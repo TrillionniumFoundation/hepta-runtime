@@ -1,0 +1,91 @@
+name: ROG Strix Halo SMU A/B
+
+on:
+  push:
+    branches:
+      - ops/rog-smu-ab-20261002
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rog-smu-ab-20261002
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    name: ROG SMU qualification
+    if: >-
+      github.repository == 'TrillionniumFoundation/hepta-runtime' &&
+      github.ref == 'refs/heads/ops/rog-smu-ab-20261002' &&
+      github.actor == 'ProfHepta'
+    runs-on: [self-hosted, linux, x64, rog]
+    timeout-minutes: 45
+    env:
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - name: Checkout exact ops head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify trusted ROG target and safety chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = TrillionniumFoundation/hepta-runtime
+          test "${GITHUB_REF}" = refs/heads/ops/rog-smu-ab-20261002
+          test "${GITHUB_ACTOR}" = ProfHepta
+          test "$(cat /sys/class/dmi/id/board_name)" = GZ302EA
+          test "$(uname -r)" = 7.0.0-34-generic
+          sudo -n true
+          test -d /sys/kernel/ryzen_smu_drv
+          test "$(cat /sys/kernel/ryzen_smu_drv/drv_version)" = 0.1.7
+          modinfo -F signer ryzen_smu | grep -F 'qian-qi-ROG-Flow-Z13-GZ302EA-GZ Secure Boot Module Signature key'
+          test "$(systemctl is-active rog-ai-safety-monitor.service)" = active
+          sudo -n test ! -e /var/lib/rog-ai-production/safe-latch
+          test -x /usr/local/sbin/rog-ai-smu-apply
+          test -x /usr/local/sbin/rog-ai-production-profile
+          test -x /home/qian-qi/pocket4-gfx1150-bench/gfx1151_bench
+          test -x /usr/local/src/RyzenAdj/build/ryzenadj
+          git rev-parse HEAD
+          sha256sum ops/rog-smu-ab-20261002.py
+
+      - name: Run bounded interleaved matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ops/rog-smu-ab-20261002.py 2>&1 | tee /home/qian-qi/rog-ai-smu-ab/workflow-20261002.log
+
+      - name: Print qualification summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -f /home/qian-qi/rog-ai-smu-ab/matrix-20261002.json; then
+            python3 - <<'PY'
+          import json
+          p='/home/qian-qi/rog-ai-smu-ab/matrix-20261002.json'
+          d=json.load(open(p))
+          print(json.dumps({'comparisons': d.get('comparisons'),
+                            'best_screened': d.get('best_screened')}, indent=2))
+          PY
+          fi
+
+      - name: Restore production baseline and verify safety
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if sudo -n test -e /var/lib/rog-ai-production/safe-latch; then
+            sudo -n /usr/local/sbin/rog-ai-smu-apply safe
+          else
+            sudo -n /usr/local/sbin/rog-ai-production-profile
+          fi
+          sudo -n systemctl restart rog-ai-safety-monitor.service
+          test "$(systemctl is-active rog-ai-safety-monitor.service)" = active
+          sudo -n /usr/local/src/RyzenAdj/build/ryzenadj --info | tee /home/qian-qi/rog-ai-smu-ab/final-smu-info-20261002.txt
+          sudo -n journalctl -k --since '30 minutes ago' --no-pager | \
+            grep -Ei 'amdgpu.*(reset|timeout|fault|wedged)|hardware error|mce:|thermal.*critical' && exit 1 || true
+          systemctl list-units 'hepta-job-*' --state=running --no-pager || true
