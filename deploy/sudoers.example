@@ -1,0 +1,6 @@
+# Copy only reviewed lines into /etc/sudoers.d/hepta-runtime and validate with visudo -cf.
+# Each helper must be root-owned, non-writable by hepta-runtime, accept a closed argument grammar,
+# and perform its own board/host/state validation. Never grant shells, env, interpreters,
+# systemctl, package managers, arbitrary file writers, or wildcard command paths.
+#
+# hepta-runtime ALL=(root) NOPASSWD: /usr/local/libexec/hepta-runtime/read-only-example

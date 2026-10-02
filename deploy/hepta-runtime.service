@@ -1,0 +1,30 @@
+[Unit]
+Description=Hepta multi-host MCP runtime
+Documentation=https://github.com/TrillionniumFoundation/hepta-runtime
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=hepta-runtime
+Group=hepta-runtime
+WorkingDirectory=/var/lib/hepta-runtime/workspaces
+ExecStart=/opt/hepta-runtime/current/hepta-runtime mcp --path /var/lib/hepta-runtime/workspaces --bind 127.0.0.1:8787 --runtime-config /etc/hepta-runtime/runtime.json --auth-token-file /etc/hepta-runtime/mcp-token
+Restart=on-failure
+RestartSec=3
+KillMode=control-group
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadOnlyPaths=/etc/hepta-runtime
+ReadWritePaths=/var/lib/hepta-runtime
+CapabilityBoundingSet=
+LockPersonality=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -556,3 +556,475 @@ async fn served_tool_schemas_carry_no_generator_noise() {
 		assert!(properties.contains_key(name), "view keeps `{name}`");
 	}
 }
+
+async fn call_runtime_tool_text(
+	client: &RunningService<RoleClient, RecordingClient>,
+	name: &str,
+	arguments: serde_json::Value,
+) -> (bool, String) {
+	let serde_json::Value::Object(arguments) = arguments else {
+		panic!("runtime tool arguments must be an object");
+	};
+	let result = client
+		.call_tool(CallToolRequestParams::new(name.to_string()).with_arguments(arguments))
+		.await
+		.unwrap_or_else(|error| panic!("call {name}: {error}"));
+	let text = result
+		.content
+		.iter()
+		.find_map(|block| match block {
+			ContentBlock::Text(text) => Some(text.text.clone()),
+			_ => None,
+		})
+		.unwrap_or_default();
+	(result.is_error == Some(true), text)
+}
+
+/// Destructive remote integration test. It is ignored by default and must run
+/// under the dedicated controller identity with a reviewed runtime config.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires dedicated hepta-runtime SSH identities and HEPTA_RUNTIME_TEST_CONFIG"]
+#[serial_test::serial]
+async fn runtime_remote_execution_recovery_and_policy_e2e() {
+	let config_path = std::env::var("HEPTA_RUNTIME_TEST_CONFIG")
+		.expect("HEPTA_RUNTIME_TEST_CONFIG points to reviewed JSON policy");
+	let config = crate::mcp::runtime::RuntimeConfig::load(std::path::Path::new(&config_path))
+		.expect("load runtime test config");
+	crate::mcp::runtime::init_runtime(config).expect("initialize runtime once");
+	let (client, _server_task, _unsolicited) = connect().await;
+
+	let tools = client.list_tools(None).await.expect("list runtime tools");
+	assert!(
+		!tools.tools.iter().any(|tool| tool.name == "shell"),
+		"legacy shell must not be advertised in runtime mode"
+	);
+	for name in [
+		"host_list",
+		"process_start",
+		"process_status",
+		"process_read",
+		"process_wait",
+		"process_cancel",
+		"pty_start",
+		"hardware_snapshot",
+		"service_status",
+		"network_inspect",
+	] {
+		assert!(
+			tools.tools.iter().any(|tool| tool.name == name),
+			"missing {name}"
+		);
+	}
+
+	let key = format!("e2e-{}", std::process::id());
+	let start_args = json!({
+		"host": "pocket4",
+		"executable": "/usr/bin/python3",
+		"args": ["-c", "import time; print('begin', flush=True); time.sleep(2); print('done', flush=True)"],
+		"cwd": "/var/lib/hepta-runtime/workspaces",
+		"idempotency_key": key,
+		"nice": 19,
+		"cpu_quota_percent": 25,
+		"memory_max_bytes": 134217728
+	});
+	let (failed, started_text) =
+		call_runtime_tool_text(&client, "process_start", start_args.clone()).await;
+	assert!(!failed, "process_start: {started_text}");
+	let started: serde_json::Value = serde_json::from_str(&started_text).expect("start JSON");
+	let job_id = started["job"]["id"].as_str().expect("job id").to_string();
+	assert_eq!(started["reused"], false);
+
+	let (failed, reused_text) = call_runtime_tool_text(&client, "process_start", start_args).await;
+	assert!(!failed, "idempotent process_start: {reused_text}");
+	let reused: serde_json::Value = serde_json::from_str(&reused_text).expect("reuse JSON");
+	assert_eq!(reused["reused"], true);
+	assert_eq!(reused["job"]["id"], job_id);
+
+	let (failed, waited_text) = call_runtime_tool_text(
+		&client,
+		"process_wait",
+		json!({"host":"pocket4", "job_id":job_id, "timeout_seconds":10}),
+	)
+	.await;
+	assert!(!failed, "process_wait: {waited_text}");
+	let waited: serde_json::Value = serde_json::from_str(&waited_text).expect("wait JSON");
+	assert_eq!(waited["state"], "succeeded", "{waited_text}");
+
+	let (failed, output_text) = call_runtime_tool_text(
+		&client,
+		"process_read",
+		json!({"host":"pocket4", "job_id":job_id, "stdout_offset":0, "stderr_offset":0, "limit":65536}),
+	)
+	.await;
+	assert!(!failed, "process_read: {output_text}");
+	let output: serde_json::Value = serde_json::from_str(&output_text).expect("read JSON");
+	let stdout = output["stdout"]["text"].as_str().unwrap_or_default();
+	assert!(
+		stdout.contains("begin") && stdout.contains("done"),
+		"{output_text}"
+	);
+
+	let cancel_key = format!("e2e-cancel-{}", std::process::id());
+	let (failed, long_text) = call_runtime_tool_text(
+		&client,
+		"process_start",
+		json!({
+			"host":"pocket4",
+			"executable":"/usr/bin/python3",
+			"args":["-c", "import time; print('cancel-me', flush=True); time.sleep(60)"],
+			"cwd":"/var/lib/hepta-runtime/workspaces",
+			"idempotency_key":cancel_key,
+			"nice":19,
+			"cpu_quota_percent":10,
+			"memory_max_bytes":134217728
+		}),
+	)
+	.await;
+	assert!(!failed, "long process_start: {long_text}");
+	let long: serde_json::Value = serde_json::from_str(&long_text).expect("long JSON");
+	let long_id = long["job"]["id"].as_str().expect("long job id");
+	tokio::time::sleep(Duration::from_millis(400)).await;
+	let (failed, cancel_text) = call_runtime_tool_text(
+		&client,
+		"process_cancel",
+		json!({"host":"pocket4", "job_id":long_id, "grace_seconds":5}),
+	)
+	.await;
+	assert!(!failed, "process_cancel: {cancel_text}");
+	let (failed, cancelled_text) = call_runtime_tool_text(
+		&client,
+		"process_wait",
+		json!({"host":"pocket4", "job_id":long_id, "timeout_seconds":8}),
+	)
+	.await;
+	assert!(!failed, "wait cancelled: {cancelled_text}");
+	let cancelled: serde_json::Value =
+		serde_json::from_str(&cancelled_text).expect("cancelled JSON");
+	assert!(
+		matches!(
+			cancelled["state"].as_str(),
+			Some("cancelled" | "failed" | "completed_unknown")
+		),
+		"{cancelled_text}"
+	);
+
+	let net_key = format!("e2e-network-{}", std::process::id());
+	let (failed, net_start_text) = call_runtime_tool_text(
+		&client,
+		"process_start",
+		json!({
+			"host":"pocket4",
+			"executable":"/usr/bin/python3",
+			"args":["-c", "import socket; socket.socket(socket.AF_INET, socket.SOCK_STREAM)"],
+			"cwd":"/var/lib/hepta-runtime/workspaces",
+			"idempotency_key":net_key
+		}),
+	)
+	.await;
+	assert!(!failed, "network sandbox launch: {net_start_text}");
+	let net_started: serde_json::Value =
+		serde_json::from_str(&net_start_text).expect("network start JSON");
+	let net_id = net_started["job"]["id"].as_str().expect("network job id");
+	let (failed, net_wait_text) = call_runtime_tool_text(
+		&client,
+		"process_wait",
+		json!({"host":"pocket4", "job_id":net_id, "timeout_seconds":8}),
+	)
+	.await;
+	assert!(!failed, "network sandbox wait: {net_wait_text}");
+	let net_wait: serde_json::Value =
+		serde_json::from_str(&net_wait_text).expect("network wait JSON");
+	assert_eq!(
+		net_wait["state"], "failed",
+		"AF_INET must be blocked: {net_wait_text}"
+	);
+
+	let (denied, denied_text) = call_runtime_tool_text(
+		&client,
+		"process_start",
+		json!({
+			"host":"pocket4",
+			"executable":"/bin/bash",
+			"args":["-c", "true"],
+			"cwd":"/var/lib/hepta-runtime/workspaces"
+		}),
+	)
+	.await;
+	assert!(denied, "shell launch must be denied: {denied_text}");
+
+	let (denied, direct_shell) =
+		call_runtime_tool_text(&client, "shell", json!({"command":"ssh hepta-rog id"})).await;
+	assert!(denied, "legacy shell bypass must be denied: {direct_shell}");
+
+	let (denied, local_secret) = call_runtime_tool_text(
+		&client,
+		"view",
+		json!({"path":"/var/lib/hepta-runtime/.ssh/id_ed25519"}),
+	)
+	.await;
+	assert!(
+		denied,
+		"controller secret path must be denied: {local_secret}"
+	);
+	let (denied, remote_protected) = call_runtime_tool_text(
+		&client,
+		"view",
+		json!({"path":"ssh://hepta-pocket4/home/alex/Jts/jts.ini"}),
+	)
+	.await;
+	assert!(
+		denied,
+		"protected remote path must be denied: {remote_protected}"
+	);
+
+	for host in ["pocket4", "rog"] {
+		let (failed, snapshot) =
+			call_runtime_tool_text(&client, "hardware_snapshot", json!({"host":host})).await;
+		assert!(
+			!failed && snapshot.contains("hostname"),
+			"snapshot {host}: {snapshot}"
+		);
+	}
+	let (failed, services) = call_runtime_tool_text(
+		&client,
+		"service_status",
+		json!({"host":"pocket4", "services":["actions.runner.TrillionniumFoundation.pocket4.service"]}),
+	)
+	.await;
+	assert!(
+		!failed && services.contains("ActiveState"),
+		"service_status: {services}"
+	);
+	let (failed, network) =
+		call_runtime_tool_text(&client, "network_inspect", json!({"host":"pocket4"})).await;
+	assert!(
+		!failed && network.contains("addresses"),
+		"network_inspect: {network}"
+	);
+
+	let (failed, pty_text) = call_runtime_tool_text(
+		&client,
+		"pty_start",
+		json!({
+			"host":"pocket4",
+			"executable":"/usr/bin/python3",
+			"args":["-i", "-q"],
+			"cwd":"/var/lib/hepta-runtime/workspaces"
+		}),
+	)
+	.await;
+	assert!(!failed, "pty_start: {pty_text}");
+	let pty: serde_json::Value = serde_json::from_str(&pty_text).expect("PTY JSON");
+	let session_id = pty["session_id"].as_str().expect("session id");
+	tokio::time::sleep(Duration::from_millis(400)).await;
+	let (failed, written) = call_runtime_tool_text(
+		&client,
+		"pty_write",
+		json!({"host":"pocket4", "session_id":session_id, "data":"print('PTY_OK')\n"}),
+	)
+	.await;
+	assert!(!failed, "pty_write: {written}");
+	tokio::time::sleep(Duration::from_millis(500)).await;
+	let (failed, pty_output) = call_runtime_tool_text(
+		&client,
+		"pty_read",
+		json!({"host":"pocket4", "session_id":session_id, "offset":0, "limit":65536}),
+	)
+	.await;
+	assert!(
+		!failed && pty_output.contains("PTY_OK"),
+		"pty_read: {pty_output}"
+	);
+	let (failed, closed) = call_runtime_tool_text(
+		&client,
+		"pty_close",
+		json!({"host":"pocket4", "session_id":session_id}),
+	)
+	.await;
+	assert!(!failed, "pty_close: {closed}");
+}
+
+/// Phase one of the controller-restart test. Run this ignored test as the
+/// dedicated controller account, let the process exit, then run phase two in a
+/// fresh test process. The remote systemd unit must outlive this MCP server.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "manual phase one for durable controller restart validation"]
+#[serial_test::serial]
+async fn runtime_restart_phase_one_starts_remote_job() {
+	let config_path = std::env::var("HEPTA_RUNTIME_TEST_CONFIG")
+		.expect("HEPTA_RUNTIME_TEST_CONFIG points to reviewed JSON policy");
+	let config = crate::mcp::runtime::RuntimeConfig::load(std::path::Path::new(&config_path))
+		.expect("load runtime test config");
+	crate::mcp::runtime::init_runtime(config).expect("initialize runtime once");
+	let (client, _server_task, _unsolicited) = connect().await;
+	let key = format!("restart-e2e-{}", std::process::id());
+	let (failed, text) = call_runtime_tool_text(
+		&client,
+		"process_start",
+		json!({
+			"host":"pocket4",
+			"executable":"/usr/bin/python3",
+			"args":["-c", "import time; print('restart-begin', flush=True); time.sleep(8); print('restart-done', flush=True)"],
+			"cwd":"/var/lib/hepta-runtime/workspaces",
+			"idempotency_key":key,
+			"nice":19,
+			"cpu_quota_percent":10,
+			"memory_max_bytes":134217728
+		}),
+	)
+	.await;
+	assert!(!failed, "process_start: {text}");
+	let value: serde_json::Value = serde_json::from_str(&text).expect("start JSON");
+	let id = value["job"]["id"].as_str().expect("job id");
+	std::fs::write(
+		"/var/lib/hepta-runtime/state/restart-e2e-job-id",
+		format!("{id}\n"),
+	)
+	.expect("persist restart test job id");
+	let (failed, status) = call_runtime_tool_text(
+		&client,
+		"process_status",
+		json!({"host":"pocket4", "job_id":id}),
+	)
+	.await;
+	assert!(
+		!failed && status.contains("running"),
+		"job must be running: {status}"
+	);
+}
+
+/// Phase two is intentionally a separate OS process from phase one.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "manual phase two for durable controller restart validation"]
+#[serial_test::serial]
+async fn runtime_restart_phase_two_recovers_remote_job() {
+	let config_path = std::env::var("HEPTA_RUNTIME_TEST_CONFIG")
+		.expect("HEPTA_RUNTIME_TEST_CONFIG points to reviewed JSON policy");
+	let config = crate::mcp::runtime::RuntimeConfig::load(std::path::Path::new(&config_path))
+		.expect("load runtime test config");
+	crate::mcp::runtime::init_runtime(config).expect("initialize runtime once");
+	let id = std::fs::read_to_string("/var/lib/hepta-runtime/state/restart-e2e-job-id")
+		.expect("phase one job id")
+		.trim()
+		.to_string();
+	let (client, _server_task, _unsolicited) = connect().await;
+	let (failed, status) = call_runtime_tool_text(
+		&client,
+		"process_wait",
+		json!({"host":"pocket4", "job_id":id, "timeout_seconds":20}),
+	)
+	.await;
+	assert!(!failed, "recover wait: {status}");
+	let status_json: serde_json::Value = serde_json::from_str(&status).expect("status JSON");
+	assert_eq!(status_json["state"], "succeeded", "{status}");
+	let (failed, output) = call_runtime_tool_text(
+		&client,
+		"process_read",
+		json!({"host":"pocket4", "job_id":id, "stdout_offset":0, "stderr_offset":0, "limit":65536}),
+	)
+	.await;
+	assert!(!failed, "recover read: {output}");
+	assert!(
+		output.contains("restart-begin") && output.contains("restart-done"),
+		"{output}"
+	);
+}
+/// Cross-platform backend integration: systemd user unit on Linux and detached supervisor on macOS.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires dedicated x230 and mac hepta-runtime SSH identities"]
+#[serial_test::serial]
+async fn runtime_linux_and_macos_backends_e2e() {
+	let config_path = std::env::var("HEPTA_RUNTIME_TEST_CONFIG")
+		.expect("HEPTA_RUNTIME_TEST_CONFIG points to reviewed JSON policy");
+	let config = crate::mcp::runtime::RuntimeConfig::load(std::path::Path::new(&config_path))
+		.expect("load runtime test config");
+	crate::mcp::runtime::init_runtime(config).expect("initialize runtime once");
+	let (client, _server_task, _unsolicited) = connect().await;
+
+	for (host, cwd, backend) in [
+		("x230", "/var/lib/hepta-runtime/workspaces", "systemd"),
+		("mac", "/Users/hepta-runtime/workspaces", "detached"),
+	] {
+		let key = format!("cross-platform-{host}-{}", std::process::id());
+		let (failed, started_text) = call_runtime_tool_text(
+			&client,
+			"process_start",
+			json!({
+				"host":host,
+				"executable":"/usr/bin/python3",
+				"args":["-c", "import time; print('cross-begin', flush=True); time.sleep(1); print('cross-done', flush=True)"],
+				"cwd":cwd,
+				"idempotency_key":key,
+				"nice":19,
+				"memory_max_bytes":134217728
+			}),
+		).await;
+		assert!(!failed, "{host} process_start: {started_text}");
+		let started: serde_json::Value = serde_json::from_str(&started_text).expect("start JSON");
+		assert_eq!(started["launch"]["backend"], backend, "{started_text}");
+		let job_id = started["job"]["id"].as_str().expect("job id");
+		let (failed, waited_text) = call_runtime_tool_text(
+			&client,
+			"process_wait",
+			json!({"host":host,"job_id":job_id,"timeout_seconds":15}),
+		)
+		.await;
+		assert!(!failed, "{host} wait: {waited_text}");
+		let waited: serde_json::Value = serde_json::from_str(&waited_text).expect("wait JSON");
+		assert_eq!(waited["state"], "succeeded", "{waited_text}");
+		let (failed, output) = call_runtime_tool_text(
+			&client,
+			"process_read",
+			json!({"host":host,"job_id":job_id,"stdout_offset":0,"stderr_offset":0,"limit":65536}),
+		)
+		.await;
+		assert!(!failed, "{host} read: {output}");
+		assert!(
+			output.contains("cross-begin") && output.contains("cross-done"),
+			"{output}"
+		);
+
+		let (failed, snapshot) =
+			call_runtime_tool_text(&client, "hardware_snapshot", json!({"host":host})).await;
+		assert!(
+			!failed && snapshot.contains("hostname"),
+			"snapshot {host}: {snapshot}"
+		);
+	}
+
+	let (failed, long_text) = call_runtime_tool_text(
+		&client,
+		"process_start",
+		json!({
+			"host":"mac",
+			"executable":"/usr/bin/python3",
+			"args":["-c", "import time; print('mac-cancel', flush=True); time.sleep(60)"],
+			"cwd":"/Users/hepta-runtime/workspaces",
+			"idempotency_key":format!("mac-cancel-{}", std::process::id())
+		}),
+	)
+	.await;
+	assert!(!failed, "mac cancel launch: {long_text}");
+	let long: serde_json::Value = serde_json::from_str(&long_text).expect("mac long JSON");
+	let id = long["job"]["id"].as_str().expect("mac long id");
+	tokio::time::sleep(Duration::from_millis(500)).await;
+	let (failed, cancel) = call_runtime_tool_text(
+		&client,
+		"process_cancel",
+		json!({"host":"mac","job_id":id,"grace_seconds":3}),
+	)
+	.await;
+	assert!(!failed, "mac cancel: {cancel}");
+	let (failed, waited) = call_runtime_tool_text(
+		&client,
+		"process_wait",
+		json!({"host":"mac","job_id":id,"timeout_seconds":8}),
+	)
+	.await;
+	assert!(!failed, "mac cancel wait: {waited}");
+	let value: serde_json::Value = serde_json::from_str(&waited).expect("mac wait JSON");
+	assert!(
+		matches!(value["state"].as_str(), Some("cancelled" | "failed")),
+		"{waited}"
+	);
+}

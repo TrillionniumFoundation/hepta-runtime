@@ -16,9 +16,9 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[command(name = "octofs")]
-#[command(version, author = "Muvon Un Limited <contact@muvon.io>")]
-#[command(about = "Standalone MCP filesystem tools server", long_about = None)]
+#[command(name = "hepta-runtime")]
+#[command(version, author = "TrillionniumFoundation")]
+#[command(about = "Policy-enforced multi-host MCP runtime", long_about = None)]
 pub struct Cli {
 	#[command(subcommand)]
 	pub command: Commands,
@@ -44,5 +44,13 @@ pub enum Commands {
 		/// SSH connection timeout in seconds for remote filesystem access
 		#[arg(long, value_name = "SECS")]
 		ssh_timeout: Option<u64>,
+
+		/// Hepta Runtime host/policy JSON. Enables multi-host process, PTY, inspection and exact privileged-action tools.
+		#[arg(long, value_name = "FILE")]
+		runtime_config: Option<PathBuf>,
+
+		/// File containing the X-Hepta-Runtime-Token value for HTTP MCP requests.
+		#[arg(long, value_name = "FILE")]
+		auth_token_file: Option<PathBuf>,
 	},
 }
