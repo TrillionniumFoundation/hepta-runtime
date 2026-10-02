@@ -3,14 +3,14 @@ Description=OpenAI Secure MCP Tunnel for Hepta Runtime
 Documentation=https://github.com/openai/tunnel-client
 Wants=network-online.target hepta-runtime.service
 After=network-online.target hepta-runtime.service
-ConditionPathExists=/etc/hepta-runtime/tunnel-profile.yaml
+ConditionPathExists=/etc/hepta-runtime/tunnel.env
 
 [Service]
 Type=simple
 User=hepta-runtime
 Group=hepta-runtime
 EnvironmentFile=-/etc/hepta-runtime/tunnel.env
-ExecStart=/usr/local/bin/tunnel-client run --profile-file /etc/hepta-runtime/tunnel-profile.yaml
+ExecStart=/usr/local/bin/tunnel-client run
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=yes

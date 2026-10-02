@@ -153,16 +153,16 @@ fork-specific host policies are not active.
 
 Preferred deployment keeps the runtime on loopback and uses the official
 OpenAI tunnel client as a separate service. Create a tunnel ID and a runtime API
-key in OpenAI Platform, then generate a profile using the official CLI. Keep the
-runtime key in a root-readable environment file or a secret manager; never put
-it in this repository. Configure the tunnel's static extra headers as
-`X-Hepta-Runtime-Token: file:/etc/hepta-runtime/mcp-token`; this is separate from
-the OpenAI control-plane API key.
+key in OpenAI Platform. Keep that key in `/etc/hepta-runtime/tunnel.env` or a
+secret manager; never put it in this repository. The same environment file sets
+`MCP_SERVER_URL` to the loopback MCP endpoint, sends
+`X-Hepta-Runtime-Token: file:/etc/hepta-runtime/mcp-token` for discovery and
+normal MCP requests, and binds tunnel health to loopback.
 
-Run `tunnel-client help quickstart` and `tunnel-client init --help` on the
-installed release because option names are versioned. Validate the generated
-profile with `doctor`, then require both health and readiness before connecting
-ChatGPT.
+The installed runtime-flavor binary exposes `run`, not the full development
+CLI. After credentials are provisioned, enable the tunnel service and require
+both its systemd state and `http://127.0.0.1:8788/health?details=true` to report
+healthy before connecting ChatGPT.
 
 ## Deployment sequence
 

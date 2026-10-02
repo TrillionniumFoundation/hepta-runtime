@@ -14,10 +14,8 @@ job units. Review existing `AllowUsers` and `Match` rules before access.
 unit. It does not create OpenAI credentials or enable the tunnel service.
 
 `install-tunnel-client.sh` installs the checksum-pinned official OpenAI runtime
-client release. Create the tunnel ID/runtime API key separately, initialize a
-profile at `/etc/hepta-runtime/tunnel-profile.yaml`, install `tunnel.env` with
-mode 0640, include the static MCP token header shown in `tunnel.env.example`, run
-`tunnel-client doctor`, and only then enable the tunnel unit.
+client release. Create the tunnel ID/runtime API key separately, then
+install `/etc/hepta-runtime/tunnel.env` with owner `root:hepta-runtime` and mode 0640. The environment file supplies the control-plane credentials, loopback MCP target, static MCP token headers, and loopback health listener. Then enable the tunnel unit and require both its systemd state and `http://127.0.0.1:8788/health?details=true` to be healthy before use.
 
 Never commit runtime API keys, private SSH keys or generated tunnel profiles.
 Desktop Commander remains the rescue path until local MCP discovery, tunnel
