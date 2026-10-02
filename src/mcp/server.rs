@@ -34,6 +34,7 @@ use tracing::{debug, warn};
 
 use super::fs;
 use super::request_ctx;
+use super::runtime;
 use super::McpToolCall;
 
 /// Per-session working directory state.
@@ -169,6 +170,24 @@ async fn notify_peer_resource_updated(peer: &Peer<RoleServer>, uri: &str) {
 /// `--dangerously-load-development-channels server:<name>` for a local server), in
 /// interactive sessions, on pre-2026-07-28 connections; other clients ignore it.
 const CLAUDE_CHANNEL_CAPABILITY: &str = "claude/channel";
+const RUNTIME_TOOL_NAMES: &[&str] = &[
+	"host_list",
+	"process_start",
+	"process_status",
+	"process_read",
+	"process_wait",
+	"process_cancel",
+	"process_list",
+	"pty_start",
+	"pty_read",
+	"pty_write",
+	"pty_close",
+	"pty_list",
+	"hardware_snapshot",
+	"service_status",
+	"network_inspect",
+	"privileged_action",
+];
 const CLAUDE_CHANNEL_NOTIFICATION: &str = "notifications/claude/channel";
 
 /// Push a finished job to Claude Code as a channel message carrying what
@@ -261,7 +280,9 @@ impl OctofsServer {
 		if let Some(session_obj) = experimental.get("session") {
 			if let Some(workdir_str) = session_obj.get("workdir").and_then(|v| v.as_str()) {
 				let path = std::path::PathBuf::from(workdir_str);
-				if path.is_absolute() && path.is_dir() {
+				let policy_allows = runtime::config::maybe_runtime_config().is_none()
+					|| runtime::config::check_local_path(&path).is_ok();
+				if path.is_absolute() && path.is_dir() && policy_allows {
 					self.workdir.set_current(path.clone());
 					debug!("Session workdir set from capabilities: {}", path.display());
 				} else {
@@ -282,6 +303,47 @@ impl Default for OctofsServer {
 }
 
 use std::path::PathBuf;
+
+fn enforce_runtime_path_spec(
+	path_spec: &str,
+	workdir: &std::path::Path,
+	write: bool,
+) -> Result<(), String> {
+	if runtime::config::maybe_runtime_config().is_none() {
+		return Ok(());
+	}
+	if path_spec.starts_with("octofs://") {
+		return Err("Octofs background resources are disabled in runtime mode".to_string());
+	}
+	for raw in path_spec.split('|') {
+		let raw = raw.trim();
+		if raw.is_empty() {
+			return Err("path must not contain an empty root".to_string());
+		}
+		match fs::remote::resolve_path_source(raw, workdir) {
+			fs::PathSource::Local(path) => {
+				runtime::config::check_local_path(&path).map_err(|error| error.to_string())?;
+			}
+			fs::PathSource::Remote {
+				host,
+				path,
+				user_explicit,
+				port_explicit,
+				..
+			} => {
+				runtime::config::check_remote_path(
+					&host,
+					&path,
+					user_explicit,
+					port_explicit,
+					write,
+				)
+				.map_err(|error| error.to_string())?;
+			}
+		}
+	}
+	Ok(())
+}
 
 #[tool_router]
 impl OctofsServer {
@@ -309,6 +371,7 @@ impl OctofsServer {
 	) -> Result<String, String> {
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
+		enforce_runtime_path_spec(&params.path, &workdir, false)?;
 		let call = McpToolCall {
 			tool_name: "view".to_string(),
 			parameters: serde_json::to_value(&params).unwrap_or_default(),
@@ -344,6 +407,7 @@ impl OctofsServer {
 	) -> Result<String, String> {
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
+		enforce_runtime_path_spec(&params.path, &workdir, true)?;
 		let call = McpToolCall {
 			tool_name: "text_editor".to_string(),
 			parameters: serde_json::to_value(&params).unwrap_or_default(),
@@ -383,6 +447,7 @@ impl OctofsServer {
 	) -> Result<String, String> {
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
+		enforce_runtime_path_spec(&params.path, &workdir, true)?;
 		let call = McpToolCall {
 			tool_name: "batch_edit".to_string(),
 			parameters: serde_json::to_value(&params).unwrap_or_default(),
@@ -417,6 +482,8 @@ impl OctofsServer {
 	) -> Result<String, String> {
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
+		enforce_runtime_path_spec(&params.from_path, &workdir, false)?;
+		enforce_runtime_path_spec(&params.append_path, &workdir, true)?;
 		let call = McpToolCall {
 			tool_name: "extract_lines".to_string(),
 			parameters: serde_json::to_value(&params).unwrap_or_default(),
@@ -459,6 +526,12 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 		Parameters(params): Parameters<ShellParams>,
 	) -> Result<CallToolResult, String> {
+		if runtime::config::maybe_runtime_config().is_some() {
+			return Err(
+				"the unrestricted local shell tool is disabled in runtime mode; use process_start or an exact privileged_action"
+					.to_string(),
+			);
+		}
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
 		let call = McpToolCall {
@@ -539,6 +612,302 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "Host List",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "List configured runtime host names and their capability flags. SSH destinations and credentials are never accepted from tool input."
+	)]
+	async fn host_list(
+		&self,
+		Parameters(_params): Parameters<runtime::inspect::HostListParams>,
+	) -> Result<String, String> {
+		runtime::inspect::host_list().map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Process Start",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Start an explicit executable and argv on one configured host. No shell syntax is parsed. Jobs have durable metadata and logs, survive MCP reconnects, support idempotency keys, and may be resource-limited."
+	)]
+	async fn process_start(
+		&self,
+		Parameters(params): Parameters<runtime::jobs::ProcessStartParams>,
+	) -> Result<String, String> {
+		runtime::jobs::start_job(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Process Status",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = true
+		),
+		description = "Read the authoritative state of a durable process created by this runtime. A job id is always bound to its original configured host."
+	)]
+	async fn process_status(
+		&self,
+		Parameters(params): Parameters<runtime::jobs::ProcessRefParams>,
+	) -> Result<String, String> {
+		runtime::jobs::status_job(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Process Read",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = true
+		),
+		description = "Read bounded stdout and stderr ranges from a durable process using independent byte offsets. The response returns next offsets for lossless pagination."
+	)]
+	async fn process_read(
+		&self,
+		Parameters(params): Parameters<runtime::jobs::ProcessReadParams>,
+	) -> Result<String, String> {
+		runtime::jobs::read_job(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Process Wait",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = true
+		),
+		description = "Wait up to 30 seconds for a durable process state change, then return its current state. This never starts or duplicates a job."
+	)]
+	async fn process_wait(
+		&self,
+		Parameters(params): Parameters<runtime::jobs::ProcessWaitParams>,
+	) -> Result<String, String> {
+		runtime::jobs::wait_job(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Process Cancel",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = true,
+			open_world_hint = true
+		),
+		description = "Cancel only a durable process created by this runtime. Ownership is verified from stored unit/job metadata; arbitrary PID signalling is not exposed."
+	)]
+	async fn process_cancel(
+		&self,
+		Parameters(params): Parameters<runtime::jobs::ProcessCancelParams>,
+	) -> Result<String, String> {
+		runtime::jobs::cancel_job(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Process List",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "List locally persisted durable job identities, optionally restricted to one configured host. Use process_status for live state."
+	)]
+	async fn process_list(
+		&self,
+		Parameters(params): Parameters<runtime::jobs::ProcessListParams>,
+	) -> Result<String, String> {
+		runtime::jobs::list_jobs(params).map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "PTY Start",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Start an interactive SSH PTY on a configured host with explicit executable and argv. PTY sessions survive MCP requests but not a runtime process restart; use durable process tools for long jobs."
+	)]
+	async fn pty_start(
+		&self,
+		Parameters(params): Parameters<runtime::pty::PtyStartParams>,
+	) -> Result<String, String> {
+		runtime::pty::start_pty(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "PTY Read",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read bounded terminal output from an interactive PTY using a monotonic byte offset. The bounded ring buffer reports if earlier bytes were dropped."
+	)]
+	async fn pty_read(
+		&self,
+		Parameters(params): Parameters<runtime::pty::PtyReadParams>,
+	) -> Result<String, String> {
+		runtime::pty::read_pty(params).map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "PTY Write",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Write exact UTF-8 bytes, including control characters, to a PTY session created by this runtime."
+	)]
+	async fn pty_write(
+		&self,
+		Parameters(params): Parameters<runtime::pty::PtyWriteParams>,
+	) -> Result<String, String> {
+		runtime::pty::write_pty(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "PTY Close",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = true,
+			open_world_hint = true
+		),
+		description = "Close stdin and terminate the local SSH PTY transport for an interactive session created by this runtime."
+	)]
+	async fn pty_close(
+		&self,
+		Parameters(params): Parameters<runtime::pty::PtyRefParams>,
+	) -> Result<String, String> {
+		runtime::pty::close_pty(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "PTY List",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "List interactive PTY sessions owned by this runtime process, optionally restricted to one configured host."
+	)]
+	async fn pty_list(
+		&self,
+		Parameters(params): Parameters<runtime::pty::PtyListParams>,
+	) -> Result<String, String> {
+		runtime::pty::list_ptys(params).map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Hardware Snapshot",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = true
+		),
+		description = "Return a typed, read-only hardware snapshot from a configured host: DMI/CPU/memory, hwmon temperatures and power, GPU state, power supplies and limits, NPU devices, and USB4/Thunderbolt peers."
+	)]
+	async fn hardware_snapshot(
+		&self,
+		Parameters(params): Parameters<runtime::inspect::HostParams>,
+	) -> Result<String, String> {
+		runtime::inspect::hardware_snapshot(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Service Status",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = true
+		),
+		description = "Read exact systemd unit or launchd label status from a configured host. This tool never starts, stops, enables, or disables services."
+	)]
+	async fn service_status(
+		&self,
+		Parameters(params): Parameters<runtime::inspect::ServiceStatusParams>,
+	) -> Result<String, String> {
+		runtime::inspect::service_status(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Network Inspect",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = true
+		),
+		description = "Read links, addresses, routes, listeners, and USB4/Thunderbolt peers from a configured host without changing network state."
+	)]
+	async fn network_inspect(
+		&self,
+		Parameters(params): Parameters<runtime::inspect::HostParams>,
+	) -> Result<String, String> {
+		runtime::inspect::network_inspect(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Privileged Action",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Run one exact, administrator-configured sudo action on a configured host. Arbitrary sudo commands, executable paths, services, and PIDs are never accepted from tool input."
+	)]
+	async fn privileged_action(
+		&self,
+		Parameters(params): Parameters<runtime::inspect::PrivilegedActionParams>,
+	) -> Result<String, String> {
+		runtime::inspect::privileged_action(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
 		title = "Working Directory",
 		annotations(
 			read_only_hint = false,
@@ -557,6 +926,11 @@ impl OctofsServer {
 	) -> Result<String, String> {
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
+		if !params.reset.unwrap_or(false) {
+			if let Some(path) = params.path.as_deref() {
+				enforce_runtime_path_spec(path, &workdir, false)?;
+			}
+		}
 		let call = McpToolCall {
 			tool_name: "workdir".to_string(),
 			parameters: serde_json::to_value(&params).unwrap_or_default(),
@@ -726,9 +1100,17 @@ impl ServerHandler for OctofsServer {
 		_request: Option<PaginatedRequestParams>,
 		context: RequestContext<RoleServer>,
 	) -> Result<ListToolsResult, ErrorData> {
+		let runtime_enabled = runtime::config::maybe_runtime_config().is_some();
 		let tools = Self::tool_router()
 			.list_all()
 			.into_iter()
+			.filter(|tool| {
+				if runtime_enabled {
+					tool.name.as_ref() != "shell"
+				} else {
+					!RUNTIME_TOOL_NAMES.contains(&tool.name.as_ref())
+				}
+			})
 			.map(|mut tool| {
 				let mut schema = tool.input_schema.as_ref().clone();
 				for value in schema.values_mut() {

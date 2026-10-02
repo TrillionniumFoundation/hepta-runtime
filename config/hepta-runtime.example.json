@@ -1,0 +1,130 @@
+{
+  "state_dir": "/var/lib/hepta-runtime/state",
+  "hosts": {
+    "rog": {
+      "ssh_target": "hepta-rog",
+      "platform": "linux",
+      "remote_state_dir": "/var/lib/hepta-runtime",
+      "allow_execute": true,
+      "allow_pty": true,
+      "allow_write": true,
+      "allowed_cwd_prefixes": [
+        "/var/lib/hepta-runtime/workspaces"
+      ],
+      "allowed_write_path_prefixes": [
+        "/var/lib/hepta-runtime/workspaces"
+      ],
+      "protected_path_prefixes": [
+        "/home/qian-qi/.openclaw",
+        "/opt/openclaw-zbj-legacy-submit"
+      ],
+      "protected_argument_substrings": [
+        "pitch-submit-live.mjs",
+        "--submit"
+      ],
+      "denied_executables": [],
+      "allowed_dangerous_executables": [],
+      "privileged_actions": {},
+      "allowed_read_path_prefixes": [
+        "/var/lib/hepta-runtime/workspaces"
+      ],
+      "allow_job_network": false,
+      "allow_detached_fallback": false
+    },
+    "pocket4": {
+      "ssh_target": "hepta-pocket4",
+      "platform": "linux",
+      "remote_state_dir": "/var/lib/hepta-runtime",
+      "allow_execute": true,
+      "allow_pty": true,
+      "allow_write": false,
+      "allowed_cwd_prefixes": [
+        "/var/lib/hepta-runtime/workspaces"
+      ],
+      "allowed_write_path_prefixes": [],
+      "protected_path_prefixes": [
+        "/home/alex/.local/share/heptatrader",
+        "/home/alex/Jts",
+        "/home/alex/ibgateway",
+        "/home/alex/actions-runner-trillionnium-real-devices"
+      ],
+      "protected_argument_substrings": [
+        "hepta-ib-executiond",
+        "heptatrader_paper_driver.py",
+        "Runner.Listener",
+        "ibgateway"
+      ],
+      "denied_executables": [],
+      "allowed_dangerous_executables": [],
+      "privileged_actions": {},
+      "allowed_read_path_prefixes": [
+        "/var/lib/hepta-runtime/workspaces"
+      ],
+      "allow_job_network": false,
+      "allow_detached_fallback": false
+    },
+    "mac": {
+      "ssh_target": "hepta-mac",
+      "platform": "macos",
+      "remote_state_dir": "/Users/hepta-runtime/Library/Application Support/hepta-runtime",
+      "allow_execute": true,
+      "allow_pty": true,
+      "allow_write": true,
+      "allowed_cwd_prefixes": [
+        "/Users/hepta-runtime/workspaces"
+      ],
+      "allowed_write_path_prefixes": [
+        "/Users/hepta-runtime/workspaces"
+      ],
+      "protected_path_prefixes": [
+        "/Users/qianqi",
+        "/Volumes/T5"
+      ],
+      "protected_argument_substrings": [
+        "Desktop Commander",
+        "desktop commander"
+      ],
+      "denied_executables": [],
+      "allowed_dangerous_executables": [],
+      "privileged_actions": {},
+      "allowed_read_path_prefixes": [
+        "/Users/hepta-runtime/workspaces"
+      ],
+      "allow_job_network": true,
+      "allow_detached_fallback": true
+    },
+    "x230": {
+      "ssh_target": "hepta-x230",
+      "platform": "linux",
+      "remote_state_dir": "/var/lib/hepta-runtime",
+      "allow_execute": true,
+      "allow_pty": true,
+      "allow_write": true,
+      "allowed_cwd_prefixes": [
+        "/var/lib/hepta-runtime/workspaces"
+      ],
+      "allowed_write_path_prefixes": [
+        "/var/lib/hepta-runtime/workspaces"
+      ],
+      "protected_path_prefixes": [
+        "/home/qian",
+        "/var/lib/libvirt"
+      ],
+      "protected_argument_substrings": [
+        "desktop commander",
+        "DesktopCommander"
+      ],
+      "denied_executables": [],
+      "allowed_dangerous_executables": [],
+      "privileged_actions": {},
+      "allowed_read_path_prefixes": [
+        "/var/lib/hepta-runtime/workspaces"
+      ],
+      "allow_job_network": false,
+      "allow_detached_fallback": false
+    }
+  },
+  "controller_workspace_roots": [
+    "/var/lib/hepta-runtime/workspaces"
+  ]
+}

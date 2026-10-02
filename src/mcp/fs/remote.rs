@@ -1237,7 +1237,10 @@ pub async fn io_write(source: &PathSource, content: &[u8]) -> Result<()> {
 		PathSource::Local(p) => tokio::fs::write(p, content)
 			.await
 			.map_err(|e| anyhow!("Failed to write '{}': {}", source.display(), e)),
-		PathSource::Remote { .. } => sftp::remote_write(source, content).await,
+		PathSource::Remote { host, path, .. } => {
+			crate::mcp::runtime::config::check_remote_write(host, path)?;
+			sftp::remote_write(source, content).await
+		}
 	}
 }
 
@@ -1297,7 +1300,10 @@ pub async fn io_create_dir_all(source: &PathSource) -> Result<()> {
 		PathSource::Local(p) => tokio::fs::create_dir_all(p)
 			.await
 			.map_err(|e| anyhow!("Failed to create dirs for '{}': {}", source.display(), e)),
-		PathSource::Remote { .. } => sftp::remote_create_dir_all(source).await,
+		PathSource::Remote { host, path, .. } => {
+			crate::mcp::runtime::config::check_remote_write(host, path)?;
+			sftp::remote_create_dir_all(source).await
+		}
 	}
 }
 
@@ -1307,7 +1313,10 @@ pub async fn io_remove_file(source: &PathSource) -> Result<()> {
 		PathSource::Local(p) => tokio::fs::remove_file(p)
 			.await
 			.map_err(|e| anyhow!("Failed to remove '{}': {}", source.display(), e)),
-		PathSource::Remote { .. } => sftp::remote_remove_file(source).await,
+		PathSource::Remote { host, path, .. } => {
+			crate::mcp::runtime::config::check_remote_write(host, path)?;
+			sftp::remote_remove_file(source).await
+		}
 	}
 }
 

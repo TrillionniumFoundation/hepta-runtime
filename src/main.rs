@@ -32,7 +32,15 @@ async fn main() -> Result<()> {
 			bind,
 			ssh_key,
 			ssh_timeout,
+			runtime_config,
+			auth_token_file,
 		} => {
+			let runtime_enabled = runtime_config.is_some();
+			if let Some(config_path) = runtime_config.as_ref() {
+				let config = mcp::runtime::RuntimeConfig::load(config_path)?;
+				mcp::runtime::init_runtime(config)?;
+			}
+
 			// Resolve working directory
 			let working_directory = if let Some(p) = path {
 				p.canonicalize().unwrap_or(p)
@@ -55,8 +63,8 @@ async fn main() -> Result<()> {
 
 			match bind {
 				Some(addr) => {
-					// HTTP mode with Streamable HTTP transport
-					run_http_server(&addr).await?;
+					// HTTP mode with Streamable HTTP transport.
+					run_http_server(&addr, auth_token_file.as_deref(), runtime_enabled).await?;
 				}
 				None => {
 					// STDIO mode (default)
@@ -107,14 +115,78 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 		service.waiting().await.ok();
 	}
 
-	// Kill all in-flight shell children's process groups so nothing survives as an orphan.
+	// Kill request-scoped shell trees and interactive SSH PTYs. Durable runtime jobs
+	// are deliberately independent and remain queryable after this process restarts.
 	mcp::fs::shell::kill_all_shell_children();
+	mcp::runtime::pty::close_all_ptys();
 
 	Ok(())
 }
 
-/// Run the MCP server over HTTP with Streamable HTTP transport
-async fn run_http_server(bind_addr: &str) -> Result<()> {
+#[derive(Clone)]
+struct HttpAuth {
+	token_hash: [u8; 32],
+}
+
+fn load_http_auth(path: Option<&std::path::Path>, required: bool) -> Result<Option<HttpAuth>> {
+	use sha2::{Digest, Sha256};
+	let Some(path) = path else {
+		if required {
+			anyhow::bail!("runtime HTTP mode requires --auth-token-file");
+		}
+		return Ok(None);
+	};
+	let metadata = std::fs::metadata(path)?;
+	if !metadata.is_file() {
+		anyhow::bail!(
+			"HTTP auth token path is not a regular file: {}",
+			path.display()
+		);
+	}
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		if metadata.permissions().mode() & 0o007 != 0 {
+			anyhow::bail!("HTTP auth token file must not be accessible to other users");
+		}
+	}
+	let token = std::fs::read(path)?;
+	let token = token.strip_suffix(b"\n").unwrap_or(&token);
+	if token.len() < 32 || token.len() > 4096 {
+		anyhow::bail!("HTTP auth token must contain 32..4096 bytes");
+	}
+	Ok(Some(HttpAuth {
+		token_hash: Sha256::digest(token).into(),
+	}))
+}
+
+async fn require_http_auth(
+	axum::extract::State(auth): axum::extract::State<HttpAuth>,
+	request: axum::extract::Request,
+	next: axum::middleware::Next,
+) -> axum::response::Response {
+	use axum::response::IntoResponse;
+	use sha2::{Digest, Sha256};
+	use subtle::ConstantTimeEq;
+	let valid = request
+		.headers()
+		.get("x-hepta-runtime-token")
+		.is_some_and(|value| {
+			let candidate: [u8; 32] = Sha256::digest(value.as_bytes()).into();
+			bool::from(candidate.ct_eq(&auth.token_hash))
+		});
+	if !valid {
+		return axum::http::StatusCode::UNAUTHORIZED.into_response();
+	}
+	next.run(request).await
+}
+
+/// Run the MCP server over HTTP with Streamable HTTP transport.
+async fn run_http_server(
+	bind_addr: &str,
+	auth_token_file: Option<&std::path::Path>,
+	auth_required: bool,
+) -> Result<()> {
 	use rmcp::transport::streamable_http_server::{
 		session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
 	};
@@ -129,7 +201,18 @@ async fn run_http_server(bind_addr: &str) -> Result<()> {
 		StreamableHttpServerConfig::default().with_cancellation_token(ct.child_token()),
 	);
 
-	let router = axum::Router::new().nest_service("/mcp", service);
+	let auth = load_http_auth(auth_token_file, auth_required)?;
+	let mut protected = axum::Router::new().nest_service("/mcp", service);
+	if let Some(auth) = auth {
+		protected = protected.layer(axum::middleware::from_fn_with_state(
+			auth,
+			require_http_auth,
+		));
+	}
+	let router = axum::Router::new()
+		.route("/healthz", axum::routing::get(|| async { "ok\n" }))
+		.route("/readyz", axum::routing::get(|| async { "ready\n" }))
+		.merge(protected);
 	let addr = bind_addr
 		.parse::<std::net::SocketAddr>()
 		.map_err(|e| anyhow::anyhow!("Invalid bind address '{}': {}", bind_addr, e))?;
@@ -142,13 +225,25 @@ async fn run_http_server(bind_addr: &str) -> Result<()> {
 
 	let _ = axum::serve(tcp_listener, router)
 		.with_graceful_shutdown(async move {
+			#[cfg(unix)]
+			{
+				use tokio::signal::unix::{signal, SignalKind};
+				let mut sigterm =
+					signal(SignalKind::terminate()).expect("failed to register SIGTERM handler");
+				tokio::select! {
+					_ = tokio::signal::ctrl_c() => {},
+					_ = sigterm.recv() => {},
+				}
+			}
+			#[cfg(not(unix))]
 			tokio::signal::ctrl_c().await.unwrap();
 			ct.cancel();
 		})
 		.await;
 
-	// Same orphan cleanup as STDIO shutdown — in-flight shell children must not survive.
+	// Same orphan cleanup as STDIO shutdown. Durable runtime jobs are unaffected.
 	mcp::fs::shell::kill_all_shell_children();
+	mcp::runtime::pty::close_all_ptys();
 
 	Ok(())
 }

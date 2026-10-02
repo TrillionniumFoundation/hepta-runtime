@@ -1,13 +1,13 @@
 [package]
-name = "octofs"
-version = "0.16.1"
+name = "hepta-runtime"
+version = "0.1.0"
 edition = "2021"
-authors = ["Muvon Un Limited <contact@muvon.io>"]
+authors = ["TrillionniumFoundation"]
 license = "Apache-2.0"
-description = "Standalone MCP filesystem tools server — view, edit, shell, workdir"
-homepage = "https://github.com/muvon/octofs"
-repository = "https://github.com/muvon/octofs"
-documentation = "https://github.com/muvon/octofs"
+description = "Policy-enforced multi-host MCP runtime, based on Octofs"
+homepage = "https://github.com/TrillionniumFoundation/hepta-runtime"
+repository = "https://github.com/TrillionniumFoundation/hepta-runtime"
+documentation = "https://github.com/TrillionniumFoundation/hepta-runtime"
 keywords = ["mcp", "ai", "filesystem", "cli", "tools"]
 categories = ["development-tools", "command-line-utilities", "filesystem"]
 readme = "README.md"
@@ -23,7 +23,7 @@ exclude = [
 ]
 
 [[bin]]
-name = "octofs"
+name = "hepta-runtime"
 path = "src/main.rs"
 
 # Enable static linking
@@ -40,6 +40,8 @@ tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "process"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 anyhow = "1.0.104"
+sha2 = "0.11"
+subtle = "2.6"
 ignore = "0.4.33"
 regex = "1.13.1"
 rayon = "1.12.0"

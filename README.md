@@ -1,3 +1,11 @@
+# Hepta Runtime
+
+Policy-enforced, multi-host MCP runtime for durable process execution, interactive PTYs, read-only hardware/service/network inspection, and exact administrator-approved privileged actions.
+
+This project is derived from [Muvon/octofs](https://github.com/Muvon/octofs) at commit `37b5d3d02be511bae86d91fa980996a5fe257d7b` under Apache-2.0. The original Octofs documentation follows below; see [`docs/HEPTA_RUNTIME.md`](docs/HEPTA_RUNTIME.md) for the fork-specific architecture, policy, deployment, and recovery contract.
+
+---
+
 <div align="center">
 
 # 🐙 Octofs
