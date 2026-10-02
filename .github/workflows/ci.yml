@@ -1,61 +1,51 @@
-name: CI
+name: Hepta Runtime CI
 
 on:
   push:
-    branches: [ master, main, develop ]
+    branches:
+      - hepta-runtime-base
+      - 'feature/**'
   pull_request:
-    branches: [ master, main, develop ]
+    branches:
+      - hepta-runtime-base
 
-# A new push supersedes whatever is still running for the same branch or PR —
-# there is no point burning runners on a commit nobody is looking at any more.
-# Grouping by workflow + ref keeps master, each branch and each PR independent.
+permissions:
+  contents: read
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  rust:
-    name: Rust CI
-    uses: muvon/ci-workflow/.github/workflows/rust-ci.yml@master
-    with:
-      feature-flags: '--all-features'
-      doc: false
-      coverage: false
-
-
-  coverage:
-    name: Coverage Report
-    permissions:
-      contents: write # push the badge JSON to the `badges` branch
-    uses: muvon/ci-workflow/.github/workflows/rust-coverage.yml@master
-    with:
-      feature-flags: '--all-features'
-  musl-build:
-    name: Musl Build (x86_64 + aarch64)
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-22.04-arm
+  runtime-ci:
+    name: Rust exact-head validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout exact head
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-    - name: Build in Alpine (mirrors release pipeline)
-      run: |
-        docker run --rm \
-          -v "$(pwd):/workspace" \
-          -w /workspace \
-          rust:1.98.0-alpine3.23 \
-          sh -c "
-            apk add --no-cache git perl musl-dev pkgconfig gcc g++ && \
-            rustup target add ${{ matrix.target }} && \
-            cargo build --target ${{ matrix.target }}
-          "
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup component add rustfmt clippy --toolchain 1.95.0
+          rustup default 1.95.0
+          rustc --version
+          cargo --version
 
-  brief:
-    uses: muvon/ci-workflow/.github/workflows/brief.yml@master
-    secrets: inherit
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Check all targets
+        run: cargo check --locked --all-targets
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --locked --all-targets
+
+      - name: Release build
+        run: cargo build --locked --release
