@@ -118,7 +118,7 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 	// Kill request-scoped shell trees and interactive SSH PTYs. Durable runtime jobs
 	// are deliberately independent and remain queryable after this process restarts.
 	mcp::fs::shell::kill_all_shell_children();
-	mcp::runtime::pty::close_all_ptys();
+	mcp::runtime::pty::close_all_ptys().await;
 
 	Ok(())
 }
@@ -168,6 +168,9 @@ async fn require_http_auth(
 	use axum::response::IntoResponse;
 	use sha2::{Digest, Sha256};
 	use subtle::ConstantTimeEq;
+	if request.headers().contains_key("origin") {
+		return axum::http::StatusCode::FORBIDDEN.into_response();
+	}
 	let valid = request
 		.headers()
 		.get("x-hepta-runtime-token")
@@ -217,6 +220,9 @@ async fn run_http_server(
 		.parse::<std::net::SocketAddr>()
 		.map_err(|e| anyhow::anyhow!("Invalid bind address '{}': {}", bind_addr, e))?;
 
+	if auth_required && !addr.ip().is_loopback() {
+		anyhow::bail!("runtime HTTP must bind a loopback address");
+	}
 	let tcp_listener = tokio::net::TcpListener::bind(&addr)
 		.await
 		.map_err(|e| anyhow::anyhow!("Failed to bind to {}: {}", addr, e))?;
@@ -243,7 +249,7 @@ async fn run_http_server(
 
 	// Same orphan cleanup as STDIO shutdown. Durable runtime jobs are unaffected.
 	mcp::fs::shell::kill_all_shell_children();
-	mcp::runtime::pty::close_all_ptys();
+	mcp::runtime::pty::close_all_ptys().await;
 
 	Ok(())
 }

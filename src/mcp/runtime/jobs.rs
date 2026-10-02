@@ -1,3 +1,7 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+//! Durable host-bound job identities, recovery and log pagination.
 use anyhow::{bail, Context, Result};
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
@@ -12,8 +16,9 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex as AsyncMutex;
 
+use super::config::Platform;
 use super::config::{check_environment, check_execution, runtime_config, valid_name};
-use super::ssh::run_python_json;
+use super::ssh::{run_jobctl, run_python_json};
 
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static START_LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
@@ -22,6 +27,7 @@ const MAX_STDIN_BYTES: usize = 1024 * 1024;
 const MAX_LOG_READ_BYTES: u64 = 1024 * 1024;
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ProcessStartParams {
 	/// Configured host name, never a raw SSH destination.
 	pub host: String,
@@ -54,12 +60,14 @@ pub struct ProcessStartParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ProcessRefParams {
 	pub host: String,
 	pub job_id: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ProcessReadParams {
 	pub host: String,
 	pub job_id: String,
@@ -73,6 +81,7 @@ pub struct ProcessReadParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ProcessWaitParams {
 	pub host: String,
 	pub job_id: String,
@@ -82,6 +91,7 @@ pub struct ProcessWaitParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ProcessCancelParams {
 	pub host: String,
 	pub job_id: String,
@@ -91,6 +101,7 @@ pub struct ProcessCancelParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ProcessListParams {
 	#[serde(default)]
 	pub host: Option<String>,
@@ -98,6 +109,8 @@ pub struct ProcessListParams {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct JobRecord {
+	#[serde(default)]
+	system_jobctl: bool,
 	id: String,
 	host: String,
 	ssh_target: String,
@@ -110,6 +123,8 @@ struct JobRecord {
 	created_unix_ms: u128,
 	idempotency_key: Option<String>,
 	request_fingerprint: u64,
+	#[serde(default)]
+	request_digest: Option<String>,
 	#[serde(default = "default_launch_state")]
 	launch_state: String,
 	#[serde(default)]
@@ -153,13 +168,24 @@ fn save_record(record: &JobRecord) -> Result<()> {
 	let path = record_path(&record.id)?;
 	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
 	let bytes = serde_json::to_vec_pretty(record)?;
-	std::fs::write(&tmp, bytes)?;
+	{
+		let mut file = OpenOptions::new()
+			.write(true)
+			.create(true)
+			.truncate(true)
+			.open(&tmp)?;
+		file.write_all(&bytes)?;
+		file.sync_all()?;
+	}
 	#[cfg(unix)]
 	{
 		use std::os::unix::fs::PermissionsExt;
 		std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
 	}
-	std::fs::rename(tmp, path)?;
+	std::fs::rename(tmp, &path)?;
+	if let Some(parent) = path.parent() {
+		std::fs::File::open(parent)?.sync_all()?;
+	}
 	Ok(())
 }
 
@@ -176,11 +202,10 @@ fn all_records() -> Result<Vec<JobRecord>> {
 		if entry.path().extension().and_then(|s| s.to_str()) != Some("json") {
 			continue;
 		}
-		if let Ok(bytes) = std::fs::read(entry.path()) {
-			if let Ok(record) = serde_json::from_slice::<JobRecord>(&bytes) {
-				records.push(record);
-			}
-		}
+		let bytes = std::fs::read(entry.path())?;
+		let record = serde_json::from_slice::<JobRecord>(&bytes)
+			.context("corrupt job record; refusing to lose idempotency binding")?;
+		records.push(record);
 	}
 	records.sort_by_key(|record| record.created_unix_ms);
 	Ok(records)
@@ -192,7 +217,7 @@ fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
 		.find(|record| record.host == host && record.idempotency_key.as_deref() == Some(key)))
 }
 
-fn fingerprint(params: &ProcessStartParams) -> u64 {
+fn request_digest(params: &ProcessStartParams) -> Result<String> {
 	let binding = json!({
 		"host": params.host,
 		"executable": params.executable,
@@ -205,13 +230,28 @@ fn fingerprint(params: &ProcessStartParams) -> u64 {
 		"cpu_quota_percent": params.cpu_quota_percent,
 		"memory_max_bytes": params.memory_max_bytes,
 	});
-	let bytes = serde_json::to_vec(&binding).expect("process binding serializes");
+	let bytes = serde_json::to_vec(&binding)?;
 	let digest = Sha256::digest(bytes);
-	u64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"))
+	Ok(digest.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+// Retain the old prefix only for readable legacy metadata. New idempotent
+// requests compare all 256 bits, and legacy bindings never silently relaunch.
+fn fingerprint(params: &ProcessStartParams) -> u64 {
+	request_digest(params)
+		.ok()
+		.and_then(|v| u64::from_str_radix(&v[..16], 16).ok())
+		.unwrap_or(0)
+}
+fn matches_request(record: &JobRecord, params: &ProcessStartParams) -> Result<bool> {
+	let expected = record.request_digest.as_ref().context(
+		"legacy idempotency binding lacks a full digest; inspect existing job_id instead of relaunching")?;
+	Ok(*expected == request_digest(params)?)
 }
 
 fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
 	let record = load_record(&params.job_id)?;
+	check_binding(&record)?;
 	if record.host != params.host {
 		bail!(
 			"job `{}` belongs to host `{}`, not `{}`",
@@ -301,7 +341,7 @@ def atomic(name, value):
 
 def process_identity(pid):
     try:
-        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().split()[21])
+        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
         return {"kind": "proc_start_ticks", "value": str(ticks)}
     except Exception:
         pass
@@ -467,7 +507,7 @@ def read_json(name):
 
 def process_identity(pid):
     try:
-        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().split()[21])
+        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
         return {"kind": "proc_start_ticks", "value": str(ticks)}
     except Exception:
         pass
@@ -542,7 +582,7 @@ def one_status():
     pid = int(started.get("supervisor_pid") or launch.get("launcher_pid") or 0)
     expected = started.get("supervisor_identity")
     actual = process_identity(pid) if pid else None
-    running = bool(pid and actual is not None and (expected is None or expected == actual))
+    running = bool(pid and actual is not None and (expected is not None and expected == actual))
     return {"state": "running" if running else "lost", "backend": launch.get("backend", "detached"), "pid": pid, "identity": actual}
 
 deadline = time.monotonic() + min(float(q.get("wait_seconds", 0)), 30.0)
@@ -579,7 +619,8 @@ def read_part(name, offset):
         size = path.stat().st_size
     except FileNotFoundError:
         size = 0
-    offset = min(max(0, int(offset or 0)), size)
+    offset = max(0, int(offset or 0))
+    if offset > size: raise SystemExit("cursor exceeds log length; refusing silent rewind")
     data = b""
     if size:
         with path.open("rb") as f:
@@ -591,6 +632,7 @@ def read_part(name, offset):
         "size": size,
         "eof": offset + len(data) >= size,
         "text": data.decode("utf-8", errors="replace"),
+        "bytes_hex": data.hex(),
     }
 
 print(json.dumps({
@@ -620,7 +662,7 @@ def atomic(name, value):
 
 def process_identity(pid):
     try:
-        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().split()[21])
+        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
         return {"kind": "proc_start_ticks", "value": str(ticks)}
     except Exception:
         pass
@@ -666,8 +708,7 @@ else:
     actual = process_identity(pid) if pid else None
     cmdline = command_line(pid) if pid else ""
     valid = bool(pid and actual is not None and str(job / "runner.py") in cmdline)
-    if expected is not None:
-        valid = valid and expected == actual
+    valid = valid and expected is not None and expected == actual
     if not valid:
         raise SystemExit("refusing to signal PID: ownership verification failed")
     try:
@@ -681,6 +722,8 @@ else:
             break
         time.sleep(0.2)
     if command_line(pid) and not read_json("exit.json"):
+        if process_identity(pid) != expected or str(job / "runner.py") not in command_line(pid):
+            raise SystemExit("refusing SIGKILL: process identity changed")
         try:
             os.killpg(pid, signal.SIGKILL)
             result = "kill_sent"
@@ -750,9 +793,30 @@ fn validate_start(params: &ProcessStartParams) -> Result<()> {
 	Ok(())
 }
 
+fn check_binding(record: &JobRecord) -> Result<()> {
+	let host = runtime_config()?.host(&record.host)?;
+	if host.ssh_target != record.ssh_target {
+		bail!("host binding changed; refusing to operate an old job");
+	}
+	Ok(())
+}
+
 async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 	let config = runtime_config()?;
 	let host = config.host(&record.host)?;
+	check_binding(record)?;
+	if record.system_jobctl {
+		let deadline = tokio::time::Instant::now() + Duration::from_secs(wait_seconds.min(30));
+		loop {
+			let value = run_jobctl(host, &json!({"op":"status","job_id":record.id})).await?;
+			if value.get("state").and_then(Value::as_str) != Some("running")
+				|| tokio::time::Instant::now() >= deadline
+			{
+				return Ok(value);
+			}
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
@@ -775,7 +839,7 @@ async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> R
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
 		"unit": record.unit,
-		"request_fingerprint": format!("{:016x}", record.request_fingerprint),
+		"request_fingerprint": record.request_digest.clone().unwrap_or_else(|| format!("{:016x}", record.request_fingerprint)),
 		"platform": host.platform,
 		"executable": params.executable,
 		"args": params.args,
@@ -789,7 +853,21 @@ async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> R
 		"allow_job_network": host.allow_job_network,
 		"allow_detached_fallback": host.allow_detached_fallback,
 	});
-	match run_python_json(host, START_CODE, &request, Duration::from_secs(20)).await {
+	let launch_result = if record.system_jobctl {
+		run_jobctl(
+			host,
+			&json!({
+				"op":"start", "job_id":record.id, "executable":params.executable,
+				"args":params.args, "cwd":params.cwd, "env":params.env, "stdin":params.stdin,
+				"timeout_seconds":params.timeout_seconds, "nice":params.nice,
+				"cpu_quota_percent":params.cpu_quota_percent, "memory_max_bytes":params.memory_max_bytes
+			}),
+		)
+		.await
+	} else {
+		run_python_json(host, START_CODE, &request, Duration::from_secs(20)).await
+	};
+	match launch_result {
 		Ok(launch) => {
 			record.launch_state = "launched".to_string();
 			record.launch_error = None;
@@ -813,10 +891,12 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	let request_fingerprint = fingerprint(&params);
 	if let Some(key) = params.idempotency_key.as_deref() {
 		if let Some(mut existing) = find_idempotent(&params.host, key)? {
-			if existing.request_fingerprint != request_fingerprint {
+			if !matches_request(&existing, &params)? {
 				bail!("idempotency key `{key}` is already bound to a different request");
 			}
-			let retry = matches!(existing.launch_state.as_str(), "pending" | "launch_failed");
+			check_binding(&existing)?;
+			let retry = existing.system_jobctl
+				&& matches!(existing.launch_state.as_str(), "pending" | "launch_failed");
 			let launch = if retry {
 				Some(launch_record(&mut existing, &params).await?)
 			} else {
@@ -843,6 +923,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	let unit = format!("hepta-runtime-job-{id}");
 	let remote_job_dir = format!("{}/jobs/{id}", host.remote_state_dir.trim_end_matches('/'));
 	let mut record = JobRecord {
+		system_jobctl: host.platform == Platform::Linux,
 		id: id.clone(),
 		host: params.host.clone(),
 		ssh_target: host.ssh_target.clone(),
@@ -855,6 +936,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 		created_unix_ms: now_ms(),
 		idempotency_key: params.idempotency_key.clone(),
 		request_fingerprint,
+		request_digest: Some(request_digest(&params)?),
 		launch_state: "pending".to_string(),
 		launch_error: None,
 	};
@@ -900,7 +982,12 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 		"stderr_offset": params.stderr_offset.unwrap_or(0),
 		"limit": params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),
 	});
-	let output: Value = run_python_json(host, READ_CODE, &request, Duration::from_secs(15)).await?;
+	let output: Value = if record.system_jobctl {
+		run_jobctl(host, &json!({"op":"read","job_id":record.id,
+            "stdout_offset":params.stdout_offset.unwrap_or(0),"stderr_offset":params.stderr_offset.unwrap_or(0),"limit":params.limit.unwrap_or(16384)})).await?
+	} else {
+		run_python_json(host, READ_CODE, &request, Duration::from_secs(15)).await?
+	};
 	audit(
 		"process_read",
 		&params.host,
@@ -923,8 +1010,11 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 		"unit": record.unit,
 		"grace_seconds": params.grace_seconds.unwrap_or(10).min(30),
 	});
-	let output: Value =
-		run_python_json(host, CANCEL_CODE, &request, Duration::from_secs(45)).await?;
+	let output: Value = if record.system_jobctl {
+		run_jobctl(host, &json!({"op":"cancel","job_id":record.id})).await?
+	} else {
+		run_python_json(host, CANCEL_CODE, &request, Duration::from_secs(45)).await?
+	};
 	audit("process_cancel", &params.host, &params.job_id, &output)?;
 	Ok(serde_json::to_string_pretty(&output)?)
 }
@@ -941,37 +1031,5 @@ pub fn list_jobs(params: ProcessListParams) -> Result<String> {
 }
 
 #[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn ids_are_valid_and_unique() {
-		let a = next_job_id();
-		let b = next_job_id();
-		assert_ne!(a, b);
-		assert!(valid_name(&a));
-	}
-
-	#[test]
-	fn fingerprint_binds_stdin_and_resource_limits() {
-		let mut base = ProcessStartParams {
-			host: "rog".into(),
-			executable: "/usr/bin/printf".into(),
-			args: vec!["ok".into()],
-			cwd: Some("/tmp".into()),
-			env: BTreeMap::new(),
-			stdin: None,
-			timeout_seconds: Some(10),
-			idempotency_key: Some("key".into()),
-			nice: Some(1),
-			cpu_quota_percent: Some(20),
-			memory_max_bytes: Some(134217728),
-		};
-		let original = fingerprint(&base);
-		base.stdin = Some("different".into());
-		assert_ne!(original, fingerprint(&base));
-		base.stdin = None;
-		base.cpu_quota_percent = Some(21);
-		assert_ne!(original, fingerprint(&base));
-	}
-}
+#[path = "jobs_tests.rs"]
+mod tests;

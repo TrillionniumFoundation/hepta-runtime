@@ -1,3 +1,7 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+//! Fail-closed host configuration and capability policy.
 use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -7,6 +11,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 
 static RUNTIME_CONFIG: OnceLock<RuntimeConfig> = OnceLock::new();
+static STATE_LOCK: OnceLock<std::fs::File> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -200,6 +205,22 @@ pub fn init_runtime(config: RuntimeConfig) -> Result<()> {
 	config.validate()?;
 	std::fs::create_dir_all(config.state_dir.join("jobs"))?;
 	std::fs::create_dir_all(config.state_dir.join("audit"))?;
+	let lock = std::fs::OpenOptions::new()
+		.read(true)
+		.write(true)
+		.create(true)
+		.truncate(false)
+		.open(config.state_dir.join("controller.lock"))?;
+	#[cfg(unix)]
+	{
+		use std::os::fd::AsRawFd;
+		if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+			bail!("another controller already owns this state directory");
+		}
+	}
+	STATE_LOCK
+		.set(lock)
+		.map_err(|_| anyhow!("controller lock already initialized"))?;
 	RUNTIME_CONFIG
 		.set(config)
 		.map_err(|_| anyhow!("runtime config was already initialized"))
@@ -372,7 +393,11 @@ pub fn check_execution(
         );
 	}
 	if let Some(cwd) = cwd {
-		if !Path::new(cwd).is_absolute() {
+		if !Path::new(cwd).is_absolute()
+			|| Path::new(cwd)
+				.components()
+				.any(|c| matches!(c, Component::ParentDir))
+		{
 			bail!("cwd must be an absolute path");
 		}
 		if !host.allowed_cwd_prefixes.is_empty()
@@ -522,26 +547,5 @@ pub fn check_remote_write(alias: &str, path: &str) -> Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn names_are_strict() {
-		assert!(valid_name("rog-1.example"));
-		assert!(!valid_name("rog/1"));
-		assert!(!valid_name(&"-".repeat(129)));
-	}
-
-	#[test]
-	fn basename_is_stable() {
-		assert_eq!(executable_basename("/usr/bin/systemctl"), "systemctl");
-		assert_eq!(executable_basename("python3"), "python3");
-	}
-
-	#[test]
-	fn privileged_regexes_are_full_match_capable() {
-		let regex = Regex::new(r"\A(?:[a-z0-9_-]+)\z").unwrap();
-		assert!(regex.is_match("profile-1"));
-		assert!(!regex.is_match("profile-1;id"));
-	}
-}
+#[path = "config_tests.rs"]
+mod tests;

@@ -1,9 +1,13 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+//! Bounded SSH transport using preconfigured hosts and verified keys.
 use anyhow::{anyhow, bail, Context, Result};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::process::Stdio;
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 
 use super::config::HostConfig;
@@ -41,6 +45,22 @@ pub fn ssh_base(host: &HostConfig) -> Command {
 	command
 }
 
+async fn read_bounded(mut reader: impl AsyncRead + Unpin) -> Result<Vec<u8>> {
+	let mut result = Vec::new();
+	let mut buf = [0u8; 8192];
+	loop {
+		let n = reader.read(&mut buf).await?;
+		if n == 0 {
+			break;
+		}
+		if result.len() + n > MAX_CAPTURE_BYTES {
+			bail!("remote response exceeds 8 MiB capture limit");
+		}
+		result.extend_from_slice(&buf[..n]);
+	}
+	Ok(result)
+}
+
 pub async fn run_capture(
 	host: &HostConfig,
 	remote_command: &str,
@@ -57,22 +77,50 @@ pub async fn run_capture(
 	let mut child = command
 		.spawn()
 		.with_context(|| format!("failed to start ssh for {}", host.ssh_target))?;
-	if let Some(mut stdin) = child.stdin.take() {
-		stdin.write_all(stdin_data).await?;
-		stdin.shutdown().await?;
-	}
-	let output = tokio::time::timeout(timeout, child.wait_with_output())
-		.await
-		.map_err(|_| {
-			anyhow!(
-				"ssh to {} timed out after {}s",
-				host.ssh_target,
-				timeout.as_secs()
-			)
-		})??;
-	if output.stdout.len() > MAX_CAPTURE_BYTES || output.stderr.len() > MAX_CAPTURE_BYTES {
-		bail!("remote response exceeded the 8 MiB safety limit");
-	}
+	let mut stdin = child
+		.stdin
+		.take()
+		.ok_or_else(|| anyhow!("missing SSH stdin"))?;
+	let stdout = child
+		.stdout
+		.take()
+		.ok_or_else(|| anyhow!("missing SSH stdout"))?;
+	let stderr = child
+		.stderr
+		.take()
+		.ok_or_else(|| anyhow!("missing SSH stderr"))?;
+	let result = tokio::time::timeout(timeout, async {
+		let input = async {
+			stdin.write_all(stdin_data).await?;
+			stdin.shutdown().await?;
+			drop(stdin);
+			Ok::<(), anyhow::Error>(())
+		};
+		let wait = async { Ok::<_, anyhow::Error>(child.wait().await?) };
+		let (_, stdout, stderr, status) =
+			tokio::try_join!(input, read_bounded(stdout), read_bounded(stderr), wait)?;
+		Ok::<_, anyhow::Error>(std::process::Output {
+			status,
+			stdout,
+			stderr,
+		})
+	})
+	.await;
+	let output = match result {
+		Ok(Ok(output)) => output,
+		other => {
+			let _ = child.start_kill();
+			let _ = child.wait().await;
+			return match other {
+				Ok(Err(error)) => Err(error),
+				_ => Err(anyhow!(
+					"ssh to {} timed out after {}s",
+					host.ssh_target,
+					timeout.as_secs()
+				)),
+			};
+		}
+	};
 	Ok(output)
 }
 
@@ -152,29 +200,27 @@ pub fn build_exec_command(
 	Ok(command)
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use std::collections::BTreeMap;
-
-	#[test]
-	fn quotes_shell_data() {
-		assert_eq!(shell_quote("a b"), "'a b'");
-		assert_eq!(shell_quote("a'b"), "'a'\"'\"'b'");
+/// Fixed no-argument capability; the administrator policy, not the caller, owns
+/// systemd properties, DynamicUser selection and protected paths.
+pub async fn run_jobctl(host: &HostConfig, input: &serde_json::Value) -> Result<serde_json::Value> {
+	let mut data = serde_json::to_vec(input)?;
+	data.push(b'\n');
+	let output = run_capture(
+		host,
+		"sudo -n /usr/local/libexec/hepta-runtime-jobctl",
+		&data,
+		Duration::from_secs(20),
+	)
+	.await?;
+	if !output.status.success() {
+		bail!(
+			"job capability failed: {}",
+			String::from_utf8_lossy(&output.stderr)
+		);
 	}
-
-	#[test]
-	fn builds_argv_without_model_side_quoting() {
-		let cmd = build_exec_command(
-			"/bin/printf",
-			&["%s".into(), "a b'c".into()],
-			Some("/tmp/a b"),
-			&BTreeMap::new(),
-			24,
-			80,
-		)
-		.unwrap();
-		assert!(cmd.contains("'/tmp/a b'"));
-		assert!(cmd.contains("'a b'\"'\"'c'"));
-	}
+	Ok(serde_json::from_slice(&output.stdout)?)
 }
+
+#[cfg(test)]
+#[path = "ssh_tests.rs"]
+mod tests;

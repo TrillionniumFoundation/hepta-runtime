@@ -1067,8 +1067,76 @@ mod sftp {
 		pub modified: Option<std::time::SystemTime>,
 	}
 
+	/// Runtime file access stays descriptor-relative on the target: a workspace
+	/// symlink must never expose the controller's SSH identity or private state.
+	async fn runtime_file_io(
+		source: &super::PathSource,
+		op: &str,
+		content: Option<&[u8]>,
+	) -> Result<Option<serde_json::Value>> {
+		use crate::mcp::runtime::{config, ssh};
+		let Some(cfg) = config::maybe_runtime_config() else {
+			return Ok(None);
+		};
+		let (alias, _, _, path, user_explicit, port_explicit) = remote_parts(source);
+		let write = matches!(op, "write" | "mkdir" | "remove");
+		config::check_remote_path(alias, path, user_explicit, port_explicit, write)?;
+		let (_, host) = cfg
+			.host_by_alias(alias)
+			.ok_or_else(|| anyhow!("unknown host"))?;
+		let roots = if write {
+			&host.allowed_write_path_prefixes
+		} else {
+			&host.allowed_read_path_prefixes
+		};
+		let root = roots
+			.iter()
+			.filter(|root| {
+				path == root.as_str()
+					|| path.starts_with(&format!("{}/", root.trim_end_matches('/')))
+			})
+			.max_by_key(|root| root.len())
+			.ok_or_else(|| anyhow!("path outside capability roots"))?;
+		let hex: String = content
+			.unwrap_or_default()
+			.iter()
+			.map(|b| format!("{b:02x}"))
+			.collect();
+		let value = ssh::run_python_json(
+			host,
+			include_str!("../runtime/fileio.py"),
+			&serde_json::json!({"root":root,"path":path,"op":op,"hex":hex}),
+			std::time::Duration::from_secs(20),
+		)
+		.await?;
+		Ok(Some(value))
+	}
+	fn runtime_meta(value: &serde_json::Value) -> RemoteMetadata {
+		RemoteMetadata {
+			size: value["size"].as_u64().unwrap_or(0),
+			is_dir: value["is_dir"].as_bool().unwrap_or(false),
+			is_file: value["is_file"].as_bool().unwrap_or(false),
+			modified: value["modified_secs"]
+				.as_f64()
+				.filter(|v| v.is_finite() && *v >= 0.0)
+				.map(|v| std::time::UNIX_EPOCH + std::time::Duration::from_secs_f64(v)),
+		}
+	}
+
 	/// Read a remote file as bytes.
 	pub async fn remote_read(source: &super::PathSource) -> Result<Vec<u8>> {
+		if let Some(v) = runtime_file_io(source, "read", None).await? {
+			let hex = v["hex"]
+				.as_str()
+				.ok_or_else(|| anyhow!("missing file bytes"))?;
+			if !hex.len().is_multiple_of(2) || !hex.is_ascii() {
+				anyhow::bail!("invalid file encoding");
+			}
+			return (0..hex.len())
+				.step_by(2)
+				.map(|i| u8::from_str_radix(&hex[i..i + 2], 16).map_err(Into::into))
+				.collect();
+		}
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
 		sftp.read(path)
@@ -1087,6 +1155,12 @@ mod sftp {
 
 	/// Write content to a remote file (creates or truncates).
 	pub async fn remote_write(source: &super::PathSource, content: &[u8]) -> Result<()> {
+		if runtime_file_io(source, "write", Some(content))
+			.await?
+			.is_some()
+		{
+			return Ok(());
+		}
 		use tokio::io::AsyncWriteExt;
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
@@ -1104,6 +1178,9 @@ mod sftp {
 
 	/// Check if a remote path exists.
 	pub async fn remote_exists(source: &super::PathSource) -> Result<bool> {
+		if let Some(v) = runtime_file_io(source, "exists", None).await? {
+			return Ok(v["exists"].as_bool().unwrap_or(false));
+		}
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
 		sftp.try_exists(path)
@@ -1113,6 +1190,9 @@ mod sftp {
 
 	/// Get metadata for a remote path.
 	pub async fn remote_metadata(source: &super::PathSource) -> Result<RemoteMetadata> {
+		if let Some(v) = runtime_file_io(source, "metadata", None).await? {
+			return Ok(runtime_meta(&v));
+		}
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
 		let attrs = sftp
@@ -1129,6 +1209,9 @@ mod sftp {
 
 	/// Create directories recursively (SFTP create_dir only creates a single dir).
 	pub async fn remote_create_dir_all(source: &super::PathSource) -> Result<()> {
+		if runtime_file_io(source, "mkdir", None).await?.is_some() {
+			return Ok(());
+		}
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
 		// Home-relative paths (`/~/x`) must stay relative so SFTP resolves them
@@ -1147,6 +1230,9 @@ mod sftp {
 
 	/// Remove a remote file.
 	pub async fn remote_remove_file(source: &super::PathSource) -> Result<()> {
+		if runtime_file_io(source, "remove", None).await?.is_some() {
+			return Ok(());
+		}
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
 		sftp.remove_file(path)
@@ -1158,6 +1244,20 @@ mod sftp {
 	pub async fn remote_list_dir(
 		source: &super::PathSource,
 	) -> Result<Vec<(String, RemoteMetadata)>> {
+		if let Some(v) = runtime_file_io(source, "list", None).await? {
+			let entries = v["entries"]
+				.as_array()
+				.ok_or_else(|| anyhow!("missing directory entries"))?;
+			return Ok(entries
+				.iter()
+				.map(|v| {
+					(
+						v["name"].as_str().unwrap_or_default().to_owned(),
+						runtime_meta(v),
+					)
+				})
+				.collect());
+		}
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
 		let read_dir = sftp
@@ -1184,6 +1284,12 @@ mod sftp {
 
 	/// Canonicalize a remote path.
 	pub async fn remote_canonicalize(source: &super::PathSource) -> Result<String> {
+		if let Some(v) = runtime_file_io(source, "canonicalize", None).await? {
+			return Ok(v["path"]
+				.as_str()
+				.ok_or_else(|| anyhow!("missing canonical path"))?
+				.to_owned());
+		}
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
 		sftp.canonicalize(path)

@@ -1,3 +1,7 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+//! Controller-scoped interactive SSH sessions with owned cancellation.
 use anyhow::{anyhow, bail, Result};
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
@@ -11,16 +15,20 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::{ChildStdin, Command};
 use tokio::sync::Mutex as AsyncMutex;
 
+use super::config::Platform;
 use super::config::{check_environment, check_execution, runtime_config, valid_name};
-use super::ssh::build_exec_command;
+use super::jobs::audit;
+use super::ssh::{build_exec_command, run_jobctl};
+use tokio_util::sync::CancellationToken;
 
 const MAX_BUFFER_BYTES: usize = 4 * 1024 * 1024;
-const MAX_READ_BYTES: usize = 1024 * 1024;
+const MAX_READ_BYTES: usize = 16 * 1024;
 const MAX_WRITE_BYTES: usize = 64 * 1024;
 static PTY_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static PTYS: OnceLock<Mutex<HashMap<String, PtySession>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct PtyStartParams {
 	pub host: String,
 	pub executable: String,
@@ -37,12 +45,14 @@ pub struct PtyStartParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct PtyRefParams {
 	pub host: String,
 	pub session_id: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct PtyReadParams {
 	pub host: String,
 	pub session_id: String,
@@ -53,6 +63,7 @@ pub struct PtyReadParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct PtyWriteParams {
 	pub host: String,
 	pub session_id: String,
@@ -61,6 +72,7 @@ pub struct PtyWriteParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct PtyListParams {
 	#[serde(default)]
 	pub host: Option<String>,
@@ -120,6 +132,7 @@ impl RingBuffer {
 
 #[derive(Clone)]
 struct PtySession {
+	stop: CancellationToken,
 	id: String,
 	host: String,
 	pid: u32,
@@ -191,9 +204,17 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 		true,
 	)?;
 	check_environment(&params.host, &params.env)?;
+	if registry()
+		.lock()
+		.map_err(|_| anyhow!("PTY registry lock poisoned"))?
+		.len() >= 128
+	{
+		bail!("PTY session limit reached");
+	}
+	let id = next_id();
 	let rows = params.rows.unwrap_or(24).clamp(1, 500);
 	let cols = params.cols.unwrap_or(120).clamp(1, 1000);
-	let remote = build_exec_command(
+	let mut remote = build_exec_command(
 		&params.executable,
 		&params.args,
 		params.cwd.as_deref(),
@@ -201,6 +222,10 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 		rows,
 		cols,
 	)?;
+	let system_jobctl = host.platform == Platform::Linux;
+	if system_jobctl {
+		remote = format!("stty -echo rows {rows} cols {cols}; exec sudo -n /usr/local/libexec/hepta-runtime-jobctl");
+	}
 	let mut command = Command::new("ssh");
 	command
 		.arg("-tt")
@@ -219,7 +244,18 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 		.kill_on_drop(false);
 	let mut child = command.spawn()?;
 	let pid = child.id().ok_or_else(|| anyhow!("ssh child has no PID"))?;
-	let stdin = Arc::new(AsyncMutex::new(child.stdin.take()));
+	let mut input = child.stdin.take();
+	if system_jobctl {
+		let mut payload = serde_json::to_vec(
+			&json!({"op":"pty","job_id":id,"executable":params.executable,"args":params.args,"cwd":params.cwd,"env":params.env,"timeout_seconds":3600}),
+		)?;
+		payload.push(b'\n');
+		if let Some(pipe) = input.as_mut() {
+			pipe.write_all(&payload).await?;
+			pipe.flush().await?;
+		}
+	}
+	let stdin = Arc::new(AsyncMutex::new(input));
 	let output = Arc::new(Mutex::new(RingBuffer::new()));
 	if let Some(stdout) = child.stdout.take() {
 		tokio::spawn(copy_reader(stdout, output.clone()));
@@ -233,8 +269,20 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 		detail: None,
 	}));
 	let waiter_status = status.clone();
+	let stop = CancellationToken::new();
+	let cancelled = stop.clone();
+	let remote_job_id = id.clone();
 	tokio::spawn(async move {
-		let next = match child.wait().await {
+		let waited = tokio::select! {
+			result = child.wait() => result,
+			_ = cancelled.cancelled() => {
+				if system_jobctl { let _ = run_jobctl(host, &json!({"op":"cancel","job_id":remote_job_id})).await; }
+				// Only the task owning the Child can terminate it. No stored PID signal.
+				let _ = child.start_kill();
+				child.wait().await
+			}
+		};
+		let next = match waited {
 			Ok(exit) if exit.code().is_some() => PtyStatus {
 				state: PtyState::Exited,
 				exit_code: exit.code(),
@@ -255,8 +303,8 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 			*guard = next;
 		}
 	});
-	let id = next_id();
 	let session = PtySession {
+		stop,
 		id: id.clone(),
 		host: params.host.clone(),
 		pid,
@@ -269,6 +317,12 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 		.lock()
 		.map_err(|_| anyhow!("PTY registry lock poisoned"))?
 		.insert(id.clone(), session);
+	audit(
+		"pty_start",
+		&params.host,
+		&id,
+		&json!({"rows":rows,"cols":cols,"restart_persistent":false}),
+	)?;
 	Ok(serde_json::to_string_pretty(&json!({
 		"session_id": id,
 		"host": params.host,
@@ -289,15 +343,26 @@ pub fn read_pty(params: PtyReadParams) -> Result<String> {
 		.lock()
 		.map_err(|_| anyhow!("PTY output lock poisoned"))?;
 	let requested = params.offset.unwrap_or(output.base_offset);
+	if requested > output.base_offset + output.data.len() as u64 {
+		bail!("PTY cursor exceeds available output; refusing silent forward seek");
+	}
 	let limit = params.limit.unwrap_or(65_536).clamp(1, MAX_READ_BYTES);
 	let (offset, next_offset, truncated, text) = output.read(requested, limit);
+	let begin = (offset - output.base_offset) as usize;
+	let end = (next_offset - output.base_offset) as usize;
+	let bytes_hex: String = output.data[begin..end]
+		.iter()
+		.map(|b| format!("{b:02x}"))
+		.collect();
 	Ok(serde_json::to_string_pretty(&json!({
 		"session_id": session.id,
 		"host": session.host,
 		"offset": offset,
 		"next_offset": next_offset,
+		"available_end": output.base_offset + output.data.len() as u64,
 		"truncated_before_offset": truncated,
 		"text": text,
+		"bytes_hex": bytes_hex,
 		"status": status,
 	}))?)
 }
@@ -307,12 +372,32 @@ pub async fn write_pty(params: PtyWriteParams) -> Result<String> {
 		bail!("PTY write exceeds 64 KiB");
 	}
 	let session = lookup(&params.host, &params.session_id)?;
+	if !matches!(
+		session
+			.status
+			.lock()
+			.map_err(|_| anyhow!("PTY status lock poisoned"))?
+			.state,
+		PtyState::Running
+	) {
+		bail!("PTY process has exited; input is not accepted");
+	}
 	let mut guard = session.stdin.lock().await;
 	let stdin = guard
 		.as_mut()
 		.ok_or_else(|| anyhow!("PTY stdin is already closed"))?;
-	stdin.write_all(params.data.as_bytes()).await?;
-	stdin.flush().await?;
+	tokio::time::timeout(std::time::Duration::from_secs(5), async {
+		stdin.write_all(params.data.as_bytes()).await?;
+		stdin.flush().await
+	})
+	.await
+	.map_err(|_| anyhow!("PTY input timeout"))??;
+	audit(
+		"pty_write",
+		&params.host,
+		&params.session_id,
+		&json!({"bytes_written":params.data.len()}),
+	)?;
 	Ok(serde_json::to_string_pretty(&json!({
 		"session_id": params.session_id,
 		"bytes_written": params.data.len(),
@@ -322,25 +407,37 @@ pub async fn write_pty(params: PtyWriteParams) -> Result<String> {
 pub async fn close_pty(params: PtyRefParams) -> Result<String> {
 	let session = lookup(&params.host, &params.session_id)?;
 	session.stdin.lock().await.take();
-	#[cfg(unix)]
-	unsafe {
-		libc::kill(session.pid as i32, libc::SIGTERM);
-	}
+	session.stop.cancel();
+	audit(
+		"pty_close",
+		&params.host,
+		&params.session_id,
+		&json!({"close_requested":true}),
+	)?;
 	Ok(serde_json::to_string_pretty(&json!({
 		"session_id": params.session_id,
-		"signal": "SIGTERM",
+		"result": "close_requested",
 	}))?)
 }
 
-pub fn close_all_ptys() {
-	if let Ok(mut sessions) = registry().lock() {
-		#[cfg(unix)]
-		for session in sessions.values() {
-			unsafe {
-				libc::kill(session.pid as i32, libc::SIGTERM);
-			}
+pub async fn close_all_ptys() {
+	let sessions = match registry().lock() {
+		Ok(mut sessions) => sessions.drain().map(|(_, s)| s).collect::<Vec<_>>(),
+		Err(_) => return,
+	};
+	for session in &sessions {
+		session.stop.cancel();
+	}
+	for _ in 0..240 {
+		let running = sessions.iter().any(|s| {
+			s.status
+				.lock()
+				.is_ok_and(|v| matches!(v.state, PtyState::Running))
+		});
+		if !running {
+			break;
 		}
-		sessions.clear();
+		tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 	}
 }
 
@@ -375,15 +472,5 @@ pub fn list_ptys(params: PtyListParams) -> Result<String> {
 }
 
 #[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn ring_tracks_dropped_prefix() {
-		let mut ring = RingBuffer::new();
-		ring.append(&vec![b'x'; MAX_BUFFER_BYTES + 7]);
-		assert_eq!(ring.base_offset, 7);
-		let (_, _, truncated, _) = ring.read(0, 32);
-		assert!(truncated);
-	}
-}
+#[path = "pty_tests.rs"]
+mod tests;

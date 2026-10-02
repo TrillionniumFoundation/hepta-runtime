@@ -1,3 +1,7 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+//! Read-only host inspection and administrator-defined actions.
 use anyhow::{bail, Result};
 use regex::Regex;
 use rmcp::schemars;
@@ -10,14 +14,17 @@ use super::jobs::audit;
 use super::ssh::run_python_json;
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct HostListParams {}
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct HostParams {
 	pub host: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ServiceStatusParams {
 	pub host: String,
 	/// Exact systemd unit or launchd label names, max 64.
@@ -25,6 +32,7 @@ pub struct ServiceStatusParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct PrivilegedActionParams {
 	pub host: String,
 	/// Exact symbolic action name from the host policy.
@@ -53,7 +61,7 @@ pub fn host_list() -> Result<String> {
 }
 
 const HARDWARE_CODE: &str = r#"
-import glob, json, os, pathlib, platform, subprocess, sys
+import glob, json, os, pathlib, platform, subprocess, sys, time
 
 def read(path, default=None):
     try:
@@ -76,6 +84,8 @@ def cmd(argv):
         return {"exit_code": -1, "stderr": str(exc), "stdout": ""}
 
 result = {
+    "schema": "hepta-hardware-v1",
+    "sampled_at_unix_ms": int(time.time()*1000),
     "hostname": platform.node(),
     "platform": sys.platform,
     "kernel": platform.release(),
@@ -107,6 +117,14 @@ if sys.platform == "linux":
         if values:
             item["values"] = values; hwmon.append(item)
     result["hwmon"] = hwmon
+    normalized = []
+    for monitor in hwmon:
+        for field, raw in monitor['values'].items():
+            unit, scale = ('C', 1000.0) if field.startswith('temp') else ('W', 1000000.0) if field.startswith('power') else ('RPM', 1.0) if field.startswith('fan') else ('Hz', 1.0)
+            try: value = float(raw) / scale
+            except (ValueError, TypeError): value = None
+            normalized.append({'source': monitor['path']+'/'+field, 'sensor': monitor['name'], 'value': value, 'unit': unit, 'available': value is not None})
+    result['sensors'] = normalized
     gpus = []
     for dev in sorted(glob.glob("/sys/class/drm/card[0-9]*/device")):
         if not read(dev + "/vendor"):
@@ -146,6 +164,7 @@ if sys.platform == "linux":
         if value is not None:
             limits["legacy_" + name] = value
     result["power_limits"] = limits
+    result["power_limit_semantics"] = "Driver-reported requests/cached values; not measured sustained power."
     result["accel_devices"] = sorted(glob.glob("/dev/accel/*"))
     thunderbolt = []
     for root in sorted(glob.glob("/sys/bus/thunderbolt/devices/*")):
@@ -156,7 +175,9 @@ if sys.platform == "linux":
         thunderbolt.append(item)
     result["thunderbolt"] = thunderbolt
 else:
-    result["hardware"] = cmd(["system_profiler", "SPHardwareDataType", "-json"])
+    result["cpu"] = cmd(["sysctl", "-n", "machdep.cpu.brand_string"])
+    result["memory_bytes"] = cmd(["sysctl", "-n", "hw.memsize"])
+    result["thermal_sensors_available"] = False
     result["battery"] = cmd(["pmset", "-g", "batt"])
 print(json.dumps(result, sort_keys=True))
 "#;
@@ -168,7 +189,7 @@ result = []
 if q["platform"] == "linux":
     props = "LoadState,ActiveState,SubState,UnitFileState,Result,MainPID,ExecMainStatus,Description"
     for name in q["services"]:
-        p = subprocess.run(["systemctl", "show", name, "--no-pager", "--property=" + props], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        p = subprocess.run(["systemctl", "show", "--no-pager", "--property=" + props, "--", name], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         values = {}
         for line in p.stdout.splitlines():
             if "=" in line:

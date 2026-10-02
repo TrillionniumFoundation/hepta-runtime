@@ -58,20 +58,36 @@ HTTP mode requires a high-entropy token file; every `/mcp` request must carry
 - `process_cancel`: only stored jobs; no arbitrary PID input.
 - `process_list`: durable controller-side identities.
 
-On Linux, the remote helper uses a transient user systemd unit. Production
-policies fail closed if the user manager cannot create it; detached fallback is
-an explicit per-host exception intended for macOS in v0.1. Jobs default to a
-private network namespace restricted to AF_UNIX, preventing access to host
-localhost services such as trading gateways. Network access is a separate,
-explicit host policy. Both backends write
-request, launch, PID/start-time and exit records inside the configured remote
-state directory. The controller stores a separate immutable job identity and
-an append-only audit event.
+On Linux, the dedicated SSH identity can invoke only the no-argument root-owned
+`hepta-runtime-jobctl` binary through a narrow sudoers entry. That binary accepts
+bounded, typed JSON for start/status/read/cancel/PTY, validates a root-owned host
+policy, and creates a transient **system** systemd unit. Workloads run under a
+separate DynamicUser, not root and not the controller SSH identity. The unit
+hides controller state/credentials and user homes, uses a private network by
+default, and grants write access only to the workspace and its own result data.
+The independent aggregate job slice limits CPU, memory and task counts.
 
-A controller restart does not terminate durable jobs. A remote host reboot is
-not claimed as process recovery in v0.1: logs and metadata remain, but an
-in-flight transient unit is reported lost unless the application itself has a
-separate restart policy.
+Root-owned records bind the job ID, full SHA-256 request digest, boot ID, random
+nonce, unit name and systemd invocation identity. New idempotent requests bind
+all 256 bits; legacy controller records remain readable but cannot silently
+relaunch through a missing full-digest binding. Completed exit records are
+preserved across target boots; interrupted in-flight jobs are reported lost and
+are never automatically repeated. Invalid completion identities fail closed.
+
+The macOS backend remains a Python detached supervisor under the dedicated
+unprivileged account. It verifies stored process identity for cancellation but
+does **not** provide Linux namespace/DynamicUser isolation; administrators must
+explicitly enable its fallback/network policy.
+
+A controller-side `launch_failed` record means the launch acknowledgement failed,
+not proof that no target process exists. A retry reuses the exact root-owned
+job ID and request digest; the root helper resolves an existing record instead
+of issuing a second execution. Status errors are reported explicitly rather
+than fabricated as success. Never retry an uncertain job under a new key.
+
+A controller restart does not terminate durable jobs. A remote host reboot does not resume a running workload: completed results and
+logs remain readable, while in-flight transient jobs become lost. Application
+checkpoint/restart policy is outside this runtime.
 
 ### PTY tools
 
@@ -143,8 +159,8 @@ relative forms, and must fall under `allowed_read_path_prefixes` or
 `allowed_write_path_prefixes`. Writes additionally require `allow_write=true`.
 A registered host must set `allow_write=true`, provide at least one absolute
 `allowed_write_path_prefixes` entry, and the target must not intersect a
-protected prefix. Login-home-relative forms such as `ssh://host/~/file` are
-read-only; write calls must use an absolute remote path.
+protected prefix. Login-home-relative forms such as `ssh://host/~/file` are rejected in runtime
+mode; use an absolute remote path.
 
 Without `--runtime-config`, upstream Octofs compatibility is retained and these
 fork-specific host policies are not active.
@@ -153,7 +169,7 @@ fork-specific host policies are not active.
 
 Preferred deployment keeps the runtime on loopback and uses the official
 OpenAI tunnel client as a separate service. Create a tunnel ID and a runtime API
-key in OpenAI Platform. Keep that key in `/etc/hepta-runtime/tunnel.env` or a
+key in OpenAI Platform. Keep that key in `/etc/hepta-runtime/tunnel-api-key` or a
 secret manager; never put it in this repository. The same environment file sets
 `MCP_SERVER_URL` to the loopback MCP endpoint, sends
 `X-Hepta-Runtime-Token: file:/etc/hepta-runtime/mcp-token` for discovery and
@@ -195,7 +211,34 @@ deleted automatically. Inspect or archive them before removal.
   reboots.
 - PTYs are controller-process scoped.
 - The controller-side JSONL audit is not yet a tamper-evident hash chain.
-- macOS uses a detached supervisor rather than transient systemd units.
+- macOS uses a detached Python supervisor and weaker OS-identity isolation.
+- Remote inspection and descriptor-safe file RPCs require Python 3. Core MCP,
+  lifecycle coordination and the Linux privileged helper are Rust.
+- Each Linux target retains at most 128 job identities before refusing new
+  starts. Archive completed records administratively; do not erase idempotency
+  history to make capacity appear available.
+- Job logs are capped at 16 MiB per stream and PTY output at a 4 MiB ring.
+  Keep important artifacts in the workspace, not unbounded stdout.
+- Jobs may alter their own workspace/output; outputs are not a proof of trusted
+  computation. Audit records are not cryptographic attestations.
 - No GUI capture or desktop input API is included in v0.1.
-- Hardware schemas expose raw kernel values where units vary; consumers must
-  preserve field names and interpret units explicitly.
+- Hardware includes raw values and normalized C/W/RPM/Hz readings, unavailable
+  readings are null, and power-limit requests are not sustained-power evidence.
+
+## Tunnel account binding
+
+The official runtime client is installed independently of cloud credentials.
+Create a workspace-associated tunnel and a dedicated Tunnels Read+Use runtime
+key in OpenAI Platform. Provision it from a root-owned 0600 file, without putting
+the secret in command-line arguments or chat:
+
+```sh
+sudo /usr/local/sbin/hepta-runtime-provision-tunnel \
+  --tunnel-id tunnel_ACTUAL_ID --key-file /root/hepta-tunnel-runtime-key
+sudo /usr/local/sbin/hepta-runtime-provision-tunnel --check
+```
+
+The helper never reuses OpenClaw/Codex credentials, creates tunnels by guessing
+an organization, or treats client installation as a connected ChatGPT app.
+After tunnel health is valid, add the tunnel to the correct ChatGPT workspace
+and verify `host_list` followed by a read-only `hardware_snapshot` tool call.

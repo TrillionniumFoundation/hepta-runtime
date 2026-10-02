@@ -5,6 +5,7 @@ on:
     branches:
       - hepta-runtime-base
       - 'feature/**'
+      - 'fix/**'
   pull_request:
     branches:
       - hepta-runtime-base
@@ -46,6 +47,9 @@ jobs:
 
       - name: Test
         run: cargo test --locked --all-targets
+
+      - name: Descriptor-relative file safety
+        run: python3 tests/file_capabilities.py
 
       - name: Release build
         run: cargo build --locked --release
