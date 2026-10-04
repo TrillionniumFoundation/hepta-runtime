@@ -5,6 +5,12 @@ working notes for agents live in `.agents/` (see below).
 
 ## Build & test
 
+Repository builds use Rust 1.99.0, pinned in `rust-toolchain.toml`. CI and the
+release target matrix use the same compiler. `Cargo.toml` retains Rust 1.95
+as the minimum supported Rust version; a compiler upgrade does not raise it.
+Use `cargo +1.95.0 check --locked --all-targets` to verify that minimum on the
+authorized dev server in addition to the checks below.
+
 - Build: `cargo build` · Release: `cargo build --release`
 - Dev run: `cargo run -- mcp` (stdio; add `--bind 0.0.0.0:12345` for HTTP;
   `RUST_LOG=debug` for logs)
