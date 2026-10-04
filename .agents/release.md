@@ -3,7 +3,7 @@
 ## CI (every push/PR; superseded runs auto-cancel)
 
 - **rust-ci** (reusable `muvon/ci-workflow`): fmt + clippy + tests with `--all-features`; doc/coverage off.
-- **musl-build**: `x86_64` + `aarch64` `unknown-linux-musl` built inside `rust:1.98.0-alpine3.23` docker —
+- **musl-build**: `x86_64` + `aarch64` `unknown-linux-musl` built inside `rust:1.99.0-alpine3.23` docker —
   mirrors the release pipeline. A change that needs cmake (or anything Alpine lacks) breaks this job; that is
   why russh uses the `ring` backend, not `aws-lc-rs`.
 - **coverage**: pushes badge JSON to the `badges` branch; percentages exclude `*_tests.rs` (same regex as
