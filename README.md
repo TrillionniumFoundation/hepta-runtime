@@ -6,6 +6,10 @@ This project is derived from [Muvon/octofs](https://github.com/Muvon/octofs) at 
 
 ## Hepta operator deployment
 
+See [native binary/remote document/page/range tools](docs/NATIVE_TRANSFER.md) for the current local replacement APIs and their explicit preservation limits.
+
+
+
 The upstream Octofs installation instructions below do **not** install this fork. Build Hepta with `cargo build --release --locked --bin hepta-runtime` and use the configuration and deployment assets in this repository.
 
 For trusted-account shell, external-PID signalling and temporary sudo, see [Operator mode](docs/OPERATOR_MODE.md). For complete operator output archives and target-owned terminals that survive controller restarts, see [Persistent terminals](docs/PERSISTENT_TERMINALS.md). The isolated default remains separate; arbitrary operator execution is not a sandbox.

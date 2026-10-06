@@ -1,4 +1,6 @@
-# Controller-local native document and image tools
+# Native document and image tools
+
+**Current candidate update:** optional configured-host document/image access, native binary tools, PDF page editing and worksheet range editing are specified in [NATIVE_TRANSFER.md](NATIVE_TRANSFER.md). That document supersedes historical local-only and unregistered-prototype statements below. Check the exact qualification receipt for what is actually installed.
 
 These are native MCP entry points, not a recommendation to run a shell command. The Rust server validates the controller's existing file roots, runs at most two bounded parser workers, and returns protocol-native text/image blocks. They operate on **local controller paths only**. Remote document tools and full Desktop Commander document-contract equivalence are separate remaining work.
 

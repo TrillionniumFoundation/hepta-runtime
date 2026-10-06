@@ -1,6 +1,7 @@
 //! Hepta Runtime: explicit multi-host execution, durable jobs, PTY sessions,
 //! policy enforcement, and read-only host inspection.
 
+pub mod binary;
 pub mod config;
 pub mod documents;
 pub mod inspect;

@@ -38,3 +38,34 @@ async fn worker_capture_is_bounded() {
 	assert_eq!(bounded(&b"valid"[..], 5).await.unwrap(), b"valid");
 	assert!(bounded(&b"too large"[..], 3).await.is_err());
 }
+
+#[test]
+fn remote_document_schema_keeps_transport_configuration_private() {
+	assert!(serde_json::from_value::<DocumentReadParams>(
+		json!({"path":"/tmp/a.pdf","host":"main","remote":{"ssh_target":"other"}})
+	)
+	.is_err());
+	assert!(serde_json::from_value::<DocumentReadParams>(
+		json!({"path":"/tmp/a.pdf","host":"main","file_helper":"code"})
+	)
+	.is_err());
+	assert!(serde_json::from_value::<DocumentReadParams>(
+		json!({"path":"/tmp/a.pdf","host":"main"})
+	)
+	.is_ok());
+}
+#[test]
+fn pdf_operations_are_typed_not_unrestricted_commands() {
+	assert!(serde_json::from_value::<PdfPageOperation>(
+		json!({"type":"delete","page_indexes":[0],"command":"x"})
+	)
+	.is_err());
+	assert!(serde_json::from_value::<PdfPageOperation>(
+		json!({"type":"execute","page_indexes":[0]})
+	)
+	.is_err());
+	assert!(serde_json::from_value::<PdfPageOperation>(
+		json!({"type":"insert","page_index":0,"markdown":"Title"})
+	)
+	.is_ok());
+}

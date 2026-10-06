@@ -171,6 +171,12 @@ async fn notify_peer_resource_updated(peer: &Peer<RoleServer>, uri: &str) {
 /// interactive sessions, on pre-2026-07-28 connections; other clients ignore it.
 const CLAUDE_CHANNEL_CAPABILITY: &str = "claude/channel";
 const RUNTIME_TOOL_NAMES: &[&str] = &[
+	"worksheet_edit",
+	"pdf_edit",
+	"file_info",
+	"binary_read",
+	"binary_write",
+	"binary_upload",
 	"document_read",
 	"image_read",
 	"document_write",
@@ -832,7 +838,7 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Read local PDF pages, DOCX outline/XML and XLSX worksheet ranges. Optional PDF render returns native MCP image content. Requires administrator-configured parser. Does not fetch URLs or unlock encrypted files."
+		description = "Read PDF pages, DOCX outline/XML and XLSX worksheet ranges on the controller or an explicit configured operator host. Native remote transfers verify versions and SHA256. Optional PDF render returns native MCP images. No URL fetching, decryption, macros or recalculation."
 	)]
 	async fn document_read(
 		&self,
@@ -851,7 +857,7 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Read a local raster image as native MCP image content with dimensions and original SHA256. Preview is resized; original bytes are not modified."
+		description = "Read a raster image on the controller or an explicit configured operator host as native MCP image content, with original SHA256 and dimensions. Preview is resized; use binary_read for lossless original bytes."
 	)]
 	async fn image_read(
 		&self,
@@ -870,7 +876,7 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = false
 		),
-		description = "Create or replace a local PDF/DOCX from markdown, or XLSX from sheet row arrays. Requires expected_sha256 or absent for create-only. Fixed document formatting only; no executable HTML or remote resources."
+		description = "Create or replace PDF/DOCX from basic markdown, or XLSX from sheet row arrays, locally or on a configured operator host. Requires expected_sha256 or absent for create-only; no executable HTML, URL fetching or formula calculation."
 	)]
 	async fn document_write(
 		&self,
@@ -889,13 +895,127 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = false
 		),
-		description = "Apply a fingerprint-checked exact XML replacement to a DOCX document/header/footer. Preserve all unselected package-part bytes. Reject invalid XML and unexpected match counts. No generic binary or shell operation."
+		description = "Apply a fingerprint-checked exact XML replacement to a local or configured-operator-host DOCX body/header/footer. Preserve unselected package payloads. Reject invalid XML, stale versions and unexpected match counts. No shell operation."
 	)]
 	async fn document_edit(
 		&self,
 		Parameters(params): Parameters<runtime::documents::DocumentEditParams>,
 	) -> Result<CallToolResult, String> {
 		runtime::documents::edit(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "file_info",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = true
+		),
+		description = "Return a regular target file size, immutable-read version token, POSIX mode and full SHA256. Explicit configured operator host; rejects symlinks and special files."
+	)]
+	async fn file_info(
+		&self,
+		Parameters(params): Parameters<runtime::binary::FileInfoParams>,
+	) -> Result<String, String> {
+		runtime::binary::info(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "binary_read",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = true
+		),
+		description = "Read bounded base64 file bytes with independent chunk SHA256 and next_offset. Pin expected_version from the first chunk. No 1 MiB total file limit."
+	)]
+	async fn binary_read(
+		&self,
+		Parameters(params): Parameters<runtime::binary::BinaryReadParams>,
+	) -> Result<String, String> {
+		runtime::binary::read(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "binary_write",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Atomically publish at most 1 MiB of decoded base64 under the target account. expected_version is mandatory; absent is create-only. Files with unsupported extended attributes, ACLs or special ownership are rejected instead of losing metadata."
+	)]
+	async fn binary_write(
+		&self,
+		Parameters(params): Parameters<runtime::binary::BinaryWriteParams>,
+	) -> Result<String, String> {
+		runtime::binary::write(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "binary_upload",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Stage binary files in bounded chunks and commit only after total size and SHA256 verification. Retries are bound to upload ID and offsets; destination is unchanged until commit. Commit replay verifies the published destination; abort never deletes committed output. This does not lock out noncooperating writers."
+	)]
+	async fn binary_upload(
+		&self,
+		Parameters(params): Parameters<runtime::binary::BinaryUploadParams>,
+	) -> Result<String, String> {
+		runtime::binary::upload(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "PDF Page Edit",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Insert/delete PDF pages into a distinct output file, preserving the source. Source/output fingerprints are required; inserted PDF sources also need SHA256. Supports local or explicitly configured operator-host paths. Page deletion is not secure redaction; signed/encrypted PDFs are rejected."
+	)]
+	async fn pdf_edit(
+		&self,
+		Parameters(params): Parameters<runtime::documents::PdfEditParams>,
+	) -> Result<rmcp::model::CallToolResult, String> {
+		runtime::documents::edit_pdf(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Worksheet Range Edit",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Edit a bounded XLSX/XLSM cell range with source SHA256 validation. Preserves unselected OOXML package payloads and cell styles; invalidates formula caches and requests recalculation on open. Does NOT calculate formulas. Signed workbooks, merged sheets and shared/array formula edits are refused. Supports local and explicit operator-host files."
+	)]
+	async fn worksheet_edit(
+		&self,
+		Parameters(params): Parameters<runtime::documents::WorksheetEditParams>,
+	) -> Result<rmcp::model::CallToolResult, String> {
+		runtime::documents::edit_worksheet(params)
 			.await
 			.map_err(|e| e.to_string())
 	}
