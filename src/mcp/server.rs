@@ -171,6 +171,10 @@ async fn notify_peer_resource_updated(peer: &Peer<RoleServer>, uri: &str) {
 /// interactive sessions, on pre-2026-07-28 connections; other clients ignore it.
 const CLAUDE_CHANNEL_CAPABILITY: &str = "claude/channel";
 const RUNTIME_TOOL_NAMES: &[&str] = &[
+	"shell_start",
+	"host_processes",
+	"host_signal",
+	"sudo_start",
 	"host_list",
 	"process_start",
 	"process_status",
@@ -609,6 +613,82 @@ impl OctofsServer {
 				}
 			}
 		}
+	}
+
+	#[tool(
+		title = "Shell Start",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Run a shell command on an administrator-configured operator host with the SSH account authority. Durable job identity, logs and idempotency use process_status/read/wait/cancel. Never retry uncertain execution with a new key. Isolated hosts deny this tool."
+	)]
+	async fn shell_start(
+		&self,
+		Parameters(params): Parameters<runtime::operator::ShellStartParams>,
+	) -> Result<String, String> {
+		runtime::operator::shell_start(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Host Processes",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = true
+		),
+		description = "List actual host processes with bounded PID pagination and start identities, not only runtime jobs. Operator hosts only. Command arguments are omitted to avoid exposing secrets."
+	)]
+	async fn host_processes(
+		&self,
+		Parameters(params): Parameters<runtime::operator::HostProcessesParams>,
+	) -> Result<String, String> {
+		runtime::operator::host_processes(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Host Signal",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Signal one positive target-host PID, including processes not created by this runtime. Operator hosts only; existing OS permissions and sudoers apply. Prefer expected_identity from host_processes. Result confirms signal delivery, not process termination. Never blindly retry uncertain delivery."
+	)]
+	async fn host_signal(
+		&self,
+		Parameters(params): Parameters<runtime::operator::HostSignalParams>,
+	) -> Result<String, String> {
+		runtime::operator::host_signal(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Sudo Start",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Start a temporary arbitrary sudo command through an operator-host SSH PTY, using only that login account existing sudoers/PAM rights. Does not grant permissions or install NOPASSWD. Use pty_read/write/close. Never put passwords in arguments; input is not persisted by the runtime audit but may be retained by the MCP client."
+	)]
+	async fn sudo_start(
+		&self,
+		Parameters(params): Parameters<runtime::operator::SudoStartParams>,
+	) -> Result<String, String> {
+		runtime::operator::sudo_start(params)
+			.await
+			.map_err(|error| error.to_string())
 	}
 
 	#[tool(

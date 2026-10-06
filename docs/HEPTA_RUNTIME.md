@@ -242,3 +242,7 @@ The helper never reuses OpenClaw/Codex credentials, creates tunnels by guessing
 an organization, or treats client installation as a connected ChatGPT app.
 After tunnel health is valid, add the tunnel to the correct ChatGPT workspace
 and verify `host_list` followed by a read-only `hardware_snapshot` tool call.
+
+## Explicit operator extension
+
+The default isolated contracts above remain unchanged. For the opt-in full-SSH-account execution mode, new shell/process-signal/sudo tools and separate qualification criteria, see [OPERATOR_MODE.md](OPERATOR_MODE.md). Operator mode intentionally changes the trust boundary and is not covered by the isolated-account sandbox claims above.

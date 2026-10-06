@@ -50,6 +50,8 @@ pub fn host_list() -> Result<String> {
 			json!({
 				"name": name,
 				"platform": host.platform,
+				"execution_mode": host.execution_mode,
+				"operator_tools": host.execution_mode == super::config::ExecutionMode::Operator,
 				"allow_execute": host.allow_execute,
 				"allow_pty": host.allow_pty,
 				"allow_write": host.allow_write,

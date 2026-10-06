@@ -41,6 +41,8 @@ pub fn ssh_base(host: &HostConfig) -> Command {
 		.arg("ConnectTimeout=8")
 		.arg("-o")
 		.arg("StrictHostKeyChecking=yes")
+		.arg("-o")
+		.arg("ForwardAgent=no")
 		.arg(&host.ssh_target);
 	command
 }

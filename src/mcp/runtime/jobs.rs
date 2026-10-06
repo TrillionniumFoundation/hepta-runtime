@@ -16,15 +16,15 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex as AsyncMutex;
 
-use super::config::Platform;
 use super::config::{check_environment, check_execution, runtime_config, valid_name};
+use super::config::{ExecutionMode, Platform};
 use super::ssh::{run_jobctl, run_python_json};
 
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static START_LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 const MAX_STDIN_BYTES: usize = 1024 * 1024;
-const MAX_LOG_READ_BYTES: u64 = 1024 * 1024;
+const MAX_LOG_READ_BYTES: u64 = 16 * 1024;
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -75,7 +75,7 @@ pub struct ProcessReadParams {
 	pub stdout_offset: Option<u64>,
 	#[serde(default)]
 	pub stderr_offset: Option<u64>,
-	/// Maximum bytes returned per stream, capped at 1 MiB.
+	/// Maximum bytes returned per stream, capped at 16 KiB with lossless byte cursors.
 	#[serde(default)]
 	pub limit: Option<u64>,
 }
@@ -109,6 +109,8 @@ pub struct ProcessListParams {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct JobRecord {
+	#[serde(default)]
+	execution_mode: ExecutionMode,
 	#[serde(default)]
 	system_jobctl: bool,
 	id: String,
@@ -288,11 +290,14 @@ pub(crate) fn audit(action: &str, host: &str, subject: &str, outcome: &Value) ->
 }
 
 const START_CODE: &str = r#"
-import json, os, pathlib, shutil, subprocess, sys, time
+import fcntl, json, os, pathlib, shutil, subprocess, sys, time
 req = json.load(sys.stdin)
 job = pathlib.Path(req["job_dir"])
 job.mkdir(parents=True, exist_ok=True)
 os.chmod(job, 0o700)
+launch_lock = open(job / "launch.lock", "a")
+fcntl.flock(launch_lock.fileno(), fcntl.LOCK_EX)
+
 
 def read_json(name):
     try:
@@ -318,8 +323,7 @@ if existing is not None:
     if launch or exit_data:
         print(json.dumps({"ok": True, "reused_remote": True, **(launch or {"backend": "completed"})}, sort_keys=True))
         raise SystemExit(0)
-    if started:
-        raise SystemExit("ambiguous prior launch: supervisor started without launch record")
+    raise SystemExit("ambiguous prior launch: inspect this job; do not relaunch under another key")
 else:
     if stdin_text is not None:
         stdin_path = job / "stdin.bin"
@@ -328,7 +332,7 @@ else:
         req["stdin_path"] = str(stdin_path)
     atomic("request.json", req)
 runner = r'''#!/usr/bin/env python3
-import json, os, pathlib, shutil, signal, subprocess, sys, time
+import json, os, pathlib, shutil, signal, subprocess, sys, threading, time
 job = pathlib.Path(__file__).resolve().parent
 req = json.loads((job / "request.json").read_text(encoding="utf-8"))
 
@@ -342,7 +346,8 @@ def atomic(name, value):
 def process_identity(pid):
     try:
         ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
-        return {"kind": "proc_start_ticks", "value": str(ticks)}
+        boot = pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        return {"kind": "proc_start_ticks", "value": boot + ":" + str(ticks)}
     except Exception:
         pass
     try:
@@ -390,8 +395,8 @@ try:
         cwd=req.get("cwd") or None,
         env=env,
         stdin=stdin_handle,
-        stdout=out,
-        stderr=err,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         start_new_session=True,
     )
     atomic("child.json", {
@@ -409,30 +414,56 @@ except Exception as exc:
     print(str(exc), file=err, flush=True)
     raise SystemExit(127)
 
+# Bound disk consumption while continuously draining producers.
+log_truncated = {"stdout": False, "stderr": False}
+def drain(stream, sink, label):
+    stored = 0
+    while True:
+        chunk = stream.read1(65536)
+        if not chunk:
+            break
+        keep = chunk[:max(0, 16 * 1024 * 1024 - stored)]
+        if keep:
+            sink.write(keep)
+            stored += len(keep)
+        if len(keep) != len(chunk):
+            log_truncated[label] = True
+    stream.close()
+
+readers = [threading.Thread(target=drain, args=(child.stdout, out, "stdout"), daemon=True),
+           threading.Thread(target=drain, args=(child.stderr, err, "stderr"), daemon=True)]
+for reader in readers:
+    reader.start()
 timed_out = False
-try:
-    timeout = req.get("timeout_seconds")
-    rc = child.wait(timeout=float(timeout) if timeout else None)
-except subprocess.TimeoutExpired:
-    timed_out = True
-    try:
-        os.killpg(child.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    try:
-        rc = child.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(child.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        rc = child.wait()
-    rc = 124
+timeout = req.get("timeout_seconds")
+deadline = time.monotonic() + float(timeout) if timeout else None
+stop_deadline = None
+while child.poll() is None:
+    now = time.monotonic()
+    if deadline is not None and now >= deadline:
+        timed_out = True
+    if timed_out or cancel_requested:
+        if stop_deadline is None:
+            stop_deadline = now + 8
+            try:
+                os.killpg(child.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        elif now >= stop_deadline:
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+    time.sleep(.05)
+rc = 124 if timed_out else child.returncode
+for reader in readers:
+    reader.join(timeout=2)
 atomic("exit.json", {
     "at_unix_ms": int(time.time() * 1000),
     "exit_code": int(rc),
     "cancelled": bool(cancel_requested),
     "timed_out": bool(timed_out),
+    "log_truncated": log_truncated,
 })
 raise SystemExit(int(rc) if 0 <= int(rc) <= 255 else 1)
 '''
@@ -456,7 +487,8 @@ if req.get("memory_max_bytes"):
     cmd += ["--property", f"MemoryMax={int(req['memory_max_bytes'])}"]
 if req.get("nice"):
     cmd += ["--property", f"Nice={int(req['nice'])}"]
-cmd += ["--property", "NoNewPrivileges=yes", "--property", "RestrictSUIDSGID=yes"]
+if req.get("execution_mode", "isolated") != "operator":
+    cmd += ["--property", "NoNewPrivileges=yes", "--property", "RestrictSUIDSGID=yes"]
 if not req.get("allow_job_network", False):
     cmd += ["--property", "PrivateNetwork=yes", "--property", "RestrictAddressFamilies=AF_UNIX AF_NETLINK"]
 cmd += ["--", sys.executable, str(runner_path)]
@@ -475,6 +507,8 @@ else:
         })
         print(result.stderr.strip(), file=sys.stderr)
         raise SystemExit(result.returncode or 1)
+    if req.get("cpu_quota_percent") or req.get("memory_max_bytes"):
+        raise SystemExit("detached backend cannot enforce requested CPU/memory limits")
     process = subprocess.Popen(
         [sys.executable, str(runner_path)],
         stdin=subprocess.DEVNULL,
@@ -508,7 +542,8 @@ def read_json(name):
 def process_identity(pid):
     try:
         ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
-        return {"kind": "proc_start_ticks", "value": str(ticks)}
+        boot = pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        return {"kind": "proc_start_ticks", "value": boot + ":" + str(ticks)}
     except Exception:
         pass
     try:
@@ -611,7 +646,7 @@ except Exception:
     raise SystemExit("remote job metadata missing")
 if request.get("job_id") != q["job_id"]:
     raise SystemExit("remote job metadata mismatch")
-limit = max(1, min(int(q.get("limit", 65536)), 1048576))
+limit = max(1, min(int(q.get("limit", 16384)), 16384))
 
 def read_part(name, offset):
     path = job / name
@@ -663,7 +698,8 @@ def atomic(name, value):
 def process_identity(pid):
     try:
         ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
-        return {"kind": "proc_start_ticks", "value": str(ticks)}
+        boot = pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        return {"kind": "proc_start_ticks", "value": boot + ":" + str(ticks)}
     except Exception:
         pass
     try:
@@ -724,6 +760,16 @@ else:
     if command_line(pid) and not read_json("exit.json"):
         if process_identity(pid) != expected or str(job / "runner.py") not in command_line(pid):
             raise SystemExit("refusing SIGKILL: process identity changed")
+        # The workload has its own process group. Kill it only after verifying
+        # the stored child identity, before terminating the supervisor itself.
+        child_record = read_json("child.json") or {}
+        child_pid = int(child_record.get("pid") or 0)
+        if child_pid and child_record.get("identity") == process_identity(child_pid):
+            try:
+                if os.getpgid(child_pid) == child_pid:
+                    os.killpg(child_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
         try:
             os.killpg(pid, signal.SIGKILL)
             result = "kill_sent"
@@ -795,7 +841,7 @@ fn validate_start(params: &ProcessStartParams) -> Result<()> {
 
 fn check_binding(record: &JobRecord) -> Result<()> {
 	let host = runtime_config()?.host(&record.host)?;
-	if host.ssh_target != record.ssh_target {
+	if host.ssh_target != record.ssh_target || host.execution_mode != record.execution_mode {
 		bail!("host binding changed; refusing to operate an old job");
 	}
 	Ok(())
@@ -841,6 +887,7 @@ async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> R
 		"unit": record.unit,
 		"request_fingerprint": record.request_digest.clone().unwrap_or_else(|| format!("{:016x}", record.request_fingerprint)),
 		"platform": host.platform,
+		"execution_mode": record.execution_mode,
 		"executable": params.executable,
 		"args": params.args,
 		"cwd": params.cwd,
@@ -923,7 +970,9 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	let unit = format!("hepta-runtime-job-{id}");
 	let remote_job_dir = format!("{}/jobs/{id}", host.remote_state_dir.trim_end_matches('/'));
 	let mut record = JobRecord {
-		system_jobctl: host.platform == Platform::Linux,
+		system_jobctl: host.platform == Platform::Linux
+			&& host.execution_mode == ExecutionMode::Isolated,
+		execution_mode: host.execution_mode,
 		id: id.clone(),
 		host: params.host.clone(),
 		ssh_target: host.ssh_target.clone(),

@@ -15,8 +15,8 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::{ChildStdin, Command};
 use tokio::sync::Mutex as AsyncMutex;
 
-use super::config::Platform;
 use super::config::{check_environment, check_execution, runtime_config, valid_name};
+use super::config::{ExecutionMode, Platform};
 use super::jobs::audit;
 use super::ssh::{build_exec_command, run_jobctl};
 use tokio_util::sync::CancellationToken;
@@ -222,7 +222,8 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 		rows,
 		cols,
 	)?;
-	let system_jobctl = host.platform == Platform::Linux;
+	let system_jobctl =
+		host.platform == Platform::Linux && host.execution_mode == ExecutionMode::Isolated;
 	if system_jobctl {
 		remote = format!("stty -echo rows {rows} cols {cols}; exec sudo -n /usr/local/libexec/hepta-runtime-jobctl");
 	}
@@ -235,6 +236,8 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 		.arg("ConnectTimeout=8")
 		.arg("-o")
 		.arg("StrictHostKeyChecking=yes")
+		.arg("-o")
+		.arg("ForwardAgent=no")
 		.arg(&host.ssh_target)
 		.arg(remote)
 		.env("TERM", "xterm-256color")
@@ -327,6 +330,8 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 		"session_id": id,
 		"host": params.host,
 		"pid": pid,
+		"pid_scope": "controller_ssh",
+		"execution_mode": host.execution_mode,
 		"persistent_across_runtime_restart": false,
 	}))?)
 }

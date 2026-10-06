@@ -29,6 +29,8 @@ jobs:
       - name: Format and test
         run: |
           set -o pipefail
+          python3 tests/process_ops_tests.py
+          python3 tests/supervisor_tests.py
           cargo fmt --all --check
           cargo test --locked --all-targets 2>&1 | tee /tmp/operator-tests.log
       - uses: actions/upload-artifact@v4

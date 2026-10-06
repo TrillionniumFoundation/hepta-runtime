@@ -4,6 +4,7 @@
 pub mod config;
 pub mod inspect;
 pub mod jobs;
+pub mod operator;
 pub mod pty;
 pub mod ssh;
 
