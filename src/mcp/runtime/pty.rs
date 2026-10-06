@@ -70,7 +70,12 @@ pub struct PtyReadParams {
 	#[serde(default)]
 	pub offset: Option<u64>,
 	#[serde(default)]
+	/// Preferred page bytes; text pages may extend up to 3 bytes to fit one character.
 	pub limit: Option<usize>,
+	/// Keep exact byte page boundaries instead of UTF-8-safe text boundaries.
+	/// Use bytes_hex for binary data; text_is_lossy labels invalid UTF-8 views.
+	#[serde(default)]
+	pub raw_bytes: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
@@ -111,6 +116,25 @@ struct RingBuffer {
 	data: Vec<u8>,
 }
 
+// Invalid bytes are retained; only an incomplete trailing character waits for
+// more input. Callers can explicitly select raw byte pages without waiting.
+fn complete_prefix(bytes: &[u8]) -> usize {
+	let mut offset = 0;
+	while offset < bytes.len() {
+		match std::str::from_utf8(&bytes[offset..]) {
+			Ok(_) => return bytes.len(),
+			Err(error) => {
+				offset += error.valid_up_to();
+				match error.error_len() {
+					Some(n) => offset += n,
+					None => return offset,
+				}
+			}
+		}
+	}
+	offset
+}
+
 impl RingBuffer {
 	fn new() -> Self {
 		Self {
@@ -128,14 +152,31 @@ impl RingBuffer {
 		}
 	}
 
-	fn read(&self, requested: u64, limit: usize) -> (u64, u64, bool, String) {
+	fn read(
+		&self,
+		requested: u64,
+		limit: usize,
+		finished: bool,
+		raw_bytes: bool,
+	) -> (u64, u64, bool, String) {
 		let truncated = requested < self.base_offset;
 		let offset = requested.max(self.base_offset);
 		let start = (offset - self.base_offset) as usize;
 		if start >= self.data.len() {
 			return (offset, offset, truncated, String::new());
 		}
-		let end = (start + limit).min(self.data.len());
+		let mut end = (start + limit.clamp(1, MAX_READ_BYTES)).min(self.data.len());
+		if !(raw_bytes || finished && end == self.data.len()) {
+			end = start + complete_prefix(&self.data[start..end]);
+			if end == start {
+				let expanded = (start + 4).min(self.data.len());
+				end = if finished && expanded == self.data.len() {
+					expanded
+				} else {
+					start + complete_prefix(&self.data[start..expanded])
+				};
+			}
+		}
 		let text = String::from_utf8_lossy(&self.data[start..end]).into_owned();
 		(offset, self.base_offset + end as u64, truncated, text)
 	}
@@ -188,21 +229,46 @@ fn lookup(host: &str, id: &str) -> Result<PtySession> {
 	Ok(session)
 }
 
-async fn copy_reader<R>(mut reader: R, output: Arc<Mutex<RingBuffer>>)
+async fn copy_reader<R>(mut reader: R, output: Arc<Mutex<RingBuffer>>) -> std::io::Result<()>
 where
 	R: AsyncRead + Unpin,
 {
 	let mut buf = vec![0_u8; 8192];
 	loop {
 		match reader.read(&mut buf).await {
-			Ok(0) => break,
+			Ok(0) => return Ok(()),
 			Ok(n) => {
-				if let Ok(mut guard) = output.lock() {
-					guard.append(&buf[..n]);
-				}
+				output
+					.lock()
+					.map_err(|_| std::io::Error::other("PTY output lock poisoned"))?
+					.append(&buf[..n]);
 			}
-			Err(_) => break,
+			Err(error) => return Err(error),
 		}
+	}
+}
+
+async fn drain_readers(
+	readers: Vec<tokio::task::JoinHandle<std::io::Result<()>>>,
+	deadline: std::time::Duration,
+) -> Option<String> {
+	let mut failures = Vec::new();
+	for mut reader in readers {
+		match tokio::time::timeout(deadline, &mut reader).await {
+			Ok(Ok(Ok(()))) => {}
+			Ok(Ok(Err(error))) => failures.push(format!("output read failed: {error}")),
+			Ok(Err(error)) => failures.push(format!("output reader task failed: {error}")),
+			Err(_) => {
+				reader.abort();
+				let _ = reader.await;
+				failures.push("output drain deadline exceeded".into());
+			}
+		}
+	}
+	if failures.is_empty() {
+		None
+	} else {
+		Some(failures.join("; "))
 	}
 }
 
@@ -309,16 +375,7 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 			}
 		};
 		// Publish a terminal state only after final output has been drained.
-		let mut capture_incomplete = false;
-		for mut reader in reader_tasks {
-			if !matches!(
-				tokio::time::timeout(std::time::Duration::from_secs(2), &mut reader).await,
-				Ok(Ok(()))
-			) {
-				reader.abort();
-				capture_incomplete = true;
-			}
-		}
+		let capture_error = drain_readers(reader_tasks, std::time::Duration::from_secs(2)).await;
 		let mut next = match waited {
 			Ok(exit) if exit.code().is_some() => PtyStatus {
 				state: PtyState::Exited,
@@ -336,8 +393,11 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 				detail: Some(error.to_string()),
 			},
 		};
-		if capture_incomplete {
-			next.detail = Some("output capture did not fully drain before its deadline".into());
+		if let Some(error) = capture_error {
+			next.detail = Some(match next.detail {
+				Some(previous) => format!("{previous}; {error}"),
+				None => error,
+			});
 		}
 		if let Ok(mut guard) = waiter_status.lock() {
 			*guard = next;
@@ -389,7 +449,9 @@ pub fn read_pty(params: PtyReadParams) -> Result<String> {
 		bail!("PTY cursor exceeds available output; refusing silent forward seek");
 	}
 	let limit = params.limit.unwrap_or(65_536).clamp(1, MAX_READ_BYTES);
-	let (offset, next_offset, truncated, text) = output.read(requested, limit);
+	let finished = !matches!(status.state, PtyState::Running);
+	let (offset, next_offset, truncated, text) =
+		output.read(requested, limit, finished, params.raw_bytes);
 	let begin = (offset - output.base_offset) as usize;
 	let end = (next_offset - output.base_offset) as usize;
 	let bytes_hex: String = output.data[begin..end]
@@ -405,6 +467,8 @@ pub fn read_pty(params: PtyReadParams) -> Result<String> {
 		"truncated_before_offset": truncated,
 		"text": text,
 		"bytes_hex": bytes_hex,
+		"text_is_lossy": std::str::from_utf8(&output.data[begin..end]).is_err(),
+		"utf8_pending": !params.raw_bytes && !finished && begin == end && end < output.data.len(),
 		"output_complete": !matches!(status.state, PtyState::Running) && status.detail.is_none(),
 		"status": status,
 	}))?)

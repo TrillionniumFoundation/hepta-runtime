@@ -69,7 +69,10 @@ class SupervisorTests(unittest.TestCase):
         self.assertNotIn('END', text)
         self.assertTrue(rpc('START_CODE', self.q)['reused_remote'])
         self.assertIn('different request', rpc('START_CODE', {**self.q, 'request_fingerprint': 'b'*64}, success=False))
-        self.assertEqual(self.wait()['exit_code'], 0)
+        ended = self.wait()
+        self.assertEqual(ended['exit_code'], 0)
+        self.assertTrue(ended['output_complete'])
+        self.assertFalse(any(ended['log_errors'].values()))
         self.assertEqual(rpc('READ_CODE', self.q)['stdout']['text'].count('BEGIN'), 1)
 
     def test_log_cap_and_lossless_cursor_bound(self):
@@ -78,6 +81,9 @@ class SupervisorTests(unittest.TestCase):
         status = self.wait()
         self.assertEqual(status['exit_code'], 0)
         self.assertTrue(status['log_truncated']['stdout'])
+        self.assertFalse(status['output_complete'])
+        self.assertEqual(status['log_bytes']['stdout']['seen'], 17*1024*1024)
+        self.assertEqual(status['log_bytes']['stdout']['stored'], 16*1024*1024)
         page = rpc('READ_CODE', {**self.q, 'stdout_offset': 16*1024*1024})
         self.assertEqual(page['stdout']['size'], 16*1024*1024)
         self.assertTrue(page['stdout']['eof'])

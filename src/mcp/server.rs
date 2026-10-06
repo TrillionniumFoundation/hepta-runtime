@@ -847,7 +847,7 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Read bounded terminal output from an interactive PTY using a monotonic byte offset. The bounded ring buffer reports if earlier bytes were dropped."
+		description = "Read bounded PTY output using byte cursors. By default text pages preserve complete UTF-8 characters (a tiny limit may extend up to 3 bytes); utf8_pending means an incomplete live character needs more input. Set raw_bytes=true for exact byte pages and decode bytes_hex for binary output. text_is_lossy labels invalid text; output_complete is false on capture errors. The ring reports dropped prefixes."
 	)]
 	async fn pty_read(
 		&self,

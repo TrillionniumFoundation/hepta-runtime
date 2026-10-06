@@ -153,6 +153,29 @@ def main():
             c.call('pty_write', {'host': 'operator', 'session_id': sid, 'data': 'exit\n'})
             c.call('pty_close', {'host': 'operator', 'session_id': sid})
             passed('real SSH PTY shell input/output/Ctrl-C/close')
+            # The real PTY deliberately splits a UTF-8 character between writes.
+            expected = "中文α🦀"
+            code = "import os,time; b=" + repr(expected.encode()) + ";os.write(1,b[:2]);time.sleep(.15);os.write(1,b[2:])"
+            sid = c.call('pty_start', {'host': 'operator', 'executable': '/usr/bin/python3', 'args': ['-c', code]})['session_id']
+            cursor, text, raw = 0, '', b''
+            for _ in range(400):
+                part = c.call('pty_read', {'host': 'operator', 'session_id': sid, 'offset': cursor, 'limit': 1})
+                assert not part['text_is_lossy'], part
+                text += part['text']
+                raw += bytes.fromhex(part['bytes_hex'])
+                assert cursor <= part['next_offset'] <= part['available_end'], part
+                cursor = part['next_offset']
+                if part['status']['state'] != 'running' and cursor == part['available_end']:
+                    assert part['output_complete'], part
+                    break
+                time.sleep(.01)
+            else:
+                raise AssertionError('real UTF-8 PTY pagination did not terminate')
+            assert expected in text and raw.decode() == text, (text, raw)
+            first = c.call('pty_read', {'host': 'operator', 'session_id': sid, 'offset': 0, 'limit': 1, 'raw_bytes': True})
+            assert first['next_offset'] == 1 and first['bytes_hex'] == raw[:1].hex()
+            c.call('pty_close', {'host': 'operator', 'session_id': sid})
+            passed('real split-write Unicode PTY: text-safe pages and exact raw-byte pages')
             if a.sudo_smoke:
                 sid = c.call('sudo_start', {'host': 'operator', 'executable': '/usr/bin/id', 'args': ['-u'], 'non_interactive': True})['session_id']
                 result = pty_until(c, sid, '0\r\n')

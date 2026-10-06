@@ -79,3 +79,9 @@ Use aliases actually configured on the installing machine; the names above are a
 PTY capacity now limits active sessions, not all historical sessions; at most 256 recent records are retained before old exited records are evicted. An active slot is reserved before asynchronous launch and released on completion/failure. Terminal status follows output-drain completion; a drain timeout is explicitly reported with `output_complete: false`.
 
 The typed `host_signal` option `sudo: true` uses existing noninteractive permission for the Python signal helper. It does not broaden command-specific sudoers rules. Where only a particular signal command is authorized, use `sudo_start` for that exact command; interactive authentication remains governed by sudo/PAM.
+
+## Output text and capture reliability
+
+PTY reads now keep UTF-8 text whole across byte-cursor pages. A tiny preferred `limit` can extend up to three bytes to fit a character. An incomplete live suffix is retained with `utf8_pending: true`; retry the same returned cursor when more output arrives. For binary or exact byte-sized pages select `raw_bytes: true` and reconstruct `bytes_hex`. Invalid text is explicitly labelled `text_is_lossy`; raw bytes remain recoverable within the reported retention window. Terminal read errors, reader task errors and drain timeouts are reflected in status details and prevent `output_complete: true`. Neither these fixes nor `output_complete` promise unlimited retention or PTY survival across controller restarts.
+
+Durable operator jobs now record per-stream read/write errors, observed/stored byte counts, and `output_complete` separately from the command exit code. Short writes are completed instead of silently losing bytes. Storage failures keep draining producers but mark capture incomplete; truncation and drain timeouts also prevent a complete-output claim. Existing 16 MiB retention limits are unchanged.

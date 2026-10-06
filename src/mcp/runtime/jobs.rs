@@ -416,19 +416,43 @@ except Exception as exc:
 
 # Bound disk consumption while continuously draining producers.
 log_truncated = {"stdout": False, "stderr": False}
+log_errors = {"stdout": None, "stderr": None}
+log_eof = {"stdout": False, "stderr": False}
+log_bytes = {"stdout": {"seen": 0, "stored": 0}, "stderr": {"seen": 0, "stored": 0}}
 def drain(stream, sink, label):
     stored = 0
-    while True:
-        chunk = stream.read1(65536)
-        if not chunk:
-            break
-        keep = chunk[:max(0, 16 * 1024 * 1024 - stored)]
-        if keep:
-            sink.write(keep)
-            stored += len(keep)
-        if len(keep) != len(chunk):
-            log_truncated[label] = True
-    stream.close()
+    try:
+        while True:
+            chunk = stream.read1(65536)
+            if not chunk:
+                log_eof[label] = True
+                break
+            log_bytes[label]["seen"] += len(chunk)
+            keep = chunk[:max(0, 16 * 1024 * 1024 - stored)]
+            if len(keep) != len(chunk):
+                log_truncated[label] = True
+            if log_errors[label] is None:
+                try:
+                    pending = memoryview(keep)
+                    while pending:
+                        written = sink.write(pending)
+                        if written is None or written <= 0 or written > len(pending):
+                            raise OSError("log write made invalid progress")
+                        stored += written
+                        log_bytes[label]["stored"] = stored
+                        pending = pending[written:]
+                except Exception as exc:
+                    # Continue draining after storage failure; never deadlock the
+                    # producer or publish silent success for lost output.
+                    log_errors[label] = "write: " + str(exc)
+    except Exception as exc:
+        log_errors[label] = "read: " + str(exc)
+    finally:
+        try:
+            stream.close()
+        except Exception as exc:
+            if log_errors[label] is None:
+                log_errors[label] = "close: " + str(exc)
 
 readers = [threading.Thread(target=drain, args=(child.stdout, out, "stdout"), daemon=True),
            threading.Thread(target=drain, args=(child.stderr, err, "stderr"), daemon=True)]
@@ -456,14 +480,20 @@ while child.poll() is None:
                 pass
     time.sleep(.05)
 rc = 124 if timed_out else child.returncode
-for reader in readers:
+for label, reader in zip(("stdout", "stderr"), readers):
     reader.join(timeout=2)
+    if reader.is_alive():
+        log_errors[label] = log_errors[label] or "output drain deadline exceeded"
+output_complete = all(log_eof.values()) and not any(log_errors.values()) and not any(log_truncated.values())
 atomic("exit.json", {
     "at_unix_ms": int(time.time() * 1000),
     "exit_code": int(rc),
     "cancelled": bool(cancel_requested),
     "timed_out": bool(timed_out),
     "log_truncated": log_truncated,
+    "log_errors": log_errors,
+    "log_bytes": log_bytes,
+    "output_complete": output_complete,
 })
 raise SystemExit(int(rc) if 0 <= int(rc) <= 255 else 1)
 '''
@@ -660,7 +690,7 @@ def read_part(name, offset):
     if size:
         with path.open("rb") as f:
             f.seek(offset)
-            data = f.read(limit)
+            data = f.read(min(limit, size - offset))
     return {
         "offset": offset,
         "next_offset": offset + len(data),
