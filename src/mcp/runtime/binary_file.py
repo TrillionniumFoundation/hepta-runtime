@@ -126,6 +126,15 @@ def main(q):
     fd, name = parent(q['root'], q['path'])
     try:
         op = q['op']
+        if op == 'inode_patch':
+            if 'inode_patch' not in globals():exec(compile(pathlib.Path(__file__).with_name('inode_patch.py').read_text(),'inode_patch.py','exec'),globals())
+            return inode_patch(q)
+        if op == 'private_read':
+            with os.fdopen(regular(fd, name, private=True),'rb') as source:
+                before=os.fstat(source.fileno());data=source.read(4097)
+                if len(data)>4096 or version(os.fstat(source.fileno()))!=version(before):
+                    raise ValueError('private file changed or exceeded limit')
+            return {'data_base64':base64.b64encode(data).decode(),'private_file_verified':True}
         if op == 'info':
             result = fingerprint(fd, name)
             f = regular(fd, name)

@@ -1,5 +1,6 @@
 # Local handoff, physical restart, rich formats and metadata
 
+**Latest capability update:** [PROTECTED_AND_COMPLEX_PARITY.md](PROTECTED_AND_COMPLEX_PARITY.md) documents the native protected-PDF, complex-workbook and inode APIs, S5 hardware qualification and the withdrawn experimental checkpoint boundary. Prior stage limitations below remain historical snapshots; installation is established only by its exact receipt.
 This stage intentionally excludes ChatGPT custom-app/tunnel/workspace configuration. The exact release and installed-service receipts, not this feature description alone, establish qualification. Preserve Desktop Commander as the old-session and rescue route until required application work has been checkpointed or drained.
 
 ## Real physical restart scope

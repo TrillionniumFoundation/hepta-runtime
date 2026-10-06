@@ -45,3 +45,13 @@ fn upload_action_is_typed_and_extra_fields_rejected() {
 	)
 	.is_ok());
 }
+
+#[test]
+fn inode_patch_requires_explicit_semantics_and_rejects_hidden_privileges() {
+	assert!(serde_json::from_value::<InodePatchParams>(
+		json!({"host":"main","path":"/tmp/a","action":"apply","transaction_id":"fixture-1"})
+	)
+	.is_err());
+	assert!(serde_json::from_value::<InodePatchParams>(json!({"host":"main","path":"/tmp/a","action":"apply","transaction_id":"fixture-1","acknowledge_non_atomic":true,"sudo":true})).is_err());
+	assert!(serde_json::from_value::<InodePatchParams>(json!({"host":"main","path":"/tmp/a","action":"recover","transaction_id":"fixture-1","acknowledge_non_atomic":true})).is_ok());
+}

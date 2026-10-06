@@ -25,8 +25,13 @@ if 'metadata_preserve' not in globals():
 
 if 'render_rich_document' not in globals():
     exec(compile(pathlib.Path(__file__).with_name('document_formats.py').read_text(), 'document_formats.py', 'exec'))
+if 'context_names' not in globals():
+    exec(compile(pathlib.Path(__file__).with_name('worksheet_context.py').read_text(), 'worksheet_context.py', 'exec'))
 if 'calculate_worksheet_package' not in globals():
     exec(compile(pathlib.Path(__file__).with_name('worksheet_calculation.py').read_text(), 'worksheet_calculation.py', 'exec'))
+
+if 'pdf_secure' not in globals():
+    exec(compile(pathlib.Path(__file__).with_name('pdf_security.py').read_text(), 'pdf_security.py', 'exec'))
 
 FILE_LIMIT = 32 * 1024 * 1024
 TEXT_LIMIT = 240 * 1024
@@ -266,7 +271,7 @@ def edit_docx(q):
 def remote_call(q, op, path, **fields):
     import shlex
     config=q['remote']
-    roots=config['read_roots'] if op in ('read','info') else config['write_roots']
+    roots=config['read_roots'] if op in ('read','info','private_read') else config['write_roots']
     candidates=[root for root in roots if path==root or path.startswith(root.rstrip('/')+'/')]
     if not candidates:raise PermissionError('remote document outside configured roots')
     payload={'op':op,'path':path,'root':max(candidates,key=len),**fields}
@@ -483,7 +488,10 @@ def edit_worksheet(q):
     return [{'type':'text','text':json.dumps(result)}]
 
 def main(q):
-    if q.get('remote'):return remote_document(q)
+    if q.get('remote'):
+        if q['op']=='pdf_secure':return remote_pdf_secure(q)
+        return remote_document(q)
+    if q['op']=='pdf_secure':return pdf_secure(q)
     if q['op']=='render_rich':return render_rich_document(q)
     if q['op']=='worksheet_recalculate':return calculate_worksheet_package(q)
     if q['op']=='pdf_edit':return edit_pdf(q)

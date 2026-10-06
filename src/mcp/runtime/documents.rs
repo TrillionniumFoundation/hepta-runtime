@@ -22,7 +22,11 @@ const WORKER: &str = concat!(
 	"\n",
 	include_str!("document_formats.py"),
 	"\n",
+	include_str!("worksheet_context.py"),
+	"\n",
 	include_str!("worksheet_calculation.py"),
+	"\n",
+	include_str!("pdf_security.py"),
 	"\n",
 	include_str!("document_local.py")
 );
@@ -174,6 +178,39 @@ pub struct WorksheetRecalculateParams {
 	pub expected_sha256: String,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PdfSecurityAction {
+	Inspect,
+	EncryptCopy,
+	DecryptCopy,
+	AppendMetadata,
+}
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PdfSecurityParams {
+	#[serde(default)]
+	pub host: Option<String>,
+	pub path: String,
+	pub expected_sha256: String,
+	pub action: PdfSecurityAction,
+	#[serde(default)]
+	pub output_path: Option<String>,
+	#[serde(default)]
+	pub output_expected_sha256: Option<String>,
+	/// Path on the selected host to an owned 0600 password file, never the password itself.
+	#[serde(default)]
+	pub password_file: Option<String>,
+	#[serde(default)]
+	pub output_user_password_file: Option<String>,
+	#[serde(default)]
+	pub output_owner_password_file: Option<String>,
+	#[serde(default)]
+	pub allow_unsigned_revision: bool,
+	#[serde(default)]
+	pub title: Option<String>,
+}
+
 async fn bounded(mut reader: impl AsyncRead + Unpin, max: usize) -> Result<Vec<u8>> {
 	let mut bytes = Vec::new();
 	let mut buffer = [0u8; 8192];
@@ -196,7 +233,10 @@ async fn execute(path: &str, mut input: Value, write: bool) -> Result<CallToolRe
 		bail!("absolute local document path required");
 	}
 	let remote_name = input.get("host").and_then(Value::as_str).map(str::to_owned);
-	let mut paths = vec![(path.to_owned(), write && input["op"] != "pdf_edit")];
+	let mut paths = vec![(
+		path.to_owned(),
+		write && input["op"] != "pdf_edit" && input["op"] != "pdf_secure",
+	)];
 	if input["op"] == "pdf_edit" {
 		paths.push((
 			input["output_path"]
@@ -210,6 +250,26 @@ async fn execute(path: &str, mut input: Value, write: bool) -> Result<CallToolRe
 				if let Some(source) = operation.get("source_path").and_then(Value::as_str) {
 					paths.push((source.to_owned(), false));
 				}
+			}
+		}
+	}
+	if input["op"] == "pdf_secure" {
+		if write {
+			paths.push((
+				input["output_path"]
+					.as_str()
+					.context("output path required")?
+					.to_owned(),
+				true,
+			));
+		}
+		for key in [
+			"password_file",
+			"output_user_password_file",
+			"output_owner_password_file",
+		] {
+			if let Some(secret_path) = input[key].as_str() {
+				paths.push((secret_path.to_owned(), false));
 			}
 		}
 	}
@@ -391,6 +451,22 @@ pub async fn recalculate(p: WorksheetRecalculateParams) -> Result<CallToolResult
 	let mut q = serde_json::to_value(&p)?;
 	q["op"] = json!("worksheet_recalculate");
 	execute(&p.path, q, true).await
+}
+
+pub async fn secure_pdf(p: PdfSecurityParams) -> Result<CallToolResult> {
+	let write = !matches!(p.action, PdfSecurityAction::Inspect);
+	if write
+		&& (p.output_path.is_none()
+			|| p.output_path.as_ref() == Some(&p.path)
+			|| p.output_expected_sha256.is_none())
+	{
+		bail!(
+			"PDF protection changes require distinct output_path and expected output fingerprint"
+		);
+	}
+	let mut q = serde_json::to_value(&p)?;
+	q["op"] = json!("pdf_secure");
+	execute(&p.path, q, write).await
 }
 
 #[cfg(test)]

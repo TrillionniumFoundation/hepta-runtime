@@ -126,9 +126,12 @@ class Completion(unittest.TestCase):
         parts['xl/workbook.xml']=parts['xl/workbook.xml'].replace(b'<workbookPr/>',b'<workbookPr date1904="1"/>')
         with zipfile.ZipFile(path,'w') as z:
             for n,data in parts.items():z.writestr(n,data)
-        before=path.read_bytes()
-        with self.assertRaisesRegex(ValueError,'1904'):self.calculate(path)
-        self.assertEqual(before,path.read_bytes())
+        result,_=self.calculate(path)
+        self.assertEqual(result['workbook_date_system'],'1904')
+        import datetime
+        expected=(datetime.date(2026,10,6)-datetime.date(1904,1,1)).days
+        values,_=self.call('read',path=str(path),sheet='S',range='A1:A1',cached_values=True)
+        self.assertEqual(values['rows'],[[expected]])
 
 
 

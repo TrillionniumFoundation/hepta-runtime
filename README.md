@@ -1,5 +1,6 @@
 # Hepta Runtime
 
+**Latest capability update:** [PROTECTED_AND_COMPLEX_PARITY.md](docs/PROTECTED_AND_COMPLEX_PARITY.md) documents the native protected-PDF, complex-workbook and inode APIs, S5 hardware qualification and the withdrawn experimental checkpoint boundary. Prior stage limitations below remain historical snapshots; installation is established only by its exact receipt.
 Policy-enforced, multi-host MCP runtime for durable process execution, interactive PTYs, read-only hardware/service/network inspection, and exact administrator-approved privileged actions.
 
 This project is derived from [Muvon/octofs](https://github.com/Muvon/octofs) at commit `37b5d3d02be511bae86d91fa980996a5fe257d7b` under Apache-2.0. The original Octofs documentation follows below; see [`docs/HEPTA_RUNTIME.md`](docs/HEPTA_RUNTIME.md) for the fork-specific architecture, policy, deployment, and recovery contract.

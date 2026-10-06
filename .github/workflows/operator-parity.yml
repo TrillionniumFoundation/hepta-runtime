@@ -54,6 +54,7 @@ jobs:
             python3 tests/supervisor_tests.py
             python3 tests/file_capabilities.py
             python3 tests/binary_file_tests.py
+            python3 tests/inode_patch_tests.py
             python3 tests/metadata_preservation_tests.py
             python3 tests/parser_configuration_tests.py
             python3 tests/output_capture_tests.py
@@ -61,6 +62,8 @@ jobs:
             /tmp/hepta-document-worker/bin/python tests/document_local_tests.py
             /tmp/hepta-document-worker/bin/python tests/document_extended_tests.py
             OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 /tmp/hepta-document-worker/bin/python tests/format_completion_tests.py
+            OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 /tmp/hepta-document-worker/bin/python tests/complex_worksheet_tests.py
+            /tmp/hepta-document-worker/bin/python tests/pdf_security_prototype_tests.py
           } 2>&1 | tee /tmp/operator-tests.log
       - uses: actions/upload-artifact@v4
         if: always()

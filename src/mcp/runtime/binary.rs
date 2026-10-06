@@ -13,6 +13,8 @@ use std::time::Duration;
 const SOURCE: &str = concat!(
 	include_str!("file_metadata.py"),
 	"\n",
+	include_str!("inode_patch.py"),
+	"\n",
 	include_str!("binary_file.py")
 );
 
@@ -74,6 +76,33 @@ pub struct BinaryUploadParams {
 	pub size: Option<u64>,
 	#[serde(default)]
 	pub sha256: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InodeAction {
+	Apply,
+	Status,
+	Recover,
+}
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InodePatchParams {
+	pub host: String,
+	pub path: String,
+	pub action: InodeAction,
+	pub transaction_id: String,
+	pub acknowledge_non_atomic: bool,
+	#[serde(default)]
+	pub preserve_special_bits: bool,
+	#[serde(default)]
+	pub offset: Option<u64>,
+	#[serde(default)]
+	pub expected_version: Option<String>,
+	#[serde(default)]
+	pub expected_sha256: Option<String>,
+	#[serde(default)]
+	pub data_base64: Option<String>,
 }
 
 async fn rpc(host_name: &str, path: &str, write: bool, mut q: Value) -> Result<String> {
@@ -171,6 +200,24 @@ pub async fn upload(p: BinaryUploadParams) -> Result<String> {
         "expected_version":p.expected_version,"size":p.size,"sha256":p.sha256}),
 	)
 	.await
+}
+
+pub async fn patch_inode(p: InodePatchParams) -> Result<String> {
+	if !p.acknowledge_non_atomic {
+		bail!("in-place patch requires explicit non-atomic acknowledgement");
+	}
+	check_remote_path(&p.host, &p.path, false, false, false)?;
+	if matches!(p.action, InodeAction::Apply)
+		&& (p.expected_version.is_none()
+			|| p.expected_sha256.is_none()
+			|| p.data_base64.as_ref().is_none_or(|s| s.len() > 87384))
+	{
+		bail!("apply requires source version, SHA256 and bounded 64 KiB patch");
+	}
+	let mut q = serde_json::to_value(&p)?;
+	q["op"] = json!("inode_patch");
+	q["offset"] = json!(p.offset.unwrap_or(0));
+	rpc(&p.host, &p.path, true, q).await
 }
 
 #[cfg(test)]

@@ -171,6 +171,8 @@ async fn notify_peer_resource_updated(peer: &Peer<RoleServer>, uri: &str) {
 /// interactive sessions, on pre-2026-07-28 connections; other clients ignore it.
 const CLAUDE_CHANNEL_CAPABILITY: &str = "claude/channel";
 const RUNTIME_TOOL_NAMES: &[&str] = &[
+	"pdf_security",
+	"binary_patch_inode",
 	"document_render",
 	"worksheet_recalculate",
 	"worksheet_edit",
@@ -1048,13 +1050,51 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = true
 		),
-		description = "Compute accepted XLSX/XLSM formula dependencies offline and update cached values while preserving formula text and unmodified OOXML payloads. Requires current SHA256. Reject cycles, linked/named/structured references, shared/array formulas and volatile/external functions before publication. Returns engine/version, calculated formula count and explicit Excel error cells; not an assertion of complete Excel engine equivalence."
+		description = "Compute supported XLSX/XLSM dependencies offline, including static global/local names, shared formulas, bounded declared fixed arrays and 1904 calendar serials. Preserve source formula encoding and unmodified OOXML payloads; require current SHA256. Reject circular/dynamic/external/relative-name/unsupported constructs before publication. Returns calculated caches and explicit error cells, not Microsoft Excel engine identity."
 	)]
 	async fn worksheet_recalculate(
 		&self,
 		Parameters(params): Parameters<runtime::documents::WorksheetRecalculateParams>,
 	) -> Result<rmcp::model::CallToolResult, String> {
 		runtime::documents::recalculate(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Recoverable Inode Patch",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Linux-only explicit same-size patch of at most 64 KiB, preserving inode/hard links/open-file identity. Requires expected version/hash, transaction ID and acknowledgement of NON-ATOMIC visibility. Durable private receipts support status/recovery. Optional special mode-bit preservation uses existing owner rights only. Not a transactional snapshot for concurrent readers; capabilities/immutable flags are refused."
+	)]
+	async fn binary_patch_inode(
+		&self,
+		Parameters(params): Parameters<runtime::binary::InodePatchParams>,
+	) -> Result<String, String> {
+		runtime::binary::patch_inode(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "PDF Protection and Signature Integrity",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Inspect PDF detached-CMS byte-range integrity, create AES-256 encrypted or owner-authorized decrypted copies, or append an explicitly acknowledged unsigned metadata revision. Source/output SHA256 required. Passwords are private owned files on the chosen host, never raw parameters. Original files remain unchanged. Certificate trust, revocation and certification policy are NOT verified; certified edits are refused. Existing signatures do not sign a new revision."
+	)]
+	async fn pdf_security(
+		&self,
+		Parameters(params): Parameters<runtime::documents::PdfSecurityParams>,
+	) -> Result<rmcp::model::CallToolResult, String> {
+		runtime::documents::secure_pdf(params)
 			.await
 			.map_err(|e| e.to_string())
 	}

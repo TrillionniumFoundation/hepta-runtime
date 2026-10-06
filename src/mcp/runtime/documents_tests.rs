@@ -81,3 +81,20 @@ fn final_format_tools_reject_hidden_interpreters_and_resources() {
 		serde_json::from_value::<DocumentAsset>(json!({"name":"x","path":"/tmp/a.png"})).is_err()
 	);
 }
+
+#[test]
+fn protected_pdf_schema_rejects_raw_secrets_and_hidden_authority() {
+	for name in [
+		"password",
+		"owner_password",
+		"user_password",
+		"file_helper",
+		"root",
+	] {
+		let mut value =
+			json!({"path":"/tmp/fixture.pdf","expected_sha256":"test","action":"inspect"});
+		value[name] = json!("not-an-allowed-field");
+		assert!(serde_json::from_value::<PdfSecurityParams>(value).is_err());
+	}
+	assert!(serde_json::from_value::<PdfSecurityParams>(json!({"path":"/tmp/a.pdf","expected_sha256":"hash","action":"inspect","password_file":"/tmp/private"})).is_ok());
+}

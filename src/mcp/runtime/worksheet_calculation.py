@@ -39,15 +39,13 @@ def calculate_worksheet_package(q):
             raise ValueError('external links and signed workbook calculation are unsupported')
         book=parse(package.read('xl/workbook.xml'));rels=parse(package.read('xl/_rels/workbook.xml.rels'))
         properties=book.find('s:workbookPr',ns)
-        if properties is not None and properties.get('date1904','0').lower() in ('1','true'):
-            raise ValueError('1904 workbook date-system recalculation is not qualified; no caches published')
-        if book.find('s:definedNames',ns) is not None and len(book.find('s:definedNames',ns)):
-            raise ValueError('named-range calculation requires separately qualified name resolution')
+        date1904=properties is not None and properties.get('date1904','0').lower() in ('1','true')
+        name_definitions=context_names(book,[s.get('name') for s in book.find('s:sheets',ns)],ns)
         targets={e.get('Id'):e.get('Target') for e in rels if e.get('TargetMode')!='External'}
         strings=[]
         if 'xl/sharedStrings.xml' in names:
             strings=[''.join(e.itertext()) for e in parse(package.read('xl/sharedStrings.xml'))]
-        sheets={};cells={};expressions={};trees={};nodes={}
+        sheets={};cells={};expressions={};trees={};nodes={};arrays={};array_owners={}
         for sheet in book.find('s:sheets',ns):
             name=sheet.get('name');normalized=name.upper()
             if normalized in sheets:raise ValueError('ambiguous sheet names')
@@ -56,16 +54,15 @@ def calculate_worksheet_package(q):
             if '..' in target.split('/') or not target.startswith('xl/worksheets/'):
                 raise ValueError('unsupported worksheet relationship')
             tree=parse(package.read(target));trees[target]=tree;sheets[normalized]=(name,target)
+            resolved,fixed_arrays,owners=worksheet_formula_context(tree,normalized,ns)
+            expressions.update(resolved);arrays.update(fixed_arrays);array_owners.update(owners)
             for cell in tree.findall('.//s:sheetData/s:row/s:c',ns):
                 coord=cell.get('r','').upper()
                 if not re.fullmatch(r'[A-Z]{1,3}[1-9][0-9]{0,6}',coord):raise ValueError('invalid worksheet coordinate')
                 key=(normalized,coord)
                 if key in nodes:raise ValueError('duplicate cell coordinates')
                 nodes[key]=cell;f=cell.find('s:f',ns);v=cell.find('s:v',ns);kind=cell.get('t')
-                if f is not None:
-                    if f.get('t') not in (None,'normal') or f.get('ref'):
-                        raise ValueError('shared/array/data-table formulas are not qualified')
-                    expressions[key]='='+str(f.text or '')
+                if f is not None:pass
                 elif kind=='s':cells[key]=strings[int(v.text)] if v is not None else ''
                 elif kind=='inlineStr':cells[key]=''.join(cell.find('s:is',ns).itertext())
                 elif kind=='b':cells[key]=v is not None and v.text=='1'
@@ -75,18 +72,34 @@ def calculate_worksheet_package(q):
                 else:cells[key]=float(v.text)
             if len(nodes)>100000:raise ValueError('worksheet cell budget exceeded')
         if not 1<=len(expressions)<=5000:raise ValueError('recalculation requires 1..5000 formula cells')
+        if len(array_owners)>5000:raise ValueError('array output cell budget exceeded')
+        for key,owner in array_owners.items():
+            if key not in nodes:
+                tree=trees[sheets[key[0]][1]];body=tree.find('s:sheetData',ns)
+                row_number=int(re.search(r'[0-9]+$',key[1]).group());row=body.find(f"s:row[@r='{row_number}']",ns)
+                if row is None:row=etree.SubElement(body,tag+'row',r=str(row_number))
+                nodes[key]=etree.SubElement(row,tag+'c',r=key[1])
+        for tree in trees.values():
+            body=tree.find('s:sheetData',ns)
+            for row in body:
+                column=lambda node:colnum(re.match(r'[A-Z]+',node.get('r')).group())
+                row[:]=sorted([c for c in row if c.tag==tag+'c'],key=column)+[c for c in row if c.tag!=tag+'c']
+            body[:]=sorted(body,key=lambda row:int(row.get('r')))
+
         compiled={};evaluated={};visiting=set();range_work=[0];errors=[]
         forbidden={'INDIRECT','OFFSET','WEBSERVICE','FILTERXML','RTD','DDE','CALL','REGISTER','REGISTER.ID','EXEC','SQL.REQUEST','NOW','TODAY','RAND','RANDBETWEEN','RANDARRAY','CELL','INFO'}
         functions=formulas.get_functions()
-        for key,expression in expressions.items():
-            if len(expression)>8192:raise ValueError('formula size limit exceeded')
-            lexical=re.sub(r'"(?:[^"]|"")*"','""',expression)
-            if any(c in lexical for c in ('[',']','|')):raise ValueError('external or structured formula references are not qualified')
-            called={n.upper() for n in re.findall(r'([A-Za-z_][A-Za-z0-9_.]*)\s*\(',lexical)}
-            if called & forbidden:raise ValueError('dynamic, external or volatile formula function is not qualified')
-            if any(n not in functions for n in called):raise ValueError('unsupported formula function; no caches published')
-            try:compiled[key]=formulas.Parser().ast(expression)[1].compile()
-            except Exception as error:raise ValueError('formula parser rejected '+key[0]+'!'+key[1]) from error
+        with workbook_calendar(date1904):
+            for key,expression in expressions.items():
+                expression=expand_workbook_names(expression,key[0],name_definitions)
+                if len(expression)>32768:raise ValueError('formula size limit exceeded')
+                lexical=re.sub(r'"(?:[^"]|"")*"','""',expression)
+                if any(c in lexical for c in ('[',']','|')):raise ValueError('external or structured formula references are not qualified')
+                called={n.upper() for n in re.findall(r'([A-Za-z_][A-Za-z0-9_.]*)\s*\(',lexical)}
+                if called & forbidden:raise ValueError('dynamic, external or volatile formula function is not qualified')
+                if any(n not in functions for n in called):raise ValueError('unsupported formula function; no caches published')
+                try:compiled[key]=formulas.Parser().ast(expression)[1].compile()
+                except Exception as error:raise ValueError('formula parser rejected '+key[0]+'!'+key[1]) from error
         pattern=re.compile(r"(?:(?:'((?:[^']|'')+)'|([^!]+))!)?(\$?[A-Z]+\$?[1-9][0-9]*)(?::(\$?[A-Z]+\$?[1-9][0-9]*))?$")
         def dependency(reference,current_sheet):
             if not isinstance(reference,str):raise ValueError('non-cell formula dependency unsupported')
@@ -104,6 +117,8 @@ def calculate_worksheet_package(q):
             return np.array(values,dtype=object)
         def evaluate(key):
             if key in evaluated:return evaluated[key]
+            if key in array_owners and array_owners[key]!=key:
+                evaluate(array_owners[key]);return evaluated[key]
             if key not in expressions:return cells.get(key,None)
             if key in visiting:raise ValueError('circular formula reference; original unchanged')
             if len(visiting)>128:raise ValueError('formula dependency depth exceeded')
@@ -112,26 +127,29 @@ def calculate_worksheet_package(q):
                 function=compiled[key];inputs=[dependency(ref,key[0]) for ref in function.inputs]
                 value=function(*inputs)
                 array=np.asarray(value,dtype=object)
-                if array.size!=1:raise ValueError('spilling/array formula results are not qualified')
-                result=array.reshape(-1)[0]
-                if isinstance(result,np.generic):result=result.item()
-                if isinstance(result,(int,float)) and not isinstance(result,bool):
-                    if not math.isfinite(result):raise ValueError('nonfinite calculation result')
-                    result=float(result)
-                elif result is None:result=0.0
-                elif not isinstance(result,(bool,str)):
-                    # Excel error tokens are explicit cache errors, not successful numeric values.
-                    text=str(result)
-                    if text in ('#DIV/0!','#VALUE!','#REF!','#NAME?','#N/A','#NUM!','#NULL!'):result=text
-                    else:raise ValueError('unsupported calculation result type')
-                evaluated[key]=result
-                return result
+                def scalar(result):
+                    if isinstance(result,np.generic):result=result.item()
+                    if isinstance(result,(int,float)) and not isinstance(result,bool):
+                        if not math.isfinite(result):raise ValueError('nonfinite calculation result')
+                        return float(result)
+                    if result is None:return 0.0
+                    if isinstance(result,(bool,str)):return result
+                    raise ValueError('unsupported calculation result type')
+                if key in arrays:
+                    rows,cols,keys=arrays[key]
+                    if array.size==1:array=np.full((rows,cols),array.item(),dtype=object)
+                    if array.shape!=(rows,cols):raise ValueError('array result shape differs from declared fixed range')
+                    for cell_key,value in zip(keys,array.flat):evaluated[cell_key]=scalar(value)
+                else:
+                    if array.size!=1:raise ValueError('unbounded dynamic spilling formula is unsupported')
+                    evaluated[key]=scalar(array.item())
+                return evaluated[key]
             finally:visiting.remove(key)
         for key in expressions:evaluate(key)
         changed=set()
         for key,value in evaluated.items():
             node=nodes[key];changed.add(sheets[key[0]][1])
-            for old in list(node.findall('s:v',ns)):node.remove(old)
+            for old in list(node.findall('s:v',ns))+list(node.findall('s:is',ns)):node.remove(old)
             node.attrib.pop('t',None)
             if isinstance(value,bool):node.set('t','b');text='1' if value else '0'
             elif isinstance(value,str):
@@ -153,7 +171,7 @@ def calculate_worksheet_package(q):
             for info in package.infolist():writer.writestr(info,replacements.get(info.filename,package.read(info)))
     result=publish(q,str(path),out.getvalue(),sha)
     result.update({'calculation_engine':'formulas','engine_version':formulas.__version__,'formulas_recalculated':True,
-                   'formula_count':len(evaluated),'formula_error_count':len(errors),'formula_errors':errors[:100],
+                   'formula_count':len(expressions),'calculated_cell_count':len(evaluated),'fixed_array_count':len(arrays),'defined_names_available':len(name_definitions),'formula_error_count':len(errors),'formula_errors':errors[:100],
                    'formula_text_preserved':True,'unselected_zip_payloads_preserved':True,'changed_parts':sorted(replacements),
-                   'external_workbooks_loaded':False,'macros_executed':False,'excel_engine_identity_claimed':False,'workbook_date_system':'1900'})
+                   'external_workbooks_loaded':False,'macros_executed':False,'excel_engine_identity_claimed':False,'workbook_date_system':'1904' if date1904 else '1900'})
     return [{'type':'text','text':json.dumps(result)}]
