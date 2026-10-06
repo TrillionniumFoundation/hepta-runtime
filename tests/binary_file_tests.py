@@ -131,14 +131,15 @@ class BinaryFiles(unittest.TestCase):
         self.write(b'x', path=self.root/'.hepta-forbidden', fail=True)
 
     @unittest.skipUnless(hasattr(os, 'setxattr'), 'extended attribute support required')
-    def test_xattrs_refused_instead_of_silently_lost(self):
+    def test_xattrs_preserved_instead_of_silently_lost(self):
         self.path.write_bytes(b'WITH_METADATA')
         try: os.setxattr(self.path, 'user.hepta_fixture', b'KEEP')
         except OSError as e: self.skipTest(str(e))
-        before = self.rpc('info')['version']
-        self.assertIn('attributes', self.write(b'NO', before, fail=True))
-        self.assertEqual(self.path.read_bytes(), b'WITH_METADATA')
+        before = self.rpc('info')
+        self.write(b'NEW_WITH_METADATA', before['version'])
+        self.assertEqual(self.path.read_bytes(), b'NEW_WITH_METADATA')
         self.assertEqual(os.getxattr(self.path, 'user.hepta_fixture'), b'KEEP')
+        self.assertEqual(before['metadata'], self.rpc('info')['metadata'])
 
 
 if __name__ == '__main__': unittest.main(verbosity=2)

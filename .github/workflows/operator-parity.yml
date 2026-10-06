@@ -34,7 +34,7 @@ jobs:
       - name: Install and verify native PDF renderer
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends poppler-utils
+          sudo apt-get install -y --no-install-recommends poppler-utils acl libpango-1.0-0 libpangoft2-1.0-0
           test -x /usr/bin/pdftoppm
           /usr/bin/pdftoppm -v
       - name: Install native document test worker
@@ -52,10 +52,12 @@ jobs:
             python3 tests/supervisor_tests.py
             python3 tests/file_capabilities.py
             python3 tests/binary_file_tests.py
+            python3 tests/metadata_preservation_tests.py
             python3 tests/output_capture_tests.py
             python3 tests/terminal_host_tests.py
             /tmp/hepta-document-worker/bin/python tests/document_local_tests.py
             /tmp/hepta-document-worker/bin/python tests/document_extended_tests.py
+            OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 /tmp/hepta-document-worker/bin/python tests/format_completion_tests.py
           } 2>&1 | tee /tmp/operator-tests.log
       - uses: actions/upload-artifact@v4
         if: always()

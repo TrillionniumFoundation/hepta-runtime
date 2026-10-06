@@ -6,6 +6,8 @@ This project is derived from [Muvon/octofs](https://github.com/Muvon/octofs) at 
 
 ## Hepta operator deployment
 
+See [local handoff, restart and format completion](docs/LOCAL_HANDOFF_AND_FORMATS.md) for the current maintenance and parser capabilities, qualified scopes, and local native CLI.
+
 See [native binary/remote document/page/range tools](docs/NATIVE_TRANSFER.md) for the current local replacement APIs and their explicit preservation limits.
 
 

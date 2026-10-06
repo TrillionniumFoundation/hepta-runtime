@@ -10,7 +10,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::time::Duration;
 
-const SOURCE: &str = include_str!("binary_file.py");
+const SOURCE: &str = concat!(
+	include_str!("file_metadata.py"),
+	"\n",
+	include_str!("binary_file.py")
+);
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]

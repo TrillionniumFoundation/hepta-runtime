@@ -17,7 +17,15 @@ use tokio::{
 	sync::Semaphore,
 };
 
-const WORKER: &str = include_str!("document_local.py");
+const WORKER: &str = concat!(
+	include_str!("file_metadata.py"),
+	"\n",
+	include_str!("document_formats.py"),
+	"\n",
+	include_str!("worksheet_calculation.py"),
+	"\n",
+	include_str!("document_local.py")
+);
 static WORKERS: Semaphore = Semaphore::const_new(2);
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
@@ -129,6 +137,43 @@ pub struct WorksheetEditParams {
 	pub values: Vec<Vec<Value>>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentAsset {
+	pub name: String,
+	pub path: String,
+	pub sha256: String,
+}
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum RichInputFormat {
+	Html,
+	Markdown,
+	Svg,
+}
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentRenderParams {
+	#[serde(default)]
+	pub host: Option<String>,
+	pub path: String,
+	pub input_format: RichInputFormat,
+	pub content: String,
+	#[serde(default)]
+	pub css: Option<String>,
+	#[serde(default)]
+	pub assets: Vec<DocumentAsset>,
+	pub expected_sha256: String,
+}
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorksheetRecalculateParams {
+	#[serde(default)]
+	pub host: Option<String>,
+	pub path: String,
+	pub expected_sha256: String,
+}
+
 async fn bounded(mut reader: impl AsyncRead + Unpin, max: usize) -> Result<Vec<u8>> {
 	let mut bytes = Vec::new();
 	let mut buffer = [0u8; 8192];
@@ -168,6 +213,17 @@ async fn execute(path: &str, mut input: Value, write: bool) -> Result<CallToolRe
 			}
 		}
 	}
+	if let Some(assets) = input.get("assets").and_then(Value::as_array) {
+		for asset in assets {
+			paths.push((
+				asset["path"]
+					.as_str()
+					.context("asset path required")?
+					.to_owned(),
+				false,
+			));
+		}
+	}
 	if let Some(name) = &remote_name {
 		let host = config.host(name)?;
 		if host.execution_mode != ExecutionMode::Operator {
@@ -175,12 +231,19 @@ async fn execute(path: &str, mut input: Value, write: bool) -> Result<CallToolRe
 		}
 		for (file, is_write) in &paths {
 			check_remote_path(name, file, false, false, *is_write)?;
-			if !(*is_write && input["op"] == "write" && input["expected_sha256"] == "absent") {
+			if !(*is_write
+				&& (input["op"] == "write" || input["op"] == "render_rich")
+				&& input["expected_sha256"] == "absent")
+			{
 				check_remote_path(name, file, false, false, false)?;
 			}
 		}
 		input["remote"] = json!({"ssh_target":host.ssh_target,"read_roots":host.allowed_read_path_prefixes,"write_roots":host.allowed_write_path_prefixes});
-		input["file_helper"] = json!(include_str!("binary_file.py"));
+		input["file_helper"] = json!(concat!(
+			include_str!("file_metadata.py"),
+			"\n",
+			include_str!("binary_file.py")
+		));
 	} else {
 		for (file, _) in &paths {
 			check_local_path(Path::new(file))?;
@@ -212,6 +275,9 @@ async fn execute(path: &str, mut input: Value, write: bool) -> Result<CallToolRe
 	let mut command = Command::new(parser);
 	command
 		.args(["-I", "-c", WORKER])
+		.env("OPENBLAS_NUM_THREADS", "1")
+		.env("OMP_NUM_THREADS", "1")
+		.env("MKL_NUM_THREADS", "1")
 		.stdin(Stdio::piped())
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
@@ -307,6 +373,23 @@ pub async fn edit_worksheet(p: WorksheetEditParams) -> Result<CallToolResult> {
 	}
 	let mut q = serde_json::to_value(&p)?;
 	q["op"] = json!("worksheet_edit");
+	execute(&p.path, q, true).await
+}
+
+pub async fn render_rich(p: DocumentRenderParams) -> Result<CallToolResult> {
+	if p.content.len() > 1024 * 1024
+		|| p.assets.len() > 32
+		|| p.css.as_ref().is_some_and(|s| s.len() > 256 * 1024)
+	{
+		bail!("rich document request exceeds limits");
+	}
+	let mut q = serde_json::to_value(&p)?;
+	q["op"] = json!("render_rich");
+	execute(&p.path, q, true).await
+}
+pub async fn recalculate(p: WorksheetRecalculateParams) -> Result<CallToolResult> {
+	let mut q = serde_json::to_value(&p)?;
+	q["op"] = json!("worksheet_recalculate");
 	execute(&p.path, q, true).await
 }
 

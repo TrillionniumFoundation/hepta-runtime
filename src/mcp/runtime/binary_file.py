@@ -17,6 +17,9 @@ import uuid
 
 CHUNK = 1024 * 1024
 
+if 'metadata_preserve' not in globals():
+    exec(compile(pathlib.Path(__file__).with_name('file_metadata.py').read_text(), 'file_metadata.py', 'exec'))
+
 
 def version(st):
     return ':'.join(map(str, (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)))
@@ -107,13 +110,7 @@ def publish(fd, name, temp, prior):
             source = regular(fd, name)
             try:
                 if version(os.fstat(source)) != prior: raise ValueError('source changed before metadata copy')
-                # Refuse unsupported metadata rather than silently removing it.
-                if hasattr(os, 'listxattr') and os.listxattr(source):
-                    raise ValueError('destination has extended attributes/ACLs; metadata-preserving replacement not qualified')
-                if before.st_uid != os.geteuid() or before.st_mode & 0o7000:
-                    raise ValueError('special ownership/mode preservation not qualified')
-                if os.fstat(f).st_gid != before.st_gid: os.fchown(f, -1, before.st_gid)
-                os.fchmod(f, stat.S_IMODE(before.st_mode))
+                metadata_preserve(source, f)
             finally: os.close(source)
         os.fsync(f)
     finally: os.close(f)
@@ -129,7 +126,14 @@ def main(q):
     fd, name = parent(q['root'], q['path'])
     try:
         op = q['op']
-        if op == 'info': return {'path': q['path'], **fingerprint(fd, name)}
+        if op == 'info':
+            result = fingerprint(fd, name)
+            f = regular(fd, name)
+            try:
+                if version(os.fstat(f)) != result['version']: raise ValueError('file changed during metadata inspection')
+                result['metadata'] = metadata_summary(metadata_capture(f))
+            finally: os.close(f)
+            return {'path': q['path'], **result}
         if op == 'read':
             with os.fdopen(regular(fd, name), 'rb') as f:
                 st = os.fstat(f.fileno()); ver = version(st)

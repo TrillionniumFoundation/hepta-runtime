@@ -69,3 +69,15 @@ fn pdf_operations_are_typed_not_unrestricted_commands() {
 	)
 	.is_ok());
 }
+
+#[test]
+fn final_format_tools_reject_hidden_interpreters_and_resources() {
+	assert!(serde_json::from_value::<DocumentRenderParams>(json!({"path":"/tmp/a.pdf","input_format":"html","content":"Hello","expected_sha256":"absent","url_fetcher":"x"})).is_err());
+	assert!(serde_json::from_value::<WorksheetRecalculateParams>(
+		json!({"path":"/tmp/a.xlsx","expected_sha256":"x","external_workbooks":true})
+	)
+	.is_err());
+	assert!(
+		serde_json::from_value::<DocumentAsset>(json!({"name":"x","path":"/tmp/a.png"})).is_err()
+	);
+}

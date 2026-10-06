@@ -171,6 +171,8 @@ async fn notify_peer_resource_updated(peer: &Peer<RoleServer>, uri: &str) {
 /// interactive sessions, on pre-2026-07-28 connections; other clients ignore it.
 const CLAUDE_CHANNEL_CAPABILITY: &str = "claude/channel";
 const RUNTIME_TOOL_NAMES: &[&str] = &[
+	"document_render",
+	"worksheet_recalculate",
 	"worksheet_edit",
 	"pdf_edit",
 	"file_info",
@@ -838,7 +840,7 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Read PDF pages, DOCX outline/XML and XLSX worksheet ranges on the controller or an explicit configured operator host. Native remote transfers verify versions and SHA256. Optional PDF render returns native MCP images. No URL fetching, decryption, macros or recalculation."
+		description = "Read PDF pages, DOCX outline/XML, XLS stored results and XLSX worksheet ranges on the controller or an explicit configured operator host. Native remote transfers verify versions and SHA256. Optional PDF render returns native MCP images. No URL fetching, decryption, macros or recalculation."
 	)]
 	async fn document_read(
 		&self,
@@ -952,7 +954,7 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = true
 		),
-		description = "Atomically publish at most 1 MiB of decoded base64 under the target account. expected_version is mandatory; absent is create-only. Files with unsupported extended attributes, ACLs or special ownership are rejected instead of losing metadata."
+		description = "Atomically publish at most 1 MiB of decoded base64 under the target account. expected_version is mandatory; absent is create-only. Preserves supported descriptor-bound ownership/mode, xattrs and ACLs with verification; rejects hard-link splits and special execution flags before publication."
 	)]
 	async fn binary_write(
 		&self,
@@ -1016,6 +1018,43 @@ impl OctofsServer {
 		Parameters(params): Parameters<runtime::documents::WorksheetEditParams>,
 	) -> Result<rmcp::model::CallToolResult, String> {
 		runtime::documents::edit_worksheet(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Rich Document PDF Render",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Render HTML/CSS, Markdown or inline SVG to PDF locally or on a configured operator host. Assets require declared names, paths and SHA256 and are referenced as asset:name. No implicit file/HTTP requests, scripts or external resources. Return render warnings and actual page count; no pixel-identity claim to a browser."
+	)]
+	async fn document_render(
+		&self,
+		Parameters(params): Parameters<runtime::documents::DocumentRenderParams>,
+	) -> Result<rmcp::model::CallToolResult, String> {
+		runtime::documents::render_rich(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+	#[tool(
+		title = "Worksheet Formula Recalculate",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Compute accepted XLSX/XLSM formula dependencies offline and update cached values while preserving formula text and unmodified OOXML payloads. Requires current SHA256. Reject cycles, linked/named/structured references, shared/array formulas and volatile/external functions before publication. Returns engine/version, calculated formula count and explicit Excel error cells; not an assertion of complete Excel engine equivalence."
+	)]
+	async fn worksheet_recalculate(
+		&self,
+		Parameters(params): Parameters<runtime::documents::WorksheetRecalculateParams>,
+	) -> Result<rmcp::model::CallToolResult, String> {
+		runtime::documents::recalculate(params)
 			.await
 			.map_err(|e| e.to_string())
 	}

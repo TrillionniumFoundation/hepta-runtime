@@ -20,6 +20,14 @@ import warnings
 import zipfile
 from xml.sax.saxutils import escape
 
+if 'metadata_preserve' not in globals():
+    exec(compile(pathlib.Path(__file__).with_name('file_metadata.py').read_text(), 'file_metadata.py', 'exec'))
+
+if 'render_rich_document' not in globals():
+    exec(compile(pathlib.Path(__file__).with_name('document_formats.py').read_text(), 'document_formats.py', 'exec'))
+if 'calculate_worksheet_package' not in globals():
+    exec(compile(pathlib.Path(__file__).with_name('worksheet_calculation.py').read_text(), 'worksheet_calculation.py', 'exec'))
+
 FILE_LIMIT = 32 * 1024 * 1024
 TEXT_LIMIT = 240 * 1024
 IMAGE_LIMIT = 512 * 1024
@@ -80,7 +88,12 @@ def publish(q,path,data,expected):
             if expected!=existing:raise ValueError('stale document fingerprint; no write applied')
             f=os.open(tmp,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600,dir_fd=fd)
             with os.fdopen(f,'wb') as stream:
-                stream.write(data);stream.flush();os.fchmod(stream.fileno(),mode);os.fsync(stream.fileno())
+                stream.write(data);stream.flush()
+                if existing != 'absent':
+                    source = os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC,dir_fd=fd)
+                    try: metadata_preserve(source,stream.fileno())
+                    finally: os.close(source)
+                os.fsync(stream.fileno())
             if existing=='absent':
                 os.link(tmp,name,src_dir_fd=fd,dst_dir_fd=fd,follow_symlinks=False);os.unlink(tmp,dir_fd=fd)
             else:
@@ -124,7 +137,9 @@ def read_document(q):
     path=checked(q,q['path']);data,digest=read_bytes(path)
     if q.get('expected_sha256') not in (None,digest): raise ValueError('document fingerprint changed')
     offset=max(0,int(q.get('offset') or 0));length=max(1,min(100,int(q.get('length') or 20)))
-    kind=path.suffix.lower();result={'path':str(path),'sha256':digest,'size':len(data)};images=[]
+    kind=path.suffix.lower()
+    if kind=='.xls':return read_legacy_xls(q,data,digest,path)
+    result={'path':str(path),'sha256':digest,'size':len(data)};images=[]
     if q['op']=='image_read' or kind in ('.png','.jpg','.jpeg','.webp','.gif','.bmp','.tif','.tiff'):
         meta,image=image_preview(data);result.update(meta);images.append(image)
     elif kind=='.docx':
@@ -295,10 +310,16 @@ def remote_document(q):
         request={k:v for k,v in q.items() if k not in ('remote','file_helper','host')}
         request['path']=str(local);request['roots']=[folder]
         prior='absent'
-        if op!='write' or q.get('expected_sha256')!='absent':
+        if op not in ('write','render_rich') or q.get('expected_sha256')!='absent':
             data,prior,sha=remote_fetch(q,path,q.get('expected_sha256'))
             local.write_bytes(data)
         mapped={str(local):path}
+        if op=='render_rich':
+            request['assets']=[]
+            for index,item in enumerate(q.get('assets',[])):
+                data,_,_=remote_fetch(q,item['path'],item['sha256'])
+                asset=pathlib.Path(folder)/(str(index)+pathlib.PurePosixPath(item['path']).suffix)
+                asset.write_bytes(data);request['assets'].append({**item,'path':str(asset)})
         if op=='pdf_edit':
             output=pathlib.Path(folder)/'output.pdf';request['output_path']=str(output)
             mapped[str(output)]=q['output_path']
@@ -313,7 +334,7 @@ def remote_document(q):
                     source=pathlib.Path(folder)/f'insert-{i}.pdf';source.write_bytes(data)
                     mapped[str(source)]=item['source_path'];item['source_path']=str(source)
         result=main(request)
-        if op in ('write','edit_docx','pdf_edit','worksheet_edit'):
+        if op in ('write','edit_docx','pdf_edit','worksheet_edit','render_rich','worksheet_recalculate'):
             output=pathlib.Path(request['output_path']) if op=='pdf_edit' else local
             destination=q['output_path'] if op=='pdf_edit' else path
             publish_result=remote_publish(q,destination,output.read_bytes(),output_prior if op=='pdf_edit' else prior)
@@ -463,6 +484,8 @@ def edit_worksheet(q):
 
 def main(q):
     if q.get('remote'):return remote_document(q)
+    if q['op']=='render_rich':return render_rich_document(q)
+    if q['op']=='worksheet_recalculate':return calculate_worksheet_package(q)
     if q['op']=='pdf_edit':return edit_pdf(q)
     if q['op']=='worksheet_edit':return edit_worksheet(q)
     if q['op'] in ('read','image_read'):return read_document(q)
@@ -477,6 +500,10 @@ def main(q):
 
 if __name__=='__main__':
     try:
+        # Enforce bounded scientific-library threads for standalone worker tests
+        # as well as the Rust-spawned worker, before importing NumPy/OpenBLAS.
+        for name in ('OPENBLAS_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS'):
+            os.environ[name]='1'
         resource.setrlimit(resource.RLIMIT_AS,(1024*1024*1024,1024*1024*1024))
         resource.setrlimit(resource.RLIMIT_CPU,(30,30))
         resource.setrlimit(resource.RLIMIT_FSIZE,(64*1024*1024,64*1024*1024))

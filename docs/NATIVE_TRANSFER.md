@@ -1,5 +1,6 @@
 # Native binary, remote documents and precise page/range edits
 
+**Current update:** [LOCAL_HANDOFF_AND_FORMATS.md](LOCAL_HANDOFF_AND_FORMATS.md) describes the reviewed rich-render, real calculation, legacy-XLS and metadata-preservation implementation, together with exact handoff/reboot boundaries. Earlier unsupported-status statements below describe historical stages; consult the latest qualification receipt for installation status.
 These operations are compiled MCP tools, not shell commands returned to the caller. Controller-local document access remains supported. Supplying an optional configured operator `host` to document tools selects a native version-bound file transfer to the controller parser and, for writes, checked atomic publication back to that host. No caller can provide an SSH destination, interpreter, helper program, file roots or sudo flag.
 
 ## Binary tools
