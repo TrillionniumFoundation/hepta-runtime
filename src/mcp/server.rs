@@ -828,7 +828,7 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = true
 		),
-		description = "Start an interactive SSH PTY on a configured host with explicit executable and argv. PTY sessions survive MCP requests but not a runtime process restart; use durable process tools for long jobs."
+		description = "Start a real terminal on a configured host. Operator terminals are owned by a target-account daemon, retain a full disk archive and survive controller restarts. Use an idempotency_key to reconcile uncertain launches. Target reboot does not resume a running program. Isolated-host terminals remain controller-scoped."
 	)]
 	async fn pty_start(
 		&self,
@@ -853,7 +853,9 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::pty::PtyReadParams>,
 	) -> Result<String, String> {
-		runtime::pty::read_pty(params).map_err(|error| error.to_string())
+		runtime::pty::read_pty_async(params)
+			.await
+			.map_err(|error| error.to_string())
 	}
 
 	#[tool(
@@ -883,7 +885,7 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = true
 		),
-		description = "Close stdin and terminate the local SSH PTY transport for an interactive session created by this runtime."
+		description = "Close a runtime-created terminal. Operator mode asks its target owner to terminate the terminal child group and retains the complete archive. This does not guarantee containment of privileged or deliberately detached descendants."
 	)]
 	async fn pty_close(
 		&self,
@@ -908,7 +910,9 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::pty::PtyListParams>,
 	) -> Result<String, String> {
-		runtime::pty::list_ptys(params).map_err(|error| error.to_string())
+		runtime::pty::list_ptys_async(params)
+			.await
+			.map_err(|error| error.to_string())
 	}
 
 	#[tool(

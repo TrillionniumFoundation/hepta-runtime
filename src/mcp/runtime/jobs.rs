@@ -414,7 +414,8 @@ except Exception as exc:
     print(str(exc), file=err, flush=True)
     raise SystemExit(127)
 
-# Bound disk consumption while continuously draining producers.
+# Operator archives retain every byte; isolated compatibility remains bounded.
+# Disk failures are explicit capture errors, never silent tail eviction.
 log_truncated = {"stdout": False, "stderr": False}
 log_errors = {"stdout": None, "stderr": None}
 log_eof = {"stdout": False, "stderr": False}
@@ -428,7 +429,7 @@ def drain(stream, sink, label):
                 log_eof[label] = True
                 break
             log_bytes[label]["seen"] += len(chunk)
-            keep = chunk[:max(0, 16 * 1024 * 1024 - stored)]
+            keep = chunk if req.get("execution_mode") == "operator" else chunk[:max(0, 16 * 1024 * 1024 - stored)]
             if len(keep) != len(chunk):
                 log_truncated[label] = True
             if log_errors[label] is None:

@@ -1,5 +1,7 @@
 # Operator mode and Desktop Commander replacement
 
+**Current candidate update:** the next-stage operator implementation uses full target-side archives and persistent target-owned terminals. [PERSISTENT_TERMINALS.md](PERSISTENT_TERMINALS.md) supersedes the historical 16 MiB / 4 MiB retention and controller-scoped operator PTY statements below. Existing isolated sessions and pre-upgrade jobs retain their original behavior. Consult the exact qualification receipt for deployment status.
+
 ## Trust contract
 
 `execution_mode: "isolated"` remains the default. It retains the Linux root-owned job helper, DynamicUser isolation, command restrictions and existing named privileged actions.

@@ -4,6 +4,16 @@ Policy-enforced, multi-host MCP runtime for durable process execution, interacti
 
 This project is derived from [Muvon/octofs](https://github.com/Muvon/octofs) at commit `37b5d3d02be511bae86d91fa980996a5fe257d7b` under Apache-2.0. The original Octofs documentation follows below; see [`docs/HEPTA_RUNTIME.md`](docs/HEPTA_RUNTIME.md) for the fork-specific architecture, policy, deployment, and recovery contract.
 
+## Hepta operator deployment
+
+The upstream Octofs installation instructions below do **not** install this fork. Build Hepta with `cargo build --release --locked --bin hepta-runtime` and use the configuration and deployment assets in this repository.
+
+For trusted-account shell, external-PID signalling and temporary sudo, see [Operator mode](docs/OPERATOR_MODE.md). For complete operator output archives and target-owned terminals that survive controller restarts, see [Persistent terminals](docs/PERSISTENT_TERMINALS.md). The isolated default remains separate; arbitrary operator execution is not a sandbox.
+
+Follow the exact source/binary qualification receipts under `docs/qualification/`. Source implementation, a parallel installed service, and a completed Desktop Commander cutover are different states. Preserve DC for existing sessions and rescue; cloud/ChatGPT registration is the final, separately authorized step.
+
+The following Octofs material is retained upstream reference, not the authoritative Hepta runtime policy and installation contract.
+
 ---
 
 <div align="center">

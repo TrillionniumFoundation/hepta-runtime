@@ -234,6 +234,7 @@ pub async fn sudo_start(params: SudoStartParams) -> Result<String> {
 		&json!({"executable":params.executable,"run_as":params.run_as,"fresh_auth":params.fresh_auth,"non_interactive":params.non_interactive}),
 	)?;
 	start_pty(PtyStartParams {
+		idempotency_key: None,
 		host: params.host,
 		executable: "/usr/bin/sudo".into(),
 		args,

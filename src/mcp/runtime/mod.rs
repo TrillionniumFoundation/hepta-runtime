@@ -7,6 +7,7 @@ pub mod jobs;
 pub mod operator;
 pub mod pty;
 pub mod ssh;
+pub mod terminal;
 
 pub use config::{
 	init_runtime, runtime_config, HostConfig, Platform, PrivilegedAction, RuntimeConfig,

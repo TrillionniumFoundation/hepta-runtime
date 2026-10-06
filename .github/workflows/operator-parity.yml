@@ -16,8 +16,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Retain exact source
-        run: git archive --format=tar.gz HEAD > /tmp/hepta-runtime-source.tar.gz
+          ref: ${{ github.sha }}
+      - name: Check and retain exact source
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          git archive --format=tar.gz HEAD > /tmp/hepta-runtime-source.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: operator-source-${{ github.sha }}
@@ -25,14 +30,20 @@ jobs:
           retention-days: 7
       - uses: dtolnay/rust-toolchain@1.99.0
         with:
-          components: rustfmt
-      - name: Format and test
+          components: rustfmt, clippy
+      - name: Format, strict lint and local regression
         run: |
-          set -o pipefail
-          python3 tests/process_ops_tests.py
-          python3 tests/supervisor_tests.py
-          cargo fmt --all --check
-          cargo test --locked --all-targets 2>&1 | tee /tmp/operator-tests.log
+          set -euo pipefail
+          {
+            cargo fmt --all --check
+            cargo clippy --locked --all-features --all-targets -- -D warnings
+            cargo test --locked --all-targets
+            python3 tests/process_ops_tests.py
+            python3 tests/supervisor_tests.py
+            python3 tests/file_capabilities.py
+            python3 tests/output_capture_tests.py
+            python3 tests/terminal_host_tests.py
+          } 2>&1 | tee /tmp/operator-tests.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -41,6 +41,9 @@ fn reserve_pty_slot() -> Result<OwnedSemaphorePermit> {
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PtyStartParams {
+	/// Operator terminals reuse the same key after an uncertain launch acknowledgement.
+	#[serde(default)]
+	pub idempotency_key: Option<String>,
 	pub host: String,
 	pub executable: String,
 	#[serde(default)]
@@ -81,6 +84,9 @@ pub struct PtyReadParams {
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PtyWriteParams {
+	/// Optional deduplication key for input sent to a persistent operator terminal.
+	#[serde(default)]
+	pub request_id: Option<String>,
 	pub host: String,
 	pub session_id: String,
 	/// UTF-8 data sent exactly as provided; control characters such as \u0003 are allowed.
@@ -90,6 +96,10 @@ pub struct PtyWriteParams {
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PtyListParams {
+	#[serde(default)]
+	pub after_session_id: Option<String>,
+	#[serde(default)]
+	pub limit: Option<usize>,
 	#[serde(default)]
 	pub host: Option<String>,
 }
@@ -281,6 +291,12 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 		true,
 	)?;
 	check_environment(&params.host, &params.env)?;
+	if host.execution_mode == ExecutionMode::Operator {
+		return super::terminal::start(&params).await;
+	}
+	if params.idempotency_key.is_some() {
+		bail!("PTY keys require an operator host");
+	}
 	// Reserve before any asynchronous launch, so concurrent starts cannot
 	// overrun the cap. Closed sessions must not permanently consume capacity.
 	let permit = reserve_pty_slot()?;
@@ -433,6 +449,35 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 	}))?)
 }
 
+pub async fn read_pty_async(params: PtyReadParams) -> Result<String> {
+	if params.session_id.starts_with("dpty-") {
+		super::terminal::read(&params).await
+	} else {
+		read_pty(params)
+	}
+}
+
+pub async fn list_ptys_async(params: PtyListParams) -> Result<String> {
+	let limit = params.limit.unwrap_or(128).clamp(1, 128);
+	let (mut persisted, more) = super::terminal::list(
+		params.host.as_deref(),
+		params.after_session_id.as_deref(),
+		limit,
+	)
+	.await?;
+	let legacy: Value = serde_json::from_str(&list_ptys(params)?)?;
+	let mut next = persisted.last().and_then(|v| v.get("session_id")).cloned();
+	if let Some(values) = legacy.get("sessions").and_then(Value::as_array) {
+		persisted.extend(values.iter().cloned());
+	}
+	if !more {
+		next = None;
+	}
+	Ok(serde_json::to_string(
+		&json!({"sessions":persisted,"has_more":more,"next_after_session_id":next}),
+	)?)
+}
+
 pub fn read_pty(params: PtyReadParams) -> Result<String> {
 	let session = lookup(&params.host, &params.session_id)?;
 	let status = session
@@ -475,6 +520,9 @@ pub fn read_pty(params: PtyReadParams) -> Result<String> {
 }
 
 pub async fn write_pty(params: PtyWriteParams) -> Result<String> {
+	if params.session_id.starts_with("dpty-") {
+		return super::terminal::write(&params).await;
+	}
 	if params.data.len() > MAX_WRITE_BYTES {
 		bail!("PTY write exceeds 64 KiB");
 	}
@@ -512,6 +560,9 @@ pub async fn write_pty(params: PtyWriteParams) -> Result<String> {
 }
 
 pub async fn close_pty(params: PtyRefParams) -> Result<String> {
+	if params.session_id.starts_with("dpty-") {
+		return super::terminal::close(&params).await;
+	}
 	let session = lookup(&params.host, &params.session_id)?;
 	session.stdin.lock().await.take();
 	session.stop.cancel();

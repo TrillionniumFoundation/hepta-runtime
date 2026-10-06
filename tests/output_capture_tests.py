@@ -41,7 +41,7 @@ class BrokenReader:
 
 class Drain(unittest.TestCase):
     def run_drain(self, stream, sink):
-        ns = {'log_truncated': {'stdout': False}, 'log_errors': {'stdout': None},
+        ns = {'req': {'execution_mode': 'isolated'}, 'log_truncated': {'stdout': False}, 'log_errors': {'stdout': None},
               'log_eof': {'stdout': False}, 'log_bytes': {'stdout': {'seen': 0, 'stored': 0}}}
         exec(CODE, ns)
         ns['drain'](stream, sink, 'stdout')

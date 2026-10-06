@@ -76,6 +76,7 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(rpc('READ_CODE', self.q)['stdout']['text'].count('BEGIN'), 1)
 
     def test_log_cap_and_lossless_cursor_bound(self):
+        self.q["execution_mode"] = "isolated"
         self.q['args'] = ['-c', "import sys;sys.stdout.buffer.write(b'x'*(17*1024*1024));sys.stderr.write('DRAINED')"]
         rpc('START_CODE', self.q)
         status = self.wait()
@@ -91,6 +92,19 @@ class SupervisorTests(unittest.TestCase):
         page = rpc('READ_CODE', {**self.q, 'limit': 1024*1024})
         self.assertEqual(page['stdout']['next_offset'], 16384)
         rpc('READ_CODE', {**self.q, 'stdout_offset': 17*1024*1024}, success=False)
+
+    def test_operator_archive_exceeds_old_cap_without_loss(self):
+        self.q['args'] = ['-c', "import sys;sys.stdout.buffer.write(b'x'*(20*1024*1024));sys.stdout.write('END_MARKER');sys.stderr.write('ERR_OK')"]
+        rpc('START_CODE', self.q)
+        status = self.wait()
+        self.assertEqual(status['exit_code'], 0)
+        self.assertTrue(status['output_complete'])
+        self.assertFalse(status['log_truncated']['stdout'])
+        part = rpc('READ_CODE', {**self.q, 'stdout_offset': 20*1024*1024})['stdout']
+        self.assertEqual(part['text'], 'END_MARKER')
+        self.assertEqual(part['size'], 20*1024*1024+10)
+        self.assertEqual(status['log_bytes']['stdout']['seen'], part['size'])
+        self.assertEqual(status['log_bytes']['stdout']['stored'], part['size'])
 
     def test_cancel_escalates_own_term_ignoring_child(self):
         self.q['args'] = ['-c', "import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print('READY',flush=True);time.sleep(20)"]
