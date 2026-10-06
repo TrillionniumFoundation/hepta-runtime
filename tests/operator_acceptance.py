@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import pathlib
+import re
 import secrets
 import shlex
 import socket
@@ -118,6 +119,9 @@ def main():
             assert c.call('shell_start', params)['job']['id'] == job
             c.call('shell_start', {**params, 'command': 'echo DIFFERENT'}, denied=True)
             passed('shell pipes/redirects/env/Unicode/real UID/idempotency', {'backend': started['launch'], 'uid': meta['uid']})
+            view = c.call('view', {'path': f'ssh://{a.ssh_target}{target_dir}/canary.txt'})
+            assert 'beta' in str(view)
+            passed('native remote file API sees the same operator-created file')
             page = c.call('host_processes', {'host': 'operator', 'limit': 2})
             assert len(page['processes']) <= 2
             passed('actual host PID pagination')
@@ -140,9 +144,14 @@ def main():
             sid = c.call('pty_start', {'host': 'operator', 'executable': '/bin/sh', 'args': ['-i'], 'cwd': target_dir})['session_id']
             c.call('pty_write', {'host': 'operator', 'session_id': sid, 'data': "printf 'PTY_%s\\n' OK\n"})
             pty_until(c, sid, 'PTY_OK')
+            c.call('pty_write', {'host': 'operator', 'session_id': sid, 'data': 'sleep 30\n'})
+            time.sleep(.2)
+            c.call('pty_write', {'host': 'operator', 'session_id': sid, 'data': '\x03'})
+            c.call('pty_write', {'host': 'operator', 'session_id': sid, 'data': "printf 'CTRL_%s\\n' OK\n"})
+            pty_until(c, sid, 'CTRL_OK')
             c.call('pty_write', {'host': 'operator', 'session_id': sid, 'data': 'exit\n'})
             c.call('pty_close', {'host': 'operator', 'session_id': sid})
-            passed('real SSH PTY shell input/output/close')
+            passed('real SSH PTY shell input/output/Ctrl-C/close')
             if a.sudo_smoke:
                 sid = c.call('sudo_start', {'host': 'operator', 'executable': '/usr/bin/id', 'args': ['-u'], 'non_interactive': True})['session_id']
                 result = pty_until(c, sid, '0\r\n')
@@ -153,6 +162,18 @@ def main():
                 assert wait(c, j)['state'] == 'succeeded'
                 assert c.call('process_read', {'host': 'operator', 'job_id': j})['stdout']['text'].strip() == '0'
                 passed('durable operator backend does not accidentally block existing sudo')
+                root_sid = c.call('sudo_start', {'host': 'operator', 'executable': '/usr/bin/python3', 'args': ['-c', "import os,time;print('ROOT_PID='+str(os.getpid()),flush=True);time.sleep(40)"], 'non_interactive': True})['session_id']
+                root_text = pty_until(c, root_sid, 'ROOT_PID=')['text']
+                root_pid = int(re.search(r'ROOT_PID=(\d+)', root_text).group(1))
+                root_row = c.call('host_processes', {'host': 'operator', 'after_pid': root_pid-1, 'limit': 1})['processes'][0]
+                assert root_row['pid'] == root_pid and root_row['uid'] == 0
+                root_sig = {'host': 'operator', 'pid': root_pid, 'expected_identity': root_row['identity'], 'signal': 0}
+                if meta['uid'] != 0:
+                    c.call('host_signal', root_sig, denied=True)
+                delivered = c.call('host_signal', {**root_sig, 'signal': 15, 'sudo': True})
+                assert delivered['effective_uid'] == 0 and delivered['result'] == 'signal_sent'
+                c.call('pty_close', {'host': 'operator', 'session_id': root_sid})
+                passed('real root-owned disposable PID: user permission denied, explicit existing sudo signal works')
             resume = {**params, 'command': "printf x >> once; printf 'START\\n'; sleep 10; printf 'COUNT='; wc -c < once", 'idempotency_key': key+'-restart', 'timeout_seconds': 30}
             j = c.call('shell_start', resume)['job']['id']
             controller.terminate()

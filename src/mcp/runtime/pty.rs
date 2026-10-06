@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::{ChildStdin, Command};
-use tokio::sync::Mutex as AsyncMutex;
+use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit, Semaphore};
 
 use super::config::{check_environment, check_execution, runtime_config, valid_name};
 use super::config::{ExecutionMode, Platform};
@@ -26,6 +26,17 @@ const MAX_READ_BYTES: usize = 16 * 1024;
 const MAX_WRITE_BYTES: usize = 64 * 1024;
 static PTY_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static PTYS: OnceLock<Mutex<HashMap<String, PtySession>>> = OnceLock::new();
+static PTY_SLOTS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+const MAX_ACTIVE_SESSIONS: usize = 128;
+const MAX_TRACKED_SESSIONS: usize = 256;
+
+fn reserve_pty_slot() -> Result<OwnedSemaphorePermit> {
+	PTY_SLOTS
+		.get_or_init(|| Arc::new(Semaphore::new(MAX_ACTIVE_SESSIONS)))
+		.clone()
+		.try_acquire_owned()
+		.map_err(|_| anyhow!("active PTY session limit reached"))
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -204,12 +215,22 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 		true,
 	)?;
 	check_environment(&params.host, &params.env)?;
-	if registry()
-		.lock()
-		.map_err(|_| anyhow!("PTY registry lock poisoned"))?
-		.len() >= 128
+	// Reserve before any asynchronous launch, so concurrent starts cannot
+	// overrun the cap. Closed sessions must not permanently consume capacity.
+	let permit = reserve_pty_slot()?;
 	{
-		bail!("PTY session limit reached");
+		let mut sessions = registry()
+			.lock()
+			.map_err(|_| anyhow!("PTY registry lock poisoned"))?;
+		if sessions.len() >= MAX_TRACKED_SESSIONS {
+			sessions.retain(|_, session| {
+				session
+					.status
+					.lock()
+					.map(|status| matches!(status.state, PtyState::Running))
+					.unwrap_or(true)
+			});
+		}
 	}
 	let id = next_id();
 	let rows = params.rows.unwrap_or(24).clamp(1, 500);
@@ -260,11 +281,12 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 	}
 	let stdin = Arc::new(AsyncMutex::new(input));
 	let output = Arc::new(Mutex::new(RingBuffer::new()));
+	let mut reader_tasks = Vec::new();
 	if let Some(stdout) = child.stdout.take() {
-		tokio::spawn(copy_reader(stdout, output.clone()));
+		reader_tasks.push(tokio::spawn(copy_reader(stdout, output.clone())));
 	}
 	if let Some(stderr) = child.stderr.take() {
-		tokio::spawn(copy_reader(stderr, output.clone()));
+		reader_tasks.push(tokio::spawn(copy_reader(stderr, output.clone())));
 	}
 	let status = Arc::new(Mutex::new(PtyStatus {
 		state: PtyState::Running,
@@ -276,6 +298,7 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 	let cancelled = stop.clone();
 	let remote_job_id = id.clone();
 	tokio::spawn(async move {
+		let _permit = permit;
 		let waited = tokio::select! {
 			result = child.wait() => result,
 			_ = cancelled.cancelled() => {
@@ -285,7 +308,18 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 				child.wait().await
 			}
 		};
-		let next = match waited {
+		// Publish a terminal state only after final output has been drained.
+		let mut capture_incomplete = false;
+		for mut reader in reader_tasks {
+			if !matches!(
+				tokio::time::timeout(std::time::Duration::from_secs(2), &mut reader).await,
+				Ok(Ok(()))
+			) {
+				reader.abort();
+				capture_incomplete = true;
+			}
+		}
+		let mut next = match waited {
 			Ok(exit) if exit.code().is_some() => PtyStatus {
 				state: PtyState::Exited,
 				exit_code: exit.code(),
@@ -302,6 +336,9 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 				detail: Some(error.to_string()),
 			},
 		};
+		if capture_incomplete {
+			next.detail = Some("output capture did not fully drain before its deadline".into());
+		}
 		if let Ok(mut guard) = waiter_status.lock() {
 			*guard = next;
 		}
@@ -368,6 +405,7 @@ pub fn read_pty(params: PtyReadParams) -> Result<String> {
 		"truncated_before_offset": truncated,
 		"text": text,
 		"bytes_hex": bytes_hex,
+		"output_complete": !matches!(status.state, PtyState::Running) && status.detail.is_none(),
 		"status": status,
 	}))?)
 }
@@ -479,3 +517,7 @@ pub fn list_ptys(params: PtyListParams) -> Result<String> {
 #[cfg(test)]
 #[path = "pty_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "pty_operator_tests.rs"]
+mod operator_tests;

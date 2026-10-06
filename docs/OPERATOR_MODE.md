@@ -57,3 +57,25 @@ python3 tests/operator_acceptance.py \
 This launches only a separate temporary controller, creates a unique target `/tmp/hepta-operator-canary-*` directory, and uses disposable commands/processes. `--sudo-smoke` runs `id -u` with the target account's existing permission, without changing sudoers. Test metadata is retained as evidence. Failed external test sleeps self-expire; no cleanup guesses a PID identity. Production services are not restarted. The report explicitly records whether password prompting and the ChatGPT tunnel were actually tested.
 
 A successful local canary is not a complete DC replacement. Before removing DC, verify the exact installed binary, all required hosts, file/binary/document workflows, PTY interruption and reconnect, reboot behavior, target permissions, tunnel/workspace binding, and an actual call from the intended ChatGPT client. Keep an independent rescue path and rollback binary until those checks pass. Service installation alone does not establish cloud account binding. No automated cutover or uninstallation is performed by this implementation.
+
+## Separate current-user deployment
+
+`deploy/install-operator-user.py` preflights explicitly supplied SSH aliases, verifies the binary hash, and installs only a new `hepta-runtime-operator.service` user unit. It refuses to overwrite existing operator files. The controller is not root; actual elevation happens under the target account's existing sudo policy. The endpoint binds only loopback and gets a new private token, which is never printed. Existing DC, runtime, tunnel and trading services remain untouched.
+
+```sh
+python3 deploy/install-operator-user.py --check-only \
+  --host main=localhost --host pocket4=pocket4 --host rog=rog \
+  --host mac=macbook-pro --host x230=x230-ts --host ai395=ai395 \
+  --out operator-host-preflight.json
+
+python3 deploy/install-operator-user.py --binary "$PWD/target/release/hepta-runtime" \
+  --host main=localhost --host pocket4=pocket4 --host rog=rog \
+  --host mac=macbook-pro --host x230=x230-ts --host ai395=ai395 \
+  --out operator-installation.json
+```
+
+Use aliases actually configured on the installing machine; the names above are a deployment example, not built-in destinations. Native file tools and shell jobs share the actual account's authority. The installer verifies authenticated MCP discovery and real UID execution on every selected host. It rolls back only its new unit on a failed smoke test, retaining diagnostic files. To stop this parallel controller without affecting DC: `systemctl --user disable --now hepta-runtime-operator.service`. Automatic startup before user login additionally depends on the host's user-manager/lingering policy and must be verified, not assumed.
+
+PTY capacity now limits active sessions, not all historical sessions; at most 256 recent records are retained before old exited records are evicted. An active slot is reserved before asynchronous launch and released on completion/failure. Terminal status follows output-drain completion; a drain timeout is explicitly reported with `output_complete: false`.
+
+The typed `host_signal` option `sudo: true` uses existing noninteractive permission for the Python signal helper. It does not broaden command-specific sudoers rules. Where only a particular signal command is authorized, use `sudo_start` for that exact command; interactive authentication remains governed by sudo/PAM.
