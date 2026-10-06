@@ -1,7 +1,7 @@
 # Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
 """Pinned, same-boot Linux checkpoint lifecycle with explicit restore/resume phases.
 Uses existing sudo authority; private snapshots never leave the target. Restricts
-admission to same-login single-process/single-thread tasks with pinned regular
+admission to same-login single-process tasks with bounded thread groups with pinned regular
 files, mapped-file identities and internal pipes. No generic resource remapping.
 """
 import fcntl
@@ -34,6 +34,35 @@ def kernel_state(pid):
     raw=pathlib.Path('/proc',str(pid),'stat').read_text()
     return raw[raw.rfind(')')+2:].split()[0]
 
+
+
+def thread_group(pid,expected_uid=None):
+    root=pathlib.Path('/proc')/str(pid)/'task'
+    entries=list(root.iterdir())
+    if not 1<=len(entries)<=16:raise ValueError('thread-group qualification limit is 1..16')
+    result=[]
+    for entry in entries:
+        status=(entry/'status').read_text().splitlines()
+        tgid=int(next(line for line in status if line.startswith('Tgid:')).split()[1])
+        uids=list(map(int,next(line for line in status if line.startswith('Uid:')).split()[1:]))
+        if tgid!=pid or len(set(uids))!=1 or (expected_uid is not None and uids[0]!=expected_uid):
+            raise ValueError('thread group changed or contains mixed credentials')
+        raw=(entry/'stat').read_text();fields=raw[raw.rfind(')')+2:].split()
+        result.append({'tid':int(entry.name),'uid':uids[0],'start_ticks':int(fields[19]),'state':fields[0]})
+    if {int(e.name) for e in root.iterdir()}!={v['tid'] for v in result}:
+        raise ValueError('thread group changed during inspection')
+    return sorted(result,key=lambda v:v['tid'])
+
+
+def thread_identities(group):
+    return [{k:v[k] for k in ('tid','uid','start_ticks')} for v in group]
+
+
+def validate_stopped_threads(pid,expected):
+    group=thread_group(pid)
+    if thread_identities(group)!=expected:raise ValueError('restored thread identity changed; no resume performed')
+    if any(v['state']!='T' for v in group):raise ValueError('not all restored threads are stopped')
+    return group
 
 def regular_read(path,limit):
     fd=os.open(path,os.O_RDONLY|os.O_NONBLOCK|os.O_NOFOLLOW|os.O_CLOEXEC)
@@ -87,7 +116,8 @@ def inventory(pid,uid):
     root=pathlib.Path('/proc')/str(pid);threads=list((root/'task').iterdir());children=[]
     for thread in threads:children.extend(map(int,(thread/'children').read_text().split()))
     reasons=[];resources=[];pipes={};files=set();mapped=set()
-    if len(threads)!=1:reasons.append('multi-thread restoration is not qualified')
+    group=thread_group(pid,uid)
+    if len(threads)!=len(group):raise ValueError('thread enumeration changed')
     if children:reasons.append('child-process coordination is not qualified')
     sizes={}
     for line in (root/'status').read_text().splitlines():
@@ -117,7 +147,7 @@ def inventory(pid,uid):
     if len(files|mapped)>256:reasons.append('mapped-file budget exceeded')
     if identity(pid)!=who:raise ValueError('process identity changed during inspection')
     return {'identity':who,'kernel_state':kernel_state(pid),'ready':not reasons,'limitations':sorted(set(reasons)),
-            'process_count':1+len(set(children)),'thread_count':len(threads),'resources':resources,
+            'process_count':1+len(set(children)),'thread_count':len(group),'threads':group,'resources':resources,
             'regular_file_count':len(files),'mapped_file_count':len(mapped),'private_file_paths':sorted(files|mapped)}
 
 
@@ -149,7 +179,13 @@ def public_state(state):
     if restored:
         try:
             result['restored_identity_matches']=identity(restored['pid'])==restored
-            if result['restored_identity_matches']:result['restored_kernel_state']=kernel_state(restored['pid'])
+            if result['restored_identity_matches']:
+                result['restored_kernel_state']=kernel_state(restored['pid'])
+                if state.get('restored_threads'):
+                    group=thread_group(restored['pid'])
+                    result['restored_threads_match']=thread_identities(group)==state['restored_threads']
+                    result['live_thread_count']=len(group)
+                    result['all_threads_stopped']=all(t['state']=='T' for t in group)
         except (FileNotFoundError,ProcessLookupError):result['restored_identity_matches']=False
     return result
 
@@ -168,6 +204,7 @@ def resume(state,q,meta):
     try:
         require_identity(identity(expected['pid']),expected)
         if kernel_state(expected['pid'])!='T':raise ValueError('restored task is not stopped; reconcile external changes')
+        if state.get('restored_threads'):validate_stopped_threads(expected['pid'],state['restored_threads'])
         state['state']='resume_requested';save(meta,state)
         signal.pidfd_send_signal(fd,signal.SIGCONT)
         state.update(state='resumed',resumed_at_unix=time.time());save(meta,state)
@@ -188,7 +225,7 @@ def main(q):
     action=q['action']
     if action=='inspect':
         result=inventory(q['pid'],uid);result.pop('private_file_paths')
-        return {**result,'scope':'same-boot single-process/single-thread Linux with internal pipes and unchanged files','application_checkpoint_required':False}
+        return {**result,'scope':'same-boot single-process Linux with 1..16 threads, internal pipes and unchanged files','application_checkpoint_required':False}
     name=q.get('checkpoint_id','')
     if not re.fullmatch(r'[A-Za-z0-9_-]{8,80}',name):raise ValueError('strict checkpoint identity required')
     if action in ('dump','restore') and not q.get('acknowledge_process_stop'):raise ValueError('process-stop acknowledgement required')
@@ -220,15 +257,17 @@ def main(q):
                 signal.pidfd_send_signal(pidfd,signal.SIGSTOP);stopped=True
                 for _ in range(100):
                     require_identity(identity(q['pid']),ready['identity'])
-                    if kernel_state(q['pid'])=='T':break
+                    if all(v['state']=='T' for v in thread_group(q['pid'],uid)):break
                     time.sleep(.01)
                 else:raise ValueError('process did not reach stopped state')
                 final=inventory(q['pid'],uid)
                 if not final['ready']:raise ValueError('resource contract changed before freeze')
+                if thread_identities(final['threads'])!=thread_identities(ready['threads']):raise ValueError('thread membership changed before freeze')
+                if any(t['state']!='T' for t in final['threads']):raise ValueError('thread stop was incomplete')
                 images=root/'images';private_directory(images,True)
                 budget=[0];files={path:pin(path,budget) for path in final['private_file_paths']}
                 state={'schema':'checkpoint-two-phase-v1','state':'dumping','checkpoint_id':name,'uid':uid,'criu_sha256':q['configured_sha256'],
-                       'original_identity':ready['identity'],'original_kernel_state':ready['kernel_state'],'created_at_unix':time.time(),'file_pins':files}
+                       'original_identity':ready['identity'],'original_kernel_state':ready['kernel_state'],'original_threads':thread_identities(final['threads']),'created_at_unix':time.time(),'file_pins':files}
                 save(meta,state)
                 code=execute_criu(binary,['dump','--tree',str(q['pid']),'--images-dir',str(images),'--work-dir',str(images),'--log-file','dump.log','--shell-job','--leave-stopped','-v4'])
                 if code:
@@ -251,6 +290,8 @@ def main(q):
         if state['state']!='dumped':raise ValueError('uncertain checkpoint state; no duplicate restore admitted')
         if pathlib.Path('/proc/sys/kernel/random/boot_id').read_text().strip()!=state['original_identity']['boot_id']:raise ValueError('cross-boot restoration is not qualified')
         if pathlib.Path('/proc',str(state['original_identity']['pid'])).exists():raise ValueError('original numeric PID is occupied; wait for its owner to reap it')
+        for thread in state.get('original_threads',[]):
+            if pathlib.Path('/proc',str(thread['tid'])).exists():raise ValueError('original numeric thread ID is occupied; restore refused')
         for path,expected in state['file_pins'].items():
             if pin(path)!=expected:raise ValueError('external file identity/content changed; restore refused')
         images=root/'images'
@@ -264,6 +305,13 @@ def main(q):
         state['restored_identity']=restored
         if kernel_state(restored['pid'])!='T':
             state['state']='restore_state_unexpected';save(meta,state);raise ValueError('restoration did not produce the required stopped state; explicit reconciliation required')
+        group=thread_group(restored['pid'],uid)
+        original_threads=state.get('original_threads')
+        expected_tids={v['tid'] for v in original_threads} if original_threads else {restored['pid']}
+        if {v['tid'] for v in group}!=expected_tids or any(v['state']!='T' for v in group):
+            state.update(state='restore_thread_state_unexpected',observed_thread_count=len(group));save(meta,state)
+            raise ValueError('restored thread group differs or is not fully stopped; explicit reconciliation required')
+        state['restored_threads']=thread_identities(group)
         state['state']='restored_stopped';save(meta,state)
         return {**public_state(state),'same_numeric_pid':True,'reused':False}
     finally:os.close(lock)

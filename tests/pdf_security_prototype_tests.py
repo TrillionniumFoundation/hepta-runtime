@@ -18,7 +18,7 @@ s=importlib.util.spec_from_file_location('security_document',ROOT/'src/mcp/runti
 exec(compile((ROOT/'src/mcp/runtime/pdf_security.py').read_text(),'pdf_security.py','exec'),D.__dict__)
 
 
-def signed_fixture(data):
+def signed_fixture(data,certificate_output=None):
     from pypdf import PdfReader,PdfWriter
     from pypdf.generic import DictionaryObject,NameObject,ArrayObject,NumberObject,ByteStringObject,TextStringObject
     from cryptography import x509
@@ -35,6 +35,7 @@ def signed_fixture(data):
     raw=raw.replace(b'1111111111',f'{start:010d}'.encode()).replace(b'2222222222',f'{end:010d}'.encode()).replace(b'3333333333',f'{len(raw)-end:010d}'.encode())
     key=rsa.generate_private_key(public_exponent=65537,key_size=2048);name=x509.Name([x509.NameAttribute(NameOID.COMMON_NAME,'Hepta disposable test signer')]);now=datetime.datetime.now(datetime.timezone.utc)
     cert=x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key()).serial_number(x509.random_serial_number()).not_valid_before(now-datetime.timedelta(minutes=1)).not_valid_after(now+datetime.timedelta(days=1)).sign(key,hashes.SHA256())
+    if certificate_output is not None:certificate_output.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
     cms=pkcs7.PKCS7SignatureBuilder().set_data(raw[:start]+raw[end:]).add_signer(cert,key,hashes.SHA256()).sign(serialization.Encoding.DER,[pkcs7.PKCS7Options.DetachedSignature,pkcs7.PKCS7Options.Binary])
     encoded=cms.hex().encode();assert len(encoded)<=16384
     return raw[:start+1]+encoded.ljust(16384,b'0')+raw[end-1:]
@@ -101,6 +102,35 @@ class PdfSecurityPrototype(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'certified'):self.call('append_metadata',allow_unsigned_revision=True,title='Not certified')
         self.assertEqual(before,self.source.read_bytes());self.assertFalse((self.root/'output.pdf').exists())
 
+
+
+    def test_explicit_trust_root_accepts_signer_but_does_not_claim_revocation(self):
+        trust=self.root/'trust.pem';self.source.write_bytes(signed_fixture(self.source.read_bytes(),trust))
+        result=self.call('inspect',trust_store_file=str(trust),trust_store_sha256=hashlib.sha256(trust.read_bytes()).hexdigest())
+        sig=result['signatures'][0]
+        self.assertEqual(sig['integrity'],'valid');self.assertTrue(sig['certificate_chain_valid']);self.assertTrue(sig['certificate_trust_evaluated'])
+        self.assertFalse(sig['revocation_evaluated']);self.assertFalse(sig['certification_policy_evaluated']);self.assertFalse(sig['trusted_signing_time_evaluated'])
+
+    def test_wrong_explicit_root_does_not_accept_intact_untrusted_signature(self):
+        self.source.write_bytes(signed_fixture(self.source.read_bytes()))
+        wrong=self.root/'other.pem';signed_fixture(D.create_bytes('pdf','# Other'),wrong)
+        result=self.call('inspect',trust_store_file=str(wrong),trust_store_sha256=hashlib.sha256(wrong.read_bytes()).hexdigest())
+        sig=result['signatures'][0]
+        self.assertEqual(sig['integrity'],'valid');self.assertTrue(sig['certificate_trust_evaluated']);self.assertFalse(sig['certificate_chain_valid'])
+
+    def test_stale_or_unpaired_trust_bundle_is_rejected(self):
+        trust=self.root/'trust.pem';self.source.write_bytes(signed_fixture(self.source.read_bytes(),trust))
+        before=self.source.read_bytes()
+        with self.assertRaisesRegex(ValueError,'together'):self.call('inspect',trust_store_file=str(trust))
+        with self.assertRaisesRegex(ValueError,'changed'):self.call('inspect',trust_store_file=str(trust),trust_store_sha256='0'*64)
+        self.assertEqual(before,self.source.read_bytes())
+
+    def test_trusted_signature_does_not_sign_unsigned_incremental_revision(self):
+        trust=self.root/'trust.pem';self.source.write_bytes(signed_fixture(self.source.read_bytes(),trust))
+        result=self.call('append_metadata',allow_unsigned_revision=True,title='Explicit new revision',trust_store_file=str(trust),trust_store_sha256=hashlib.sha256(trust.read_bytes()).hexdigest())
+        sig=result['output_signatures']['signatures'][0]
+        self.assertTrue(sig['certificate_chain_valid']);self.assertEqual(sig['integrity'],'valid')
+        self.assertFalse(result['new_revision_is_signed']);self.assertFalse(result['output_signatures']['current_revision_fully_signed'])
 
 
 if __name__=='__main__':unittest.main(verbosity=2)

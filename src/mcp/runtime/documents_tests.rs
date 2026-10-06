@@ -98,3 +98,9 @@ fn protected_pdf_schema_rejects_raw_secrets_and_hidden_authority() {
 	}
 	assert!(serde_json::from_value::<PdfSecurityParams>(json!({"path":"/tmp/a.pdf","expected_sha256":"hash","action":"inspect","password_file":"/tmp/private"})).is_ok());
 }
+
+#[test]
+fn trust_roots_are_paths_not_inline_secrets_or_validator_commands() {
+	assert!(serde_json::from_value::<PdfSecurityParams>(json!({"path":"/tmp/a.pdf","expected_sha256":"00","action":"inspect","trust_store_file":"/tmp/ca.pem","trust_store_sha256":"11"})).is_ok());
+	assert!(serde_json::from_value::<PdfSecurityParams>(json!({"path":"/tmp/a.pdf","expected_sha256":"00","action":"inspect","openssl_command":"anything"})).is_err());
+}

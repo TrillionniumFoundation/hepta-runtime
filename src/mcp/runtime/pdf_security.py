@@ -45,7 +45,7 @@ def pdf_open(q,data,owner_required=False):
     return reader
 
 
-def pdf_signature_info(data,reader):
+def pdf_signature_info(data,reader,trust_bundle=None):
     from pypdf.generic import IndirectObject
     found=[];seen=set()
     fields=(reader.get_fields() or {}).values()
@@ -58,7 +58,7 @@ def pdf_signature_info(data,reader):
         seen.add(ident)
         if len(found)>=20:raise ValueError('PDF signature budget exceeded')
         ranges=value.get('/ByteRange');contents=value.get('/Contents')
-        info={'subfilter':str(value.get('/SubFilter','')),'certificate_trust_evaluated':False,'certification_policy_evaluated':False}
+        info={'subfilter':str(value.get('/SubFilter','')),'certificate_trust_evaluated':False,'certification_policy_evaluated':False,'revocation_evaluated':False,'trusted_signing_time_evaluated':False,'certificate_purpose_evaluated':False}
         if not ranges or len(ranges)!=4 or any(not isinstance(n,int) or isinstance(n,bool) for n in ranges):
             info['integrity']='invalid_byte_range';found.append(info);continue
         start,length,tail,count=map(int,ranges)
@@ -89,18 +89,38 @@ def pdf_signature_info(data,reader):
                 root=pathlib.Path(directory);cms=root/'signature.der';signed=root/'signed.bin'
                 cms.write_bytes(signature[:size]);signed.write_bytes(data[:length]+data[tail:tail+count]);cms.chmod(0o600);signed.chmod(0o600)
                 result=subprocess.run(['/usr/bin/openssl','cms','-verify','-binary','-inform','DER','-in',str(cms),'-content',str(signed),'-noverify','-out',os.devnull],capture_output=True,timeout=10)
+                if trust_bundle is not None and result.returncode==0:
+                    anchors=root/'explicit-trust.pem';anchors.write_bytes(trust_bundle);anchors.chmod(0o600)
+                    verified=subprocess.run(['/usr/bin/openssl','cms','-verify','-binary','-inform','DER','-in',str(cms),'-content',str(signed),'-CAfile',str(anchors),'-no-CApath','-no-CAstore','-purpose','any','-out',os.devnull],capture_output=True,timeout=10)
+                    info.update(certificate_trust_evaluated=True,certificate_chain_valid=verified.returncode==0,trust_source='caller_pinned_PEM_bundle',trust_bundle_sha256=hashlib.sha256(trust_bundle).hexdigest(),trust_evaluation_time='current_parser_system_time',network_certificate_fetch_performed=False)
+
             info['integrity']='valid' if result.returncode==0 else 'invalid'
         except (OSError,ValueError,subprocess.TimeoutExpired):info['integrity']='verification_unavailable'
         found.append(info)
-    return {'signature_count':len(found),'signatures':found,'certificate_trust_evaluated':False,'current_revision_fully_signed':bool(found) and any(v.get('integrity')=='valid' and v.get('covers_current_file') for v in found)}
+    return {'signature_count':len(found),'signatures':found,'certificate_trust_evaluated':any(v.get('certificate_trust_evaluated') for v in found),'revocation_evaluated':False,'certification_policy_evaluated':False,'current_revision_fully_signed':bool(found) and any(v.get('integrity')=='valid' and v.get('covers_current_file') for v in found)}
 
+
+
+def pdf_trust_bundle(q):
+    path=q.get('trust_store_file');expected=q.get('trust_store_sha256')
+    if bool(path)!=bool(expected):raise ValueError('trust_store_file and its SHA256 must be supplied together')
+    if not path:return None
+    data,digest=read_bytes(checked(q,path))
+    if len(data)>256*1024 or digest!=expected:raise ValueError('certificate trust bundle changed or exceeds bounds')
+    from cryptography import x509
+    if b'PRIVATE KEY' in data:raise ValueError('trust bundle accepts public certificates only')
+    try:certificates=x509.load_pem_x509_certificates(data)
+    except ValueError:raise ValueError('trust bundle must contain PEM certificates') from None
+    if not 1<=len(certificates)<=64:raise ValueError('trust bundle certificate count exceeds bounds')
+    return data
 
 def pdf_secure(q):
     from pypdf import PdfReader,PdfWriter
     source=checked(q,q['path']);data,sha=read_bytes(source)
     if sha!=q['expected_sha256']:raise ValueError('PDF source fingerprint changed')
     action=q['action'];reader=pdf_open(q,data,owner_required=action in ('encrypt_copy','decrypt_copy'))
-    signatures=pdf_signature_info(data,reader)
+    trust=pdf_trust_bundle(q)
+    signatures=pdf_signature_info(data,reader,trust)
     metadata={'path':str(source),'sha256':sha,'size':len(data),'encrypted':reader.is_encrypted,'page_count':len(reader.pages),**signatures}
     if action=='inspect':return [{'type':'text','text':json.dumps(metadata)}]
     target=checked(q,q['output_path'])
@@ -126,7 +146,7 @@ def pdf_secure(q):
     buffer=io.BytesIO();writer.write(buffer);output=buffer.getvalue()
     if action=='append_metadata':
         if not output.startswith(data):raise ValueError('incremental write changed original signed bytes')
-        after=pdf_signature_info(output,PdfReader(io.BytesIO(output)))
+        after=pdf_signature_info(output,PdfReader(io.BytesIO(output)),trust)
         if len(after['signatures'])!=len(signatures['signatures']):raise ValueError('signature fields changed')
         for before,now in zip(signatures['signatures'],after['signatures']):
             if before.get('signed_bytes_sha256')!=now.get('signed_bytes_sha256') or before['integrity']!=now['integrity']:
@@ -134,7 +154,7 @@ def pdf_secure(q):
     else:after={'signature_count':0,'current_revision_fully_signed':False}
     if read_bytes(source)[1]!=sha:raise ValueError('source changed before derived PDF publication')
     result=publish(q,str(target),output,q['output_expected_sha256'])
-    result.update({'action':action,'source_path':str(source),'source_sha256':sha,'source_unchanged':read_bytes(source)[1]==sha,'output_encrypted':action=='encrypt_copy','original_bytes_are_prefix':action=='append_metadata','new_revision_is_signed':False,'certificate_trust_evaluated':False,'certification_policy_evaluated':False,'source_signatures':signatures,'output_signatures':after})
+    result.update({'action':action,'source_path':str(source),'source_sha256':sha,'source_unchanged':read_bytes(source)[1]==sha,'output_encrypted':action=='encrypt_copy','original_bytes_are_prefix':action=='append_metadata','new_revision_is_signed':False,'certificate_trust_evaluated':signatures['certificate_trust_evaluated'],'certification_policy_evaluated':False,'source_signatures':signatures,'output_signatures':after})
     return [{'type':'text','text':json.dumps(result)}]
 
 
@@ -151,6 +171,10 @@ def remote_pdf_secure(q):
                 if result.get('private_file_verified') is not True:raise ValueError('remote private file not verified')
                 secret=root/key;secret.write_bytes(base64.b64decode(result['data_base64'],validate=True));secret.chmod(0o600)
                 request[key]=str(secret)
+        if q.get('trust_store_file'):
+            bundle,_,_=remote_fetch(q,q['trust_store_file'],q.get('trust_store_sha256'))
+            certificate_file=root/'trust.pem';certificate_file.write_bytes(bundle);certificate_file.chmod(0o600)
+            request['trust_store_file']=str(certificate_file)
         write=q['action']!='inspect';prior='absent';output=root/'output.pdf'
         if write:
             request['output_path']=str(output)

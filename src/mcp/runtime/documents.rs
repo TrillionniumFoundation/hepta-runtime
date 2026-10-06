@@ -189,6 +189,11 @@ pub enum PdfSecurityAction {
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PdfSecurityParams {
+	/// Explicit public PEM trust anchors; optional and bound to trust_store_sha256.
+	#[serde(default)]
+	pub trust_store_file: Option<String>,
+	#[serde(default)]
+	pub trust_store_sha256: Option<String>,
 	#[serde(default)]
 	pub host: Option<String>,
 	pub path: String,
@@ -267,6 +272,7 @@ async fn execute(path: &str, mut input: Value, write: bool) -> Result<CallToolRe
 			"password_file",
 			"output_user_password_file",
 			"output_owner_password_file",
+			"trust_store_file",
 		] {
 			if let Some(secret_path) = input[key].as_str() {
 				paths.push((secret_path.to_owned(), false));

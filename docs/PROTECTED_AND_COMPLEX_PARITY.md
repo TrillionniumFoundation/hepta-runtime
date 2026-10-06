@@ -41,3 +41,10 @@ Prior pinned CRIU experiments on X230 genuinely preserved random process memory,
 A new authenticated MCP checkpoint experiment successfully inspected a process, rejected a stale identity, captured real CRIU images and restored the same PID/memory, but its restored process retained the stop state used during capture. Automatic continuation did not pass. A requested lifecycle correction was denied by the session safety check and was not retried through another route. Only the exact disposable restored process was explicitly resumed for cleanup; its original memory and unread-pipe hashes then matched and it exited normally. That cleanup is not reported as a successful automatic native lifecycle.
 
 The unqualified `process_checkpoint` registration was withdrawn from the production tool router and compiled module. Experiment source is retained under `experiments/native_checkpoint/` with the failed native acceptance receipt for review, not enabled in the installed service. No host checkpoint configuration or new sudo entitlement is installed. Do not advertise this as a production arbitrary-PID migration API.
+
+
+## Explicit PDF trust roots
+
+`pdf_security` additionally accepts optional `trust_store_file` and `trust_store_sha256` together. The selected host's permitted read path is transferred and fingerprinted like other public document inputs. The bounded PEM bundle contains public certificates, not private keys. Current-time OpenSSL chain verification is performed only against these explicit anchors; default trust directories/stores are not added. The result distinguishes valid detached-CMS bytes from a certificate chain that is trusted under the caller-selected anchors.
+
+This is an explicit, per-call trust decision, not a claim that a self-signed fixture is publicly trusted. Wrong roots, stale bundles and tampered signatures are covered separately. Revocation, trusted signing time, certificate-purpose/EKU policy and DocMDP modification permissions are not evaluated. A trusted original signature still does not sign an appended unsigned revision. The original source remains unchanged for all derived-copy operations.

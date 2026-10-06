@@ -92,7 +92,8 @@ def main():
    assert 'Protected fixture' in str(call('document_read',{'path':root_path+'/clear.pdf'}))
    assert call('file_info',{'path':encrypted})['sha256']==encrypted_sha
    passed('AES-256 copy, real user/owner authentication split and owner-authorized clear copy preserve originals')
-   signed_bytes=signed_fixture(D.create_bytes('pdf','# Signed synthetic fixture'))
+   trust_file=folder/'synthetic-root.pem'
+   signed_bytes=signed_fixture(D.create_bytes('pdf','# Signed synthetic fixture'),trust_file)
    signed,signed_sha=put('signed.pdf',signed_bytes)
    verified=call('pdf_security',{'path':signed,'expected_sha256':signed_sha,'action':'inspect'})
    assert verified['signatures'][0]['integrity']=='valid' and verified['current_revision_fully_signed'] and not verified['certificate_trust_evaluated']
@@ -102,6 +103,18 @@ def main():
    tampered,tampered_sha=put('tampered.pdf',signed_bytes.replace(b'FixtureOriginal',b'FixtureTampered'))
    assert call('pdf_security',{'path':tampered,'expected_sha256':tampered_sha,'action':'inspect'})['signatures'][0]['integrity']=='invalid'
    passed('real detached CMS integrity, tamper detection and unsigned incremental revision are distinguished')
+   trust_path,trust_sha=put('trusted-root.pem',trust_file.read_bytes())
+   trust_request={'path':signed,'expected_sha256':signed_sha,'action':'inspect','trust_store_file':trust_path,'trust_store_sha256':trust_sha}
+   trusted=call('pdf_security',trust_request)
+   assert trusted['signatures'][0]['certificate_chain_valid'] and trusted['certificate_trust_evaluated']
+   assert not trusted['signatures'][0]['revocation_evaluated'] and not trusted['signatures'][0]['certification_policy_evaluated']
+   call('pdf_security',{**trust_request,'trust_store_sha256':'0'*64},denied=True)
+   wrong_file=folder/'wrong-root.pem';signed_fixture(D.create_bytes('pdf','# Unrelated root'),wrong_file)
+   wrong_path,wrong_sha=put('wrong-root.pem',wrong_file.read_bytes())
+   untrusted=call('pdf_security',{**trust_request,'trust_store_file':wrong_path,'trust_store_sha256':wrong_sha})
+   assert untrusted['signatures'][0]['integrity']=='valid' and not untrusted['signatures'][0]['certificate_chain_valid']
+   report['caller_anchor_trust_verified']=True
+   passed('native SHA-bound certificate chain evaluation distinguishes explicit trust from intact untrusted signatures')
    workbook=complex_workbook();path,sha=put('complex.xlsx',workbook)
    calculated=call('worksheet_recalculate',{'path':path,'expected_sha256':sha});assert calculated['workbook_date_system']=='1904' and calculated['fixed_array_count']==1
    for sheet,region,expected in [('Data','C1:C1',[[15]]),('Data','D1:D2',[[12],[14]]),('Data','C3:D4',[[4,6],[8,10]]),('Data','F3:F3',[[11]]),('Other','A1:D1',[[2,3,0,1904]])]:

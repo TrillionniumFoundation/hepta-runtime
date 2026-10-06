@@ -82,4 +82,33 @@ class CheckpointLifecycle(unittest.TestCase):
 
 
 
+    def test_changed_restored_worker_identity_cannot_resume(self):
+        state=self.state();state['restored_threads']=[{'tid':123,'uid':1000,'start_ticks':55},{'tid':124,'uid':1000,'start_ticks':56}]
+        actual=[{'tid':123,'uid':1000,'start_ticks':55,'state':'T'},{'tid':124,'uid':1000,'start_ticks':57,'state':'T'}]
+        with mock.patch.object(C,'thread_group',return_value=actual),mock.patch.object(C.signal,'pidfd_send_signal') as send:
+            with self.assertRaisesRegex(ValueError,'thread identity'):self.invoke(state,self.q())
+            send.assert_not_called()
+
+    def test_partially_running_group_is_not_reported_stopped(self):
+        group=[{'tid':123,'uid':1000,'start_ticks':55,'state':'T'},{'tid':124,'uid':1000,'start_ticks':56,'state':'S'}]
+        with mock.patch.object(C,'thread_group',return_value=group):
+            with self.assertRaisesRegex(ValueError,'not all'):C.validate_stopped_threads(123,C.thread_identities(group))
+
+    def test_exact_all_stopped_thread_group_admitted(self):
+        group=[{'tid':123,'uid':1000,'start_ticks':55,'state':'T'},{'tid':124,'uid':1000,'start_ticks':56,'state':'T'}]
+        with mock.patch.object(C,'thread_group',return_value=group):
+            self.assertEqual(C.validate_stopped_threads(123,C.thread_identities(group)),group)
+
+    def test_real_thread_group_inventory_preserves_membership(self):
+        import threading
+        ready=threading.Event();done=threading.Event()
+        def worker():ready.set();done.wait(timeout=10)
+        thread=threading.Thread(target=worker);thread.start();ready.wait(timeout=2)
+        try:
+            group=C.thread_group(os.getpid(),os.getuid())
+            self.assertIn(thread.native_id,[v['tid'] for v in group]);self.assertIn(os.getpid(),[v['tid'] for v in group])
+            self.assertTrue(all(v['uid']==os.getuid() for v in group))
+        finally:done.set();thread.join(timeout=3)
+
+
 if __name__=='__main__':unittest.main(verbosity=2)

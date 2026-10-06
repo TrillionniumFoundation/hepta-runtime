@@ -22,7 +22,7 @@ CRIU_SHA='773ebe0534f7934e93ff208819c76e326b773be5e265a8b41e931ca4a196523f'
 
 
 def main():
- ap=argparse.ArgumentParser();ap.add_argument('--binary',required=True);ap.add_argument('--out',required=True);ap.add_argument('--url');ap.add_argument('--token-file');ap.add_argument('--host',default='x230');a=ap.parse_args()
+ ap=argparse.ArgumentParser();ap.add_argument('--binary',required=True);ap.add_argument('--out',required=True);ap.add_argument('--url');ap.add_argument('--token-file');ap.add_argument('--host',default='x230');ap.add_argument('--threads',type=int,default=1,choices=[1,4]);a=ap.parse_args()
  ident=secrets.token_hex(12);target='/home/qian/hepta-native-snapshot-'+ident;sid=None;controller=None
  with open(a.binary,'rb') as binary_file:artifact_sha=hashlib.file_digest(binary_file,'sha256').hexdigest()
  report={'binary_sha256':artifact_sha,'complete':False,'checks':[],'application_checkpoint_code':False,'installed_endpoint':bool(a.url),'images_exported':False,'business_processes_modified':False}
@@ -43,6 +43,28 @@ while not(root/'continue').exists():time.sleep(.05)
 after={'pid':os.getpid(),'uid':os.getuid(),'memory_sha256':hashlib.sha256(memory).hexdigest(),'pipe_sha256':hashlib.sha256(os.read(r,97)).hexdigest(),'value':value}
 (root/'after.json').write_text(json.dumps(after));print('RESTORED_MEMORY',flush=True)
 """.replace('os.write(w,unread);os.close(w)','os.write(w,unread)')
+ if a.threads==4:
+  program="""import hashlib,json,os,pathlib,time,threading
+root=pathlib.Path(__file__).parent;before_workers={};after_workers={};lock=threading.Lock();done=threading.Event()
+def worker(index):
+ memory=os.urandom(128);r,w=os.pipe();unread=os.urandom(97);os.write(w,unread);value=8273641+index
+ state={'tid':threading.get_native_id(),'memory_sha256':hashlib.sha256(memory).hexdigest(),'pipe_sha256':hashlib.sha256(unread).hexdigest(),'value':value}
+ with lock:before_workers[index]=state
+ while not(root/'continue').exists():time.sleep(.05)
+ state={'tid':threading.get_native_id(),'memory_sha256':hashlib.sha256(memory).hexdigest(),'pipe_sha256':hashlib.sha256(os.read(r,97)).hexdigest(),'value':value}
+ with lock:after_workers[index]=state
+ done.wait(timeout=60);os.close(r);os.close(w)
+threads=[threading.Thread(target=worker,args=(i,)) for i in range(3)]
+for t in threads:t.start()
+while len(before_workers)!=3:time.sleep(.01)
+before={'pid':os.getpid(),'uid':os.getuid(),'workers':before_workers}
+(root/'before.json').write_text(json.dumps(before));print('START_ONCE',flush=True)
+while len(after_workers)!=3:time.sleep(.05)
+after={'pid':os.getpid(),'uid':os.getuid(),'workers':after_workers}
+(root/'after.json').write_text(json.dumps(after));print('RESTORED_MEMORY',flush=True);done.set()
+for t in threads:t.join()
+"""
+ report['requested_threads']=a.threads
  ssh('import pathlib;r=pathlib.Path('+repr(target)+');r.mkdir(mode=0o700);(r/"app.py").write_text('+repr(program)+')')
  with tempfile.TemporaryDirectory(prefix='hepta-checkpoint-controller-') as tmp:
   root=pathlib.Path(tmp);(root/'workspace').mkdir();token=secrets.token_hex(32);(root/'token').write_text(token);(root/'token').chmod(0o600)
@@ -68,7 +90,7 @@ after={'pid':os.getpid(),'uid':os.getuid(),'memory_sha256':hashlib.sha256(memory
     if before:break
     time.sleep(.1)
    assert before and before['uid']==1000;report['before']=before
-   info=c.call('process_checkpoint',{'host':a.host,'action':'inspect','pid':before['pid']});assert info['ready'],info
+   info=c.call('process_checkpoint',{'host':a.host,'action':'inspect','pid':before['pid']});assert info['ready'] and info['thread_count']==a.threads,info
    passed('native inventory accepted real same-login process and internal anonymous pipe without exposing images')
    request={'host':a.host,'action':'dump','pid':before['pid'],'expected_identity':info['identity'],'checkpoint_id':'native-'+ident,'acknowledge_process_stop':True}
    c.call('process_checkpoint',{**request,'expected_identity':{**info['identity'],'start_ticks':info['identity']['start_ticks']+1}},denied=True)
@@ -82,6 +104,7 @@ after={'pid':os.getpid(),'uid':os.getuid(),'memory_sha256':hashlib.sha256(memory
    resumed=c.call('process_checkpoint',{'host':a.host,'action':'restore','checkpoint_id':'native-'+ident,'acknowledge_process_stop':True});restored=True;report['restore']=resumed
    assert resumed['same_numeric_pid'] and resumed['restored_identity']['pid']==before['pid']
    assert resumed['state']=='restored_stopped' and resumed['requires_explicit_resume'] and resumed['restored_kernel_state']=='T'
+   assert resumed['live_thread_count']==a.threads and resumed['all_threads_stopped'] and resumed['restored_threads_match']
    repeated=c.call('process_checkpoint',{'host':a.host,'action':'restore','checkpoint_id':'native-'+ident,'acknowledge_process_stop':True});assert repeated['reused']
    ssh('import pathlib;pathlib.Path('+repr(target+'/continue')+').write_text("1")')
    time.sleep(.15)
