@@ -5,6 +5,8 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
+import shutil
 import pathlib
 import tempfile
 import unittest
@@ -18,7 +20,14 @@ D=importlib.util.module_from_spec(spec);spec.loader.exec_module(D)
 class Completion(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory(prefix='hepta-formats-test-');self.root=pathlib.Path(self.temp.name).resolve()
-    def tearDown(self):self.temp.cleanup()
+    def tearDown(self):
+        result=self._outcome.result
+        failed=any(test is self for test,_ in result.failures+result.errors)
+        artifacts=os.environ.get('HEPTA_TEST_ARTIFACTS_DIR')
+        if failed and artifacts:
+            target=pathlib.Path(artifacts)/self._testMethodName
+            shutil.copytree(self.root,target,dirs_exist_ok=True)
+        self.temp.cleanup()
     def call(self,op,**params):
         q={'op':op,'roots':[str(self.root)],**params}
         blocks=D.main(q);return json.loads(blocks[0]['text']),blocks

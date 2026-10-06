@@ -34,7 +34,7 @@ jobs:
       - name: Install and verify native PDF renderer
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends poppler-utils acl libpango-1.0-0 libpangoft2-1.0-0
+          sudo apt-get install -y --no-install-recommends poppler-utils acl libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core fonts-noto-cjk
           test -x /usr/bin/pdftoppm
           /usr/bin/pdftoppm -v
       - name: Install native document test worker
@@ -42,6 +42,8 @@ jobs:
           python3 -m venv /tmp/hepta-document-worker
           /tmp/hepta-document-worker/bin/pip install -r deploy/requirements-documents.txt
       - name: Format, strict lint and local regression
+        env:
+          HEPTA_TEST_ARTIFACTS_DIR: /tmp/hepta-format-fixtures
         run: |
           set -euo pipefail
           {
@@ -53,6 +55,7 @@ jobs:
             python3 tests/file_capabilities.py
             python3 tests/binary_file_tests.py
             python3 tests/metadata_preservation_tests.py
+            python3 tests/parser_configuration_tests.py
             python3 tests/output_capture_tests.py
             python3 tests/terminal_host_tests.py
             /tmp/hepta-document-worker/bin/python tests/document_local_tests.py
@@ -66,3 +69,11 @@ jobs:
           path: /tmp/operator-tests.log
           if-no-files-found: ignore
           retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: format-failure-fixtures-${{ github.sha }}
+          path: /tmp/hepta-format-fixtures
+          if-no-files-found: ignore
+          retention-days: 7
