@@ -65,7 +65,8 @@ def main():
         raise AssertionError('PTY marker absent: ' + marker)
 
     try:
-        meta = json.loads(ssh_python("import os,sys,json,pathlib; p=pathlib.Path("+repr(target_dir)+");p.mkdir(mode=0o700);print(json.dumps({'uid':os.getuid(),'platform':'linux' if sys.platform=='linux' else 'macos'}))"))
+        meta = json.loads(ssh_python("import os,sys,json,pathlib; p=pathlib.Path("+repr(target_dir)+");p.mkdir(mode=0o700);print(json.dumps({'uid':os.getuid(),'platform':'linux' if sys.platform=='linux' else 'macos','workdir':str(p.resolve())}))"))
+        target_dir = meta['workdir']
         passed('real SSH target account', meta)
         with tempfile.TemporaryDirectory(prefix='hepta-operator-controller-') as work:
             work = pathlib.Path(work)
