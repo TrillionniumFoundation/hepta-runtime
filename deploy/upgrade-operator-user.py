@@ -55,6 +55,7 @@ def main():
     ap.add_argument('--matrix', required=True)
     ap.add_argument('--out', required=True)
     ap.add_argument('--sudo-smoke', action='store_true')
+    ap.add_argument('--exercise-rollback', action='store_true', help='After starting a qualified candidate, inject a validation failure and verify restoration of the original release')
     a = ap.parse_args()
     if not __debug__:
         raise RuntimeError('qualification requires Python assertions enabled')
@@ -139,6 +140,8 @@ def main():
             names = {x['name']: x for x in client.call('host_list', {})['hosts']}
             assert set(names) == set(hosts) and all(h['execution_mode'] == 'operator' for h in names.values())
             passed('installed authenticated host discovery and operator modes')
+            if a.exercise_rollback:
+                raise RuntimeError('HEPTA_EXPECTED_ROLLBACK_DRILL')
             for name, metadata in hosts.items():
                 j = client.call('process_start', {'host': name, 'executable': '/usr/bin/id', 'args': ['-u'], 'timeout_seconds': 15})['job']['id']
                 status = client.call('process_wait', {'host': name, 'job_id': j, 'timeout_seconds': 20})
@@ -207,7 +210,15 @@ def main():
             connect()
             report.update({'rolled_back': sha(f'/proc/{pid(SERVICE)}/exe') == old_sha,
                            'error': type(error).__name__ + ': ' + str(error)})
+            report['desktop_commander_pid_after'] = pid(DC)
+            report['original_unit_restored'] = unit.read_text() == before
+            report['original_manifest_restored'] = json.loads((conf / 'manifest.json').read_text()) == manifest
+            expected = a.exercise_rollback and str(error) == 'HEPTA_EXPECTED_ROLLBACK_DRILL'
+            report['rollback_drill_passed'] = bool(expected and report['rolled_back'] and report['original_unit_restored'] and report['original_manifest_restored'] and pid(DC) == dc_pid)
             atomic(pathlib.Path(a.out), json.dumps(report, indent=2) + '\n')
+            if report['rollback_drill_passed']:
+                print('ROLLBACK_DRILL_VERIFIED', old_sha, flush=True)
+                return
             raise
 
 

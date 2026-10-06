@@ -171,6 +171,10 @@ async fn notify_peer_resource_updated(peer: &Peer<RoleServer>, uri: &str) {
 /// interactive sessions, on pre-2026-07-28 connections; other clients ignore it.
 const CLAUDE_CHANNEL_CAPABILITY: &str = "claude/channel";
 const RUNTIME_TOOL_NAMES: &[&str] = &[
+	"document_read",
+	"image_read",
+	"document_write",
+	"document_edit",
 	"shell_start",
 	"host_processes",
 	"host_signal",
@@ -818,6 +822,82 @@ impl OctofsServer {
 		Parameters(params): Parameters<runtime::jobs::ProcessListParams>,
 	) -> Result<String, String> {
 		runtime::jobs::list_jobs(params).map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "document_read",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read local PDF pages, DOCX outline/XML and XLSX worksheet ranges. Optional PDF render returns native MCP image content. Requires administrator-configured parser. Does not fetch URLs or unlock encrypted files."
+	)]
+	async fn document_read(
+		&self,
+		Parameters(params): Parameters<runtime::documents::DocumentReadParams>,
+	) -> Result<CallToolResult, String> {
+		runtime::documents::read(params, false)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "image_read",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read a local raster image as native MCP image content with dimensions and original SHA256. Preview is resized; original bytes are not modified."
+	)]
+	async fn image_read(
+		&self,
+		Parameters(params): Parameters<runtime::documents::DocumentReadParams>,
+	) -> Result<CallToolResult, String> {
+		runtime::documents::read(params, true)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "document_write",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Create or replace a local PDF/DOCX from markdown, or XLSX from sheet row arrays. Requires expected_sha256 or absent for create-only. Fixed document formatting only; no executable HTML or remote resources."
+	)]
+	async fn document_write(
+		&self,
+		Parameters(params): Parameters<runtime::documents::DocumentWriteParams>,
+	) -> Result<CallToolResult, String> {
+		runtime::documents::write(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "document_edit",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Apply a fingerprint-checked exact XML replacement to a DOCX document/header/footer. Preserve all unselected package-part bytes. Reject invalid XML and unexpected match counts. No generic binary or shell operation."
+	)]
+	async fn document_edit(
+		&self,
+		Parameters(params): Parameters<runtime::documents::DocumentEditParams>,
+	) -> Result<CallToolResult, String> {
+		runtime::documents::edit(params)
+			.await
+			.map_err(|e| e.to_string())
 	}
 
 	#[tool(
