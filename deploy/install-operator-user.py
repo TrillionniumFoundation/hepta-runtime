@@ -125,10 +125,11 @@ def main():
         atomic_write(conf / 'runtime.json', json.dumps(cfg, indent=2) + '\n')
         unit.parent.mkdir(parents=True, exist_ok=True)
         command = [installed, 'mcp', '--path', workspace, '--bind', f'127.0.0.1:{a.port}', '--runtime-config', conf / 'runtime.json', '--auth-token-file', conf / 'token']
-        content = '[Unit]\nDescription=Hepta Runtime trusted operator controller\nStartLimitIntervalSec=60\nStartLimitBurst=5\n\n[Service]\nType=simple\nExecStart=' + ' '.join(map(unit_quote, command)) + '\nWorkingDirectory=' + unit_quote(workspace) + '\nEnvironment=PATH=/usr/local/bin:/usr/bin:/bin\nNoNewPrivileges=yes\nUMask=0077\nRestart=on-failure\nRestartSec=3\nTimeoutStopSec=15\nKillMode=control-group\n\n[Install]\nWantedBy=default.target\n'
+        content = '[Unit]\nDescription=Hepta Runtime trusted operator controller\nStartLimitIntervalSec=60\nStartLimitBurst=5\n\n[Service]\nType=simple\nExecStart=' + ' '.join(map(unit_quote, command)) + '\nWorkingDirectory=' + str(workspace).replace('%', '%%') + '\nEnvironment=PATH=/usr/local/bin:/usr/bin:/bin\nNoNewPrivileges=yes\nUMask=0077\nRestart=on-failure\nRestartSec=3\nTimeoutStopSec=15\nKillMode=control-group\n\n[Install]\nWantedBy=default.target\n'
         atomic_write(unit, content)
         url = f'http://127.0.0.1:{a.port}/mcp'
         try:
+            run(['systemd-analyze', '--user', 'verify', str(unit)])
             run(['systemctl', '--user', 'daemon-reload'])
             run(['systemctl', '--user', 'enable', '--now', SERVICE])
             sys.path.insert(0, str(ROOT / 'tests'))
