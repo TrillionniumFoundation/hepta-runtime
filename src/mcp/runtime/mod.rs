@@ -2,6 +2,7 @@
 //! policy enforcement, and read-only host inspection.
 
 pub mod binary;
+pub mod checkpoint;
 pub mod config;
 pub mod documents;
 pub mod inspect;

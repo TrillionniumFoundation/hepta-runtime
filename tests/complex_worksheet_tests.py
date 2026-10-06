@@ -104,5 +104,14 @@ class ComplexWorksheet(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'master missing'):self.calculate()
         self.assertEqual(before,self.path.read_bytes())
 
+    def test_1904_text_uses_original_branch_and_correct_calendar(self):
+        self.create({'Data':[['=DATE(2026,10,6)','=TEXT(A1,"yyyy-mm-dd")','=TEXT(123.4,"0.00")','=TEXT(A1,"[>=45000]yyyy-mm-dd;0.00")','=TEXT(0.5,"hh:mm")']]})
+        self.patch(lambda parts:parts.__setitem__('xl/workbook.xml',parts['xl/workbook.xml'].replace(b'<workbookPr/>',b'<workbookPr date1904="1"/>')))
+        self.calculate()
+        self.assertEqual(self.values(region='A1:E1'),[[44839,'2026-10-06','123.40','44839.00','12:00']])
+        self.create({'Data':[['=TEXT(DATE(2026,10,6),"yyyy-mm-dd")']]})
+        self.calculate();self.assertEqual(self.values(region='A1:A1'),[['2026-10-06']])
+
+
 
 if __name__=='__main__':unittest.main(verbosity=2)

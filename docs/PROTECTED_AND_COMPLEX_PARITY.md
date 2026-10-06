@@ -1,5 +1,7 @@
 # Protected documents, complex workbook context, inode identity and power lifecycle
 
+**Lifecycle update:** [CHECKPOINT_LIFECYCLE.md](CHECKPOINT_LIFECYCLE.md) describes the separate stopped-restore/explicit-resume API and the 1904 TEXT correction. The earlier withdrawn automatic-continuation experiment below remains a historical boundary, not the new contract. Check the latest release receipt for installed qualification.
+
 This stage extends the local operator implementation; it does not change cloud/workspace/tunnel bindings. The exact implementation, installed artifact, test attempts and qualification limits belong to the dated receipt. Do not infer that a tested S5 shutdown is a removal of AC/battery power, or that a compatible CRIU experiment is an arbitrary application migration service.
 
 ## Inode-preserving API versus atomic replacement

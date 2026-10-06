@@ -171,6 +171,7 @@ async fn notify_peer_resource_updated(peer: &Peer<RoleServer>, uri: &str) {
 /// interactive sessions, on pre-2026-07-28 connections; other clients ignore it.
 const CLAUDE_CHANNEL_CAPABILITY: &str = "claude/channel";
 const RUNTIME_TOOL_NAMES: &[&str] = &[
+	"process_checkpoint",
 	"pdf_security",
 	"binary_patch_inode",
 	"document_render",
@@ -1095,6 +1096,25 @@ impl OctofsServer {
 		Parameters(params): Parameters<runtime::documents::PdfSecurityParams>,
 	) -> Result<rmcp::model::CallToolResult, String> {
 		runtime::documents::secure_pdf(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Process Checkpoint Lifecycle",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Same-boot single-process Linux CRIU snapshots, only on administrator-pinned operator hosts. Inspect returns exact identity and resource limits. Dump stops/exits the original only after a validated private snapshot. Restore returns restored_stopped, never claims the program is running. A separate resume requires exact restored identity and acknowledge_resume. Old requests never silently relaunch; status exposes uncertain states. Internal pipes/unchanged files only; external sockets/terminals/GPU/multi-process state not supported. Uses existing sudo authority; no images or secrets returned."
+	)]
+	async fn process_checkpoint(
+		&self,
+		Parameters(params): Parameters<runtime::checkpoint::CheckpointParams>,
+	) -> Result<String, String> {
+		runtime::checkpoint::execute(params)
 			.await
 			.map_err(|e| e.to_string())
 	}

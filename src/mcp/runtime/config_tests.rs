@@ -87,3 +87,18 @@ fn operator_config_cannot_pretend_to_be_sandboxed() {
 	config.hosts.get_mut("test").unwrap().allow_job_network = false;
 	assert!(config.validate().is_err());
 }
+
+#[test]
+fn checkpoint_config_is_pinned_and_opt_in_linux_operator_only() {
+	let mut c: RuntimeConfig=serde_json::from_value(serde_json::json!({"hosts":{"test":{"ssh_target":"test","remote_state_dir":"/tmp/state","execution_mode":"operator","allow_execute":true,"allow_job_network":true}}})).unwrap();
+	assert!(c.validate().is_ok());
+	c.hosts.get_mut("test").unwrap().checkpoint_binary = Some("/usr/local/bin/criu".into());
+	assert!(c.validate().is_err());
+	c.hosts.get_mut("test").unwrap().checkpoint_binary_sha256 = Some("a".repeat(64));
+	assert!(c.validate().is_ok());
+	c.hosts.get_mut("test").unwrap().platform = Platform::Macos;
+	assert!(c.validate().is_err());
+	c.hosts.get_mut("test").unwrap().platform = Platform::Linux;
+	c.hosts.get_mut("test").unwrap().checkpoint_binary = Some("/tmp/../criu".into());
+	assert!(c.validate().is_err());
+}

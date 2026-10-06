@@ -137,7 +137,32 @@ def workbook_calendar(date1904):
             result=function(*values,**kwargs)
             return shift(result,-1462) if out else result
         return invoke
+    def text_calendar(value,format_code):
+        # Keep section conditions in the workbook's original numeric domain.
+        # Only the selected calendar rendering is converted to engine serials.
+        from formulas.functions.text import xtext,_parse_format_code,_format_datetime,_format_number
+        if isinstance(value,(bool,np.bool_,XlError)):
+            return xtext(value,format_code)
+        try:numeric=float(value)
+        except (ValueError,TypeError):
+            # The library already parses date strings in its own 1900 domain.
+            return xtext(value,format_code)
+        for check,codes,types,fstr,mul in _parse_format_code(str(format_code)):
+            if not check(numeric):continue
+            if 'date' in types:
+                result=_format_datetime(numeric+1462,codes,types)
+            elif 'time' in types:
+                result=_format_datetime(numeric,codes,types)
+            else:
+                result=_format_number(numeric,codes,types,fstr,mul)
+            return ''.join(result)
+        return xtext(value,format_code)
+
     try:
+        from formulas.functions import wrap_ufunc
+        if 'TEXT' in functions:
+            original['TEXT']=functions['TEXT']
+            functions['TEXT']=wrap_ufunc(text_calendar,input_parser=lambda *args:args)
         for name,(indexes,out) in contracts.items():
             if name in functions:
                 f=functions[name];original[name]=f

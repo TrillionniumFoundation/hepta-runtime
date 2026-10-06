@@ -51,6 +51,12 @@ fn default_action_timeout() -> u64 {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HostConfig {
+	/// Optional administrator-pinned CRIU executable. Disabled when absent.
+	#[serde(default)]
+	pub checkpoint_binary: Option<String>,
+	/// Exact SHA256 for the configured CRIU artifact, never supplied by tool callers.
+	#[serde(default)]
+	pub checkpoint_binary_sha256: Option<String>,
 	#[serde(default)]
 	pub execution_mode: ExecutionMode,
 	/// OpenSSH config alias or user@host target. Never supplied by a tool call.
@@ -142,6 +148,29 @@ impl RuntimeConfig {
 			}
 		}
 		for (name, host) in &self.hosts {
+			match (&host.checkpoint_binary, &host.checkpoint_binary_sha256) {
+				(None, None) => {}
+				(Some(binary), Some(sha)) => {
+					if host.execution_mode != ExecutionMode::Operator
+						|| host.platform != Platform::Linux
+						|| !host.allow_execute
+					{
+						bail!("checkpoint pin requires an executable Linux operator host `{name}`");
+					}
+					if !Path::new(binary).is_absolute()
+						|| binary.contains(['\0', '\n', '\r'])
+						|| Path::new(binary)
+							.components()
+							.any(|c| matches!(c, Component::ParentDir))
+						|| sha.len() != 64 || !sha
+						.bytes()
+						.all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+					{
+						bail!("invalid checkpoint executable or SHA256 on `{name}`");
+					}
+				}
+				_ => bail!("checkpoint executable and SHA256 must be paired on `{name}`"),
+			}
 			if host.execution_mode == ExecutionMode::Operator {
 				if !host.protected_path_prefixes.is_empty()
 					|| !host.protected_argument_substrings.is_empty()

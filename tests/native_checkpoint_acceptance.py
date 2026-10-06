@@ -80,8 +80,34 @@ after={'pid':os.getpid(),'uid':os.getuid(),'memory_sha256':hashlib.sha256(memory
    passed('stale PID identity rejected, real CRIU image captured and original process stopped only after valid dump')
    resumed=c.call('process_checkpoint',{'host':a.host,'action':'restore','checkpoint_id':'native-'+ident,'acknowledge_process_stop':True});restored=True;report['restore']=resumed
    assert resumed['same_numeric_pid'] and resumed['restored_identity']['pid']==before['pid']
+   assert resumed['state']=='restored_stopped' and resumed['requires_explicit_resume'] and resumed['restored_kernel_state']=='T'
    repeated=c.call('process_checkpoint',{'host':a.host,'action':'restore','checkpoint_id':'native-'+ident,'acknowledge_process_stop':True});assert repeated['reused']
    ssh('import pathlib;pathlib.Path('+repr(target+'/continue')+').write_text("1")')
+   time.sleep(.15)
+   assert json.loads(ssh('import pathlib,json;print(json.dumps(pathlib.Path('+repr(target+'/after.json')+').exists()))')) is False
+   restore_identity=resumed['restored_identity']
+   c.call('process_checkpoint',{'host':a.host,'action':'resume','checkpoint_id':'native-'+ident,'expected_identity':restore_identity},denied=True)
+   c.call('process_checkpoint',{'host':a.host,'action':'resume','checkpoint_id':'native-'+ident,'acknowledge_resume':True,'expected_identity':{**restore_identity,'start_ticks':restore_identity['start_ticks']+1}},denied=True)
+   stopped_status=c.call('process_checkpoint',{'host':a.host,'action':'status','checkpoint_id':'native-'+ident})
+   assert stopped_status['state']=='restored_stopped' and stopped_status['restored_kernel_state']=='T'
+   passed('restore reports stopped state; missing consent and stale restored identity cannot resume it')
+   if controller is not None:
+    controller.terminate();controller.wait(timeout=20)
+    with (root/'controller.log').open('a') as log:
+     controller=subprocess.Popen([a.binary,'mcp','--path',str(root/'workspace'),'--bind',f'127.0.0.1:{port}','--runtime-config',str(root/'config.json'),'--auth-token-file',str(root/'token')],stdin=subprocess.DEVNULL,stdout=log,stderr=log)
+    for _ in range(100):
+     try:c=Client(f'http://127.0.0.1:{port}/mcp',token);break
+     except (OSError,RuntimeError):time.sleep(.1)
+    status=c.call('process_checkpoint',{'host':a.host,'action':'status','checkpoint_id':'native-'+ident})
+    assert status['state']=='restored_stopped' and status['restored_identity']==restore_identity and status['restored_kernel_state']=='T'
+    report['controller_restarted_while_target_stopped']=True
+    passed('fresh controller recovers the same private checkpoint and stopped restored identity before resume')
+
+   resume_request={'host':a.host,'action':'resume','checkpoint_id':'native-'+ident,'acknowledge_resume':True,'expected_identity':restore_identity}
+   continued=c.call('process_checkpoint',resume_request);report['resume']=continued
+   assert continued['state']=='resumed' and not continued['reused']
+   replay=c.call('process_checkpoint',resume_request);assert replay['reused']
+
    after=None
    for _ in range(80):
     after=json.loads(ssh('import pathlib;p=pathlib.Path('+repr(target+'/after.json')+');print(p.read_text() if p.exists() else "null")'))
@@ -92,14 +118,19 @@ after={'pid':os.getpid(),'uid':os.getuid(),'memory_sha256':hashlib.sha256(memory
    assert logs=='START_ONCE\nRESTORED_MEMORY\n',logs
    status=c.call('process_checkpoint',{'host':a.host,'action':'status','checkpoint_id':'native-'+ident,'acknowledge_process_stop':True});report['status']=status
    passed('same PID/UID/random memory/unread pipe bytes restored; stdout offset retained and start not repeated')
-   report.update(complete=True,passed=len(report['checks']),host='x230-ts',checkpoint_id='native-'+ident,third_party_resources_universally_supported=False,final_stdout_sha256=hashlib.sha256(logs.encode()).hexdigest());save()
+   report.update(complete=True,two_phase_restore_resume=True,passed=len(report['checks']),host='x230-ts',checkpoint_id='native-'+ident,third_party_resources_universally_supported=False,final_stdout_sha256=hashlib.sha256(logs.encode()).hexdigest());save()
   finally:
    if job and c:
     try:c.call('process_cancel',{'host':a.host,'job_id':job})
     except Exception:pass
-   if restored:
-    try:ssh('import pathlib;pathlib.Path('+repr(target+'/continue')+').touch()')
-    except Exception:pass
+   if restored and c:
+    try:
+     ssh('import pathlib;pathlib.Path('+repr(target+'/continue')+').touch()')
+     state=c.call('process_checkpoint',{'host':a.host,'action':'status','checkpoint_id':'native-'+ident})
+     if state['state']=='restored_stopped':
+      c.call('process_checkpoint',{'host':a.host,'action':'resume','checkpoint_id':'native-'+ident,'acknowledge_resume':True,'expected_identity':state['restored_identity']})
+      report['cleanup_resumed_only_own_stopped_fixture']=True
+    except Exception as error:report['cleanup_error']=str(error)[:300]
    if controller:controller.terminate();controller.wait(timeout=20)
    save()
 
