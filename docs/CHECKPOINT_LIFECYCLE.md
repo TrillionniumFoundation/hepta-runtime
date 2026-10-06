@@ -1,5 +1,6 @@
 # Two-phase native checkpoint lifecycle
 
+For the additional offline PDF certification/field-lock actions, see [PDF_MODIFICATION_POLICY.md](PDF_MODIFICATION_POLICY.md). Installed qualification is recorded separately; this extension does not expand the checkpoint resource contract.
 The `process_checkpoint` contract separates restoring process memory from allowing the restored program to execute. Tool registration does not enable it on every host: the administrator must pin both an absolute CRIU executable and its SHA256 on a Linux operator host. Existing OS/sudo rights remain the authority. No new sudoers, PAM, kernel policy or remote account is installed by this API.
 
 ## Explicit states and actions

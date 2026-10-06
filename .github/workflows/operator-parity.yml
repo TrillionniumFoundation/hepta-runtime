@@ -65,6 +65,7 @@ jobs:
             OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 /tmp/hepta-document-worker/bin/python tests/format_completion_tests.py
             OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 /tmp/hepta-document-worker/bin/python tests/complex_worksheet_tests.py
             /tmp/hepta-document-worker/bin/python tests/pdf_security_prototype_tests.py
+            /tmp/hepta-document-worker/bin/python tests/pdf_policy_tests.py
           } 2>&1 | tee /tmp/operator-tests.log
       - uses: actions/upload-artifact@v4
         if: always()

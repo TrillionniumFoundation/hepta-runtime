@@ -1089,7 +1089,7 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = true
 		),
-		description = "Inspect PDF detached-CMS byte-range integrity, create AES-256 encrypted or owner-authorized decrypted copies, or append an explicitly acknowledged unsigned metadata revision. Source/output SHA256 required. Passwords are private owned files on the chosen host, never raw parameters. Original files remain unchanged. Optional trust_store_file plus SHA256 validates the chain only against caller-supplied public roots. Revocation, signing time, certificate purpose and certification policy are NOT verified; certified edits are refused. Existing signatures do not sign a new revision."
+		description = "Inspect PDF detached-CMS byte-range integrity, create AES-256 encrypted or owner-authorized decrypted copies, or append an explicitly acknowledged unsigned metadata revision. Source/output SHA256 required. Passwords are private owned files on the chosen host, never raw parameters. Original files remain unchanged. Optional trust_store_file plus SHA256 validates the chain only against caller-supplied public roots. validate_policy additionally checks DocMDP/FieldMDP revision differences offline. fill_form_copy creates a distinct incremental text-form output only with explicit roots, allow_unsigned_revision and verified form-filling permission; locked fields or invalid revisions are refused. Revocation, trusted signing time and certificate-purpose policy remain unevaluated. Existing signatures do not sign a new revision."
 	)]
 	async fn pdf_security(
 		&self,

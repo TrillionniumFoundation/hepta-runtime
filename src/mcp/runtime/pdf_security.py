@@ -1,7 +1,7 @@
 # Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
 """Password-file PDF access and byte-preserving signed-revision operations.
 Passwords are private files, never command arguments, audit values or results.
-CMS verification checks cryptographic integrity, not certificate trust or DocMDP.
+CMS, explicit trust anchors and optional separate DocMDP/FieldMDP analysis have distinct results.
 """
 import hashlib
 import io
@@ -11,6 +11,9 @@ import pathlib
 import stat
 import subprocess
 import tempfile
+
+if 'pdf_policy_operation' not in globals():
+    exec(compile(pathlib.Path(__file__).with_name('pdf_policy.py').read_text(),'pdf_policy.py','exec'))
 
 
 def pdf_password(q, key):
@@ -123,6 +126,8 @@ def pdf_secure(q):
     signatures=pdf_signature_info(data,reader,trust)
     metadata={'path':str(source),'sha256':sha,'size':len(data),'encrypted':reader.is_encrypted,'page_count':len(reader.pages),**signatures}
     if action=='inspect':return [{'type':'text','text':json.dumps(metadata)}]
+    if action in ('validate_policy','fill_form_copy'):
+        return pdf_policy_operation(q,data,reader,source,sha,signatures,trust)
     target=checked(q,q['output_path'])
     if target==source or target.suffix.lower()!='.pdf':raise ValueError('PDF security operation requires a distinct PDF output')
     if action=='append_metadata':
@@ -175,7 +180,7 @@ def remote_pdf_secure(q):
             bundle,_,_=remote_fetch(q,q['trust_store_file'],q.get('trust_store_sha256'))
             certificate_file=root/'trust.pem';certificate_file.write_bytes(bundle);certificate_file.chmod(0o600)
             request['trust_store_file']=str(certificate_file)
-        write=q['action']!='inspect';prior='absent';output=root/'output.pdf'
+        write=q['action'] not in ('inspect','validate_policy');prior='absent';output=root/'output.pdf'
         if write:
             request['output_path']=str(output)
             if q['output_expected_sha256']!='absent':

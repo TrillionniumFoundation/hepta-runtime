@@ -26,6 +26,8 @@ const WORKER: &str = concat!(
 	"\n",
 	include_str!("worksheet_calculation.py"),
 	"\n",
+	include_str!("pdf_policy.py"),
+	"\n",
 	include_str!("pdf_security.py"),
 	"\n",
 	include_str!("document_local.py")
@@ -182,6 +184,8 @@ pub struct WorksheetRecalculateParams {
 #[serde(rename_all = "snake_case")]
 pub enum PdfSecurityAction {
 	Inspect,
+	ValidatePolicy,
+	FillFormCopy,
 	EncryptCopy,
 	DecryptCopy,
 	AppendMetadata,
@@ -189,6 +193,9 @@ pub enum PdfSecurityAction {
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PdfSecurityParams {
+	/// Printable-ASCII single-widget text fields for a certified copy; never signing material.
+	#[serde(default)]
+	pub form_values: std::collections::BTreeMap<String, String>,
 	/// Explicit public PEM trust anchors; optional and bound to trust_store_sha256.
 	#[serde(default)]
 	pub trust_store_file: Option<String>,
@@ -460,7 +467,10 @@ pub async fn recalculate(p: WorksheetRecalculateParams) -> Result<CallToolResult
 }
 
 pub async fn secure_pdf(p: PdfSecurityParams) -> Result<CallToolResult> {
-	let write = !matches!(p.action, PdfSecurityAction::Inspect);
+	let write = !matches!(
+		p.action,
+		PdfSecurityAction::Inspect | PdfSecurityAction::ValidatePolicy
+	);
 	if write
 		&& (p.output_path.is_none()
 			|| p.output_path.as_ref() == Some(&p.path)
@@ -469,6 +479,13 @@ pub async fn secure_pdf(p: PdfSecurityParams) -> Result<CallToolResult> {
 		bail!(
 			"PDF protection changes require distinct output_path and expected output fingerprint"
 		);
+	}
+	if p.form_values.len() > 32
+		|| p.form_values
+			.iter()
+			.any(|(key, value)| key.len() > 1024 || value.len() > 8192)
+	{
+		bail!("PDF form field budget exceeded");
 	}
 	let mut q = serde_json::to_value(&p)?;
 	q["op"] = json!("pdf_secure");

@@ -104,3 +104,14 @@ fn trust_roots_are_paths_not_inline_secrets_or_validator_commands() {
 	assert!(serde_json::from_value::<PdfSecurityParams>(json!({"path":"/tmp/a.pdf","expected_sha256":"00","action":"inspect","trust_store_file":"/tmp/ca.pem","trust_store_sha256":"11"})).is_ok());
 	assert!(serde_json::from_value::<PdfSecurityParams>(json!({"path":"/tmp/a.pdf","expected_sha256":"00","action":"inspect","openssl_command":"anything"})).is_err());
 }
+
+#[test]
+fn pdf_policy_parameters_are_typed_and_cannot_inject_authority() {
+	assert!(serde_json::from_value::<PdfSecurityParams>(
+		json!({"path":"/tmp/source.pdf","expected_sha256":"pin","action":"validate_policy"})
+	)
+	.is_ok());
+	assert!(serde_json::from_value::<PdfSecurityParams>(json!({"path":"/tmp/source.pdf","expected_sha256":"pin","action":"fill_form_copy","form_values":{"Name":"Allowed"}})).is_ok());
+	assert!(serde_json::from_value::<PdfSecurityParams>(json!({"path":"/tmp/source.pdf","expected_sha256":"pin","action":"validate_policy","allow_network":true})).is_err());
+	assert!(serde_json::from_value::<PdfSecurityParams>(json!({"path":"/tmp/source.pdf","expected_sha256":"pin","action":"fill_form_copy","signing_key":"forbidden"})).is_err());
+}
