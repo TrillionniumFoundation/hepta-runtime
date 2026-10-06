@@ -107,8 +107,6 @@ def worksheet_formula_context(tree,sheet,ns):
 
 @contextlib.contextmanager
 def workbook_calendar(date1904):
-    if not date1904:
-        yield;return
     import numpy as np
     import formulas
     from formulas.tokens.operand import XlError
@@ -137,6 +135,30 @@ def workbook_calendar(date1904):
             result=function(*values,**kwargs)
             return shift(result,-1462) if out else result
         return invoke
+    def value_calendar(value):
+        from formulas.functions.text import xvalue
+        if isinstance(value,XlError):return value
+        if isinstance(value,(bool,np.bool_)):return xvalue(value)
+        try:return float(value)
+        except (TypeError,ValueError):pass
+        if isinstance(value,str):
+            text=value.strip()
+            # A time-only value is a day fraction, never the parser's ambient date.
+            match=re.fullmatch(r'(\d{1,2})(?::(\d{2})(?::(\d{2}(?:\.\d+)?))?)?\s*(AM|PM)?',text,re.I)
+            if match and (':' in text or match[4]):
+                hour=int(match[1]);minute=int(match[2] or 0);second=float(match[3] or 0);period=(match[4] or '').upper()
+                if minute>=60 or second>=60:raise ValueError('invalid time value')
+                if period:
+                    if not 1<=hour<=12:raise ValueError('invalid twelve-hour time')
+                    hour=hour%12+(12 if period=='PM' else 0)
+                elif hour>=24:raise ValueError('time value requires an hour below 24')
+                return (hour*3600+minute*60+second)/86400
+            # Complete date strings use the same parser as DATEVALUE, with the
+            # selected workbook's serial epoch applied once to its result.
+            result=xvalue(value)
+            return result-1462 if date1904 else result
+        return xvalue(value)
+
     def text_calendar(value,format_code):
         # Keep section conditions in the workbook's original numeric domain.
         # Only the selected calendar rendering is converted to engine serials.
@@ -160,10 +182,13 @@ def workbook_calendar(date1904):
 
     try:
         from formulas.functions import wrap_ufunc
-        if 'TEXT' in functions:
+        if 'VALUE' in functions:
+            original['VALUE']=functions['VALUE']
+            functions['VALUE']=wrap_ufunc(value_calendar,input_parser=lambda *args:args)
+        if date1904 and 'TEXT' in functions:
             original['TEXT']=functions['TEXT']
             functions['TEXT']=wrap_ufunc(text_calendar,input_parser=lambda *args:args)
-        for name,(indexes,out) in contracts.items():
+        for name,(indexes,out) in (contracts.items() if date1904 else ()):
             if name in functions:
                 f=functions[name];original[name]=f
                 if isinstance(f,dict):functions[name]={**f,'function':wrap(f['function'],indexes,out)}

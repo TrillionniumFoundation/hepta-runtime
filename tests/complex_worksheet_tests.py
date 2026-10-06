@@ -113,5 +113,14 @@ class ComplexWorksheet(unittest.TestCase):
         self.calculate();self.assertEqual(self.values(region='A1:A1'),[['2026-10-06']])
 
 
+    def test_value_date_and_time_are_not_anchored_to_an_unrelated_year(self):
+        for date1904,serial in [(True,44839),(False,46301)]:
+            self.create({'Data':[['=VALUE("2026-10-06")','=DATEVALUE("2026-10-06")','=VALUE("123.40")','=VALUE("12:00")','=VALUE("12 AM")','=VALUE("12 PM")']]})
+            if date1904:
+                self.patch(lambda parts:parts.__setitem__('xl/workbook.xml',parts['xl/workbook.xml'].replace(b'<workbookPr/>',b'<workbookPr date1904="1"/>')))
+            self.calculate()
+            self.assertEqual(self.values(region='A1:F1'),[[serial,serial,123.4,0.5,0,0.5]])
+
+
 
 if __name__=='__main__':unittest.main(verbosity=2)

@@ -24,7 +24,8 @@ CRIU_SHA='773ebe0534f7934e93ff208819c76e326b773be5e265a8b41e931ca4a196523f'
 def main():
  ap=argparse.ArgumentParser();ap.add_argument('--binary',required=True);ap.add_argument('--out',required=True);ap.add_argument('--url');ap.add_argument('--token-file');ap.add_argument('--host',default='x230');a=ap.parse_args()
  ident=secrets.token_hex(12);target='/home/qian/hepta-native-snapshot-'+ident;sid=None;controller=None
- report={'complete':False,'checks':[],'application_checkpoint_code':False,'installed_endpoint':bool(a.url),'images_exported':False,'business_processes_modified':False}
+ with open(a.binary,'rb') as binary_file:artifact_sha=hashlib.file_digest(binary_file,'sha256').hexdigest()
+ report={'binary_sha256':artifact_sha,'complete':False,'checks':[],'application_checkpoint_code':False,'installed_endpoint':bool(a.url),'images_exported':False,'business_processes_modified':False}
  def save():pathlib.Path(a.out).write_text(json.dumps(report,indent=2)+'\n')
  def passed(name):report['checks'].append(name);save();print('PASS '+name,flush=True)
  def ssh(code):
