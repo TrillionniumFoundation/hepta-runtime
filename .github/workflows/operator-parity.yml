@@ -1,0 +1,40 @@
+name: Operator parity qualification
+on:
+  push:
+    branches: [feat/operator-parity-20261006]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: operator-parity-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  qualification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Retain exact source
+        run: git archive --format=tar.gz HEAD > /tmp/hepta-runtime-source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: operator-source-${{ github.sha }}
+          path: /tmp/hepta-runtime-source.tar.gz
+          retention-days: 7
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          components: rustfmt
+      - name: Format and test
+        run: |
+          set -o pipefail
+          cargo fmt --all --check
+          cargo test --locked --all-targets 2>&1 | tee /tmp/operator-tests.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: operator-tests-${{ github.sha }}
+          path: /tmp/operator-tests.log
+          if-no-files-found: ignore
+          retention-days: 14
