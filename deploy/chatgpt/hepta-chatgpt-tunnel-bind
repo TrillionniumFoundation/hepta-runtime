@@ -41,6 +41,24 @@ export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 export CONTROL_PLANE_TUNNEL_ID="$TUNNEL_ID"
 
+echo '== runtime-key visibility for selected tunnel =='
+CONTROL_PLANE_API_KEY="$(cat "$CONFIG/runtime-api-key")" \
+  "$HOME/.local/bin/tunnel-client" admin --json tunnels get "$TUNNEL_ID" \
+  > "$CONFIG/tunnel-metadata.json"
+chmod 600 "$CONFIG/tunnel-metadata.json"
+python3 - "$CONFIG/tunnel-metadata.json" "$TUNNEL_ID" <<'PY'
+import json,pathlib,sys
+path=pathlib.Path(sys.argv[1])
+expected=sys.argv[2]
+value=json.loads(path.read_text())
+actual=value.get("id") or value.get("tunnel_id")
+if actual != expected:
+    raise SystemExit("control-plane tunnel metadata identity mismatch")
+print("runtime key can read selected tunnel metadata:", actual)
+print("organization attachments:", len(value.get("organization_ids") or []))
+print("workspace attachments:", len(value.get("workspace_ids") or []))
+PY
+
 echo '== tunnel metadata / doctor =='
 "$HOME/.local/bin/tunnel-client" doctor --profile "$PROFILE" --explain
 
