@@ -1,0 +1,509 @@
+{
+  "schema": "hepta-full-operator-local-facade-qualification-v1",
+  "recorded_at": "2026-10-07T15:45:59.347149+00:00",
+  "prepared_on_base": "6d8644693a6ab57234bee5f843e50843978c4aa4",
+  "goal": "Private Hepta Runtime Full Operator in the intended Business workspace; public Cloud Gateway only after actual ChatGPT-origin acceptance.",
+  "implementation_status": "New source candidate plus local real-host acceptance; full tunnel adapter not installed or activated.",
+  "catalog": {
+    "tools": 46,
+    "read_only": 19,
+    "mutating": 27,
+    "catalog_sha256": "c1662cd7231c29f5bff3c6624d9d96aa448ce88cb6b7a84aceb53f25bf3e064c",
+    "contract_file_sha256": "7e9b4f0769e5496738a16001710e584817bad7fae979218d276f09f06ea3c81e",
+    "exact_native_schemas_descriptions_annotations_preserved": true,
+    "native_write_tools_relabelled_readonly": false
+  },
+  "source_sha256": {
+    "deploy/chatgpt_full_operator.py": "bc0c3566cdc7562e8fe6aa0d2a0a323dc7fd043d21f435007101fcdf41f5b8d3",
+    "deploy/mcp_tool_contract.py": "5ea3172f77a6bbdb24255146efb031eb2ba701c3a636e2aee1c0274768747b4e",
+    "deploy/contracts/hepta-runtime-full-operator-v1.json": "7e9b4f0769e5496738a16001710e584817bad7fae979218d276f09f06ea3c81e",
+    "tests/full_operator_facade_tests.py": "d4c51a4cdcb6f5d97a24d27d5e2c5e509ee79957c5acc9b5683956305df04d98",
+    "tests/full_operator_acceptance.py": "ad5bf6c07f133bce1bca03d0ea626195fed354630990bc64c3d68912430fa44f",
+    "docs/CHATGPT_FULL_OPERATOR.md": "5102fbd2342191c87df1ce6c7289595fc4440ec2794483ddad7771bfcac42b22"
+  },
+  "architecture": {
+    "shared_contract_module": "deploy/mcp_tool_contract.py",
+    "private_adapter": "deploy/chatgpt_full_operator.py",
+    "execution_backend": "Unchanged existing authenticated loopback hepta-runtime",
+    "new_execution_kernel": false,
+    "public_gateway_created": false,
+    "public_endpoint_published": false
+  },
+  "full_proxy_behavior": [
+    "Explicit full-operator acknowledgement and pinned contract file digest required.",
+    "Native initialize, session headers and complete tool catalog checked before admitting actions.",
+    "Unknown methods/tools, batch operations and write notifications refused; native schemas/hints retained without read-only relabelling.",
+    "4 MiB request/16 MiB response budgets admit the native 1 MiB binary payload in base64 JSON.",
+    "Lost write responses are reported unknown and never automatically retried; arguments/credentials are absent from generic errors.",
+    "Runtime token stays local and upstream is fixed to IPv4 loopback HTTP /mcp; no new public listener."
+  ],
+  "unit_tests": {
+    "count": 17,
+    "exit_code": 0,
+    "log_sha256": "372c67a50cfaf1f2d45f7041bdcbf4f7588c1ff92618465c1afd940f79ce6dc5"
+  },
+  "real_host_checks": 54,
+  "six_host_matrix": {
+    "recorded_at": "2026-10-07T15:38:29.119084+00:00",
+    "source_sha256": {
+      "deploy/chatgpt_full_operator.py": "bc0c3566cdc7562e8fe6aa0d2a0a323dc7fd043d21f435007101fcdf41f5b8d3",
+      "deploy/mcp_tool_contract.py": "5ea3172f77a6bbdb24255146efb031eb2ba701c3a636e2aee1c0274768747b4e",
+      "deploy/contracts/hepta-runtime-full-operator-v1.json": "7e9b4f0769e5496738a16001710e584817bad7fae979218d276f09f06ea3c81e",
+      "tests/full_operator_acceptance.py": "ad5bf6c07f133bce1bca03d0ea626195fed354630990bc64c3d68912430fa44f"
+    },
+    "results": [
+      {
+        "host": "main",
+        "ssh_target": "localhost",
+        "exit_code": 0,
+        "report": {
+          "host": "main",
+          "ssh_target": "localhost",
+          "complete": true,
+          "checks": [
+            {
+              "name": "all 46 native tools and exact schemas/annotations, unknown direct call denied",
+              "details": null
+            },
+            {
+              "name": "configured real operator host selected",
+              "details": null
+            },
+            {
+              "name": "actual shell pipeline/redirection/env/Unicode and native request idempotency",
+              "details": null
+            },
+            {
+              "name": "actual binary write with >1-MiB JSON request, complete target SHA256",
+              "details": {
+                "bytes": 1048576
+              }
+            },
+            {
+              "name": "native document write/edit/read over unchanged installed backend",
+              "details": null
+            },
+            {
+              "name": "actual interactive PTY input, output, Ctrl-C and close",
+              "details": null
+            },
+            {
+              "name": "external disposable PID: stale identity refusal and actual authorized signal",
+              "details": {
+                "fixture_pid": 350145
+              }
+            },
+            {
+              "name": "temporary sudo PTY real UID 0 through existing host authorization",
+              "details": null
+            },
+            {
+              "name": "facade-only restart preserves existing durable job and once-only effect",
+              "details": null
+            }
+          ],
+          "local_facade_origin": true,
+          "chatgpt_originated": false,
+          "tunnel_originated": false,
+          "runtime_or_DC_restarted": false,
+          "business_files_touched": false,
+          "contract_sha256": "7e9b4f0769e5496738a16001710e584817bad7fae979218d276f09f06ea3c81e",
+          "target_directory": "/tmp/hepta-full-operator-10b1866e27b44b79a9fbd2c946f5e774",
+          "passed": 9
+        }
+      },
+      {
+        "host": "pocket4",
+        "ssh_target": "pocket4",
+        "exit_code": 0,
+        "report": {
+          "host": "pocket4",
+          "ssh_target": "pocket4",
+          "complete": true,
+          "checks": [
+            {
+              "name": "all 46 native tools and exact schemas/annotations, unknown direct call denied",
+              "details": null
+            },
+            {
+              "name": "configured real operator host selected",
+              "details": null
+            },
+            {
+              "name": "actual shell pipeline/redirection/env/Unicode and native request idempotency",
+              "details": null
+            },
+            {
+              "name": "actual binary write with >1-MiB JSON request, complete target SHA256",
+              "details": {
+                "bytes": 1048576
+              }
+            },
+            {
+              "name": "native document write/edit/read over unchanged installed backend",
+              "details": null
+            },
+            {
+              "name": "actual interactive PTY input, output, Ctrl-C and close",
+              "details": null
+            },
+            {
+              "name": "external disposable PID: stale identity refusal and actual authorized signal",
+              "details": {
+                "fixture_pid": 3737385
+              }
+            },
+            {
+              "name": "temporary sudo PTY real UID 0 through existing host authorization",
+              "details": null
+            },
+            {
+              "name": "facade-only restart preserves existing durable job and once-only effect",
+              "details": null
+            }
+          ],
+          "local_facade_origin": true,
+          "chatgpt_originated": false,
+          "tunnel_originated": false,
+          "runtime_or_DC_restarted": false,
+          "business_files_touched": false,
+          "contract_sha256": "7e9b4f0769e5496738a16001710e584817bad7fae979218d276f09f06ea3c81e",
+          "target_directory": "/tmp/hepta-full-operator-186db5662cbc4a1d8d7a5d8f2edd4a79",
+          "passed": 9
+        }
+      },
+      {
+        "host": "rog",
+        "ssh_target": "rog",
+        "exit_code": 0,
+        "report": {
+          "host": "rog",
+          "ssh_target": "rog",
+          "complete": true,
+          "checks": [
+            {
+              "name": "all 46 native tools and exact schemas/annotations, unknown direct call denied",
+              "details": null
+            },
+            {
+              "name": "configured real operator host selected",
+              "details": null
+            },
+            {
+              "name": "actual shell pipeline/redirection/env/Unicode and native request idempotency",
+              "details": null
+            },
+            {
+              "name": "actual binary write with >1-MiB JSON request, complete target SHA256",
+              "details": {
+                "bytes": 1048576
+              }
+            },
+            {
+              "name": "native document write/edit/read over unchanged installed backend",
+              "details": null
+            },
+            {
+              "name": "actual interactive PTY input, output, Ctrl-C and close",
+              "details": null
+            },
+            {
+              "name": "external disposable PID: stale identity refusal and actual authorized signal",
+              "details": {
+                "fixture_pid": 2700253
+              }
+            },
+            {
+              "name": "temporary sudo PTY real UID 0 through existing host authorization",
+              "details": null
+            },
+            {
+              "name": "facade-only restart preserves existing durable job and once-only effect",
+              "details": null
+            }
+          ],
+          "local_facade_origin": true,
+          "chatgpt_originated": false,
+          "tunnel_originated": false,
+          "runtime_or_DC_restarted": false,
+          "business_files_touched": false,
+          "contract_sha256": "7e9b4f0769e5496738a16001710e584817bad7fae979218d276f09f06ea3c81e",
+          "target_directory": "/tmp/hepta-full-operator-80d203f63ce747959eec94b19d1ec8d2",
+          "passed": 9
+        }
+      },
+      {
+        "host": "mac",
+        "ssh_target": "macbook-pro",
+        "exit_code": 0,
+        "report": {
+          "host": "mac",
+          "ssh_target": "macbook-pro",
+          "complete": true,
+          "checks": [
+            {
+              "name": "all 46 native tools and exact schemas/annotations, unknown direct call denied",
+              "details": null
+            },
+            {
+              "name": "configured real operator host selected",
+              "details": null
+            },
+            {
+              "name": "actual shell pipeline/redirection/env/Unicode and native request idempotency",
+              "details": null
+            },
+            {
+              "name": "actual binary write with >1-MiB JSON request, complete target SHA256",
+              "details": {
+                "bytes": 1048576
+              }
+            },
+            {
+              "name": "native document write/edit/read over unchanged installed backend",
+              "details": null
+            },
+            {
+              "name": "actual interactive PTY input, output, Ctrl-C and close",
+              "details": null
+            },
+            {
+              "name": "external disposable PID: stale identity refusal and actual authorized signal",
+              "details": {
+                "fixture_pid": 81095
+              }
+            },
+            {
+              "name": "temporary sudo PTY real UID 0 through existing host authorization",
+              "details": null
+            },
+            {
+              "name": "facade-only restart preserves existing durable job and once-only effect",
+              "details": null
+            }
+          ],
+          "local_facade_origin": true,
+          "chatgpt_originated": false,
+          "tunnel_originated": false,
+          "runtime_or_DC_restarted": false,
+          "business_files_touched": false,
+          "contract_sha256": "7e9b4f0769e5496738a16001710e584817bad7fae979218d276f09f06ea3c81e",
+          "target_directory": "/private/tmp/hepta-full-operator-a1e74d9ff22e49aa9b55a513026be79a",
+          "passed": 9
+        }
+      },
+      {
+        "host": "x230",
+        "ssh_target": "x230-ts",
+        "exit_code": 0,
+        "report": {
+          "host": "x230",
+          "ssh_target": "x230-ts",
+          "complete": true,
+          "checks": [
+            {
+              "name": "all 46 native tools and exact schemas/annotations, unknown direct call denied",
+              "details": null
+            },
+            {
+              "name": "configured real operator host selected",
+              "details": null
+            },
+            {
+              "name": "actual shell pipeline/redirection/env/Unicode and native request idempotency",
+              "details": null
+            },
+            {
+              "name": "actual binary write with >1-MiB JSON request, complete target SHA256",
+              "details": {
+                "bytes": 1048576
+              }
+            },
+            {
+              "name": "native document write/edit/read over unchanged installed backend",
+              "details": null
+            },
+            {
+              "name": "actual interactive PTY input, output, Ctrl-C and close",
+              "details": null
+            },
+            {
+              "name": "external disposable PID: stale identity refusal and actual authorized signal",
+              "details": {
+                "fixture_pid": 683295
+              }
+            },
+            {
+              "name": "temporary sudo PTY real UID 0 through existing host authorization",
+              "details": null
+            },
+            {
+              "name": "facade-only restart preserves existing durable job and once-only effect",
+              "details": null
+            }
+          ],
+          "local_facade_origin": true,
+          "chatgpt_originated": false,
+          "tunnel_originated": false,
+          "runtime_or_DC_restarted": false,
+          "business_files_touched": false,
+          "contract_sha256": "7e9b4f0769e5496738a16001710e584817bad7fae979218d276f09f06ea3c81e",
+          "target_directory": "/tmp/hepta-full-operator-07eab60d9c3949b0a0e2bc97d5587e73",
+          "passed": 9
+        }
+      },
+      {
+        "host": "ai395",
+        "ssh_target": "ai395",
+        "exit_code": 0,
+        "report": {
+          "host": "ai395",
+          "ssh_target": "ai395",
+          "complete": true,
+          "checks": [
+            {
+              "name": "all 46 native tools and exact schemas/annotations, unknown direct call denied",
+              "details": null
+            },
+            {
+              "name": "configured real operator host selected",
+              "details": null
+            },
+            {
+              "name": "actual shell pipeline/redirection/env/Unicode and native request idempotency",
+              "details": null
+            },
+            {
+              "name": "actual binary write with >1-MiB JSON request, complete target SHA256",
+              "details": {
+                "bytes": 1048576
+              }
+            },
+            {
+              "name": "native document write/edit/read over unchanged installed backend",
+              "details": null
+            },
+            {
+              "name": "actual interactive PTY input, output, Ctrl-C and close",
+              "details": null
+            },
+            {
+              "name": "external disposable PID: stale identity refusal and actual authorized signal",
+              "details": {
+                "fixture_pid": 2705757
+              }
+            },
+            {
+              "name": "temporary sudo PTY real UID 0 through existing host authorization",
+              "details": null
+            },
+            {
+              "name": "facade-only restart preserves existing durable job and once-only effect",
+              "details": null
+            }
+          ],
+          "local_facade_origin": true,
+          "chatgpt_originated": false,
+          "tunnel_originated": false,
+          "runtime_or_DC_restarted": false,
+          "business_files_touched": false,
+          "contract_sha256": "7e9b4f0769e5496738a16001710e584817bad7fae979218d276f09f06ea3c81e",
+          "target_directory": "/tmp/hepta-full-operator-0135bcf336cc4889878042b8d3f0ea63",
+          "passed": 9
+        }
+      }
+    ],
+    "complete": true,
+    "chatgpt_originated": false,
+    "cloud_gateway_started": false
+  },
+  "initial_failures_retained": [
+    {
+      "case": "first main native initialization",
+      "exit_code": 1,
+      "reason": "Empty SSE data heartbeat was initially passed to JSON decoding; failed before native tool actions.",
+      "correction": "Skip only empty SSE heartbeats, retain multiline JSON parsing and response identity checks; dedicated regression added."
+    },
+    {
+      "case": "first six-host Mac binary fixture",
+      "initial_matrix_complete": false,
+      "reason": "Mac /tmp is a symlink; native no-symlink path policy correctly refused the binary path.",
+      "correction": "Use canonical /private/tmp for macos in the test; runtime path policy unchanged. All six full suites then reran and passed against identical facade/contract sources."
+    }
+  ],
+  "unchanged_active_services": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2927",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    },
+    "hepta-openai-tunnel.service": {
+      "MainPID": "279444",
+      "ActiveState": "active"
+    },
+    "hepta-chatgpt-bridge.service": {
+      "MainPID": "225100",
+      "ActiveState": "active"
+    }
+  },
+  "actual_native_binary_sha256": "5bb9dadef53329caa13acec8965d2d6c074c17192c744078d76b689d8c3fb8b3",
+  "native_runtime_restarted": false,
+  "desktop_commander_restarted": false,
+  "live_tunnel_restarted_or_reconfigured": false,
+  "current_cloud_boundary": {
+    "existing_tunnel_id": "tunnel_6ac65d3dc4c88191a2729276f21da603",
+    "existing_metadata_name": "Hepta ChatGPT Readonly",
+    "previously_recorded_workspace_id": "dcda91f0-84dd-4409-8a0c-771fd622507a",
+    "target_business_workspace_verified": false,
+    "workspace_plan_inferred_from_uuid": false,
+    "Hepta_app_found_in_current_available_tools": false,
+    "plugin_search_scope_exhaustive": false,
+    "signed_in_browser_automation_endpoint_found": false,
+    "ChatGPT_originated_full_tool_calls": 0,
+    "existing_readonly_tunnel_changed": false
+  },
+  "blocked_actions": [
+    {
+      "action": "stage_full_operator.py installer source creation",
+      "status": "blocked before file creation",
+      "retried_via_other_path": false
+    },
+    {
+      "action": "combined CI wiring/old docs update/final test plus fresh tunnel-metadata command",
+      "status": "blocked before execution; intended tracked changes and final-test files absent on fresh check",
+      "retried_via_other_path": false
+    }
+  ],
+  "activation_draft": {
+    "local_path": "deploy/full_operator_binding.py",
+    "committed_as_working_product": false,
+    "installed": false,
+    "executed": false,
+    "note": "Uninstalled local draft is not part of this qualified source set and cannot establish workspace plan/role."
+  },
+  "hosted_ci": {
+    "new_unit_suite_added_to_workflow": false,
+    "reason": "CI wiring command was blocked; local test receipts must not be represented as hosted execution of the new suite.",
+    "existing_workflow_at_new_head": "not yet observed at receipt creation"
+  },
+  "next_required_boundary": [
+    "Permitted deployment of the tested full adapter; existing readonly tunnel must not silently broaden.",
+    "Identify the intended Business workspace and admin/private-access scope; current tool metadata does not verify it.",
+    "Create the Full Operator custom app, scan the pinned 46 tools and invoke real tool calls from ChatGPT.",
+    "Only after those calls pass, reuse the same contract for public Gateway identity/tenant/device routing; do not clone the native executor."
+  ],
+  "receipt_sha256": {
+    "full-operator-main.log": "61fc77b7e3d72dc3bcfcbf463f853119a77d993ca84de30db3d535670446d8f1",
+    "full-operator-main-v2.json": "0889ed5dae47689b6863cc94f3ef5f1f06e8b9c12389a23d44c264052687557b",
+    "full-operator-facade-tests-v2.log": "372c67a50cfaf1f2d45f7041bdcbf4f7588c1ff92618465c1afd940f79ce6dc5",
+    "full-operator-matrix.json": "de221c1ae63ebf86d143017e8687d7bc9de43a3cdf33d6920e5f95d1179bb972",
+    "full-operator-final-matrix.json": "1a8c1af54f61500d85a2a6231ac73d19d9dc88bf33ec3977d785f82594089155",
+    "full-operator-mac-canonical.json": "4b97272219396d167a279316fe1f45421419bfe424c75c0c0aec0938bfd57436"
+  },
+  "business_or_production_services_changed": false,
+  "host_sudoers_PAM_or_credentials_changed": false,
+  "private_token_or_API_key_committed": false
+}
