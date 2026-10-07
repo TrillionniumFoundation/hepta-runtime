@@ -9,6 +9,7 @@ own or close the transferred descriptors.
 import array
 import base64
 import errno
+import fcntl
 import hashlib
 import json
 import os
@@ -24,7 +25,7 @@ import subprocess
 import sys
 import time
 
-MAX_FDS=3
+MAX_FDS=5
 MAX_MESSAGE=128*1024
 MAX_READ=16*1024
 MAX_WRITE=64*1024
@@ -100,6 +101,54 @@ def pipe_description(fd):
     info=os.fstat(fd)
     if not stat.S_ISFIFO(info.st_mode):raise ValueError('handoff accepts pipes only')
     return {'device':info.st_dev,'inode':info.st_ino,'access':__import__('fcntl').fcntl(fd,__import__('fcntl').F_GETFL)&os.O_ACCMODE}
+
+
+
+def history_description(fd):
+    value=os.fstat(fd)
+    if not stat.S_ISREG(value.st_mode) or value.st_uid!=os.getuid():
+        raise ValueError('history descriptor must be an account-owned regular file')
+    access=fcntl.fcntl(fd,fcntl.F_GETFL)&os.O_ACCMODE
+    if access!=os.O_RDONLY:raise ValueError('history descriptor must be read-only')
+    h=hashlib.sha256();offset=0
+    while offset<value.st_size:
+        block=os.pread(fd,min(1024*1024,value.st_size-offset),offset)
+        if not block:raise ValueError('history source made no progress')
+        h.update(block);offset+=len(block)
+    now=os.fstat(fd)
+    if (value.st_dev,value.st_ino,value.st_size,value.st_mtime_ns,value.st_ctime_ns)!=(now.st_dev,now.st_ino,now.st_size,now.st_mtime_ns,now.st_ctime_ns):
+        raise ValueError('history source changed while hashing')
+    return {'device':value.st_dev,'inode':value.st_ino,'size':value.st_size,'sha256':h.hexdigest(),'access':access}
+
+def seed_archive(job,name,fd,expected):
+    if history_description(fd)!=expected:raise ValueError('history source fingerprint changed')
+    destination=job/(name+'.log')
+    if destination.exists():
+        with destination.open('rb') as current:
+            h=hashlib.sha256();size=0
+            for block in iter(lambda:current.read(1024*1024),b''):h.update(block);size+=len(block)
+        if size!=expected['size'] or h.hexdigest()!=expected['sha256']:
+            raise ValueError('existing archive differs from finalized history')
+        return {'reused':True,'size':size,'sha256':h.hexdigest()}
+    temporary=job/(name+'.history-'+str(os.getpid()))
+    out=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+    try:
+        offset=0;h=hashlib.sha256()
+        while offset<expected['size']:
+            block=os.pread(fd,min(1024*1024,expected['size']-offset),offset)
+            if not block:raise ValueError('history copy made no progress')
+            if write_all(out,block)!=len(block):raise OSError('history archive write incomplete')
+            h.update(block);offset+=len(block)
+        os.fsync(out)
+        if h.hexdigest()!=expected['sha256']:raise ValueError('history hash changed during archive copy')
+        os.replace(temporary,destination)
+        parent=os.open(job,os.O_RDONLY|os.O_DIRECTORY)
+        try:os.fsync(parent)
+        finally:os.close(parent)
+        return {'reused':False,'size':offset,'sha256':h.hexdigest()}
+    finally:
+        os.close(out)
+        temporary.unlink(missing_ok=True)
 
 
 def validate_app_stdio(application,descriptions):
@@ -293,18 +342,35 @@ def daemon(job):
                             described=message.get('descriptors',[])
                             if len(described)!=len(received) or len({v['role'] for v in described})!=len(described):raise ValueError('descriptor roles/count differ')
                             roles={v['role'] for v in described}
-                            if not {'stdin_writer','stdout_reader'}<=roles or not roles<={'stdin_writer','stdout_reader','stderr_reader'}:raise ValueError('stdin/stdout required; only stderr is optional')
+                            allowed={'stdin_writer','stdout_reader','stderr_reader','stdout_history','stderr_history'}
+                            if not {'stdin_writer','stdout_reader'}<=roles or not roles<=allowed:raise ValueError('stdin/stdout required; stderr/history are optional')
+                            if message.get('history_finalized') is not True and any(v['role'].endswith('_history') for v in described):
+                                raise ValueError('history descriptors require a finalized owner boundary')
+                            pipe_items=[];history_seed={}
                             for fd,item in zip(received,described):
-                                if pipe_description(fd)!=item['identity']:raise ValueError('transferred pipe identity changed')
-                                expected=os.O_WRONLY if item['role']=='stdin_writer' else os.O_RDONLY
-                                if item['identity']['access']!=expected:raise ValueError('pipe role/access mode differs')
-                            validate_app_stdio(request['application_identities'][0],described)
+                                role=item['role']
+                                if role in ('stdin_writer','stdout_reader','stderr_reader'):
+                                    if pipe_description(fd)!=item['identity']:raise ValueError('transferred pipe identity changed')
+                                    expected=os.O_WRONLY if role=='stdin_writer' else os.O_RDONLY
+                                    if item['identity']['access']!=expected:raise ValueError('pipe role/access mode differs')
+                                    pipe_items.append(item)
+                                elif role in ('stdout_history','stderr_history'):
+                                    if history_description(fd)!=item['identity']:raise ValueError('history identity/content changed')
+                                else:raise ValueError('unsupported descriptor role')
+                            validate_app_stdio(request['application_identities'][0],pipe_items)
+                            for fd,item in zip(received,described):
+                                if item['role'] in ('stdout_history','stderr_history'):
+                                    stream_name=item['role'].split('_',1)[0]
+                                    history_seed[stream_name]=seed_archive(job,stream_name,fd,item['identity'])
                             receipt={'session_id':request['session_id'],'sender_identity':message['sender_identity'],
                                      'application_identities':request['application_identities'],'descriptors':described,
-                                     'accepted_unix_ms':int(time.time()*1000),'same_pipe_objects':True}
+                                     'accepted_unix_ms':int(time.time()*1000),'same_pipe_objects':True,
+                                     'history_seed':history_seed,'history_finalized':message.get('history_finalized',False)}
                             atomic(job/'handoff_receipt.json',receipt,True)
                             for fd,item in zip(received,described):
-                                role=item['role'];os.set_blocking(fd,False);streams[role]=fd
+                                role=item['role']
+                                if role.endswith('_history'):continue
+                                os.set_blocking(fd,False);streams[role]=fd
                                 if role.endswith('_reader'):
                                     stream_name='stdout' if role=='stdout_reader' else 'stderr'
                                     logfd=os.open(job/(stream_name+'.log'),os.O_WRONLY|os.O_CREAT|os.O_APPEND|os.O_NOFOLLOW,0o600)

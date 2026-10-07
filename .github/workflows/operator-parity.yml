@@ -55,7 +55,10 @@ jobs:
             python3 tests/independent_observer_tests.py
             python3 tests/stream_handoff_tests.py
             python3 tests/stream_handoff_acceptance.py test /tmp/hepta-stream-handoff-ci.json
-            python3 -m py_compile src/mcp/runtime/stream_broker.py tests/stream_native_acceptance.py
+            python3 -m py_compile src/mcp/runtime/stream_broker.py deploy/dc_handoff_owner.py tests/stream_native_acceptance.py
+            python3 tests/stream_broker_tests.py
+            python3 tests/stream_history_tests.py
+            python3 tests/dc_owner_history_acceptance.py
             python3 tests/checkpoint_lifecycle_tests.py
             python3 tests/supervisor_tests.py
             python3 tests/file_capabilities.py
