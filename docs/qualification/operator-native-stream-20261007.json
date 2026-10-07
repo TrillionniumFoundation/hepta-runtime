@@ -1,0 +1,327 @@
+{
+  "schema": "hepta-native-stream-installed-qualification-v1",
+  "recorded_at": "2026-10-07T03:17:21.705304+00:00",
+  "scope": "Installed native cooperative stream ownership plus exact-artifact regression; no controller power/reboot and no ChatGPT cloud binding",
+  "implementation_revision": "2d0ee0c98e86502766d92b683ba2beef22b0a54f",
+  "binary_sha256": "6f04e041b0f1b03fc5d664db51b3a915f67d7462b84e0c5ab18f51d56135ff43",
+  "installed": true,
+  "installed_binary": "/home/qian-qi/.local/lib/hepta-runtime/releases/operator-6f04e041b0f1b03f/hepta-runtime",
+  "actual_runtime_pid": 546677,
+  "desktop_commander_pid": 2959,
+  "native_tool_count": 46,
+  "native_stream_tools": [
+    "stream_handoff_prepare",
+    "stream_handoff_status",
+    "stream_handoff_read",
+    "stream_handoff_write",
+    "stream_handoff_close",
+    "stream_handoff_list"
+  ],
+  "implementation_summary": [
+    "A user-systemd broker, not the MCP controller, owns cooperatively exported same-login stdin/stdout/stderr pipes and archives output.",
+    "Prepare is idempotency-bound to exact application identities. Input requires request identity; identical replay is reused and changed bytes are rejected.",
+    "Close is input EOF rather than a signal. Completed stdout/stderr remain readable and raw input bytes are not stored in receipts.",
+    "The owner export helper requires explicit I/O quiescence and SCM_RIGHTS transfer; it does not copy application memory or stop the application."
+  ],
+  "local_exact_source": {
+    "rust_suites": [
+      {
+        "passed": 390,
+        "failed": 0,
+        "ignored": 11
+      },
+      {
+        "passed": 8,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "rust_passed": 398,
+    "rust_ignored": 11,
+    "new_python_suite_counts": [
+      13,
+      6,
+      9,
+      5
+    ],
+    "new_python_passed": 33,
+    "release_build": "passed"
+  },
+  "hosted_ci": {
+    "head_sha": "2d0ee0c98e86502766d92b683ba2beef22b0a54f",
+    "run_id": 37562925855,
+    "status": "completed",
+    "conclusion": "success",
+    "observed_via": "GitHub REST workflow endpoint"
+  },
+  "six_host_matrix": {
+    "complete": true,
+    "checks": 270,
+    "hosts": [
+      {
+        "host": "main",
+        "checks": 45
+      },
+      {
+        "host": "pocket4",
+        "checks": 45
+      },
+      {
+        "host": "rog",
+        "checks": 45
+      },
+      {
+        "host": "mac",
+        "checks": 45
+      },
+      {
+        "host": "x230",
+        "checks": 45
+      },
+      {
+        "host": "ai395",
+        "checks": 45
+      }
+    ]
+  },
+  "initial_exact_stream_failure": {
+    "retained": true,
+    "binary_sha256": "6f04e041b0f1b03fc5d664db51b3a915f67d7462b84e0c5ab18f51d56135ff43",
+    "checks_completed_before_failure": 5,
+    "failure_type": "ConnectionResetError during final status/close convergence",
+    "assertion_relaxed": false,
+    "receipt_sha256": "6c42049f372b2632001791d5d8ffbfc66c9e29314f48c6a4712686474a788e59",
+    "log_sha256": "2cfdddf5410d9b655103300ce94322dc9ba626c29ed63d6f63e4651cab8713b1"
+  },
+  "subsequent_exact_stream_canaries": [
+    {
+      "run": 1,
+      "passed": 6,
+      "complete": true,
+      "receipt_sha256": "b57e6ca01149e997d096e51f3d4146dad7ccb976238710a1ac32dfa4202481c6"
+    },
+    {
+      "run": 2,
+      "passed": 6,
+      "complete": true,
+      "receipt_sha256": "d99b46b545725f0aa93c7ea42447d0f46726af83c98333752843fece47da708f"
+    },
+    {
+      "run": 3,
+      "passed": 6,
+      "complete": true,
+      "receipt_sha256": "fab4a825f2f3eb8f9e92dd886ce3df2686fb9164e7000a97b042a9dc7800a188"
+    }
+  ],
+  "installed_upgrade": {
+    "source_revision": "2d0ee0c98e86502766d92b683ba2beef22b0a54f",
+    "binary_sha256": "6f04e041b0f1b03fc5d664db51b3a915f67d7462b84e0c5ab18f51d56135ff43",
+    "previous_binary_sha256": "8c41c444035e971d2aa50e2a0321c5746d873a3fb801ecc4cbc10977561b2676",
+    "recorded_at": "20261007T030445Z",
+    "service": "hepta-runtime-operator.service",
+    "endpoint": "http://127.0.0.1:8790/mcp",
+    "rollback_unit": "/home/qian-qi/.config/hepta-runtime-operator/rollback-20261007T030445Z.service",
+    "desktop_commander_pid_before": 2959,
+    "checks": [
+      "installed authenticated host discovery and operator modes",
+      "installed UID and complete durable output: main",
+      "installed existing sudo UID 0: main",
+      "installed UID and complete durable output: pocket4",
+      "installed existing sudo UID 0: pocket4",
+      "installed UID and complete durable output: rog",
+      "installed existing sudo UID 0: rog",
+      "installed UID and complete durable output: mac",
+      "installed existing sudo UID 0: mac",
+      "installed UID and complete durable output: x230",
+      "installed existing sudo UID 0: x230",
+      "installed UID and complete durable output: ai395",
+      "installed existing sudo UID 0: ai395",
+      "installed real Unicode text pages and exact raw-byte compatibility",
+      "installed endpoint rejects missing token",
+      "installed controller restart preserves once-only durable job",
+      "actual running binary checksum and unchanged DC PID"
+    ],
+    "installed": true,
+    "chatgpt_tunnel_verified": false,
+    "password_prompt_tested": false,
+    "reboot_tested": false,
+    "verified": true,
+    "pid": 530274,
+    "binary": "/home/qian-qi/.local/lib/hepta-runtime/releases/operator-6f04e041b0f1b03f/hepta-runtime",
+    "active": "active",
+    "enabled": "enabled",
+    "desktop_commander_pid_after": 2959,
+    "desktop_commander_changed": false
+  },
+  "installed_stream_before_rollback": {
+    "complete": true,
+    "binary_sha256": "6f04e041b0f1b03fc5d664db51b3a915f67d7462b84e0c5ab18f51d56135ff43",
+    "checks": [
+      {
+        "check": "installed endpoint exposes all six stream ownership tools",
+        "detail": 46
+      },
+      {
+        "check": "installed broker accepts exact live pipes",
+        "detail": {
+          "queued_before": 476,
+          "application_pids": [
+            545284,
+            545285
+          ]
+        }
+      },
+      {
+        "check": "new MCP client recovers broker identity and queued output",
+        "detail": null
+      },
+      {
+        "check": "installed input retry is once-only and app/child memory identities persist",
+        "detail": null
+      },
+      {
+        "check": "installed close yields complete archive and no raw input in receipts",
+        "detail": null
+      }
+    ],
+    "service_restart_performed": false,
+    "DC_modified": false,
+    "cloud_binding_used": false,
+    "passed": 5,
+    "session_id": "stream-aa9f3690a36aa9a51ef72fa90171333a46491b0e8c41756b994008d75ea0d2e2",
+    "application_pid": 545284,
+    "child_pid": 545285,
+    "application_processes_stopped": false
+  },
+  "installed_stream_after_rollback": {
+    "complete": true,
+    "binary_sha256": "6f04e041b0f1b03fc5d664db51b3a915f67d7462b84e0c5ab18f51d56135ff43",
+    "checks": [
+      {
+        "check": "installed endpoint exposes all six stream ownership tools",
+        "detail": 46
+      },
+      {
+        "check": "installed broker accepts exact live pipes",
+        "detail": {
+          "queued_before": 476,
+          "application_pids": [
+            547983,
+            547985
+          ]
+        }
+      },
+      {
+        "check": "new MCP client recovers broker identity and queued output",
+        "detail": null
+      },
+      {
+        "check": "installed input retry is once-only and app/child memory identities persist",
+        "detail": null
+      },
+      {
+        "check": "installed close yields complete archive and no raw input in receipts",
+        "detail": null
+      }
+    ],
+    "service_restart_performed": false,
+    "DC_modified": false,
+    "cloud_binding_used": false,
+    "passed": 5,
+    "session_id": "stream-4e08e7b6667f5074482c3979e46e32535bd94822221ec5b17ee473d7f0d1550a",
+    "application_pid": 547983,
+    "child_pid": 547985,
+    "application_processes_stopped": false
+  },
+  "forced_failure_rollback": {
+    "source_revision": "4f2a336aa0e20fbbcc93b15ed8e219c127b2d72d",
+    "binary_sha256": "8c41c444035e971d2aa50e2a0321c5746d873a3fb801ecc4cbc10977561b2676",
+    "previous_binary_sha256": "6f04e041b0f1b03fc5d664db51b3a915f67d7462b84e0c5ab18f51d56135ff43",
+    "recorded_at": "20261007T031346Z",
+    "service": "hepta-runtime-operator.service",
+    "endpoint": "http://127.0.0.1:8790/mcp",
+    "rollback_unit": "/home/qian-qi/.config/hepta-runtime-operator/rollback-20261007T031346Z.service",
+    "desktop_commander_pid_before": 2959,
+    "checks": [
+      "installed authenticated host discovery and operator modes"
+    ],
+    "installed": false,
+    "chatgpt_tunnel_verified": false,
+    "password_prompt_tested": false,
+    "reboot_tested": false,
+    "rolled_back": true,
+    "error": "RuntimeError: HEPTA_EXPECTED_ROLLBACK_DRILL",
+    "desktop_commander_pid_after": 2959,
+    "original_unit_restored": true,
+    "original_manifest_restored": true,
+    "rollback_drill_passed": true
+  },
+  "installed_stream_restart_boundary": {
+    "live_stream_plus_installed_service_restart_attempted": false,
+    "reason": "The execution safety check blocked that combined command before execution; it was not repackaged or retried.",
+    "separate_evidence": "Exact-artifact canary proves broker/app survive disposable MCP-controller SIGKILL and restart; standard installed upgrade separately restarted the service, but not while a live installed stream was accepted."
+  },
+  "maintenance_snapshot": {
+    "safe_reboot_proven": false,
+    "workload_count": 17,
+    "interactive_process_count": 63,
+    "stateful_service_count": 12,
+    "running_container_count": 1,
+    "blockers": [
+      "active_workloads_need_completion_or_verified_checkpoint",
+      "interactive_application_state_not_attested",
+      "stateful_services_need_verified_restart_contract",
+      "running_containers_need_verified_restart_contract"
+    ]
+  },
+  "power_boundary": {
+    "verified_independent_observers": [
+      "x230-ts",
+      "pocket4"
+    ],
+    "independent_power_actuator_verified": false,
+    "networkmanager_wol_profile": "magic",
+    "sysfs_pci_device_wakeup_observed": "disabled",
+    "ethtool_installed": false,
+    "ipmi_mei_nut_serial_power_route_verified": false,
+    "G3_power_removal_performed": false,
+    "controller_physical_reboot_performed": false
+  },
+  "migration_boundary": {
+    "native_receiver_installed": true,
+    "old_owner_export_helper_qualified": true,
+    "kernel_queued_pipe_bytes_preserved": true,
+    "userspace_read_ahead_buffer_exported_by_DC": false,
+    "arbitrary_existing_DC_session_adoption": false,
+    "cross_host_memory_migration": false,
+    "socket_GPU_desktop_state_migration": false,
+    "general_privileged_process_tree_capture_added": false
+  },
+  "unchanged": [
+    "Desktop Commander service/configuration",
+    "host PAM/sudoers/accounts/SSH/token/access roots",
+    "current business builds/services/containers",
+    "ChatGPT/workspace/tunnel/provider settings"
+  ],
+  "remaining_prerequisites": [
+    "A target-bound independently powered actuator and measured off/on state are required for actual power-removal recovery.",
+    "Current builds, GUI state, PostgreSQL/container/OpenBao/authority services need explicit drain/checkpoint/restart qualification before qian-qi reboot is lossless.",
+    "Actual DC owner integration must expose/quiesce its pipe handles and any already-consumed userspace read buffers before existing arbitrary DC sessions can use the native broker."
+  ],
+  "receipt_sha256": {
+    "stream-full-local.log": "c057b9fdb2e4fbeecc834e7d3b6191e3a8935d1d21f41407ed820bae6cca0835",
+    "stream-release.log": "c159a8e57664775c640698684db6b58ad1f6801f24c1b22f6a5feaf409192117",
+    "stream-matrix.json": "4aa22a847e0a6d57f34e89285710c666b27836e3d2199199484576d98773520b",
+    "stream-installed.json": "1cfd1ffdfc9deba0b55a88daf15ee7958fdaf7a6649139fbdc289c5ec606ab62",
+    "stream-installed-norestart.json": "ea7c86adcac795732c856f3652f76301d1f1228657db536d88276b5e3b0619ad",
+    "stream-installed-postrollback.json": "6b80becbde8b8a5521fa1cbfa2a952f1efa7ec1916ce80ccf07eae8e8e737869",
+    "stream-rollback.json": "0eceff791d8ace6911a21e92842f5e642c4e054661c42f8375cefcbe0d95aa2b",
+    "stream-native-release.json": "6c42049f372b2632001791d5d8ffbfc66c9e29314f48c6a4712686474a788e59",
+    "stream-native-release.log": "2cfdddf5410d9b655103300ce94322dc9ba626c29ed63d6f63e4651cab8713b1",
+    "exact-stream-1.json": "b57e6ca01149e997d096e51f3d4146dad7ccb976238710a1ac32dfa4202481c6",
+    "exact-stream-2.json": "d99b46b545725f0aa93c7ea42447d0f46726af83c98333752843fece47da708f",
+    "exact-stream-3.json": "fab4a825f2f3eb8f9e92dd886ce3df2686fb9164e7000a97b042a9dc7800a188",
+    "stream-maintenance-final.json": "1c1c194ac52740aa80ec72d4287922250ea369db20d1323a2e1826e2b70530c7",
+    "tests/stream_installed_norestart_acceptance.py": "847f85c45ea38454a74325ae6565c686713a2818010e2448b36af6a849701249"
+  }
+}
