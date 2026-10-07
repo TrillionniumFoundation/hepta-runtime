@@ -99,11 +99,19 @@ def main():
         assert after['total']==22 and after['pid']==ready['pid'] and after['hash']==ready['hash']
         rpc({'op':'close','state_dir':str(state),'session_id':session})
         # Closing input yields EOF and normal child exit; archive remains readable.
-        deadline=time.monotonic()+8
+        deadline=time.monotonic()+8;status2=None;last_status_error=None
         while time.monotonic()<deadline:
-            status2=rpc({'op':'status','state_dir':str(state),'session_id':session})
+            try:
+                status2=rpc({'op':'status','state_dir':str(state),'session_id':session})
+                last_status_error=None
+            except RuntimeError as error:
+                # The broker closes its control socket just before publishing final.json.
+                # A status probe that lands in that tiny transition can see ECONNRESET;
+                # retry the same durable session identity instead of treating it as loss.
+                last_status_error=error;time.sleep(.05);continue
             if status2['state']=='exited':break
             time.sleep(.05)
+        if status2 is None and last_status_error is not None:raise last_status_error
         assert status2['state']=='exited' and status2['output_complete']
         assert owner.stderr.read()==b''
         report={'complete':True,'old_owner_started_child':True,'old_owner_exited':True,
