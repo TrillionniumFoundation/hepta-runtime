@@ -89,11 +89,33 @@ def pending_stdin():
 
 def control_request(path,value):
     with socket.socket(socket.AF_UNIX,socket.SOCK_SEQPACKET) as conn:
-        conn.settimeout(10);conn.connect(str(path));conn.sendall(json.dumps(value).encode())
+        conn.settimeout(10);conn.connect(str(path));EXPORT.peer(conn,os.getuid());conn.sendall(json.dumps(value).encode())
         raw=conn.recv(MAX_CONTROL)
     result=json.loads(raw)
     if 'error' in result:raise RuntimeError(result['error'])
     return result
+
+
+def reconciled_acceptance(receipt_path,manifest,handoff_socket):
+    """Bind a lost ACK to both its exact durable receipt and a live native owner."""
+    path=pathlib.Path(receipt_path)
+    private_dir(path.parent)
+    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
+    with os.fdopen(fd,'rb') as stream:
+        info=os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid!=os.getuid() or info.st_mode&0o077 or info.st_size>MAX_CONTROL:
+            raise ValueError('private bounded native acceptance receipt required')
+        raw=stream.read(MAX_CONTROL+1)
+    receipt=json.loads(raw)
+    expected={'session_id':manifest['handoff_id'],'sender_identity':manifest['sender_identity'],
+              'application_identities':manifest['application_identities'],'descriptors':manifest['descriptors']}
+    if any(receipt.get(key)!=value for key,value in expected.items()) or receipt.get('history_finalized') is not True:
+        raise ValueError('native receipt does not match the uncertain export')
+    status=control_request(pathlib.Path(handoff_socket).with_name('control.sock'),{'op':'status'})
+    if status.get('owner_accepted') is not True or status.get('session_id')!=manifest['handoff_id'] or status.get('owner_identity')!=manifest['sender_identity'] or status.get('application_identities')!=manifest['application_identities']:
+        raise ValueError('live native broker has not confirmed this exact ownership')
+    return {'accepted':True,'handoff_id':manifest['handoff_id'],
+            'receipt_sha256':hashlib.sha256(raw).hexdigest(),'reconciled_lost_ack':True}
 
 
 def run_owner(state_dir,argv):
@@ -122,15 +144,35 @@ def run_owner(state_dir,argv):
                'raw_owner_io':True,'started_unix_ms':int(time.time()*1000)}
     atomic(state/'status.json',state_doc)
     print('HEPTA_DC_OWNER_READY '+json.dumps({k:state_doc[k] for k in ('owner_pid','child_identity','application_pids','control_socket')}),flush=True)
-    handed=False;input_closed=False
+    handed=False;input_closed=False;io_quiesced=False;uncertain_manifest=None;uncertain_socket=None
+    pending_input=bytearray()
     def current():
         pids=[child.pid,*descendants(child.pid)] if child.poll() is None else state_doc['application_pids']
-        return {**state_doc,'state':'running' if child.poll() is None else 'child_exited',
+        return {**state_doc,'state':state_doc['state'] if io_quiesced else ('running' if child.poll() is None else 'child_exited'),
                 'application_pids':pids,'child_exit_code':child.poll(),'stdin_pending_bytes':pending_stdin(),
+                'stdin_buffered_bytes':len(pending_input),
                 'stdout_history_size':os.fstat(history['stdout']).st_size,'stderr_history_size':os.fstat(history['stderr']).st_size}
+    def quiesce():
+        nonlocal io_quiesced
+        io_quiesced=True
+        for fd in (0,child.stdin.fileno(),child.stdout.fileno(),child.stderr.fileno()):
+            try:selector.unregister(fd)
+            except KeyError:pass
+    def finish_handoff(ack,actual):
+        nonlocal handed
+        quiesce()
+        for stream in (child.stdin,child.stdout,child.stderr):stream.close()
+        receipt={**ack,'owner_pid':os.getpid(),'child_identity':state_doc['child_identity'],
+                 'application_pids':actual,'history_finalized':True,
+                 'stdout_history_sha256':hashlib.sha256((state/'stdout.history').read_bytes()).hexdigest(),
+                 'stderr_history_sha256':hashlib.sha256((state/'stderr.history').read_bytes()).hexdigest(),
+                 'userspace_read_ahead_bytes_unaccounted':0,'stdin_pending_bytes':0}
+        atomic(state/'handoff.json',receipt);state_doc.update(state='handed_off',session_id=ack['handoff_id'])
+        atomic(state/'status.json',state_doc);handed=True
+        return receipt
     try:
         while True:
-            if child.poll() is not None:
+            if child.poll() is not None and not io_quiesced:
                 # Drain both child output pipes before owner exit.
                 for fd,name in ((child.stdout.fileno(),'stdout'),(child.stderr.fileno(),'stderr')):
                     while True:
@@ -144,6 +186,7 @@ def run_owner(state_dir,argv):
             events=selector.select(.1)
             for key,_ in events:
                 kind,name=key.data
+                if io_quiesced and kind!='control':continue
                 if kind=='child_output':
                     fd=key.fileobj
                     try:data=os.read(fd,MAX_IO)
@@ -163,7 +206,18 @@ def run_owner(state_dir,argv):
                             child.stdin.close();input_closed=True
                         continue
                     if input_closed:raise RuntimeError('DC input arrived after child stdin closed')
-                    write_all(child.stdin.fileno(),data)
+                    # Stop reading DC while a bounded block is waiting for the
+                    # nonblocking child pipe; retain every partially written byte.
+                    pending_input.extend(data);selector.unregister(0)
+                    selector.register(child.stdin.fileno(),selectors.EVENT_WRITE,('child_input',None))
+                elif kind=='child_input':
+                    try:written=os.write(child.stdin.fileno(),pending_input)
+                    except BlockingIOError:continue
+                    if written<=0:raise OSError('child stdin write made no progress')
+                    del pending_input[:written]
+                    if not pending_input:
+                        selector.unregister(child.stdin.fileno())
+                        selector.register(0,selectors.EVENT_READ,('dc_input',None))
                 else:
                     conn,_=control.accept()
                     with conn:
@@ -173,31 +227,35 @@ def run_owner(state_dir,argv):
                             if op=='status':
                                 response=current()
                             elif op=='handoff':
+                                if io_quiesced:raise ValueError('ownership outcome uncertain; reconcile without replay or resumed I/O')
                                 expected=request['application_pids'];actual=[child.pid,*descendants(child.pid)]
                                 if expected!=actual:raise ValueError('application identity list changed before handoff')
                                 queued=pending_stdin()
                                 if queued is None:raise ValueError('cannot prove raw owner stdin is quiescent')
                                 if queued!=0:raise ValueError('unconsumed owner stdin exists; drain before handoff')
+                                if pending_input:raise ValueError('buffered child stdin exists; drain before handoff')
                                 for fd in history.values():os.fsync(fd)
                                 descriptions={}
                                 with open(state/'stdout.history','rb',buffering=0) as stdout_history,open(state/'stderr.history','rb',buffering=0) as stderr_history:
                                     descriptions={'stdin_writer':child.stdin.fileno(),'stdout_reader':child.stdout.fileno(),
                                                   'stderr_reader':child.stderr.fileno(),'stdout_history':stdout_history.fileno(),
                                                   'stderr_history':stderr_history.fileno()}
-                                    ack=EXPORT.transfer(request['handoff_socket'],request['session_id'],descriptions,actual,
-                                                        acknowledge_quiesced_io=True)
-                                for stream in (child.stdin,child.stdout,child.stderr):
-                                    try:selector.unregister(stream.fileno())
-                                    except Exception:pass
-                                    stream.close()
-                                receipt={**ack,'owner_pid':os.getpid(),'child_identity':EXPORT.identity(child.pid),
-                                         'application_pids':actual,'history_finalized':True,
-                                         'stdout_history_sha256':hashlib.sha256((state/'stdout.history').read_bytes()).hexdigest(),
-                                         'stderr_history_sha256':hashlib.sha256((state/'stderr.history').read_bytes()).hexdigest(),
-                                         'userspace_read_ahead_bytes_unaccounted':0,'stdin_pending_bytes':0}
-                                atomic(state/'handoff.json',receipt);state_doc.update(state='handed_off',session_id=request['session_id'])
-                                atomic(state/'status.json',state_doc)
-                                response=receipt;handed=True
+                                    try:
+                                        ack=EXPORT.transfer(request['handoff_socket'],request['session_id'],descriptions,actual,
+                                                            acknowledge_quiesced_io=True)
+                                    except EXPORT.AmbiguousTransferError as error:
+                                        quiesce();uncertain_manifest=error.manifest;uncertain_socket=request['handoff_socket']
+                                        state_doc.update(state='handoff_uncertain',session_id=request['session_id'],
+                                                         owned_io_quiesced=True,automatic_resume_allowed=False)
+                                        atomic(state/'uncertain.json',{'manifest':uncertain_manifest,'handoff_socket':uncertain_socket,
+                                                                      'error':str(error),'recorded_unix_ms':int(time.time()*1000)})
+                                        atomic(state/'status.json',state_doc)
+                                        raise
+                                response=finish_handoff(ack,actual)
+                            elif op=='reconcile':
+                                if uncertain_manifest is None:raise ValueError('no uncertain export to reconcile')
+                                ack=reconciled_acceptance(request['receipt_path'],uncertain_manifest,uncertain_socket)
+                                response=finish_handoff(ack,[v['pid'] for v in uncertain_manifest['application_identities']])
                             else:raise ValueError('unknown owner control operation')
                             conn.sendall(json.dumps(response).encode())
                         except Exception as error:
@@ -210,7 +268,7 @@ def run_owner(state_dir,argv):
         for fd in history.values():
             try:os.fsync(fd);os.close(fd)
             except OSError:pass
-        if not handed and child.poll() is None:
+        if not handed and not io_quiesced and child.poll() is None:
             child.terminate()
             try:child.wait(timeout=5)
             except subprocess.TimeoutExpired:child.kill();child.wait(timeout=5)
@@ -221,6 +279,7 @@ def main():
     sub=ap.add_subparsers(dest='mode',required=True)
     run=sub.add_parser('run');run.add_argument('--state-dir',required=True);run.add_argument('command',nargs=argparse.REMAINDER)
     status=sub.add_parser('status');status.add_argument('--socket',required=True)
+    reconcile=sub.add_parser('reconcile');reconcile.add_argument('--socket',required=True);reconcile.add_argument('--receipt-path',required=True)
     handoff=sub.add_parser('handoff');handoff.add_argument('--socket',required=True);handoff.add_argument('--handoff-socket',required=True);handoff.add_argument('--session-id',required=True);handoff.add_argument('--application-pids',required=True)
     args=ap.parse_args()
     if args.mode=='run':
@@ -228,6 +287,8 @@ def main():
         raise SystemExit(run_owner(pathlib.Path(args.state_dir),command))
     if args.mode=='status':
         print(json.dumps(control_request(args.socket,{'op':'status'})));return
+    if args.mode=='reconcile':
+        print(json.dumps(control_request(args.socket,{'op':'reconcile','receipt_path':args.receipt_path})));return
     pids=json.loads(args.application_pids)
     print(json.dumps(control_request(args.socket,{'op':'handoff','handoff_socket':args.handoff_socket,'session_id':args.session_id,'application_pids':pids})))
 

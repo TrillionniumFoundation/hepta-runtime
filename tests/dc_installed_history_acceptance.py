@@ -43,6 +43,7 @@ def main():
     ap.add_argument('--token-file',required=True)
     ap.add_argument('--out',required=True)
     ap.add_argument('--service',default='hepta-runtime-operator.service')
+    ap.add_argument('--no-runtime-restart',action='store_true',help='qualify owner integration without changing the installed service')
     args=ap.parse_args()
     os.environ.setdefault('XDG_RUNTIME_DIR',f'/run/user/{os.getuid()}')
     os.environ.setdefault('DBUS_SESSION_BUS_ADDRESS',f'unix:path=/run/user/{os.getuid()}/bus')
@@ -91,14 +92,18 @@ def main():
     assert handoff['history_seed']['stdout']['sha256']==hashlib.sha256(stdout_history).hexdigest()
     assert handoff['history_seed']['stderr']['sha256']==hashlib.sha256(stderr_history).hexdigest()
     passed('native durable archive starts with the exact bytes already consumed and forwarded by DC owner')
-    subprocess.run(['systemctl','--user','restart',args.service],check=True,timeout=30)
+    if not args.no_runtime_restart:
+        subprocess.run(['systemctl','--user','restart',args.service],check=True,timeout=30)
     c=connect();runtime_after=service_pid(args.service)
-    assert runtime_after!=runtime_before and sha('/proc/'+str(runtime_after)+'/exe')==expected_sha
+    assert (runtime_after==runtime_before if args.no_runtime_restart else runtime_after!=runtime_before)
+    assert sha('/proc/'+str(runtime_after)+'/exe')==expected_sha
     assert service_pid('desktop-commander-remote.service')==dc_before
     status=c.call('stream_handoff_status',{'session_id':sid})
     assert status['owner_accepted'] and status['all_applications_alive']
-    passed('same app/history/broker ownership survives installed MCP service restart',
-           {'runtime_before':runtime_before,'runtime_after':runtime_after,'DC_pid':dc_before})
+    passed('same app/history/broker ownership is accessible from a fresh native client' if args.no_runtime_restart else
+           'same app/history/broker ownership survives installed MCP service restart',
+           {'runtime_before':runtime_before,'runtime_after':runtime_after,'DC_pid':dc_before,
+            'runtime_service_restarted':not args.no_runtime_restart})
     request={'session_id':sid,'request_id':'dc-real-history-write-01','data_base64':base64.b64encode(b'5\n').decode()}
     first=c.call('stream_handoff_write',request);second=c.call('stream_handoff_write',request)
     assert first['state']=='confirmed' and second['reused']
@@ -129,6 +134,7 @@ def main():
                   stdout_history_sha256=hashlib.sha256(stdout_history).hexdigest(),
                   userspace_read_ahead_bytes_unaccounted=0,runtime_pid_before=runtime_before,
                   runtime_pid_after=runtime_after,desktop_commander_pid=dc_before,application_process_stopped_for_handoff=False)
+    report['runtime_service_restarted']=not args.no_runtime_restart
     save();print('DC_INSTALLED_HISTORY_PASS',report['passed'],flush=True)
 
 
