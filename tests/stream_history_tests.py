@@ -65,4 +65,38 @@ class History(unittest.TestCase):
             with path.open('rb') as f:
                 self.assertNotEqual(before,EXPORT.history_description(f.fileno()))
 
+
+    def test_stdout_and_stderr_histories_seed_independently(self):
+        app_code="import json,os,sys\nprint(json.dumps({'event':'OUT_READY','pid':os.getpid()}),flush=True);print(json.dumps({'event':'ERR_READY','pid':os.getpid()}),file=sys.stderr,flush=True)\nfor line in sys.stdin:\n v=int(line);print(json.dumps({'event':'OUT_VALUE','value':v}),flush=True);print(json.dumps({'event':'ERR_VALUE','value':v}),file=sys.stderr,flush=True)"
+        with tempfile.TemporaryDirectory(prefix='hepta-history-two-stream-') as t:
+            root=pathlib.Path(t);state=root/'state';state.mkdir(mode=0o700)
+            app=subprocess.Popen([sys.executable,'-u','-c',app_code],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True,bufsize=0)
+            try:
+                out=app.stdout.readline();err=app.stderr.readline();self.assertIn(b'OUT_READY',out);self.assertIn(b'ERR_READY',err)
+                out_history=root/'stdout.history';err_history=root/'stderr.history';out_history.write_bytes(out);err_history.write_bytes(err)
+                session='stream-'+hashlib.sha256((self.id()+'-two').encode()).hexdigest()
+                prepared=self.rpc({'op':'prepare','state_dir':str(state),'session_id':session,'application_pids':[app.pid]})
+                with out_history.open('rb') as oh,err_history.open('rb') as eh:
+                    ack=EXPORT.transfer(prepared['handoff_socket'],session,
+                        {'stdin_writer':app.stdin.fileno(),'stdout_reader':app.stdout.fileno(),'stderr_reader':app.stderr.fileno(),'stdout_history':oh.fileno(),'stderr_history':eh.fileno()},
+                        [app.pid],acknowledge_quiesced_io=True)
+                self.assertTrue(ack['accepted']);app.stdin.close();app.stdout.close();app.stderr.close()
+                stdout=self.rpc({'op':'read','state_dir':str(state),'session_id':session,'stream':'stdout','offset':0,'limit':4096})
+                stderr=self.rpc({'op':'read','state_dir':str(state),'session_id':session,'stream':'stderr','offset':0,'limit':4096})
+                self.assertEqual(base64.b64decode(stdout['data_base64']),out);self.assertEqual(base64.b64decode(stderr['data_base64']),err)
+                receipt=json.loads((state/'stream_handoffs'/session/'handoff_receipt.json').read_text())
+                self.assertEqual(receipt['history_seed']['stdout']['sha256'],hashlib.sha256(out).hexdigest())
+                self.assertEqual(receipt['history_seed']['stderr']['sha256'],hashlib.sha256(err).hexdigest())
+                self.rpc({'op':'write','state_dir':str(state),'session_id':session,'request_id':'two-stream-write','data_base64':base64.b64encode(b'9\n').decode()})
+                end=time.monotonic()+6;out_all=err_all=b''
+                while time.monotonic()<end:
+                    out_all=base64.b64decode(self.rpc({'op':'read','state_dir':str(state),'session_id':session,'stream':'stdout','offset':0,'limit':4096})['data_base64'])
+                    err_all=base64.b64decode(self.rpc({'op':'read','state_dir':str(state),'session_id':session,'stream':'stderr','offset':0,'limit':4096})['data_base64'])
+                    if b'OUT_VALUE' in out_all and b'ERR_VALUE' in err_all:break
+                    time.sleep(.05)
+                self.assertTrue(out_all.startswith(out));self.assertTrue(err_all.startswith(err));self.assertIn(b'\"value\": 9',out_all);self.assertIn(b'\"value\": 9',err_all)
+                self.rpc({'op':'close','state_dir':str(state),'session_id':session});app.wait(timeout=5)
+            finally:
+                if app.poll() is None:app.terminate();app.wait(timeout=5)
+
 if __name__=='__main__':unittest.main(verbosity=2)
