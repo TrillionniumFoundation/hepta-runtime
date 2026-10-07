@@ -171,6 +171,12 @@ async fn notify_peer_resource_updated(peer: &Peer<RoleServer>, uri: &str) {
 /// interactive sessions, on pre-2026-07-28 connections; other clients ignore it.
 const CLAUDE_CHANNEL_CAPABILITY: &str = "claude/channel";
 const RUNTIME_TOOL_NAMES: &[&str] = &[
+	"stream_handoff_prepare",
+	"stream_handoff_status",
+	"stream_handoff_read",
+	"stream_handoff_write",
+	"stream_handoff_close",
+	"stream_handoff_list",
 	"process_checkpoint",
 	"pdf_security",
 	"binary_patch_inode",
@@ -1096,6 +1102,120 @@ impl OctofsServer {
 		Parameters(params): Parameters<runtime::documents::PdfSecurityParams>,
 	) -> Result<rmcp::model::CallToolResult, String> {
 		runtime::documents::secure_pdf(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Stream Handoff Prepare",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Prepare a controller-local receiver for a cooperating same-login old I/O owner. The first PID is the application leader; optional additional PIDs must be descendants. This does not open /proc fds, signal/capture processes, or steal DC sessions. Reuse the same idempotency key after uncertain acknowledgement. The returned private Unix socket is consumed by the reviewed owner-export helper; runtime restarts do not close accepted kernel pipe objects."
+	)]
+	async fn stream_handoff_prepare(
+		&self,
+		Parameters(params): Parameters<runtime::stream::StreamPrepareParams>,
+	) -> Result<String, String> {
+		runtime::stream::prepare(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Stream Handoff Status",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read the status of a controller-local cooperative stream receiver, including bound application identities, accepted owner state and retained output lengths. This never adopts a new descriptor or starts an application."
+	)]
+	async fn stream_handoff_status(
+		&self,
+		Parameters(params): Parameters<runtime::stream::StreamRefParams>,
+	) -> Result<String, String> {
+		runtime::stream::status(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Stream Handoff Read",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read exact bounded bytes from the retained stdout or stderr archive of an accepted cooperative handoff. Uses byte offsets/base64 and SHA256; it never consumes the application's kernel pipe directly."
+	)]
+	async fn stream_handoff_read(
+		&self,
+		Parameters(params): Parameters<runtime::stream::StreamReadParams>,
+	) -> Result<String, String> {
+		runtime::stream::read(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Stream Handoff Write",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Write up to 64 KiB of exact base64-decoded input to a previously accepted cooperative stdin pipe. request_id is mandatory: same ID/same bytes returns the prior receipt; partial or uncertain writes are never blindly replayed. This does not signal the application."
+	)]
+	async fn stream_handoff_write(
+		&self,
+		Parameters(params): Parameters<runtime::stream::StreamWriteParams>,
+	) -> Result<String, String> {
+		runtime::stream::write(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Stream Handoff Close Input",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Close only the runtime owner's accepted stdin-writer pipe. This may deliver EOF to the application when no other writer remains. It does not send a signal or claim termination."
+	)]
+	async fn stream_handoff_close(
+		&self,
+		Parameters(params): Parameters<runtime::stream::StreamRefParams>,
+	) -> Result<String, String> {
+		runtime::stream::close(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Stream Handoff List",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "List bounded controller-local cooperative stream sessions persisted by this runtime. Use status/read for authoritative state. No remote host or descriptor source can be supplied by the caller."
+	)]
+	async fn stream_handoff_list(
+		&self,
+		Parameters(params): Parameters<runtime::stream::StreamListParams>,
+	) -> Result<String, String> {
+		runtime::stream::list(params)
 			.await
 			.map_err(|e| e.to_string())
 	}

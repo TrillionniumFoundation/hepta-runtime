@@ -10,6 +10,7 @@ pub mod jobs;
 pub mod operator;
 pub mod pty;
 pub mod ssh;
+pub mod stream;
 pub mod terminal;
 
 pub use config::{
