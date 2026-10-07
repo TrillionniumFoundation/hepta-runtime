@@ -1,0 +1,21 @@
+[Unit]
+Description=Hepta ChatGPT read-only MCP bridge
+After=hepta-runtime-operator.service
+Requires=hepta-runtime-operator.service
+
+[Service]
+Type=simple
+RuntimeDirectory=hepta-chatgpt
+RuntimeDirectoryMode=0700
+ExecStart=/usr/bin/python3 %h/.local/lib/hepta-chatgpt-bridge/bridge.py --socket %t/hepta-chatgpt/bridge.sock --upstream http://127.0.0.1:8790/mcp --token-file %h/.config/hepta-runtime-operator/token
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,24 @@
+[Unit]
+Description=OpenAI Secure MCP Tunnel for Hepta read-only facade
+After=network-online.target hepta-chatgpt-bridge.service
+Wants=network-online.target
+Requires=hepta-chatgpt-bridge.service
+ConditionPathExists=%h/.config/hepta-chatgpt-tunnel/runtime-api-key
+ConditionPathExists=%h/.config/hepta-chatgpt-tunnel/tunnel.env
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/hepta-chatgpt-tunnel/tunnel.env
+Environment=TUNNEL_CLIENT_PROFILE=hepta-chatgpt
+Environment=TUNNEL_CLIENT_PROFILE_DIR=%h/.config/tunnel-client
+ExecStart=%h/.local/bin/tunnel-client run --profile hepta-chatgpt
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,87 @@
+#!/bin/bash
+set -euo pipefail
+
+CONFIG="$HOME/.config/hepta-chatgpt-tunnel"
+PROFILE="hepta-chatgpt"
+mkdir -p "$CONFIG"
+chmod 700 "$CONFIG"
+
+if [[ -t 0 ]]; then
+  read -r -p 'OpenAI tunnel id (tunnel_...): ' TUNNEL_ID
+  read -r -s -p 'Restricted Runtime API key (Tunnels Read + Use): ' RUNTIME_KEY
+  printf '\n' >&2
+else
+  echo 'interactive terminal required; secrets are intentionally not accepted on argv/stdin pipes' >&2
+  exit 2
+fi
+
+if [[ ! "$TUNNEL_ID" =~ ^tunnel_[A-Za-z0-9_-]{16,}$ ]]; then
+  echo 'invalid tunnel id shape' >&2
+  exit 2
+fi
+KEY_LEN=$(printf '%s' "$RUNTIME_KEY" | wc -c)
+if [[ "$KEY_LEN" -lt 20 || "$RUNTIME_KEY" == *$'\n'* || "$RUNTIME_KEY" == *$'\r'* ]]; then
+  echo 'invalid runtime key shape' >&2
+  exit 2
+fi
+
+umask 077
+tmp_key="$CONFIG/runtime-api-key.new.$$"
+tmp_env="$CONFIG/tunnel.env.new.$$"
+trap 'rm -f "$tmp_key" "$tmp_env"' EXIT
+printf '%s\n' "$RUNTIME_KEY" > "$tmp_key"
+printf 'CONTROL_PLANE_TUNNEL_ID=%s\n' "$TUNNEL_ID" > "$tmp_env"
+chmod 600 "$tmp_key" "$tmp_env"
+mv "$tmp_key" "$CONFIG/runtime-api-key"
+mv "$tmp_env" "$CONFIG/tunnel.env"
+RUNTIME_KEY=
+unset RUNTIME_KEY
+
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+export CONTROL_PLANE_TUNNEL_ID="$TUNNEL_ID"
+
+echo '== tunnel metadata / doctor =='
+"$HOME/.local/bin/tunnel-client" doctor --profile "$PROFILE" --explain
+
+echo '== start managed user service =='
+systemctl --user reset-failed hepta-openai-tunnel.service || true
+systemctl --user restart hepta-openai-tunnel.service
+
+for _ in $(seq 1 60); do
+  state=$(systemctl --user is-active hepta-openai-tunnel.service 2>/dev/null || true)
+  [[ "$state" == active ]] && break
+  sleep 1
+done
+systemctl --user is-active hepta-openai-tunnel.service
+
+for _ in $(seq 1 60); do
+  if python3 - <<'PY'
+import urllib.request,sys
+try:
+    with urllib.request.urlopen('http://127.0.0.1:8792/readyz',timeout=1) as r:
+        sys.exit(0 if r.status==200 else 1)
+except Exception:
+    sys.exit(1)
+PY
+  then break; fi
+  sleep 1
+done
+
+python3 - <<'PY'
+import urllib.request
+for path in ('/healthz','/readyz','/health?details=true'):
+    try:
+        with urllib.request.urlopen('http://127.0.0.1:8792'+path,timeout=3) as r:
+            body=r.read(65536).decode(errors='replace')
+            print(path, r.status, body[:1000])
+    except Exception as e:
+        print(path, 'ERROR', type(e).__name__)
+PY
+
+echo
+echo 'Tunnel runtime is local-ready. Next in ChatGPT web:'
+echo 'Settings -> Apps/Plugins -> Create/Add custom MCP server -> Connection: Tunnel'
+echo "Select/paste: $TUNNEL_ID"
+echo 'Authentication: None (the private hepta token stays local behind the bridge)'
+echo 'Scan Tools: expect exactly 7 read-only tools.'
