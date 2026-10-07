@@ -15,6 +15,7 @@ from unittest import mock
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('streamhandoff',ROOT/'deploy/stream_handoff.py');H=importlib.util.module_from_spec(spec);spec.loader.exec_module(H)
+ownspec=importlib.util.spec_from_file_location('dchandoffowner',ROOT/'deploy/dc_handoff_owner.py');O=importlib.util.module_from_spec(ownspec);ownspec.loader.exec_module(O)
 
 
 class StreamHandoff(unittest.TestCase):
@@ -83,6 +84,49 @@ class StreamHandoff(unittest.TestCase):
             with mock.patch.object(H,'validate_stdio'),self.assertRaises(FileExistsError):H.receive(right,self.root/'receipt.json',self.key)
             self.assertEqual((self.root/'receipt.json').read_text(),'KEEP')
         finally:left.close();right.close()
+
+
+    def test_descriptor_delivery_without_ack_is_ambiguous_not_retryable(self):
+        path=self.root/'ambiguous.sock';listener=H.listener(path);accepted=[]
+        def server():
+            conn,_=listener.accept()
+            with conn:
+                _,control,_,_=conn.recvmsg(H.MAX_MESSAGE,socket.CMSG_SPACE(H.MAX_FDS*array.array('i').itemsize),socket.MSG_CMSG_CLOEXEC)
+                received=[]
+                for level,kind,raw in control:
+                    if level==socket.SOL_SOCKET and kind==socket.SCM_RIGHTS:
+                        values=array.array('i');values.frombytes(raw[:len(raw)-(len(raw)%values.itemsize)]);received.extend(values)
+                accepted.extend(received)
+                for fd in received:os.close(fd)
+                # Close without ACK: the sender can no longer prove whether ownership was accepted.
+        worker=threading.Thread(target=server);worker.start()
+        try:
+            with self.assertRaises(H.AmbiguousTransferError) as caught:
+                H.transfer(path,self.key,{'stdin_writer':self.w},[os.getpid()],acknowledge_quiesced_io=True)
+            manifest=caught.exception.manifest
+            self.assertEqual(manifest['handoff_id'],self.key)
+            self.assertEqual(manifest['application_identities'],[self.ident])
+            self.assertEqual(manifest['descriptors'][0]['identity'],H.pipe_description(self.w))
+            self.assertTrue(manifest['sender_io_quiesced'])
+        finally:
+            worker.join(timeout=3);listener.close();path.unlink(missing_ok=True)
+        self.assertEqual(len(accepted),1)
+
+    def test_lost_ack_reconcile_requires_exact_receipt_and_live_broker_identity(self):
+        manifest={**self.message(),'history_finalized':True}
+        receipt={'session_id':self.key,'sender_identity':self.ident,'application_identities':[self.ident],
+                 'descriptors':manifest['descriptors'],'history_finalized':True}
+        path=self.root/'native-receipt.json';path.write_text(json.dumps(receipt));path.chmod(0o600)
+        status={'owner_accepted':True,'session_id':self.key,'owner_identity':self.ident,'application_identities':[self.ident]}
+        with mock.patch.object(O,'control_request',return_value=status):
+            accepted=O.reconciled_acceptance(path,manifest,self.root/'handoff.sock')
+        self.assertTrue(accepted['accepted']);self.assertTrue(accepted['reconciled_lost_ack'])
+        self.assertEqual(accepted['receipt_sha256'],hashlib.sha256(path.read_bytes()).hexdigest())
+        with mock.patch.object(O,'control_request',return_value={**status,'owner_accepted':False}),self.assertRaisesRegex(ValueError,'live native broker'):
+            O.reconciled_acceptance(path,manifest,self.root/'handoff.sock')
+        wrong={**receipt,'application_identities':[{**self.ident,'start_ticks':self.ident['start_ticks']+1}]};path.write_text(json.dumps(wrong))
+        with mock.patch.object(O,'control_request',return_value=status),self.assertRaisesRegex(ValueError,'receipt does not match'):
+            O.reconciled_acceptance(path,manifest,self.root/'handoff.sock')
 
 
 if __name__=='__main__':unittest.main(verbosity=2)

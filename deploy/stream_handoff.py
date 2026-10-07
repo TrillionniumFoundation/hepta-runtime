@@ -21,6 +21,13 @@ MAX_FDS=5
 MAX_MESSAGE=16384
 
 
+class AmbiguousTransferError(RuntimeError):
+    """Descriptors may have arrived; the sender must stay quiesced until reconciled."""
+    def __init__(self,message,manifest):
+        super().__init__(message)
+        self.manifest=manifest
+
+
 def identity(pid):
     if not isinstance(pid,int) or isinstance(pid,bool) or pid<=1:raise ValueError('invalid process identity')
     root=pathlib.Path('/proc')/str(pid);text=(root/'stat').read_text();parts=text[text.rfind(')')+2:].split()
@@ -155,8 +162,13 @@ def transfer(path,handoff_id,descriptors,application_pids,*,acknowledge_quiesced
     with socket.socket(socket.AF_UNIX,socket.SOCK_SEQPACKET) as conn:
         conn.settimeout(10);conn.connect(str(path));peer(conn,os.getuid())
         rights=array.array('i',descriptors.values())
-        sent=conn.sendmsg([data],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,rights)])
-        if sent!=len(data):raise RuntimeError('transfer outcome uncertain; do not retry')
-        ack=json.loads(conn.recv(MAX_MESSAGE))
-        if not ack.get('accepted') or ack.get('handoff_id')!=handoff_id:raise RuntimeError('acknowledgement uncertain; inspect receiver before further I/O')
-        return ack
+        # Once descriptor delivery is attempted, even a lost/rejected ACK cannot
+        # establish that no receiver retained the handles or published a receipt.
+        try:
+            sent=conn.sendmsg([data],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,rights)])
+            if sent!=len(data):raise RuntimeError('descriptor message incomplete')
+            ack=json.loads(conn.recv(MAX_MESSAGE))
+            if not ack.get('accepted') or ack.get('handoff_id')!=handoff_id:raise RuntimeError('acceptance not confirmed')
+            return ack
+        except Exception as error:
+            raise AmbiguousTransferError('transfer outcome uncertain; keep owned I/O quiesced and reconcile the receiver',message) from error
