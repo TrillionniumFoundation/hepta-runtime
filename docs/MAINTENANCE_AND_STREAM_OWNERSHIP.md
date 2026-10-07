@@ -1,5 +1,7 @@
 # Independent observation and cooperative live stream ownership
 
+> **Installed status (2026-10-07):** the six native `stream_handoff_*` tools and persistent broker described below are installed. `deploy/dc_handoff_owner.py` has also been exercised as an actual Desktop Commander-launched owner against that installed broker: finalized stdout/stderr histories became the exact native archive prefix, zero userspace read-ahead was unaccounted, the same application continued without checkpoint/restart, and the broker survived an MCP service restart. See `docs/qualification/operator-dc-native-handoff-20261007.json`. The earlier “candidate” wording below is retained as development history. Retroactive adoption of arbitrary pre-existing DC sessions that were not launched through a cooperating owner remains unsupported.
+
 This stage addresses the outstanding hardware/maintenance/resource-handoff work without changing Desktop Commander, the installed runtime, host permissions or the prior CRIU contract. It does not register new MCP tools or claim that general process-tree snapshot capture is implemented.
 
 ## Independent peer observation is not power control
@@ -22,7 +24,7 @@ With `--pid`, the inventory lists a bounded same-login process tree, fd roles/ob
 
 The application and its child continue running. The kernel transfers references to the same open pipe objects, rather than reopening named files, copying process memory, restoring a snapshot or changing the application PIDs. Buffered bytes still in those pipe objects remain available. The caller must handle its own userspace read-ahead buffers and establish a quiescent boundary. The implementation does not infer exclusive ownership from fd numbers or silently stop a competing reader.
 
-A missing acknowledgement is ambiguous. The source must not blindly replay a transfer or resume I/O without reconciling the receiver. The helper does not promise persistent handles after the receiver crashes, durable memory after power loss, automatic supervisor adoption or cross-host migration. It is a library and qualified fixture, **not an installed native-runtime adoption endpoint**, and DC was not modified to export its descriptors.
+A missing acknowledgement is ambiguous. The source must not blindly replay a transfer or resume I/O without reconciling the receiver. The helper does not promise persistent handles after the receiver crashes, durable memory after power loss, automatic supervisor adoption or cross-host migration. At that historical stage it was only a library/fixture. The current installed runtime now supplies the native receiver, and the handoff-aware DC owner exports exact live child pipes plus finalized history. This still does not retrofit descriptor export into arbitrary pre-existing DC sessions that were not launched through the cooperating owner.
 
 ## Executed qualification
 
@@ -43,7 +45,7 @@ If the connected execution channel forbids privileged or lifecycle commands, the
 - CRIU's different explicit resource-remapping contract and its limits: https://www.criu.org/Inheriting_FDs_on_restore
 - systemd inhibitor locks and why absence of an inhibitor is not application-state durability: https://systemd.io/INHIBITOR_LOCKS/
 
-## Native runtime receiver candidate
+## Native runtime receiver (historical candidate section; now installed)
 
 The next candidate integrates the cooperative stream owner into the compiled runtime as six controller-local tools: `stream_handoff_prepare`, `stream_handoff_status`, `stream_handoff_read`, `stream_handoff_write`, `stream_handoff_close`, and `stream_handoff_list`. `prepare` binds an idempotency key to exact same-login application identities and starts a separate user-systemd broker. The broker, not the MCP controller process, receives the cooperating owner's pipe descriptors. Restarting or SIGKILLing the MCP controller therefore does not close already accepted application pipes.
 
@@ -53,7 +55,7 @@ A real candidate test uses an application plus child worker with independent ran
 
 This receiver closes only the **runtime side** of the ownership gap. The generic new-command owner wrapper attempted in this continuation was blocked by the session safety check before file creation and was not repackaged or retried. Existing Desktop Commander sessions still do not expose their already-read userspace buffers or pipe handles to this API. The separate reviewed `stream_handoff.py` helper remains the explicit cooperating-owner export protocol used by qualification. Kernel pipe bytes are covered; bytes already consumed into an old owner's private read-ahead buffer remain an application/owner boundary and are not claimed transferred by the installed protocol.
 
-## Finalized old-owner history and DC-launch integration candidate
+## Finalized old-owner history and DC-launch integration (now installed for cooperating launches)
 
 The installed native broker now owns live exported pipes independently of the MCP controller. The remaining lossless old-owner boundary is bytes that the old owner has already consumed from those pipes before descriptor transfer. Kernel descriptor passing cannot reconstruct those private user-space bytes.
 
