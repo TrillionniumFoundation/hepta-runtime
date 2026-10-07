@@ -15,8 +15,8 @@ else
   exit 2
 fi
 
-if [[ ! "$TUNNEL_ID" =~ ^tunnel_[A-Za-z0-9_-]{16,}$ ]]; then
-  echo 'invalid tunnel id shape' >&2
+if [[ ! "$TUNNEL_ID" =~ ^tunnel_[0-9a-f]{32}$ ]]; then
+  echo 'invalid tunnel id: expected tunnel_ followed by 32 lowercase hexadecimal characters' >&2
   exit 2
 fi
 KEY_LEN=$(printf '%s' "$RUNTIME_KEY" | wc -c)
