@@ -11,8 +11,7 @@ Commander service.
 ChatGPT custom MCP app (read/fetch on Pro)
   -> OpenAI Secure MCP Tunnel
   -> tunnel-client v0.0.16 on qian-qi
-  -> /run/user/1000/hepta-chatgpt/bridge.sock
-  -> read-only MCP facade
+  -> stdio read-only MCP facade (child of tunnel-client)
   -> http://127.0.0.1:8790/mcp
   -> existing hepta-runtime
 ~~~
@@ -45,22 +44,13 @@ A direct attempt to call shell_start, host_signal, sudo_start, process_start,
 pty_write, binary/document writes, or an unknown tool is rejected before the
 private runtime is contacted.
 
-The facade is on an account-owned Unix socket only:
+The tunnel profile launches the facade directly over stdio. This avoids a DNS/probe mismatch observed when tunnel-client doctor validated a logical HTTP hostname before honoring the Unix-socket dial override. The stdio facade still talks only to the existing loopback runtime and retains MCP session/protocol state inside that one child process.
 
-~~~
-/run/user/1000/hepta-chatgpt/bridge.sock
-directory mode: 0700
-socket mode:    0600
-~~~
-
-The service is hepta-chatgpt-bridge.service. It depends on the existing
-hepta-runtime-operator.service but does not restart or reconfigure it.
+The previously installed `hepta-chatgpt-bridge.service` remains available as a local acceptance/debug surface on an account-owned Unix socket, but it is no longer required by `hepta-openai-tunnel.service`. The tunnel service depends only on the existing `hepta-runtime-operator.service`.
 
 ## tunnel-client
 
-The local deployment uses the official openai/tunnel-client v0.0.16 Linux
-amd64 release. The downloaded release ZIP was checked against its published
-SHA256 before installation.
+The local deployment currently uses `tunnel-client 0.0.16+5f99daab`, whose embedded git SHA resolves to the public `openai/tunnel-client` repository. The locally installed binary SHA256 is recorded in qualification evidence. An attempted downgrade to the latest tagged v0.0.15 release was abandoned before replacement because the local download path produced an incomplete archive/CDN denial; the existing binary was left unchanged.
 
 Profile:
 

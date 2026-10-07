@@ -1,8 +1,8 @@
 [Unit]
 Description=OpenAI Secure MCP Tunnel for Hepta read-only facade
-After=network-online.target hepta-chatgpt-bridge.service
+After=network-online.target hepta-runtime-operator.service
 Wants=network-online.target
-Requires=hepta-chatgpt-bridge.service
+Requires=hepta-runtime-operator.service
 ConditionPathExists=%h/.config/hepta-chatgpt-tunnel/runtime-api-key
 ConditionPathExists=%h/.config/hepta-chatgpt-tunnel/tunnel.env
 

@@ -15,6 +15,7 @@ import os
 import pathlib
 import socketserver
 import stat
+import sys
 import threading
 import urllib.parse
 
@@ -218,12 +219,129 @@ class Handler(http.server.BaseHTTPRequestHandler):
             connection.close()
 
 
+def _stdio_emit(value):
+    data = json.dumps(value, separators=(",", ":")).encode()
+    if len(data) > MAX_BODY:
+        raise ValueError("stdio response exceeds bridge limit")
+    sys.stdout.buffer.write(data + b"\n")
+    sys.stdout.buffer.flush()
+
+
+def _request_has_id(request):
+    if isinstance(request, dict):
+        return "id" in request
+    if isinstance(request, list):
+        return any(isinstance(item, dict) and "id" in item for item in request)
+    return True
+
+
+def serve_stdio(upstream_url, token):
+    """Serve newline-delimited MCP JSON-RPC on stdio for tunnel-client.
+
+    The facade remains the policy owner: every request is inspected before the
+    loopback backend is contacted. MCP session and protocol headers are retained
+    inside this one bridge process and never supplied by the tunnel caller.
+    """
+    upstream = urllib.parse.urlsplit(upstream_url)
+    if upstream.scheme != "http" or upstream.hostname not in ("127.0.0.1", "localhost"):
+        raise ValueError("stdio bridge upstream must remain loopback HTTP")
+    session = None
+    protocol = None
+    while True:
+        raw = sys.stdin.buffer.readline(MAX_BODY + 2)
+        if not raw:
+            return
+        if len(raw) > MAX_BODY + 1 or not raw.endswith(b"\n"):
+            while raw and not raw.endswith(b"\n"):
+                raw = sys.stdin.buffer.readline(MAX_BODY + 2)
+            _stdio_emit({"jsonrpc":"2.0","id":None,"error":{"code":-32600,"message":"bounded JSON-RPC line required"}})
+            continue
+        raw = raw.rstrip(b"\r\n")
+        if not raw:
+            _stdio_emit({"jsonrpc":"2.0","id":None,"error":{"code":-32600,"message":"Invalid Request"}})
+            continue
+        try:
+            request = json.loads(raw)
+        except json.JSONDecodeError:
+            _stdio_emit({"jsonrpc":"2.0","id":None,"error":{"code":-32700,"message":"Parse error"}})
+            continue
+        items = request if isinstance(request, list) else [request]
+        blocked = [inspect_request(value) for value in items]
+        if any(value is not None for value in blocked):
+            replies = []
+            for original, error in zip(items, blocked):
+                if error is not None and isinstance(original, dict) and "id" in original:
+                    replies.append(error)
+            if replies:
+                _stdio_emit(replies if isinstance(request, list) else replies[0])
+            continue
+        headers = {
+            "Content-Type":"application/json",
+            "Accept":"application/json, text/event-stream",
+            "X-Hepta-Runtime-Token":token,
+        }
+        if session:
+            headers["Mcp-Session-Id"] = session
+        if protocol:
+            headers["MCP-Protocol-Version"] = protocol
+        connection = http.client.HTTPConnection(upstream.hostname, upstream.port, timeout=30)
+        try:
+            connection.request("POST", upstream.path or "/mcp", body=raw, headers=headers)
+            response = connection.getresponse()
+            body = response.read(MAX_BODY + 1)
+            if len(body) > MAX_BODY:
+                raise ValueError("upstream response exceeds bridge limit")
+            returned_session = response.getheader("Mcp-Session-Id")
+            if returned_session:
+                session = returned_session
+            if response.status == 202 or not body:
+                continue
+            content_type = (response.getheader("Content-Type") or "").lower()
+            values = []
+            if "text/event-stream" in content_type:
+                for line in body.decode("utf-8").splitlines():
+                    if line.startswith("data:") and line[5:].strip():
+                        values.append(json.loads(line[5:].strip()))
+            elif "application/json" in content_type:
+                values.append(json.loads(body))
+            else:
+                raise ValueError("unexpected upstream response type")
+            for value in values:
+                filtered = filter_response(request, value)
+                if isinstance(request, dict) and request.get("method") == "initialize":
+                    result = filtered.get("result") if isinstance(filtered, dict) else None
+                    if isinstance(result, dict) and isinstance(result.get("protocolVersion"), str):
+                        protocol = result["protocolVersion"]
+                if _request_has_id(request) or (isinstance(filtered, dict) and "method" in filtered):
+                    _stdio_emit(filtered)
+        except Exception:
+            if _request_has_id(request):
+                if isinstance(request, dict):
+                    ident = request.get("id")
+                    _stdio_emit({"jsonrpc":"2.0","id":ident,"error":{"code":-32000,"message":"private MCP upstream unavailable"}})
+                else:
+                    replies=[jsonrpc_error(item,-32000,"private MCP upstream unavailable")
+                             for item in request if isinstance(item,dict) and "id" in item]
+                    if replies:
+                        _stdio_emit(replies)
+        finally:
+            connection.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--socket", required=True)
+    mode = ap.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--socket")
+    mode.add_argument("--stdio", action="store_true")
     ap.add_argument("--upstream", default="http://127.0.0.1:8790/mcp")
     ap.add_argument("--token-file", required=True)
     args = ap.parse_args()
+    token = private_file(pathlib.Path(args.token_file)).decode().strip()
+    if not token or any(c.isspace() for c in token):
+        raise ValueError("runtime token file must contain one non-whitespace token")
+    if args.stdio:
+        serve_stdio(args.upstream, token)
+        return
     socket_path = pathlib.Path(args.socket)
     parent = socket_path.parent
     parent.mkdir(parents=True, exist_ok=True)
@@ -232,9 +350,6 @@ def main():
         raise PermissionError("private account-owned socket directory required")
     if socket_path.exists() or socket_path.is_symlink():
         socket_path.unlink()
-    token = private_file(pathlib.Path(args.token_file)).decode().strip()
-    if not token or any(c.isspace() for c in token):
-        raise ValueError("runtime token file must contain one non-whitespace token")
     server = UnixThreadingHTTPServer(str(socket_path), Handler)
     server.upstream = args.upstream
     server.token = token
