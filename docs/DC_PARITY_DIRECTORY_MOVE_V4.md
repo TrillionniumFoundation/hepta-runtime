@@ -56,3 +56,19 @@ The previously attempted **48-tool** service cutover was blocked by the platform
 Before a future properly authorized deployment: verify exact-head CI, independently review the new schema/permissions, preserve explicit rollback, re-scan the exact frozen catalog in the actual workspace, and obtain genuine model-origin file-management acceptance. The full shell/PTY/sudo/write gate remains HOLD until its actual approved path has passed. The public multi-tenant Cloud Gateway remains unlaunched.
 
 Receipt: `docs/qualification/dc-parity-directory-move-v4-20261012.json`. Original Desktop Commander move proof: `/tmp/hepta-dc-model-origin-directory-move-proof-20261012.json` on qian-qi, with no secrets; the temporary file tree has been removed.
+
+## New exact-source Release + six genuine host acceptance — 2026-10-12 (22:43 +08)
+
+The exact `088a2acbd53c97f482a68f3cc45eca40d9cbb7a3` v4 source has hosted CI **#38260675518 success**. Rather than treating the previous 20:09 Release binary as the new source, a fresh `cargo build --locked --release --bin hepta-runtime` completed. SHA256 **`c64d0406514fd29a16f303fdd5332ad85509e5148620bea6302ccd983080a73a`**, size **6,991,896 bytes**. The immutable native candidate is staged at `~/.local/lib/hepta-runtime/releases/operator-v4-c64d0406514fd29a/hepta-runtime`; a separate, **not-started** candidate tunnel profile `~/.config/tunnel-client/hepta-full-operator-v4.yaml` pins the **50-tool** schema and uses its own unused health port. `tunnel-client doctor --health.listen-addr 127.0.0.1:0` returned **RESULT ok**. No private credential content was copied into the release.
+
+Re-executed on the **new Release executable**, not only the debug candidate:
+
+- Existing 46 + four additive file tools: authenticated isolated MCP `12/12` checks passed. All old frozen schemas and truthful hints are retained.
+- Directory move, existing-root confinement, write/search-only UNIX directory rights, no overwrite, path/cached-view correctness: **18/18** checks passed, including two authentic 2026-07-28 `server/discover`/`tools/list` JSON Schema responses with **0 errors**.
+- Four 8-way concurrent text-write rounds: every round permitted only one SHA-pinned winner, with the other seven rejected. Independent create-only and overwrite conflict tests also passed: **6/6** checks.
+- **Six real SSH operator targets** with separate disposable controllers and the exact frozen Release: main `13/13` (actual existing sudo), Pocket4 `10/10`, ROG `10/10`, Mac `10/10`, X230 `10/10`, AI395 `10/10` = **63/63**. The three protected services retained the exact same PIDs and active states throughout.
+- Four offline source/staging tests passed, confirming v1→v4 monotonic tool additions and refusal of mismatched, writable or symlinked staged artifacts. The six-host test script and the release-only stager are versioned and Python syntax-checked in CI. The hosted CI does **not** claim to possess or execute the six private SSH targets.
+
+This is an **immutable pre-deployment stage**, not the previously blocked live switch. The existing installed runtime remains native SHA256 `5bb9dade…` and the existing ChatGPT app remains at **46 tools**. No blocked write or service-switch request was retried using an alternative executor, no Desktop Commander lifecycle was changed and no public Cloud Gateway was started. Live installation, new schema scan and model-origin actual file writes remain separately gated.
+
+Full receipt: `docs/qualification/dc-parity-v4-six-host-release-staged-20261012.json`. The candidate stays independent until a permitted service cutover; the prior live profile and runtime binary have not been overwritten.
