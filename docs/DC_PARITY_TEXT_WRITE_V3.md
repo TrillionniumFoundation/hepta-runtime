@@ -49,3 +49,19 @@ The catalog is a **reviewable protocol contract**, not permission for platform-s
 5. Only an independently authorized, controlled runtime/tunnel upgrade and explicit ChatGPT tool rescan may turn this from a source candidate into a live tool. The earlier 48-tool cutover was stopped by the platform and is **not** treated as authorization to use an alternative tool to perform that cutover.
 
 **Do not claim ChatGPT model-origin write parity before a genuine approved frontend write acceptance.** The accepted benign `workdir(reset=true)` does not establish permission for document, source-code or Shell writes.
+
+
+## Actual ChatGPT-origin Desktop Commander comparison — 2026-10-12
+
+In a disposable `/tmp/hepta-dc-parity-*` tree, the **installed Remote Desktop Commander plugin**, invoked directly from ChatGPT, successfully completed:
+
+- `create_directory` on a nested directory;
+- `write_file(mode=rewrite)` to create UTF-8 text; the initial asynchronous invocation was reconciled by its original `call_id`, **not resent**;
+- `write_file(mode=append)` and a read-back of both Unicode lines;
+- `write_file(mode=rewrite)` again and `move_file` to a new filename, with a final read-back of exact `final_snapshot\n` (15 bytes, SHA256 `e241bf1a4f52372d53a90fe8859043732bab3622418610fa494759ffcd2e8448`), and confirmation that the old filename was absent.
+
+The native Hepta v3 candidate separately passed **12** equivalent isolated authenticated MCP checks, and official 2026-07-28 `ListToolsResultResponse` JSON Schema validation returned **0 errors** on the 49-tool catalog. This is a comparison of **actual DC model-origin calls** against **Hepta local-source qualification**, not a claim that the 49-tool Hepta app was installed or its writes were accepted by ChatGPT. The live Hepta app remains pinned to 46 tools, with the previous `shell_start` and `document_write` client safety checks still unresolved. No execution alias, deceptive annotations or alternate tool route was used to replay denied Hepta calls.
+
+**Intentional differences:** The observed Desktop Commander scratch file mode was `0664`; Hepta's new text publisher creates at `0600` and requires a pinned old SHA256 for append/replace. Hepta v3 limits new input to 64 KiB, existing file reads to 4 MiB, rejects special metadata/hardlinks/symlinks and does not implement DC's broader cross-platform or directory-moving semantics. The scoped `file_move` is **regular-file-only, Linux controller-local**, and fails rather than overwrite a destination or cross filesystems. These constraints must not be weakened to claim superficial parity.
+
+Evidence: `docs/qualification/dc-parity-real-chatgpt-v3-20261012.json`. The tested Desktop Commander scratch directory is removed after evidence capture; no production input or application data is used.
