@@ -63,8 +63,12 @@ echo '== tunnel metadata / doctor =='
 "$HOME/.local/bin/tunnel-client" doctor --profile "$PROFILE" --health.listen-addr 127.0.0.1:0 --explain
 
 echo '== start managed user service =='
-systemctl --user reset-failed hepta-openai-tunnel.service || true
-systemctl --user restart hepta-openai-tunnel.service
+if systemctl --user is-active --quiet hepta-openai-full-operator.service 2>/dev/null || systemctl --user is-enabled --quiet hepta-openai-full-operator.service 2>/dev/null; then
+  echo 'Full Operator tunnel is active/enabled; credentials were updated and doctor passed. Refusing to start the legacy read-only poller on the same tunnel.'
+else
+  systemctl --user reset-failed hepta-openai-tunnel.service || true
+  systemctl --user restart hepta-openai-tunnel.service
+fi
 
 for _ in $(seq 1 60); do
   state=$(systemctl --user is-active hepta-openai-tunnel.service 2>/dev/null || true)
