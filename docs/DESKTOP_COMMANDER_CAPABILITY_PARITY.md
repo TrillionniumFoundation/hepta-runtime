@@ -1,5 +1,18 @@
 # Desktop Commander → Hepta functional parity (private candidate)
 
+## CURRENT: v4 is live server-side, not yet refreshed in ChatGPT (2026-10-13)
+
+This section supersedes the **historical v2/candidate** status descriptions below, which remain as original qualification evidence. The installed authenticated runtime and the Full Operator tunnel now expose **50 tools**, preserving the original 46 exact definitions and adding four genuine, truthfully annotated controller-local file operations: `directory_create`, `file_move`, `text_file_write`, `directory_move`. The source is HEAD `97d3cd67828b33212fd30bcdfefb5eec2862a849`, with successful [exact-head CI #38276849298](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/38276849298). The active runtime/facade/contract release and guarded rollback are recorded in `docs/qualification/dc-parity-v4-live-activation-20261013.json`. Desktop Commander remained running and unchanged.
+
+A fresh **read-only local stdio check against the actually installed v4 facade** returned a valid `server/discover`, the exact 50-tool pinned `tools/list`, and a six-host `host_list`. Every original v1 tool definition still matches; four new names and write annotations are unchanged from the reviewed v4 catalog. This is not a model-origin approval. Receipt: `docs/qualification/dc-parity-v4-chatgpt-refresh-readiness-20261013.json`.
+
+**Current conversation state:** the ChatGPT-side app snapshot is still **46 tools**; `directory_create`, `file_move`, `text_file_write`, `directory_move` are absent from the visible client tools. A post-cutover ChatGPT-origin `host_list` succeeded, showing that the old approved read path still works. A **distinct** text-editor create smoke test in a unique `/tmp` scratch file returned a generic client/tool failure; the file was absent on the host and no positive write receipt exists. Because the platform-side error was generic, it must not be relabelled as either native write success or a proven safety-policy denial. Do not automatically retry the uncertain write.
+
+**Supported next gate:** open [ChatGPT Plugins](https://chatgpt.com/plugins), select the existing **Hepta Runtime Full Operator** connection, choose **Refresh**, and review the exact **50** tools and their original truthful annotations. New actions must be explicitly reviewed and approved under the applicable product/workspace policy; do not fabricate approval by moving them behind an existing tool. Open a **new ChatGPT conversation** and verify the four new names are visible before attempting scratch create/append, directory create, file no-overwrite move and directory no-overwrite move. OpenAI documents both the Refresh/new-conversation flow and frozen custom MCP tool snapshots: https://developers.openai.com/plugins/deploy/connect-chatgpt and https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt. This assistant cannot refresh the authenticated ChatGPT UI using the available server-side tools.
+
+The native six-host tests **do not** waive the outstanding ChatGPT-origin full Shell/PTY/sudo and file-writing checks. Keep the public Cloud Gateway on HOLD until the private client-side qualification passes.
+
+
 The target is **honest functional parity for user-authorized operations**, not
 tool naming/annotation manipulation to get past ChatGPT safety checks. A
 ChatGPT plugin showing a write schema, a local/native acceptance success and
