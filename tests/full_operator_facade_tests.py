@@ -89,6 +89,16 @@ class Fake(http.server.BaseHTTPRequestHandler):
         request=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
         method=request['method'];self.server.seen.append({'method':method,'request':request,'session':self.headers.get('Mcp-Session-Id'),'protocol':self.headers.get('MCP-Protocol-Version'),'token':self.headers.get('X-Hepta-Runtime-Token'),'authorization':self.headers.get('Authorization')})
         if method=='notifications/initialized':self.send_response(202);self.send_header('Content-Length','0');self.end_headers();return
+        if method=='tools/list' and self.headers.get('Mcp-Session-Id')=='session-fixture' and self.server.expire_catalog_reads>0:
+            # Emulate the actual installed rmcp HTTP response to a stale
+            # session, with a countable limit to prove no recursive retry.
+            self.server.expire_catalog_reads-=1
+            raw=b'Not Found: Session not found'
+            self.send_response(404)
+            self.send_header('Content-Length',str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+            return
         if method=='initialize':result={'protocolVersion':'2025-06-18','capabilities':{'tools':{},'resources':{}},'serverInfo':{'name':'upstream','version':'test'}}
         elif method=='tools/list':result={'tools':self.server.tools}
         elif method=='tools/call':
@@ -107,7 +117,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
 class TransportTests(unittest.TestCase):
     def setUp(self):
         self.server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Fake);self.server.daemon_threads=True
-        self.server.tools=copy.deepcopy(TOOLS);self.server.seen=[];self.server.effects=0;self.server.disconnect=False
+        self.server.tools=copy.deepcopy(TOOLS);self.server.seen=[];self.server.effects=0;self.server.disconnect=False;self.server.expire_catalog_reads=0
         self.worker=threading.Thread(target=self.server.serve_forever,daemon=True);self.worker.start()
         self.contract=ToolContract(make_contract(copy.deepcopy(TOOLS)));self.proxy=F.NativeProxy(f'http://127.0.0.1:{self.server.server_port}/mcp','private-fixture-token',self.contract,timeout=2)
     def tearDown(self):self.server.shutdown();self.server.server_close();self.worker.join(timeout=2)
@@ -199,6 +209,41 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(r['error']['code'],-32602)
         self.assertEqual(self.server.effects,0)
         self.assertEqual(self.server.seen,[])
+
+    def test_stale_modern_session_recovers_discovery_catalog_without_effect(self):
+        self.modern('server/discover')
+        self.server.expire_catalog_reads=1
+        value=self.modern('tools/list',ident=77)
+        self.assertEqual(value['result']['tools'],self.contract.tools)
+        self.assertEqual(sum(x['method']=='initialize' for x in self.server.seen),2)
+        self.assertEqual(self.server.effects,0)
+        self.assertEqual(self.server.expire_catalog_reads,0)
+
+    def test_stale_modern_preflight_does_not_double_submit_write(self):
+        self.modern('server/discover')
+        self.server.expire_catalog_reads=1
+        response=self.modern('tools/call',{'name':'shell_start','arguments':{'command':'fixture-only'}},ident=78)
+        self.assertIn('result',response)
+        self.assertEqual(self.server.effects,1)
+        self.assertEqual(sum(x['method']=='tools/call' for x in self.server.seen),1)
+        self.assertEqual(sum(x['method']=='initialize' for x in self.server.seen),2)
+
+    def test_repeated_stale_catalog_rejection_fails_without_recursive_retry(self):
+        self.modern('server/discover')
+        self.server.expire_catalog_reads=2
+        result=self.modern('tools/call',{'name':'binary_write','arguments':{'data_base64':'fixture-only'}},ident=79)
+        self.assertEqual(result['error']['code'],-32603)
+        self.assertEqual(result['error']['data']['outcome'],'unknown')
+        self.assertEqual(self.server.effects,0)
+        self.assertEqual(sum(x['method']=='initialize' for x in self.server.seen),2)
+
+    def test_legacy_expired_session_requires_caller_reinitialize(self):
+        self.initialize()
+        self.server.expire_catalog_reads=1
+        result=self.call('tools/list',{},ident=80)
+        self.assertIn('error',result)
+        self.assertEqual(sum(x['method']=='initialize' for x in self.server.seen),1)
+        self.assertEqual(self.server.effects,0)
 
     def test_modern_response_drop_is_unknown_without_double_write(self):
         self.modern('server/discover')

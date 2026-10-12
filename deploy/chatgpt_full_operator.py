@@ -87,6 +87,10 @@ def parse_messages(content_type,body):
     return messages
 
 
+class NativeSessionExpired(RuntimeError):
+    """The verified loopback MCP endpoint rejected its former session identity."""
+
+
 class NativeProxy:
     def __init__(self,upstream,token,contract,timeout=150):
         parsed=urllib.parse.urlsplit(upstream)
@@ -104,6 +108,11 @@ class NativeProxy:
             conn.request('POST','/mcp',body=body,headers=headers)
             response=conn.getresponse();raw=response.read(MAX_RESPONSE+1)
             if len(raw)>MAX_RESPONSE:raise ValueError('upstream response exceeds explicit limit')
+            if (response.status==404 and self.session is not None
+                    and raw.strip()==b'Not Found: Session not found'):
+                # This response is authoritative for this internal session only.
+                # It is not proof that an arbitrary tool write was not executed.
+                raise NativeSessionExpired('loopback native MCP session is no longer valid')
             if not 200<=response.status<300:raise RuntimeError('upstream HTTP failure')
             session=response.getheader('Mcp-Session-Id')
             if session:self.session=session
@@ -118,7 +127,20 @@ class NativeProxy:
         self.internal_counter+=1
         return self.exchange({'jsonrpc':'2.0','id':'hepta-contract-'+str(self.internal_counter),'method':method,'params':params})
     def _verify_catalog(self):
-        tools=self.internal('tools/list',{})
+        try:
+            tools=self.internal('tools/list',{})
+        except NativeSessionExpired:
+            # Only the read-only preflight was submitted. On modern requests
+            # the private backend session is owned by this adapter, not by the
+            # model client. A fresh initialization checks the entire pinned
+            # catalog before any user write is sent. Legacy callers must
+            # reinitialize explicitly instead of having their session replaced.
+            if not self.initialized or self.legacy_ready:
+                raise
+            self._new_native_session({'protocolVersion':'2025-11-25',
+                'capabilities':{},'clientInfo':{
+                    'name':'hepta-full-operator-adapter','version':'1'}})
+            return
         if 'error' in tools or not isinstance(tools.get('result'),dict) or tools['result'].get('nextCursor'):
             raise ValueError('cannot attest full native catalog')
         self.contract.verify(tools['result']['tools'])
