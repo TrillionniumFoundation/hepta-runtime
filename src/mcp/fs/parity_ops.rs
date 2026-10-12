@@ -99,6 +99,53 @@ pub async fn execute_file_move(call: &McpToolCall) -> Result<String> {
 	.to_string())
 }
 
+/// Rename a controller-local directory into an absent destination, preserving
+/// the complete existing tree without copying, traversing entries or shell use.
+/// Source and destination must both remain inside configured workspace roots.
+pub async fn execute_directory_move(call: &McpToolCall) -> Result<String> {
+	let from = call
+		.parameters
+		.get("source")
+		.and_then(|v| v.as_str())
+		.ok_or_else(|| anyhow!("source must be a string"))?;
+	let to = call
+		.parameters
+		.get("destination")
+		.and_then(|v| v.as_str())
+		.ok_or_else(|| anyhow!("destination must be a string"))?;
+	let source = scoped_local(from, &call.workdir)?;
+	let destination = scoped_local(to, &call.workdir)?;
+	let old = source.clone();
+	let new = destination.clone();
+	tokio::task::spawn_blocking(move || {
+		#[cfg(target_os = "linux")]
+		{
+			local_linux::move_directory_noreplace(&old, &new)
+		}
+		#[cfg(not(target_os = "linux"))]
+		{
+			let _ = (&old, &new);
+			bail!("Scoped no-replace directory move currently requires Linux")
+		}
+	})
+	.await
+	.context("directory move task failed")??;
+	// Relocating a directory invalidates EVERY cached descendant. Forgetting
+	// only its own path would leave stale whole-file delta snapshots behind.
+	super::delta::forget_subtree(&PathSource::Local(source.clone()));
+	super::delta::forget_subtree(&PathSource::Local(destination.clone()));
+	Ok(serde_json::json!({
+		"source": source.display().to_string(),
+		"destination": destination.display().to_string(),
+		"moved": true,
+		"destination_was_absent": true,
+		"same_filesystem_atomic_noreplace": true,
+		"directory_tree_was_not_traversed": true,
+		"external_writers_transactionally_excluded": false
+	})
+	.to_string())
+}
+
 #[cfg(target_os = "linux")]
 mod local_linux {
 	use anyhow::{anyhow, bail, Context, Result};
@@ -198,6 +245,52 @@ mod local_linux {
 			}
 		}
 		Ok(created)
+	}
+
+	pub fn move_directory_noreplace(source: &Path, destination: &Path) -> Result<()> {
+		if source == destination {
+			bail!("Source and destination must differ");
+		}
+		let a = components(source)?;
+		let b = components(destination)?;
+		let (src_parent, src_name) = existing_parent(&a)?;
+		let (dst_parent, dst_name) = existing_parent(&b)?;
+		let mut st = std::mem::MaybeUninit::<libc::stat>::uninit();
+		// SAFETY: fd-held source parent, CString and initialized stat buffer.
+		let rc = unsafe {
+			libc::fstatat(
+				src_parent.as_raw_fd(),
+				src_name.as_ptr(),
+				st.as_mut_ptr(),
+				libc::AT_SYMLINK_NOFOLLOW,
+			)
+		};
+		if rc < 0 {
+			return Err(std::io::Error::last_os_error()).context("Directory source missing");
+		}
+		// SAFETY: successful fstatat initialized the provided storage.
+		let source_stat = unsafe { st.assume_init() };
+		if (source_stat.st_mode & libc::S_IFMT) != libc::S_IFDIR {
+			bail!("Source must be a directory, not a file or symlink");
+		}
+		// Kernel-enforced RENAME_NOREPLACE is the complete move operation.
+		// We never recursively copy contents, follow child links or execute a
+		// fallback on EXDEV, EEXIST or unsupported filesystem semantics.
+		// SAFETY: live dir FDs and two bounded NUL-terminated names.
+		let rc = unsafe {
+			libc::renameat2(
+				src_parent.as_raw_fd(),
+				src_name.as_ptr(),
+				dst_parent.as_raw_fd(),
+				dst_name.as_ptr(),
+				libc::RENAME_NOREPLACE,
+			)
+		};
+		if rc < 0 {
+			return Err(std::io::Error::last_os_error())
+				.context("Atomic no-replace directory move refused");
+		}
+		Ok(())
 	}
 
 	pub fn move_noreplace(source: &Path, destination: &Path) -> Result<()> {

@@ -28,6 +28,7 @@ def main():
     ap.add_argument('--out',required=True)
     ap.add_argument('--catalog-out', help='Freeze reviewed candidate MCP schema; requires absent path')
     ap.add_argument('--verify-contract', help='Require exact candidate schema to match this frozen catalog')
+    ap.add_argument('--allow-v4-directory-move', action='store_true', help='Permit only the reviewed v4 additive directory_move tool')
     args=ap.parse_args()
     binary=str(pathlib.Path(args.binary).resolve(strict=True))
     checks=[]
@@ -71,21 +72,30 @@ def main():
                 else:
                     raise TimeoutError('isolated MCP candidate never became ready')
                 actual={x['name']:x for x in client.rpc('tools/list',{})['tools']}
-                assert len(actual)==49,len(actual)
+                expected_count=50 if args.allow_v4_directory_move else 49
+                assert len(actual)==expected_count,len(actual)
                 source=pathlib.Path(__file__).resolve().parents[1]
                 original=json.loads((source/'deploy/contracts/hepta-runtime-full-operator-v1.json').read_text())
                 old_tools={t['name']:t for t in original['tools']}
                 assert len(old_tools)==46
-                assert set(actual)-set(old_tools)=={'directory_create','file_move','text_file_write'}
+                extras={'directory_create','file_move','text_file_write'}
+                if args.allow_v4_directory_move:extras.add('directory_move')
+                assert set(actual)-set(old_tools)==extras
                 for name,old in old_tools.items():
                     assert actual[name]==old, ('old tool contract changed',name)
                 candidate=make_contract(list(actual.values()))
-                assert candidate['tool_count']==49
+                assert candidate['tool_count']==expected_count
                 frozen_v2=json.loads((source/'deploy/contracts/hepta-runtime-full-operator-v2.json').read_text())
                 v2_tools={t['name']:t for t in frozen_v2['tools']}
                 assert len(v2_tools)==48
-                assert set(actual)-set(v2_tools)=={'text_file_write'}
+                assert set(actual)-set(v2_tools)==extras-{'directory_create','file_move'}
                 assert all(actual[name]==tool for name,tool in v2_tools.items())
+                if args.allow_v4_directory_move:
+                    v3_path=source/'deploy/contracts/hepta-runtime-full-operator-v3.json'
+                    v3=ToolContract.load(v3_path,hashlib.sha256(v3_path.read_bytes()).hexdigest())
+                    assert len(v3.tools)==49
+                    assert set(actual)-set(v3.by_name)=={'directory_move'}
+                    for name,old in v3.by_name.items():assert actual[name]==old, ('v3 tool changed',name)
                 if args.verify_contract:
                     pinned=pathlib.Path(args.verify_contract)
                     contract=ToolContract.load(pinned,hashlib.sha256(pinned.read_bytes()).hexdigest())
@@ -95,14 +105,14 @@ def main():
                     assert not output.exists(), 'do not overwrite an existing contract'
                     output.write_text(json.dumps(candidate,ensure_ascii=False,indent=2)+'\n')
                     output.chmod(0o600)
-                passed('old 46 and v2 48 definitions unchanged; one additive bounded text operation')
+                passed('old 46 and frozen v2/v3 definitions unchanged; only reviewed v4 directory operation additive' if args.allow_v4_directory_move else 'old 46 and v2 48 definitions unchanged; one additive bounded text operation')
                 hints=actual['directory_create']['annotations']
                 assert hints['readOnlyHint'] is False and hints['destructiveHint'] is False and hints['idempotentHint'] is True and hints['openWorldHint'] is False
                 hints=actual['file_move']['annotations']
                 assert hints['readOnlyHint'] is False and hints['destructiveHint'] is True and hints['idempotentHint'] is False and hints['openWorldHint'] is False
                 hints=actual['text_file_write']['annotations']
                 assert hints['readOnlyHint'] is False and hints['destructiveHint'] is True and hints['idempotentHint'] is False and hints['openWorldHint'] is False
-                passed('49 native tools discovered; directory/move/text-write annotations truthful')
+                passed(f'{len(actual)} native tools discovered; directory/move/text-write annotations truthful')
                 target=workspace/'nested/inside'
                 value=client.call('directory_create',{'path':str(target)})
                 assert value['created'] is True and target.is_dir()

@@ -56,6 +56,70 @@ fn check_ops(old: &[&str], new: &[&str], ops: &[DiffOp]) -> usize {
 }
 
 #[test]
+fn directory_cache_invalidation_keeps_sibling_prefixes() {
+	let cache = ViewCache::default();
+	for name in [
+		"/tmp/work/old",
+		"/tmp/work/old/nested/file",
+		"/tmp/work/old/file",
+		"/tmp/work/old2/file",
+		"/tmp/work/other/file",
+	] {
+		cache.set(name.to_string(), "test content".to_string());
+	}
+	cache.forget_subtree("/tmp/work/old");
+	for name in [
+		"/tmp/work/old",
+		"/tmp/work/old/nested/file",
+		"/tmp/work/old/file",
+	] {
+		assert!(
+			cache.get(name).is_none(),
+			"stale descendant cache key: {name}"
+		);
+	}
+	for name in ["/tmp/work/old2/file", "/tmp/work/other/file"] {
+		assert_eq!(cache.get(name).as_deref(), Some("test content"));
+	}
+}
+
+#[tokio::test]
+async fn relocated_directory_invalidates_prior_descendant_view_snapshots() {
+	let temp = tempfile::tempdir().unwrap();
+	let old = temp.path().join("old");
+	std::fs::create_dir_all(old.join("inner")).unwrap();
+	let file = old.join("inner/file.txt");
+	std::fs::write(&file, b"BEFORE\n").unwrap();
+	let sibling = temp.path().join("old2");
+	std::fs::create_dir(&sibling).unwrap();
+	let sibling_file = sibling.join("file.txt");
+	std::fs::write(&sibling_file, b"SIBLING\n").unwrap();
+	let cache = Arc::new(ViewCache::default());
+	with_request_context(cache.clone(), async {
+		let source = PathSource::Local(file.clone());
+		let sibling_source = PathSource::Local(sibling_file.clone());
+		let first = render_whole_file(&source, "BEFORE\n", false);
+		assert!(first.contains("BEFORE"));
+		let first_sibling = render_whole_file(&sibling_source, "SIBLING\n", false);
+		assert!(first_sibling.contains("SIBLING"));
+		std::fs::rename(&old, temp.path().join("renamed")).unwrap();
+		forget_subtree(&PathSource::Local(old.clone()));
+		forget_subtree(&PathSource::Local(temp.path().join("renamed")));
+		// Rename another directory into the original name, with same content.
+		// Without subtree invalidation this view would misleadingly say
+		// 'unchanged since you last viewed' despite a different path identity.
+		std::fs::create_dir_all(old.join("inner")).unwrap();
+		std::fs::write(&file, b"BEFORE\n").unwrap();
+		let again = render_whole_file(&source, "BEFORE\n", false);
+		assert!(again.contains("BEFORE"));
+		assert!(!again.contains("unchanged since"));
+		let sibling_again = render_whole_file(&sibling_source, "SIBLING\n", false);
+		assert!(sibling_again.contains("unchanged since"));
+	})
+	.await;
+}
+
+#[test]
 fn myers_classic_example_has_minimal_edit_distance() {
 	let old = ["A", "B", "C", "A", "B", "B", "A"];
 	let new = ["C", "B", "A", "B", "A", "C"];

@@ -122,4 +122,101 @@ mod linux {
 		assert!(local_linux::move_noreplace(&p.join("source"), &p.join("alias/result")).is_err());
 		assert!(p.join("source").exists());
 	}
+	#[test]
+	fn directory_move_preserves_nonempty_subtree_inodes_and_contents() {
+		let temp = tempfile::tempdir().unwrap();
+		let p = temp.path();
+		std::fs::create_dir_all(p.join("from/child/grandchild")).unwrap();
+		std::fs::write(p.join("from/child/grandchild/content"), b"real content").unwrap();
+		let source_inode = std::fs::metadata(p.join("from")).unwrap().ino();
+		let child_inode = std::fs::metadata(p.join("from/child")).unwrap().ino();
+		local_linux::move_directory_noreplace(&p.join("from"), &p.join("after")).unwrap();
+		assert!(!p.join("from").exists());
+		assert_eq!(
+			std::fs::metadata(p.join("after")).unwrap().ino(),
+			source_inode
+		);
+		assert_eq!(
+			std::fs::metadata(p.join("after/child")).unwrap().ino(),
+			child_inode
+		);
+		assert_eq!(
+			std::fs::read(p.join("after/child/grandchild/content")).unwrap(),
+			b"real content"
+		);
+	}
+
+	#[test]
+	fn directory_move_denies_any_existing_destination_even_when_empty() {
+		let temp = tempfile::tempdir().unwrap();
+		let p = temp.path();
+		std::fs::create_dir(p.join("from")).unwrap();
+		std::fs::create_dir(p.join("to")).unwrap();
+		assert!(local_linux::move_directory_noreplace(&p.join("from"), &p.join("to")).is_err());
+		assert!(p.join("from").is_dir() && p.join("to").is_dir());
+	}
+
+	#[test]
+	fn directory_move_rejects_source_symlink_or_plain_file() {
+		let temp = tempfile::tempdir().unwrap();
+		let p = temp.path();
+		std::fs::create_dir(p.join("real")).unwrap();
+		std::fs::write(p.join("file"), b"not a directory").unwrap();
+		symlink(p.join("real"), p.join("link")).unwrap();
+		assert!(local_linux::move_directory_noreplace(&p.join("link"), &p.join("bad")).is_err());
+		assert!(local_linux::move_directory_noreplace(&p.join("file"), &p.join("bad")).is_err());
+		assert!(p.join("link").is_symlink());
+		assert!(p.join("file").is_file());
+	}
+
+	#[test]
+	fn directory_move_rejects_symlink_parent_and_existing_leaf_symlink() {
+		let temp = tempfile::tempdir().unwrap();
+		let p = temp.path();
+		std::fs::create_dir(p.join("source")).unwrap();
+		std::fs::create_dir(p.join("parent")).unwrap();
+		symlink(p.join("parent"), p.join("parent-link")).unwrap();
+		assert!(local_linux::move_directory_noreplace(
+			&p.join("source"),
+			&p.join("parent-link/new")
+		)
+		.is_err());
+		symlink(p.join("parent"), p.join("destination-link")).unwrap();
+		assert!(local_linux::move_directory_noreplace(
+			&p.join("source"),
+			&p.join("destination-link")
+		)
+		.is_err());
+		assert!(p.join("source").is_dir());
+		assert!(p.join("destination-link").is_symlink());
+	}
+
+	#[test]
+	fn directory_move_rejects_descendant_moves_and_absent_destination_parent() {
+		let temp = tempfile::tempdir().unwrap();
+		let p = temp.path();
+		std::fs::create_dir_all(p.join("source/child")).unwrap();
+		assert!(local_linux::move_directory_noreplace(
+			&p.join("source"),
+			&p.join("source/child/inner")
+		)
+		.is_err());
+		assert!(
+			local_linux::move_directory_noreplace(&p.join("source"), &p.join("missing/new"))
+				.is_err()
+		);
+		assert!(p.join("source/child").is_dir());
+	}
+
+	#[test]
+	fn directory_move_keeps_internal_symlinks_as_links_without_following() {
+		let temp = tempfile::tempdir().unwrap();
+		let p = temp.path();
+		std::fs::create_dir(p.join("source")).unwrap();
+		std::fs::write(p.join("external"), b"unchanged").unwrap();
+		symlink(p.join("external"), p.join("source/child-link")).unwrap();
+		local_linux::move_directory_noreplace(&p.join("source"), &p.join("new")).unwrap();
+		assert!(p.join("new/child-link").is_symlink());
+		assert_eq!(std::fs::read(p.join("external")).unwrap(), b"unchanged");
+	}
 }

@@ -554,6 +554,43 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "Move Workspace Directory Without Overwrite",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Atomically rename one existing controller-local directory tree inside configured workspace roots to an absent target path. \
+            Existing destination, symlinked parents/source, missing destination parent and cross-device moves are refused. \
+            This moves an entire directory tree without traversing its entries and removes the original pathname. \
+            No shell, remote host, privilege escalation or copy/delete fallback. Linux only; not a transaction with independent writers."
+	)]
+	async fn directory_move(
+		&self,
+		context: RequestContext<RoleServer>,
+		Parameters(params): Parameters<DirectoryMoveParams>,
+	) -> Result<String, String> {
+		self.ensure_session_workdir(&context);
+		let workdir = self.workdir.get_current();
+		enforce_runtime_path_spec(&params.source, &workdir, true)?;
+		enforce_runtime_path_spec(&params.destination, &workdir, true)?;
+		let call = McpToolCall {
+			tool_name: "directory_move".to_string(),
+			parameters: serde_json::to_value(&params).unwrap_or_default(),
+			tool_id: String::new(),
+			workdir,
+		};
+		request_ctx::with_request_context(self.view_cache.clone(), async move {
+			let result = fs::parity_ops::execute_directory_move(&call)
+				.await
+				.map_err(|e| e.to_string())?;
+			Ok(append_hints(result))
+		})
+		.await
+	}
+
+	#[tool(
 		title = "Batch Edit",
 		annotations(
 			read_only_hint = false,
@@ -1979,6 +2016,14 @@ pub struct TextFileWriteParams {
 pub struct DirectoryCreateParams {
 	/// Directory path in the configured local controller workspace. Remote paths are refused.
 	pub path: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct DirectoryMoveParams {
+	/// Existing controller-local workspace directory, never a symlink or file.
+	pub source: String,
+	/// Absent target directory path with an existing authorized parent.
+	pub destination: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
