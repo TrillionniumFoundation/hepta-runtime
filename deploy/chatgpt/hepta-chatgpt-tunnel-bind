@@ -60,7 +60,7 @@ print("workspace attachments:", len(value.get("workspace_ids") or []))
 PY
 
 echo '== tunnel metadata / doctor =='
-"$HOME/.local/bin/tunnel-client" doctor --profile "$PROFILE" --explain
+"$HOME/.local/bin/tunnel-client" doctor --profile "$PROFILE" --health.listen-addr 127.0.0.1:0 --explain
 
 echo '== start managed user service =='
 systemctl --user reset-failed hepta-openai-tunnel.service || true

@@ -22,6 +22,14 @@ Request and response sizes are separately bounded at 4 MiB and 16 MiB. The large
 
 A transport failure after submitting a write is reported as `outcome=unknown`, with `automatic_retry=false`. The adapter never silently sends the same write again. Reconcile using the native job/request/upload identity and actual target state. Error messages do not include token contents, arguments or response bodies.
 
+## Server-side tunnel activation — 2026-10-12
+
+A new tunnel `tunnel_6acc93cc226081919911d15143cafbdb` was bound with a restricted runtime key. The bind helper originally failed only because `doctor` tried to bind `127.0.0.1:8792` while the already-running tunnel owned that health port; the helper now uses an ephemeral `127.0.0.1:0` doctor listener. Real doctor then returned `RESULT ok`.
+
+The six-host-qualified Full Operator source was installed as an immutable local release and a separate `hepta-full-operator` tunnel profile. A controlled service cutover stopped/disabled the old seven-tool tunnel and started/enabled `hepta-openai-full-operator.service`. `/readyz` on port 8793 is 200, control-plane polling has a successful long-poll and zero consecutive failures, and logs show the Full Operator stdio command plus the new tunnel ID. Runtime PID 2927 and Desktop Commander PID 2894 did not change. The old readonly profile/service/config remain available for rollback.
+
+This is **server-side activation only**. The tunnel MCP health remains `not_observed` until ChatGPT itself sends initialize/tool discovery. No ChatGPT custom app, tool scan or ChatGPT-originated write call is claimed yet. The associated workspace UUID is `9958b3c3-c57c-49a0-b50c-681d1a1a82da`; the tunnel metadata alone does not prove plan/role policy. See `docs/qualification/chatgpt-full-operator-tunnel-20261012.json`.
+
 ## Current deployment and account boundary
 
 The source candidate and the actual installed backend must be distinguished. A successful facade test from qian-qi proves local stdio → authenticated runtime → target behavior. It does not prove a request originated from ChatGPT, a custom app exists, or the linked workspace has Business full-MCP permissions.
