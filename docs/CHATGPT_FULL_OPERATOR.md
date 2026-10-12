@@ -49,6 +49,16 @@ The six-host-qualified Full Operator source was installed as an immutable local 
 
 This is **server-side activation only**. The tunnel MCP health remains `not_observed` until ChatGPT itself sends initialize/tool discovery. No ChatGPT custom app, tool scan or ChatGPT-originated write call is claimed yet. The associated workspace UUID is `9958b3c3-c57c-49a0-b50c-681d1a1a82da`; the tunnel metadata alone does not prove plan/role policy. See `docs/qualification/chatgpt-full-operator-tunnel-20261012.json`.
 
+## Discovery repair deployed — current private tunnel
+
+After the local dual-era and six-host acceptance, the newly committed facade was installed under the immutable user release `fc10e43962bdc8b3` and selected in the existing `hepta-full-operator` stdio profile. `mcp.stdio_send_initialized_notification: true` is now on. A pre-install `tunnel-client doctor` on the candidate profile returned `RESULT ok`; the only restarted service was `hepta-openai-full-operator.service`. The previous profile was preserved at `~/.config/hepta-full-operator/backup-profile-before-mcp-20260728.yaml`; the old release remains available. The old seven-tool tunnel is still disabled. Runtime PID 2927 and Desktop Commander PID 2894 were unchanged. The revised tunnel reports `/readyz=200`, with a successful control-plane poll, zero consecutive failures, and an active stdio child.
+
+The installed command's actual `server/discover`, `tools/list` (46 tools) and `tools/call` (`host_list`) responses all independently matched the official 2026-07-28 schema with **zero** validation errors. The installed command also passed two consecutive legacy initializations. The final security/unit suite passed **26 tests**, and the modified facade was exercised again on all **six real targets, 9 checks each: 54/54**. Details: `docs/qualification/chatgpt-modern-mcp-discovery-20261012.json`.
+
+An optional `HEPTA_MCP_PROTOCOL_TRACE=1` setting is temporarily enabled on the private tunnel service. It logs only known discovery method names, modern/legacy classification and success/error code — never caller identities, raw arguments, tool inputs/outputs or tokens. Remove the small systemd drop-in after a successful UI scan if the diagnostics are no longer needed.
+
+**Product-side status remains PENDING until a fresh ChatGPT Scan Tools.** A ready control-plane does not initialize a stdio MCP child on behalf of ChatGPT; after the service restart, MCP health initially reads `not_observed`. Do not mark the plugin complete until the actual UI scan observes `server_discovered`/`discovered` (or correct legacy initialization), returns exactly 46 tools and the first ChatGPT-originated call succeeds. An existing failed draft may need an explicit rescan; cached tool manifests are not automatically refreshed.
+
 ## Current deployment and account boundary
 
 The source candidate and the actual installed backend must be distinguished. A successful facade test from qian-qi proves local stdio → authenticated runtime → target behavior. It does not prove a request originated from ChatGPT, a custom app exists, or the linked workspace has Business full-MCP permissions.
