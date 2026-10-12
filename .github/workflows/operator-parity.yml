@@ -59,6 +59,8 @@ jobs:
             python3 tests/dc_parity_workspace_root_guard_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-root-guard-ci.json
             python3 tests/dc_parity_concurrent_text_acceptance.py --binary target/debug/hepta-runtime --v4-contract deploy/contracts/hepta-runtime-full-operator-v4.json --waves 3 --contenders 6 --out /tmp/hepta-dc-text-concurrency-ci.json
             python3 tests/dc_parity_v4_staging_tests.py
+            python3 tests/dc_parity_v4_deployment_tests.py
+            python3 -m py_compile deploy/activate_dc_parity_v4.py deploy/rollback_dc_parity_v4.py
             python3 -m py_compile deploy/stage_dc_parity_v4.py tests/dc_parity_release_six_host_acceptance.py
             python3 tests/dc_parity_full_facade_pins_tests.py
             python3 -m py_compile tests/dc_parity_full_facade_six_host_acceptance.py
