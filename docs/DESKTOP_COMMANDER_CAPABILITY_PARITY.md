@@ -14,6 +14,7 @@ an actual ChatGPT-origin action result are three separate qualification states.
   It is **not** an unrestricted terminal.
 - Installed Hepta Full Operator: **46 tools**, including **27 tools annotated
   non-read-only**, with unchanged native binary and pinned catalog.
+- The candidate schema is pinned separately in `deploy/contracts/hepta-runtime-full-operator-v2.json`: exactly 48 tools; all 46 v1 tool definitions are byte-for-byte equivalent as parsed JSON. The schema file format remains `hepta-native-tool-contract-v1`; v2 refers to its versioned **tool catalog**.
 - This source candidate: **48 tools** only in an isolated build, adding two
   independently useful filesystem tools with truthful annotations. **This is
   not installed in the production runtime or ChatGPT's approved tool snapshot.**

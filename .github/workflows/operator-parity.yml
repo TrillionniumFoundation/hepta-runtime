@@ -51,7 +51,7 @@ jobs:
             cargo clippy --locked --all-features --all-targets -- -D warnings
             cargo test --locked --all-targets
             cargo build --locked --bin hepta-runtime
-            python3 tests/dc_parity_native_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-parity-native-ci.json
+            python3 tests/dc_parity_native_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-parity-native-ci.json --verify-contract deploy/contracts/hepta-runtime-full-operator-v2.json
             python3 tests/process_ops_tests.py
             python3 tests/maintenance_inventory_tests.py
             python3 tests/maintenance_readiness_tests.py

@@ -7,6 +7,7 @@ approval. Only one private temp workspace, service and token are created. The
 installed 46-tool native runtime, tunnel and Desktop Commander are unchanged.
 """
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -18,11 +19,15 @@ import tempfile
 import time
 
 from runtime_http_acceptance import Client
+sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/"deploy"))
+from mcp_tool_contract import make_contract, ToolContract, canonical
 
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--binary',required=True)
     ap.add_argument('--out',required=True)
+    ap.add_argument('--catalog-out', help='Freeze reviewed candidate MCP schema; requires absent path')
+    ap.add_argument('--verify-contract', help='Require exact candidate schema to match this frozen catalog')
     args=ap.parse_args()
     binary=str(pathlib.Path(args.binary).resolve(strict=True))
     checks=[]
@@ -67,6 +72,25 @@ def main():
                     raise TimeoutError('isolated MCP candidate never became ready')
                 actual={x['name']:x for x in client.rpc('tools/list',{})['tools']}
                 assert len(actual)==48,len(actual)
+                source=pathlib.Path(__file__).resolve().parents[1]
+                original=json.loads((source/'deploy/contracts/hepta-runtime-full-operator-v1.json').read_text())
+                old_tools={t['name']:t for t in original['tools']}
+                assert len(old_tools)==46
+                assert set(actual)-set(old_tools)=={'directory_create','file_move'}
+                for name,old in old_tools.items():
+                    assert actual[name]==old, ('old tool contract changed',name)
+                candidate=make_contract(list(actual.values()))
+                assert candidate['tool_count']==48
+                if args.verify_contract:
+                    pinned=pathlib.Path(args.verify_contract)
+                    contract=ToolContract.load(pinned,hashlib.sha256(pinned.read_bytes()).hexdigest())
+                    contract.verify(list(actual.values()))
+                if args.catalog_out:
+                    output=pathlib.Path(args.catalog_out)
+                    assert not output.exists(), 'do not overwrite an existing contract'
+                    output.write_text(json.dumps(candidate,ensure_ascii=False,indent=2)+'\n')
+                    output.chmod(0o600)
+                passed('old 46 definitions unchanged; candidate adds exactly two separately annotated operations')
                 hints=actual['directory_create']['annotations']
                 assert hints['readOnlyHint'] is False and hints['destructiveHint'] is False and hints['idempotentHint'] is True and hints['openWorldHint'] is False
                 hints=actual['file_move']['annotations']
