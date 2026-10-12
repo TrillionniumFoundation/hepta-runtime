@@ -57,6 +57,21 @@ class ModelOriginLedger(unittest.TestCase):
         self.assertEqual(self.final['previous_ledger_sha256'], sha(self.before_path))
         self.assertEqual(self.final['delta_evidence_sha256'], sha(self.delta_path))
 
+    def test_each_individual_definition_agrees_with_updated_model_origin_ledger(self):
+        rows=self.final['positive_tool_definitions']
+        self.assertEqual(len(rows),31)
+        approvals={r['tool']:r for r in rows}
+        self.assertEqual(len(approvals),31)
+        names=set(self.final['model_positive_nonreadonly_tools'])
+        pending=set(self.final['model_unverified_nonreadonly_tools'])
+        self.assertEqual({k for k,v in approvals.items() if v['status']=='positive_bounded_model_origin'}, names)
+        self.assertEqual({k for k,v in approvals.items() if v['status']=='not_verified_from_chatgpt'}, pending)
+        authoritative={t['name']:t['annotations'] for t in self.catalog['tools']}
+        for k,v in approvals.items():
+            self.assertEqual(v['annotations'],authoritative[k])
+        for k in self.delta['new_positive_tool_names']:
+            self.assertEqual(approvals[k]['evidence'],'dc-parity-v4-model-origin-seven-new-20261013.json')
+
     def test_high_risk_unverified_tools_are_not_silently_promoted(self):
         self.assertEqual(self.final['model_unverified_nonreadonly_tools'],
                          ['privileged_action', 'process_checkpoint'])
