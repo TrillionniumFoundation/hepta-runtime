@@ -176,11 +176,14 @@ mod local_linux {
 	}
 
 	fn root() -> Result<OwnedFd> {
+		// O_PATH obtains a directory handle without requiring read permission.
+		// The handle is only used by fd-relative *at operations; no directory
+		// contents are read or exposed. O_NOFOLLOW preserves path safety.
 		// SAFETY: constant null-terminated path and documented libc open flags.
 		let fd = unsafe {
 			libc::open(
 				c"/".as_ptr(),
-				libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+				libc::O_PATH | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
 			)
 		};
 		if fd < 0 {
@@ -191,12 +194,15 @@ mod local_linux {
 	}
 
 	fn open_dir(parent: &OwnedFd, name: &CString) -> Result<OwnedFd> {
+		// Linux directory mutation requires search/write, not read permission.
+		// O_PATH|O_DIRECTORY|O_NOFOLLOW opens the parent for mkdirat/renameat2
+		// without following symlinks or inventing a directory read requirement.
 		// SAFETY: CString is NUL terminated; fd is valid while parent lives.
 		let fd = unsafe {
 			libc::openat(
 				parent.as_raw_fd(),
 				name.as_ptr(),
-				libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+				libc::O_PATH | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
 			)
 		};
 		if fd < 0 {
