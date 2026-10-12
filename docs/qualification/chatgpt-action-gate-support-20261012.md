@@ -2,6 +2,14 @@
 
 Status: **ACTION-GATE HOLD**, 2026-10-12. Reproduction is limited to authorized private devices and non-sensitive scratch actions. This is a support request, **not** evidence that complete shell access was approved.
 
+## P0 workspace admin check before escalation (not yet verified)
+
+**Action control is independent of App permissions.** Official ChatGPT workspace administration supports configuring which current app actions are enabled (All actions, Only read actions, or Custom), while `Allow all actions` in App permissions only controls additional confirmation prompts. A published custom app's enabled action set and any workspace parameter constraints must be checked by the **actual workspace admin**. We do not have a connector that can inspect these settings remotely; no conclusion can be drawn from the user-specific app-permission setting alone.
+
+In the ChatGPT Business workspace actually associated with the `hepta` tunnel: **Workspace settings → Apps → Enabled → Hepta Runtime Full Operator → ⋯ → Action control** (or Configure actions). For an unpublished draft, check the Drafts → Publish → Configure actions flow. Record whether current actions are All / Only read / Custom; if Custom, inspect `shell_start`, `pty_start`, `pty_write`, `process_start`, `sudo_start`, `document_write`, and applicable argument constraints. Only the authorized administrator should enable intended tools. Review how new/changed actions are handled. If the action is enabled yet the same platform safety warning persists, submit the Support request below; app action permissions do not override safety protections.
+
+Sources: https://help.openai.com/en/articles/11509118-admin-controls-security-and-compliance-for-plugins-and-apps and https://help.openai.com/en/articles/11487775-connectors-in-chatgpt.
+
 ## Copyable support summary
 
 > In ChatGPT web using GPT-6, the private **Hepta Runtime Full Operator** MCP app is installed and lists 46 tools. The app-specific permission is **Allow all actions**, the same setting as the installed **Remote Desktop Commander** app. Hepta's actual `host_list`, `file_info` and `stream_handoff_list` work. A separate non-read-only, non-destructive Hepta `workdir(reset=true)` also returned `{"action":"reset","success":true}`; tunnel accepted/completed counters both increased 20→21. However, a user-authorized scratch `shell_start` and a separate scratch-DOCX `document_write` request produced a ChatGPT tool dispatch error: **“此工具调用被 OpenAI 的安全检查屏蔽。请仔细检查你发送的内容。”** (blocked by OpenAI security check). Both had no successful native tool execution receipt. By contrast, a safe Desktop Commander `start_process` request (`/usr/bin/id -u`) returned UID 1000. What specific client-side/workspace/app/tool safety rule is responsible for this difference? What officially supported correction, consent step, review, or admin control (if any) applies? We will not relabel write tools as read-only or attempt to bypass the safety decision.

@@ -15,6 +15,33 @@ class History(unittest.TestCase):
         if fail:
             self.assertNotEqual(p.returncode,0,p.stdout);return p.stderr
         self.assertEqual(p.returncode,0,p.stderr);return json.loads(p.stdout)
+    def wait_broker_finalized(self,state,session,timeout=10):
+        """Wait for the live broker's durable final receipt AND socket cleanup.
+
+        App exit is not an owner shutdown acknowledgement: the out-of-process
+        service may still be fsyncing archives or unlinking its control socket.
+        Only after both barriers can TemporaryDirectory safely remove state.
+        """
+        job=state/'stream_handoffs'/session
+        bound=json.loads((job/'request.json').read_text())
+        socket_root=pathlib.Path(bound['socket_root'])
+        deadline=time.monotonic()+timeout;last=None
+        while time.monotonic()<deadline:
+            try:
+                result=self.rpc({'op':'status','state_dir':str(state),'session_id':session})
+            except (AssertionError,RuntimeError,OSError) as exc:
+                last=type(exc).__name__;time.sleep(.05);continue
+            last=result.get('state')
+            closed=all(not (socket_root/name).exists()
+                       for name in ('handoff.sock','control.sock'))
+            if result.get('state')=='exited' and result.get('output_complete') is True and closed:
+                self.assertTrue(result['stdin_closed'])
+                self.assertTrue(result['stdout_eof'])
+                self.assertTrue(result['stderr_eof'])
+                return result
+            time.sleep(.05)
+        self.fail('native stream broker did not complete durable finalization and socket cleanup: '+str(last))
+
     def test_history_descriptor_is_exact_readonly_regular_file(self):
         with tempfile.TemporaryDirectory() as t:
             path=pathlib.Path(t)/'history';path.write_bytes(b'abc\x00'+'中文'.encode())
@@ -53,6 +80,7 @@ class History(unittest.TestCase):
                 receipt=json.loads((state/'stream_handoffs'/session/'handoff_receipt.json').read_text())
                 seed=receipt['history_seed']['stdout'];self.assertEqual(seed['sha256'],hashlib.sha256(raw).hexdigest());self.assertEqual(seed['size'],len(raw))
                 self.rpc({'op':'close','state_dir':str(state),'session_id':session});app.wait(timeout=5)
+                self.wait_broker_finalized(state,session)
                 self.assertEqual(app.pid,app_pid)
             finally:
                 if app.poll() is None:app.terminate();app.wait(timeout=5)
@@ -96,6 +124,7 @@ class History(unittest.TestCase):
                     time.sleep(.05)
                 self.assertTrue(out_all.startswith(out));self.assertTrue(err_all.startswith(err));self.assertIn(b'\"value\": 9',out_all);self.assertIn(b'\"value\": 9',err_all)
                 self.rpc({'op':'close','state_dir':str(state),'session_id':session});app.wait(timeout=5)
+                self.wait_broker_finalized(state,session)
             finally:
                 if app.poll() is None:app.terminate();app.wait(timeout=5)
 
