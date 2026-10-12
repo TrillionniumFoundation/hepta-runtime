@@ -24,6 +24,7 @@ pub mod remote;
 pub mod search;
 pub mod shell;
 pub mod text_editing;
+pub mod text_file_write;
 pub mod workdir;
 
 #[cfg(test)]

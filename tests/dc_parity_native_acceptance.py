@@ -71,16 +71,21 @@ def main():
                 else:
                     raise TimeoutError('isolated MCP candidate never became ready')
                 actual={x['name']:x for x in client.rpc('tools/list',{})['tools']}
-                assert len(actual)==48,len(actual)
+                assert len(actual)==49,len(actual)
                 source=pathlib.Path(__file__).resolve().parents[1]
                 original=json.loads((source/'deploy/contracts/hepta-runtime-full-operator-v1.json').read_text())
                 old_tools={t['name']:t for t in original['tools']}
                 assert len(old_tools)==46
-                assert set(actual)-set(old_tools)=={'directory_create','file_move'}
+                assert set(actual)-set(old_tools)=={'directory_create','file_move','text_file_write'}
                 for name,old in old_tools.items():
                     assert actual[name]==old, ('old tool contract changed',name)
                 candidate=make_contract(list(actual.values()))
-                assert candidate['tool_count']==48
+                assert candidate['tool_count']==49
+                frozen_v2=json.loads((source/'deploy/contracts/hepta-runtime-full-operator-v2.json').read_text())
+                v2_tools={t['name']:t for t in frozen_v2['tools']}
+                assert len(v2_tools)==48
+                assert set(actual)-set(v2_tools)=={'text_file_write'}
+                assert all(actual[name]==tool for name,tool in v2_tools.items())
                 if args.verify_contract:
                     pinned=pathlib.Path(args.verify_contract)
                     contract=ToolContract.load(pinned,hashlib.sha256(pinned.read_bytes()).hexdigest())
@@ -90,12 +95,14 @@ def main():
                     assert not output.exists(), 'do not overwrite an existing contract'
                     output.write_text(json.dumps(candidate,ensure_ascii=False,indent=2)+'\n')
                     output.chmod(0o600)
-                passed('old 46 definitions unchanged; candidate adds exactly two separately annotated operations')
+                passed('old 46 and v2 48 definitions unchanged; one additive bounded text operation')
                 hints=actual['directory_create']['annotations']
                 assert hints['readOnlyHint'] is False and hints['destructiveHint'] is False and hints['idempotentHint'] is True and hints['openWorldHint'] is False
                 hints=actual['file_move']['annotations']
                 assert hints['readOnlyHint'] is False and hints['destructiveHint'] is True and hints['idempotentHint'] is False and hints['openWorldHint'] is False
-                passed('48 native tools discovered; both new tool annotations truthful')
+                hints=actual['text_file_write']['annotations']
+                assert hints['readOnlyHint'] is False and hints['destructiveHint'] is True and hints['idempotentHint'] is False and hints['openWorldHint'] is False
+                passed('49 native tools discovered; directory/move/text-write annotations truthful')
                 target=workspace/'nested/inside'
                 value=client.call('directory_create',{'path':str(target)})
                 assert value['created'] is True and target.is_dir()
@@ -127,6 +134,32 @@ def main():
                 client.call('file_move',{'source':str(source),'destination':str(root/'outside.txt')},denied=True)
                 assert not (root/'outside.txt').exists()
                 passed('both file move endpoints constrained to controller roots')
+                plaintext=target/'managed-text.txt'
+                created=client.call('text_file_write',{'path':str(plaintext),'mode':'create',
+                    'expected_sha256':'absent','content':'First 中文\n'})
+                assert created['was_new_file'] and plaintext.read_text()=='First 中文\n'
+                appended=client.call('text_file_write',{'path':str(plaintext),'mode':'append',
+                    'expected_sha256':created['sha256'],'content':'Next 🦀\n'})
+                assert plaintext.read_text()=='First 中文\nNext 🦀\n'
+                assert appended['sha256']==hashlib.sha256(plaintext.read_bytes()).hexdigest()
+                replaced=client.call('text_file_write',{'path':str(plaintext),'mode':'replace',
+                    'expected_sha256':appended['sha256'],'content':'Final\n'})
+                assert plaintext.read_text()=='Final\n'
+                passed('native bounded UTF-8 create/append/replace with pinned prior hashes')
+                client.call('text_file_write',{'path':str(plaintext),'mode':'append',
+                    'expected_sha256':created['sha256'],'content':'STALE'},denied=True)
+                client.call('text_file_write',{'path':str(plaintext),'mode':'create',
+                    'expected_sha256':'absent','content':'DUPLICATE'},denied=True)
+                assert plaintext.read_text()=='Final\n'
+                client.call('text_file_write',{'path':str(root/'outside.txt'),'mode':'create',
+                    'expected_sha256':'absent','content':'OUTSIDE'},denied=True)
+                assert not (root/'outside.txt').exists()
+                passed('stale/duplicate publication and external workspace writes refused')
+                symlinked=target/'forbidden.txt';symlinked.symlink_to(plaintext)
+                client.call('text_file_write',{'path':str(symlinked),'mode':'replace',
+                    'expected_sha256':replaced['sha256'],'content':'NEW'},denied=True)
+                assert plaintext.read_text()=='Final\n'
+                passed('plain text publication refuses symlinked target')
                 data={'schema':'hepta-dc-parity-independent-mcp-v1','complete':True,'checks':checks,
                       'tool_count':len(actual),'chatgpt_origin':False,'runtime_install_changed':False,
                       'desktop_commander_changed':False,'public_gateway_started':False}

@@ -521,6 +521,39 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "Publish Bounded Workspace UTF-8 Text",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Create a new UTF-8 file, replace its full content, or append bounded text only in a configured controller-local workspace. Creates require expected_sha256='absent'; replace/append require the existing content's exact SHA256. Refuses symlinks, hard links, executable files, xattrs/ACLs, large content, remote targets and unmanaged overwrite. Publication uses a temporary file and atomic same-directory rename, changing inode on replacement; not a transaction against external concurrent writers. No shell, remote execution or privilege escalation. Never blindly retry an unknown outcome."
+	)]
+	async fn text_file_write(
+		&self,
+		context: RequestContext<RoleServer>,
+		Parameters(params): Parameters<TextFileWriteParams>,
+	) -> Result<String, String> {
+		self.ensure_session_workdir(&context);
+		let workdir = self.workdir.get_current();
+		enforce_runtime_path_spec(&params.path, &workdir, true)?;
+		let call = McpToolCall {
+			tool_name: "text_file_write".to_string(),
+			parameters: serde_json::to_value(&params).unwrap_or_default(),
+			tool_id: String::new(),
+			workdir,
+		};
+		request_ctx::with_request_context(self.view_cache.clone(), async move {
+			let result = fs::text_file_write::execute_text_file_write(&call)
+				.await
+				.map_err(|e| e.to_string())?;
+			Ok(append_hints(result))
+		})
+		.await
+	}
+
+	#[tool(
 		title = "Batch Edit",
 		annotations(
 			read_only_hint = false,
@@ -1919,6 +1952,27 @@ pub enum TextEditorCommand {
 	StrReplace,
 	Delete,
 	UndoEdit,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TextFileWriteMode {
+	Create,
+	Replace,
+	Append,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TextFileWriteParams {
+	/// Controller-local target path under an explicitly configured workspace.
+	pub path: String,
+	/// Explicit create, replace or append semantics.
+	pub mode: TextFileWriteMode,
+	/// UTF-8 input up to 64 KiB. Repeated unknown-outcome writes must not be blindly retried.
+	pub content: String,
+	/// 'absent' for create; lowercase 64-hex original SHA256 for replace or append.
+	pub expected_sha256: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
