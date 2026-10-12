@@ -1,5 +1,24 @@
 # Hepta Runtime Full Operator — private-workspace contract
 
+## 2026-07-28 discovery compatibility — 2026-10-12 repair
+
+ChatGPT's first Full Operator Scan Tools attempt reached the live main-channel stdio child. The tunnel remained ready and its control-plane poller succeeded, but MCP health recorded `mcp_discovery_error`, `initialize_epoch=4` with no successful initialize/tools-list evidence. Separate `harpoon` routing warnings were also visible; the official tunnel-client documentation says Harpoon is intentionally unroutable without explicit targets and this does not establish a failure in the configured `main` MCP channel. No unrequested Harpoon target was added.
+
+The original Full Operator facade implemented only handshake-era MCP. In particular, it rejected `server/discover` (mandatory for the 2026-07-28 era), rejected per-request `_meta` on `tools/list`, and rejected repeat `initialize` on the same stdio child. A traditional local `initialize → tools/list → ping` test remained green, hiding the new-client incompatibility.
+
+The candidate now implements both eras without changing the native execution kernel or the pinned 46-tool catalog:
+
+- **Modern 2026-07-28:** `server/discover` returns an explicit `supportedVersions` list, tool-only capabilities, `resultType=complete`, private cache hints and server identity in response `_meta`. Modern `tools/list`, `ping`, and `tools/call` accept validated per-request version/client-capabilities metadata without a legacy handshake. Before exposing the native catalog, the facade internally establishes a private legacy MCP session and verifies the complete native schema/annotation digest. It strips only transport-specific `_meta` from native tool calls, preserving the exact tool arguments and request identity. Modern results contain required `resultType`, and writes with an uncertain response remain `outcome=unknown`, never automatically replayed.
+- **Legacy 2025-11-25 and earlier:** `initialize → notifications/initialized → tools/list` remains supported. A new legacy initialize on an already used stdio child creates a fresh loopback MCP session; native persistent jobs and DC are unaffected. A legacy call cannot borrow access merely because a modern discovery initialized the backend. `mcp.stdio_send_initialized_notification` can be enabled on the tunnel-client profile to accommodate clients that omit the legacy notification.
+- **Protocol scope:** unsupported modern versions receive the official `-32022` error including the supported revision. Unknown tools and malformed metadata still fail. The facade advertises tools only; it does not invent resources, prompts, OAuth identities or public endpoints.
+
+The updated local unit suite includes repeat legacy initialization, stateless modern discovery, tools-list and tool-call, metadata stripping, version negotiation, pinned-catalog integrity and lost-write no-retry tests. The actual responses for `server/discover`, `tools/list` (all 46) and `tools/call` also validated with zero errors against the official published MCP 2026-07-28 JSON Schema downloaded from the modelcontextprotocol repository. This is **local evidence** and does not alone qualify ChatGPT-originated scanner success; a fresh UI scan is still required after installation.
+
+Official references:
+- https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/server/discover.mdx
+- https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/basic/versioning.mdx
+- https://github.com/openai/tunnel-client/blob/master/docs/configuration.md
+
 This is the private full-operation candidate. It does not replace the execution engine, claim a public Cloud Gateway is already deployed, or mark a local test as a ChatGPT-originated request. The old seven-tool readonly facade and live tunnel remain separate until an explicit deployment to the selected workspace is qualified.
 
 ## One execution engine and one full catalog

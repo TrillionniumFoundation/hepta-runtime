@@ -151,4 +151,96 @@ class TransportTests(unittest.TestCase):
             self.assertEqual(len(responses),2);self.assertEqual(self.server.effects,1);self.assertNotIn(b'private-fixture-token',result.stdout)
 
 
+    def modern(self,method,params=None,ident='openai-mcp-discover'):
+        meta={F.VERSION_KEY:F.MODERN_VERSION,F.CAPABILITIES_KEY:{},
+              'io.modelcontextprotocol/clientInfo':{'name':'ChatGPT Modern Fixture','version':'1'}}
+        return self.proxy.dispatch({'jsonrpc':'2.0','id':ident,'method':method,
+                                    'params':{'_meta':meta,**(params or {})}})
+
+    def test_modern_discover_before_initialize_is_complete_and_private(self):
+        result=self.modern('server/discover')['result']
+        self.assertEqual(result['resultType'],'complete')
+        self.assertEqual(result['supportedVersions'],[F.MODERN_VERSION])
+        self.assertEqual(result['cacheScope'],'private')
+        self.assertEqual(result['ttlMs'],0)
+        self.assertEqual(result['capabilities'],{'tools':{'listChanged':False}})
+        self.assertEqual(result['_meta'][F.SERVER_INFO_KEY]['name'],'hepta-runtime-full-operator')
+        self.assertEqual(self.server.effects,0)
+        self.assertFalse(self.proxy.legacy_ready)
+
+    def test_modern_tools_list_directly_without_legacy_handshake(self):
+        result=self.modern('tools/list',ident=1)['result']
+        self.assertEqual(result['resultType'],'complete')
+        self.assertEqual(result['tools'],self.contract.tools)
+        self.assertEqual(result['cacheScope'],'private')
+        self.assertEqual(result['ttlMs'],0)
+        self.assertTrue(self.proxy.initialized)
+        self.assertFalse(self.proxy.legacy_ready)
+
+    def test_modern_call_strips_transport_metadata_but_keeps_exact_arguments(self):
+        args={'command':'printf "中文 $()"','literal':{'x':1}}
+        result=self.modern('tools/call',{'name':'shell_start','arguments':args},ident=2)
+        self.assertEqual(result['result']['resultType'],'complete')
+        self.assertEqual(json.loads(result['result']['content'][0]['text']),args)
+        forwarded=next(x for x in reversed(self.server.seen) if x['method']=='tools/call')
+        self.assertEqual(forwarded['request']['params']['arguments'],args)
+        self.assertNotIn('_meta',forwarded['request']['params'])
+        self.assertEqual(self.server.effects,1)
+
+    def test_modern_invalid_or_future_version_is_a_precise_error_and_no_effect(self):
+        r=self.modern('tools/call',{'name':'unreviewed','arguments':{}})
+        self.assertEqual(r['error']['code'],-32601)
+        r=self.proxy.dispatch({'jsonrpc':'2.0','id':4,'method':'server/discover',
+            'params':{'_meta':{F.VERSION_KEY:'2027-01-01',F.CAPABILITIES_KEY:{}}}})
+        self.assertEqual(r['error']['code'],-32022)
+        self.assertEqual(r['error']['data']['supported'],[F.MODERN_VERSION])
+        r=self.proxy.dispatch({'jsonrpc':'2.0','id':5,'method':'tools/list',
+            'params':{'_meta':{F.VERSION_KEY:F.MODERN_VERSION,F.CAPABILITIES_KEY:None}}})
+        self.assertEqual(r['error']['code'],-32602)
+        self.assertEqual(self.server.effects,0)
+        self.assertEqual(self.server.seen,[])
+
+    def test_modern_response_drop_is_unknown_without_double_write(self):
+        self.modern('server/discover')
+        self.server.disconnect=True
+        r=self.modern('tools/call',{'name':'shell_start','arguments':{'command':'disposable'}},ident=99)
+        self.assertEqual(self.server.effects,1)
+        self.assertEqual(r['error']['code'],-32603)
+        self.assertEqual(r['error']['data']['outcome'],'unknown')
+        self.assertFalse(r['error']['data']['automatic_retry'])
+
+    def test_new_legacy_initialize_on_same_stdio_process_is_supported(self):
+        one=self.initialize();self.assertIn('result',one)
+        two=self.initialize();self.assertIn('result',two)
+        self.assertEqual(self.call('tools/list')['result']['tools'],self.contract.tools)
+        self.assertEqual(sum(1 for x in self.server.seen if x['method']=='initialize'),2)
+        self.assertEqual(self.server.effects,0)
+
+    def test_legacy_fallback_after_modern_discover_preserves_contract(self):
+        self.modern('server/discover')
+        legacy=self.initialize();self.assertIn('result',legacy)
+        self.assertEqual(self.call('tools/list')['result']['tools'],self.contract.tools)
+        self.assertEqual(self.server.effects,0)
+
+    def test_legacy_tool_without_own_initialize_stays_rejected_after_modern_probe(self):
+        self.modern('server/discover')
+        result=self.call('tools/call',{'name':'sudo_start','arguments':{}})
+        self.assertIn('error',result)
+        self.assertEqual(self.server.effects,0)
+
+
+    def test_opt_in_discovery_diagnostics_never_log_credentials_or_callers(self):
+        import contextlib
+        stream=io.StringIO()
+        with mock.patch.dict(os.environ,{'HEPTA_MCP_PROTOCOL_TRACE':'1'}),contextlib.redirect_stderr(stream):
+            self.modern('server/discover',ident='caller-should-never-appear')
+            self.modern('tools/list',ident='caller-should-never-appear')
+        logs=stream.getvalue()
+        self.assertIn('hepta_mcp_protocol',logs)
+        self.assertIn('server/discover',logs)
+        self.assertIn('tools/list',logs)
+        for secret in ('private-fixture-token','caller-should-never-appear','host_list','shell_start'):
+            self.assertNotIn(secret,logs)
+
+
 if __name__=='__main__':unittest.main(verbosity=2)

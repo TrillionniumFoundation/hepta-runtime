@@ -16,7 +16,11 @@ from mcp_tool_contract import ToolContract,canonical
 
 MAX_REQUEST=4*1024*1024
 MAX_RESPONSE=16*1024*1024
-METHODS={'initialize','notifications/initialized','notifications/cancelled','ping','tools/list','tools/call'}
+METHODS={'initialize','server/discover','notifications/initialized','notifications/cancelled','ping','tools/list','tools/call'}
+MODERN_VERSION='2026-07-28'
+VERSION_KEY='io.modelcontextprotocol/protocolVersion'
+CAPABILITIES_KEY='io.modelcontextprotocol/clientCapabilities'
+SERVER_INFO_KEY='io.modelcontextprotocol/serverInfo'
 
 
 def private_token(path):
@@ -53,8 +57,19 @@ def valid_request(request,contract):
     if method=='tools/call':
         if set(params)-{'name','arguments','_meta'} or not contract.allows(params.get('name')):return error(ident,-32601,'Tool not present in the pinned full-operator contract')
         if not isinstance(params.get('arguments',{}),dict):return error(ident,-32602,'Tool arguments must be an object')
-    if method=='tools/list' and params:return error(ident,-32602,'The complete pinned catalog fits in one page')
+    if method=='tools/list' and set(params)-{'_meta'}:return error(ident,-32602,'The complete pinned catalog fits in one page')
+    if method=='server/discover' and set(params)-{'_meta'}:return error(ident,-32602,'Only discovery protocol metadata is accepted')
     return None
+
+
+def request_era(request):
+    params=request.get('params') or {}
+    meta=params.get('_meta')
+    if not isinstance(meta,dict) or VERSION_KEY not in meta:return 'legacy',None
+    version=meta.get(VERSION_KEY)
+    if version!=MODERN_VERSION:return 'unsupported',version
+    if not isinstance(meta.get(CAPABILITIES_KEY),dict):return 'invalid',version
+    return 'modern',version
 
 
 def parse_messages(content_type,body):
@@ -78,7 +93,7 @@ class NativeProxy:
         if parsed.scheme!='http' or parsed.hostname!='127.0.0.1' or parsed.path!='/mcp' or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError('full operator upstream must be explicit IPv4 loopback HTTP /mcp')
         self.upstream=parsed;self.token=token;self.contract=contract;self.timeout=timeout
-        self.session=None;self.protocol=None;self.initialized=False;self.internal_counter=0
+        self.session=None;self.protocol=None;self.initialized=False;self.legacy_ready=False;self.internal_counter=0
     def exchange(self,request):
         body=canonical(request)
         headers={'Content-Type':'application/json','Accept':'application/json, text/event-stream','X-Hepta-Runtime-Token':self.token}
@@ -102,41 +117,129 @@ class NativeProxy:
     def internal(self,method,params):
         self.internal_counter+=1
         return self.exchange({'jsonrpc':'2.0','id':'hepta-contract-'+str(self.internal_counter),'method':method,'params':params})
-    def dispatch(self,request):
+    def _verify_catalog(self):
+        tools=self.internal('tools/list',{})
+        if 'error' in tools or not isinstance(tools.get('result'),dict) or tools['result'].get('nextCursor'):
+            raise ValueError('cannot attest full native catalog')
+        self.contract.verify(tools['result']['tools'])
+
+    def _new_native_session(self,init_params):
+        # The tunnel process may serve multiple independent ChatGPT discovery
+        # sessions. Reset the loopback MCP HTTP session before every legacy
+        # initialize, but never touch the native persistent job/broker state.
+        self.initialized=False
+        self.legacy_ready=False
+        self.session=None
+        self.protocol=None
+        self.internal_counter+=1
+        result=self.exchange({'jsonrpc':'2.0','id':'hepta-native-initialize-'+str(self.internal_counter),
+                              'method':'initialize','params':init_params})
+        if 'error' in result:raise ValueError('native initialize rejected')
+        native=result['result']
+        if not isinstance(native,dict) or not isinstance(native.get('protocolVersion'),str):
+            raise ValueError('malformed native initialization')
+        self.protocol=native['protocolVersion']
+        self.exchange({'jsonrpc':'2.0','method':'notifications/initialized','params':{}})
+        self._verify_catalog()
+        self.initialized=True
+        return native
+
+    def _ensure_native(self):
+        if not self.initialized:
+            self._new_native_session({'protocolVersion':'2025-11-25', 'capabilities':{},
+                                      'clientInfo':{'name':'hepta-full-operator-adapter','version':'1'}})
+
+    def _modern_result(self,ident,result):
+        result=dict(result)
+        result['resultType']='complete'
+        metadata=result.get('_meta')
+        metadata=dict(metadata) if isinstance(metadata,dict) else {}
+        metadata[SERVER_INFO_KEY]={'name':'hepta-runtime-full-operator','version':self.contract.catalog_sha256[:16]}
+        result['_meta']=metadata
+        return {'jsonrpc':'2.0','id':ident,'result':result}
+
+    def _dispatch(self,request):
         invalid=valid_request(request,self.contract)
         if invalid is not None:return invalid
         method=request['method'];ident=request.get('id')
-        if method=='notifications/initialized':return None
-        if method!='initialize' and not self.initialized:
-            return None if method.startswith('notifications/') else error(ident,-32071,'Initialize and verify the pinned native contract first')
-        if method=='initialize' and self.initialized:return error(ident,-32600,'A full-operator session is initialized once')
+        era,version=request_era(request)
+        if era=='unsupported':
+            return error(ident,-32022,'Unsupported protocol version',supported=[MODERN_VERSION],requested=version)
+        if era=='invalid':return error(ident,-32602,'Modern MCP request requires object clientCapabilities')
+        if method=='server/discover' and era!='modern':
+            return error(ident,-32601,'Modern MCP discovery requires protocol metadata')
+        if method=='initialize' and era=='modern':
+            return error(ident,-32601,'Modern MCP uses server/discover, not initialize')
+        if method.startswith('notifications/'):
+            return None
+        if era=='legacy' and method!='initialize' and not self.legacy_ready:
+            return error(ident,-32071,'Legacy MCP initialization required before tool calls')
         mutating=method=='tools/call' and not self.contract.read_only(request['params']['name'])
         try:
-            response=self.exchange(request)
             if method=='initialize':
-                if 'error' in response:return response
-                native=response['result'];self.protocol=native['protocolVersion']
-                self.exchange({'jsonrpc':'2.0','method':'notifications/initialized','params':{}})
-                tools=self.internal('tools/list',{})
-                if 'error' in tools or tools['result'].get('nextCursor'):raise ValueError('cannot attest full native catalog')
-                self.contract.verify(tools['result']['tools'])
-                self.initialized=True
-                result=dict(native);result['serverInfo']={'name':'hepta-runtime-full-operator','version':self.contract.catalog_sha256[:16]}
+                native=self._new_native_session(request.get('params',{}))
+                result=dict(native)
+                result['serverInfo']={'name':'hepta-runtime-full-operator','version':self.contract.catalog_sha256[:16]}
                 result['capabilities']={'tools':{'listChanged':False}}
-                return {**response,'result':result}
+                self.legacy_ready=True
+                return {'jsonrpc':'2.0','id':ident,'result':result}
+            if era=='modern':
+                self._ensure_native()
+                if method=='server/discover':
+                    # No public cache: this catalog belongs to the private,
+                    # authenticated operator identity behind the tunnel.
+                    return self._modern_result(ident,{'supportedVersions':[MODERN_VERSION],
+                        'capabilities':{'tools':{'listChanged':False}},'cacheScope':'private','ttlMs':0})
+                if method=='tools/list':
+                    self._verify_catalog()
+                    return self._modern_result(ident,{'tools':self.contract.tools,'cacheScope':'private','ttlMs':0})
+                if method=='ping':
+                    return self._modern_result(ident,{})
+                if method=='tools/call':
+                    self._verify_catalog()
+                    args=request.get('params',{}).get('arguments',{})
+                    native_req={'jsonrpc':'2.0','id':ident,'method':'tools/call',
+                                'params':{'name':request['params']['name'],'arguments':args}}
+                    response=self.exchange(native_req)
+                    if 'error' in response:return response
+                    result=response.get('result')
+                    if not isinstance(result,dict) or not isinstance(result.get('content'),list):
+                        raise ValueError('native tool response must contain content array')
+                    return self._modern_result(ident,result)
+                raise ValueError('unhandled modern MCP operation')
+            # Legacy clients use one initialize/initialized logical session.
             if method=='tools/list':
-                if 'error' in response:return response
-                if response['result'].get('nextCursor'):raise ValueError('native catalog changed pagination')
-                self.contract.verify(response['result']['tools'])
-                # Definitions and annotations are returned exactly, not relabelled read-only.
-                return {**response,'result':{'tools':self.contract.tools}}
-            return response
+                self._verify_catalog()
+                return {'jsonrpc':'2.0','id':ident,'result':{'tools':self.contract.tools}}
+            if method=='tools/call':
+                self._verify_catalog()
+            return self.exchange(request)
         except Exception:
-            if method in ('initialize','tools/list'):self.initialized=False
-            if method.startswith('notifications/'):return None
-            return error(ident,-32070,'Native operation result unavailable; do not replay a write blindly',
+            if method in ('initialize','tools/list','server/discover'):
+                self.initialized=False
+                self.legacy_ready=False
+            # Use standard JSON-RPC internal error in the modern protocol: the
+            # -32020..-32099 range is reserved by the 2026-07-28 specification.
+            return error(ident,-32603 if era=='modern' else -32070,
+                         'Native operation result unavailable; do not replay a write blindly',
                          outcome='unknown' if mutating else 'unavailable',automatic_retry=False,
                          contract_sha256=self.contract.catalog_sha256)
+
+    def dispatch(self,request):
+        reply=self._dispatch(request)
+        # Opt-in discovery diagnostics only. Never log caller IDs, transport
+        # metadata, tool names, tool arguments, tokens or response payloads.
+        if os.environ.get('HEPTA_MCP_PROTOCOL_TRACE')=='1' and isinstance(request,dict):
+            method=request.get('method')
+            if method in ('server/discover','initialize','tools/list','ping','notifications/initialized'):
+                era,_=request_era(request)
+                status='error' if isinstance(reply,dict) and 'error' in reply else ('no_reply' if reply is None else 'ok')
+                code=reply['error'].get('code') if status=='error' else None
+                record={'event':'hepta_mcp_protocol','method':method,'era':era,'status':status,'error_code':code}
+                sys.stderr.write(json.dumps(record,separators=(',',':'))+'\n')
+                sys.stderr.flush()
+        return reply
+
     def serve(self,input_stream,output_stream):
         while True:
             raw=input_stream.readline(MAX_REQUEST+2)
