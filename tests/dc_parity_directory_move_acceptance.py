@@ -176,6 +176,53 @@ def main():
                 assert 'unchanged since' not in str(recreated_view),str(recreated_view)
                 passed('whole-subtree old/destination view caches invalidated after move')
 
+                # A directory with owner mode 0300 supports entry mutation but
+                # cannot be opened O_RDONLY. Real MCP handlers must use
+                # fd-only O_PATH traversal, without widening the account's
+                # permissions or disabling O_NOFOLLOW. This is not a shell.
+                wparent=workspace/'write-traverse-only';wparent.mkdir()
+                (wparent/'source-file').write_text('leave bytes')
+                (wparent/'source-dir'/'child').mkdir(parents=True)
+                (wparent/'source-dir'/'child'/'file').write_text('nested text')
+                wparent.chmod(0o300)
+                try:
+                    newdir=client.call('directory_create',{'path':str(wparent/'new-child')})
+                    filem=client.call('file_move',{
+                        'source':str(wparent/'source-file'),
+                        'destination':str(wparent/'target-file')})
+                    dirm=client.call('directory_move',{
+                        'source':str(wparent/'source-dir'),
+                        'destination':str(wparent/'target-dir')})
+                finally:
+                    wparent.chmod(0o700)
+                assert newdir['created'] and filem['moved'] and dirm['moved']
+                assert (wparent/'new-child').is_dir()
+                assert (wparent/'target-file').read_text()=='leave bytes'
+                assert (wparent/'target-dir'/'child'/'file').read_text()=='nested text'
+                assert not (wparent/'source-file').exists() and not (wparent/'source-dir').exists()
+                passed('real MCP mkdir, file and directory move with write+search only; no read grant')
+
+                deniedparent=workspace/'execute-only';deniedparent.mkdir()
+                (deniedparent/'file').write_text('protected')
+                (deniedparent/'dir').mkdir()
+                deniedparent.chmod(0o100)
+                try:
+                    client.call('directory_create',{'path':str(deniedparent/'forbidden')},denied=True)
+                    client.call('file_move',{
+                        'source':str(deniedparent/'file'),
+                        'destination':str(deniedparent/'renamed')},denied=True)
+                    client.call('directory_move',{
+                        'source':str(deniedparent/'dir'),
+                        'destination':str(deniedparent/'renamed-dir')},denied=True)
+                finally:
+                    deniedparent.chmod(0o700)
+                assert (deniedparent/'file').read_text()=='protected'
+                assert (deniedparent/'dir').is_dir()
+                assert not (deniedparent/'forbidden').exists()
+                assert not (deniedparent/'renamed').exists()
+                assert not (deniedparent/'renamed-dir').exists()
+                passed('real MCP execute-only parent denies all three mutations')
+
                 second=workspace/'second';second.mkdir()
                 client.call('directory_move',{'source':str(second),'destination':str(new)},denied=True)
                 assert second.is_dir() and new.is_dir()

@@ -4,7 +4,7 @@
 #[cfg(target_os = "linux")]
 mod linux {
 	use super::super::local_linux;
-	use std::os::unix::fs::{symlink, MetadataExt};
+	use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
 	use std::path::Path;
 
 	#[test]
@@ -15,6 +15,76 @@ mod linux {
 		assert!(!local_linux::make_directories(&p).unwrap());
 		assert!(p.is_dir());
 		assert_eq!(std::fs::metadata(&p).unwrap().mode() & 0o777, 0o700);
+	}
+
+	#[test]
+	fn creates_inside_write_execute_only_parent_without_read_permission() {
+		let temp = tempfile::tempdir().unwrap();
+		let parent = temp.path().join("traversable");
+		std::fs::create_dir(&parent).unwrap();
+		std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o300)).unwrap();
+		let created = local_linux::make_directories(&parent.join("new-directory"));
+		std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700)).unwrap();
+		assert!(created.as_ref().is_ok_and(|c| *c), "{created:?}");
+		assert!(parent.join("new-directory").is_dir());
+	}
+
+	#[test]
+	fn moves_files_under_write_execute_only_parent() {
+		let temp = tempfile::tempdir().unwrap();
+		let parent = temp.path().join("traversable");
+		std::fs::create_dir(&parent).unwrap();
+		std::fs::write(parent.join("before"), b"unaltered").unwrap();
+		std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o300)).unwrap();
+		let moved = local_linux::move_noreplace(&parent.join("before"), &parent.join("after"));
+		std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700)).unwrap();
+		assert!(moved.is_ok(), "{moved:?}");
+		assert_eq!(std::fs::read(parent.join("after")).unwrap(), b"unaltered");
+		assert!(!parent.join("before").exists());
+	}
+
+	#[test]
+	fn moves_directories_under_write_execute_only_parent() {
+		let temp = tempfile::tempdir().unwrap();
+		let parent = temp.path().join("traversable");
+		std::fs::create_dir_all(parent.join("source/nested")).unwrap();
+		std::fs::write(parent.join("source/nested/leaf"), b"unaltered").unwrap();
+		std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o300)).unwrap();
+		let moved = local_linux::move_directory_noreplace(
+			&parent.join("source"),
+			&parent.join("destination"),
+		);
+		std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700)).unwrap();
+		assert!(moved.is_ok(), "{moved:?}");
+		assert_eq!(
+			std::fs::read(parent.join("destination/nested/leaf")).unwrap(),
+			b"unaltered"
+		);
+		assert!(!parent.join("source").exists());
+	}
+
+	#[test]
+	fn traversable_but_nonwritable_parent_does_not_grant_mutation() {
+		let temp = tempfile::tempdir().unwrap();
+		let parent = temp.path().join("execute-only");
+		std::fs::create_dir_all(parent.join("tree/child")).unwrap();
+		std::fs::write(parent.join("file"), b"preserve").unwrap();
+		std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o100)).unwrap();
+		let mkdir = local_linux::make_directories(&parent.join("forbidden"));
+		let file_move = local_linux::move_noreplace(&parent.join("file"), &parent.join("renamed"));
+		let dir_move = local_linux::move_directory_noreplace(
+			&parent.join("tree"),
+			&parent.join("tree-renamed"),
+		);
+		std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700)).unwrap();
+		assert!(mkdir.is_err(), "write privilege must still be enforced");
+		assert!(file_move.is_err(), "file move needs write privilege");
+		assert!(dir_move.is_err(), "directory move needs write privilege");
+		assert!(parent.join("file").exists());
+		assert!(parent.join("tree/child").is_dir());
+		assert!(!parent.join("forbidden").exists());
+		assert!(!parent.join("renamed").exists());
+		assert!(!parent.join("tree-renamed").exists());
 	}
 
 	#[test]
