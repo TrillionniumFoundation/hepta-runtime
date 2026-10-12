@@ -90,3 +90,14 @@ ChatGPT legitimately allows their actual declared operations.
 
 Official design criteria: https://developers.openai.com/plugins/plan/tools and
 https://developers.openai.com/plugins/plugin-guidelines.
+
+## v2 release and controlled activation boundary — 2026-10-12
+
+- **Exact 48-tool source/contract head:** `4b5e0b8db350cac8046d7e86d632fc2c5696e503`. CI [38240469052](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/38240469052) completed **success**. New v2 source preserves all original 46 definitions; the two new operations are truthful, non-shell file primitives.
+- **Release build verified:** `target/release/hepta-runtime` SHA256 `cc2e592e8ec330fcbd3bc6c6eb5d1666010430b9f1517c1a60b1b4e1f045fc8b` (6,942,632 bytes). An immutable stage was installed outside the active runtime unit, and the v2 tunnel profile was staged separately. No service is switched merely by staging a file.
+- **Real executable acceptance:** the Release binary passed an isolated MCP run with v2 contract and 9/9 checks, including 48-tool discovery and no-overwrite file moves. The same Release executable passed actual six-host SSH/operator tests (main 13/13 with existing sudo; Pocket4, ROG, Mac, X230 and AI395 each 10/10). These are **local-origin native checks**, not ChatGPT-origin write acceptance.
+- **Tunnel preflight:** `tunnel-client doctor --profile hepta-full-operator-v2 --health.listen-addr 127.0.0.1:0` returned `RESULT ok`. Old runtime systemd unit, tunnel profile, and tunnel manifest were backed up to private account-owned files before activation. The required coupled upgrade is native runtime binary + pinned v2 MCP tool contract; upgrading only one would fail the exact catalog check.
+- **Cutover NOT executed:** the actual controlled service-switch request was rejected by the OpenAI pre-tool safety check. No alternative executor or disguised tool call was used. Follow-up direct state checks prove the native runtime remained PID 2927 with the old `operator-5bb9dade…` binary, Full Operator tunnel remained PID 1270044 on **46-tool v1**, and Desktop Commander remained PID 2894. The tunnel was still ready with control-plane `ok`.
+- **Release gate:** 48-tool **candidate code qualified and staged**; live 48-tool **deployment HOLD**. ChatGPT tool snapshot stays 46 until an authorized coordinated cutover and subsequent explicit admin tool scan. Neither the above CI success nor native six-host parity is evidence of ChatGPT client write approval. Public Gateway remains HOLD.
+
+Receipt: `docs/qualification/dc-parity-v2-release-staged-20261012.json`.
