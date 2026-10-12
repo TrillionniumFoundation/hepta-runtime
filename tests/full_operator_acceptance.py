@@ -66,10 +66,10 @@ class StdioClient:
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--host',required=True);ap.add_argument('--ssh-target',required=True)
     ap.add_argument('--facade',default=str(ROOT/'deploy/chatgpt_full_operator.py'));ap.add_argument('--contract',default=str(ROOT/'deploy/contracts/hepta-runtime-full-operator-v1.json'))
-    ap.add_argument('--token-file',default=str(pathlib.Path.home()/'.config/hepta-runtime-operator/token'));ap.add_argument('--out',required=True)
+    ap.add_argument('--token-file',default=str(pathlib.Path.home()/'.config/hepta-runtime-operator/token'));ap.add_argument('--upstream',default='http://127.0.0.1:8790/mcp');ap.add_argument('--out',required=True)
     ap.add_argument('--sudo-smoke',action='store_true');a=ap.parse_args()
     contract=pathlib.Path(a.contract);contract_sha=hashlib.sha256(contract.read_bytes()).hexdigest();key=uuid.uuid4().hex;target='/tmp/hepta-full-operator-'+key
-    command=[sys.executable,a.facade,'--stdio','--token-file',a.token_file,'--contract',str(contract),'--contract-sha256',contract_sha,'--acknowledge-full-operator']
+    command=[sys.executable,a.facade,'--stdio','--upstream',a.upstream,'--token-file',a.token_file,'--contract',str(contract),'--contract-sha256',contract_sha,'--acknowledge-full-operator']
     report={'host':a.host,'ssh_target':a.ssh_target,'complete':False,'checks':[],'local_facade_origin':True,'chatgpt_originated':False,'tunnel_originated':False,'runtime_or_DC_restarted':False,'business_files_touched':False,'contract_sha256':contract_sha,'target_directory':target}
     def save():pathlib.Path(a.out).write_text(json.dumps(report,indent=2)+'\n')
     def passed(name,details=None):report['checks'].append({'name':name,'details':details});save();print('PASS',name,flush=True)
@@ -78,11 +78,12 @@ def main():
         try:
             client=StdioClient(command,log)
             listed=client.rpc('tools/list',{})['result']['tools'];original=json.loads(contract.read_text())['tools']
-            assert listed==original and len(listed)==46
+            assert listed==original and len(listed)==len(original)
+            report['pinned_tool_count']=len(original)
             for name in ('shell_start','sudo_start','host_signal','pty_write','binary_write','document_write'):
                 tool=next(t for t in listed if t['name']==name);assert not tool['annotations']['readOnlyHint'] and tool['annotations']['destructiveHint']
             client.call('unreviewed_tool',{},denied=True)
-            passed('all 46 native tools and exact schemas/annotations, unknown direct call denied')
+            passed(f'all {len(original)} native tools and exact schemas/annotations, unknown direct call denied')
             hosts=client.call('host_list',{})['hosts'];host=next(h for h in hosts if h['name']==a.host)
             assert host['execution_mode']=='operator'
             if host.get('platform')=='macos':

@@ -1,0 +1,116 @@
+{
+  "schema": "hepta-dc-parity-frozen-v4-full-stdio-six-host-v1",
+  "recorded_utc": "2026-10-12T15:48:53.059075+00:00",
+  "tested_harness_head": "09d7a4baea4628bd25e19f9299ecf31c9af570b3",
+  "native_release_source_head": "874e801b92c1ec2fb3093b1934a5535a12eb1e64",
+  "native_binary_sha256": "db181570e9e65f9e6a962d013dd4880eedc5b0cda1c71508f84388a4a8d8072b",
+  "stdio_facade_sha256": "71c339ec00d35c272162358f464a17b3e0ba6bdfad681558e02652a97f825a32",
+  "frozen_tool_contract_sha256": "d36610d575146805f4c02d89210abd360b4d42acc8736d1966f20d0d724704b1",
+  "tools_discovered_per_host": 50,
+  "six_real_ssh_target_results": {
+    "main": {
+      "exit_code": 0,
+      "checks": 9,
+      "tool_count": 50,
+      "receipt_sha256": "9b85788a2f2a6df97d8565c3232aa4df825954c7ac99fa919fdb522d7bba6e4c",
+      "log_sha256": "2c05238b73b1704b28eb119114f0017241c6ed8faa0f76314014580484a94927"
+    },
+    "pocket4": {
+      "exit_code": 0,
+      "checks": 8,
+      "tool_count": 50,
+      "receipt_sha256": "0e25f54fdd1504322b1e8dc912e2cbc2521ed16418295310cb6ae3bdb5c96e7c",
+      "log_sha256": "7bd7373ef14230b4bd54ff2842395ca031e854b1fec9aee248e273143f0770fc"
+    },
+    "rog": {
+      "exit_code": 0,
+      "checks": 8,
+      "tool_count": 50,
+      "receipt_sha256": "f6c8ffeada7fef633d8a3e68d5ebce3f4a87c6e73aba0174c8e933209e0495bd",
+      "log_sha256": "7bd7373ef14230b4bd54ff2842395ca031e854b1fec9aee248e273143f0770fc"
+    },
+    "mac": {
+      "exit_code": 0,
+      "checks": 8,
+      "tool_count": 50,
+      "receipt_sha256": "3485ca1e80f1ff5dce817b6dbffb5e07a2bf4be6b5533131290ebddac6ea5f81",
+      "log_sha256": "7bd7373ef14230b4bd54ff2842395ca031e854b1fec9aee248e273143f0770fc"
+    },
+    "x230": {
+      "exit_code": 0,
+      "checks": 8,
+      "tool_count": 50,
+      "receipt_sha256": "10ad95176fee5c594c41168cabad1d77ef22cbfd15441b13de031b3667ba4b44",
+      "log_sha256": "7bd7373ef14230b4bd54ff2842395ca031e854b1fec9aee248e273143f0770fc"
+    },
+    "ai395": {
+      "exit_code": 0,
+      "checks": 8,
+      "tool_count": 50,
+      "receipt_sha256": "f7230b0fc968db1edb2d7ea03eace7fc68ae72ea21173549b55cd9bb12d5c2b2",
+      "log_sha256": "7bd7373ef14230b4bd54ff2842395ca031e854b1fec9aee248e273143f0770fc"
+    }
+  },
+  "six_target_passed_checks": 49,
+  "six_target_expected_checks": 49,
+  "six_target_complete": true,
+  "protected_service_identities_unchanged": true,
+  "protected_service_pids": {
+    "hepta-runtime-operator.service": "2927",
+    "desktop-commander-remote.service": "2894",
+    "hepta-openai-full-operator.service": "1270044"
+  },
+  "repeat_after_artifact_hash_pins": {
+    "host": "main",
+    "passed_checks": 9,
+    "tool_count": 50,
+    "complete": true,
+    "result_sha256": "ebefd65625fa61eb10346d37eba31336ed6530496c555a00af7aaeab93fe0468"
+  },
+  "offline_contract_pin_tests": {
+    "checks": 4,
+    "passed": true,
+    "source": "tests/dc_parity_full_facade_pins_tests.py"
+  },
+  "first_failures_preserved": [
+    {
+      "stage": "main isolated facade first attempt",
+      "failure": "missing HEPTA_RUNTIME_DOCUMENT_PYTHON in the disposable native controller",
+      "native_action_boundary": "Shell and binary write had passed, DOCX was rejected by existing parser configuration check",
+      "correction": "explicitly require and inject the existing dedicated document worker only for isolated controller",
+      "log_sha256": "c6d802e62e246beb14551fed2c20e6c105f1cd7dc7bcd7c14c4a5684335580cf"
+    },
+    {
+      "stage": "first six-host results aggregator",
+      "failure": "strictly required 9 checks from all hosts despite optional sudo only on main",
+      "actual_host_operation_results": "all six exit 0, main 9, others 8",
+      "correction": "expected count depends on explicitly recorded sudo_smoke boolean; fresh complete six-host matrix rerun without reusing failed receipts",
+      "log_sha256": "af7e31ac7c2754168fd6ad4e584f59d4daca61169bf7663275e18422e75f7a84"
+    }
+  ],
+  "receipt_locations": {
+    "six_host_summary": "/tmp/hepta-v4-full-facade-six-qualified-20261012.json",
+    "per_host_directory": "/tmp/hepta-v4-full-facade-six-qualified-20261012",
+    "pinned_main_summary": "/tmp/hepta-v4-facade-pinned-main-20261012.json"
+  },
+  "claim_boundaries": {
+    "local_origin": true,
+    "model_originated": false,
+    "ChatGPT_direct_app_tool_count": 46,
+    "candidate_tool_count": 50,
+    "candidate_activated": false,
+    "live_runtime_replaced": false,
+    "live_tunnel_restarted": false,
+    "Desktop_Commander_restarted": false,
+    "public_gateway_started": false,
+    "ChatGPT_origin_full_shell_qualified": false,
+    "model_origin_write_gate": "HOLD"
+  },
+  "evidence_versioning": {
+    "frozen_native_runtime_rebuilt_this_turn": false,
+    "native_runtime_code_changed": false,
+    "staged_release_sha_preverified": true,
+    "harness_extra_artifact_sha_pins_added_after_first_full_six_run": true,
+    "pinned_main_run_post_pin": true
+  }
+}
