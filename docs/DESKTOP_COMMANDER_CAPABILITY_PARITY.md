@@ -2,6 +2,15 @@
 
 ## LATEST: 50-tool model-origin file, shell and PTY acceptance — 2026-10-13
 
+### Six-host model-origin PTY completion + safe shell pipeline — 2026-10-13
+
+Four additional real ChatGPT-origin `pty_start → pty_write → pty_read → pty_close` sequences succeeded on **main, ROG, X230 and AI395** using normal-user Python REPLs. Each printed a unique `*_PTY_MODEL_ORIGIN_OK 42` marker, exited with code 0, retained `output_complete=true` and no capture error. Independent read-only SSH inspection of **each actual target-side terminal archive** matched the MCP full-output SHA256 and byte count exactly. The existing Pocket4 and Mac receipts were already green, so **all six configured hosts now have at least one model-origin interactive PTY success**.
+
+A separate model-origin `shell_start` on `main` executed one **harmless, non-writing Shell pipeline** (`printf ... | grep ...`), followed by authoritative `process_wait` status `succeeded`/exit 0 and `process_read` stdout `HEPTA_SAFE_PIPELINE_OK`. Its durable target-side stdout archive independently matched the exact 23-byte output and SHA256. This extends the prior `id -u` shell smoke to an actual pipe, **not** unconditional approval for arbitrary compound commands, sudo, or writes through Shell.
+
+New immutable evidence: `docs/qualification/dc-parity-v4-chatgpt-six-host-pty-and-safe-shell-20261013.json`. No running native runtime, tunnel or Desktop Commander service was restarted; no business files or user permissions were changed. The exact-head CI on the preceding source commit `b0e6f68` succeeded: [#38287221561](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/38287221561).
+
+
 ### Additional real ChatGPT-origin multihost qualification — 2026-10-13
 
 This conversation directly invoked the **installed, reviewed 50-tool** Hepta Full Operator plugin to create one unique, harmless `/tmp` scratch file each on **Pocket4, ROG, Mac, X230 and AI395** via `text_editor(create)` and configured `ssh://` destinations. Native `view` and `file_info` independently returned exact contents, byte lengths and SHA256s for each target. Further model-origin `text_editor(str_replace)` on Pocket4 and Mac inserted true UTF-8 Chinese and crab-emoji text; both were read back. An **independent SSH read-only verification** on each target independently confirmed the final file size, content marker and hash. No existing business files, sudo, symlink paths or service configuration were touched. Evidence: `docs/qualification/dc-parity-v4-chatgpt-multihost-write-20261013.json`.

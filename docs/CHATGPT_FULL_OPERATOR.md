@@ -2,6 +2,15 @@
 
 ## LATEST: 50-tool model-origin file, shell and PTY acceptance — 2026-10-13
 
+### Six-host model-origin PTY completion + safe shell pipeline — 2026-10-13
+
+Four additional real ChatGPT-origin `pty_start → pty_write → pty_read → pty_close` sequences succeeded on **main, ROG, X230 and AI395** using normal-user Python REPLs. Each printed a unique `*_PTY_MODEL_ORIGIN_OK 42` marker, exited with code 0, retained `output_complete=true` and no capture error. Independent read-only SSH inspection of **each actual target-side terminal archive** matched the MCP full-output SHA256 and byte count exactly. The existing Pocket4 and Mac receipts were already green, so **all six configured hosts now have at least one model-origin interactive PTY success**.
+
+A separate model-origin `shell_start` on `main` executed one **harmless, non-writing Shell pipeline** (`printf ... | grep ...`), followed by authoritative `process_wait` status `succeeded`/exit 0 and `process_read` stdout `HEPTA_SAFE_PIPELINE_OK`. Its durable target-side stdout archive independently matched the exact 23-byte output and SHA256. This extends the prior `id -u` shell smoke to an actual pipe, **not** unconditional approval for arbitrary compound commands, sudo, or writes through Shell.
+
+New immutable evidence: `docs/qualification/dc-parity-v4-chatgpt-six-host-pty-and-safe-shell-20261013.json`. No running native runtime, tunnel or Desktop Commander service was restarted; no business files or user permissions were changed. The exact-head CI on the preceding source commit `b0e6f68` succeeded: [#38287221561](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/38287221561).
+
+
 **This supersedes all older 46/48/49-tool candidate and ChatGPT-refresh-pending statements below, retained for historical accountability.** The current conversation actually loads all **50** native Hepta Full Operator tools (19 annotated read-only, 31 annotated non-read-only). The full native backend and private tunnel are already installed, and the last pre-evidence exact-head GitHub CI [#38280658585](https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/38280658585) succeeded. The original 46 tools' definitions remain pinned; four additive file tools retain their reviewed risk annotations.
 
 Actual **ChatGPT-originated** acceptance (not a local stdio/SSH simulation) succeeded in a dedicated `/tmp/hepta-chatgpt-v4-model-acceptance-20261013-0100-6f3a2b` scratch scope: `directory_create`, `text_file_write(create)`, `text_file_write(append)`, `text_file_write(replace)` with exact prior SHA256s, `file_move`, and `directory_move`. The final file was independently read at the relocated path: exact UTF-8 content, SHA256 `46a58a30f025c63efb1c2250c13e992ad47a35a4518eda29eeeabc89c35217c5`, mode 0600, directory mode 0700, and both original pathnames absent. No overwrite, symlink, remote-host or privilege relaxation was used. All four *new tool names* have actual positive receipts now.
