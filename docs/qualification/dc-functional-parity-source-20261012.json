@@ -1,0 +1,105 @@
+{
+  "schema": "hepta-dc-functional-parity-candidate-v1",
+  "recorded_at_utc": "2026-10-12T11:00:41.974079+00:00",
+  "base_head": "b34acd65b5b4bf25a98d8838189b8d398e5b9e78",
+  "existing_chatgpt_registered_tools": 46,
+  "new_isolated_candidate_tools": 48,
+  "new_tools": [
+    {
+      "name": "directory_create",
+      "purpose": "Scoped controller-local Linux recursive directory creation without shell",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "native_qualification": "passed"
+    },
+    {
+      "name": "file_move",
+      "purpose": "Scoped Linux controller-local single regular file atomic rename without replacement, not arbitrary move",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "native_qualification": "passed"
+    }
+  ],
+  "tests": {
+    "rust_main_passed": 399,
+    "rust_main_ignored": 11,
+    "rust_jobctl_passed": 8,
+    "parity_focused_tests": 9,
+    "rust_clippy_strict": "passed",
+    "rustfmt": "passed",
+    "independent_isolated_mcp_checks": 8,
+    "integration_receipt_schema": "hepta-dc-parity-independent-mcp-v1"
+  },
+  "source_file_sha256": {
+    "src/mcp/server.rs": "5aaef6e5f6ee74c8fe56dda1f90ac50e425a44e898c7387a286c204f733a938b",
+    "src/mcp/server_tests.rs": "e2fecc16264081763969a249a43c2a99c6ef5d233cae4bb1869bf9a57321b6b1",
+    "src/mcp/fs/mod.rs": "8aca25ef43b14259c46c32717856e31aae3a9cd923ba5fc861e2eb207ff8c283",
+    "src/mcp/fs/parity_ops.rs": "228d8ac336ef235c03d62b85077805f660ccc9c48e72e5e9ee00c100684f16ab",
+    "src/mcp/fs/parity_ops_tests.rs": "5ecdce9e7bdf6f6db2d2ca610e6a3dd7ac80fa4700ba18ac2b6a8a43d3c61be3",
+    "tests/dc_parity_native_acceptance.py": "d510557d2a21d57654b6671a255aff9022b72ad6766ba81a1ffac9cb1de49173",
+    ".github/workflows/operator-parity.yml": "6e8f915bbb17749a425d4063b088c2227377c0ff53ee5a47d7e30b4887d337eb",
+    "docs/DESKTOP_COMMANDER_CAPABILITY_PARITY.md": "e634194b53ae1c8d9053633c5f7bec0ea1da933dfe5ada345192ec47dcadcea7"
+  },
+  "native_isolated_test": {
+    "schema": "hepta-dc-parity-independent-mcp-v1",
+    "complete": true,
+    "checks": [
+      "48 native tools discovered; both new tool annotations truthful",
+      "real MCP directory create and idempotent existing directory",
+      "controller workspace isolation enforced before mkdir",
+      "symlink parent refused without side effects",
+      "same private runtime creates and then atomically moves a regular file",
+      "existing destination not overwritten",
+      "file move refuses symlink source",
+      "both file move endpoints constrained to controller roots"
+    ],
+    "tool_count": 48,
+    "chatgpt_origin": false,
+    "runtime_install_changed": false,
+    "desktop_commander_changed": false,
+    "public_gateway_started": false
+  },
+  "services": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2927",
+      "ActiveState": "active",
+      "UnitFileState": "enabled"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active",
+      "UnitFileState": "enabled"
+    },
+    "hepta-openai-full-operator.service": {
+      "MainPID": "1270044",
+      "ActiveState": "active",
+      "UnitFileState": "enabled"
+    }
+  },
+  "safety": {
+    "new_service_or_runtime_restarted": false,
+    "existing_full_tunnel_pinned_contract_changed": false,
+    "existing_46_tool_installed_binary_changed": false,
+    "desktop_commander_changed": false,
+    "shell_tool_renamed_or_proxy_wrapped": false,
+    "write_tool_pretended_readonly": false,
+    "prior_platform_blocks_bypassed": false
+  },
+  "release_state": {
+    "source_candidate_ready_for_ci": true,
+    "new_exact_head_CI": "pending",
+    "ChatGPT_originated_new_mutating_calls": 0,
+    "prod_runtime_installed_new_tools": false,
+    "private_tunnel_tool_count": 46,
+    "public_gateway": "HOLD"
+  },
+  "doc": "docs/DESKTOP_COMMANDER_CAPABILITY_PARITY.md"
+}

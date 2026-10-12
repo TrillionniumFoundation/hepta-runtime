@@ -449,6 +449,78 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "Create Workspace Directory",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Create a directory tree only inside the configured controller-local workspace. \
+			Existing directories succeed without change, while files or symlink components are refused. \
+			No command execution, remote host selection, privilege escalation or overwrite. Linux only."
+	)]
+	async fn directory_create(
+		&self,
+		context: RequestContext<RoleServer>,
+		Parameters(params): Parameters<DirectoryCreateParams>,
+	) -> Result<String, String> {
+		self.ensure_session_workdir(&context);
+		let workdir = self.workdir.get_current();
+		enforce_runtime_path_spec(&params.path, &workdir, true)?;
+		let call = McpToolCall {
+			tool_name: "directory_create".to_string(),
+			parameters: serde_json::to_value(&params).unwrap_or_default(),
+			tool_id: String::new(),
+			workdir,
+		};
+		request_ctx::with_request_context(self.view_cache.clone(), async move {
+			let result = fs::parity_ops::execute_directory_create(&call)
+				.await
+				.map_err(|e| e.to_string())?;
+			Ok(append_hints(result))
+		})
+		.await
+	}
+
+	#[tool(
+		title = "Move Workspace File Without Overwrite",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Move one regular file between two configured controller-local workspace paths. \
+			Never overwrite an existing destination or follow source/parent symlinks. Requires an \
+			existing destination parent and same-device atomic rename support; no copy/delete fallback. \
+			This removes the old filename but retains the file inode. Linux only."
+	)]
+	async fn file_move(
+		&self,
+		context: RequestContext<RoleServer>,
+		Parameters(params): Parameters<FileMoveParams>,
+	) -> Result<String, String> {
+		self.ensure_session_workdir(&context);
+		let workdir = self.workdir.get_current();
+		enforce_runtime_path_spec(&params.source, &workdir, true)?;
+		enforce_runtime_path_spec(&params.destination, &workdir, true)?;
+		let call = McpToolCall {
+			tool_name: "file_move".to_string(),
+			parameters: serde_json::to_value(&params).unwrap_or_default(),
+			tool_id: String::new(),
+			workdir,
+		};
+		request_ctx::with_request_context(self.view_cache.clone(), async move {
+			let result = fs::parity_ops::execute_file_move(&call)
+				.await
+				.map_err(|e| e.to_string())?;
+			Ok(append_hints(result))
+		})
+		.await
+	}
+
+	#[tool(
 		title = "Batch Edit",
 		annotations(
 			read_only_hint = false,
@@ -1847,6 +1919,20 @@ pub enum TextEditorCommand {
 	StrReplace,
 	Delete,
 	UndoEdit,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct DirectoryCreateParams {
+	/// Directory path in the configured local controller workspace. Remote paths are refused.
+	pub path: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct FileMoveParams {
+	/// Existing local ordinary file to move, never a symlink or directory.
+	pub source: String,
+	/// Absent destination path with an existing non-symlink parent directory.
+	pub destination: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]

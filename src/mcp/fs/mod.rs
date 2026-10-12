@@ -19,6 +19,7 @@ pub mod core;
 pub mod delta;
 pub mod directory;
 pub mod file_ops;
+pub mod parity_ops;
 pub mod remote;
 pub mod search;
 pub mod shell;
