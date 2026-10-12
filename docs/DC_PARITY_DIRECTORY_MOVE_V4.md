@@ -72,3 +72,11 @@ Re-executed on the **new Release executable**, not only the debug candidate:
 This is an **immutable pre-deployment stage**, not the previously blocked live switch. The existing installed runtime remains native SHA256 `5bb9dade…` and the existing ChatGPT app remains at **46 tools**. No blocked write or service-switch request was retried using an alternative executor, no Desktop Commander lifecycle was changed and no public Cloud Gateway was started. Live installation, new schema scan and model-origin actual file writes remain separately gated.
 
 Full receipt: `docs/qualification/dc-parity-v4-six-host-release-staged-20261012.json`. The candidate stays independent until a permitted service cutover; the prior live profile and runtime binary have not been overwritten.
+
+## Source root boundary hardening — 2026-10-12
+
+A private **two-root controller MCP** demonstrated a real missing invariant: v4 accepted `directory_move` with its source exactly equal to one configured controller workspace root, relocating that entire root into a second authorized root. The kernel atomic rename was correct for its requested paths, but that move invalidated a configured workspace authority boundary. The tested root held only a disposable marker file. The original failure (old immutable Release) is retained; it must not be relabelled as a passing security case.
+
+The corrected source now checks the canonicalized source against **every configured controller workspace root**, rejecting a move when any configured root is the source directory itself or lies below it. This includes nested workspace roots inside an otherwise authorized parent. It uses the administrator's existing config only; no new shell/OS privileges, tool names or annotations are introduced. Existing fd-relative Linux `RENAME_NOREPLACE` still guards the real operation and symlink traversal.
+
+The new independent `tests/dc_parity_workspace_root_guard_acceptance.py` explicitly recreates this multi-root situation, proves the two denial cases, and proves ordinary directory/file moves inside a workspace continue to succeed. The current fix is a controller-root policy guard, **not** a universal race-free identity comparison against an unrelated privileged writer able to rename directories concurrently. Production runtime and the ChatGPT-approved 46-tool contract remain unchanged.

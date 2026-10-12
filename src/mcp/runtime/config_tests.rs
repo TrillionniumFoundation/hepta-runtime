@@ -102,3 +102,23 @@ fn checkpoint_config_is_pinned_and_opt_in_linux_operator_only() {
 	c.hosts.get_mut("test").unwrap().checkpoint_binary = Some("/tmp/../criu".into());
 	assert!(c.validate().is_err());
 }
+
+#[test]
+fn directory_move_does_not_relocate_configured_roots_or_ancestors() {
+	let fixture = tempfile::tempdir().unwrap();
+	let a = fixture.path().join("workspace-a");
+	let b = fixture.path().join("workspace-b");
+	let ancestor = b.join("parent");
+	let nested = ancestor.join("protected-workspace");
+	let ordinary = b.join("ordinary");
+	std::fs::create_dir(&a).unwrap();
+	std::fs::create_dir_all(&nested).unwrap();
+	std::fs::create_dir(&ordinary).unwrap();
+	let roots = vec![a.clone(), b.clone(), nested.clone()];
+	assert!(check_directory_move_against_roots(&a, &roots).is_err());
+	assert!(check_directory_move_against_roots(&b, &roots).is_err());
+	assert!(check_directory_move_against_roots(&ancestor, &roots).is_err());
+	assert!(check_directory_move_against_roots(&nested, &roots).is_err());
+	assert!(check_directory_move_against_roots(&ordinary, &roots).is_ok());
+	assert!(check_directory_move_against_roots(&b.join("missing"), &roots).is_err());
+}

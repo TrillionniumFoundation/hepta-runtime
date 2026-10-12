@@ -115,6 +115,7 @@ pub async fn execute_directory_move(call: &McpToolCall) -> Result<String> {
 		.ok_or_else(|| anyhow!("destination must be a string"))?;
 	let source = scoped_local(from, &call.workdir)?;
 	let destination = scoped_local(to, &call.workdir)?;
+	crate::mcp::runtime::config::check_directory_move_source(&source)?;
 	let old = source.clone();
 	let new = destination.clone();
 	tokio::task::spawn_blocking(move || {

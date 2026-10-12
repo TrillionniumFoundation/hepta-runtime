@@ -564,6 +564,32 @@ pub fn check_local_path(path: &Path) -> Result<()> {
 	)
 }
 
+/// An administrator-selected controller root is a durable authority boundary.
+/// Even when a process has OS rename permission on that directory, relocating
+/// the root (or one of its ancestors) would silently invalidate workspace
+/// confinement for later operations. This check does not grant new authority.
+/// Directory parents may still be changed concurrently by independent owners;
+/// the fd-relative kernel rename remains the final no-symlink/no-overwrite gate.
+fn check_directory_move_against_roots(source: &Path, roots: &[PathBuf]) -> Result<()> {
+	let candidate = std::fs::canonicalize(source)
+		.with_context(|| "cannot resolve directory move source identity")?;
+	for root in roots {
+		let pinned = std::fs::canonicalize(root)
+			.with_context(|| "configured controller workspace root is unavailable")?;
+		if pinned.starts_with(&candidate) {
+			bail!("directory move would relocate a configured controller workspace root");
+		}
+	}
+	Ok(())
+}
+
+/// Protect every configured root, including a nested root contained in a
+/// larger authorized workspace. Only callable after normal path checks.
+pub fn check_directory_move_source(source: &Path) -> Result<()> {
+	let config = runtime_config()?;
+	check_directory_move_against_roots(source, &config.controller_workspace_roots)
+}
+
 fn remote_path_allowed(path: &str, prefixes: &[String]) -> bool {
 	prefixes.iter().any(|prefix| {
 		path == prefix || path.starts_with(&format!("{}/", prefix.trim_end_matches('/')))
