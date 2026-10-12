@@ -199,6 +199,55 @@ class GatewayPolicyTests(unittest.TestCase):
             self.call('directory_create',{'path':ROOT_PATH+'/two'},
                       call_id='one-request-00001'))
 
+    def test_two_authorized_tenants_isolate_same_call_id_device_and_paths(self):
+        second_user=AuthenticatedUser(
+            issuer=self.user.issuer,audience=RESOURCE,
+            subject='cust-002',tenant='tenant-002',expires_at=NOW+300,
+            scopes=frozenset({'hepta:connect','hepta:write'}),
+        )
+        second_agent=AuthenticatedAgent(
+            device_id='device-002',cert_sha256='a'*64,
+            connection_generation=3,tenant='tenant-002',subject='cust-002',
+            workspace_root='/home/customer2/workspace',
+            configured_host_aliases=frozenset({'isolated-host'}),
+            native_catalog_sha256=self.contract.catalog_sha256,
+            tenant_runtime_isolated=True,
+        )
+        second_binding=TenantBinding(
+            issuer=second_user.issuer,audience=RESOURCE,
+            subject=second_user.subject,tenant=second_user.tenant,
+            device_id=second_agent.device_id,cert_sha256=second_agent.cert_sha256,
+            connection_generation=second_agent.connection_generation,
+            expires_at=NOW+1000,allowed_tools=frozenset({'directory_create','host_list'}),
+            allowed_hosts=frozenset({'isolated-host'}),
+            local_workspace_root=second_agent.workspace_root,
+        )
+        def verify(auth):
+            if auth=='Bearer fixture-alice':return self.user
+            if auth=='Bearer fixture-bob':return second_user
+            raise ValueError('invalid test token')
+        gateway=GatewayPolicy(
+            self.contract,self.ledger,verify,(self.binding,second_binding),
+            resource=RESOURCE,now=lambda:NOW)
+        request_id='shared-request-00001'
+        alice=gateway.prepare('Bearer fixture-alice',self.agent,
+            'directory_create',{'path':ROOT_PATH+'/alice'},request_id)
+        bob=gateway.prepare('Bearer fixture-bob',second_agent,
+            'directory_create',{'path':'/home/customer2/workspace/bob'},request_id)
+        self.assertNotEqual(alice.tenant,bob.tenant)
+        self.assertEqual(self.ledger.state(alice),'reserved')
+        self.assertEqual(self.ledger.state(bob),'reserved')
+        with self.assertRaises(Rejected) as error:
+            gateway.prepare('Bearer fixture-alice',second_agent,'host_list',{},
+                'cross-tenant-0001')
+        self.assertEqual(error.exception.code,'TENANT_DEVICE_NOT_AUTHORIZED')
+        with self.assertRaises(Rejected) as error:
+            gateway.prepare('Bearer fixture-bob',second_agent,'directory_create',
+                {'path':ROOT_PATH+'/stolen'},'cross-path-000001')
+        self.assertEqual(error.exception.code,'PATH_OUTSIDE_TENANT_WORKSPACE')
+        self.assertEqual(self.ledger.state(alice),'reserved')
+        self.assertEqual(self.ledger.state(bob),'reserved')
+
     def test_mismatched_tenant_subject_and_issuer_fail_closed(self):
         for change in ({'tenant':'tenant-evil'},{'subject':'cust-evil'},
                        {'issuer':'https://evil.example.test'}):

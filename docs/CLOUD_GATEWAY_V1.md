@@ -97,6 +97,11 @@ Source-level unit testing is **not** an OAuth compliance certificate, a public
 network security penetration test, signed device manifest verification or
 ChatGPT Plugin Directory review.
 
+A separate two-tenant positive/negative regression verifies that two enrolled
+accounts each retain their own reservation for the same opaque client call ID,
+while a token from tenant A cannot select tenant B's agent or write paths.
+These are still fake verifier identities, not real commercial customers.
+
 ## Work required before internet exposure
 
 1. Choose a verified organization, actual stable owned public HTTPS domain,
@@ -121,3 +126,64 @@ Official product requirements:
 - https://developers.openai.com/plugins/build/mcp-server
 - https://developers.openai.com/plugins/deploy/app-review
 - https://developers.openai.com/api/docs/guides/secure-mcp-tunnels
+
+## Offline MCP discovery and OAuth metadata projection
+
+`deploy/cloud_gateway_mcp_catalog.py` builds a **pure-data** modern MCP
+`server/discover`, `tools/list` and OAuth protected-resource metadata/challenge
+projection from exactly the same reviewed v4 native catalog. The tool names,
+input schemas and read-only/destructive/open-world annotations remain bytewise
+identical in the selected native tool definitions; only an accurate
+`securitySchemes: [{"type": "oauth2", "scopes": [...]}]` entry is added per
+tool. The scope list reflects the same connect/write/execute/privileged policy
+as the offline Gateway decision core. There is no anonymous fallback for
+customer-specific tools.
+
+The catalog projection requires a nonempty explicit administrator-reviewed
+allowlist and cannot silently expose newly introduced tools. A deliberately
+provided full 50-name allowlist remains just a **test catalog**; it does not
+publish all shell/sudo operations or grant a customer any new authority.
+`tests/cloud_gateway_mcp_catalog_tests.py` verifies 10 additional behavior
+properties. The local development schema validation of full v4 catalog MCP
+`DiscoverResultResponse` and `ListToolsResultResponse` recorded **zero**
+errors against the 2026-07-28 official JSON Schema. No network/OAuth login
+or actual multi-tenant execution is tested by this projection.
+
+**High-risk tool caveat:** A public ordinary-user execution agent must not
+inherit the private controller's broad sudoers/account privileges. Otherwise
+`shell_start` or `process_start` could evade a policy intended only to gate
+`sudo_start`. A future signed OS sandbox attestation must prove an isolated
+non-root UID, dropped capabilities and no implicit sudo rights; any privileged
+lane needs its own explicit audited authorization boundary. This protection
+is NOT implemented by the offline Python policy or a mere boolean claim.
+
+## Caller-specific authenticated MCP discovery (offline candidate)
+
+**Mandatory future public ingress flow:** verify an OAuth bearer token's
+signature, issuer, audience, scopes, expiry and revocation using an independently
+trusted verifier; authenticate an isolated device over real mutually authenticated
+transport; then use `GatewayPolicy.authorized_tool_names(...)` to derive **each
+caller's** subset of the approved native v4 tools. The new
+`authenticated_tools_list_response(...)` only returns that derived subset.
+The `authenticated_discover_response(...)` entrypoint enforces the same
+user/device admission before returning public capability metadata.
+
+`reviewed_public_tools(...)` and `tools_list_response(...)` are offline/admin
+building blocks, **not HTTP handler entrypoints**. They must not be wired to
+untrusted model-supplied tool names, a shared global token, or an anonymous
+fallback. Each `tools/call` must separately invoke `GatewayPolicy.prepare`
+with the current independently verified user/device. The policy and catalog
+remain immutable until an explicit reviewed release.
+
+A direct, **non-network** local verification of the existing code after the
+identity-aware refactor (using the test fixture's fake OAuth verifier and
+synthetic agent certificate identities) returned: 6 names for an enrolled
+read+write+execute user, 2 for connect/read-only, 5 for connect+write without
+execute, and an empty catalog for a caller with no enrolled tools. Invalid
+bearer and cross-tenant agent cases were rejected. Every authenticated
+`server/discover` and `tools/list` response tested against the local official
+MCP 2026-07-28 JSON Schema returned zero errors. These ad-hoc checks have
+not been promoted to a separate persistent CI test because the attempted
+source-test edit was blocked by this ChatGPT session's safety check; no
+alternative path was used to replay that rejected edit. This is **not** a
+production readiness qualification.

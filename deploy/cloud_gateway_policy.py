@@ -291,10 +291,8 @@ class GatewayPolicy:
                 raise ValueError("Conflicting device enrollment")
             self.bindings[key] = binding
 
-    def prepare(
-        self, authorization_header: str, agent: AuthenticatedAgent,
-        tool_name: str, arguments: dict, call_id: str,
-    ) -> DispatchPermit:
+    def _authenticated_binding(self, authorization_header: str,
+                               agent: AuthenticatedAgent):
         if not isinstance(authorization_header, str) or not authorization_header.startswith("Bearer "):
             raise Rejected("OAUTH_REQUIRED")
         # The verifier MUST validate issuer/JWKS signature, audience/resource,
@@ -337,6 +335,33 @@ class GatewayPolicy:
             or agent.configured_host_aliases != binding.allowed_hosts
             or agent.tenant_runtime_isolated is not True):
             raise Rejected("AGENT_CONFIG_MISMATCH")
+        return user, binding
+
+    def authorized_tool_names(self, authorization_header: str,
+                              agent: AuthenticatedAgent) -> FrozenSet[str]:
+        """An authenticated per-user discovery subset; no model-supplied ACL.
+
+        The public /mcp adapter MUST call this for each tools/list, and invoke
+        prepare independently before tools/call. No empty/anonymous fallback.
+        """
+        user,binding=self._authenticated_binding(authorization_header,agent)
+        approved=set()
+        for name in binding.allowed_tools:
+            if not self.contract.read_only(name) and 'hepta:write' not in user.scopes:
+                continue
+            if name in EXECUTION_TOOLS and 'hepta:execute' not in user.scopes:
+                continue
+            if name in HIGH_PRIVILEGE and (name not in binding.elevated_tools
+                                           or 'hepta:privileged' not in user.scopes):
+                continue
+            approved.add(name)
+        return frozenset(approved)
+
+    def prepare(
+        self, authorization_header: str, agent: AuthenticatedAgent,
+        tool_name: str, arguments: dict, call_id: str,
+    ) -> DispatchPermit:
+        user,binding=self._authenticated_binding(authorization_header,agent)
         if not isinstance(tool_name,str) or tool_name not in self.contract.by_name:
             raise Rejected("TOOL_UNKNOWN")
         if tool_name not in binding.allowed_tools:
