@@ -7,6 +7,7 @@ endpoint, or candidate execution is available. All validation precedes publicati
 A successful preflight remains HOLD: live inventories are not an admission freeze.
 """
 import argparse
+import copy
 import datetime
 import hashlib
 import http.client
@@ -622,6 +623,220 @@ def refuse_token_source(path, token_path):
         raise ValueError("authentication inode cannot be a backup role")
 
 
+
+PROFILE_REVIEW_KEYS = {
+    "schema", "status", "stage_manifest", "source", "inputs", "candidate_profile",
+    "candidate_installed_manifest", "changed_profile_fields",
+    "changed_installed_manifest_fields", "candidate_facade_argv",
+    "other_profile_fields_preserved", "other_installed_manifest_fields_preserved",
+    "live_files_changed", "services_restarted", "app_refreshed", "token_read_or_copied",
+    "candidate_started", "administrator_profile_review_completed",
+    "full_dc_replacement_qualified", "services_before",
+}
+
+
+def private_json_object(raw):
+    """JSON only, with no duplicate fields or non-finite numeric values."""
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError("duplicate private configuration field")
+            value[key] = item
+        return value
+
+    def nonfinite(_):
+        raise ValueError("non-finite private configuration value")
+
+    value = json.loads(raw.decode("utf-8"), object_pairs_hook=unique, parse_constant=nonfinite)
+    if not isinstance(value, dict):
+        raise ValueError("private JSON configuration object required")
+    # parse_constant does not catch an exponent such as 1e999 overflowing to inf.
+    json.dumps(value, allow_nan=False)
+    return value
+
+
+def read_private_profile_artifact(path, expected_sha256, token_path):
+    """Pin private configuration bytes; never digest a credential inode."""
+    path = S.absolute_path(path)
+    token_path = S.absolute_path(token_path)
+    if not isinstance(expected_sha256, str) or not S.HASH.fullmatch(expected_sha256):
+        raise ValueError("explicit private artifact SHA256 pin required")
+    refuse_token_source(path, token_path)
+    token_before = token_path.lstat()
+    if (not stat.S_ISREG(token_before.st_mode) or token_before.st_nlink != 1
+            or token_before.st_uid != os.getuid()
+            or stat.S_IMODE(token_before.st_mode) not in (0o400, 0o600)):
+        raise PermissionError("authentication reference requires its private ordinary inode")
+    token_identity = (token_before.st_dev, token_before.st_ino)
+    parent, name = S.open_parent(path)
+    try:
+        parent_before = os.fstat(parent)
+        if (not stat.S_ISDIR(parent_before.st_mode) or parent_before.st_uid != os.getuid()
+                or stat.S_IMODE(parent_before.st_mode) != 0o700):
+            raise PermissionError("private configuration parent requires owner-only 0700")
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                     dir_fd=parent)
+        try:
+            def validate(info):
+                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                    raise ValueError("private configuration requires a single-link ordinary file")
+                if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o600:
+                    raise PermissionError("private configuration requires current owner and mode 0600")
+
+            before = os.fstat(fd)
+            validate(before)
+            current_token = token_path.lstat()
+            if ((current_token.st_dev, current_token.st_ino) != token_identity
+                    or (before.st_dev, before.st_ino) == token_identity):
+                raise ValueError("private configuration cannot alias changed authentication")
+            if before.st_size > S.MAX_TEXT_BYTES:
+                raise ValueError("private configuration exceeds bounded descriptor read")
+            raw = bytearray()
+            while len(raw) <= S.MAX_TEXT_BYTES:
+                chunk = os.read(fd, min(65536, S.MAX_TEXT_BYTES + 1 - len(raw)))
+                if not chunk:
+                    break
+                raw.extend(chunk)
+            after = os.fstat(fd)
+            validate(after)
+            linked = os.stat(name, dir_fd=parent, follow_symlinks=False)
+            fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns",
+                      "st_uid", "st_nlink", "st_mode")
+            if (any(getattr(before, field) != getattr(after, field) for field in fields)
+                    or any(getattr(after, field) != getattr(linked, field) for field in fields)):
+                raise ValueError("private configuration changed during descriptor read")
+            parent_after = os.fstat(parent)
+            if any(getattr(parent_before, field) != getattr(parent_after, field)
+                   for field in ("st_dev", "st_ino", "st_uid", "st_mode")):
+                raise ValueError("private configuration parent changed during descriptor read")
+            token_after = token_path.lstat()
+            if ((token_after.st_dev, token_after.st_ino) != token_identity
+                    or len(raw) != before.st_size or len(raw) > S.MAX_TEXT_BYTES):
+                raise ValueError("private configuration or authentication identity changed")
+        finally:
+            os.close(fd)
+    finally:
+        os.close(parent)
+    raw = bytes(raw)
+    observed_sha256 = digest(raw)
+    if observed_sha256 != expected_sha256:
+        raise ValueError("private artifact differs from its supplied SHA256 pin")
+    return raw, {"path": str(path), "sha256": observed_sha256, "bytes": len(raw), "mode": "0600"}
+
+
+def validate_private_profile_review(args, manifest, material, stage_pin):
+    """Verify a private candidate packet; metadata never grants administration."""
+    supplied_path = getattr(args, "profile_review_manifest", None)
+    supplied_sha256 = getattr(args, "profile_review_manifest_sha256", None)
+    if supplied_path is None and supplied_sha256 is None:
+        return None
+    if supplied_path is None or supplied_sha256 is None:
+        raise ValueError("private profile review path and SHA256 must be supplied together")
+    path = S.absolute_path(supplied_path)
+    folder = path.parent
+    if path.name != "review.json":
+        raise ValueError("private profile review requires the fixed packet manifest name")
+    forbidden = [S.absolute_path(args.source_root), S.ROOT.resolve(),
+                 S.absolute_path(args.output_directory)]
+    if args.prepare_backups:
+        forbidden.append(S.absolute_path(args.backup_directory))
+    if any(folder == root or root in folder.parents or folder in root.parents for root in forbidden):
+        raise ValueError("private profile packet must be isolated from source and publication paths")
+    if any((ancestor / ".git").exists() for ancestor in (folder, *folder.parents)):
+        raise ValueError("private profile packet must be outside Git checkouts")
+    private_directory(folder)
+    names = set()
+    for child in folder.iterdir():
+        names.add(child.name)
+        if len(names) > 3:
+            raise ValueError("private profile packet has unexpected entries")
+    if names != {"review.json", "candidate-profile.yaml", "candidate-installed.json"}:
+        raise ValueError("private profile packet requires exactly its three pinned files")
+    token_path = manifest["baseline"]["auth_token_file"]
+    raw, review_pin = read_private_profile_artifact(path, supplied_sha256, token_path)
+    review = private_json_object(raw)
+    if (set(review) != PROFILE_REVIEW_KEYS or review["schema"] != "hepta-successor-private-profile-review-v1"
+            or review["status"] != "HOLD"):
+        raise ValueError("unsupported private profile review manifest")
+    if any(review[key] is not False for key in (
+            "live_files_changed", "services_restarted", "app_refreshed", "token_read_or_copied",
+            "candidate_started", "administrator_profile_review_completed", "full_dc_replacement_qualified")):
+        raise ValueError("private profile metadata cannot assert activation or administrator approval")
+    if (review["other_profile_fields_preserved"] is not True
+            or review["other_installed_manifest_fields_preserved"] is not True
+            or not isinstance(review["services_before"], dict)):
+        raise ValueError("private profile preservation metadata is inconsistent")
+    expected_stage = {"path": str(S.absolute_path(args.stage_manifest)), "sha256": stage_pin["sha256"]}
+    if (raw_json(review["stage_manifest"]) != raw_json(expected_stage)
+            or raw_json(review["source"]) != raw_json(manifest["source"])):
+        raise ValueError("private profile review is bound to a different exact stage or source")
+    references = manifest["baseline"]["live_files"]
+    expected_inputs = {role: references[role] for role in ("profile", "installed_manifest")}
+    if raw_json(review["inputs"]) != raw_json(expected_inputs):
+        raise ValueError("private profile review differs from current pinned live authorities")
+    current = {}
+    for role, pin in expected_inputs.items():
+        current_raw, _ = read_private_profile_artifact(pin["path"], pin["sha256"], token_path)
+        current[role] = private_json_object(current_raw)
+    stage_folder = S.absolute_path(args.stage_manifest).parent
+    facade_expected = ["/usr/bin/python3", str(stage_folder / "chatgpt_full_operator.py"),
+                       "--stdio", "--upstream", ENDPOINT, "--token-file", str(token_path),
+                       "--contract", str(stage_folder / "contract.json"),
+                       "--contract-sha256", manifest["inputs"]["contract"]["sha256"],
+                       "--acknowledge-full-operator"]
+    if (review["candidate_facade_argv"] != facade_expected
+            or json.loads(material["candidate-commands.json"])["facade_argv"] != facade_expected):
+        raise ValueError("private profile candidate changes staged facade or loopback authority")
+    old = manifest["baseline"]["artifacts"]
+    old_argv = ["/usr/bin/python3", old["facade"]["path"], "--stdio", "--token-file", str(token_path),
+                "--contract", old["contract"]["path"], "--contract-sha256", old["contract"]["sha256"],
+                "--acknowledge-full-operator"]
+    mcp = current["profile"].get("mcp")
+    commands = mcp.get("commands") if isinstance(mcp, dict) else None
+    if (not isinstance(commands, list) or len(commands) != 1 or not isinstance(commands[0], dict)
+            or commands[0].get("channel") != "main" or not isinstance(commands[0].get("command"), str)
+            or shlex.split(commands[0]["command"]) != old_argv
+            or current["installed_manifest"].get("release") != str(pathlib.Path(old["facade"]["path"]).parent)):
+        raise ValueError("private installed command or release differs from pinned rollback authority")
+    updates = {"release": str(stage_folder), "facade_sha256": manifest["inputs"]["facade"]["sha256"],
+               "contract_sha256": manifest["inputs"]["contract"]["sha256"],
+               "tool_contract_catalog_sha256": manifest["catalog"]["catalog_sha256"],
+               "tools": manifest["catalog"]["tool_count"]}
+    activation = json.loads(material["activation-plan.json"])
+    if (raw_json(activation["installed_manifest_field_updates"]) != raw_json(updates)
+            or review["changed_profile_fields"] != ["mcp.commands[0].command"]
+            or review["changed_installed_manifest_fields"] != sorted(updates)):
+        raise ValueError("private profile review claims unsupported field changes")
+    candidates = {}
+    for role, filename in (("candidate_profile", "candidate-profile.yaml"),
+                           ("candidate_installed_manifest", "candidate-installed.json")):
+        pin = review[role]
+        if (not isinstance(pin, dict) or set(pin) != {"path", "sha256", "bytes", "mode"}
+                or pin["path"] != str(folder / filename) or pin["mode"] != "0600"
+                or type(pin["bytes"]) is not int or not 1 <= pin["bytes"] <= S.MAX_TEXT_BYTES):
+            raise ValueError("private profile candidate requires fixed path and bounded exact metadata")
+        candidate_raw, observed = read_private_profile_artifact(pin["path"], pin["sha256"], token_path)
+        if observed["bytes"] != pin["bytes"]:
+            raise ValueError("private profile candidate byte count differs")
+        candidates[role] = (private_json_object(candidate_raw), observed)
+    expected_profile = copy.deepcopy(current["profile"])
+    expected_profile["mcp"]["commands"][0]["command"] = shlex.join(facade_expected)
+    expected_installed = copy.deepcopy(current["installed_manifest"])
+    expected_installed.update(updates)
+    if (raw_json(candidates["candidate_profile"][0]) != raw_json(expected_profile)
+            or raw_json(candidates["candidate_installed_manifest"][0]) != raw_json(expected_installed)):
+        raise ValueError("private profile candidate changes fields outside the exact staged update")
+    return {"prepared": True, "administrator_review_completed": False, "status": "HOLD",
+            "format": "json-only", "review_manifest": review_pin,
+            "stage_manifest_sha256": stage_pin["sha256"],
+            "source_head": manifest["source"]["base_HEAD"],
+            "source_code_fingerprint": manifest["source"]["source_code_fingerprint"],
+            "candidate_profile": candidates["candidate_profile"][1],
+            "candidate_installed_manifest": candidates["candidate_installed_manifest"][1],
+            "only_declared_fields_changed": True, "raw_configuration_or_token_value_saved": False}
+
+
 def prepare_preflight(args, service_probe=None, inventory_probe=None, process_probe=None):
     """Read only; even late failure cannot leave an output directory or backup."""
     output = absent(args.output_directory)
@@ -728,6 +943,7 @@ def prepare_preflight(args, service_probe=None, inventory_probe=None, process_pr
     dropin_line = shlex.join(native_expected).replace("%", "%%").replace("$", "$$")
     if material["native-dropin.conf"] != ("[Service]\nExecStart=\nExecStart=" + dropin_line + "\n").encode():
         raise ValueError("native drop-in bytes do not match the exact non-starting command")
+    private_profile_review = validate_private_profile_review(args, manifest, material, stage_pin)
     inventory = sanitized_inventory((inventory_probe or inventory_observation)(manifest))
     holds.extend(inventory_holds(inventory))
     after = service_probe()
@@ -748,8 +964,14 @@ def prepare_preflight(args, service_probe=None, inventory_probe=None, process_pr
     if final_manifest != manifest or final_pin != stage_pin:
         raise ValueError("stage changed during preflight")
     receipt_summaries(manifest)
+    final_profile_review = validate_private_profile_review(args, manifest, material, stage_pin)
+    if raw_json(final_profile_review) != raw_json(private_profile_review):
+        raise ValueError("private profile packet changed during preflight")
     blocked(holds, "AUTHORIZED_CUTOVER_NOT_PERFORMED", "production", "This helper cannot freeze admission, alter live files, restart services or activate a candidate")
-    blocked(holds, "PRIVATE_PROFILE_MERGE_UNPREPARED", "facade", "Path-only stage template must be merged into a separately reviewed private exact profile before changing the live pointer")
+    if private_profile_review is None:
+        blocked(holds, "PRIVATE_PROFILE_MERGE_UNPREPARED", "facade", "Path-only stage template must be merged into a separately reviewed private exact profile before changing the live pointer")
+    else:
+        blocked(holds, "PRIVATE_PROFILE_REVIEW_REQUIRED", "facade", "Exact private candidate profile is prepared; an authorized administrator must review it before any live pointer change")
     blocked(holds, "WORKSPACE_REFRESH_REQUIRED", "ChatGPT", "Authorized administrator must Refresh the existing connection, review changed metadata and test affected tools in a new conversation; no Refresh API is claimed")
     blocked(holds, "REAL_BUSINESS_DC_OFF_ACCEPTANCE_PENDING", "qualification", "Independent operation, recovery, rollback and genuine business replacement/DC-off remain separate acceptance")
     if not args.prepare_backups:
@@ -785,13 +1007,18 @@ def prepare_preflight(args, service_probe=None, inventory_probe=None, process_pr
                   "restart_facade": ["systemctl", "--user", "restart", UNITS[1]],
                   "rollback_remove_only_owned_successor_dropin": {"path": str(new_dropin), "expected_sha256": digest(material["native-dropin.conf"])},
                   "rollback_restore_exact_private_profile_manifest_dropins": "Use packet manifest original paths and SHA pins after fresh same-ID inventories; preserve state/token/DC"}}
+    if private_profile_review is not None:
+        report["private_profile_review"] = private_profile_review
     # Internal backup bytes may contain profile credentials, never report/public output.
     return {"report": report, "backups": backups if args.prepare_backups else {},
             "pins": {"stage_manifest_sha256": stage_pin["sha256"], "live_files": live, "dropins": dropins,
                      "output_directory": str(output),
                      "backup_directory": str(backup) if args.prepare_backups else None,
                      "prepare_backups": bool(args.prepare_backups), "source_root": str(S.absolute_path(args.source_root)),
-                     "restore_entries": restore_entries}}
+                     "restore_entries": restore_entries,
+                     "private_profile_review": ({"path": private_profile_review["review_manifest"]["path"],
+                          "sha256": private_profile_review["review_manifest"]["sha256"]}
+                          if private_profile_review is not None else None)}}
 
 
 def write_private_bundle(path, files):
@@ -858,6 +1085,21 @@ def publish(prepared, args):
         root = S.absolute_path(args.source_root)
         if backup == root or root in backup.parents or backup == output or backup in output.parents or output in backup.parents:
             raise ValueError("private backup destination is not isolated")
+    private_pin = pins.get("private_profile_review")
+    supplied_path = getattr(args, "profile_review_manifest", None)
+    supplied_sha256 = getattr(args, "profile_review_manifest_sha256", None)
+    if private_pin is None:
+        if supplied_path is not None or supplied_sha256 is not None:
+            raise ValueError("private profile packet was not validated before publication")
+    else:
+        if (supplied_path is None or supplied_sha256 is None
+                or str(S.absolute_path(supplied_path)) != private_pin["path"]
+                or supplied_sha256 != private_pin["sha256"]):
+            raise ValueError("private profile publication arguments differ from validated pins")
+        current_stage, current_material, current_stage_pin = validate_stage(args)
+        current_review = validate_private_profile_review(args, current_stage, current_material, current_stage_pin)
+        if raw_json(current_review) != raw_json(prepared["report"].get("private_profile_review")):
+            raise ValueError("private profile packet changed before publication")
     report = prepared["report"]
     if args.prepare_backups:
         absent(args.backup_directory)
@@ -889,6 +1131,8 @@ def parser():
     ap.add_argument("--output-directory", required=True, type=pathlib.Path)
     ap.add_argument("--prepare-backups", action="store_true")
     ap.add_argument("--backup-directory", type=pathlib.Path)
+    ap.add_argument("--profile-review-manifest", type=pathlib.Path)
+    ap.add_argument("--profile-review-manifest-sha256")
     return ap
 
 

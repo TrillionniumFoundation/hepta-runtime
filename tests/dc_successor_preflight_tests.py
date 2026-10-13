@@ -15,6 +15,7 @@ import io
 import json
 import os
 import pathlib
+import shlex
 import stat
 import subprocess
 import sys
@@ -1251,6 +1252,358 @@ class PrivateHttpTokenDescriptor(unittest.TestCase):
                 with self.assertRaises(OSError) as error:
                     os.fstat(token_fds[0])
                 self.assertEqual(error.exception.errno, errno.EBADF)
+
+
+class PrivateProfileReview(unittest.TestCase):
+    """Private JSON candidate packets over injected offline production probes."""
+
+    git = SuccessorPreflight.git
+    prepare = SuccessorPreflight.prepare
+    repin_manifest = SuccessorPreflight.repin_manifest
+    assert_hold = SuccessorPreflight.assert_hold
+    assert_refuses_without_writes = SuccessorPreflight.assert_refuses_without_writes
+
+    def setUp(self):
+        original_stage = S.stage
+
+        def stage_with_private_json(args):
+            old = self.baseline
+            old_argv = ["/usr/bin/python3", old["facade"]["path"], "--stdio",
+                        "--token-file", str(self.token), "--contract", old["contract"]["path"],
+                        "--contract-sha256", old["contract"]["sha256"], "--acknowledge-full-operator"]
+            self.live_profile = {"mcp": {"commands": [{"channel": "main", "command": shlex.join(old_argv)}]},
+                                 "transport": {"private_authentication": self.profile_secret},
+                                 "other": {"nested": [None, False, 17, "preserve"]}}
+            installed = json.loads((self.live / "installed_manifest").read_bytes())
+            installed["custom"] = {"preserve": [False, 17, None]}
+            for role, value in (("profile", self.live_profile), ("installed_manifest", installed)):
+                raw = encoded(value)
+                write(self.live / role, raw)
+                self.baseline["live_files"][role]["sha256"] = digest(raw)
+            write(args.baseline_pins, encoded(self.baseline))
+            args.baseline_pins_sha256 = digest(args.baseline_pins.read_bytes())
+            return original_stage(args)
+
+        with mock.patch.object(S, "stage", side_effect=stage_with_private_json):
+            SuccessorPreflight.setUp(self)
+        self.packet = self.root / "private-profile-review"
+        self.packet.mkdir(mode=0o700)
+        self.candidate_profile = self.packet / "candidate-profile.yaml"
+        self.candidate_installed = self.packet / "candidate-installed.json"
+        self.review_path = self.packet / "review.json"
+        commands = json.loads((self.stage / "candidate-commands.json").read_bytes())
+        updates = json.loads((self.stage / "activation-plan.json").read_bytes())["installed_manifest_field_updates"]
+        self.expected_profile = copy.deepcopy(self.live_profile)
+        self.expected_profile["mcp"]["commands"][0]["command"] = shlex.join(commands["facade_argv"])
+        self.expected_installed = json.loads((self.live / "installed_manifest").read_bytes())
+        self.expected_installed.update(updates)
+        self.review = {
+            "schema": "hepta-successor-private-profile-review-v1", "status": "HOLD",
+            "stage_manifest": {"path": str(self.manifest_path), "sha256": self.args.stage_manifest_sha256},
+            "source": copy.deepcopy(self.manifest["source"]),
+            "inputs": {role: copy.deepcopy(self.manifest["baseline"]["live_files"][role])
+                       for role in ("profile", "installed_manifest")},
+            "candidate_profile": {}, "candidate_installed_manifest": {},
+            "changed_profile_fields": ["mcp.commands[0].command"],
+            "changed_installed_manifest_fields": sorted(updates),
+            "candidate_facade_argv": commands["facade_argv"],
+            "other_profile_fields_preserved": True, "other_installed_manifest_fields_preserved": True,
+            "live_files_changed": False, "services_restarted": False, "app_refreshed": False,
+            "token_read_or_copied": False, "candidate_started": False,
+            "administrator_profile_review_completed": False, "full_dc_replacement_qualified": False,
+            "services_before": {"units": copy.deepcopy(self.units)},
+        }
+        write(self.candidate_profile, encoded(self.expected_profile))
+        write(self.candidate_installed, encoded(self.expected_installed))
+        self.repin_review()
+
+    def repin_review(self):
+        for role, path in (("candidate_profile", self.candidate_profile),
+                           ("candidate_installed_manifest", self.candidate_installed)):
+            self.review[role] = {"path": str(path), "sha256": digest(path.read_bytes()),
+                                 "bytes": path.stat().st_size, "mode": "0600"}
+        write(self.review_path, encoded(self.review))
+        self.args.profile_review_manifest = self.review_path
+        self.args.profile_review_manifest_sha256 = digest(self.review_path.read_bytes())
+
+    def replace_profile(self, value):
+        write(self.candidate_profile, encoded(value))
+        self.repin_review()
+
+    def replace_installed(self, value):
+        write(self.candidate_installed, encoded(value))
+        self.repin_review()
+
+    def test_exact_json_packet_is_prepared_but_requires_review_and_keeps_all_other_holds(self):
+        before = tree_snapshot(self.root)
+        prepared = self.prepare()
+        report = self.assert_hold(prepared, "PRIVATE_PROFILE_REVIEW_REQUIRED")
+        self.assertNotIn("PRIVATE_PROFILE_MERGE_UNPREPARED", [r["code"] for r in report["blockers"]])
+        self.assertIn("AUTHORIZED_CUTOVER_NOT_PERFORMED", [r["code"] for r in report["blockers"]])
+        self.assertIs(report["private_profile_review"]["prepared"], True)
+        self.assertIs(report["private_profile_review"]["administrator_review_completed"], False)
+        self.assertEqual(tree_snapshot(self.root), before)
+        for secret in (self.token_secret, self.profile_secret):
+            self.assertNotIn(secret, json.dumps(report))
+            self.assertNotIn(secret, json.dumps(prepared["pins"]))
+        self.assertFalse(self.marker.exists())
+
+    def test_default_without_packet_preserves_unprepared_hold(self):
+        del self.args.profile_review_manifest
+        del self.args.profile_review_manifest_sha256
+        report = self.assert_hold(self.prepare(), "PRIVATE_PROFILE_MERGE_UNPREPARED")
+        self.assertNotIn("private_profile_review", report)
+
+    def test_manifest_path_and_digest_must_be_supplied_together(self):
+        for field in ("profile_review_manifest", "profile_review_manifest_sha256"):
+            with self.subTest(field=field):
+                value = getattr(self.args, field)
+                setattr(self.args, field, None)
+                self.assert_refuses_without_writes()
+                setattr(self.args, field, value)
+
+    def test_self_asserted_administrator_or_activation_flags_never_grant_authority(self):
+        for field in ("administrator_profile_review_completed", "candidate_started",
+                      "live_files_changed", "services_restarted", "app_refreshed",
+                      "token_read_or_copied", "full_dc_replacement_qualified"):
+            for value in (True, 0, 1):
+                with self.subTest(field=field, value=value):
+                    self.review[field] = value
+                    self.repin_review()
+                    self.assert_refuses_without_writes()
+                    self.review[field] = False
+        self.repin_review()
+
+    def test_different_stage_source_or_current_authority_is_rejected(self):
+        cases = [
+            ("stage_manifest", {"path": str(self.manifest_path), "sha256": "0" * 64}),
+            ("source", {**self.review["source"], "base_HEAD": "0" * 40}),
+            ("source", {**self.review["source"], "dirty_source": 0}),
+            ("inputs", {**self.review["inputs"], "profile":
+                        {**self.review["inputs"]["profile"], "sha256": "0" * 64}}),
+        ]
+        for field, value in cases:
+            with self.subTest(field=field):
+                original = self.review[field]
+                self.review[field] = value
+                self.repin_review()
+                self.assert_refuses_without_writes()
+                self.review[field] = original
+        self.repin_review()
+
+    def test_resealed_candidate_cannot_change_private_transport_or_unknown_settings(self):
+        for field in ("transport", "other"):
+            with self.subTest(field=field):
+                value = copy.deepcopy(self.expected_profile)
+                value[field] = {"changed": "UNTRUSTED_OFFLINE_ONLY"}
+                self.replace_profile(value)
+                self.assert_refuses_without_writes()
+        self.replace_profile(self.expected_profile)
+
+    def test_resealed_candidate_cannot_change_value_types_that_python_equality_equates(self):
+        for position, value in ((1, 0), (2, 17.0)):
+            with self.subTest(position=position):
+                candidate = copy.deepcopy(self.expected_profile)
+                candidate["other"]["nested"][position] = value
+                self.replace_profile(candidate)
+                self.assert_refuses_without_writes()
+        self.replace_profile(self.expected_profile)
+        candidate = copy.deepcopy(self.expected_installed)
+        candidate["custom"]["preserve"][0] = 0
+        self.replace_installed(candidate)
+        self.assert_refuses_without_writes()
+
+    def test_resealed_profile_cannot_change_argv_channel_or_command_cardinality(self):
+        for change in ("upstream", "channel", "count"):
+            with self.subTest(change=change):
+                candidate = copy.deepcopy(self.expected_profile)
+                if change == "upstream":
+                    candidate["mcp"]["commands"][0]["command"] = candidate["mcp"]["commands"][0]["command"].replace(
+                        "http://127.0.0.1:8790/mcp", "http://127.0.0.1:8791/mcp")
+                elif change == "channel":
+                    candidate["mcp"]["commands"][0]["channel"] = "other"
+                else:
+                    candidate["mcp"]["commands"].append(copy.deepcopy(candidate["mcp"]["commands"][0]))
+                self.replace_profile(candidate)
+                self.assert_refuses_without_writes()
+
+    def test_every_installed_update_is_stage_derived_and_other_fields_preserved(self):
+        for field in self.review["changed_installed_manifest_fields"]:
+            with self.subTest(field=field):
+                candidate = copy.deepcopy(self.expected_installed)
+                candidate[field] = float(candidate[field]) if type(candidate[field]) is int else "wrong"
+                self.replace_installed(candidate)
+                self.assert_refuses_without_writes()
+        candidate = copy.deepcopy(self.expected_installed)
+        del candidate["custom"]
+        self.replace_installed(candidate)
+        self.assert_refuses_without_writes()
+
+    def test_live_profile_and_installed_drift_are_rejected_without_publication(self):
+        for role in ("profile", "installed_manifest"):
+            with self.subTest(role=role):
+                path = self.live / role
+                original = path.read_bytes()
+                write(path, original + b"\n")
+                self.assert_refuses_without_writes()
+                write(path, original)
+
+    def test_duplicate_fields_and_nonfinite_numbers_are_rejected_in_every_json_role(self):
+        for raw in (b'{"a":1,"a":2}', b'{"a":NaN}', b'{"a":Infinity}', b'{"a":1e999}'):
+            with self.subTest(raw=raw):
+                with self.assertRaises(ValueError):
+                    P.private_json_object(raw)
+        for path in (self.candidate_profile, self.candidate_installed):
+            original = path.read_bytes()
+            write(path, b'{"mcp":{},"mcp":{}}')
+            self.repin_review()
+            self.assert_refuses_without_writes()
+            write(path, original)
+        self.repin_review()
+        raw = encoded(self.review)
+        write(self.review_path, raw[:-2] + b', "status":"HOLD"}\n')
+        self.args.profile_review_manifest_sha256 = digest(self.review_path.read_bytes())
+        self.assert_refuses_without_writes()
+
+    def test_yaml_is_explicitly_unsupported_without_parser_dependencies(self):
+        write(self.candidate_profile, b"mcp:\n  commands: []\n")
+        self.repin_review()
+        self.assert_refuses_without_writes()
+
+    def test_private_packet_and_file_permissions_are_strict(self):
+        self.packet.chmod(0o750)
+        try:
+            self.assert_refuses_without_writes()
+        finally:
+            self.packet.chmod(0o700)
+        for path in (self.review_path, self.candidate_profile, self.candidate_installed):
+            with self.subTest(path=path.name):
+                path.chmod(0o640)
+                self.assert_refuses_without_writes()
+                path.chmod(0o600)
+
+    def test_candidate_link_and_review_symlink_or_fifo_cannot_be_read(self):
+        alias = self.root / "outside-alias"
+        os.link(self.candidate_profile, alias)
+        self.assert_refuses_without_writes()
+        alias.unlink()
+        raw = self.review_path.read_bytes()
+        self.review_path.unlink()
+        self.review_path.symlink_to(self.candidate_profile)
+        self.assert_refuses_without_writes()
+        self.review_path.unlink()
+        os.mkfifo(self.review_path, 0o600)
+        self.assert_refuses_without_writes()
+        self.review_path.unlink()
+        write(self.review_path, raw)
+
+    def test_token_alias_and_open_time_token_replacement_are_rejected_before_digest(self):
+        alias = self.packet / "alias-token"
+        os.link(self.token, alias)
+        try:
+            with mock.patch.object(P, "digest", side_effect=AssertionError("token digest forbidden")):
+                with self.assertRaises(ValueError):
+                    P.read_private_profile_artifact(alias, "0" * 64, self.token)
+        finally:
+            alias.unlink()
+        candidate = write(self.packet / "race-candidate", b"OWNED_OFFLINE_CONFIGURATION")
+        original_open = os.open
+        raced = False
+
+        def race(path, flags, *args, **kwargs):
+            nonlocal raced
+            if path == candidate.name and not raced:
+                raced = True
+                candidate.unlink()
+                os.replace(self.token, candidate)
+                write(self.token, b"REPLACEMENT_OFFLINE_TOKEN")
+            return original_open(path, flags, *args, **kwargs)
+
+        with mock.patch.object(P.os, "open", side_effect=race), \
+             mock.patch.object(P, "digest", side_effect=AssertionError("token digest forbidden")):
+            with self.assertRaises(ValueError):
+                P.read_private_profile_artifact(candidate, "0" * 64, self.token)
+        self.assertTrue(raced)
+
+    def test_symlink_authentication_reference_is_rejected_before_private_digest(self):
+        target = write(self.packet / "owned-token-target", b"OFFLINE_TOKEN_TARGET_ONLY")
+        self.token.unlink()
+        self.token.symlink_to(target)
+        with mock.patch.object(P, "digest", side_effect=AssertionError("token digest forbidden")):
+            with self.assertRaises(PermissionError):
+                P.read_private_profile_artifact(self.candidate_profile, "0" * 64, self.token)
+
+    def test_manifest_candidate_metadata_is_bounded_typed_and_packet_local(self):
+        original = copy.deepcopy(self.review["candidate_profile"])
+        for patch in ({"bytes": True}, {"bytes": S.MAX_TEXT_BYTES + 1},
+                      {"path": str(self.live / "profile")}, {"mode": "0400"}):
+            with self.subTest(patch=patch):
+                self.review["candidate_profile"] = {**original, **patch}
+                write(self.review_path, encoded(self.review))
+                self.args.profile_review_manifest_sha256 = digest(self.review_path.read_bytes())
+                self.assert_refuses_without_writes()
+        self.review["candidate_profile"] = original
+        self.repin_review()
+
+    def test_unknown_manifest_fields_and_packet_entries_are_refused(self):
+        self.review["administrator_review"] = True
+        self.repin_review()
+        self.assert_refuses_without_writes()
+        del self.review["administrator_review"]
+        self.repin_review()
+        extra = write(self.packet / "unexpected-private-file", b"OFFLINE_ONLY")
+        self.assert_refuses_without_writes()
+        extra.unlink()
+
+    def test_packet_inside_git_source_is_refused(self):
+        destination = self.source / "private-packet"
+        destination.mkdir(mode=0o700)
+        for path in (self.candidate_profile, self.candidate_installed, self.review_path):
+            write(destination / path.name, path.read_bytes())
+        self.args.profile_review_manifest = destination / "review.json"
+        self.args.profile_review_manifest_sha256 = digest(self.args.profile_review_manifest.read_bytes())
+        self.assert_refuses_without_writes()
+
+    def test_slow_inventory_packet_change_is_rejected_before_publication(self):
+        def inventory(manifest):
+            write(self.candidate_profile, self.candidate_profile.read_bytes() + b"\n")
+            return copy.deepcopy(self.inventory)
+        with self.assertRaises(ValueError):
+            P.prepare_preflight(self.args,
+                service_probe=lambda: {"units": copy.deepcopy(self.units)},
+                inventory_probe=inventory,
+                process_probe=lambda pid: copy.deepcopy(self.processes[int(pid)]))
+        self.assertFalse(self.args.output_directory.exists())
+
+    def test_publication_rechecks_packet_digest_and_argument_identity(self):
+        prepared = self.prepare()
+        before = tree_snapshot(self.root)
+        self.args.profile_review_manifest_sha256 = "0" * 64
+        with self.assertRaises(ValueError):
+            P.publish(prepared, self.args)
+        self.assertEqual(tree_snapshot(self.root), before)
+        self.args.profile_review_manifest_sha256 = digest(self.review_path.read_bytes())
+        write(self.candidate_profile, self.candidate_profile.read_bytes() + b"\n")
+        before = tree_snapshot(self.root)
+        with self.assertRaises(ValueError):
+            P.publish(prepared, self.args)
+        self.assertEqual(tree_snapshot(self.root), before)
+
+    def test_private_publication_outputs_only_metadata_and_never_executes_candidate(self):
+        prepared = self.prepare()
+        before = {path: path.read_bytes() for path in (self.token, self.live / "profile",
+                  self.live / "installed_manifest", self.candidate_profile, self.candidate_installed)}
+        result = P.publish(prepared, self.args)
+        self.assertEqual(result["status"], "HOLD")
+        report = json.loads((self.args.output_directory / "report.json").read_bytes())
+        self.assertIs(report["private_profile_review"]["prepared"], True)
+        self.assertIn("PRIVATE_PROFILE_REVIEW_REQUIRED", [r["code"] for r in report["blockers"]])
+        for secret in (self.token_secret, self.profile_secret):
+            self.assertNotIn(secret, json.dumps(report))
+        for path, raw in before.items():
+            self.assertEqual(path.read_bytes(), raw)
+        self.assertFalse(self.marker.exists())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
