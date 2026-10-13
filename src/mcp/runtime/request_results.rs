@@ -153,7 +153,7 @@ fn unbase64(text: &str) -> Result<Vec<u8>> {
 		}
 	}
 	let mut output = Vec::new();
-	for row in text.as_bytes().chunks_exact(4) {
+	for row in text.as_bytes().as_chunks::<4>().0 {
 		let a = value(row[0]).ok_or_else(|| anyhow!("retained bytes refused"))?;
 		let b = value(row[1]).ok_or_else(|| anyhow!("retained bytes refused"))?;
 		let c = if row[2] == b'=' {

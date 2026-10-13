@@ -244,7 +244,7 @@
   },
   "implemented_capabilities": {
     "search_effect_integrity": "Persist stable start/stop intent before dispatch; lost or malformed acknowledgement and post-effect persistence faults retain the same observed operation ID, indicate uncertainty/durability honestly, and never auto-replay.",
-    "request_status_result_scope": "Only exact native success CallToolResult snapshots from host_list, host_health and effective_config; raw snapshots <=64 KiB, ledger files <=96 KiB, pages <=32 KiB raw with <=64 KiB lookup envelopes.",
+    "request_status_result_scope": "Only exact native success CallToolResult snapshots from host_list, host_health and effective_config; raw snapshots <=64 KiB, ledger files <=96 KiB, raw result pages 1..16384 bytes (default 16384) with <=64 KiB lookup envelopes.",
     "request_result_exclusions": "No arbitrary handler output, errors, parameters, file/shell/process output or recursive history/status/result cache. Oversized approved live DTO still returns normally but retention reports overflow with the same server ID.",
     "central_id_ack_exposure": "Only the three approved DTO handlers and two result lookup tools receive the V8 identity/retention overlay. Legacy bounded effect/search/batch/process envelopes remain unchanged.",
     "ownership": "Verified private credential scope shared by all its holders; never claimed to identify ChatGPT callers. Rotation and a changed whole-config policy revoke old snapshots.",
