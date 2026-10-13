@@ -13,6 +13,9 @@ See [local handoff, restart and format completion](docs/LOCAL_HANDOFF_AND_FORMAT
 
 See [native binary/remote document/page/range tools](docs/NATIVE_TRANSFER.md) for the current local replacement APIs and their explicit preservation limits.
 
+See [the v5 native DC-replacement candidate](docs/DC_FUNCTIONAL_V5_NATIVE_CANDIDATE.md) for bounded multi-file UTF-8 reads, configured-host SSH health and durable cancellable search. The [optimized six-host stage receipt](docs/qualification/dc-functional-v5-release-staged-20261013.json) records a staged artifact, not an installed catalog or full replacement. The installed v4 service and Desktop Commander remain active; [the Work handoff](docs/WORK_HANDOFF_DC_REPLACEMENT_20261013.md) lists caller/resume, model-origin, business and recovery/cutover gates.
+
+
 
 
 The upstream Octofs installation instructions below do **not** install this fork. Build Hepta with `cargo build --release --locked --bin hepta-runtime` and use the configuration and deployment assets in this repository.
