@@ -266,3 +266,32 @@ not been promoted to a separate persistent CI test because the attempted
 source-test edit was blocked by this ChatGPT session's safety check; no
 alternative path was used to replay that rejected edit. This is **not** a
 production readiness qualification.
+
+
+## Public HTTPS resource and OAuth issuer syntax — 2026-10-13
+
+An adversarial offline inspection reproduced that the former public URL checks accepted
+`https://127.0.0.2/mcp`, RFC1918 IPv4 and private IPv6 literals, local DNS
+suffixes, and a malformed nonnumeric port (e.g.
+`https://gateway.example.test:bad/mcp`). The OAuth issuer metadata check had
+the same gap. These were **candidate configuration inputs only**, not an
+actual request accepted over the internet.
+
+`deploy/cloud_gateway_https.py` now supplies **one shared syntax admission**
+for `GatewayPolicy` public MCP audience URLs, enrolled OAuth issuer origins and
+`cloud_gateway_mcp_catalog` metadata/challenges. It requires standard HTTPS
+(default port or explicitly 443), a canonical multi-label ASCII DNS name, no
+private IP literals/special-use local suffixes, no userinfo/controls, and an
+exact `/mcp` resource path or origin-only issuer. The policy also checks the
+admin-enrolled issuer rather than trusting any arbitrary future token verifier
+string. Invalid/ambiguous strings fail before any tenant dispatch reservation.
+
+This **does not prove the domain is owned, DNS resolves publicly, the TLS
+certificate is valid, or the host cannot rebind to a private address**. The
+future network ingress must perform real DNS/TLS/issuer validation, OAuth
+resource verification and transport threat review. Isolated device mTLS, actual
+agent enforcement and public app publication remain HOLD. The private 50-tool
+contract, runtime, DC and private tunnel were not modified.
+
+Source, adversarial regression and prepatch observations are frozen at
+`docs/qualification/cloud-gateway-offline-https-origin-20261013.json`.

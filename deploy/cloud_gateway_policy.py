@@ -14,7 +14,6 @@ source cannot be deployed, connected to ChatGPT, or sold as a public plugin.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from urllib.parse import urlsplit
 import hashlib
 import json
 import os
@@ -26,6 +25,7 @@ import threading
 import time
 from typing import Callable, FrozenSet
 
+from cloud_gateway_https import public_https_url
 from mcp_tool_contract import ToolContract, canonical
 
 # Exact 50-tool v4 release; a new catalog requires an explicit review bump.
@@ -287,11 +287,7 @@ class GatewayPolicy:
     ):
         if not contract.tools or contract.catalog_sha256 != APPROVED_CATALOG_SHA256:
             raise ValueError("Explicitly reviewed public v4 tool contract required")
-        url = urlsplit(resource)
-        if (url.scheme != "https" or not url.hostname or url.hostname in
-            ("localhost", "127.0.0.1", "::1") or url.username or url.password
-            or url.path != "/mcp" or url.query or url.fragment):
-            raise ValueError("Explicit stable HTTPS /mcp resource required")
+        public_https_url(resource, resource=True)
         self.contract = contract
         self.ledger = ledger
         self.token_verifier = token_verifier
@@ -304,6 +300,10 @@ class GatewayPolicy:
                 binding.tenant, binding.device_id,
             )):
                 raise ValueError("Invalid, wildcard or missing enrollment identity")
+            # The configured identity-provider issuer is a trusted HTTPS origin,
+            # not an arbitrary local URL. This is syntax-only: the real OAuth
+            # resource server still verifies issuer ownership/JWKS signatures.
+            public_https_url(binding.issuer, resource=False)
             if not HEX64.fullmatch(binding.cert_sha256):
                 raise ValueError("Exact sha256 mTLS certificate fingerprint required")
             if (type(binding.connection_generation) is not int

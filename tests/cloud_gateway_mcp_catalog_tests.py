@@ -138,7 +138,9 @@ class OfflinePublicCatalog(unittest.TestCase):
                        'https://mcp.example.test/mcp?secret=1',
                        'https://mcp.example.test/mcp#foo',
                        'https://mcp.example.test/anything',
-                       'https://mcp.example.test/mcp\r\nInjected: x')
+                       'https://mcp.example.test/mcp\r\nInjected: x',
+                       'https://127.0.0.2/mcp', 'https://10.0.0.1/mcp',
+                       'https://[fc00::1]/mcp', 'https://mcp.example.test:bad/mcp')
         for bad in bad_resources:
             with self.subTest(resource=bad):
                 with self.assertRaises(ValueError):
@@ -146,7 +148,9 @@ class OfflinePublicCatalog(unittest.TestCase):
         for bad in ('http://auth.example.test','https://localhost',
                     'https://auth.example.test/tail',
                     'https://auth.example.test/?secret=1',
-                    'https://user:secret@auth.example.test'):
+                    'https://user:secret@auth.example.test',
+                    'https://127.0.0.2', 'https://[fd00::1]',
+                    'https://auth.example.test:bad'):
             with self.subTest(issuer=bad):
                 with self.assertRaises(ValueError):
                     oauth_protected_resource_metadata(RESOURCE,bad)

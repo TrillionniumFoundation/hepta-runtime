@@ -585,10 +585,23 @@ class GatewayPolicyTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             OnceOnlyLedger(path)
 
+    def test_enrolled_issuer_must_be_public_https_origin_syntax(self):
+        for issuer in ('https://127.0.0.2', 'https://10.0.0.3',
+                       'https://[fd00::1]', 'https://issuer.local',
+                       'https://issuer.example.test:bad',
+                       'https://issuer.example.test/tail'):
+            with self.subTest(issuer=issuer):
+                enrolment = dataclasses.replace(self.binding, issuer=issuer)
+                with self.assertRaises(ValueError):
+                    self.make_policy(binding=enrolment)
+
     def test_explicit_https_resource_required(self):
         for url in ('http://gateway.example.test/mcp','https://localhost/mcp',
                     'https://gateway.example.test/tool','https://gateway.example.test/mcp?x=y',
-                    'https://user:pass@gateway.example.test/mcp'):
+                    'https://user:pass@gateway.example.test/mcp',
+                    'https://127.0.0.2/mcp','https://10.0.0.3/mcp',
+                    'https://[fc00::1]/mcp','https://gateway.local/mcp',
+                    'https://gateway.example.test:bad/mcp'):
             with self.subTest(url=url):
                 with self.assertRaises(ValueError):
                     self.make_policy(resource=url)

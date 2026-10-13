@@ -9,12 +9,13 @@ of all native shell/sudo operations. This module does NOT verify access tokens;
 that belongs to a separate required OAuth 2.1 resource-server implementation.
 """
 import copy
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlunsplit
 
 from cloud_gateway_policy import (
     APPROVED_CATALOG_SHA256, EXECUTION_TOOLS, HIGH_PRIVILEGE,
     GatewayPolicy, AuthenticatedAgent,
 )
+from cloud_gateway_https import public_https_url
 from mcp_tool_contract import ToolContract
 
 VERSION='2026-07-28'
@@ -23,22 +24,11 @@ SCOPES=frozenset({'hepta:connect','hepta:write','hepta:execute','hepta:privilege
 
 
 def _valid_https_resource(url):
-    if not isinstance(url,str) or any(ord(c)<32 for c in url):
-        raise ValueError('HTTPS resource metadata cannot contain control characters')
-    r=urlsplit(url)
-    if (r.scheme!='https' or not r.hostname or r.hostname in ('localhost','127.0.0.1','::1')
-        or r.username or r.password or r.path!='/mcp' or r.query or r.fragment):
-        raise ValueError('Stable HTTPS /mcp public resource required')
-    return r
+    return public_https_url(url, resource=True)
 
 
 def _valid_issuer(issuer):
-    if not isinstance(issuer,str) or any(ord(c)<32 for c in issuer):
-        raise ValueError('OAuth issuer must be a valid HTTPS origin')
-    r=urlsplit(issuer)
-    if (r.scheme!='https' or not r.hostname or r.hostname in ('localhost','127.0.0.1','::1')
-        or r.username or r.password or r.query or r.fragment or r.path not in ('','/')):
-        raise ValueError('OAuth issuer must be a stable HTTPS origin')
+    public_https_url(issuer, resource=False)
     return issuer.rstrip('/')
 
 
