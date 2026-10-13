@@ -102,6 +102,43 @@ accounts each retain their own reservation for the same opaque client call ID,
 while a token from tenant A cannot select tenant B's agent or write paths.
 These are still fake verifier identities, not real commercial customers.
 
+## Offline tenant path-authority closure (2026-10-13)
+
+Adversarial tests found that the pre-dispatch policy checked `path`,
+`source`, `destination` and similar primary fields but did **not** reject
+out-of-tenant execution `cwd`, secondary PDF `output_path` / password/trust
+files, nested PDF page `source_path`, or rich-render assets' nested `path`.
+Before this change those malformed requests could be *reserved* by the
+replay ledger as if admitted. No internet endpoint was deployed and no native
+execution occurred in these tests.
+
+`GatewayPolicy.prepare` now applies the explicit enrolled tenant-root check
+on each known primary and secondary path field. The four executable-start
+operations (`shell_start`, `process_start`, `pty_start`, `sudo_start`) need an
+explicit **absolute tenant-scoped `cwd`**; tools with a `host` input in the
+execution category require an enrolled exact host alias. Structured
+`pdf_edit.operations` and `document_render.assets` are checked for their
+known file sources; malformed shapes are denied *before* write reservation.
+Arbitrary user-authored document/form text is not searched or interpreted as a
+path, and tool names, descriptions, schemas and honest risk annotations remain
+unchanged.
+
+**This is preflight defense, not runtime isolation.** A shell can change
+its directory and refer to arbitrary absolute paths. Before public release,
+the independent customer device agent must enforce an isolated non-root UID,
+filesystem mount/namespace rules, no implicit sudo rights, fd-relative local
+path validation and explicit host allowlists. The offline policy has no power
+to contain native processes or to prove an OAuth signature or mTLS identity.
+
+`tests/cloud_gateway_authenticated_catalog_tests.py` is a persistent,
+synthetic two-tenant regression for modern `server/discover` and `tools/list`
+using the same reviewed v4 contract and fake *trusted* verifier/device inputs.
+It checks per-user scopes, administrator elevated grants, cross-tenant identity
+confusion, device certificate/generation/catalog drift, expired enrollment,
+revocation, unauthenticated failures and blank authorized catalogs. It is now
+part of the exact-head CI. It does **not** represent completed OAuth 2.1,
+a live public server, signed device attestation, or customer onboarding.
+
 ## Work required before internet exposure
 
 1. Choose a verified organization, actual stable owned public HTTPS domain,

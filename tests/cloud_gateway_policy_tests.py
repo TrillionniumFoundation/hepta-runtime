@@ -339,6 +339,89 @@ class GatewayPolicyTests(unittest.TestCase):
                          call_id='path-test-0000001')
         self.assertTrue(permit.mutating)
 
+    def test_shell_cwd_must_be_explicit_and_inside_tenant_root(self):
+        base={'host':'main','command':'printf harmless'}
+        for bad in (None,'/etc','/tmp',ROOT_PATH+'/../outside',
+                    'ssh://other/root',ROOT_PATH+'-other/work','relative',123):
+            with self.subTest(cwd=bad):
+                params={**base}
+                if bad is not None:params['cwd']=bad
+                self.assert_denied('PATH_OUTSIDE_TENANT_WORKSPACE',
+                    lambda:self.call('shell_start',params,
+                                     call_id='cwd-negative-0001'))
+        good=self.call('shell_start',{**base,'cwd':ROOT_PATH+'/run'},
+                       call_id='cwd-positive-0001')
+        self.assertTrue(good.mutating)
+
+    def test_other_execution_cwd_paths_are_bounded_before_reservation(self):
+        elevated=dataclasses.replace(self.binding,
+            allowed_tools=self.binding.allowed_tools|{'process_start','pty_start'},
+            elevated_tools=frozenset({'sudo_start'}))
+        self.policy=self.make_policy(elevated)
+        self.user=dataclasses.replace(self.user,
+            scopes=self.user.scopes|{'hepta:privileged'})
+        for name in ('process_start','pty_start','sudo_start'):
+            baseline={'host':'main','executable':'/usr/bin/id','args':['-u']}
+            for bad in (None,'/root','/tmp','relative',ROOT_PATH+'/../../etc'):
+                with self.subTest(tool=name,cwd=bad):
+                    params={**baseline}
+                    if bad is not None:params['cwd']=bad
+                    self.assert_denied('PATH_OUTSIDE_TENANT_WORKSPACE',
+                        lambda:self.call(name,params,call_id='othercwd-negative-1'))
+            self.assert_denied('HOST_NOT_ENROLLED',
+                lambda:self.call(name,{'executable':'/usr/bin/id',
+                    'cwd':ROOT_PATH+'/run'},call_id='missing-host-00001'))
+            self.assertTrue(self.call(name,{**baseline,'cwd':ROOT_PATH+'/run'},
+                    call_id='valid-'+name+'-0001').mutating)
+
+    def test_generated_document_and_pdf_secondary_paths_cannot_escape(self):
+        enabled=dataclasses.replace(self.binding,
+            allowed_tools=self.binding.allowed_tools|{
+                'pdf_edit','pdf_security','document_render'})
+        self.policy=self.make_policy(enabled)
+        paths={
+            'pdf_edit':[
+                {'path':ROOT_PATH+'/input.pdf','output_path':'/etc/output.pdf'},
+                {'path':ROOT_PATH+'/input.pdf','output_path':ROOT_PATH+'/result.pdf',
+                 'operations':[{'type':'insert','page_index':0,'source_path':'/etc/passwd'}]},
+            ],
+            'pdf_security':[
+                {'path':ROOT_PATH+'/input.pdf','password_file':'/etc/secret'},
+                {'path':ROOT_PATH+'/input.pdf','output_path':'/tmp/leak.pdf'},
+                {'path':ROOT_PATH+'/input.pdf','output_owner_password_file':'/tmp/pw'},
+                {'path':ROOT_PATH+'/input.pdf','trust_store_file':'/etc/ssl/certs/ca-certificates.crt'},
+            ],
+            'document_render':[
+                {'path':ROOT_PATH+'/result.pdf','assets':[
+                    {'name':'image','path':'/etc/shadow','sha256':'0'*64}]},
+            ],
+        }
+        for tool,cases in paths.items():
+            for args in cases:
+                with self.subTest(tool=tool,args=args):
+                    self.assert_denied('PATH_OUTSIDE_TENANT_WORKSPACE',
+                        lambda:self.call(tool,args,call_id='second-path-neg-01'))
+        for tool,args in [
+            ('pdf_edit',{'path':ROOT_PATH+'/input.pdf','output_path':ROOT_PATH+'/result.pdf',
+                         'operations':[{'type':'insert','page_index':0,
+                                        'source_path':ROOT_PATH+'/asset.pdf'}]}),
+            ('document_render',{'path':ROOT_PATH+'/result.pdf',
+                 'assets':[{'name':'image','path':ROOT_PATH+'/img.png','sha256':'0'*64}]}),
+        ]:
+            self.assertTrue(self.call(tool,args,
+                call_id='secondary-'+tool+'-0001').mutating)
+
+    def test_invalid_nested_shape_fails_without_reserving_tool_write(self):
+        enabled=dataclasses.replace(self.binding,
+            allowed_tools=self.binding.allowed_tools|{'pdf_edit','document_render'})
+        self.policy=self.make_policy(enabled)
+        for tool,key in [('pdf_edit','operations'),('document_render','assets')]:
+            for bad in ('not-an-array',[None],['string']):
+                with self.subTest(tool=tool,bad=bad):
+                    self.assert_denied('INVALID_ARGUMENTS',
+                        lambda:self.call(tool,{'path':ROOT_PATH+'/f.pdf',key:bad},
+                                         call_id='nested-shape-test-1'))
+
     def test_privileged_tool_requires_both_grant_and_scope(self):
         self.assert_denied('ELEVATED_ACTION_NOT_GRANTED',
             lambda:self.call('sudo_start',{'host':'main','executable':'/usr/bin/id'}))
@@ -347,7 +430,7 @@ class GatewayPolicyTests(unittest.TestCase):
         self.assert_denied('ELEVATED_ACTION_NOT_GRANTED',
             lambda:self.call('sudo_start',{'host':'main','executable':'/usr/bin/id'}))
         self.user=dataclasses.replace(self.user,scopes=self.user.scopes|{'hepta:privileged'})
-        p=self.call('sudo_start',{'host':'main','executable':'/usr/bin/id'},
+        p=self.call('sudo_start',{'host':'main','executable':'/usr/bin/id','cwd':ROOT_PATH+'/run'},
                     call_id='sudo-fixture-0001')
         self.assertTrue(p.mutating)
 
@@ -358,7 +441,7 @@ class GatewayPolicyTests(unittest.TestCase):
         self.user=dataclasses.replace(self.user,scopes=self.user.scopes|{'hepta:execute'})
         self.assert_denied('HOST_NOT_ENROLLED',
             lambda:self.call('shell_start',{'host':'other','command':'echo test'}))
-        p=self.call('shell_start',{'host':'main','command':'echo test'},
+        p=self.call('shell_start',{'host':'main','command':'echo test','cwd':ROOT_PATH+'/run'},
                     call_id='shell-fixture-00001')
         self.assertTrue(p.mutating)
 

@@ -37,8 +37,19 @@ ALLOWED_OPERATION_ID = re.compile(r"[A-Za-z0-9_.:-]{8,128}\Z")
 HIGH_PRIVILEGE = frozenset({
     "sudo_start", "host_signal", "process_checkpoint", "privileged_action",
 })
-REMOTE_PATH_FIELDS = frozenset({
+# These are native file paths, not opaque identifiers. Controller-local
+# workspace checks apply to EVERY known path-bearing parameter, including
+# execution working directories, PDF outputs and password/trust files.
+LOCAL_PATH_FIELDS = frozenset({
     "path", "source", "destination", "from_path", "append_path",
+    "cwd", "output_path", "source_path", "password_file",
+    "output_owner_password_file", "output_user_password_file", "trust_store_file",
+})
+# A public isolated agent must never choose its account home implicitly for
+# operations that can launch an executable. The caller supplies a tenant-root
+# cwd and the agent independently checks its own OS-enforced working root.
+EXPLICIT_CWD_TOOLS = frozenset({
+    "shell_start", "process_start", "pty_start", "sudo_start",
 })
 # Shell/PTY process execution additionally requires an isolated per-device agent
 # with explicit OS authority; JSON path checks are not a sandbox.
@@ -244,6 +255,26 @@ def _safe_path(root: str, path: str) -> bool:
     return PurePosixPath(path).is_relative_to(PurePosixPath(root))
 
 
+def _check_nested_file_sources(tool_name: str, arguments: dict,
+                               tenant_root: str) -> None:
+    """Check schema-known paths in structured PDF operations and assets.
+
+    Never search content, form fields, model-written strings or arbitrary
+    spreadsheets for words such as 'path': those are user *data*. Only known
+    file-resource structures convey an additional local-path authority.
+    """
+    member = {"pdf_edit": ("operations", "source_path"),
+              "document_render": ("assets", "path")}.get(tool_name)
+    if member is None or member[0] not in arguments:
+        return
+    collection = arguments[member[0]]
+    if not isinstance(collection, list) or any(not isinstance(v, dict) for v in collection):
+        raise Rejected("INVALID_ARGUMENTS")
+    for item in collection:
+        if member[1] in item and not _safe_path(tenant_root, item[member[1]]):
+            raise Rejected("PATH_OUTSIDE_TENANT_WORKSPACE")
+
+
 class GatewayPolicy:
     """Decision only. Does not create a publicly reachable HTTP route."""
 
@@ -381,11 +412,12 @@ class GatewayPolicy:
             if k == "host":
                 if not isinstance(val,str) or val not in binding.allowed_hosts:
                     raise Rejected("HOST_NOT_ENROLLED")
-            elif k in REMOTE_PATH_FIELDS:
-                # Some tools use relative workdir paths. Public deployment
-                # deliberately requires explicit absolute tenant-root paths.
+            elif k in LOCAL_PATH_FIELDS:
+                # The public agent never inherits the private controller's
+                # home, generic filesystem roots, or implicit SSH paths.
                 if not _safe_path(binding.local_workspace_root, val):
                     raise Rejected("PATH_OUTSIDE_TENANT_WORKSPACE")
+        _check_nested_file_sources(tool_name, arguments, binding.local_workspace_root)
         mutated = not self.contract.read_only(tool_name)
         if mutated and "hepta:write" not in user.scopes:
             raise Rejected("WRITE_SCOPE_REQUIRED")
@@ -395,6 +427,12 @@ class GatewayPolicy:
             tool_name not in binding.elevated_tools or "hepta:privileged" not in user.scopes
         ):
             raise Rejected("ELEVATED_ACTION_NOT_GRANTED")
+        if tool_name in EXECUTION_TOOLS and "host" in schema_props:
+            if arguments.get("host") not in binding.allowed_hosts:
+                raise Rejected("HOST_NOT_ENROLLED")
+        if tool_name in EXPLICIT_CWD_TOOLS:
+            if not _safe_path(binding.local_workspace_root, arguments.get("cwd")):
+                raise Rejected("PATH_OUTSIDE_TENANT_WORKSPACE")
         if not isinstance(call_id,str) or not ALLOWED_OPERATION_ID.fullmatch(call_id):
             raise Rejected("INVALID_CALL_ID")
         digest = hashlib.sha256(canonical({
