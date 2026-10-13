@@ -6,42 +6,19 @@ The user asks Work to continue implementing, testing, reviewing and deploying **
 
 Use the authorized qian-qi computer and connected GitHub/Hepta tools, with other hosts accessible through existing configured channels. Do not assume new Work instances inherit a shell, privileges or a particular GUI session: verify connected tools and service identities first.
 
-## Work continuation — 2026-10-13 native v5 candidate
+## Work continuation — 2026-10-13 native v6 candidate
 
-Active continuation worktree: /home/qian-qi/hepta-runtime-dc-functional-20261013, local branch work/dc-functional-20261013, pushing to the existing remote PR branch feat/operator-parity-20261006. The historical operator worktree remains retained with its original untracked evidence; do not overwrite it with a blind checkout. Always verify the latest remote PR HEAD.
+Active worktree: /home/qian-qi/hepta-runtime-dc-functional-20261013, local branch work/dc-functional-20261013, pushing every commit to feat/operator-parity-20261006 / Draft PR #3. Verify latest remote HEAD before continuing; retain the original operator worktree and its unrelated evidence.
 
-The priority-2/3 native implementation work below has advanced. See
-docs/DC_FUNCTIONAL_V5_NATIVE_CANDIDATE.md and the immutable
-docs/qualification/dc-functional-v5-native-candidate-20261013.json for exact
-source/binary fingerprints and retained failures. Installed/runtime/app
-baseline remains v4 with 50 tools; candidate source/catalog has six additive
-native tools with every original definition unchanged.
+Native v5 bounded batch reads, configured-host health and durable search remain implemented and separately sealed in docs/DC_FUNCTIONAL_V5_NATIVE_CANDIDATE.md. Its optimized release and prior staging receipt remain historical evidence, not the current installed baseline. V6 additionally implements effective_config and request_history, central native dispatch auditing, and honest durable process launch/cancel/reconciliation results when transport, completion-audit or local persistence fails.
 
-Native candidate acceptance passed strict lint, 446 Rust tests (11 conditional
-tests remain ignored by default), 19 batch helper tests, 7 search worker tests,
-12 gate tests and 31 facade tests. The same debug candidate passed six-host
-health (10 checks), batch reads (108), durable search (54), and actual
-operator/PTY/stdin/cursor/cancel/temporary-controller restart regression (81).
-The optimized release repeats the same six-host cases and all predecessor regressions; the candidate artifact is SHA256 204b5502efe58c47233c8ad2671fcbc5a5db9624d92b7f056073ec8d1920a8dd.
+See docs/DC_FUNCTIONAL_V6_METADATA_CANDIDATE.md and docs/qualification/dc-functional-v6-native-candidate-20261013.json. Final optimized artifact SHA256 a2eb8e7480260a9208e6fe509917b3e3b7d4ae0848e5aeedf4b048ce8c832cfa; compiled core fingerprint c3fe01a408765ac2322ca50658ceae881dd138eb69675fa69b07bf9b6b78d803. Strict lint and 472 Rust tests pass (11 conditional tests remain ignored), with original v4 and v5 definitions exact. Actual six-host health/batch/search/operator matrix and metadata/configuration acceptance pass. Local CI metadata fixtures explicitly skip SSH and cannot count as six-host health. A disposable main-host controller v6→v4-copy→v6 drill preserves a real in-flight job and the same PTY; all owned cleanup is confirmed. It does not qualify production/six-host rollback, business replacement or DC-off.
 
-These are native/local-facade proofs, not new-tool model-origin acceptance,
-production recovery, production rollback, DC-off or full replacement.
+Installed runtime/app remain v4 with 50 tools. Native v6 catalog has eight additive names, but no new-tool model-origin acceptance or full replacement is claimed. Desktop Commander and protected production services remain unchanged. Keep the frozen installed-v4 crosswalk intact until real installed/model-origin evidence changes it.
 
-Fixed defects include omitted pinned evidence in Git, acceptance of unrelated
-cutover receipts, batch transport diagnostic leakage, abandoned search-session
-quota lockout and Mac case/Unicode protected-directory aliases. All failure
-logs/receipts are retained. Mac cancellation's detached-backend return is
-term_sent/kill_sent; the canonical cancelled terminal/output evidence is
-required rather than a Linux-only launch-result assumption.
+Metadata ownership is only a native MCP session; the facade shares that session across modern calls, and existing jobs retain trusted operator-account scope. Request history excludes untrusted names/IDs/meta, params, output/errors, private paths and credentials. Completed only means a normal handler response was generated; lost side-effect results remain unknown with the same job ID and no automatic retry. Post-rename fsync failure may expose terminal metadata of unconfirmed durability. Remaining legacy post-effect audit paths, including host_signal, are explicit gaps. Source audit identified the installed facade's discarded cancellation notifications and blocked reader; its bounded request-owned cancellation candidate is being qualified separately.
 
-Next work must resolve truthful private caller scope, secure session/restart
-resume where required, request-level audit/history and redacted effective
-configuration. The optimized release is now natively qualified for the documented bounded cases and staged without installation (docs/qualification/dc-functional-v5-release-staged-20261013.json). Preserve active native jobs
-before any controlled native installation; then require legitimate
-administrator app Refresh/Review and genuine model-origin acceptance. Keep
-the historical installed-v4 crosswalk intact until actual installed/model
-evidence changes. Do not repeat the implementation as if the native candidate
-were absent, or silently promote it to the installed/ChatGPT baseline.
+Next work: truthful authenticated caller scope and secure reconnect/session/restart resume, complete asynchronous request/job auditing, facade cancellation, controlled candidate activation with active-job/PTY preservation, legitimate administrator app Refresh/Review, genuine model-origin calls and required actual business/failure/recovery/rollback workflows. Vendor-only DC function retirement and any actual privileged-action pins require user/admin decisions. P3 DC-off remains blocked until prerequisites pass and the user explicitly authorizes the risk-bearing drill with out-of-band rescue and rollback.
 
 ## Current qualified baseline
 

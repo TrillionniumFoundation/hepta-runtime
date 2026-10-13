@@ -909,7 +909,123 @@ async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 	.await
 }
 
-async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> Result<Value> {
+fn require_operation_intent(outcome: Result<()>) -> Result<()> {
+	outcome.map_err(|_| {
+		anyhow::anyhow!("Operation intent audit unavailable; no remote operation submitted")
+	})
+}
+
+fn operation_intent(action: &str, host: &str, job_id: &str) -> Result<()> {
+	require_operation_intent(audit(
+		action,
+		host,
+		job_id,
+		&json!({"phase":"intent","remote_operation_submitted":false}),
+	))
+}
+
+fn retain_result_after_audit(mut result: Value, outcome: Result<()>) -> Value {
+	result["audit_recorded"] = json!(outcome.is_ok());
+	if outcome.is_err() {
+		result["audit_warning"] = json!("Operation result retained; completion audit unavailable. Reconcile using the existing job_id.");
+	}
+	result
+}
+
+#[derive(Debug)]
+struct LaunchOutcome {
+	value: Value,
+	local_record_pending: bool,
+}
+
+fn preserve_launch_outcome<F>(
+	record: &mut JobRecord,
+	outcome: Result<Value>,
+	persist: F,
+) -> LaunchOutcome
+where
+	F: FnOnce(&JobRecord) -> Result<()>,
+{
+	let value = match outcome {
+		Ok(value) => {
+			let remote_state = if record.system_jobctl
+				&& record.execution_mode == ExecutionMode::Isolated
+				&& value.get("reused_remote").and_then(Value::as_bool) == Some(true)
+			{
+				value
+					.pointer("/status/launch_state")
+					.and_then(Value::as_str)
+					.filter(|state| {
+						matches!(
+							*state,
+							"pending" | "launch_failed" | "launched" | "cancelled"
+						)
+					})
+					.unwrap_or("launch_unknown")
+			} else {
+				"launched"
+			};
+			record.launch_state = remote_state.to_string();
+			record.launch_error = (remote_state == "launch_unknown")
+				.then(|| "Remote launch state unavailable".to_string());
+			value
+		}
+		Err(_) => {
+			// Transport failure cannot prove the remote supervisor did not launch.
+			record.launch_state = "launch_unknown".to_string();
+			record.launch_error = Some("Remote launch outcome unavailable".to_string());
+			json!({
+				"job_id":record.id,
+				"state":"launch_unknown",
+				"outcome":"unknown",
+				"status_authoritative":false,
+				"automatic_retry":false,
+				"reconcile_via":"process_status"
+			})
+		}
+	};
+	LaunchOutcome {
+		value,
+		local_record_pending: persist(record).is_err(),
+	}
+}
+
+fn attach_launch_record_warning(result: &mut Value, outcome: &LaunchOutcome) {
+	result["local_record_pending"] = json!(outcome.local_record_pending);
+	if outcome.local_record_pending {
+		result["reconcile_warning"] = json!("Remote launch outcome retained; local launch record update is pending. Use process_status with the existing job_id; do not create a new key.");
+	}
+}
+
+fn reconcile_retry_allowed(record: &JobRecord) -> bool {
+	// The administrator-pinned jobctl first checks the same job ID and full
+	// request digest. Operator helpers never relaunch an uncertain old record.
+	record.system_jobctl
+		&& record.execution_mode == ExecutionMode::Isolated
+		&& matches!(record.launch_state.as_str(), "pending" | "launch_failed")
+}
+
+fn unavailable_status(job_id: &str) -> Value {
+	json!({"job_id":job_id,"state":"status_unavailable","outcome":"unknown",
+        "status_authoritative":false,"automatic_retry":false})
+}
+
+fn retain_cancel_outcome(job_id: &str, outcome: Result<Value>) -> Value {
+	match outcome {
+		Ok(mut value) => {
+			value["job_id"] = json!(job_id);
+			value
+		}
+		Err(_) => json!({"job_id":job_id,"result":"cancel_unknown","outcome":"unknown",
+            "status_authoritative":false,"automatic_retry":false,
+            "reconcile_via":"process_status"}),
+	}
+}
+
+async fn launch_record(
+	record: &mut JobRecord,
+	params: &ProcessStartParams,
+) -> Result<LaunchOutcome> {
 	let config = runtime_config()?;
 	let host = config.host(&record.host)?;
 	let request = json!({
@@ -945,22 +1061,7 @@ async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> R
 	} else {
 		run_python_json(host, START_CODE, &request, Duration::from_secs(20)).await
 	};
-	match launch_result {
-		Ok(launch) => {
-			record.launch_state = "launched".to_string();
-			record.launch_error = None;
-			save_record(record)?;
-			Ok(launch)
-		}
-		Err(error) => {
-			record.launch_state = "launch_failed".to_string();
-			record.launch_error = Some(error.to_string());
-			save_record(record)?;
-			let outcome = json!({"error": error.to_string(), "job": record});
-			audit("process_start_failed", &record.host, &record.id, &outcome)?;
-			Err(error)
-		}
-	}
+	Ok(preserve_launch_outcome(record, launch_result, save_record))
 }
 
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
@@ -973,24 +1074,33 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 				bail!("idempotency key `{key}` is already bound to a different request");
 			}
 			check_binding(&existing)?;
-			let retry = existing.system_jobctl
-				&& matches!(existing.launch_state.as_str(), "pending" | "launch_failed");
+			let retry = reconcile_retry_allowed(&existing);
 			let launch = if retry {
+				operation_intent("process_start_reconcile_intent", &params.host, &existing.id)?;
 				Some(launch_record(&mut existing, &params).await?)
 			} else {
 				None
 			};
-			let status = status_record(&existing, 0).await.unwrap_or_else(
-				|error| json!({"state": "status_error", "error": error.to_string()}),
-			);
-			let result = json!({
+			let status = status_record(&existing, 0)
+				.await
+				.unwrap_or_else(|_| unavailable_status(&existing.id));
+			let mut result = json!({
 				"reused": true,
 				"retried_launch": retry,
 				"job": existing,
-				"launch": launch,
+				"launch": launch.as_ref().map(|outcome| &outcome.value),
 				"status": status,
 			});
-			audit("process_start_reused", &params.host, &existing.id, &result)?;
+			if let Some(outcome) = &launch {
+				attach_launch_record_warning(&mut result, outcome);
+			}
+			let completion = audit(
+				"process_start_reused",
+				&params.host,
+				&existing.id,
+				&json!({"phase":"result","reused":true,"retried_launch":retry}),
+			);
+			let result = retain_result_after_audit(result, completion);
 			return Ok(serde_json::to_string_pretty(&result)?);
 		}
 	}
@@ -1020,12 +1130,22 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 		launch_state: "pending".to_string(),
 		launch_error: None,
 	};
-	// Persist identity before remote launch. A crash can be retried with the same
-	// idempotency key and request, never by inventing a second remote job.
-	save_record(&record)?;
+	// Persist identity before remote launch. Later calls reconcile this same
+	// host, job ID and request binding; never invent a second remote job.
+	operation_intent("process_start_intent", &params.host, &id)?;
+	save_record(&record).map_err(|_| {
+		anyhow::anyhow!("Durable job identity could not be saved; no remote launch submitted")
+	})?;
 	let launch = launch_record(&mut record, &params).await?;
-	let result = json!({"reused": false, "job": record, "launch": launch});
-	audit("process_start", &params.host, &id, &result)?;
+	let mut result = json!({"reused": false, "job": record, "launch": launch.value});
+	attach_launch_record_warning(&mut result, &launch);
+	let completion = audit(
+		"process_start",
+		&params.host,
+		&id,
+		&json!({"phase":"result","launch_state":record.launch_state}),
+	);
+	let result = retain_result_after_audit(result, completion);
 	Ok(serde_json::to_string_pretty(&result)?)
 }
 
@@ -1090,12 +1210,20 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 		"unit": record.unit,
 		"grace_seconds": params.grace_seconds.unwrap_or(10).min(30),
 	});
-	let output: Value = if record.system_jobctl {
-		run_jobctl(host, &json!({"op":"cancel","job_id":record.id})).await?
+	operation_intent("process_cancel_intent", &params.host, &params.job_id)?;
+	let remote = if record.system_jobctl {
+		run_jobctl(host, &json!({"op":"cancel","job_id":record.id})).await
 	} else {
-		run_python_json(host, CANCEL_CODE, &request, Duration::from_secs(45)).await?
+		run_python_json(host, CANCEL_CODE, &request, Duration::from_secs(45)).await
 	};
-	audit("process_cancel", &params.host, &params.job_id, &output)?;
+	let output = retain_cancel_outcome(&params.job_id, remote);
+	let completion = audit(
+		"process_cancel",
+		&params.host,
+		&params.job_id,
+		&json!({"phase":"result","outcome_unknown":output["outcome"]=="unknown"}),
+	);
+	let output = retain_result_after_audit(output, completion);
 	Ok(serde_json::to_string_pretty(&output)?)
 }
 

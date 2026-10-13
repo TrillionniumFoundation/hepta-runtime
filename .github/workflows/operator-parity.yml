@@ -54,12 +54,13 @@ jobs:
             cargo build --locked --bin hepta-runtime
             # Contract loader intentionally rejects group/other-writable files.
             # Runner/worktree umask must not change the exact frozen test bytes.
-            chmod go-w deploy/contracts/hepta-runtime-full-operator-v{1,2,3,4,5}.json
-            python3 tests/dc_functional_v5_catalog_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-v5-catalog-ci.json --contract deploy/contracts/hepta-runtime-full-operator-v5.json
-            python3 tests/dc_parity_native_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-parity-native-ci.json --verify-contract deploy/contracts/hepta-runtime-full-operator-v4.json --allow-v4-directory-move --successor-contract deploy/contracts/hepta-runtime-full-operator-v5.json
-            python3 tests/dc_parity_directory_move_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-directory-move-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v5.json
-            python3 tests/dc_parity_workspace_root_guard_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-root-guard-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v5.json
-            python3 tests/dc_parity_concurrent_text_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v5.json --waves 3 --contenders 6 --out /tmp/hepta-dc-text-concurrency-ci.json
+            chmod go-w deploy/contracts/hepta-runtime-full-operator-v{1,2,3,4,5,6}.json
+            python3 tests/dc_functional_v6_catalog_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-v6-catalog-ci.json --contract deploy/contracts/hepta-runtime-full-operator-v6.json
+            python3 tests/dc_functional_v6_metadata_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v6.json --local-fixture --out /tmp/hepta-dc-v6-metadata-ci.json
+            python3 tests/dc_parity_native_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-parity-native-ci.json --verify-contract deploy/contracts/hepta-runtime-full-operator-v4.json --allow-v4-directory-move --successor-contract deploy/contracts/hepta-runtime-full-operator-v6.json
+            python3 tests/dc_parity_directory_move_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-directory-move-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v6.json
+            python3 tests/dc_parity_workspace_root_guard_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-root-guard-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v6.json
+            python3 tests/dc_parity_concurrent_text_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v6.json --waves 3 --contenders 6 --out /tmp/hepta-dc-text-concurrency-ci.json
             python3 tests/dc_parity_v4_staging_tests.py
             python3 tests/dc_parity_v4_deployment_tests.py
             python3 -m py_compile deploy/activate_dc_parity_v4.py deploy/rollback_dc_parity_v4.py
@@ -91,7 +92,7 @@ jobs:
             python3 tests/model_origin_tool_ledger_tests.py
             python3 tests/multi_read_tests.py
             python3 tests/search_worker_tests.py
-            python3 -m py_compile tests/host_health_acceptance.py tests/multi_read_six_host_acceptance.py tests/search_six_host_acceptance.py tests/dc_successor_contract.py
+            python3 -m py_compile tests/host_health_acceptance.py tests/multi_read_six_host_acceptance.py tests/search_six_host_acceptance.py tests/dc_successor_contract.py tests/dc_functional_v6_operator_six_host_acceptance.py tests/dc_functional_v6_metadata_acceptance.py
             python3 tests/dc_replacement_gate_tests.py
             python3 deploy/dc_replacement_gate.py > /tmp/hepta-dc-replacement-gate-ci.json
             python3 -m py_compile deploy/chatgpt_support_snapshot.py

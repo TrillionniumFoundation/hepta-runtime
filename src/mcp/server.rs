@@ -19,11 +19,12 @@ use std::sync::{Arc, RwLock};
 use rmcp::{
 	handler::server::{wrapper::Parameters, ServerHandler},
 	model::{
-		CacheScope, CallToolResult, ContentBlock, CustomNotification, ExperimentalCapabilities,
-		Implementation, JsonObject, ListResourcesResult, ListToolsResult, PaginatedRequestParams,
-		ProtocolVersion, ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult,
-		RequestId, Resource, ResourceContents, ServerCapabilities, ServerConfig,
-		ServerNotification, SubscribeRequestParams, SubscriptionFilter, UnsubscribeRequestParams,
+		CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock,
+		CustomNotification, ExperimentalCapabilities, Implementation, JsonObject,
+		ListResourcesResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
+		ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, RequestId, Resource,
+		ResourceContents, ServerCapabilities, ServerConfig, ServerNotification,
+		SubscribeRequestParams, SubscriptionFilter, UnsubscribeRequestParams,
 	},
 	schemars,
 	service::{Peer, RequestContext, SubscriptionContext, SubscriptionSink},
@@ -171,6 +172,8 @@ async fn notify_peer_resource_updated(peer: &Peer<RoleServer>, uri: &str) {
 /// interactive sessions, on pre-2026-07-28 connections; other clients ignore it.
 const CLAUDE_CHANNEL_CAPABILITY: &str = "claude/channel";
 const RUNTIME_TOOL_NAMES: &[&str] = &[
+	"effective_config",
+	"request_history",
 	"host_health",
 	"read_multiple_files",
 	"search_start",
@@ -381,6 +384,47 @@ fn enforce_runtime_path_spec(
 
 #[tool_router]
 impl OctofsServer {
+	#[tool(
+		title = "Read Redacted Effective Configuration",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read bounded effective Hepta capabilities and configured host aliases from a strict allowlist projection. Returns authorization switches and counts, never SSH destinations, private paths, credentials, environment values, privileged commands or raw policy. Does not modify configuration; administrator changes require reviewed version-controlled configuration and rollback."
+	)]
+	async fn effective_config(
+		&self,
+		Parameters(params): Parameters<runtime::effective_config::EffectiveConfigParams>,
+	) -> Result<String, String> {
+		runtime::effective_config::effective_config(params).map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Native Session Request History",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read bounded redacted dispatch metadata owned by this native MCP session, with an independent retained-record cursor. Stores only server request identity, canonical tool name, timing and observed status; never parameters, output, errors, paths or credentials. Unknown means effects may have occurred: never replay automatically. Records do not prove response delivery, business success, authenticated ChatGPT caller isolation or secure resume after session/service restart. Transport-invalid requests and facade-local refusals are outside native dispatch history."
+	)]
+	async fn request_history(
+		&self,
+		Parameters(params): Parameters<runtime::request_audit::RequestHistoryParams>,
+	) -> Result<String, String> {
+		let owner = self
+			.search_owner
+			.as_ref()
+			.as_deref()
+			.ok_or_else(|| "native session entropy unavailable".to_string())?;
+		runtime::request_audit::history(owner, params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
 	#[tool(
 		title = "View",
 		annotations(
@@ -1850,6 +1894,74 @@ fn supports_cache_hints(context: &RequestContext<RoleServer>) -> bool {
 
 #[tool_handler(router = Self::tool_router())]
 impl ServerHandler for OctofsServer {
+	async fn call_tool(
+		&self,
+		request: CallToolRequestParams,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResponse, ErrorData> {
+		use runtime::request_audit::AuditCompletion;
+		let cancelled = context.ct.clone();
+		let router = Self::tool_router();
+		let enabled = runtime::config::maybe_runtime_config().is_some();
+		let known = router.get(request.name.as_ref());
+		let visible = known.is_some()
+			&& if enabled {
+				request.name.as_ref() != "shell"
+			} else {
+				!RUNTIME_TOOL_NAMES.contains(&request.name.as_ref())
+			};
+		let readonly = known
+			.and_then(|tool| tool.annotations.as_ref())
+			.and_then(|hints| hints.read_only_hint)
+			== Some(true);
+		let ticket = if enabled {
+			let owner = self.search_owner.as_ref().as_deref().ok_or_else(|| {
+				ErrorData::internal_error("native session entropy unavailable", None)
+			})?;
+			let canonical = known.map_or("_unknown_tool", |tool| tool.name.as_ref());
+			Some(
+				runtime::request_audit::begin(owner, canonical)
+					.await
+					.map_err(|_| {
+						ErrorData::internal_error(
+							"request audit unavailable; dispatch refused",
+							None,
+						)
+					})?,
+			)
+		} else {
+			None
+		};
+		let result = if visible {
+			let call = rmcp::handler::server::tool::ToolCallContext::new(self, request, context);
+			router.call(call).await
+		} else {
+			Err(ErrorData::invalid_params(
+				"tool not found in this runtime mode",
+				None,
+			))
+		};
+		if let Some(ticket) = ticket {
+			let completion = match &result {
+				_ if cancelled.is_cancelled() => AuditCompletion::Unknown,
+				Ok(CallToolResponse::Complete(value)) if !value.is_error.unwrap_or(false) => {
+					AuditCompletion::Completed
+				}
+				_ if !visible || readonly => AuditCompletion::Failed,
+				_ => AuditCompletion::Unknown,
+			};
+			if runtime::request_audit::finish(ticket, completion)
+				.await
+				.is_err()
+			{
+				// Final metadata durability is uncertain, including after atomic publication.
+				// Preserve executed writes and their identities rather than suggesting retry.
+				warn!("request audit completion unavailable; dispatch result preserved");
+			}
+		}
+		result
+	}
+
 	fn get_info(&self) -> ServerConfig {
 		ServerConfig::new(
 			// Resources (read/list) advertise automatically promoted shell jobs
