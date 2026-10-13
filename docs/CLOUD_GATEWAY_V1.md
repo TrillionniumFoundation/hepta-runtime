@@ -139,6 +139,24 @@ revocation, unauthenticated failures and blank authorized catalogs. It is now
 part of the exact-head CI. It does **not** represent completed OAuth 2.1,
 a live public server, signed device attestation, or customer onboarding.
 
+## Offline OAuth verifier claim-type hardening (2026-10-13)
+
+A second adversarial test found that the policy's `AuthenticatedUser` and
+`AuthenticatedAgent` dataclass type annotations were not enforced at runtime.
+If a future token verifier accidentally returned an OAuth `scopes` string,
+Python substring membership could wrongly satisfy `hepta:connect`,
+`hepta:write`, `hepta:execute` or `hepta:privileged`. Non-integer expiry
+and certificate connection-generation claims could likewise cause an
+unhandled TypeError rather than a stable authorization denial.
+
+The policy now requires a **frozenset of bounded strings** for scopes,
+integer (not boolean or float) expirations and integer connection generations.
+Malformed verifier results fail with `OAUTH_INVALID`; malformed authenticated
+agent generations fail with `AGENT_IDENTITY_INVALID`. Malformed administrator
+binding generation/expiry fields fail enrollment validation. This hardens the
+future verifier integration boundary; it is **not** a replacement for
+cryptographic JWT validation, OAuth token revocation, or real device mTLS.
+
 ## Work required before internet exposure
 
 1. Choose a verified organization, actual stable owned public HTTPS domain,

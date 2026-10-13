@@ -306,8 +306,10 @@ class GatewayPolicy:
                 raise ValueError("Invalid, wildcard or missing enrollment identity")
             if not HEX64.fullmatch(binding.cert_sha256):
                 raise ValueError("Exact sha256 mTLS certificate fingerprint required")
-            if binding.connection_generation <= 0 or binding.expires_at <= 0:
-                raise ValueError("Generation and expiration must be positive")
+            if (type(binding.connection_generation) is not int
+                or type(binding.expires_at) is not int
+                or binding.connection_generation <= 0 or binding.expires_at <= 0):
+                raise ValueError("Generation and expiration must be positive integers")
             root = binding.local_workspace_root
             if not isinstance(root, str) or not root.startswith("/") or root == "/" or not _safe_path(root, root):
                 raise ValueError("Public tenant needs a private non-root absolute workspace")
@@ -336,8 +338,16 @@ class GatewayPolicy:
         if not isinstance(user, AuthenticatedUser):
             raise Rejected("OAUTH_INVALID")
         now = self.now()
-        if (not all(_identity_field(x) for x in
-                    (user.issuer,user.audience,user.subject,user.tenant))
+        # Dataclass annotations are not runtime validators. A poorly formed
+        # verifier result with a string/list/dict `scopes` could otherwise
+        # pass membership tests by substring/key lookup. Normalize and type
+        # check all claims at the independently trusted verifier boundary.
+        if (type(user.scopes) is not frozenset
+            or any(not isinstance(scope,str) or not 1 <= len(scope) <= 128
+                   for scope in user.scopes)
+            or type(user.expires_at) is not int
+            or not all(_identity_field(x) for x in
+                       (user.issuer,user.audience,user.subject,user.tenant))
             or user.audience != self.resource
             or user.expires_at <= now or user.expires_at > now + 24*60*60
             or "hepta:connect" not in user.scopes):
@@ -346,6 +356,7 @@ class GatewayPolicy:
             or not _identity_field(agent.device_id)
             or not isinstance(agent.cert_sha256,str)
             or not HEX64.fullmatch(agent.cert_sha256)
+            or type(agent.connection_generation) is not int
             or agent.connection_generation <= 0
             or not _identity_field(agent.tenant)
             or not _identity_field(agent.subject)):

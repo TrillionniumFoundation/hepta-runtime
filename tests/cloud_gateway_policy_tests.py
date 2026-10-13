@@ -272,6 +272,42 @@ class GatewayPolicyTests(unittest.TestCase):
                 self.assert_denied('OAUTH_INVALID',lambda:self.call('host_list'))
             finally:self.user=old
 
+    def test_verified_user_scope_claim_must_be_frozenset_of_strings(self):
+        original=self.user
+        invalid=[
+            'hepta:connect hepta:write hepta:execute hepta:privileged',
+            ['hepta:connect','hepta:write'],
+            {'hepta:connect':True},
+            123,
+            None,
+            frozenset({'hepta:connect',23}),
+        ]
+        for scopes in invalid:
+            with self.subTest(scopes=scopes):
+                self.user=dataclasses.replace(original,scopes=scopes)
+                self.assert_denied('OAUTH_INVALID',
+                    lambda:self.policy.authorized_tool_names(
+                        'Bearer _fixture_valid_only',self.agent))
+        self.user=original
+        self.assertIn('host_list',self.policy.authorized_tool_names(
+            'Bearer _fixture_valid_only',self.agent))
+
+    def test_untyped_verifier_expiry_and_agent_generation_fail_closed(self):
+        original=self.user
+        for bad in ('soon',float(NOW+100),None,True):
+            with self.subTest(expiry=bad):
+                self.user=dataclasses.replace(original,expires_at=bad)
+                self.assert_denied('OAUTH_INVALID',
+                    lambda:self.policy.authorized_tool_names(
+                        'Bearer _fixture_valid_only',self.agent))
+        self.user=original
+        for generation in ('9',None,True):
+            with self.subTest(generation=generation):
+                agent=dataclasses.replace(self.agent,connection_generation=generation)
+                self.assert_denied('AGENT_IDENTITY_INVALID',
+                    lambda:self.policy.authorized_tool_names(
+                        'Bearer _fixture_valid_only',agent))
+
     def test_revoked_or_expired_device_and_certificate_rotation_denied(self):
         revoked=dataclasses.replace(self.binding,revoked=True)
         self.policy=self.make_policy(revoked)
@@ -468,7 +504,10 @@ class GatewayPolicyTests(unittest.TestCase):
                        {'allowed_tools':frozenset({'tool-not-in-v4'})},
                        {'tenant':'*'},
                        {'allowed_hosts':frozenset({'*'})},
-                       {'cert_sha256':'bogus'}):
+                       {'cert_sha256':'bogus'},
+                       {'connection_generation':True},
+                       {'connection_generation':'9'},
+                       {'expires_at':1700000500.0}):
             with self.subTest(change=change):
                 with self.assertRaises(ValueError):
                     self.make_policy(dataclasses.replace(self.binding,**change))
