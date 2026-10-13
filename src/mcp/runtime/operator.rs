@@ -146,21 +146,126 @@ pub async fn host_signal(params: HostSignalParams) -> Result<String> {
 	}
 	let number = validate_signal(&params)?;
 	let request = json!({"op":"signal", "pid":params.pid, "signal":number, "expected_identity":params.expected_identity, "sudo":params.sudo});
-	// Record intent before side effects. If the transport fails, outcome is unknown.
-	audit(
+	// A failed intent is a zero-dispatch refusal, not a failed signal delivery.
+	require_signal_intent(audit(
 		"host_signal_requested",
 		&params.host,
 		&params.pid.to_string(),
-		&request,
-	)?;
-	let result = process_rpc(host, &request, params.sudo).await?;
-	audit(
+		&json!({"phase":"intent","signal":number,"sudo":params.sudo,"expected_identity_supplied":params.expected_identity.is_some(),"remote_operation_submitted":false}),
+	))?;
+	let prefix = if params.sudo { "sudo -n -- " } else { "" };
+	let command = format!(
+		"{prefix}/usr/bin/python3 -c {}",
+		shell_quote(include_str!("process_ops.py"))
+	);
+	let remote = run_capture(
+		host,
+		&command,
+		&serde_json::to_vec(&request)?,
+		Duration::from_secs(20),
+	)
+	.await;
+	let result = retain_signal_outcome(&params, number, remote)?;
+	let completion = audit(
 		"host_signal_result",
 		&params.host,
 		&params.pid.to_string(),
-		&serde_json::from_str::<Value>(&result)?,
-	)?;
-	Ok(result)
+		&json!({"phase":"result","result":result["result"],"outcome_unknown":result["outcome"]=="unknown"}),
+	);
+	Ok(serde_json::to_string_pretty(&retain_signal_after_audit(
+		result, completion,
+	))?)
+}
+
+fn require_signal_intent(outcome: Result<()>) -> Result<()> {
+	outcome.map_err(|_| {
+		anyhow::anyhow!("Host signal intent audit unavailable; no signal request dispatched")
+	})
+}
+
+fn unknown_signal(params: &HostSignalParams, number: i32) -> Value {
+	json!({"host":params.host,"pid":params.pid,"signal":number,"expected_identity":params.expected_identity,
+		"result":"signal_outcome_unknown","outcome":"unknown","automatic_retry":false,"termination_confirmed":false,
+		"reconcile_warning":"Signal delivery is not confirmed. Inspect the existing PID/start identity; do not resend automatically."})
+}
+
+fn retain_signal_outcome(
+	params: &HostSignalParams,
+	number: i32,
+	remote: Result<std::process::Output>,
+) -> Result<Value> {
+	let output = match remote {
+		Ok(output) => output,
+		Err(_) => return Ok(unknown_signal(params, number)),
+	};
+	if !output.status.success() {
+		// Nonzero exit may occur after a syscall or after the real ACK was lost.
+		// Never infer a pre-effect refusal from stderr or discard its identity.
+		return Ok(unknown_signal(params, number));
+	}
+	let value: Value = match serde_json::from_slice(&output.stdout) {
+		Ok(value) => value,
+		Err(_) => return Ok(unknown_signal(params, number)),
+	};
+	if value["pid"].as_u64() == Some(params.pid as u64)
+		&& value["signal"].as_i64() == Some(number as i64)
+		&& value["result"] == "signal_refused"
+		&& value["signal_syscall_attempted"] == false
+		&& value["termination_confirmed"] == false
+	{
+		bail!("Operator signal helper refused before the signal syscall; no signal sent.");
+	}
+	if value["pid"].as_u64() == Some(params.pid as u64)
+		&& value["signal"].as_i64() == Some(number as i64)
+		&& value["result"] == "signal_refused"
+		&& value["signal_syscall_attempted"] == true
+		&& value["signal_delivery_confirmed"] == false
+		&& value["refusal_reason"] == "kernel_permission_denied"
+		&& value["termination_confirmed"] == false
+		&& value["identity"]
+			.as_str()
+			.is_some_and(|identity| !identity.is_empty() && identity.len() <= 256)
+		&& params
+			.expected_identity
+			.as_deref()
+			.is_none_or(|expected| value["identity"].as_str() == Some(expected))
+	{
+		bail!("Operator signal permission denied by the kernel; no signal delivered.");
+	}
+	let expected_result = if number == 0 {
+		"probe_succeeded"
+	} else {
+		"signal_sent"
+	};
+	let identity = value["identity"].as_str();
+	if value["pid"].as_u64() != Some(params.pid as u64)
+		|| value["signal"].as_i64() != Some(number as i64)
+		|| value["result"].as_str() != Some(expected_result)
+		|| value["termination_confirmed"] != false
+		|| !value["atomic_identity"].is_boolean()
+		|| !value["effective_uid"].is_u64()
+		|| !identity.is_some_and(|identity| !identity.is_empty() && identity.len() <= 256)
+		|| params
+			.expected_identity
+			.as_deref()
+			.is_some_and(|expected| identity != Some(expected))
+	{
+		return Ok(unknown_signal(params, number));
+	}
+	Ok(
+		json!({"pid":value["pid"],"signal":value["signal"],"identity":value["identity"],"result":value["result"],
+		"atomic_identity":value["atomic_identity"],"effective_uid":value["effective_uid"],"termination_confirmed":false,"automatic_retry":false}),
+	)
+}
+
+fn retain_signal_after_audit(mut result: Value, outcome: Result<()>) -> Value {
+	result["audit_recorded"] = json!(outcome.is_ok());
+	if outcome.is_err() {
+		result["audit_warning"] = json!(
+			"Signal helper outcome retained; completion audit unavailable. Do not resend the signal automatically."
+		);
+	}
+	result
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]

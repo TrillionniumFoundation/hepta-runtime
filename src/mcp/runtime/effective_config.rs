@@ -7,7 +7,6 @@ use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 
 use super::config::{runtime_config, ExecutionMode, Platform, RuntimeConfig};
-use crate::utils::truncation::MAX_RESULT_BYTES;
 
 const MAX_HOST_ENTRIES: usize = 256;
 const MAX_SUMMARY_BYTES: usize = 256 * 1024;
@@ -68,7 +67,6 @@ struct FileApiSummary {
 struct SummaryLimits {
 	maximum_summary_host_entries: usize,
 	maximum_summary_response_bytes: usize,
-	maximum_tool_result_bytes: usize,
 }
 
 fn render_effective_config(config: Result<&RuntimeConfig>) -> Result<String> {
@@ -122,14 +120,13 @@ fn render_effective_config(config: Result<&RuntimeConfig>) -> Result<String> {
 		hosts,
 		limits: SummaryLimits {
 			maximum_summary_host_entries: MAX_HOST_ENTRIES,
-			maximum_summary_response_bytes: MAX_SUMMARY_BYTES.min(MAX_RESULT_BYTES),
-			maximum_tool_result_bytes: MAX_RESULT_BYTES,
+			maximum_summary_response_bytes: MAX_SUMMARY_BYTES,
 		},
 	};
 	let text = serde_json::to_string_pretty(&summary)?;
 	let wire =
 		rmcp::model::CallToolResult::success(vec![rmcp::model::ContentBlock::text(text.clone())]);
-	if serde_json::to_vec(&wire)?.len() > MAX_SUMMARY_BYTES.min(MAX_RESULT_BYTES) {
+	if serde_json::to_vec(&wire)?.len() > MAX_SUMMARY_BYTES {
 		bail!("effective configuration exceeds the bounded response limit");
 	}
 	Ok(text)

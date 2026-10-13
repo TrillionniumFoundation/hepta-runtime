@@ -181,3 +181,162 @@ async fn clean_capture_and_timed_out_capture_are_distinct() {
 	let detail = drain_readers(vec![task], std::time::Duration::from_millis(1)).await;
 	assert!(detail.unwrap().contains("deadline exceeded"));
 }
+
+#[derive(Clone, Copy)]
+enum WriteFault {
+	PartialError,
+	FlushError,
+	PartialTimeout,
+	None,
+}
+struct FaultWriter {
+	accepted: Vec<u8>,
+	fault: WriteFault,
+	polls: usize,
+}
+impl AsyncWrite for FaultWriter {
+	fn poll_write(
+		mut self: std::pin::Pin<&mut Self>,
+		_: &mut std::task::Context<'_>,
+		data: &[u8],
+	) -> std::task::Poll<std::io::Result<usize>> {
+		self.polls += 1;
+		if !self.accepted.is_empty() {
+			match self.fault {
+				WriteFault::PartialError => {
+					return std::task::Poll::Ready(Err(std::io::Error::other(
+						"SECRET partial write failure",
+					)))
+				}
+				WriteFault::PartialTimeout => return std::task::Poll::Pending,
+				_ => {}
+			}
+		}
+		let n = if matches!(
+			self.fault,
+			WriteFault::PartialError | WriteFault::PartialTimeout
+		) {
+			data.len().min(3)
+		} else {
+			data.len()
+		};
+		self.accepted.extend_from_slice(&data[..n]);
+		std::task::Poll::Ready(Ok(n))
+	}
+	fn poll_flush(
+		self: std::pin::Pin<&mut Self>,
+		_: &mut std::task::Context<'_>,
+	) -> std::task::Poll<std::io::Result<()>> {
+		std::task::Poll::Ready(if matches!(self.fault, WriteFault::FlushError) {
+			Err(std::io::Error::other("SECRET flush failure"))
+		} else {
+			Ok(())
+		})
+	}
+	fn poll_shutdown(
+		self: std::pin::Pin<&mut Self>,
+		_: &mut std::task::Context<'_>,
+	) -> std::task::Poll<std::io::Result<()>> {
+		std::task::Poll::Ready(Ok(()))
+	}
+}
+fn fault_writer(fault: WriteFault) -> FaultWriter {
+	FaultWriter {
+		accepted: Vec::new(),
+		fault,
+		polls: 0,
+	}
+}
+
+#[tokio::test]
+async fn failed_pty_intent_refuses_before_any_input_dispatch() {
+	let mut writer = fault_writer(WriteFault::None);
+	let result = dispatch_input(
+		&mut writer,
+		"target-host",
+		"pty-existing",
+		b"business command\n",
+		Err(anyhow!("SECRET intent unavailable")),
+		std::time::Duration::from_secs(1),
+	)
+	.await;
+	assert!(result
+		.unwrap_err()
+		.to_string()
+		.contains("no terminal operation dispatched"));
+	assert_eq!(writer.polls, 0);
+	assert!(writer.accepted.is_empty());
+}
+
+#[tokio::test]
+async fn partial_input_flush_failure_and_timeout_retain_unknown_identity_without_retry() {
+	for fault in [
+		WriteFault::PartialError,
+		WriteFault::FlushError,
+		WriteFault::PartialTimeout,
+	] {
+		let mut writer = fault_writer(fault);
+		let result = dispatch_input(
+			&mut writer,
+			"target-host",
+			"pty-existing",
+			b"business command\n",
+			Ok(()),
+			std::time::Duration::from_millis(5),
+		)
+		.await
+		.unwrap();
+		assert!(
+			!writer.accepted.is_empty(),
+			"fault must occur after real accepted bytes"
+		);
+		assert_eq!(result["outcome"], "unknown");
+		assert_eq!(result["automatic_retry"], false);
+		assert_eq!(result["host"], "target-host");
+		assert_eq!(result["session_id"], "pty-existing");
+		assert!(
+			result.get("bytes_written").is_none(),
+			"a partial write must not assert the full count"
+		);
+		assert!(!result.to_string().contains("SECRET"));
+	}
+}
+
+#[tokio::test]
+async fn completed_input_survives_post_effect_audit_failure() {
+	let mut writer = fault_writer(WriteFault::None);
+	let result = dispatch_input(
+		&mut writer,
+		"target-host",
+		"pty-existing",
+		b"business command\n",
+		Ok(()),
+		std::time::Duration::from_secs(1),
+	)
+	.await
+	.unwrap();
+	assert_eq!(writer.accepted, b"business command\n");
+	let result = retain_pty_after_audit(result, Err(anyhow!("SECRET audit sync failure")));
+	assert_eq!(result["bytes_written"], writer.accepted.len());
+	assert_eq!(result["host"], "target-host");
+	assert_eq!(result["session_id"], "pty-existing");
+	assert_eq!(result["audit_recorded"], false);
+	assert_eq!(result["automatic_retry"], false);
+	assert!(!result.to_string().contains("SECRET"));
+}
+
+#[test]
+fn start_and_close_result_survive_completion_audit_failure() {
+	for value in [
+		json!({"session_id":"pty-existing","host":"target-host","pid":123,"pid_scope":"controller_ssh"}),
+		json!({"session_id":"pty-existing","host":"target-host","result":"close_requested","termination_confirmed":false}),
+	] {
+		let result = retain_pty_after_audit(value.clone(), Err(anyhow!("SECRET audit path")));
+		for (key, field) in value.as_object().unwrap() {
+			assert_eq!(result[key], *field);
+		}
+		assert_eq!(result["audit_recorded"], false);
+		assert_eq!(result["automatic_retry"], false);
+		assert!(!result.to_string().contains("SECRET"));
+	}
+}

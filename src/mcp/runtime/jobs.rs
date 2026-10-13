@@ -247,7 +247,8 @@ fn fingerprint(params: &ProcessStartParams) -> u64 {
 }
 fn matches_request(record: &JobRecord, params: &ProcessStartParams) -> Result<bool> {
 	let expected = record.request_digest.as_ref().context(
-		"legacy idempotency binding lacks a full digest; inspect existing job_id instead of relaunching")?;
+		"legacy idempotency binding lacks a full digest; inspect existing job_id instead of relaunching",
+	)?;
 	Ok(*expected == request_digest(params)?)
 }
 
@@ -927,7 +928,9 @@ fn operation_intent(action: &str, host: &str, job_id: &str) -> Result<()> {
 fn retain_result_after_audit(mut result: Value, outcome: Result<()>) -> Value {
 	result["audit_recorded"] = json!(outcome.is_ok());
 	if outcome.is_err() {
-		result["audit_warning"] = json!("Operation result retained; completion audit unavailable. Reconcile using the existing job_id.");
+		result["audit_warning"] = json!(
+			"Operation result retained; completion audit unavailable. Reconcile using the existing job_id."
+		);
 	}
 	result
 }
@@ -936,6 +939,26 @@ fn retain_result_after_audit(mut result: Value, outcome: Result<()>) -> Value {
 struct LaunchOutcome {
 	value: Value,
 	local_record_pending: bool,
+}
+
+fn trusted_launch_ack(record: &JobRecord, value: &Value) -> bool {
+	if value["ok"] != true {
+		return false;
+	}
+	if record.system_jobctl && record.execution_mode == ExecutionMode::Isolated {
+		return value["backend"] == "systemd_system"
+			&& value
+				.pointer("/status/job_id")
+				.is_none_or(|id| id.as_str() == Some(&record.id));
+	}
+	match value["backend"].as_str() {
+		Some("systemd") => value["unit"].as_str() == Some(&record.unit),
+		Some("detached") => value["launcher_pid"]
+			.as_u64()
+			.is_some_and(|pid| pid > 0 && pid <= i32::MAX as u64),
+		Some("completed" | "launch_failed") => value["reused_remote"] == true,
+		_ => false,
+	}
 }
 
 fn preserve_launch_outcome<F>(
@@ -947,7 +970,7 @@ where
 	F: FnOnce(&JobRecord) -> Result<()>,
 {
 	let value = match outcome {
-		Ok(value) => {
+		Ok(value) if trusted_launch_ack(record, &value) => {
 			let remote_state = if record.system_jobctl
 				&& record.execution_mode == ExecutionMode::Isolated
 				&& value.get("reused_remote").and_then(Value::as_bool) == Some(true)
@@ -962,6 +985,8 @@ where
 						)
 					})
 					.unwrap_or("launch_unknown")
+			} else if value["backend"] == "launch_failed" {
+				"launch_failed"
 			} else {
 				"launched"
 			};
@@ -970,8 +995,8 @@ where
 				.then(|| "Remote launch state unavailable".to_string());
 			value
 		}
-		Err(_) => {
-			// Transport failure cannot prove the remote supervisor did not launch.
+		Ok(_) | Err(_) => {
+			// Invalid ACKs and transport failures cannot prove the supervisor did not launch.
 			record.launch_state = "launch_unknown".to_string();
 			record.launch_error = Some("Remote launch outcome unavailable".to_string());
 			json!({
@@ -993,7 +1018,9 @@ where
 fn attach_launch_record_warning(result: &mut Value, outcome: &LaunchOutcome) {
 	result["local_record_pending"] = json!(outcome.local_record_pending);
 	if outcome.local_record_pending {
-		result["reconcile_warning"] = json!("Remote launch outcome retained; local launch record update is pending. Use process_status with the existing job_id; do not create a new key.");
+		result["reconcile_warning"] = json!(
+			"Remote launch outcome retained; local launch record update is pending. Use process_status with the existing job_id; do not create a new key."
+		);
 	}
 }
 
@@ -1011,15 +1038,22 @@ fn unavailable_status(job_id: &str) -> Value {
 }
 
 fn retain_cancel_outcome(job_id: &str, outcome: Result<Value>) -> Value {
-	match outcome {
-		Ok(mut value) => {
-			value["job_id"] = json!(job_id);
-			value
+	if let Ok(value) = outcome {
+		if value["job_id"].as_str() == Some(job_id)
+			&& value["result"].as_str().is_some_and(|result| {
+				matches!(
+					result,
+					"already_exited" | "stop_requested" | "term_sent" | "kill_sent" | "not_running"
+				)
+			}) {
+			// An acknowledgement requests or sends a signal; it is not terminal proof.
+			return json!({"job_id":job_id,"result":value["result"],"automatic_retry":false,
+				"termination_confirmed":false,"reconcile_via":"process_status"});
 		}
-		Err(_) => json!({"job_id":job_id,"result":"cancel_unknown","outcome":"unknown",
-            "status_authoritative":false,"automatic_retry":false,
-            "reconcile_via":"process_status"}),
 	}
+	json!({"job_id":job_id,"result":"cancel_unknown","outcome":"unknown",
+		"status_authoritative":false,"automatic_retry":false,"termination_confirmed":false,
+		"reconcile_via":"process_status"})
 }
 
 async fn launch_record(
@@ -1152,8 +1186,15 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 pub async fn status_job(params: ProcessRefParams) -> Result<String> {
 	let record = check_ref(&params)?;
 	let status = status_record(&record, 0).await?;
-	audit("process_status", &params.host, &params.job_id, &status)?;
-	Ok(serde_json::to_string_pretty(&status)?)
+	let completion = audit(
+		"process_status",
+		&params.host,
+		&params.job_id,
+		&json!({"phase":"observation","ok":true}),
+	);
+	Ok(serde_json::to_string_pretty(
+		&retain_observation_after_audit(status, completion, &record.host, &record.id),
+	)?)
 }
 
 pub async fn wait_job(params: ProcessWaitParams) -> Result<String> {
@@ -1164,8 +1205,15 @@ pub async fn wait_job(params: ProcessWaitParams) -> Result<String> {
 	let record = check_ref(&reference)?;
 	let wait = params.timeout_seconds.unwrap_or(10).min(30);
 	let status = status_record(&record, wait).await?;
-	audit("process_wait", &params.host, &params.job_id, &status)?;
-	Ok(serde_json::to_string_pretty(&status)?)
+	let completion = audit(
+		"process_wait",
+		&params.host,
+		&params.job_id,
+		&json!({"phase":"observation","ok":true}),
+	);
+	Ok(serde_json::to_string_pretty(
+		&retain_observation_after_audit(status, completion, &record.host, &record.id),
+	)?)
 }
 
 pub async fn read_job(params: ProcessReadParams) -> Result<String> {
@@ -1188,13 +1236,32 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 	} else {
 		run_python_json(host, READ_CODE, &request, Duration::from_secs(15)).await?
 	};
-	audit(
+	let completion = audit(
 		"process_read",
 		&params.host,
 		&params.job_id,
-		&json!({"ok": true}),
-	)?;
-	Ok(serde_json::to_string_pretty(&output)?)
+		&json!({"phase":"observation","ok": true}),
+	);
+	Ok(serde_json::to_string_pretty(
+		&retain_observation_after_audit(output, completion, &record.host, &record.id),
+	)?)
+}
+
+fn retain_observation_after_audit(
+	mut result: Value,
+	outcome: Result<()>,
+	host: &str,
+	job_id: &str,
+) -> Value {
+	if !result.is_object() {
+		return json!({"host":host,"job_id":job_id,"result":"invalid_remote_observation","outcome":"unknown","automatic_retry":false,"audit_recorded":outcome.is_ok(),"reconcile_warning":"Existing job observation was not a trusted object. No new job was launched."});
+	}
+	result["audit_recorded"] = json!(outcome.is_ok());
+	if outcome.is_err() {
+		result["audit_warning"] =
+			json!("Existing job observation retained; audit unavailable. No new job was launched.");
+	}
+	result
 }
 
 pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {

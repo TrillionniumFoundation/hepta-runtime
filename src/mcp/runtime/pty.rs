@@ -11,7 +11,7 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::process::{ChildStdin, Command};
 use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit, Semaphore};
 
@@ -282,6 +282,66 @@ async fn drain_readers(
 	}
 }
 
+pub(super) fn require_pty_intent(outcome: Result<()>) -> Result<()> {
+	outcome.map_err(|_| anyhow!("PTY intent audit unavailable; no terminal operation dispatched"))
+}
+
+pub(super) fn unknown_pty_outcome(
+	host: &str,
+	id: &str,
+	operation: &str,
+	persistent: bool,
+) -> Value {
+	let mut value = json!({"host":host,"session_id":id,"operation":operation,"result":"pty_outcome_unknown",
+		"outcome":"unknown","automatic_retry":false,"effect_confirmed":false,
+		"persistent_across_runtime_restart":persistent,
+		"reconcile_warning":"Terminal operation outcome is not confirmed. Inspect this existing session identity; do not repeat input or create a new terminal automatically."});
+	if operation == "close" {
+		value["termination_confirmed"] = json!(false);
+	}
+	value
+}
+
+pub(super) fn retain_pty_after_audit(mut result: Value, completion: Result<()>) -> Value {
+	result["automatic_retry"] = json!(false);
+	result["audit_recorded"] = json!(completion.is_ok());
+	if completion.is_err() {
+		result["audit_warning"] = json!("Terminal result retained; completion audit unavailable. Do not repeat the operation automatically.");
+	}
+	result
+}
+
+async fn write_input<W: AsyncWrite + Unpin>(
+	input: &mut W,
+	data: &[u8],
+	deadline: std::time::Duration,
+) -> Result<()> {
+	tokio::time::timeout(deadline, async {
+		input.write_all(data).await?;
+		input.flush().await
+	})
+	.await
+	.map_err(|_| anyhow!("PTY input acknowledgement timeout"))??;
+	Ok(())
+}
+
+async fn dispatch_input<W: AsyncWrite + Unpin>(
+	input: &mut W,
+	host: &str,
+	id: &str,
+	data: &[u8],
+	intent: Result<()>,
+	deadline: std::time::Duration,
+) -> Result<Value> {
+	require_pty_intent(intent)?;
+	let sent = write_input(input, data, deadline).await;
+	Ok(if sent.is_ok() {
+		json!({"session_id":id,"host":host,"bytes_written":data.len()})
+	} else {
+		unknown_pty_outcome(host, id, "write", false)
+	})
+}
+
 pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 	let host = check_execution(
 		&params.host,
@@ -348,20 +408,24 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
 		.kill_on_drop(false);
-	let mut child = command.spawn()?;
-	let pid = child.id().ok_or_else(|| anyhow!("ssh child has no PID"))?;
-	let mut input = child.stdin.take();
-	if system_jobctl {
-		let mut payload = serde_json::to_vec(
+	let payload = if system_jobctl {
+		let mut bytes = serde_json::to_vec(
 			&json!({"op":"pty","job_id":id,"executable":params.executable,"args":params.args,"cwd":params.cwd,"env":params.env,"timeout_seconds":3600}),
 		)?;
-		payload.push(b'\n');
-		if let Some(pipe) = input.as_mut() {
-			pipe.write_all(&payload).await?;
-			pipe.flush().await?;
-		}
-	}
-	let stdin = Arc::new(AsyncMutex::new(input));
+		bytes.push(b'\n');
+		Some(bytes)
+	} else {
+		None
+	};
+	require_pty_intent(audit(
+		"pty_start_intent",
+		&params.host,
+		&id,
+		&json!({"phase":"intent","remote_operation_submitted":false}),
+	))?;
+	let mut child = command.spawn()?;
+	let pid = child.id().unwrap_or(0);
+	let stdin = Arc::new(AsyncMutex::new(child.stdin.take()));
 	let output = Arc::new(Mutex::new(RingBuffer::new()));
 	let mut reader_tasks = Vec::new();
 	if let Some(stdout) = child.stdout.take() {
@@ -429,24 +493,52 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 		output,
 		status,
 	};
-	registry()
-		.lock()
-		.map_err(|_| anyhow!("PTY registry lock poisoned"))?
-		.insert(id.clone(), session);
-	audit(
+	// Register the owned child before sending its launch handshake. Partial input
+	// or a lost flush acknowledgement must leave a discoverable close/read identity.
+	let registered = match registry().lock() {
+		Ok(mut sessions) => {
+			sessions.insert(id.clone(), session.clone());
+			true
+		}
+		Err(_) => {
+			session.stop.cancel();
+			false
+		}
+	};
+	let handshake = if registered {
+		if let Some(payload) = payload {
+			let mut input = session.stdin.lock().await;
+			match input.as_mut() {
+				Some(pipe) => write_input(pipe, &payload, std::time::Duration::from_secs(5)).await,
+				None => Err(anyhow!("PTY launch input unavailable")),
+			}
+		} else {
+			Ok(())
+		}
+	} else {
+		Err(anyhow!("PTY identity registration unavailable"))
+	};
+	let result = if handshake.is_ok() && pid != 0 {
+		json!({"session_id":id,"host":params.host,"pid":pid,
+			"pid_scope":"controller_ssh","execution_mode":host.execution_mode,
+			"persistent_across_runtime_restart":false})
+	} else {
+		let mut unknown = unknown_pty_outcome(&params.host, &id, "start", false);
+		unknown["pid"] = json!(pid);
+		unknown["pid_scope"] = json!("controller_ssh");
+		unknown["session_registered"] = json!(registered);
+		unknown
+	};
+	let completion = audit(
 		"pty_start",
 		&params.host,
 		&id,
-		&json!({"rows":rows,"cols":cols,"restart_persistent":false}),
-	)?;
-	Ok(serde_json::to_string_pretty(&json!({
-		"session_id": id,
-		"host": params.host,
-		"pid": pid,
-		"pid_scope": "controller_ssh",
-		"execution_mode": host.execution_mode,
-		"persistent_across_runtime_restart": false,
-	}))?)
+		&json!({"phase":"result","rows":rows,"cols":cols,"restart_persistent":false,
+			"outcome_unknown":result["outcome"]=="unknown"}),
+	);
+	Ok(serde_json::to_string_pretty(&retain_pty_after_audit(
+		result, completion,
+	))?)
 }
 
 pub async fn read_pty_async(params: PtyReadParams) -> Result<String> {
@@ -541,22 +633,30 @@ pub async fn write_pty(params: PtyWriteParams) -> Result<String> {
 	let stdin = guard
 		.as_mut()
 		.ok_or_else(|| anyhow!("PTY stdin is already closed"))?;
-	tokio::time::timeout(std::time::Duration::from_secs(5), async {
-		stdin.write_all(params.data.as_bytes()).await?;
-		stdin.flush().await
-	})
-	.await
-	.map_err(|_| anyhow!("PTY input timeout"))??;
-	audit(
+	let intent = audit(
+		"pty_write_intent",
+		&params.host,
+		&params.session_id,
+		&json!({"phase":"intent","bytes":params.data.len(),"remote_operation_submitted":false}),
+	);
+	let result = dispatch_input(
+		stdin,
+		&params.host,
+		&params.session_id,
+		params.data.as_bytes(),
+		intent,
+		std::time::Duration::from_secs(5),
+	)
+	.await?;
+	let completion = audit(
 		"pty_write",
 		&params.host,
 		&params.session_id,
-		&json!({"bytes_written":params.data.len()}),
-	)?;
-	Ok(serde_json::to_string_pretty(&json!({
-		"session_id": params.session_id,
-		"bytes_written": params.data.len(),
-	}))?)
+		&json!({"phase":"result","bytes_written":result["bytes_written"],"outcome_unknown":result["outcome"]=="unknown"}),
+	);
+	Ok(serde_json::to_string_pretty(&retain_pty_after_audit(
+		result, completion,
+	))?)
 }
 
 pub async fn close_pty(params: PtyRefParams) -> Result<String> {
@@ -564,18 +664,25 @@ pub async fn close_pty(params: PtyRefParams) -> Result<String> {
 		return super::terminal::close(&params).await;
 	}
 	let session = lookup(&params.host, &params.session_id)?;
+	require_pty_intent(audit(
+		"pty_close_intent",
+		&params.host,
+		&params.session_id,
+		&json!({"phase":"intent","remote_operation_submitted":false}),
+	))?;
 	session.stdin.lock().await.take();
 	session.stop.cancel();
-	audit(
+	let completion = audit(
 		"pty_close",
 		&params.host,
 		&params.session_id,
-		&json!({"close_requested":true}),
-	)?;
-	Ok(serde_json::to_string_pretty(&json!({
-		"session_id": params.session_id,
-		"result": "close_requested",
-	}))?)
+		&json!({"phase":"result","close_requested":true}),
+	);
+	Ok(serde_json::to_string_pretty(&retain_pty_after_audit(
+		json!({"session_id":params.session_id,"host":params.host,"result":"close_requested",
+			"termination_confirmed":false}),
+		completion,
+	))?)
 }
 
 pub async fn close_all_ptys() {

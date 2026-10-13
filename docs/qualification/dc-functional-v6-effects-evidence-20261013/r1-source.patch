@@ -1,0 +1,1736 @@
+diff --git a/.github/workflows/operator-parity.yml b/.github/workflows/operator-parity.yml
+index a9a4ea9..87ca097 100644
+--- a/.github/workflows/operator-parity.yml
++++ b/.github/workflows/operator-parity.yml
+@@ -68,6 +68,7 @@ jobs:
+             python3 tests/dc_parity_full_facade_pins_tests.py
+             python3 -m py_compile tests/dc_parity_full_facade_six_host_acceptance.py
+             python3 tests/process_ops_tests.py
++            python3 tests/privileged_action_python_tests.py
+             python3 tests/maintenance_inventory_tests.py
+             python3 tests/maintenance_readiness_tests.py
+             python3 tests/independent_observer_tests.py
+@@ -93,7 +94,7 @@ jobs:
+             python3 tests/model_origin_tool_ledger_tests.py
+             python3 tests/multi_read_tests.py
+             python3 tests/search_worker_tests.py
+-            python3 -m py_compile tests/host_health_acceptance.py tests/multi_read_six_host_acceptance.py tests/search_six_host_acceptance.py tests/dc_successor_contract.py tests/dc_functional_v6_operator_six_host_acceptance.py tests/dc_functional_v6_metadata_acceptance.py
++            python3 -m py_compile tests/host_health_acceptance.py tests/multi_read_six_host_acceptance.py tests/search_six_host_acceptance.py tests/dc_successor_contract.py tests/dc_functional_v6_operator_six_host_acceptance.py tests/dc_functional_v6_metadata_acceptance.py tests/dc_functional_v6_real_facade_cancel_acceptance.py tests/dc_functional_v6_signal_audit_acceptance.py
+             python3 tests/dc_replacement_gate_tests.py
+             python3 deploy/dc_replacement_gate.py > /tmp/hepta-dc-replacement-gate-ci.json
+             python3 -m py_compile deploy/chatgpt_support_snapshot.py
+diff --git a/src/mcp/runtime/effective_config.rs b/src/mcp/runtime/effective_config.rs
+index d7fea57..06767cc 100644
+--- a/src/mcp/runtime/effective_config.rs
++++ b/src/mcp/runtime/effective_config.rs
+@@ -7,7 +7,6 @@ use rmcp::schemars;
+ use serde::{Deserialize, Serialize};
+ 
+ use super::config::{runtime_config, ExecutionMode, Platform, RuntimeConfig};
+-use crate::utils::truncation::MAX_RESULT_BYTES;
+ 
+ const MAX_HOST_ENTRIES: usize = 256;
+ const MAX_SUMMARY_BYTES: usize = 256 * 1024;
+@@ -68,7 +67,6 @@ struct FileApiSummary {
+ struct SummaryLimits {
+ 	maximum_summary_host_entries: usize,
+ 	maximum_summary_response_bytes: usize,
+-	maximum_tool_result_bytes: usize,
+ }
+ 
+ fn render_effective_config(config: Result<&RuntimeConfig>) -> Result<String> {
+@@ -122,14 +120,13 @@ fn render_effective_config(config: Result<&RuntimeConfig>) -> Result<String> {
+ 		hosts,
+ 		limits: SummaryLimits {
+ 			maximum_summary_host_entries: MAX_HOST_ENTRIES,
+-			maximum_summary_response_bytes: MAX_SUMMARY_BYTES.min(MAX_RESULT_BYTES),
+-			maximum_tool_result_bytes: MAX_RESULT_BYTES,
++			maximum_summary_response_bytes: MAX_SUMMARY_BYTES,
+ 		},
+ 	};
+ 	let text = serde_json::to_string_pretty(&summary)?;
+ 	let wire =
+ 		rmcp::model::CallToolResult::success(vec![rmcp::model::ContentBlock::text(text.clone())]);
+-	if serde_json::to_vec(&wire)?.len() > MAX_SUMMARY_BYTES.min(MAX_RESULT_BYTES) {
++	if serde_json::to_vec(&wire)?.len() > MAX_SUMMARY_BYTES {
+ 		bail!("effective configuration exceeds the bounded response limit");
+ 	}
+ 	Ok(text)
+diff --git a/src/mcp/runtime/effective_config_tests.rs b/src/mcp/runtime/effective_config_tests.rs
+index caedaf6..d997d65 100644
+--- a/src/mcp/runtime/effective_config_tests.rs
++++ b/src/mcp/runtime/effective_config_tests.rs
+@@ -102,9 +102,14 @@ fn effective_config_preserves_flags_counts_and_alias_order() {
+ 	assert_eq!(primary["named_privileged_action_count"], 1);
+ 	assert_eq!(summary["policy_mutation_supported"], false);
+ 	assert_eq!(summary["target_probe_performed"], false);
++	assert!(summary["limits"].get("maximum_tool_result_bytes").is_none());
+ 	assert_eq!(
+-		summary["limits"]["maximum_tool_result_bytes"],
+-		MAX_RESULT_BYTES
++		summary["limits"]["maximum_summary_host_entries"],
++		MAX_HOST_ENTRIES
++	);
++	assert_eq!(
++		summary["limits"]["maximum_summary_response_bytes"],
++		MAX_SUMMARY_BYTES
+ 	);
+ }
+ 
+@@ -241,7 +246,10 @@ fn effective_config_bounds_host_count_and_serialized_response() {
+ 			.insert(format!("host-{i:03}-{}", "a".repeat(119)), template.clone());
+ 	}
+ 	let encoded = render_effective_config(Ok(&config)).unwrap();
+-	assert!(encoded.len() <= MAX_SUMMARY_BYTES && encoded.len() <= MAX_RESULT_BYTES);
++	let summary: Value = serde_json::from_str(&encoded).unwrap();
++	assert!(summary["limits"].get("maximum_tool_result_bytes").is_none());
++	let wire = rmcp::model::CallToolResult::success(vec![rmcp::model::ContentBlock::text(encoded)]);
++	assert!(serde_json::to_vec(&wire).unwrap().len() <= MAX_SUMMARY_BYTES);
+ 	config.hosts.insert("one-more-host".into(), template);
+ 	let error = render_effective_config(Ok(&config))
+ 		.unwrap_err()
+@@ -267,5 +275,5 @@ fn effective_config_bounds_the_actual_mcp_wire_envelope() {
+ 		rmcp::model::CallToolResult::success(vec![rmcp::model::ContentBlock::text(text.clone())]);
+ 	let bytes = serde_json::to_vec(&wire).unwrap().len();
+ 	assert!(bytes > text.len());
+-	assert!(bytes <= MAX_SUMMARY_BYTES.min(MAX_RESULT_BYTES));
++	assert!(bytes <= MAX_SUMMARY_BYTES);
+ }
+diff --git a/src/mcp/runtime/inspect.rs b/src/mcp/runtime/inspect.rs
+index ada6da0..1b5340a 100644
+--- a/src/mcp/runtime/inspect.rs
++++ b/src/mcp/runtime/inspect.rs
+@@ -242,14 +242,66 @@ print(json.dumps(result, sort_keys=True))
+ "#;
+ 
+ const PRIVILEGED_CODE: &str = r#"
+-import json, subprocess, sys
++import json, os, selectors, subprocess, sys, time
+ q = json.load(sys.stdin)
+ argv = ["sudo", "-n", q["executable"], *q.get("fixed_args", []), *q.get("args", [])]
++LIMIT = 524288
++def bounded_text(value, seen):
++    encoded = bytes(value).decode("utf-8", "replace").encode("utf-8")
++    return encoded[-LIMIT:].decode("utf-8", "ignore"), seen > LIMIT or len(encoded) > LIMIT
++
++# Bound memory while the action runs; never communicate() on inherited pipes.
++# Only the direct action launcher is killed on timeout. Descendant state remains
++# unconfirmed, and inherited pipe writers cannot hold this helper indefinitely.
++p = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
++                     stderr=subprocess.PIPE, close_fds=True)
++tails = {"stdout": bytearray(), "stderr": bytearray()}
++seen = {"stdout": 0, "stderr": 0}
++eof = {"stdout": False, "stderr": False}
++selector = selectors.DefaultSelector()
++for name, stream in (("stdout", p.stdout), ("stderr", p.stderr)):
++    os.set_blocking(stream.fileno(), False)
++    selector.register(stream, selectors.EVENT_READ, name)
++deadline = time.monotonic() + float(q.get("timeout_seconds", 30))
++timed_out, kill_deadline, drain_deadline, capture_error = False, None, None, None
+ try:
+-    p = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=float(q.get("timeout_seconds", 30)))
+-    result = {"exit_code": p.returncode, "stdout": p.stdout[-1048576:], "stderr": p.stderr[-1048576:]}
+-except subprocess.TimeoutExpired as exc:
+-    result = {"exit_code": 124, "stdout": (exc.stdout or "")[-1048576:], "stderr": "privileged action timed out"}
++    while selector.get_map() or p.poll() is None:
++        now = time.monotonic()
++        if not timed_out and p.poll() is None and now >= deadline:
++            timed_out, kill_deadline = True, now + 2
++            try: p.kill()
++            except ProcessLookupError: pass
++        if p.poll() is not None and drain_deadline is None:
++            drain_deadline = now + 1
++        if (kill_deadline is not None and now >= kill_deadline) or (drain_deadline is not None and now >= drain_deadline):
++            break
++        for key, _ in selector.select(.05):
++            try: chunk = os.read(key.fd, 65536)
++            except BlockingIOError: continue
++            except OSError:
++                capture_error = "read_failed"; chunk = b""
++            if not chunk:
++                eof[key.data] = capture_error is None
++                selector.unregister(key.fileobj); key.fileobj.close()
++                continue
++            name = key.data; seen[name] += len(chunk)
++            tails[name].extend(chunk)
++            if len(tails[name]) > LIMIT: del tails[name][:-LIMIT]
++finally:
++    selector.close()
++    for stream in (p.stdout, p.stderr):
++        if not stream.closed: stream.close()
++confirmed = p.poll() is not None
++stdout, stdout_truncated = bounded_text(tails["stdout"], seen["stdout"])
++stderr, stderr_truncated = bounded_text(tails["stderr"], seen["stderr"])
++result = {"exit_code": 124 if timed_out else p.returncode,
++          "exit_code_authoritative": confirmed and not timed_out,
++          "process_exit_confirmed": confirmed, "stdout": stdout, "stderr": stderr,
++          "timed_out": timed_out, "stdout_truncated": stdout_truncated,
++          "stderr_truncated": stderr_truncated, "stdout_bytes_seen": seen["stdout"],
++          "stderr_bytes_seen": seen["stderr"], "capture_error": capture_error,
++          "output_complete": confirmed and all(eof.values()) and capture_error is None and not stdout_truncated and not stderr_truncated,
++          "output_limit_bytes_per_stream": LIMIT, "descendant_termination_confirmed": False}
+ print(json.dumps(result, sort_keys=True))
+ "#;
+ 
+@@ -337,13 +389,129 @@ pub async fn privileged_action(params: PrivilegedActionParams) -> Result<String>
+ 		"args": params.args,
+ 		"timeout_seconds": action.timeout_seconds.min(300),
+ 	});
+-	let output: Value = run_python_json(
++	require_privileged_intent(audit(
++		"privileged_action_requested",
++		&params.host,
++		&params.action,
++		&json!({"phase":"intent","remote_operation_submitted":false}),
++	))?;
++	let remote: Result<Value> = run_python_json(
+ 		host,
+ 		PRIVILEGED_CODE,
+ 		&request,
+ 		Duration::from_secs(action.timeout_seconds.min(300) + 10),
+ 	)
+-	.await?;
+-	audit("privileged_action", &params.host, &params.action, &output)?;
+-	Ok(serde_json::to_string_pretty(&output)?)
++	.await;
++	let output = retain_privileged_outcome(&params, remote);
++	let completion = audit(
++		"privileged_action",
++		&params.host,
++		&params.action,
++		&json!({"phase":"result","exit_code":output["exit_code"],"timed_out":output["timed_out"]}),
++	);
++	Ok(serde_json::to_string_pretty(
++		&retain_privileged_after_audit(output, completion),
++	)?)
++}
++
++fn retain_privileged_after_audit(mut result: Value, outcome: Result<()>) -> Value {
++	if !result.is_object() {
++		result = json!({"result":"invalid_remote_acknowledgement","outcome":"unknown","automatic_retry":false});
++	}
++	result["audit_recorded"] = json!(outcome.is_ok());
++	result["automatic_retry"] = json!(false);
++	if outcome.is_err() {
++		result["audit_warning"] = json!(
++			"Administrator-pinned action result retained; completion audit unavailable. Do not repeat the action automatically."
++		);
++	}
++	result
++}
++
++fn require_privileged_intent(outcome: Result<()>) -> Result<()> {
++	outcome.map_err(|_| {
++		anyhow::anyhow!("Pinned action intent audit unavailable; no action request dispatched")
++	})
+ }
++
++fn unknown_privileged(params: &PrivilegedActionParams) -> Value {
++	json!({"host":params.host,"action":params.action,"result":"action_outcome_unknown","outcome":"unknown","automatic_retry":false,
++		"reconcile_warning":"Administrator-pinned action outcome is not confirmed. Reconcile its existing effect; do not repeat automatically."})
++}
++
++fn retain_privileged_outcome(params: &PrivilegedActionParams, remote: Result<Value>) -> Value {
++	let mut value = match remote {
++		Ok(value) => value,
++		Err(_) => return unknown_privileged(params),
++	};
++	if !value.is_object()
++		|| !value["exit_code"]
++			.as_i64()
++			.is_some_and(|code| (-128..=255).contains(&code))
++		|| !value["timed_out"].is_boolean()
++		|| !value["exit_code_authoritative"].is_boolean()
++		|| !value["process_exit_confirmed"].is_boolean()
++		|| !value["stdout_truncated"].is_boolean()
++		|| !value["stderr_truncated"].is_boolean()
++		|| !value["output_complete"].is_boolean()
++		|| !value["stdout_bytes_seen"].is_u64()
++		|| !value["stderr_bytes_seen"].is_u64()
++		|| value["output_limit_bytes_per_stream"] != 524288
++		|| value["descendant_termination_confirmed"] != false
++		|| !(value["capture_error"].is_null() || value["capture_error"] == "read_failed")
++		|| (value["timed_out"] == true
++			&& (value["exit_code"] != 124 || value["exit_code_authoritative"] != false))
++		|| (value["timed_out"] == false
++			&& (value["process_exit_confirmed"] != true
++				|| value["exit_code_authoritative"] != true))
++		|| (value["output_complete"] == true
++			&& (value["process_exit_confirmed"] != true
++				|| value["stdout_truncated"] != false
++				|| value["stderr_truncated"] != false
++				|| !value["capture_error"].is_null()))
++		|| value["stdout"]
++			.as_str()
++			.is_none_or(|text| text.len() > 524288)
++		|| value["stderr"]
++			.as_str()
++			.is_none_or(|text| text.len() > 524288)
++	{
++		return unknown_privileged(params);
++	}
++	if let Some(fields) = value.as_object_mut() {
++		fields.retain(|key, _| {
++			matches!(
++				key.as_str(),
++				"exit_code"
++					| "exit_code_authoritative"
++					| "process_exit_confirmed"
++					| "stdout" | "stderr"
++					| "timed_out" | "stdout_truncated"
++					| "stderr_truncated"
++					| "stdout_bytes_seen"
++					| "stderr_bytes_seen"
++					| "capture_error"
++					| "output_complete"
++					| "output_limit_bytes_per_stream"
++					| "descendant_termination_confirmed"
++			)
++		});
++	}
++	value["host"] = json!(params.host);
++	value["action"] = json!(params.action);
++	let envelope = serde_json::to_string_pretty(&value).ok().and_then(|text| {
++		serde_json::to_vec(&rmcp::model::CallToolResult::success(vec![
++			rmcp::model::ContentBlock::text(text),
++		]))
++		.ok()
++	});
++	if envelope.is_none_or(|bytes| bytes.len() > crate::utils::truncation::MAX_RESULT_BYTES - 4096)
++	{
++		return unknown_privileged(params);
++	}
++	value
++}
++
++#[cfg(test)]
++#[path = "inspect_tests.rs"]
++mod tests;
+diff --git a/src/mcp/runtime/jobs.rs b/src/mcp/runtime/jobs.rs
+index 9decf34..9773b46 100644
+--- a/src/mcp/runtime/jobs.rs
++++ b/src/mcp/runtime/jobs.rs
+@@ -247,7 +247,8 @@ fn fingerprint(params: &ProcessStartParams) -> u64 {
+ }
+ fn matches_request(record: &JobRecord, params: &ProcessStartParams) -> Result<bool> {
+ 	let expected = record.request_digest.as_ref().context(
+-		"legacy idempotency binding lacks a full digest; inspect existing job_id instead of relaunching")?;
++		"legacy idempotency binding lacks a full digest; inspect existing job_id instead of relaunching",
++	)?;
+ 	Ok(*expected == request_digest(params)?)
+ }
+ 
+@@ -927,7 +928,9 @@ fn operation_intent(action: &str, host: &str, job_id: &str) -> Result<()> {
+ fn retain_result_after_audit(mut result: Value, outcome: Result<()>) -> Value {
+ 	result["audit_recorded"] = json!(outcome.is_ok());
+ 	if outcome.is_err() {
+-		result["audit_warning"] = json!("Operation result retained; completion audit unavailable. Reconcile using the existing job_id.");
++		result["audit_warning"] = json!(
++			"Operation result retained; completion audit unavailable. Reconcile using the existing job_id."
++		);
+ 	}
+ 	result
+ }
+@@ -938,6 +941,26 @@ struct LaunchOutcome {
+ 	local_record_pending: bool,
+ }
+ 
++fn trusted_launch_ack(record: &JobRecord, value: &Value) -> bool {
++	if value["ok"] != true {
++		return false;
++	}
++	if record.system_jobctl && record.execution_mode == ExecutionMode::Isolated {
++		return value["backend"] == "systemd_system"
++			&& value
++				.pointer("/status/job_id")
++				.is_none_or(|id| id.as_str() == Some(&record.id));
++	}
++	match value["backend"].as_str() {
++		Some("systemd") => value["unit"].as_str() == Some(&record.unit),
++		Some("detached") => value["launcher_pid"]
++			.as_u64()
++			.is_some_and(|pid| pid > 0 && pid <= i32::MAX as u64),
++		Some("completed" | "launch_failed") => value["reused_remote"] == true,
++		_ => false,
++	}
++}
++
+ fn preserve_launch_outcome<F>(
+ 	record: &mut JobRecord,
+ 	outcome: Result<Value>,
+@@ -947,7 +970,7 @@ where
+ 	F: FnOnce(&JobRecord) -> Result<()>,
+ {
+ 	let value = match outcome {
+-		Ok(value) => {
++		Ok(value) if trusted_launch_ack(record, &value) => {
+ 			let remote_state = if record.system_jobctl
+ 				&& record.execution_mode == ExecutionMode::Isolated
+ 				&& value.get("reused_remote").and_then(Value::as_bool) == Some(true)
+@@ -962,6 +985,8 @@ where
+ 						)
+ 					})
+ 					.unwrap_or("launch_unknown")
++			} else if value["backend"] == "launch_failed" {
++				"launch_failed"
+ 			} else {
+ 				"launched"
+ 			};
+@@ -970,8 +995,8 @@ where
+ 				.then(|| "Remote launch state unavailable".to_string());
+ 			value
+ 		}
+-		Err(_) => {
+-			// Transport failure cannot prove the remote supervisor did not launch.
++		Ok(_) | Err(_) => {
++			// Invalid ACKs and transport failures cannot prove the supervisor did not launch.
+ 			record.launch_state = "launch_unknown".to_string();
+ 			record.launch_error = Some("Remote launch outcome unavailable".to_string());
+ 			json!({
+@@ -993,7 +1018,9 @@ where
+ fn attach_launch_record_warning(result: &mut Value, outcome: &LaunchOutcome) {
+ 	result["local_record_pending"] = json!(outcome.local_record_pending);
+ 	if outcome.local_record_pending {
+-		result["reconcile_warning"] = json!("Remote launch outcome retained; local launch record update is pending. Use process_status with the existing job_id; do not create a new key.");
++		result["reconcile_warning"] = json!(
++			"Remote launch outcome retained; local launch record update is pending. Use process_status with the existing job_id; do not create a new key."
++		);
+ 	}
+ }
+ 
+@@ -1011,15 +1038,22 @@ fn unavailable_status(job_id: &str) -> Value {
+ }
+ 
+ fn retain_cancel_outcome(job_id: &str, outcome: Result<Value>) -> Value {
+-	match outcome {
+-		Ok(mut value) => {
+-			value["job_id"] = json!(job_id);
+-			value
++	if let Ok(value) = outcome {
++		if value["job_id"].as_str() == Some(job_id)
++			&& value["result"].as_str().is_some_and(|result| {
++				matches!(
++					result,
++					"already_exited" | "stop_requested" | "term_sent" | "kill_sent" | "not_running"
++				)
++			}) {
++			// An acknowledgement requests or sends a signal; it is not terminal proof.
++			return json!({"job_id":job_id,"result":value["result"],"automatic_retry":false,
++				"termination_confirmed":false,"reconcile_via":"process_status"});
+ 		}
+-		Err(_) => json!({"job_id":job_id,"result":"cancel_unknown","outcome":"unknown",
+-            "status_authoritative":false,"automatic_retry":false,
+-            "reconcile_via":"process_status"}),
+ 	}
++	json!({"job_id":job_id,"result":"cancel_unknown","outcome":"unknown",
++		"status_authoritative":false,"automatic_retry":false,"termination_confirmed":false,
++		"reconcile_via":"process_status"})
+ }
+ 
+ async fn launch_record(
+@@ -1152,8 +1186,15 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
+ pub async fn status_job(params: ProcessRefParams) -> Result<String> {
+ 	let record = check_ref(&params)?;
+ 	let status = status_record(&record, 0).await?;
+-	audit("process_status", &params.host, &params.job_id, &status)?;
+-	Ok(serde_json::to_string_pretty(&status)?)
++	let completion = audit(
++		"process_status",
++		&params.host,
++		&params.job_id,
++		&json!({"phase":"observation","ok":true}),
++	);
++	Ok(serde_json::to_string_pretty(
++		&retain_observation_after_audit(status, completion, &record.host, &record.id),
++	)?)
+ }
+ 
+ pub async fn wait_job(params: ProcessWaitParams) -> Result<String> {
+@@ -1164,8 +1205,15 @@ pub async fn wait_job(params: ProcessWaitParams) -> Result<String> {
+ 	let record = check_ref(&reference)?;
+ 	let wait = params.timeout_seconds.unwrap_or(10).min(30);
+ 	let status = status_record(&record, wait).await?;
+-	audit("process_wait", &params.host, &params.job_id, &status)?;
+-	Ok(serde_json::to_string_pretty(&status)?)
++	let completion = audit(
++		"process_wait",
++		&params.host,
++		&params.job_id,
++		&json!({"phase":"observation","ok":true}),
++	);
++	Ok(serde_json::to_string_pretty(
++		&retain_observation_after_audit(status, completion, &record.host, &record.id),
++	)?)
+ }
+ 
+ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
+@@ -1188,13 +1236,32 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
+ 	} else {
+ 		run_python_json(host, READ_CODE, &request, Duration::from_secs(15)).await?
+ 	};
+-	audit(
++	let completion = audit(
+ 		"process_read",
+ 		&params.host,
+ 		&params.job_id,
+-		&json!({"ok": true}),
+-	)?;
+-	Ok(serde_json::to_string_pretty(&output)?)
++		&json!({"phase":"observation","ok": true}),
++	);
++	Ok(serde_json::to_string_pretty(
++		&retain_observation_after_audit(output, completion, &record.host, &record.id),
++	)?)
++}
++
++fn retain_observation_after_audit(
++	mut result: Value,
++	outcome: Result<()>,
++	host: &str,
++	job_id: &str,
++) -> Value {
++	if !result.is_object() {
++		return json!({"host":host,"job_id":job_id,"result":"invalid_remote_observation","outcome":"unknown","automatic_retry":false,"audit_recorded":outcome.is_ok(),"reconcile_warning":"Existing job observation was not a trusted object. No new job was launched."});
++	}
++	result["audit_recorded"] = json!(outcome.is_ok());
++	if outcome.is_err() {
++		result["audit_warning"] =
++			json!("Existing job observation retained; audit unavailable. No new job was launched.");
++	}
++	result
+ }
+ 
+ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
+diff --git a/src/mcp/runtime/jobs_tests.rs b/src/mcp/runtime/jobs_tests.rs
+index a9826fc..671f53a 100644
+--- a/src/mcp/runtime/jobs_tests.rs
++++ b/src/mcp/runtime/jobs_tests.rs
+@@ -4,6 +4,51 @@
+ //! Regression tests for jobs.
+ use super::*;
+ 
++#[test]
++fn legacy_audit_failure_cannot_hide_existing_job_status_wait_or_output_cursors() {
++	for observation in [
++		json!({"state":"succeeded","exit_code":0,"output_complete":true}),
++		json!({"state":"running","pid":1234}),
++		json!({"stdout":{"text":"retained-output","offset":5,"next_offset":20,"eof":true},"stderr":{"text":"","offset":0,"next_offset":0,"eof":true}}),
++	] {
++		let retained = retain_observation_after_audit(
++			observation.clone(),
++			Err(anyhow::anyhow!("PRIVATE_AUDIT_SECRET")),
++			"local-host",
++			"local-job",
++		);
++		for (key, value) in observation.as_object().unwrap() {
++			assert_eq!(&retained[key], value);
++		}
++		assert_eq!(retained["audit_recorded"], false);
++		assert!(retained["audit_warning"]
++			.as_str()
++			.unwrap()
++			.contains("No new job"));
++		assert!(!retained.to_string().contains("PRIVATE_AUDIT_SECRET"));
++	}
++	let observed = retain_observation_after_audit(
++		json!({"state":"succeeded"}),
++		Ok(()),
++		"local-host",
++		"local-job",
++	);
++	assert_eq!(observed["audit_recorded"], true);
++	assert!(observed.get("audit_warning").is_none());
++}
++
++#[test]
++fn nonobject_observations_are_controlled_unknown_without_panic() {
++	for value in [Value::Null, json!("UNTRUSTED_SECRET"), json!([1, 2])] {
++		let result = retain_observation_after_audit(value, Ok(()), "local-host", "local-job");
++		assert_eq!(result["outcome"], "unknown");
++		assert_eq!(result["automatic_retry"], false);
++		assert_eq!(result["host"], "local-host");
++		assert_eq!(result["job_id"], "local-job");
++		assert!(!result.to_string().contains("UNTRUSTED_SECRET"));
++	}
++}
++
+ #[test]
+ fn ids_are_valid_and_unique() {
+ 	let a = next_job_id();
+@@ -130,6 +175,34 @@ fn confirmed_remote_launch_survives_failed_local_completion_save() {
+ 	assert!(!response.to_string().contains("/private-record-path"));
+ }
+ 
++#[test]
++fn untrusted_launch_ack_cannot_promote_pending_to_launched() {
++	for ack in [
++		Value::Null,
++		json!("ACK_SECRET"),
++		json!([1]),
++		json!({}),
++		json!({"ok":false,"backend":"detached","launcher_pid":1234}),
++		json!({"ok":true,"backend":"detached","launcher_pid":0}),
++		json!({"ok":true,"backend":"systemd","unit":"other-unit"}),
++	] {
++		let mut record = outcome_fixture(ExecutionMode::Operator, false, "pending");
++		let result = preserve_launch_outcome(&mut record, Ok(ack), |_| Ok(()));
++		assert_eq!(record.launch_state, "launch_unknown");
++		assert_eq!(result.value["job_id"], "same-job-id");
++		assert_eq!(result.value["automatic_retry"], false);
++		assert!(!result.value.to_string().contains("ACK_SECRET"));
++	}
++	let mut record = outcome_fixture(ExecutionMode::Operator, false, "pending");
++	let result = preserve_launch_outcome(
++		&mut record,
++		Ok(json!({"ok":true,"reused_remote":true,"backend":"launch_failed"})),
++		|_| Ok(()),
++	);
++	assert_eq!(record.launch_state, "launch_failed");
++	assert_eq!(result.value["backend"], "launch_failed");
++}
++
+ #[test]
+ fn unknown_remote_launch_retains_job_id_without_claiming_failure_or_success() {
+ 	let mut record = outcome_fixture(ExecutionMode::Operator, false, "pending");
+@@ -197,7 +270,9 @@ fn reconcile_retries_are_only_fixed_id_isolated_jobctl_records() {
+ fn cancel_success_and_unknown_completion_are_identity_bound_and_redacted() {
+ 	let result = retain_cancel_outcome(
+ 		"same-job-id",
+-		Ok(json!({"job_id":"wrong-helper-id","result":"stop_requested","signal_sent":true})),
++		Ok(
++			json!({"job_id":"same-job-id","result":"stop_requested","untrusted_extra":"ACK_SECRET"}),
++		),
+ 	);
+ 	let retained = retain_result_after_audit(
+ 		result,
+@@ -205,7 +280,9 @@ fn cancel_success_and_unknown_completion_are_identity_bound_and_redacted() {
+ 	);
+ 	assert_eq!(retained["job_id"], "same-job-id");
+ 	assert_eq!(retained["result"], "stop_requested");
+-	assert_eq!(retained["signal_sent"], true);
++	assert_eq!(retained["termination_confirmed"], false);
++	assert_eq!(retained["automatic_retry"], false);
++	assert!(!retained.to_string().contains("ACK_SECRET"));
+ 	assert_eq!(retained["audit_recorded"], false);
+ 	let unknown = retain_cancel_outcome(
+ 		"same-job-id",
+@@ -220,6 +297,26 @@ fn cancel_success_and_unknown_completion_are_identity_bound_and_redacted() {
+ 	assert!(!unknown.to_string().contains("SECRET"));
+ }
+ 
++#[test]
++fn malformed_or_mismatched_cancel_ack_cannot_claim_a_confirmed_request_or_panic() {
++	for ack in [
++		Value::Null,
++		json!("ACK_SECRET"),
++		json!([1]),
++		json!({}),
++		json!({"job_id":"wrong-helper-id","result":"stop_requested"}),
++		json!({"job_id":"same-job-id","result":"terminated"}),
++	] {
++		let result = retain_cancel_outcome("same-job-id", Ok(ack));
++		assert_eq!(result["job_id"], "same-job-id");
++		assert_eq!(result["result"], "cancel_unknown");
++		assert_eq!(result["status_authoritative"], false);
++		assert_eq!(result["automatic_retry"], false);
++		assert_eq!(result["termination_confirmed"], false);
++		assert!(!result.to_string().contains("ACK_SECRET"));
++	}
++}
++
+ #[test]
+ fn unavailable_reuse_status_never_discloses_upstream_diagnostics() {
+ 	let status = unavailable_status("same-job-id");
+diff --git a/src/mcp/runtime/operator.rs b/src/mcp/runtime/operator.rs
+index 60e1109..20b8219 100644
+--- a/src/mcp/runtime/operator.rs
++++ b/src/mcp/runtime/operator.rs
+@@ -146,21 +146,109 @@ pub async fn host_signal(params: HostSignalParams) -> Result<String> {
+ 	}
+ 	let number = validate_signal(&params)?;
+ 	let request = json!({"op":"signal", "pid":params.pid, "signal":number, "expected_identity":params.expected_identity, "sudo":params.sudo});
+-	// Record intent before side effects. If the transport fails, outcome is unknown.
+-	audit(
++	// A failed intent is a zero-dispatch refusal, not a failed signal delivery.
++	require_signal_intent(audit(
+ 		"host_signal_requested",
+ 		&params.host,
+ 		&params.pid.to_string(),
+-		&request,
+-	)?;
+-	let result = process_rpc(host, &request, params.sudo).await?;
+-	audit(
++		&json!({"phase":"intent","signal":number,"sudo":params.sudo,"expected_identity_supplied":params.expected_identity.is_some(),"remote_operation_submitted":false}),
++	))?;
++	let prefix = if params.sudo { "sudo -n -- " } else { "" };
++	let command = format!(
++		"{prefix}/usr/bin/python3 -c {}",
++		shell_quote(include_str!("process_ops.py"))
++	);
++	let remote = run_capture(
++		host,
++		&command,
++		&serde_json::to_vec(&request)?,
++		Duration::from_secs(20),
++	)
++	.await;
++	let result = retain_signal_outcome(&params, number, remote)?;
++	let completion = audit(
+ 		"host_signal_result",
+ 		&params.host,
+ 		&params.pid.to_string(),
+-		&serde_json::from_str::<Value>(&result)?,
+-	)?;
+-	Ok(result)
++		&json!({"phase":"result","result":result["result"],"outcome_unknown":result["outcome"]=="unknown"}),
++	);
++	Ok(serde_json::to_string_pretty(&retain_signal_after_audit(
++		result, completion,
++	))?)
++}
++
++fn require_signal_intent(outcome: Result<()>) -> Result<()> {
++	outcome.map_err(|_| {
++		anyhow::anyhow!("Host signal intent audit unavailable; no signal request dispatched")
++	})
++}
++
++fn unknown_signal(params: &HostSignalParams, number: i32) -> Value {
++	json!({"host":params.host,"pid":params.pid,"signal":number,"expected_identity":params.expected_identity,
++		"result":"signal_outcome_unknown","outcome":"unknown","automatic_retry":false,"termination_confirmed":false,
++		"reconcile_warning":"Signal delivery is not confirmed. Inspect the existing PID/start identity; do not resend automatically."})
++}
++
++fn retain_signal_outcome(
++	params: &HostSignalParams,
++	number: i32,
++	remote: Result<std::process::Output>,
++) -> Result<Value> {
++	let output = match remote {
++		Ok(output) => output,
++		Err(_) => return Ok(unknown_signal(params, number)),
++	};
++	if !output.status.success() {
++		// Nonzero exit may occur after a syscall or after the real ACK was lost.
++		// Never infer a pre-effect refusal from stderr or discard its identity.
++		return Ok(unknown_signal(params, number));
++	}
++	let value: Value = match serde_json::from_slice(&output.stdout) {
++		Ok(value) => value,
++		Err(_) => return Ok(unknown_signal(params, number)),
++	};
++	if value["pid"].as_u64() == Some(params.pid as u64)
++		&& value["signal"].as_i64() == Some(number as i64)
++		&& value["result"] == "signal_refused"
++		&& value["signal_syscall_attempted"] == false
++		&& value["termination_confirmed"] == false
++	{
++		bail!("Operator signal helper refused before the signal syscall; no signal sent.");
++	}
++	let expected_result = if number == 0 {
++		"probe_succeeded"
++	} else {
++		"signal_sent"
++	};
++	let identity = value["identity"].as_str();
++	if value["pid"].as_u64() != Some(params.pid as u64)
++		|| value["signal"].as_i64() != Some(number as i64)
++		|| value["result"].as_str() != Some(expected_result)
++		|| value["termination_confirmed"] != false
++		|| !value["atomic_identity"].is_boolean()
++		|| !value["effective_uid"].is_u64()
++		|| !identity.is_some_and(|identity| !identity.is_empty() && identity.len() <= 256)
++		|| params
++			.expected_identity
++			.as_deref()
++			.is_some_and(|expected| identity != Some(expected))
++	{
++		return Ok(unknown_signal(params, number));
++	}
++	Ok(
++		json!({"pid":value["pid"],"signal":value["signal"],"identity":value["identity"],"result":value["result"],
++		"atomic_identity":value["atomic_identity"],"effective_uid":value["effective_uid"],"termination_confirmed":false,"automatic_retry":false}),
++	)
++}
++
++fn retain_signal_after_audit(mut result: Value, outcome: Result<()>) -> Value {
++	result["audit_recorded"] = json!(outcome.is_ok());
++	if outcome.is_err() {
++		result["audit_warning"] = json!(
++			"Signal helper outcome retained; completion audit unavailable. Do not resend the signal automatically."
++		);
++	}
++	result
+ }
+ 
+ #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+diff --git a/src/mcp/runtime/operator_tests.rs b/src/mcp/runtime/operator_tests.rs
+index d560cca..4adfea6 100644
+--- a/src/mcp/runtime/operator_tests.rs
++++ b/src/mcp/runtime/operator_tests.rs
+@@ -74,3 +74,93 @@ fn operator_schemas_reject_hidden_authority_fields() {
+ 	)
+ 	.is_err());
+ }
++
++#[test]
++fn failed_signal_intent_is_a_redacted_zero_dispatch_refusal() {
++	let error = require_signal_intent(Err(anyhow::anyhow!("PRIVATE_AUDIT_PATH_TOKEN")))
++		.unwrap_err()
++		.to_string();
++	assert_eq!(
++		error,
++		"Host signal intent audit unavailable; no signal request dispatched"
++	);
++	assert!(!error.contains("PRIVATE_AUDIT_PATH_TOKEN"));
++	assert!(require_signal_intent(Ok(())).is_ok());
++}
++
++#[cfg(unix)]
++fn signal_output(code: i32, stdout: &str, stderr: &str) -> std::process::Output {
++	use std::os::unix::process::ExitStatusExt;
++	std::process::Output {
++		status: std::process::ExitStatus::from_raw(code << 8),
++		stdout: stdout.as_bytes().to_vec(),
++		stderr: stderr.as_bytes().to_vec(),
++	}
++}
++
++#[cfg(unix)]
++#[test]
++fn signal_ack_survives_completion_audit_failure_and_filters_untrusted_extras() {
++	let p: HostSignalParams = serde_json::from_value(
++		json!({"host":"main","pid":1234,"signal":15,"expected_identity":"linux:boot:42"}),
++	)
++	.unwrap();
++	let ack = json!({"pid":1234,"signal":15,"identity":"linux:boot:42","result":"signal_sent","atomic_identity":true,"effective_uid":1000,"termination_confirmed":false,"extra":"ACK_SECRET"});
++	let result = retain_signal_outcome(&p, 15, Ok(signal_output(0, &ack.to_string(), ""))).unwrap();
++	assert_eq!(result["result"], "signal_sent");
++	assert!(!result.to_string().contains("ACK_SECRET"));
++	let retained = retain_signal_after_audit(result, Err(anyhow::anyhow!("AUDIT_SECRET")));
++	assert_eq!(retained["pid"], 1234);
++	assert_eq!(retained["identity"], "linux:boot:42");
++	assert_eq!(retained["result"], "signal_sent");
++	assert_eq!(retained["audit_recorded"], false);
++	assert_eq!(retained["automatic_retry"], false);
++	assert_eq!(retained["termination_confirmed"], false);
++	assert!(!retained.to_string().contains("AUDIT_SECRET"));
++}
++
++#[cfg(unix)]
++#[test]
++fn transport_loss_or_success_without_matching_ack_is_unknown_without_retry() {
++	let p: HostSignalParams = serde_json::from_value(
++		json!({"host":"mac","pid":1234,"signal":15,"expected_identity":"ps:known-start"}),
++	)
++	.unwrap();
++	for remote in [Err(anyhow::anyhow!("SSH_SECRET")),Ok(signal_output(255,"","SSH_SECRET")),
++		Ok(signal_output(0,"INVALID_ACK_SECRET","")),Ok(signal_output(0,"{}","")),
++		Ok(signal_output(0,&json!({"pid":1235,"signal":15,"identity":"ps:known-start","result":"signal_sent","atomic_identity":false,"effective_uid":1000,"termination_confirmed":false}).to_string(),""))] {
++		let result=retain_signal_outcome(&p,15,remote).unwrap();
++		assert_eq!(result["outcome"],"unknown");assert_eq!(result["automatic_retry"],false);
++		assert_eq!(result["pid"],1234);assert_eq!(result["expected_identity"],"ps:known-start");
++		assert!(!result.to_string().contains("SECRET"));
++	}
++	let after_syscall = retain_signal_outcome(
++		&p,
++		15,
++		Ok(signal_output(1, "", "PRIVATE syscall cleanup failed")),
++	)
++	.unwrap();
++	assert_eq!(after_syscall["outcome"], "unknown");
++	assert_eq!(after_syscall["pid"], 1234);
++	assert_eq!(after_syscall["expected_identity"], "ps:known-start");
++	assert!(!after_syscall.to_string().contains("PRIVATE"));
++	let refused = retain_signal_outcome(&p,15,Ok(signal_output(0,
++		&json!({"pid":1234,"signal":15,"result":"signal_refused","signal_syscall_attempted":false,"termination_confirmed":false}).to_string(),"PRIVATE")))
++		.unwrap_err().to_string();
++	assert!(refused.contains("before the signal syscall"));
++	assert!(refused.contains("no signal sent"));
++	assert!(!refused.contains("PRIVATE"));
++}
++
++#[cfg(unix)]
++#[test]
++fn zero_signal_probe_remains_a_probe_and_never_confirms_termination() {
++	let p: HostSignalParams =
++		serde_json::from_value(json!({"host":"main","pid":1234,"signal":0})).unwrap();
++	let ack = json!({"pid":1234,"signal":0,"identity":"linux:boot:42","result":"probe_succeeded","atomic_identity":true,"effective_uid":1000,"termination_confirmed":false});
++	let result = retain_signal_outcome(&p, 0, Ok(signal_output(0, &ack.to_string(), ""))).unwrap();
++	assert_eq!(result["result"], "probe_succeeded");
++	assert_eq!(result["termination_confirmed"], false);
++	let retained = retain_signal_after_audit(result, Ok(()));
++	assert_eq!(retained["audit_recorded"], true);
++}
+diff --git a/src/mcp/runtime/process_ops.py b/src/mcp/runtime/process_ops.py
+index e2c629f..fe499ad 100644
+--- a/src/mcp/runtime/process_ops.py
++++ b/src/mcp/runtime/process_ops.py
+@@ -70,7 +70,7 @@ def send_signal(q):
+     pid, number = int(q["pid"]), int(q["signal"])
+     if not 0 < pid <= 2147483647 or number not in ({0} | set(signal.valid_signals())):
+         raise ValueError("single positive PID and supported signal required")
+-    fd = None
++    fd, attempted = None, False
+     try:
+         atomic = sys.platform == "linux" and hasattr(os, "pidfd_open") and hasattr(signal, "pidfd_send_signal")
+         if atomic:
+@@ -80,16 +80,23 @@ def send_signal(q):
+         if expected is not None and expected != actual:
+             raise ValueError("process identity changed; no signal sent")
+         if atomic:
++            attempted = True
+             signal.pidfd_send_signal(fd, number, None, 0)
+         else:
+             # POSIX lacks a cross-platform pidfd equivalent. This is best effort.
+             if identity(pid) != actual:
+                 raise ValueError("process identity changed; no signal sent")
++            attempted = True
+             os.kill(pid, number)
+         return {"pid": pid, "signal": number, "identity": actual,
+                 "result": "probe_succeeded" if number == 0 else "signal_sent",
+                 "atomic_identity": atomic, "effective_uid": os.geteuid(),
+                 "termination_confirmed": False}
++    except Exception:
++        if not attempted:
++            return {"pid": pid, "signal": number, "result": "signal_refused",
++                    "signal_syscall_attempted": False, "termination_confirmed": False}
++        raise
+     finally:
+         if fd is not None:
+             os.close(fd)
+diff --git a/src/mcp/runtime/pty.rs b/src/mcp/runtime/pty.rs
+index 25619b4..96a132f 100644
+--- a/src/mcp/runtime/pty.rs
++++ b/src/mcp/runtime/pty.rs
+@@ -11,7 +11,7 @@ use std::process::Stdio;
+ use std::sync::atomic::{AtomicU64, Ordering};
+ use std::sync::{Arc, Mutex, OnceLock};
+ use std::time::{SystemTime, UNIX_EPOCH};
+-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
++use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+ use tokio::process::{ChildStdin, Command};
+ use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit, Semaphore};
+ 
+@@ -282,6 +282,66 @@ async fn drain_readers(
+ 	}
+ }
+ 
++pub(super) fn require_pty_intent(outcome: Result<()>) -> Result<()> {
++	outcome.map_err(|_| anyhow!("PTY intent audit unavailable; no terminal operation dispatched"))
++}
++
++pub(super) fn unknown_pty_outcome(
++	host: &str,
++	id: &str,
++	operation: &str,
++	persistent: bool,
++) -> Value {
++	let mut value = json!({"host":host,"session_id":id,"operation":operation,"result":"pty_outcome_unknown",
++		"outcome":"unknown","automatic_retry":false,"effect_confirmed":false,
++		"persistent_across_runtime_restart":persistent,
++		"reconcile_warning":"Terminal operation outcome is not confirmed. Inspect this existing session identity; do not repeat input or create a new terminal automatically."});
++	if operation == "close" {
++		value["termination_confirmed"] = json!(false);
++	}
++	value
++}
++
++pub(super) fn retain_pty_after_audit(mut result: Value, completion: Result<()>) -> Value {
++	result["automatic_retry"] = json!(false);
++	result["audit_recorded"] = json!(completion.is_ok());
++	if completion.is_err() {
++		result["audit_warning"] = json!("Terminal result retained; completion audit unavailable. Do not repeat the operation automatically.");
++	}
++	result
++}
++
++async fn write_input<W: AsyncWrite + Unpin>(
++	input: &mut W,
++	data: &[u8],
++	deadline: std::time::Duration,
++) -> Result<()> {
++	tokio::time::timeout(deadline, async {
++		input.write_all(data).await?;
++		input.flush().await
++	})
++	.await
++	.map_err(|_| anyhow!("PTY input acknowledgement timeout"))??;
++	Ok(())
++}
++
++async fn dispatch_input<W: AsyncWrite + Unpin>(
++	input: &mut W,
++	host: &str,
++	id: &str,
++	data: &[u8],
++	intent: Result<()>,
++	deadline: std::time::Duration,
++) -> Result<Value> {
++	require_pty_intent(intent)?;
++	let sent = write_input(input, data, deadline).await;
++	Ok(if sent.is_ok() {
++		json!({"session_id":id,"host":host,"bytes_written":data.len()})
++	} else {
++		unknown_pty_outcome(host, id, "write", false)
++	})
++}
++
+ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
+ 	let host = check_execution(
+ 		&params.host,
+@@ -348,20 +408,24 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
+ 		.stdout(Stdio::piped())
+ 		.stderr(Stdio::piped())
+ 		.kill_on_drop(false);
+-	let mut child = command.spawn()?;
+-	let pid = child.id().ok_or_else(|| anyhow!("ssh child has no PID"))?;
+-	let mut input = child.stdin.take();
+-	if system_jobctl {
+-		let mut payload = serde_json::to_vec(
++	let payload = if system_jobctl {
++		let mut bytes = serde_json::to_vec(
+ 			&json!({"op":"pty","job_id":id,"executable":params.executable,"args":params.args,"cwd":params.cwd,"env":params.env,"timeout_seconds":3600}),
+ 		)?;
+-		payload.push(b'\n');
+-		if let Some(pipe) = input.as_mut() {
+-			pipe.write_all(&payload).await?;
+-			pipe.flush().await?;
+-		}
+-	}
+-	let stdin = Arc::new(AsyncMutex::new(input));
++		bytes.push(b'\n');
++		Some(bytes)
++	} else {
++		None
++	};
++	require_pty_intent(audit(
++		"pty_start_intent",
++		&params.host,
++		&id,
++		&json!({"phase":"intent","remote_operation_submitted":false}),
++	))?;
++	let mut child = command.spawn()?;
++	let pid = child.id().unwrap_or(0);
++	let stdin = Arc::new(AsyncMutex::new(child.stdin.take()));
+ 	let output = Arc::new(Mutex::new(RingBuffer::new()));
+ 	let mut reader_tasks = Vec::new();
+ 	if let Some(stdout) = child.stdout.take() {
+@@ -429,24 +493,52 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
+ 		output,
+ 		status,
+ 	};
+-	registry()
+-		.lock()
+-		.map_err(|_| anyhow!("PTY registry lock poisoned"))?
+-		.insert(id.clone(), session);
+-	audit(
++	// Register the owned child before sending its launch handshake. Partial input
++	// or a lost flush acknowledgement must leave a discoverable close/read identity.
++	let registered = match registry().lock() {
++		Ok(mut sessions) => {
++			sessions.insert(id.clone(), session.clone());
++			true
++		}
++		Err(_) => {
++			session.stop.cancel();
++			false
++		}
++	};
++	let handshake = if registered {
++		if let Some(payload) = payload {
++			let mut input = session.stdin.lock().await;
++			match input.as_mut() {
++				Some(pipe) => write_input(pipe, &payload, std::time::Duration::from_secs(5)).await,
++				None => Err(anyhow!("PTY launch input unavailable")),
++			}
++		} else {
++			Ok(())
++		}
++	} else {
++		Err(anyhow!("PTY identity registration unavailable"))
++	};
++	let result = if handshake.is_ok() && pid != 0 {
++		json!({"session_id":id,"host":params.host,"pid":pid,
++			"pid_scope":"controller_ssh","execution_mode":host.execution_mode,
++			"persistent_across_runtime_restart":false})
++	} else {
++		let mut unknown = unknown_pty_outcome(&params.host, &id, "start", false);
++		unknown["pid"] = json!(pid);
++		unknown["pid_scope"] = json!("controller_ssh");
++		unknown["session_registered"] = json!(registered);
++		unknown
++	};
++	let completion = audit(
+ 		"pty_start",
+ 		&params.host,
+ 		&id,
+-		&json!({"rows":rows,"cols":cols,"restart_persistent":false}),
+-	)?;
+-	Ok(serde_json::to_string_pretty(&json!({
+-		"session_id": id,
+-		"host": params.host,
+-		"pid": pid,
+-		"pid_scope": "controller_ssh",
+-		"execution_mode": host.execution_mode,
+-		"persistent_across_runtime_restart": false,
+-	}))?)
++		&json!({"phase":"result","rows":rows,"cols":cols,"restart_persistent":false,
++			"outcome_unknown":result["outcome"]=="unknown"}),
++	);
++	Ok(serde_json::to_string_pretty(&retain_pty_after_audit(
++		result, completion,
++	))?)
+ }
+ 
+ pub async fn read_pty_async(params: PtyReadParams) -> Result<String> {
+@@ -541,22 +633,30 @@ pub async fn write_pty(params: PtyWriteParams) -> Result<String> {
+ 	let stdin = guard
+ 		.as_mut()
+ 		.ok_or_else(|| anyhow!("PTY stdin is already closed"))?;
+-	tokio::time::timeout(std::time::Duration::from_secs(5), async {
+-		stdin.write_all(params.data.as_bytes()).await?;
+-		stdin.flush().await
+-	})
+-	.await
+-	.map_err(|_| anyhow!("PTY input timeout"))??;
+-	audit(
++	let intent = audit(
++		"pty_write_intent",
++		&params.host,
++		&params.session_id,
++		&json!({"phase":"intent","bytes":params.data.len(),"remote_operation_submitted":false}),
++	);
++	let result = dispatch_input(
++		stdin,
++		&params.host,
++		&params.session_id,
++		params.data.as_bytes(),
++		intent,
++		std::time::Duration::from_secs(5),
++	)
++	.await?;
++	let completion = audit(
+ 		"pty_write",
+ 		&params.host,
+ 		&params.session_id,
+-		&json!({"bytes_written":params.data.len()}),
+-	)?;
+-	Ok(serde_json::to_string_pretty(&json!({
+-		"session_id": params.session_id,
+-		"bytes_written": params.data.len(),
+-	}))?)
++		&json!({"phase":"result","bytes_written":result["bytes_written"],"outcome_unknown":result["outcome"]=="unknown"}),
++	);
++	Ok(serde_json::to_string_pretty(&retain_pty_after_audit(
++		result, completion,
++	))?)
+ }
+ 
+ pub async fn close_pty(params: PtyRefParams) -> Result<String> {
+@@ -564,18 +664,25 @@ pub async fn close_pty(params: PtyRefParams) -> Result<String> {
+ 		return super::terminal::close(&params).await;
+ 	}
+ 	let session = lookup(&params.host, &params.session_id)?;
++	require_pty_intent(audit(
++		"pty_close_intent",
++		&params.host,
++		&params.session_id,
++		&json!({"phase":"intent","remote_operation_submitted":false}),
++	))?;
+ 	session.stdin.lock().await.take();
+ 	session.stop.cancel();
+-	audit(
++	let completion = audit(
+ 		"pty_close",
+ 		&params.host,
+ 		&params.session_id,
+-		&json!({"close_requested":true}),
+-	)?;
+-	Ok(serde_json::to_string_pretty(&json!({
+-		"session_id": params.session_id,
+-		"result": "close_requested",
+-	}))?)
++		&json!({"phase":"result","close_requested":true}),
++	);
++	Ok(serde_json::to_string_pretty(&retain_pty_after_audit(
++		json!({"session_id":params.session_id,"host":params.host,"result":"close_requested",
++			"termination_confirmed":false}),
++		completion,
++	))?)
+ }
+ 
+ pub async fn close_all_ptys() {
+diff --git a/src/mcp/runtime/pty_tests.rs b/src/mcp/runtime/pty_tests.rs
+index b7fbd05..d695445 100644
+--- a/src/mcp/runtime/pty_tests.rs
++++ b/src/mcp/runtime/pty_tests.rs
+@@ -181,3 +181,162 @@ async fn clean_capture_and_timed_out_capture_are_distinct() {
+ 	let detail = drain_readers(vec![task], std::time::Duration::from_millis(1)).await;
+ 	assert!(detail.unwrap().contains("deadline exceeded"));
+ }
++
++#[derive(Clone, Copy)]
++enum WriteFault {
++	PartialError,
++	FlushError,
++	PartialTimeout,
++	None,
++}
++struct FaultWriter {
++	accepted: Vec<u8>,
++	fault: WriteFault,
++	polls: usize,
++}
++impl AsyncWrite for FaultWriter {
++	fn poll_write(
++		mut self: std::pin::Pin<&mut Self>,
++		_: &mut std::task::Context<'_>,
++		data: &[u8],
++	) -> std::task::Poll<std::io::Result<usize>> {
++		self.polls += 1;
++		if !self.accepted.is_empty() {
++			match self.fault {
++				WriteFault::PartialError => {
++					return std::task::Poll::Ready(Err(std::io::Error::other(
++						"SECRET partial write failure",
++					)))
++				}
++				WriteFault::PartialTimeout => return std::task::Poll::Pending,
++				_ => {}
++			}
++		}
++		let n = if matches!(
++			self.fault,
++			WriteFault::PartialError | WriteFault::PartialTimeout
++		) {
++			data.len().min(3)
++		} else {
++			data.len()
++		};
++		self.accepted.extend_from_slice(&data[..n]);
++		std::task::Poll::Ready(Ok(n))
++	}
++	fn poll_flush(
++		self: std::pin::Pin<&mut Self>,
++		_: &mut std::task::Context<'_>,
++	) -> std::task::Poll<std::io::Result<()>> {
++		std::task::Poll::Ready(if matches!(self.fault, WriteFault::FlushError) {
++			Err(std::io::Error::other("SECRET flush failure"))
++		} else {
++			Ok(())
++		})
++	}
++	fn poll_shutdown(
++		self: std::pin::Pin<&mut Self>,
++		_: &mut std::task::Context<'_>,
++	) -> std::task::Poll<std::io::Result<()>> {
++		std::task::Poll::Ready(Ok(()))
++	}
++}
++fn fault_writer(fault: WriteFault) -> FaultWriter {
++	FaultWriter {
++		accepted: Vec::new(),
++		fault,
++		polls: 0,
++	}
++}
++
++#[tokio::test]
++async fn failed_pty_intent_refuses_before_any_input_dispatch() {
++	let mut writer = fault_writer(WriteFault::None);
++	let result = dispatch_input(
++		&mut writer,
++		"target-host",
++		"pty-existing",
++		b"business command\n",
++		Err(anyhow!("SECRET intent unavailable")),
++		std::time::Duration::from_secs(1),
++	)
++	.await;
++	assert!(result
++		.unwrap_err()
++		.to_string()
++		.contains("no terminal operation dispatched"));
++	assert_eq!(writer.polls, 0);
++	assert!(writer.accepted.is_empty());
++}
++
++#[tokio::test]
++async fn partial_input_flush_failure_and_timeout_retain_unknown_identity_without_retry() {
++	for fault in [
++		WriteFault::PartialError,
++		WriteFault::FlushError,
++		WriteFault::PartialTimeout,
++	] {
++		let mut writer = fault_writer(fault);
++		let result = dispatch_input(
++			&mut writer,
++			"target-host",
++			"pty-existing",
++			b"business command\n",
++			Ok(()),
++			std::time::Duration::from_millis(5),
++		)
++		.await
++		.unwrap();
++		assert!(
++			!writer.accepted.is_empty(),
++			"fault must occur after real accepted bytes"
++		);
++		assert_eq!(result["outcome"], "unknown");
++		assert_eq!(result["automatic_retry"], false);
++		assert_eq!(result["host"], "target-host");
++		assert_eq!(result["session_id"], "pty-existing");
++		assert!(
++			result.get("bytes_written").is_none(),
++			"a partial write must not assert the full count"
++		);
++		assert!(!result.to_string().contains("SECRET"));
++	}
++}
++
++#[tokio::test]
++async fn completed_input_survives_post_effect_audit_failure() {
++	let mut writer = fault_writer(WriteFault::None);
++	let result = dispatch_input(
++		&mut writer,
++		"target-host",
++		"pty-existing",
++		b"business command\n",
++		Ok(()),
++		std::time::Duration::from_secs(1),
++	)
++	.await
++	.unwrap();
++	assert_eq!(writer.accepted, b"business command\n");
++	let result = retain_pty_after_audit(result, Err(anyhow!("SECRET audit sync failure")));
++	assert_eq!(result["bytes_written"], writer.accepted.len());
++	assert_eq!(result["host"], "target-host");
++	assert_eq!(result["session_id"], "pty-existing");
++	assert_eq!(result["audit_recorded"], false);
++	assert_eq!(result["automatic_retry"], false);
++	assert!(!result.to_string().contains("SECRET"));
++}
++
++#[test]
++fn start_and_close_result_survive_completion_audit_failure() {
++	for value in [
++		json!({"session_id":"pty-existing","host":"target-host","pid":123,"pid_scope":"controller_ssh"}),
++		json!({"session_id":"pty-existing","host":"target-host","result":"close_requested","termination_confirmed":false}),
++	] {
++		let result = retain_pty_after_audit(value.clone(), Err(anyhow!("SECRET audit path")));
++		for (key, field) in value.as_object().unwrap() {
++			assert_eq!(result[key], *field);
++		}
++		assert_eq!(result["audit_recorded"], false);
++		assert_eq!(result["automatic_retry"], false);
++		assert!(!result.to_string().contains("SECRET"));
++	}
++}
+diff --git a/src/mcp/runtime/terminal.rs b/src/mcp/runtime/terminal.rs
+index 584235c..a286df4 100644
+--- a/src/mcp/runtime/terminal.rs
++++ b/src/mcp/runtime/terminal.rs
+@@ -3,7 +3,10 @@
+ // SPDX-License-Identifier: Apache-2.0
+ //! Target-owned operator PTYs with durable controller references and full archives.
+ use super::config::{runtime_config, ExecutionMode};
+-use super::pty::{PtyReadParams, PtyRefParams, PtyStartParams, PtyWriteParams};
++use super::pty::{
++	require_pty_intent, retain_pty_after_audit, unknown_pty_outcome, PtyReadParams, PtyRefParams,
++	PtyStartParams, PtyWriteParams,
++};
+ use super::ssh::run_python_json;
+ use anyhow::{bail, Context, Result};
+ use serde::{Deserialize, Serialize};
+@@ -68,12 +71,103 @@ async fn rpc(record: &TerminalRecord, mut input: Value) -> Result<Value> {
+ 		serde_json::to_string(SOURCE)?
+ 	);
+ 	let mut output: Value = run_python_json(host, &code, &input, Duration::from_secs(25)).await?;
++	if !output.is_object() {
++		bail!("invalid terminal acknowledgement");
++	}
+ 	output["session_id"] = json!(record.session_id);
+ 	output["host"] = json!(record.host);
+ 	output["persistent_across_runtime_restart"] = json!(true);
+ 	Ok(output)
+ }
+ 
++fn retain_terminal_outcome(
++	record: &TerminalRecord,
++	operation: &str,
++	remote: Result<Value>,
++	requested_bytes: Option<usize>,
++) -> Value {
++	let mut value = match remote {
++		Ok(value) if value.is_object() => value,
++		_ => return unknown_pty_outcome(&record.host, &record.session_id, operation, true),
++	};
++	let valid = match operation {
++		"start" => {
++			value["reused"].is_boolean()
++				&& matches!(
++					value["status"]["state"].as_str(),
++					Some("running" | "exited" | "lost" | "launch_unknown")
++				) && value["status"]["output_complete"].is_boolean()
++		}
++		"write" => {
++			value["bytes_written"]
++				.as_u64()
++				.zip(requested_bytes)
++				.is_some_and(|(written, requested)| {
++					written <= requested as u64
++						&& value["complete"].as_bool() == Some(written == requested as u64)
++				}) && value["reused"].is_boolean()
++		}
++		"close" => matches!(
++			value["result"].as_str(),
++			Some("close_requested" | "already_exited")
++		),
++		_ => false,
++	};
++	if !valid || value.get("error").is_some() {
++		return unknown_pty_outcome(&record.host, &record.session_id, operation, true);
++	}
++	// These bindings come from the locally authorized record, never a remote ACK.
++	value["host"] = json!(record.host);
++	value["session_id"] = json!(record.session_id);
++	value["persistent_across_runtime_restart"] = json!(true);
++	value["automatic_retry"] = json!(false);
++	if operation == "start"
++		&& matches!(
++			value["status"]["state"].as_str(),
++			Some("lost" | "launch_unknown")
++		) {
++		value["result"] = json!("pty_outcome_unknown");
++		value["outcome"] = json!("unknown");
++		value["reconcile_warning"] = json!("Terminal launch acknowledgement is unavailable. Inspect this same session identity; do not create another terminal automatically.");
++	}
++	if operation == "close" {
++		value["termination_confirmed"] = json!(false);
++		if value["result"] == "already_exited" {
++			// The current helper also uses this ACK for lost/launch_unknown state.
++			// It is not proof that the target child actually exited.
++			value["outcome"] = json!("unknown");
++			value["reconcile_warning"] = json!("Terminal owner is not accepting close. Inspect this session's exit status; this acknowledgement does not confirm termination.");
++		}
++	}
++	value
++}
++
++async fn dispatch_operation(
++	record: &TerminalRecord,
++	operation: &str,
++	input: Value,
++	requested_bytes: Option<usize>,
++) -> Result<String> {
++	require_pty_intent(super::jobs::audit(
++		&format!("persistent_pty_{operation}_intent"),
++		&record.host,
++		&record.session_id,
++		&json!({"phase":"intent","bytes":requested_bytes,"remote_operation_submitted":false}),
++	))?;
++	let result =
++		retain_terminal_outcome(record, operation, rpc(record, input).await, requested_bytes);
++	let completion = super::jobs::audit(
++		&format!("persistent_pty_{operation}"),
++		&record.host,
++		&record.session_id,
++		&json!({"phase":"result","outcome_unknown":result["outcome"]=="unknown",
++			"bytes_written":result["bytes_written"],"close_requested":result["result"]=="close_requested"}),
++	);
++	Ok(serde_json::to_string(&retain_pty_after_audit(
++		result, completion,
++	))?)
++}
++
+ pub async fn start(params: &PtyStartParams) -> Result<String> {
+ 	let _guard = START_LOCK.lock().await;
+ 	let host = runtime_config()?.host(&params.host)?;
+@@ -109,9 +203,13 @@ pub async fn start(params: &PtyStartParams) -> Result<String> {
+ 		if compare != record.request {
+ 			bail!("terminal key is already bound to a different request");
+ 		}
+-		return Ok(serde_json::to_string(
+-			&rpc(&record, json!({"op":"start","request":record.request})).await?,
+-		)?);
++		return dispatch_operation(
++			&record,
++			"start",
++			json!({"op":"start","request":record.request}),
++			None,
++		)
++		.await;
+ 	}
+ 	tokio::fs::create_dir_all(directory()?).await?;
+ 	let mut req = request;
+@@ -140,14 +238,13 @@ pub async fn start(params: &PtyStartParams) -> Result<String> {
+ 	}
+ 	file.write_all(&serde_json::to_vec(&record)?).await?;
+ 	file.sync_all().await?;
+-	super::jobs::audit(
+-		"persistent_pty_start",
+-		&params.host,
+-		&id,
+-		&json!({"archive":true}),
+-	)?;
+-	let output = rpc(&record, json!({"op":"start","request":record.request})).await?;
+-	Ok(serde_json::to_string(&output)?)
++	dispatch_operation(
++		&record,
++		"start",
++		json!({"op":"start","request":record.request}),
++		None,
++	)
++	.await
+ }
+ 
+ pub async fn read(params: &PtyReadParams) -> Result<String> {
+@@ -165,33 +262,26 @@ pub async fn write(params: &PtyWriteParams) -> Result<String> {
+ 	if params.data.len() > 65536 {
+ 		bail!("PTY input exceeds 64 KiB");
+ 	}
++	if params
++		.request_id
++		.as_ref()
++		.is_some_and(|key| key.is_empty() || key.chars().count() > 128)
++	{
++		bail!("invalid PTY input request identity");
++	}
+ 	let record = load(&params.host, &params.session_id).await?;
+-	super::jobs::audit(
+-		"persistent_pty_write",
+-		&params.host,
+-		&params.session_id,
+-		&json!({"bytes":params.data.len()}),
+-	)?;
+-	Ok(serde_json::to_string(
+-		&rpc(
+-			&record,
+-			json!({"op":"write","data":params.data,"request_id":params.request_id}),
+-		)
+-		.await?,
+-	)?)
++	dispatch_operation(
++		&record,
++		"write",
++		json!({"op":"write","data":params.data,"request_id":params.request_id}),
++		Some(params.data.len()),
++	)
++	.await
+ }
+ 
+ pub async fn close(params: &PtyRefParams) -> Result<String> {
+ 	let record = load(&params.host, &params.session_id).await?;
+-	super::jobs::audit(
+-		"persistent_pty_close",
+-		&params.host,
+-		&params.session_id,
+-		&json!({"close_requested":true}),
+-	)?;
+-	Ok(serde_json::to_string(
+-		&rpc(&record, json!({"op":"close"})).await?,
+-	)?)
++	dispatch_operation(&record, "close", json!({"op":"close"}), None).await
+ }
+ 
+ pub async fn list(
+@@ -231,3 +321,7 @@ pub async fn list(
+ 	}
+ 	Ok((values, false))
+ }
++
++#[cfg(test)]
++#[path = "terminal_tests.rs"]
++mod tests;
+diff --git a/tests/dc_functional_v6_rollback_acceptance.py b/tests/dc_functional_v6_rollback_acceptance.py
+index ef4d5a5..6eb4026 100644
+--- a/tests/dc_functional_v6_rollback_acceptance.py
++++ b/tests/dc_functional_v6_rollback_acceptance.py
+@@ -23,10 +23,11 @@ import time
+ import traceback
+ 
+ from dc_parity_release_six_host_acceptance import services
++from dc_functional_v6_operator_six_host_acceptance import source_identity
+ from runtime_http_acceptance import Client
+ 
+ ROOT = pathlib.Path(__file__).resolve().parents[1]
+-PRODUCTION_PID = 2064509
++PRODUCTION_UNIT = "hepta-runtime-operator.service"
+ OLD_SHA256 = "db181570e9e65f9e6a962d013dd4880eedc5b0cda1c71508f84388a4a8d8072b"
+ HOST = "main"
+ SSH_TARGET = "localhost"
+@@ -43,9 +44,33 @@ def process_identity(pid):
+     return {"pid": pid, "start_ticks": int(fields[19]), "uid": pathlib.Path(f"/proc/{pid}").stat().st_uid}
+ 
+ 
+-def copy_installed_artifact(destination):
+-    before = process_identity(PRODUCTION_PID)
+-    reference = pathlib.Path(f"/proc/{PRODUCTION_PID}/exe")
++def capture_production_pin(baseline):
++    """Pin the already installed unit once; never follow a new/candidate PID."""
++    fields = dict(baseline[PRODUCTION_UNIT])
++    raw_pid = fields.get("MainPID", "0")
++    if fields.get("ActiveState") != "active" or not raw_pid.isdigit() or int(raw_pid) <= 0:
++        raise RuntimeError("installed production unit is not active with a valid PID")
++    identity = process_identity(int(raw_pid))
++    if identity["uid"] != os.getuid():
++        raise RuntimeError("installed user-unit process owner differs from operator UID")
++    pin = {"unit": PRODUCTION_UNIT, "service_fields": fields, "identity": identity}
++    verify_production_pin(pin)
++    return pin
++
++
++def verify_production_pin(pin):
++    if pin["unit"] != PRODUCTION_UNIT:
++        raise RuntimeError("production artifact may only use the installed unit")
++    if services()[PRODUCTION_UNIT] != pin["service_fields"]:
++        raise RuntimeError("installed production unit/PID changed; refusing to follow another process")
++    if process_identity(pin["identity"]["pid"]) != pin["identity"]:
++        raise RuntimeError("pinned production process start identity or owner changed")
++
++
++def copy_installed_artifact(destination, production_pin):
++    verify_production_pin(production_pin)
++    before = production_pin["identity"]
++    reference = pathlib.Path(f"/proc/{before['pid']}/exe")
+     source_path = os.readlink(reference)
+     source = os.open(reference, os.O_RDONLY | os.O_CLOEXEC)
+     output = None
+@@ -73,9 +98,9 @@ def copy_installed_artifact(destination):
+             raise RuntimeError("production executable descriptor changed while reading")
+         if digest.hexdigest() != OLD_SHA256 or sha256(destination) != OLD_SHA256:
+             raise RuntimeError("installed artifact SHA256 differs from the explicit rollback pin")
+-        if process_identity(PRODUCTION_PID) != before:
+-            raise RuntimeError("pinned production process identity changed during artifact read")
+-        return {"source_proc": str(reference), "source_path": source_path, "source_identity": before,
++        verify_production_pin(production_pin)
++        return {"production_unit": PRODUCTION_UNIT, "service_fields": production_pin["service_fields"],
++                "source_proc": str(reference), "source_path": source_path, "source_identity": before,
+                 "sha256": digest.hexdigest(), "bytes": inode.st_size, "private_copy": str(destination)}
+     finally:
+         os.close(source)
+@@ -90,6 +115,8 @@ def main():
+     parser.add_argument("--candidate-contract", required=True)
+     parser.add_argument("--receipt-dir", required=True)
+     parser.add_argument("--out", required=True)
++    parser.add_argument("--expected-head")
++    parser.add_argument("--expected-source-fingerprint")
+     args = parser.parse_args()
+     candidate = pathlib.Path(args.binary).resolve(strict=True)
+     if not stat.S_ISREG(candidate.stat().st_mode) or not os.access(candidate, os.X_OK):
+@@ -110,10 +137,18 @@ def main():
+     baseline = services()
+     if any(row.get("ActiveState") != "active" or row.get("MainPID") == "0" for row in baseline.values()):
+         raise RuntimeError("production Runtime/Facade/DC must remain active")
+-    if baseline["hepta-runtime-operator.service"]["MainPID"] != str(PRODUCTION_PID):
+-        raise RuntimeError("explicit old-artifact production PID pin changed")
++    production_pin = capture_production_pin(baseline)
++    source_before = source_identity()
++    if args.expected_head and source_before["base_HEAD"] != args.expected_head:
++        raise RuntimeError("source HEAD differs from expected committed HEAD")
++    if args.expected_source_fingerprint and source_before["source_code_fingerprint"] != args.expected_source_fingerprint:
++        raise RuntimeError("compile-input fingerprint differs from supplied build pin")
+     report = {"schema": "hepta-v6-owned-temporary-controller-v4-rollback-v1",
+-              "source_head": subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip(),
++              "source_head": source_before["base_HEAD"], "source_head_is_compiled_code_claim": False,
++              "source_before": source_before, "expected_head": args.expected_head,
++              "expected_compiled_source_fingerprint": args.expected_source_fingerprint,
++              "harness_sha256": sha256(pathlib.Path(__file__).resolve()),
++              "installed_production_pin": production_pin,
+               "candidate_binary_sha256": args.expected_candidate_sha256,
+               "candidate_contract_sha256": sha256(args.candidate_contract),
+               "v4_contract_sha256": sha256(ROOT / "deploy/contracts/hepta-runtime-full-operator-v4.json"),
+@@ -246,7 +281,7 @@ def main():
+ 
+     try:
+         old_binary = folder / "qualified-installed-v4"
+-        report["old_artifact"] = copy_installed_artifact(old_binary)
++        report["old_artifact"] = copy_installed_artifact(old_binary, production_pin)
+         passed("pinned production executable descriptor copied privately without live artifact mutation", report["old_artifact"])
+         meta = ssh("import os,pathlib,json,tempfile; p=pathlib.Path(tempfile.mkdtemp(prefix='hepta-v6-rollback-target-')).resolve();os.chmod(p,0o700);(p/'data').mkdir(mode=0o700);(p/'data'/'search.txt').write_text('rollback-owned-search');print(json.dumps({'path':str(p),'uid':os.getuid()}))")
+         target = meta["path"]
+@@ -384,9 +419,31 @@ def main():
+                     raw.unlink()
+             report["phase_logs"] = [{"path": str(path), "sha256": sha256(path)} for path in folder.glob("*.log")]
+             report["cleanup"]["errors"] = cleanup_errors
+-            report["protected_services_after"] = services()
+-            report["service_identity_stable"] = report["protected_services_after"] == baseline
+-            report["complete"] = bool(report.get("workflow_passed") and not cleanup_errors and report["cleanup"]["target_fixture_removed"] and report["service_identity_stable"])
++            try:
++                report["protected_services_after"] = services()
++                report["service_identity_stable"] = report["protected_services_after"] == baseline
++                verify_production_pin(production_pin)
++                report["installed_production_identity_after"] = process_identity(production_pin["identity"]["pid"])
++                report["installed_production_identity_stable"] = report["installed_production_identity_after"] == production_pin["identity"]
++            except Exception as error:
++                report["service_identity_stable"] = False
++                report["installed_production_identity_stable"] = False
++                report["protected_service_observation_error_type"] = type(error).__name__
++            try:
++                source_after = source_identity()
++                report["source_after"] = source_after
++                report["source_fingerprint_stable"] = source_after["source_code_fingerprint"] == source_before["source_code_fingerprint"]
++                report["source_head_stable"] = source_after["base_HEAD"] == source_before["base_HEAD"]
++                report["candidate_hashes_stable"] = (sha256(candidate) == args.expected_candidate_sha256
++                    and sha256(args.candidate_contract) == report["candidate_contract_sha256"]
++                    and sha256(pathlib.Path(__file__).resolve()) == report["harness_sha256"]
++                    and report["source_fingerprint_stable"] and report["source_head_stable"])
++            except Exception as error:
++                report["candidate_hashes_stable"] = False
++                report["source_observation_error_type"] = type(error).__name__
++            report["complete"] = bool(report.get("workflow_passed") and not cleanup_errors
++                and report["cleanup"]["target_fixture_removed"] and report["service_identity_stable"]
++                and report["installed_production_identity_stable"] and report["candidate_hashes_stable"])
+             save()
+     print("TEMPORARY_ROLLBACK_COMPLETE", report["complete"], flush=True)
+     if not report["complete"]:
+diff --git a/tests/process_ops_tests.py b/tests/process_ops_tests.py
+index 8584f8a..2653567 100644
+--- a/tests/process_ops_tests.py
++++ b/tests/process_ops_tests.py
+@@ -8,6 +8,7 @@ import signal
+ import subprocess
+ import sys
+ import unittest
++from unittest import mock
+ 
+ PATH = pathlib.Path(__file__).resolve().parents[1] / 'src/mcp/runtime/process_ops.py'
+ spec = importlib.util.spec_from_file_location('process_ops', PATH)
+@@ -31,8 +32,9 @@ class ProcessOperations(unittest.TestCase):
+             start = ops.identity(child.pid)
+             request = {'pid': child.pid, 'signal': 0, 'expected_identity': start}
+             self.assertEqual(ops.send_signal(request)['result'], 'probe_succeeded')
+-            with self.assertRaisesRegex(ValueError, 'identity changed'):
+-                ops.send_signal({**request, 'signal': signal.SIGTERM, 'expected_identity': 'stale'})
++            refused = ops.send_signal({**request, 'signal': signal.SIGTERM, 'expected_identity': 'stale'})
++            self.assertEqual(refused, {'pid': child.pid, 'signal': signal.SIGTERM,
++                'result': 'signal_refused', 'signal_syscall_attempted': False, 'termination_confirmed': False})
+             self.assertIsNone(child.poll())
+             result = ops.send_signal({**request, 'signal': signal.SIGTERM})
+             self.assertEqual(result['result'], 'signal_sent')
+@@ -45,6 +47,23 @@ class ProcessOperations(unittest.TestCase):
+                 child.kill()
+                 child.wait(timeout=5)
+ 
++    @unittest.skipUnless(sys.platform == 'linux', 'Linux pidfd acknowledgement cleanup path')
++    def test_cleanup_error_can_happen_after_real_signal_delivery(self):
++        child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
++        actual_close = ops.os.close
++        def close_then_fail(fd):
++            actual_close(fd)
++            raise OSError('post-syscall acknowledgement cleanup failed')
++        try:
++            start = ops.identity(child.pid)
++            with mock.patch.object(ops.os, 'close', side_effect=close_then_fail):
++                with self.assertRaisesRegex(OSError, 'post-syscall'):
++                    ops.send_signal({'pid': child.pid, 'signal': signal.SIGTERM, 'expected_identity': start})
++            self.assertEqual(child.wait(timeout=5), -signal.SIGTERM)
++        finally:
++            if child.poll() is None:
++                child.kill(); child.wait(timeout=5)
++
+     def test_group_and_wildcard_are_not_single_pids(self):
+         for pid in [0, -1, -100, 2147483648]:
+             with self.assertRaises(ValueError):

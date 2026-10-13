@@ -6,6 +6,10 @@ The user asks Work to continue implementing, testing, reviewing and deploying **
 
 Use the authorized qian-qi computer and connected GitHub/Hepta tools, with other hosts accessible through existing configured channels. Do not assume new Work instances inherit a shell, privileges or a particular GUI session: verify connected tools and service identities first.
 
+## Latest completed source slice — effect/observation integrity
+
+The active functional worktree additionally contains the sealed [v6 effects candidate](DC_FUNCTIONAL_V6_EFFECTS_CANDIDATE.md). Its final R2 optimized artifact/source and six-host native/facade matrix passed; original permission-refusal, test and lint failures are retained. Installed v4 and DC are unchanged. Unit-name job cancellation/replay hardening and credential metadata resume have separate reviewed candidates still being integrated; they are not installed or full business qualification. Use the newest remote HEAD and current receipt, not an older artifact SHA.
+
 ## Work continuation — 2026-10-13 native v6 candidate
 
 Active worktree: /home/qian-qi/hepta-runtime-dc-functional-20261013, local branch work/dc-functional-20261013, pushing every commit to feat/operator-parity-20261006 / Draft PR #3. Verify latest remote HEAD before continuing; retain the original operator worktree and its unrelated evidence.

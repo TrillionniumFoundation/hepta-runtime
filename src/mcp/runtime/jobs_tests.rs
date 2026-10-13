@@ -5,6 +5,51 @@
 use super::*;
 
 #[test]
+fn legacy_audit_failure_cannot_hide_existing_job_status_wait_or_output_cursors() {
+	for observation in [
+		json!({"state":"succeeded","exit_code":0,"output_complete":true}),
+		json!({"state":"running","pid":1234}),
+		json!({"stdout":{"text":"retained-output","offset":5,"next_offset":20,"eof":true},"stderr":{"text":"","offset":0,"next_offset":0,"eof":true}}),
+	] {
+		let retained = retain_observation_after_audit(
+			observation.clone(),
+			Err(anyhow::anyhow!("PRIVATE_AUDIT_SECRET")),
+			"local-host",
+			"local-job",
+		);
+		for (key, value) in observation.as_object().unwrap() {
+			assert_eq!(&retained[key], value);
+		}
+		assert_eq!(retained["audit_recorded"], false);
+		assert!(retained["audit_warning"]
+			.as_str()
+			.unwrap()
+			.contains("No new job"));
+		assert!(!retained.to_string().contains("PRIVATE_AUDIT_SECRET"));
+	}
+	let observed = retain_observation_after_audit(
+		json!({"state":"succeeded"}),
+		Ok(()),
+		"local-host",
+		"local-job",
+	);
+	assert_eq!(observed["audit_recorded"], true);
+	assert!(observed.get("audit_warning").is_none());
+}
+
+#[test]
+fn nonobject_observations_are_controlled_unknown_without_panic() {
+	for value in [Value::Null, json!("UNTRUSTED_SECRET"), json!([1, 2])] {
+		let result = retain_observation_after_audit(value, Ok(()), "local-host", "local-job");
+		assert_eq!(result["outcome"], "unknown");
+		assert_eq!(result["automatic_retry"], false);
+		assert_eq!(result["host"], "local-host");
+		assert_eq!(result["job_id"], "local-job");
+		assert!(!result.to_string().contains("UNTRUSTED_SECRET"));
+	}
+}
+
+#[test]
 fn ids_are_valid_and_unique() {
 	let a = next_job_id();
 	let b = next_job_id();
@@ -131,6 +176,34 @@ fn confirmed_remote_launch_survives_failed_local_completion_save() {
 }
 
 #[test]
+fn untrusted_launch_ack_cannot_promote_pending_to_launched() {
+	for ack in [
+		Value::Null,
+		json!("ACK_SECRET"),
+		json!([1]),
+		json!({}),
+		json!({"ok":false,"backend":"detached","launcher_pid":1234}),
+		json!({"ok":true,"backend":"detached","launcher_pid":0}),
+		json!({"ok":true,"backend":"systemd","unit":"other-unit"}),
+	] {
+		let mut record = outcome_fixture(ExecutionMode::Operator, false, "pending");
+		let result = preserve_launch_outcome(&mut record, Ok(ack), |_| Ok(()));
+		assert_eq!(record.launch_state, "launch_unknown");
+		assert_eq!(result.value["job_id"], "same-job-id");
+		assert_eq!(result.value["automatic_retry"], false);
+		assert!(!result.value.to_string().contains("ACK_SECRET"));
+	}
+	let mut record = outcome_fixture(ExecutionMode::Operator, false, "pending");
+	let result = preserve_launch_outcome(
+		&mut record,
+		Ok(json!({"ok":true,"reused_remote":true,"backend":"launch_failed"})),
+		|_| Ok(()),
+	);
+	assert_eq!(record.launch_state, "launch_failed");
+	assert_eq!(result.value["backend"], "launch_failed");
+}
+
+#[test]
 fn unknown_remote_launch_retains_job_id_without_claiming_failure_or_success() {
 	let mut record = outcome_fixture(ExecutionMode::Operator, false, "pending");
 	let saves = std::cell::Cell::new(0);
@@ -197,7 +270,9 @@ fn reconcile_retries_are_only_fixed_id_isolated_jobctl_records() {
 fn cancel_success_and_unknown_completion_are_identity_bound_and_redacted() {
 	let result = retain_cancel_outcome(
 		"same-job-id",
-		Ok(json!({"job_id":"wrong-helper-id","result":"stop_requested","signal_sent":true})),
+		Ok(
+			json!({"job_id":"same-job-id","result":"stop_requested","untrusted_extra":"ACK_SECRET"}),
+		),
 	);
 	let retained = retain_result_after_audit(
 		result,
@@ -205,7 +280,9 @@ fn cancel_success_and_unknown_completion_are_identity_bound_and_redacted() {
 	);
 	assert_eq!(retained["job_id"], "same-job-id");
 	assert_eq!(retained["result"], "stop_requested");
-	assert_eq!(retained["signal_sent"], true);
+	assert_eq!(retained["termination_confirmed"], false);
+	assert_eq!(retained["automatic_retry"], false);
+	assert!(!retained.to_string().contains("ACK_SECRET"));
 	assert_eq!(retained["audit_recorded"], false);
 	let unknown = retain_cancel_outcome(
 		"same-job-id",
@@ -218,6 +295,26 @@ fn cancel_success_and_unknown_completion_are_identity_bound_and_redacted() {
 	assert!(unknown.get("signal_sent").is_none());
 	assert!(!unknown.to_string().contains("/private-target"));
 	assert!(!unknown.to_string().contains("SECRET"));
+}
+
+#[test]
+fn malformed_or_mismatched_cancel_ack_cannot_claim_a_confirmed_request_or_panic() {
+	for ack in [
+		Value::Null,
+		json!("ACK_SECRET"),
+		json!([1]),
+		json!({}),
+		json!({"job_id":"wrong-helper-id","result":"stop_requested"}),
+		json!({"job_id":"same-job-id","result":"terminated"}),
+	] {
+		let result = retain_cancel_outcome("same-job-id", Ok(ack));
+		assert_eq!(result["job_id"], "same-job-id");
+		assert_eq!(result["result"], "cancel_unknown");
+		assert_eq!(result["status_authoritative"], false);
+		assert_eq!(result["automatic_retry"], false);
+		assert_eq!(result["termination_confirmed"], false);
+		assert!(!result.to_string().contains("ACK_SECRET"));
+	}
 }
 
 #[test]

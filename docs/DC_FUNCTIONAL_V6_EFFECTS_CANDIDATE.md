@@ -1,0 +1,13 @@
+# Native v6 effect and observation integrity candidate
+
+This candidate keeps the frozen original v4/v5/v6 catalogs unchanged. It is not installed; the app and runtime remain v4 and Desktop Commander remains active as rescue.
+
+Signal delivery and durable job launch/cancel now require matching typed acknowledgements. Transport loss, malformed replies, wrong job IDs, post-operation audit failure and partial PTY writes never invite automatic replay. Kernel EPERM/EACCES acknowledgement remains an explicit refusal; an unacknowledged post-syscall failure remains unknown. Isolated and persistent PTY start/write/close preserve the original session identity after effects. A persistent helper's `already_exited` is conservatively unknown because that helper also uses it for lost state.
+
+Pinned privileged-action output is captured incrementally with 512 KiB tails per stream, bounded exit/drain deadlines and explicit truncation/authority flags. Actual helper tests produced 128 MiB per stream under a 64 MiB memory limit, and exercised descendant-held pipes. No new privileged action, sudo grant or policy was configured. Action helper tests do not qualify a real administrator-pinned workflow.
+
+The final source passed formatting, strict lint, 484 main Rust tests plus 8 jobctl tests; 11 conditional tests remain ignored. Its optimized artifact passed 42 actual six-host signal/audit-fault checks, six-host metadata acceptance, all six operator/PTY and durable stdin/cursor/cancel supplements, 30 actual native/facade cancellation checks, predecessor native file regressions and a seven-check temporary main-controller rollback. Source/helper/harness/artifact identities and protected installed service PIDs are sealed in [the receipt](qualification/dc-functional-v6-effects-candidate-20261013.json).
+
+Original failures remain available. R1 normal-user root-PID probing returned unknown instead of its trusted kernel refusal, and the real operator matrix failed; R2 corrects that protocol rather than relaxing the denial check. Initial stale-identity test and lint failures are also retained. Local-origin native/facade evidence is separate from authenticated ChatGPT-origin evidence and real business qualification.
+
+Remaining unit-name cancellation ownership/replay gaps are being repaired in a separate source slice. Credential metadata resume is also a separate candidate. Neither this passing bounded matrix nor tool count qualifies full replacement. Production activation/recovery/rollback, administrator Refresh, genuine new-tool model calls, required business workflows and an explicitly authorized DC-off drill remain HOLD. PR #3 remains Draft.

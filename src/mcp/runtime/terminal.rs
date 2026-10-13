@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Target-owned operator PTYs with durable controller references and full archives.
 use super::config::{runtime_config, ExecutionMode};
-use super::pty::{PtyReadParams, PtyRefParams, PtyStartParams, PtyWriteParams};
+use super::pty::{
+	require_pty_intent, retain_pty_after_audit, unknown_pty_outcome, PtyReadParams, PtyRefParams,
+	PtyStartParams, PtyWriteParams,
+};
 use super::ssh::run_python_json;
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -68,10 +71,101 @@ async fn rpc(record: &TerminalRecord, mut input: Value) -> Result<Value> {
 		serde_json::to_string(SOURCE)?
 	);
 	let mut output: Value = run_python_json(host, &code, &input, Duration::from_secs(25)).await?;
+	if !output.is_object() {
+		bail!("invalid terminal acknowledgement");
+	}
 	output["session_id"] = json!(record.session_id);
 	output["host"] = json!(record.host);
 	output["persistent_across_runtime_restart"] = json!(true);
 	Ok(output)
+}
+
+fn retain_terminal_outcome(
+	record: &TerminalRecord,
+	operation: &str,
+	remote: Result<Value>,
+	requested_bytes: Option<usize>,
+) -> Value {
+	let mut value = match remote {
+		Ok(value) if value.is_object() => value,
+		_ => return unknown_pty_outcome(&record.host, &record.session_id, operation, true),
+	};
+	let valid = match operation {
+		"start" => {
+			value["reused"].is_boolean()
+				&& matches!(
+					value["status"]["state"].as_str(),
+					Some("running" | "exited" | "lost" | "launch_unknown")
+				) && value["status"]["output_complete"].is_boolean()
+		}
+		"write" => {
+			value["bytes_written"]
+				.as_u64()
+				.zip(requested_bytes)
+				.is_some_and(|(written, requested)| {
+					written <= requested as u64
+						&& value["complete"].as_bool() == Some(written == requested as u64)
+				}) && value["reused"].is_boolean()
+		}
+		"close" => matches!(
+			value["result"].as_str(),
+			Some("close_requested" | "already_exited")
+		),
+		_ => false,
+	};
+	if !valid || value.get("error").is_some() {
+		return unknown_pty_outcome(&record.host, &record.session_id, operation, true);
+	}
+	// These bindings come from the locally authorized record, never a remote ACK.
+	value["host"] = json!(record.host);
+	value["session_id"] = json!(record.session_id);
+	value["persistent_across_runtime_restart"] = json!(true);
+	value["automatic_retry"] = json!(false);
+	if operation == "start"
+		&& matches!(
+			value["status"]["state"].as_str(),
+			Some("lost" | "launch_unknown")
+		) {
+		value["result"] = json!("pty_outcome_unknown");
+		value["outcome"] = json!("unknown");
+		value["reconcile_warning"] = json!("Terminal launch acknowledgement is unavailable. Inspect this same session identity; do not create another terminal automatically.");
+	}
+	if operation == "close" {
+		value["termination_confirmed"] = json!(false);
+		if value["result"] == "already_exited" {
+			// The current helper also uses this ACK for lost/launch_unknown state.
+			// It is not proof that the target child actually exited.
+			value["outcome"] = json!("unknown");
+			value["reconcile_warning"] = json!("Terminal owner is not accepting close. Inspect this session's exit status; this acknowledgement does not confirm termination.");
+		}
+	}
+	value
+}
+
+async fn dispatch_operation(
+	record: &TerminalRecord,
+	operation: &str,
+	input: Value,
+	requested_bytes: Option<usize>,
+) -> Result<String> {
+	require_pty_intent(super::jobs::audit(
+		&format!("persistent_pty_{operation}_intent"),
+		&record.host,
+		&record.session_id,
+		&json!({"phase":"intent","bytes":requested_bytes,"remote_operation_submitted":false}),
+	))?;
+	let result =
+		retain_terminal_outcome(record, operation, rpc(record, input).await, requested_bytes);
+	let completion = super::jobs::audit(
+		&format!("persistent_pty_{operation}"),
+		&record.host,
+		&record.session_id,
+		&json!({"phase":"result","outcome_unknown":result["outcome"]=="unknown",
+			"bytes_written":result["bytes_written"],"close_requested":result["result"]=="close_requested"}),
+	);
+	Ok(serde_json::to_string(&retain_pty_after_audit(
+		result, completion,
+	))?)
 }
 
 pub async fn start(params: &PtyStartParams) -> Result<String> {
@@ -109,9 +203,13 @@ pub async fn start(params: &PtyStartParams) -> Result<String> {
 		if compare != record.request {
 			bail!("terminal key is already bound to a different request");
 		}
-		return Ok(serde_json::to_string(
-			&rpc(&record, json!({"op":"start","request":record.request})).await?,
-		)?);
+		return dispatch_operation(
+			&record,
+			"start",
+			json!({"op":"start","request":record.request}),
+			None,
+		)
+		.await;
 	}
 	tokio::fs::create_dir_all(directory()?).await?;
 	let mut req = request;
@@ -140,14 +238,13 @@ pub async fn start(params: &PtyStartParams) -> Result<String> {
 	}
 	file.write_all(&serde_json::to_vec(&record)?).await?;
 	file.sync_all().await?;
-	super::jobs::audit(
-		"persistent_pty_start",
-		&params.host,
-		&id,
-		&json!({"archive":true}),
-	)?;
-	let output = rpc(&record, json!({"op":"start","request":record.request})).await?;
-	Ok(serde_json::to_string(&output)?)
+	dispatch_operation(
+		&record,
+		"start",
+		json!({"op":"start","request":record.request}),
+		None,
+	)
+	.await
 }
 
 pub async fn read(params: &PtyReadParams) -> Result<String> {
@@ -165,33 +262,26 @@ pub async fn write(params: &PtyWriteParams) -> Result<String> {
 	if params.data.len() > 65536 {
 		bail!("PTY input exceeds 64 KiB");
 	}
+	if params
+		.request_id
+		.as_ref()
+		.is_some_and(|key| key.is_empty() || key.chars().count() > 128)
+	{
+		bail!("invalid PTY input request identity");
+	}
 	let record = load(&params.host, &params.session_id).await?;
-	super::jobs::audit(
-		"persistent_pty_write",
-		&params.host,
-		&params.session_id,
-		&json!({"bytes":params.data.len()}),
-	)?;
-	Ok(serde_json::to_string(
-		&rpc(
-			&record,
-			json!({"op":"write","data":params.data,"request_id":params.request_id}),
-		)
-		.await?,
-	)?)
+	dispatch_operation(
+		&record,
+		"write",
+		json!({"op":"write","data":params.data,"request_id":params.request_id}),
+		Some(params.data.len()),
+	)
+	.await
 }
 
 pub async fn close(params: &PtyRefParams) -> Result<String> {
 	let record = load(&params.host, &params.session_id).await?;
-	super::jobs::audit(
-		"persistent_pty_close",
-		&params.host,
-		&params.session_id,
-		&json!({"close_requested":true}),
-	)?;
-	Ok(serde_json::to_string(
-		&rpc(&record, json!({"op":"close"})).await?,
-	)?)
+	dispatch_operation(&record, "close", json!({"op":"close"}), None).await
 }
 
 pub async fn list(
@@ -231,3 +321,7 @@ pub async fn list(
 	}
 	Ok((values, false))
 }
+
+#[cfg(test)]
+#[path = "terminal_tests.rs"]
+mod tests;

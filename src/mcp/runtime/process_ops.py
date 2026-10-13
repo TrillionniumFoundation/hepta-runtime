@@ -1,5 +1,6 @@
 # Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
 """Operator-account process inspection/signalling. Not a privilege boundary."""
+import errno
 import json
 import os
 import pathlib
@@ -70,7 +71,7 @@ def send_signal(q):
     pid, number = int(q["pid"]), int(q["signal"])
     if not 0 < pid <= 2147483647 or number not in ({0} | set(signal.valid_signals())):
         raise ValueError("single positive PID and supported signal required")
-    fd = None
+    fd, attempted = None, False
     try:
         atomic = sys.platform == "linux" and hasattr(os, "pidfd_open") and hasattr(signal, "pidfd_send_signal")
         if atomic:
@@ -80,16 +81,30 @@ def send_signal(q):
         if expected is not None and expected != actual:
             raise ValueError("process identity changed; no signal sent")
         if atomic:
+            attempted = True
             signal.pidfd_send_signal(fd, number, None, 0)
         else:
             # POSIX lacks a cross-platform pidfd equivalent. This is best effort.
             if identity(pid) != actual:
                 raise ValueError("process identity changed; no signal sent")
+            attempted = True
             os.kill(pid, number)
         return {"pid": pid, "signal": number, "identity": actual,
                 "result": "probe_succeeded" if number == 0 else "signal_sent",
                 "atomic_identity": atomic, "effective_uid": os.geteuid(),
                 "termination_confirmed": False}
+    except Exception as error:
+        if not attempted:
+            return {"pid": pid, "signal": number, "result": "signal_refused",
+                    "signal_syscall_attempted": False, "termination_confirmed": False}
+        # A trusted EPERM/EACCES acknowledgement proves the kernel refused this
+        # syscall. Later cleanup/transport failures still have unknown outcome.
+        if isinstance(error, PermissionError) and error.errno in (errno.EPERM, errno.EACCES):
+            return {"pid": pid, "signal": number, "identity": actual,
+                    "result": "signal_refused", "signal_syscall_attempted": True,
+                    "signal_delivery_confirmed": False,
+                    "refusal_reason": "kernel_permission_denied", "termination_confirmed": False}
+        raise
     finally:
         if fd is not None:
             os.close(fd)

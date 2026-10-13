@@ -23,10 +23,11 @@ import time
 import traceback
 
 from dc_parity_release_six_host_acceptance import services
+from dc_functional_v6_operator_six_host_acceptance import source_identity
 from runtime_http_acceptance import Client
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-PRODUCTION_PID = 2064509
+PRODUCTION_UNIT = "hepta-runtime-operator.service"
 OLD_SHA256 = "db181570e9e65f9e6a962d013dd4880eedc5b0cda1c71508f84388a4a8d8072b"
 HOST = "main"
 SSH_TARGET = "localhost"
@@ -43,9 +44,33 @@ def process_identity(pid):
     return {"pid": pid, "start_ticks": int(fields[19]), "uid": pathlib.Path(f"/proc/{pid}").stat().st_uid}
 
 
-def copy_installed_artifact(destination):
-    before = process_identity(PRODUCTION_PID)
-    reference = pathlib.Path(f"/proc/{PRODUCTION_PID}/exe")
+def capture_production_pin(baseline):
+    """Pin the already installed unit once; never follow a new/candidate PID."""
+    fields = dict(baseline[PRODUCTION_UNIT])
+    raw_pid = fields.get("MainPID", "0")
+    if fields.get("ActiveState") != "active" or not raw_pid.isdigit() or int(raw_pid) <= 0:
+        raise RuntimeError("installed production unit is not active with a valid PID")
+    identity = process_identity(int(raw_pid))
+    if identity["uid"] != os.getuid():
+        raise RuntimeError("installed user-unit process owner differs from operator UID")
+    pin = {"unit": PRODUCTION_UNIT, "service_fields": fields, "identity": identity}
+    verify_production_pin(pin)
+    return pin
+
+
+def verify_production_pin(pin):
+    if pin["unit"] != PRODUCTION_UNIT:
+        raise RuntimeError("production artifact may only use the installed unit")
+    if services()[PRODUCTION_UNIT] != pin["service_fields"]:
+        raise RuntimeError("installed production unit/PID changed; refusing to follow another process")
+    if process_identity(pin["identity"]["pid"]) != pin["identity"]:
+        raise RuntimeError("pinned production process start identity or owner changed")
+
+
+def copy_installed_artifact(destination, production_pin):
+    verify_production_pin(production_pin)
+    before = production_pin["identity"]
+    reference = pathlib.Path(f"/proc/{before['pid']}/exe")
     source_path = os.readlink(reference)
     source = os.open(reference, os.O_RDONLY | os.O_CLOEXEC)
     output = None
@@ -73,9 +98,9 @@ def copy_installed_artifact(destination):
             raise RuntimeError("production executable descriptor changed while reading")
         if digest.hexdigest() != OLD_SHA256 or sha256(destination) != OLD_SHA256:
             raise RuntimeError("installed artifact SHA256 differs from the explicit rollback pin")
-        if process_identity(PRODUCTION_PID) != before:
-            raise RuntimeError("pinned production process identity changed during artifact read")
-        return {"source_proc": str(reference), "source_path": source_path, "source_identity": before,
+        verify_production_pin(production_pin)
+        return {"production_unit": PRODUCTION_UNIT, "service_fields": production_pin["service_fields"],
+                "source_proc": str(reference), "source_path": source_path, "source_identity": before,
                 "sha256": digest.hexdigest(), "bytes": inode.st_size, "private_copy": str(destination)}
     finally:
         os.close(source)
@@ -90,6 +115,8 @@ def main():
     parser.add_argument("--candidate-contract", required=True)
     parser.add_argument("--receipt-dir", required=True)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--expected-head")
+    parser.add_argument("--expected-source-fingerprint")
     args = parser.parse_args()
     candidate = pathlib.Path(args.binary).resolve(strict=True)
     if not stat.S_ISREG(candidate.stat().st_mode) or not os.access(candidate, os.X_OK):
@@ -110,10 +137,18 @@ def main():
     baseline = services()
     if any(row.get("ActiveState") != "active" or row.get("MainPID") == "0" for row in baseline.values()):
         raise RuntimeError("production Runtime/Facade/DC must remain active")
-    if baseline["hepta-runtime-operator.service"]["MainPID"] != str(PRODUCTION_PID):
-        raise RuntimeError("explicit old-artifact production PID pin changed")
+    production_pin = capture_production_pin(baseline)
+    source_before = source_identity()
+    if args.expected_head and source_before["base_HEAD"] != args.expected_head:
+        raise RuntimeError("source HEAD differs from expected committed HEAD")
+    if args.expected_source_fingerprint and source_before["source_code_fingerprint"] != args.expected_source_fingerprint:
+        raise RuntimeError("compile-input fingerprint differs from supplied build pin")
     report = {"schema": "hepta-v6-owned-temporary-controller-v4-rollback-v1",
-              "source_head": subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip(),
+              "source_head": source_before["base_HEAD"], "source_head_is_compiled_code_claim": False,
+              "source_before": source_before, "expected_head": args.expected_head,
+              "expected_compiled_source_fingerprint": args.expected_source_fingerprint,
+              "harness_sha256": sha256(pathlib.Path(__file__).resolve()),
+              "installed_production_pin": production_pin,
               "candidate_binary_sha256": args.expected_candidate_sha256,
               "candidate_contract_sha256": sha256(args.candidate_contract),
               "v4_contract_sha256": sha256(ROOT / "deploy/contracts/hepta-runtime-full-operator-v4.json"),
@@ -246,7 +281,7 @@ def main():
 
     try:
         old_binary = folder / "qualified-installed-v4"
-        report["old_artifact"] = copy_installed_artifact(old_binary)
+        report["old_artifact"] = copy_installed_artifact(old_binary, production_pin)
         passed("pinned production executable descriptor copied privately without live artifact mutation", report["old_artifact"])
         meta = ssh("import os,pathlib,json,tempfile; p=pathlib.Path(tempfile.mkdtemp(prefix='hepta-v6-rollback-target-')).resolve();os.chmod(p,0o700);(p/'data').mkdir(mode=0o700);(p/'data'/'search.txt').write_text('rollback-owned-search');print(json.dumps({'path':str(p),'uid':os.getuid()}))")
         target = meta["path"]
@@ -384,9 +419,31 @@ def main():
                     raw.unlink()
             report["phase_logs"] = [{"path": str(path), "sha256": sha256(path)} for path in folder.glob("*.log")]
             report["cleanup"]["errors"] = cleanup_errors
-            report["protected_services_after"] = services()
-            report["service_identity_stable"] = report["protected_services_after"] == baseline
-            report["complete"] = bool(report.get("workflow_passed") and not cleanup_errors and report["cleanup"]["target_fixture_removed"] and report["service_identity_stable"])
+            try:
+                report["protected_services_after"] = services()
+                report["service_identity_stable"] = report["protected_services_after"] == baseline
+                verify_production_pin(production_pin)
+                report["installed_production_identity_after"] = process_identity(production_pin["identity"]["pid"])
+                report["installed_production_identity_stable"] = report["installed_production_identity_after"] == production_pin["identity"]
+            except Exception as error:
+                report["service_identity_stable"] = False
+                report["installed_production_identity_stable"] = False
+                report["protected_service_observation_error_type"] = type(error).__name__
+            try:
+                source_after = source_identity()
+                report["source_after"] = source_after
+                report["source_fingerprint_stable"] = source_after["source_code_fingerprint"] == source_before["source_code_fingerprint"]
+                report["source_head_stable"] = source_after["base_HEAD"] == source_before["base_HEAD"]
+                report["candidate_hashes_stable"] = (sha256(candidate) == args.expected_candidate_sha256
+                    and sha256(args.candidate_contract) == report["candidate_contract_sha256"]
+                    and sha256(pathlib.Path(__file__).resolve()) == report["harness_sha256"]
+                    and report["source_fingerprint_stable"] and report["source_head_stable"])
+            except Exception as error:
+                report["candidate_hashes_stable"] = False
+                report["source_observation_error_type"] = type(error).__name__
+            report["complete"] = bool(report.get("workflow_passed") and not cleanup_errors
+                and report["cleanup"]["target_fixture_removed"] and report["service_identity_stable"]
+                and report["installed_production_identity_stable"] and report["candidate_hashes_stable"])
             save()
     print("TEMPORARY_ROLLBACK_COMPLETE", report["complete"], flush=True)
     if not report["complete"]:

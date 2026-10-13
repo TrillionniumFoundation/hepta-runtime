@@ -102,9 +102,14 @@ fn effective_config_preserves_flags_counts_and_alias_order() {
 	assert_eq!(primary["named_privileged_action_count"], 1);
 	assert_eq!(summary["policy_mutation_supported"], false);
 	assert_eq!(summary["target_probe_performed"], false);
+	assert!(summary["limits"].get("maximum_tool_result_bytes").is_none());
 	assert_eq!(
-		summary["limits"]["maximum_tool_result_bytes"],
-		MAX_RESULT_BYTES
+		summary["limits"]["maximum_summary_host_entries"],
+		MAX_HOST_ENTRIES
+	);
+	assert_eq!(
+		summary["limits"]["maximum_summary_response_bytes"],
+		MAX_SUMMARY_BYTES
 	);
 }
 
@@ -241,7 +246,10 @@ fn effective_config_bounds_host_count_and_serialized_response() {
 			.insert(format!("host-{i:03}-{}", "a".repeat(119)), template.clone());
 	}
 	let encoded = render_effective_config(Ok(&config)).unwrap();
-	assert!(encoded.len() <= MAX_SUMMARY_BYTES && encoded.len() <= MAX_RESULT_BYTES);
+	let summary: Value = serde_json::from_str(&encoded).unwrap();
+	assert!(summary["limits"].get("maximum_tool_result_bytes").is_none());
+	let wire = rmcp::model::CallToolResult::success(vec![rmcp::model::ContentBlock::text(encoded)]);
+	assert!(serde_json::to_vec(&wire).unwrap().len() <= MAX_SUMMARY_BYTES);
 	config.hosts.insert("one-more-host".into(), template);
 	let error = render_effective_config(Ok(&config))
 		.unwrap_err()
@@ -267,5 +275,5 @@ fn effective_config_bounds_the_actual_mcp_wire_envelope() {
 		rmcp::model::CallToolResult::success(vec![rmcp::model::ContentBlock::text(text.clone())]);
 	let bytes = serde_json::to_vec(&wire).unwrap().len();
 	assert!(bytes > text.len());
-	assert!(bytes <= MAX_SUMMARY_BYTES.min(MAX_RESULT_BYTES));
+	assert!(bytes <= MAX_SUMMARY_BYTES);
 }
