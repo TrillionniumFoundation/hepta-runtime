@@ -167,9 +167,23 @@ class TransportTests(unittest.TestCase):
             command=[sys.executable,str(ROOT/'deploy/chatgpt_full_operator.py'),'--stdio','--upstream',f'http://127.0.0.1:{self.server.server_port}/mcp','--token-file',str(token),'--contract',str(contract),'--contract-sha256',hashlib.sha256(contract.read_bytes()).hexdigest()]
             failed=subprocess.run(command,input=b'',capture_output=True,timeout=5);self.assertNotEqual(failed.returncode,0);self.assertEqual(self.server.seen,[])
             messages=[{'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2025-06-18','capabilities':{},'clientInfo':{'name':'test','version':'1'}}},{'jsonrpc':'2.0','id':2,'method':'tools/call','params':{'name':'sudo_start','arguments':{'command':'fixture'}}}]
-            result=subprocess.run([*command,'--acknowledge-full-operator'],input=b''.join(canonical(m)+b'\n' for m in messages),capture_output=True,timeout=10)
-            self.assertEqual(result.returncode,0,result.stderr);responses=[json.loads(line) for line in result.stdout.splitlines()]
-            self.assertEqual(len(responses),2);self.assertEqual(self.server.effects,1);self.assertNotIn(b'private-fixture-token',result.stdout)
+            process=subprocess.Popen([*command,'--acknowledge-full-operator'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+            try:
+                # EOF is cancellation intent. Keep the input live until each
+                # operation has a reply, as an actual stdio caller does.
+                responses=[]
+                for message in messages:
+                    process.stdin.write(canonical(message)+b'\n');process.stdin.flush()
+                    import select
+                    self.assertTrue(select.select([process.stdout],[],[],5)[0],'facade response deadline')
+                    responses.append(json.loads(process.stdout.readline()))
+                process.stdin.close();process.wait(timeout=5)
+                self.assertEqual(process.returncode,0,process.stderr.read())
+                self.assertEqual(len(responses),2);self.assertEqual(self.server.effects,1)
+                self.assertNotIn('private-fixture-token',json.dumps(responses))
+            finally:
+                if process.poll() is None:process.kill();process.wait(timeout=5)
+                process.stdout.close();process.stderr.close()
 
 
     def modern(self,method,params=None,ident='openai-mcp-discover'):

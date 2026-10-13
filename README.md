@@ -16,6 +16,7 @@ See [native binary/remote document/page/range tools](docs/NATIVE_TRANSFER.md) fo
 See [the v5 native DC-replacement candidate](docs/DC_FUNCTIONAL_V5_NATIVE_CANDIDATE.md) for bounded multi-file UTF-8 reads, configured-host SSH health and durable cancellable search. The [optimized six-host stage receipt](docs/qualification/dc-functional-v5-release-staged-20261013.json) records a staged artifact, not an installed catalog or full replacement. The installed v4 service and Desktop Commander remain active; [the Work handoff](docs/WORK_HANDOFF_DC_REPLACEMENT_20261013.md) lists caller/resume, model-origin, business and recovery/cutover gates.
 
 Current bounded metadata/configuration candidate: [native v6 audit and configuration](docs/DC_FUNCTIONAL_V6_METADATA_CANDIDATE.md). Installed v4 and Desktop Commander remain unchanged; native receipts do not grant full replacement qualification.
+Bounded request cancellation: [native v6 facade candidate](docs/DC_FUNCTIONAL_V6_FACADE_CANCELLATION.md), with actual six-host native/facade receipts; ChatGPT model-origin and production cutover remain open.
 
 
 

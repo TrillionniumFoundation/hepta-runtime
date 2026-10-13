@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
 """Freeze or verify an additive native candidate; no installed service changes."""
-import argparse,datetime,hashlib,json,pathlib,secrets,socket,subprocess,sys,tempfile,time
+import argparse,datetime,hashlib,json,os,pathlib,secrets,select,socket,subprocess,sys,tempfile,time
 from runtime_http_acceptance import Client
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'deploy'))
@@ -70,10 +70,35 @@ def main():
                     '--upstream',f'http://127.0.0.1:{port}/mcp','--token-file',str(token),
                     '--contract',str(path.resolve()),'--contract-sha256',hashlib.sha256(path.read_bytes()).hexdigest(),
                     '--acknowledge-full-operator']
-                wire=subprocess.run(command,input=''.join(json.dumps(q)+'\n' for q in requests),
-                    text=True,capture_output=True,timeout=45)
-                assert wire.returncode==0,wire.returncode
-                rows=[json.loads(line) for line in wire.stdout.splitlines()]
+                facade_log=pathlib.Path(a.out).with_suffix('.facade.stderr.log')
+                facade_stream=facade_log.open('xb')
+                wire=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,
+                    stderr=facade_stream,bufsize=0)
+                rows=[];buffer=b''
+                try:
+                    for request in requests:
+                        wire.stdin.write((json.dumps(request)+'\n').encode());wire.stdin.flush()
+                        deadline=time.monotonic()+45
+                        while b'\n' not in buffer:
+                            remaining=deadline-time.monotonic()
+                            if remaining<=0 or not select.select([wire.stdout],[],[],remaining)[0]:
+                                raise TimeoutError('facade request/reply deadline')
+                            part=os.read(wire.stdout.fileno(),65536)
+                            if not part:raise RuntimeError('facade ended before expected reply')
+                            buffer+=part
+                            if len(buffer)>1024*1024:raise RuntimeError('facade reply exceeded bounded fixture')
+                        line,buffer=buffer.split(b'\n',1)
+                        rows.append(json.loads(line))
+                    wire.stdin.close()
+                    assert wire.wait(timeout=15)==0,wire.returncode
+                    assert not buffer
+                finally:
+                    if wire.poll() is None:wire.terminate()
+                    wire.wait(timeout=15)
+                    facade_stream.close()
+                    raw=facade_log.read_bytes()
+                    facade_log.write_bytes(raw.replace(token.read_text().encode(),b'[redacted-test-token]'))
+                    facade_log.chmod(0o600)
                 assert len(rows)==3
                 for request,row in zip(requests,rows):
                     assert row.get('id')==request['id'] and 'error' not in row
@@ -87,6 +112,8 @@ def main():
                     'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),
                     'contract_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
                     'catalog_sha256':frozen.catalog_sha256,'tool_count':58,'checks':checks,'complete':True,
+                    'facade_stderr_sha256':hashlib.sha256(facade_log.read_bytes()).hexdigest(),
+                    'facade_stderr_path':str(facade_log),
                     'origin':'isolated local native controller and facade',
                     'chatgpt_originated':False,'installed_runtime_changed':False,'desktop_commander_changed':False,
                     'full_dc_replacement_qualified':False}
