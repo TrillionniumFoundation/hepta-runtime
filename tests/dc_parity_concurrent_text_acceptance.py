@@ -4,7 +4,7 @@
 
 Runs ONLY against a disposable authenticated candidate MCP runtime and private
 controller workspace. No ChatGPT-originated writes, production service restarts,
-or OS privilege changes. The candidate must have the reviewed v4 50-tool schema.
+or OS privilege changes. The candidate must match the explicitly supplied frozen reviewed schema.
 """
 import argparse
 import concurrent.futures
@@ -43,7 +43,7 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--binary",required=True)
     ap.add_argument("--out",required=True)
-    ap.add_argument("--v4-contract",default=str(ROOT/"deploy/contracts/hepta-runtime-full-operator-v4.json"))
+    ap.add_argument("--v4-contract", "--contract",default=str(ROOT/"deploy/contracts/hepta-runtime-full-operator-v4.json"))
     ap.add_argument("--waves",type=int,default=6)
     ap.add_argument("--contenders",type=int,default=8)
     args=ap.parse_args()
@@ -78,8 +78,8 @@ def main():
                 catalog=c.rpc("tools/list",{})["tools"]
                 file=pathlib.Path(args.v4_contract)
                 contract=ToolContract.load(file,hashlib.sha256(file.read_bytes()).hexdigest())
-                assert len(catalog)==50;contract.verify(catalog)
-                passed("isolated native controller exactly matches pinned v4 50-tool catalog")
+                assert len(catalog)==len(contract.tools);contract.verify(catalog)
+                passed("isolated native controller exactly matches the explicitly pinned reviewed catalog")
                 target=workspace/"concurrent.txt"
                 init=c.call("text_file_write",{"path":str(target),"mode":"create",
                     "expected_sha256":"absent","content":"base\n"})

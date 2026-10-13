@@ -34,6 +34,7 @@ def main():
     parser.add_argument('--v4-contract')
     parser.add_argument('--official-schema',help='Optional locally supplied published MCP 2026-07-28 JSON Schema')
     parser.add_argument('--freeze-v4-contract')
+    parser.add_argument('--successor-contract', help='Explicit reviewed successor before historical v4 operation regression')
     args=parser.parse_args()
     checks=[]
     def passed(label):
@@ -78,6 +79,11 @@ def main():
                     raise TimeoutError('isolated MCP did not start')
 
                 catalog=client.rpc('tools/list',{})['tools']
+                if args.successor_contract:
+                    from dc_successor_contract import verify_successor
+                    assert not args.v4_contract and not args.freeze_v4_contract, 'dedicated v5 acceptance verifies modern facade'
+                    catalog=verify_successor(catalog,args.successor_contract)
+                    passed('full reviewed successor verified before exact v4 operation regression')
                 by_name={t['name']:t for t in catalog}
                 assert len(catalog)==len(by_name)==50
                 v3_file=pathlib.Path(args.v3_contract)

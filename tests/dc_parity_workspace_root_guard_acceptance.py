@@ -22,6 +22,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", required=True)
     parser.add_argument("--out", required=True)
+    parser.add_argument('--successor-contract')
     args = parser.parse_args()
     binary = pathlib.Path(args.binary).resolve(strict=True)
     tests = []
@@ -83,7 +84,11 @@ def main():
                         time.sleep(.1)
                 else:
                     raise TimeoutError("private fixture did not start")
-                actual = {v["name"]: v for v in client.rpc("tools/list", {})["tools"]}
+                served = client.rpc("tools/list", {})["tools"]
+                if args.successor_contract:
+                    from dc_successor_contract import verify_successor
+                    served = verify_successor(served, args.successor_contract)
+                actual = {v["name"]: v for v in served}
                 assert len(actual) == 50 and "directory_move" in actual
                 passed("private 50-tool runtime discovered from isolated controller")
 

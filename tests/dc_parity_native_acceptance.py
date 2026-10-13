@@ -29,6 +29,7 @@ def main():
     ap.add_argument('--catalog-out', help='Freeze reviewed candidate MCP schema; requires absent path')
     ap.add_argument('--verify-contract', help='Require exact candidate schema to match this frozen catalog')
     ap.add_argument('--allow-v4-directory-move', action='store_true', help='Permit only the reviewed v4 additive directory_move tool')
+    ap.add_argument('--successor-contract', help='Explicit reviewed additive successor; full catalog checked before v4 regression')
     args=ap.parse_args()
     binary=str(pathlib.Path(args.binary).resolve(strict=True))
     checks=[]
@@ -71,7 +72,13 @@ def main():
                         time.sleep(.1)
                 else:
                     raise TimeoutError('isolated MCP candidate never became ready')
-                actual={x['name']:x for x in client.rpc('tools/list',{})['tools']}
+                served=client.rpc('tools/list',{})['tools']
+                if args.successor_contract:
+                    from dc_successor_contract import verify_successor
+                    assert not args.catalog_out, 'successor freeze belongs to dedicated candidate acceptance'
+                    served=verify_successor(served,args.successor_contract)
+                    passed('full successor verified; exact v4 subset retained for historical operation regression')
+                actual={x['name']:x for x in served}
                 expected_count=50 if args.allow_v4_directory_move else 49
                 assert len(actual)==expected_count,len(actual)
                 source=pathlib.Path(__file__).resolve().parents[1]

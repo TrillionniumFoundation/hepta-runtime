@@ -171,6 +171,12 @@ async fn notify_peer_resource_updated(peer: &Peer<RoleServer>, uri: &str) {
 /// interactive sessions, on pre-2026-07-28 connections; other clients ignore it.
 const CLAUDE_CHANNEL_CAPABILITY: &str = "claude/channel";
 const RUNTIME_TOOL_NAMES: &[&str] = &[
+	"host_health",
+	"read_multiple_files",
+	"search_start",
+	"search_results",
+	"search_list",
+	"search_stop",
 	"stream_handoff_prepare",
 	"stream_handoff_status",
 	"stream_handoff_read",
@@ -250,6 +256,8 @@ const SHELL_HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_
 /// MCP server with per-session working directory isolation.
 #[derive(Debug, Clone)]
 pub struct OctofsServer {
+	/// Opaque native-session owner; failed entropy disables searches.
+	search_owner: Arc<Option<String>>,
 	/// Per-session working directory state.
 	workdir: Arc<SessionWorkdir>,
 	/// Whether the session context (workdir) has been applied from client
@@ -275,6 +283,7 @@ impl OctofsServer {
 	/// per-cwd background-job guard from sibling tests.
 	pub fn with_root(root: PathBuf) -> Self {
 		Self {
+			search_owner: Arc::new(runtime::search_jobs::new_owner_id().ok()),
 			workdir: Arc::new(SessionWorkdir::new(root)),
 			session_applied: Arc::new(std::sync::atomic::AtomicBool::new(false)),
 			subscriptions: Arc::new(SubscriptionRegistry::default()),
@@ -869,6 +878,140 @@ impl OctofsServer {
 		Parameters(_params): Parameters<runtime::inspect::HostListParams>,
 	) -> Result<String, String> {
 		runtime::inspect::host_list().map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Start Bounded Native Search",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Start a bounded background native file-name or literal UTF-8 content search under one configured read root. No shell or arbitrary targets. Refuses symlinks and hard links, skips binary content and bounds traversal, bytes, results and time. Owner is the authenticated native MCP session, never caller input. Results become immutable paginated snapshots when terminal; not regex or gitignore parity. A service restart leaves unfinished work interrupted and does not grant the new session access to old searches."
+	)]
+	async fn search_start(
+		&self,
+		Parameters(params): Parameters<runtime::search_jobs::SearchStartParams>,
+	) -> Result<String, String> {
+		let owner = self
+			.search_owner
+			.as_ref()
+			.as_deref()
+			.ok_or_else(|| "search session entropy unavailable".to_string())?;
+		runtime::search_jobs::search_start(owner, params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Search Snapshot Page",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read an immutable terminal result page for a search owned by this native MCP session, using an independent row cursor. Running work reports snapshot_ready=false. Maximum 32 rows and 64 KiB per page. No cross-session lookup, host override or mutable running-page cursor; session restart resume remains unsupported."
+	)]
+	async fn search_results(
+		&self,
+		Parameters(params): Parameters<runtime::search_jobs::SearchResultsParams>,
+	) -> Result<String, String> {
+		let owner = self
+			.search_owner
+			.as_ref()
+			.as_deref()
+			.ok_or_else(|| "search session entropy unavailable".to_string())?;
+		runtime::search_jobs::search_results(owner, params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "List Session Searches",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "List bounded persisted searches owned by this authenticated native MCP session with independent pagination. Never lists other sessions or accepts a caller-selected owner. Old-session records remain inaccessible after native service restart."
+	)]
+	async fn search_list(
+		&self,
+		Parameters(params): Parameters<runtime::search_jobs::SearchListParams>,
+	) -> Result<String, String> {
+		let owner = self
+			.search_owner
+			.as_ref()
+			.as_deref()
+			.ok_or_else(|| "search session entropy unavailable".to_string())?;
+		runtime::search_jobs::search_list(owner, params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Cancel Own Native Search",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Request cooperative cancellation only for a bounded native search owned by this authenticated MCP session. Uses its pinned job cancellation marker, never an arbitrary PID or process signal. Repeated stop is idempotent; retained terminal snapshots are preserved."
+	)]
+	async fn search_stop(
+		&self,
+		Parameters(params): Parameters<runtime::search_jobs::SearchRefParams>,
+	) -> Result<String, String> {
+		let owner = self
+			.search_owner
+			.as_ref()
+			.as_deref()
+			.ok_or_else(|| "search session entropy unavailable".to_string())?;
+		runtime::search_jobs::search_stop(owner, params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Multiple UTF-8 Files",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read 1 to 16 complete small UTF-8 files on one configured operator host. Each path is authorized independently and opened without symlinks or hard links. Per-file byte cap defaults to 16 KiB, maximum 64 KiB; serialized MCP text response budget defaults to 64 KiB, maximum 256 KiB including escaping. Any bad path, invalid UTF-8, changed file or exceeded budget fails the whole call without partial content. Returns independent file versions and SHA256; not an atomic snapshot across files. No shell or arbitrary SSH targets."
+	)]
+	async fn read_multiple_files(
+		&self,
+		Parameters(params): Parameters<runtime::multi_read::MultiReadParams>,
+	) -> Result<String, String> {
+		runtime::multi_read::read(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Configured Host Health",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Measure authenticated SSH reachability and command roundtrip latency for one configured host alias, including authentication and remote startup. Uses a fixed bounded read-only challenge and a 10-second deadline. No caller-supplied network destinations or commands; failures are redacted. This is not ICMP ping or pure network RTT."
+	)]
+	async fn host_health(
+		&self,
+		Parameters(params): Parameters<runtime::health::HostHealthParams>,
+	) -> Result<String, String> {
+		runtime::health::host_health(params)
+			.await
+			.map_err(|error| error.to_string())
 	}
 
 	#[tool(

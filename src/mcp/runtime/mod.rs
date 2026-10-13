@@ -1,3 +1,6 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
 //! Hepta Runtime: explicit multi-host execution, durable jobs, PTY sessions,
 //! policy enforcement, and read-only host inspection.
 
@@ -5,10 +8,13 @@ pub mod binary;
 pub mod checkpoint;
 pub mod config;
 pub mod documents;
+pub mod health;
 pub mod inspect;
 pub mod jobs;
+pub mod multi_read;
 pub mod operator;
 pub mod pty;
+pub mod search_jobs;
 pub mod ssh;
 pub mod stream;
 pub mod terminal;

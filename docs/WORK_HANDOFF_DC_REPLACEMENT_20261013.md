@@ -6,10 +6,43 @@ The user asks Work to continue implementing, testing, reviewing and deploying **
 
 Use the authorized qian-qi computer and connected GitHub/Hepta tools, with other hosts accessible through existing configured channels. Do not assume new Work instances inherit a shell, privileges or a particular GUI session: verify connected tools and service identities first.
 
+## Work continuation — 2026-10-13 native v5 candidate
+
+The priority-2/3 native implementation work below has advanced. See
+docs/DC_FUNCTIONAL_V5_NATIVE_CANDIDATE.md and the immutable
+docs/qualification/dc-functional-v5-native-candidate-20261013.json for exact
+source/binary fingerprints and retained failures. Installed/runtime/app
+baseline remains v4 with 50 tools; candidate source/catalog has six additive
+native tools with every original definition unchanged.
+
+Native candidate acceptance passed strict lint, 446 Rust tests (11 conditional
+tests remain ignored by default), 19 batch helper tests, 7 search worker tests,
+12 gate tests and 31 facade tests. The same debug candidate passed six-host
+health (10 checks), batch reads (108), durable search (54), and actual
+operator/PTY/stdin/cursor/cancel/temporary-controller restart regression (81).
+These are native/local-facade proofs, not new-tool model-origin acceptance,
+production recovery, production rollback, DC-off or full replacement.
+
+Fixed defects include omitted pinned evidence in Git, acceptance of unrelated
+cutover receipts, batch transport diagnostic leakage, abandoned search-session
+quota lockout and Mac case/Unicode protected-directory aliases. All failure
+logs/receipts are retained. Mac cancellation's detached-backend return is
+term_sent/kill_sent; the canonical cancelled terminal/output evidence is
+required rather than a Linux-only launch-result assumption.
+
+Next work must resolve truthful private caller scope, secure session/restart
+resume where required, request-level audit/history and redacted effective
+configuration. Qualify an optimized release and preserve active native jobs
+before any controlled native installation; then require legitimate
+administrator app Refresh/Review and genuine model-origin acceptance. Keep
+the historical installed-v4 crosswalk intact until actual installed/model
+evidence changes. Do not repeat the implementation as if the native candidate
+were absent, or silently promote it to the installed/ChatGPT baseline.
+
 ## Current qualified baseline
 
 - Private repo: `TrillionniumFoundation/hepta-runtime`, worktree `/home/qian-qi/hepta-runtime-operator-20261006`, branch `feat/operator-parity-20261006`, Draft PR #3.
-- Source: native Rust multi-host runtime, existing 50-tool pinned catalog at `deploy/contracts/hepta-runtime-full-operator-v4.json`. Private Full Operator ChatGPT app currently loads **50** tools: 19 declared read-only, 31 declared non-read-only. Review latest HEAD, remote branch and exact-head CI before changes: other legitimate work may have advanced this branch.
+- Installed source baseline: native Rust multi-host runtime, existing 50-tool pinned catalog at `deploy/contracts/hepta-runtime-full-operator-v4.json`. Private Full Operator ChatGPT app currently loads **50** tools: 19 declared read-only, 31 declared non-read-only. Review latest HEAD, remote branch and exact-head CI before changes: other legitimate work may have advanced this branch.
 - `docs/qualification/dc-parity-v4-model-origin-tool-ledger-v3-20261013.json` records **30 distinct non-read-only tool names with successful bounded invocation**: 29 with positive bounded action evidence and `process_checkpoint` with **read-only inspect** success only. `privileged_action` has no configured admin-pinned action; no arbitrary grant was invented. Tool-name count does not imply all parameters, safety categories or runtime states passed.
 - Existing model-origin six-host evidence covers bounded normal-user shells, PTYs, file creation/edit, document/PDF operations, kill/cancel of **disposable identity-pinned processes**, and limited sudo `id -u`. Native tests are separate from ChatGPT-origin results.
 - Desktop Commander is a distinct app with **31 exposed tools** and its own blocked command list. It remains installed, running and serves as recovery path; never uninstall/disable it merely because Hepta lists more tools.
