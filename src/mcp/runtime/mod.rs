@@ -16,6 +16,7 @@ pub mod jobs;
 pub mod multi_read;
 pub mod operator;
 pub mod pty;
+pub mod request_async;
 pub mod request_audit;
 pub mod request_results;
 pub mod search_jobs;

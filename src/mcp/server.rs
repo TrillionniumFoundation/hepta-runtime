@@ -176,6 +176,8 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"request_history",
 	"request_status",
 	"request_result",
+	"request_start",
+	"request_cancel",
 	"host_health",
 	"read_multiple_files",
 	"search_start",
@@ -450,10 +452,44 @@ impl OctofsServer {
 			.owner_binding
 			.resolve(&context, self.search_owner.as_ref().as_deref())
 			.map_err(|e| e.to_string())?;
-		runtime::request_results::request_status(scope.owner(), params)
-			.await
-			.and_then(|text| scope.annotate(text, false))
-			.map_err(|e| e.to_string())
+		let async_observation =
+			runtime::request_async::observation(scope.owner(), &params.request_id)
+				.await
+				.map_err(|error| error.to_string())?;
+		let request_id = params.request_id.clone();
+		let text = match runtime::request_results::request_status(scope.owner(), params).await {
+			Ok(text) => text,
+			Err(error) => {
+				let absent_at_first_observation = async_observation
+					.as_ref()
+					.and_then(|observation| observation.get("audit_metadata_available"))
+					== Some(&serde_json::Value::Bool(false));
+				if !absent_at_first_observation
+					|| runtime::request_audit::optional_observation(scope.owner(), &request_id)
+						.await
+						.map_err(|error| error.to_string())?
+						.is_some()
+				{
+					return Err(error.to_string());
+				}
+				serde_json::json!({
+					"request_id": request_id, "dispatch_state": "unknown", "result_state": "unavailable",
+					"inner_receipt_available": false, "automatic_retry": false,
+					"metadata_lookup_does_not_prove_delivery_or_business_success": true
+				})
+				.to_string()
+			}
+		};
+		let mut value: serde_json::Value =
+			serde_json::from_str(&text).map_err(|_| "request status unavailable".to_string())?;
+		if let Some(observation) = async_observation {
+			if let (Some(object), Some(extra)) = (value.as_object_mut(), observation.as_object()) {
+				object.extend(extra.clone());
+			}
+		}
+		scope
+			.annotate(value.to_string(), false)
+			.map_err(|error| error.to_string())
 	}
 	#[tool(
 		title = "Read Bounded Original Request Result",
@@ -474,10 +510,62 @@ impl OctofsServer {
 			.owner_binding
 			.resolve(&context, self.search_owner.as_ref().as_deref())
 			.map_err(|e| e.to_string())?;
+		runtime::request_async::observation(scope.owner(), &params.request_id)
+			.await
+			.map_err(|error| error.to_string())?;
 		runtime::request_results::request_result(scope.owner(), params)
 			.await
 			.and_then(|text| scope.annotate(text, false))
 			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Start Idempotent Owned Read Request",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Admit one background request from the explicit host_list, host_health or effective_config typed whitelist. Requires a private idempotency key: identical retries under the same verified HTTP credential or native stdio session return the original server-generated inner request_id without redispatch; changed arguments or policy refuse reuse. Durable private key hashes precede admission and effects. Only eight requests globally and four per owner may be active; key retention is finite and never silently evicts or rebinds keys. Response acknowledges admission, not dispatch completion or transport delivery. Use request_status/request_result for the inner id. A controller restart makes unfinished work unknown; no request is automatically replayed or resumed. Users sharing a private credential share this scope; no authenticated ChatGPT caller isolation. No arbitrary tools, commands, addresses or process ids."
+	)]
+	async fn request_start(
+		&self,
+		Parameters(params): Parameters<runtime::request_async::RequestStartParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::request_async::start(scope.owner(), params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|error| error.to_string())
+	}
+	#[tool(
+		title = "Cancel Owned Read Request Future",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Request cancellation of this controller's own background Rust future using the exact request_start inner request_id and the same verified private credential or native stdio session. Current policy must still authorize the immutable key binding. Never accepts an OS pid, command or arbitrary tool. Cancellation does not kill arbitrary processes or prove remote work stopped; effects started before cancellation may continue. Result settlement cannot be cancelled and late cancellation never discards a retained original result. Missing futures after controller restart remain unknown and are never recreated or replayed."
+	)]
+	async fn request_cancel(
+		&self,
+		Parameters(params): Parameters<runtime::request_async::RequestCancelParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::request_async::cancel(scope.owner(), params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|error| error.to_string())
 	}
 
 	#[tool(
@@ -1989,12 +2077,24 @@ impl ServerHandler for OctofsServer {
 					scope.owner(),
 					canonical,
 					if matches!(canonical, "request_status" | "request_result") {
-						request
+						match request
 							.arguments
 							.as_ref()
 							.and_then(|a| a.get("request_id"))
 							.and_then(serde_json::Value::as_str)
-							.map(str::to_owned)
+						{
+							Some(id) => {
+								runtime::request_async::audit_read_target(scope.owner(), id)
+									.await
+									.map_err(|_| {
+										ErrorData::invalid_params(
+											"request unavailable to this scope or current policy",
+											None,
+										)
+									})?
+							}
+							None => None,
+						}
 					} else {
 						None
 					},

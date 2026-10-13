@@ -154,6 +154,66 @@ pub(crate) async fn observation(owner: &str, id: &str) -> Result<AuditObservatio
 		.map_err(|_| anyhow!("request unavailable to this scope"))?
 }
 
+/// V9 admission may durably reserve an identity before creating its audit record.
+/// Only an absent record is optional; corrupt, unsafe or foreign records refuse.
+#[cfg(unix)]
+fn optional_observation_at(root: &Path, owner: &str, id: &str) -> Result<Option<AuditObservation>> {
+	if !valid_id(owner) || !valid_id(id) {
+		bail!("request unavailable to this scope");
+	}
+	let _guard = store_lock()?;
+	let dir = open_store(root)?;
+	let r = match read_record(&dir, &format!("{id}.json")) {
+		Ok(record) => record,
+		Err(error)
+			if error
+				.downcast_ref::<std::io::Error>()
+				.is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
+		{
+			return Ok(None)
+		}
+		Err(_) => bail!("request unavailable to this scope"),
+	};
+	if r.owner != owner {
+		bail!("request unavailable to this scope");
+	}
+	let state = match r.state {
+		DurableState::Unknown if is_dispatch_active(id)? => "accepted",
+		DurableState::Unknown => "unknown",
+		DurableState::Completed => "completed",
+		DurableState::Failed => "failed",
+	};
+	Ok(Some(AuditObservation {
+		identity: RequestIdentity {
+			request_id: r.request_id,
+			owner: r.owner,
+			tool_name: r.tool_name,
+			accepted_unix_ms: r.accepted_unix_ms,
+		},
+		state,
+		elapsed_ms: r.elapsed_ms,
+	}))
+}
+#[cfg(not(unix))]
+fn optional_observation_at(
+	_root: &Path,
+	_owner: &str,
+	_id: &str,
+) -> Result<Option<AuditObservation>> {
+	bail!("private request metadata requires Unix");
+}
+pub(crate) async fn optional_observation(
+	owner: &str,
+	id: &str,
+) -> Result<Option<AuditObservation>> {
+	let root = runtime_config()?.state_dir.clone();
+	let owner = owner.to_owned();
+	let id = id.to_owned();
+	tokio::task::spawn_blocking(move || optional_observation_at(&root, &owner, &id))
+		.await
+		.map_err(|_| anyhow!("request unavailable to this scope"))?
+}
+
 fn valid_id(value: &str) -> bool {
 	value.len() == 64
 		&& value
@@ -678,6 +738,60 @@ pub async fn begin(owner: &str, canonical_tool_name: &str) -> Result<RequestTick
 #[cfg(not(unix))]
 fn begin_at(_root: &Path, _owner: &str, _tool_name: &str) -> Result<RequestTicket> {
 	bail!("private request auditing requires Unix descriptor support")
+}
+
+#[cfg(unix)]
+fn begin_reserved_at(root: &Path, identity: RequestIdentity) -> Result<RequestTicket> {
+	if !valid_id(&identity.owner)
+		|| !valid_id(&identity.request_id)
+		|| !matches!(
+			identity.tool_name.as_str(),
+			"host_list" | "host_health" | "effective_config"
+		) {
+		bail!("reserved request identity unavailable");
+	}
+	let _guard = store_lock()?;
+	let directory = open_store(root)?;
+	match read_record(&directory, &format!("{}.json", identity.request_id)) {
+		Ok(_) => bail!("reserved request already exists; never redispatch"),
+		Err(error)
+			if error
+				.downcast_ref::<std::io::Error>()
+				.is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) => {}
+		Err(_) => bail!("reserved request unavailable; never redispatch"),
+	}
+	let mut records = entries(&directory)?;
+	retain_before_begin(&directory, &identity.owner, &mut records)?;
+	let record = Record {
+		request_id: identity.request_id,
+		owner: identity.owner,
+		tool_name: identity.tool_name,
+		state: DurableState::Unknown,
+		accepted_unix_ms: identity.accepted_unix_ms,
+		elapsed_ms: None,
+	};
+	save(&directory, &record, false)?;
+	let active = Arc::new(AtomicBool::new(true));
+	active_registry()?.insert(record.request_id.clone(), Arc::downgrade(&active));
+	Ok(RequestTicket {
+		directory,
+		record,
+		started: Instant::now(),
+		active,
+		_read_pin: None,
+	})
+}
+#[cfg(not(unix))]
+fn begin_reserved_at(_root: &Path, _identity: RequestIdentity) -> Result<RequestTicket> {
+	bail!("private request auditing requires Unix descriptor support")
+}
+/// Only a newly published server-generated async reservation may call this.
+/// Existing key bindings never rebuild a ticket, even when the audit record is absent.
+pub(crate) async fn begin_reserved(identity: RequestIdentity) -> Result<RequestTicket> {
+	let root = runtime_config()?.state_dir.clone();
+	tokio::task::spawn_blocking(move || begin_reserved_at(&root, identity))
+		.await
+		.map_err(|_| anyhow!("reserved request admission unavailable; never redispatch"))?
 }
 
 #[cfg(unix)]

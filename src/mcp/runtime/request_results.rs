@@ -110,7 +110,7 @@ fn digest(data: &[u8]) -> String {
 		.map(|b| format!("{b:02x}"))
 		.collect()
 }
-fn policy_binding() -> Result<String> {
+pub(crate) fn policy_binding() -> Result<String> {
 	let mut hash = Sha256::new();
 	hash.update(b"hepta-runtime/result-policy/v1\0");
 	hash.update(serde_json::to_vec(runtime_config()?)?);
@@ -326,14 +326,18 @@ fn identity_value(id: &str) -> Value {
 	json!({"request_id":id,"automatic_retry":false,"delivery_proven":false})
 }
 pub fn exposes_identity(tool: &str) -> bool {
-	eligible(tool) || matches!(tool, "request_status" | "request_result")
+	eligible(tool)
+		|| matches!(
+			tool,
+			"request_status" | "request_result" | "request_start" | "request_cancel"
+		)
 }
 /// Preview the largest fixed acknowledgement before any result is retained.
 /// DTO methods are read-only; an over-cap result becomes an explicit same-id refusal.
 pub fn reserve_final_wire(result: &mut Result<CallToolResponse, ErrorData>, tool: &str, id: &str) {
 	let cap = match tool {
 		"effective_config" => 256 * 1024,
-		"request_status" | "request_result" => 64 * 1024,
+		"request_status" | "request_result" | "request_start" | "request_cancel" => 64 * 1024,
 		_ => return,
 	};
 	let mut candidate = result.clone();

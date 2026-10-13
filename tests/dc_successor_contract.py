@@ -6,6 +6,8 @@ The v7 credential metadata descriptions are approved by an exact file digest.
 That branch never relaxes the historical v6 requirement that all v5 definitions
 remain exact, nor accepts an unknown self-consistent catalog by its tool count. V8 adds only
 two bounded result lookup definitions while preserving all 58 V7 definitions.
+V9 adds only two owned read-request lifecycle definitions and preserves all
+60 V8 definitions exactly; counts never approve an unreviewed digest.
 """
 import hashlib
 import pathlib
@@ -18,13 +20,15 @@ from mcp_tool_contract import ToolContract
 ADDITIONS = {"host_health", "read_multiple_files", "search_start", "search_results", "search_list", "search_stop"}
 AUDIT_CONFIG_ADDITIONS = {"effective_config", "request_history"}
 V8_RESULT_ADDITIONS = {"request_status", "request_result"}
+V9_ASYNC_ADDITIONS = {"request_start", "request_cancel"}
 V7_OWNERSHIP_CHANGED = {"request_history", "search_start", "search_results", "search_list", "search_stop"}
 V4_SHA256 = "d36610d575146805f4c02d89210abd360b4d42acc8736d1966f20d0d724704b1"
 V5_SHA256 = "f3fd365ae69e1189c550c4314c4fdfb12f4c80d8cc86d1bc0aca6bd1bf7c4cba"
 V6_SHA256 = "de23cec290a0c22d248575c92b656d2a194a8306b85cc92b68aedea4fe0db3c8"
 V7_SHA256 = "8ad53842e4aa41bbd1567ed99e956088baafea108b6fb0b9a8df979c72c794cc"
 V8_SHA256 = "b64769210b9913fbdab28f7d0e95b7ef300d8710b3f1eeea74afcfac25b08318"
-REVIEWED_SUCCESSORS = {V5_SHA256: 5, V6_SHA256: 6, V7_SHA256: 7, V8_SHA256: 8}
+V9_SHA256 = "3eb628812d0c70b9af8393ecf9d0ce47f69b1438a134148f75ae2dd3132e6761"
+REVIEWED_SUCCESSORS = {V5_SHA256: 5, V6_SHA256: 6, V7_SHA256: 7, V8_SHA256: 8, V9_SHA256: 9}
 
 def frozen(version, digest):
     return ToolContract.load(ROOT / f"deploy/contracts/hepta-runtime-full-operator-v{version}.json", digest)
@@ -39,10 +43,12 @@ def verify_successor(tools, path):
     contract.verify(tools)
     baseline = frozen(4, V4_SHA256)
     expected = ADDITIONS if version == 5 else ADDITIONS | AUDIT_CONFIG_ADDITIONS
-    if version == 8:
+    if version in (8, 9):
         expected |= V8_RESULT_ADDITIONS
+    if version == 9:
+        expected |= V9_ASYNC_ADDITIONS
     assert set(contract.by_name) - set(baseline.by_name) == expected, "unexpected successor additions"
-    assert len(contract.tools) == (56 if version == 5 else 60 if version == 8 else 58), "unexpected successor tool count"
+    assert len(contract.tools) == (56 if version == 5 else 62 if version == 9 else 60 if version == 8 else 58), "unexpected successor tool count"
     assert all(contract.by_name[name] == value for name, value in baseline.by_name.items()), "v4 definition drift"
     if version == 6:
         v5 = frozen(5, V5_SHA256)
@@ -56,4 +62,8 @@ def verify_successor(tools, path):
         v7 = frozen(7, V7_SHA256)
         assert set(contract.by_name) - set(v7.by_name) == V8_RESULT_ADDITIONS, "v8 name drift"
         assert all(contract.by_name[name] == value for name, value in v7.by_name.items()), "v7 definition drift"
+    elif version == 9:
+        v8 = frozen(8, V8_SHA256)
+        assert set(contract.by_name) - set(v8.by_name) == V9_ASYNC_ADDITIONS, "v9 name drift"
+        assert all(contract.by_name[name] == value for name, value in v8.by_name.items()), "v8 definition drift"
     return [tool for tool in tools if tool["name"] in baseline.by_name]

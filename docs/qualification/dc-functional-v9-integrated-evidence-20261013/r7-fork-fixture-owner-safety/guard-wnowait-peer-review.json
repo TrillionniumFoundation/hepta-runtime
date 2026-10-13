@@ -1,0 +1,26 @@
+{
+  "active_source_modified": false,
+  "findings": [
+    "MetadataLock is private and non-Clone; created only after successful LOCK_EX|LOCK_NB, Drop explicitly LOCK_UN before inner File close.",
+    "Controller long-lived ownership lease is unchanged; failed external metadata flock does not construct a guard or unlock a foreign lock.",
+    "Linux child fork branch uses close/write/pause/_exit only, without Rust allocation or destructors.",
+    "OwnedChild stores Option<PID>, nonreaping waitid(WEXITED|WNOHANG|WNOWAIT) probes retain zombie ownership, ECHILD disarms before assertion.",
+    "Drop signals only the retained owned child PID, then waitpid reaps with EINTR loop.",
+    "Original inherited-open-file-description counterexample is retained; no retries or weakened quota assertions."
+  ],
+  "fingerprint_origin": "root frozen r8 final source map; inspected source files verified separately",
+  "independent_semantics_fixture_job_id": "1a136cbba1d-b2f-5db",
+  "independent_semantics_fixture_receipt_sha256": "805ebc6982a8e1eae5029e88e6475513a3d8bb1cd7e0da9a7d40431124142a23",
+  "p0_findings": [],
+  "product_compiled_or_installed_by_reviewer": false,
+  "review_kind": "read-only source review, no compilation or native qualification claimed",
+  "reviewed_files": {
+    "src/mcp/runtime/request_async.rs": "a446137925b345f30b7d2a75681eb6d14f1ea4c5b60735fb5aa439b5bf56f661",
+    "src/mcp/runtime/request_async_tests.rs": "2312a499e242fb60a492035e406dd5541a460a1cd926667440096faae7fb5749"
+  },
+  "reviewed_source_fingerprint": "b376418a2b3346a707dfd2592f99ce6fbceb6c86c8445995069f1e4ac0ed32bf",
+  "root_counterexample_origin": "root reported real old-source Rust EAGAIN counterexample; not reclassified as final b376 source qualification",
+  "root_original_counterexample_directory": "docs/qualification/dc-functional-v9-integrated-evidence-20261013/r3-metadata-lock-fork-regression",
+  "schema": "hepta-v9-metadata-lock-source-peer-review-v1",
+  "source_review_passed": true
+}
