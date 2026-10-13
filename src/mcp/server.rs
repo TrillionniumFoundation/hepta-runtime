@@ -261,6 +261,8 @@ const SHELL_HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_
 pub struct OctofsServer {
 	/// Opaque native-session owner; failed entropy disables searches.
 	search_owner: Arc<Option<String>>,
+	/// Trusted metadata authority, fixed for each native session.
+	owner_binding: Arc<runtime::caller_scope::SessionOwnerBinding>,
 	/// Per-session working directory state.
 	workdir: Arc<SessionWorkdir>,
 	/// Whether the session context (workdir) has been applied from client
@@ -287,6 +289,7 @@ impl OctofsServer {
 	pub fn with_root(root: PathBuf) -> Self {
 		Self {
 			search_owner: Arc::new(runtime::search_jobs::new_owner_id().ok()),
+			owner_binding: Arc::new(runtime::caller_scope::SessionOwnerBinding::default()),
 			workdir: Arc::new(SessionWorkdir::new(root)),
 			session_applied: Arc::new(std::sync::atomic::AtomicBool::new(false)),
 			subscriptions: Arc::new(SubscriptionRegistry::default()),
@@ -402,26 +405,27 @@ impl OctofsServer {
 	}
 
 	#[tool(
-		title = "Read Native Session Request History",
+		title = "Read Credential or Native Session Request History",
 		annotations(
 			read_only_hint = true,
 			destructive_hint = false,
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Read bounded redacted dispatch metadata owned by this native MCP session, with an independent retained-record cursor. Stores only server request identity, canonical tool name, timing and observed status; never parameters, output, errors, paths or credentials. Unknown means effects may have occurred: never replay automatically. Records do not prove response delivery, business success, authenticated ChatGPT caller isolation or secure resume after session/service restart. Transport-invalid requests and facade-local refusals are outside native dispatch history."
+		description = "Read bounded redacted dispatch metadata owned by the verified private HTTP operator credential; the same credential resumes its retained metadata after reconnect or controller restart. All users sharing that credential share this scope; this is not authenticated ChatGPT caller isolation. Stdio remains native-session-only. Independent retained-record cursors; server request identity, canonical tool name, timing and observed status only. Unknown effects must never be replayed automatically. Records prove neither delivery nor business success. Transport-invalid requests and facade-local refusals are outside native dispatch history."
 	)]
 	async fn request_history(
 		&self,
 		Parameters(params): Parameters<runtime::request_audit::RequestHistoryParams>,
+		context: RequestContext<RoleServer>,
 	) -> Result<String, String> {
-		let owner = self
-			.search_owner
-			.as_ref()
-			.as_deref()
-			.ok_or_else(|| "native session entropy unavailable".to_string())?;
-		runtime::request_audit::history(owner, params)
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::request_audit::history(scope.owner(), params)
 			.await
+			.and_then(|result| scope.annotate(result, false))
 			.map_err(|error| error.to_string())
 	}
 
@@ -932,19 +936,20 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = false
 		),
-		description = "Start a bounded background native file-name or literal UTF-8 content search under one configured read root. No shell or arbitrary targets. Refuses symlinks and hard links, skips binary content and bounds traversal, bytes, results and time. Owner is the authenticated native MCP session, never caller input. Results become immutable paginated snapshots when terminal; not regex or gitignore parity. A service restart leaves unfinished work interrupted and does not grant the new session access to old searches."
+		description = "Start a bounded background file-name or literal UTF-8 content search under one configured read root. No shell or arbitrary targets. Refuses symlinks and hard links; skips binary content and bounds traversal, bytes, results and time. HTTP ownership is the verified private operator credential, shared by all its users; stdio ownership remains this native session. Never takes caller-selected ownership. The same HTTP credential can resume retained metadata and immutable terminal pages after reconnect or controller restart only while the current host binding and read-root policy authorize access; unfinished searches become interrupted without relaunch. Not authenticated ChatGPT caller isolation, running-program resume, regex or gitignore parity."
 	)]
 	async fn search_start(
 		&self,
 		Parameters(params): Parameters<runtime::search_jobs::SearchStartParams>,
+		context: RequestContext<RoleServer>,
 	) -> Result<String, String> {
-		let owner = self
-			.search_owner
-			.as_ref()
-			.as_deref()
-			.ok_or_else(|| "search session entropy unavailable".to_string())?;
-		runtime::search_jobs::search_start(owner, params)
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::search_jobs::search_start(scope.owner(), params)
 			.await
+			.map(|result| scope.annotate_search_effect(result))
 			.map_err(|error| error.to_string())
 	}
 
@@ -956,43 +961,45 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Read an immutable terminal result page for a search owned by this native MCP session, using an independent row cursor. Running work reports snapshot_ready=false. Maximum 32 rows and 64 KiB per page. No cross-session lookup, host override or mutable running-page cursor; session restart resume remains unsupported."
+		description = "Read an immutable terminal page for a search owned by the verified private HTTP operator credential, or by this stdio native session. Same-credential HTTP reconnect and controller restart preserve metadata access only while the current host binding and read-root policy authorize access; credential changes never grant older ownership. Running work reports snapshot_ready=false. Maximum 32 rows and 64 KiB per page, independent row cursors. No host or owner override, running-program restore or authenticated ChatGPT caller isolation."
 	)]
 	async fn search_results(
 		&self,
 		Parameters(params): Parameters<runtime::search_jobs::SearchResultsParams>,
+		context: RequestContext<RoleServer>,
 	) -> Result<String, String> {
-		let owner = self
-			.search_owner
-			.as_ref()
-			.as_deref()
-			.ok_or_else(|| "search session entropy unavailable".to_string())?;
-		runtime::search_jobs::search_results(owner, params)
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::search_jobs::search_results(scope.owner(), params)
 			.await
+			.and_then(|result| scope.annotate(result, true))
 			.map_err(|error| error.to_string())
 	}
 
 	#[tool(
-		title = "List Session Searches",
+		title = "List Owned Searches",
 		annotations(
 			read_only_hint = true,
 			destructive_hint = false,
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "List bounded persisted searches owned by this authenticated native MCP session with independent pagination. Never lists other sessions or accepts a caller-selected owner. Old-session records remain inaccessible after native service restart."
+		description = "List bounded persisted searches owned by the verified private HTTP operator credential, shared by all its users, or this stdio native session. Independent pagination; never accepts caller-selected ownership. The same HTTP credential resumes retained metadata after reconnect or controller restart only while the current host binding and read-root policy authorize access. Revoked receipts are omitted. Stdio and legacy native-session receipts remain inaccessible to fresh sessions. Not authenticated ChatGPT caller isolation."
 	)]
 	async fn search_list(
 		&self,
 		Parameters(params): Parameters<runtime::search_jobs::SearchListParams>,
+		context: RequestContext<RoleServer>,
 	) -> Result<String, String> {
-		let owner = self
-			.search_owner
-			.as_ref()
-			.as_deref()
-			.ok_or_else(|| "search session entropy unavailable".to_string())?;
-		runtime::search_jobs::search_list(owner, params)
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::search_jobs::search_list(scope.owner(), params)
 			.await
+			.and_then(|result| scope.annotate(result, true))
 			.map_err(|error| error.to_string())
 	}
 
@@ -1004,19 +1011,20 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Request cooperative cancellation only for a bounded native search owned by this authenticated MCP session. Uses its pinned job cancellation marker, never an arbitrary PID or process signal. Repeated stop is idempotent; retained terminal snapshots are preserved."
+		description = "Request cooperative cancellation only for a bounded search owned by the verified private HTTP operator credential, or this stdio native session. Current host binding and read-root authorization are checked even for terminal receipts. Uses its pinned job cancellation marker, never an arbitrary PID or signal. Repeated stop is idempotent; retained terminal snapshots are preserved. After controller restart, unfinished searches are interrupted and are never relaunched. Not authenticated ChatGPT caller isolation."
 	)]
 	async fn search_stop(
 		&self,
 		Parameters(params): Parameters<runtime::search_jobs::SearchRefParams>,
+		context: RequestContext<RoleServer>,
 	) -> Result<String, String> {
-		let owner = self
-			.search_owner
-			.as_ref()
-			.as_deref()
-			.ok_or_else(|| "search session entropy unavailable".to_string())?;
-		runtime::search_jobs::search_stop(owner, params)
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::search_jobs::search_stop(scope.owner(), params)
 			.await
+			.map(|result| scope.annotate_search_effect(result))
 			.map_err(|error| error.to_string())
 	}
 
@@ -1915,12 +1923,18 @@ impl ServerHandler for OctofsServer {
 			.and_then(|hints| hints.read_only_hint)
 			== Some(true);
 		let ticket = if enabled {
-			let owner = self.search_owner.as_ref().as_deref().ok_or_else(|| {
-				ErrorData::internal_error("native session entropy unavailable", None)
-			})?;
+			let scope = self
+				.owner_binding
+				.resolve(&context, self.search_owner.as_ref().as_deref())
+				.map_err(|_| {
+					ErrorData::internal_error(
+						"request authority unavailable; dispatch refused",
+						None,
+					)
+				})?;
 			let canonical = known.map_or("_unknown_tool", |tool| tool.name.as_ref());
 			Some(
-				runtime::request_audit::begin(owner, canonical)
+				runtime::request_audit::begin(scope.owner(), canonical)
 					.await
 					.map_err(|_| {
 						ErrorData::internal_error(

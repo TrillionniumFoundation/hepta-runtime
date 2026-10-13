@@ -302,16 +302,24 @@ fcntl.flock(launch_lock.fileno(), fcntl.LOCK_EX)
 
 def read_json(name):
     try:
-        return json.loads((job / name).read_text(encoding="utf-8"))
-    except Exception:
+        value = json.loads((job / name).read_text(encoding="utf-8"))
+    except FileNotFoundError:
         return None
+    if not isinstance(value, dict):
+        raise ValueError("remote metadata must be a JSON object")
+    return value
 
 def atomic(name, value):
     target = job / name
     tmp = job / (name + ".tmp")
-    tmp.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
-    os.chmod(tmp, 0o600)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(json.dumps(value, sort_keys=True) + "\n")
+        stream.flush(); os.fsync(stream.fileno())
     os.replace(tmp, target)
+    fd = os.open(job, os.O_RDONLY)
+    try: os.fsync(fd)
+    finally: os.close(fd)
 
 stdin_text = req.pop("stdin", None)
 existing = read_json("request.json")
@@ -326,49 +334,87 @@ if existing is not None:
         raise SystemExit(0)
     raise SystemExit("ambiguous prior launch: inspect this job; do not relaunch under another key")
 else:
+    if any(os.path.lexists(job / name) for name in ("runner.py","owner-intent.json","started.json","launch.json","exit.json","stdout.log","stderr.log")):
+        raise SystemExit("prior or uncertain job artifacts exist without request binding; no launch submitted")
+    req["launch_nonce"] = os.urandom(16).hex()
     if stdin_text is not None:
         stdin_path = job / "stdin.bin"
         stdin_path.write_bytes(stdin_text.encode("utf-8"))
         os.chmod(stdin_path, 0o600)
         req["stdin_path"] = str(stdin_path)
-    atomic("request.json", req)
+    fd = os.open(job / "request.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        json.dump(req, stream, sort_keys=True); stream.flush(); os.fsync(stream.fileno())
+    fd = os.open(job, os.O_RDONLY)
+    try: os.fsync(fd)
+    finally: os.close(fd)
 runner = r'''#!/usr/bin/env python3
-import json, os, pathlib, shutil, signal, subprocess, sys, threading, time
+import fcntl, json, os, pathlib, select, shutil, signal, stat, subprocess, sys, threading, time
 job = pathlib.Path(__file__).resolve().parent
 req = json.loads((job / "request.json").read_text(encoding="utf-8"))
 
 def atomic(name, value):
     target = job / name
     tmp = job / (name + ".tmp")
-    tmp.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
-    os.chmod(tmp, 0o600)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(json.dumps(value, sort_keys=True) + "\n")
+        stream.flush(); os.fsync(stream.fileno())
     os.replace(tmp, target)
+    fd = os.open(job, os.O_RDONLY)
+    try: os.fsync(fd)
+    finally: os.close(fd)
 
 def process_identity(pid):
+    if sys.platform == "linux":
+        try:
+            ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
+            boot = pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+            return {"kind": "proc_start_ticks", "value": boot + ":" + str(ticks)} if boot else None
+        except Exception:
+            return None
     try:
-        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
-        boot = pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip()
-        return {"kind": "proc_start_ticks", "value": boot + ":" + str(ticks)}
-    except Exception:
-        pass
-    try:
-        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True).strip()
+        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True, timeout=3).strip()
         return {"kind": "ps_lstart", "value": value} if value else None
     except Exception:
         return None
 
 os.umask(0o077)
+owner_fd = os.open(job / "owner.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+owner_stat = os.fstat(owner_fd)
+if not stat.S_ISREG(owner_stat.st_mode) or owner_stat.st_uid != os.geteuid() or owner_stat.st_nlink != 1 or owner_stat.st_mode & 0o077:
+    raise SystemExit("unsafe supervisor lifetime lock")
+fcntl.flock(owner_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+if any(os.path.lexists(job / name) for name in ("owner-intent.json","started.json","exit.json")):
+    raise SystemExit("prior supervisor intent or binding exists; workload must not be replayed")
+if sys.platform == "linux":
+    if not hasattr(os, "waitid") or not hasattr(os, "WNOWAIT"):
+        raise SystemExit("non-reaping child identity observation unavailable; no workload submitted")
+elif not all(hasattr(select, name) for name in ("kqueue","kevent","KQ_FILTER_PROC","KQ_NOTE_EXIT")):
+    raise SystemExit("non-reaping child exit observation unavailable; no workload submitted")
+owner_identity = process_identity(os.getpid())
+if not owner_identity:
+    raise SystemExit("supervisor start identity unavailable; no workload submitted")
+owner_binding = {"at_unix_ms":int(time.time()*1000),"job_id":req["job_id"],
+    "launch_nonce":req["launch_nonce"],"supervisor_pid":os.getpid(),
+    "supervisor_uid":os.geteuid(),"supervisor_identity":owner_identity,
+    "invocation_id":os.environ.get("INVOCATION_ID")}
+def publish_owner(name):
+    fd = os.open(job / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        json.dump(owner_binding, stream, sort_keys=True); stream.flush(); os.fsync(stream.fileno())
+    fd = os.open(job, os.O_RDONLY)
+    try: os.fsync(fd)
+    finally: os.close(fd)
+# Even interrupted publication is a tombstone: later owners cannot replay it.
+publish_owner("owner-intent.json")
+publish_owner("started.json")
 child = None
 cancel_requested = False
 
 def stop_handler(signum, _frame):
     global cancel_requested
     cancel_requested = True
-    if child is not None and child.poll() is None:
-        try:
-            os.killpg(child.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
 
 signal.signal(signal.SIGTERM, stop_handler)
 signal.signal(signal.SIGINT, stop_handler)
@@ -377,11 +423,6 @@ if req.get("nice"):
         os.nice(int(req["nice"]))
     except OSError:
         pass
-atomic("started.json", {
-    "at_unix_ms": int(time.time() * 1000),
-    "supervisor_pid": os.getpid(),
-    "supervisor_identity": process_identity(os.getpid()),
-})
 out = open(job / "stdout.log", "ab", buffering=0)
 err = open(job / "stderr.log", "ab", buffering=0)
 stdin_handle = subprocess.DEVNULL
@@ -463,24 +504,43 @@ for reader in readers:
 timed_out = False
 timeout = req.get("timeout_seconds")
 deadline = time.monotonic() + float(timeout) if timeout else None
-stop_deadline = None
-while child.poll() is None:
+stop_deadline, kill_submitted = None, False
+exit_queue, exit_seen = None, False
+if sys.platform != "linux":
+    exit_queue = select.kqueue()
+    try:
+        exit_queue.control([select.kevent(child.pid, filter=select.KQ_FILTER_PROC,
+            flags=select.KQ_EV_ADD | select.KQ_EV_ENABLE, fflags=select.KQ_NOTE_EXIT)], 0, 0)
+    except ProcessLookupError:
+        exit_seen = True
+while True:
+    # waitid(WNOWAIT) / kqueue observes exit without reaping. The original
+    # leader holds its PID/PGID until this one path completes all group signals.
+    if sys.platform == "linux":
+        exited = os.waitid(os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+    else:
+        exit_seen = exit_seen or bool(exit_queue.control([], 1, 0))
+        exited = True if exit_seen else None
     now = time.monotonic()
-    if deadline is not None and now >= deadline:
+    if exited is None and deadline is not None and now >= deadline:
         timed_out = True
-    if timed_out or cancel_requested:
+    stopping = timed_out or cancel_requested
+    if stopping:
         if stop_deadline is None:
             stop_deadline = now + 8
-            try:
-                os.killpg(child.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-        elif now >= stop_deadline:
-            try:
-                os.killpg(child.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            try: os.killpg(child.pid, signal.SIGTERM)
+            except ProcessLookupError: pass
+        elif now >= stop_deadline and not kill_submitted:
+            kill_submitted = True
+            try: os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError: pass
+        if exited is not None and (all(log_eof.values()) or now >= stop_deadline):
+            break
+    elif exited is not None:
+        break
     time.sleep(.05)
+child.wait()
+if exit_queue is not None: exit_queue.close()
 rc = 124 if timed_out else child.returncode
 for label, reader in zip(("stdout", "stderr"), readers):
     reader.join(timeout=2)
@@ -511,7 +571,7 @@ cmd = [
     "--unit", req["unit"],
     "--property", "KillMode=control-group",
     "--property", "TimeoutStopSec=10s",
-    "--property", f"Description=Hepta Runtime job {req['job_id']}",
+    "--property", f"Description=Hepta Runtime job {req['job_id']} {req['launch_nonce']}",
 ]
 if req.get("cpu_quota_percent"):
     cmd += ["--property", f"CPUQuota={int(req['cpu_quota_percent'])}%"]
@@ -567,22 +627,42 @@ job = pathlib.Path(q["job_dir"])
 
 def read_json(name):
     try:
-        return json.loads((job / name).read_text(encoding="utf-8"))
-    except Exception:
+        value = json.loads((job / name).read_text(encoding="utf-8"))
+    except FileNotFoundError:
         return None
+    if not isinstance(value, dict):
+        raise ValueError("remote metadata must be a JSON object")
+    return value
 
 def process_identity(pid):
+    if sys.platform == "linux":
+        try:
+            ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
+            boot = pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+            return {"kind": "proc_start_ticks", "value": boot + ":" + str(ticks)} if boot else None
+        except Exception:
+            return None
     try:
-        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
-        boot = pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip()
-        return {"kind": "proc_start_ticks", "value": boot + ":" + str(ticks)}
-    except Exception:
-        pass
-    try:
-        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True).strip()
+        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True, timeout=3).strip()
         return {"kind": "ps_lstart", "value": value} if value else None
     except Exception:
         return None
+
+def valid_owner(request, started, systemd=False):
+    nonce = request.get("launch_nonce")
+    identity = started.get("supervisor_identity")
+    return (isinstance(nonce, str) and len(nonce) == 32 and all(c in "0123456789abcdef" for c in nonce) and
+        started.get("job_id") == request.get("job_id") and started.get("launch_nonce") == nonce and
+        type(started.get("supervisor_uid")) is int and started["supervisor_uid"] == os.geteuid() and
+        type(started.get("supervisor_pid")) is int and 1 < started["supervisor_pid"] <= 2147483647 and
+        isinstance(identity, dict) and identity.get("kind") == ("proc_start_ticks" if sys.platform == "linux" else "ps_lstart") and
+        isinstance(identity.get("value"), str) and bool(identity["value"]) and
+        (not systemd or (isinstance(started.get("invocation_id"), str) and len(started["invocation_id"]) == 32 and
+            all(c in "0123456789abcdef" for c in started["invocation_id"]))))
+
+def process_uid(pid):
+    if sys.platform == "linux": return pathlib.Path(f"/proc/{pid}").stat().st_uid
+    return int(subprocess.check_output(["ps", "-p", str(pid), "-o", "uid="], text=True, timeout=3).strip())
 
 def final_status(exit_data):
     if exit_data.get("timed_out"):
@@ -610,7 +690,7 @@ def one_status():
         env.setdefault("DBUS_SESSION_BUS_ADDRESS", f"unix:path=/run/user/{uid}/bus")
         p = subprocess.run(
             ["systemctl", "--user", "show", q["unit"], "--no-pager",
-             "--property=LoadState,ActiveState,SubState,Result,ExecMainPID,ExecMainCode,ExecMainStatus"],
+             "--property=LoadState,ActiveState,SubState,Result,ExecMainPID,ExecMainCode,ExecMainStatus,InvocationID,Description"],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
         props = {}
         for line in p.stdout.splitlines():
@@ -621,9 +701,24 @@ def one_status():
         exit_data = read_json("exit.json")
         if exit_data:
             return final_status(exit_data)
+        started = read_json("started.json") or {}
+        nonce = request.get("launch_nonce")
+        invocation = started.get("invocation_id")
+        if not valid_owner(request, started, systemd=True):
+            return {"state":"owner_unknown","reason":"frozen supervisor binding unavailable",
+                    "status_authoritative":False,"automatic_retry":False}
+        if props.get("LoadState") != "not-found" and (props.get("InvocationID") != invocation or
+                props.get("Description") != f"Hepta Runtime job {q['job_id']} {nonce}"):
+            return {"state":"owner_unknown","reason":"unit incarnation differs from frozen supervisor",
+                    "status_authoritative":False,"automatic_retry":False}
         active = props.get("ActiveState")
         sub = props.get("SubState")
         if active in ("active", "activating") and sub not in ("exited", "dead"):
+            try: matching = process_identity(started["supervisor_pid"]) == started["supervisor_identity"] and process_uid(started["supervisor_pid"]) == started["supervisor_uid"]
+            except (OSError, ValueError, subprocess.SubprocessError): matching = False
+            if not matching:
+                return {"state":"owner_unknown","reason":"frozen supervisor PID/start/UID unavailable or changed",
+                        "status_authoritative":False,"automatic_retry":False}
             state = "running"
         elif active == "failed":
             state = "failed"
@@ -648,6 +743,9 @@ def one_status():
     started = read_json("started.json") or {}
     pid = int(started.get("supervisor_pid") or launch.get("launcher_pid") or 0)
     expected = started.get("supervisor_identity")
+    if not valid_owner(request, started):
+        return {"state":"owner_unknown","reason":"frozen supervisor binding unavailable",
+                "status_authoritative":False,"automatic_retry":False}
     actual = process_identity(pid) if pid else None
     running = bool(pid and actual is not None and (expected is not None and expected == actual))
     return {"state": "running" if running else "lost", "backend": launch.get("backend", "detached"), "pid": pid, "identity": actual}
@@ -716,38 +814,54 @@ job = pathlib.Path(q["job_dir"])
 
 def read_json(name):
     try:
-        return json.loads((job / name).read_text(encoding="utf-8"))
-    except Exception:
+        value = json.loads((job / name).read_text(encoding="utf-8"))
+    except FileNotFoundError:
         return None
+    if not isinstance(value, dict):
+        raise ValueError("remote metadata must be a JSON object")
+    return value
 
 def atomic(name, value):
     target = job / name
     tmp = job / (name + ".tmp")
-    tmp.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
-    os.chmod(tmp, 0o600)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(json.dumps(value, sort_keys=True) + "\n")
+        stream.flush(); os.fsync(stream.fileno())
     os.replace(tmp, target)
+    fd = os.open(job, os.O_RDONLY)
+    try: os.fsync(fd)
+    finally: os.close(fd)
 
 def process_identity(pid):
+    if sys.platform == "linux":
+        try:
+            ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
+            boot = pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+            return {"kind": "proc_start_ticks", "value": boot + ":" + str(ticks)} if boot else None
+        except Exception:
+            return None
     try:
-        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
-        boot = pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip()
-        return {"kind": "proc_start_ticks", "value": boot + ":" + str(ticks)}
-    except Exception:
-        pass
-    try:
-        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True).strip()
+        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True, timeout=3).strip()
         return {"kind": "ps_lstart", "value": value} if value else None
     except Exception:
         return None
 
-def command_line(pid):
-    try:
-        return pathlib.Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
-    except Exception:
-        try:
-            return subprocess.check_output(["ps", "-p", str(pid), "-o", "command="], text=True).strip()
-        except Exception:
-            return ""
+def valid_owner(request, started, systemd=False):
+    nonce = request.get("launch_nonce")
+    identity = started.get("supervisor_identity")
+    return (isinstance(nonce, str) and len(nonce) == 32 and all(c in "0123456789abcdef" for c in nonce) and
+        started.get("job_id") == request.get("job_id") and started.get("launch_nonce") == nonce and
+        type(started.get("supervisor_uid")) is int and started["supervisor_uid"] == os.geteuid() and
+        type(started.get("supervisor_pid")) is int and 1 < started["supervisor_pid"] <= 2147483647 and
+        isinstance(identity, dict) and identity.get("kind") == ("proc_start_ticks" if sys.platform == "linux" else "ps_lstart") and
+        isinstance(identity.get("value"), str) and bool(identity["value"]) and
+        (not systemd or (isinstance(started.get("invocation_id"), str) and len(started["invocation_id"]) == 32 and
+            all(c in "0123456789abcdef" for c in started["invocation_id"]))))
+
+def process_uid(pid):
+    if sys.platform == "linux": return pathlib.Path(f"/proc/{pid}").stat().st_uid
+    return int(subprocess.check_output(["ps", "-p", str(pid), "-o", "uid="], text=True, timeout=3).strip())
 
 request = read_json("request.json")
 if not request or request.get("job_id") != q["job_id"]:
@@ -756,58 +870,47 @@ if read_json("exit.json"):
     print(json.dumps({"job_id": q["job_id"], "result": "already_exited"}))
     raise SystemExit(0)
 launch = read_json("launch.json") or {}
-atomic("cancel-request.json", {"at_unix_ms": int(time.time() * 1000)})
-grace = max(0.0, min(float(q.get("grace_seconds", 10)), 30.0))
-result = "not_running"
-if launch.get("backend") == "systemd":
-    uid = os.getuid()
-    env = os.environ.copy()
-    env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
-    env.setdefault("DBUS_SESSION_BUS_ADDRESS", f"unix:path=/run/user/{uid}/bus")
-    p = subprocess.run(["systemctl", "--user", "stop", q["unit"]], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-    result = "stop_requested" if p.returncode == 0 else "stop_failed"
-    if p.returncode != 0:
-        print(json.dumps({"job_id": q["job_id"], "result": result, "stderr": p.stderr.strip()}))
-        raise SystemExit(1)
-else:
-    started = read_json("started.json") or {}
-    pid = int(started.get("supervisor_pid") or launch.get("launcher_pid") or 0)
-    expected = started.get("supervisor_identity")
-    actual = process_identity(pid) if pid else None
-    cmdline = command_line(pid) if pid else ""
-    valid = bool(pid and actual is not None and str(job / "runner.py") in cmdline)
-    valid = valid and expected is not None and expected == actual
-    if not valid:
-        raise SystemExit("refusing to signal PID: ownership verification failed")
-    try:
-        os.killpg(pid, signal.SIGTERM)
-        result = "term_sent"
-    except ProcessLookupError:
-        result = "not_running"
+started = read_json("started.json") or {}
+nonce = request.get("launch_nonce")
+pid = int(started.get("supervisor_pid") or 0)
+expected = started.get("supervisor_identity")
+expected_uid = started.get("supervisor_uid")
+if not valid_owner(request, started, systemd=launch.get("backend") == "systemd"):
+    raise SystemExit("frozen supervisor binding unavailable; no cancellation submitted")
+# Never stop by a reusable unit name. This descriptor stays bound to the
+# original supervisor even if its PID or systemd unit name is later recycled.
+atomic_identity = sys.platform == "linux"
+fd = None
+try:
+    if atomic_identity:
+        if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+            raise SystemExit("atomic supervisor signalling unavailable; no cancellation submitted")
+        fd = os.pidfd_open(pid, 0)
+    if process_identity(pid) != expected or process_uid(pid) != expected_uid:
+        raise SystemExit("frozen supervisor identity or UID changed; no cancellation submitted")
+    atomic("cancel-request.json", {"at_unix_ms": int(time.time() * 1000),
+           "job_id": q["job_id"], "launch_nonce": nonce})
+    if atomic_identity:
+        signal.pidfd_send_signal(fd, signal.SIGTERM, None, 0)
+    else:
+        # macOS has no pidfd. Retain its explicitly non-atomic account scope.
+        if process_identity(pid) != expected or process_uid(pid) != expected_uid:
+            raise SystemExit("supervisor changed before best-effort signal")
+        os.kill(pid, signal.SIGTERM)
+    grace = max(0.0, min(float(q.get("grace_seconds", 10)), 30.0))
     deadline = time.monotonic() + grace
     while time.monotonic() < deadline:
-        if read_json("exit.json") or not command_line(pid):
+        if read_json("exit.json") or process_identity(pid) != expected:
             break
-        time.sleep(0.2)
-    if command_line(pid) and not read_json("exit.json"):
-        if process_identity(pid) != expected or str(job / "runner.py") not in command_line(pid):
-            raise SystemExit("refusing SIGKILL: process identity changed")
-        # The workload has its own process group. Kill it only after verifying
-        # the stored child identity, before terminating the supervisor itself.
-        child_record = read_json("child.json") or {}
-        child_pid = int(child_record.get("pid") or 0)
-        if child_pid and child_record.get("identity") == process_identity(child_pid):
-            try:
-                if os.getpgid(child_pid) == child_pid:
-                    os.killpg(child_pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        try:
-            os.killpg(pid, signal.SIGKILL)
-            result = "kill_sent"
-        except ProcessLookupError:
-            pass
-print(json.dumps({"job_id": q["job_id"], "result": result}, sort_keys=True))
+        time.sleep(.1)
+    # The original runner owns workload termination, escalation and output
+    # drain. Never force-kill a potentially recycled child group from here.
+    result = "stop_requested" if launch.get("backend") == "systemd" else "term_sent"
+    print(json.dumps({"job_id":q["job_id"],"result":result,
+          "atomic_identity":atomic_identity,"supervisor_pid":pid,
+          "termination_confirmed":False,"reconcile_via":"process_status"}, sort_keys=True))
+finally:
+    if fd is not None: os.close(fd)
 "#;
 
 fn validate_start(params: &ProcessStartParams) -> Result<()> {
@@ -1047,8 +1150,18 @@ fn retain_cancel_outcome(job_id: &str, outcome: Result<Value>) -> Value {
 				)
 			}) {
 			// An acknowledgement requests or sends a signal; it is not terminal proof.
-			return json!({"job_id":job_id,"result":value["result"],"automatic_retry":false,
+			let mut retained = json!({"job_id":job_id,"result":value["result"],"automatic_retry":false,
 				"termination_confirmed":false,"reconcile_via":"process_status"});
+			if value["atomic_identity"].is_boolean() {
+				retained["atomic_identity"] = value["atomic_identity"].clone();
+			}
+			if value["supervisor_pid"]
+				.as_u64()
+				.is_some_and(|pid| pid > 1 && pid <= i32::MAX as u64)
+			{
+				retained["supervisor_pid"] = value["supervisor_pid"].clone();
+			}
+			return retained;
 		}
 	}
 	json!({"job_id":job_id,"result":"cancel_unknown","outcome":"unknown",
@@ -1302,7 +1415,31 @@ pub fn list_jobs(params: ProcessListParams) -> Result<String> {
 		.into_iter()
 		.filter(|record| params.host.as_ref().is_none_or(|host| &record.host == host))
 		.collect();
-	Ok(serde_json::to_string_pretty(&json!({"jobs": records}))?)
+	job_inventory_response(&records)
+}
+
+fn job_inventory_response(records: &[JobRecord]) -> Result<String> {
+	const MAX_INVENTORY_WIRE_BYTES: usize = 1024 * 1024;
+	let jobs: Vec<Value> = records
+		.iter()
+		.map(|record| {
+			json!({
+				"id":record.id,"host":record.host,"created_unix_ms":record.created_unix_ms,
+				"execution_mode":record.execution_mode,"launch_state":record.launch_state,
+			})
+		})
+		.collect();
+	let text = serde_json::to_string_pretty(&json!({"jobs":jobs,"total":records.len(),
+		"inventory_complete":true,"status_authoritative":false}))?;
+	let wire = serde_json::to_vec(&rmcp::model::CallToolResult::success(vec![
+		rmcp::model::ContentBlock::text(text.clone()),
+	]))?;
+	if wire.len() > MAX_INVENTORY_WIRE_BYTES {
+		bail!(
+			"Durable job inventory exceeds the 1 MiB response budget; narrow using the configured host filter. No partial inventory returned."
+		);
+	}
+	Ok(text)
 }
 
 #[cfg(test)]

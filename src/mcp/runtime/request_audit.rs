@@ -1,7 +1,7 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! Private native-session request metadata. Unknown durable intent precedes dispatch;
+//! Private ownership-scoped request metadata. Unknown durable intent precedes dispatch;
 //! an audit completion failure never proves that an operation failed or can be retried.
 use anyhow::{anyhow, bail, Result};
 use rmcp::schemars;
@@ -38,7 +38,7 @@ pub enum AuditCompletion {
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RequestHistoryParams {
-	/// Last returned request id. Expired and other-session cursors are refused.
+	/// Last returned request id. Expired and other-owner cursors are refused.
 	#[serde(default)]
 	pub after_id: Option<String>,
 	/// At most 32 metadata records; default 32. No parameters or output are returned.

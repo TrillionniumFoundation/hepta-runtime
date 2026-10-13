@@ -81,7 +81,7 @@ pub struct SearchListParams {
 	/// Last returned opaque search id, for lexicographic pagination.
 	#[serde(default)]
 	pub after_id: Option<String>,
-	/// At most 32 session-owned receipts; default 32.
+	/// At most 32 metadata-owner-scoped receipts; default 32.
 	#[serde(default)]
 	pub limit: Option<u16>,
 }
@@ -340,6 +340,7 @@ async fn owned(directory: &Path, owner: &str, id: &str) -> Result<SearchRecord> 
 	if record.owner != owner || record.id != id {
 		bail!("search unavailable to this session");
 	}
+	pinned_host(&record).map_err(|_| anyhow!("search unavailable to this session"))?;
 	if reconcile(&mut record, instance()?) {
 		save(directory, &record).await?;
 	}
@@ -511,7 +512,12 @@ pub async fn search_list(owner: &str, params: SearchListParams) -> Result<String
 	let all = records(&directory).await?;
 	let owned: Vec<_> = all
 		.iter()
-		.filter(|r| r.owner == owner && params.after_id.as_ref().is_none_or(|id| &r.id > id))
+		// Revoked hosts/roots must not leak even terminal or interrupted receipt metadata.
+		.filter(|r| {
+			r.owner == owner
+				&& pinned_host(r).is_ok()
+				&& params.after_id.as_ref().is_none_or(|id| &r.id > id)
+		})
 		.collect();
 	let mut page = Vec::new();
 	for record in owned.iter().take(limit) {

@@ -5,6 +5,61 @@
 use super::*;
 
 #[test]
+fn large_job_inventory_is_complete_redacted_and_wire_bounded() {
+	let records: Vec<JobRecord> = (0..3431)
+		.map(|index| {
+			let mut record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+			record.id = format!("owned-job-{index:06}");
+			record.host = format!("configured-host-{}", index % 6);
+			record.args = vec!["PRIVATE_ARG".repeat(400)];
+			record.cwd = Some("/PRIVATE_CWD".to_owned());
+			record.ssh_target = "PRIVATE_SSH".to_owned();
+			record.remote_job_dir = "/PRIVATE_REMOTE_STATE".to_owned();
+			record.executable = "/PRIVATE_EXECUTABLE".to_owned();
+			record.env_keys = vec!["PRIVATE_ENV".to_owned()];
+			record
+		})
+		.collect();
+	let legacy = serde_json::to_string_pretty(&json!({"jobs":records})).unwrap();
+	let legacy_wire = serde_json::to_vec(&rmcp::model::CallToolResult::success(vec![
+		rmcp::model::ContentBlock::text(legacy),
+	]))
+	.unwrap();
+	assert!(legacy_wire.len() > 8 * 1024 * 1024);
+	let text = job_inventory_response(&records).unwrap();
+	let wire = serde_json::to_vec(&rmcp::model::CallToolResult::success(vec![
+		rmcp::model::ContentBlock::text(text.clone()),
+	]))
+	.unwrap();
+	assert!(wire.len() <= 1024 * 1024);
+	assert!(!text.contains("PRIVATE_"));
+	let value: Value = serde_json::from_str(&text).unwrap();
+	assert_eq!(value["inventory_complete"], true);
+	assert_eq!(value["total"], 3431);
+	assert_eq!(value["status_authoritative"], false);
+	for (record, summary) in records.iter().zip(value["jobs"].as_array().unwrap()) {
+		assert_eq!(summary["id"], record.id);
+		assert_eq!(summary["host"], record.host);
+		assert_eq!(summary.as_object().unwrap().len(), 5);
+	}
+}
+
+#[test]
+fn inventory_overflow_refuses_the_whole_result_instead_of_silent_partial() {
+	let records: Vec<JobRecord> = (0..10000)
+		.map(|index| {
+			let mut record = outcome_fixture(ExecutionMode::Operator, false, "pending");
+			record.id = format!("owned-job-{index}");
+			record.host = "bounded-configured-host".repeat(10);
+			record
+		})
+		.collect();
+	let error = job_inventory_response(&records).unwrap_err().to_string();
+	assert!(error.contains("No partial inventory returned"));
+	assert!(error.contains("host filter"));
+}
+
+#[test]
 fn legacy_audit_failure_cannot_hide_existing_job_status_wait_or_output_cursors() {
 	for observation in [
 		json!({"state":"succeeded","exit_code":0,"output_complete":true}),
