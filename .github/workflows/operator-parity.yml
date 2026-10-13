@@ -54,14 +54,14 @@ jobs:
             cargo build --locked --bin hepta-runtime
             # Contract loader intentionally rejects group/other-writable files.
             # Runner/worktree umask must not change the exact frozen test bytes.
-            chmod go-w deploy/contracts/hepta-runtime-full-operator-v{1,2,3,4,5,6,7}.json
-            python3 tests/dc_functional_v7_catalog_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-v7-catalog-ci.json --contract deploy/contracts/hepta-runtime-full-operator-v7.json
-            # Private local search-helper emulation proves protocol/metadata only; never six-host SSH health.
-            python3 tests/dc_functional_v7_credential_scope_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v7.json --local-fixture --out /tmp/hepta-dc-v7-credential-scope-ci.json
-            python3 tests/dc_parity_native_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-parity-native-ci.json --verify-contract deploy/contracts/hepta-runtime-full-operator-v4.json --allow-v4-directory-move --successor-contract deploy/contracts/hepta-runtime-full-operator-v7.json
-            python3 tests/dc_parity_directory_move_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-directory-move-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v7.json
-            python3 tests/dc_parity_workspace_root_guard_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-root-guard-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v7.json
-            python3 tests/dc_parity_concurrent_text_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v7.json --waves 3 --contenders 6 --out /tmp/hepta-dc-text-concurrency-ci.json
+            chmod go-w deploy/contracts/hepta-runtime-full-operator-v{1,2,3,4,5,6,7,8}.json
+            python3 tests/dc_functional_v8_catalog_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-v8-catalog-ci.json --contract deploy/contracts/hepta-runtime-full-operator-v8.json --expected-binary-sha256 "$(sha256sum target/debug/hepta-runtime | cut -d' ' -f1)"
+            # Private local fixed-health emulation proves result-recovery protocol only; never real SSH or six-host health.
+            python3 tests/dc_functional_v8_request_results_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v8.json --out /tmp/hepta-dc-v8-request-results-ci.json
+            python3 tests/dc_parity_native_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-parity-native-ci.json --verify-contract deploy/contracts/hepta-runtime-full-operator-v4.json --allow-v4-directory-move --successor-contract deploy/contracts/hepta-runtime-full-operator-v8.json
+            python3 tests/dc_parity_directory_move_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-directory-move-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v8.json
+            python3 tests/dc_parity_workspace_root_guard_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-root-guard-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v8.json
+            python3 tests/dc_parity_concurrent_text_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v8.json --waves 3 --contenders 6 --out /tmp/hepta-dc-text-concurrency-ci.json
             python3 tests/dc_parity_v4_staging_tests.py
             python3 tests/dc_parity_v4_deployment_tests.py
             python3 -m py_compile deploy/activate_dc_parity_v4.py deploy/rollback_dc_parity_v4.py
@@ -73,6 +73,11 @@ jobs:
             python3 tests/dc_successor_stage_tests.py
             python3 -m py_compile deploy/stage_dc_successor.py tests/operator_job_identity_real_acceptance.py tests/operator_job_identity_mac_acceptance.py
             python3 -m py_compile tests/dc_functional_v7_rollback_acceptance.py tests/dc_functional_v7_real_facade_cancel_acceptance.py tests/dc_functional_v7_search_six_host_acceptance.py tests/dc_functional_v7_job_inventory_snapshot_acceptance.py
+            python3 -m py_compile tests/dc_functional_v7_rollback_host_acceptance.py tests/dc_functional_v8_search_six_host_acceptance.py tests/dc_functional_v8_real_facade_cancel_acceptance.py tests/dc_functional_v8_credential_scope_acceptance.py tests/search_effects_native_acceptance.py deploy/preflight_dc_successor.py
+            python3 tests/dc_successor_preflight_tests.py
+            python3 -B tests/dc_functional_v8_signal_fixture_safety_tests.py
+            python3 -B tests/dc_functional_v8_health_multiread_safety_tests.py
+            python3 -m py_compile tests/dc_functional_v8_signal_audit_acceptance.py tests/dc_functional_v8_job_inventory_snapshot_acceptance.py tests/dc_functional_v8_rollback_host_acceptance.py tests/dc_functional_v8_health_multiread_acceptance.py
             python3 tests/privileged_action_python_tests.py
             python3 tests/maintenance_inventory_tests.py
             python3 tests/maintenance_readiness_tests.py
@@ -99,7 +104,7 @@ jobs:
             python3 tests/model_origin_tool_ledger_tests.py
             python3 tests/multi_read_tests.py
             python3 tests/search_worker_tests.py
-            python3 -m py_compile tests/host_health_acceptance.py tests/multi_read_six_host_acceptance.py tests/search_six_host_acceptance.py tests/dc_successor_contract.py tests/dc_functional_v6_operator_six_host_acceptance.py tests/dc_functional_v6_metadata_acceptance.py tests/dc_functional_v6_real_facade_cancel_acceptance.py tests/dc_functional_v6_signal_audit_acceptance.py tests/dc_functional_v7_catalog_acceptance.py tests/dc_functional_v7_credential_scope_acceptance.py
+            python3 -m py_compile tests/host_health_acceptance.py tests/multi_read_six_host_acceptance.py tests/search_six_host_acceptance.py tests/dc_successor_contract.py tests/dc_functional_v6_operator_six_host_acceptance.py tests/dc_functional_v6_metadata_acceptance.py tests/dc_functional_v6_real_facade_cancel_acceptance.py tests/dc_functional_v6_signal_audit_acceptance.py tests/dc_functional_v7_catalog_acceptance.py tests/dc_functional_v7_credential_scope_acceptance.py tests/dc_functional_v8_catalog_acceptance.py tests/dc_functional_v8_request_results_acceptance.py
             python3 tests/dc_replacement_gate_tests.py
             python3 deploy/dc_replacement_gate.py > /tmp/hepta-dc-replacement-gate-ci.json
             python3 -m py_compile deploy/chatgpt_support_snapshot.py
@@ -138,12 +143,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: operator-v7-local-protocol-receipts-${{ github.sha }}
+          name: operator-v8-local-protocol-receipts-${{ github.sha }}
           path: |
-            /tmp/hepta-dc-v7-catalog-ci.json
-            /tmp/hepta-dc-v7-catalog-ci.facade.stderr.log
-            /tmp/hepta-dc-v7-credential-scope-ci.json
-            /tmp/hepta-dc-v7-credential-scope-ci-logs
+            /tmp/hepta-dc-v8-catalog-ci.json
+            /tmp/hepta-dc-v8-catalog-ci-logs
+            /tmp/hepta-dc-v8-request-results-ci.json
+            /tmp/hepta-dc-v8-request-results-ci-logs
           if-no-files-found: ignore
           retention-days: 14
 

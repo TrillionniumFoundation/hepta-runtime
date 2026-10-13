@@ -174,6 +174,8 @@ const CLAUDE_CHANNEL_CAPABILITY: &str = "claude/channel";
 const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"effective_config",
 	"request_history",
+	"request_status",
+	"request_result",
 	"host_health",
 	"read_multiple_files",
 	"search_start",
@@ -427,6 +429,55 @@ impl OctofsServer {
 			.await
 			.and_then(|result| scope.annotate(result, false))
 			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Owned Request Status",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read dispatch and bounded original-result retention state by an exact server-generated request id owned by the verified private HTTP credential or this stdio native session. Never accepts caller-selected owner. Retention currently supports only host_list, host_health and effective_config validated DTO results; other tools, history and result lookup are metadata-only. Configuration changes revoke retained-result access. Unknown, unavailable or overflow does not prove an effect failed; never replay automatically. Does not prove delivery, business completion, ChatGPT caller isolation or early-return asynchronous execution."
+	)]
+	async fn request_status(
+		&self,
+		Parameters(params): Parameters<runtime::request_results::RequestStatusParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|e| e.to_string())?;
+		runtime::request_results::request_status(scope.owner(), params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|e| e.to_string())
+	}
+	#[tool(
+		title = "Read Bounded Original Request Result",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Page immutable serialized original native CallToolResult bytes using an exact server-generated owned request id and independent byte offset. At most 16384 bytes per page, base64 plus full SHA256; at most 64 KiB retained per result. Only validated host_list, host_health and effective_config DTO successes are retained; arbitrary output, errors, request parameters and credentials are not stored. Original boundary includes the server request identity before retention acknowledgement and transport-version normalization. The same verified private HTTP credential may resume after restart only while the complete current policy binding is unchanged; stdio remains native-session-only. Unknown, overflow, expired or unretained results are refused without replay. Not universal DC get_tool_result equivalence, early-return async start, business completion or authenticated ChatGPT caller isolation."
+	)]
+	async fn request_result(
+		&self,
+		Parameters(params): Parameters<runtime::request_results::RequestResultParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|e| e.to_string())?;
+		runtime::request_results::request_result(scope.owner(), params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|e| e.to_string())
 	}
 
 	#[tool(
@@ -1934,19 +1985,52 @@ impl ServerHandler for OctofsServer {
 				})?;
 			let canonical = known.map_or("_unknown_tool", |tool| tool.name.as_ref());
 			Some(
-				runtime::request_audit::begin(scope.owner(), canonical)
-					.await
-					.map_err(|_| {
-						ErrorData::internal_error(
-							"request audit unavailable; dispatch refused",
-							None,
-						)
-					})?,
+				runtime::request_audit::begin_with_read(
+					scope.owner(),
+					canonical,
+					if matches!(canonical, "request_status" | "request_result") {
+						request
+							.arguments
+							.as_ref()
+							.and_then(|a| a.get("request_id"))
+							.and_then(serde_json::Value::as_str)
+							.map(str::to_owned)
+					} else {
+						None
+					},
+				)
+				.await
+				.map_err(|_| {
+					ErrorData::internal_error("request audit unavailable; dispatch refused", None)
+				})?,
 			)
 		} else {
 			None
 		};
-		let result = if visible {
+		let result_intent = if let Some(ticket) = ticket
+			.as_ref()
+			.filter(|t| runtime::request_results::eligible(&t.identity().tool_name))
+		{
+			match runtime::request_results::admit(ticket.identity()).await {
+				Ok(intent) => Some(intent),
+				Err(_) => {
+					let mut result = Err(ErrorData::internal_error(
+						"result admission unavailable; tool was not dispatched",
+						None,
+					));
+					runtime::request_results::attach_identity(&mut result, ticket.request_id());
+					runtime::request_results::attach_ack(
+						&mut result,
+						"durability_unknown_not_dispatched",
+						false,
+					);
+					return result;
+				}
+			}
+		} else {
+			None
+		};
+		let mut result = if visible {
 			let call = rmcp::handler::server::tool::ToolCallContext::new(self, request, context);
 			router.call(call).await
 		} else {
@@ -1956,6 +2040,13 @@ impl ServerHandler for OctofsServer {
 			))
 		};
 		if let Some(ticket) = ticket {
+			let id = ticket.request_id().to_owned();
+			let tool = ticket.identity().tool_name;
+			let expose_id = runtime::request_results::exposes_identity(&tool);
+			if expose_id {
+				runtime::request_results::attach_identity(&mut result, &id);
+				runtime::request_results::reserve_final_wire(&mut result, &tool, &id);
+			}
 			let completion = match &result {
 				_ if cancelled.is_cancelled() => AuditCompletion::Unknown,
 				Ok(CallToolResponse::Complete(value)) if !value.is_error.unwrap_or(false) => {
@@ -1964,13 +2055,29 @@ impl ServerHandler for OctofsServer {
 				_ if !visible || readonly => AuditCompletion::Failed,
 				_ => AuditCompletion::Unknown,
 			};
-			if runtime::request_audit::finish(ticket, completion)
+			let retained = if let Some(intent) = result_intent {
+				let response = match &result {
+					Ok(CallToolResponse::Complete(value))
+						if !cancelled.is_cancelled() && !value.is_error.unwrap_or(false) =>
+					{
+						Some(value.clone())
+					}
+					_ => None,
+				};
+				runtime::request_results::complete(intent, response)
+					.await
+					.unwrap_or("durability_unknown")
+			} else {
+				"not_retained_policy"
+			};
+			let audit_durable = runtime::request_audit::finish(ticket, completion)
 				.await
-				.is_err()
-			{
-				// Final metadata durability is uncertain, including after atomic publication.
-				// Preserve executed writes and their identities rather than suggesting retry.
-				warn!("request audit completion unavailable; dispatch result preserved");
+				.is_ok();
+			if !audit_durable {
+				warn!("request audit completion unavailable; dispatch result preserved; no automatic retry");
+			}
+			if expose_id {
+				runtime::request_results::attach_ack(&mut result, retained, audit_durable);
 			}
 		}
 		result

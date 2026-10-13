@@ -24,6 +24,7 @@ const MAX_PAGE_BYTES: usize = 64 * 1024;
 const STORE_NAME: &str = "request-audit";
 static STORE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static ACTIVE: OnceLock<Mutex<HashMap<String, Weak<AtomicBool>>>> = OnceLock::new();
+static READ_PINS: OnceLock<Mutex<HashMap<String, Vec<Weak<()>>>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy)]
 pub enum AuditCompletion {
@@ -71,12 +72,86 @@ pub struct RequestTicket {
 	record: Record,
 	started: Instant,
 	active: Arc<AtomicBool>,
+	_read_pin: Option<Arc<()>>,
 }
 
 impl RequestTicket {
 	pub fn request_id(&self) -> &str {
 		&self.record.request_id
 	}
+}
+#[derive(Clone)]
+pub(crate) struct RequestIdentity {
+	pub request_id: String,
+	pub owner: String,
+	pub tool_name: String,
+	pub accepted_unix_ms: u128,
+}
+pub(crate) struct AuditObservation {
+	pub identity: RequestIdentity,
+	pub state: &'static str,
+	pub elapsed_ms: Option<u64>,
+}
+impl RequestTicket {
+	pub(crate) fn identity(&self) -> RequestIdentity {
+		RequestIdentity {
+			request_id: self.record.request_id.clone(),
+			owner: self.record.owner.clone(),
+			tool_name: self.record.tool_name.clone(),
+			accepted_unix_ms: self.record.accepted_unix_ms,
+		}
+	}
+}
+#[cfg(unix)]
+pub(crate) fn retained_ids_at(root: &Path) -> Result<std::collections::HashSet<String>> {
+	let _guard = store_lock()?;
+	let dir = open_store(root)?;
+	Ok(entries(&dir)?.into_iter().map(|r| r.request_id).collect())
+}
+#[cfg(unix)]
+fn observation_at(root: &Path, owner: &str, id: &str) -> Result<AuditObservation> {
+	if !valid_id(owner) || !valid_id(id) {
+		bail!("request unavailable to this scope");
+	}
+	let _guard = store_lock()?;
+	let dir = open_store(root)?;
+	let r = read_record(&dir, &format!("{id}.json"))
+		.map_err(|_| anyhow!("request unavailable to this scope"))?;
+	if r.owner != owner {
+		bail!("request unavailable to this scope");
+	}
+	let state = match r.state {
+		DurableState::Unknown if is_dispatch_active(id)? => "accepted",
+		DurableState::Unknown => "unknown",
+		DurableState::Completed => "completed",
+		DurableState::Failed => "failed",
+	};
+	Ok(AuditObservation {
+		identity: RequestIdentity {
+			request_id: r.request_id,
+			owner: r.owner,
+			tool_name: r.tool_name,
+			accepted_unix_ms: r.accepted_unix_ms,
+		},
+		state,
+		elapsed_ms: r.elapsed_ms,
+	})
+}
+#[cfg(not(unix))]
+pub(crate) fn retained_ids_at(_root: &Path) -> Result<std::collections::HashSet<String>> {
+	bail!("private request metadata requires Unix");
+}
+#[cfg(not(unix))]
+fn observation_at(_root: &Path, _owner: &str, _id: &str) -> Result<AuditObservation> {
+	bail!("private request metadata requires Unix");
+}
+pub(crate) async fn observation(owner: &str, id: &str) -> Result<AuditObservation> {
+	let root = runtime_config()?.state_dir.clone();
+	let owner = owner.to_owned();
+	let id = id.to_owned();
+	tokio::task::spawn_blocking(move || observation_at(&root, &owner, &id))
+		.await
+		.map_err(|_| anyhow!("request unavailable to this scope"))?
 }
 
 fn valid_id(value: &str) -> bool {
@@ -114,13 +189,28 @@ fn active_registry() -> Result<std::sync::MutexGuard<'static, HashMap<String, We
 		.map_err(|_| anyhow!("request audit active registry unavailable"))
 }
 
-fn is_active(id: &str) -> Result<bool> {
+fn read_pins() -> Result<std::sync::MutexGuard<'static, HashMap<String, Vec<Weak<()>>>>> {
+	READ_PINS
+		.get_or_init(|| Mutex::new(HashMap::new()))
+		.lock()
+		.map_err(|_| anyhow!("request read pin state unavailable"))
+}
+fn is_dispatch_active(id: &str) -> Result<bool> {
 	let mut registry = active_registry()?;
 	registry.retain(|_, marker| marker.strong_count() > 0);
 	Ok(registry
 		.get(id)
 		.and_then(Weak::upgrade)
 		.is_some_and(|marker| marker.load(Ordering::Acquire)))
+}
+fn is_active(id: &str) -> Result<bool> {
+	let active = is_dispatch_active(id)?;
+	let mut pins = read_pins()?;
+	pins.retain(|_, markers| {
+		markers.retain(|marker| marker.strong_count() > 0);
+		!markers.is_empty()
+	});
+	Ok(active || pins.contains_key(id))
 }
 
 #[cfg(unix)]
@@ -492,13 +582,36 @@ fn save(directory: &File, record: &Record, replacing: bool) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn begin_at(root: &Path, owner: &str, tool_name: &str) -> Result<RequestTicket> {
+fn begin_with_read_at(
+	root: &Path,
+	owner: &str,
+	tool_name: &str,
+	target: Option<&str>,
+) -> Result<RequestTicket> {
 	if !valid_id(owner) || !valid_tool(tool_name) {
 		bail!("request audit session or canonical tool metadata unavailable");
 	}
 	let _guard = store_lock()?;
 	let directory = open_store(root)?;
 	let mut records = entries(&directory)?;
+	let read_pin = if let Some(id) = target {
+		if !matches!(tool_name, "request_status" | "request_result")
+			|| !valid_id(id)
+			|| !records
+				.iter()
+				.any(|r| r.request_id == id && r.owner == owner)
+		{
+			bail!("request unavailable to this scope");
+		}
+		let pin = Arc::new(());
+		read_pins()?
+			.entry(id.to_owned())
+			.or_default()
+			.push(Arc::downgrade(&pin));
+		Some(pin)
+	} else {
+		None
+	};
 	retain_before_begin(&directory, owner, &mut records)?;
 	let record = Record {
 		request_id: new_id()?,
@@ -519,7 +632,36 @@ fn begin_at(root: &Path, owner: &str, tool_name: &str) -> Result<RequestTicket> 
 		record,
 		started: Instant::now(),
 		active,
+		_read_pin: read_pin,
 	})
+}
+
+#[cfg(unix)]
+fn begin_at(root: &Path, owner: &str, tool_name: &str) -> Result<RequestTicket> {
+	begin_with_read_at(root, owner, tool_name, None)
+}
+#[cfg(not(unix))]
+fn begin_with_read_at(
+	_root: &Path,
+	_owner: &str,
+	_tool: &str,
+	_target: Option<&str>,
+) -> Result<RequestTicket> {
+	bail!("private request auditing requires Unix descriptor support")
+}
+/// Protect only an already-owned lookup target until its native read finishes.
+pub(crate) async fn begin_with_read(
+	owner: &str,
+	tool: &str,
+	target: Option<String>,
+) -> Result<RequestTicket> {
+	let root = runtime_config()?.state_dir.clone();
+	let owner = owner.to_owned();
+	let tool = tool.to_owned();
+	tokio::task::spawn_blocking(move || begin_with_read_at(&root, &owner, &tool, target.as_deref()))
+		.await
+		.map_err(|_| anyhow!("request audit intent unavailable; request was not dispatched"))?
+		.map_err(|_| anyhow!("request audit intent unavailable; request was not dispatched"))
 }
 
 /// Only canonical router names (or `_unknown_tool`) may reach this internal API.
@@ -605,15 +747,16 @@ fn history_at(root: &Path, owner: &str, params: RequestHistoryParams) -> Result<
 	};
 	let mut page = Vec::new();
 	for record in records.iter().skip(start).take(limit) {
-		let state = if record.state == DurableState::Unknown && is_active(&record.request_id)? {
-			"accepted"
-		} else {
-			match record.state {
-				DurableState::Unknown => "unknown",
-				DurableState::Completed => "completed",
-				DurableState::Failed => "failed",
-			}
-		};
+		let state =
+			if record.state == DurableState::Unknown && is_dispatch_active(&record.request_id)? {
+				"accepted"
+			} else {
+				match record.state {
+					DurableState::Unknown => "unknown",
+					DurableState::Completed => "completed",
+					DurableState::Failed => "failed",
+				}
+			};
 		page.push(json!({"request_id":record.request_id,"tool_name":record.tool_name,"state":state,"accepted_unix_ms":record.accepted_unix_ms,"elapsed_ms":record.elapsed_ms}));
 	}
 	let next = if start + page.len() < records.len() {
@@ -655,3 +798,7 @@ pub async fn history(owner: &str, params: RequestHistoryParams) -> Result<String
 #[cfg(all(test, unix))]
 #[path = "request_audit_tests.rs"]
 mod tests;
+
+#[cfg(all(test, unix))]
+#[path = "request_audit_lookup_tests.rs"]
+mod lookup_tests;

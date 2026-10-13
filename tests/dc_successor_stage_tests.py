@@ -537,6 +537,65 @@ class SuccessorStage(unittest.TestCase):
         self.assertIs(manifest["credentials_copied"], False)
         self.assertFalse(self.marker.exists())
 
+    def test_untrusted_publication_parent_refuses_before_creating_stage(self):
+        original_fstat = os.fstat
+        for reason in ("writable", "foreign_owner"):
+            with self.subTest(reason=reason):
+                parent = self.root / ("publication-parent-" + reason)
+                parent.mkdir(mode=0o700)
+                self.args.destination = parent / "release"
+                if reason == "writable":
+                    parent.chmod(0o777)
+                pin = parent.stat()
+                def untrusted_parent(descriptor):
+                    info = original_fstat(descriptor)
+                    if reason == "foreign_owner" and (info.st_dev, info.st_ino) == (pin.st_dev, pin.st_ino):
+                        fields = list(info)
+                        fields[4] = os.getuid() + 100000
+                        return os.stat_result(fields)
+                    return info
+                before = snapshot(self.root)
+                with mock.patch.object(os, "fstat", side_effect=untrusted_parent):
+                    with self.assertRaisesRegex(PermissionError, "publication parent"):
+                        S.stage(self.args)
+                self.assertEqual(snapshot(self.root), before)
+                self.assertFalse(self.args.destination.exists())
+                self.assertFalse(self.marker.exists())
+
+    def test_replaced_stage_directory_is_never_removed_during_failure_cleanup(self):
+        original_stat = os.stat
+        for empty in (True, False):
+            with self.subTest(empty_replacement=empty):
+                self.args.destination = self.root / ("race-stage-" + str(empty))
+                destination = self.args.destination
+                displaced = self.root / ("displaced-stage-" + str(empty))
+                replaced = False
+                def replace_before_path_check(path, *arguments, **kwargs):
+                    nonlocal replaced
+                    if path == destination.name and kwargs.get("dir_fd") is not None and not replaced:
+                        try:
+                            original_stat(destination / "manifest.json")
+                        except FileNotFoundError:
+                            pass
+                        else:
+                            destination.rename(displaced)
+                            destination.mkdir(mode=0o700)
+                            if not empty:
+                                write(destination / "foreign-marker", b"replacement must survive")
+                            replaced = True
+                    return original_stat(path, *arguments, **kwargs)
+                with mock.patch.object(os, "stat", side_effect=replace_before_path_check):
+                    with self.assertRaisesRegex(ValueError, "pathname changed"):
+                        S.stage(self.args)
+                self.assertTrue(replaced)
+                self.assertTrue(destination.is_dir())
+                self.assertEqual(list(displaced.iterdir()), [])
+                if empty:
+                    self.assertEqual(list(destination.iterdir()), [])
+                else:
+                    self.assertEqual((destination / "foreign-marker").read_bytes(), b"replacement must survive")
+                self.assertFalse(self.marker.exists())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

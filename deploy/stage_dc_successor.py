@@ -61,6 +61,30 @@ def open_parent(path):
         raise
 
 
+def require_trusted_publication_parent(parent):
+    info = os.fstat(parent)
+    if (not stat.S_ISDIR(info.st_mode) or info.st_uid not in (0, os.getuid())
+            or info.st_mode & 0o022):
+        raise PermissionError("publication parent requires trusted owner and no group/other writes")
+
+
+def remove_owned_directory(parent, name, identity):
+    """Leave an observed replacement untouched in a trusted publication parent.
+
+    The stat/rmdir pair is not atomic against another same-UID writer. Private
+    publication is not a security boundary against code running under our UID.
+    """
+    if identity is None:
+        return
+    try:
+        linked = os.stat(name, dir_fd=parent, follow_symlinks=False)
+        if (stat.S_ISDIR(linked.st_mode)
+                and (linked.st_dev, linked.st_ino) == (identity.st_dev, identity.st_ino)):
+            os.rmdir(name, dir_fd=parent)
+    except OSError:
+        pass
+
+
 def validate_inode(info, label):
     if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
         raise ValueError(label + ": single-link ordinary file required")
@@ -411,17 +435,20 @@ def stage(args):
     destination = bundle["destination"]
     parent, name = open_parent(destination)
     directory = None
+    identity = None
     created = []
     made = False
     try:
+        require_trusted_publication_parent(parent)
         os.mkdir(name, mode=0o700, dir_fd=parent)
         made = True
         directory = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
                             dir_fd=parent)
-        os.fchmod(directory, 0o700)
-        identity = os.fstat(directory)
-        if identity.st_uid != os.getuid():
+        observed = os.fstat(directory)
+        if observed.st_uid != os.getuid():
             raise PermissionError("new stage directory has an unexpected owner")
+        identity = observed
+        os.fchmod(directory, 0o700)
         for filename, (contents, mode) in bundle["files"].items():
             fd = os.open(filename, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
                          mode, dir_fd=directory)
@@ -438,8 +465,9 @@ def stage(args):
                 if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != mode or reader.read() != contents:
                     raise ValueError("staged artifact differs from the validated snapshot")
         os.fsync(directory)
-        if (os.stat(name, dir_fd=parent, follow_symlinks=False).st_ino != identity.st_ino
-                or os.stat(name, dir_fd=parent, follow_symlinks=False).st_dev != identity.st_dev):
+        linked = os.stat(name, dir_fd=parent, follow_symlinks=False)
+        if (not stat.S_ISDIR(linked.st_mode)
+                or (linked.st_dev, linked.st_ino) != (identity.st_dev, identity.st_ino)):
             raise ValueError("stage pathname changed during publication")
         os.fsync(parent)
         return {"staged": True, "activated": False, "destination": str(destination),
@@ -453,10 +481,7 @@ def stage(args):
                 except FileNotFoundError:
                     pass
         if made:
-            try:
-                os.rmdir(name, dir_fd=parent)
-            except OSError:
-                pass
+            remove_owned_directory(parent, name, identity)
         raise
     finally:
         if directory is not None:

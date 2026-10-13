@@ -6,6 +6,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::future::Future;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
@@ -201,6 +202,19 @@ async fn directory() -> Result<PathBuf> {
 }
 
 async fn save(directory: &Path, record: &SearchRecord) -> Result<()> {
+	save_with_directory_sync(directory, record, async {
+		let parent = tokio::fs::File::open(directory).await?;
+		parent.sync_all().await?;
+		Ok(())
+	})
+	.await
+}
+
+async fn save_with_directory_sync<F: Future<Output = Result<()>>>(
+	directory: &Path,
+	record: &SearchRecord,
+	directory_sync: F,
+) -> Result<()> {
 	let temporary = directory.join(format!(".{}-{}", record.id, new_owner_id()?));
 	let mut options = tokio::fs::OpenOptions::new();
 	options.create_new(true).write(true);
@@ -213,9 +227,7 @@ async fn save(directory: &Path, record: &SearchRecord) -> Result<()> {
 	file.sync_all().await?;
 	drop(file);
 	tokio::fs::rename(&temporary, directory.join(format!("{}.json", record.id))).await?;
-	let parent = tokio::fs::File::open(directory).await?;
-	parent.sync_all().await?;
-	Ok(())
+	directory_sync.await
 }
 
 async fn read_record(path: &Path) -> Result<SearchRecord> {
@@ -366,8 +378,32 @@ async fn rpc(record: &SearchRecord, action: &str, extra: Value) -> Result<Value>
 	{
 		request[key] = value.clone();
 	}
-	run_python_json(host, include_str!("search_worker.py"), &request, Duration::from_secs(12))
-		.await.map_err(|_| anyhow!("native search helper unavailable or refused; receipt retained, do not relaunch uncertain starts"))
+	// The fixed remote wrapper binds the worker acknowledgement to this exact
+	// request. Client metadata and inner worker extras cannot choose its identity.
+	let source = format!(
+		"__name__ = 'hepta_search_worker'\n{}\nq = json.load(sys.stdin)\nprint(json.dumps({{'search_id':q['search_id'],'action':q['action'],'backend':'native_search_worker','result':main(q)}}))",
+		include_str!("search_worker.py")
+	);
+	let envelope: Value = run_python_json(host, &source, &request, Duration::from_secs(12))
+		.await.map_err(|_| anyhow!("native search helper unavailable or refused; receipt retained, do not relaunch uncertain starts"))?;
+	if envelope["search_id"] != record.id
+		|| envelope["action"] != action
+		|| envelope["backend"] != "native_search_worker"
+		|| !envelope["result"].is_object()
+	{
+		bail!("native search acknowledgement unavailable");
+	}
+	let mut result = envelope["result"].clone();
+	if result
+		.get("search_id")
+		.is_some_and(|id| id != &json!(record.id))
+	{
+		bail!("native search acknowledgement unavailable");
+	}
+	result["search_id"] = json!(record.id);
+	result["action"] = json!(action);
+	result["backend"] = json!("native_search_worker");
+	Ok(result)
 }
 
 fn wire_size(text: &str) -> Result<usize> {
@@ -388,6 +424,123 @@ fn brief(record: &SearchRecord) -> Value {
 	json!({"search_id":record.id,"host":record.host,"root":record.request.root,
 		"kind":record.request.kind,"state":record.state,"reason":record.reason,
 		"created_unix_ms":record.created_unix_ms})
+}
+
+fn matching_effect_ack(record: &SearchRecord, action: &str, native: &Value) -> bool {
+	native.is_object()
+		&& native.get("error").is_none()
+		&& native["search_id"] == record.id
+		&& native["action"] == action
+		&& native["backend"] == "native_search_worker"
+}
+
+fn retain_start_effect(record: &mut SearchRecord, remote: Result<Value>) -> Value {
+	if let Ok(native) = remote {
+		if matching_effect_ack(record, "start", &native)
+			&& native["state"] == "running"
+			&& native["snapshot_ready"] == false
+		{
+			record.state = "running".into();
+			record.reason = None;
+			return json!({"effect_outcome":"start_acknowledged","observed_state":"running",
+				"native":{"search_id":record.id,"backend":"native_search_worker","action":"start","state":"running","snapshot_ready":false},
+				"limits":limits(&record.request),"session_resume_after_restart":false,"terminal_pages_only":true,"effect_confirmed":true});
+		}
+	}
+	record.state = "launch_uncertain".into();
+	record.reason = Some("native_start_response_unavailable_do_not_relaunch".into());
+	json!({"effect_outcome":"start_unknown","outcome":"unknown","effect_confirmed":false,
+		"observed_state":"launch_uncertain","launch_uncertain":true})
+}
+
+fn retain_stop_effect(record: &mut SearchRecord, remote: Result<Value>) -> Value {
+	if let Ok(native) = remote {
+		let state = native["state"].as_str();
+		if matching_effect_ack(record, "stop", &native)
+			&& state.is_some_and(|state| state == "running" || TERMINAL.contains(&state))
+			&& native["stop_requested"].as_bool() == state.map(|state| !TERMINAL.contains(&state))
+			&& native.get("reason").is_none_or(|reason| {
+				reason.is_null() || reason.as_str().is_some_and(|reason| reason.len() <= 512)
+			}) {
+			apply_native_terminal(record, &native);
+			return json!({"effect_outcome":if native["stop_requested"]==true {"cancel_requested"} else {"already_terminal"},
+				"observed_state":native["state"],"stop_requested":native["stop_requested"],
+				"native":{"search_id":record.id,"backend":"native_search_worker","action":"stop","state":native["state"],"stop_requested":native["stop_requested"]},
+				"confirmation":"poll search_results for terminal cancellation receipt",
+				"effect_confirmed":true,"termination_confirmed":false});
+		}
+	}
+	json!({"effect_outcome":"cancel_unknown","outcome":"unknown","effect_confirmed":false,
+		"observed_state":record.state,"termination_confirmed":false})
+}
+
+fn retain_search_effect_result(
+	record: &SearchRecord,
+	mut observed: Value,
+	persisted: Result<()>,
+) -> String {
+	observed["search"] = brief(record);
+	observed["automatic_retry"] = json!(false);
+	observed["metadata_durability_confirmed"] = json!(persisted.is_ok());
+	observed["reconcile_via"] = json!(
+		"search_results or search_list using this existing search_id; never relaunch automatically"
+	);
+	if persisted.is_err() {
+		observed["metadata_warning"] = json!(
+			"Observed search operation result retained; local receipt durability is unconfirmed."
+		);
+	}
+	let text = observed.to_string();
+	if wire_size(&text).is_ok_and(|size| size <= 64 * 1024) {
+		return text;
+	}
+	// Preserve effect truth and its existing ID even if an observation cannot fit.
+	let mut bounded = json!({"search":{"search_id":record.id,"host":record.host},
+		"automatic_retry":false,"metadata_durability_confirmed":persisted.is_ok(),
+		"result_warning":"Existing search effect result exceeded the wire cap; reconcile this search_id without relaunch."});
+	for key in [
+		"effect_outcome",
+		"outcome",
+		"observed_state",
+		"stop_requested",
+		"termination_confirmed",
+		"effect_confirmed",
+	] {
+		if let Some(value) = observed.get(key).filter(|value| {
+			value.is_boolean() || value.as_str().is_some_and(|text| text.len() <= 512)
+		}) {
+			bounded[key] = value.clone();
+		}
+	}
+	bounded.to_string()
+}
+
+async fn dispatch_search_start<F: Future<Output = Result<Value>>>(
+	directory: &Path,
+	mut record: SearchRecord,
+	remote: F,
+) -> Result<String> {
+	save(directory, &record)
+		.await
+		.map_err(|_| anyhow!("search durable intent unavailable; no start request dispatched"))?;
+	let observed = retain_start_effect(&mut record, remote.await);
+	let persisted = save(directory, &record).await;
+	Ok(retain_search_effect_result(&record, observed, persisted))
+}
+
+async fn dispatch_search_stop<F: Future<Output = Result<Value>>>(
+	directory: &Path,
+	mut record: SearchRecord,
+	remote: F,
+) -> Result<String> {
+	// Confirm a durable current receipt before cancellation; the native router
+	// separately persists this search_stop request's unknown dispatch intent.
+	save(directory, &record)
+		.await
+		.map_err(|_| anyhow!("search durable intent unavailable; no stop request dispatched"))?;
+	let observed = retain_stop_effect(&mut record, remote.await);
+	let persisted = save(directory, &record).await;
+	Ok(retain_search_effect_result(&record, observed, persisted))
 }
 
 pub async fn search_start(owner: &str, params: SearchStartParams) -> Result<String> {
@@ -418,7 +571,7 @@ pub async fn search_start(owner: &str, params: SearchStartParams) -> Result<Stri
 	{
 		bail!("active search quota reached; collect terminal results or stop own searches first");
 	}
-	let mut record = SearchRecord {
+	let record = SearchRecord {
 		id: new_owner_id()?,
 		owner: owner.into(),
 		instance: instance()?.into(),
@@ -433,32 +586,12 @@ pub async fn search_start(owner: &str, params: SearchStartParams) -> Result<Stri
 		reason: None,
 		request: params,
 	};
-	save(&directory, &record).await?;
-	let result = rpc(
-		&record,
-		"start",
-		json!({"root":record.request.root,"query":record.request.query,
+	let remote_record = record.clone();
+	let request = json!({"root":record.request.root,"query":record.request.query,
 		"kind":record.request.kind,"include_hidden":record.request.include_hidden,
 		"limits":limits(&record.request),"allowed_roots":host.allowed_read_path_prefixes,
-		"protected_roots":host.protected_path_prefixes}),
-	)
-	.await;
-	match result {
-		Ok(native) => {
-			record.state = "running".into();
-			save(&directory, &record).await?;
-			response(
-				json!({"search":brief(&record),"native":native,"limits":limits(&record.request),
-				"session_resume_after_restart":false,"terminal_pages_only":true}),
-			)
-		}
-		Err(_) => {
-			record.state = "launch_uncertain".into();
-			record.reason = Some("native_start_response_unavailable_do_not_relaunch".into());
-			save(&directory, &record).await?;
-			response(json!({"search":brief(&record),"launch_uncertain":true}))
-		}
-	}
+		"protected_roots":host.protected_path_prefixes});
+	dispatch_search_start(&directory, record, rpc(&remote_record, "start", request)).await
 }
 
 pub async fn search_results(owner: &str, params: SearchResultsParams) -> Result<String> {
@@ -539,19 +672,14 @@ pub async fn search_list(owner: &str, params: SearchListParams) -> Result<String
 pub async fn search_stop(owner: &str, params: SearchRefParams) -> Result<String> {
 	let _guard = lock().lock().await;
 	let directory = directory().await?;
-	let mut record = owned(&directory, owner, &params.search_id).await?;
+	let record = owned(&directory, owner, &params.search_id).await?;
 	if TERMINAL.contains(&record.state.as_str()) {
 		return response(
 			json!({"search":brief(&record),"stop_requested":false,"already_terminal":true}),
 		);
 	}
-	let native = rpc(&record, "stop", json!({})).await?;
-	if apply_native_terminal(&mut record, &native) {
-		save(&directory, &record).await?;
-	}
-	response(
-		json!({"search":brief(&record),"native":native,"confirmation":"poll search_results for terminal cancellation receipt"}),
-	)
+	let remote_record = record.clone();
+	dispatch_search_stop(&directory, record, rpc(&remote_record, "stop", json!({}))).await
 }
 
 #[cfg(test)]
