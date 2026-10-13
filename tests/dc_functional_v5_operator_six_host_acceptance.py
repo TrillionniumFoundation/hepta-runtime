@@ -78,6 +78,23 @@ def supplement_host(name, ssh, binary, directory, contract, previous):
         print('PASS', name, check, flush=True)
 
     save()
+
+    def dispatch(name, params):
+        report['dispatch_phase'] = name
+        report['dispatch_params'] = params
+        save()
+        try:
+            return client.call(name, params)
+        except Exception as error:
+            report.setdefault('native_error', {
+                'phase': name, 'params': params,
+                'exception_type': type(error).__name__,
+                'message': str(error)[:65536],
+                'message_sha256': hashlib.sha256(str(error).encode()).hexdigest(),
+            })
+            save()
+            raise
+
     try:
         with tempfile.TemporaryDirectory(prefix='hepta-v5-operator-controller-') as work:
             work = pathlib.Path(work)
@@ -130,8 +147,8 @@ def supplement_host(name, ssh, binary, directory, contract, previous):
                         'args': ['-c', "import sys;b=sys.stdin.buffer.read();sys.stdout.buffer.write(b'OUT:'+b);sys.stderr.buffer.write(b'ERR:'+b)"],
                         'stdin': text, 'cwd': target, 'timeout_seconds': 20,
                     }
-                    job = client.call('process_start', params)['job']['id']
-                    status = client.call('process_wait', {'host': 'operator', 'job_id': job, 'timeout_seconds': 25})
+                    job = dispatch('process_start', params)['job']['id']
+                    status = dispatch('process_wait', {'host': 'operator', 'job_id': job, 'timeout_seconds': 25})
                     assert status['state'] == 'succeeded', status
                     expected = {'stdout': b'OUT:' + text.encode(), 'stderr': b'ERR:' + text.encode()}
                     cursor = {'stdout': 0, 'stderr': 0}
@@ -140,7 +157,7 @@ def supplement_host(name, ssh, binary, directory, contract, previous):
                     # cursors must remain independent through every one-byte page.
                     for stream in ('stdout', 'stderr'):
                         for _ in range(len(expected[stream]) + 2):
-                            value = client.call('process_read', {
+                            value = dispatch('process_read', {
                                 'host': 'operator', 'job_id': job,
                                 'stdout_offset': cursor['stdout'], 'stderr_offset': cursor['stderr'], 'limit': 1,
                             })[stream]
@@ -157,7 +174,7 @@ def supplement_host(name, ssh, binary, directory, contract, previous):
                     passed('real Unicode stdin and independent exact stdout/stderr byte cursors', {
                         'job_id': job, 'stdout_bytes': len(actual['stdout']), 'stderr_bytes': len(actual['stderr']),
                     })
-                    cancel_launch = client.call('process_start', {
+                    cancel_launch = dispatch('process_start', {
                         'host': 'operator', 'executable': '/usr/bin/python3',
                         'args': ['-c', "import time;print('CANCEL_READY',flush=True);time.sleep(90)"],
                         'cwd': target, 'timeout_seconds': 30,
@@ -166,28 +183,28 @@ def supplement_host(name, ssh, binary, directory, contract, previous):
                     report['cancel_launch'] = cancel_launch
                     save()
                     for _ in range(50):
-                        ready = client.call('process_read', {'host': 'operator', 'job_id': cancel_job})
+                        ready = dispatch('process_read', {'host': 'operator', 'job_id': cancel_job})
                         if 'CANCEL_READY' in ready['stdout']['text']:
                             break
                         time.sleep(.1)
                     else:
                         raise AssertionError('owned cancel fixture did not start')
-                    pre_status = client.call('process_status', {'host': 'operator', 'job_id': cancel_job})
+                    pre_status = dispatch('process_status', {'host': 'operator', 'job_id': cancel_job})
                     report['cancel_pre_status'] = pre_status
                     save()
                     assert pre_status['state'] == 'running', pre_status
-                    result = client.call('process_cancel', {'host': 'operator', 'job_id': cancel_job})
+                    result = dispatch('process_cancel', {'host': 'operator', 'job_id': cancel_job})
                     report['cancel_response'] = result
                     save()
                     backend = cancel_launch['launch']['backend']
                     expected_result = {'systemd': {'stop_requested'}, 'detached': {'term_sent', 'kill_sent'}}
                     assert backend in expected_result and result['result'] in expected_result[backend], result
-                    status = client.call('process_wait', {'host': 'operator', 'job_id': cancel_job, 'timeout_seconds': 20})
+                    status = dispatch('process_wait', {'host': 'operator', 'job_id': cancel_job, 'timeout_seconds': 20})
                     report['cancel_terminal_status'] = status
                     save()
                     assert status['state'] == 'cancelled' and status['cancelled'] is True, status
                     assert status['output_complete'] is True, status
-                    output = client.call('process_read', {'host': 'operator', 'job_id': cancel_job})
+                    output = dispatch('process_read', {'host': 'operator', 'job_id': cancel_job})
                     report['cancel_retained_output'] = output
                     save()
                     assert 'CANCEL_READY' in output['stdout']['text']
@@ -201,7 +218,7 @@ def supplement_host(name, ssh, binary, directory, contract, previous):
                 finally:
                     if client is not None and cancel_job is not None:
                         try:
-                            client.call('process_cancel', {'host': 'operator', 'job_id': cancel_job})
+                            dispatch('process_cancel', {'host': 'operator', 'job_id': cancel_job})
                         except Exception:
                             report['cleanup_owned_job_cancel_failed'] = True
                             save()
@@ -213,6 +230,9 @@ def supplement_host(name, ssh, binary, directory, contract, previous):
                         controller.wait(timeout=5)
     except Exception as error:
         report['failure_exception_type'] = type(error).__name__
+        report['failure_phase'] = report.get('dispatch_phase', 'controller initialization or contract verification')
+        report['failure_message'] = str(error)[:65536]
+        report['failure_message_sha256'] = hashlib.sha256(str(error).encode()).hexdigest()
         save()
         raise
     return {

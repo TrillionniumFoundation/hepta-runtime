@@ -8,6 +8,8 @@ Use the authorized qian-qi computer and connected GitHub/Hepta tools, with other
 
 ## Work continuation — 2026-10-13 native v5 candidate
 
+Active continuation worktree: /home/qian-qi/hepta-runtime-dc-functional-20261013, local branch work/dc-functional-20261013, pushing to the existing remote PR branch feat/operator-parity-20261006. The historical operator worktree remains retained with its original untracked evidence; do not overwrite it with a blind checkout. Always verify the latest remote PR HEAD.
+
 The priority-2/3 native implementation work below has advanced. See
 docs/DC_FUNCTIONAL_V5_NATIVE_CANDIDATE.md and the immutable
 docs/qualification/dc-functional-v5-native-candidate-20261013.json for exact
@@ -20,6 +22,8 @@ tests remain ignored by default), 19 batch helper tests, 7 search worker tests,
 12 gate tests and 31 facade tests. The same debug candidate passed six-host
 health (10 checks), batch reads (108), durable search (54), and actual
 operator/PTY/stdin/cursor/cancel/temporary-controller restart regression (81).
+The optimized release repeats the same six-host cases and all predecessor regressions; the candidate artifact is SHA256 204b5502efe58c47233c8ad2671fcbc5a5db9624d92b7f056073ec8d1920a8dd.
+
 These are native/local-facade proofs, not new-tool model-origin acceptance,
 production recovery, production rollback, DC-off or full replacement.
 
@@ -32,7 +36,7 @@ required rather than a Linux-only launch-result assumption.
 
 Next work must resolve truthful private caller scope, secure session/restart
 resume where required, request-level audit/history and redacted effective
-configuration. Qualify an optimized release and preserve active native jobs
+configuration. The optimized release is now natively qualified for the documented bounded cases and staged without installation (docs/qualification/dc-functional-v5-release-staged-20261013.json). Preserve active native jobs
 before any controlled native installation; then require legitimate
 administrator app Refresh/Review and genuine model-origin acceptance. Keep
 the historical installed-v4 crosswalk intact until actual installed/model

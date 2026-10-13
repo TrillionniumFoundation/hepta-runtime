@@ -25,6 +25,10 @@ Real six-host fixtures cover main, Pocket4, ROG, Mac, X230 and AI395. Fixtures a
 
 Existing frozen crosswalk remains the installed-v4 baseline. The gate now rejects valid-hash but unrelated receipts for positive cutover flags and requires dedicated business-workflow qualification before a full replacement conclusion. Past bounded success is not silently promoted to universal parity.
 
+## Optimized release
+
+The optimized stripped release was independently exercised on all six hosts and staged without installation. The immutable stage receipt is docs/qualification/dc-functional-v5-release-staged-20261013.json. Its source HEAD b02e45f99ddb05cfeb3b14ddb0d55c91b6eebc1b passed exact-head hosted CI. A release startup failure had its detailed response discarded by the old harness; all available evidence is retained. SSH pre-auth saturation at the same time is strongly correlated but does not identify the failed client. Three strict main diagnostics and a main-first coordinated full-six rerun passed. The harness now records phase/error evidence; no SSHd policy change or uncertain write retry was added. Uncoordinated auth-burst resilience remains unqualified.
+
 ## Remaining gates
 
 - Isolate real ChatGPT callers or explicitly review a truthful single-principal private scope; implement secure reconnect/resume where required.
