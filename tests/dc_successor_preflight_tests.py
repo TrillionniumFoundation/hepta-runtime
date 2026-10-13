@@ -1011,5 +1011,246 @@ class SuccessorPreflight(unittest.TestCase):
         self.assertNotIn("pid", report["inventory"]["jobs"][0])
 
 
+
+class PrivateHttpTokenDescriptor(unittest.TestCase):
+    """Owned offline files only; this class never opens the installed token."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="hepta-token-reader-offline-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = pathlib.Path(self.temp.name)
+        self.root.chmod(0o700)
+        self.token = self.root / "owned-token"
+        self.raw = b"OFFLINE_PRIVATE_TOKEN_READER_FIXTURE_20261013\n"
+        write(self.token, self.raw)
+        self.value = self.raw.decode("ascii").strip()
+
+    def test_owner_read_only_0400_and_0600_preserve_mode_inode_and_bytes_without_hashing(self):
+        for mode in (0o400, 0o600):
+            with self.subTest(mode=oct(mode)):
+                self.token.chmod(mode)
+                before = self.token.stat()
+                with mock.patch.object(S, "snapshot", side_effect=AssertionError("snapshot forbidden")), \
+                     mock.patch.object(P, "digest", side_effect=AssertionError("digest forbidden")), \
+                     mock.patch.object(P.hashlib, "sha256", side_effect=AssertionError("hash forbidden")):
+                    self.assertEqual(P.read_private_token(self.token), self.value)
+                after = self.token.stat()
+                self.assertEqual(self.token.read_bytes(), self.raw)
+                self.assertEqual((after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns,
+                                  after.st_ctime_ns, after.st_uid, after.st_nlink, after.st_mode),
+                                 (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns,
+                                  before.st_ctime_ns, before.st_uid, before.st_nlink, before.st_mode))
+
+    def test_group_other_executable_and_special_permission_bits_are_refused_before_read(self):
+        for mode in (0o640, 0o604, 0o660, 0o600 | 0o100, 0o400 | 0o10,
+                     0o400 | 0o1, 0o4600, 0o2600, 0o1600):
+            with self.subTest(mode=oct(mode)):
+                self.token.chmod(mode)
+                with mock.patch.object(P.os, "read", side_effect=AssertionError("read forbidden")):
+                    with self.assertRaises(PermissionError):
+                        P.read_private_token(self.token)
+        self.token.chmod(0o600)
+
+    def test_private_parent_requires_current_owner_and_exact_0700(self):
+        for mode in (0o750, 0o770, 0o755):
+            with self.subTest(mode=oct(mode)):
+                self.root.chmod(mode)
+                try:
+                    with mock.patch.object(P.os, "read", side_effect=AssertionError("read forbidden")):
+                        with self.assertRaises(PermissionError):
+                            P.read_private_token(self.token)
+                finally:
+                    self.root.chmod(0o700)
+        original = os.fstat
+        parent_inode = self.root.stat().st_ino
+
+        def other_owner(fd):
+            info = original(fd)
+            if info.st_ino == parent_inode:
+                fields = list(info)
+                fields[4] = os.getuid() + 1
+                return os.stat_result(fields)
+            return info
+
+        with mock.patch.object(P.os, "fstat", side_effect=other_owner):
+            with self.assertRaises(PermissionError):
+                P.read_private_token(self.token)
+
+    def test_other_owner_token_is_refused_before_read(self):
+        original = os.fstat
+        inode = self.token.stat().st_ino
+
+        def other_owner(fd):
+            info = original(fd)
+            if info.st_ino == inode:
+                fields = list(info)
+                fields[4] = os.getuid() + 1
+                return os.stat_result(fields)
+            return info
+
+        with mock.patch.object(P.os, "fstat", side_effect=other_owner), \
+             mock.patch.object(P.os, "read", side_effect=AssertionError("read forbidden")):
+            with self.assertRaises(PermissionError):
+                P.read_private_token(self.token)
+
+    def test_single_link_and_final_symlink_are_refused(self):
+        alias = self.root / "alias"
+        os.link(self.token, alias)
+        with mock.patch.object(P.os, "read", side_effect=AssertionError("read forbidden")):
+            with self.assertRaises(ValueError):
+                P.read_private_token(self.token)
+        alias.unlink()
+        alias.symlink_to(self.token)
+        with self.assertRaises(OSError):
+            P.read_private_token(alias)
+
+    def test_symlink_parent_cannot_redirect_private_token(self):
+        alias = self.root / "parent-alias"
+        alias.symlink_to(self.root, target_is_directory=True)
+        with self.assertRaises(OSError):
+            P.read_private_token(alias / self.token.name)
+
+    def test_fifo_and_directory_are_refused_with_nonblocking_descriptor(self):
+        fifo = self.root / "owned-fifo"
+        os.mkfifo(fifo, mode=0o600)
+        original = os.open
+        flags_seen = []
+
+        def record_flags(path, flags, *args, **kwargs):
+            if path == fifo.name:
+                flags_seen.append(flags)
+            return original(path, flags, *args, **kwargs)
+
+        with mock.patch.object(P.os, "open", side_effect=record_flags):
+            with self.assertRaises(ValueError):
+                P.read_private_token(fifo)
+        self.assertEqual(len(flags_seen), 1)
+        self.assertTrue(flags_seen[0] & os.O_NONBLOCK)
+        self.assertTrue(flags_seen[0] & os.O_NOFOLLOW)
+        self.assertTrue(flags_seen[0] & os.O_CLOEXEC)
+        directory = self.root / "owned-directory"
+        directory.mkdir(mode=0o700)
+        with self.assertRaises(ValueError):
+            P.read_private_token(directory)
+
+    def test_oversize_descriptor_is_refused_without_read(self):
+        write(self.token, b"x" * 513)
+        with mock.patch.object(P.os, "read", side_effect=AssertionError("read forbidden")):
+            with self.assertRaises(ValueError):
+                P.read_private_token(self.token)
+
+    def test_bounded_short_reads_are_collected_and_descriptor_is_closed(self):
+        original_read = os.read
+        original_open = os.open
+        token_fds = []
+
+        def short_read(fd, count):
+            return original_read(fd, min(count, 3))
+
+        def record_open(path, flags, *args, **kwargs):
+            fd = original_open(path, flags, *args, **kwargs)
+            if path == self.token.name:
+                token_fds.append(fd)
+            return fd
+
+        with mock.patch.object(P.os, "read", side_effect=short_read), \
+             mock.patch.object(P.os, "open", side_effect=record_open):
+            self.assertEqual(P.read_private_token(self.token), self.value)
+        self.assertEqual(len(token_fds), 1)
+        with self.assertRaises(OSError) as error:
+            os.fstat(token_fds[0])
+        self.assertEqual(error.exception.errno, errno.EBADF)
+
+    def test_incomplete_and_appended_read_are_refused(self):
+        original = os.read
+        with mock.patch.object(P.os, "read", return_value=b""):
+            with self.assertRaises(ValueError):
+                P.read_private_token(self.token)
+        first = True
+
+        def append_during_read(fd, count):
+            nonlocal first
+            if first:
+                first = False
+                with self.token.open("ab") as writer:
+                    writer.write(b"appended")
+            return original(fd, count)
+
+        with mock.patch.object(P.os, "read", side_effect=append_during_read):
+            with self.assertRaises(ValueError):
+                P.read_private_token(self.token)
+
+    def test_same_size_content_change_cannot_hide_behind_restored_mtime(self):
+        original = os.read
+        before = self.token.stat()
+        first = True
+
+        def rewrite_during_read(fd, count):
+            nonlocal first
+            if first:
+                first = False
+                with self.token.open("r+b") as writer:
+                    writer.write(b"Z" + self.raw[1:])
+                    writer.flush()
+                    os.fsync(writer.fileno())
+                os.utime(self.token, ns=(before.st_atime_ns, before.st_mtime_ns))
+            return original(fd, count)
+
+        with mock.patch.object(P.os, "read", side_effect=rewrite_during_read):
+            with self.assertRaises(ValueError):
+                P.read_private_token(self.token)
+
+    def test_replaced_path_and_changed_private_parent_are_refused(self):
+        original = os.read
+        first = True
+
+        def replace_during_read(fd, count):
+            nonlocal first
+            if first:
+                first = False
+                replacement = write(self.root / "replacement", self.raw)
+                os.replace(replacement, self.token)
+            return original(fd, count)
+
+        with mock.patch.object(P.os, "read", side_effect=replace_during_read):
+            with self.assertRaises(ValueError):
+                P.read_private_token(self.token)
+        first = True
+
+        def expose_parent_during_read(fd, count):
+            nonlocal first
+            if first:
+                first = False
+                self.root.chmod(0o750)
+            return original(fd, count)
+
+        try:
+            with mock.patch.object(P.os, "read", side_effect=expose_parent_during_read):
+                with self.assertRaises(ValueError):
+                    P.read_private_token(self.token)
+        finally:
+            self.root.chmod(0o700)
+
+    def test_invalid_format_and_all_refusals_close_token_descriptor(self):
+        original = os.open
+        for raw in (b"", b"two\nlines", b"\x00", b"bad\xff", b"x" * 257):
+            with self.subTest(format_case=len(raw)):
+                write(self.token, raw)
+                token_fds = []
+
+                def record_open(path, flags, *args, **kwargs):
+                    fd = original(path, flags, *args, **kwargs)
+                    if path == self.token.name:
+                        token_fds.append(fd)
+                    return fd
+
+                with mock.patch.object(P.os, "open", side_effect=record_open):
+                    with self.assertRaises((ValueError, UnicodeError)):
+                        P.read_private_token(self.token)
+                self.assertEqual(len(token_fds), 1)
+                with self.assertRaises(OSError) as error:
+                    os.fstat(token_fds[0])
+                self.assertEqual(error.exception.errno, errno.EBADF)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

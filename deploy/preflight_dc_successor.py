@@ -193,10 +193,54 @@ def process_observation(pid):
 
 
 def read_private_token(path):
-    raw, metadata = S.snapshot(path, "private HTTP authentication", 512)
-    if metadata["source_mode"] != "0600":
-        raise PermissionError("HTTP token descriptor requires exact 0600")
-    # Never return metadata/hash or preserve raw token bytes in any publication.
+    """Read one private credential without producing a digest or metadata record."""
+    parent, name = S.open_parent(path)
+    try:
+        parent_before = os.fstat(parent)
+        if (not stat.S_ISDIR(parent_before.st_mode) or parent_before.st_uid != os.getuid()
+                or stat.S_IMODE(parent_before.st_mode) != 0o700):
+            raise PermissionError("HTTP token parent requires owner-only 0700")
+
+        descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                             dir_fd=parent)
+        try:
+            def validate(info):
+                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                    raise ValueError("HTTP token requires a single-link ordinary file")
+                if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) not in (0o400, 0o600):
+                    raise PermissionError("HTTP token requires current owner and mode 0400 or 0600")
+
+            before = os.fstat(descriptor)
+            validate(before)
+            if before.st_size > 512:
+                raise ValueError("HTTP token exceeds bounded descriptor read")
+            raw = bytearray()
+            while len(raw) <= 512:
+                chunk = os.read(descriptor, 513 - len(raw))
+                if not chunk:
+                    break
+                raw.extend(chunk)
+            after = os.fstat(descriptor)
+            validate(after)
+            linked = os.stat(name, dir_fd=parent, follow_symlinks=False)
+            fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns",
+                      "st_uid", "st_nlink", "st_mode")
+            if (any(getattr(before, field) != getattr(after, field) for field in fields)
+                    or any(getattr(after, field) != getattr(linked, field) for field in fields)):
+                raise ValueError("HTTP token changed during descriptor read")
+            parent_after = os.fstat(parent)
+            parent_fields = ("st_dev", "st_ino", "st_uid", "st_mode")
+            if any(getattr(parent_before, field) != getattr(parent_after, field)
+                   for field in parent_fields):
+                raise ValueError("HTTP token parent changed during descriptor read")
+            if len(raw) != before.st_size or len(raw) > 512:
+                raise ValueError("HTTP token descriptor read was incomplete or oversized")
+        finally:
+            os.close(descriptor)
+    finally:
+        os.close(parent)
+    # Credentials stay in memory for the loopback request; no snapshot, digest,
+    # returned metadata, publication, or token-file mutation is permitted here.
     value = raw.decode("ascii").strip()
     if not value or len(value) > 256 or any(ord(c) < 33 or ord(c) > 126 for c in value):
         raise ValueError("private authentication format refused")
