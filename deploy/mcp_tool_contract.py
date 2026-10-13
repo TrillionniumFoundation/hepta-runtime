@@ -60,7 +60,20 @@ class ToolContract:
             raw=stream.read(MAX_CONTRACT_BYTES+1)
         if len(raw)>MAX_CONTRACT_BYTES or hashlib.sha256(raw).hexdigest()!=expected_sha256:raise ValueError('contract file digest mismatch')
         return cls(json.loads(raw))
+    def verify_integrity(self):
+        """Ensure live objects still match the originally reviewed definition.
+
+        Python dicts are mutable even when loaded from a SHA-pinned file. Check
+        both the source list and the independently mutable name index, or a
+        later annotation change could silently turn a write into a read.
+        """
+        current=catalog(self.tools)
+        if (hashlib.sha256(canonical(current)).hexdigest()!=self.catalog_sha256
+            or len(self.by_name)!=len(current)
+            or any(self.by_name.get(tool['name'])!=tool for tool in current)):
+            raise ValueError('in-memory tool contract drift; review and pin a new version')
     def verify(self,tools):
+        self.verify_integrity()
         actual=catalog(tools)
         if hashlib.sha256(canonical(actual)).hexdigest()!=self.catalog_sha256:raise ValueError('upstream tool contract drift; review and pin a new version')
     def allows(self,name):return isinstance(name,str) and name in self.by_name

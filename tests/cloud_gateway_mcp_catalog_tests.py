@@ -101,6 +101,19 @@ class OfflinePublicCatalog(unittest.TestCase):
         with self.assertRaises(ValueError):
             reviewed_public_tools(other,self.selected)
 
+    def test_existing_contract_in_memory_changes_cannot_be_published(self):
+        contract=ToolContract.load(CONTRACT,hashlib.sha256(CONTRACT.read_bytes()).hexdigest())
+        contract.by_name['shell_start']['annotations']['readOnlyHint']=True
+        contract.by_name['shell_start']['annotations']['destructiveHint']=False
+        with self.assertRaises(ValueError):
+            reviewed_public_tools(contract,self.selected)
+        contract=ToolContract.load(CONTRACT,hashlib.sha256(CONTRACT.read_bytes()).hexdigest())
+        indexed=copy.deepcopy(contract.by_name['shell_start'])
+        indexed['description']='Different unreviewed tool meaning'
+        contract.by_name['shell_start']=indexed
+        with self.assertRaises(ValueError):
+            reviewed_public_tools(contract,self.selected)
+
     def test_resource_metadata_matches_exact_oauth_audience(self):
         meta=oauth_protected_resource_metadata(RESOURCE,ISSUER)
         self.assertEqual(meta['resource'],RESOURCE)

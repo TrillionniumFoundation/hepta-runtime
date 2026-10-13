@@ -313,6 +313,12 @@ class GatewayPolicy:
             root = binding.local_workspace_root
             if not isinstance(root, str) or not root.startswith("/") or root == "/" or not _safe_path(root, root):
                 raise ValueError("Public tenant needs a private non-root absolute workspace")
+            # Frozen dataclass fields alone do not freeze nested sets. Mutable
+            # authorizations could otherwise be widened after enrollment and
+            # silently affect subsequent tool discovery and dispatch.
+            if any(type(items) is not frozenset for items in (
+                    binding.allowed_tools, binding.elevated_tools, binding.allowed_hosts)):
+                raise ValueError("Enrollment tool, elevated and host allowlists must be immutable frozensets")
             if not binding.allowed_tools <= contract.by_name.keys():
                 raise ValueError("Enrolled tool names must be in the immutable catalog")
             if not binding.elevated_tools <= HIGH_PRIVILEGE:
@@ -358,6 +364,8 @@ class GatewayPolicy:
             or not HEX64.fullmatch(agent.cert_sha256)
             or type(agent.connection_generation) is not int
             or agent.connection_generation <= 0
+            or type(agent.configured_host_aliases) is not frozenset
+            or not all(_identity_field(host) for host in agent.configured_host_aliases)
             or not _identity_field(agent.tenant)
             or not _identity_field(agent.subject)):
             raise Rejected("AGENT_IDENTITY_INVALID")
@@ -379,6 +387,17 @@ class GatewayPolicy:
             raise Rejected("AGENT_CONFIG_MISMATCH")
         return user, binding
 
+    def _require_unchanged_native_catalog(self) -> None:
+        # Neither Python's frozen dataclasses nor a file-level SHA protects
+        # nested live tool dictionaries from accidental in-process mutation.
+        # Check the reviewed digest AND the name index on each admission.
+        try:
+            if self.contract.catalog_sha256 != APPROVED_CATALOG_SHA256:
+                raise ValueError('unexpected version')
+            self.contract.verify_integrity()
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise Rejected("CATALOG_DRIFT") from exc
+
     def authorized_tool_names(self, authorization_header: str,
                               agent: AuthenticatedAgent) -> FrozenSet[str]:
         """An authenticated per-user discovery subset; no model-supplied ACL.
@@ -387,6 +406,7 @@ class GatewayPolicy:
         prepare independently before tools/call. No empty/anonymous fallback.
         """
         user,binding=self._authenticated_binding(authorization_header,agent)
+        self._require_unchanged_native_catalog()
         approved=set()
         for name in binding.allowed_tools:
             if not self.contract.read_only(name) and 'hepta:write' not in user.scopes:
@@ -404,6 +424,7 @@ class GatewayPolicy:
         tool_name: str, arguments: dict, call_id: str,
     ) -> DispatchPermit:
         user,binding=self._authenticated_binding(authorization_header,agent)
+        self._require_unchanged_native_catalog()
         if not isinstance(tool_name,str) or tool_name not in self.contract.by_name:
             raise Rejected("TOOL_UNKNOWN")
         if tool_name not in binding.allowed_tools:

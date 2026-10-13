@@ -45,6 +45,7 @@ def _valid_issuer(issuer):
 def _verify_reviewed_set(contract,approved):
     if not isinstance(contract,ToolContract) or contract.catalog_sha256!=APPROVED_CATALOG_SHA256:
         raise ValueError('Only immutable reviewed v4 native catalog is eligible')
+    contract.verify_integrity()
     if not isinstance(approved,frozenset) or not approved:
         raise ValueError('A nonempty exact administrator-reviewed tool allowlist is mandatory')
     if not approved<=contract.by_name.keys():

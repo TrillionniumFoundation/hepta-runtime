@@ -94,6 +94,35 @@ class GatewayPolicyTests(unittest.TestCase):
         with self.assertRaises(Rejected) as ctx:fn()
         self.assertEqual(ctx.exception.code,code)
 
+    def test_in_memory_catalog_annotation_drift_cannot_relabel_writes(self):
+        self.user=dataclasses.replace(self.user,
+            scopes=frozenset({'hepta:connect','hepta:execute'}))
+        # A frozen file hash is insufficient if live Python dictionaries are
+        # later changed in memory: tools and by_name share mutable instances.
+        self.contract.by_name['shell_start']['annotations']['readOnlyHint']=True
+        self.contract.by_name['shell_start']['annotations']['destructiveHint']=False
+        self.assert_denied('CATALOG_DRIFT',
+            lambda:self.policy.authorized_tool_names(
+                'Bearer _fixture_valid_only',self.agent))
+        self.assert_denied('CATALOG_DRIFT',
+            lambda:self.call('shell_start',{
+                'host':'main','cwd':ROOT_PATH+'/run','command':'printf marker'},
+                call_id='changed-catalog-0001'))
+
+    def test_separately_mutated_tool_index_cannot_change_admission(self):
+        # Mutating the index without mutating source tools must also be caught.
+        self.contract.by_name['directory_create']=dict(
+            self.contract.by_name['directory_create'])
+        self.contract.by_name['directory_create']['annotations']=dict(
+            self.contract.by_name['directory_create']['annotations'])
+        self.contract.by_name['directory_create']['annotations']['readOnlyHint']=True
+        self.assert_denied('CATALOG_DRIFT',
+            lambda:self.policy.authorized_tool_names(
+                'Bearer _fixture_valid_only',self.agent))
+        self.assert_denied('CATALOG_DRIFT',
+            lambda:self.call('directory_create',{'path':ROOT_PATH+'/new'},
+                call_id='index-drift-00001'))
+
     def test_real_v4_contract_exactly_50_without_relabelled_writes(self):
         self.assertEqual(len(self.contract.tools),50)
         self.assertEqual(sum(not t['annotations']['readOnlyHint'] for t in self.contract.tools),31)
@@ -516,6 +545,34 @@ class GatewayPolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             GatewayPolicy(self.contract,self.ledger,self.verifier,
                           (self.binding,self.binding),resource=RESOURCE,now=lambda:NOW)
+
+    def test_enrolled_allowlists_are_immutable_exact_frozensets(self):
+        for name in ('allowed_tools','allowed_hosts','elevated_tools'):
+            old=getattr(self.binding,name)
+            mutable=set(old)
+            with self.subTest(allowlist=name):
+                with self.assertRaises(ValueError):
+                    self.make_policy(dataclasses.replace(self.binding,**{name:mutable}))
+                # Construction must never retain a mutable object that can be
+                # extended to publish a new tool/host after admin enrollment.
+                mutable.add('unexpected-added-after-creation')
+                self.assertNotIn('unexpected-added-after-creation',old)
+        for name in ('allowed_tools','allowed_hosts','elevated_tools'):
+            with self.subTest(malformed_allowlist=name):
+                with self.assertRaises(ValueError):
+                    self.make_policy(dataclasses.replace(self.binding,**{name:'host_list'}))
+
+    def test_verified_agent_host_manifest_must_be_immutable_and_exact(self):
+        for bad in (set(self.agent.configured_host_aliases),
+                    list(self.agent.configured_host_aliases),
+                    'main,pocket4'):
+            with self.subTest(host_aliases=bad):
+                agent=dataclasses.replace(self.agent,configured_host_aliases=bad)
+                self.assert_denied('AGENT_IDENTITY_INVALID',
+                    lambda:self.policy.authorized_tool_names(
+                        'Bearer _fixture_valid_only',agent))
+        self.assertIn('host_list',self.policy.authorized_tool_names(
+            'Bearer _fixture_valid_only',self.agent))
 
     def test_ledger_private_and_symlink_fail_closed(self):
         path=pathlib.Path(self.temp.name)/'ledger.sqlite3'

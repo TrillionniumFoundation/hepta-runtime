@@ -157,6 +157,30 @@ binding generation/expiry fields fail enrollment validation. This hardens the
 future verifier integration boundary; it is **not** a replacement for
 cryptographic JWT validation, OAuth token revocation, or real device mTLS.
 
+## Live contract mutation is not a reviewed catalog (2026-10-13)
+
+The v4 catalog is pinned by a verified SHA256 digest, but Python lists/dictionaries loaded
+from that immutable JSON file are mutable. A tenant-aware policy that checks
+only `contract.catalog_sha256` at constructor time could later read an
+in-memory changed `readOnlyHint` or a shadow `by_name` entry, altering the
+OAuth write-scope decision without any reviewed release. Adversarial tests
+proved this failure mode before the fix.
+
+The shared `ToolContract.verify_integrity()` now rehashes the current tool
+list against its pinned SHA256 and compares all entries against its indexed
+names. The private facade's catalog verification invokes this check, and the
+offline public Gateway calls it before every caller-specific discovery and
+tool admission. The public catalog builder checks it before publishing any
+selected schema. Any mismatch is a closed `CATALOG_DRIFT` denial; it cannot
+become a silently downgraded tool annotation or a successful write permit.
+
+No frozen 50-tool v4 JSON, published tool schema, authorization scope or
+native execution policy was changed. The updated shared Python source is
+currently a **candidate in the developer worktree**, not an automatic update
+of the running private Full Operator's immutable installed release. Validation
+still needs exact-head CI, and neither private model-origin execution nor
+public OAuth/mTLS deployment is inferred from these unit tests.
+
 ## Work required before internet exposure
 
 1. Choose a verified organization, actual stable owned public HTTPS domain,

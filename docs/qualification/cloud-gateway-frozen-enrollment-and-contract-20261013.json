@@ -1,0 +1,60 @@
+{
+  "schema": "hepta-cloud-gateway-immutable-enrollment-and-live-contract-guard-v1",
+  "collected_utc": "2026-10-13T01:42:45.775090+00:00",
+  "base_commit": "254a7db7031c1eff29976e8c1c9ee13c9a9bef7f",
+  "reviewed_native_v4_tool_count": 50,
+  "reviewed_catalog_sha256": "63742708c287e8468d73f27ba85ecc6585afd4adcd76d06b618456730cfaf8ad",
+  "catalog_file_sha256": "d36610d575146805f4c02d89210abd360b4d42acc8736d1966f20d0d724704b1",
+  "adversarial_prepatch_results": {
+    "mutable_enrolled_tool_host_elevated_grants": "accepted; previously could widen the registered policy object after constructor",
+    "mutable_verified_agent_host_manifest": "accepted as equal to a frozenset; now invalid shape",
+    "mutated_in_memory_readOnly_destructive_hints": "accepted for authorization/discovery despite frozen source digest",
+    "shadowed_by_name_tool_definition": "not rejected by previous hash-property-only checks"
+  },
+  "controls": [
+    "Require exact frozenset instances for enrolled tools, hosts and elevated grants.",
+    "Require exact frozenset of enrolled host aliases from verified agent identity.",
+    "Hash current 50 live tool definitions and compare full by_name index before auth-dependent discovery and each tool admission.",
+    "Private facade source shares the same tightened ToolContract verification; installed private immutable release not overwritten.",
+    "Return stable CATALOG_DRIFT for all unauthorized in-memory definition changes; never relabel a write as a read."
+  ],
+  "tests": {
+    "gateway_policy": {
+      "passed": 39,
+      "log_sha256": "d88a4f369a366dafbce87630382482fed83a4a354970012ddf3b40c182bd9547"
+    },
+    "catalog": {
+      "passed": 11,
+      "log_sha256": "95e2e25179d8de68b4adbd51925605ee98b8ce8286beba346cfbd46b646ae683"
+    },
+    "authenticated_discovery": {
+      "passed": 7,
+      "log_sha256": "c3f0a018284f29686b5c757e0af818fc25e864a42a55dd9584f07cbcb6b52261"
+    },
+    "private_facade": {
+      "passed": 31,
+      "log_sha256": "64b15fcc5a1608751c1bc05c09782eaf12e30f6f4bb86b408bab9270ce1fe746"
+    }
+  },
+  "source_sha256": {
+    "deploy/mcp_tool_contract.py": "e2b29f987d3aaa863d7bf6879d0d6a835a807c133c5c355b6a4e69bce9c3e216",
+    "deploy/cloud_gateway_policy.py": "3591c41bf5cd51ac0be7d8a79f0c1454fbb5476d9232881d0827f0d6679d73b2",
+    "deploy/cloud_gateway_mcp_catalog.py": "229aba790138289153b2bf67829733babaa35a4b83ac478958c08e9c639698ee",
+    "tests/cloud_gateway_policy_tests.py": "dd6b54d94e33ca393cd111256cfe20cfc8b3250c7f689339c3047c6d9e720319",
+    "tests/cloud_gateway_mcp_catalog_tests.py": "a2ba6500c0ca0f8cb18cf49c42c1e8c8589ec753ee283c50ee7a6991c6d2ae4a",
+    "tests/full_operator_facade_tests.py": "f8c0b2f713347f2be818b2b35ffc03cf46bf3c9c955552dd1d40a8476b5ca4d4",
+    "docs/CLOUD_GATEWAY_V1.md": "364a52ef1135ce2eea99fed514a02ec7f703256a6f811826090ba875eaf1ce8c"
+  },
+  "limits": {
+    "fixture_fake_verifier": true,
+    "actual_oauth_jwks_revocation_server": false,
+    "actual_device_mtls_and_signature": false,
+    "actual_tenant_os_sandbox": false,
+    "public_https_endpoint_running": false,
+    "public_plugin_launched": false,
+    "private_50_tool_catalog_changed": false,
+    "private_runtime_or_tunnel_or_DC_restarted": false,
+    "exact_head_ci": "unobserved until the new commit run completes"
+  },
+  "secret_material_collected": false
+}

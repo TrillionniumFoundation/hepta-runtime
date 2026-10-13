@@ -45,6 +45,17 @@ class ContractTests(unittest.TestCase):
         for field,new in [('description','changed'),('inputSchema',{'type':'object'}),('annotations',{'readOnlyHint':True,'destructiveHint':False,'idempotentHint':True,'openWorldHint':True})]:
             changed=copy.deepcopy(TOOLS);changed[1][field]=new
             with self.assertRaises(ValueError):self.contract.verify(changed)
+    def test_loaded_contract_refuses_live_schema_or_index_drift(self):
+        self.contract.verify_integrity()
+        source=self.contract.tools[0]
+        source['description']+=' unreviewed change'
+        with self.assertRaises(ValueError):self.contract.verify_integrity()
+        with self.assertRaises(ValueError):self.contract.verify(TOOLS)
+        rebuilt=ToolContract(make_contract(copy.deepcopy(TOOLS)))
+        rebuilt.by_name['shell_start']=copy.deepcopy(rebuilt.by_name['shell_start'])
+        rebuilt.by_name['shell_start']['description']='Unreviewed shadow definition'
+        with self.assertRaises(ValueError):rebuilt.verify_integrity()
+
     def test_invalid_duplicate_or_incomplete_definitions_rejected(self):
         for tools in ([],[TOOLS[0],TOOLS[0]],[{**TOOLS[0],'annotations':{}}],[{**TOOLS[0],'name':'bad name'}]):
             with self.assertRaises(ValueError):make_contract(tools)
