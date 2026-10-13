@@ -33,6 +33,85 @@ REQUIRED_RECEIPTS = frozenset((
     "dc-parity-v4-chatgpt-model-origin-accepted-20261013.json",
 ))
 
+CUTOVER_SCOPE = "private_desktop_commander_replacement"
+FUNCTIONAL_SCOPE = "required_user_workflows"
+SIX_HOSTS = frozenset(("main", "pocket4", "rog", "mac", "x230", "ai395"))
+CUTOVER_CHECKS = {
+    "independent_dc_off_smoke": frozenset(("dc_agent_temporarily_stopped", "out_of_band_rescue_verified", "six_host_real_workflows_passed", "business_services_unchanged", "dc_restored")),
+    "workflow_restart_recovery": frozenset(("native_service_restart_verified", "tunnel_restart_verified", "durable_jobs_and_ptys_recovered", "no_duplicate_effects", "business_services_unchanged")),
+    "cutover_rollback_drill": frozenset(("rollback_performed", "previous_release_restored", "dc_rescue_verified", "business_services_unchanged")),
+    "audit_and_search_session_gap": frozenset(("caller_scoped_audit_qualified", "search_lifecycle_qualified", "client_reconnect_qualified", "six_host_acceptance_passed")),
+    "privileged_action_policy_review": frozenset(("admin_pinned_action_review_complete", "required_workflows_qualified", "no_new_unaudited_privilege")),
+    "vendor_specific_retirement_decision": frozenset(("vendor_functions_reviewed", "explicit_retirement_approved", "hepta_alternatives_documented")),
+}
+
+
+def verified_receipt(ref, evidence_root):
+    """Read an existing digest-pinned qualification artifact, without following an escape."""
+    if not isinstance(ref, dict) or set(ref) != {"path", "sha256"}:
+        return None
+    if not isinstance(ref["path"], str) or not isinstance(ref["sha256"], str):
+        return None
+    path = pathlib.Path(ref["path"])
+    if path.is_absolute() or ".." in path.parts or not path.as_posix().startswith("docs/qualification/"):
+        return None
+    full = evidence_root / path
+    try:
+        if (full.is_symlink() or not full.resolve().is_relative_to((evidence_root / "docs/qualification").resolve())
+                or not full.is_file() or full.stat().st_size > 2 * 1024 * 1024
+                or sha256(full) != ref["sha256"]):
+            return None
+        value = json.loads(full.read_text())
+    except (OSError, ValueError, UnicodeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def cutover_receipt_valid(gate, value):
+    """Typed evidence binds a positive flag to its actual drill and explicit authorization.
+
+    This is a provenance/semantic check, not cryptographic proof of a human action.
+    In particular a prior bounded model-origin tool receipt is never a cutover drill.
+    """
+    if not isinstance(value, dict) or gate not in CUTOVER_CHECKS:
+        return False
+    authorization = value.get("authorization")
+    checks = value.get("checks")
+    return (value.get("schema") == "hepta-dc-cutover-gate-evidence-v1"
+            and value.get("gate") == gate and value.get("scope") == CUTOVER_SCOPE
+            and value.get("complete") is True
+            and isinstance(authorization, dict)
+            and set(authorization) == {"approved", "scope", "record_reference"}
+            and authorization.get("approved") is True and authorization.get("scope") == gate
+            and isinstance(authorization.get("record_reference"), str)
+            and bool(authorization["record_reference"].strip())
+            and isinstance(checks, dict) and set(checks) == CUTOVER_CHECKS[gate]
+            and all(value is True for value in checks.values()))
+
+
+def functional_receipt_valid(row, value):
+    """A bounded invocation alone does not qualify a required business workflow."""
+    if not isinstance(value, dict):
+        return False
+    workflows = value.get("required_workflows")
+    return (value.get("schema") == "hepta-dc-functional-qualification-v1"
+            and value.get("dc_tool") == row.get("dc_tool")
+            and value.get("hepta_tools") == row.get("hepta_tools")
+            and value.get("scope") == FUNCTIONAL_SCOPE and value.get("complete") is True
+            and value.get("universal_parity_claimed") is False
+            and value.get("business_workflow_accepted") is True
+            and isinstance(workflows, list) and bool(workflows)
+            and all(isinstance(workflow, str) and workflow.strip() for workflow in workflows)
+            and isinstance(value.get("native_hosts"), list)
+            and len(value["native_hosts"]) == len(SIX_HOSTS)
+            and all(isinstance(host, str) for host in value["native_hosts"])
+            and set(value["native_hosts"]) == SIX_HOSTS
+            and isinstance(value.get("model_origin_hosts"), list)
+            and len(value["model_origin_hosts"]) == len(SIX_HOSTS)
+            and all(isinstance(host, str) for host in value["model_origin_hosts"])
+            and set(value["model_origin_hosts"]) == SIX_HOSTS)
+
+
 def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -138,13 +217,25 @@ def evaluate(ledger, contract, *, evidence_root=ROOT):
             if not isinstance(receipt, dict) or set(receipt) != {"path", "sha256"}:
                 problems.append(f"{name}: positive gate requires a frozen evidence reference")
             else:
-                path = pathlib.Path(receipt["path"])
-                if (path.is_absolute() or ".." in path.parts or
-                        not path.as_posix().startswith("docs/qualification/") or
-                        not (evidence_root / path).is_file() or
-                        sha256(evidence_root / path) != receipt["sha256"]):
+                value = verified_receipt(receipt, evidence_root)
+                if value is None:
                     problems.append(f"{name}: frozen cutover receipt is invalid")
-    replacement_ready = not problems and not unresolved and all(gates.get(k) is True for k in forced_holds)
+                elif not cutover_receipt_valid(name, value):
+                    problems.append(f"{name}: receipt does not qualify this exact cutover gate and authorized scope")
+    functional_pending = []
+    for item in entries:
+        if not isinstance(item, dict) or item.get("status") == "vendor_specific":
+            continue
+        ref = item.get("functional_qualification")
+        if ref is None:
+            functional_pending.append(item.get("dc_tool"))
+            continue
+        value = verified_receipt(ref, evidence_root)
+        if not functional_receipt_valid(item, value):
+            problems.append(f"{item.get('dc_tool')}: functional qualification does not prove required workflows on six native and model-origin hosts")
+            functional_pending.append(item.get("dc_tool"))
+    replacement_ready = (not problems and not unresolved and not functional_pending
+                         and all(gates.get(k) is True for k in forced_holds))
     if ledger.get("full_replacement_claimed") is True and not replacement_ready:
         problems.append("Crosswalk falsely asserts full replacement before evidence gates pass")
         replacement_ready = False
@@ -154,6 +245,7 @@ def evaluate(ledger, contract, *, evidence_root=ROOT):
         "installed_hepta_tool_count": len(unique),
         "categories": dict(sorted(classifications.items())),
         "functional_parity_unresolved": unresolved,
+        "required_workflow_qualification_pending": functional_pending,
         "requirements": list(forced_holds),
         "integrity_problems": problems,
         "full_dc_replacement_qualified": replacement_ready,

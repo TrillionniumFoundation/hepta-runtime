@@ -94,5 +94,78 @@ class Gate(unittest.TestCase):
         self.assertIn("administrator",rows["set_config_value"]["next_gate"])
         self.assertNotIn("shell_start",rows["set_config_value"]["hepta_tools"])
 
+class SemanticEvidence(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.ledger=json.loads(G.LEDGER.read_text())
+        cls.contract=json.loads(G.CONTRACT.read_text())
+        cls.old_ref=cls.ledger["source_receipts"]["dc-parity-v4-chatgpt-model-origin-accepted-20261013.json"]
+        cls.old_receipt=json.loads((ROOT/cls.old_ref["path"]).read_text())
+
+    def promoted(self):
+        value=copy.deepcopy(self.ledger)
+        for row in value["entries"]:
+            if row["status"] in ("partial","unimplemented"):
+                row.update(status="bounded",hepta_tools=["view"],evidence=self.old_ref)
+        return value
+
+    def test_old_bounded_receipt_cannot_authorize_any_cutover_gate(self):
+        for name in G.CUTOVER_CHECKS:
+            with self.subTest(gate=name):
+                value=copy.deepcopy(self.ledger)
+                value["cutover_gates"][name]=True
+                value["cutover_evidence"]={name:self.old_ref}
+                result=G.evaluate(value,self.contract,evidence_root=ROOT)
+                self.assertFalse(result["full_dc_replacement_qualified"])
+                self.assertTrue(any("exact cutover gate" in error for error in result["integrity_problems"]))
+                self.assertFalse(G.cutover_receipt_valid(name,self.old_receipt))
+
+    def test_reclassifying_every_gap_with_view_and_old_receipts_never_qualifies(self):
+        value=self.promoted()
+        value["cutover_gates"]={name:True for name in G.CUTOVER_CHECKS}
+        value["cutover_evidence"]={name:self.old_ref for name in G.CUTOVER_CHECKS}
+        value["full_replacement_claimed"]=True
+        result=G.evaluate(value,self.contract,evidence_root=ROOT)
+        self.assertFalse(result["full_dc_replacement_qualified"])
+        self.assertEqual(len(result["required_workflow_qualification_pending"]),26)
+        self.assertTrue(any("falsely asserts" in error for error in result["integrity_problems"]))
+
+    def test_unrelated_hash_valid_receipt_is_not_a_functional_qualification(self):
+        value=self.promoted()
+        for row in value["entries"]:
+            if row["status"]=="bounded":row["functional_qualification"]=self.old_ref
+        result=G.evaluate(value,self.contract,evidence_root=ROOT)
+        self.assertFalse(result["full_dc_replacement_qualified"])
+        self.assertTrue(any("functional qualification" in error for error in result["integrity_problems"]))
+
+    def test_typed_drill_requires_exact_gate_approval_and_every_actual_check(self):
+        for name,checks in G.CUTOVER_CHECKS.items():
+            receipt={"schema":"hepta-dc-cutover-gate-evidence-v1","gate":name,"scope":G.CUTOVER_SCOPE,
+                     "complete":True,"authorization":{"approved":True,"scope":name,"record_reference":"explicit-test-fixture-authorization"},
+                     "checks":{key:True for key in checks}}
+            self.assertTrue(G.cutover_receipt_valid(name,receipt))
+            for field,replacement in (("gate","other-gate"),("scope","bounded-tool-call"),("complete",False)):
+                wrong=copy.deepcopy(receipt);wrong[field]=replacement
+                self.assertFalse(G.cutover_receipt_valid(name,wrong))
+            wrong=copy.deepcopy(receipt);wrong["authorization"]["approved"]=False
+            self.assertFalse(G.cutover_receipt_valid(name,wrong))
+            wrong=copy.deepcopy(receipt);wrong["checks"][next(iter(checks))]=False
+            self.assertFalse(G.cutover_receipt_valid(name,wrong))
+
+    def test_workflow_receipt_binds_tool_workflow_native_model_hosts_and_acceptance(self):
+        row=next(row for row in self.ledger["entries"] if row["dc_tool"]=="read_file")
+        receipt={"schema":"hepta-dc-functional-qualification-v1","dc_tool":row["dc_tool"],
+                 "hepta_tools":row["hepta_tools"],"scope":G.FUNCTIONAL_SCOPE,"complete":True,
+                 "universal_parity_claimed":False,"business_workflow_accepted":True,
+                 "required_workflows":["read the required real business document"],
+                 "native_hosts":sorted(G.SIX_HOSTS),"model_origin_hosts":sorted(G.SIX_HOSTS)}
+        self.assertTrue(G.functional_receipt_valid(row,receipt))
+        for field,replacement in (("dc_tool","start_search"),("hepta_tools",["view"]),
+                                  ("required_workflows",[]),("business_workflow_accepted",False),
+                                  ("native_hosts",["main"]),("model_origin_hosts",["main"]),
+                                  ("universal_parity_claimed",True)):
+            wrong=copy.deepcopy(receipt);wrong[field]=replacement
+            self.assertFalse(G.functional_receipt_valid(row,wrong),field)
+
 if __name__=="__main__":
     unittest.main(verbosity=2)
