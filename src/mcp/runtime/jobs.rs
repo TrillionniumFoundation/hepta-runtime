@@ -1211,6 +1211,24 @@ async fn launch_record(
 	Ok(preserve_launch_outcome(record, launch_result, save_record))
 }
 
+/// The macOS operator helper uses a detached process backend. It cannot
+/// enforce systemd CPUQuota/MemoryMax. Refuse a *new* unsupported request
+/// before allocating a durable job identity, persisting launch intent or
+/// contacting SSH; never silently drop the requested resource bounds.
+fn validate_new_host_resource_limits(
+	platform: Platform,
+	params: &ProcessStartParams,
+) -> Result<()> {
+	if platform == Platform::Macos
+		&& (params.cpu_quota_percent.is_some() || params.memory_max_bytes.is_some())
+	{
+		bail!(
+            "macOS detached job backend cannot enforce requested CPU/memory limits;              no new job identity allocated or remote launch submitted"
+        );
+	}
+	Ok(())
+}
+
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	validate_start(&params)?;
 	let _start_guard = start_lock().lock().await;
@@ -1254,6 +1272,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 
 	let config = runtime_config()?;
 	let host = config.host(&params.host)?;
+	validate_new_host_resource_limits(host.platform, &params)?;
 	let id = next_job_id();
 	let unit = format!("hepta-runtime-job-{id}");
 	let remote_job_dir = format!("{}/jobs/{id}", host.remote_state_dir.trim_end_matches('/'));

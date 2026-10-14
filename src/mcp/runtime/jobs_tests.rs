@@ -5,6 +5,46 @@
 use super::*;
 
 #[test]
+fn macos_detached_resource_bounds_reject_before_new_job_identity() {
+	let mut params = ProcessStartParams {
+		host: "mac".into(),
+		executable: "/usr/bin/python3".into(),
+		args: vec!["-c".into(), "print(42)".into()],
+		cwd: None,
+		env: BTreeMap::new(),
+		stdin: None,
+		timeout_seconds: Some(30),
+		idempotency_key: Some("keep-original-identity".into()),
+		nice: Some(5),
+		cpu_quota_percent: None,
+		memory_max_bytes: None,
+	};
+	assert!(validate_new_host_resource_limits(Platform::Macos, &params).is_ok());
+	params.cpu_quota_percent = Some(25);
+	let error = validate_new_host_resource_limits(Platform::Macos, &params)
+		.unwrap_err()
+		.to_string();
+	assert!(error.contains("no new job identity"));
+	assert!(error.contains("remote launch submitted"));
+	assert!(validate_new_host_resource_limits(Platform::Linux, &params).is_ok());
+	params.cpu_quota_percent = None;
+	params.memory_max_bytes = Some(32 * 1024 * 1024);
+	assert!(validate_new_host_resource_limits(Platform::Macos, &params).is_err());
+	assert!(validate_new_host_resource_limits(Platform::Linux, &params).is_ok());
+	params.cpu_quota_percent = Some(100);
+	assert!(validate_new_host_resource_limits(Platform::Macos, &params).is_err());
+	params.cpu_quota_percent = None;
+	params.memory_max_bytes = None;
+	assert!(validate_new_host_resource_limits(Platform::Macos, &params).is_ok());
+	// Other user-provided params, including timeout/nice and exact key, are untouched.
+	assert_eq!(
+		params.idempotency_key.as_deref(),
+		Some("keep-original-identity")
+	);
+	assert_eq!(params.nice, Some(5));
+}
+
+#[test]
 fn large_job_inventory_is_complete_redacted_and_wire_bounded() {
 	let records: Vec<JobRecord> = (0..3431)
 		.map(|index| {

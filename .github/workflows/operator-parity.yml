@@ -1,7 +1,7 @@
 name: Operator parity qualification
 on:
   push:
-    branches: [feat/operator-parity-20261006, fix/service-scope-20261014, fix/runtime-v10-service-network-lossless-20261014, feat/operator-readonly-inventory-20261014]
+    branches: [feat/operator-parity-20261006, fix/service-scope-20261014, fix/runtime-v10-service-network-lossless-20261014, feat/operator-readonly-inventory-20261014, fix/mac-detached-resource-admission-20261014]
   workflow_dispatch:
 permissions:
   contents: read
@@ -56,6 +56,7 @@ jobs:
             python3 -B tests/dc_readonly_inventory_collector_tests.py
             python3 -m py_compile tests/service_scope_native_acceptance.py deploy/install_local_scope_canary.py tests/network_result_boundary_acceptance.py
             cargo build --locked --bin hepta-runtime
+            python3 -B tests/mac_detached_resource_native_acceptance.py --binary target/debug/hepta-runtime --output /tmp/hepta-macos-preflight-source-ci
             # Contract loader intentionally rejects group/other-writable files.
             # Runner/worktree umask must not change the exact frozen test bytes.
             chmod go-w deploy/contracts/hepta-runtime-full-operator-v{1,2,3,4,5,6,7,8,9,10}.json
