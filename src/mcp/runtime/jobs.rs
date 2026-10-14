@@ -1429,7 +1429,7 @@ fn job_inventory_response(records: &[JobRecord]) -> Result<String> {
 			})
 		})
 		.collect();
-	let text = serde_json::to_string_pretty(&json!({"jobs":jobs,"total":records.len(),
+	let text = serde_json::to_string(&json!({"jobs":jobs,"total":records.len(),
 		"inventory_complete":true,"status_authoritative":false}))?;
 	let wire = serde_json::to_vec(&rmcp::model::CallToolResult::success(vec![
 		rmcp::model::ContentBlock::text(text.clone()),

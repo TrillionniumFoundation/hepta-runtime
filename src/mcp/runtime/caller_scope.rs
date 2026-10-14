@@ -6,12 +6,16 @@ use anyhow::{anyhow, bail, Result};
 use rmcp::{service::RequestContext, RoleServer};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::{path::Path, sync::Mutex};
+use std::{
+	path::Path,
+	sync::{Arc, Mutex},
+};
 
 /// Only the verified HTTP middleware constructs this non-serialized extension.
 #[derive(Clone)]
 pub struct AuthenticatedOperatorScope {
 	owner: String,
+	operation_crypto: Option<Arc<super::operation_crypto::ResultCryptoScope>>,
 }
 impl std::fmt::Debug for AuthenticatedOperatorScope {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -24,6 +28,11 @@ impl AuthenticatedOperatorScope {
 		digest.update(b"hepta-runtime/private-operator-credential/v1\0");
 		digest.update(token);
 		Self {
+			operation_crypto: super::operation_crypto::ResultCryptoScope::from_verified_token(
+				token,
+			)
+			.ok()
+			.map(Arc::new),
 			owner: digest
 				.finalize()
 				.iter()
@@ -152,6 +161,26 @@ impl std::fmt::Debug for SessionOwnerBinding {
 	}
 }
 impl SessionOwnerBinding {
+	pub(crate) fn resolve_operation_crypto(
+		&self,
+		context: &RequestContext<RoleServer>,
+		fallback: Option<&str>,
+		stdio_crypto: Option<&Arc<super::operation_crypto::ResultCryptoScope>>,
+	) -> Result<(OwnerScope, Arc<super::operation_crypto::ResultCryptoScope>)> {
+		let scope = self.resolve(context, fallback)?;
+		let crypto = if let Some(parts) = context.extensions.get::<axum::http::request::Parts>() {
+			parts
+				.extensions
+				.get::<AuthenticatedOperatorScope>()
+				.and_then(|verified| verified.operation_crypto.clone())
+		} else {
+			stdio_crypto.cloned()
+		};
+		Ok((
+			scope,
+			crypto.ok_or_else(|| anyhow!("trusted operation crypto authority unavailable"))?,
+		))
+	}
 	pub fn resolve(
 		&self,
 		context: &RequestContext<RoleServer>,

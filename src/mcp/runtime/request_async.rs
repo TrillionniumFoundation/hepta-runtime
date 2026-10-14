@@ -177,12 +177,15 @@ fn registry() -> Result<std::sync::MutexGuard<'static, Registry>> {
 		.lock()
 		.map_err(|_| anyhow!("async request state unavailable"))
 }
-struct Slot {
+pub(crate) struct Slot {
 	owner: String,
 }
 impl Slot {
-	fn take(owner: &str) -> Result<Self> {
+	pub(crate) fn take(owner: &str) -> Result<Self> {
 		let mut r = registry()?;
+		if STOPPING.load(Ordering::Acquire) {
+			bail!("async admission is frozen; existing receipts remain queryable");
+		}
 		if r.reserved.values().sum::<usize>() >= GLOBAL_ACTIVE
 			|| r.reserved.get(owner).copied().unwrap_or(0) >= OWNER_ACTIVE
 		{
@@ -1223,8 +1226,11 @@ pub async fn cancel(owner: &str, p: RequestCancelParams) -> Result<String> {
         "cancellation_scope":"this_controller_owned_rust_future_only"}),
 	)?)
 }
-pub async fn shutdown() {
+pub(crate) fn freeze_admission() {
 	STOPPING.store(true, Ordering::Release);
+}
+pub async fn shutdown() {
+	freeze_admission();
 	let _admission = ADMISSION
 		.get_or_init(|| tokio::sync::Mutex::new(()))
 		.lock()

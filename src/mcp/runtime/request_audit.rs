@@ -750,6 +750,21 @@ fn begin_reserved_at(root: &Path, identity: RequestIdentity) -> Result<RequestTi
 		) {
 		bail!("reserved request identity unavailable");
 	}
+	begin_reserved_record_at(root, identity)
+}
+#[cfg(unix)]
+fn begin_operation_reserved_at(root: &Path, identity: RequestIdentity) -> Result<RequestTicket> {
+	if !valid_id(&identity.owner)
+		|| !valid_id(&identity.request_id)
+		|| !super::operation_async::eligible(&identity.tool_name)
+	{
+		bail!("reserved native read identity unavailable");
+	}
+	begin_reserved_record_at(root, identity)
+}
+/// Both closed internal families validate their exact capability before opening disk.
+#[cfg(unix)]
+fn begin_reserved_record_at(root: &Path, identity: RequestIdentity) -> Result<RequestTicket> {
 	let _guard = store_lock()?;
 	let directory = open_store(root)?;
 	match read_record(&directory, &format!("{}.json", identity.request_id)) {
@@ -794,6 +809,17 @@ pub(crate) async fn begin_reserved(identity: RequestIdentity) -> Result<RequestT
 		.map_err(|_| anyhow!("reserved request admission unavailable; never redispatch"))?
 }
 
+#[cfg(not(unix))]
+fn begin_operation_reserved_at(_root: &Path, _identity: RequestIdentity) -> Result<RequestTicket> {
+	bail!("private request auditing requires Unix descriptor support")
+}
+/// V10's closed native-read reservation; never widens V9's three-DTO API.
+pub(crate) async fn begin_operation_reserved(identity: RequestIdentity) -> Result<RequestTicket> {
+	let root = runtime_config()?.state_dir.clone();
+	tokio::task::spawn_blocking(move || begin_operation_reserved_at(&root, identity))
+		.await
+		.map_err(|_| anyhow!("reserved native read admission unavailable; never redispatch"))?
+}
 #[cfg(unix)]
 fn finish_sync(mut ticket: RequestTicket, completion: AuditCompletion) -> Result<()> {
 	let _guard = store_lock()?;

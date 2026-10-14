@@ -1,0 +1,130 @@
+{
+  "schema": "hepta-native-operation-crypto-primitive-v2",
+  "base_HEAD": "50372629e0522d19b5bc4c1a800bfc311e4597f9",
+  "full_compile_fingerprint": "d1c81ca402f657e132f616caceab2a5066a36dcee962dc0eb3be9b19e9f53123",
+  "source_files": {
+    "src/mcp/runtime/operation_crypto.rs": {
+      "bytes": 15524,
+      "sha256": "a48463ef35ca41d0aa8ef64fcaeb9d3245773052221789a38d18d52ced891633"
+    },
+    "src/mcp/runtime/operation_crypto_tests.rs": {
+      "bytes": 22916,
+      "sha256": "ccb885c51850a14332dba860a3e354598f489734fbb3539ec8f3bd3d7144a9f6"
+    }
+  },
+  "previous_v1_tests_retained": [
+    "authenticated_but_invalid_inner_schema_length_or_sha_is_refused",
+    "bounded_nonce_accounting_fails_closed_before_new_seal",
+    "ciphertext_contains_no_private_args_key_output_or_plaintext_digest_header",
+    "concurrent_duplicate_nonce_admits_exactly_one_ciphertext",
+    "cross_operation_and_cross_owner_swaps_are_refused",
+    "distinct_operation_subkeys_make_same_nonce_a_distinct_key_namespace",
+    "empty_and_binary_payloads_remain_opaque_not_parsed_or_rewritten",
+    "entropy_failure_never_returns_ciphertext_or_partially_initialized_scope",
+    "every_trusted_binding_field_is_authenticated",
+    "exact_one_mib_is_retained_without_truncation",
+    "hmac_domains_separate_private_args_and_private_idempotency_keys",
+    "hostile_packet_sizes_headers_and_truncations_are_rejected",
+    "immutable_ledger_nonce_creates_independent_subkey_for_a_reused_operation_id",
+    "malformed_trusted_identities_are_refused_before_any_nonce_consumption",
+    "nonce_tag_and_ciphertext_tampering_fail_closed",
+    "original_native_sdk_success_and_error_bytes_round_trip_exactly",
+    "overflow_fails_before_entropy_or_nonce_admission",
+    "owned_disk_packet_and_public_metadata_do_not_enable_owner_hash_decryption",
+    "persisted_owner_hash_is_not_a_decryption_key_or_key_derivation_input",
+    "repeated_nonce_is_rejected_even_through_a_cloned_scope",
+    "request_and_key_input_bounds_fail_closed",
+    "schema_algorithm_and_domain_aad_changes_cannot_decrypt",
+    "scope_binding_payload_and_errors_debug_never_print_secrets",
+    "stdio_keys_are_independent_and_reset_without_durable_resume",
+    "substituting_a_binding_domain_key_for_aead_is_refused",
+    "verified_same_token_resumes_but_wrong_or_rotated_token_does_not"
+  ],
+  "new_policy_tests": [
+    "private_policy_binding_has_independent_domain_and_no_public_digest_or_owner_key",
+    "private_policy_binding_is_bounded_and_stdio_has_no_durable_shared_policy_key"
+  ],
+  "HKDF_domains": [
+    "result-aead/v1",
+    "request-binding/v1",
+    "idempotency-binding/v1",
+    "private-policy-binding/v1"
+  ],
+  "validation_origin": "actual new full/default and full/allfeatures alltargets Rust logs; not a separate targeted rerun",
+  "modes": {
+    "rust-default-alltargets": {
+      "exit_code": 0,
+      "log_path": "docs/qualification/dc-functional-v10-operation-candidate-20261013/r9-full-input-frozen-checks/rust-default-alltargets.log",
+      "log_sha256": "068448ff67cf02fd52a5314786634ac77524898aa97422f062460eab31f7737b",
+      "crypto_tests_passed": 28,
+      "tests": [
+        "authenticated_but_invalid_inner_schema_length_or_sha_is_refused",
+        "bounded_nonce_accounting_fails_closed_before_new_seal",
+        "ciphertext_contains_no_private_args_key_output_or_plaintext_digest_header",
+        "concurrent_duplicate_nonce_admits_exactly_one_ciphertext",
+        "cross_operation_and_cross_owner_swaps_are_refused",
+        "distinct_operation_subkeys_make_same_nonce_a_distinct_key_namespace",
+        "empty_and_binary_payloads_remain_opaque_not_parsed_or_rewritten",
+        "entropy_failure_never_returns_ciphertext_or_partially_initialized_scope",
+        "every_trusted_binding_field_is_authenticated",
+        "exact_one_mib_is_retained_without_truncation",
+        "hmac_domains_separate_private_args_and_private_idempotency_keys",
+        "hostile_packet_sizes_headers_and_truncations_are_rejected",
+        "immutable_ledger_nonce_creates_independent_subkey_for_a_reused_operation_id",
+        "malformed_trusted_identities_are_refused_before_any_nonce_consumption",
+        "nonce_tag_and_ciphertext_tampering_fail_closed",
+        "original_native_sdk_success_and_error_bytes_round_trip_exactly",
+        "overflow_fails_before_entropy_or_nonce_admission",
+        "owned_disk_packet_and_public_metadata_do_not_enable_owner_hash_decryption",
+        "persisted_owner_hash_is_not_a_decryption_key_or_key_derivation_input",
+        "private_policy_binding_has_independent_domain_and_no_public_digest_or_owner_key",
+        "private_policy_binding_is_bounded_and_stdio_has_no_durable_shared_policy_key",
+        "repeated_nonce_is_rejected_even_through_a_cloned_scope",
+        "request_and_key_input_bounds_fail_closed",
+        "schema_algorithm_and_domain_aad_changes_cannot_decrypt",
+        "scope_binding_payload_and_errors_debug_never_print_secrets",
+        "stdio_keys_are_independent_and_reset_without_durable_resume",
+        "substituting_a_binding_domain_key_for_aead_is_refused",
+        "verified_same_token_resumes_but_wrong_or_rotated_token_does_not"
+      ]
+    },
+    "rust-allfeatures-alltargets": {
+      "exit_code": 0,
+      "log_path": "docs/qualification/dc-functional-v10-operation-candidate-20261013/r9-full-input-frozen-checks/rust-allfeatures-alltargets.log",
+      "log_sha256": "08957709c948d5c10691c5c62ab60991f1a2bca0cd85d51fa34df1ac6590428c",
+      "crypto_tests_passed": 28,
+      "tests": [
+        "authenticated_but_invalid_inner_schema_length_or_sha_is_refused",
+        "bounded_nonce_accounting_fails_closed_before_new_seal",
+        "ciphertext_contains_no_private_args_key_output_or_plaintext_digest_header",
+        "concurrent_duplicate_nonce_admits_exactly_one_ciphertext",
+        "cross_operation_and_cross_owner_swaps_are_refused",
+        "distinct_operation_subkeys_make_same_nonce_a_distinct_key_namespace",
+        "empty_and_binary_payloads_remain_opaque_not_parsed_or_rewritten",
+        "entropy_failure_never_returns_ciphertext_or_partially_initialized_scope",
+        "every_trusted_binding_field_is_authenticated",
+        "exact_one_mib_is_retained_without_truncation",
+        "hmac_domains_separate_private_args_and_private_idempotency_keys",
+        "hostile_packet_sizes_headers_and_truncations_are_rejected",
+        "immutable_ledger_nonce_creates_independent_subkey_for_a_reused_operation_id",
+        "malformed_trusted_identities_are_refused_before_any_nonce_consumption",
+        "nonce_tag_and_ciphertext_tampering_fail_closed",
+        "original_native_sdk_success_and_error_bytes_round_trip_exactly",
+        "overflow_fails_before_entropy_or_nonce_admission",
+        "owned_disk_packet_and_public_metadata_do_not_enable_owner_hash_decryption",
+        "persisted_owner_hash_is_not_a_decryption_key_or_key_derivation_input",
+        "private_policy_binding_has_independent_domain_and_no_public_digest_or_owner_key",
+        "private_policy_binding_is_bounded_and_stdio_has_no_durable_shared_policy_key",
+        "repeated_nonce_is_rejected_even_through_a_cloned_scope",
+        "request_and_key_input_bounds_fail_closed",
+        "schema_algorithm_and_domain_aad_changes_cannot_decrypt",
+        "scope_binding_payload_and_errors_debug_never_print_secrets",
+        "stdio_keys_are_independent_and_reset_without_durable_resume",
+        "substituting_a_binding_domain_key_for_aead_is_refused",
+        "verified_same_token_resumes_but_wrong_or_rotated_token_does_not"
+      ]
+    }
+  },
+  "scope": "primitive only, root independent source peer review separately recorded; no native/six/business claim",
+  "full_dc_replacement_qualified": false
+}

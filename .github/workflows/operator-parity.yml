@@ -54,7 +54,7 @@ jobs:
             cargo build --locked --bin hepta-runtime
             # Contract loader intentionally rejects group/other-writable files.
             # Runner/worktree umask must not change the exact frozen test bytes.
-            chmod go-w deploy/contracts/hepta-runtime-full-operator-v{1,2,3,4,5,6,7,8,9}.json
+            chmod go-w deploy/contracts/hepta-runtime-full-operator-v{1,2,3,4,5,6,7,8,9,10}.json
             # V9-only reviewed source pins. Exact constants come from the accepted source review,
             # not a self-declared JSON approval; old V7/V8 scripts stay immutable.
             sha256sum --check <<'HEPTA_REVIEWED_V9_INPUTS'
@@ -75,18 +75,39 @@ jobs:
           b64769210b9913fbdab28f7d0e95b7ef300d8710b3f1eeea74afcfac25b08318  deploy/contracts/hepta-runtime-full-operator-v8.json
           3eb628812d0c70b9af8393ecf9d0ce47f69b1438a134148f75ae2dd3132e6761  deploy/contracts/hepta-runtime-full-operator-v9.json
           HEPTA_REVIEWED_V9_INPUTS
+            # V10 exact full66 and immutable old62 definitions; not DC qualification.
+            sha256sum --check <<'HEPTA_REVIEWED_V10_INPUTS'
+          460555ec2afb81c1fc419ca24d48de1abbdc0f7233f897d2fdee3cef008038cf  tests/dc_functional_v10_catalog_acceptance.py
+          b1162c9195712b7f0ca3a354a1c37738ab43ac19c36d652c99e74da0042dc7d5  tests/dc_functional_v10_contract_approval_tests.py
+          ab25e3f5de58864eb94e7aba1616e360421a2e5eea087b193c8a5fc42d27baba  tests/dc_functional_v10_legacy_concurrent_text_acceptance.py
+          0bd70cd9bda80bbca1fa1a360d3471ed76d922d0ce45c556f3d6a4c78a8a331e  tests/dc_functional_v10_legacy_directory_move_acceptance.py
+          e248aa72a564dc785162999e5c08681ad998e6064cd119d30b0e3f658679c021  tests/dc_functional_v10_legacy_native_acceptance.py
+          268bcc0da78ca52ba2586221f847b463274a921b0484dd1740a8bbec3ec83a16  tests/dc_functional_v10_legacy_workspace_root_guard_acceptance.py
+          3c3e53a1f9e63954e251580ed643be743da4add4702b166faece762b4486b5fa  tests/dc_functional_v10_operation_acceptance.py
+          1b86c28ed4bceec363b0c8f470dc67ce415086f89ba281202be0a8a4690dac84  tests/dc_functional_v10_request_async_acceptance.py
+          184f54f084f0df87a94cd61c8fee55baba1f72f0e38637e61bc908f92abcb1ab  tests/dc_functional_v10_request_results_acceptance.py
+          399bb9767e84e3d97de0abfd25e38fed31a006ddd9f2e0e1ff21f4c39fd413b0  tests/dc_functional_v10_version_pin.py
+          4623c4da9493dccfc4bcef18c7267ba96ba7f5f1ddd799441214948c9da161fe  tests/dc_successor_contract_v10.py
+          12994454084369fb31e44f0e1ceb7a7f2ace5bbed33057789399cf895e70d553  deploy/contracts/hepta-runtime-full-operator-v10.json
+          a198944235a8b71763a612d077bf41c8915028487beb96888da003868e24e5c9  deploy/dc_successor_inventory.py
+          3e0431497a23d56b5f8aeb81c4035173a819134ca44cae48d802b9972849876f  tests/dc_successor_inventory_tests.py
+          HEPTA_REVIEWED_V10_INPUTS
             BINARY_SHA256="$(sha256sum target/debug/hepta-runtime | cut -d' ' -f1)"
             SOURCE_FINGERPRINT="$(python3 -c 'import hashlib,json,pathlib; r=pathlib.Path("."); paths=set(r.glob("src/**/*.rs"))|set(r.glob("src/**/*.py"))|{r/"Cargo.toml",r/"Cargo.lock"}; assert all(p.is_file() and not p.is_symlink() for p in paths); entries={p.as_posix():{"bytes":p.stat().st_size,"sha256":hashlib.sha256(p.read_bytes()).hexdigest()} for p in sorted(paths)}; print(hashlib.sha256(json.dumps(entries,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest())')"
             test -z "$(git status --porcelain --untracked-files=all -- src Cargo.toml Cargo.lock)"
-            python3 tests/dc_functional_v9_catalog_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-v9-catalog-ci.json --contract deploy/contracts/hepta-runtime-full-operator-v9.json --expected-binary-sha256 "$BINARY_SHA256" --expected-source-fingerprint "$SOURCE_FINGERPRINT" --expected-http-helper-sha256 8b7ee206ccfc7978ac4abdf3eac3ddb8f7e7c36d053f601b5cfcb66f52fb8dba --expected-contract-helper-sha256 e2b29f987d3aaa863d7bf6879d0d6a835a807c133c5c355b6a4e69bce9c3e216 --expected-approval-loader-sha256 0b039e2d667314fec32bde7827fd0f9ad01d35b8d3199e73a1e036c7b1eb3dde --expected-facade-sha256 b35313888a70a90dc72be44dc45d3f20be45337d7c2353556a382564299d649a
+            python3 tests/dc_functional_v10_catalog_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-v10-catalog-ci.json --contract deploy/contracts/hepta-runtime-full-operator-v10.json --expected-binary-sha256 "$BINARY_SHA256" --expected-source-fingerprint "$SOURCE_FINGERPRINT" --expected-http-helper-sha256 8b7ee206ccfc7978ac4abdf3eac3ddb8f7e7c36d053f601b5cfcb66f52fb8dba --expected-contract-helper-sha256 e2b29f987d3aaa863d7bf6879d0d6a835a807c133c5c355b6a4e69bce9c3e216 --expected-approval-loader-sha256 4623c4da9493dccfc4bcef18c7267ba96ba7f5f1ddd799441214948c9da161fe --expected-facade-sha256 b35313888a70a90dc72be44dc45d3f20be45337d7c2353556a382564299d649a
             # Private fixed-health emulation proves local result-recovery/async protocol only;
             # it invokes no actual SSH target and does not qualify six-host health or DC cutover.
-            python3 tests/dc_functional_v9_request_results_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v9.json --out /tmp/hepta-dc-v9-request-results-ci.json --expected-binary-sha256 "$BINARY_SHA256" --expected-source-fingerprint "$SOURCE_FINGERPRINT" --expected-http-helper-sha256 8b7ee206ccfc7978ac4abdf3eac3ddb8f7e7c36d053f601b5cfcb66f52fb8dba --expected-contract-helper-sha256 e2b29f987d3aaa863d7bf6879d0d6a835a807c133c5c355b6a4e69bce9c3e216 --expected-approval-loader-sha256 0b039e2d667314fec32bde7827fd0f9ad01d35b8d3199e73a1e036c7b1eb3dde
-            python3 tests/dc_functional_v9_request_async_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v9.json --out /tmp/hepta-dc-v9-request-async-ci.json --expected-contract-sha256 3eb628812d0c70b9af8393ecf9d0ce47f69b1438a134148f75ae2dd3132e6761 --expected-binary-sha256 "$BINARY_SHA256" --expected-source-fingerprint "$SOURCE_FINGERPRINT"
-            python3 tests/dc_parity_native_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-parity-native-ci.json --verify-contract deploy/contracts/hepta-runtime-full-operator-v4.json --allow-v4-directory-move --successor-contract deploy/contracts/hepta-runtime-full-operator-v9.json
-            python3 tests/dc_parity_directory_move_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-directory-move-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v9.json
-            python3 tests/dc_parity_workspace_root_guard_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-root-guard-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v9.json
-            python3 tests/dc_parity_concurrent_text_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v9.json --waves 3 --contenders 6 --out /tmp/hepta-dc-text-concurrency-ci.json
+            python3 tests/dc_functional_v10_request_results_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v10.json --out /tmp/hepta-dc-v10-request-results-ci.json --expected-binary-sha256 "$BINARY_SHA256" --expected-source-fingerprint "$SOURCE_FINGERPRINT" --expected-http-helper-sha256 8b7ee206ccfc7978ac4abdf3eac3ddb8f7e7c36d053f601b5cfcb66f52fb8dba --expected-contract-helper-sha256 e2b29f987d3aaa863d7bf6879d0d6a835a807c133c5c355b6a4e69bce9c3e216 --expected-approval-loader-sha256 4623c4da9493dccfc4bcef18c7267ba96ba7f5f1ddd799441214948c9da161fe
+            python3 tests/dc_functional_v10_request_async_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v10.json --out /tmp/hepta-dc-v10-request-async-ci.json --expected-contract-sha256 12994454084369fb31e44f0e1ceb7a7f2ace5bbed33057789399cf895e70d553 --expected-binary-sha256 "$BINARY_SHA256" --expected-source-fingerprint "$SOURCE_FINGERPRINT"
+            python3 tests/dc_functional_v10_legacy_native_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-v10-legacy-native-ci.json --verify-contract deploy/contracts/hepta-runtime-full-operator-v4.json --allow-v4-directory-move --successor-contract deploy/contracts/hepta-runtime-full-operator-v10.json
+            python3 tests/dc_functional_v10_legacy_directory_move_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-v10-legacy-directory-move-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v10.json
+            python3 tests/dc_functional_v10_legacy_workspace_root_guard_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-v10-legacy-root-guard-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v10.json
+            python3 tests/dc_functional_v10_legacy_concurrent_text_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v10.json --waves 3 --contenders 6 --out /tmp/hepta-dc-v10-legacy-concurrency-ci.json
+            # Generated local native read operations only; six-host/model/business remain unqualified.
+            python3 -B tests/dc_functional_v10_operation_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v10.json --expected-contract-sha256 12994454084369fb31e44f0e1ceb7a7f2ace5bbed33057789399cf895e70d553 --expected-binary-sha256 "$BINARY_SHA256" --expected-source-fingerprint "$SOURCE_FINGERPRINT" --expected-head "${{ github.sha }}" --previous-contract deploy/contracts/hepta-runtime-full-operator-v9.json --expected-previous-contract-sha256 3eb628812d0c70b9af8393ecf9d0ce47f69b1438a134148f75ae2dd3132e6761 --out /tmp/hepta-dc-v10-operation-ci.json
+            python3 -B tests/dc_functional_v10_contract_approval_tests.py 2>&1 | tee /tmp/hepta-dc-v10-contract-approval-ci.log
+            python3 -B tests/dc_successor_inventory_tests.py --results-dir /tmp/hepta-dc-v10-inventory-offline-ci > /tmp/hepta-dc-v10-inventory-offline-ci.log 2>&1
             python3 tests/dc_parity_v4_staging_tests.py
             python3 tests/dc_parity_v4_deployment_tests.py
             python3 -m py_compile deploy/activate_dc_parity_v4.py deploy/rollback_dc_parity_v4.py
@@ -170,14 +191,22 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: operator-v9-local-protocol-receipts-${{ github.sha }}
+          name: operator-v10-local-protocol-and-offline-receipts-${{ github.sha }}
           path: |
-            /tmp/hepta-dc-v9-catalog-ci.json
-            /tmp/hepta-dc-v9-catalog-ci-logs
-            /tmp/hepta-dc-v9-request-results-ci.json
-            /tmp/hepta-dc-v9-request-results-ci-logs
-            /tmp/hepta-dc-v9-request-async-ci.json
-            /tmp/hepta-dc-v9-request-async-ci-logs
+            /tmp/hepta-dc-v10-catalog-ci.json
+            /tmp/hepta-dc-v10-catalog-ci-logs
+            /tmp/hepta-dc-v10-request-results-ci.json
+            /tmp/hepta-dc-v10-request-results-ci-logs
+            /tmp/hepta-dc-v10-request-async-ci.json
+            /tmp/hepta-dc-v10-request-async-ci-logs
+            /tmp/hepta-dc-v10-legacy-native-ci.json
+            /tmp/hepta-dc-v10-legacy-directory-move-ci.json
+            /tmp/hepta-dc-v10-legacy-root-guard-ci.json
+            /tmp/hepta-dc-v10-legacy-concurrency-ci.json
+            /tmp/hepta-dc-v10-operation-ci.json
+            /tmp/hepta-dc-v10-contract-approval-ci.log
+            /tmp/hepta-dc-v10-inventory-offline-ci
+            /tmp/hepta-dc-v10-inventory-offline-ci.log
             /tmp/hepta-dc-v9-signal-safety-ci.log
             /tmp/hepta-dc-v9-health-safety-ci.log
           if-no-files-found: ignore

@@ -1605,5 +1605,243 @@ class PrivateProfileReview(unittest.TestCase):
         self.assertFalse(self.marker.exists())
 
 
+
+class LargeBoundedInventoryPreflight(unittest.TestCase):
+    """Named jobs-only mode over injected offline observations."""
+
+    git = SuccessorPreflight.git
+    prepare = SuccessorPreflight.prepare
+    assert_hold = SuccessorPreflight.assert_hold
+    assert_refuses_without_writes = SuccessorPreflight.assert_refuses_without_writes
+
+    def setUp(self):
+        SuccessorPreflight.setUp(self)
+        import dc_successor_inventory as protocol
+        self.protocol = protocol
+        self.args.inventory_observer = "large-bounded"
+        self.args.inventory_budget_seconds = 120.0
+        self.args.inventory_rpc_timeout_seconds = 10.0
+
+    def large_inventory(self, count=4097):
+        value = {"hosts": HOSTS, "jobs": [], "errors": [],
+                 "membership_complete": True, "status_observation_complete": False,
+                 "status_authoritative_complete": False, "bindings_complete": False,
+                 "jobs_complete": False, "ptys_complete": True, "streams_complete": True,
+                 "dispatch": {"native_complete": True, "facade_complete": True, "admission_frozen": True}}
+        for index in range(count):
+            value["jobs"].append({"host": HOSTS[index % len(HOSTS)], "id": "owned-large-" + str(index),
+                "state": "unknown", "status_observed": False, "status_shape_complete": False,
+                "launch_nonce_present": None, "supervisor_binding_verified": False,
+                "status_authoritative": False, "argv": [self.profile_secret], "stdout": self.token_secret})
+        return value
+
+    def test_named_mode_preserves_all_4097_ids_and_forces_other_domains_incomplete(self):
+        value = self.large_inventory()
+        prepared = self.prepare(inventory=value)
+        report = self.assert_hold(prepared, "JOB_INVENTORY_INCOMPLETE")
+        actual = report["inventory"]
+        self.assertEqual(len(actual["jobs"]), 4097)
+        self.assertEqual({r["id"] for r in actual["jobs"]}, {r["id"] for r in value["jobs"]})
+        self.assertIs(actual["ptys_complete"], False)
+        self.assertIs(actual["streams_complete"], False)
+        self.assertTrue(all(v is False for v in actual["dispatch"].values()))
+        self.assertIn("PTY_INVENTORY_INCOMPLETE", [r["code"] for r in report["blockers"]])
+        self.assertIn("STREAM_INVENTORY_INCOMPLETE", [r["code"] for r in report["blockers"]])
+        self.assertEqual(report["inventory_observer"], "large-bounded")
+        for secret in (self.token_secret, self.profile_secret):
+            self.assertNotIn(secret, json.dumps(report))
+
+    def test_default_legacy_mode_does_not_import_or_call_large_observer(self):
+        del self.args.inventory_observer
+        del self.args.inventory_budget_seconds
+        del self.args.inventory_rpc_timeout_seconds
+        with mock.patch.object(P, "large_bounded_inventory_observation", side_effect=AssertionError("large forbidden")):
+            self.assert_hold(self.prepare())
+        self.assertNotIn("inventory_observer", self.prepare()["report"])
+
+    def test_legacy_4096_bound_is_unchanged_and_large_16385_is_refused(self):
+        self.args.inventory_observer = "legacy"
+        with self.assertRaises(ValueError):
+            self.prepare(inventory=self.large_inventory())
+        self.args.inventory_observer = "large-bounded"
+        with self.assertRaises(self.protocol.InventoryError):
+            self.prepare(inventory=self.large_inventory(16385))
+        self.assertFalse(self.args.output_directory.exists())
+
+    def test_unknown_mode_and_invalid_budget_are_refused_before_publication(self):
+        self.args.inventory_observer = "unapproved"
+        self.assert_refuses_without_writes()
+        self.args.inventory_observer = "large-bounded"
+        for budget in (float("nan"), float("inf"), 301, True):
+            with self.subTest(budget=budget):
+                self.args.inventory_budget_seconds = budget
+                with self.assertRaises(self.protocol.InventoryError):
+                    self.prepare(inventory=self.large_inventory(1))
+                self.assertFalse(self.args.output_directory.exists())
+        self.args.inventory_budget_seconds = 120.0
+
+    def test_publication_binds_observer_mode_and_budget(self):
+        prepared = self.prepare(inventory=self.large_inventory(6))
+        before = tree_snapshot(self.root)
+        self.args.inventory_observer = "legacy"
+        with self.assertRaises(ValueError):
+            P.publish(prepared, self.args)
+        self.assertEqual(tree_snapshot(self.root), before)
+        self.args.inventory_observer = "large-bounded"
+        self.args.inventory_budget_seconds = 119.0
+        with self.assertRaises(ValueError):
+            P.publish(prepared, self.args)
+        self.assertEqual(tree_snapshot(self.root), before)
+
+    def guard_fixture(self, patch_catalog=None, patch_hosts=None):
+        I = self.protocol
+        owner = self
+        calls, closed = [], []
+        expected = json.loads(self.v4raw)["tools"]
+        class Client:
+            def __init__(self, token_file, **kwargs):
+                self.host = kwargs["host"]
+                self.expected_credential_identity = kwargs["expected_credential_identity"]
+                owner.assertEqual(token_file, owner.token)
+                owner.assertIs(kwargs["token_reader"], P.read_private_token)
+                calls.append(("constructor", self.host))
+            def rpc(self, method, params):
+                owner.assertEqual((method, params), ("tools/list", {}))
+                calls.append(("catalog", self.host))
+                return patch_catalog if patch_catalog is not None else {"tools": copy.deepcopy(expected)}
+            def call(self, name, params):
+                owner.assertEqual((name, params), ("host_list", {}))
+                calls.append(("hosts", self.host))
+                return patch_hosts if patch_hosts is not None else {"hosts": [{"name": host} for host in HOSTS]}
+            def close(self):
+                closed.append(self.host)
+        def observer(directory, factory, **kwargs):
+            owner.assertEqual(directory, owner.state / "jobs")
+            owner.assertLessEqual(kwargs["budget_seconds"], 120.0)
+            client = factory("main", I.Deadline(1), kwargs["credential_identity"])
+            client.close()
+            return owner.large_inventory(6)
+        return Client, observer, calls, closed
+
+    def test_real_adapter_guards_exact_catalog_and_six_hosts_with_audited_reader(self):
+        I = self.protocol
+        client, observer, calls, closed = self.guard_fixture()
+        with mock.patch.object(I, "LoopbackReadClient", client), \
+             mock.patch.object(I, "observe_inventory", side_effect=observer):
+            result = P.large_bounded_inventory_observation(self.manifest)
+        self.assertEqual(len(result["jobs"]), 6)
+        self.assertEqual(calls, [("constructor", "main"), ("catalog", "main"), ("hosts", "main")])
+        self.assertEqual(closed, ["main"])
+
+    def test_catalog_drift_duplicate_names_and_pagination_refuse_before_status(self):
+        I = self.protocol
+        original = json.loads(self.v4raw)["tools"]
+        for catalog in ({"tools": []}, {"tools": original, "nextCursor": "opaque"},
+                        {"tools": original + [original[0]]}):
+            with self.subTest(catalog_case=len(catalog["tools"])):
+                client, observer, calls, closed = self.guard_fixture(patch_catalog=catalog)
+                with mock.patch.object(I, "LoopbackReadClient", client), \
+                     mock.patch.object(I, "observe_inventory", side_effect=observer):
+                    with self.assertRaises(I.InventoryError):
+                        P.large_bounded_inventory_observation(self.manifest)
+                self.assertEqual(closed, ["main"])
+                self.assertNotIn(("hosts", "main"), calls)
+
+    def test_configured_authority_drift_and_duplicate_hosts_are_refused(self):
+        I = self.protocol
+        for names in (HOSTS[:-1], HOSTS[:-1] + [HOSTS[0]], HOSTS[:-1] + ["unapproved"]):
+            client, observer, calls, closed = self.guard_fixture(
+                patch_hosts={"hosts": [{"name": host} for host in names]})
+            with mock.patch.object(I, "LoopbackReadClient", client), \
+                 mock.patch.object(I, "observe_inventory", side_effect=observer):
+                with self.assertRaises(I.InventoryError):
+                    P.large_bounded_inventory_observation(self.manifest)
+            self.assertEqual(closed, ["main"])
+
+    def test_large_observer_module_cannot_be_called_from_default_injected_probes(self):
+        I = self.protocol
+        self.args.inventory_observer = "legacy"
+        with mock.patch.object(I, "observe_inventory", side_effect=AssertionError("large forbidden")):
+            self.assert_hold(self.prepare())
+
+
+
+    def test_contract_token_path_and_alias_refused_before_any_content_hash(self):
+        I = self.protocol
+        original_bytes = self.token.read_bytes()
+        original_mode = stat.S_IMODE(self.token.stat().st_mode)
+        alias = self.live / "contract-token-alias"
+        for alias_case in (False, True):
+            with self.subTest(alias_case=alias_case):
+                path = self.token
+                if alias_case:
+                    os.link(self.token, alias)
+                    path = alias
+                value = copy.deepcopy(self.manifest)
+                value["baseline"]["artifacts"]["contract"] = {"path": str(path), "sha256": "0" * 64}
+                try:
+                    with mock.patch.object(S, "read_pinned", side_effect=AssertionError("content read forbidden")) as pinned, \
+                         mock.patch.object(S, "snapshot", side_effect=AssertionError("snapshot forbidden")) as snapshot, \
+                         mock.patch.object(P, "digest", side_effect=AssertionError("digest forbidden")) as hashed, \
+                         mock.patch.object(P.hashlib, "sha256", side_effect=AssertionError("sha256 forbidden")) as sha, \
+                         mock.patch.object(I, "credential_inode", side_effect=AssertionError("credential probe forbidden")) as credential, \
+                         mock.patch.object(I, "LoopbackReadClient", side_effect=AssertionError("HTTP forbidden")) as http:
+                        with self.assertRaises(ValueError):
+                            P.large_bounded_inventory_observation(value)
+                        for refused in (pinned, snapshot, hashed, sha, credential, http):
+                            refused.assert_not_called()
+                    self.assertEqual(self.token.read_bytes(), original_bytes)
+                    self.assertEqual(stat.S_IMODE(self.token.stat().st_mode), original_mode)
+                finally:
+                    if alias_case:
+                        alias.unlink()
+        self.assertEqual(self.token.stat().st_nlink, 1)
+
+    def test_invalid_rpc_timeout_refused_upfront_for_injected_and_real_observers(self):
+        I = self.protocol
+        for timeout in (0, -1, 30.0001, 31, float("nan"), float("inf"), float("-inf"), True, False, "10"):
+            with self.subTest(timeout=timeout):
+                self.args.inventory_rpc_timeout_seconds = timeout
+                service, inventory, process = mock.Mock(), mock.Mock(), mock.Mock()
+                with mock.patch.object(P, "validate_stage", side_effect=AssertionError("stage read forbidden")) as stage, \
+                     mock.patch.object(I, "credential_inode", side_effect=AssertionError("credential probe forbidden")) as credential, \
+                     mock.patch.object(P, "read_private_token", side_effect=AssertionError("token read forbidden")) as token, \
+                     mock.patch.object(I, "LoopbackReadClient", side_effect=AssertionError("HTTP forbidden")) as http, \
+                     mock.patch.object(S, "read_pinned", side_effect=AssertionError("content read forbidden")) as pinned, \
+                     mock.patch.object(P.hashlib, "sha256", side_effect=AssertionError("sha256 forbidden")) as sha:
+                    with self.assertRaises(I.InventoryError):
+                        P.prepare_preflight(self.args, service_probe=service, inventory_probe=inventory, process_probe=process)
+                    with self.assertRaises(I.InventoryError):
+                        P.large_bounded_inventory_observation(self.manifest, rpc_timeout=timeout)
+                    for refused in (stage, credential, token, http, pinned, sha, service, inventory, process):
+                        refused.assert_not_called()
+                self.assertFalse(self.args.output_directory.exists())
+        self.args.inventory_rpc_timeout_seconds = 10.0
+
+    def test_exact_rpc_limit_accepted_and_publication_timeout_is_bound(self):
+        I = self.protocol
+        self.args.inventory_rpc_timeout_seconds = I.MAX_RPC_SECONDS
+        prepared = self.prepare(inventory=self.large_inventory(6))
+        self.assert_hold(prepared, "JOB_INVENTORY_INCOMPLETE")
+        client, observer, calls, closed = self.guard_fixture()
+        def checked_client(token_file, **kwargs):
+            self.assertEqual(kwargs["rpc_timeout"], I.MAX_RPC_SECONDS)
+            return client(token_file, **kwargs)
+        def checked_observer(directory, factory, **kwargs):
+            self.assertEqual(kwargs["rpc_timeout"], I.MAX_RPC_SECONDS)
+            return observer(directory, factory, **kwargs)
+        with mock.patch.object(I, "LoopbackReadClient", side_effect=checked_client), \
+             mock.patch.object(I, "observe_inventory", side_effect=checked_observer):
+            self.assertEqual(len(P.large_bounded_inventory_observation(
+                self.manifest, rpc_timeout=I.MAX_RPC_SECONDS)["jobs"]), 6)
+        self.assertEqual(calls, [("constructor", "main"), ("catalog", "main"), ("hosts", "main")])
+        self.assertEqual(closed, ["main"])
+        before = tree_snapshot(self.root)
+        self.args.inventory_rpc_timeout_seconds = I.MAX_RPC_SECONDS - 1
+        with self.assertRaises(ValueError):
+            P.publish(prepared, self.args)
+        self.assertEqual(tree_snapshot(self.root), before)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

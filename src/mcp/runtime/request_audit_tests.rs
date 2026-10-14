@@ -337,3 +337,110 @@ fn directory_scan_failure_is_not_mistaken_for_empty_history_or_retention_capacit
 	assert!(directory_scan_result(false, libc::EIO).is_err());
 	assert!(directory_scan_result(false, libc::EINTR).is_err());
 }
+
+fn reserved_identity(tool: &str) -> RequestIdentity {
+	RequestIdentity {
+		request_id: new_id().unwrap(),
+		owner: owner('a'),
+		tool_name: tool.into(),
+		accepted_unix_ms: 1700000000123,
+	}
+}
+
+#[test]
+fn v9_reserved_dto_family_stays_closed_when_v10_native_auditing_is_added() {
+	for tool in ["host_list", "host_health", "effective_config"] {
+		let temporary = root();
+		let identity = reserved_identity(tool);
+		let ticket = begin_reserved_at(temporary.path(), identity.clone()).unwrap();
+		assert_eq!(ticket.record.request_id, identity.request_id);
+		assert_eq!(ticket.record.owner, identity.owner);
+		assert_eq!(ticket.record.tool_name, identity.tool_name);
+		assert_eq!(ticket.record.accepted_unix_ms, identity.accepted_unix_ms);
+		assert!(begin_operation_reserved_at(temporary.path(), reserved_identity(tool)).is_err());
+		finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	}
+	for tool in [
+		"file_info",
+		"read_multiple_files",
+		"binary_read",
+		"process_status",
+		"process_read",
+		"process_wait",
+		"process_list",
+		"hardware_snapshot",
+		"service_status",
+		"network_inspect",
+	] {
+		let temporary = root();
+		assert!(begin_reserved_at(temporary.path(), reserved_identity(tool)).is_err());
+		assert!(!temporary.path().join(STORE_NAME).exists());
+	}
+}
+
+#[test]
+fn v10_reserved_native_family_persists_full_original_identity_and_never_recreates_ticket() {
+	for tool in [
+		"file_info",
+		"read_multiple_files",
+		"binary_read",
+		"process_status",
+		"process_read",
+		"process_wait",
+		"process_list",
+		"hardware_snapshot",
+		"service_status",
+		"network_inspect",
+	] {
+		let temporary = root();
+		let identity = reserved_identity(tool);
+		let ticket = begin_operation_reserved_at(temporary.path(), identity.clone()).unwrap();
+		let name = format!("{}.json", identity.request_id);
+		let record = read_record(&ticket.directory, &name).unwrap();
+		assert_eq!(record.request_id, identity.request_id);
+		assert_eq!(record.owner, identity.owner);
+		assert_eq!(record.tool_name, identity.tool_name);
+		assert_eq!(record.accepted_unix_ms, identity.accepted_unix_ms);
+		let path = temporary.path().join(STORE_NAME).join(&name);
+		let before = std::fs::read(&path).unwrap();
+		assert!(begin_operation_reserved_at(temporary.path(), identity.clone()).is_err());
+		assert_eq!(std::fs::read(&path).unwrap(), before);
+		finish_sync(ticket, AuditCompletion::Completed).unwrap();
+		let directory = open_store(temporary.path()).unwrap();
+		assert!(matches!(
+			read_record(&directory, &name).unwrap().state,
+			DurableState::Completed
+		));
+	}
+}
+
+#[test]
+fn v10_native_reserved_audit_refuses_effects_controls_and_invalid_authority_before_disk() {
+	for tool in [
+		"process_start",
+		"process_cancel",
+		"host_signal",
+		"binary_write",
+		"privileged_action",
+		"operation_start",
+		"operation_status",
+		"request_start",
+		"maintenance_apply",
+		"arbitrary_tool",
+	] {
+		let temporary = root();
+		assert!(begin_operation_reserved_at(temporary.path(), reserved_identity(tool)).is_err());
+		assert!(!temporary.path().join(STORE_NAME).exists());
+	}
+	for field in 0..2 {
+		let temporary = root();
+		let mut identity = reserved_identity("file_info");
+		if field == 0 {
+			identity.owner = "../caller".into();
+		} else {
+			identity.request_id = "../caller".into();
+		}
+		assert!(begin_operation_reserved_at(temporary.path(), identity).is_err());
+		assert!(!temporary.path().join(STORE_NAME).exists());
+	}
+}

@@ -178,6 +178,10 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"request_result",
 	"request_start",
 	"request_cancel",
+	"operation_start",
+	"operation_status",
+	"operation_result",
+	"operation_cancel",
 	"host_health",
 	"read_multiple_files",
 	"search_start",
@@ -267,6 +271,7 @@ pub struct OctofsServer {
 	search_owner: Arc<Option<String>>,
 	/// Trusted metadata authority, fixed for each native session.
 	owner_binding: Arc<runtime::caller_scope::SessionOwnerBinding>,
+	operation_crypto: Option<Arc<runtime::operation_crypto::ResultCryptoScope>>,
 	/// Per-session working directory state.
 	workdir: Arc<SessionWorkdir>,
 	/// Whether the session context (workdir) has been applied from client
@@ -294,6 +299,9 @@ impl OctofsServer {
 		Self {
 			search_owner: Arc::new(runtime::search_jobs::new_owner_id().ok()),
 			owner_binding: Arc::new(runtime::caller_scope::SessionOwnerBinding::default()),
+			operation_crypto: runtime::operation_crypto::ResultCryptoScope::stdio()
+				.ok()
+				.map(Arc::new),
 			workdir: Arc::new(SessionWorkdir::new(root)),
 			session_applied: Arc::new(std::sync::atomic::AtomicBool::new(false)),
 			subscriptions: Arc::new(SubscriptionRegistry::default()),
@@ -566,6 +574,119 @@ impl OctofsServer {
 			.await
 			.and_then(|text| scope.annotate(text, false))
 			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Start Owned Native Read Operation",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Admit one background operation from ten closed native read APIs: read_multiple_files, file_info, binary_read, process_status, process_read, process_wait, process_list, hardware_snapshot, service_status and network_inspect. Original configured-host, filesystem and operator-account policies apply. No write, command, privilege, maintenance, recursive async or arbitrary tool dispatch. Required private idempotency key has a secret HMAC binding; identical retries return the original operation_id without replay. Admission acknowledges neither completion nor delivery. Original SDK success/tool-error/RPC-error bytes up to 1 MiB are encrypted at rest with trusted credential-derived keys; all users sharing that credential share retrieval. Stdio keys are ephemeral. Shared request/operation concurrency is eight globally and four per owner; immutable key retention is 512 globally and 128 per owner, full capacity refuses new keys forever until an independently reviewed lifecycle change. No restart execution resume, ChatGPT caller isolation or full Desktop Commander replacement is implied."
+	)]
+	async fn operation_start(
+		&self,
+		Parameters(params): Parameters<runtime::operation_async::OperationStartParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let (scope, crypto) = self
+			.owner_binding
+			.resolve_operation_crypto(
+				&context,
+				self.search_owner.as_ref().as_deref(),
+				self.operation_crypto.as_ref(),
+			)
+			.map_err(|e| e.to_string())?;
+		runtime::operation_async::start(scope.owner(), crypto, params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|e| e.to_string())
+	}
+	#[tool(
+		title = "Read Owned Native Operation Status",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read the same trusted credential or native stdio session's immutable operation_id state and authenticated encrypted-result availability. Current policy must match. Ordinary redacted audit eviction does not erase the separate operation binding or encrypted payload. Completion means a handler generated a result, not delivery or business success. Unfinished restart work remains unknown with no replay; users sharing a credential share this scope."
+	)]
+	async fn operation_status(
+		&self,
+		Parameters(params): Parameters<runtime::operation_async::OperationStatusParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let (scope, crypto) = self
+			.owner_binding
+			.resolve_operation_crypto(
+				&context,
+				self.search_owner.as_ref().as_deref(),
+				self.operation_crypto.as_ref(),
+			)
+			.map_err(|e| e.to_string())?;
+		runtime::operation_async::status(scope.owner(), crypto, params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|e| e.to_string())
+	}
+	#[tool(
+		title = "Read Original Owned Native Operation Result",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Page up to 16384 bytes of the immutable original native SDK payload by operation_id, independent byte offset and SHA256. Supports serialized CallToolResult success/tool-error or ErrorData RPC-error bytes, before operation metadata and transport normalization; at most 1 MiB per retained result. Payloads are encrypted at rest with trusted token-derived private keys and an authenticated ID/tool/policy/ledger binding. Token or policy changes require controller restart and then revoke old retrieval; there is no live file-reload revocation; stdio restart cannot recover ephemeral-key results. This API never dispatches, interprets or follows payload links. Missing/corrupt/overflow/unknown output never grants replay and does not prove an effect failed."
+	)]
+	async fn operation_result(
+		&self,
+		Parameters(params): Parameters<runtime::operation_async::OperationResultParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let (scope, crypto) = self
+			.owner_binding
+			.resolve_operation_crypto(
+				&context,
+				self.search_owner.as_ref().as_deref(),
+				self.operation_crypto.as_ref(),
+			)
+			.map_err(|e| e.to_string())?;
+		runtime::operation_async::result(scope.owner(), crypto, params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|e| e.to_string())
+	}
+	#[tool(
+		title = "Cancel Owned Native Read Operation Future",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Request cancellation of this controller's owned read-operation future by immutable operation_id under the same verified private credential or native stdio session and unchanged policy. Never accepts a process ID, shell, signal or arbitrary tool. This does not prove remote work stopped or reverse an effect. Settlement cannot be cancelled; late cancellation cannot discard committed result bytes. Missing futures after restart remain unknown and are never reconstructed or replayed."
+	)]
+	async fn operation_cancel(
+		&self,
+		Parameters(params): Parameters<runtime::operation_async::OperationCancelParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let (scope, crypto) = self
+			.owner_binding
+			.resolve_operation_crypto(
+				&context,
+				self.search_owner.as_ref().as_deref(),
+				self.operation_crypto.as_ref(),
+			)
+			.map_err(|e| e.to_string())?;
+		runtime::operation_async::cancel(scope.owner(), crypto, params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|e| e.to_string())
 	}
 
 	#[tool(
