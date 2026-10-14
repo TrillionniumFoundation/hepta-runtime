@@ -1,7 +1,7 @@
 name: Operator parity qualification
 on:
   push:
-    branches: [feat/operator-parity-20261006]
+    branches: [feat/operator-parity-20261006, fix/service-scope-20261014, fix/runtime-v10-service-network-lossless-20261014, feat/operator-readonly-inventory-20261014]
   workflow_dispatch:
 permissions:
   contents: read
@@ -51,6 +51,10 @@ jobs:
             cargo fmt --all --check
             cargo clippy --locked --all-features --all-targets -- -D warnings
             cargo test --locked --all-features --all-targets
+            python3 -B tests/service_scope_tests.py
+            python3 -B tests/dc_readonly_inventory_tests.py
+            python3 -B tests/dc_readonly_inventory_collector_tests.py
+            python3 -m py_compile tests/service_scope_native_acceptance.py deploy/install_local_scope_canary.py tests/network_result_boundary_acceptance.py
             cargo build --locked --bin hepta-runtime
             # Contract loader intentionally rejects group/other-writable files.
             # Runner/worktree umask must not change the exact frozen test bytes.
@@ -109,6 +113,9 @@ jobs:
             # Generated local native read operations only; six-host/model/business remain unqualified.
             python3 -B tests/dc_functional_v10_operation_explicit_state_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v10.json --expected-contract-sha256 12994454084369fb31e44f0e1ceb7a7f2ace5bbed33057789399cf895e70d553 --expected-binary-sha256 "$BINARY_SHA256" --expected-source-fingerprint "$SOURCE_FINGERPRINT" --expected-head "${{ github.sha }}" --previous-contract deploy/contracts/hepta-runtime-full-operator-v9.json --expected-previous-contract-sha256 3eb628812d0c70b9af8393ecf9d0ce47f69b1438a134148f75ae2dd3132e6761 --out /tmp/hepta-dc-v10-operation-ci.json
             python3 -B tests/dc_functional_v10_contract_approval_tests.py 2>&1 | tee /tmp/hepta-dc-v10-contract-approval-ci.log
+            # Synthetic closed read fixture only; no production SSH or private sample in CI.
+            python3 -c 'import json,pathlib; pathlib.Path("/tmp/hepta-network-boundary-sample.json").write_text(json.dumps({"routes":{"exit_code":0,"data":[{"dst":"198.18.0.0/24","dev":"test0","metric":1}]*13000},"links":[],"listeners":"synthetic"}))'
+            python3 -B tests/network_result_boundary_acceptance.py --role fixed --binary target/debug/hepta-runtime --sample /tmp/hepta-network-boundary-sample.json --root /tmp/hepta-network-boundary-fixed-ci
             python3 -B tests/dc_successor_inventory_tests.py --results-dir /tmp/hepta-dc-v10-inventory-offline-ci > /tmp/hepta-dc-v10-inventory-offline-ci.log 2>&1
             python3 tests/dc_parity_v4_staging_tests.py
             python3 tests/dc_parity_v4_deployment_tests.py
