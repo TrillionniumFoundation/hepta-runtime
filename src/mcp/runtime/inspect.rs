@@ -184,25 +184,7 @@ else:
 print(json.dumps(result, sort_keys=True))
 "#;
 
-const SERVICE_CODE: &str = r#"
-import json, subprocess, sys
-q = json.load(sys.stdin)
-result = []
-if q["platform"] == "linux":
-    props = "LoadState,ActiveState,SubState,UnitFileState,Result,MainPID,ExecMainStatus,Description"
-    for name in q["services"]:
-        p = subprocess.run(["systemctl", "show", "--no-pager", "--property=" + props, "--", name], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        values = {}
-        for line in p.stdout.splitlines():
-            if "=" in line:
-                key, value = line.split("=", 1); values[key] = value
-        result.append({"name": name, "exit_code": p.returncode, "properties": values, "stderr": p.stderr.strip()})
-else:
-    for name in q["services"]:
-        p = subprocess.run(["launchctl", "print", "system/" + name], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        result.append({"name": name, "exit_code": p.returncode, "stdout": p.stdout[-65536:], "stderr": p.stderr.strip()})
-print(json.dumps({"services": result}, sort_keys=True))
-"#;
+const SERVICE_CODE: &str = include_str!("service_inspect.py");
 
 const NETWORK_CODE: &str = r#"
 import glob, json, os, pathlib, subprocess, sys
@@ -336,11 +318,14 @@ pub async fn service_status(params: ServiceStatusParams) -> Result<String> {
 	Ok(serde_json::to_string_pretty(&output)?)
 }
 
+#[path = "inspection_result.rs"]
+mod inspection_result;
+
 pub async fn network_inspect(params: HostParams) -> Result<String> {
 	let host = runtime_config()?.host(&params.host)?;
 	let output: Value =
 		run_python_json(host, NETWORK_CODE, &json!({}), Duration::from_secs(25)).await?;
-	Ok(serde_json::to_string_pretty(&output)?)
+	inspection_result::network_result(&output)
 }
 
 pub async fn privileged_action(params: PrivilegedActionParams) -> Result<String> {
