@@ -84,6 +84,8 @@ jobs:
           e248aa72a564dc785162999e5c08681ad998e6064cd119d30b0e3f658679c021  tests/dc_functional_v10_legacy_native_acceptance.py
           268bcc0da78ca52ba2586221f847b463274a921b0484dd1740a8bbec3ec83a16  tests/dc_functional_v10_legacy_workspace_root_guard_acceptance.py
           3c3e53a1f9e63954e251580ed643be743da4add4702b166faece762b4486b5fa  tests/dc_functional_v10_operation_acceptance.py
+          22837c70f1fa9deb093eda82233c22c496a20617c1baeca545a96e7a235cf6e5  tests/dc_functional_v10_operation_explicit_state_acceptance.py
+          a03f3f94f867e0ec8df8ab5024ac7a50415bfa10f1c6ea0f08f717326ae1264d  tests/dc_functional_v10_operation_umask_causal_tests_r2.py
           1b86c28ed4bceec363b0c8f470dc67ce415086f89ba281202be0a8a4690dac84  tests/dc_functional_v10_request_async_acceptance.py
           184f54f084f0df87a94cd61c8fee55baba1f72f0e38637e61bc908f92abcb1ab  tests/dc_functional_v10_request_results_acceptance.py
           399bb9767e84e3d97de0abfd25e38fed31a006ddd9f2e0e1ff21f4c39fd413b0  tests/dc_functional_v10_version_pin.py
@@ -105,7 +107,7 @@ jobs:
             python3 tests/dc_functional_v10_legacy_workspace_root_guard_acceptance.py --binary target/debug/hepta-runtime --out /tmp/hepta-dc-v10-legacy-root-guard-ci.json --successor-contract deploy/contracts/hepta-runtime-full-operator-v10.json
             python3 tests/dc_functional_v10_legacy_concurrent_text_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v10.json --waves 3 --contenders 6 --out /tmp/hepta-dc-v10-legacy-concurrency-ci.json
             # Generated local native read operations only; six-host/model/business remain unqualified.
-            python3 -B tests/dc_functional_v10_operation_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v10.json --expected-contract-sha256 12994454084369fb31e44f0e1ceb7a7f2ace5bbed33057789399cf895e70d553 --expected-binary-sha256 "$BINARY_SHA256" --expected-source-fingerprint "$SOURCE_FINGERPRINT" --expected-head "${{ github.sha }}" --previous-contract deploy/contracts/hepta-runtime-full-operator-v9.json --expected-previous-contract-sha256 3eb628812d0c70b9af8393ecf9d0ce47f69b1438a134148f75ae2dd3132e6761 --out /tmp/hepta-dc-v10-operation-ci.json
+            python3 -B tests/dc_functional_v10_operation_explicit_state_acceptance.py --binary target/debug/hepta-runtime --contract deploy/contracts/hepta-runtime-full-operator-v10.json --expected-contract-sha256 12994454084369fb31e44f0e1ceb7a7f2ace5bbed33057789399cf895e70d553 --expected-binary-sha256 "$BINARY_SHA256" --expected-source-fingerprint "$SOURCE_FINGERPRINT" --expected-head "${{ github.sha }}" --previous-contract deploy/contracts/hepta-runtime-full-operator-v9.json --expected-previous-contract-sha256 3eb628812d0c70b9af8393ecf9d0ce47f69b1438a134148f75ae2dd3132e6761 --out /tmp/hepta-dc-v10-operation-ci.json
             python3 -B tests/dc_functional_v10_contract_approval_tests.py 2>&1 | tee /tmp/hepta-dc-v10-contract-approval-ci.log
             python3 -B tests/dc_successor_inventory_tests.py --results-dir /tmp/hepta-dc-v10-inventory-offline-ci > /tmp/hepta-dc-v10-inventory-offline-ci.log 2>&1
             python3 tests/dc_parity_v4_staging_tests.py
