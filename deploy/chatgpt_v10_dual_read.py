@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # Copyright 2026 TrillionniumFoundation
 # SPDX-License-Identifier: Apache-2.0
-"""Optional V10 stdio facade with legacy V4 read-only result custody.
+"""Optional V10 facade with original V4 job, PTY and stream read custody.
 
-All new work and all write/cancel operations go to V10. Only four pinned
-read-only lookup tools may consult original V4 jobs/PTYs. Ownership is
-identified through distinct local, controller-owned durable registries;
-ambiguous/mismatched records fail closed. Never replay an original effect.
-This is a separate candidate entrypoint, not the installed V4 bridge.
+Without the explicit effect-owner flag, all state changes are refused.
+With it, only the original V4 effect names may dispatch to V4, never V10.
+Read-only historical job, terminal and cooperative stream operations
+preserve original ownership, identities, and byte cursors.
+This source is not installed as the production ChatGPT connector.
 """
 from __future__ import annotations
 import argparse
@@ -33,6 +33,10 @@ READ_ROUTES = {
 HOSTS = frozenset(("main", "pocket4", "rog", "mac", "x230", "ai395"))
 JOB_ID = re.compile(r"[0-9a-f]+-[0-9a-f]+-[0-9a-f]+", re.ASCII)
 PTY_ID = re.compile(r"dpty-[A-Za-z0-9-]{1,91}", re.ASCII)
+STREAM_ID = re.compile(r"stream-[0-9a-f]{64}", re.ASCII)
+STREAM_READ_NAMES = frozenset(("stream_handoff_list", "stream_handoff_status", "stream_handoff_read"))
+STREAM_EFFECT_BINDING = frozenset(("stream_handoff_write", "stream_handoff_close"))
+MAX_STREAM_SESSIONS = 128
 MAX_METADATA = 65536
 
 
@@ -113,6 +117,96 @@ def inspect_owned_record(root: pathlib.Path, kind: str, identity: str, host: str
         os.close(dirfd)
 
 
+def inspect_owned_stream(root: pathlib.Path, identity: str) -> bool:
+    """Resolve one account-owned stream request, never opening its FIFO/socket."""
+    if not isinstance(identity, str) or not STREAM_ID.fullmatch(identity):
+        return False
+    fd = directory_fd(root)
+    try:
+        try:
+            base = os.open("stream_handoffs", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=fd)
+        except FileNotFoundError:
+            return False
+        try:
+            sb = os.fstat(base)
+            if sb.st_uid != os.getuid() or (sb.st_mode & 0o077) or not stat.S_ISDIR(sb.st_mode):
+                raise UnsafeProvenance("stream_registry_not_private")
+            try:
+                target = os.open(identity, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=base)
+            except FileNotFoundError:
+                return False
+            try:
+                sd = os.fstat(target)
+                if sd.st_uid != os.getuid() or (sd.st_mode & 0o077) or not stat.S_ISDIR(sd.st_mode):
+                    raise UnsafeProvenance("stream_owner_directory_not_private")
+                filefd = os.open("request.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=target)
+                try:
+                    before = os.fstat(filefd)
+                    if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid()
+                            or before.st_nlink != 1 or before.st_mode & 0o077
+                            or not 0 < before.st_size <= MAX_METADATA):
+                        raise UnsafeProvenance("stream_request_shape")
+                    raw = bytearray()
+                    while len(raw) < before.st_size:
+                        chunk = os.read(filefd, min(16384, before.st_size - len(raw)))
+                        if not chunk:
+                            break
+                        raw.extend(chunk)
+                    after = os.fstat(filefd)
+                    leaf = os.stat("request.json", dir_fd=target, follow_symlinks=False)
+                    fields = ("st_dev", "st_ino", "st_uid", "st_mode", "st_size", "st_mtime_ns", "st_ctime_ns", "st_nlink")
+                    if len(raw) != before.st_size or any(
+                            getattr(before, key) != getattr(after, key)
+                            or getattr(before, key) != getattr(leaf, key) for key in fields):
+                        raise UnsafeProvenance("stream_request_changed")
+                    try:
+                        record = json.loads(raw, object_pairs_hook=strict_pairs,
+                            parse_constant=lambda _: (_ for _ in ()).throw(UnsafeProvenance("invalid_number")))
+                    except (ValueError, TypeError, UnicodeError) as exc:
+                        raise UnsafeProvenance("invalid_stream_request") from exc
+                    if (not isinstance(record, dict) or record.get("session_id") != identity
+                            or not isinstance(record.get("application_identities"), list)):
+                        raise UnsafeProvenance("stream_request_identity_mismatch")
+                    return True
+                finally:
+                    os.close(filefd)
+            finally:
+                os.close(target)
+        finally:
+            os.close(base)
+    finally:
+        os.close(fd)
+
+
+def owned_stream_names(root: pathlib.Path) -> list[str]:
+    """Bounded stable member set; future dual-populated lists explicitly refuse."""
+    fd = directory_fd(root)
+    try:
+        try:
+            base = os.open("stream_handoffs", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=fd)
+        except FileNotFoundError:
+            return []
+        try:
+            sb = os.fstat(base)
+            if sb.st_uid != os.getuid() or (sb.st_mode & 0o077) or not stat.S_ISDIR(sb.st_mode):
+                raise UnsafeProvenance("stream_registry_not_private")
+            names = os.listdir(base)
+            if len(names) > MAX_STREAM_SESSIONS or len(names) != len(set(names)):
+                raise UnsafeProvenance("stream_list_bound_or_duplicate")
+            if any(STREAM_ID.fullmatch(name) is None for name in names):
+                raise UnsafeProvenance("unknown_stream_registry_entry")
+            for name in names:
+                if not inspect_owned_stream(root, name):
+                    raise UnsafeProvenance("stream_member_unbound")
+            if set(names) != set(os.listdir(base)):
+                raise UnsafeProvenance("stream_membership_changed")
+            return sorted(names)
+        finally:
+            os.close(base)
+    finally:
+        os.close(fd)
+
+
 class OriginalOwner:
     def __init__(self, original_root, new_root):
         self.original_root = pathlib.Path(original_root)
@@ -127,6 +221,23 @@ class OriginalOwner:
             os.close(fd)
 
     def route(self, name, arguments):
+        if name in STREAM_READ_NAMES:
+            if not isinstance(arguments, dict):
+                return None
+            if name == "stream_handoff_list":
+                old = owned_stream_names(self.original_root)
+                new = owned_stream_names(self.new_root)
+                if old and new:
+                    raise UnsafeProvenance("two_active_stream_registries_cannot_be_silently_collapsed")
+                return "legacy" if old else "native"
+            identity = arguments.get("session_id")
+            if not isinstance(identity, str) or STREAM_ID.fullmatch(identity) is None:
+                return None
+            old = inspect_owned_stream(self.original_root, identity)
+            new = inspect_owned_stream(self.new_root, identity)
+            if old and new:
+                raise UnsafeProvenance("ambiguous_original_and_new_stream_identity")
+            return "legacy" if old else "native"
         if name not in READ_ROUTES or not isinstance(arguments, dict):
             return None
         kind, key, record_field = READ_ROUTES[name]
@@ -155,7 +266,7 @@ class DualReadNativeProxy(NativeProxy):
         if self.route_original_effects and (len(original_tools) != 50 or
                 any(current_tools.get(name) != definition for name, definition in original_tools.items())):
             raise UnsafeProvenance("original_fifty_tool_contract_drift")
-        for tool in READ_ROUTES:
+        for tool in tuple(READ_ROUTES) + tuple(sorted(STREAM_READ_NAMES)):
             if not self.contract.allows(tool) or not self.contract.read_only(tool):
                 raise UnsafeProvenance("v10_read_definition_missing")
             if not original_contract.allows(tool) or not original_contract.read_only(tool):
@@ -244,6 +355,8 @@ class DualReadNativeProxy(NativeProxy):
                 "process_cancel": ("process_status", "job_id"),
                 "pty_write": ("pty_read", "session_id"),
                 "pty_close": ("pty_read", "session_id"),
+                "stream_handoff_write": ("stream_handoff_status", "session_id"),
+                "stream_handoff_close": ("stream_handoff_status", "session_id"),
             }
             if name in ownership:
                 target, key = ownership[name]
@@ -260,7 +373,7 @@ class DualReadNativeProxy(NativeProxy):
             # retain original V4 policy, durable idempotency and result ownership.
             return self._original(request, context, era, mutating=True)
 
-        if name not in READ_ROUTES:
+        if name not in READ_ROUTES and name not in STREAM_READ_NAMES:
             return super()._dispatch(request, context)
         try:
             owner = self.provenance.route(name, params.get("arguments", {}))
