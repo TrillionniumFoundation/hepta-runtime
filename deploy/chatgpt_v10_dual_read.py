@@ -145,8 +145,16 @@ class OriginalOwner:
 
 class DualReadNativeProxy(NativeProxy):
     def __init__(self, upstream, token, contract, original_upstream, original_token,
-                 original_contract, original_state, new_state):
+                 original_contract, original_state, new_state, route_original_effects=False):
         super().__init__(upstream, token, contract)
+        self.route_original_effects = bool(route_original_effects)
+        # Old effectful definitions must remain exact. No role/annotation change
+        # can silently turn a new V10 tool into an original V4 mutation.
+        original_tools = {tool["name"]: tool for tool in original_contract.tools}
+        current_tools = {tool["name"]: tool for tool in contract.tools}
+        if self.route_original_effects and (len(original_tools) != 50 or
+                any(current_tools.get(name) != definition for name, definition in original_tools.items())):
+            raise UnsafeProvenance("original_fifty_tool_contract_drift")
         for tool in READ_ROUTES:
             if not self.contract.allows(tool) or not self.contract.read_only(tool):
                 raise UnsafeProvenance("v10_read_definition_missing")
@@ -158,24 +166,57 @@ class DualReadNativeProxy(NativeProxy):
             raise UnsafeProvenance("legacy_upstream_must_be_independent")
         self._legacy_read_lock = threading.RLock()
 
+    def _original(self, request, context, era, *, mutating):
+        identity = request.get("id")
+        try:
+            if context is not None:
+                with self._active_lock:
+                    if context.cancel_requested or self._closing.is_set():
+                        return self._not_submitted(context, era)
+            # Both native contracts are re-attested before delegating. The
+            # separate V4 session is the only allowed effect owner.
+            with self._state_lock:
+                self._ensure_native(context)
+                self._verify_catalog(context)
+            with self._legacy_read_lock:
+                with self.legacy._state_lock:
+                    self.legacy._ensure_native()
+                    self.legacy._verify_catalog()
+                    native_id = self.legacy._next_native_id("owned-effect" if mutating else "original-read")
+                    binding = (self.legacy.session, self.legacy.protocol)
+                native_request = {
+                    "jsonrpc": "2.0", "id": native_id,
+                    "method": "tools/call",
+                    "params": {"name": request["params"]["name"], "arguments": request["params"].get("arguments", {})},
+                }
+                # Setting context.transmitting/posted on the ORIGINAL V4 POST
+                # ensures a lost response is never misreported as unsubmitted.
+                # Do not give the V10 cancellation machinery this V4 binding.
+                # Cancellation is intent-only; no cross-controller signals.
+                original = self.legacy.exchange(native_request, binding=binding, context=context, timeout=38)
+            response = {**original, "id": identity}
+            if era == "modern" and "error" not in response:
+                value = response.get("result")
+                if not isinstance(value, dict) or not isinstance(value.get("content"), list):
+                    raise ValueError("invalid original result")
+                return self._modern_result(identity, value)
+            return response
+        except RequestNotSubmitted:
+            return self._not_submitted(context, era)
+        except Exception:
+            return error(identity, -32603,
+                         "Original V4 operation response unavailable; no request was replayed",
+                         outcome="unknown" if mutating else "unavailable",
+                         automatic_retry=False, original_request_replayed=False)
+
     def _dispatch(self, request, context=None):
         if not isinstance(request, dict) or request.get("method") != "tools/call":
             return super()._dispatch(request, context)
         params = request.get("params")
-        # Until both admission domains share one durable launch/idempotency
-        # authority, ANY native effect could repeat a legacy V4 effect under
-        # the same request key. This transitional bridge permits reads only.
-        if isinstance(params, dict) and isinstance(params.get("name"), str):
-            name = params["name"]
-            if self.contract.allows(name) and not self.contract.read_only(name):
-                invalid = valid_request(request, self.contract)
-                if invalid is not None:
-                    return invalid
-                return error(request.get("id"), -32603,
-                             "Dual-controller transition refuses effectful calls until shared admission is qualified",
-                             outcome="not_submitted", automatic_retry=False,
-                             original_request_replayed=False)
-        if not isinstance(params, dict) or params.get("name") not in READ_ROUTES:
+        if not isinstance(params, dict) or not isinstance(params.get("name"), str):
+            return super()._dispatch(request, context)
+        name = params["name"]
+        if not self.contract.allows(name):
             return super()._dispatch(request, context)
         invalid = valid_request(request, self.contract)
         if invalid is not None:
@@ -184,47 +225,52 @@ class DualReadNativeProxy(NativeProxy):
         if era not in ("modern", "legacy"):
             return super()._dispatch(request, context)
         identity = request.get("id")
-        try:
-            owner = self.provenance.route(params["name"], params.get("arguments", {}))
-        except (UnsafeProvenance, OSError):
-            return error(identity, -32603, "Original task provenance cannot be resolved safely",
-                         outcome="unavailable", automatic_retry=False, original_request_replayed=False)
-        if owner != "legacy":
+        if era == "legacy" and not getattr(self, "legacy_ready", False):
+            return error(identity, -32071, "Legacy MCP initialization required before tool calls",
+                         outcome="not_submitted", automatic_retry=False,
+                         original_request_replayed=False)
+        if not self.contract.read_only(name):
+            old_effect = (getattr(self, "route_original_effects", False) and self.legacy.contract.allows(name)
+                          and not self.legacy.contract.read_only(name))
+            if not old_effect:
+                return error(identity, -32603,
+                             "V10 effects require one shared admission owner; no native dispatch submitted",
+                             outcome="not_submitted", automatic_retry=False,
+                             original_request_replayed=False)
+            # A new V10-owned job or terminal must never be mutated in V4
+            # based on a borrowed/recycled identifier. Provenance has to be
+            # the original V4 registry identity, otherwise refuse.
+            ownership = {
+                "process_cancel": ("process_status", "job_id"),
+                "pty_write": ("pty_read", "session_id"),
+                "pty_close": ("pty_read", "session_id"),
+            }
+            if name in ownership:
+                target, key = ownership[name]
+                try:
+                    owner = self.provenance.route(target, params.get("arguments", {}))
+                except (UnsafeProvenance, OSError):
+                    owner = None
+                if owner != "legacy":
+                    return error(identity, -32603,
+                                 "The requested effect is not bound to an original V4-owned job or PTY",
+                                 outcome="not_submitted", automatic_retry=False,
+                                 original_request_replayed=False)
+            # No V10 effect is sent from this bridge. The old 50 tool names
+            # retain original V4 policy, durable idempotency and result ownership.
+            return self._original(request, context, era, mutating=True)
+
+        if name not in READ_ROUTES:
             return super()._dispatch(request, context)
         try:
-            if context is not None:
-                with self._active_lock:
-                    if context.cancel_requested or self._closing.is_set():
-                        return self._not_submitted(context, era)
-            # Continue to attest that V10 still exposes the entire unchanged
-            # 66-tool contract. The V4 backend has its own pinned 50-tool one.
-            with self._state_lock:
-                self._ensure_native(context)
-                self._verify_catalog(context)
-            with self._legacy_read_lock:
-                with self.legacy._state_lock:
-                    self.legacy._ensure_native()
-                    self.legacy._verify_catalog()
-                    native_id = self.legacy._next_native_id("original-read")
-                    binding = (self.legacy.session, self.legacy.protocol)
-                native_request = {
-                    "jsonrpc": "2.0", "id": native_id,
-                    "method": "tools/call",
-                    "params": {"name": params["name"], "arguments": params.get("arguments", {})},
-                }
-                original = self.legacy.exchange(native_request, binding=binding, timeout=38)
-            response = {**original, "id": identity}
-            if era == "modern" and "error" not in response:
-                value = response.get("result")
-                if not isinstance(value, dict) or not isinstance(value.get("content"), list):
-                    raise ValueError("invalid original read result")
-                return self._modern_result(identity, value)
-            return response
-        except RequestNotSubmitted:
-            return self._not_submitted(context, era)
-        except Exception:
-            return error(identity, -32603, "Original task read unavailable; no request was replayed",
-                         outcome="unavailable", automatic_retry=False, original_request_replayed=False)
+            owner = self.provenance.route(name, params.get("arguments", {}))
+        except (UnsafeProvenance, OSError):
+            return error(identity, -32603, "Original task provenance cannot be resolved safely",
+                         outcome="unavailable", automatic_retry=False,
+                         original_request_replayed=False)
+        if owner != "legacy":
+            return super()._dispatch(request, context)
+        return self._original(request, context, era, mutating=False)
 
 
 def main():
@@ -240,6 +286,8 @@ def main():
     parser.add_argument("--legacy-contract-sha256", required=True)
     parser.add_argument("--legacy-state", required=True)
     parser.add_argument("--new-state", required=True)
+    parser.add_argument("--route-original-v4-effects", action="store_true",
+                        help="Route the original 50 effect names solely to V4; never enable by default")
     parser.add_argument("--acknowledge-full-operator", action="store_true", required=True)
     args = parser.parse_args()
     native_contract = ToolContract.load(args.contract, args.contract_sha256)
@@ -247,7 +295,7 @@ def main():
     proxy = DualReadNativeProxy(
         args.upstream, private_token(args.token_file), native_contract,
         args.legacy_upstream, private_token(args.legacy_token_file), legacy_contract,
-        args.legacy_state, args.new_state,
+        args.legacy_state, args.new_state, route_original_effects=args.route_original_v4_effects,
     )
     proxy.serve(__import__("sys").stdin.buffer, __import__("sys").stdout.buffer)
 
