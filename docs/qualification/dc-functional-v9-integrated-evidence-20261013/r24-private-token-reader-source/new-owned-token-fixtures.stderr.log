@@ -1,0 +1,28 @@
+test_bounded_short_reads_are_collected_and_descriptor_is_closed (__main__.PrivateHttpTokenDescriptor.test_bounded_short_reads_are_collected_and_descriptor_is_closed) ... ok
+test_fifo_and_directory_are_refused_with_nonblocking_descriptor (__main__.PrivateHttpTokenDescriptor.test_fifo_and_directory_are_refused_with_nonblocking_descriptor) ... ERROR
+test_group_other_executable_and_special_permission_bits_are_refused_before_read (__main__.PrivateHttpTokenDescriptor.test_group_other_executable_and_special_permission_bits_are_refused_before_read) ... ok
+test_incomplete_and_appended_read_are_refused (__main__.PrivateHttpTokenDescriptor.test_incomplete_and_appended_read_are_refused) ... ok
+test_invalid_format_and_all_refusals_close_token_descriptor (__main__.PrivateHttpTokenDescriptor.test_invalid_format_and_all_refusals_close_token_descriptor) ... ok
+test_other_owner_token_is_refused_before_read (__main__.PrivateHttpTokenDescriptor.test_other_owner_token_is_refused_before_read) ... ok
+test_oversize_descriptor_is_refused_without_read (__main__.PrivateHttpTokenDescriptor.test_oversize_descriptor_is_refused_without_read) ... ok
+test_owner_read_only_0400_and_0600_preserve_mode_inode_and_bytes_without_hashing (__main__.PrivateHttpTokenDescriptor.test_owner_read_only_0400_and_0600_preserve_mode_inode_and_bytes_without_hashing) ... ok
+test_private_parent_requires_current_owner_and_exact_0700 (__main__.PrivateHttpTokenDescriptor.test_private_parent_requires_current_owner_and_exact_0700) ... ok
+test_replaced_path_and_changed_private_parent_are_refused (__main__.PrivateHttpTokenDescriptor.test_replaced_path_and_changed_private_parent_are_refused) ... ok
+test_same_size_content_change_cannot_hide_behind_restored_mtime (__main__.PrivateHttpTokenDescriptor.test_same_size_content_change_cannot_hide_behind_restored_mtime) ... ok
+test_single_link_and_final_symlink_are_refused (__main__.PrivateHttpTokenDescriptor.test_single_link_and_final_symlink_are_refused) ... ok
+test_symlink_parent_cannot_redirect_private_token (__main__.PrivateHttpTokenDescriptor.test_symlink_parent_cannot_redirect_private_token) ... ok
+
+======================================================================
+ERROR: test_fifo_and_directory_are_refused_with_nonblocking_descriptor (__main__.PrivateHttpTokenDescriptor.test_fifo_and_directory_are_refused_with_nonblocking_descriptor)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/qian-qi/hepta-runtime-dc-functional-20261013/tests/dc_successor_preflight_tests.py", line 1132, in test_fifo_and_directory_are_refused_with_nonblocking_descriptor
+    P.read_private_token(self.root)
+  File "/home/qian-qi/hepta-runtime-dc-functional-20261013/deploy/preflight_dc_successor.py", line 202, in read_private_token
+    raise PermissionError("HTTP token parent requires owner-only 0700")
+PermissionError: HTTP token parent requires owner-only 0700
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.049s
+
+FAILED (errors=1)

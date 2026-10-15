@@ -523,7 +523,19 @@ fn generator_noise_is_stripped_but_parameters_named_like_it_survive() {
 async fn served_tool_schemas_carry_no_generator_noise() {
 	let (client, _server_task, _unsolicited) = connect_legacy().await;
 	let tools = client.list_tools(None).await.expect("list tools");
-	assert_eq!(tools.tools.len(), 6);
+	assert_eq!(tools.tools.len(), 10);
+	for name in [
+		"directory_create",
+		"file_move",
+		"directory_move",
+		"text_file_write",
+	] {
+		assert!(
+			tools.tools.iter().any(|t| t.name == name),
+			"registered explicit {name}"
+		);
+	}
+
 	for tool in &tools.tools {
 		let schema = serde_json::to_string(tool.input_schema.as_ref()).expect("schema json");
 		assert!(

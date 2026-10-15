@@ -1,0 +1,87 @@
+{
+  "schema": "hepta-dc-parity-workspace-root-protection-v1",
+  "captured_at_utc": "2026-10-12T15:10:27.226757+00:00",
+  "previous_source_head": "052fb6ee3d2f46490cdcef686b85210369e38b24",
+  "initial_failure": {
+    "candidate": "previous immutable v4 release c64d0406514fd29a",
+    "kind": "configured controller workspace root was moved by directory_move into second authorized root",
+    "test_exit_code": 1,
+    "original_root_disappeared": true,
+    "all_paths_disposable": true
+  },
+  "fix": {
+    "scope": "deny moves of any configured controller workspace root or directory ancestor thereof",
+    "root_comparison": "canonical original existing path versus every administrator-selected workspace root",
+    "existing_regular_subdirectory_and_file_moves_still_allowed": true,
+    "no_generic_shell_added": true,
+    "no_new_privileges": true,
+    "cross_process_rename_race_claimed_closed": false
+  },
+  "checks": {
+    "new_rust_policy_unit": 1,
+    "main_rust_passed": 420,
+    "jobctl_rust_passed": 8,
+    "main_rust_ignored_existing": 11,
+    "private_50_tool_mcp_root_guard": 5,
+    "private_other_file_ops": 12,
+    "private_v4_directory_and_official_schema": 18,
+    "private_concurrent_text": 6,
+    "staging_unit_tests": 4,
+    "fmt": "pass",
+    "strict_clippy": "pass",
+    "new_exact_head_hosted_CI": "pending"
+  },
+  "catalog": {
+    "old_v1_tools_live": 46,
+    "frozen_v4_candidate_tools": 50,
+    "frozen_contract_sha256": "d36610d575146805f4c02d89210abd360b4d42acc8736d1966f20d0d724704b1",
+    "changed_tool_schemas": false,
+    "existing_live_tool_contract_changed": false
+  },
+  "artifacts": {
+    "source_sha256": {
+      "src/mcp/fs/parity_ops.rs": "6f409047d3e829033c8ca76fdb2c3ebeb1706467a0f5aa6ece36c23779be1605",
+      "src/mcp/runtime/config.rs": "30e42aa65d6a7d49af7f116e1e5b65468bbdb14a98fe0c16e4dd4d21f86a14ae",
+      "src/mcp/runtime/config_tests.rs": "c7354e591a42a43615f7690ec2bfeba0d3de6992ead7dbe3488339986a1d6a9d",
+      "tests/dc_parity_workspace_root_guard_acceptance.py": "61007f569fe80efa8b519020bb093fcd10fc7e0549817f30ec1951dab6590241",
+      ".github/workflows/operator-parity.yml": "35b15611432fa47de58f145b9aa12239ae6b381879e190cb78e5b3b8ab386c2a"
+    },
+    "logs_sha256": {
+      "hepta-root-guard-before.log": "a9543bbfd582a7c67c6f3b876a7738bb543d014d3e70ab2a8b31a07dc0024c7d",
+      "hepta-root-guard-after.log": "52f476c70fda9e888bd57047174d0f2ab19c7b15d86bac5b1f8e5c87286dae83",
+      "hepta-root-guard-unit.log": "d80d8e852707ebce6e0a5c22627258eab6a9124b3227022dda0de2ac3de3f201",
+      "hepta-root-guard-fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "hepta-root-guard-clippy.log": "da8acca8296375d4e33a9195d001995cfe544e7c2f88b56d96a852fd5a653793",
+      "hepta-root-guard-full-rust.log": "ab83bfded32536e5ba65838f7add74c58900495a9d9026ebf8e7085a29482d40",
+      "hepta-root-guard-native-parity.log": "d5c55690de1f2464ea5f57c0e0ef99ea2230a921d0551efef445ed4c5b419a61",
+      "hepta-root-guard-v4-directory.log": "5531c1f235ef46145cbb18f2f8f3802baa958a032598cf7548a8109d719f0759",
+      "hepta-root-guard-text-concurrency.log": "d65270a1d63db1f39c06798ff806355eec010c28f486ba9e25f8c82d571baadb",
+      "hepta-root-guard-final.log": "52f476c70fda9e888bd57047174d0f2ab19c7b15d86bac5b1f8e5c87286dae83",
+      "hepta-root-guard-stage-tests.log": "f5885a30b0fc1a5866a019a0cb667534103bc043f13b13779f46653c2e8d1bcb"
+    }
+  },
+  "protected_services": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2927",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    },
+    "hepta-openai-full-operator.service": {
+      "MainPID": "1270044",
+      "ActiveState": "active"
+    }
+  },
+  "state": {
+    "runtime_service_restarted": false,
+    "desktop_commander_restarted": false,
+    "tunnel_restarted": false,
+    "public_cloud_gateway_started": false,
+    "chatgpt_model_origin_new_writes": false,
+    "production_native_release_switched": false,
+    "preexisting_dirty_file_preserved": "tests/full_operator_acceptance.py"
+  },
+  "next": "Freeze and independently qualify an exact updated binary. Live upgrade and ChatGPT-origin write gate remain separately held."
+}

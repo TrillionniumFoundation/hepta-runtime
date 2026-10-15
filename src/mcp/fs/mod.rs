@@ -19,10 +19,12 @@ pub mod core;
 pub mod delta;
 pub mod directory;
 pub mod file_ops;
+pub mod parity_ops;
 pub mod remote;
 pub mod search;
 pub mod shell;
 pub mod text_editing;
+pub mod text_file_write;
 pub mod workdir;
 
 #[cfg(test)]

@@ -1,0 +1,158 @@
+{
+  "schema": "hepta-v4-model-origin-bounded-file-and-document-write-acceptance-v1",
+  "recorded_at_utc": "2026-10-12T18:23:57.282754+00:00",
+  "base_source_head": "1842dafda2fa71ac73076ff011f73a2e5f22f624",
+  "origin": "Individual native 50-tool Hepta MCP calls originated from this ChatGPT conversation. Independent qian-qi account read-only filesystem and PDF/OOXML verification; no cryptographic ChatGPT-origin request attestation.",
+  "scope": "One unique /tmp scratch directory; no existing business files, sudo commands or running services touched.",
+  "new_positive_nonreadonly_tools": [
+    "batch_edit",
+    "extract_lines",
+    "binary_write",
+    "binary_upload",
+    "document_render",
+    "pdf_edit",
+    "worksheet_edit",
+    "worksheet_recalculate"
+  ],
+  "model_operations": [
+    {
+      "tool": "batch_edit",
+      "action": "replace original line 2 by correct prior line-id",
+      "result": "updated beta to beta verified with line-id 2:a6"
+    },
+    {
+      "tool": "extract_lines",
+      "action": "append original line 2 to destination at -1",
+      "result": "Appended 1 lines (2-2); source untouched"
+    },
+    {
+      "tool": "binary_write",
+      "action": "create-only binary.bin expected_version absent",
+      "result": "31 bytes SHA256 verified"
+    },
+    {
+      "tool": "binary_upload",
+      "action": "chunk, then SHA256-and-length checked commit under one upload ID",
+      "chunk_receipt": {
+        "next_offset": 31,
+        "visible": false
+      },
+      "commit_receipt": {
+        "committed": true,
+        "reused": false,
+        "size": 31
+      }
+    },
+    {
+      "tool": "document_render",
+      "action": "static HTML/CSS -> PDF with no declared assets or external fetch",
+      "renderer": "weasyprint",
+      "renderer_version": "70.0",
+      "pages": 1,
+      "render_warnings": []
+    },
+    {
+      "tool": "pdf_edit",
+      "action": "append a single simple Markdown page to distinct PDF output",
+      "pages": 2,
+      "source_unchanged": true,
+      "page_deletion_is_secure_redaction": false
+    },
+    {
+      "tool": "worksheet_edit",
+      "action": "edit Values!B3 from 20 to 30 with exact source SHA",
+      "cache_invalidated": true,
+      "target_sha256": "e6bf06e44df56bdff548bf5c4d74c6122553178df55411398fd1a375beb02842"
+    },
+    {
+      "tool": "worksheet_recalculate",
+      "action": "calculate original preserved SUM(B2:B3) formula offline",
+      "formula_count": 1,
+      "formula_error_count": 0,
+      "cached_total": 40,
+      "external_links_loaded": false,
+      "macros_executed": false
+    }
+  ],
+  "files": [
+    {
+      "name": "source.txt",
+      "bytes": 20,
+      "sha256": "009f9fd181563adda91070aafed1eaeeeb1131c130e7760001ae666b6f453521",
+      "mode_octal": "0o600"
+    },
+    {
+      "name": "destination.txt",
+      "bytes": 27,
+      "sha256": "b93591a3ee6c1e3197f3609db772168f5bae18e7887abededc8e0402f30ace97",
+      "mode_octal": "0o600"
+    },
+    {
+      "name": "binary.bin",
+      "bytes": 31,
+      "sha256": "3b87c52317e77047e1bb0ba0399d9d65ff42e70b6baf830121f33ab4d9a63b9b",
+      "mode_octal": "0o600"
+    },
+    {
+      "name": "upload.bin",
+      "bytes": 31,
+      "sha256": "3b87c52317e77047e1bb0ba0399d9d65ff42e70b6baf830121f33ab4d9a63b9b",
+      "mode_octal": "0o600"
+    },
+    {
+      "name": "rich_parity.pdf",
+      "bytes": 124115,
+      "sha256": "89e82e160a65e4581ec3b4539649e75369517df2b4e40deaca3adf0e77ef137a",
+      "mode_octal": "0o600"
+    },
+    {
+      "name": "rich_parity_two_pages.pdf",
+      "bytes": 127696,
+      "sha256": "aa9d790222d1621e2e638926d2e11fabf2323a78ff382c7e6682b1e0042ea036",
+      "mode_octal": "0o600"
+    },
+    {
+      "name": "worksheet_parity.xlsx",
+      "bytes": 4980,
+      "sha256": "1c7d58ef35049bdf60b17d7bcfbed33c6e593874ee3dbe5bf4d93df1a8cfa9b4",
+      "mode_octal": "0o600"
+    }
+  ],
+  "pdf_independent_validation": {
+    "pdfinfo_pages": [
+      1,
+      2
+    ],
+    "pdftotext_expected_text_found": true,
+    "source_sha256_unchanged_after_edit": true,
+    "first_page_png_sha256": "8846b532dab8f476131b1eb51639acfedd8a4da613d44",
+    "second_page_png_sha256": "a0c452b2c5a91de96e86c683021ecdbdd11bbe941d83616c702e2e2b1f05e5aa",
+    "visual_preview_reviewed": true,
+    "no_rendered_page_clipping_observed": true
+  },
+  "xlsx_independent_validation": {
+    "zip_testzip": "ok",
+    "sheet": "Values",
+    "B2": 10,
+    "B3": 30,
+    "B4_formula": "SUM(B2:B3)",
+    "B4_cached_value": 40,
+    "macro_or_external_link_parts_present": false,
+    "formula_errors": 0
+  },
+  "release_scope": {
+    "live_50_tool_count_unchanged": true,
+    "risk_annotations_unchanged": true,
+    "hepta_runtime_restarted": false,
+    "desktop_commander_restarted": false,
+    "tunnel_restarted": false,
+    "public_gateway_activated": false
+  },
+  "limits": [
+    "A positive call to one tool name is not permission to execute all parameter combinations.",
+    "Binary upload used one small chunk and was not a throughput or large-file benchmark.",
+    "PDF acceptance used bounded static HTML and one page insert; rich DC HTML/CSS parity is not claimed.",
+    "Offline worksheet recalculation used a supported SUM formula, not Excel-identical evaluation for all formulas.",
+    "No privileged or cooperative live stream mutators were exercised."
+  ]
+}

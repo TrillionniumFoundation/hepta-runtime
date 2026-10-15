@@ -1,0 +1,298 @@
+{
+  "schema": "hepta-installed-dc-native-handoff-and-maintenance-boundary-v1",
+  "recorded_at": "2026-10-07T05:10:37.309378+00:00",
+  "branch_head": "454821bef0c5c1cc03383e7f9e7b1b30f3d3079d",
+  "installed_runtime": {
+    "implementation_revision": "1b0a9e743bd214f0d7bc20210793241978a676de",
+    "binary_sha256": "5bb9dadef53329caa13acec8965d2d6c074c17192c744078d76b689d8c3fb8b3",
+    "pid": 651604,
+    "service": "hepta-runtime-operator.service",
+    "native_tool_count": 46,
+    "stream_tools": [
+      "stream_handoff_close",
+      "stream_handoff_list",
+      "stream_handoff_prepare",
+      "stream_handoff_read",
+      "stream_handoff_status",
+      "stream_handoff_write"
+    ]
+  },
+  "desktop_commander": {
+    "service": "desktop-commander-remote.service",
+    "pid": 2959,
+    "retained": true,
+    "modified_by_this_stage": false
+  },
+  "migration_contract": {
+    "qualified": true,
+    "scope": "DC work launched through deploy/dc_handoff_owner.py or another conforming cooperating same-login owner: finalized raw stdout/stderr history plus the same live child pipes into installed native broker; application stays running.",
+    "actual_dc_installed_acceptance": {
+      "complete": true,
+      "checks": [
+        {
+          "check": "actual DC owner has durable raw pre-handoff history and zero unread raw stdin",
+          "detail": {
+            "owner_pid": 647447,
+            "application_pids": [
+              647460
+            ],
+            "stdout_history_bytes": 245
+          }
+        },
+        {
+          "check": "DC owner exported live pipes plus finalized histories and exited its ownership path",
+          "detail": {
+            "session_id": "stream-b485d4624ebe5fe82a1c325903388b738d67fd8536adf5d3127cd7699b09f3d6",
+            "history_receipt": "e9913ab7534963a60bea8665d3fbb64f4918f765376d3e26aa803b04632092b0"
+          }
+        },
+        {
+          "check": "native durable archive starts with the exact bytes already consumed and forwarded by DC owner",
+          "detail": null
+        },
+        {
+          "check": "same app/history/broker ownership survives installed MCP service restart",
+          "detail": {
+            "runtime_before": 645869,
+            "runtime_after": 648308,
+            "DC_pid": 2959
+          }
+        },
+        {
+          "check": "native once-only input continues the exact DC-launched process state",
+          "detail": {
+            "pid": 647460,
+            "total": 22
+          }
+        },
+        {
+          "check": "EOF completes archive and native receipts contain no raw post-handoff input",
+          "detail": null
+        }
+      ],
+      "binary_sha256": "5bb9dadef53329caa13acec8965d2d6c074c17192c744078d76b689d8c3fb8b3",
+      "actual_DC_launched_owner_required": true,
+      "application_checkpoint_code": false,
+      "privileged_operation": false,
+      "cloud_binding_used": false,
+      "passed": 6,
+      "session_id": "stream-b485d4624ebe5fe82a1c325903388b738d67fd8536adf5d3127cd7699b09f3d6",
+      "old_owner_pid": 647447,
+      "application_pid": 647460,
+      "application_memory_hash": "491666c22ac02fc6e96081d6bee047f272cc5be673638236eb6770bc385a7b5d",
+      "stdout_history_sha256": "ddfa0725503325dfaef104a4cc897e2b3bf88681d15fa42d7e063f348121a4f2",
+      "userspace_read_ahead_bytes_unaccounted": 0,
+      "runtime_pid_before": 645869,
+      "runtime_pid_after": 648308,
+      "desktop_commander_pid": 2959,
+      "application_process_stopped_for_handoff": false
+    },
+    "installed_broker_restart_acceptance": {
+      "complete": true,
+      "binary_sha256": "5bb9dadef53329caa13acec8965d2d6c074c17192c744078d76b689d8c3fb8b3",
+      "checks": [
+        {
+          "check": "installed endpoint exposes all six stream ownership tools",
+          "detail": 46
+        },
+        {
+          "check": "old ordinary-user owner transferred the exact live pipes to installed broker",
+          "detail": {
+            "queued_before": 476,
+            "application_pids": [
+              645846,
+              645847
+            ]
+          }
+        },
+        {
+          "check": "pre-handoff queued output archived without replay and memory identities retained",
+          "detail": null
+        },
+        {
+          "check": "broker, app identity and queued output survive actual installed service restart",
+          "detail": {
+            "runtime_before": 644880,
+            "runtime_after": 645869
+          }
+        },
+        {
+          "check": "installed native input receipt prevents duplicate effect and preserves app/child memory",
+          "detail": null
+        },
+        {
+          "check": "input EOF completes archive and receipts contain no raw input",
+          "detail": null
+        }
+      ],
+      "service_restart_performed": true,
+      "desktop_commander_modified": false,
+      "privileged_operation": false,
+      "cloud_binding_used": false,
+      "passed": 6,
+      "session_id": "stream-5f3a189210b6f35f472f054ac1b17bb2fc88ff5788a65af4796264b67897264f",
+      "application_pid": 645846,
+      "child_pid": 645847,
+      "runtime_pid_before": 644880,
+      "runtime_pid_after": 645869,
+      "desktop_commander_pid": 2959,
+      "native_receiver_persistent_across_installed_restart": true,
+      "application_checkpoint_code": false,
+      "application_processes_stopped_for_handoff": false
+    },
+    "postrollback_acceptance": {
+      "complete": true,
+      "binary_sha256": "5bb9dadef53329caa13acec8965d2d6c074c17192c744078d76b689d8c3fb8b3",
+      "checks": [
+        {
+          "check": "installed endpoint exposes all six stream ownership tools",
+          "detail": 46
+        },
+        {
+          "check": "old ordinary-user owner transferred the exact live pipes to installed broker",
+          "detail": {
+            "queued_before": 476,
+            "application_pids": [
+              651584,
+              651586
+            ]
+          }
+        },
+        {
+          "check": "pre-handoff queued output archived without replay and memory identities retained",
+          "detail": null
+        },
+        {
+          "check": "broker, app identity and queued output survive actual installed service restart",
+          "detail": {
+            "runtime_before": 650103,
+            "runtime_after": 651604
+          }
+        },
+        {
+          "check": "installed native input receipt prevents duplicate effect and preserves app/child memory",
+          "detail": null
+        },
+        {
+          "check": "input EOF completes archive and receipts contain no raw input",
+          "detail": null
+        }
+      ],
+      "service_restart_performed": true,
+      "desktop_commander_modified": false,
+      "privileged_operation": false,
+      "cloud_binding_used": false,
+      "passed": 6,
+      "session_id": "stream-a0bdf80f95f531fa63a78fc3d28225c50e8a233791e5be2915f22314ff4e685c",
+      "application_pid": 651584,
+      "child_pid": 651586,
+      "runtime_pid_before": 650103,
+      "runtime_pid_after": 651604,
+      "desktop_commander_pid": 2959,
+      "native_receiver_persistent_across_installed_restart": true,
+      "application_checkpoint_code": false,
+      "application_processes_stopped_for_handoff": false
+    },
+    "userspace_read_ahead_bytes_unaccounted": 0,
+    "native_receiver_survives_mcp_service_restart": true,
+    "once_only_input_receipts": true,
+    "old_history_is_native_archive_prefix": true,
+    "arbitrary_preexisting_unwrapped_dc_session_adoption": false,
+    "external_socket_gpu_desktop_state_migration": false,
+    "cross_host_process_memory_migration": false
+  },
+  "exact_head_ci": {
+    "run_id": 37569682519,
+    "head_sha": "454821bef0c5c1cc03383e7f9e7b1b30f3d3079d",
+    "status": "completed",
+    "conclusion": "success",
+    "observed_via_github_connector": true,
+    "updated_at": "2026-10-07T04:12:39Z"
+  },
+  "controller_restart_evidence": {
+    "historical_real_boot_change": [
+      "IDX BOOT ID                          FIRST ENTRY                 LAST ENTRY",
+      " -1 2f25b83b6b1f4029a9e6d06fe89d0de3 Tue 2026-10-06 10:41:58 CST Tue 2026-10-06 12:03:53 CST"
+    ],
+    "current_boot_id": "a5cfd4f3-4a31-4fb1-b8cc-cf71ef25ea2d",
+    "openbao_lease_restore_recorded": true,
+    "postgresql_accepting_connections": true,
+    "docker_syncthing_restart_policy": {
+      "Name": "unless-stopped",
+      "MaximumRetryCount": 0
+    },
+    "docker_syncthing_persistent_mounts": [
+      {
+        "Type": "bind",
+        "Source": "/home/qian-qi/.openclaw/workspace/shared-oc-sync/config",
+        "Destination": "/config",
+        "RW": true
+      },
+      {
+        "Type": "bind",
+        "Source": "/data/openclaw-sync",
+        "Destination": "/data/openclaw-sync",
+        "RW": true
+      }
+    ],
+    "application_level_checkpoint_proven_for_all_current_state": false,
+    "restart_execution_performed_this_stage": false
+  },
+  "current_maintenance": {
+    "safe_reboot_proven": false,
+    "blockers": [
+      "active_workloads_need_completion_or_verified_checkpoint",
+      "interactive_application_state_not_attested",
+      "stateful_services_need_verified_restart_contract",
+      "running_containers_need_verified_restart_contract"
+    ],
+    "interactive_process_count": 63,
+    "stateful_service_count": 12,
+    "running_container_count": 1,
+    "active_dc_download_session": true,
+    "dc_download_process": "724141   11659 S+   ssh",
+    "pocket4_digitalis_download": {
+      "part_exists": true,
+      "final_exists": false,
+      "bytes": 2126479360,
+      "target": 3488309248,
+      "percent": 60.96,
+      "sha_file": false
+    },
+    "reason": "The active DC-owned SSH download would be disrupted by a controller reboot; interactive/application state is also not fully drained."
+  },
+  "power_boundary": {
+    "controller_interface": "enp4s0",
+    "controller_lan_address": "192.168.0.4",
+    "nic": "Realtek RTL8111/8168/8411 via r8169",
+    "networkmanager_wol_profile": "magic",
+    "pci_root_port_acpi_wake_enabled": true,
+    "nic_sysfs_wakeup": "disabled",
+    "active_reapply_authorized": false,
+    "independent_power_actuator_verified": false,
+    "ipmi_device_verified": false,
+    "mei_device_verified": false,
+    "usb_or_serial_power_controller_verified": false,
+    "G3_power_removal_performed": false,
+    "conclusion": "Independent observation is qualified, but no separately powered target-bound actuator with measured off/on state is available. WOL is not a power-cut actuator and current NIC wake state is not proven armed."
+  },
+  "chatgpt_direct_binding": false,
+  "unchanged": [
+    "host PAM/sudoers/accounts",
+    "SSH identities and MCP token",
+    "runtime access roots/checkpoint opt-in policy",
+    "Desktop Commander service/configuration",
+    "ChatGPT/workspace/tunnel binding"
+  ],
+  "receipt_sha256": {
+    "history-dc-installed-actual.json": "8b86f44cb79f606521ec94824134eaa189f2df1ff25da7a9af84c5c53bb84436",
+    "history-installed-live-restart.json": "fefd17f01826dbd1a326b9c2a995792ffeab17c259f5c9da492c42521516ff1e",
+    "history-installed-postrollback.json": "6e66bd0aee6631b41435c3f738222f5aab6a3538da6814382b63cc6ba1a661b3",
+    "maintenance-current-20261007.json": "b41e896a3b8538e29b89877a447e5698c4cf7302528bee6dd307b38b28bac794",
+    "history-controller-boot-readonly.json": "d3c05e07faac9c946fa231b90ddfcb363c8eb4533d0afca785a591b1f2d4e2dc",
+    "history-business-restart-readonly.json": "72f01b7acdd22dc483d89e91b7ff43aa976cf2a815ee2d27103d8f0bcec6a16c",
+    "history-power-readonly.json": "395cf9c9029fbe24f05ca38886e10fb784957268b5c57cf16e2df12531fe9750",
+    "readiness-wol-profile.json": "069949c96c1e452f08a202883eb0998c43243daf643e98b7e80bc1e5d5c07b4c",
+    "readiness-wol-reapply.json": "fd81ce94c2735d9989ef578e36394caf674e9f960f4f18bc9f30c115b085b171"
+  }
+}

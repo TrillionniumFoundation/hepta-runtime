@@ -1,0 +1,423 @@
+{
+  "schema": "hepta-dc-functional-crosswalk-v1",
+  "recorded_utc": "2026-10-13T03:02:25.764677+00:00",
+  "origin": "Exact current Desktop Commander 31-tool discovery plus frozen 50-tool Hepta v4 contract and model-origin bounded acceptance receipts",
+  "pinned_hepta_catalog_sha256": "63742708c287e8468d73f27ba85ecc6585afd4adcd76d06b618456730cfaf8ad",
+  "dc_tool_count": 31,
+  "hepta_tool_count": 50,
+  "terms": {
+    "bounded": "At least one limited demonstrated workflow; NOT full per-argument parity or universal ChatGPT approval.",
+    "partial": "Some functionality available, but one or more DC semantics missing.",
+    "unimplemented": "No dedicated Hepta equivalent or user-flow completion yet.",
+    "vendor_specific": "DC account/agent product function needs a truthful Hepta-specific retirement decision, not a fake vendor clone."
+  },
+  "entries": [
+    {
+      "dc_tool": "list_devices",
+      "status": "bounded",
+      "hepta_tools": [
+        "host_list"
+      ],
+      "limits": "Hepta returns fixed configured host aliases/capability flags, not DC remote device enrollment.",
+      "evidence": {
+        "path": "docs/qualification/dc-parity-v4-chatgpt-model-origin-accepted-20261013.json",
+        "sha256": "38265a251f46def0a336932271265895c5b3c808fa95c8a36285a021510f105c"
+      },
+      "next_gate": "",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "who_am_i",
+      "status": "vendor_specific",
+      "hepta_tools": [],
+      "limits": "DC account identity/billing is product-specific, not the host login identity.",
+      "evidence": null,
+      "next_gate": "Replace DC account access with Hepta-owned identity/entitlement reporting; no fake DC billing identity.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "get_tool_result",
+      "status": "partial",
+      "hepta_tools": [
+        "process_status",
+        "process_wait",
+        "process_read"
+      ],
+      "limits": "Only Hepta-owned durable jobs can be reconciled; no DC request call_id is adopted.",
+      "evidence": null,
+      "next_gate": "Prove equivalent reconnect/status for Hepta-owned model-origin asynchronous tool calls.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "list_remote_tool_calls",
+      "status": "partial",
+      "hepta_tools": [
+        "process_list"
+      ],
+      "limits": "Lists Hepta durable jobs rather than DC background MCP call IDs.",
+      "evidence": null,
+      "next_gate": "Create truthful Hepta request-level async call history, separate from OS processes.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "ping",
+      "status": "unimplemented",
+      "hepta_tools": [],
+      "limits": "host_list and network_inspect do not measure target reachability/RTT.",
+      "evidence": null,
+      "next_gate": "Implement safe configured-host health/latency probe without user-supplied network destinations.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "shutdown",
+      "status": "vendor_specific",
+      "hepta_tools": [],
+      "limits": "DC shutdown stops the DC agent, not the computer; not meaningful as a Hepta shell alias.",
+      "evidence": null,
+      "next_gate": "Qualify supported Hepta agent lifecycle maintenance with independent rescue before retiring DC.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "get_config",
+      "status": "partial",
+      "hepta_tools": [
+        "host_list",
+        "service_status"
+      ],
+      "limits": "Host capabilities and service state do not expose the full authenticated Hepta effective config.",
+      "evidence": null,
+      "next_gate": "Provide a redacted, read-only effective-config inspection that never returns credentials.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "set_config_value",
+      "status": "vendor_specific",
+      "hepta_tools": [],
+      "limits": "DC vendor application settings include blocklists and allowed directories; no arbitrary Hepta policy writer is exposed.",
+      "evidence": null,
+      "next_gate": "Use reviewed versioned Hepta administrator policy changes with rollback; do not clone a generic blocklist editor.",
+      "dc_core_modify_execute": true
+    },
+    {
+      "dc_tool": "read_file",
+      "status": "bounded",
+      "hepta_tools": [
+        "view",
+        "document_read",
+        "binary_read",
+        "image_read"
+      ],
+      "limits": "Different text/binary/document APIs; tested bounded real file reads and hashes.",
+      "evidence": {
+        "path": "docs/qualification/dc-parity-v4-chatgpt-multihost-write-20261013.json",
+        "sha256": "d538fa9728e8cd7e45000a069676930f7f60f8630bad540b8dd532120868eef3"
+      },
+      "next_gate": "",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "read_multiple_files",
+      "status": "partial",
+      "hepta_tools": [
+        "view"
+      ],
+      "limits": "Parallel per-path reads work, but no single atomic bounded multi-file result equivalent.",
+      "evidence": null,
+      "next_gate": "Implement a bounded multi-file read interface, per-path authorization and total-size budget.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "write_file",
+      "status": "bounded",
+      "hepta_tools": [
+        "text_file_write",
+        "text_editor",
+        "batch_edit"
+      ],
+      "limits": "Create/append/replace are fingerprint guarded; not every DC mode or arbitrary path combination.",
+      "evidence": {
+        "path": "docs/qualification/dc-parity-v4-chatgpt-model-origin-accepted-20261013.json",
+        "sha256": "38265a251f46def0a336932271265895c5b3c808fa95c8a36285a021510f105c"
+      },
+      "next_gate": "",
+      "dc_core_modify_execute": true
+    },
+    {
+      "dc_tool": "write_pdf",
+      "status": "bounded",
+      "hepta_tools": [
+        "document_write",
+        "document_render",
+        "pdf_edit"
+      ],
+      "limits": "One-page scratch PDF created through Hepta and DC; rich visual semantics remain unproven.",
+      "evidence": {
+        "path": "docs/qualification/dc-parity-v4-chatgpt-pdf-model-origin-20261013.json",
+        "sha256": "acedb2050b150020ab7cfc7a02997f4c941d91e25db9b075da0fd2fb22393d08"
+      },
+      "next_gate": "",
+      "dc_core_modify_execute": true
+    },
+    {
+      "dc_tool": "create_directory",
+      "status": "bounded",
+      "hepta_tools": [
+        "directory_create"
+      ],
+      "limits": "Private controller-workspace create-only semantics; no remote mkdir in this tool.",
+      "evidence": {
+        "path": "docs/qualification/dc-parity-v4-chatgpt-model-origin-accepted-20261013.json",
+        "sha256": "38265a251f46def0a336932271265895c5b3c808fa95c8a36285a021510f105c"
+      },
+      "next_gate": "",
+      "dc_core_modify_execute": true
+    },
+    {
+      "dc_tool": "list_directory",
+      "status": "partial",
+      "hepta_tools": [
+        "view"
+      ],
+      "limits": "Native directory listing and filters exist but DC listing response/pagination and GUI semantics differ.",
+      "evidence": null,
+      "next_gate": "Qualify model-origin paginated directory listings and hidden/symlink handling.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "move_file",
+      "status": "bounded",
+      "hepta_tools": [
+        "file_move",
+        "directory_move"
+      ],
+      "limits": "Atomic no-overwrite same-filesystem controller moves; broader DC move semantics differ.",
+      "evidence": {
+        "path": "docs/qualification/dc-parity-v4-chatgpt-model-origin-accepted-20261013.json",
+        "sha256": "38265a251f46def0a336932271265895c5b3c808fa95c8a36285a021510f105c"
+      },
+      "next_gate": "",
+      "dc_core_modify_execute": true
+    },
+    {
+      "dc_tool": "start_search",
+      "status": "partial",
+      "hepta_tools": [
+        "view"
+      ],
+      "limits": "Hepta supports bounded synchronous content/glob search, not an independent cancellable search job.",
+      "evidence": null,
+      "next_gate": "Add a native bounded search lifecycle, explicit IDs, pagination and cancellation without a shell.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "get_more_search_results",
+      "status": "partial",
+      "hepta_tools": [
+        "view"
+      ],
+      "limits": "Range-based view pagination is not a stable continuation cursor for a live search.",
+      "evidence": null,
+      "next_gate": "Add stable search result cursor semantics bound to a fixed search snapshot.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "stop_search",
+      "status": "unimplemented",
+      "hepta_tools": [],
+      "limits": "No search job identity exists to cancel, unlike DC.",
+      "evidence": null,
+      "next_gate": "Implement cancellation of only the Hepta-created search identity.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "list_searches",
+      "status": "unimplemented",
+      "hepta_tools": [],
+      "limits": "No catalog of Hepta search jobs exists.",
+      "evidence": null,
+      "next_gate": "Expose bounded search-session discovery without exposing other users' work.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "get_file_info",
+      "status": "bounded",
+      "hepta_tools": [
+        "file_info"
+      ],
+      "limits": "Regular file metadata with SHA256/version; DC broader directory metadata differs.",
+      "evidence": {
+        "path": "docs/qualification/dc-parity-v4-chatgpt-multihost-write-20261013.json",
+        "sha256": "d538fa9728e8cd7e45000a069676930f7f60f8630bad540b8dd532120868eef3"
+      },
+      "next_gate": "",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "edit_block",
+      "status": "bounded",
+      "hepta_tools": [
+        "text_editor",
+        "batch_edit"
+      ],
+      "limits": "Version/line-hash aware editing of scratch text has model-origin evidence; XML edits separate.",
+      "evidence": {
+        "path": "docs/qualification/dc-parity-v4-chatgpt-model-origin-expanded-20261013.json",
+        "sha256": "10c0c9e2d3b2ed838d79848bd2038128a83b16330b1ae49154868c6e9539db00"
+      },
+      "next_gate": "",
+      "dc_core_modify_execute": true
+    },
+    {
+      "dc_tool": "start_process",
+      "status": "bounded",
+      "hepta_tools": [
+        "shell_start",
+        "process_start"
+      ],
+      "limits": "Harmless normal-user shell pipeline and exact executable argv through durable jobs, not arbitrary commands.",
+      "evidence": {
+        "path": "docs/qualification/dc-parity-v4-chatgpt-six-host-pty-and-safe-shell-20261013.json",
+        "sha256": "c19fbc7a7a3065a32ecb4825c254e969793b38be4423b3e9c9d6d8f58f06f35a"
+      },
+      "next_gate": "",
+      "dc_core_modify_execute": true
+    },
+    {
+      "dc_tool": "read_process_output",
+      "status": "bounded",
+      "hepta_tools": [
+        "process_read",
+        "pty_read"
+      ],
+      "limits": "Bounded byte-cursor native job and PTY output; model-origin real output checked on six hosts.",
+      "evidence": {
+        "path": "docs/qualification/dc-parity-v4-chatgpt-six-host-pty-and-safe-shell-20261013.json",
+        "sha256": "c19fbc7a7a3065a32ecb4825c254e969793b38be4423b3e9c9d6d8f58f06f35a"
+      },
+      "next_gate": "",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "interact_with_process",
+      "status": "bounded",
+      "hepta_tools": [
+        "pty_start",
+        "pty_write",
+        "pty_read",
+        "pty_close"
+      ],
+      "limits": "Only Hepta-owned PTY sessions; cannot retroactively adopt arbitrary DC buffers.",
+      "evidence": {
+        "path": "docs/qualification/dc-parity-v4-chatgpt-six-host-pty-and-safe-shell-20261013.json",
+        "sha256": "c19fbc7a7a3065a32ecb4825c254e969793b38be4423b3e9c9d6d8f58f06f35a"
+      },
+      "next_gate": "",
+      "dc_core_modify_execute": true
+    },
+    {
+      "dc_tool": "force_terminate",
+      "status": "bounded",
+      "hepta_tools": [
+        "process_cancel",
+        "host_signal"
+      ],
+      "limits": "Only runtime-owned jobs or identity-checked disposable PIDs; no wildcard process groups.",
+      "evidence": {
+        "path": "docs/qualification/dc-parity-v4-chatgpt-model-origin-expanded-20261013.json",
+        "sha256": "10c0c9e2d3b2ed838d79848bd2038128a83b16330b1ae49154868c6e9539db00"
+      },
+      "next_gate": "",
+      "dc_core_modify_execute": true
+    },
+    {
+      "dc_tool": "list_sessions",
+      "status": "partial",
+      "hepta_tools": [
+        "pty_list",
+        "process_list"
+      ],
+      "limits": "Hepta-created terminals/jobs only; DC internal sessions cannot be enumerated or migrated wholesale.",
+      "evidence": null,
+      "next_gate": "Prove restart/reconnect history for Hepta-owned PTYs, and explicit DC session retirement.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "list_processes",
+      "status": "bounded",
+      "hepta_tools": [
+        "host_processes"
+      ],
+      "limits": "Bounded actual host processes with UID/start identity; caller arguments intentionally omitted.",
+      "evidence": {
+        "path": "docs/qualification/dc-parity-v4-chatgpt-model-origin-expanded-20261013.json",
+        "sha256": "10c0c9e2d3b2ed838d79848bd2038128a83b16330b1ae49154868c6e9539db00"
+      },
+      "next_gate": "",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "kill_process",
+      "status": "bounded",
+      "hepta_tools": [
+        "host_signal"
+      ],
+      "limits": "Only one start-identity pinned disposable external PID delivered a signal; not broad unrestricted kill.",
+      "evidence": {
+        "path": "docs/qualification/dc-parity-v4-chatgpt-model-origin-expanded-20261013.json",
+        "sha256": "10c0c9e2d3b2ed838d79848bd2038128a83b16330b1ae49154868c6e9539db00"
+      },
+      "next_gate": "",
+      "dc_core_modify_execute": true
+    },
+    {
+      "dc_tool": "get_usage_stats",
+      "status": "vendor_specific",
+      "hepta_tools": [],
+      "limits": "DC subscription usage is provider data; Hepta cannot truthfully return DC billing percentages.",
+      "evidence": null,
+      "next_gate": "Define Hepta-specific redacted quota, audit and call-usage statistics from its own authority.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "get_recent_tool_calls",
+      "status": "partial",
+      "hepta_tools": [
+        "process_list"
+      ],
+      "limits": "Native runtime audit exists, but no equivalent caller-scoped, redacted MCP tool-call history exposed.",
+      "evidence": null,
+      "next_gate": "Add scoped audit cursor and privacy/retention controls; distinguish tool calls from jobs.",
+      "dc_core_modify_execute": false
+    },
+    {
+      "dc_tool": "give_feedback_to_desktop_commander",
+      "status": "vendor_specific",
+      "hepta_tools": [],
+      "limits": "DC vendor survey link has no meaning once replaced.",
+      "evidence": null,
+      "next_gate": "Provide Hepta-owned issue/report path if needed; no impersonation of DC feedback.",
+      "dc_core_modify_execute": false
+    }
+  ],
+  "cutover_gates": {
+    "independent_dc_off_smoke": false,
+    "workflow_restart_recovery": false,
+    "cutover_rollback_drill": false,
+    "audit_and_search_session_gap": false,
+    "privileged_action_policy_review": false,
+    "vendor_specific_retirement_decision": false
+  },
+  "cutover_evidence": {},
+  "full_replacement_claimed": false,
+  "public_cloud_gateway": "Independent OAuth/tenant/device product gate; not implied by local Desktop Commander retirement.",
+  "source_receipts": {
+    "dc-parity-v4-model-origin-tool-ledger-v3-20261013.json": {
+      "path": "docs/qualification/dc-parity-v4-model-origin-tool-ledger-v3-20261013.json",
+      "sha256": "97f751726d8b47207e1481f8803fdd72f0c84f907ddf479d7377df20ef23d71d"
+    },
+    "dc-parity-v4-chatgpt-model-origin-accepted-20261013.json": {
+      "path": "docs/qualification/dc-parity-v4-chatgpt-model-origin-accepted-20261013.json",
+      "sha256": "38265a251f46def0a336932271265895c5b3c808fa95c8a36285a021510f105c"
+    }
+  }
+}

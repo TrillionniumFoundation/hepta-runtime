@@ -1,0 +1,123 @@
+{
+  "schema": "hepta-operator-unit-reuse-helper-v1",
+  "origin": "local_source_pinned_helpers_real_owned_systemd_units",
+  "chatgpt_originated": false,
+  "native_mcp_envelope_tested": false,
+  "installed_service_changed": false,
+  "DC_changed": false,
+  "full_dc_replacement_qualified": false,
+  "recorded_utc": "2026-10-13T15:49:33.998159+00:00",
+  "source_head": "9112938dabc91854fde66c211954897fd577e8f3",
+  "jobs_source_sha256": "751e5b7c87fa16fb8e44cc5d5281261d6076c7e3db594bf463f3ae5f2dfe8d6f",
+  "script_sha256": "c5624d2d948c8b86cb8287df8240e5506755a01234608aa95ddef80058cddac4",
+  "checks": [
+    "real runner freezes launch nonce, UID, start identity and systemd invocation",
+    "old_owner_gone refuses cancellation/new-unit status without touching replacement",
+    "missing_frozen_binding refuses cancellation/new-unit status without touching replacement",
+    "original output cursors and final result remain available after same-name reuse",
+    "fresh helper process cancels the original frozen supervisor; runner escalates owned workload and captures complete output"
+  ],
+  "cleanup": {
+    "original_terminal_confirmed": true,
+    "replacement_terminal_confirmed": true,
+    "same_unit_collected": true,
+    "live_cancel_terminal_confirmed": true,
+    "fixture_removed": true
+  },
+  "complete": true,
+  "original_start": {
+    "at_unix_ms": 1791906574206,
+    "invocation_id": "d479458b9b2f492ca8ade98942153494",
+    "job_id": "owned-original-35cf489cb6784f7389365f2bc6e40cfa",
+    "launch_nonce": "f5a06414a2b76bb1b1f0d91689db55ec",
+    "supervisor_identity": {
+      "kind": "proc_start_ticks",
+      "value": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:1408863"
+    },
+    "supervisor_pid": 287540,
+    "supervisor_uid": 1000
+  },
+  "original_ready": {
+    "pid": 287542,
+    "uid": 1000
+  },
+  "original_unit": {
+    "ExecMainPID": "287540",
+    "Description": "Hepta Runtime job owned-original-35cf489cb6784f7389365f2bc6e40cfa f5a06414a2b76bb1b1f0d91689db55ec",
+    "LoadState": "loaded",
+    "InvocationID": "d479458b9b2f492ca8ade98942153494"
+  },
+  "replacement_start": {
+    "pid": 287555,
+    "identity": {
+      "kind": "proc_start_ticks",
+      "value": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:1408897"
+    },
+    "unit_properties": {
+      "ExecMainPID": "287555",
+      "Description": "Owned replacement fixture",
+      "LoadState": "loaded",
+      "InvocationID": "509c1fc6bc6e4fbd90a1a7e55368afa3"
+    }
+  },
+  "live_cancel": {
+    "launch": {
+      "backend": "systemd",
+      "launcher_pid": null,
+      "ok": true,
+      "unit": "hepta-job-owner-ce87182913ff48308da1a75184bb184f-cancel"
+    },
+    "start": {
+      "at_unix_ms": 1791906575747,
+      "invocation_id": "bc09a5224b4a47fb98b65d7ce14b4bda",
+      "job_id": "owned-cancel-b1b10230e737445ab1c308a20b4112f7",
+      "launch_nonce": "9fb70fb265feddc62032207ffaf62a80",
+      "supervisor_identity": {
+        "kind": "proc_start_ticks",
+        "value": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:1409018"
+      },
+      "supervisor_pid": 287604,
+      "supervisor_uid": 1000
+    },
+    "ack": {
+      "atomic_identity": true,
+      "job_id": "owned-cancel-b1b10230e737445ab1c308a20b4112f7",
+      "reconcile_via": "process_status",
+      "result": "stop_requested",
+      "supervisor_pid": 287604,
+      "termination_confirmed": false
+    },
+    "final": {
+      "at_unix_ms": 1791906584316,
+      "cancelled": true,
+      "exit_code": -9,
+      "log_bytes": {
+        "stderr": {
+          "seen": 0,
+          "stored": 0
+        },
+        "stdout": {
+          "seen": 12,
+          "stored": 12
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "timed_out": false
+    }
+  },
+  "source_stable": true,
+  "logs": {
+    "helper-dispatch.jsonl": {
+      "sha256": "f1250b4229499399c0becb2a639f5f2e8a46156d9778c2662313a5f861655e3c",
+      "bytes": 6656
+    }
+  }
+}

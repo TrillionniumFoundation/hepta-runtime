@@ -1,0 +1,118 @@
+{
+  "schema": "hepta-v4-model-origin-multihost-command-and-interactive-acceptance-v1",
+  "recorded_at_utc": "2026-10-12T17:51:57.409592+00:00",
+  "source_head_at_time_of_check": "bf6cd0f7698fa7185fddeed4345a10b955b038ff",
+  "tool_count": 50,
+  "origin": "Actual model ChatGPT plugin calls in this conversation; independent SSH reads only for evidence, without cryptographic ChatGPT request attestation.",
+  "process_start": [
+    {
+      "host": "pocket4",
+      "job_id": "1a13139b4a7-1f807d-4",
+      "backend": "systemd",
+      "effective_uid": 1000,
+      "exit_code": 0,
+      "output_complete": true,
+      "stdout_size": 5,
+      "stdout_sha256": "83c02ac2d48c863dab2ccf6870455aadfc2cec073b8db269b517c879d76aa6d9",
+      "independent_ssh_archive_check": true
+    },
+    {
+      "host": "rog",
+      "job_id": "1a13139bee7-1f807d-5",
+      "backend": "systemd",
+      "effective_uid": 1000,
+      "exit_code": 0,
+      "output_complete": true,
+      "stdout_size": 5,
+      "stdout_sha256": "83c02ac2d48c863dab2ccf6870455aadfc2cec073b8db269b517c879d76aa6d9",
+      "independent_ssh_archive_check": true
+    },
+    {
+      "host": "mac",
+      "job_id": "1a13139c846-1f807d-6",
+      "backend": "detached",
+      "effective_uid": 501,
+      "exit_code": 0,
+      "output_complete": true,
+      "stdout_size": 4,
+      "stdout_sha256": "8f7780eb97bf581bd67489c46eba7b1ff7c933ecf26c7c609705841d48cbfca2",
+      "independent_ssh_archive_check": true
+    },
+    {
+      "host": "x230",
+      "job_id": "1a13139dbe1-1f807d-7",
+      "backend": "systemd",
+      "effective_uid": 1000,
+      "exit_code": 0,
+      "output_complete": true,
+      "stdout_size": 5,
+      "stdout_sha256": "83c02ac2d48c863dab2ccf6870455aadfc2cec073b8db269b517c879d76aa6d9",
+      "independent_ssh_archive_check": true
+    },
+    {
+      "host": "ai395",
+      "job_id": "1a13139e5c0-1f807d-8",
+      "backend": "systemd",
+      "effective_uid": 1000,
+      "exit_code": 0,
+      "output_complete": true,
+      "stdout_size": 5,
+      "stdout_sha256": "83c02ac2d48c863dab2ccf6870455aadfc2cec073b8db269b517c879d76aa6d9",
+      "independent_ssh_archive_check": true
+    }
+  ],
+  "process_start_hosts": 5,
+  "accepted_chatgpt_operations": [
+    "process_start /usr/bin/id -u across 5 real configured hosts",
+    "process_wait authoritative state succeeded/exit 0 on each",
+    "process_read exact stdout UID per host",
+    "PTY start/write/read on Pocket4 and Mac",
+    "PTY Python REPL output unique marker on both",
+    "PTY exit() and output_complete true, capture_error null",
+    "pty_close returned already_exited"
+  ],
+  "pty_results": [
+    {
+      "host": "pocket4",
+      "session_id": "dpty-08fb75cff6bd993194318b868c315a439eabf37253febd3dec06db77126b8293",
+      "marker": "P4_PTY_MODEL_OK",
+      "readback_contains_marker": true,
+      "exit_state": "exited",
+      "output_complete": true,
+      "capture_error": null,
+      "close_result": "already_exited"
+    },
+    {
+      "host": "mac",
+      "session_id": "dpty-2f9af99ad40240f48c4743b5efe40fc43c942cce7953c03fecbd76ef86c61edc",
+      "marker": "MAC_PTY_MODEL_OK",
+      "readback_contains_marker": true,
+      "exit_state": "exited",
+      "output_complete": true,
+      "capture_error": null,
+      "close_result": "already_exited"
+    }
+  ],
+  "transient_failure_retained": {
+    "host": "pocket4",
+    "tool": "process_read",
+    "error": "MCP connection failed once; later read-only retry of same job_id returned stdout 1000\\n, no duplicate process launch."
+  },
+  "file_write_receipt": "docs/qualification/dc-parity-v4-chatgpt-multihost-write-20261013.json",
+  "file_receipt_sha256": "d538fa9728e8cd7e45000a069676930f7f60f8630bad540b8dd532120868eef3",
+  "security_boundaries": {
+    "no_privileged_commands_or_sudo": true,
+    "no_arbitrary_external_pid_signal": true,
+    "test_processes_exited": true,
+    "no_business_files_modified": true,
+    "no_runtime_or_DC_restart": true,
+    "no_tool_risk_annotations_changed": true,
+    "no_cloud_gateway_deployment": true
+  },
+  "remaining_unqualified": [
+    "generic Desktop Commander set_config_value capability",
+    "unrestricted compound shell command",
+    "privileged sudo workflow",
+    "full rich PDF parity"
+  ]
+}

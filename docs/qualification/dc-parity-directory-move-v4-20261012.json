@@ -1,0 +1,108 @@
+{
+  "schema": "hepta-dc-directory-move-source-v4-qualified-v1",
+  "recorded_at_utc": "2026-10-12T13:21:01.654777+00:00",
+  "parent_head": "51d36ddee4b12aafae9b49a8c2f57d085d22b3c9",
+  "catalog": {
+    "count": 50,
+    "prior_v3_count": 49,
+    "original_v3_tool_definitions_unchanged": true,
+    "only_added_name": "directory_move",
+    "new_tool_annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "catalog_sha256": "63742708c287e8468d73f27ba85ecc6585afd4adcd76d06b618456730cfaf8ad",
+    "file_sha256": "d36610d575146805f4c02d89210abd360b4d42acc8736d1966f20d0d724704b1",
+    "read_only": 19,
+    "non_readonly": 31
+  },
+  "tests": {
+    "fmt": "pass",
+    "strict_clippy": "pass",
+    "all_target_rust_main_pass": 415,
+    "all_target_jobctl_pass": 8,
+    "ignored": 11,
+    "native_parity_unit_pass": 15,
+    "new_cache_unit_pass": 2,
+    "frozen_v3_mcp_compatibility_checks": 12,
+    "v4_native_and_modern_stdio_checks": 16,
+    "mcp_2026_07_28_official_discover_errors": 0,
+    "mcp_2026_07_28_official_tool_list_errors": 0,
+    "original_full_facade_tests": 30,
+    "only_isolated_local_runtime_for_new_tool_tests": true
+  },
+  "model_origin_DC": {
+    "source": "actual ChatGPT connected Remote Desktop Commander",
+    "tools": [
+      "create_directory",
+      "write_file(mode=rewrite)",
+      "move_file(directory)",
+      "read_file",
+      "list_directory"
+    ],
+    "directory_move_pass": true,
+    "source_absent": true,
+    "file_bytes": 40,
+    "file_sha256": "bbc7b747e162c0bb78b6d36d333743bf5b5d10881761d4311c085fe129689d37",
+    "test_tree_removed": true
+  },
+  "safety": {
+    "no_shell_or_process_executor_added": true,
+    "symlink_parents_not_followed": true,
+    "existing_destination_not_replaced": true,
+    "no_cross_filesystem_fallback": true,
+    "no_privilege_or_ssh_fallback": true,
+    "independent_external_writers_excluded": false,
+    "session_delta_cache_subtrees_invalidated": true,
+    "cross_session_cache_invalidation_not_claimed": true
+  },
+  "source_sha256": {
+    "src/mcp/fs/parity_ops.rs": "bac19e1941341c5c1158415372a5dd5c48a99f47a2a01a8cf020ce1e37409e09",
+    "src/mcp/fs/parity_ops_tests.rs": "df9625aecb57ca0e567f5f55626524a58d7ef300ea0e0cc3219086de6085f1b6",
+    "src/mcp/fs/delta.rs": "8ac5c5e4b4ae3c95975986519c44029a053ece396c9ae2f966652b7ceacd2d86",
+    "src/mcp/fs/delta_tests.rs": "dee9e96007097addb8c7d9759d2bbb2e0daa6e7d9c6b5f1412aff94dd66374e2",
+    "src/mcp/server.rs": "42dccf4f6336034083f42fdd080bae8f40267cf627ad6bc4697d8411ac2830c6",
+    "src/mcp/server_tests.rs": "7c78eea596d04e4a01bd1e209043f7fe85e1431421e8a505823e455c714c2125",
+    "tests/dc_parity_directory_move_acceptance.py": "fb601f86334b95d533fd0b0f865a5c7647db7a385bb4fe1a32dbf74fa1d3a9d0",
+    "tests/dc_parity_native_acceptance.py": "bcf5ad0984b8909a000650101ac0a01c8e998638bd72a6f1411288a577c18120",
+    ".github/workflows/operator-parity.yml": "7ab8207b8a943a8db997bdfd76e8fc5bc4461ac8a7b4d82cad5734e78e9e2912",
+    "docs/DC_PARITY_DIRECTORY_MOVE_V4.md": "4aa49c8692b398a615c176178bbc25e187e43da30f0dce78de91db22c1d9e882",
+    "deploy/contracts/hepta-runtime-full-operator-v4.json": "d36610d575146805f4c02d89210abd360b4d42acc8736d1966f20d0d724704b1"
+  },
+  "evidence_sha256": {
+    "hepta-dir-v4-full-rust.log": "114c45ce675e2b4dda95b3873cd6b2b75682b0220ab2eddb92fbb5986760a596",
+    "hepta-dir-v4-full-clippy.log": "eb2501ddce06e06a21b3f4c4c359d714cf6e62543cbcb9430d9904667554f525",
+    "hepta-v4-modern-wire-final.json": "a7de519a9c8f76d593aeec69c67976891183c250a4bbeb9ae5bdfb4ccf7d70dd",
+    "hepta-dir-v4-superset-final.json": "a936dd57efadadfa9c04ed7fbc609eaf21ad50ee2e681ab3fb76e86050627100",
+    "hepta-dc-model-origin-directory-move-proof-20261012.json": "26d45779a6dfc8d1f37dd206bb100a086464582140dd2f38d83bb980a3e8f932"
+  },
+  "current_services": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2927",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    },
+    "hepta-openai-full-operator.service": {
+      "MainPID": "1270044",
+      "ActiveState": "active"
+    }
+  },
+  "tunnel_ready": true,
+  "control_plane_status": "ok",
+  "untouched_preexisting_diff": "tests/full_operator_acceptance.py",
+  "status": {
+    "source_qualified": true,
+    "exact_head_CI": "pending at time of record",
+    "real_ChatGPT_hepta_directory_move_passed": false,
+    "deployed_Hepta_tool_count_still": 46,
+    "production_native_upgraded": false,
+    "platform_write_gate": "HOLD",
+    "public_gateway_deployed": false
+  },
+  "secrets_logged": false
+}

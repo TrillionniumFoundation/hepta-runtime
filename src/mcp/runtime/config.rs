@@ -21,6 +21,16 @@ pub enum Platform {
 	Macos,
 }
 
+/// Administrator-selected trust boundary, never supplied by a tool invocation.
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionMode {
+	#[default]
+	Isolated,
+	/// Full authority of the configured SSH login, including its existing sudo rights.
+	Operator,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PrivilegedAction {
 	pub executable: String,
@@ -41,6 +51,14 @@ fn default_action_timeout() -> u64 {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HostConfig {
+	/// Optional administrator-pinned CRIU executable. Disabled when absent.
+	#[serde(default)]
+	pub checkpoint_binary: Option<String>,
+	/// Exact SHA256 for the configured CRIU artifact, never supplied by tool callers.
+	#[serde(default)]
+	pub checkpoint_binary_sha256: Option<String>,
+	#[serde(default)]
+	pub execution_mode: ExecutionMode,
 	/// OpenSSH config alias or user@host target. Never supplied by a tool call.
 	pub ssh_target: String,
 	#[serde(default)]
@@ -130,6 +148,42 @@ impl RuntimeConfig {
 			}
 		}
 		for (name, host) in &self.hosts {
+			match (&host.checkpoint_binary, &host.checkpoint_binary_sha256) {
+				(None, None) => {}
+				(Some(binary), Some(sha)) => {
+					if host.execution_mode != ExecutionMode::Operator
+						|| host.platform != Platform::Linux
+						|| !host.allow_execute
+					{
+						bail!("checkpoint pin requires an executable Linux operator host `{name}`");
+					}
+					if !Path::new(binary).is_absolute()
+						|| binary.contains(['\0', '\n', '\r'])
+						|| Path::new(binary)
+							.components()
+							.any(|c| matches!(c, Component::ParentDir))
+						|| sha.len() != 64 || !sha
+						.bytes()
+						.all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+					{
+						bail!("invalid checkpoint executable or SHA256 on `{name}`");
+					}
+				}
+				_ => bail!("checkpoint executable and SHA256 must be paired on `{name}`"),
+			}
+			if host.execution_mode == ExecutionMode::Operator {
+				if !host.protected_path_prefixes.is_empty()
+					|| !host.protected_argument_substrings.is_empty()
+					|| !host.denied_executables.is_empty()
+					|| !host.allowed_cwd_prefixes.is_empty()
+					|| !host.allowed_dangerous_executables.is_empty()
+				{
+					bail!("operator host `{name}` cannot claim command/path sandboxing; use isolated mode or OS permissions");
+				}
+				if (host.allow_execute || host.allow_pty) && !host.allow_job_network {
+					bail!("operator host `{name}` requires explicit allow_job_network=true");
+				}
+			}
 			if !valid_name(name) {
 				bail!("invalid host name `{name}`; use letters, digits, dot, underscore or dash");
 			}
@@ -330,7 +384,10 @@ const DANGEROUS_ENV: &[&str] = &[
 pub fn check_environment(host_name: &str, env: &BTreeMap<String, String>) -> Result<()> {
 	let host = runtime_config()?.host(host_name)?;
 	for (key, value) in env {
-		if DANGEROUS_ENV.contains(&key.as_str()) {
+		if value.contains('\0') {
+			bail!("environment values may not contain NUL bytes");
+		}
+		if host.execution_mode == ExecutionMode::Isolated && DANGEROUS_ENV.contains(&key.as_str()) {
 			bail!("environment variable `{key}` is denied on host `{host_name}`");
 		}
 		if let Some(prefix) = protected_value(host, value) {
@@ -357,6 +414,18 @@ pub fn check_execution(
 ) -> Result<&'static HostConfig> {
 	let config = runtime_config()?;
 	let host = config.host(host_name)?;
+	validate_execution(host_name, host, executable, args, cwd, pty)?;
+	Ok(host)
+}
+
+fn validate_execution(
+	host_name: &str,
+	host: &HostConfig,
+	executable: &str,
+	args: &[String],
+	cwd: Option<&str>,
+	pty: bool,
+) -> Result<()> {
 	if pty && !host.allow_pty {
 		bail!("PTY execution is disabled for host `{host_name}`");
 	}
@@ -387,13 +456,16 @@ pub fn check_execution(
 		.allowed_dangerous_executables
 		.iter()
 		.any(|x| x == base || x == executable);
-	if explicitly_denied || (dangerous && !explicitly_allowed) {
+	if explicitly_denied
+		|| (host.execution_mode == ExecutionMode::Isolated && dangerous && !explicitly_allowed)
+	{
 		bail!(
             "executable `{base}` is denied on host `{host_name}`; use a named privileged_action when configured"
         );
 	}
 	if let Some(cwd) = cwd {
-		if !Path::new(cwd).is_absolute()
+		if cwd.contains('\0')
+			|| !Path::new(cwd).is_absolute()
 			|| Path::new(cwd)
 				.components()
 				.any(|c| matches!(c, Component::ParentDir))
@@ -418,7 +490,7 @@ pub fn check_execution(
 			bail!("argument intersects protected value `{prefix}` on host `{host_name}`");
 		}
 	}
-	Ok(host)
+	Ok(())
 }
 
 fn normalize_absolute(path: &Path) -> Result<PathBuf> {
@@ -490,6 +562,32 @@ pub fn check_local_path(path: &Path) -> Result<()> {
 		"local path `{}` is outside configured controller workspaces",
 		candidate.display()
 	)
+}
+
+/// An administrator-selected controller root is a durable authority boundary.
+/// Even when a process has OS rename permission on that directory, relocating
+/// the root (or one of its ancestors) would silently invalidate workspace
+/// confinement for later operations. This check does not grant new authority.
+/// Directory parents may still be changed concurrently by independent owners;
+/// the fd-relative kernel rename remains the final no-symlink/no-overwrite gate.
+fn check_directory_move_against_roots(source: &Path, roots: &[PathBuf]) -> Result<()> {
+	let candidate = std::fs::canonicalize(source)
+		.with_context(|| "cannot resolve directory move source identity")?;
+	for root in roots {
+		let pinned = std::fs::canonicalize(root)
+			.with_context(|| "configured controller workspace root is unavailable")?;
+		if pinned.starts_with(&candidate) {
+			bail!("directory move would relocate a configured controller workspace root");
+		}
+	}
+	Ok(())
+}
+
+/// Protect every configured root, including a nested root contained in a
+/// larger authorized workspace. Only callable after normal path checks.
+pub fn check_directory_move_source(source: &Path) -> Result<()> {
+	let config = runtime_config()?;
+	check_directory_move_against_roots(source, &config.controller_workspace_roots)
 }
 
 fn remote_path_allowed(path: &str, prefixes: &[String]) -> bool {

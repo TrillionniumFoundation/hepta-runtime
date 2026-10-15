@@ -1,0 +1,96 @@
+{
+  "schema": "hepta-cloud-gateway-path-closure-and-private-catalog-v1",
+  "collected_utc": "2026-10-13T01:30:18.649723+00:00",
+  "source_reference_head": "f619ee6fa99e9947433f3138a0ea2f3cd79bbc37",
+  "catalog": {
+    "native_tool_count": 50,
+    "read_only_tool_count": 19,
+    "non_read_only_tool_count": 31,
+    "unchanged_catalog_sha256": "63742708c287e8468d73f27ba85ecc6585afd4adcd76d06b618456730cfaf8ad",
+    "contract_file_sha256": "d36610d575146805f4c02d89210abd360b4d42acc8736d1966f20d0d724704b1"
+  },
+  "finding": {
+    "scope": "offline GatewayPolicy.prepare validation before any agent dispatch",
+    "prepatch_negative_tests_were_red": true,
+    "previously_unchecked": [
+      "executable working cwd",
+      "PDF output_path",
+      "password and trust-store file paths",
+      "nested pdf_edit.operations[*].source_path",
+      "document_render.assets[*].path"
+    ],
+    "effect_if_exposed": "Unscoped local path parameters could be admitted and (for writes) reserved despite tenant workspace policy; no public endpoint is currently running."
+  },
+  "fix": {
+    "explicit_execution_workdir_required_for": [
+      "shell_start",
+      "process_start",
+      "pty_start",
+      "sudo_start"
+    ],
+    "exact_tenant_root_path_checked": true,
+    "exact_host_selection_required_for_execution_tools": true,
+    "nested_known_resource_sources_checked": true,
+    "malformed_assets_and_operations_refused": true,
+    "not_processed_as_file_paths": [
+      "document content text",
+      "XLSX cell values",
+      "free-form form field values"
+    ],
+    "native_file_and_process_sandbox_claimed": false,
+    "tool_schema_or_annotation_changed": false
+  },
+  "tests": {
+    "gateway_policy_33": {
+      "passed": 33,
+      "log_sha256": "86e054605eda760117ceff5ecb1e38a4d9a38451fe85151e540714d683dc58d9"
+    },
+    "public_catalog_10": {
+      "passed": 10,
+      "log_sha256": "4b7cc0735b85130d9610b990d5117bd3d45c9ae9a88ed1acd24911708f95b97d"
+    },
+    "authenticated_catalog_7": {
+      "passed": 7,
+      "log_sha256": "8682cfbe2df6da28cd827683e2020d5b2d8d0cd5cd5dba310bbcaefda0da7237"
+    }
+  },
+  "official_mcp_schema": {
+    "spec": "2026-07-28",
+    "local_published_schema_sha256": "ef70b61f99b6d2e5e3b46863822eab08dff6a45bedc7a08914e0e5b133f40203",
+    "synthetic_alice_discover_errors": 0,
+    "synthetic_alice_tools_list_errors": 0,
+    "synthetic_bob_discover_errors": 0,
+    "synthetic_bob_tools_list_errors": 0,
+    "note": "Local developer machine schema check; official validator is not bundled in the hosted CI."
+  },
+  "identity_cases": [
+    "separate tenant/subject discovery",
+    "per-user connect/write/execute/privileged scopes",
+    "explicit elevated tool grant",
+    "wrong agent certificate and generation refusal",
+    "wrong tenant/workspace/catalog refusal",
+    "revocation and expiry refusal",
+    "anonymous and unknown bearer refusal",
+    "empty enrolled catalog",
+    "50-tool source and annotations unchanged"
+  ],
+  "source_sha256": {
+    "deploy/cloud_gateway_policy.py": "a3347ff2d53f4bb18935fc28184d4294fcf16489bbc34a548358ed3cd86a8026",
+    "deploy/cloud_gateway_mcp_catalog.py": "2bd10873c90e3f6ce4fd5e7a8d628d78114c8ab0f2f06a87235ff239f9feff37",
+    "tests/cloud_gateway_policy_tests.py": "0a62753ccd6d3dfd869f32ff3d304e38adbd03ebd6b0b9b6d6898ced411bca29",
+    "tests/cloud_gateway_mcp_catalog_tests.py": "25c52ffd0a8d19a415ecbd40d0b6f0eca58ad05b6aa5056b2e2787648de8031c",
+    "tests/cloud_gateway_authenticated_catalog_tests.py": "2db9e4b7c7347d2a50b314f6782e088fc3f5e5f9ef87d8349c5d3f7ca3279535",
+    ".github/workflows/operator-parity.yml": "cca45f1490fac058937cc3cb8c4355fd72e8e365261ff710af4f0f3120d6e3c2",
+    "docs/CLOUD_GATEWAY_V1.md": "90983cd06f82cf629cfa06ad9d90b0428a63abf764e45914844797261e44de9e"
+  },
+  "release": {
+    "public_https_listener_running": false,
+    "oauth_2_1_signing_or_verifier_implemented": false,
+    "device_mtls_sandbox_implemented": false,
+    "public_plugin_published": false,
+    "private_tunnel_or_runtime_or_DC_modified": false,
+    "concurrent_model_write_audit_changed": false,
+    "new_exact_head_ci": "pending"
+  },
+  "secret_material_collected": false
+}

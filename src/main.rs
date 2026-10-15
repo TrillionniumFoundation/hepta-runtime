@@ -117,6 +117,12 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 
 	// Kill request-scoped shell trees and interactive SSH PTYs. Durable runtime jobs
 	// are deliberately independent and remain queryable after this process restarts.
+	mcp::runtime::request_async::freeze_admission();
+	mcp::runtime::operation_async::freeze_admission();
+	tokio::join!(
+		mcp::runtime::request_async::shutdown(),
+		mcp::runtime::operation_async::shutdown()
+	);
 	mcp::fs::shell::kill_all_shell_children();
 	mcp::runtime::pty::close_all_ptys().await;
 
@@ -126,6 +132,7 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 #[derive(Clone)]
 struct HttpAuth {
 	token_hash: [u8; 32],
+	scope: mcp::runtime::caller_scope::AuthenticatedOperatorScope,
 }
 
 fn load_http_auth(path: Option<&std::path::Path>, required: bool) -> Result<Option<HttpAuth>> {
@@ -136,33 +143,16 @@ fn load_http_auth(path: Option<&std::path::Path>, required: bool) -> Result<Opti
 		}
 		return Ok(None);
 	};
-	let metadata = std::fs::metadata(path)?;
-	if !metadata.is_file() {
-		anyhow::bail!(
-			"HTTP auth token path is not a regular file: {}",
-			path.display()
-		);
-	}
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::PermissionsExt;
-		if metadata.permissions().mode() & 0o007 != 0 {
-			anyhow::bail!("HTTP auth token file must not be accessible to other users");
-		}
-	}
-	let token = std::fs::read(path)?;
-	let token = token.strip_suffix(b"\n").unwrap_or(&token);
-	if token.len() < 32 || token.len() > 4096 {
-		anyhow::bail!("HTTP auth token must contain 32..4096 bytes");
-	}
+	let token = mcp::runtime::caller_scope::read_private_token(path)?;
 	Ok(Some(HttpAuth {
-		token_hash: Sha256::digest(token).into(),
+		token_hash: Sha256::digest(&token).into(),
+		scope: mcp::runtime::caller_scope::AuthenticatedOperatorScope::from_verified_token(&token),
 	}))
 }
 
 async fn require_http_auth(
 	axum::extract::State(auth): axum::extract::State<HttpAuth>,
-	request: axum::extract::Request,
+	mut request: axum::extract::Request,
 	next: axum::middleware::Next,
 ) -> axum::response::Response {
 	use axum::response::IntoResponse;
@@ -181,6 +171,7 @@ async fn require_http_auth(
 	if !valid {
 		return axum::http::StatusCode::UNAUTHORIZED.into_response();
 	}
+	request.extensions_mut().insert(auth.scope.clone());
 	next.run(request).await
 }
 
@@ -248,6 +239,12 @@ async fn run_http_server(
 		.await;
 
 	// Same orphan cleanup as STDIO shutdown. Durable runtime jobs are unaffected.
+	mcp::runtime::request_async::freeze_admission();
+	mcp::runtime::operation_async::freeze_admission();
+	tokio::join!(
+		mcp::runtime::request_async::shutdown(),
+		mcp::runtime::operation_async::shutdown()
+	);
 	mcp::fs::shell::kill_all_shell_children();
 	mcp::runtime::pty::close_all_ptys().await;
 
