@@ -1,0 +1,21 @@
+name: Runtime capacity shadow
+on:
+  pull_request:
+    paths:
+      - 'deploy/runtime_capacity.py'
+      - 'tests/runtime_capacity_tests.py'
+      - 'docs/R22_CAPACITY_SHADOW_20261016.md'
+      - '.github/workflows/runtime-capacity-shadow.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  planner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Original behavior
+        run: python3 -m unittest discover -s tests -p runtime_capacity_tests.py -v
+      - name: Optimized Python behavior
+        run: python3 -O -m unittest discover -s tests -p runtime_capacity_tests.py -v
