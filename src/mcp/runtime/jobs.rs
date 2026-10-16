@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -25,6 +25,7 @@ static START_LOCKS: OnceLock<Mutex<HashMap<String, Arc<AsyncMutex<()>>>>> = Once
 static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static REUSE_HITS: OnceLock<Mutex<ReuseHitCache>> = OnceLock::new();
 const MAX_REUSE_HITS: usize = 4096;
+const MAX_CACHED_RECORD_BYTES: u64 = 1024 * 1024;
 const MAX_STDIN_BYTES: usize = 1024 * 1024;
 const MAX_LOG_READ_BYTES: u64 = 16 * 1024;
 
@@ -272,6 +273,75 @@ fn all_records() -> Result<Vec<JobRecord>> {
 	all_records_in(&jobs_dir()?)
 }
 
+// Cached reads must be stricter than ordinary compatibility scans: no
+// symlink/hardlink, foreign ownership, mode widening, oversized payload or
+// path/inode replacement may be silently promoted to a known-good job.
+#[cfg(unix)]
+fn read_verified_cached_record(dir: &Path, id: &str) -> Result<JobRecord> {
+	use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+	if !valid_name(id) {
+		bail!("cached job identity invalid");
+	}
+	let path = dir.join(format!("{id}.json"));
+	let before = std::fs::symlink_metadata(&path)
+		.context("cached job record unavailable; reconcile original identity")?;
+	let safe_file = |m: &std::fs::Metadata| {
+		m.file_type().is_file()
+			&& m.nlink() == 1
+			&& m.uid() == unsafe { libc::geteuid() }
+			&& (m.mode() & 0o7777) == 0o600
+			&& m.len() > 0
+			&& m.len() <= MAX_CACHED_RECORD_BYTES
+	};
+	let identity = |m: &std::fs::Metadata| {
+		(
+			m.dev(),
+			m.ino(),
+			m.uid(),
+			m.mode(),
+			m.nlink(),
+			m.len(),
+			m.mtime(),
+			m.mtime_nsec(),
+			m.ctime(),
+			m.ctime_nsec(),
+		)
+	};
+	if !safe_file(&before) {
+		bail!("cached job record inode or permissions unsafe; no relaunch");
+	}
+	let mut file = OpenOptions::new()
+		.read(true)
+		.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+		.open(&path)
+		.context("cached job record path changed; no relaunch")?;
+	let opened = file.metadata()?;
+	if !safe_file(&opened) || identity(&before) != identity(&opened) {
+		bail!("cached job record identity changed before read; no relaunch");
+	}
+	let mut bytes = Vec::with_capacity(before.len() as usize);
+	(&mut file)
+		.take(MAX_CACHED_RECORD_BYTES + 1)
+		.read_to_end(&mut bytes)?;
+	if bytes.len() as u64 > MAX_CACHED_RECORD_BYTES {
+		bail!("cached job record exceeds bounded byte budget");
+	}
+	let read_done = file.metadata()?;
+	let path_done = std::fs::symlink_metadata(&path)?;
+	if !safe_file(&path_done)
+		|| identity(&opened) != identity(&read_done)
+		|| identity(&opened) != identity(&path_done)
+	{
+		bail!("cached job record changed during read; no relaunch");
+	}
+	serde_json::from_slice(&bytes)
+		.context("cached job record corrupted; never relaunch automatically")
+}
+#[cfg(not(unix))]
+fn read_verified_cached_record(_dir: &Path, _id: &str) -> Result<JobRecord> {
+	bail!("cached job record reads require Unix inode identity")
+}
+
 // Only cache a VERIFIED EXISTING, already launched identity. Unknown keys,
 // pending/uncertain launches, changed registry identity and errors always
 // retain the full historical scan. Never use this cache to authorize a new job.
@@ -305,10 +375,7 @@ fn find_idempotent_in(
 		if !valid_name(&id) {
 			bail!("cached job identity invalid; never allocate a replacement job");
 		}
-		let bytes = std::fs::read(dir.join(format!("{id}.json")))
-			.context("cached job identity unavailable; never relaunch automatically")?;
-		let record: JobRecord = serde_json::from_slice(&bytes)
-			.context("cached job identity corrupted; never relaunch automatically")?;
+		let record = read_verified_cached_record(dir, &id)?;
 		if record.id != id || record.host != host || record.idempotency_key.as_deref() != Some(key)
 		{
 			bail!("cached job binding changed; never allocate a replacement job");

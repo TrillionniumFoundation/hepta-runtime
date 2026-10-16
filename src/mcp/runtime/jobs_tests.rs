@@ -589,7 +589,13 @@ async fn host_bound_start_lock_preserves_same_host_idempotency_serialization() {
 
 fn fixture_write(dir: &Path, record: &JobRecord) {
 	let bytes = serde_json::to_vec(record).unwrap();
-	std::fs::write(dir.join(format!("{}.json", record.id)), bytes).unwrap();
+	let file = dir.join(format!("{}.json", record.id));
+	std::fs::write(&file, bytes).unwrap();
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+	}
 }
 
 #[cfg(unix)]
@@ -807,4 +813,68 @@ fn positive_reuse_microbenchmark_6000_synthetic_records() {
 	assert_eq!(hot.id, "fixture-job-05999");
 	assert_eq!(cache.lock().unwrap().known.len(), 1);
 	println!("isolated_fixture_records=6000 cold_lookup_ms={cold_ms:.3} hot_reuse_ms={hot_ms:.3}");
+}
+
+#[cfg(unix)]
+#[test]
+fn cached_hit_rejects_permissions_widened_without_directory_mutation() {
+	use std::os::unix::fs::PermissionsExt;
+	let root = tempfile::tempdir().unwrap();
+	let cache = Mutex::new(ReuseHitCache::default());
+	let job = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &job);
+	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
+	assert_eq!(cache.lock().unwrap().hits.len(), 1);
+	let path = root.path().join("same-job-id.json");
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+	let error = find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+		.unwrap_err()
+		.to_string();
+	assert!(error.contains("permissions unsafe"), "{error}");
+}
+
+#[cfg(unix)]
+#[test]
+fn cached_read_refuses_symlink_hardlink_and_oversize_record() {
+	use std::os::unix::fs::symlink;
+	let external = tempfile::tempdir().unwrap();
+	let root = tempfile::tempdir().unwrap();
+	let record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(external.path(), &record);
+	let link = root.path().join("same-job-id.json");
+
+	symlink(external.path().join("same-job-id.json"), &link).unwrap();
+	assert!(read_verified_cached_record(root.path(), "same-job-id")
+		.unwrap_err()
+		.to_string()
+		.contains("unsafe"));
+	std::fs::remove_file(&link).unwrap();
+	fixture_write(root.path(), &record);
+	assert_eq!(
+		read_verified_cached_record(root.path(), "same-job-id")
+			.unwrap()
+			.id,
+		record.id
+	);
+	std::fs::hard_link(&link, root.path().join("second-hardlink.bak")).unwrap();
+	assert!(read_verified_cached_record(root.path(), "same-job-id")
+		.unwrap_err()
+		.to_string()
+		.contains("unsafe"));
+	std::fs::remove_file(root.path().join("second-hardlink.bak")).unwrap();
+	std::fs::write(&link, vec![b'x'; (MAX_CACHED_RECORD_BYTES + 1) as usize]).unwrap();
+	assert!(read_verified_cached_record(root.path(), "same-job-id")
+		.unwrap_err()
+		.to_string()
+		.contains("unsafe"));
+}
+
+#[cfg(unix)]
+#[test]
+fn cached_read_rejects_invalid_record_name() {
+	let root = tempfile::tempdir().unwrap();
+	let record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &record);
+	assert!(read_verified_cached_record(root.path(), "bad/child").is_err());
+	assert!(read_verified_cached_record(root.path(), "same-job-id").is_ok());
 }
