@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -23,6 +23,8 @@ use super::ssh::{run_jobctl, run_python_json};
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static START_LOCKS: OnceLock<Mutex<HashMap<String, Arc<AsyncMutex<()>>>>> = OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static REUSE_HITS: OnceLock<Mutex<ReuseHitCache>> = OnceLock::new();
+const MAX_REUSE_HITS: usize = 4096;
 const MAX_STDIN_BYTES: usize = 1024 * 1024;
 const MAX_LOG_READ_BYTES: u64 = 16 * 1024;
 
@@ -206,9 +208,53 @@ fn load_record(id: &str) -> Result<JobRecord> {
 	serde_json::from_slice(&bytes).context("corrupt durable job metadata")
 }
 
-fn all_records() -> Result<Vec<JobRecord>> {
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RegistryEpoch {
+	device: u64,
+	inode: u64,
+	modified_seconds: i64,
+	modified_nanos: i64,
+	changed_seconds: i64,
+	changed_nanos: i64,
+}
+#[cfg(not(unix))]
+type RegistryEpoch = ();
+
+#[cfg(unix)]
+fn registry_epoch(dir: &Path) -> Result<RegistryEpoch> {
+	use std::os::unix::fs::MetadataExt;
+	let m = std::fs::symlink_metadata(dir)?;
+	if !m.file_type().is_dir() {
+		bail!("job registry directory identity is not a directory");
+	}
+	Ok(RegistryEpoch {
+		device: m.dev(),
+		inode: m.ino(),
+		modified_seconds: m.mtime(),
+		modified_nanos: m.mtime_nsec(),
+		changed_seconds: m.ctime(),
+		changed_nanos: m.ctime_nsec(),
+	})
+}
+#[cfg(not(unix))]
+fn registry_epoch(_dir: &Path) -> Result<RegistryEpoch> {
+	bail!("positive reuse caching requires a Unix registry identity")
+}
+
+#[derive(Default)]
+struct ReuseHitCache {
+	root: Option<PathBuf>,
+	epoch: Option<RegistryEpoch>,
+	// Preserve known host/key bindings across ordinary directory updates.
+	// These are refusal evidence, not a negative cache or effect authority.
+	known: HashMap<(String, String), String>,
+	hits: HashMap<(String, String), String>,
+}
+
+fn all_records_in(dir: &Path) -> Result<Vec<JobRecord>> {
 	let mut records = Vec::new();
-	for entry in std::fs::read_dir(jobs_dir()?)? {
+	for entry in std::fs::read_dir(dir)? {
 		let entry = entry?;
 		if entry.path().extension().and_then(|s| s.to_str()) != Some("json") {
 			continue;
@@ -222,10 +268,105 @@ fn all_records() -> Result<Vec<JobRecord>> {
 	Ok(records)
 }
 
+fn all_records() -> Result<Vec<JobRecord>> {
+	all_records_in(&jobs_dir()?)
+}
+
+// Only cache a VERIFIED EXISTING, already launched identity. Unknown keys,
+// pending/uncertain launches, changed registry identity and errors always
+// retain the full historical scan. Never use this cache to authorize a new job.
+fn find_idempotent_in(
+	dir: &Path,
+	host: &str,
+	key: &str,
+	cache: &Mutex<ReuseHitCache>,
+) -> Result<Option<JobRecord>> {
+	let epoch = registry_epoch(dir)?;
+	let identity = (host.to_owned(), key.to_owned());
+	let (cached_id, known_id) = {
+		let mut guard = cache
+			.lock()
+			.map_err(|_| anyhow::anyhow!("reuse cache unavailable"))?;
+		if guard.root.is_some() && guard.root.as_deref() != Some(dir) {
+			bail!("job registry root changed; reconcile existing identities first");
+		}
+		if guard.epoch != Some(epoch) {
+			// A changed registry invalidates fast reads, not prior ownership.
+			guard.hits.clear();
+			guard.epoch = Some(epoch);
+		}
+		guard.root = Some(dir.to_path_buf());
+		(
+			guard.hits.get(&identity).cloned(),
+			guard.known.get(&identity).cloned(),
+		)
+	};
+	if let Some(id) = cached_id {
+		if !valid_name(&id) {
+			bail!("cached job identity invalid; never allocate a replacement job");
+		}
+		let bytes = std::fs::read(dir.join(format!("{id}.json")))
+			.context("cached job identity unavailable; never relaunch automatically")?;
+		let record: JobRecord = serde_json::from_slice(&bytes)
+			.context("cached job identity corrupted; never relaunch automatically")?;
+		if record.id != id || record.host != host || record.idempotency_key.as_deref() != Some(key)
+		{
+			bail!("cached job binding changed; never allocate a replacement job");
+		}
+		// A pending/unknown record can cause launch reconciliation; that path
+		// must continue scanning every original job before any new effect.
+		if record.launch_state == "launched" && registry_epoch(dir)? == epoch {
+			return Ok(Some(record));
+		}
+	}
+
+	let mut found: Option<JobRecord> = None;
+	for record in all_records_in(dir)? {
+		if record.host == host && record.idempotency_key.as_deref() == Some(key) {
+			if found.is_some() {
+				bail!("duplicate original idempotency binding; reconcile before execution");
+			}
+			found = Some(record);
+		}
+	}
+	if let Some(expected) = known_id {
+		if found.as_ref().map(|r| r.id.as_str()) != Some(expected.as_str()) {
+			bail!("previous idempotency binding missing or changed; no new launch");
+		}
+	}
+	if let Some(record) = &found {
+		let after = registry_epoch(dir)?;
+		let mut guard = cache
+			.lock()
+			.map_err(|_| anyhow::anyhow!("reuse cache unavailable"))?;
+		if guard.root.as_deref() == Some(dir) && guard.epoch == Some(epoch) {
+			if guard.known.len() < MAX_REUSE_HITS {
+				guard
+					.known
+					.entry(identity.clone())
+					.or_insert_with(|| record.id.clone());
+			}
+			if record.launch_state == "launched"
+				&& after == epoch
+				&& guard.hits.len() < MAX_REUSE_HITS
+			{
+				guard
+					.hits
+					.entry(identity)
+					.or_insert_with(|| record.id.clone());
+			}
+		}
+	}
+	Ok(found)
+}
+
 fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
-	Ok(all_records()?
-		.into_iter()
-		.find(|record| record.host == host && record.idempotency_key.as_deref() == Some(key)))
+	find_idempotent_in(
+		&jobs_dir()?,
+		host,
+		key,
+		REUSE_HITS.get_or_init(|| Mutex::new(ReuseHitCache::default())),
+	)
 }
 
 fn request_digest(params: &ProcessStartParams) -> Result<String> {
