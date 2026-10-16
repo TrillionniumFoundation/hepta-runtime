@@ -558,3 +558,31 @@ fn canonical_jobctl_reconciliation_preserves_authoritative_launch_state() {
 		);
 	}
 }
+
+#[tokio::test]
+async fn host_bound_start_lock_does_not_block_independent_hosts() {
+	let rog = start_lock("hepta-fixture-rog").unwrap();
+	let mac = start_lock("hepta-fixture-mac").unwrap();
+	assert!(!Arc::ptr_eq(&rog, &mac));
+	let guard = rog.lock().await;
+	assert!(rog.try_lock().is_err());
+	assert!(
+		mac.try_lock().is_ok(),
+		"another host must not queue behind ROG"
+	);
+	drop(guard);
+}
+
+#[tokio::test]
+async fn host_bound_start_lock_preserves_same_host_idempotency_serialization() {
+	let first = start_lock("hepta-fixture-pocket4").unwrap();
+	let second = start_lock("hepta-fixture-pocket4").unwrap();
+	assert!(Arc::ptr_eq(&first, &second));
+	let guard = first.lock().await;
+	assert!(
+		second.try_lock().is_err(),
+		"same host must serialize starts"
+	);
+	drop(guard);
+	assert!(second.try_lock().is_ok());
+}
