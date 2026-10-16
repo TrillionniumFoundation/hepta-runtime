@@ -586,3 +586,295 @@ async fn host_bound_start_lock_preserves_same_host_idempotency_serialization() {
 	drop(guard);
 	assert!(second.try_lock().is_ok());
 }
+
+fn fixture_write(dir: &Path, record: &JobRecord) {
+	let bytes = serde_json::to_vec(record).unwrap();
+	let file = dir.join(format!("{}.json", record.id));
+	std::fs::write(&file, bytes).unwrap();
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+	}
+}
+
+#[cfg(unix)]
+#[test]
+fn positive_reuse_cache_never_negative_caches_or_allocates_new_identity() {
+	let root = tempfile::tempdir().unwrap();
+	let cache = Mutex::new(ReuseHitCache::default());
+	let mut existing = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	existing.id = "same-job-id".to_owned();
+	fixture_write(root.path(), &existing);
+	let first = find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+		.unwrap()
+		.unwrap();
+	assert_eq!(first.id, existing.id);
+	assert_eq!(cache.lock().unwrap().hits.len(), 1);
+	let reused = find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+		.unwrap()
+		.unwrap();
+	assert_eq!(reused.id, existing.id);
+	assert!(find_idempotent_in(root.path(), "main", "new-key", &cache)
+		.unwrap()
+		.is_none());
+	assert_eq!(cache.lock().unwrap().hits.len(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn positive_reuse_corrupted_or_rebound_identity_fails_closed() {
+	let root = tempfile::tempdir().unwrap();
+
+	let cache = Mutex::new(ReuseHitCache::default());
+	let record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &record);
+	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
+	let mut rebound = record.clone();
+	rebound.idempotency_key = Some("other-key".to_owned());
+	fixture_write(root.path(), &rebound);
+	let error = find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+		.unwrap_err()
+		.to_string();
+	assert!(error.contains("binding changed"));
+	std::fs::remove_file(root.path().join("same-job-id.json")).unwrap();
+	assert!(find_idempotent_in(root.path(), "main", "fixed-key", &cache).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn positive_reuse_directory_generation_change_renews_complete_scan() {
+	let root = tempfile::tempdir().unwrap();
+	let cache = Mutex::new(ReuseHitCache::default());
+	let record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &record);
+	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
+	let original = cache.lock().unwrap().epoch;
+	let mut another = record.clone();
+	another.id = "different-id".to_owned();
+	another.idempotency_key = Some("different-key".to_owned());
+	std::thread::sleep(Duration::from_millis(5));
+	fixture_write(root.path(), &another);
+
+	assert_ne!(original, Some(registry_epoch(root.path()).unwrap()));
+	let found = find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+		.unwrap()
+		.unwrap();
+	assert_eq!(found.id, record.id);
+	assert_eq!(
+		cache.lock().unwrap().epoch,
+		Some(registry_epoch(root.path()).unwrap())
+	);
+}
+
+#[cfg(unix)]
+#[test]
+fn positive_reuse_duplicate_original_bindings_refuse_after_new_file() {
+	let root = tempfile::tempdir().unwrap();
+	let cache = Mutex::new(ReuseHitCache::default());
+	let record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &record);
+	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
+	let mut duplicate = record.clone();
+	duplicate.id = "conflicting-id".to_owned();
+	duplicate.created_unix_ms = 0;
+	std::thread::sleep(Duration::from_millis(5));
+	fixture_write(root.path(), &duplicate);
+	assert!(find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+		.unwrap_err()
+		.to_string()
+		.contains("duplicate original"));
+}
+
+#[cfg(unix)]
+#[test]
+fn pending_or_uncertain_identity_does_not_enter_positive_cache() {
+	for state in ["pending", "unknown", "failed"] {
+		let root = tempfile::tempdir().unwrap();
+		let cache = Mutex::new(ReuseHitCache::default());
+		let record = outcome_fixture(ExecutionMode::Operator, false, state);
+		fixture_write(root.path(), &record);
+		assert_eq!(
+			find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+				.unwrap()
+				.unwrap()
+				.id,
+			record.id
+		);
+		assert!(cache.lock().unwrap().hits.is_empty());
+	}
+}
+
+#[cfg(unix)]
+#[test]
+fn unknown_key_preserves_full_scan_corruption_refusal() {
+	let root = tempfile::tempdir().unwrap();
+	let cache = Mutex::new(ReuseHitCache::default());
+	let record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &record);
+	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
+	std::fs::write(root.path().join("damaged.json"), b"not-json").unwrap();
+	assert!(find_idempotent_in(root.path(), "main", "not-registered", &cache).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn cached_positive_cannot_escape_configured_state_root() {
+	let one = tempfile::tempdir().unwrap();
+	let two = tempfile::tempdir().unwrap();
+	let cache = Mutex::new(ReuseHitCache::default());
+
+	let record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(one.path(), &record);
+	assert!(find_idempotent_in(one.path(), "main", "fixed-key", &cache)
+		.unwrap()
+		.is_some());
+	assert!(find_idempotent_in(two.path(), "main", "fixed-key", &cache)
+		.unwrap_err()
+		.to_string()
+		.contains("registry root changed"));
+	assert_eq!(cache.lock().unwrap().root.as_deref(), Some(one.path()));
+}
+
+#[cfg(unix)]
+#[test]
+fn previously_observed_other_keys_survive_unrelated_registry_churn() {
+	let root = tempfile::tempdir().unwrap();
+	let cache = Mutex::new(ReuseHitCache::default());
+	let first = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	let mut second = first.clone();
+	second.id = "other-record-id".to_owned();
+	second.idempotency_key = Some("second-key".to_owned());
+	fixture_write(root.path(), &first);
+	fixture_write(root.path(), &second);
+	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
+	find_idempotent_in(root.path(), "main", "second-key", &cache).unwrap();
+	assert_eq!(cache.lock().unwrap().known.len(), 2);
+	// Change directory generation and query a different key first; old
+	// identities must still be retained as refusal evidence.
+	std::thread::sleep(Duration::from_millis(5));
+	std::fs::write(root.path().join("non-record.txt"), b"fixture").unwrap();
+	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
+	assert_eq!(cache.lock().unwrap().known.len(), 2);
+	std::fs::remove_file(root.path().join("other-record-id.json")).unwrap();
+	assert!(
+		find_idempotent_in(root.path(), "main", "second-key", &cache)
+			.unwrap_err()
+			.to_string()
+			.contains("previous idempotency binding")
+	);
+}
+
+#[cfg(unix)]
+#[test]
+
+fn previously_observed_old_key_cannot_be_rebound_to_new_job_id() {
+	let root = tempfile::tempdir().unwrap();
+	let cache = Mutex::new(ReuseHitCache::default());
+	let original = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &original);
+	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
+	std::fs::remove_file(root.path().join("same-job-id.json")).unwrap();
+	let mut replacement = original.clone();
+	replacement.id = "replacement-job-id".to_owned();
+	fixture_write(root.path(), &replacement);
+	assert!(find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+		.unwrap_err()
+		.to_string()
+		.contains("previous idempotency binding"));
+}
+
+#[cfg(unix)]
+#[test]
+#[ignore = "manual isolated filesystem microbenchmark; not production TPS"]
+fn positive_reuse_microbenchmark_6000_synthetic_records() {
+	let root = tempfile::tempdir().unwrap();
+	let cache = Mutex::new(ReuseHitCache::default());
+	let template = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	for i in 0..6000u32 {
+		let mut record = template.clone();
+		record.id = format!("fixture-job-{i:05}");
+		record.created_unix_ms = i as u128;
+		record.idempotency_key = Some(format!("unique-key-{i:05}"));
+		fixture_write(root.path(), &record);
+	}
+	let key = "unique-key-05999";
+	let cold_start = std::time::Instant::now();
+	let cold = find_idempotent_in(root.path(), "main", key, &cache)
+		.unwrap()
+		.unwrap();
+	let cold_ms = cold_start.elapsed().as_secs_f64() * 1000.0;
+	let hot_start = std::time::Instant::now();
+	let hot = find_idempotent_in(root.path(), "main", key, &cache)
+		.unwrap()
+		.unwrap();
+	let hot_ms = hot_start.elapsed().as_secs_f64() * 1000.0;
+	assert_eq!(cold.id, hot.id);
+	assert_eq!(hot.id, "fixture-job-05999");
+	assert_eq!(cache.lock().unwrap().known.len(), 1);
+	println!("isolated_fixture_records=6000 cold_lookup_ms={cold_ms:.3} hot_reuse_ms={hot_ms:.3}");
+}
+
+#[cfg(unix)]
+#[test]
+fn cached_hit_rejects_permissions_widened_without_directory_mutation() {
+	use std::os::unix::fs::PermissionsExt;
+	let root = tempfile::tempdir().unwrap();
+	let cache = Mutex::new(ReuseHitCache::default());
+	let job = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &job);
+	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
+	assert_eq!(cache.lock().unwrap().hits.len(), 1);
+	let path = root.path().join("same-job-id.json");
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+	let error = find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+		.unwrap_err()
+		.to_string();
+	assert!(error.contains("permissions unsafe"), "{error}");
+}
+
+#[cfg(unix)]
+#[test]
+fn cached_read_refuses_symlink_hardlink_and_oversize_record() {
+	use std::os::unix::fs::symlink;
+	let external = tempfile::tempdir().unwrap();
+	let root = tempfile::tempdir().unwrap();
+	let record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(external.path(), &record);
+	let link = root.path().join("same-job-id.json");
+
+	symlink(external.path().join("same-job-id.json"), &link).unwrap();
+	assert!(read_verified_cached_record(root.path(), "same-job-id")
+		.unwrap_err()
+		.to_string()
+		.contains("unsafe"));
+	std::fs::remove_file(&link).unwrap();
+	fixture_write(root.path(), &record);
+	assert_eq!(
+		read_verified_cached_record(root.path(), "same-job-id")
+			.unwrap()
+			.id,
+		record.id
+	);
+	std::fs::hard_link(&link, root.path().join("second-hardlink.bak")).unwrap();
+	assert!(read_verified_cached_record(root.path(), "same-job-id")
+		.unwrap_err()
+		.to_string()
+		.contains("unsafe"));
+	std::fs::remove_file(root.path().join("second-hardlink.bak")).unwrap();
+	std::fs::write(&link, vec![b'x'; (MAX_CACHED_RECORD_BYTES + 1) as usize]).unwrap();
+	assert!(read_verified_cached_record(root.path(), "same-job-id")
+		.unwrap_err()
+		.to_string()
+		.contains("unsafe"));
+}
+
+#[cfg(unix)]
+#[test]
+fn cached_read_rejects_invalid_record_name() {
+	let root = tempfile::tempdir().unwrap();
+	let record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &record);
+	assert!(read_verified_cached_record(root.path(), "bad/child").is_err());
+	assert!(read_verified_cached_record(root.path(), "same-job-id").is_ok());
+}
