@@ -7,12 +7,12 @@ use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -21,7 +21,7 @@ use super::config::{ExecutionMode, Platform};
 use super::ssh::{run_jobctl, run_python_json};
 
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
-static START_LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
+static START_LOCKS: OnceLock<Mutex<HashMap<String, Arc<AsyncMutex<()>>>>> = OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 const MAX_STDIN_BYTES: usize = 1024 * 1024;
 const MAX_LOG_READ_BYTES: u64 = 16 * 1024;
@@ -137,8 +137,17 @@ fn default_launch_state() -> String {
 	"launched".to_string()
 }
 
-fn start_lock() -> &'static AsyncMutex<()> {
-	START_LOCK.get_or_init(|| AsyncMutex::new(()))
+fn start_lock(host: &str) -> Result<Arc<AsyncMutex<()>>> {
+	// Hold the global map mutex only to look up a configured host's lock.
+	// Never hold it during remote launch or any asynchronous wait.
+	let mut locks = START_LOCKS
+		.get_or_init(|| Mutex::new(HashMap::new()))
+		.lock()
+		.map_err(|_| anyhow::anyhow!("job launch lock registry unavailable"))?;
+	Ok(locks
+		.entry(host.to_owned())
+		.or_insert_with(|| Arc::new(AsyncMutex::new(())))
+		.clone())
 }
 
 fn now_ms() -> u128 {
@@ -1231,7 +1240,8 @@ fn validate_new_host_resource_limits(
 
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	validate_start(&params)?;
-	let _start_guard = start_lock().lock().await;
+	let _host_start_lock = start_lock(&params.host)?;
+	let _start_guard = _host_start_lock.lock().await;
 	let request_fingerprint = fingerprint(&params);
 	if let Some(key) = params.idempotency_key.as_deref() {
 		if let Some(mut existing) = find_idempotent(&params.host, key)? {
