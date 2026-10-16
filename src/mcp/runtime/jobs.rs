@@ -342,6 +342,29 @@ fn read_verified_cached_record(_dir: &Path, _id: &str) -> Result<JobRecord> {
 	bail!("cached job record reads require Unix inode identity")
 }
 
+// Unlike the full inventory view, an exact-key lookup does not need a sorted
+// Vec of all job records. It must still parse EVERY existing JSON record so
+// malformed history and duplicate original bindings refuse a new effect.
+fn scan_idempotent_binding_in(dir: &Path, host: &str, key: &str) -> Result<Option<JobRecord>> {
+	let mut found: Option<JobRecord> = None;
+	for entry in std::fs::read_dir(dir)? {
+		let entry = entry?;
+		if entry.path().extension().and_then(|s| s.to_str()) != Some("json") {
+			continue;
+		}
+		let bytes = std::fs::read(entry.path())?;
+		let record: JobRecord = serde_json::from_slice(&bytes)
+			.context("corrupt job record; refusing to lose idempotency binding")?;
+		if record.host == host && record.idempotency_key.as_deref() == Some(key) {
+			if found.is_some() {
+				bail!("duplicate original idempotency binding; reconcile before execution");
+			}
+			found = Some(record);
+		}
+	}
+	Ok(found)
+}
+
 // Only cache a VERIFIED EXISTING, already launched identity. Unknown keys,
 // pending/uncertain launches, changed registry identity and errors always
 // retain the full historical scan. Never use this cache to authorize a new job.
@@ -387,15 +410,7 @@ fn find_idempotent_in(
 		}
 	}
 
-	let mut found: Option<JobRecord> = None;
-	for record in all_records_in(dir)? {
-		if record.host == host && record.idempotency_key.as_deref() == Some(key) {
-			if found.is_some() {
-				bail!("duplicate original idempotency binding; reconcile before execution");
-			}
-			found = Some(record);
-		}
-	}
+	let found = scan_idempotent_binding_in(dir, host, key)?;
 	if let Some(expected) = known_id {
 		if found.as_ref().map(|r| r.id.as_str()) != Some(expected.as_str()) {
 			bail!("previous idempotency binding missing or changed; no new launch");
