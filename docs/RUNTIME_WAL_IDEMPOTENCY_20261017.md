@@ -46,17 +46,26 @@ owner epoch binding, and rollback that never issues a second job ID.
 
 Exact source branch: `codex/runtime-wal-idempotency-20261017`,
 stacked on PR #14 commit `9bf3e40cb38b1dc43720d26639df989b36d922e1`.
-Initial isolated Rust WAL regression: **10 passed, 0 failed, 1 ignored**.
+Isolated Rust WAL regression on the batched implementation: **13 passed, 0 failed, 1 ignored** (the ignored case is the separately executed 23,347-row synthetic benchmark).
 The explicitly invoked synthetic 23,347-row test completed successfully:
 private JSON -> WAL index bootstrap **1,577.497 ms**, 100 exact-key lookups
 P50 **0.0874 ms**, P95 **0.1032 ms**. Total test wall was **177.40 s**
 because fixture creation synchronously wrote 23,347 individual test files;
 that fixture preparation is excluded from the stated bootstrap figure.
-A 32-thread independent-connection test preserved 32/32 unique identities,
-but **32 FULL-sync individual transactions took 2,944.42 ms** even after
-separating connection setup. That revealed real serialized WAL write cost.
-The subsequent implementation adds a bounded `reserve_batch` method that
-commits up to 128 reservations in one atomic FULL-sync WAL transaction,
-with abort-and-rollback on any key/digest/job-ID conflict. Its updated
-1/4/8/16/32 tests must pass before the batched path is qualified.
-No six-host SSH TPS or production speedup is claimed from these DB tests.
+The current isolated replay of **32 separate FULL-sync transactions** returned
+**2,641.86 ms** after connection initialization, while 32 entries committed
+in one FULL-sync atomic `reserve_batch` call took **8.099 ms** on the same host.
+Batch 4/8/16/32 returned **8.490 / 14.356 / 9.777 / 8.099 ms**, respectively,
+with exact ID reuse on repeated input. All-or-nothing rollback tests for
+conflicting keys and duplicate job IDs passed, as did crash/reopen recovery.
+On the same source, the complete locked offline Cargo suite passed:
+**674 Runtime tests, 0 failed, 14 ignored; 8 Jobctl tests, 0 failed**.
+Strict `cargo clippy --offline --locked --all-targets -- -D warnings` also
+passed (exit 0). `cargo fmt --all -- --check` and `git diff --check` passed.
+A normal-only Cargo dependency-tree check reports no `rusqlite` dependency:
+SQLite code and its dependency are test-only, never invoked by production
+`process_start`. Neither local tests nor benchmark establish hosted CI success.
+The per-test ratio for 32 was approximately 326x, but this is a comparison
+of durable DB write strategies, not six-host job launch TPS or production
+speedup. Actual live request batching would require an owner-fenced,
+resource-bounded admission collector that is NOT implemented by this PR.
