@@ -1488,6 +1488,76 @@ mod tests {
 	}
 
 	#[test]
+	fn stale_writer_batch_fails_atomically_across_epoch_transfer() {
+		let f = Fixture::new();
+		let mut old = f.bootstrap();
+		let digest = "d".repeat(64);
+		old.establish_first_writer("v4").unwrap();
+		let mut stale = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		stale.bind_writer("v4", 1).unwrap();
+		old.freeze_writer().unwrap();
+		assert_eq!(old.promote_frozen_writer("v11").unwrap(), 2);
+		let old_batch = [
+			ReservationRequest {
+				host: "rog",
+				key: "blocked-rog",
+				digest: &digest,
+				proposed_id: "blocked-rog-id",
+			},
+			ReservationRequest {
+				host: "mac",
+				key: "blocked-mac",
+				digest: &digest,
+				proposed_id: "blocked-mac-id",
+			},
+		];
+		assert!(stale.reserve_batch(&old_batch).is_err());
+		let mut successor = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		successor.bind_writer("v11", 2).unwrap();
+		let new_batch = [
+			ReservationRequest {
+				host: "rog",
+				key: "new-rog",
+				digest: &digest,
+				proposed_id: "new-rog-id",
+			},
+			ReservationRequest {
+				host: "mac",
+				key: "new-mac",
+				digest: &digest,
+				proposed_id: "new-mac-id",
+			},
+		];
+		assert_eq!(successor.reserve_batch(&new_batch).unwrap().len(), 2);
+		assert!(stale.reserve_batch(&old_batch).is_err());
+		successor.freeze_writer().unwrap();
+		assert!(successor.reserve_batch(&new_batch).is_err());
+		assert_eq!(successor.promote_frozen_writer("v4").unwrap(), 3);
+		let mut restored = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		restored.bind_writer("v4", 3).unwrap();
+		assert_eq!(
+			restored
+				.reserve("rog", "new-rog", &digest, "replayed-id")
+				.unwrap(),
+			Reserve::Existing {
+				job_id: "new-rog-id".into(),
+				phase: "reserved".into()
+			}
+		);
+		assert_eq!(
+			restored
+				.reserve("mac", "new-mac", &digest, "replayed-id")
+				.unwrap(),
+			Reserve::Existing {
+				job_id: "new-mac-id".into(),
+				phase: "reserved".into()
+			}
+		);
+		assert!(stale.reserve_batch(&old_batch).is_err());
+		assert!(f.jobs.join("blocked-rog-id.json").exists() == false);
+	}
+
+	#[test]
 	fn frozen_authority_remains_closed_after_controller_restart() {
 		let f = Fixture::new();
 		let mut v4 = f.bootstrap();
