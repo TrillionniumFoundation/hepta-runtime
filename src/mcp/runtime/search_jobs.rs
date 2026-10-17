@@ -6,6 +6,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
@@ -14,8 +15,12 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
-use super::config::{check_remote_path, runtime_config, HostConfig};
-use super::ssh::run_python_json;
+use super::config::{check_remote_path, runtime_config, HostConfig, RuntimeConfig};
+use super::ssh::{run_python_json_with_interpreter, validate_python_interpreter};
+
+#[path = "search_globs.rs"]
+mod search_globs;
+use search_globs::compile_glob_program;
 
 const MAX_RECEIPTS: usize = 1024;
 const MAX_PAGE_BYTES: usize = 96 * 1024;
@@ -23,14 +28,75 @@ const MAX_RECORD_BYTES: u64 = 16 * 1024;
 const TERMINAL: &[&str] = &["completed", "limited", "cancelled", "failed", "interrupted"];
 static SEARCH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static INSTANCE: OnceLock<std::result::Result<String, String>> = OnceLock::new();
+static INTERPRETERS: OnceLock<std::result::Result<BTreeMap<String, String>, String>> =
+	OnceLock::new();
+
+fn parse_search_interpreters(
+	value: Option<&str>,
+	config: &RuntimeConfig,
+) -> Result<BTreeMap<String, String>> {
+	let Some(value) = value else {
+		return Ok(BTreeMap::new());
+	};
+	if value.len() > 64 * 1024 {
+		bail!("HEPTA_RUNTIME_SEARCH_PYTHONS exceeds 64 KiB");
+	}
+	let mapping: BTreeMap<String, String> = serde_json::from_str(value)
+		.context("HEPTA_RUNTIME_SEARCH_PYTHONS must be a JSON object of host aliases to absolute interpreter paths")?;
+	for (host, interpreter) in &mapping {
+		if !config.hosts.contains_key(host) {
+			bail!("HEPTA_RUNTIME_SEARCH_PYTHONS references an unknown configured host alias");
+		}
+		if !Path::new(interpreter).is_absolute() {
+			bail!("HEPTA_RUNTIME_SEARCH_PYTHONS requires absolute interpreter paths");
+		}
+		validate_python_interpreter(interpreter)?;
+	}
+	Ok(mapping)
+}
+
+/// Freeze administrator-only parser selection once. No tool parameter can choose an interpreter.
+pub fn init_search_interpreters(config: &RuntimeConfig) -> Result<()> {
+	INTERPRETERS
+		.get_or_init(|| {
+			let value = std::env::var("HEPTA_RUNTIME_SEARCH_PYTHONS");
+			let parsed = match value {
+				Ok(value) => parse_search_interpreters(Some(&value), config),
+				Err(std::env::VarError::NotPresent) => parse_search_interpreters(None, config),
+				Err(_) => Err(anyhow!("HEPTA_RUNTIME_SEARCH_PYTHONS must be valid UTF-8")),
+			};
+			parsed.map_err(|error| error.to_string())
+		})
+		.as_ref()
+		.map(|_| ())
+		.map_err(|error| anyhow!(error.clone()))
+}
+
+fn interpreter_for_host(host: &str) -> Result<&'static str> {
+	init_search_interpreters(runtime_config()?)?;
+	let mapping = INTERPRETERS
+		.get()
+		.ok_or_else(|| anyhow!("search interpreter configuration unavailable"))?
+		.as_ref()
+		.map_err(|error| anyhow!(error.clone()))?;
+	Ok(mapping.get(host).map(String::as_str).unwrap_or("python3"))
+}
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SearchKind {
-	/// Literal substring of the root-relative regular-file path.
+	/// Match regular-file paths using the selected query mode.
 	Files,
-	/// Literal UTF-8 substring in ordinary UTF-8 text files; no regular expressions.
+	/// Match UTF-8 text or bounded extractable DOCX/XLSX/PDF text.
 	Content,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SearchQueryMode {
+	Literal,
+	Regex,
+	Glob,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
@@ -39,9 +105,30 @@ pub struct SearchStartParams {
 	pub host: String,
 	/// Absolute root under this configured host's read policy; symlink components are refused.
 	pub root: String,
-	/// Literal 1..512 UTF-8 bytes; NUL and newlines are refused.
+	/// Query of 1..512 UTF-8 bytes; NUL and newlines are refused.
 	pub query: String,
 	pub kind: SearchKind,
+	/// Omitted mode preserves case-sensitive literal substring matching. Glob is for file searches.
+	#[serde(default)]
+	pub query_mode: Option<SearchQueryMode>,
+	/// Optional compatibility spelling: true selects literal, false selects regex; conflicts are refused.
+	#[serde(default)]
+	pub literal_search: Option<bool>,
+	/// Case-insensitive text/name matching; glob rules use ripgrep's ASCII byte folding. Omitted preserves case sensitivity.
+	#[serde(default)]
+	pub ignore_case: bool,
+	/// Include up to 10 surrounding lines on either side of a text match; default 0.
+	#[serde(default)]
+	pub context_lines: Option<u16>,
+	/// Ordered ripgrep globs separated by |; leading ! excludes, last match wins (16 globs, 512 bytes total).
+	#[serde(default)]
+	pub file_pattern: Option<String>,
+	/// Up to 32 ripgrep exclusion globs (512 bytes each); leading ! restores a match. Excluded directories are pruned.
+	#[serde(default)]
+	pub exclude_patterns: Vec<String>,
+	/// File searches may finish after a literal exact basename match; default false.
+	#[serde(default)]
+	pub early_termination: bool,
 	#[serde(default)]
 	pub include_hidden: bool,
 	/// At most 1000 results; default 1000.
@@ -71,7 +158,7 @@ pub struct SearchResultsParams {
 	/// Independent zero-based result offset; never advances another caller's cursor.
 	#[serde(default)]
 	pub cursor: Option<u32>,
-	/// 1..32 terminal snapshot records per response; default 32.
+	/// 1..32 fsynced committed records per response; default 32. Terminal pages are immutable.
 	#[serde(default)]
 	pub limit: Option<u16>,
 }
@@ -153,6 +240,38 @@ fn validate_start(params: &SearchStartParams) -> Result<()> {
 	{
 		bail!("search root must be an absolute safe path of at most 4096 bytes");
 	}
+	if params.context_lines.is_some_and(|value| value > 10) {
+		bail!("search context_lines must be 0..10");
+	}
+	let pattern_valid = |pattern: &str| {
+		!pattern.is_empty() && pattern.len() <= 512 && !pattern.contains(['\0', '\n', '\r'])
+	};
+	if params.file_pattern.as_ref().is_some_and(|pattern| {
+		pattern.len() > 512
+			|| pattern.contains(['\0', '\n', '\r'])
+			|| pattern
+				.split('|')
+				.filter(|part| !part.trim().is_empty())
+				.count() > 16
+	}) || params.exclude_patterns.len() > 32
+		|| params
+			.exclude_patterns
+			.iter()
+			.any(|pattern| !pattern_valid(pattern))
+	{
+		bail!("invalid search file/exclusion glob filter");
+	}
+	let mode = match (params.query_mode, params.literal_search) {
+		(Some(SearchQueryMode::Literal), Some(false))
+		| (Some(SearchQueryMode::Regex | SearchQueryMode::Glob), Some(true))
+		| (Some(SearchQueryMode::Glob), Some(false)) => bail!("conflicting search query modes"),
+		(Some(mode), _) => mode,
+		(None, Some(false)) => SearchQueryMode::Regex,
+		_ => SearchQueryMode::Literal,
+	};
+	if matches!(mode, SearchQueryMode::Glob) && matches!(params.kind, SearchKind::Content) {
+		bail!("glob query mode requires a file search");
+	}
 	let limits = limits(params);
 	for (key, cap) in [
 		("results", 1000),
@@ -167,6 +286,7 @@ fn validate_start(params: &SearchStartParams) -> Result<()> {
 			bail!("invalid search {key} resource limit");
 		}
 	}
+	compile_glob_program(params)?;
 	Ok(())
 }
 
@@ -215,6 +335,10 @@ async fn save_with_directory_sync<F: Future<Output = Result<()>>>(
 	record: &SearchRecord,
 	directory_sync: F,
 ) -> Result<()> {
+	let data = serde_json::to_vec(record)?;
+	if data.len() as u64 > MAX_RECORD_BYTES {
+		bail!("search receipt exceeds the fixed 16 KiB state budget");
+	}
 	let temporary = directory.join(format!(".{}-{}", record.id, new_owner_id()?));
 	let mut options = tokio::fs::OpenOptions::new();
 	options.create_new(true).write(true);
@@ -223,7 +347,7 @@ async fn save_with_directory_sync<F: Future<Output = Result<()>>>(
 		.mode(0o600)
 		.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
 	let mut file = options.open(&temporary).await?;
-	file.write_all(&serde_json::to_vec(record)?).await?;
+	file.write_all(&data).await?;
 	file.sync_all().await?;
 	drop(file);
 	tokio::fs::rename(&temporary, directory.join(format!("{}.json", record.id))).await?;
@@ -384,7 +508,7 @@ async fn rpc(record: &SearchRecord, action: &str, extra: Value) -> Result<Value>
 		"__name__ = 'hepta_search_worker'\n{}\nq = json.load(sys.stdin)\nprint(json.dumps({{'search_id':q['search_id'],'action':q['action'],'backend':'native_search_worker','result':main(q)}}))",
 		include_str!("search_worker.py")
 	);
-	let envelope: Value = run_python_json(host, &source, &request, Duration::from_secs(12))
+	let envelope: Value = run_python_json_with_interpreter(host, interpreter_for_host(&record.host)?, &source, &request, Duration::from_secs(12))
 		.await.map_err(|_| anyhow!("native search helper unavailable or refused; receipt retained, do not relaunch uncertain starts"))?;
 	if envelope["search_id"] != record.id
 		|| envelope["action"] != action
@@ -444,7 +568,7 @@ fn retain_start_effect(record: &mut SearchRecord, remote: Result<Value>) -> Valu
 			record.reason = None;
 			return json!({"effect_outcome":"start_acknowledged","observed_state":"running",
 				"native":{"search_id":record.id,"backend":"native_search_worker","action":"start","state":"running","snapshot_ready":false},
-				"limits":limits(&record.request),"session_resume_after_restart":false,"terminal_pages_only":true,"effect_confirmed":true});
+				"limits":limits(&record.request),"session_resume_after_restart":false,"terminal_pages_only":false,"committed_progressive_pages":true,"effect_confirmed":true});
 		}
 	}
 	record.state = "launch_uncertain".into();
@@ -546,6 +670,8 @@ async fn dispatch_search_stop<F: Future<Output = Result<Value>>>(
 pub async fn search_start(owner: &str, params: SearchStartParams) -> Result<String> {
 	validate_owner(owner)?;
 	validate_start(&params)?;
+	// Validate the frozen administrator mapping before creating any durable intent.
+	interpreter_for_host(&params.host)?;
 	check_remote_path(&params.host, &params.root, false, false, false)?;
 	let host = runtime_config()?.host(&params.host)?;
 	if !Path::new(&host.remote_state_dir).is_absolute()
@@ -589,6 +715,11 @@ pub async fn search_start(owner: &str, params: SearchStartParams) -> Result<Stri
 	let remote_record = record.clone();
 	let request = json!({"root":record.request.root,"query":record.request.query,
 		"kind":record.request.kind,"include_hidden":record.request.include_hidden,
+		"query_mode":record.request.query_mode,"literal_search":record.request.literal_search,
+		"ignore_case":record.request.ignore_case,"context_lines":record.request.context_lines.unwrap_or(0),
+		"file_pattern":record.request.file_pattern,"exclude_patterns":record.request.exclude_patterns,
+		"early_termination":record.request.early_termination,
+		"glob_program":compile_glob_program(&record.request)?,
 		"limits":limits(&record.request),"allowed_roots":host.allowed_read_path_prefixes,
 		"protected_roots":host.protected_path_prefixes});
 	dispatch_search_start(&directory, record, rpc(&remote_record, "start", request)).await

@@ -1,7 +1,7 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! Bounded original native results for three reviewed credential-free DTO tools.
+//! Durable original native results for three reviewed credential-free DTO tools.
 //! Request parameters, caller-selected identities, arbitrary output and errors are never stored.
 use anyhow::{anyhow, bail, Result};
 use rmcp::{
@@ -12,10 +12,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
+	collections::VecDeque,
 	fs::File,
 	io::{Read, Write},
 	path::{Path, PathBuf},
-	sync::{Mutex, OnceLock},
+	sync::{Arc, Mutex, OnceLock},
 };
 
 use super::{
@@ -23,15 +24,22 @@ use super::{
 	request_audit::{self, RequestIdentity},
 };
 
+#[cfg(test)]
 const MAX_GLOBAL: usize = 512;
-const MAX_OWNER: usize = 128;
 const MAX_RESULT_BYTES: usize = 64 * 1024;
 const MAX_RECORD_BYTES: usize = 96 * 1024;
 const MAX_PAGE_BYTES: usize = 64 * 1024;
 const STORE_NAME: &str = "request-results";
+const ARCHIVE_STORE_NAME: &str = "request-results-v2";
+const ARCHIVE_NAME: &str = "archive";
+const ARCHIVE_ANCHOR: &str = ".request-results-v2-anchor.json";
+const ARCHIVE_MARKER: &str = ".request-results-v2.json";
 pub const ID_META: &str = "io.hepta.runtime/request-v8";
 pub const ACK_META: &str = "io.hepta.runtime/retention-v8";
 static STORE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static RECORD_LOCKS: OnceLock<[Mutex<()>; 256]> = OnceLock::new();
+type AnchorCache = VecDeque<(AnchorStamp, Arc<CachedAnchor>)>;
+static ANCHOR_CACHE: OnceLock<Mutex<AnchorCache>> = OnceLock::new();
 
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -62,7 +70,7 @@ enum ResultState {
 	NotCompleted,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct Record {
 	request_id: String,
@@ -77,8 +85,53 @@ struct Record {
 }
 pub struct ResultIntent {
 	directory: File,
+	store: File,
 	root: PathBuf,
 	record: Record,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct DirectoryIdentity {
+	device: u64,
+	inode: u64,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ArchiveAnchor {
+	schema: u8,
+	root: DirectoryIdentity,
+	legacy: DirectoryIdentity,
+	store: DirectoryIdentity,
+	archive: DirectoryIdentity,
+	shards: Vec<DirectoryIdentity>,
+}
+
+struct ArchiveStore {
+	archive: File,
+	anchor: Arc<CachedAnchor>,
+}
+
+struct CachedAnchor {
+	anchor: ArchiveAnchor,
+	sha256: String,
+}
+
+#[derive(PartialEq, Eq)]
+struct AnchorStamp {
+	device: u64,
+	inode: u64,
+	length: u64,
+	modified: (i64, i64),
+	changed: (i64, i64),
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ArchiveMarker {
+	schema: u8,
+	anchor_sha256: String,
 }
 
 pub fn eligible(tool: &str) -> bool {
@@ -96,6 +149,15 @@ fn valid_tool(value: &str) -> bool {
 fn store_lock() -> Result<std::sync::MutexGuard<'static, ()>> {
 	STORE_LOCK
 		.get_or_init(|| Mutex::new(()))
+		.lock()
+		.map_err(|_| anyhow!("result state unavailable"))
+}
+fn record_lock(id: &str) -> Result<std::sync::MutexGuard<'static, ()>> {
+	if !valid_id(id) {
+		bail!("invalid retained result identity");
+	}
+	let index = u8::from_str_radix(&id[..2], 16)? as usize;
+	RECORD_LOCKS.get_or_init(|| std::array::from_fn(|_| Mutex::new(())))[index]
 		.lock()
 		.map_err(|_| anyhow!("result state unavailable"))
 }
@@ -456,8 +518,8 @@ fn private_directory(directory: &File) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn open_store(root: &Path) -> Result<File> {
-	use std::os::fd::{AsRawFd, FromRawFd};
+fn open_root(root: &Path) -> Result<File> {
+	use std::os::fd::FromRawFd;
 	let raw = root
 		.to_str()
 		.ok_or_else(|| anyhow!("request audit root is not UTF-8"))?;
@@ -478,6 +540,19 @@ fn open_store(root: &Path) -> Result<File> {
 	for component in raw.split('/').filter(|part| !part.is_empty()) {
 		base = open_at(&base, component, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
 	}
+	Ok(base)
+}
+
+#[cfg(unix)]
+fn open_store(root: &Path) -> Result<File> {
+	use std::os::fd::AsRawFd;
+	let base = open_root(root)?;
+	// Once the archive is anchored, a missing legacy directory is lost history.
+	if !is_absent(&base, ARCHIVE_ANCHOR)? {
+		let directory = open_at(&base, STORE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+		private_directory(&directory)?;
+		return Ok(directory);
+	}
 	let folder = name(STORE_NAME)?;
 	let made = unsafe { libc::mkdirat(base.as_raw_fd(), folder.as_ptr(), 0o700) };
 	if made < 0 {
@@ -490,6 +565,291 @@ fn open_store(root: &Path) -> Result<File> {
 	}
 	let directory = open_at(&base, STORE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
 	private_directory(&directory)?;
+	Ok(directory)
+}
+
+#[cfg(unix)]
+fn is_not_found(error: &anyhow::Error) -> bool {
+	error
+		.downcast_ref::<std::io::Error>()
+		.is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+}
+
+#[cfg(unix)]
+fn is_absent(directory: &File, component: &str) -> Result<bool> {
+	match open_at(directory, component, libc::O_RDONLY | libc::O_NONBLOCK, 0) {
+		Ok(_) => Ok(false),
+		Err(error) if is_not_found(&error) => Ok(true),
+		Err(error) => Err(error),
+	}
+}
+
+#[cfg(unix)]
+fn directory_identity(directory: &File, require_private: bool) -> Result<DirectoryIdentity> {
+	use std::os::unix::fs::MetadataExt;
+	if require_private {
+		private_directory(directory)?;
+	}
+	let metadata = directory.metadata()?;
+	Ok(DirectoryIdentity {
+		device: metadata.dev(),
+		inode: metadata.ino(),
+	})
+}
+
+#[cfg(unix)]
+fn make_directory(parent: &File, component: &str) -> Result<File> {
+	use std::os::fd::AsRawFd;
+	let name = name(component)?;
+	if unsafe { libc::mkdirat(parent.as_raw_fd(), name.as_ptr(), 0o700) } < 0 {
+		return Err(std::io::Error::last_os_error().into());
+	}
+	parent.sync_all()?;
+	let directory = open_at(parent, component, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+	private_directory(&directory)?;
+	Ok(directory)
+}
+
+#[cfg(unix)]
+fn read_anchor(root: &File) -> Result<Arc<CachedAnchor>> {
+	use std::os::unix::fs::MetadataExt;
+	let mut file = open_at(root, ARCHIVE_ANCHOR, libc::O_RDONLY | libc::O_NONBLOCK, 0)?;
+	validate_file(&file)?;
+	let metadata = file.metadata()?;
+	let stamp = AnchorStamp {
+		device: metadata.dev(),
+		inode: metadata.ino(),
+		length: metadata.len(),
+		modified: (metadata.mtime(), metadata.mtime_nsec()),
+		changed: (metadata.ctime(), metadata.ctime_nsec()),
+	};
+	let cache = ANCHOR_CACHE.get_or_init(|| Mutex::new(VecDeque::new()));
+	if let Some(anchor) = cache
+		.lock()
+		.map_err(|_| anyhow!("result anchor cache unavailable"))?
+		.iter()
+		.find(|(existing, _)| *existing == stamp)
+		.map(|(_, anchor)| Arc::clone(anchor))
+	{
+		return Ok(anchor);
+	}
+	let mut bytes = Vec::new();
+	Read::by_ref(&mut file)
+		.take((MAX_RECORD_BYTES + 1) as u64)
+		.read_to_end(&mut bytes)?;
+	if bytes.len() > MAX_RECORD_BYTES {
+		bail!("result archive anchor size refused");
+	}
+	let after = file.metadata()?;
+	if after.dev() != stamp.device
+		|| after.ino() != stamp.inode
+		|| after.len() != stamp.length
+		|| (after.mtime(), after.mtime_nsec()) != stamp.modified
+		|| (after.ctime(), after.ctime_nsec()) != stamp.changed
+	{
+		bail!("result archive anchor changed during read");
+	}
+	let anchor: ArchiveAnchor = serde_json::from_slice(&bytes)?;
+	if anchor.schema != 2 || anchor.shards.len() != 256 {
+		bail!("result archive anchor schema refused");
+	}
+	let anchor = Arc::new(CachedAnchor {
+		sha256: digest(&bytes),
+		anchor,
+	});
+	let mut cache = cache
+		.lock()
+		.map_err(|_| anyhow!("result anchor cache unavailable"))?;
+	// This bound limits cache memory only. Eviction never refuses admission,
+	// evicts history, changes ownership, or bypasses filesystem validation.
+	if cache.len() >= 16 {
+		cache.pop_front();
+	}
+	cache.push_back((stamp, Arc::clone(&anchor)));
+	Ok(anchor)
+}
+
+#[cfg(unix)]
+fn read_archive_marker(legacy: &File) -> Result<Option<ArchiveMarker>> {
+	let mut file = match open_at(legacy, ARCHIVE_MARKER, libc::O_RDONLY | libc::O_NONBLOCK, 0) {
+		Ok(file) => file,
+		Err(error) if is_not_found(&error) => return Ok(None),
+		Err(error) => return Err(error),
+	};
+	validate_file(&file)?;
+	let mut bytes = Vec::new();
+	Read::by_ref(&mut file).take(1025).read_to_end(&mut bytes)?;
+	if bytes.len() > 1024 {
+		bail!("result archive marker size refused");
+	}
+	let marker: ArchiveMarker = serde_json::from_slice(&bytes)?;
+	if marker.schema != 2 || !valid_id(&marker.anchor_sha256) {
+		bail!("result archive marker schema refused");
+	}
+	Ok(Some(marker))
+}
+
+#[cfg(unix)]
+fn ensure_archive_marker(legacy: &File, expected: &str) -> Result<()> {
+	if let Some(marker) = read_archive_marker(legacy)? {
+		if marker.anchor_sha256 != expected {
+			bail!("result archive marker binding changed");
+		}
+		return Ok(());
+	}
+	let _initialization = store_lock()?;
+	if let Some(marker) = read_archive_marker(legacy)? {
+		if marker.anchor_sha256 != expected {
+			bail!("result archive marker binding changed");
+		}
+		return Ok(());
+	}
+	// This marker is independent of the new archive namespace. Losing both the
+	// archive and its anchor must not look like first-time empty initialization.
+	let mut file = open_at(
+		legacy,
+		ARCHIVE_MARKER,
+		libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL,
+		0o600,
+	)?;
+	file.write_all(&serde_json::to_vec(&ArchiveMarker {
+		schema: 2,
+		anchor_sha256: expected.into(),
+	})?)?;
+	file.sync_all()?;
+	legacy.sync_all()?;
+	Ok(())
+}
+
+#[cfg(unix)]
+fn publish_anchor(root: &File, anchor: &ArchiveAnchor) -> Result<()> {
+	use std::os::fd::AsRawFd;
+	let temporary = format!(".result-anchor-{}.tmp", new_id()?);
+	let mut file = open_at(
+		root,
+		&temporary,
+		libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL,
+		0o600,
+	)?;
+	let result = (|| -> Result<()> {
+		let bytes = serde_json::to_vec(anchor)?;
+		if bytes.len() > MAX_RECORD_BYTES {
+			bail!("result archive anchor size refused");
+		}
+		file.write_all(&bytes)?;
+		file.sync_all()?;
+		let source = name(&temporary)?;
+		let target = name(ARCHIVE_ANCHOR)?;
+		if unsafe {
+			libc::linkat(
+				root.as_raw_fd(),
+				source.as_ptr(),
+				root.as_raw_fd(),
+				target.as_ptr(),
+				0,
+			)
+		} < 0
+		{
+			return Err(std::io::Error::last_os_error().into());
+		}
+		if unsafe { libc::unlinkat(root.as_raw_fd(), source.as_ptr(), 0) } < 0 {
+			return Err(std::io::Error::last_os_error().into());
+		}
+		root.sync_all()?;
+		Ok(())
+	})();
+	if result.is_err() {
+		if let Ok(component) = name(&temporary) {
+			unsafe { libc::unlinkat(root.as_raw_fd(), component.as_ptr(), 0) };
+		}
+	}
+	result
+}
+
+/// Only initialization owns the global lock. Each call opens the pinned root
+/// and its exact shard; completed history and unrelated shards are never scanned.
+#[cfg(unix)]
+fn open_archive_store(root: &Path, legacy: &File, create: bool) -> Result<Option<ArchiveStore>> {
+	let base = open_root(root)?;
+	let cached =
+		match read_anchor(&base) {
+			Ok(anchor) => anchor,
+			Err(error) if is_not_found(&error) => {
+				let _initialization = store_lock()?;
+				// Another stripe may have finished first-time initialization while this
+				// caller waited. Never interpret its newly anchored state as empty.
+				match read_anchor(&base) {
+					Ok(anchor) => anchor,
+					Err(error) if is_not_found(&error) => {
+						if read_archive_marker(legacy)?.is_some() {
+							bail!("result archive anchor missing; history never recreated automatically");
+						}
+						if !is_absent(&base, ARCHIVE_STORE_NAME)? {
+							bail!("unanchored result archive refused; history never recreated automatically");
+						}
+						if !create {
+							return Ok(None);
+						}
+						let store = make_directory(&base, ARCHIVE_STORE_NAME)?;
+						let archive = make_directory(&store, ARCHIVE_NAME)?;
+						let mut shards = Vec::with_capacity(256);
+						for index in 0..256 {
+							let directory = make_directory(&archive, &format!("{index:02x}"))?;
+							shards.push(directory_identity(&directory, true)?);
+						}
+						let anchor = ArchiveAnchor {
+							schema: 2,
+							root: directory_identity(&base, false)?,
+							legacy: directory_identity(legacy, true)?,
+							store: directory_identity(&store, true)?,
+							archive: directory_identity(&archive, true)?,
+							shards,
+						};
+						publish_anchor(&base, &anchor)?;
+						read_anchor(&base)?
+					}
+					Err(error) => return Err(error),
+				}
+			}
+			Err(error) => return Err(error),
+		};
+	let anchor = &cached.anchor;
+	let store = open_at(
+		&base,
+		ARCHIVE_STORE_NAME,
+		libc::O_RDONLY | libc::O_DIRECTORY,
+		0,
+	)?;
+	let archive = open_at(&store, ARCHIVE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+	if anchor.root != directory_identity(&base, false)?
+		|| anchor.legacy != directory_identity(legacy, true)?
+		|| anchor.store != directory_identity(&store, true)?
+		|| anchor.archive != directory_identity(&archive, true)?
+	{
+		bail!("result archive directory binding changed; history never recreated automatically");
+	}
+	ensure_archive_marker(legacy, &cached.sha256)?;
+	Ok(Some(ArchiveStore {
+		archive,
+		anchor: cached,
+	}))
+}
+
+#[cfg(unix)]
+fn shard(archive: &ArchiveStore, id: &str) -> Result<File> {
+	if !valid_id(id) {
+		bail!("invalid result archive identity");
+	}
+	let directory = open_at(
+		&archive.archive,
+		&id[..2],
+		libc::O_RDONLY | libc::O_DIRECTORY,
+		0,
+	)?;
+	let index = u8::from_str_radix(&id[..2], 16)? as usize;
+	if archive.anchor.anchor.shards.get(index) != Some(&directory_identity(&directory, true)?) {
+		bail!("result archive shard binding changed; history never recreated automatically");
+	}
 	Ok(directory)
 }
 
@@ -510,6 +870,11 @@ fn validate_file(file: &File) -> Result<()> {
 
 #[cfg(unix)]
 fn read_record(directory: &File, filename: &str) -> Result<Record> {
+	let id = filename
+		.strip_suffix(".json")
+		.filter(|id| valid_id(id))
+		.ok_or_else(|| anyhow!("invalid retained result filename"))?;
+	cleanup_target_staging(directory, id)?;
 	let mut file = open_at(directory, filename, libc::O_RDONLY | libc::O_NONBLOCK, 0)?;
 	validate_file(&file)?;
 	let mut bytes = Vec::new();
@@ -553,7 +918,7 @@ fn read_record(directory: &File, filename: &str) -> Result<Record> {
 	Ok(record)
 }
 
-#[cfg(unix)]
+#[cfg(all(test, unix))]
 fn directory_scan_result(has_entry: bool, error: i32) -> Result<bool> {
 	if has_entry {
 		return Ok(true);
@@ -564,7 +929,7 @@ fn directory_scan_result(has_entry: bool, error: i32) -> Result<bool> {
 	Ok(false)
 }
 
-#[cfg(unix)]
+#[cfg(all(test, unix))]
 fn scan_errno(reset: bool) -> Result<i32> {
 	#[cfg(target_os = "linux")]
 	{
@@ -589,8 +954,13 @@ fn scan_errno(reset: bool) -> Result<i32> {
 	}
 }
 
-#[cfg(unix)]
+#[cfg(all(test, unix))]
 fn entries(directory: &File) -> Result<Vec<Record>> {
+	entries_with_marker(directory, true)
+}
+
+#[cfg(all(test, unix))]
+fn entries_with_marker(directory: &File, allow_marker: bool) -> Result<Vec<Record>> {
 	use std::os::fd::AsRawFd;
 	// A fresh directory file description avoids a shared seek cursor between snapshots.
 	let scan = open_at(directory, ".", libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
@@ -628,8 +998,14 @@ fn entries(directory: &File) -> Result<Vec<Record>> {
 	}
 	// Remove only verified private staging inodes after an interrupted publication.
 	// This cannot remove an active writer because all mutations use STORE_LOCK.
-	for filename in names.iter().filter(|value| value.starts_with('.')) {
+	for filename in names.iter().filter(|value| {
+		value.starts_with('.') && (!allow_marker || value.as_str() != ARCHIVE_MARKER)
+	}) {
 		cleanup_staging(directory, filename)?;
+	}
+	if names.iter().any(|value| value == ARCHIVE_MARKER) {
+		read_archive_marker(directory)?
+			.ok_or_else(|| anyhow!("result archive marker disappeared"))?;
 	}
 	let mut result = Vec::new();
 	for filename in names.iter().filter(|value| !value.starts_with('.')) {
@@ -688,36 +1064,44 @@ fn cleanup_staging(directory: &File, filename: &str) -> Result<()> {
 	Ok(())
 }
 
+/// Deterministic private staging makes interrupted link publication recoverable
+/// by exact id, including in an archive shard whose history is never enumerated.
 #[cfg(unix)]
-fn remove_record(directory: &File, id: &str) -> Result<()> {
-	use std::os::fd::AsRawFd;
-	let filename = name(&format!("{id}.json"))?;
-	if unsafe { libc::unlinkat(directory.as_raw_fd(), filename.as_ptr(), 0) } < 0 {
-		return Err(std::io::Error::last_os_error().into());
+fn cleanup_target_staging(directory: &File, id: &str) -> Result<()> {
+	let filename = format!(".{id}-{id}.tmp");
+	if is_absent(directory, &filename)? {
+		return Ok(());
 	}
-	directory.sync_all()?;
-	Ok(())
+	cleanup_staging(directory, &filename)
 }
 
 #[cfg(unix)]
 fn save(directory: &File, record: &Record, replacing: bool) -> Result<()> {
 	use std::os::fd::AsRawFd;
 	private_directory(directory)?;
+	cleanup_target_staging(directory, &record.request_id)?;
 	let filename = format!("{}.json", record.request_id);
 	if replacing {
 		let existing = read_record(directory, &filename)?;
 		if existing.owner != record.owner
 			|| existing.tool_name != record.tool_name
 			|| existing.accepted_unix_ms != record.accepted_unix_ms
+			|| existing.policy_binding != record.policy_binding
 		{
 			bail!("request audit receipt binding changed");
+		}
+		if existing.state != ResultState::Unknown {
+			if existing != *record {
+				bail!("completed original result is immutable");
+			}
+			return Ok(());
 		}
 	}
 	let bytes = serde_json::to_vec(record)?;
 	if bytes.len() > MAX_RECORD_BYTES {
 		bail!("request audit record size refused");
 	}
-	let temporary = format!(".{}-{}.tmp", record.request_id, new_id()?);
+	let temporary = format!(".{}-{}.tmp", record.request_id, record.request_id);
 	let mut file = open_at(
 		directory,
 		&temporary,
@@ -772,7 +1156,20 @@ fn save(directory: &File, record: &Record, replacing: bool) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn admit_at(root: &Path, identity: RequestIdentity, binding: String) -> Result<ResultIntent> {
+fn optional_record(directory: &File, id: &str) -> Result<Option<Record>> {
+	match read_record(directory, &format!("{id}.json")) {
+		Ok(record) => Ok(Some(record)),
+		Err(error) if is_not_found(&error) => Ok(None),
+		Err(error) => Err(error),
+	}
+}
+
+#[cfg(unix)]
+fn admit_synchronous_at(
+	root: &Path,
+	identity: RequestIdentity,
+	binding: String,
+) -> Result<Option<ResultIntent>> {
 	if !valid_id(&identity.request_id)
 		|| !valid_id(&identity.owner)
 		|| !eligible(&identity.tool_name)
@@ -780,21 +1177,17 @@ fn admit_at(root: &Path, identity: RequestIdentity, binding: String) -> Result<R
 	{
 		bail!("result admission unavailable");
 	}
-	let _guard = store_lock()?;
+	let _guard = record_lock(&identity.request_id)?;
 	let directory = open_store(root)?;
-	let retained = request_audit::retained_ids_at(root)?;
-	if !retained.contains(&identity.request_id) {
-		bail!("result admission unavailable");
+	request_audit::validate_identity_at(root, &identity)?;
+	if optional_record(&directory, &identity.request_id)?.is_some() {
+		bail!("result identity already retained; never recreate admission");
 	}
-	let mut records = entries(&directory)?;
-	for record in records.iter().filter(|r| !retained.contains(&r.request_id)) {
-		remove_record(&directory, &record.request_id)?;
-	}
-	records.retain(|r| retained.contains(&r.request_id));
-	if records.len() >= MAX_GLOBAL
-		|| records.iter().filter(|r| r.owner == identity.owner).count() >= MAX_OWNER
-	{
-		bail!("result retention quota unavailable");
+	let archive = open_archive_store(root, &directory, true)?
+		.ok_or_else(|| anyhow!("result archive unavailable"))?;
+	let target = shard(&archive, &identity.request_id)?;
+	if optional_record(&target, &identity.request_id)?.is_some() {
+		bail!("result identity already retained; never recreate admission");
 	}
 	let record = Record {
 		request_id: identity.request_id,
@@ -807,17 +1200,31 @@ fn admit_at(root: &Path, identity: RequestIdentity, binding: String) -> Result<R
 		payload_bytes: None,
 		payload_sha256: None,
 	};
-	save(&directory, &record, false)?;
-	Ok(ResultIntent {
-		directory,
+	// This immutable identity is durable before dispatch. History size and old
+	// unknown receipts never consume admission slots or authorize redispatch.
+	save(&target, &record, false)?;
+	Ok(Some(ResultIntent {
+		directory: target,
+		store: directory,
 		root: root.into(),
 		record,
-	})
+	}))
 }
 #[cfg(not(unix))]
-fn admit_at(_root: &Path, _identity: RequestIdentity, _binding: String) -> Result<ResultIntent> {
+fn admit_synchronous_at(
+	_root: &Path,
+	_identity: RequestIdentity,
+	_binding: String,
+) -> Result<Option<ResultIntent>> {
 	bail!("private result retention requires Unix");
 }
+
+fn admit_at(root: &Path, identity: RequestIdentity, binding: String) -> Result<ResultIntent> {
+	admit_synchronous_at(root, identity, binding)?
+		.ok_or_else(|| anyhow!("result admission unavailable"))
+}
+
+/// Explicit async requests require a durable result slot before dispatch.
 pub(crate) async fn admit(identity: RequestIdentity) -> Result<ResultIntent> {
 	let root = runtime_config()?.state_dir.clone();
 	let binding = policy_binding()?;
@@ -828,11 +1235,17 @@ pub(crate) async fn admit(identity: RequestIdentity) -> Result<ResultIntent> {
 #[cfg(unix)]
 fn complete_sync(mut intent: ResultIntent, result: Option<CallToolResult>) -> Result<&'static str> {
 	use std::os::unix::fs::MetadataExt;
-	let _guard = store_lock()?;
+	let _guard = record_lock(&intent.record.request_id)?;
 	let current = open_store(&intent.root)?;
-	let old = intent.directory.metadata()?;
+	let old = intent.store.metadata()?;
 	let fresh = current.metadata()?;
 	if old.dev() != fresh.dev() || old.ino() != fresh.ino() {
+		bail!("result storage changed; existing request identity retained");
+	}
+	let archive = open_archive_store(&intent.root, &current, false)?
+		.ok_or_else(|| anyhow!("result archive unavailable"))?;
+	let live = shard(&archive, &intent.record.request_id)?;
+	if directory_identity(&live, true)? != directory_identity(&intent.directory, true)? {
 		bail!("result storage changed; existing request identity retained");
 	}
 	let state = if let Some(result) = result {
@@ -895,19 +1308,23 @@ fn page(value: Value) -> Result<String> {
 }
 #[cfg(unix)]
 fn lookup_at(root: &Path, identity: &RequestIdentity, binding: &str) -> Result<Option<Record>> {
-	let _guard = store_lock()?;
+	let _guard = record_lock(&identity.request_id)?;
 	let directory = open_store(root)?;
-	let filename = format!("{}.json", identity.request_id);
-	let record = match read_record(&directory, &filename) {
-		Ok(record) => record,
-		Err(error)
-			if error
-				.downcast_ref::<std::io::Error>()
-				.is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) =>
-		{
-			return Ok(None)
-		}
-		Err(_) => bail!("request result unavailable to this scope or current policy"),
+	let archive = open_archive_store(root, &directory, false)
+		.map_err(|_| anyhow!("request result unavailable to this scope or current policy"))?;
+	let legacy = optional_record(&directory, &identity.request_id)
+		.map_err(|_| anyhow!("request result unavailable to this scope or current policy"))?;
+	let archived = if let Some(archive) = &archive {
+		optional_record(&shard(archive, &identity.request_id)?, &identity.request_id)
+			.map_err(|_| anyhow!("request result unavailable to this scope or current policy"))?
+	} else {
+		None
+	};
+	if legacy.is_some() && archived.is_some() {
+		bail!("request result unavailable to this scope or current policy");
+	}
+	let Some(record) = legacy.or(archived) else {
+		return Ok(None);
 	};
 	if record.owner != identity.owner
 		|| record.tool_name != identity.tool_name
@@ -994,3 +1411,7 @@ pub async fn request_result(owner: &str, params: RequestResultParams) -> Result<
 #[cfg(all(test, unix))]
 #[path = "request_results_tests.rs"]
 mod tests;
+
+#[cfg(all(test, unix))]
+#[path = "request_results_growth_tests.rs"]
+mod growth_tests;

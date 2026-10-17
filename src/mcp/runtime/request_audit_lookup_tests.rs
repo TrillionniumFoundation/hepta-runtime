@@ -1,3 +1,4 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! Lookup admission and concurrent bounded eviction fixtures only.
@@ -41,7 +42,15 @@ fn owned_lookup_is_pinned_before_its_own_full_quota_admission_and_concurrent_evi
 	finish_sync(lookup, AuditCompletion::Completed).unwrap();
 	assert!(!is_active(&oldest).unwrap());
 	completed(root.path(), &owner);
-	assert!(observation_at(root.path(), &owner, &oldest).is_err());
+	assert!(!root
+		.path()
+		.join(STORE_NAME)
+		.join(format!("{oldest}.json"))
+		.exists());
+	assert_eq!(
+		observation_at(root.path(), &owner, &oldest).unwrap().state,
+		"completed"
+	);
 }
 #[test]
 fn read_pins_are_independent_of_dispatch_active_state_and_other_reads() {
@@ -59,7 +68,7 @@ fn read_pins_are_independent_of_dispatch_active_state_and_other_reads() {
 	assert!(!is_active(&id).unwrap());
 }
 #[test]
-fn unowned_expired_malformed_or_nonlookup_pin_is_refused_before_eviction() {
+fn unowned_missing_malformed_or_nonlookup_pin_is_refused_before_eviction() {
 	let root = private_root();
 	let owner = "c".repeat(64);
 	let other = "d".repeat(64);

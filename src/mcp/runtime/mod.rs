@@ -10,6 +10,7 @@ pub mod checkpoint;
 pub mod config;
 pub mod documents;
 pub mod effective_config;
+pub mod effect_owner_fence;
 pub mod health;
 pub mod inspect;
 pub mod jobs;

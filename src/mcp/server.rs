@@ -173,6 +173,8 @@ async fn notify_peer_resource_updated(peer: &Peer<RoleServer>, uri: &str) {
 const CLAUDE_CHANNEL_CAPABILITY: &str = "claude/channel";
 const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"effective_config",
+	"usage_stats",
+	"request_archive",
 	"request_history",
 	"request_status",
 	"request_result",
@@ -220,6 +222,7 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"process_wait",
 	"process_cancel",
 	"process_list",
+	"process_list_page",
 	"pty_start",
 	"pty_read",
 	"pty_write",
@@ -417,6 +420,56 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "Read Private Local Usage Statistics",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read per-tool counts, dispatch outcomes and first/last admission times owned by the same verified private HTTP credential or native stdio session. Includes metadata retained when the archive was introduced and all subsequent admitted native requests; it is not retroactive lifetime accounting. Metadata archive is retained when the bounded hot history cache evicts entries. Never returns parameters, output, secrets or vendor billing. Counts describe dispatch observations, not delivery or business success."
+	)]
+	async fn usage_stats(
+		&self,
+		Parameters(params): Parameters<runtime::request_audit::UsageStatsParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::request_audit::usage_stats(scope.owner(), params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Page Retained Request Metadata Archive",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Page private dispatch metadata retained at archive introduction and all subsequent admitted native requests. This archive is not automatically evicted with the hot request_history cache. At most 32 records per page, independent after_id cursors; no parameters or output are stored. Uses the same verified private HTTP credential or native stdio session ownership. History is live, and observed completion proves neither delivery nor business success. No dispatch or replay occurs."
+	)]
+	async fn request_archive(
+		&self,
+		Parameters(params): Parameters<runtime::request_audit::RequestHistoryParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::request_audit::archive_history(scope.owner(), params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
 		title = "Read Credential or Native Session Request History",
 		annotations(
 			read_only_hint = true,
@@ -542,6 +595,12 @@ impl OctofsServer {
 		Parameters(params): Parameters<runtime::request_async::RequestStartParams>,
 		context: RequestContext<RoleServer>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		let scope = self
 			.owner_binding
 			.resolve(&context, self.search_owner.as_ref().as_deref())
@@ -584,13 +643,19 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = true
 		),
-		description = "Admit one background operation from ten closed native read APIs: read_multiple_files, file_info, binary_read, process_status, process_read, process_wait, process_list, hardware_snapshot, service_status and network_inspect. Original configured-host, filesystem and operator-account policies apply. No write, command, privilege, maintenance, recursive async or arbitrary tool dispatch. Required private idempotency key has a secret HMAC binding; identical retries return the original operation_id without replay. Admission acknowledges neither completion nor delivery. Original SDK success/tool-error/RPC-error bytes up to 1 MiB are encrypted at rest with trusted credential-derived keys; all users sharing that credential share retrieval. Stdio keys are ephemeral. Shared request/operation concurrency is eight globally and four per owner; immutable key retention is 512 globally and 128 per owner, full capacity refuses new keys forever until an independently reviewed lifecycle change. No restart execution resume, ChatGPT caller isolation or full Desktop Commander replacement is implied."
+		description = "Admit one background operation from ten closed native read APIs: read_multiple_files, file_info, binary_read, process_status, process_read, process_wait, process_list, hardware_snapshot, service_status and network_inspect. Original configured-host, filesystem and operator-account policies apply. No write, command, privilege, maintenance, recursive async or arbitrary tool dispatch. Required private idempotency key has a secret HMAC binding; identical retries return the original operation_id without replay. Admission acknowledges neither completion nor delivery. Original SDK success/tool-error/RPC-error bytes up to 1 MiB are encrypted at rest with trusted credential-derived keys; all users sharing that credential share retrieval. Stdio keys are ephemeral. Shared request/operation concurrency is eight globally and four per owner; immutable key retention defaults to 512 globally and 128 per owner and may be raised by validated administrator startup limits up to 65536. Capacity refuses new keys without deleting, expiring or rebinding previous identities. No restart execution resume, ChatGPT caller isolation or full Desktop Commander replacement is implied."
 	)]
 	async fn operation_start(
 		&self,
 		Parameters(params): Parameters<runtime::operation_async::OperationStartParams>,
 		context: RequestContext<RoleServer>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		let (scope, crypto) = self
 			.owner_binding
 			.resolve_operation_crypto(
@@ -747,6 +812,12 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 		Parameters(params): Parameters<TextEditorParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
 		enforce_runtime_path_spec(&params.path, &workdir, true)?;
@@ -782,6 +853,12 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 		Parameters(params): Parameters<DirectoryCreateParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
 		enforce_runtime_path_spec(&params.path, &workdir, true)?;
@@ -818,6 +895,12 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 		Parameters(params): Parameters<FileMoveParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
 		enforce_runtime_path_spec(&params.source, &workdir, true)?;
@@ -852,6 +935,12 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 		Parameters(params): Parameters<TextFileWriteParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
 		enforce_runtime_path_spec(&params.path, &workdir, true)?;
@@ -888,6 +977,12 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 		Parameters(params): Parameters<DirectoryMoveParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
 		enforce_runtime_path_spec(&params.source, &workdir, true)?;
@@ -929,6 +1024,12 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 		Parameters(params): Parameters<BatchEditParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
 		enforce_runtime_path_spec(&params.path, &workdir, true)?;
@@ -964,6 +1065,12 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 		Parameters(params): Parameters<ExtractLinesParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
 		enforce_runtime_path_spec(&params.from_path, &workdir, false)?;
@@ -1010,6 +1117,12 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 		Parameters(params): Parameters<ShellParams>,
 	) -> Result<CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		if runtime::config::maybe_runtime_config().is_some() {
 			return Err(
 				"the unrestricted local shell tool is disabled in runtime mode; use process_start or an exact privileged_action"
@@ -1109,6 +1222,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::operator::ShellStartParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::operator::shell_start(params)
 			.await
 			.map_err(|error| error.to_string())
@@ -1147,6 +1266,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::operator::HostSignalParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::operator::host_signal(params)
 			.await
 			.map_err(|error| error.to_string())
@@ -1166,6 +1291,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::operator::SudoStartParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::operator::sudo_start(params)
 			.await
 			.map_err(|error| error.to_string())
@@ -1196,13 +1327,19 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = false
 		),
-		description = "Start a bounded background file-name or literal UTF-8 content search under one configured read root. No shell or arbitrary targets. Refuses symlinks and hard links; skips binary content and bounds traversal, bytes, results and time. HTTP ownership is the verified private operator credential, shared by all its users; stdio ownership remains this native session. Never takes caller-selected ownership. The same HTTP credential can resume retained metadata and immutable terminal pages after reconnect or controller restart only while the current host binding and read-root policy authorize access; unfinished searches become interrupted without relaunch. Not authenticated ChatGPT caller isolation, running-program resume, regex or gitignore parity."
+		description = "Start a bounded background file-name or content search under one configured read root. Omitted options preserve case-sensitive literal matching; explicit query_mode selects literal, regex or file glob. Supports case folding, file/exclusion globs, context lines and early exact-name termination. DOCX/XLSX text is extracted under expansion limits; PDF requires the administrator-configured host interpreter with a bounded pypdf parser. Skipped formats and limits are explicit in statistics. No shell or arbitrary targets. Refuses symlinks and hard links; skips binary content and bounds traversal, bytes, results and time. HTTP ownership is the verified private operator credential, shared by all its users; stdio ownership remains this native session. Never takes caller-selected ownership. The same HTTP credential can resume retained metadata and immutable terminal pages after reconnect or controller restart only while the current host binding and read-root policy authorize access; unfinished searches become interrupted without relaunch. Not authenticated ChatGPT caller isolation or running-program resume. Regex uses bounded Python syntax; glob filters do not imply gitignore parity."
 	)]
 	async fn search_start(
 		&self,
 		Parameters(params): Parameters<runtime::search_jobs::SearchStartParams>,
 		context: RequestContext<RoleServer>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		let scope = self
 			.owner_binding
 			.resolve(&context, self.search_owner.as_ref().as_deref())
@@ -1221,7 +1358,7 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Read an immutable terminal page for a search owned by the verified private HTTP operator credential, or by this stdio native session. Same-credential HTTP reconnect and controller restart preserve metadata access only while the current host binding and read-root policy authorize access; credential changes never grant older ownership. Running work reports snapshot_ready=false. Maximum 32 rows and 64 KiB per page, independent row cursors. No host or owner override, running-program restore or authenticated ChatGPT caller isolation."
+		description = "Read an immutable terminal page for a search owned by the verified private HTTP operator credential, or by this stdio native session. Same-credential HTTP reconnect and controller restart preserve metadata access only while the current host binding and read-root policy authorize access; credential changes never grant older ownership. Running work reports snapshot_ready=false and exposes only its fsynced committed result prefix with progressive=true. Terminal pages remain immutable. Maximum 32 rows and 96 KiB per page, independent row cursors. No host or owner override, running-program restore or authenticated ChatGPT caller isolation."
 	)]
 	async fn search_results(
 		&self,
@@ -1439,6 +1576,26 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "Page Durable Job Identities",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Page retained durable job metadata with an optional configured-host filter, opaque snapshot cursor and independent page limit of 1..128. Every response is bounded to 64 KiB. Continue next_cursor until null; inventory_complete is true only on the last page. A fresh first page observes current metadata. Continuations refer to that observation and may be invalidated by source changes, controller restart or bounded snapshot-cache expiry; start a new first page when refused. No job is started, stopped or replayed. Use process_status for authoritative live status."
+	)]
+	async fn process_list_page(
+		&self,
+		Parameters(params): Parameters<runtime::jobs::ProcessListPageParams>,
+	) -> Result<String, String> {
+		tokio::task::spawn_blocking(move || runtime::jobs::list_jobs_page(params))
+			.await
+			.map_err(|_| "Durable job inventory worker unavailable".to_string())?
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
 		title = "document_read",
 		annotations(
 			read_only_hint = true,
@@ -1490,6 +1647,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::documents::DocumentWriteParams>,
 	) -> Result<CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::documents::write(params)
 			.await
 			.map_err(|e| e.to_string())
@@ -1509,6 +1672,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::documents::DocumentEditParams>,
 	) -> Result<CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::documents::edit(params)
 			.await
 			.map_err(|e| e.to_string())
@@ -1566,6 +1735,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::binary::BinaryWriteParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::binary::write(params)
 			.await
 			.map_err(|e| e.to_string())
@@ -1585,6 +1760,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::binary::BinaryUploadParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::binary::upload(params)
 			.await
 			.map_err(|e| e.to_string())
@@ -1604,6 +1785,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::documents::PdfEditParams>,
 	) -> Result<rmcp::model::CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::documents::edit_pdf(params)
 			.await
 			.map_err(|e| e.to_string())
@@ -1623,6 +1810,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::documents::WorksheetEditParams>,
 	) -> Result<rmcp::model::CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::documents::edit_worksheet(params)
 			.await
 			.map_err(|e| e.to_string())
@@ -1642,6 +1835,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::documents::DocumentRenderParams>,
 	) -> Result<rmcp::model::CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::documents::render_rich(params)
 			.await
 			.map_err(|e| e.to_string())
@@ -1660,6 +1859,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::documents::WorksheetRecalculateParams>,
 	) -> Result<rmcp::model::CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::documents::recalculate(params)
 			.await
 			.map_err(|e| e.to_string())
@@ -1679,6 +1884,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::binary::InodePatchParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::binary::patch_inode(params)
 			.await
 			.map_err(|e| e.to_string())
@@ -1698,6 +1909,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::documents::PdfSecurityParams>,
 	) -> Result<rmcp::model::CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::documents::secure_pdf(params)
 			.await
 			.map_err(|e| e.to_string())
@@ -1717,6 +1934,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::stream::StreamPrepareParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::stream::prepare(params)
 			.await
 			.map_err(|e| e.to_string())
@@ -1831,6 +2054,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::checkpoint::CheckpointParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::checkpoint::execute(params)
 			.await
 			.map_err(|e| e.to_string())
@@ -2002,6 +2231,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::inspect::PrivilegedActionParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::inspect::privileged_action(params)
 			.await
 			.map_err(|error| error.to_string())

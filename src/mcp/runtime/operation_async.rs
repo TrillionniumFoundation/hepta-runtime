@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
-	collections::HashMap,
+	collections::{HashMap, VecDeque},
 	fs::File,
 	io::{Read, Write},
 	path::{Path, PathBuf},
@@ -36,10 +36,6 @@ use tokio_util::sync::CancellationToken;
 const STORE_NAME: &str = "request-operations-v10";
 const ANCHOR_NAME: &str = ".request-operations-v10-anchor.json";
 const MAX_RECORD_BYTES: usize = 4096;
-const MAX_GLOBAL_KEYS: usize = 512;
-const MAX_OWNER_KEYS: usize = 128;
-const GLOBAL_ACTIVE: usize = 8;
-const OWNER_ACTIVE: usize = 4;
 const QUEUED: u8 = 0;
 const RUNNING: u8 = 1;
 const SETTLING: u8 = 2;
@@ -261,11 +257,6 @@ impl Slot {
 	fn take(owner: &str) -> Result<Self> {
 		let shared = super::request_async::Slot::take(owner)?;
 		let mut r = registry()?;
-		if r.reserved.values().sum::<usize>() >= GLOBAL_ACTIVE
-			|| r.reserved.get(owner).copied().unwrap_or(0) >= OWNER_ACTIVE
-		{
-			bail!("async request concurrency unavailable; existing keys and receipts remain queryable");
-		}
 		*r.reserved.entry(owner.into()).or_default() += 1;
 		Ok(Self {
 			owner: owner.into(),
@@ -557,9 +548,6 @@ fn store(root: &Path) -> Result<File> {
 		}
 		Some(_) => {}
 		None => {
-			if pins.len() >= 128 {
-				bail!("async root namespace bound exceeded");
-			}
 			pins.insert(root.into(), (metadata.dev(), metadata.ino()));
 		}
 	}
@@ -689,16 +677,25 @@ fn locked_store(root: &Path) -> Result<(File, MetadataLock)> {
 	}
 	Ok((dir, MetadataLock(lock)))
 }
-#[cfg(unix)]
+#[cfg(all(test, unix))]
 fn names(dir: &File) -> Result<Vec<String>> {
 	names_impl(dir, true)
 }
-#[cfg(unix)]
+#[cfg(all(test, unix))]
 fn record_names(dir: &File) -> Result<Vec<String>> {
 	names_impl(dir, false)
 }
-#[cfg(unix)]
+#[cfg(all(test, unix))]
 fn names_impl(dir: &File, root: bool) -> Result<Vec<String>> {
+	let mut names = Vec::new();
+	for_each_name(dir, root, |name| {
+		names.push(name.to_owned());
+		Ok(())
+	})?;
+	Ok(names)
+}
+#[cfg(unix)]
+fn for_each_name(dir: &File, root: bool, mut visit: impl FnMut(&str) -> Result<()>) -> Result<()> {
 	use std::os::fd::AsRawFd;
 	let scan = open_at(dir, ".", libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
 	let fd = unsafe { libc::dup(scan.as_raw_fd()) };
@@ -721,7 +718,6 @@ fn names_impl(dir: &File, root: bool) -> Result<Vec<String>> {
 		}
 	}
 	let guard = Stream(stream);
-	let mut result = Vec::new();
 	loop {
 		#[cfg(target_os = "linux")]
 		let errno = unsafe { libc::__errno_location() };
@@ -759,18 +755,15 @@ fn names_impl(dir: &File, root: bool) -> Result<Vec<String>> {
 				continue;
 			}
 			// Incomplete publication is an explicit refusal, never silently treated absent.
-			if result.len() >= MAX_GLOBAL_KEYS
-				|| !name.ends_with(".json")
-				|| !valid_id(&name[..name.len().saturating_sub(5)])
-			{
+			if !name.ends_with(".json") || !valid_id(&name[..name.len().saturating_sub(5)]) {
 				bail!("async key registry unavailable; administrator review required");
 			}
-			result.push(name);
+			visit(&name)?;
 		}
 	}
-	Ok(result)
+	Ok(())
 }
-#[cfg(unix)]
+#[cfg(all(test, unix))]
 fn bindings(dir: &File) -> Result<Vec<Binding>> {
 	let occupancy = open_at(dir, ".occupied", libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
 	let intents = open_at(dir, ".intents", libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
@@ -821,6 +814,136 @@ fn bindings(dir: &File) -> Result<Vec<Binding>> {
 	}
 	Ok(result)
 }
+#[cfg(unix)]
+#[derive(Clone, PartialEq, Eq)]
+struct DirectoryStamp {
+	device: u64,
+	inode: u64,
+	modified: (i64, i64),
+	changed: (i64, i64),
+}
+#[cfg(unix)]
+#[derive(Clone, PartialEq, Eq)]
+struct NamespaceStamp([DirectoryStamp; 4]);
+#[cfg(unix)]
+static NAMESPACE_CACHE: OnceLock<Mutex<VecDeque<NamespaceStamp>>> = OnceLock::new();
+
+#[cfg(unix)]
+fn namespace_stamp(directory: &File) -> Result<NamespaceStamp> {
+	use std::os::unix::fs::MetadataExt;
+	fn stamp(directory: &File) -> Result<DirectoryStamp> {
+		private_dir(directory)?;
+		let metadata = directory.metadata()?;
+		Ok(DirectoryStamp {
+			device: metadata.dev(),
+			inode: metadata.ino(),
+			modified: (metadata.mtime(), metadata.mtime_nsec()),
+			changed: (metadata.ctime(), metadata.ctime_nsec()),
+		})
+	}
+	let occupied = open_at(
+		directory,
+		".occupied",
+		libc::O_RDONLY | libc::O_DIRECTORY,
+		0,
+	)?;
+	let intents = open_at(directory, ".intents", libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+	let outcomes = open_at(
+		directory,
+		".outcomes",
+		libc::O_RDONLY | libc::O_DIRECTORY,
+		0,
+	)?;
+	Ok(NamespaceStamp([
+		stamp(directory)?,
+		stamp(&occupied)?,
+		stamp(&intents)?,
+		stamp(&outcomes)?,
+	]))
+}
+#[cfg(unix)]
+fn cache_namespace(directory: &File) -> Result<()> {
+	let stamp = namespace_stamp(directory)?;
+	let mut cache = NAMESPACE_CACHE
+		.get_or_init(|| Mutex::new(VecDeque::new()))
+		.lock()
+		.map_err(|_| anyhow!("async namespace cache unavailable"))?;
+	cache.retain(|old| (old.0[0].device, old.0[0].inode) != (stamp.0[0].device, stamp.0[0].inode));
+	// This only bounds disposable validation-cache memory. Durable keys, active
+	// futures, and newly eligible requests are never counted against this budget.
+	if cache.len() >= 16 {
+		cache.pop_front();
+	}
+	cache.push_back(stamp);
+	Ok(())
+}
+#[cfg(unix)]
+fn validate_namespace(directory: &File) -> Result<()> {
+	let before = namespace_stamp(directory)?;
+	if NAMESPACE_CACHE
+		.get_or_init(|| Mutex::new(VecDeque::new()))
+		.lock()
+		.map_err(|_| anyhow!("async namespace cache unavailable"))?
+		.iter()
+		.any(|stamp| *stamp == before)
+	{
+		return Ok(());
+	}
+	// Only a cold/external namespace change needs a complete inventory. Validate
+	// both directions by exact filenames, without collecting lifetime history.
+	let intents = open_at(directory, ".intents", libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+	let occupied = open_at(
+		directory,
+		".occupied",
+		libc::O_RDONLY | libc::O_DIRECTORY,
+		0,
+	)?;
+	let outcomes = open_at(
+		directory,
+		".outcomes",
+		libc::O_RDONLY | libc::O_DIRECTORY,
+		0,
+	)?;
+	for_each_name(directory, true, |name| {
+		binding_pair(directory, &name[..name.len() - 5])?
+			.ok_or_else(|| anyhow!("async key history incomplete; never replay"))?;
+		Ok(())
+	})?;
+	for_each_name(&occupied, false, |name| {
+		binding_pair(directory, &name[..name.len() - 5])?
+			.ok_or_else(|| anyhow!("async occupancy history incomplete; never replay"))?;
+		Ok(())
+	})?;
+	for_each_name(&intents, false, |name| {
+		let binding: Binding = read_json(&intents, name)?;
+		if !valid_binding(&binding)
+			|| name != format!("{}.json", binding.request_id)
+			|| binding_pair(directory, &binding.key_hash)?.as_ref() != Some(&binding)
+		{
+			bail!("async intent history incomplete; never replay");
+		}
+		Ok(())
+	})?;
+	for_each_name(&outcomes, false, |name| {
+		let outcome: Outcome = read_json(&outcomes, name)?;
+		if !valid_id(&outcome.request_id) || name != format!("{}.json", outcome.request_id) {
+			bail!("async outcome history identity unavailable");
+		}
+		let binding: Binding = read_json(&intents, &format!("{}.json", outcome.request_id))?;
+		if !valid_binding(&binding)
+			|| binding.request_id != outcome.request_id
+			|| binding_pair(directory, &binding.key_hash)?.as_ref() != Some(&binding)
+		{
+			bail!("async outcome has no complete historical binding; never replay");
+		}
+		check_outcome(&binding, &outcome)
+	})?;
+	if namespace_stamp(directory)? != before {
+		bail!("async namespace changed during validation; never replay");
+	}
+	cache_namespace(directory)
+}
+
 #[cfg(unix)]
 fn binding_pair(dir: &File, hash: &str) -> Result<Option<Binding>> {
 	let occupancy = open_at(dir, ".occupied", libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
@@ -874,10 +997,10 @@ fn lookup_key_at(
 		.lock()
 		.map_err(|_| anyhow!("async metadata unavailable"))?;
 	let (dir, _lease) = locked_store(root)?;
+	validate_namespace(&dir)?;
 	let Some(b) = binding_pair(&dir, hash)? else {
 		// Absence of both key markers is not a fresh permit while any independent
 		// historical intent/outcome remains inconsistent with this namespace.
-		bindings(&dir)?;
 		return Ok(None);
 	};
 	if !valid_binding(&b) {
@@ -909,20 +1032,22 @@ fn lookup_id_at(root: &Path, owner: &str, id: &str, policy: &str) -> Result<Opti
 		Err(_) => bail!("async journal unavailable"),
 	}
 	let (dir, _lease) = locked_store(root)?;
-	for b in bindings(&dir)? {
-		if b.request_id == id {
-			if b.owner != owner || b.policy_binding != policy {
-				bail!("async request unavailable to this scope or current policy");
-			}
-			let pair = binding_pair(&dir, &b.key_hash)?
-				.ok_or_else(|| anyhow!("async occupancy is not a fresh key"))?;
-			if pair != b {
-				bail!("async key binding changed");
-			}
-			return Ok(Some(b));
-		}
+	validate_namespace(&dir)?;
+	let intents = open_at(&dir, ".intents", libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+	let binding: Binding = match read_json(&intents, &format!("{id}.json")) {
+		Ok(binding) => binding,
+		Err(error) if missing(&error) => return Ok(None),
+		Err(_) => bail!("async intent unavailable to this scope"),
+	};
+	if !valid_binding(&binding)
+		|| binding.request_id != id
+		|| binding.owner != owner
+		|| binding.policy_binding != policy
+		|| binding_pair(&dir, &binding.key_hash)?.as_ref() != Some(&binding)
+	{
+		bail!("async request unavailable to this scope or current policy");
 	}
-	Ok(None)
+	Ok(Some(binding))
 }
 #[cfg(unix)]
 fn reserve_at(root: &Path, candidate: Binding) -> Result<Reservation> {
@@ -934,6 +1059,7 @@ fn reserve_at(root: &Path, candidate: Binding) -> Result<Reservation> {
 		.lock()
 		.map_err(|_| anyhow!("async metadata unavailable"))?;
 	let (dir, _lease) = locked_store(root)?;
+	validate_namespace(&dir)?;
 	let name = format!("{}.json", candidate.key_hash);
 	let base = root_at(root)?;
 	let anchor: Anchor = read_json(&base, ANCHOR_NAME)?;
@@ -957,20 +1083,11 @@ fn reserve_at(root: &Path, candidate: Binding) -> Result<Reservation> {
 		)?;
 		return Ok(Reservation::Existing(old));
 	}
-	let existing = bindings(&dir)?;
-	if existing
-		.iter()
-		.any(|b| b.request_id == candidate.request_id)
-	{
-		bail!("generated request identity already bound");
-	}
-	if existing.len() >= MAX_GLOBAL_KEYS
-		|| existing
-			.iter()
-			.filter(|b| b.owner == candidate.owner)
-			.count() >= MAX_OWNER_KEYS
-	{
-		bail!("async key retention full; new keys refused, existing keys never rebound");
+	let historical = open_at(&dir, ".intents", libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+	match read_json::<Binding>(&historical, &format!("{}.json", candidate.request_id)) {
+		Ok(_) => bail!("generated request identity already bound"),
+		Err(error) if missing(&error) => {}
+		Err(_) => bail!("generated request identity unavailable"),
 	}
 	let occupancy = open_at(&dir, ".occupied", libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
 	private_dir(&occupancy)?;
@@ -985,6 +1102,7 @@ fn reserve_at(root: &Path, candidate: Binding) -> Result<Reservation> {
 	)?;
 	publish(&occupancy, &name, &candidate)?;
 	publish(&dir, &name, &candidate)?;
+	cache_namespace(&dir)?;
 	Ok(Reservation::New(candidate))
 }
 #[cfg(unix)]
@@ -1019,6 +1137,7 @@ fn outcome_at(root: &Path, b: &Binding, state: Option<&str>) -> Result<Option<St
 		.lock()
 		.map_err(|_| anyhow!("async metadata unavailable"))?;
 	let (dir, _lease) = locked_store(root)?;
+	validate_namespace(&dir)?;
 	let saved =
 		binding_pair(&dir, &b.key_hash)?.ok_or_else(|| anyhow!("async occupancy missing"))?;
 	if saved != *b {
@@ -1059,6 +1178,7 @@ fn outcome_at(root: &Path, b: &Binding, state: Option<&str>) -> Result<Option<St
 				state: state.into(),
 			},
 		)?;
+		cache_namespace(&dir)?;
 	}
 	let o: Outcome = match read_json(&outcomes, &name) {
 		Ok(o) => o,
@@ -1185,6 +1305,7 @@ fn save_payload_at(root: &Path, b: &Binding, packet: &[u8]) -> Result<()> {
 		.lock()
 		.map_err(|_| anyhow!("operation metadata unavailable"))?;
 	let (dir, _lease) = locked_store(root)?;
+	validate_namespace(&dir)?;
 	let saved = binding_pair(&dir, &b.key_hash)?
 		.ok_or_else(|| anyhow!("operation occupancy unavailable"))?;
 	if saved != *b {
@@ -1246,6 +1367,7 @@ fn read_payload_at(root: &Path, b: &Binding) -> Result<Option<Vec<u8>>> {
 		.lock()
 		.map_err(|_| anyhow!("operation metadata unavailable"))?;
 	let (dir, _lease) = locked_store(root)?;
+	validate_namespace(&dir)?;
 	let saved = binding_pair(&dir, &b.key_hash)?
 		.ok_or_else(|| anyhow!("operation occupancy unavailable"))?;
 	if saved != *b {

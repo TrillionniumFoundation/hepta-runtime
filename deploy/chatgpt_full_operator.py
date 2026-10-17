@@ -19,6 +19,7 @@ import select
 import socket
 import threading
 import time
+import weakref
 from mcp_tool_contract import ToolContract,canonical
 
 MAX_REQUEST=4*1024*1024
@@ -28,6 +29,17 @@ MAX_RETIRED_IDS=4096
 MAX_CANCEL_WORKERS=2
 CANCEL_TIMEOUT=2
 SHUTDOWN_TIMEOUT=3
+KEEPALIVE_INTERVAL=120
+KEEPALIVE_TIMEOUT=2
+# These reads use explicit configured hosts or durable controller identities,
+# never the native session's workdir, view cache or transient owner identity.
+SESSION_INDEPENDENT_READS=frozenset(('host_list','host_health','effective_config',
+    'hardware_snapshot','host_processes','network_inspect','service_status',
+    'read_multiple_files','file_info','binary_read','process_list','process_status',
+    'process_read','process_wait','process_list_page','pty_list','pty_read','stream_handoff_list',
+    'stream_handoff_status','stream_handoff_read'))
+SCOPED_READS=frozenset(('search_list','search_results','request_history','request_status',
+    'request_result','request_archive','usage_stats','operation_status','operation_result'))
 METHODS={'initialize','server/discover','notifications/initialized','notifications/cancelled','ping','tools/list','tools/call'}
 MODERN_VERSION='2026-07-28'
 VERSION_KEY='io.modelcontextprotocol/protocolVersion'
@@ -125,6 +137,10 @@ class NativeSessionExpired(RuntimeError):
     """The verified loopback MCP endpoint rejected its former session identity."""
 
 
+class NativeSessionStateLost(RuntimeError):
+    """Preflight confirmed lost legacy state before any tool was submitted."""
+
+
 class RequestNotSubmitted(RuntimeError):
     """A locally cancelled intent never entered the tool HTTP submission."""
 
@@ -148,12 +164,17 @@ class NativeProxy:
         self._trace_lock=threading.Lock();self._owner=object();self._namespace=secrets.token_hex(16)
         self._active={};self._retired=set();self._closing=threading.Event()
         self._cancel_slots=threading.BoundedSemaphore(MAX_CANCEL_WORKERS);self._cancel_threads=set()
+        self._keepalive_stop=threading.Event();self._keepalive_thread=None
+        self._legacy_state_lost=False;self._credential_scope_proofs={}
 
     def _identity_digest(self,ident):
         # Fixed-size retired identities bound memory even for large integer IDs.
         return (type(ident),hashlib.sha256(canonical(ident)).digest())
 
     def _reserve(self,request,remember=False):
+        # Modern IDs correlate outstanding requests, not a process lifetime.
+        # Preserve legacy session tombstones independently of operation keys.
+        remember=remember and request_era(request)[0]!='modern'
         ident=request['id'];key=(type(ident),ident)
         with self._active_lock:
             if self._closing.is_set():return None,error(ident,-32603,'Facade input is closing',outcome='not_submitted',automatic_retry=False)
@@ -164,7 +185,9 @@ class NativeProxy:
                 pending_retirements=sum(c.remember for c in self._active.values())
                 if len(self._retired)+pending_retirements>=MAX_RETIRED_IDS:
                     return None,error(ident,-32603,'Bounded request identity history is full; reconnect with a new facade process',outcome='not_submitted',automatic_retry=False)
-            if len(self._active)>=MAX_ACTIVE_REQUESTS:
+            # HTTP instances opt out; stdio retains its queue's live budget.
+            active_limit=getattr(self,'active_request_limit',MAX_ACTIVE_REQUESTS)
+            if active_limit is not None and len(self._active)>=active_limit:
                 return None,error(ident,-32603,'Facade active request limit reached',outcome='not_submitted',automatic_retry=False)
             context=ActiveRequest(request,self._owner,remember);self._active[key]=context
             return context,None
@@ -187,7 +210,7 @@ class NativeProxy:
     def _valid_sid(value):
         return isinstance(value,str) and 0<len(value)<=512 and all(33<=ord(c)<=126 for c in value)
 
-    def exchange(self,request,binding=None,context=None,timeout=None,cancellation=None):
+    def exchange(self,request,binding=None,context=None,timeout=None,cancellation=None,absolute_timeout=None):
         body=canonical(request)
         selected_session,selected_protocol=binding if binding is not None else (self.session,self.protocol)
         headers={'Content-Type':'application/json','Accept':'application/json, text/event-stream','X-Hepta-Runtime-Token':self.token}
@@ -204,17 +227,18 @@ class NativeProxy:
                             or binding!=cancellation.binding or not self._valid_sid(selected_session)
                             or request.get('params')!={'requestId':cancellation.native_id}):
                         raise ValueError('cancellation is outside the active native session mapping')
-                # Socket timeouts bound inactivity, not a peer that trickles
-                # headers or body bytes forever. Cancellation has an absolute
-                # deadline, with at most two guarded connections in flight.
-                cancel_deadline=time.monotonic()+min(self.timeout,CANCEL_TIMEOUT)
+            # Socket timeouts only bound inactivity. Both cancellation and
+            # keepalive have a watchdog so trickled bytes cannot hold shutdown.
+            watchdog=min(self.timeout,CANCEL_TIMEOUT) if cancellation is not None else absolute_timeout
+            if watchdog is not None:
+                cancel_deadline=time.monotonic()+watchdog
                 def interrupt():
                     peer=cancel_socket[0] if cancel_socket else conn.sock
                     if peer is not None:
                         try:peer.shutdown(socket.SHUT_RDWR)
                         except OSError:pass
                     conn.close()
-                cancel_timer=threading.Timer(min(self.timeout,CANCEL_TIMEOUT),interrupt)
+                cancel_timer=threading.Timer(watchdog,interrupt)
                 cancel_timer.daemon=True;cancel_timer.start()
             if context is not None:
                 with self._active_lock:
@@ -262,13 +286,83 @@ class NativeProxy:
     def _verify_catalog(self,context=None):
         try:tools=self.internal('tools/list',{})
         except NativeSessionExpired:
-            if not self.initialized or self.legacy_ready or self._other_active(context):raise
+            legacy=self.legacy_ready
+            if legacy:self._legacy_state_lost=True
+            if (not self.initialized or self._other_active(context)
+                    or (legacy and not self._recoverable_read(context))):
+                if legacy and context is not None and context.request.get('method')=='tools/call':
+                    raise NativeSessionStateLost() from None
+                raise
             self._new_native_session({'protocolVersion':'2025-11-25','capabilities':{},
                 'clientInfo':{'name':'hepta-full-operator-adapter','version':'1'}},context)
+            if legacy:
+                # A safe host/registry read can continue, but the new transport
+                # cannot silently inherit a lost workdir or session-only IDs.
+                self.legacy_ready=True;self._legacy_state_lost=True
             return
         if 'error' in tools or not isinstance(tools.get('result'),dict) or tools['result'].get('nextCursor'):
             raise ValueError('cannot attest full native catalog')
         self.contract.verify(tools['result']['tools'])
+
+    @staticmethod
+    def _scope_family(name):
+        return name.split('_',1)[0] if isinstance(name,str) and name.startswith(('search_','request_','operation_','usage_')) else None
+
+    def _recoverable_read(self,context):
+        if context is None or context.request.get('method')!='tools/call':return False
+        name=context.request['params']['name']
+        if not self.contract.read_only(name):return False
+        if name in SESSION_INDEPENDENT_READS:return True
+        proof=self._credential_scope_proofs.get(self._scope_family(name))
+        return name in SCOPED_READS and proof==hashlib.sha256(self.token.encode('ascii')).digest()
+
+    def _observe_scope(self,name,result):
+        family=self._scope_family(name)
+        if family is None or result.get('isError',False) is not False:return
+        content=result.get('content')
+        if (not isinstance(content,list) or len(content)!=1 or not isinstance(content[0],dict)
+                or content[0].get('type')!='text'):return
+        try:value=json.loads(content[0]['text'])
+        except (ValueError,TypeError,KeyError):return
+        if not isinstance(value,dict):return
+        if (value.get('ownership_scope')=='authenticated_private_operator_credential'
+                and value.get('credential_metadata_resume') is True):
+            self._credential_scope_proofs[family]=hashlib.sha256(self.token.encode('ascii')).digest()
+        elif 'ownership_scope' in value or 'credential_metadata_resume' in value:
+            self._credential_scope_proofs.pop(family,None)
+
+    def _keepalive_once(self):
+        if not self._state_lock.acquire(blocking=False):return
+        try:
+            if self._closing.is_set() or not self.initialized or not self._valid_sid(self.session):return
+            binding=(self.session,self.protocol)
+            request={'jsonrpc':'2.0','id':self._next_native_id('keepalive'),'method':'ping','params':{}}
+            # Never reinitialize or replay anything after a heartbeat failure.
+            self.exchange(request,binding=binding,timeout=KEEPALIVE_TIMEOUT,
+                          absolute_timeout=KEEPALIVE_TIMEOUT)
+        except Exception:pass
+        finally:self._state_lock.release()
+
+    def _start_keepalive(self):
+        if self._keepalive_thread is not None or self._closing.is_set():return
+        reference=weakref.ref(self);stop=self._keepalive_stop
+        def run():
+            while not stop.wait(KEEPALIVE_INTERVAL):
+                proxy=reference()
+                if proxy is None:return
+                proxy._keepalive_once()
+                del proxy
+        self._keepalive_thread=threading.Thread(target=run,name='hepta-native-keepalive',daemon=True)
+        self._keepalive_thread.start()
+
+    def close(self,timeout=KEEPALIVE_TIMEOUT+0.5):
+        deadline=time.monotonic()+max(0,timeout)
+        self._closing.set();self._keepalive_stop.set()
+        worker=self._keepalive_thread
+        if worker is not None and worker is not threading.current_thread():
+            worker.join(max(0,deadline-time.monotonic()))
+        original=getattr(self,'legacy',None)
+        if isinstance(original,NativeProxy):original.close(timeout=max(0,deadline-time.monotonic()))
 
     def _new_native_session(self,init_params,context=None):
         with self._active_lock:
@@ -284,7 +378,7 @@ class NativeProxy:
         if not isinstance(native,dict) or not isinstance(native.get('protocolVersion'),str):raise ValueError('malformed native initialization')
         self.protocol=native['protocolVersion']
         self.exchange({'jsonrpc':'2.0','method':'notifications/initialized','params':{}})
-        self._verify_catalog(context);self.initialized=True
+        self._verify_catalog(context);self.initialized=True;self._start_keepalive()
         return native
 
     def _ensure_native(self,context=None):
@@ -342,6 +436,13 @@ class NativeProxy:
             'Request cancellation received before upstream tool submission',outcome='not_submitted',
             cancellation='request_intent_only',automatic_retry=False)
 
+    @staticmethod
+    def _state_lost(ident,era):
+        return error(ident,-32603 if era=='modern' else -32070,
+            'Native session-local state expired; initialize explicitly before this operation',
+            outcome='not_submitted',automatic_retry=False,
+            reason='native_session_state_lost',reinitialize_required=True)
+
     def _dispatch(self,request,context=None):
         invalid=valid_request(request,self.contract)
         if invalid is not None:return invalid
@@ -363,6 +464,7 @@ class NativeProxy:
                     native=self._new_native_session(request.get('params',{}),context)
                     result=dict(native);result['serverInfo']={'name':'hepta-runtime-full-operator','version':self.contract.catalog_sha256[:16]}
                     result['capabilities']={'tools':{'listChanged':False}};self.legacy_ready=True
+                    self._legacy_state_lost=False;self._credential_scope_proofs.clear()
                     return {'jsonrpc':'2.0','id':ident,'result':result}
                 if era=='modern':self._ensure_native(context)
                 if method=='server/discover':
@@ -374,7 +476,10 @@ class NativeProxy:
                     if era=='modern':return self._modern_result(ident,{**value,'cacheScope':'private','ttlMs':0})
                     return {'jsonrpc':'2.0','id':ident,'result':value}
                 if method=='ping' and era=='modern':return self._modern_result(ident,{})
-                if method=='tools/call':self._verify_catalog(context)
+                if method=='tools/call':
+                    if self._legacy_state_lost and not self._recoverable_read(context):
+                        return self._state_lost(ident,era)
+                    self._verify_catalog(context)
                 native_id=self._next_native_id('call')
                 binding=(self.session,self.protocol)
                 if context is not None:
@@ -387,6 +492,8 @@ class NativeProxy:
             # bounded cancellation workers can operate on the frozen binding.
             response=self.exchange(native_req,binding=binding,context=context)
             response={**response,'id':ident}
+            if method=='tools/call' and isinstance(response.get('result'),dict):
+                with self._state_lock:self._observe_scope(request['params']['name'],response['result'])
             if era=='modern' and 'error' not in response:
                 result=response.get('result')
                 if not isinstance(result,dict) or not isinstance(result.get('content'),list):raise ValueError('native tool response must contain content array')
@@ -394,6 +501,8 @@ class NativeProxy:
             return response
         except RequestNotSubmitted:
             return self._not_submitted(context,era)
+        except NativeSessionStateLost:
+            return self._state_lost(ident,era)
         except Exception:
             if method in ('initialize','tools/list','server/discover'):
                 with self._state_lock:self.initialized=False;self.legacy_ready=False
@@ -556,6 +665,7 @@ class NativeProxy:
             while not self._closing.is_set() and not reader_done.wait(.05):pass
         finally:
             self._closing.set()
+            self._keepalive_stop.set()
             deadline=time.monotonic()+SHUTDOWN_TIMEOUT
             shutdown_deadline[0]=deadline
             output_grace=min(0.5,SHUTDOWN_TIMEOUT/4)
@@ -578,6 +688,7 @@ class NativeProxy:
                     cancellation='request_intent_only',automatic_retry=False)
                 if self._finish(context):emit(value,deadline)
             output_stop.set();writer.join(max(0,deadline-time.monotonic()))
+            self.close(timeout=max(0,deadline-time.monotonic()))
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--stdio',action='store_true',required=True)

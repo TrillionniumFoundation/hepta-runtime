@@ -38,6 +38,7 @@ async fn main() -> Result<()> {
 			let runtime_enabled = runtime_config.is_some();
 			if let Some(config_path) = runtime_config.as_ref() {
 				let config = mcp::runtime::RuntimeConfig::load(config_path)?;
+				mcp::runtime::search_jobs::init_search_interpreters(&config)?;
 				mcp::runtime::init_runtime(config)?;
 			}
 

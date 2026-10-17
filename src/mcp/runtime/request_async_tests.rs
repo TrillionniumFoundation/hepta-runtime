@@ -1,8 +1,11 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! Private filesystem and parser fixtures only: no runtime initialization,
 //! SSH, live jobs, background dispatch, or business effects.
 use super::*;
+const LEGACY_OWNER_KEYS: usize = 128;
+const LEGACY_GLOBAL_KEYS: usize = 512;
 use serde_json::json;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -446,56 +449,58 @@ fn journal_parent_symlink_and_replaced_symlink_directory_are_refused() {
 }
 
 #[test]
-fn owner_capacity_preserves_existing_key_lookup_and_refuses_new_key_without_eviction() {
+fn completed_and_unknown_owner_keys_grow_beyond_128_without_rebinding_history() {
 	let root = private_root();
-	let first = fixture_binding(1000);
-	for offset in 0..MAX_OWNER_KEYS {
-		require_new(reserve_at(root.path(), fixture_binding(1000 + offset as u64)).unwrap());
+	let first = require_new(reserve_at(root.path(), fixture_binding(1000)).unwrap());
+	let before = graph_snapshot(root.path(), &first);
+	for number in 1001..=1160 {
+		let binding = require_new(reserve_at(root.path(), fixture_binding(number)).unwrap());
+		if number % 2 == 0 {
+			outcome_at(root.path(), &binding, Some("completed")).unwrap();
+		}
 	}
-	let names = journal_names(root.path());
-	assert_eq!(names.len(), MAX_OWNER_KEYS);
-	let mut retry = first.clone();
-	retry.request_id = fixture_id(999_100);
+	let mut repeat = first.clone();
+	repeat.request_id = fixture_id(900_100);
 	require_same(
-		&require_existing(reserve_at(root.path(), retry).unwrap()),
 		&first,
+		&require_existing(reserve_at(root.path(), repeat).unwrap()),
 	);
-	assert!(reserve_at(root.path(), fixture_binding(900_100)).is_err());
-	assert_eq!(journal_names(root.path()), names);
-	let by_key = lookup_key_at(
-		root.path(),
-		&first.owner,
-		&first.key_hash,
-		&first.request_hash,
-		&first.policy_binding,
-	)
-	.unwrap()
-	.unwrap();
-	require_same(&by_key, &first);
+	assert_eq!(outcome_at(root.path(), &first, None).unwrap(), None);
+	assert_eq!(graph_snapshot(root.path(), &first), before);
+	require_same(
+		&first,
+		&lookup_id_at(
+			root.path(),
+			&first.owner,
+			&first.request_id,
+			&first.policy_binding,
+		)
+		.unwrap()
+		.unwrap(),
+	);
 }
 
 #[test]
-fn global_capacity_preserves_existing_keys_and_rejects_new_owner_without_eviction() {
+fn global_key_history_grows_beyond_512_with_all_original_bindings_unchanged() {
 	let root = private_root();
-	let mut first = fixture_binding(2000);
-	first.owner = fixture_id(5000);
-	for offset in 0..MAX_GLOBAL_KEYS {
-		let mut candidate = fixture_binding(2000 + offset as u64);
-		candidate.owner = fixture_id(5000 + (offset / MAX_OWNER_KEYS) as u64);
-		require_new(reserve_at(root.path(), candidate).unwrap());
+	let mut originals = Vec::new();
+	for number in 2000..2000 + LEGACY_GLOBAL_KEYS as u64 + 29 {
+		let mut binding = fixture_binding(number);
+		binding.owner = fixture_id(100_000 + number % 5);
+		let binding = require_new(reserve_at(root.path(), binding).unwrap());
+		originals.push((binding.clone(), graph_snapshot(root.path(), &binding)));
 	}
-	let names = journal_names(root.path());
-	assert_eq!(names.len(), MAX_GLOBAL_KEYS);
-	let mut retry = first.clone();
-	retry.request_id = fixture_id(999_200);
-	require_same(
-		&require_existing(reserve_at(root.path(), retry).unwrap()),
-		&first,
-	);
-	let mut new_owner = fixture_binding(900_200);
-	new_owner.owner = fixture_id(90_000);
-	assert!(reserve_at(root.path(), new_owner).is_err());
-	assert_eq!(journal_names(root.path()), names);
+	for (binding, before) in originals {
+		assert_eq!(outcome_at(root.path(), &binding, None).unwrap(), None);
+		require_same(
+			&binding,
+			&require_existing(reserve_at(root.path(), binding.clone()).unwrap()),
+		);
+		assert_eq!(graph_snapshot(root.path(), &binding), before);
+	}
+	let mut fresh = fixture_binding(900_200);
+	fresh.owner = fixture_id(200_000);
+	require_new(reserve_at(root.path(), fresh).unwrap());
 }
 
 #[test]
@@ -639,64 +644,43 @@ fn cancel_parser_never_accepts_pid_host_signal_command_or_selected_owner() {
 
 #[test]
 #[serial_test::serial]
-fn one_owner_can_hold_four_actual_registry_slots_and_drop_releases_capacity() {
+fn one_owner_can_hold_64_registry_slots_and_drop_releases_tracking() {
 	let owner = next_id().unwrap();
-	let mut slots: Vec<_> = (0..OWNER_ACTIVE)
-		.map(|_| Slot::take(&owner).unwrap())
-		.collect();
-	assert!(Slot::take(&owner).is_err());
-	assert_eq!(
-		registry().unwrap().reserved.get(&owner).copied(),
-		Some(OWNER_ACTIVE)
-	);
-	drop(slots.pop().unwrap());
-	let replacement = Slot::take(&owner).unwrap();
-	drop(replacement);
+	let slots: Vec<_> = (0..64).map(|_| Slot::take(&owner).unwrap()).collect();
+	assert_eq!(registry().unwrap().reserved.get(&owner).copied(), Some(64));
 	drop(slots);
 	assert!(!registry().unwrap().reserved.contains_key(&owner));
 }
 
 #[test]
 #[serial_test::serial]
-fn two_owners_fill_eight_actual_registry_slots_but_existing_storage_stays_readable() {
-	let a = next_id().unwrap();
-	let b = next_id().unwrap();
-	let c = next_id().unwrap();
+fn many_active_futures_do_not_refuse_new_owners_or_existing_receipts() {
 	let root = private_root();
-	let mut candidate = fixture_binding(777_000);
-	candidate.owner = a.clone();
-	let existing = require_new(reserve_at(root.path(), candidate).unwrap());
-	let mut slots = Vec::new();
-	for owner in [&a, &b] {
-		for _ in 0..OWNER_ACTIVE {
-			slots.push(Slot::take(owner).unwrap());
-		}
-	}
-	assert_eq!(slots.len(), GLOBAL_ACTIVE);
-	assert!(Slot::take(&c).is_err());
-	let found = lookup_key_at(
-		root.path(),
-		&existing.owner,
-		&existing.key_hash,
-		&existing.request_hash,
-		&existing.policy_binding,
-	)
-	.unwrap()
-	.unwrap();
-	require_same(&found, &existing);
-	let mut retry = existing.clone();
-	retry.request_id = next_id().unwrap();
+	let existing = require_new(reserve_at(root.path(), fixture_binding(777_000)).unwrap());
+	let owners: Vec<_> = (0..3).map(|_| next_id().unwrap()).collect();
+	let slots: Vec<_> = owners
+		.iter()
+		.flat_map(|owner| (0..64).map(|_| Slot::take(owner).unwrap()))
+		.collect();
 	require_same(
-		&require_existing(reserve_at(root.path(), retry).unwrap()),
 		&existing,
+		&require_existing(reserve_at(root.path(), existing.clone()).unwrap()),
 	);
-	assert_eq!(journal_names(root.path()).len(), 1);
+	require_same(
+		&existing,
+		&lookup_id_at(
+			root.path(),
+			&existing.owner,
+			&existing.request_id,
+			&existing.policy_binding,
+		)
+		.unwrap()
+		.unwrap(),
+	);
 	drop(slots);
-	for owner in [&a, &b, &c] {
-		assert!(!registry().unwrap().reserved.contains_key(owner));
+	for owner in owners {
+		assert!(!registry().unwrap().reserved.contains_key(&owner));
 	}
-	drop(Slot::take(&c).unwrap());
-	assert!(!registry().unwrap().reserved.contains_key(&c));
 }
 
 fn occupancy_path(root: &Path, binding: &Binding) -> PathBuf {
@@ -736,10 +720,10 @@ fn deleted_primary_cannot_rebind_a_used_key_or_expose_old_identity() {
 }
 
 #[test]
-fn full_owner_occupancy_never_reclaims_capacity_when_one_primary_is_deleted() {
+fn missing_primary_refuses_until_the_owned_fixture_graph_is_complete() {
 	let root = private_root();
 	let first = fixture_binding(810_000);
-	for index in 0..MAX_OWNER_KEYS {
+	for index in 0..LEGACY_OWNER_KEYS {
 		require_new(reserve_at(root.path(), fixture_binding(810_000 + index as u64)).unwrap());
 	}
 	let primary = journal_path(root.path(), &first);
@@ -749,7 +733,7 @@ fn full_owner_occupancy_never_reclaims_capacity_when_one_primary_is_deleted() {
 		fs::read_dir(root.path().join(STORE_NAME).join(".occupied"))
 			.unwrap()
 			.count(),
-		MAX_OWNER_KEYS,
+		LEGACY_OWNER_KEYS,
 	);
 	assert!(reserve_at(root.path(), fixture_binding(900_500)).is_err());
 	let mut retry = first.clone();
@@ -758,10 +742,10 @@ fn full_owner_occupancy_never_reclaims_capacity_when_one_primary_is_deleted() {
 	assert!(!primary.exists());
 	assert!(!occupancy_path(root.path(), &fixture_binding(900_500)).exists());
 	// Restoring the exact missing primary repairs the owned fixture only; the
-	// occupied quota remains full and never grants a replacement key permit.
+	// the complete graph remains bound while a genuinely new key is eligible.
 	private_write(&primary, &original);
-	assert!(reserve_at(root.path(), fixture_binding(900_501)).is_err());
-	assert_eq!(journal_names(root.path()).len(), MAX_OWNER_KEYS);
+	require_new(reserve_at(root.path(), fixture_binding(900_501)).unwrap());
+	assert_eq!(journal_names(root.path()).len(), LEGACY_OWNER_KEYS + 1);
 }
 
 #[test]
@@ -918,6 +902,75 @@ fn audit_identity_must_match_all_four_reserved_identity_fields() {
 			_ => observed.accepted_unix_ms += 1,
 		}
 		assert!(check_audit_identity(&binding, &observed).is_err());
+	}
+}
+
+#[test]
+fn unknown_reused_receipt_never_claims_a_fresh_dispatch_or_result() {
+	let binding = fixture_binding(870_100);
+	let receipt: Value =
+		serde_json::from_str(&observed_admission_receipt(&binding, true, "unknown").unwrap())
+			.unwrap();
+	assert_eq!(receipt["request_id"], binding.request_id);
+	assert_eq!(receipt["async_state"], "unknown");
+	assert_eq!(receipt["this_call_dispatch_started"], false);
+	assert_eq!(receipt["original_request_replayed"], false);
+	assert_eq!(receipt["automatic_retry"], false);
+	assert!(receipt.get("outcome").is_none());
+}
+
+#[test]
+fn failed_outcome_keeps_original_schema_binding_and_reused_key_without_new_permit() {
+	let root = private_root();
+	let binding = require_new(reserve_at(root.path(), fixture_binding(870_101)).unwrap());
+	assert_eq!(
+		outcome_at(root.path(), &binding, Some("failed"))
+			.unwrap()
+			.as_deref(),
+		Some("failed")
+	);
+	let same = require_existing(reserve_at(root.path(), binding.clone()).unwrap());
+	require_same(&same, &binding);
+	let state = outcome_at(root.path(), &same, None).unwrap().unwrap();
+	let receipt: Value =
+		serde_json::from_str(&observed_admission_receipt(&same, true, &state).unwrap()).unwrap();
+	assert_eq!(receipt["request_id"], binding.request_id);
+	assert_eq!(receipt["async_state"], "failed");
+	assert_eq!(receipt["reused"], true);
+	assert_eq!(receipt["this_call_dispatch_started"], false);
+	assert_eq!(receipt["original_request_replayed"], false);
+	assert!(receipt.get("outcome").is_none());
+	let raw: Value = serde_json::from_slice(
+		&fs::read(
+			root.path()
+				.join(STORE_NAME)
+				.join(".outcomes")
+				.join(format!("{}.json", binding.request_id)),
+		)
+		.unwrap(),
+	)
+	.unwrap();
+	assert_eq!(raw.as_object().unwrap().len(), 5);
+	assert_eq!(raw["state"], "failed");
+}
+
+#[test]
+fn cancelled_future_reuse_never_claims_original_dispatch_was_not_submitted_or_stopped() {
+	let binding = fixture_binding(870_102);
+	let receipt: Value = serde_json::from_str(
+		&observed_admission_receipt(&binding, true, "cancelled_future").unwrap(),
+	)
+	.unwrap();
+	assert_eq!(receipt["async_state"], "cancelled_future");
+	assert_eq!(receipt["this_call_dispatch_started"], false);
+	assert_eq!(receipt["original_request_replayed"], false);
+	for unproven in [
+		"outcome",
+		"outcome_scope",
+		"remote_termination_confirmed",
+		"execution_admitted",
+	] {
+		assert!(receipt.get(unproven).is_none());
 	}
 }
 
@@ -1379,4 +1432,137 @@ fn metadata_lock_drop_unlocks_while_a_forked_child_holds_the_descriptor() {
 	child.assert_alive();
 	drop(next_lease);
 	drop(child);
+}
+
+#[test]
+fn old_capacity_environment_never_refuses_or_hides_durable_key_history() {
+	const OWNER_KEYS_ENV: &str = "HEPTA_ASYNC_RETENTION_OWNER_KEYS";
+	const GLOBAL_KEYS_ENV: &str = "HEPTA_ASYNC_RETENTION_GLOBAL_KEYS";
+	const CHILD: &str = "HEPTA_UNBOUNDED_JOURNAL_TEST_CHILD";
+	if std::env::var_os(CHILD).is_none() {
+		let status = std::process::Command::new(std::env::current_exe().unwrap())
+			.args(["--exact", "mcp::runtime::request_async::tests::old_capacity_environment_never_refuses_or_hides_durable_key_history", "--test-threads=1"])
+			.env(CHILD, "1").env(OWNER_KEYS_ENV, "2").env(GLOBAL_KEYS_ENV, "3")
+			.status().unwrap();
+		assert!(status.success());
+		return;
+	}
+	let root = private_root();
+	let first = require_new(reserve_at(root.path(), fixture_binding(3000)).unwrap());
+	let before = graph_snapshot(root.path(), &first);
+	for number in 3001..=3540 {
+		require_new(reserve_at(root.path(), fixture_binding(number)).unwrap());
+	}
+	require_same(
+		&first,
+		&lookup_id_at(
+			root.path(),
+			&first.owner,
+			&first.request_id,
+			&first.policy_binding,
+		)
+		.unwrap()
+		.unwrap(),
+	);
+	assert_eq!(graph_snapshot(root.path(), &first), before);
+	let directory = store(root.path()).unwrap();
+	assert_eq!(bindings(&directory).unwrap().len(), 541);
+}
+
+fn graph_snapshot(root: &Path, binding: &Binding) -> Vec<(u64, u64, u32, u64, Vec<u8>)> {
+	use std::os::unix::fs::MetadataExt;
+	let directory = root.join(STORE_NAME);
+	[
+		directory.join(format!("{}.json", binding.key_hash)),
+		directory
+			.join(".occupied")
+			.join(format!("{}.json", binding.key_hash)),
+		directory
+			.join(".intents")
+			.join(format!("{}.json", binding.request_id)),
+	]
+	.into_iter()
+	.map(|path| {
+		let metadata = path.symlink_metadata().unwrap();
+		(
+			metadata.dev(),
+			metadata.ino(),
+			metadata.mode(),
+			metadata.nlink(),
+			fs::read(path).unwrap(),
+		)
+	})
+	.collect()
+}
+
+#[test]
+fn concurrent_64_independent_keys_are_durable_and_old_unknown_is_never_reissued() {
+	let root = private_root();
+	let first = require_new(reserve_at(root.path(), fixture_binding(5000)).unwrap());
+	let before = graph_snapshot(root.path(), &first);
+	let barrier = std::sync::Arc::new(std::sync::Barrier::new(64));
+	let inputs: Vec<_> = (5001..5065).map(fixture_binding).collect();
+	let workers: Vec<_> = inputs
+		.into_iter()
+		.map(|binding| {
+			let path = root.path().to_path_buf();
+			let barrier = barrier.clone();
+			std::thread::spawn(move || {
+				barrier.wait();
+				require_new(reserve_at(&path, binding).unwrap())
+			})
+		})
+		.collect();
+	for worker in workers {
+		let binding = worker.join().unwrap();
+		require_same(
+			&binding,
+			&lookup_id_at(
+				root.path(),
+				&binding.owner,
+				&binding.request_id,
+				&binding.policy_binding,
+			)
+			.unwrap()
+			.unwrap(),
+		);
+		assert_eq!(outcome_at(root.path(), &binding, None).unwrap(), None);
+	}
+	assert_eq!(graph_snapshot(root.path(), &first), before);
+	require_same(
+		&first,
+		&require_existing(reserve_at(root.path(), first.clone()).unwrap()),
+	);
+	assert_eq!(outcome_at(root.path(), &first, None).unwrap(), None);
+}
+
+#[test]
+fn validation_cache_eviction_preserves_old_unknown_identity_and_accepts_new_keys() {
+	let first_root = private_root();
+	let first = require_new(reserve_at(first_root.path(), fixture_binding(7000)).unwrap());
+	let before = graph_snapshot(first_root.path(), &first);
+	let mut roots = Vec::new();
+	for _ in 0..20 {
+		let root = private_root();
+		require_new(reserve_at(root.path(), fixture_binding(7000)).unwrap());
+		roots.push(root);
+	}
+	require_same(
+		&first,
+		&lookup_id_at(
+			first_root.path(),
+			&first.owner,
+			&first.request_id,
+			&first.policy_binding,
+		)
+		.unwrap()
+		.unwrap(),
+	);
+	require_same(
+		&first,
+		&require_existing(reserve_at(first_root.path(), first.clone()).unwrap()),
+	);
+	require_new(reserve_at(first_root.path(), fixture_binding(7001)).unwrap());
+	assert_eq!(graph_snapshot(first_root.path(), &first), before);
+	assert_eq!(outcome_at(first_root.path(), &first, None).unwrap(), None);
 }

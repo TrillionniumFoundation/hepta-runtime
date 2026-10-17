@@ -110,6 +110,19 @@ pub struct ProcessListParams {
 	pub host: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProcessListPageParams {
+	#[serde(default)]
+	pub host: Option<String>,
+	/// Opaque continuation from this exact registry snapshot. Changes require a fresh first page.
+	#[serde(default)]
+	pub cursor: Option<String>,
+	/// At most 128 identities per page, additionally bounded to a 64 KiB wire response.
+	#[serde(default)]
+	pub limit: Option<u16>,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct JobRecord {
 	#[serde(default)]
@@ -1471,6 +1484,15 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	validate_start(&params)?;
 	let _host_start_lock = start_lock(&params.host)?;
 	let _start_guard = _host_start_lock.lock().await;
+	// Cross-process owner fence: retain the shared admission lock from
+	// idempotency lookup through durable intent, launch and response.
+	let _owner_admission = super::effect_owner_fence::admit_new_effect().await?;
+	// The freshly promoted controller must not relaunch a process_start key
+	// previously accepted by V4. Perform the private predecessor lookup while
+	// the shared epoch-bound admission lock is held, BEFORE any new job ID or
+	// launch intent is allocated. Unknown/corrupt old history fails closed.
+	_owner_admission
+		.require_new_process_identity(&params.host, params.idempotency_key.as_deref())?;
 	let request_fingerprint = fingerprint(&params);
 	if let Some(key) = params.idempotency_key.as_deref() {
 		if let Some(mut existing) = find_idempotent(&params.host, key)? {
@@ -1676,6 +1698,317 @@ pub fn list_jobs(params: ProcessListParams) -> Result<String> {
 	job_inventory_response(&records)
 }
 
+/// The old unpaginated API remains unchanged; this API never silently truncates it.
+pub fn list_jobs_page(params: ProcessListPageParams) -> Result<String> {
+	if let Some(host) = params.host.as_deref() {
+		runtime_config()?.host(host)?;
+	}
+	let records = inventory_records_at(&runtime_config()?.state_dir, InventoryLimits::default())?;
+	let mut rows: Vec<Value> = records
+		.into_iter()
+		.filter(|record| params.host.as_ref().is_none_or(|host| &record.host == host))
+		.map(|record| {
+			json!({"id":record.id,"host":record.host,"created_unix_ms":record.created_unix_ms,
+			"execution_mode":record.execution_mode,"launch_state":record.launch_state})
+		})
+		.collect();
+	rows.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
+	let root = runtime_config()?.state_dir.to_string_lossy();
+	page_job_rows(&rows, &params, &root)
+}
+
+#[derive(Clone, Copy)]
+struct InventoryLimits {
+	records: usize,
+	bytes: u64,
+	record_bytes: u64,
+	time: Duration,
+}
+
+impl Default for InventoryLimits {
+	fn default() -> Self {
+		Self {
+			records: 65_536,
+			bytes: 128 * 1024 * 1024,
+			record_bytes: 4 * 1024 * 1024 + 64 * 1024,
+			time: Duration::from_secs(5),
+		}
+	}
+}
+
+#[cfg(unix)]
+fn inventory_records_at(root: &std::path::Path, limits: InventoryLimits) -> Result<Vec<JobRecord>> {
+	use std::fs::{File, Metadata};
+	use std::io::Read;
+	use std::os::fd::{AsRawFd, FromRawFd};
+	use std::os::unix::fs::MetadataExt;
+	use std::time::Instant;
+	let started = Instant::now();
+	let deadline = || -> Result<()> {
+		if started.elapsed() >= limits.time {
+			bail!("durable inventory source time budget exceeded; no partial inventory returned");
+		}
+		Ok(())
+	};
+	fn open_at(base: Option<&File>, component: &str, flags: i32) -> Result<File> {
+		let name = std::ffi::CString::new(component)?;
+		let fd = unsafe {
+			libc::openat(
+				base.map_or(libc::AT_FDCWD, AsRawFd::as_raw_fd),
+				name.as_ptr(),
+				flags | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+			)
+		};
+		if fd < 0 {
+			return Err(std::io::Error::last_os_error().into());
+		}
+		Ok(unsafe { File::from_raw_fd(fd) })
+	}
+	fn open_root(root: &std::path::Path) -> Result<File> {
+		let raw = root
+			.to_str()
+			.ok_or_else(|| anyhow::anyhow!("inventory root must be UTF-8"))?;
+		if !root.is_absolute() || raw.split('/').any(|part| matches!(part, "." | "..")) {
+			bail!("inventory root must be an explicit absolute path");
+		}
+		let mut base = open_at(None, "/", libc::O_RDONLY | libc::O_DIRECTORY)?;
+		for part in raw.split('/').filter(|part| !part.is_empty()) {
+			base = open_at(Some(&base), part, libc::O_RDONLY | libc::O_DIRECTORY)?;
+		}
+		let info = base.metadata()?;
+		if info.uid() != unsafe { libc::geteuid() } || info.mode() & 0o077 != 0 {
+			bail!("durable inventory root must be private and account-owned");
+		}
+		Ok(base)
+	}
+	fn stamp(info: &Metadata) -> (u64, u64, u32, u32, u64, u64, i64, i64, i64, i64) {
+		(
+			info.dev(),
+			info.ino(),
+			info.uid(),
+			info.mode(),
+			info.nlink(),
+			info.len(),
+			info.mtime(),
+			info.mtime_nsec(),
+			info.ctime(),
+			info.ctime_nsec(),
+		)
+	}
+	fn directory_identity(info: &Metadata) -> (u64, u64, u32, u32) {
+		(info.dev(), info.ino(), info.uid(), info.mode())
+	}
+	fn entries(
+		base: &File,
+		maximum: usize,
+		check: &impl Fn() -> Result<()>,
+	) -> Result<Vec<String>> {
+		// A new file description keeps repeated membership scans independent.
+		let scan = open_at(Some(base), ".", libc::O_RDONLY | libc::O_DIRECTORY)?;
+		let fd = unsafe { libc::dup(scan.as_raw_fd()) };
+		if fd < 0 {
+			return Err(std::io::Error::last_os_error().into());
+		}
+		let pointer = unsafe { libc::fdopendir(fd) };
+		if pointer.is_null() {
+			unsafe { libc::close(fd) };
+			return Err(std::io::Error::last_os_error().into());
+		}
+		struct Stream(*mut libc::DIR);
+		impl Drop for Stream {
+			fn drop(&mut self) {
+				unsafe { libc::closedir(self.0) };
+			}
+		}
+		let stream = Stream(pointer);
+		let mut names = Vec::new();
+		loop {
+			check()?;
+			#[cfg(target_os = "linux")]
+			let error = unsafe { libc::__errno_location() };
+			#[cfg(target_os = "macos")]
+			let error = unsafe { libc::__error() };
+			#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+			{
+				bail!("bounded inventory directory scans require Linux or macOS");
+			}
+			#[cfg(any(target_os = "linux", target_os = "macos"))]
+			{
+				unsafe { *error = 0 };
+				let item = unsafe { libc::readdir(stream.0) };
+				if item.is_null() {
+					if unsafe { *error } != 0 {
+						return Err(std::io::Error::last_os_error().into());
+					}
+					break;
+				}
+				let value =
+					unsafe { std::ffi::CStr::from_ptr((*item).d_name.as_ptr()) }.to_str()?;
+				if matches!(value, "." | "..") {
+					continue;
+				}
+				if names.len() >= maximum.saturating_add(32) {
+					bail!("durable inventory source entry bound exceeded");
+				}
+				names.push(value.to_owned());
+			}
+		}
+		names.sort();
+		Ok(names
+			.into_iter()
+			.filter(|name| name.ends_with(".json"))
+			.collect())
+	}
+	let rootfd = open_root(root)?;
+	let root_identity = directory_identity(&rootfd.metadata()?);
+	let base = open_at(Some(&rootfd), "jobs", libc::O_RDONLY | libc::O_DIRECTORY)?;
+	let base_metadata = base.metadata()?;
+	if base_metadata.uid() != unsafe { libc::geteuid() } || base_metadata.mode() & 0o022 != 0 {
+		bail!("durable inventory directory must be account-owned and non-writable by others");
+	}
+	let base_identity = directory_identity(&base_metadata);
+	let names = entries(&base, limits.records, &deadline)?;
+	if names.len() > limits.records {
+		bail!("durable inventory source row bound exceeded");
+	}
+	let mut records = Vec::with_capacity(names.len());
+	let mut stamps = Vec::with_capacity(names.len());
+	let mut bytes = 0u64;
+	for name in &names {
+		deadline()?;
+		let id = name
+			.strip_suffix(".json")
+			.ok_or_else(|| anyhow::anyhow!("invalid inventory identity"))?;
+		if !valid_name(id) {
+			bail!("invalid durable inventory identity");
+		}
+		let mut file = open_at(Some(&base), name, libc::O_RDONLY)?;
+		let before = file.metadata()?;
+		if !before.is_file()
+			|| before.uid() != unsafe { libc::geteuid() }
+			|| before.mode() & 0o7777 != 0o600
+			|| before.nlink() != 1
+			|| before.len() == 0
+			|| before.len() > limits.record_bytes
+		{
+			bail!("durable inventory metadata inode or byte bound refused");
+		}
+		bytes = bytes
+			.checked_add(before.len())
+			.ok_or_else(|| anyhow::anyhow!("durable inventory byte overflow"))?;
+		if bytes > limits.bytes {
+			bail!("durable inventory total source byte bound exceeded");
+		}
+		let mut raw = Vec::with_capacity(before.len() as usize);
+		Read::by_ref(&mut file)
+			.take(before.len() + 1)
+			.read_to_end(&mut raw)?;
+		deadline()?;
+		if raw.len() as u64 != before.len() || stamp(&before) != stamp(&file.metadata()?) {
+			bail!("durable inventory metadata changed during observation");
+		}
+		let record: JobRecord =
+			serde_json::from_slice(&raw).context("corrupt durable inventory metadata")?;
+		if record.id != id || !valid_name(&record.host) {
+			bail!("durable inventory record identity mismatch");
+		}
+		stamps.push(stamp(&before));
+		records.push(record);
+	}
+	if entries(&base, limits.records, &deadline)? != names {
+		bail!("durable inventory membership changed");
+	}
+	for (name, before) in names.iter().zip(stamps) {
+		deadline()?;
+		let current = open_at(Some(&base), name, libc::O_RDONLY)?;
+		if stamp(&current.metadata()?) != before {
+			bail!("durable inventory metadata changed");
+		}
+	}
+	let held_base = open_at(Some(&rootfd), "jobs", libc::O_RDONLY | libc::O_DIRECTORY)?;
+	if directory_identity(&held_base.metadata()?) != base_identity
+		|| directory_identity(&base.metadata()?) != base_identity
+		|| directory_identity(&rootfd.metadata()?) != root_identity
+		|| directory_identity(&open_root(root)?.metadata()?) != root_identity
+	{
+		bail!("durable inventory root or directory changed");
+	}
+	deadline()?;
+	Ok(records)
+}
+
+#[cfg(not(unix))]
+fn inventory_records_at(
+	_root: &std::path::Path,
+	_limits: InventoryLimits,
+) -> Result<Vec<JobRecord>> {
+	bail!("bounded durable inventory requires Unix descriptor support")
+}
+
+fn page_job_rows(
+	rows: &[Value],
+	params: &ProcessListPageParams,
+	namespace: &str,
+) -> Result<String> {
+	let limit = params.limit.unwrap_or(128) as usize;
+	if !(1..=128).contains(&limit)
+		|| params
+			.cursor
+			.as_ref()
+			.is_some_and(|cursor| cursor.len() > 256)
+	{
+		bail!("invalid durable job inventory page");
+	}
+	let binding =
+		serde_json::to_vec(&json!({"namespace":namespace,"host":params.host,"rows":rows}))?;
+	let fingerprint = Sha256::digest(&binding)
+		.iter()
+		.map(|byte| format!("{byte:02x}"))
+		.collect::<String>();
+	let start = match params.cursor.as_deref() {
+		None => 0,
+		Some(cursor) => {
+			let (digest, id) = cursor
+				.split_once(':')
+				.ok_or_else(|| anyhow::anyhow!("invalid inventory cursor"))?;
+			if digest != fingerprint {
+				bail!("durable job inventory changed; restart from the first page");
+			}
+			rows.iter()
+				.position(|row| row["id"].as_str() == Some(id))
+				.ok_or_else(|| anyhow::anyhow!("inventory cursor unavailable"))?
+				+ 1
+		}
+	};
+	let mut end = (start + limit).min(rows.len());
+	loop {
+		let more = end < rows.len();
+		let next = if more {
+			Some(format!(
+				"{}:{}",
+				fingerprint,
+				rows[end - 1]["id"].as_str().unwrap_or_default()
+			))
+		} else {
+			None
+		};
+		let value = json!({"jobs":&rows[start..end],"total":rows.len(),"next_cursor":next,
+			"has_more":more,"inventory_complete":!more,"snapshot_sha256":fingerprint,
+			"status_authoritative":false,"snapshot_semantics":"registry_metadata_at_observation"});
+		let text = serde_json::to_string(&value)?;
+		let wire = rmcp::model::CallToolResult::success(vec![rmcp::model::ContentBlock::text(
+			text.clone(),
+		)]);
+		if serde_json::to_vec(&wire)?.len() <= 64 * 1024 {
+			return Ok(text);
+		}
+		if end <= start + 1 {
+			bail!("one durable job identity exceeds the inventory page budget");
+		}
+		end -= 1;
+	}
+}
+
 fn job_inventory_response(records: &[JobRecord]) -> Result<String> {
 	const MAX_INVENTORY_WIRE_BYTES: usize = 1024 * 1024;
 	let jobs: Vec<Value> = records
@@ -1703,3 +2036,7 @@ fn job_inventory_response(records: &[JobRecord]) -> Result<String> {
 #[cfg(test)]
 #[path = "jobs_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "jobs_pagination_tests.rs"]
+mod pagination_tests;

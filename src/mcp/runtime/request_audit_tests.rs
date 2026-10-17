@@ -29,6 +29,105 @@ fn root() -> tempfile::TempDir {
 }
 
 #[test]
+fn warm_hot_cache_does_not_reread_unrelated_payloads_but_exact_lookup_refuses_corruption() {
+	let temporary = root();
+	let session = owner('8');
+	let first = begin_at(temporary.path(), &session, "host_list").unwrap();
+	let id = first.request_id().to_owned();
+	finish_sync(first, AuditCompletion::Completed).unwrap();
+	let path = temporary.path().join(STORE_NAME).join(format!("{id}.json"));
+	let original = std::fs::read(&path).unwrap();
+	let guard = store_lock().unwrap();
+	let directory = open_store(temporary.path()).unwrap();
+	cache_hot(&directory, &entries(&directory).unwrap()).unwrap();
+	// An in-place edit does not change the parent directory stamp. New identities
+	// do not need this unrelated payload; reading its exact identity still refuses.
+	std::fs::write(&path, b"invalid historical payload").unwrap();
+	let (cached, _) = hot_snapshot(temporary.path(), &directory).unwrap();
+	assert_eq!(cached.len(), 1);
+	assert_eq!(cached[0].request_id, id);
+	drop(guard);
+	assert!(observation_at(temporary.path(), &session, &id).is_err());
+	assert_eq!(std::fs::read(&path).unwrap(), b"invalid historical payload");
+	std::fs::write(&path, original).unwrap();
+}
+
+#[test]
+fn hot_cache_revalidates_changed_namespace_instead_of_trusting_stale_membership() {
+	let temporary = root();
+	let session = owner('8');
+	let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+	finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	let unexpected = temporary.path().join(STORE_NAME).join("unexpected-entry");
+	std::fs::write(&unexpected, b"PRIVATE_NAMESPACE_SENTINEL").unwrap();
+	assert!(begin_at(temporary.path(), &session, "host_list").is_err());
+	assert_eq!(
+		std::fs::read(&unexpected).unwrap(),
+		b"PRIVATE_NAMESPACE_SENTINEL"
+	);
+	std::fs::remove_file(&unexpected).unwrap();
+	let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+	finish_sync(ticket, AuditCompletion::Completed).unwrap();
+}
+
+#[test]
+fn a_live_archive_scan_does_not_hold_the_global_admission_lock_between_records() {
+	let temporary = root();
+	let session = owner('8');
+	for _ in 0..8 {
+		let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+		finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	}
+	let archive = open_archive(temporary.path()).unwrap();
+	let (started_tx, started_rx) = std::sync::mpsc::channel();
+	let (continue_tx, continue_rx) = std::sync::mpsc::channel();
+	let scanner = std::thread::spawn(move || {
+		let mut first = true;
+		scan_archive(&archive, |_| {
+			if first {
+				first = false;
+				started_tx.send(()).unwrap();
+				continue_rx
+					.recv_timeout(std::time::Duration::from_secs(5))
+					.unwrap();
+			}
+			Ok(())
+		})
+		.unwrap();
+	});
+	started_rx
+		.recv_timeout(std::time::Duration::from_secs(5))
+		.unwrap();
+	let ticket = begin_at(temporary.path(), &session, "host_health").unwrap();
+	finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	continue_tx.send(()).unwrap();
+	scanner.join().unwrap();
+}
+
+#[test]
+fn disposable_hot_namespace_cache_eviction_never_refuses_new_or_old_roots() {
+	let roots: Vec<_> = (0..18).map(|_| root()).collect();
+	let session = owner('8');
+	let mut first = None;
+	for temporary in &roots {
+		let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+		let id = ticket.request_id().to_owned();
+		finish_sync(ticket, AuditCompletion::Completed).unwrap();
+		if first.is_none() {
+			let path = temporary
+				.path()
+				.join(ARCHIVE_NAME)
+				.join(format!("{id}.json"));
+			first = Some((path.clone(), std::fs::read(path).unwrap()));
+		}
+	}
+	let ticket = begin_at(roots[0].path(), &session, "host_health").unwrap();
+	finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	let (path, original) = first.unwrap();
+	assert_eq!(std::fs::read(path).unwrap(), original);
+}
+
+#[test]
 fn durable_unknown_maps_to_live_accepted_then_completed_without_sensitive_fields() {
 	let temporary = root();
 	let session = owner('1');
@@ -178,14 +277,128 @@ fn page_cursors_are_independent_and_evicted_rows_are_explicitly_rejected() {
 }
 
 #[test]
-fn active_retention_cannot_erase_outstanding_intents_and_global_growth_is_bounded() {
+fn archived_dispatch_and_read_pin_survive_hot_eviction_without_new_dispatch() {
+	let temporary = root();
+	let session = owner('5');
+	let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+	let identity = ticket.identity();
+	finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	for _ in 0..MAX_OWNER + 5 {
+		let ticket = begin_at(temporary.path(), &session, "view").unwrap();
+		finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	}
+	assert!(!temporary
+		.path()
+		.join(STORE_NAME)
+		.join(format!("{}.json", identity.request_id))
+		.exists());
+	let observed = observation_at(temporary.path(), &session, &identity.request_id).unwrap();
+	assert_eq!(observed.state, "completed");
+	assert_eq!(observed.identity.tool_name, "host_list");
+	assert_eq!(
+		observed.identity.accepted_unix_ms,
+		identity.accepted_unix_ms
+	);
+	validate_identity_at(temporary.path(), &identity).unwrap();
+	let read = begin_with_read_at(
+		temporary.path(),
+		&session,
+		"request_result",
+		Some(&identity.request_id),
+	)
+	.unwrap();
+	finish_sync(read, AuditCompletion::Completed).unwrap();
+	assert!(begin_with_read_at(
+		temporary.path(),
+		&owner('6'),
+		"request_status",
+		Some(&identity.request_id),
+	)
+	.is_err());
+	assert!(optional_observation_at(temporary.path(), &owner('6'), &identity.request_id).is_err());
+	assert!(begin_reserved_at(temporary.path(), identity.clone()).is_err());
+	let mut changed = identity;
+	changed.accepted_unix_ms += 1;
+	assert!(validate_identity_at(temporary.path(), &changed).is_err());
+}
+
+#[test]
+fn archived_lookup_refuses_corruption_identity_conflict_and_lost_anchor() {
+	for fault in [
+		"corrupt_archive",
+		"foreign_archive",
+		"changed_hot",
+		"lost_anchor",
+	] {
+		let temporary = root();
+		let session = owner('5');
+		let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+		let identity = ticket.identity();
+		finish_sync(ticket, AuditCompletion::Completed).unwrap();
+		let path = temporary
+			.path()
+			.join(ARCHIVE_NAME)
+			.join(format!("{}.json", identity.request_id));
+		match fault {
+			"corrupt_archive" => std::fs::write(path, b"broken").unwrap(),
+			"foreign_archive" | "changed_hot" => {
+				let path = if fault == "changed_hot" {
+					temporary
+						.path()
+						.join(STORE_NAME)
+						.join(format!("{}.json", identity.request_id))
+				} else {
+					path
+				};
+				let mut record: Record =
+					serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+				record.owner = owner('6');
+				std::fs::write(path, serde_json::to_vec(&record).unwrap()).unwrap();
+			}
+			"lost_anchor" => std::fs::remove_file(temporary.path().join(ARCHIVE_ANCHOR)).unwrap(),
+			_ => unreachable!(),
+		}
+		assert!(observation_at(temporary.path(), &session, &identity.request_id).is_err());
+		assert!(optional_observation_at(temporary.path(), &session, &identity.request_id).is_err());
+		assert!(validate_identity_at(temporary.path(), &identity).is_err());
+	}
+}
+
+#[test]
+fn archived_completion_wins_over_unknown_hot_after_failed_hot_publication() {
+	let temporary = root();
+	let session = owner('5');
+	let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+	let identity = ticket.identity();
+	let store = temporary.path().join(STORE_NAME);
+	std::fs::set_permissions(&store, std::fs::Permissions::from_mode(0o500)).unwrap();
+	assert!(finish_sync(ticket, AuditCompletion::Completed).is_err());
+	std::fs::set_permissions(&store, std::fs::Permissions::from_mode(0o700)).unwrap();
+	assert_eq!(
+		observation_at(temporary.path(), &session, &identity.request_id)
+			.unwrap()
+			.state,
+		"completed"
+	);
+}
+
+#[test]
+fn active_retention_never_erases_intents_or_refuses_archive_only_admission() {
 	let temporary = root();
 	let session = owner('6');
 	let mut tickets = Vec::new();
 	for _ in 0..MAX_OWNER {
 		tickets.push(begin_at(temporary.path(), &session, "process_start").unwrap());
 	}
-	assert!(begin_at(temporary.path(), &session, "process_start").is_err());
+	let overflow = begin_at(temporary.path(), &session, "process_start").unwrap();
+	assert!(!overflow.hot_present);
+	assert_eq!(
+		observation_at(temporary.path(), &session, overflow.request_id())
+			.unwrap()
+			.state,
+		"accepted"
+	);
+	finish_sync(overflow, AuditCompletion::Completed).unwrap();
 	assert_eq!(
 		entries(&open_store(temporary.path()).unwrap())
 			.unwrap()
@@ -442,5 +655,289 @@ fn v10_native_reserved_audit_refuses_effects_controls_and_invalid_authority_befo
 		}
 		assert!(begin_operation_reserved_at(temporary.path(), identity).is_err());
 		assert!(!temporary.path().join(STORE_NAME).exists());
+	}
+}
+
+#[test]
+fn archive_preserves_evicted_history_and_lifetime_counts_without_cross_owner_leakage() {
+	let temporary = root();
+	let session = owner('7');
+	let other = owner('8');
+	let mut ids = Vec::new();
+	for number in 0..MAX_OWNER + 3 {
+		let ticket = begin_at(temporary.path(), &session, "file_info").unwrap();
+		ids.push(ticket.request_id().to_owned());
+		finish_sync(
+			ticket,
+			if number == 0 {
+				AuditCompletion::Failed
+			} else {
+				AuditCompletion::Completed
+			},
+		)
+		.unwrap();
+	}
+	let ticket = begin_at(temporary.path(), &other, "host_list").unwrap();
+	finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	let stats: Value =
+		serde_json::from_str(&usage_stats_at(temporary.path(), &session).unwrap()).unwrap();
+	assert_eq!(stats["total_requests"], (MAX_OWNER + 3) as u64);
+	assert_eq!(stats["failed"], 1);
+	assert_eq!(stats["completed"], (MAX_OWNER + 2) as u64);
+	assert_eq!(stats["tool_counts"]["file_info"], (MAX_OWNER + 3) as u64);
+	assert!(stats["tool_counts"].get("host_list").is_none());
+	assert!(!serde_json::to_string(&stats).unwrap().contains(&other));
+	let mut cursor = None;
+	let mut seen = Vec::new();
+	loop {
+		let text = archive_history_at(
+			temporary.path(),
+			&session,
+			RequestHistoryParams {
+				after_id: cursor,
+				limit: Some(17),
+			},
+		)
+		.unwrap();
+		let value: Value = serde_json::from_str(&text).unwrap();
+		seen.extend(
+			value["requests"]
+				.as_array()
+				.unwrap()
+				.iter()
+				.map(|row| row["request_id"].as_str().unwrap().to_owned()),
+		);
+		cursor = value["next_after_id"].as_str().map(str::to_owned);
+		if cursor.is_none() {
+			break;
+		}
+	}
+	assert_eq!(seen.len(), ids.len());
+	assert!(ids.iter().all(|id| seen.contains(id)));
+	assert!(!temporary
+		.path()
+		.join(STORE_NAME)
+		.join(format!("{}.json", ids[0]))
+		.exists());
+	assert!(temporary
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!("{}.json", ids[0]))
+		.exists());
+	assert!(archive_history_at(
+		temporary.path(),
+		&other,
+		RequestHistoryParams {
+			after_id: Some(ids[0].clone()),
+			limit: None
+		}
+	)
+	.is_err());
+}
+
+#[test]
+fn archive_symlink_and_corrupt_metadata_refuse_without_disclosure_or_hot_deletion() {
+	let temporary = root();
+	let session = owner('7');
+	let ticket = begin_at(temporary.path(), &session, "file_info").unwrap();
+	let id = ticket.request_id().to_owned();
+	finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	let archive_file = temporary
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!("{id}.json"));
+	std::fs::remove_file(&archive_file).unwrap();
+	let outside = temporary.path().join("outside");
+	std::fs::write(&outside, "SECRET_SENTINEL").unwrap();
+	symlink(&outside, &archive_file).unwrap();
+	assert!(usage_stats_at(temporary.path(), &session).is_err());
+	assert!(observation_at(temporary.path(), &session, &id).is_err());
+	{
+		let _guard = store_lock().unwrap();
+		let stamp = archive_stamp(&open_store(temporary.path()).unwrap()).unwrap();
+		HOT_CACHE
+			.get()
+			.unwrap()
+			.lock()
+			.unwrap()
+			.retain(|entry| entry.stamp != stamp);
+	}
+	let independent = begin_at(temporary.path(), &session, "file_info").unwrap();
+	finish_sync(independent, AuditCompletion::Completed).unwrap();
+	for _ in 0..MAX_OWNER + 2 {
+		let independent = begin_at(temporary.path(), &session, "file_info").unwrap();
+		finish_sync(independent, AuditCompletion::Completed).unwrap();
+	}
+	assert!(temporary
+		.path()
+		.join(STORE_NAME)
+		.join(format!("{id}.json"))
+		.exists());
+	assert_eq!(
+		std::fs::read_to_string(&outside).unwrap(),
+		"SECRET_SENTINEL"
+	);
+}
+
+#[test]
+fn reserved_archived_identity_cannot_redispatch_after_hot_eviction() {
+	for tool in ["host_list", "file_info"] {
+		let temporary = root();
+		let identity = reserved_identity(tool);
+		let begin = |identity| {
+			if tool == "host_list" {
+				begin_reserved_at(temporary.path(), identity)
+			} else {
+				begin_operation_reserved_at(temporary.path(), identity)
+			}
+		};
+		let ticket = begin(identity.clone()).unwrap();
+		finish_sync(ticket, AuditCompletion::Completed).unwrap();
+		for _ in 0..MAX_OWNER {
+			let ticket = begin_at(temporary.path(), &identity.owner, "host_list").unwrap();
+			finish_sync(ticket, AuditCompletion::Completed).unwrap();
+		}
+		let filename = format!("{}.json", identity.request_id);
+		assert!(!temporary.path().join(STORE_NAME).join(&filename).exists());
+		let archived = std::fs::read(temporary.path().join(ARCHIVE_NAME).join(&filename)).unwrap();
+		let error = match begin(identity) {
+			Err(error) => error.to_string(),
+			Ok(_) => panic!("archived reserved identity must not acquire another dispatch ticket"),
+		};
+		assert!(error.contains("already archived"));
+		assert!(!temporary.path().join(STORE_NAME).join(&filename).exists());
+		assert_eq!(
+			archived,
+			std::fs::read(temporary.path().join(ARCHIVE_NAME).join(filename)).unwrap()
+		);
+	}
+}
+
+#[test]
+fn archive_growth_has_no_lifetime_admission_quota_and_keeps_original_bytes() {
+	let temporary = root();
+	let session = owner('7');
+	let first = begin_at(temporary.path(), &session, "host_list").unwrap();
+	let id = first.request_id().to_owned();
+	finish_sync(first, AuditCompletion::Completed).unwrap();
+	let path = temporary
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!("{id}.json"));
+	let original = std::fs::read(&path).unwrap();
+	for _ in 0..MAX_OWNER + 8 {
+		let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+		finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	}
+	assert_eq!(std::fs::read(&path).unwrap(), original);
+	assert_eq!(
+		observation_at(temporary.path(), &session, &id)
+			.unwrap()
+			.state,
+		"completed"
+	);
+	let usage: Value =
+		serde_json::from_str(&usage_stats_at(temporary.path(), &session).unwrap()).unwrap();
+	assert_eq!(usage["total_requests"], MAX_OWNER + 9);
+}
+
+#[test]
+fn unrelated_archive_corruption_is_not_a_lifetime_gate_but_reads_fail_closed() {
+	let temporary = root();
+	let session = owner('7');
+	let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+	finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	let unknown = temporary.path().join(ARCHIVE_NAME).join("unknown-entry");
+	std::fs::write(&unknown, b"PRIVATE_SENTINEL").unwrap();
+	assert!(usage_stats_at(temporary.path(), &session).is_err());
+	let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+	finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	assert_eq!(std::fs::read(&unknown).unwrap(), b"PRIVATE_SENTINEL");
+	std::fs::remove_file(&unknown).unwrap();
+	let usage: Value =
+		serde_json::from_str(&usage_stats_at(temporary.path(), &session).unwrap()).unwrap();
+	assert_eq!(usage["total_requests"], 2);
+}
+
+#[test]
+fn archive_recovers_verified_interrupted_link_publication_before_seed_reads() {
+	use std::os::unix::fs::MetadataExt;
+	let temporary = root();
+	let session = owner('7');
+	let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+	let identity = ticket.request_id().to_owned();
+	finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	let path = temporary
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!("{identity}.json"));
+	let staging = temporary
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!(".{identity}-{}.tmp", new_id().unwrap()));
+	std::fs::hard_link(&path, &staging).unwrap();
+	assert_eq!(std::fs::metadata(&path).unwrap().nlink(), 2);
+	let stats: Value =
+		serde_json::from_str(&usage_stats_at(temporary.path(), &session).unwrap()).unwrap();
+	assert_eq!(stats["total_requests"], 1);
+	assert_eq!(stats["completed"], 1);
+	assert!(!staging.exists());
+	assert_eq!(std::fs::metadata(&path).unwrap().nlink(), 1);
+	let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+	finish_sync(ticket, AuditCompletion::Completed).unwrap();
+}
+
+#[test]
+fn archive_root_or_anchor_removal_and_replacement_refuse_without_recreating_history() {
+	for replacement in ["missing", "replaced", "anchor-missing", "anchor-copy"] {
+		let temporary = root();
+		let session = owner('7');
+		let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+		let identity = ticket.request_id().to_owned();
+		finish_sync(ticket, AuditCompletion::Completed).unwrap();
+		let archive = temporary.path().join(ARCHIVE_NAME);
+		let held = temporary.path().join("held-original-archive");
+		match replacement {
+			"missing" => std::fs::rename(&archive, &held).unwrap(),
+			"replaced" => {
+				std::fs::rename(&archive, &held).unwrap();
+				std::fs::create_dir(&archive).unwrap();
+				std::fs::set_permissions(&archive, std::fs::Permissions::from_mode(0o700)).unwrap();
+			}
+			"anchor-missing" => {
+				std::fs::remove_file(temporary.path().join(ARCHIVE_ANCHOR)).unwrap()
+			}
+			_ => {
+				let target = root();
+				std::fs::copy(
+					temporary.path().join(ARCHIVE_ANCHOR),
+					target.path().join(ARCHIVE_ANCHOR),
+				)
+				.unwrap();
+				std::fs::set_permissions(
+					target.path().join(ARCHIVE_ANCHOR),
+					std::fs::Permissions::from_mode(0o600),
+				)
+				.unwrap();
+				assert!(open_archive(target.path()).is_err());
+				continue;
+			}
+		}
+		assert!(
+			usage_stats_at(temporary.path(), &session).is_err(),
+			"{replacement}"
+		);
+		assert!(
+			begin_at(temporary.path(), &session, "host_list").is_err(),
+			"{replacement}"
+		);
+		assert!(temporary
+			.path()
+			.join(STORE_NAME)
+			.join(format!("{identity}.json"))
+			.exists());
+		if replacement == "missing" {
+			assert!(!archive.exists());
+		}
 	}
 }
