@@ -38,6 +38,25 @@ A `writer_authority` row binds exactly one `v4`/`v11` writer, monotonically incr
 
 This is a database-only **cooperating-controller** model. The test-only initial-owner and transfer methods are **not** authenticated administrative operations. They do not establish that production V4/V11 or any other ingress uses the WAL ledger, do not drain already issued remote effects, and do not hold the real owner flock through a network submission. Until an independently authenticated shared effect fence encloses every production write ingress, this model must not be wired to live dispatch.
 
+## WAL inode and sidecar integrity hardening (isolated v4)
+
+The prototype now opens the SQLite database with `SQLITE_OPEN_NOFOLLOW` and
+checks existing `-wal` / `-shm` sidecars immediately before and after
+opening the database. Every present sidecar must be a regular, single-link,
+current-UID-owned `0600` file. Symlink, hardlink and wide-permission
+sidecars fail closed instead of being opened as authoritative WAL input.
+Two real filesystem regression tests passed for these cases and for a
+symlink-substituted main database file on disposable private state. After
+resolving a missing Cargo source-cache package and correcting one equivalent
+boolean assertion flagged by strict Clippy, the exact hardened source passed
+both full Rust regression and `cargo clippy --all-targets -- -D warnings`.
+
+This is a defense against common inode substitution and accidental unsafe
+permissions, not a complete same-UID adversarial filesystem isolation
+guarantee. Production promotion would still require a privileged effect-owner
+fence over all ingress, secure state roots, and a recoverable WAL/checkpoint
+and rollback policy that preserves unknown in-flight remote submissions.
+
 ## Boundaries — do not confuse with production readiness
 
 Tests model short SQLite transactions and 1/4/8/16/32 concurrent callers.
@@ -77,7 +96,7 @@ Batch 4/8/16/32 returned **8.490 / 14.356 / 9.777 / 8.099 ms**, respectively,
 with exact ID reuse on repeated input. All-or-nothing rollback tests for
 conflicting keys and duplicate job IDs passed, as did crash/reopen recovery.
 On the current WAL **v3** source, the complete locked offline Cargo suite passed:
-**684 Runtime tests, 0 failed, 14 ignored; 8 Jobctl tests, 0 failed**, on the checked WAL v4 source; see retained local `qualification-wal-v4-all-tests.log`.
+**687 Runtime tests, 0 failed, 14 ignored; 8 Jobctl tests, 0 failed**, on the checked WAL v4 plus SQLite-sidecar-hardening source; see retained local `qualification-wal-v4-sidecar-final-full-tests.log`. Strict Clippy final exit 0 is recorded in `qualification-wal-v4-sidecar-clippy-final.log`. Earlier v4 684/8 baseline and its original failure evidence remain preserved.
 Strict `cargo clippy --offline --locked --all-targets -- -D warnings` also
 passed (exit 0) on WAL v3 after resolving a missing Cargo cache package (`adler2`) with a locked `cargo fetch`. The initial offline Clippy invocation failed before any source check due to that missing package; the final strict check passed. `cargo fmt --all -- --check` and `git diff --check` passed.
 A normal-only Cargo dependency-tree check reports no `rusqlite` dependency:

@@ -196,9 +196,43 @@ fn require_current_writer(txn: &Transaction<'_>, proof: Option<&WriterBinding>) 
 	}
 }
 
+// SQLite may open a preexisting -wal or -shm inode during connect. A
+// substituted link or wide-mode sidecar must not be trusted as WAL state.
+#[cfg(unix)]
+fn validate_existing_sidecars(path: &Path) -> Result<()> {
+	use std::os::unix::fs::{MetadataExt, PermissionsExt};
+	for suffix in ["-wal", "-shm"] {
+		let mut name = path.as_os_str().to_os_string();
+		name.push(suffix);
+		let sidecar = PathBuf::from(name);
+		match fs::symlink_metadata(&sidecar) {
+			Ok(meta) => {
+				if !meta.is_file()
+					|| meta.file_type().is_symlink()
+					|| meta.uid() != unsafe { libc::geteuid() }
+					|| meta.nlink() != 1
+					|| meta.permissions().mode() & 0o7777 != 0o600
+				{
+					bail!("WAL sidecar inode or permissions unsafe");
+				}
+			}
+			Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+			Err(error) => return Err(error).context("WAL sidecar metadata unavailable"),
+		}
+	}
+	Ok(())
+}
+
 impl Ledger {
 	fn connect(path: &Path, creating: bool) -> Result<Connection> {
-		let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
+		#[cfg(unix)]
+		validate_existing_sidecars(path)?;
+		let connection = Connection::open_with_flags(
+			path,
+			OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NOFOLLOW,
+		)?;
+		#[cfg(unix)]
+		validate_existing_sidecars(path)?;
 		connection.busy_timeout(Duration::from_secs(20))?;
 		// Reopen must not reassert WAL mode under concurrent admissions.
 		let pragma = if creating {
@@ -1554,7 +1588,7 @@ mod tests {
 			}
 		);
 		assert!(stale.reserve_batch(&old_batch).is_err());
-		assert!(f.jobs.join("blocked-rog-id.json").exists() == false);
+		assert!(!f.jobs.join("blocked-rog-id.json").exists());
 	}
 
 	#[test]
@@ -1700,5 +1734,68 @@ mod tests {
 		assert!(new_v11
 			.reserve("rog", "crash-new", &digest, "bad-id")
 			.is_err());
+	}
+}
+
+#[cfg(all(test, unix))]
+mod sidecar_identity_tests {
+	use super::*;
+	use std::os::unix::fs::{symlink, PermissionsExt};
+
+	fn new_fixture() -> (tempfile::TempDir, PathBuf) {
+		let root = tempfile::tempdir().unwrap();
+		let jobs = root.path().join("jobs");
+		fs::create_dir(&jobs).unwrap();
+		fs::set_permissions(&jobs, fs::Permissions::from_mode(0o700)).unwrap();
+		let mut ledger = Ledger::create_private(root.path(), &jobs).unwrap();
+		assert_eq!(ledger.bootstrap_frozen().unwrap(), 0);
+		drop(ledger);
+		(root, jobs)
+	}
+
+	fn sidecar(db: &Path, suffix: &str) -> PathBuf {
+		let mut path = db.as_os_str().to_os_string();
+		path.push(suffix);
+		PathBuf::from(path)
+	}
+
+	#[test]
+	fn refuses_linked_or_wide_wal_and_shm_before_reopen() {
+		let (root, jobs) = new_fixture();
+		let db = root.path().join(DB_NAME);
+		let sentinel = root.path().join("unrelated-private-file");
+		fs::write(&sentinel, b"DO_NOT_CHANGE").unwrap();
+		fs::set_permissions(&sentinel, fs::Permissions::from_mode(0o600)).unwrap();
+		for suffix in ["-wal", "-shm"] {
+			let path = sidecar(&db, suffix);
+			assert!(!path.exists(), "closed WAL must checkpoint test fixture");
+			symlink(&sentinel, &path).unwrap();
+			assert!(Ledger::reopen(root.path(), &jobs).is_err());
+			fs::remove_file(&path).unwrap();
+
+			fs::hard_link(&sentinel, &path).unwrap();
+			assert!(Ledger::reopen(root.path(), &jobs).is_err());
+			fs::remove_file(&path).unwrap();
+
+			fs::write(&path, b"untrusted-sidecar").unwrap();
+			fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+			assert!(Ledger::reopen(root.path(), &jobs).is_err());
+			fs::remove_file(&path).unwrap();
+		}
+		assert_eq!(fs::read(&sentinel).unwrap(), b"DO_NOT_CHANGE");
+		assert!(Ledger::reopen(root.path(), &jobs).is_ok());
+	}
+
+	#[test]
+	fn sqlite_connection_no_follow_rejects_main_db_symlink() {
+		let (root, jobs) = new_fixture();
+		let db = root.path().join(DB_NAME);
+		let copy = root.path().join("private-db-copy");
+		fs::copy(&db, &copy).unwrap();
+		fs::set_permissions(&copy, fs::Permissions::from_mode(0o600)).unwrap();
+		fs::remove_file(&db).unwrap();
+		symlink(&copy, &db).unwrap();
+		assert!(Ledger::connect(&db, false).is_err());
+		assert!(Ledger::reopen(root.path(), &jobs).is_err());
 	}
 }
