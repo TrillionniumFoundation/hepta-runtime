@@ -1611,6 +1611,78 @@ mod tests {
 	}
 
 	#[test]
+	fn rollback_cannot_reuse_unkeyed_legacy_id_or_change_reserved_batch_identity() {
+		let f = Fixture::new();
+		let digest = "f".repeat(64);
+		f.original("unkeyed-original", "x230", None, None);
+		let mut first = f.bootstrap();
+		first.establish_first_writer("v4").unwrap();
+		let initial = [
+			ReservationRequest {
+				host: "rog",
+				key: "same-rog",
+				digest: &digest,
+				proposed_id: "original-rog-id",
+			},
+			ReservationRequest {
+				host: "mac",
+				key: "same-mac",
+				digest: &digest,
+				proposed_id: "original-mac-id",
+			},
+		];
+		assert!(first
+			.reserve_batch(&initial)
+			.unwrap()
+			.iter()
+			.all(|r| matches!(r, Reserve::Fresh(_))));
+		first.freeze_writer().unwrap();
+		assert_eq!(first.promote_frozen_writer("v11").unwrap(), 2);
+		let mut successor = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		successor.bind_writer("v11", 2).unwrap();
+		let wrong = [
+			ReservationRequest {
+				host: "rog",
+				key: "same-rog",
+				digest: &digest,
+				proposed_id: "unkeyed-original",
+			},
+			ReservationRequest {
+				host: "main",
+				key: "new-main",
+				digest: &digest,
+				proposed_id: "unkeyed-original",
+			},
+		];
+		assert!(successor.reserve_batch(&wrong).is_err());
+		let replayed = successor.reserve_batch(&initial).unwrap();
+		assert_eq!(
+			replayed[0],
+			Reserve::Existing {
+				job_id: "original-rog-id".into(),
+				phase: "reserved".into()
+			}
+		);
+		assert_eq!(
+			replayed[1],
+			Reserve::Existing {
+				job_id: "original-mac-id".into(),
+				phase: "reserved".into()
+			}
+		);
+		successor.freeze_writer().unwrap();
+		assert_eq!(successor.promote_frozen_writer("v4").unwrap(), 3);
+		let mut restored = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		restored.bind_writer("v4", 3).unwrap();
+		assert!(restored.reserve_batch(&wrong).is_err());
+		assert!(restored
+			.reserve_batch(&initial)
+			.unwrap()
+			.iter()
+			.all(|r| matches!(r, Reserve::Existing { .. })));
+	}
+
+	#[test]
 	fn frozen_authority_remains_closed_after_controller_restart() {
 		let f = Fixture::new();
 		let mut v4 = f.bootstrap();

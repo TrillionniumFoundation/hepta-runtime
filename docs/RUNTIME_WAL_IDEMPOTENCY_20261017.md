@@ -56,7 +56,7 @@ owner epoch binding, and rollback that never issues a second job ID.
 
 Exact source branch: `codex/runtime-wal-idempotency-20261017`,
 stacked on PR #14 commit `9bf3e40cb38b1dc43720d26639df989b36d922e1`.
-Current WAL v3 **focused** regression: **21 passed, 0 failed, 1 ignored**. The additions cover remote-submission single-use intent, crash/reopen recovery, six-host batch staging, the formerly failing unkeyed-legacy-ID collision, atomic batch rollback, frozen-owner rejection, V4→V11→V4 epoch transfer, and prevention of cross-epoch remote-intent submission. The ignored case is the independently invokable 23,347-row synthetic benchmark.
+Current WAL v4 **focused** regression: **23 passed, 0 failed, 1 ignored**, including new original-ID preservation across V4→V11→V4 batch rollback and refusal to reuse an unkeyed legacy ID after transfer. The additions cover remote-submission single-use intent, crash/reopen recovery, six-host batch staging, the formerly failing unkeyed-legacy-ID collision, atomic batch rollback, frozen-owner rejection, V4→V11→V4 epoch transfer, and prevention of cross-epoch remote-intent submission. The ignored case is the independently invokable 23,347-row synthetic benchmark.
 **WAL v3 actual-scale isolated replay:** the explicitly invoked 23,347-row
 synthetic import completed PASS with **1,889.296 ms** to seal the
 all-original-ID SQLite index, exact-key lookup **P50 0.0823 ms** and
@@ -77,7 +77,7 @@ Batch 4/8/16/32 returned **8.490 / 14.356 / 9.777 / 8.099 ms**, respectively,
 with exact ID reuse on repeated input. All-or-nothing rollback tests for
 conflicting keys and duplicate job IDs passed, as did crash/reopen recovery.
 On the current WAL **v3** source, the complete locked offline Cargo suite passed:
-**682 Runtime tests, 0 failed, 14 ignored; 8 Jobctl tests, 0 failed**.
+**684 Runtime tests, 0 failed, 14 ignored; 8 Jobctl tests, 0 failed**, on the checked WAL v4 source; see retained local `qualification-wal-v4-all-tests.log`.
 Strict `cargo clippy --offline --locked --all-targets -- -D warnings` also
 passed (exit 0) on WAL v3 after resolving a missing Cargo cache package (`adler2`) with a locked `cargo fetch`. The initial offline Clippy invocation failed before any source check due to that missing package; the final strict check passed. `cargo fmt --all -- --check` and `git diff --check` passed.
 A normal-only Cargo dependency-tree check reports no `rusqlite` dependency:
