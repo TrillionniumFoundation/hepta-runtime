@@ -10,9 +10,9 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-const VERSION: &str = "hepta-idempotency-ledger-v1";
+const VERSION: &str = "hepta-idempotency-ledger-v2";
 const MAX_JOB_BYTES: u64 = 1024 * 1024;
-const DB_NAME: &str = "idempotency-v1.sqlite3";
+const DB_NAME: &str = "idempotency-v2.sqlite3";
 
 #[derive(Debug, Deserialize)]
 struct LegacyJob {
@@ -20,12 +20,22 @@ struct LegacyJob {
 	host: String,
 	idempotency_key: Option<String>,
 	request_digest: Option<String>,
+	#[serde(default)]
+	launch_state: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 enum Reserve {
 	Fresh(String),
 	Existing { job_id: String, phase: String },
+}
+
+/// A single, persistently fenced remote attempt. The caller must submit only
+/// when this ticket was freshly issued; UNKNOWN is never a retry permit.
+#[derive(Debug, PartialEq, Eq)]
+#[must_use]
+struct SubmitOnce {
+	job_id: String,
 }
 
 #[derive(Clone, Copy)]
@@ -203,6 +213,10 @@ impl Ledger {
                 phase TEXT NOT NULL CHECK (phase IN
                   ('legacy','reserved','record_saved','submission_unknown')),
                 PRIMARY KEY (host, idem_key)
+             ) WITHOUT ROWID;
+             CREATE TABLE original_job_ids (
+                job_id TEXT PRIMARY KEY,
+                host TEXT NOT NULL, idem_key TEXT
              ) WITHOUT ROWID;",
 		)?;
 		let root_path = fs::canonicalize(root)?;
@@ -302,6 +316,17 @@ impl Ledger {
 			}
 			let original = read_original(&entry.path())?;
 			scanned += 1;
+			// Preserve every historical ID, including unkeyed jobs. Otherwise
+			// a new keyed reservation could reuse an old unkeyed remote ID.
+			txn.execute(
+				"INSERT INTO original_job_ids(job_id,host,idem_key) VALUES (?1,?2,?3)",
+				params![
+					original.id.as_str(),
+					original.host.as_str(),
+					original.idempotency_key.as_deref()
+				],
+			)
+			.context("duplicate original job ID; bootstrap refused")?;
 			if let Some(key) = original.idempotency_key {
 				txn.execute(
 					"INSERT INTO identities(host,idem_key,job_id,digest,phase)
@@ -388,6 +413,25 @@ impl Ledger {
 			if bound.as_deref() != Some(request.digest) {
 				bail!("idempotency key already bound to another or unknown digest");
 			}
+			if fresh == 1 {
+				// The original-ID registry includes historical UNKEYED jobs.
+				// Collisions roll back this entire batch, not just this row.
+				txn.execute(
+					"INSERT INTO original_job_ids(job_id,host,idem_key) VALUES (?1,?2,?3)",
+					params![&id, request.host, request.key],
+				)
+				.context("job ID already reserved by an existing original identity")?;
+			}
+			let (owner_host, owner_key): (String, Option<String>) = txn
+				.query_row(
+					"SELECT host, idem_key FROM original_job_ids WHERE job_id=?1",
+					params![&id],
+					|row| Ok((row.get(0)?, row.get(1)?)),
+				)
+				.context("original job-ID registry binding unavailable")?;
+			if owner_host != request.host || owner_key.as_deref() != Some(request.key) {
+				bail!("job ID owner differs from the exact host/key binding");
+			}
 			results.push(if fresh == 1 {
 				Reserve::Fresh(id)
 			} else {
@@ -405,8 +449,9 @@ impl Ledger {
 			|| job.host != host
 			|| job.idempotency_key.as_deref() != Some(key)
 			|| job.request_digest.as_deref() != Some(digest)
+			|| job.launch_state.as_deref() != Some("pending")
 		{
-			bail!("saved original record not bound to reserved identity");
+			bail!("saved original record not bound to a pending reserved identity");
 		}
 		let txn = self
 			.connection
@@ -414,7 +459,11 @@ impl Ledger {
 		let changed = txn.execute(
 			"UPDATE identities SET phase='record_saved'
              WHERE host=?1 AND idem_key=?2 AND job_id=?3 AND digest=?4
-                   AND phase='reserved'",
+                   AND phase='reserved'
+                   AND EXISTS (
+                       SELECT 1 FROM original_job_ids AS j
+                       WHERE j.job_id=?3 AND j.host=?1 AND j.idem_key=?2
+                   )",
 			params![host, key, job_id, digest],
 		)?;
 		if changed != 1 {
@@ -422,6 +471,52 @@ impl Ledger {
 		}
 		txn.commit()?;
 		Ok(())
+	}
+
+	/// Persist intent BEFORE any remote submission. A crash, timeout or
+	/// transport failure after this transaction must retain the original ID
+	/// as UNKNOWN; no caller may obtain another submit ticket by retrying.
+	/// An external single-effect-owner permit must span this call and the
+	/// actual remote submission before this becomes an effectful API.
+	fn begin_remote_submission(
+		&mut self,
+		host: &str,
+		key: &str,
+		job_id: &str,
+		digest: &str,
+	) -> Result<SubmitOnce> {
+		if !safe_id(job_id) || !safe_id(host) || key.is_empty() || !safe_digest(digest) {
+			bail!("invalid remote submission identity");
+		}
+		let saved = read_original(&self.jobs.join(format!("{job_id}.json")))?;
+		if saved.id != job_id
+			|| saved.host != host
+			|| saved.idempotency_key.as_deref() != Some(key)
+			|| saved.request_digest.as_deref() != Some(digest)
+			|| saved.launch_state.as_deref() != Some("pending")
+		{
+			bail!("remote submission requires exact saved pending original identity");
+		}
+		let txn = self
+			.connection
+			.transaction_with_behavior(TransactionBehavior::Immediate)?;
+		let changed = txn.execute(
+			"UPDATE identities SET phase='submission_unknown'
+             WHERE host=?1 AND idem_key=?2 AND job_id=?3 AND digest=?4
+                   AND phase='record_saved'
+                   AND EXISTS (
+                       SELECT 1 FROM original_job_ids AS j
+                       WHERE j.job_id=?3 AND j.host=?1 AND j.idem_key=?2
+                   )",
+			params![host, key, job_id, digest],
+		)?;
+		if changed != 1 {
+			bail!("remote submission was already attempted or not durably saved");
+		}
+		txn.commit()?;
+		Ok(SubmitOnce {
+			job_id: job_id.to_owned(),
+		})
 	}
 
 	fn index_file(&self) -> &Path {
@@ -622,10 +717,58 @@ mod tests {
 			.query_row("SELECT count(*) FROM identities", [], |r| r.get(0))
 			.unwrap();
 		assert_eq!(keyed, 1);
+		let original_ids: i64 = ledger
+			.connection
+			.query_row("SELECT COUNT(*) FROM original_job_ids", [], |r| r.get(0))
+			.unwrap();
+		assert_eq!(
+			original_ids, 2,
+			"unkeyed original IDs remain globally reserved"
+		);
 	}
 
 	#[test]
+	fn imported_unkeyed_job_id_must_not_be_reissued_for_a_new_key() {
+		let f = Fixture::new();
+		f.original("anonymous-id", "main", None, None);
+		let mut ledger = f.bootstrap();
+		assert!(
+			ledger
+				.reserve("rog", "new-key", &"a".repeat(64), "anonymous-id")
+				.is_err(),
+			"an original unkeyed job identity must remain globally reserved"
+		);
+	}
 
+	#[test]
+	fn collision_with_an_unkeyed_legacy_id_rolls_back_entire_batch() {
+		let f = Fixture::new();
+		f.original("anonymous-id", "pocket4", None, None);
+		let mut ledger = f.bootstrap();
+		let digest = "a".repeat(64);
+		let requests = [
+			ReservationRequest {
+				host: "mac",
+				key: "new-1",
+				digest: &digest,
+				proposed_id: "new-id",
+			},
+			ReservationRequest {
+				host: "rog",
+				key: "new-2",
+				digest: &digest,
+				proposed_id: "anonymous-id",
+			},
+		];
+		assert!(ledger.reserve_batch(&requests).is_err());
+		let count: i64 = ledger
+			.connection
+			.query_row("SELECT COUNT(*) FROM identities", [], |row| row.get(0))
+			.unwrap();
+		assert_eq!(count, 0, "failed batch must not persist the first new key");
+	}
+
+	#[test]
 	fn symbolic_and_hard_links_and_overpermissive_records_fail_bootstrap() {
 		use std::os::unix::fs::{symlink, PermissionsExt};
 		for case in ["symlink", "hardlink", "wide"] {
@@ -930,5 +1073,137 @@ mod tests {
                   lookup_p50_ms={:.4} lookup_p95_ms={:.4} no_remote_effects=true",
 			samples[50], samples[95]
 		);
+	}
+
+	#[test]
+	fn submission_intent_is_durable_single_use_after_saved_record() {
+		let f = Fixture::new();
+		let mut writer = f.bootstrap();
+		let digest = "a".repeat(64);
+		let reserved = writer
+			.reserve("main", "once-key", &digest, "job-once")
+			.unwrap();
+		assert_eq!(reserved, Reserve::Fresh("job-once".into()));
+		assert!(writer
+			.begin_remote_submission("main", "once-key", "job-once", &digest)
+			.is_err());
+		f.original("job-once", "main", Some("once-key"), Some(&digest));
+		writer
+			.mark_saved("main", "once-key", "job-once", &digest)
+			.unwrap();
+		let ticket = writer
+			.begin_remote_submission("main", "once-key", "job-once", &digest)
+			.unwrap();
+		assert_eq!(
+			ticket,
+			SubmitOnce {
+				job_id: "job-once".into()
+			}
+		);
+		assert!(writer
+			.begin_remote_submission("main", "once-key", "job-once", &digest)
+			.is_err());
+		drop(writer);
+		let mut reopened = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		assert_eq!(
+			reopened
+				.reserve("main", "once-key", &digest, "new-job")
+				.unwrap(),
+			Reserve::Existing {
+				job_id: "job-once".into(),
+				phase: "submission_unknown".into()
+			}
+		);
+		assert!(!f.jobs.join("new-job.json").exists());
+		assert!(reopened
+			.begin_remote_submission("main", "once-key", "job-once", &digest)
+			.is_err());
+	}
+
+	#[test]
+	fn submission_intent_rejects_tampered_identity_and_invalid_state() {
+		let f = Fixture::new();
+		let mut ledger = f.bootstrap();
+		let digest = "a".repeat(64);
+		assert_eq!(
+			ledger.reserve("rog", "key", &digest, "original").unwrap(),
+			Reserve::Fresh("original".into())
+		);
+		f.original("original", "rog", Some("key"), Some(&digest));
+		ledger
+			.mark_saved("rog", "key", "original", &digest)
+			.unwrap();
+		let wrong_digest = "b".repeat(64);
+		for (host, key, id, hash) in [
+			("mac", "key", "original", digest.as_str()),
+			("rog", "changed", "original", digest.as_str()),
+			("rog", "key", "wrong-id", digest.as_str()),
+			("rog", "key", "original", wrong_digest.as_str()),
+		] {
+			assert!(ledger.begin_remote_submission(host, key, id, hash).is_err());
+		}
+		// Even with an intact DB reservation, a changed original launch state
+		// is not a valid new remote-submission authorization.
+		let path = f.jobs.join("original.json");
+		let bytes = fs::read(&path).unwrap();
+		let mut saved: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+		saved["launch_state"] = serde_json::json!("launched");
+		fs::write(&path, serde_json::to_vec(&saved).unwrap()).unwrap();
+
+		assert!(ledger
+			.begin_remote_submission("rog", "key", "original", &digest)
+			.is_err());
+		saved["launch_state"] = serde_json::json!("pending");
+		fs::write(&path, serde_json::to_vec(&saved).unwrap()).unwrap();
+		assert!(ledger
+			.begin_remote_submission("rog", "key", "original", &digest)
+			.is_ok());
+	}
+
+	#[test]
+	fn batch_six_hosts_stages_six_independent_single_use_remote_tickets() {
+		let f = Fixture::new();
+		let mut writer = f.bootstrap();
+		let digest = "a".repeat(64);
+		let keys: Vec<String> = (0..6).map(|i| format!("task-{i}")).collect();
+		let ids: Vec<String> = (0..6).map(|i| format!("batch-original-{i}")).collect();
+		let entries: Vec<_> = (0..6)
+			.map(|i| ReservationRequest {
+				host: HOSTS[i],
+				key: &keys[i],
+				digest: &digest,
+				proposed_id: &ids[i],
+			})
+			.collect();
+		let reserved = writer.reserve_batch(&entries).unwrap();
+		assert_eq!(reserved.len(), 6);
+		assert!(reserved.iter().all(|x| matches!(x, Reserve::Fresh(_))));
+		for i in 0..6 {
+			f.original(&ids[i], HOSTS[i], Some(&keys[i]), Some(&digest));
+			writer
+				.mark_saved(HOSTS[i], &keys[i], &ids[i], &digest)
+				.unwrap();
+			assert_eq!(
+				writer
+					.begin_remote_submission(HOSTS[i], &keys[i], &ids[i], &digest)
+					.unwrap()
+					.job_id,
+				ids[i]
+			);
+		}
+		drop(writer);
+		let mut rebooted = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		for (i, result) in rebooted.reserve_batch(&entries).unwrap().iter().enumerate() {
+			assert_eq!(
+				result,
+				&Reserve::Existing {
+					job_id: ids[i].clone(),
+					phase: "submission_unknown".into()
+				}
+			);
+			assert!(rebooted
+				.begin_remote_submission(HOSTS[i], &keys[i], &ids[i], &digest)
+				.is_err());
+		}
 	}
 }
