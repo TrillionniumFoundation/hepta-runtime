@@ -13,6 +13,7 @@ pub mod effective_config;
 pub mod health;
 pub mod inspect;
 pub mod jobs;
+// SQLite WAL ledger prototype is test-only: it cannot admit production effects.
 pub mod multi_read;
 pub mod operator;
 pub mod pty;
@@ -23,6 +24,8 @@ pub mod search_jobs;
 pub mod ssh;
 pub mod stream;
 pub mod terminal;
+#[cfg(test)]
+mod wal_idempotency;
 
 pub use config::{
 	init_runtime, runtime_config, HostConfig, Platform, PrivilegedAction, RuntimeConfig,
