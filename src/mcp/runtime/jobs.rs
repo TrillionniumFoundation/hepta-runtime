@@ -13,7 +13,7 @@ use std::future::Future;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -25,6 +25,9 @@ static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static START_LOCKS: OnceLock<Mutex<HashMap<String, Arc<AsyncMutex<()>>>>> = OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static REUSE_HITS: OnceLock<Mutex<ReuseHitCache>> = OnceLock::new();
+// Coordinate only this owner process's local metadata reads/publications.
+// Guards remain inside synchronous functions, never across remote awaits.
+static REGISTRY_ACCESS: RwLock<()> = RwLock::new(());
 const MAX_REUSE_HITS: usize = 4096;
 const MAX_IDEMPOTENCY_SCAN_ATTEMPTS: usize = 3;
 const MAX_CACHED_RECORD_BYTES: u64 = 1024 * 1024;
@@ -193,8 +196,28 @@ fn record_path(id: &str) -> Result<PathBuf> {
 	Ok(jobs_dir()?.join(format!("{id}.json")))
 }
 
+fn with_registry_read<T>(gate: &RwLock<()>, read: impl FnOnce() -> Result<T>) -> Result<T> {
+	let _read = gate
+		.read()
+		.map_err(|_| anyhow::anyhow!("job registry read lock unavailable"))?;
+	read()
+}
+
 fn save_record(record: &JobRecord) -> Result<()> {
-	let path = record_path(&record.id)?;
+	save_record_with_registry_gate(record, &REGISTRY_ACCESS, || record_path(&record.id))
+}
+
+fn save_record_with_registry_gate(
+	record: &JobRecord,
+	gate: &RwLock<()>,
+	record_path: impl FnOnce() -> Result<PathBuf>,
+) -> Result<()> {
+	// Include path/directory creation and both fsyncs. Every local publication,
+	// including a launch outcome replacing pending metadata, uses this writer.
+	let _write = gate
+		.write()
+		.map_err(|_| anyhow::anyhow!("job registry write lock unavailable"))?;
+	let path = record_path()?;
 	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
 	let bytes = serde_json::to_vec_pretty(record)?;
 	{
@@ -558,12 +581,17 @@ fn find_idempotent_in(
 }
 
 fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
-	find_idempotent_in(
-		&jobs_dir()?,
-		host,
-		key,
-		REUSE_HITS.get_or_init(|| Mutex::new(ReuseHitCache::default())),
-	)
+	// Readers may scan concurrently. A local pending/result publication waits
+	// until every lookup, including verified cache reads, has checked its epoch.
+	// External writers still require the bounded epoch checks inside the scan.
+	with_registry_read(&REGISTRY_ACCESS, || {
+		find_idempotent_in(
+			&jobs_dir()?,
+			host,
+			key,
+			REUSE_HITS.get_or_init(|| Mutex::new(ReuseHitCache::default())),
+		)
+	})
 }
 
 fn request_digest(params: &ProcessStartParams) -> Result<String> {

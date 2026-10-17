@@ -1395,3 +1395,265 @@ async fn uncertain_or_retried_reuse_keeps_start_lock_during_status_wait() {
 		assert!(guard.is_some());
 	}
 }
+
+#[cfg(unix)]
+#[test]
+fn registry_gate_parallel_scans_survive_local_pending_and_outcome_publication() {
+	use std::sync::mpsc::{channel, RecvTimeoutError};
+	let root = tempfile::tempdir().unwrap();
+	let gate = Arc::new(RwLock::new(()));
+	let mut prior = outcome_fixture(ExecutionMode::Operator, false, "pending");
+	prior.id = "prior-pending-job".into();
+	fixture_write(root.path(), &prior);
+	let (enumerated_tx, enumerated_rx) = channel();
+	let mut releases = Vec::new();
+	let mut workers = Vec::new();
+	for host in ["main", "rog", "ai395", "pocket4", "x230", "mac"] {
+		let dir = root.path().to_path_buf();
+		let worker_gate = gate.clone();
+		let enumerated = enumerated_tx.clone();
+		let (release_tx, release_rx) = channel();
+		releases.push(release_tx);
+		workers.push(std::thread::spawn(move || {
+			let key = format!("new-{host}");
+			let mut scans = 0;
+			let found = with_registry_read(&worker_gate, || {
+				scan_idempotent_binding_in_with_retries(&dir, host, &key, |_| {
+					scans += 1;
+					enumerated.send(host).unwrap();
+					release_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+				})
+			})?;
+			assert!(found.is_none());
+			let mut record = outcome_fixture(ExecutionMode::Operator, false, "pending");
+			record.id = format!("new-job-{host}");
+			record.host = host.into();
+			record.idempotency_key = Some(key);
+			let path = dir.join(format!("{}.json", record.id));
+			save_record_with_registry_gate(&record, &worker_gate, || Ok(path.clone()))?;
+			let outcome = preserve_launch_outcome(
+				&mut record,
+				Ok(json!({"ok":true,"backend":"detached","launcher_pid":321})),
+				|record| save_record_with_registry_gate(record, &worker_gate, || Ok(path)),
+			);
+			assert!(!outcome.local_record_pending);
+			Ok::<_, anyhow::Error>((record.id, scans))
+		}));
+	}
+	drop(enumerated_tx);
+	// All six must finish real enumeration before any is released. An exclusive
+	// scan mutex would fail this handshake instead of preserving parallel reads.
+	let mut observed = Vec::new();
+	for _ in 0..6 {
+		observed.push(enumerated_rx.recv_timeout(Duration::from_secs(10)).unwrap());
+	}
+	let stable = registry_epoch(root.path()).unwrap();
+	let (attempt_tx, attempt_rx) = channel();
+	let (acquired_tx, acquired_rx) = channel();
+	let writer_gate = gate.clone();
+	let prior_path = root.path().join("prior-pending-job.json");
+	let writer = std::thread::spawn(move || {
+		attempt_tx.send(()).unwrap();
+		preserve_launch_outcome(
+			&mut prior,
+			Ok(json!({"ok":true,"backend":"detached","launcher_pid":322})),
+			|record| {
+				save_record_with_registry_gate(record, &writer_gate, || {
+					acquired_tx.send(()).unwrap();
+					Ok(prior_path)
+				})
+			},
+		)
+	});
+	attempt_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+	let blocked = acquired_rx.recv_timeout(Duration::from_millis(100));
+	let unchanged = registry_epoch(root.path()).unwrap() == stable;
+	// Release and join before asserting the negative observation, so failures
+	// cannot leave a publisher blocked behind a test-owned read guard.
+	for release in releases {
+		release.send(()).unwrap();
+	}
+	let results: Vec<_> = workers
+		.into_iter()
+		.map(|worker| worker.join().unwrap())
+		.collect();
+	let prior_outcome = writer.join().unwrap();
+	assert!(matches!(blocked, Err(RecvTimeoutError::Timeout)));
+	assert!(
+		unchanged,
+		"a local publication must not mutate a live scan epoch"
+	);
+	assert!(!prior_outcome.local_record_pending);
+	observed.sort_unstable();
+	observed.dedup();
+	assert_eq!(observed.len(), 6);
+	for result in results {
+		let (id, scans) = result.unwrap();
+		assert_eq!(
+			scans, 1,
+			"local publishers must not consume epoch retry attempts"
+		);
+		let saved: JobRecord =
+			serde_json::from_slice(&std::fs::read(root.path().join(format!("{id}.json"))).unwrap())
+				.unwrap();
+		assert_eq!(saved.id, id);
+		assert_eq!(saved.launch_state, "launched");
+	}
+	let saved_prior: JobRecord =
+		serde_json::from_slice(&std::fs::read(root.path().join("prior-pending-job.json")).unwrap())
+			.unwrap();
+	assert_eq!(saved_prior.launch_state, "launched");
+}
+
+#[cfg(unix)]
+#[test]
+fn registry_gate_cached_lookup_waits_for_actual_outcome_replacement() {
+	use std::sync::mpsc::{channel, RecvTimeoutError};
+	let root = tempfile::tempdir().unwrap();
+	let gate = Arc::new(RwLock::new(()));
+	let cache = Arc::new(Mutex::new(ReuseHitCache::default()));
+	let record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	let path = root.path().join(format!("{}.json", record.id));
+	save_record_with_registry_gate(&record, &gate, || Ok(path.clone())).unwrap();
+	with_registry_read(&gate, || {
+		find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+	})
+	.unwrap()
+	.unwrap();
+	assert_eq!(cache.lock().unwrap().hits.len(), 1);
+	let (writer_inside_tx, writer_inside_rx) = channel();
+	let (release_tx, release_rx) = channel();
+	let writer_gate = gate.clone();
+	let mut changed = record.clone();
+	let writer = std::thread::spawn(move || {
+		preserve_launch_outcome(
+			&mut changed,
+			Err(anyhow::anyhow!("unknown launch reply")),
+			|record| {
+				save_record_with_registry_gate(record, &writer_gate, || {
+					writer_inside_tx.send(()).unwrap();
+					release_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+					Ok(path)
+				})
+			},
+		)
+	});
+	writer_inside_rx
+		.recv_timeout(Duration::from_secs(10))
+		.unwrap();
+	let (attempt_tx, attempt_rx) = channel();
+	let (result_tx, result_rx) = channel();
+	let reader_gate = gate.clone();
+	let reader_cache = cache.clone();
+	let dir = root.path().to_path_buf();
+	let reader = std::thread::spawn(move || {
+		attempt_tx.send(()).unwrap();
+		let found = with_registry_read(&reader_gate, || {
+			find_idempotent_in(&dir, "main", "fixed-key", &reader_cache)
+		});
+		result_tx.send(found).unwrap();
+	});
+	attempt_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+	let before_publication = result_rx.recv_timeout(Duration::from_millis(100));
+	release_tx.send(()).unwrap();
+	let outcome = writer.join().unwrap();
+	reader.join().unwrap();
+	assert!(
+		matches!(before_publication, Err(RecvTimeoutError::Timeout)),
+		"even a populated positive cache must wait for a local writer"
+	);
+	assert!(!outcome.local_record_pending);
+	let found = result_rx
+		.recv_timeout(Duration::from_secs(10))
+		.unwrap()
+		.unwrap()
+		.unwrap();
+	assert_eq!(found.id, record.id);
+	assert_eq!(found.launch_state, "launch_unknown");
+	assert!(cache.lock().unwrap().hits.is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn registry_gate_preserves_external_epoch_and_integrity_refusals() {
+	let root = tempfile::tempdir().unwrap();
+	let gate = RwLock::new(());
+	let mut scans = 0;
+	let error = with_registry_read(&gate, || {
+		scan_idempotent_binding_in_with_retries(root.path(), "main", "unaccepted", |attempt| {
+			scans += 1;
+			let mut external = outcome_fixture(ExecutionMode::Operator, false, "launched");
+			external.id = format!("external-writer-{attempt}");
+			external.host = "mac".into();
+			external.idempotency_key = Some(format!("external-key-{attempt}"));
+			// Deliberately bypass the process-local gate, like another process.
+			std::thread::sleep(Duration::from_millis(5));
+			fixture_write(root.path(), &external);
+		})
+	})
+	.unwrap_err();
+	assert_eq!(scans, MAX_IDEMPOTENCY_SCAN_ATTEMPTS);
+	assert!(error.downcast_ref::<RegistryScanChanged>().is_some());
+	for corrupt in [false, true] {
+		let root = tempfile::tempdir().unwrap();
+		let cache = Mutex::new(ReuseHitCache::default());
+		let original = outcome_fixture(ExecutionMode::Operator, false, "launched");
+		fixture_write(root.path(), &original);
+		if corrupt {
+			std::fs::write(root.path().join("corrupt.json"), b"not-json").unwrap();
+		} else {
+			let mut duplicate = original.clone();
+			duplicate.id = "conflicting-original".into();
+			fixture_write(root.path(), &duplicate);
+		}
+		let error = with_registry_read(&gate, || {
+			find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+		})
+		.unwrap_err();
+		assert!(error.to_string().contains(if corrupt {
+			"corrupt job record"
+		} else {
+			"duplicate original"
+		}));
+		assert!(cache.lock().unwrap().hits.is_empty());
+	}
+}
+
+#[cfg(unix)]
+#[test]
+fn registry_gate_poison_refuses_cached_lookup_and_record_publication() {
+	let root = tempfile::tempdir().unwrap();
+	let gate = Arc::new(RwLock::new(()));
+	let cache = Mutex::new(ReuseHitCache::default());
+	let record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &record);
+	with_registry_read(&gate, || {
+		find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+	})
+	.unwrap()
+	.unwrap();
+	assert_eq!(cache.lock().unwrap().hits.len(), 1);
+	let poisoned = gate.clone();
+	assert!(std::thread::spawn(move || {
+		let _write = poisoned.write().unwrap();
+		panic!("fixture poisons an incomplete registry publication");
+	})
+	.join()
+	.is_err());
+	let error = with_registry_read(&gate, || {
+		find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+	})
+	.unwrap_err();
+	assert!(error.to_string().contains("registry read lock unavailable"));
+	let mut path_evaluated = false;
+	let error = save_record_with_registry_gate(&record, &gate, || {
+		path_evaluated = true;
+		Ok(root.path().join("must-not-be-published.json"))
+	})
+	.unwrap_err();
+	assert!(error
+		.to_string()
+		.contains("registry write lock unavailable"));
+	assert!(!path_evaluated, "writer refusal must precede path creation");
+	assert!(!root.path().join("must-not-be-published.json").exists());
+}
