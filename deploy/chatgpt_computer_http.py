@@ -87,6 +87,10 @@ class ComputerHTTPServer(http.server.ThreadingHTTPServer):
         self._factory = proxy_factory
         self._token = auth_token
         self._lock = threading.RLock()
+        # Read-only job-page cursors belong to this HTTP service, not to one
+        # stateless modern proxy lane. Effect owners, credentials, workdirs and
+        # native sessions remain independent for every lane.
+        self._shared_readonly_registry_pager = None
         self._sessions = {}
         self._modern_idle = []
         self._modern_busy = {}
@@ -104,7 +108,28 @@ class ComputerHTTPServer(http.server.ThreadingHTTPServer):
             raise
 
     def _new_proxy(self):
-        return unlimited_proxy(self._factory())
+        proxy = unlimited_proxy(self._factory())
+        native = getattr(proxy, 'native', proxy)
+        pager = getattr(native, 'registry_pager', None)
+        if pager is None:
+            return proxy
+        try:
+            with self._lock:
+                existing = self._shared_readonly_registry_pager
+                if existing is None:
+                    self._shared_readonly_registry_pager = pager
+                elif (type(existing) is not type(pager)
+                      or existing.roots != pager.roots):
+                    raise ValueError('readonly_registry_pager_root_mismatch')
+                else:
+                    # The pager has its own RLock, MAC key and strictly bounded
+                    # frozen projections. Never share the upstream native
+                    # session, effect registry, undo state or credentials.
+                    native.registry_pager = existing
+        except BaseException:
+            proxy.close(timeout=0)
+            raise
+        return proxy
 
     def acquire(self, sid, *, legacy_initialize=False):
         with self._lock:

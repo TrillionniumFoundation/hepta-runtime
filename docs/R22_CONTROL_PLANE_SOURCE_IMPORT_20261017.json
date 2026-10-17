@@ -1,8 +1,4 @@
 {
-  "schema": "hepta-r22-live-control-plane-source-import-v1",
-  "installed_release_generation": "latest-r22",
-  "release_artifact_count": 49,
-  "imported_verified_source_artifacts": 42,
   "excluded_binaries_licenses_and_static_manifest": [
     "cloudflared",
     "cloudflared-manifest.json",
@@ -11,6 +7,29 @@
     "tunnel-client-LICENSE",
     "tunnel-client-NOTICE"
   ],
+  "imported_verified_source_artifacts": 42,
+  "installed_release_generation": "latest-r22",
+  "original_import_verified_count": 42,
+  "post_import_patches": [
+    {
+      "change": "share read-only registry pager among stateless HTTP lanes with exact root identity checks; no shared effect/session ownership",
+      "installed_r22_sha256": "18151f5878c8f4fac981a6dcb91bc3defcdfa2e27e4ebd66dad786de9301677d",
+      "patched_candidate_sha256": "35d15ae59b5f1616ae213abe5824079a4390aa1e0346aa060f0ee501e18b5694",
+      "qualification": "171/171 isolated Python tests passed across read-only pager, V11 and HTTP lane suites",
+      "repo_path": "deploy/chatgpt_computer_http.py"
+    },
+    {
+      "change": "LRU fairness for authenticated active registry cursors; absolute TTL/caps unchanged",
+      "installed_r22_sha256": "ace0a827cc2dc103bb5804e50486ae31e07d5ccfa45a3532d7d0d4c474af50d9",
+      "patched_candidate_sha256": "47dd3c5d3e955c491c96ecdbab572a953fbf39602b23041d34d734ed96c7d749",
+      "qualification": "171/171 isolated Python tests passed across read-only pager, V11 and HTTP lane suites",
+      "repo_path": "deploy/runtime_registry_page.py"
+    }
+  ],
+  "production_modified": false,
+  "release_artifact_count": 49,
+  "rust_binary_source_equivalence": false,
+  "schema": "hepta-r22-live-control-plane-source-import-v1",
   "source_assets": [
     {
       "release_file": "chatgpt_computer_http.py",
@@ -223,6 +242,5 @@
       "sha256": "cd14d988aa17920fb3e8139709c0e36a501075d1625281593cf2e8c3813ba9dc"
     }
   ],
-  "rust_binary_source_equivalence": false,
-  "production_modified": false
+  "unchanged_import_count_after_isolated_patch": 40
 }

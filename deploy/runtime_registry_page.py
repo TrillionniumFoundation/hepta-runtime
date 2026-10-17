@@ -271,6 +271,10 @@ class RuntimeRegistryPager:
             if chosen is None:
                 raise UnsafeProvenance("registry_page_snapshot_expired_or_cursor_invalid")
             self._validate_roots(chosen["bindings"])
+            # LRU fairness: an authenticated active cursor must remain recent
+            # while unrelated readers create snapshots. Absolute TTL unchanged.
+            self._snapshots.remove(chosen)
+            self._snapshots.append(chosen)
         else:
             # V4 remains a live writer while we construct this read-only
             # observation. Retry only a benign membership race and only from
