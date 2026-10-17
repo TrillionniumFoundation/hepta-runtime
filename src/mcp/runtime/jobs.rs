@@ -346,6 +346,18 @@ fn read_verified_cached_record(_dir: &Path, _id: &str) -> Result<JobRecord> {
 // Vec of all job records. It must still parse EVERY existing JSON record so
 // malformed history and duplicate original bindings refuse a new effect.
 fn scan_idempotent_binding_in(dir: &Path, host: &str, key: &str) -> Result<Option<JobRecord>> {
+	scan_idempotent_binding_in_with_observer(dir, host, key, || {})
+}
+
+// The observer is a no-op for runtime calls; tests inject a deterministic
+// post-enumeration mutation to prove that an obsolete directory epoch refuses
+// a launch instead of trusting a stale negative or positive lookup.
+fn scan_idempotent_binding_in_with_observer(
+	dir: &Path,
+	host: &str,
+	key: &str,
+	after_scan: impl FnOnce(),
+) -> Result<Option<JobRecord>> {
 	// A new/unknown key may allocate an effect after this call. Never infer
 	// absence from a scan overlapping a concurrent directory mutation.
 	let before = registry_epoch(dir)?;
@@ -365,6 +377,7 @@ fn scan_idempotent_binding_in(dir: &Path, host: &str, key: &str) -> Result<Optio
 			found = Some(record);
 		}
 	}
+	after_scan();
 	if registry_epoch(dir)? != before {
 		bail!("idempotency registry changed during scan; no new job may launch");
 	}

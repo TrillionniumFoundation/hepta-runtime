@@ -966,3 +966,57 @@ fn streaming_scan_rejects_corruption_and_duplicate_bindings() {
 		.to_string()
 		.contains("corrupt job record"));
 }
+
+#[cfg(unix)]
+#[test]
+fn streaming_scan_rejects_post_enumeration_directory_mutation() {
+	let root = tempfile::tempdir().unwrap();
+	let old = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &old);
+	assert!(
+		scan_idempotent_binding_in(root.path(), "main", "never-accepted")
+			.unwrap()
+			.is_none()
+	);
+
+	let mut inserted = old.clone();
+	inserted.id = "newly-written-job".into();
+	inserted.idempotency_key = Some("never-accepted".into());
+	let rejected =
+		scan_idempotent_binding_in_with_observer(root.path(), "main", "never-accepted", || {
+			// This runs AFTER complete enumeration, BEFORE the authoritative
+			// directory epoch comparison. It is not an unreliable race test.
+			std::thread::sleep(Duration::from_millis(5));
+			fixture_write(root.path(), &inserted);
+		})
+		.unwrap_err()
+		.to_string();
+	assert!(
+		rejected.contains("registry changed during scan"),
+		"{rejected}"
+	);
+	let accepted = scan_idempotent_binding_in(root.path(), "main", "never-accepted")
+		.unwrap()
+		.unwrap();
+	assert_eq!(accepted.id, inserted.id);
+
+	let mut duplicate = inserted.clone();
+	duplicate.id = "second-conflicting-id".into();
+	let rejected_existing =
+		scan_idempotent_binding_in_with_observer(root.path(), "main", "never-accepted", || {
+			std::thread::sleep(Duration::from_millis(5));
+			fixture_write(root.path(), &duplicate);
+		})
+		.unwrap_err()
+		.to_string();
+	assert!(
+		rejected_existing.contains("registry changed during scan"),
+		"{rejected_existing}"
+	);
+	assert!(
+		scan_idempotent_binding_in(root.path(), "main", "never-accepted")
+			.unwrap_err()
+			.to_string()
+			.contains("duplicate original")
+	);
+}
