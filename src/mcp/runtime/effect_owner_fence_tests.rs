@@ -460,7 +460,7 @@ mod isolated_pty_replay_tests {
     }
     #[test]
     fn original_v4_unfenced_replay_check_does_not_require_idempotency_key() {
-        let (_t,root,old,new)=fixture();
+        let (_t,root,old,_new)=fixture();
         let mut d:serde_json::Value=serde_json::from_slice(&std::fs::read(root.join(".owner.json")).unwrap()).unwrap();
         d["owner"]=serde_json::json!("v4");
         d["state_root"]=serde_json::json!(old);
@@ -479,4 +479,20 @@ mod isolated_pty_replay_tests {
         assert!(permit.require_new_pty_identity("pocket4",Some("same-original-key")).is_ok());
         assert!(permit.require_new_pty_identity("main",None).is_err());
     }
+}
+
+#[test]
+fn wal_native_writer_proof_refuses_unenrolled_or_fabricated_epoch() {
+    let unenrolled = AdmissionPermit {
+        _locked: None, _authority_root: None, authority_path: None,
+        _state_root: None, predecessor_state_root: None,
+        epoch: None, owner: None,
+    };
+    assert!(unenrolled.wal_writer_proof().is_err());
+    let forged = AdmissionPermit {
+        _locked: None, _authority_root: None, authority_path: None,
+        _state_root: None, predecessor_state_root: None,
+        epoch: Some(22), owner: Some("v11".to_owned()),
+    };
+    assert!(forged.wal_writer_proof().is_err());
 }

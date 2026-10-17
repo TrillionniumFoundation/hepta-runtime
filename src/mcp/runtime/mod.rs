@@ -9,11 +9,12 @@ pub mod caller_scope;
 pub mod checkpoint;
 pub mod config;
 pub mod documents;
-pub mod effective_config;
 pub mod effect_owner_fence;
+pub mod effective_config;
 pub mod health;
 pub mod inspect;
 pub mod jobs;
+// Fully isolated SQLite WAL state-machine proof; not a production effect path.
 pub mod multi_read;
 pub mod operator;
 pub mod pty;
@@ -24,6 +25,8 @@ pub mod search_jobs;
 pub mod ssh;
 pub mod stream;
 pub mod terminal;
+#[cfg(test)]
+mod wal_idempotency;
 
 pub use config::{
 	init_runtime, runtime_config, HostConfig, Platform, PrivilegedAction, RuntimeConfig,
