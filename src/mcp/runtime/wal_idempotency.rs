@@ -3,16 +3,18 @@
 //! Test-only candidate: fail-closed SQLite WAL job identity ledger.
 //! No production effect path imports this module or changes the active owner.
 use anyhow::{bail, Context, Result};
-use rusqlite::{params, Connection, OpenFlags, TransactionBehavior};
+use rusqlite::{
+	params, Connection, OpenFlags, OptionalExtension, Transaction, TransactionBehavior,
+};
 use serde::Deserialize;
 use std::fs::{self, OpenOptions};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-const VERSION: &str = "hepta-idempotency-ledger-v2";
+const VERSION: &str = "hepta-idempotency-ledger-v3";
 const MAX_JOB_BYTES: u64 = 1024 * 1024;
-const DB_NAME: &str = "idempotency-v2.sqlite3";
+const DB_NAME: &str = "idempotency-v3.sqlite3";
 
 #[derive(Debug, Deserialize)]
 struct LegacyJob {
@@ -46,10 +48,17 @@ struct ReservationRequest<'a> {
 	proposed_id: &'a str,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WriterBinding {
+	owner: String,
+	epoch: i64,
+}
+
 struct Ledger {
 	connection: Connection,
 	db_path: PathBuf,
 	jobs: PathBuf,
+	writer: Option<WriterBinding>,
 }
 
 fn safe_id(s: &str) -> bool {
@@ -163,6 +172,30 @@ fn read_original(path: &Path) -> Result<LegacyJob> {
 	Ok(value)
 }
 
+// DB-transaction epoch check is only an admission model. Production
+// submission still needs an external cross-controller owner lock held until
+// the actual remote effect has been handed off and reconciled.
+fn require_current_writer(txn: &Transaction<'_>, proof: Option<&WriterBinding>) -> Result<()> {
+	let row: Option<(String, i64, String)> = txn
+		.query_row(
+			"SELECT owner, epoch, phase FROM writer_authority WHERE slot=1",
+			[],
+			|r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+		)
+		.optional()?;
+	match (row, proof) {
+		// Existing unfenced tests may use an isolated ledger only before a
+		// writer has been established. No configured controller may bypass it.
+		(None, None) => Ok(()),
+		(Some((owner, epoch, phase)), Some(proof))
+			if owner == proof.owner && epoch == proof.epoch && phase == "admitting" =>
+		{
+			Ok(())
+		}
+		_ => bail!("current writer/epoch is frozen, absent or superseded"),
+	}
+}
+
 impl Ledger {
 	fn connect(path: &Path, creating: bool) -> Result<Connection> {
 		let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)?;
@@ -212,12 +245,21 @@ impl Ledger {
                 job_id TEXT NOT NULL UNIQUE, digest TEXT,
                 phase TEXT NOT NULL CHECK (phase IN
                   ('legacy','reserved','record_saved','submission_unknown')),
+                admitted_owner TEXT, admitted_epoch INTEGER,
+                CHECK ((admitted_owner IS NULL AND admitted_epoch IS NULL)
+                    OR (admitted_owner IN ('v4','v11') AND admitted_epoch>0)),
                 PRIMARY KEY (host, idem_key)
              ) WITHOUT ROWID;
              CREATE TABLE original_job_ids (
                 job_id TEXT PRIMARY KEY,
                 host TEXT NOT NULL, idem_key TEXT
-             ) WITHOUT ROWID;",
+             ) WITHOUT ROWID;
+             CREATE TABLE writer_authority (
+                slot INTEGER PRIMARY KEY CHECK(slot=1),
+                owner TEXT NOT NULL CHECK(owner IN ('v4','v11')),
+                epoch INTEGER NOT NULL CHECK(epoch>0),
+                phase TEXT NOT NULL CHECK(phase IN ('admitting','frozen'))
+             );",
 		)?;
 		let root_path = fs::canonicalize(root)?;
 		let jobs_path = fs::canonicalize(jobs)?;
@@ -236,6 +278,7 @@ impl Ledger {
 			connection,
 			db_path: db,
 			jobs: jobs_path,
+			writer: None,
 		})
 	}
 
@@ -292,7 +335,109 @@ impl Ledger {
 			connection,
 			db_path: db,
 			jobs: jobs_path,
+			writer: None,
 		})
+	}
+
+	/// Test-only initial handoff after a frozen, complete historical import.
+	/// This is NOT administrator authentication or a production owner switch.
+	fn establish_first_writer(&mut self, owner: &str) -> Result<i64> {
+		if !matches!(owner, "v4" | "v11") || self.writer.is_some() {
+			bail!("initial writer must be a fresh configured controller");
+		}
+		let txn = self
+			.connection
+			.transaction_with_behavior(TransactionBehavior::Immediate)?;
+		let sealed: i64 =
+			txn.query_row("SELECT sealed FROM metadata WHERE slot=1", [], |r| r.get(0))?;
+		let unsettled: i64 = txn.query_row(
+			"SELECT COUNT(*) FROM identities WHERE phase != 'legacy'",
+			[],
+			|r| r.get(0),
+		)?;
+		if sealed != 1 || unsettled != 0 {
+			bail!("initial writer requires sealed unchanged legacy history");
+		}
+		txn.execute(
+			"INSERT INTO writer_authority(slot,owner,epoch,phase)
+             VALUES (1,?1,1,'admitting')",
+			params![owner],
+		)?;
+		txn.commit()?;
+		self.writer = Some(WriterBinding {
+			owner: owner.to_owned(),
+			epoch: 1,
+		});
+		Ok(1)
+	}
+
+	/// A restarted controller can name its owner and epoch, but each later
+	/// transaction must check the actual database writer row again.
+	fn bind_writer(&mut self, owner: &str, epoch: i64) -> Result<()> {
+		if !matches!(owner, "v4" | "v11") || epoch < 1 {
+			bail!("invalid writer proof");
+		}
+		let candidate = WriterBinding {
+			owner: owner.to_owned(),
+			epoch,
+		};
+		let txn = self
+			.connection
+			.transaction_with_behavior(TransactionBehavior::Immediate)?;
+		require_current_writer(&txn, Some(&candidate))?;
+		txn.commit()?;
+		self.writer = Some(candidate);
+		Ok(())
+	}
+
+	/// SQLite serializes this transition with WAL writes. Remote submissions
+	/// that already left the DB transaction are NOT drained by this operation.
+	fn freeze_writer(&mut self) -> Result<()> {
+		let current = self.writer.as_ref().context("writer identity required")?;
+		let txn = self
+			.connection
+			.transaction_with_behavior(TransactionBehavior::Immediate)?;
+		let updated = txn.execute(
+			"UPDATE writer_authority SET phase='frozen'
+             WHERE slot=1 AND owner=?1 AND epoch=?2 AND phase='admitting'",
+			params![current.owner, current.epoch],
+		)?;
+		if updated != 1 {
+			bail!("writer already frozen or no longer authoritative");
+		}
+		txn.commit()?;
+		Ok(())
+	}
+
+	/// Model a privileged transfer after a completed external drain.
+	/// No public MCP entrypoint or real transfer capability invokes this.
+	fn promote_frozen_writer(&mut self, successor: &str) -> Result<i64> {
+		let current = self
+			.writer
+			.as_ref()
+			.context("frozen owner identity required")?;
+		if !matches!(successor, "v4" | "v11")
+			|| current.owner == successor
+			|| current.epoch == i64::MAX
+		{
+			bail!("invalid successor owner or epoch");
+		}
+		let txn = self
+			.connection
+			.transaction_with_behavior(TransactionBehavior::Immediate)?;
+		let updated = txn.execute(
+			"UPDATE writer_authority
+             SET owner=?1, epoch=epoch+1, phase='admitting'
+             WHERE slot=1 AND owner=?2 AND epoch=?3 AND phase='frozen'",
+			params![successor, current.owner, current.epoch],
+		)?;
+		if updated != 1 {
+			bail!("owner transfer requires exact previous frozen epoch");
+		}
+		txn.commit()?;
+		let epoch = current.epoch + 1;
+		self.writer = None;
+		Ok(epoch)
 	}
 
 	// Caller must freeze all effect writers and verify this is disposable
@@ -386,6 +531,7 @@ impl Ledger {
 		let txn = self
 			.connection
 			.transaction_with_behavior(TransactionBehavior::Immediate)?;
+		require_current_writer(&txn, self.writer.as_ref())?;
 		let sealed: i64 =
 			txn.query_row("SELECT sealed FROM metadata WHERE slot=1", [], |r| r.get(0))?;
 		if sealed != 1 {
@@ -394,14 +540,17 @@ impl Ledger {
 		let mut results = Vec::with_capacity(entries.len());
 		for request in entries {
 			let fresh = txn.execute(
-				"INSERT INTO identities(host,idem_key,job_id,digest,phase)
-                VALUES (?1,?2,?3,?4,'reserved')
+				"INSERT INTO identities(host,idem_key,job_id,digest,phase,
+                    admitted_owner,admitted_epoch)
+                VALUES (?1,?2,?3,?4,'reserved',?5,?6)
                 ON CONFLICT(host,idem_key) DO NOTHING",
 				params![
 					request.host,
 					request.key,
 					request.proposed_id,
-					request.digest
+					request.digest,
+					self.writer.as_ref().map(|w| w.owner.as_str()),
+					self.writer.as_ref().map(|w| w.epoch),
 				],
 			)?;
 			let (id, bound, phase): (String, Option<String>, String) = txn.query_row(
@@ -456,15 +605,24 @@ impl Ledger {
 		let txn = self
 			.connection
 			.transaction_with_behavior(TransactionBehavior::Immediate)?;
+		require_current_writer(&txn, self.writer.as_ref())?;
 		let changed = txn.execute(
 			"UPDATE identities SET phase='record_saved'
              WHERE host=?1 AND idem_key=?2 AND job_id=?3 AND digest=?4
                    AND phase='reserved'
+                   AND admitted_owner IS ?5 AND admitted_epoch IS ?6
                    AND EXISTS (
                        SELECT 1 FROM original_job_ids AS j
                        WHERE j.job_id=?3 AND j.host=?1 AND j.idem_key=?2
                    )",
-			params![host, key, job_id, digest],
+			params![
+				host,
+				key,
+				job_id,
+				digest,
+				self.writer.as_ref().map(|w| w.owner.as_str()),
+				self.writer.as_ref().map(|w| w.epoch)
+			],
 		)?;
 		if changed != 1 {
 			bail!("original identity cannot transition to saved");
@@ -500,15 +658,24 @@ impl Ledger {
 		let txn = self
 			.connection
 			.transaction_with_behavior(TransactionBehavior::Immediate)?;
+		require_current_writer(&txn, self.writer.as_ref())?;
 		let changed = txn.execute(
 			"UPDATE identities SET phase='submission_unknown'
              WHERE host=?1 AND idem_key=?2 AND job_id=?3 AND digest=?4
                    AND phase='record_saved'
+                   AND admitted_owner IS ?5 AND admitted_epoch IS ?6
                    AND EXISTS (
                        SELECT 1 FROM original_job_ids AS j
                        WHERE j.job_id=?3 AND j.host=?1 AND j.idem_key=?2
                    )",
-			params![host, key, job_id, digest],
+			params![
+				host,
+				key,
+				job_id,
+				digest,
+				self.writer.as_ref().map(|w| w.owner.as_str()),
+				self.writer.as_ref().map(|w| w.epoch)
+			],
 		)?;
 		if changed != 1 {
 			bail!("remote submission was already attempted or not durably saved");
@@ -1205,5 +1372,138 @@ mod tests {
 				.begin_remote_submission(HOSTS[i], &keys[i], &ids[i], &digest)
 				.is_err());
 		}
+	}
+
+	#[test]
+	fn single_writer_epoch_freeze_transfer_and_rollback_preserves_all_ids() {
+		let f = Fixture::new();
+		let digest = "a".repeat(64);
+		f.original("legacy-job", "main", Some("legacy-key"), Some(&digest));
+		let mut v4 = f.bootstrap();
+		assert_eq!(v4.establish_first_writer("v4").unwrap(), 1);
+		let mut v4_second = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		v4_second.bind_writer("v4", 1).unwrap();
+		let mut v11 = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		assert!(v11.bind_writer("v11", 1).is_err());
+		assert!(v11
+			.reserve("mac", "unauthorized", &digest, "bad-id")
+			.is_err());
+		assert_eq!(
+			v4.reserve("main", "legacy-key", &digest, "replay-id")
+				.unwrap(),
+			Reserve::Existing {
+				job_id: "legacy-job".into(),
+				phase: "legacy".into()
+			}
+		);
+		v4.freeze_writer().unwrap();
+		assert!(v4.reserve("mac", "frozen", &digest, "bad-id").is_err());
+		assert!(v4_second
+			.reserve("rog", "also-frozen", &digest, "bad-id")
+			.is_err());
+		assert!(v11.bind_writer("v11", 1).is_err());
+		let epoch_two = v4.promote_frozen_writer("v11").unwrap();
+		assert_eq!(epoch_two, 2);
+		assert!(v4_second
+			.reserve("mac", "stale-owner", &digest, "bad-id")
+			.is_err());
+		v11.bind_writer("v11", epoch_two).unwrap();
+		assert_eq!(
+			v11.reserve("mac", "new-era", &digest, "successor-id")
+				.unwrap(),
+			Reserve::Fresh("successor-id".into())
+		);
+		assert_eq!(
+			v11.reserve("main", "legacy-key", &digest, "replay-id")
+				.unwrap(),
+			Reserve::Existing {
+				job_id: "legacy-job".into(),
+				phase: "legacy".into()
+			}
+		);
+		v11.freeze_writer().unwrap();
+
+		let epoch_three = v11.promote_frozen_writer("v4").unwrap();
+		assert_eq!(epoch_three, 3);
+		assert!(v11.reserve("main", "stale-v11", &digest, "bad-id").is_err());
+		v4_second.bind_writer("v4", epoch_three).unwrap();
+		assert_eq!(
+			v4_second
+				.reserve("rog", "rollback-new", &digest, "rollback-id")
+				.unwrap(),
+			Reserve::Fresh("rollback-id".into())
+		);
+		assert_eq!(
+			v4_second
+				.reserve("mac", "new-era", &digest, "bad-replay")
+				.unwrap(),
+			Reserve::Existing {
+				job_id: "successor-id".into(),
+				phase: "reserved".into()
+			}
+		);
+	}
+
+	#[test]
+	fn submission_intent_cannot_cross_owner_epoch_or_bypass_frozen_state() {
+		let f = Fixture::new();
+		let mut v4 = f.bootstrap();
+		let digest = "b".repeat(64);
+		v4.establish_first_writer("v4").unwrap();
+		assert_eq!(
+			v4.reserve("main", "command", &digest, "original-id")
+				.unwrap(),
+			Reserve::Fresh("original-id".into())
+		);
+		f.original("original-id", "main", Some("command"), Some(&digest));
+		let mut unbound = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		assert!(unbound
+			.mark_saved("main", "command", "original-id", &digest)
+			.is_err());
+		assert!(unbound
+			.begin_remote_submission("main", "command", "original-id", &digest)
+			.is_err());
+		v4.mark_saved("main", "command", "original-id", &digest)
+			.unwrap();
+		v4.freeze_writer().unwrap();
+		assert!(v4
+			.begin_remote_submission("main", "command", "original-id", &digest)
+			.is_err());
+		assert_eq!(v4.promote_frozen_writer("v11").unwrap(), 2);
+		let mut v11 = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		v11.bind_writer("v11", 2).unwrap();
+		assert_eq!(
+			v11.reserve("main", "command", &digest, "new-id").unwrap(),
+			Reserve::Existing {
+				job_id: "original-id".into(),
+				phase: "record_saved".into()
+			}
+		);
+		assert!(
+			v11.begin_remote_submission("main", "command", "original-id", &digest)
+				.is_err(),
+			"new owner cannot submit an old epoch's staged remote command"
+		);
+		assert!(!f.jobs.join("new-id.json").exists());
+	}
+
+	#[test]
+	fn frozen_authority_remains_closed_after_controller_restart() {
+		let f = Fixture::new();
+		let mut v4 = f.bootstrap();
+		let digest = "c".repeat(64);
+		v4.establish_first_writer("v4").unwrap();
+		v4.freeze_writer().unwrap();
+		drop(v4);
+		let mut new_v4 = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		assert!(new_v4.bind_writer("v4", 1).is_err());
+		assert!(new_v4
+			.reserve("main", "crash-retry", &digest, "bad-id")
+			.is_err());
+		let mut new_v11 = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		assert!(new_v11.bind_writer("v11", 2).is_err());
+		assert!(new_v11
+			.reserve("rog", "crash-new", &digest, "bad-id")
+			.is_err());
 	}
 }
