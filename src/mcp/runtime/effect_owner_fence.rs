@@ -66,6 +66,24 @@ pub struct AdmissionPermit {
     predecessor_state_root: Option<(PathBuf, File)>,
     #[allow(dead_code)]
     epoch: Option<u64>,
+    #[allow(dead_code)]
+    owner: Option<String>,
+}
+
+impl AdmissionPermit {
+    // This is an isolated WAL proof, not an alternative source of authority.
+    #[cfg(test)]
+    pub(crate) fn wal_writer_proof(&self) -> Result<(&str, i64)> {
+        self._locked.as_ref().context("WAL requires the acquired effect-owner flock")?;
+        self._authority_root.as_ref().context("WAL requires a pinned owner authority")?;
+        self._state_root.as_ref().context("WAL requires a pinned controller state")?;
+        let owner = self.owner.as_deref().context("WAL owner identity unavailable")?;
+        if !matches!(owner, "v4" | "v11") {
+            bail!("WAL owner identity invalid");
+        }
+        let epoch = self.epoch.context("WAL owner epoch unavailable")?;
+        Ok((owner, i64::try_from(epoch)?))
+    }
 }
 
 #[cfg(unix)]
@@ -162,7 +180,7 @@ fn verify_root_path_identity(path: &Path, pinned: &File) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn acquire_from_root(root: &Path, self_owner: &str, self_state: &Path) -> Result<AdmissionPermit> {
+pub(crate) fn acquire_from_root(root: &Path, self_owner: &str, self_state: &Path) -> Result<AdmissionPermit> {
     if !matches!(self_owner, "v4" | "v11") || !self_state.is_absolute() {
         bail!("invalid owner identity or controller state root");
     }
@@ -237,6 +255,7 @@ fn acquire_from_root(root: &Path, self_owner: &str, self_state: &Path) -> Result
         _state_root: Some(state_fd),
         predecessor_state_root,
         epoch: Some(record.epoch),
+        owner: Some(record.owner),
     })
 }
 
@@ -544,7 +563,7 @@ pub async fn admit_new_effect() -> Result<AdmissionPermit> {
         (None, None) if !required =>
             return Ok(AdmissionPermit {
                 _locked: None, _authority_root: None, authority_path: None, _state_root: None,
-                predecessor_state_root: None, epoch: None,
+                predecessor_state_root: None, epoch: None, owner: None,
             }),
         (Some(root), Some(owner)) => (root, owner),
         _ => bail!("required effect owner fence is not fully configured"),
