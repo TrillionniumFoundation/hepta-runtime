@@ -17,6 +17,9 @@ use std::collections::HashSet;
 use std::ffi::CString;
 use std::fs::{self, File};
 use std::io::Read;
+#[cfg(target_os = "linux")]
+use std::sync::{Mutex, OnceLock};
+use sha2::{Digest, Sha256};
 #[cfg(unix)]
 use std::os::fd::{AsRawFd, FromRawFd};
 #[cfg(unix)]
@@ -25,6 +28,12 @@ use std::path::{Component, Path, PathBuf};
 
 const SCHEMA: &str = "hepta-effect-owner-fence-v1";
 const MAX_OWNER_BYTES: u64 = 4096;
+// Match the native source-inventory row bound, not the older 32,768 facaded
+// list bound. A frozen predecessor remains eligible for a V11 transition as
+// its historical job registry grows, but always within finite resource caps.
+const MAX_PREDECESSOR_JOBS: usize = 65_536;
+const MAX_PREDECESSOR_TOTAL_BYTES: u64 = 128 * 1024 * 1024;
+const MAX_PREDECESSOR_SCAN_SECS: u64 = 30;
 const FENCE_DIRECTORY: &str = "HEPTA_EFFECT_OWNER_FENCE_DIR";
 const SELF_OWNER: &str = "HEPTA_EFFECT_OWNER_SELF";
 const FENCE_REQUIRED: &str = "HEPTA_EFFECT_OWNER_FENCE_REQUIRED";
@@ -52,6 +61,7 @@ pub struct AdmissionPermit {
     // Keep the authority and state identities open for the complete admitted
     // submission. Admission requires their pathnames to have remained stable.
     _authority_root: Option<File>,
+    authority_path: Option<PathBuf>,
     _state_root: Option<File>,
     predecessor_state_root: Option<(PathBuf, File)>,
     #[allow(dead_code)]
@@ -223,6 +233,7 @@ fn acquire_from_root(root: &Path, self_owner: &str, self_state: &Path) -> Result
     Ok(AdmissionPermit {
         _locked: Some(lock),
         _authority_root: Some(root_fd),
+        authority_path: Some(root.to_path_buf()),
         _state_root: Some(state_fd),
         predecessor_state_root,
         epoch: Some(record.epoch),
@@ -243,6 +254,35 @@ struct LegacyJobKey {
     request_digest: Option<String>,
 }
 
+// Cache only a SUCCESSFULLY authenticated scan of an independently fenced,
+// immutable V4 predecessor registry. The shared owner flock is held on every
+// lookup, and every lookup rechecks the original jobs directory identity.
+// Keys are SHA256(host + NUL + idempotency), never raw private inputs.
+// Any pathname/inode/metadata drift under the SAME owner epoch fails closed;
+// a changed authority/state root or new epoch forces a fresh full scan.
+#[cfg(target_os = "linux")]
+struct ReplaySnapshot {
+    authority_path: PathBuf,
+    predecessor_path: PathBuf,
+    authority_identity: (u64, u64),
+    predecessor_identity: (u64, u64),
+    authority_stamp: (u64, u64, u64, u64, u32, u32, i64, i64, i64, i64),
+    epoch: u64,
+    registry_stamp: (u64, u64, u64, u64, u32, u32, i64, i64, i64, i64),
+    bound_keys: HashSet<[u8; 32]>,
+}
+#[cfg(target_os = "linux")]
+static REPLAY_SNAPSHOT: OnceLock<Mutex<Option<ReplaySnapshot>>> = OnceLock::new();
+
+#[cfg(target_os = "linux")]
+fn bound_key_digest(host: &str, key: &str) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(host.as_bytes());
+    hasher.update([0u8]);
+    hasher.update(key.as_bytes());
+    hasher.finalize().into()
+}
+
 impl AdmissionPermit {
     /// Reject any V4 historical process_start retry before V11 allocates its
     /// own durable identity. Missing keys are refused on a V11 owner, since
@@ -254,28 +294,79 @@ impl AdmissionPermit {
                 return Ok(());
             };
             let key = key.context("V11 process_start requires a new idempotency key")?;
-            if key.is_empty() || key.len() > 256 {
-                bail!("V11 process_start requires a valid idempotency key");
+            if key.is_empty() || key.len() > 256 || host.is_empty() || host.len() > 128
+                || !host.bytes().all(|b| b.is_ascii_alphanumeric() || b"-._".contains(&b))
+            {
+                bail!("V11 process_start requires a valid host/idempotency key");
             }
+            // This method is never reachable with V4 as owner, and never
+            // bypasses the already-held SH owner lock.
+            let authority = self._authority_root.as_ref()
+                .context("no pinned cross-controller admission authority")?;
+            let epoch = self.epoch.context("no pinned predecessor epoch")?;
+            let authority_path = self.authority_path.as_deref()
+                .context("missing pinned authority path")?;
+            verify_root_path_identity(authority_path, authority)?;
+            let auth_info = authority.metadata()?;
+            let pred_info = pinned.metadata()?;
+            let identity = (auth_info.dev(), auth_info.ino());
+            let state_identity = (pred_info.dev(), pred_info.ino());
+            let authority_stamp = owner_stamp(&auth_info);
             verify_root_path_identity(predecessor, pinned)?;
             let jobs = open_component(pinned, std::ffi::OsStr::new("jobs"))?;
             let folder_meta = jobs.metadata()?;
-            if folder_meta.uid() != unsafe { libc::geteuid() } || folder_meta.mode() & 0o777 != 0o700 {
+            if folder_meta.uid() != unsafe { libc::geteuid() }
+                || folder_meta.mode() & 0o777 != 0o700
+            {
                 bail!("predecessor jobs registry must be owner-private");
             }
-            // Linux /proc/self/fd pins the already-open directory, avoiding
-            // a second independent traversal of the writable path.
+            let stamp = owner_stamp(&folder_meta);
+            let digest = bound_key_digest(host, key);
+            let cache = REPLAY_SNAPSHOT.get_or_init(|| Mutex::new(None));
+            let mut cache = cache.lock()
+                .map_err(|_| anyhow!("predecessor replay cache unavailable"))?;
+            if let Some(prior) = cache.as_ref() {
+                if prior.authority_path == authority_path
+                    && prior.predecessor_path == *predecessor
+                    && prior.authority_identity == identity
+                    && prior.predecessor_identity == state_identity
+                    && prior.authority_stamp == authority_stamp
+                    && prior.epoch == epoch
+                {
+                    if stamp != prior.registry_stamp {
+                        bail!("frozen predecessor registry mutated after replay seal");
+                    }
+                    verify_root_path_identity(predecessor, pinned)?;
+                    if prior.bound_keys.contains(&digest) {
+                        bail!("original V4 accepted this host/idempotency identity; resume original job");
+                    }
+                    return Ok(());
+                }
+            }
+
+            // A different fixed authority/root/epoch is an independent
+            // owner session. Failures do not replace a valid cached snapshot.
+            // Collect under one SH flock and this initialization mutex so a
+            // wave of concurrent new starts cannot each scan 26K+ files.
             let fd_path = format!("/proc/self/fd/{}", jobs.as_raw_fd());
+            let scan_started = std::time::Instant::now();
+            let deadline = || -> Result<()> {
+                if scan_started.elapsed() > std::time::Duration::from_secs(MAX_PREDECESSOR_SCAN_SECS) {
+                    bail!("predecessor replay scan exceeded bounded time budget");
+                }
+                Ok(())
+            };
             let enumerate = || -> Result<Vec<String>> {
                 let mut names = Vec::new();
                 for item in fs::read_dir(&fd_path)? {
+                    deadline()?;
                     let name = item?.file_name().into_string()
                         .map_err(|_| anyhow!("non-UTF8 old durable job filename"))?;
                     if !name.ends_with(".json") || name.len() > 140 {
                         bail!("uncertain or temporary predecessor job record");
                     }
                     names.push(name);
-                    if names.len() > 32768 {
+                    if names.len() > MAX_PREDECESSOR_JOBS {
                         bail!("predecessor registry exceeds safe replay scan bound");
                     }
                 }
@@ -284,12 +375,18 @@ impl AdmissionPermit {
             };
             let names = enumerate()?;
             let mut old_keys = HashSet::with_capacity(names.len());
-            let mut is_replay = false;
+            let mut total_source_bytes = 0u64;
             for name in &names {
+                deadline()?;
                 let file = open_record(&jobs, name, false)?;
                 let before = file.metadata()?;
                 if before.len() == 0 || before.len() > 1024 * 1024 {
                     bail!("invalid predecessor durable job length");
+                }
+                total_source_bytes = total_source_bytes.checked_add(before.len())
+                    .context("predecessor replay byte count overflow")?;
+                if total_source_bytes > MAX_PREDECESSOR_TOTAL_BYTES {
+                    bail!("predecessor replay scan exceeded bounded source bytes");
                 }
                 let mut content = Vec::with_capacity(before.len() as usize);
                 (&file).take(1024 * 1024 + 1).read_to_end(&mut content)?;
@@ -304,6 +401,7 @@ impl AdmissionPermit {
                     .context("invalid predecessor durable job identity")?;
                 if row.id != name.trim_end_matches(".json")
                     || row.host.is_empty() || row.host.len() > 128
+                    || !row.host.bytes().all(|b| b.is_ascii_alphanumeric() || b"-._".contains(&b))
                 {
                     bail!("predecessor durable identity mismatch");
                 }
@@ -315,21 +413,33 @@ impl AdmissionPermit {
                     {
                         bail!("predecessor idempotency binding incomplete");
                     }
-                    if !old_keys.insert((row.host.clone(), prior_key.clone())) {
+                    if !old_keys.insert(bound_key_digest(&row.host, &prior_key)) {
                         bail!("duplicate V4 predecessor idempotency binding");
-                    }
-                    if row.host == host && prior_key == key {
-                        is_replay = true;
                     }
                 }
             }
+            deadline()?;
             if enumerate()? != names || owner_stamp(&folder_meta) != owner_stamp(&jobs.metadata()?) {
                 bail!("predecessor registry changed while verifying replay namespace");
             }
             verify_root_path_identity(predecessor, pinned)?;
-            if is_replay {
-                bail!("original V4 has already accepted this host/idempotency identity; resume original job");
+            if old_keys.contains(&digest) {
+                // Successful inspection is still reusable to refuse subsequent
+                // retries; the old submission must never be launched by V11.
+                *cache = Some(ReplaySnapshot {
+                    authority_path: authority_path.to_path_buf(),
+                    predecessor_path: predecessor.to_path_buf(),
+                    authority_identity: identity, predecessor_identity: state_identity,
+                    authority_stamp, epoch, registry_stamp: stamp, bound_keys: old_keys,
+                });
+                bail!("original V4 accepted this host/idempotency identity; resume original job");
             }
+            *cache = Some(ReplaySnapshot {
+                authority_path: authority_path.to_path_buf(),
+                predecessor_path: predecessor.to_path_buf(),
+                authority_identity: identity, predecessor_identity: state_identity,
+                authority_stamp, epoch, registry_stamp: stamp, bound_keys: old_keys,
+            });
             Ok(())
         }
         #[cfg(not(target_os = "linux"))]
@@ -337,6 +447,77 @@ impl AdmissionPermit {
             let _ = (host, key);
             if self.predecessor_state_root.is_some() {
                 bail!("V11 predecessor replay validation requires supported Linux controller");
+            }
+            Ok(())
+        }
+    }
+}
+
+// A newly promoted V11 must not start a second PTY for a V4 idempotency key.
+// Persistent operator terminals use a deterministic session identity derived
+// from host + NUL + key. Unlike process_start, this can be checked by a single
+// descriptor-relative lookup; no 20K-job scan or model-supplied pathname.
+// Existing V4 terminal reads/writes remain with their original owner.
+impl AdmissionPermit {
+    pub fn require_new_pty_identity(&self, host: &str, key: Option<&str>) -> Result<()> {
+        #[cfg(target_os = "linux")]
+        {
+            let Some((predecessor, pinned)) = &self.predecessor_state_root else {
+                return Ok(());
+            };
+            let key = key.context("V11 PTY start requires a new idempotency key")?;
+            if key.is_empty() || key.len() > 256 || host.is_empty() || host.len() > 128
+                || !host.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-._".contains(&byte))
+            {
+                bail!("V11 PTY admission requires a valid host and idempotency key");
+            }
+            verify_root_path_identity(predecessor, pinned)?;
+            let root_before = owner_stamp(&pinned.metadata()?);
+            let dir = match open_component(pinned, std::ffi::OsStr::new("terminals")) {
+                Ok(dir) => Some(dir),
+                Err(error) if error.root_cause().downcast_ref::<std::io::Error>()
+                    .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound) => None,
+                Err(error) => return Err(error),
+            };
+            let mut original_exists = false;
+            if let Some(dir) = dir {
+                let before = owner_stamp(&dir.metadata()?);
+                let info = dir.metadata()?;
+                if info.uid() != unsafe { libc::geteuid() } || info.mode() & 0o777 != 0o700 {
+                    bail!("V4 predecessor terminal registry is not private");
+                }
+                // Match terminal::start's exact SHA-256 hex encoding across sha2 versions.
+                let digest = Sha256::digest(format!("{host}\0{key}").as_bytes());
+                let identity = format!("dpty-{}", digest.iter()
+                    .map(|byte| format!("{byte:02x}")).collect::<String>());
+                let name = format!("{identity}.json");
+                original_exists = match open_record(&dir, &name, false) {
+                    Ok(_) => true,
+                    Err(error) if error.root_cause().downcast_ref::<std::io::Error>()
+                        .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound) => false,
+                    Err(error) => return Err(error),
+                };
+                let again = open_component(pinned, std::ffi::OsStr::new("terminals"))?;
+                if before != owner_stamp(&dir.metadata()?)
+                    || before != owner_stamp(&again.metadata()?)
+                {
+                    bail!("V4 predecessor terminal registry changed during replay check");
+                }
+            }
+            verify_root_path_identity(predecessor, pinned)?;
+            if root_before != owner_stamp(&pinned.metadata()?) {
+                bail!("V4 predecessor state changed during PTY replay check");
+            }
+            if original_exists {
+                bail!("Original V4 already owns the PTY idempotency identity; resume the original session");
+            }
+            Ok(())
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let _ = (host, key);
+            if self.predecessor_state_root.is_some() {
+                bail!("V11 predecessor PTY replay validation requires Linux");
             }
             Ok(())
         }
@@ -362,7 +543,7 @@ pub async fn admit_new_effect() -> Result<AdmissionPermit> {
     let (root, owner) = match (root, owner) {
         (None, None) if !required =>
             return Ok(AdmissionPermit {
-                _locked: None, _authority_root: None, _state_root: None,
+                _locked: None, _authority_root: None, authority_path: None, _state_root: None,
                 predecessor_state_root: None, epoch: None,
             }),
         (Some(root), Some(owner)) => (root, owner),
