@@ -79,6 +79,274 @@ fn validation_bounds_every_caller_resource() {
 }
 
 #[test]
+fn explicit_search_modes_and_filters_preserve_omitted_literal_defaults() {
+	let defaults = params();
+	assert!(defaults.query_mode.is_none());
+	assert!(defaults.literal_search.is_none());
+	assert!(!defaults.ignore_case);
+	assert!(!defaults.early_termination);
+	assert!(defaults.context_lines.is_none());
+	let mut p = defaults.clone();
+	p.query_mode = Some(SearchQueryMode::Regex);
+	p.literal_search = Some(false);
+	p.ignore_case = true;
+	p.context_lines = Some(10);
+	p.file_pattern = Some("*.rs|*.py".into());
+	p.exclude_patterns = vec!["vendor".into(), "target/*".into()];
+	assert!(validate_start(&p).is_ok());
+	p.literal_search = Some(true);
+	assert!(validate_start(&p).is_err());
+	p.literal_search = None;
+	p.query_mode = Some(SearchQueryMode::Glob);
+	assert!(validate_start(&p).is_err());
+	p.kind = SearchKind::Files;
+	assert!(validate_start(&p).is_ok());
+	p.context_lines = Some(11);
+	assert!(validate_start(&p).is_err());
+	p.context_lines = None;
+	p.file_pattern = Some("[z-a]".into());
+	assert!(validate_start(&p).is_err());
+	p.file_pattern = None;
+	p.exclude_patterns = vec!["x".into(); 33];
+	assert!(validate_start(&p).is_err());
+	p.exclude_patterns = vec!["bad\npattern".into()];
+	assert!(validate_start(&p).is_err());
+	assert!(serde_json::from_value::<SearchStartParams>(json!({
+		"host":"main","root":"/tmp","query":"x","kind":"content","ignore_case":1
+	}))
+	.is_err());
+}
+
+#[test]
+fn compiled_globs_match_ripgrep_order_braces_anchors_escapes_and_byte_case_folding() {
+	use std::io::Write;
+	use std::process::{Command, Stdio};
+	let temporary = tempfile::tempdir().unwrap();
+	let paths = [
+		"a.txt",
+		"secret.txt",
+		"KEEP.TXT",
+		"dir/a.txt",
+		"dir/deep/b.txt",
+		"dir/secret.txt",
+		"src/a.js",
+		"src/b.ts",
+		"src/deep/c.js",
+		"names/star*.txt",
+		"names/q?.txt",
+		"!bang.txt",
+		"unicode/Å.txt",
+		"unicode/å.txt",
+		"unicode/中.txt",
+		"a1.txt",
+		"a2.txt",
+		"new\nline.txt",
+	];
+	for path in paths {
+		let full = temporary.path().join(path);
+		std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+		std::fs::write(full, "needle").unwrap();
+	}
+	let patterns = [
+		"*.txt|!secret.txt",
+		"*.txt|!secret.txt|secret.txt",
+		"src/*.{js,ts}",
+		"src/**/{a,b,c}.js",
+		"*.txt|!dir/|dir/a.txt",
+		"/a.txt",
+		"a[12].txt",
+		r"names/star\*.txt",
+		r"names/q\?.txt",
+		r"\!bang.txt",
+		"#comment|*.js",
+		"*.{txt,js}|!src/**|src/a.js",
+		"dir/",
+		"unicode/Å.txt",
+		"*.txt| | !secret.txt",
+	];
+	let mut requests = Vec::new();
+	let mut expected = Vec::new();
+	let mut labels = Vec::new();
+	for insensitive in [false, true] {
+		for pattern in patterns {
+			let mut p = params();
+			p.kind = SearchKind::Files;
+			p.query = "*".into();
+			p.query_mode = Some(SearchQueryMode::Glob);
+			p.file_pattern = Some(pattern.into());
+			p.ignore_case = insensitive;
+			let program = compile_glob_program(&p).unwrap();
+			let mut value = serde_json::to_value(&p).unwrap();
+			value["glob_program"] = serde_json::to_value(program).unwrap();
+			value["context_lines"] = json!(0);
+			requests.push(value);
+			labels.push(format!(
+				"file_pattern={pattern:?}, ignore_case={insensitive}"
+			));
+			let mut command = Command::new("rg");
+			command.current_dir(temporary.path()).args([
+				"--files",
+				"--hidden",
+				"--no-ignore",
+				"--no-config",
+				"--null",
+			]);
+			for glob in pattern
+				.split('|')
+				.map(str::trim)
+				.filter(|part| !part.is_empty())
+			{
+				command
+					.arg(if insensitive { "--iglob" } else { "--glob" })
+					.arg(glob);
+			}
+			let output = command.arg(".").output().unwrap();
+			assert!(
+				output.status.code().is_some_and(|code| code <= 1),
+				"{}",
+				String::from_utf8_lossy(&output.stderr)
+			);
+			let mut names: Vec<_> = output
+				.stdout
+				.split(|byte| *byte == 0)
+				.filter(|name| !name.is_empty())
+				.map(|name| {
+					String::from_utf8(name.to_vec())
+						.unwrap()
+						.trim_start_matches("./")
+						.to_string()
+				})
+				.collect();
+			names.sort();
+			expected.push(names);
+		}
+	}
+	for (query, excludes) in [
+		("src/*.{js,ts}", vec![]),
+		("src/**", vec![]),
+		(r"names/q\?.txt", vec![]),
+		("unicode/?.txt", vec![]),
+		("unicode/??.txt", vec![]),
+		("a[!2].txt", vec![]),
+		("*", vec!["*.txt", "!a.txt"]),
+		("*", vec!["dir/", "!dir/a.txt"]),
+		("*", vec!["dir/*", "!dir/a.txt"]),
+	] {
+		let mut p = params();
+		p.kind = SearchKind::Files;
+		p.query = query.into();
+		p.query_mode = Some(SearchQueryMode::Glob);
+		p.exclude_patterns = excludes.iter().map(|value| value.to_string()).collect();
+		let mut value = serde_json::to_value(&p).unwrap();
+		value["glob_program"] = serde_json::to_value(compile_glob_program(&p).unwrap()).unwrap();
+		value["context_lines"] = json!(0);
+		requests.push(value);
+		labels.push(format!("query={query:?}, excludes={excludes:?}"));
+		let mut command = Command::new("rg");
+		command.current_dir(temporary.path()).args([
+			"--files",
+			"--hidden",
+			"--no-ignore",
+			"--no-config",
+			"--null",
+			"--glob",
+			query,
+		]);
+		for exclusion in excludes {
+			command.arg("--glob").arg(
+				exclusion
+					.strip_prefix('!')
+					.map_or_else(|| format!("!{exclusion}"), str::to_string),
+			);
+		}
+		let output = command.arg(".").output().unwrap();
+		assert!(
+			output.status.code().is_some_and(|code| code <= 1),
+			"{}",
+			String::from_utf8_lossy(&output.stderr)
+		);
+		let mut names: Vec<_> = output
+			.stdout
+			.split(|byte| *byte == 0)
+			.filter(|name| !name.is_empty())
+			.map(|name| {
+				String::from_utf8(name.to_vec())
+					.unwrap()
+					.trim_start_matches("./")
+					.to_string()
+			})
+			.collect();
+		names.sort();
+		expected.push(names);
+	}
+	let source = format!("__name__='search_glob_test'\n{}\nq=json.load(sys.stdin)\nout=[]\nfor request in q['requests']:\n matches,included,excluded,_=options(request)\n selected=[]\n for path in q['paths']:\n  parents=path.split('/')[:-1]\n  denied=any(excluded('/'.join(parents[:i]),True) for i in range(1,len(parents)+1))\n  if not denied and included(path) and not excluded(path) and matches(path):selected.append(path)\n out.append(sorted(selected))\nprint(json.dumps(out))", include_str!("search_worker.py"));
+	let mut child = Command::new("python3")
+		.args(["-c", &source])
+		.stdin(Stdio::piped())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.spawn()
+		.unwrap();
+	child
+		.stdin
+		.take()
+		.unwrap()
+		.write_all(&serde_json::to_vec(&json!({"requests":requests,"paths":paths})).unwrap())
+		.unwrap();
+	let output = child.wait_with_output().unwrap();
+	assert!(
+		output.status.success(),
+		"{}",
+		String::from_utf8_lossy(&output.stderr)
+	);
+	let actual: Vec<Vec<String>> = serde_json::from_slice(&output.stdout).unwrap();
+	assert_eq!(actual.len(), expected.len());
+	for (index, (actual, expected)) in actual.iter().zip(&expected).enumerate() {
+		assert_eq!(actual, expected, "case {index}, {}", labels[index]);
+	}
+}
+
+#[test]
+fn administrator_search_interpreter_mapping_rejects_malformed_unknown_and_unsafe_paths() {
+	let config: RuntimeConfig = serde_json::from_value(json!({"hosts":{
+		"main":{"ssh_target":"localhost","remote_state_dir":"/tmp/state"},
+		"other":{"ssh_target":"remote","remote_state_dir":"/tmp/state"}
+	}}))
+	.unwrap();
+	assert!(parse_search_interpreters(None, &config).unwrap().is_empty());
+	let mapping =
+		parse_search_interpreters(Some(r#"{"main":"/opt/document env/bin/python3"}"#), &config)
+			.unwrap();
+	assert_eq!(
+		mapping.get("main").unwrap(),
+		"/opt/document env/bin/python3"
+	);
+	assert!(!mapping.contains_key("other"));
+	for invalid in [
+		"invalid JSON",
+		"[]",
+		"null",
+		r#"{"main":null}"#,
+		r#"{"unknown":"/usr/bin/python3"}"#,
+		r#"{"main":"python3"}"#,
+		r#"{"main":"relative/python3"}"#,
+		r#"{"main":"/opt/../python3"}"#,
+		r#"{"main":"/opt/python\n3"}"#,
+		r#"{"main":"/opt/python\t3"}"#,
+	] {
+		assert!(
+			parse_search_interpreters(Some(invalid), &config).is_err(),
+			"{invalid:?}"
+		);
+	}
+	assert!(parse_search_interpreters(Some(&" ".repeat(64 * 1024 + 1)), &config).is_err());
+	assert!(serde_json::from_value::<SearchStartParams>(json!({
+		"host":"main","root":"/tmp","query":"x","kind":"content", "interpreter":"/bin/sh"
+	}))
+	.is_err());
+}
+
+#[test]
 fn unfinished_restart_receipt_is_interrupted_without_pid_reattachment() {
 	let mut r = record();
 	let old = r.instance.clone();
@@ -171,6 +439,22 @@ async fn receipts_refuse_symlink_special_files_and_unbounded_serialized_response
 	);
 	assert!(response(boundary).is_ok());
 	assert!(response(json!({"payload":"x".repeat(exact_payload + 1)})).is_err());
+}
+
+#[tokio::test]
+async fn aggregate_filter_state_cannot_publish_an_unreadable_receipt() {
+	let temporary = tempfile::tempdir().unwrap();
+	let mut r = record();
+	r.request.exclude_patterns = vec!["\t".repeat(512); 32];
+	assert!(validate_start(&r.request).is_ok());
+	assert!(save(temporary.path(), &r).await.is_err());
+	assert!(tokio::fs::read_dir(temporary.path())
+		.await
+		.unwrap()
+		.next_entry()
+		.await
+		.unwrap()
+		.is_none());
 }
 
 fn effect_ack(record: &SearchRecord, action: &str, state: &str) -> Value {

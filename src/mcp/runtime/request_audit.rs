@@ -7,7 +7,7 @@ use anyhow::{anyhow, bail, Result};
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
@@ -22,9 +22,36 @@ const MAX_OWNER: usize = 128;
 const MAX_RECORD_BYTES: usize = 2048;
 const MAX_PAGE_BYTES: usize = 64 * 1024;
 const STORE_NAME: &str = "request-audit";
+const ARCHIVE_NAME: &str = "request-archive-v11";
+const ARCHIVE_ANCHOR: &str = ".request-archive-v11-anchor.json";
 static STORE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static ACTIVE: OnceLock<Mutex<HashMap<String, Weak<AtomicBool>>>> = OnceLock::new();
 static READ_PINS: OnceLock<Mutex<HashMap<String, Vec<Weak<()>>>>> = OnceLock::new();
+#[cfg(unix)]
+static HOT_CACHE: OnceLock<Mutex<VecDeque<HotSnapshot>>> = OnceLock::new();
+
+#[cfg(unix)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct ArchiveStamp {
+	device: u64,
+	inode: u64,
+	modified: (i64, i64),
+	changed: (i64, i64),
+}
+#[cfg(unix)]
+struct HotSnapshot {
+	stamp: ArchiveStamp,
+	records: Vec<Record>,
+}
+#[cfg(unix)]
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ArchiveAnchor {
+	root_device: u64,
+	root_inode: u64,
+	archive_device: u64,
+	archive_inode: u64,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum AuditCompletion {
@@ -47,6 +74,10 @@ pub struct RequestHistoryParams {
 	pub limit: Option<u16>,
 }
 
+#[derive(Debug, Clone, Default, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UsageStatsParams {}
+
 #[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 enum DurableState {
@@ -55,7 +86,7 @@ enum DurableState {
 	Failed,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct Record {
 	request_id: String,
@@ -69,6 +100,8 @@ struct Record {
 /// The private owner and state-directory handle are deliberately not printable.
 pub struct RequestTicket {
 	directory: File,
+	archive: File,
+	hot_present: bool,
 	record: Record,
 	started: Instant,
 	active: Arc<AtomicBool>,
@@ -103,42 +136,23 @@ impl RequestTicket {
 	}
 }
 #[cfg(unix)]
-pub(crate) fn retained_ids_at(root: &Path) -> Result<std::collections::HashSet<String>> {
-	let _guard = store_lock()?;
-	let dir = open_store(root)?;
-	Ok(entries(&dir)?.into_iter().map(|r| r.request_id).collect())
+pub(crate) fn validate_identity_at(root: &Path, identity: &RequestIdentity) -> Result<()> {
+	let observed = optional_observation_at(root, &identity.owner, &identity.request_id)?
+		.ok_or_else(|| anyhow!("result admission unavailable"))?;
+	if observed.identity.tool_name != identity.tool_name
+		|| observed.identity.accepted_unix_ms != identity.accepted_unix_ms
+	{
+		bail!("result admission unavailable");
+	}
+	Ok(())
 }
 #[cfg(unix)]
 fn observation_at(root: &Path, owner: &str, id: &str) -> Result<AuditObservation> {
-	if !valid_id(owner) || !valid_id(id) {
-		bail!("request unavailable to this scope");
-	}
-	let _guard = store_lock()?;
-	let dir = open_store(root)?;
-	let r = read_record(&dir, &format!("{id}.json"))
-		.map_err(|_| anyhow!("request unavailable to this scope"))?;
-	if r.owner != owner {
-		bail!("request unavailable to this scope");
-	}
-	let state = match r.state {
-		DurableState::Unknown if is_dispatch_active(id)? => "accepted",
-		DurableState::Unknown => "unknown",
-		DurableState::Completed => "completed",
-		DurableState::Failed => "failed",
-	};
-	Ok(AuditObservation {
-		identity: RequestIdentity {
-			request_id: r.request_id,
-			owner: r.owner,
-			tool_name: r.tool_name,
-			accepted_unix_ms: r.accepted_unix_ms,
-		},
-		state,
-		elapsed_ms: r.elapsed_ms,
-	})
+	optional_observation_at(root, owner, id)?
+		.ok_or_else(|| anyhow!("request unavailable to this scope"))
 }
 #[cfg(not(unix))]
-pub(crate) fn retained_ids_at(_root: &Path) -> Result<std::collections::HashSet<String>> {
+pub(crate) fn validate_identity_at(_root: &Path, _identity: &RequestIdentity) -> Result<()> {
 	bail!("private request metadata requires Unix");
 }
 #[cfg(not(unix))]
@@ -163,16 +177,11 @@ fn optional_observation_at(root: &Path, owner: &str, id: &str) -> Result<Option<
 	}
 	let _guard = store_lock()?;
 	let dir = open_store(root)?;
-	let r = match read_record(&dir, &format!("{id}.json")) {
-		Ok(record) => record,
-		Err(error)
-			if error
-				.downcast_ref::<std::io::Error>()
-				.is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
-		{
-			return Ok(None)
-		}
-		Err(_) => bail!("request unavailable to this scope"),
+	let archive = open_archive(root).map_err(|_| anyhow!("request unavailable to this scope"))?;
+	let Some(r) = retained_record(&dir, &archive, id)
+		.map_err(|_| anyhow!("request unavailable to this scope"))?
+	else {
+		return Ok(None);
 	};
 	if r.owner != owner {
 		bail!("request unavailable to this scope");
@@ -193,6 +202,40 @@ fn optional_observation_at(root: &Path, owner: &str, id: &str) -> Result<Option<
 		state,
 		elapsed_ms: r.elapsed_ms,
 	}))
+}
+
+/// The archive is the durable admission ledger; hot eviction does not revoke it.
+/// Only a missing member may fall back. Unsafe metadata never becomes absence.
+#[cfg(unix)]
+fn retained_record(hot: &File, archive: &File, id: &str) -> Result<Option<Record>> {
+	fn optional(directory: &File, id: &str) -> Result<Option<Record>> {
+		match read_record(directory, &format!("{id}.json")) {
+			Ok(record) => Ok(Some(record)),
+			Err(error)
+				if error
+					.downcast_ref::<std::io::Error>()
+					.is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
+			{
+				Ok(None)
+			}
+			Err(error) => Err(error),
+		}
+	}
+	let hot = optional(hot, id)?;
+	let archived = optional(archive, id)?;
+	if let (Some(hot), Some(archived)) = (&hot, &archived) {
+		if hot.owner != archived.owner
+			|| hot.tool_name != archived.tool_name
+			|| hot.accepted_unix_ms != archived.accepted_unix_ms
+			|| (hot.state != DurableState::Unknown && hot.state != archived.state)
+			|| (hot.elapsed_ms.is_some() && hot.elapsed_ms != archived.elapsed_ms)
+		{
+			bail!("request archive identity or outcome changed");
+		}
+	}
+	// Completion is published to the archive first. A failed hot-cache update
+	// can leave an older unknown receipt, but cannot undo the archived completion.
+	Ok(archived.or(hot))
 }
 #[cfg(not(unix))]
 fn optional_observation_at(
@@ -311,7 +354,31 @@ fn private_directory(directory: &File) -> Result<()> {
 
 #[cfg(unix)]
 fn open_store(root: &Path) -> Result<File> {
-	use std::os::fd::{AsRawFd, FromRawFd};
+	open_named_store(root, STORE_NAME)
+}
+
+#[cfg(unix)]
+fn open_named_store(root: &Path, store_name: &str) -> Result<File> {
+	use std::os::fd::AsRawFd;
+	let base = audit_root(root)?;
+	let folder = name(store_name)?;
+	let made = unsafe { libc::mkdirat(base.as_raw_fd(), folder.as_ptr(), 0o700) };
+	if made < 0 {
+		let error = std::io::Error::last_os_error();
+		if error.kind() != std::io::ErrorKind::AlreadyExists {
+			return Err(error.into());
+		}
+	} else {
+		base.sync_all()?;
+	}
+	let directory = open_at(&base, store_name, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+	private_directory(&directory)?;
+	Ok(directory)
+}
+
+#[cfg(unix)]
+fn audit_root(root: &Path) -> Result<File> {
+	use std::os::fd::FromRawFd;
 	let raw = root
 		.to_str()
 		.ok_or_else(|| anyhow!("request audit root is not UTF-8"))?;
@@ -332,19 +399,7 @@ fn open_store(root: &Path) -> Result<File> {
 	for component in raw.split('/').filter(|part| !part.is_empty()) {
 		base = open_at(&base, component, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
 	}
-	let folder = name(STORE_NAME)?;
-	let made = unsafe { libc::mkdirat(base.as_raw_fd(), folder.as_ptr(), 0o700) };
-	if made < 0 {
-		let error = std::io::Error::last_os_error();
-		if error.kind() != std::io::ErrorKind::AlreadyExists {
-			return Err(error.into());
-		}
-	} else {
-		base.sync_all()?;
-	}
-	let directory = open_at(&base, STORE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
-	private_directory(&directory)?;
-	Ok(directory)
+	Ok(base)
 }
 
 #[cfg(not(unix))]
@@ -368,8 +423,157 @@ fn validate_file(file: &File) -> Result<()> {
 }
 
 #[cfg(unix)]
+fn archive_stamp(directory: &File) -> Result<ArchiveStamp> {
+	use std::os::unix::fs::MetadataExt;
+	private_directory(directory)?;
+	let metadata = directory.metadata()?;
+	Ok(ArchiveStamp {
+		device: metadata.dev(),
+		inode: metadata.ino(),
+		modified: (metadata.mtime(), metadata.mtime_nsec()),
+		changed: (metadata.ctime(), metadata.ctime_nsec()),
+	})
+}
+
+#[cfg(unix)]
+fn read_archive_anchor(root: &File) -> Result<ArchiveAnchor> {
+	let mut file = open_at(root, ARCHIVE_ANCHOR, libc::O_RDONLY | libc::O_NONBLOCK, 0)?;
+	validate_file(&file)?;
+	let mut bytes = Vec::new();
+	Read::by_ref(&mut file)
+		.take((MAX_RECORD_BYTES + 1) as u64)
+		.read_to_end(&mut bytes)?;
+	if bytes.len() > MAX_RECORD_BYTES {
+		bail!("request archive anchor size refused");
+	}
+	Ok(serde_json::from_slice(&bytes)?)
+}
+
+#[cfg(unix)]
+fn publish_archive_anchor(root: &File, anchor: &ArchiveAnchor) -> Result<()> {
+	use std::os::fd::AsRawFd;
+	let temporary = format!(".archive-anchor-{}.tmp", new_id()?);
+	let mut file = open_at(
+		root,
+		&temporary,
+		libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL,
+		0o600,
+	)?;
+	let result = (|| -> Result<()> {
+		file.write_all(&serde_json::to_vec(anchor)?)?;
+		file.sync_all()?;
+		let source = name(&temporary)?;
+		let target = name(ARCHIVE_ANCHOR)?;
+		if unsafe {
+			libc::linkat(
+				root.as_raw_fd(),
+				source.as_ptr(),
+				root.as_raw_fd(),
+				target.as_ptr(),
+				0,
+			)
+		} < 0
+		{
+			return Err(std::io::Error::last_os_error().into());
+		}
+		if unsafe { libc::unlinkat(root.as_raw_fd(), source.as_ptr(), 0) } < 0 {
+			return Err(std::io::Error::last_os_error().into());
+		}
+		root.sync_all()?;
+		Ok(())
+	})();
+	if result.is_err() {
+		if let Ok(component) = name(&temporary) {
+			unsafe { libc::unlinkat(root.as_raw_fd(), component.as_ptr(), 0) };
+		}
+	}
+	result
+}
+
+/// A missing archive after introduction is uncertain history, never an empty archive.
+#[cfg(unix)]
+fn open_archive(root: &Path) -> Result<File> {
+	use std::os::{fd::AsRawFd, unix::fs::MetadataExt};
+	let base = audit_root(root)?;
+	let metadata = base.metadata()?;
+	match read_archive_anchor(&base) {
+		Ok(anchor) => {
+			if anchor.root_device != metadata.dev() || anchor.root_inode != metadata.ino() {
+				bail!("request archive root binding changed");
+			}
+			let archive = open_at(&base, ARCHIVE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+			let stamp = archive_stamp(&archive)?;
+			if (stamp.device, stamp.inode) != (anchor.archive_device, anchor.archive_inode) {
+				bail!("request archive identity changed; history never recreated automatically");
+			}
+			Ok(archive)
+		}
+		Err(error)
+			if error
+				.downcast_ref::<std::io::Error>()
+				.is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
+		{
+			match open_at(&base, ARCHIVE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0) {
+				Err(error)
+					if error
+						.downcast_ref::<std::io::Error>()
+						.is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) => {}
+				_ => bail!(
+					"unanchored request archive refused; history never recreated automatically"
+				),
+			}
+			let component = name(ARCHIVE_NAME)?;
+			if unsafe { libc::mkdirat(base.as_raw_fd(), component.as_ptr(), 0o700) } < 0 {
+				return Err(std::io::Error::last_os_error().into());
+			}
+			base.sync_all()?;
+			let archive = open_at(&base, ARCHIVE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+			let stamp = archive_stamp(&archive)?;
+			publish_archive_anchor(
+				&base,
+				&ArchiveAnchor {
+					root_device: metadata.dev(),
+					root_inode: metadata.ino(),
+					archive_device: stamp.device,
+					archive_inode: stamp.inode,
+				},
+			)?;
+			Ok(archive)
+		}
+		Err(error) => Err(error),
+	}
+}
+
+#[cfg(unix)]
 fn read_record(directory: &File, filename: &str) -> Result<Record> {
+	let id = filename
+		.strip_suffix(".json")
+		.filter(|id| valid_id(id))
+		.ok_or_else(|| anyhow!("invalid request metadata filename"))?;
+	let staging = format!(".{id}-{id}.tmp");
+	match open_at(directory, &staging, libc::O_RDONLY | libc::O_NONBLOCK, 0) {
+		Ok(_) => cleanup_staging(directory, &staging)?,
+		Err(error)
+			if error
+				.downcast_ref::<std::io::Error>()
+				.is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) => {}
+		Err(error) => return Err(error),
+	}
 	let mut file = open_at(directory, filename, libc::O_RDONLY | libc::O_NONBLOCK, 0)?;
+	{
+		use std::os::unix::fs::MetadataExt;
+		if file.metadata()?.nlink() == 2 {
+			// Old versions used random staging names. Only this exceptional
+			// interrupted-publication case scans names, never record history.
+			let prefix = format!(".{id}-");
+			walk_directory(directory, |entry| {
+				if entry.starts_with(&prefix) && entry.ends_with(".tmp") {
+					cleanup_staging(directory, entry)?;
+				}
+				Ok(())
+			})?;
+		}
+	}
 	validate_file(&file)?;
 	let mut bytes = Vec::new();
 	Read::by_ref(&mut file)
@@ -427,10 +631,15 @@ fn scan_errno(reset: bool) -> Result<i32> {
 
 #[cfg(unix)]
 fn entries(directory: &File) -> Result<Vec<Record>> {
+	entries_bounded(directory, MAX_GLOBAL)
+}
+
+#[cfg(unix)]
+fn walk_directory(directory: &File, mut visit: impl FnMut(&str) -> Result<()>) -> Result<()> {
 	use std::os::fd::AsRawFd;
 	// A fresh directory file description avoids a shared seek cursor between snapshots.
 	let scan = open_at(directory, ".", libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
-	let duplicate = unsafe { libc::dup(scan.as_raw_fd()) };
+	let duplicate = unsafe { libc::fcntl(scan.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 0) };
 	if duplicate < 0 {
 		return Err(std::io::Error::last_os_error().into());
 	}
@@ -446,7 +655,6 @@ fn entries(directory: &File) -> Result<Vec<Record>> {
 		}
 	}
 	let stream = DirectoryStream(pointer);
-	let mut names = Vec::new();
 	loop {
 		scan_errno(true)?;
 		let item = unsafe { libc::readdir(stream.0) };
@@ -457,11 +665,50 @@ fn entries(directory: &File) -> Result<Vec<Record>> {
 		if filename == "." || filename == ".." {
 			continue;
 		}
-		if names.len() >= MAX_GLOBAL + 32 {
+		visit(filename)?;
+	}
+	Ok(())
+}
+
+#[cfg(unix)]
+fn directory_members(directory: &File, maximum: usize) -> Result<Vec<String>> {
+	let mut names = Vec::new();
+	walk_directory(directory, |filename| {
+		if names.len() >= maximum + 32 {
 			bail!("request audit retention invariant exceeded");
 		}
 		names.push(filename.to_owned());
-	}
+		Ok(())
+	})?;
+	Ok(names)
+}
+
+/// Archive read APIs have bounded working memory and release STORE_LOCK after
+/// each exact record read, so ordinary admissions can progress during a live scan.
+#[cfg(unix)]
+fn scan_archive(archive: &File, mut visit: impl FnMut(Record) -> Result<()>) -> Result<()> {
+	walk_directory(archive, |filename| {
+		if filename.starts_with('.') {
+			let value = filename
+				.strip_prefix('.')
+				.and_then(|value| value.strip_suffix(".tmp"))
+				.and_then(|value| value.split_once('-'));
+			if !value.is_some_and(|(id, nonce)| valid_id(id) && valid_id(nonce)) {
+				bail!("unexpected private request audit entry");
+			}
+			return Ok(());
+		}
+		let record = {
+			let _guard = store_lock()?;
+			read_record(archive, filename)?
+		};
+		visit(record)
+	})
+}
+
+#[cfg(unix)]
+fn entries_bounded(directory: &File, maximum: usize) -> Result<Vec<Record>> {
+	let names = directory_members(directory, maximum)?;
 	// Remove only verified private staging inodes after an interrupted publication.
 	// This cannot remove an active writer because all mutations use STORE_LOCK.
 	for filename in names.iter().filter(|value| value.starts_with('.')) {
@@ -469,7 +716,7 @@ fn entries(directory: &File) -> Result<Vec<Record>> {
 	}
 	let mut result = Vec::new();
 	for filename in names.iter().filter(|value| !value.starts_with('.')) {
-		if result.len() >= MAX_GLOBAL || !filename.ends_with(".json") {
+		if result.len() >= maximum || !filename.ends_with(".json") {
 			bail!("unexpected private request audit entry");
 		}
 		result.push(read_record(directory, filename)?);
@@ -525,9 +772,12 @@ fn cleanup_staging(directory: &File, filename: &str) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn remove_record(directory: &File, id: &str) -> Result<()> {
+fn remove_record(directory: &File, expected: &Record) -> Result<()> {
 	use std::os::fd::AsRawFd;
-	let filename = name(&format!("{id}.json"))?;
+	if read_record(directory, &format!("{}.json", expected.request_id))? != *expected {
+		bail!("request hot cache binding changed");
+	}
+	let filename = name(&format!("{}.json", expected.request_id))?;
 	if unsafe { libc::unlinkat(directory.as_raw_fd(), filename.as_ptr(), 0) } < 0 {
 		return Err(std::io::Error::last_os_error().into());
 	}
@@ -536,7 +786,24 @@ fn remove_record(directory: &File, id: &str) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn retain_before_begin(directory: &File, owner: &str, records: &mut Vec<Record>) -> Result<()> {
+fn archived_copy_matches(archive: &File, record: &Record) -> bool {
+	let Ok(archived) = read_record(archive, &format!("{}.json", record.request_id)) else {
+		return false;
+	};
+	archived.owner == record.owner
+		&& archived.tool_name == record.tool_name
+		&& archived.accepted_unix_ms == record.accepted_unix_ms
+		&& (record.state == DurableState::Unknown || record.state == archived.state)
+		&& (record.elapsed_ms.is_none() || record.elapsed_ms == archived.elapsed_ms)
+}
+
+#[cfg(unix)]
+fn retain_before_begin(
+	directory: &File,
+	archive: &File,
+	owner: &str,
+	records: &mut Vec<Record>,
+) -> Result<bool> {
 	while records
 		.iter()
 		.filter(|record| record.owner == owner)
@@ -545,28 +812,35 @@ fn retain_before_begin(directory: &File, owner: &str, records: &mut Vec<Record>)
 	{
 		let mut victim = None;
 		for (index, record) in records.iter().enumerate() {
-			if record.owner == owner && !is_active(&record.request_id)? {
+			if record.owner == owner
+				&& !is_active(&record.request_id)?
+				&& archived_copy_matches(archive, record)
+			{
 				victim = Some(index);
 				break;
 			}
 		}
-		let index = victim.ok_or_else(|| anyhow!("all retained session requests are active"))?;
-		remove_record(directory, &records[index].request_id)?;
+		let Some(index) = victim else {
+			return Ok(false);
+		};
+		remove_record(directory, &records[index])?;
 		records.remove(index);
 	}
 	while records.len() >= MAX_GLOBAL {
 		let mut victim = None;
 		for (index, record) in records.iter().enumerate() {
-			if !is_active(&record.request_id)? {
+			if !is_active(&record.request_id)? && archived_copy_matches(archive, record) {
 				victim = Some(index);
 				break;
 			}
 		}
-		let index = victim.ok_or_else(|| anyhow!("all retained requests are active"))?;
-		remove_record(directory, &records[index].request_id)?;
+		let Some(index) = victim else {
+			return Ok(false);
+		};
+		remove_record(directory, &records[index])?;
 		records.remove(index);
 	}
-	Ok(())
+	Ok(true)
 }
 
 #[cfg(unix)]
@@ -587,7 +861,7 @@ fn save(directory: &File, record: &Record, replacing: bool) -> Result<()> {
 	if bytes.len() > MAX_RECORD_BYTES {
 		bail!("request audit record size refused");
 	}
-	let temporary = format!(".{}-{}.tmp", record.request_id, new_id()?);
+	let temporary = format!(".{}-{}.tmp", record.request_id, record.request_id);
 	let mut file = open_at(
 		directory,
 		&temporary,
@@ -641,6 +915,143 @@ fn save(directory: &File, record: &Record, replacing: bool) -> Result<()> {
 	persisted
 }
 
+/// An append-retained metadata archive is independent of the bounded hot cache.
+/// Only the exact immutable identity is read; lifetime history is never counted
+/// or scanned in the dispatch path, and no history-count admission limit exists.
+#[cfg(unix)]
+fn archive_record(archive: &File, record: &Record) -> Result<()> {
+	let replacing = match read_record(archive, &format!("{}.json", record.request_id)) {
+		Ok(existing) => {
+			if existing.owner != record.owner
+				|| existing.tool_name != record.tool_name
+				|| existing.accepted_unix_ms != record.accepted_unix_ms
+			{
+				bail!("request archive identity changed");
+			}
+			if record.state == DurableState::Unknown && existing.state != DurableState::Unknown {
+				return Ok(());
+			}
+			if existing.state != DurableState::Unknown && existing.state != record.state {
+				bail!("request archive terminal outcome changed");
+			}
+			if existing.state != DurableState::Unknown && existing.elapsed_ms != record.elapsed_ms {
+				bail!("request archive terminal outcome changed");
+			}
+			if existing.state == record.state && existing.elapsed_ms == record.elapsed_ms {
+				return Ok(());
+			}
+			true
+		}
+		Err(error)
+			if error
+				.downcast_ref::<std::io::Error>()
+				.is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) =>
+		{
+			false
+		}
+		Err(error) => return Err(error),
+	};
+	save(archive, record, replacing)
+}
+
+#[cfg(unix)]
+fn cache_hot(directory: &File, records: &[Record]) -> Result<()> {
+	let stamp = archive_stamp(directory)?;
+	let mut cache = HOT_CACHE
+		.get_or_init(|| Mutex::new(VecDeque::new()))
+		.lock()
+		.map_err(|_| anyhow!("request hot cache unavailable"))?;
+	cache.retain(|entry| (entry.stamp.device, entry.stamp.inode) != (stamp.device, stamp.inode));
+	// This bounds disposable cache memory, never admissions or durable history.
+	if cache.len() >= 16 {
+		cache.pop_front();
+	}
+	cache.push_back(HotSnapshot {
+		stamp,
+		records: records.to_vec(),
+	});
+	Ok(())
+}
+
+#[cfg(unix)]
+fn seed_missing_archive_record(archive: &File, record: &Record) -> Result<()> {
+	use std::os::fd::AsRawFd;
+	let filename = name(&format!("{}.json", record.request_id))?;
+	let mut metadata = std::mem::MaybeUninit::<libc::stat>::uninit();
+	if unsafe {
+		libc::fstatat(
+			archive.as_raw_fd(),
+			filename.as_ptr(),
+			metadata.as_mut_ptr(),
+			libc::AT_SYMLINK_NOFOLLOW,
+		)
+	} == 0
+	{
+		// Existing bytes are never repaired or rebound by an unrelated admission.
+		// A bad counterpart prevents eviction of its good hot copy, not new IDs.
+		return Ok(());
+	}
+	let error = std::io::Error::last_os_error();
+	if error.kind() != std::io::ErrorKind::NotFound {
+		return Err(error.into());
+	}
+	save(archive, record, false)
+}
+
+/// Callers hold STORE_LOCK. Cold/external namespace changes are validated once;
+/// ordinary writes update the stamp and bounded index after their own fsync.
+#[cfg(unix)]
+fn hot_snapshot(root: &Path, directory: &File) -> Result<(Vec<Record>, File)> {
+	let archive = open_archive(root)?;
+	let mut stamp = archive_stamp(directory)?;
+	{
+		let cache = HOT_CACHE
+			.get_or_init(|| Mutex::new(VecDeque::new()))
+			.lock()
+			.map_err(|_| anyhow!("request hot cache unavailable"))?;
+		if let Some(saved) = cache.iter().find(|entry| entry.stamp == stamp) {
+			return Ok((saved.records.clone(), archive));
+		}
+	}
+	let mut records = entries(directory)?;
+	for attempt in 0..3 {
+		let after = archive_stamp(directory)?;
+		if after == stamp {
+			break;
+		}
+		if attempt == 2 {
+			bail!("request hot namespace changed during validation");
+		}
+		stamp = after;
+		records = entries(directory)?;
+	}
+	for record in &records {
+		seed_missing_archive_record(&archive, record)?;
+	}
+	cache_hot(directory, &records)?;
+	Ok((records, archive))
+}
+
+#[cfg(unix)]
+fn update_cached_completion(directory: &File, record: &Record, before: ArchiveStamp) -> Result<()> {
+	let after = archive_stamp(directory)?;
+	let mut cache = HOT_CACHE
+		.get_or_init(|| Mutex::new(VecDeque::new()))
+		.lock()
+		.map_err(|_| anyhow!("request hot cache unavailable"))?;
+	if let Some(saved) = cache.iter_mut().find(|entry| entry.stamp == before) {
+		if let Some(original) = saved
+			.records
+			.iter_mut()
+			.find(|item| item.request_id == record.request_id)
+		{
+			*original = record.clone();
+			saved.stamp = after;
+		}
+	}
+	Ok(())
+}
+
 #[cfg(unix)]
 fn begin_with_read_at(
 	root: &Path,
@@ -653,13 +1064,11 @@ fn begin_with_read_at(
 	}
 	let _guard = store_lock()?;
 	let directory = open_store(root)?;
-	let mut records = entries(&directory)?;
+	let (mut records, archive) = hot_snapshot(root, &directory)?;
 	let read_pin = if let Some(id) = target {
 		if !matches!(tool_name, "request_status" | "request_result")
 			|| !valid_id(id)
-			|| !records
-				.iter()
-				.any(|r| r.request_id == id && r.owner == owner)
+			|| retained_record(&directory, &archive, id)?.is_none_or(|record| record.owner != owner)
 		{
 			bail!("request unavailable to this scope");
 		}
@@ -672,7 +1081,7 @@ fn begin_with_read_at(
 	} else {
 		None
 	};
-	retain_before_begin(&directory, owner, &mut records)?;
+	let hot_present = retain_before_begin(&directory, &archive, owner, &mut records)?;
 	let record = Record {
 		request_id: new_id()?,
 		owner: owner.into(),
@@ -684,11 +1093,21 @@ fn begin_with_read_at(
 			.as_millis(),
 		elapsed_ms: None,
 	};
-	save(&directory, &record, false)?;
+	save(&archive, &record, false)?;
+	if hot_present {
+		save(&directory, &record, false)?;
+		records.push(record.clone());
+		records.sort_by(|a, b| {
+			(a.accepted_unix_ms, &a.request_id).cmp(&(b.accepted_unix_ms, &b.request_id))
+		});
+	}
+	cache_hot(&directory, &records)?;
 	let active = Arc::new(AtomicBool::new(true));
 	active_registry()?.insert(record.request_id.clone(), Arc::downgrade(&active));
 	Ok(RequestTicket {
 		directory,
+		archive,
+		hot_present,
 		record,
 		started: Instant::now(),
 		active,
@@ -775,8 +1194,16 @@ fn begin_reserved_record_at(root: &Path, identity: RequestIdentity) -> Result<Re
 				.is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) => {}
 		Err(_) => bail!("reserved request unavailable; never redispatch"),
 	}
-	let mut records = entries(&directory)?;
-	retain_before_begin(&directory, &identity.owner, &mut records)?;
+	let (mut records, archive) = hot_snapshot(root, &directory)?;
+	match read_record(&archive, &format!("{}.json", identity.request_id)) {
+		Ok(_) => bail!("reserved request already archived; never redispatch"),
+		Err(error)
+			if error
+				.downcast_ref::<std::io::Error>()
+				.is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) => {}
+		Err(_) => bail!("reserved request archive unavailable; never redispatch"),
+	}
+	let hot_present = retain_before_begin(&directory, &archive, &identity.owner, &mut records)?;
 	let record = Record {
 		request_id: identity.request_id,
 		owner: identity.owner,
@@ -785,11 +1212,21 @@ fn begin_reserved_record_at(root: &Path, identity: RequestIdentity) -> Result<Re
 		accepted_unix_ms: identity.accepted_unix_ms,
 		elapsed_ms: None,
 	};
-	save(&directory, &record, false)?;
+	save(&archive, &record, false)?;
+	if hot_present {
+		save(&directory, &record, false)?;
+		records.push(record.clone());
+		records.sort_by(|a, b| {
+			(a.accepted_unix_ms, &a.request_id).cmp(&(b.accepted_unix_ms, &b.request_id))
+		});
+	}
+	cache_hot(&directory, &records)?;
 	let active = Arc::new(AtomicBool::new(true));
 	active_registry()?.insert(record.request_id.clone(), Arc::downgrade(&active));
 	Ok(RequestTicket {
 		directory,
+		archive,
+		hot_present,
 		record,
 		started: Instant::now(),
 		active,
@@ -831,7 +1268,170 @@ fn finish_sync(mut ticket: RequestTicket, completion: AuditCompletion) -> Result
 	};
 	ticket.record.elapsed_ms =
 		Some(ticket.started.elapsed().as_millis().min(u64::MAX as u128) as u64);
-	save(&ticket.directory, &ticket.record, true)
+	archive_record(&ticket.archive, &ticket.record)?;
+	if ticket.hot_present {
+		let before = archive_stamp(&ticket.directory)?;
+		save(&ticket.directory, &ticket.record, true)?;
+		update_cached_completion(&ticket.directory, &ticket.record, before)?;
+	}
+	Ok(())
+}
+
+#[cfg(unix)]
+fn usage_stats_at(root: &Path, owner: &str) -> Result<String> {
+	if !valid_id(owner) {
+		bail!("request usage unavailable to this scope");
+	}
+	let archive = {
+		let _guard = store_lock()?;
+		let hot = open_store(root)?;
+		hot_snapshot(root, &hot)?.1
+	};
+	let mut counts = std::collections::BTreeMap::<String, u64>::new();
+	let mut completed = 0u64;
+	let mut failed = 0u64;
+	let mut unknown = 0u64;
+	let mut active = 0u64;
+	let mut first: Option<u128> = None;
+	let mut last: Option<u128> = None;
+	scan_archive(&archive, |record| {
+		if record.owner != owner {
+			return Ok(());
+		}
+		*counts.entry(record.tool_name.clone()).or_default() += 1;
+		first = Some(first.map_or(record.accepted_unix_ms, |time| {
+			time.min(record.accepted_unix_ms)
+		}));
+		last = Some(last.map_or(record.accepted_unix_ms, |time| {
+			time.max(record.accepted_unix_ms)
+		}));
+		match record.state {
+			DurableState::Completed => completed += 1,
+			DurableState::Failed => failed += 1,
+			DurableState::Unknown if is_dispatch_active(&record.request_id)? => active += 1,
+			DurableState::Unknown => unknown += 1,
+		}
+		Ok(())
+	})?;
+	Ok(serde_json::to_string(
+		&json!({"schema":"hepta-private-usage-v1",
+		"total_requests":completed+failed+unknown+active,"completed":completed,"failed":failed,
+		"unknown":unknown,"active":active,"tool_counts":counts,"first_accepted_unix_ms":first,
+		"last_accepted_unix_ms":last,"retention":"archive_metadata_not_evicted_with_hot_cache",
+		"coverage":"metadata_retained_at_archive_introduction_and_subsequent_admitted_requests",
+		"semantics":"dispatch_observation_not_transport_delivery_or_business_success",
+		"contains_parameters_or_output":false,"scope":"same_verified_credential_or_native_session"}),
+	)?)
+}
+
+pub async fn usage_stats(owner: &str, _params: UsageStatsParams) -> Result<String> {
+	let root = runtime_config()?.state_dir.clone();
+	let owner = owner.to_owned();
+	#[cfg(unix)]
+	{
+		tokio::task::spawn_blocking(move || usage_stats_at(&root, &owner))
+			.await
+			.map_err(|_| anyhow!("request usage unavailable to this scope"))?
+			.map_err(|_| anyhow!("request usage unavailable to this scope"))
+	}
+	#[cfg(not(unix))]
+	{
+		let _ = (root, owner);
+		bail!("request usage requires Unix descriptor support")
+	}
+}
+
+#[cfg(unix)]
+fn archive_history_at(root: &Path, owner: &str, params: RequestHistoryParams) -> Result<String> {
+	if !valid_id(owner) {
+		bail!("request archive unavailable to this scope");
+	}
+	let limit = params.limit.unwrap_or(32) as usize;
+	if !(1..=32).contains(&limit) || params.after_id.as_deref().is_some_and(|id| !valid_id(id)) {
+		bail!("invalid request archive page");
+	}
+	let (archive, cursor) = {
+		let _guard = store_lock()?;
+		let hot = open_store(root)?;
+		let archive = hot_snapshot(root, &hot)?.1;
+		let cursor = if let Some(id) = params.after_id.as_deref() {
+			let record = read_record(&archive, &format!("{id}.json"))?;
+			if record.owner != owner {
+				bail!("request archive cursor unavailable to this scope");
+			}
+			Some((record.accepted_unix_ms, record.request_id))
+		} else {
+			None
+		};
+		(archive, cursor)
+	};
+	let mut records = Vec::with_capacity(limit + 1);
+	let mut total = 0u64;
+	scan_archive(&archive, |record| {
+		if record.owner != owner {
+			return Ok(());
+		}
+		total += 1;
+		if cursor
+			.as_ref()
+			.is_some_and(|key| (record.accepted_unix_ms, &record.request_id) <= (key.0, &key.1))
+		{
+			return Ok(());
+		}
+		records.push(record);
+		records.sort_by(|a, b| {
+			(a.accepted_unix_ms, &a.request_id).cmp(&(b.accepted_unix_ms, &b.request_id))
+		});
+		if records.len() > limit + 1 {
+			records.pop();
+		}
+		Ok(())
+	})?;
+	let more = records.len() > limit;
+	records.truncate(limit);
+	let mut page = Vec::new();
+	for record in &records {
+		let state = match record.state {
+			DurableState::Unknown if is_dispatch_active(&record.request_id)? => "accepted",
+			DurableState::Unknown => "unknown",
+			DurableState::Completed => "completed",
+			DurableState::Failed => "failed",
+		};
+		page.push(
+			json!({"request_id":record.request_id,"tool_name":record.tool_name,
+			"state":state,"accepted_unix_ms":record.accepted_unix_ms,"elapsed_ms":record.elapsed_ms}),
+		);
+	}
+	let next = if more {
+		page.last().map(|row| row["request_id"].clone())
+	} else {
+		None
+	};
+	let output = json!({"requests":page,"next_after_id":next,"total":total,
+		"archive_retention":"no_automatic_metadata_eviction","history_is_live":true,
+		"coverage":"metadata_retained_at_archive_introduction_and_subsequent_admitted_requests",
+		"contains_parameters_or_output":false,"automatic_operation_retry":false});
+	if wire_size(&output)? > MAX_PAGE_BYTES {
+		bail!("request archive wire page limit exceeded");
+	}
+	Ok(serde_json::to_string(&output)?)
+}
+
+pub async fn archive_history(owner: &str, params: RequestHistoryParams) -> Result<String> {
+	let root = runtime_config()?.state_dir.clone();
+	let owner = owner.to_owned();
+	#[cfg(unix)]
+	{
+		tokio::task::spawn_blocking(move || archive_history_at(&root, &owner, params))
+			.await
+			.map_err(|_| anyhow!("request archive unavailable to this scope"))?
+			.map_err(|_| anyhow!("request archive unavailable to this scope"))
+	}
+	#[cfg(not(unix))]
+	{
+		let _ = (root, owner, params);
+		bail!("request archive requires Unix descriptor support")
+	}
 }
 
 #[cfg(not(unix))]

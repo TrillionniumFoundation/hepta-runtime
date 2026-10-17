@@ -5,6 +5,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::path::{Component, Path};
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
@@ -136,8 +137,47 @@ where
 	I: Serialize + ?Sized,
 	O: DeserializeOwned,
 {
+	run_python_json_with_interpreter(host, "python3", code, input, timeout).await
+}
+
+pub(crate) fn validate_python_interpreter(interpreter: &str) -> Result<()> {
+	if interpreter != "python3"
+		&& (!Path::new(interpreter).is_absolute()
+			|| Path::new(interpreter)
+				.components()
+				.any(|component| matches!(component, Component::ParentDir | Component::CurDir)))
+	{
+		bail!("configured Python interpreter must be absolute or the fixed python3 default");
+	}
+	if interpreter.len() > 4096 || interpreter.chars().any(char::is_control) {
+		bail!("configured Python interpreter contains invalid characters or exceeds 4096 bytes");
+	}
+	Ok(())
+}
+
+fn python_json_command(interpreter: &str, code: &str) -> Result<String> {
+	validate_python_interpreter(interpreter)?;
+	Ok(format!(
+		"{} -c {}",
+		shell_quote(interpreter),
+		shell_quote(code)
+	))
+}
+
+/// Administrator-selected interpreter; tool requests must never choose this executable.
+pub async fn run_python_json_with_interpreter<I, O>(
+	host: &HostConfig,
+	interpreter: &str,
+	code: &str,
+	input: &I,
+	timeout: Duration,
+) -> Result<O>
+where
+	I: Serialize + ?Sized,
+	O: DeserializeOwned,
+{
+	let remote_command = python_json_command(interpreter, code)?;
 	let payload = serde_json::to_vec(input)?;
-	let remote_command = format!("python3 -c {}", shell_quote(code));
 	let output = run_capture(host, &remote_command, &payload, timeout).await?;
 	if !output.status.success() {
 		let stderr = String::from_utf8_lossy(&output.stderr);

@@ -1,8 +1,11 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! Closed capability/parser and private metadata fault fixtures only.
 //! No runtime initialization, SSH, services, jobs, or live effects.
 use super::*;
+const LEGACY_OWNER_KEYS: usize = 128;
+const LEGACY_GLOBAL_KEYS: usize = 512;
 use serde_json::json;
 
 fn readonly_rows() -> Vec<serde_json::Value> {
@@ -527,107 +530,73 @@ fn payload_directory_replacement_does_not_create_a_new_trusted_namespace() {
 	assert!(moved.is_dir());
 }
 
-fn seed_complete_graph(root: &Path, binding: &Binding) {
-	for path in graph_paths(root, binding) {
-		private_fixture_write(&path, &serde_json::to_vec(binding).unwrap());
-	}
-}
-
 #[test]
-fn immutable_owner_key_quota_refuses_new_keys_and_preserves_original_reuse() {
+fn completed_and_unknown_owner_keys_grow_beyond_128_without_rebinding_history() {
 	let root = fixture_root();
-	let mut oldest = None;
-	for number in 0..128 {
-		let binding = fixture_binding(root.path(), 1000 + number);
-		if oldest.is_none() {
-			oldest = Some(binding.clone());
+	let first = require_new(reserve_at(root.path(), fixture_binding(root.path(), 1000)).unwrap());
+	let before = graph_snapshot(root.path(), &first);
+	for number in 1001..1001 + LEGACY_OWNER_KEYS as u64 + 32 {
+		let binding =
+			require_new(reserve_at(root.path(), fixture_binding(root.path(), number)).unwrap());
+		if number % 2 == 0 {
+			outcome_at(root.path(), &binding, Some("completed")).unwrap();
 		}
-		seed_complete_graph(root.path(), &binding);
 	}
-	let first = oldest.unwrap();
-	assert!(reserve_at(root.path(), fixture_binding(root.path(), 2000)).is_err());
-	let mut repeated = first.clone();
-	repeated.request_id = fixture_id(900_100);
-	let existing = require_existing(reserve_at(root.path(), repeated).unwrap());
-	same_binding(&first, &existing);
+	let mut repeat = first.clone();
+	repeat.request_id = fixture_id(900_100);
+	same_binding(
+		&first,
+		&require_existing(reserve_at(root.path(), repeat).unwrap()),
+	);
+	assert_eq!(outcome_at(root.path(), &first, None).unwrap(), None);
+	assert_eq!(graph_snapshot(root.path(), &first), before);
+	same_binding(
+		&first,
+		&lookup_id_at(
+			root.path(),
+			&first.owner,
+			&first.request_id,
+			&first.policy_binding,
+		)
+		.unwrap()
+		.unwrap(),
+	);
 }
 
 #[test]
-fn immutable_global_key_quota_refuses_new_owner_without_evicting_any_used_key() {
+fn global_key_history_grows_beyond_512_with_all_original_bindings_unchanged() {
 	let root = fixture_root();
-	let mut oldest = None;
-	for number in 0..512 {
-		let mut binding = fixture_binding(root.path(), 3000 + number);
-		binding.owner = fixture_id(100_000 + number / 128);
-		if oldest.is_none() {
-			oldest = Some(binding.clone());
-		}
-		seed_complete_graph(root.path(), &binding);
+	let mut originals = Vec::new();
+	for number in 2000..2000 + LEGACY_GLOBAL_KEYS as u64 + 29 {
+		let mut binding = fixture_binding(root.path(), number);
+		binding.owner = fixture_id(100_000 + number % 5);
+		let binding = require_new(reserve_at(root.path(), binding).unwrap());
+		originals.push((binding.clone(), graph_snapshot(root.path(), &binding)));
 	}
-	let mut new_owner = fixture_binding(root.path(), 4000);
-	new_owner.owner = fixture_id(200_000);
-	assert!(reserve_at(root.path(), new_owner).is_err());
-	let first = oldest.unwrap();
-	let mut repeated = first.clone();
-	repeated.request_id = fixture_id(900_300);
-	let existing = require_existing(reserve_at(root.path(), repeated).unwrap());
-	same_binding(&first, &existing);
-	for path in graph_paths(root.path(), &first) {
-		assert!(path.is_file());
-	}
-}
-
-#[test]
-fn mixed_v9_v10_slots_share_owner_four_global_eight_and_release_capacity() {
-	const CHILD_FLAG: &str = "HEPTA_V10_SHARED_SLOT_TEST_CHILD";
-	if std::env::var_os(CHILD_FLAG).is_none() {
-		// A separate test process prevents overlap with historical V9 registry tests.
-		// The child runs only this exact in-memory test; no runtime or SSH is initialized.
-		let output = std::process::Command::new(std::env::current_exe().unwrap())
-   .args(["--exact", "mcp::runtime::operation_async::tests::mixed_v9_v10_slots_share_owner_four_global_eight_and_release_capacity", "--test-threads=1", "--nocapture"])
-   .env(CHILD_FLAG,"1")
-   .output().unwrap();
-		assert!(
-			output.status.success(),
-			"isolated shared-slot regression failed: {}",
-			String::from_utf8_lossy(&output.stderr)
+	for (binding, before) in originals {
+		assert_eq!(outcome_at(root.path(), &binding, None).unwrap(), None);
+		same_binding(
+			&binding,
+			&require_existing(reserve_at(root.path(), binding.clone()).unwrap()),
 		);
-		assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
-		return;
+		assert_eq!(graph_snapshot(root.path(), &binding), before);
 	}
-	let owner_a = fixture_id(1_000_001);
-	let owner_b = fixture_id(1_000_002);
-	let owner_c = fixture_id(1_000_003);
-	let mut v9 = Vec::new();
-	let mut v10 = Vec::new();
-	for _ in 0..2 {
-		v9.push(super::super::request_async::Slot::take(&owner_a).unwrap());
-		v10.push(Slot::take(&owner_a).unwrap());
-	}
-	assert!(super::super::request_async::Slot::take(&owner_a).is_err());
-	assert!(Slot::take(&owner_a).is_err());
-	for _ in 0..4 {
-		v9.push(super::super::request_async::Slot::take(&owner_b).unwrap());
-	}
-	assert!(Slot::take(&owner_c).is_err());
-	assert!(super::super::request_async::Slot::take(&owner_c).is_err());
-	v9.pop();
-	v10.push(Slot::take(&owner_c).unwrap());
-	assert!(super::super::request_async::Slot::take(&owner_c).is_err());
+	let mut fresh = fixture_binding(root.path(), 900_200);
+	fresh.owner = fixture_id(200_000);
+	require_new(reserve_at(root.path(), fresh).unwrap());
+}
+
+#[test]
+fn mixed_v9_v10_slots_track_64_each_without_rejecting_new_work() {
+	let owner = next_id().unwrap();
+	let v9: Vec<_> = (0..64)
+		.map(|_| super::super::request_async::Slot::take(&owner).unwrap())
+		.collect();
+	let v10: Vec<_> = (0..64).map(|_| Slot::take(&owner).unwrap()).collect();
+	assert_eq!(registry().unwrap().reserved.get(&owner).copied(), Some(64));
 	drop(v10);
 	drop(v9);
-	assert!(registry().unwrap().reserved.is_empty());
-	let mut recovered = Vec::new();
-	for owner in [&owner_a, &owner_b] {
-		for _ in 0..4 {
-			recovered.push(super::super::request_async::Slot::take(owner).unwrap());
-		}
-	}
-	assert!(Slot::take(&owner_c).is_err());
-	drop(recovered);
-	let recovered = Slot::take(&owner_c).unwrap();
-	drop(recovered);
-	assert!(registry().unwrap().reserved.is_empty());
+	assert!(!registry().unwrap().reserved.contains_key(&owner));
 }
 
 #[test]
@@ -856,4 +825,141 @@ fn encrypted_maximum_payload_roundtrips_through_actual_private_immutable_disk_gr
 	fs::write(&path, &changed).unwrap();
 	let corrupted = read_payload_at(root.path(), &binding).unwrap().unwrap();
 	assert!(crypto.open(&trusted, &corrupted).is_err());
+}
+
+#[test]
+fn old_capacity_environment_never_refuses_or_hides_durable_key_history() {
+	const OWNER_KEYS_ENV: &str = "HEPTA_ASYNC_RETENTION_OWNER_KEYS";
+	const GLOBAL_KEYS_ENV: &str = "HEPTA_ASYNC_RETENTION_GLOBAL_KEYS";
+	const CHILD: &str = "HEPTA_UNBOUNDED_JOURNAL_TEST_CHILD";
+	if std::env::var_os(CHILD).is_none() {
+		let status = std::process::Command::new(std::env::current_exe().unwrap())
+			.args(["--exact", "mcp::runtime::operation_async::tests::old_capacity_environment_never_refuses_or_hides_durable_key_history", "--test-threads=1"])
+			.env(CHILD, "1").env(OWNER_KEYS_ENV, "2").env(GLOBAL_KEYS_ENV, "3")
+			.status().unwrap();
+		assert!(status.success());
+		return;
+	}
+	let root = fixture_root();
+	let first = require_new(reserve_at(root.path(), fixture_binding(root.path(), 3000)).unwrap());
+	let before = graph_snapshot(root.path(), &first);
+	for number in 3001..=3540 {
+		require_new(reserve_at(root.path(), fixture_binding(root.path(), number)).unwrap());
+	}
+	same_binding(
+		&first,
+		&lookup_id_at(
+			root.path(),
+			&first.owner,
+			&first.request_id,
+			&first.policy_binding,
+		)
+		.unwrap()
+		.unwrap(),
+	);
+	assert_eq!(graph_snapshot(root.path(), &first), before);
+	let directory = store(root.path()).unwrap();
+	assert_eq!(bindings(&directory).unwrap().len(), 541);
+}
+
+fn graph_snapshot(root: &Path, binding: &Binding) -> Vec<(u64, u64, u32, u64, Vec<u8>)> {
+	use std::os::unix::fs::MetadataExt;
+	let directory = root.join(STORE_NAME);
+	[
+		directory.join(format!("{}.json", binding.key_hash)),
+		directory
+			.join(".occupied")
+			.join(format!("{}.json", binding.key_hash)),
+		directory
+			.join(".intents")
+			.join(format!("{}.json", binding.request_id)),
+	]
+	.into_iter()
+	.map(|path| {
+		let metadata = path.symlink_metadata().unwrap();
+		(
+			metadata.dev(),
+			metadata.ino(),
+			metadata.mode(),
+			metadata.nlink(),
+			fs::read(path).unwrap(),
+		)
+	})
+	.collect()
+}
+
+#[test]
+fn concurrent_64_independent_keys_are_durable_and_old_unknown_is_never_reissued() {
+	let root = fixture_root();
+	let first = require_new(reserve_at(root.path(), fixture_binding(root.path(), 5000)).unwrap());
+	let before = graph_snapshot(root.path(), &first);
+	let barrier = std::sync::Arc::new(std::sync::Barrier::new(64));
+	let inputs: Vec<_> = (5001..5065)
+		.map(|number| fixture_binding(root.path(), number))
+		.collect();
+	let workers: Vec<_> = inputs
+		.into_iter()
+		.map(|binding| {
+			let path = root.path().to_path_buf();
+			let barrier = barrier.clone();
+			std::thread::spawn(move || {
+				barrier.wait();
+				require_new(reserve_at(&path, binding).unwrap())
+			})
+		})
+		.collect();
+	for worker in workers {
+		let binding = worker.join().unwrap();
+		same_binding(
+			&binding,
+			&lookup_id_at(
+				root.path(),
+				&binding.owner,
+				&binding.request_id,
+				&binding.policy_binding,
+			)
+			.unwrap()
+			.unwrap(),
+		);
+		assert_eq!(outcome_at(root.path(), &binding, None).unwrap(), None);
+	}
+	assert_eq!(graph_snapshot(root.path(), &first), before);
+	same_binding(
+		&first,
+		&require_existing(reserve_at(root.path(), first.clone()).unwrap()),
+	);
+	assert_eq!(outcome_at(root.path(), &first, None).unwrap(), None);
+}
+
+#[test]
+fn validation_cache_eviction_preserves_old_unknown_identity_and_accepts_new_keys() {
+	let first_root = fixture_root();
+	let root = &first_root;
+	let first =
+		require_new(reserve_at(first_root.path(), fixture_binding(root.path(), 7000)).unwrap());
+	let before = graph_snapshot(first_root.path(), &first);
+	let mut roots = Vec::new();
+	for _ in 0..20 {
+		let root = fixture_root();
+		require_new(reserve_at(root.path(), fixture_binding(root.path(), 7000)).unwrap());
+		roots.push(root);
+	}
+	same_binding(
+		&first,
+		&lookup_id_at(
+			first_root.path(),
+			&first.owner,
+			&first.request_id,
+			&first.policy_binding,
+		)
+		.unwrap()
+		.unwrap(),
+	);
+	same_binding(
+		&first,
+		&require_existing(reserve_at(first_root.path(), first.clone()).unwrap()),
+	);
+	require_new(reserve_at(first_root.path(), fixture_binding(first_root.path(), 7001)).unwrap());
+	assert_eq!(graph_snapshot(first_root.path(), &first), before);
+	assert_eq!(outcome_at(first_root.path(), &first, None).unwrap(), None);
 }

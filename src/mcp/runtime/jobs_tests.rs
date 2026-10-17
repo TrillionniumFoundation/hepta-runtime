@@ -559,6 +559,97 @@ fn canonical_jobctl_reconciliation_preserves_authoritative_launch_state() {
 	}
 }
 
+#[test]
+fn paged_job_inventory_covers_large_registry_and_rejects_changed_snapshot() {
+	let rows: Vec<Value> = (0..12000)
+		.map(|number| {
+			json!({
+				"id": format!("{:08x}-1-1", number), "host":"rog", "created_unix_ms":number,
+				"execution_mode":"operator", "launch_state":"launched"
+			})
+		})
+		.collect();
+	let mut params = ProcessListPageParams {
+		host: Some("rog".into()),
+		cursor: None,
+		limit: Some(128),
+	};
+	let mut seen = Vec::new();
+	loop {
+		let text = page_job_rows(&rows, &params, "fixed-state").unwrap();
+		let value: Value = serde_json::from_str(&text).unwrap();
+		let wire =
+			rmcp::model::CallToolResult::success(vec![rmcp::model::ContentBlock::text(text)]);
+		assert!(serde_json::to_vec(&wire).unwrap().len() <= 64 * 1024);
+		seen.extend(
+			value["jobs"]
+				.as_array()
+				.unwrap()
+				.iter()
+				.map(|row| row["id"].clone()),
+		);
+		params.cursor = value["next_cursor"].as_str().map(str::to_owned);
+		if params.cursor.is_none() {
+			assert_eq!(value["inventory_complete"], true);
+			break;
+		}
+		assert_eq!(value["inventory_complete"], false);
+	}
+	assert_eq!(seen.len(), rows.len());
+	assert_eq!(
+		seen,
+		rows.iter().map(|row| row["id"].clone()).collect::<Vec<_>>()
+	);
+	let first: Value = serde_json::from_str(
+		&page_job_rows(&rows, &ProcessListPageParams::default(), "fixed-state").unwrap(),
+	)
+	.unwrap();
+	params.cursor = Some(first["next_cursor"].as_str().unwrap().into());
+	let mut changed = rows.clone();
+	changed[0]["launch_state"] = json!("cancelled");
+	assert!(page_job_rows(&changed, &params, "fixed-state").is_err());
+	assert!(page_job_rows(&rows, &params, "different-state").is_err());
+	params.host = Some("mac".into());
+	assert!(page_job_rows(&rows, &params, "fixed-state").is_err());
+}
+
+#[test]
+fn paged_job_inventory_validates_limits_empty_registry_and_cursor() {
+	let params = ProcessListPageParams::default();
+	let value: Value =
+		serde_json::from_str(&page_job_rows(&[], &params, "state").unwrap()).unwrap();
+	assert_eq!(value["jobs"], json!([]));
+	assert_eq!(value["inventory_complete"], true);
+	assert_eq!(value["next_cursor"], Value::Null);
+	assert!(page_job_rows(
+		&[],
+		&ProcessListPageParams {
+			limit: Some(0),
+			..params.clone()
+		},
+		"state"
+	)
+	.is_err());
+	assert!(page_job_rows(
+		&[],
+		&ProcessListPageParams {
+			limit: Some(129),
+			..params.clone()
+		},
+		"state"
+	)
+	.is_err());
+	assert!(page_job_rows(
+		&[],
+		&ProcessListPageParams {
+			cursor: Some("bad".into()),
+			..params
+		},
+		"state"
+	)
+	.is_err());
+}
+
 #[tokio::test]
 async fn host_bound_start_lock_does_not_block_independent_hosts() {
 	let rog = start_lock("hepta-fixture-rog").unwrap();
@@ -848,7 +939,6 @@ fn positive_reuse_microbenchmark_6000_synthetic_records() {
 		(streamed_ms[2] + streamed_ms[3]) / 2.0);
 }
 
-#[cfg(unix)]
 #[test]
 fn cached_hit_rejects_permissions_widened_without_directory_mutation() {
 	use std::os::unix::fs::PermissionsExt;
@@ -866,7 +956,6 @@ fn cached_hit_rejects_permissions_widened_without_directory_mutation() {
 	assert!(error.contains("permissions unsafe"), "{error}");
 }
 
-#[cfg(unix)]
 #[test]
 fn cached_read_refuses_symlink_hardlink_and_oversize_record() {
 	use std::os::unix::fs::symlink;
@@ -902,7 +991,6 @@ fn cached_read_refuses_symlink_hardlink_and_oversize_record() {
 		.contains("unsafe"));
 }
 
-#[cfg(unix)]
 #[test]
 fn cached_read_rejects_invalid_record_name() {
 	let root = tempfile::tempdir().unwrap();

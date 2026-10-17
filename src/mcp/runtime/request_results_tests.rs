@@ -1,3 +1,4 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! Private filesystem fixtures only: no runtime initialization, SSH or live jobs.
@@ -79,9 +80,20 @@ fn store_fixture(mut intent: ResultIntent, result: &CallToolResult) -> Vec<u8> {
 	intent.record.payload_bytes = Some(bytes.len());
 	intent.record.payload_sha256 = Some(digest(&bytes));
 	intent.record.payload_base64 = Some(base64(&bytes));
+	let _guard = record_lock(&intent.record.request_id).unwrap();
 	save(&intent.directory, &intent.record, true).unwrap();
 	bytes
 }
+fn result_path(root: &Path, request: &RequestIdentity) -> PathBuf {
+	root.join(ARCHIVE_STORE_NAME)
+		.join(ARCHIVE_NAME)
+		.join(&request.request_id[..2])
+		.join(format!("{}.json", request.request_id))
+}
+fn result_directory(root: &Path, request: &RequestIdentity) -> File {
+	File::open(result_path(root, request).parent().unwrap()).unwrap()
+}
+
 fn unwrap_complete(response: &Result<CallToolResponse, ErrorData>) -> &CallToolResult {
 	match response.as_ref().unwrap() {
 		CallToolResponse::Complete(result) => result,
@@ -169,15 +181,8 @@ fn private_stored_snapshot_roundtrips_original_native_envelope_exactly() {
 	assert_eq!(record.payload_sha256, Some(digest(&original_bytes)));
 	let decoded: CallToolResult = serde_json::from_slice(&recovered).unwrap();
 	assert_eq!(decoded, original);
-	let raw: Value = serde_json::from_slice(
-		&fs::read(
-			root.path()
-				.join(STORE_NAME)
-				.join(format!("{}.json", request.request_id)),
-		)
-		.unwrap(),
-	)
-	.unwrap();
+	let raw: Value =
+		serde_json::from_slice(&fs::read(result_path(root.path(), &request)).unwrap()).unwrap();
 	assert_eq!(raw["payload_bytes"], original_bytes.len());
 	assert!(raw.get("parameters").is_none());
 	assert!(raw.get("credential").is_none());
@@ -262,12 +267,7 @@ fn controller_crash_leaves_unknown_without_payload_or_automatic_replay() {
 	assert!(record.payload_sha256.is_none());
 	assert!(record.payload_bytes.is_none());
 	assert!(admit_at(root.path(), request.clone(), policy()).is_err());
-	let raw = fs::read_to_string(
-		root.path()
-			.join(STORE_NAME)
-			.join(format!("{}.json", request.request_id)),
-	)
-	.unwrap();
+	let raw = fs::read_to_string(result_path(root.path(), &request)).unwrap();
 	assert!(!raw.contains("command"));
 	assert!(!raw.contains("stdin"));
 	assert!(!raw.contains("retry"));
@@ -296,12 +296,7 @@ fn missing_completion_and_untrusted_output_never_become_stored() {
 		"not_retained_dto"
 	);
 	assert!(record.payload_base64.is_none());
-	let raw = fs::read_to_string(
-		root.path()
-			.join(STORE_NAME)
-			.join(format!("{}.json", untrusted.request_id)),
-	)
-	.unwrap();
+	let raw = fs::read_to_string(result_path(root.path(), &untrusted)).unwrap();
 	assert!(!raw.contains("SECRET"));
 }
 
@@ -320,18 +315,14 @@ fn oversized_native_result_records_overflow_without_retaining_output() {
 	assert!(record.payload_bytes.is_none());
 	assert!(record.payload_sha256.is_none());
 	assert!(
-		fs::metadata(
-			root.path()
-				.join(STORE_NAME)
-				.join(format!("{}.json", request.request_id))
-		)
-		.unwrap()
-		.len() < 2048
+		fs::metadata(result_path(root.path(), &request))
+			.unwrap()
+			.len() < 2048
 	);
 }
 
 #[test]
-fn results_whose_audit_identity_expired_are_pruned_on_next_admission() {
+fn missing_audit_metadata_never_deletes_or_rebinds_retained_original_bytes() {
 	let root = private_root();
 	let (old, intent) = admit(root.path(), 8);
 	store_fixture(intent, &fixture_result(&old));
@@ -342,15 +333,148 @@ fn results_whose_audit_identity_expired_are_pruned_on_next_admission() {
 	)
 	.unwrap();
 	let (current, _) = admit(root.path(), 9);
-	assert!(!root
-		.path()
-		.join(STORE_NAME)
-		.join(format!("{}.json", old.request_id))
-		.exists());
-	assert!(lookup_at(root.path(), &old, &policy()).unwrap().is_none());
+	assert!(result_path(root.path(), &old).exists());
+	let old_record = lookup_at(root.path(), &old, &policy()).unwrap().unwrap();
+	assert_eq!(
+		unbase64(old_record.payload_base64.as_deref().unwrap()).unwrap(),
+		serde_json::to_vec(&fixture_result(&old)).unwrap()
+	);
+	assert!(admit_at(root.path(), old, policy()).is_err());
 	assert!(lookup_at(root.path(), &current, &policy())
 		.unwrap()
 		.is_some());
+}
+
+#[test]
+fn result_admission_requires_exact_scoped_audit_identity_not_only_existing_id() {
+	let root = private_root();
+	let request = identity(81, "host_health");
+	audit(root.path(), &request);
+	for changed in 0..3 {
+		let mut other = request.clone();
+		match changed {
+			0 => other.owner = "c".repeat(64),
+			1 => other.tool_name = "host_list".into(),
+			2 => other.accepted_unix_ms += 1,
+			_ => unreachable!(),
+		}
+		assert!(admit_at(root.path(), other, policy()).is_err());
+	}
+	assert!(entries(&open_store(root.path()).unwrap())
+		.unwrap()
+		.is_empty());
+	assert!(admit_at(root.path(), request, policy()).is_ok());
+}
+
+#[test]
+fn retained_bytes_and_policy_remain_bound_after_hot_metadata_eviction() {
+	let root = private_root();
+	let (request, intent) = admit(root.path(), 82);
+	let original = store_fixture(intent, &fixture_result(&request));
+	// The admission lookup introduced a pinned archive. Populate its unchanged
+	// six-field receipt as an on-disk fixture, then remove only the hot member.
+	let filename = format!("{}.json", request.request_id);
+	private_write(
+		&root.path().join("request-archive-v11").join(&filename),
+		&fs::read(root.path().join("request-audit").join(&filename)).unwrap(),
+	);
+	fs::remove_file(root.path().join("request-audit").join(&filename)).unwrap();
+	for number in 100..235 {
+		let current = identity(number, "process_read");
+		audit(root.path(), &current);
+	}
+	request_audit::validate_identity_at(root.path(), &request).unwrap();
+	let (_, next) = admit(root.path(), 999);
+	drop(next);
+	let record = lookup_at(root.path(), &request, &policy())
+		.unwrap()
+		.unwrap();
+	assert_eq!(
+		unbase64(record.payload_base64.as_deref().unwrap()).unwrap(),
+		original
+	);
+	assert!(lookup_at(root.path(), &request, &"c".repeat(64)).is_err());
+	let mut foreign = request.clone();
+	foreign.owner = "c".repeat(64);
+	assert!(lookup_at(root.path(), &foreign, &policy()).is_err());
+	assert!(admit_at(root.path(), request, policy()).is_err());
+}
+
+#[test]
+fn owner_unknown_history_beyond_128_keeps_identity_and_does_not_block_new_admission() {
+	let root = private_root();
+	let (first, first_intent) = admit(root.path(), 1);
+	drop(first_intent);
+	let path = result_path(root.path(), &first);
+	let original = fs::read(&path).unwrap();
+	for number in 2..=160 {
+		let (_, intent) = admit(root.path(), number);
+		drop(intent);
+	}
+	assert_eq!(fs::read(&path).unwrap(), original);
+	assert!(retained_unknown(root.path(), &first));
+	assert!(admit_at(root.path(), first.clone(), policy()).is_err());
+	for changed in 0..3 {
+		let mut wrong = first.clone();
+		match changed {
+			0 => wrong.owner = "c".repeat(64),
+			1 => wrong.tool_name = "host_list".into(),
+			_ => wrong.accepted_unix_ms += 1,
+		}
+		assert!(admit_at(root.path(), wrong, policy()).is_err());
+	}
+}
+fn retained_unknown(root: &Path, request: &RequestIdentity) -> bool {
+	let record = lookup_at(root, request, &policy()).unwrap().unwrap();
+	record.state == ResultState::Unknown && record.payload_base64.is_none()
+}
+
+#[test]
+fn global_unknown_history_beyond_512_accepts_new_owner_without_rewriting_old_records() {
+	let root = private_root();
+	let mut first = None;
+	for number in 1..=540 {
+		let mut request = identity(number, "host_health");
+		request.owner = id(number);
+		audit(root.path(), &request);
+		drop(admit_at(root.path(), request.clone(), policy()).unwrap());
+		if first.is_none() {
+			first = Some((
+				request.clone(),
+				fs::read(result_path(root.path(), &request)).unwrap(),
+			));
+		}
+	}
+	let (request, raw) = first.unwrap();
+	assert_eq!(fs::read(result_path(root.path(), &request)).unwrap(), raw);
+	assert!(retained_unknown(root.path(), &request));
+}
+
+#[test]
+fn quota_ack_preserves_original_sync_success_without_claiming_new_result_retention() {
+	let request = identity(2001, "host_list");
+	let original = fixture_result(&request);
+	let mut response = Ok(original.clone().into());
+	attach_ack(&mut response, "not_retained_quota", true);
+	let result = unwrap_complete(&response);
+	assert_eq!(result.content, original.content);
+	assert_eq!(result.is_error, original.is_error);
+	assert_eq!(
+		result.meta.as_ref().unwrap()[ID_META]["request_id"],
+		request.request_id
+	);
+	assert_eq!(
+		result.meta.as_ref().unwrap()[ACK_META]["result_state"],
+		"not_retained_quota"
+	);
+	assert_eq!(
+		result.meta.as_ref().unwrap()[ACK_META]["audit_completion_durable"],
+		true
+	);
+	assert_eq!(
+		result.meta.as_ref().unwrap()[ACK_META]["automatic_retry"],
+		false
+	);
 }
 
 #[test]
@@ -359,10 +483,7 @@ fn result_inode_symlinks_hardlinks_writable_and_oversized_files_are_refused() {
 		let root = private_root();
 		let (request, intent) = admit(root.path(), 10);
 		drop(intent);
-		let file = root
-			.path()
-			.join(STORE_NAME)
-			.join(format!("{}.json", request.request_id));
+		let file = result_path(root.path(), &request);
 		match kind {
 			"symlink" => {
 				let outside = root.path().join("outside");
@@ -407,11 +528,8 @@ fn special_inode_and_malformed_record_are_refused_without_blocking() {
 	let root = private_root();
 	let (request, intent) = admit(root.path(), 11);
 	drop(intent);
-	let directory = open_store(root.path()).unwrap();
-	let file = root
-		.path()
-		.join(STORE_NAME)
-		.join(format!("{}.json", request.request_id));
+	let directory = result_directory(root.path(), &request);
+	let file = result_path(root.path(), &request);
 	fs::remove_file(&file).unwrap();
 	fs::create_dir(&file).unwrap();
 	assert!(lookup_at(root.path(), &request, &policy()).is_err());
@@ -434,24 +552,21 @@ fn verified_interrupted_staging_is_removed_without_changing_published_bytes() {
 	let root = private_root();
 	let (request, intent) = admit(root.path(), 12);
 	let original = store_fixture(intent, &fixture_result(&request));
-	let directory = open_store(root.path()).unwrap();
-	let file = root
-		.path()
-		.join(STORE_NAME)
-		.join(format!("{}.json", request.request_id));
-	let staging =
-		root.path()
-			.join(STORE_NAME)
-			.join(format!(".{}-{}.tmp", request.request_id, id(991)));
+	let directory = result_directory(root.path(), &request);
+	let file = result_path(root.path(), &request);
+	let staging = result_path(root.path(), &request)
+		.parent()
+		.unwrap()
+		.join(format!(".{}-{}.tmp", request.request_id, id(991)));
 	fs::hard_link(&file, &staging).unwrap();
 	let records = entries(&directory).unwrap();
 	assert_eq!(records.len(), 1);
 	assert!(!staging.exists());
 	let recovered = unbase64(records[0].payload_base64.as_deref().unwrap()).unwrap();
 	assert_eq!(recovered, original);
-	let abandoned = root
-		.path()
-		.join(STORE_NAME)
+	let abandoned = result_path(root.path(), &request)
+		.parent()
+		.unwrap()
 		.join(format!(".{}-{}.tmp", id(913), id(992)));
 	private_write(&abandoned, b"interrupted publication");
 	assert_eq!(entries(&directory).unwrap().len(), 1);
@@ -464,12 +579,16 @@ fn unexpected_staging_names_permissions_and_unrelated_links_are_refused() {
 		let root = private_root();
 		let (request, intent) = admit(root.path(), 13);
 		drop(intent);
-		let directory = open_store(root.path()).unwrap();
-		let staging = root.path().join(STORE_NAME).join(if kind == "name" {
-			".not-a-valid-staging.tmp".into()
-		} else {
-			format!(".{}-{}.tmp", request.request_id, id(993))
-		});
+		let directory = result_directory(root.path(), &request);
+		let staging =
+			result_path(root.path(), &request)
+				.parent()
+				.unwrap()
+				.join(if kind == "name" {
+					".not-a-valid-staging.tmp".into()
+				} else {
+					format!(".{}-{}.tmp", request.request_id, id(993))
+				});
 		private_write(&staging, b"untrusted staging");
 		if kind == "writable" {
 			fs::set_permissions(&staging, fs::Permissions::from_mode(0o640)).unwrap();
@@ -488,9 +607,9 @@ fn unexpected_staging_names_permissions_and_unrelated_links_are_refused() {
 #[test]
 fn repeated_directory_scans_do_not_share_a_stale_cursor() {
 	let root = private_root();
-	let (_, a) = admit(root.path(), 14);
+	let (first, a) = admit(root.path(), 14);
 	drop(a);
-	let directory = open_store(root.path()).unwrap();
+	let directory = result_directory(root.path(), &first);
 	assert_eq!(entries(&directory).unwrap().len(), 1);
 	let (_, b) = admit(root.path(), 15);
 	drop(b);
@@ -506,13 +625,13 @@ fn completion_storage_relocation_preserves_response_identity_and_original_conten
 	let mut response = Ok(fixture_result(&request).into());
 	let before = unwrap_complete(&response).content.clone();
 	let archive = root.path().join("moved-results");
-	fs::rename(root.path().join(STORE_NAME), &archive).unwrap();
-	fs::create_dir(root.path().join(STORE_NAME)).unwrap();
-	fs::set_permissions(
-		root.path().join(STORE_NAME),
-		fs::Permissions::from_mode(0o700),
-	)
-	.unwrap();
+	let shard = result_path(root.path(), &request)
+		.parent()
+		.unwrap()
+		.to_path_buf();
+	fs::rename(shard.clone(), &archive).unwrap();
+	fs::create_dir(shard.clone()).unwrap();
+	fs::set_permissions(shard.clone(), fs::Permissions::from_mode(0o700)).unwrap();
 	assert!(complete_sync(intent, Some(unwrap_complete(&response).clone())).is_err());
 	attach_ack(&mut response, "unknown", false);
 	let value = unwrap_complete(&response);
@@ -749,10 +868,7 @@ fn corrupt_stored_payload_and_payload_on_unknown_are_refused_even_for_status_loo
 		let (request, intent) = admit(root.path(), 900 + mutate);
 		let result = fixture_result(&request);
 		store_fixture(intent, &result);
-		let path = root
-			.path()
-			.join(STORE_NAME)
-			.join(format!("{}.json", request.request_id));
+		let path = result_path(root.path(), &request);
 		let mut record: Record = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
 		match mutate {
 			0 => record.payload_bytes = Some(MAX_RESULT_BYTES + 1),

@@ -351,6 +351,9 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 		true,
 	)?;
 	check_environment(&params.host, &params.env)?;
+	// Hold the same cross-controller admission guard until the PTY launch
+	// has been durably registered; old PTY reads remain ungated.
+	let _owner_admission = super::effect_owner_fence::admit_new_effect().await?;
 	if host.execution_mode == ExecutionMode::Operator {
 		return super::terminal::start(&params).await;
 	}
