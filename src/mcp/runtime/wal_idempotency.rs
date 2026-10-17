@@ -1558,6 +1558,59 @@ mod tests {
 	}
 
 	#[test]
+	fn successor_batch_reuses_old_epoch_ids_after_restart_without_relaunch() {
+		let f = Fixture::new();
+		let digest = "e".repeat(64);
+		let mut first = f.bootstrap();
+		first.establish_first_writer("v4").unwrap();
+		let ids = ["job-a", "job-b", "job-c"];
+		let keys = ["key-a", "key-b", "key-c"];
+		let hosts = ["main", "pocket4", "mac"];
+		let requests: Vec<_> = (0..ids.len())
+			.map(|i| ReservationRequest {
+				host: hosts[i],
+				key: keys[i],
+				digest: &digest,
+				proposed_id: ids[i],
+			})
+			.collect();
+		assert!(first
+			.reserve_batch(&requests)
+			.unwrap()
+			.iter()
+			.all(|x| matches!(x, Reserve::Fresh(_))));
+		first.freeze_writer().unwrap();
+		assert_eq!(first.promote_frozen_writer("v11").unwrap(), 2);
+		drop(first);
+		let mut second = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		assert!(
+			second.reserve_batch(&requests).is_err(),
+			"unbound new controller must be denied"
+		);
+		second.bind_writer("v11", 2).unwrap();
+		let results = second.reserve_batch(&requests).unwrap();
+		for (i, result) in results.into_iter().enumerate() {
+			assert_eq!(
+				result,
+				Reserve::Existing {
+					job_id: ids[i].into(),
+					phase: "reserved".into()
+				}
+			);
+		}
+		second.freeze_writer().unwrap();
+		assert!(second.reserve_batch(&requests).is_err());
+		assert_eq!(second.promote_frozen_writer("v4").unwrap(), 3);
+		let mut restored = Ledger::reopen(f.root(), &f.jobs).unwrap();
+		restored.bind_writer("v4", 3).unwrap();
+		assert!(restored
+			.reserve_batch(&requests)
+			.unwrap()
+			.iter()
+			.all(|x| matches!(x, Reserve::Existing { phase, .. } if phase == "reserved")));
+	}
+
+	#[test]
 	fn frozen_authority_remains_closed_after_controller_restart() {
 		let f = Fixture::new();
 		let mut v4 = f.bootstrap();
