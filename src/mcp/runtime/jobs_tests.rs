@@ -812,7 +812,40 @@ fn positive_reuse_microbenchmark_6000_synthetic_records() {
 	assert_eq!(cold.id, hot.id);
 	assert_eq!(hot.id, "fixture-job-05999");
 	assert_eq!(cache.lock().unwrap().known.len(), 1);
-	println!("isolated_fixture_records=6000 cold_lookup_ms={cold_ms:.3} hot_reuse_ms={hot_ms:.3}");
+	let legacy_scan = || {
+		let start = std::time::Instant::now();
+		let found = all_records_in(root.path())
+			.unwrap()
+			.into_iter()
+			.find(|r| r.host == "main" && r.idempotency_key.as_deref() == Some(key))
+			.unwrap();
+		assert_eq!(found.id, hot.id);
+		start.elapsed().as_secs_f64() * 1000.0
+	};
+	let streaming_scan = || {
+		let start = std::time::Instant::now();
+		let found = scan_idempotent_binding_in(root.path(), "main", key)
+			.unwrap()
+			.unwrap();
+		assert_eq!(found.id, hot.id);
+		start.elapsed().as_secs_f64() * 1000.0
+	};
+	let mut legacy_ms = Vec::new();
+	let mut streamed_ms = Vec::new();
+	for round in 0..6 {
+		if round % 2 == 0 {
+			legacy_ms.push(legacy_scan());
+			streamed_ms.push(streaming_scan());
+		} else {
+			streamed_ms.push(streaming_scan());
+			legacy_ms.push(legacy_scan());
+		}
+	}
+	legacy_ms.sort_by(f64::total_cmp);
+	streamed_ms.sort_by(f64::total_cmp);
+	println!("isolated_fixture_records=6000 cold_lookup_ms={cold_ms:.3} hot_reuse_ms={hot_ms:.3} legacy_sorted_median_ms={:.3} streamed_median_ms={:.3}",
+		(legacy_ms[2] + legacy_ms[3]) / 2.0,
+		(streamed_ms[2] + streamed_ms[3]) / 2.0);
 }
 
 #[cfg(unix)]
@@ -877,4 +910,113 @@ fn cached_read_rejects_invalid_record_name() {
 	fixture_write(root.path(), &record);
 	assert!(read_verified_cached_record(root.path(), "bad/child").is_err());
 	assert!(read_verified_cached_record(root.path(), "same-job-id").is_ok());
+}
+
+#[test]
+fn streaming_lookup_matches_sorted_legacy_record_scan() {
+	let root = tempfile::tempdir().unwrap();
+	let template = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	for i in 0..128u32 {
+		let mut record = template.clone();
+		record.id = format!("fixture-stream-{i:04}");
+		record.created_unix_ms = i as u128;
+		record.idempotency_key = Some(format!("stream-key-{i:04}"));
+		record.host = if i % 2 == 0 {
+			"main".into()
+		} else {
+			"mac".into()
+		};
+		fixture_write(root.path(), &record);
+	}
+	for i in [0, 1, 16, 63, 126, 127] {
+		let host = if i % 2 == 0 { "main" } else { "mac" };
+		let key = format!("stream-key-{i:04}");
+		let old = all_records_in(root.path())
+			.unwrap()
+			.into_iter()
+			.find(|r| r.host == host && r.idempotency_key.as_deref() == Some(key.as_str()))
+			.unwrap();
+		let current = scan_idempotent_binding_in(root.path(), host, &key)
+			.unwrap()
+			.unwrap();
+		assert_eq!(old.id, current.id);
+	}
+	assert!(
+		scan_idempotent_binding_in(root.path(), "main", "never-created")
+			.unwrap()
+			.is_none()
+	);
+}
+
+#[test]
+fn streaming_scan_rejects_corruption_and_duplicate_bindings() {
+	let root = tempfile::tempdir().unwrap();
+	let mut record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &record);
+	record.id = "second-id".into();
+	fixture_write(root.path(), &record);
+	assert!(scan_idempotent_binding_in(root.path(), "main", "fixed-key")
+		.unwrap_err()
+		.to_string()
+		.contains("duplicate original"));
+	std::fs::remove_file(root.path().join("second-id.json")).unwrap();
+	std::fs::write(root.path().join("corrupt.json"), b"{not-json").unwrap();
+	assert!(scan_idempotent_binding_in(root.path(), "main", "other")
+		.unwrap_err()
+		.to_string()
+		.contains("corrupt job record"));
+}
+
+#[cfg(unix)]
+#[test]
+fn streaming_scan_rejects_post_enumeration_directory_mutation() {
+	let root = tempfile::tempdir().unwrap();
+	let old = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &old);
+	assert!(
+		scan_idempotent_binding_in(root.path(), "main", "never-accepted")
+			.unwrap()
+			.is_none()
+	);
+
+	let mut inserted = old.clone();
+	inserted.id = "newly-written-job".into();
+	inserted.idempotency_key = Some("never-accepted".into());
+	let rejected =
+		scan_idempotent_binding_in_with_observer(root.path(), "main", "never-accepted", || {
+			// This runs AFTER complete enumeration, BEFORE the authoritative
+			// directory epoch comparison. It is not an unreliable race test.
+			std::thread::sleep(Duration::from_millis(5));
+			fixture_write(root.path(), &inserted);
+		})
+		.unwrap_err()
+		.to_string();
+	assert!(
+		rejected.contains("registry changed during scan"),
+		"{rejected}"
+	);
+	let accepted = scan_idempotent_binding_in(root.path(), "main", "never-accepted")
+		.unwrap()
+		.unwrap();
+	assert_eq!(accepted.id, inserted.id);
+
+	let mut duplicate = inserted.clone();
+	duplicate.id = "second-conflicting-id".into();
+	let rejected_existing =
+		scan_idempotent_binding_in_with_observer(root.path(), "main", "never-accepted", || {
+			std::thread::sleep(Duration::from_millis(5));
+			fixture_write(root.path(), &duplicate);
+		})
+		.unwrap_err()
+		.to_string();
+	assert!(
+		rejected_existing.contains("registry changed during scan"),
+		"{rejected_existing}"
+	);
+	assert!(
+		scan_idempotent_binding_in(root.path(), "main", "never-accepted")
+			.unwrap_err()
+			.to_string()
+			.contains("duplicate original")
+	);
 }
