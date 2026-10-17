@@ -355,9 +355,7 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 	// has been durably registered; old PTY reads remain ungated.
 	let _owner_admission = super::effect_owner_fence::admit_new_effect().await?;
 	// Preserve original V4 terminal identity across an owner epoch transfer.
-	_owner_admission.require_new_pty_identity(
-		&params.host, params.idempotency_key.as_deref(),
-	)?;
+	_owner_admission.require_new_pty_identity(&params.host, params.idempotency_key.as_deref())?;
 	if host.execution_mode == ExecutionMode::Operator {
 		return super::terminal::start(&params).await;
 	}

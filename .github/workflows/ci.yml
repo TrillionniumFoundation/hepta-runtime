@@ -5,10 +5,11 @@ on:
     branches:
       - hepta-runtime-base
       - 'feature/**'
+      - 'feat/**'
+      - 'codex/**'
       - 'fix/**'
   pull_request:
-    branches:
-      - hepta-runtime-base
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -27,6 +28,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Install pinned Rust toolchain
         run: |
@@ -50,6 +52,20 @@ jobs:
 
       - name: Descriptor-relative file safety
         run: python3 tests/file_capabilities.py
+
+      - name: Control-plane regression
+        run: |
+          set -euo pipefail
+          python3 -B tests/runtime_registry_page_tests.py
+          python3 -B tests/chatgpt_v11_layered_read_tests.py
+          python3 -B tests/runtime_workflow_owner_tests.py
+          python3 -B tests/chatgpt_v10_single_v4_effect_tests.py
+          python3 -B tests/chatgpt_v10_stream_custody_tests.py
+          python3 -B tests/test_computer_http.py
+          python3 -B tests/full_operator_facade_tests.py
+          python3 -B tests/full_operator_cancel_tests.py
+          python3 -B tests/chatgpt_request_identity_tests.py
+          python3 -B tests/full_operator_session_recovery_tests.py
 
       - name: Release build
         run: cargo build --locked --release

@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::OpenOptions;
+use std::future::Future;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -25,6 +26,7 @@ static START_LOCKS: OnceLock<Mutex<HashMap<String, Arc<AsyncMutex<()>>>>> = Once
 static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static REUSE_HITS: OnceLock<Mutex<ReuseHitCache>> = OnceLock::new();
 const MAX_REUSE_HITS: usize = 4096;
+const MAX_IDEMPOTENCY_SCAN_ATTEMPTS: usize = 3;
 const MAX_CACHED_RECORD_BYTES: u64 = 1024 * 1024;
 const MAX_STDIN_BYTES: usize = 1024 * 1024;
 const MAX_LOG_READ_BYTES: u64 = 16 * 1024;
@@ -227,6 +229,8 @@ fn load_record(id: &str) -> Result<JobRecord> {
 struct RegistryEpoch {
 	device: u64,
 	inode: u64,
+	owner: u32,
+	mode: u32,
 	modified_seconds: i64,
 	modified_nanos: i64,
 	changed_seconds: i64,
@@ -245,6 +249,8 @@ fn registry_epoch(dir: &Path) -> Result<RegistryEpoch> {
 	Ok(RegistryEpoch {
 		device: m.dev(),
 		inode: m.ino(),
+		owner: m.uid(),
+		mode: m.mode(),
 		modified_seconds: m.mtime(),
 		modified_nanos: m.mtime_nsec(),
 		changed_seconds: m.ctime(),
@@ -255,6 +261,29 @@ fn registry_epoch(dir: &Path) -> Result<RegistryEpoch> {
 fn registry_epoch(_dir: &Path) -> Result<RegistryEpoch> {
 	bail!("positive reuse caching requires a Unix registry identity")
 }
+
+#[cfg(unix)]
+fn same_registry_root(one: &RegistryEpoch, other: &RegistryEpoch) -> bool {
+	one.device == other.device
+		&& one.inode == other.inode
+		&& one.owner == other.owner
+		&& one.mode == other.mode
+}
+#[cfg(not(unix))]
+fn same_registry_root(_one: &RegistryEpoch, _other: &RegistryEpoch) -> bool {
+	false
+}
+
+#[derive(Debug)]
+struct RegistryScanChanged;
+
+impl std::fmt::Display for RegistryScanChanged {
+	fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		formatter.write_str("idempotency registry changed during scan; no new job may launch")
+	}
+}
+
+impl std::error::Error for RegistryScanChanged {}
 
 #[derive(Default)]
 struct ReuseHitCache {
@@ -359,6 +388,56 @@ fn read_verified_cached_record(_dir: &Path, _id: &str) -> Result<JobRecord> {
 // Vec of all job records. It must still parse EVERY existing JSON record so
 // malformed history and duplicate original bindings refuse a new effect.
 fn scan_idempotent_binding_in(dir: &Path, host: &str, key: &str) -> Result<Option<JobRecord>> {
+	scan_idempotent_binding_in_with_retries(dir, host, key, |_| {})
+}
+
+// Independent host launches can atomically add/replace records while another
+// host scans. Retry only that same-directory epoch change, before any job ID,
+// durable intent or remote effect is allocated. Never retry invalid history or
+// a different registry root; sustained churn still fails within a fixed budget.
+fn scan_idempotent_binding_in_with_retries(
+	dir: &Path,
+	host: &str,
+	key: &str,
+	mut after_scan: impl FnMut(usize),
+) -> Result<Option<JobRecord>> {
+	let root = registry_epoch(dir)?;
+	for attempt in 0..MAX_IDEMPOTENCY_SCAN_ATTEMPTS {
+		match scan_idempotent_binding_once(dir, host, key, &root, || after_scan(attempt)) {
+			Err(error)
+				if error.downcast_ref::<RegistryScanChanged>().is_some()
+					&& attempt + 1 < MAX_IDEMPOTENCY_SCAN_ATTEMPTS => {}
+			result => return result,
+		}
+	}
+	unreachable!("bounded registry scan returns its final attempt")
+}
+
+// Preserve the upstream deterministic post-enumeration race fixture for one
+// scan. Production uses the bounded wrapper above with the same scan body.
+#[cfg(test)]
+fn scan_idempotent_binding_in_with_observer(
+	dir: &Path,
+	host: &str,
+	key: &str,
+	after_scan: impl FnOnce(),
+) -> Result<Option<JobRecord>> {
+	scan_idempotent_binding_once(dir, host, key, &registry_epoch(dir)?, after_scan)
+}
+
+fn scan_idempotent_binding_once(
+	dir: &Path,
+	host: &str,
+	key: &str,
+	root: &RegistryEpoch,
+	after_scan: impl FnOnce(),
+) -> Result<Option<JobRecord>> {
+	// Never infer an absent binding from a scan that overlaps a directory
+	// mutation. The original root identity is pinned across all retry attempts.
+	let before = registry_epoch(dir)?;
+	if !same_registry_root(root, &before) {
+		bail!("idempotency registry root identity changed; reconcile before execution");
+	}
 	let mut found: Option<JobRecord> = None;
 	for entry in std::fs::read_dir(dir)? {
 		let entry = entry?;
@@ -374,6 +453,14 @@ fn scan_idempotent_binding_in(dir: &Path, host: &str, key: &str) -> Result<Optio
 			}
 			found = Some(record);
 		}
+	}
+	after_scan();
+	let after = registry_epoch(dir)?;
+	if !same_registry_root(root, &after) {
+		bail!("idempotency registry root identity changed; reconcile before execution");
+	}
+	if after != before {
+		return Err(RegistryScanChanged.into());
 	}
 	Ok(found)
 }
@@ -396,6 +483,12 @@ fn find_idempotent_in(
 		if guard.root.is_some() && guard.root.as_deref() != Some(dir) {
 			bail!("job registry root changed; reconcile existing identities first");
 		}
+		if guard
+			.epoch
+			.is_some_and(|previous| !same_registry_root(&previous, &epoch))
+		{
+			bail!("job registry root identity changed; reconcile existing identities first");
+		}
 		if guard.epoch != Some(epoch) {
 			// A changed registry invalidates fast reads, not prior ownership.
 			guard.hits.clear();
@@ -408,6 +501,9 @@ fn find_idempotent_in(
 		)
 	};
 	if let Some(id) = cached_id {
+		if known_id.as_ref() != Some(&id) {
+			bail!("cached idempotency binding lost original ownership; no new launch");
+		}
 		if !valid_name(&id) {
 			bail!("cached job identity invalid; never allocate a replacement job");
 		}
@@ -424,6 +520,9 @@ fn find_idempotent_in(
 	}
 
 	let found = scan_idempotent_binding_in(dir, host, key)?;
+	if !same_registry_root(&epoch, &registry_epoch(dir)?) {
+		bail!("job registry root identity changed during lookup; no new launch");
+	}
 	if let Some(expected) = known_id {
 		if found.as_ref().map(|r| r.id.as_str()) != Some(expected.as_str()) {
 			bail!("previous idempotency binding missing or changed; no new launch");
@@ -444,6 +543,9 @@ fn find_idempotent_in(
 			if record.launch_state == "launched"
 				&& after == epoch
 				&& guard.hits.len() < MAX_REUSE_HITS
+				// Epoch changes clear hits, while known can already be full.
+				// Never cache an identity whose refusal evidence was not retained.
+				&& guard.known.get(&identity) == Some(&record.id)
 			{
 				guard
 					.hits
@@ -1385,6 +1487,23 @@ fn unavailable_status(job_id: &str) -> Value {
         "status_authoritative":false,"automatic_retry":false})
 }
 
+async fn read_reuse_status(
+	record: &JobRecord,
+	retry: bool,
+	start_guard: &mut Option<tokio::sync::MutexGuard<'_, ()>>,
+	read_status: impl Future<Output = Result<Value>>,
+) -> Value {
+	// A confirmed original launch needs only an observation. Keep uncertain
+	// identities and launch reconciliation serialized, but do not make another
+	// same-host start wait for this read-only SSH status roundtrip.
+	if !retry && record.launch_state == "launched" {
+		drop(start_guard.take());
+	}
+	read_status
+		.await
+		.unwrap_or_else(|_| unavailable_status(&record.id))
+}
+
 fn retain_cancel_outcome(job_id: &str, outcome: Result<Value>) -> Value {
 	if let Ok(value) = outcome {
 		if value["job_id"].as_str() == Some(job_id)
@@ -1477,7 +1596,7 @@ fn validate_new_host_resource_limits(
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	validate_start(&params)?;
 	let _host_start_lock = start_lock(&params.host)?;
-	let _start_guard = _host_start_lock.lock().await;
+	let mut start_guard = Some(_host_start_lock.lock().await);
 	// Cross-process owner fence: retain the shared admission lock from
 	// idempotency lookup through durable intent, launch and response.
 	let _owner_admission = super::effect_owner_fence::admit_new_effect().await?;
@@ -1501,9 +1620,13 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 			} else {
 				None
 			};
-			let status = status_record(&existing, 0)
-				.await
-				.unwrap_or_else(|_| unavailable_status(&existing.id));
+			let status = read_reuse_status(
+				&existing,
+				retry,
+				&mut start_guard,
+				status_record(&existing, 0),
+			)
+			.await;
 			let mut result = json!({
 				"reused": true,
 				"retried_launch": retry,

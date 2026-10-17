@@ -1054,3 +1054,344 @@ fn streaming_scan_rejects_corruption_and_duplicate_bindings() {
 		.to_string()
 		.contains("corrupt job record"));
 }
+
+#[cfg(unix)]
+#[test]
+fn streaming_scan_rejects_post_enumeration_directory_mutation() {
+	let root = tempfile::tempdir().unwrap();
+	let old = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &old);
+	assert!(
+		scan_idempotent_binding_in(root.path(), "main", "never-accepted")
+			.unwrap()
+			.is_none()
+	);
+
+	let mut inserted = old.clone();
+	inserted.id = "newly-written-job".into();
+	inserted.idempotency_key = Some("never-accepted".into());
+	let rejected =
+		scan_idempotent_binding_in_with_observer(root.path(), "main", "never-accepted", || {
+			// This runs AFTER complete enumeration, BEFORE the authoritative
+			// directory epoch comparison. It is not an unreliable race test.
+			std::thread::sleep(Duration::from_millis(5));
+			fixture_write(root.path(), &inserted);
+		})
+		.unwrap_err()
+		.to_string();
+	assert!(
+		rejected.contains("registry changed during scan"),
+		"{rejected}"
+	);
+	let accepted = scan_idempotent_binding_in(root.path(), "main", "never-accepted")
+		.unwrap()
+		.unwrap();
+	assert_eq!(accepted.id, inserted.id);
+
+	let mut duplicate = inserted.clone();
+	duplicate.id = "second-conflicting-id".into();
+	let rejected_existing =
+		scan_idempotent_binding_in_with_observer(root.path(), "main", "never-accepted", || {
+			std::thread::sleep(Duration::from_millis(5));
+			fixture_write(root.path(), &duplicate);
+		})
+		.unwrap_err()
+		.to_string();
+	assert!(
+		rejected_existing.contains("registry changed during scan"),
+		"{rejected_existing}"
+	);
+	assert!(
+		scan_idempotent_binding_in(root.path(), "main", "never-accepted")
+			.unwrap_err()
+			.to_string()
+			.contains("duplicate original")
+	);
+}
+
+#[cfg(unix)]
+#[test]
+fn streaming_retry_returns_inserted_original_instead_of_stale_miss() {
+	let root = tempfile::tempdir().unwrap();
+	let original = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	let mut scans = 0;
+	let found =
+		scan_idempotent_binding_in_with_retries(root.path(), "main", "fixed-key", |attempt| {
+			scans += 1;
+			if attempt == 0 {
+				std::thread::sleep(Duration::from_millis(5));
+				fixture_write(root.path(), &original);
+			}
+		})
+		.unwrap()
+		.unwrap();
+	assert_eq!(found.id, original.id);
+	assert_eq!(scans, 2, "a changed first scan must be fully repeated");
+}
+
+#[cfg(unix)]
+#[test]
+fn streaming_retry_tolerates_independent_host_atomic_publication() {
+	let root = tempfile::tempdir().unwrap();
+	let original = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &original);
+	let mut other = original.clone();
+	other.id = "mac-concurrent-job".into();
+	other.host = "mac".into();
+	other.idempotency_key = Some("mac-new-key".into());
+	let writer_dir = root.path().to_path_buf();
+	let (scan_done_tx, scan_done_rx) = std::sync::mpsc::channel();
+	let (published_tx, published_rx) = std::sync::mpsc::channel();
+	let writer = std::thread::spawn(move || {
+		scan_done_rx.recv().unwrap();
+		std::thread::sleep(Duration::from_millis(5));
+		let stage = writer_dir.join("mac-concurrent-job.stage");
+		std::fs::write(&stage, serde_json::to_vec(&other).unwrap()).unwrap();
+		std::fs::rename(stage, writer_dir.join("mac-concurrent-job.json")).unwrap();
+		published_tx.send(()).unwrap();
+	});
+	let mut scans = 0;
+	let found =
+		scan_idempotent_binding_in_with_retries(root.path(), "main", "main-new-key", |attempt| {
+			scans += 1;
+			if attempt == 0 {
+				scan_done_tx.send(()).unwrap();
+				published_rx.recv().unwrap();
+			}
+		})
+		.unwrap();
+	writer.join().unwrap();
+	assert!(found.is_none());
+	assert_eq!(scans, 2);
+	assert_eq!(
+		scan_idempotent_binding_in(root.path(), "mac", "mac-new-key")
+			.unwrap()
+			.unwrap()
+			.id,
+		"mac-concurrent-job"
+	);
+}
+
+#[cfg(unix)]
+#[test]
+fn streaming_retry_budget_refuses_sustained_membership_churn() {
+	let root = tempfile::tempdir().unwrap();
+	let mut scans = 0;
+	let error =
+		scan_idempotent_binding_in_with_retries(root.path(), "main", "unaccepted", |attempt| {
+			scans += 1;
+			let mut other = outcome_fixture(ExecutionMode::Operator, false, "launched");
+			other.id = format!("mac-churn-{attempt}");
+			other.host = "mac".into();
+			other.idempotency_key = Some(format!("mac-key-{attempt}"));
+			std::thread::sleep(Duration::from_millis(5));
+			fixture_write(root.path(), &other);
+		})
+		.unwrap_err();
+	assert_eq!(scans, MAX_IDEMPOTENCY_SCAN_ATTEMPTS);
+	assert!(error.downcast_ref::<RegistryScanChanged>().is_some());
+}
+
+#[cfg(unix)]
+#[test]
+fn streaming_retry_does_not_mask_corruption_or_duplicate_bindings() {
+	for corruption in [false, true] {
+		let root = tempfile::tempdir().unwrap();
+		let original = outcome_fixture(ExecutionMode::Operator, false, "launched");
+		fixture_write(root.path(), &original);
+		let mut scans = 0;
+		let error =
+			scan_idempotent_binding_in_with_retries(root.path(), "main", "fixed-key", |_| {
+				scans += 1;
+				std::thread::sleep(Duration::from_millis(5));
+				if corruption {
+					std::fs::write(root.path().join("broken.json"), b"not-json").unwrap();
+				} else {
+					let mut duplicate = original.clone();
+					duplicate.id = "conflicting-original".into();
+					fixture_write(root.path(), &duplicate);
+				}
+			})
+			.unwrap_err();
+		assert_eq!(
+			scans, 1,
+			"invalid history must stop before another observer"
+		);
+		assert!(error.to_string().contains(if corruption {
+			"corrupt job record"
+		} else {
+			"duplicate original"
+		}));
+		assert!(error.downcast_ref::<RegistryScanChanged>().is_none());
+	}
+}
+
+#[cfg(unix)]
+#[test]
+fn streaming_retry_refuses_root_replacement_and_permission_changes() {
+	use std::os::unix::fs::PermissionsExt;
+	for replacement in [false, true] {
+		let root = tempfile::tempdir().unwrap();
+		let jobs = root.path().join("jobs");
+		std::fs::create_dir(&jobs).unwrap();
+		std::fs::set_permissions(&jobs, std::fs::Permissions::from_mode(0o700)).unwrap();
+		let mut scans = 0;
+		let error = scan_idempotent_binding_in_with_retries(&jobs, "main", "unaccepted", |_| {
+			scans += 1;
+			if replacement {
+				std::fs::rename(&jobs, root.path().join("original-jobs")).unwrap();
+				std::fs::create_dir(&jobs).unwrap();
+				std::fs::set_permissions(&jobs, std::fs::Permissions::from_mode(0o700)).unwrap();
+			} else {
+				std::fs::set_permissions(&jobs, std::fs::Permissions::from_mode(0o755)).unwrap();
+			}
+		})
+		.unwrap_err();
+		assert_eq!(scans, 1, "root changes are not ordinary membership churn");
+		assert!(error.to_string().contains("root identity changed"));
+		assert!(error.downcast_ref::<RegistryScanChanged>().is_none());
+	}
+}
+
+#[cfg(unix)]
+#[test]
+fn saturated_reuse_cache_never_admits_untracked_hits_or_evicts_known_bindings() {
+	let root = tempfile::tempdir().unwrap();
+	let original = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &original);
+	let mut full = ReuseHitCache::default();
+	full.known
+		.insert(("main".into(), "fixed-key".into()), original.id.clone());
+	for i in 1..MAX_REUSE_HITS {
+		full.known.insert(
+			("main".into(), format!("old-key-{i}")),
+			format!("old-id-{i}"),
+		);
+	}
+	let cache = Mutex::new(full);
+	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
+	let mut newer = original.clone();
+	newer.id = "uncached-original".into();
+	newer.idempotency_key = Some("newer-key".into());
+	std::thread::sleep(Duration::from_millis(5));
+	fixture_write(root.path(), &newer);
+	let found = find_idempotent_in(root.path(), "main", "newer-key", &cache)
+		.unwrap()
+		.unwrap();
+	assert_eq!(
+		found.id, newer.id,
+		"full scans still return the actual original"
+	);
+	{
+		let guard = cache.lock().unwrap();
+		assert_eq!(guard.known.len(), MAX_REUSE_HITS);
+		assert!(!guard
+			.known
+			.contains_key(&("main".into(), "newer-key".into())));
+		assert!(!guard
+			.hits
+			.contains_key(&("main".into(), "newer-key".into())));
+		assert!(guard
+			.hits
+			.iter()
+			.all(|(identity, id)| guard.known.get(identity) == Some(id)));
+	}
+	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
+	assert!(cache
+		.lock()
+		.unwrap()
+		.hits
+		.contains_key(&("main".into(), "fixed-key".into())));
+	std::fs::remove_file(root.path().join("same-job-id.json")).unwrap();
+	assert!(find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+		.unwrap_err()
+		.to_string()
+		.contains("previous idempotency binding"));
+}
+
+#[cfg(unix)]
+#[test]
+fn cached_hit_without_known_ownership_refuses_reuse() {
+	let root = tempfile::tempdir().unwrap();
+	let original = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(root.path(), &original);
+	let cache = Mutex::new(ReuseHitCache::default());
+	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
+	cache.lock().unwrap().known.clear();
+	assert!(find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+		.unwrap_err()
+		.to_string()
+		.contains("lost original ownership"));
+}
+
+#[cfg(unix)]
+#[test]
+fn known_cache_refuses_changed_root_before_unknown_key_lookup() {
+	let root = tempfile::tempdir().unwrap();
+	let jobs = root.path().join("jobs");
+	std::fs::create_dir(&jobs).unwrap();
+	let original = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	fixture_write(&jobs, &original);
+	let cache = Mutex::new(ReuseHitCache::default());
+	find_idempotent_in(&jobs, "main", "fixed-key", &cache).unwrap();
+	std::fs::rename(&jobs, root.path().join("original-jobs")).unwrap();
+	std::fs::create_dir(&jobs).unwrap();
+	assert!(find_idempotent_in(&jobs, "main", "new-key", &cache)
+		.unwrap_err()
+		.to_string()
+		.contains("root identity changed"));
+}
+
+#[tokio::test]
+async fn confirmed_reuse_status_wait_releases_same_host_start_lock() {
+	let lock = start_lock("hepta-fixture-confirmed-reuse").unwrap();
+	let record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	for unavailable in [false, true] {
+		let mut guard = Some(lock.lock().await);
+		let status = read_reuse_status(&record, false, &mut guard, async {
+			tokio::task::yield_now().await;
+			let admitted = lock
+				.try_lock()
+				.expect("status observation must not block a same-host start");
+			drop(admitted);
+			if unavailable {
+				bail!("private upstream diagnostic")
+			}
+			Ok(json!({"job_id":record.id,"state":"exited"}))
+		})
+		.await;
+		assert!(guard.is_none());
+		assert_eq!(status["job_id"], record.id);
+		if unavailable {
+			assert_eq!(status["state"], "status_unavailable");
+			assert_eq!(status["automatic_retry"], false);
+			assert!(!status.to_string().contains("private upstream diagnostic"));
+		} else {
+			assert_eq!(status["state"], "exited");
+		}
+	}
+}
+
+#[tokio::test]
+async fn uncertain_or_retried_reuse_keeps_start_lock_during_status_wait() {
+	let lock = start_lock("hepta-fixture-uncertain-reuse").unwrap();
+	for (state, retry) in [
+		("pending", false),
+		("unknown", false),
+		("launch_failed", true),
+		("launched", true),
+	] {
+		let record = outcome_fixture(ExecutionMode::Operator, false, state);
+		let mut guard = Some(lock.lock().await);
+		read_reuse_status(&record, retry, &mut guard, async {
+			tokio::task::yield_now().await;
+			assert!(
+				lock.try_lock().is_err(),
+				"uncertain/retried identity must remain serialized"
+			);
+			Ok(json!({"job_id":record.id,"state":"observed"}))
+		})
+		.await;
+		assert!(guard.is_some());
+	}
+}

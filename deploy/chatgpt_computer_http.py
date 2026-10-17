@@ -76,7 +76,9 @@ class ComputerHTTPServer(http.server.ThreadingHTTPServer):
     # idle/write sockets have a 30-second timeout. No active effect is replayed.
     daemon_threads = False
     block_on_close = True
-    allow_reuse_address = False
+    # Permit restart after closed connections enter TIME_WAIT; a live listener
+    # remains exclusive because SO_REUSEPORT stays disabled.
+    allow_reuse_address = True
     request_queue_size = socket.SOMAXCONN
 
     def __init__(self, address, proxy_factory, auth_token):

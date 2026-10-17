@@ -175,6 +175,24 @@ class RegistryPageTests(unittest.TestCase):
             self.assertEqual(current["jobs"], expected)
             self.assertLessEqual(len(self.pager._snapshots), P.MAX_SNAPSHOTS)
 
+    def test_cursor_index_is_included_in_snapshot_memory_quota(self):
+        for number in range(512):
+            self.write(self.old, number)
+        self.pager.page({"limit": 1})
+        snapshot = self.pager._snapshots[0]
+        self.assertGreaterEqual(snapshot["bytes"], P._memory_bytes(snapshot))
+        rows_only = {key: value for key, value in snapshot.items()
+                     if key not in ("cursor_offsets", "bytes")}
+        rows_only_budget = P._memory_bytes(rows_only) + 1024
+        self.assertLess(rows_only_budget, snapshot["bytes"])
+        # A budget that fits the rows but not their cursor index must refuse
+        # the entire new snapshot, rather than retain uncharged index memory.
+        other = P.RuntimeRegistryPager(self.old, self.new)
+        with mock.patch.object(P, "MAX_SNAPSHOT_CACHE_BYTES", rows_only_budget):
+            with self.assertRaisesRegex(P.UnsafeProvenance, "snapshot_cache_bound"):
+                other.page({})
+        self.assertEqual(other._snapshots, [])
+
     def test_returned_projection_cannot_mutate_cached_frozen_rows(self):
         self.write(self.old, 1)
         self.write(self.new, 2)
@@ -300,7 +318,12 @@ class RegistryPageTests(unittest.TestCase):
             expected.add(path.stem)
         arguments, found, snapshots = {}, [], set()
         for iteration in range(48):
-            page = self.pager.page(arguments)
+            with mock.patch.object(self.pager, "_cursor", wraps=self.pager._cursor) as cursors:
+                page = self.pager.page(arguments)
+            if "cursor" in arguments:
+                # Continuations authenticate the indexed row and generate
+                # this page's output cursors; they must not rehash its prefix.
+                self.assertLessEqual(cursors.call_count, page["returned"] + 2)
             self.assertEqual(page["total"], 6000)
             self.assertLessEqual(page["returned"], 128)
             self.assertLessEqual(len(P.canonical(page["jobs"])), 64 * 1024)
@@ -317,6 +340,52 @@ class RegistryPageTests(unittest.TestCase):
         self.assertEqual(len(snapshots), 1)
         self.assertEqual(len(found), len(set(found)))
         self.assertEqual(set(found), expected)
+
+    def test_real_registry_growth_past_32768_to_65528_and_bound(self):
+        # One growing private-file fixture covers the old per-directory cap
+        # and the new aggregate row boundary without duplicating 65K writes.
+        expected = set()
+        for number in range(32769):
+            path = self.write(self.old, number)
+            expected.add(("legacy", path.stem))
+
+        def complete_inventory(count):
+            arguments, found, snapshots = {}, [], set()
+            for _ in range((count + 127) // 128 + 1):
+                page = self.pager.page(arguments)
+                self.assertEqual(page["total"], count)
+                self.assertTrue(page["page_complete"])
+                self.assertFalse(page["status_authoritative"])
+                self.assertGreater(page["returned"], 0)
+                self.assertLessEqual(page["returned"], 128)
+                wire = {"jsonrpc": "2.0", "id": "x" * 128, "result": {
+                    "content": [{"type": "text",
+                                 "text": P.canonical(page).decode("utf-8")}],
+                    "isError": False}}
+                self.assertLessEqual(len(P.canonical(wire)), 64 * 1024)
+                found.extend((row["owner"], row["id"]) for row in page["jobs"])
+                snapshots.add(page["snapshot_id"])
+                if not page["has_more"]:
+                    self.assertTrue(page["inventory_complete"])
+                    self.assertIsNone(page["next_cursor"])
+                    break
+                self.assertFalse(page["inventory_complete"])
+                arguments = {"cursor": page["next_cursor"]}
+            else:
+                self.fail("grown registry did not reach complete inventory EOF")
+            self.assertEqual(len(snapshots), 1)
+            self.assertEqual(len(found), count)
+            self.assertEqual(len(found), len(set(found)))
+            self.assertEqual(set(found), expected)
+
+        complete_inventory(32769)
+        for number in range(32769, 65528):
+            path = self.write(self.new, number)
+            expected.add(("native", path.stem))
+        complete_inventory(65528)
+        self.write(self.new, 65528)
+        with self.assertRaisesRegex(P.UnsafeProvenance, "member_shape_collision_or_bound"):
+            self.pager.page({})
 
 
     def test_first_page_reobserves_after_one_new_job_membership_race(self):
