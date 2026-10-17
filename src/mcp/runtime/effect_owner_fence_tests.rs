@@ -99,6 +99,8 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
     let pty=include_str!("pty.rs");
     assert!(jobs.contains("let _owner_admission = super::effect_owner_fence::admit_new_effect().await?;"));
     assert!(pty.contains("let _owner_admission = super::effect_owner_fence::admit_new_effect().await?;"));
+    assert!(pty.contains("require_new_pty_identity"),
+            "PTY ingress must reject a predecessor V4 idempotency replay");
 }
 #[test]
 fn matching_owner_receives_epoch_bound_shared_admission() {
@@ -309,6 +311,84 @@ fn successor_replay_denies_uncertain_or_corrupt_legacy_registry() {
 }
 
 #[test]
+fn successor_replay_can_scan_predecessor_past_old_32768_job_limit() {
+    let f = Fixture::new();
+    let jobs = f.v4_state.join("jobs");
+    fs::create_dir(&jobs).unwrap();
+    fs::set_permissions(&jobs,fs::Permissions::from_mode(0o700)).unwrap();
+    // Real files, not a mocked counter: the old 32768-row bound would
+    // deny a new V11 request even with no duplicate idempotency binding.
+    for number in 0..32_769u32 {
+        let identity = format!("1a14-{number:x}-1");
+        let payload = serde_json::json!({"id":identity,"host":"main",
+            "idempotency_key":format!("private-old-{number}"),
+            "request_digest":"a".repeat(64)});
+        let path=jobs.join(format!("{identity}.json"));
+        fs::write(&path,serde_json::to_vec(&payload).unwrap()).unwrap();
+        fs::set_permissions(&path,fs::Permissions::from_mode(0o600)).unwrap();
+    }
+    f.write_state("v11","admitting",8);
+    let permit = f.admit("v11").unwrap();
+    assert!(permit.require_new_process_identity("main",Some("fresh-v11-key")).is_ok(),
+        "safe replay scan must handle more than 32768 predecessor records");
+    // Algorithmic regression: once the pinned predecessor has been verified,
+    // independent new keys must not trigger 16 more full 32K-record scans.
+    // The bound is deliberately generous to remain robust under CI load.
+    let warmed = std::time::Instant::now();
+    for ordinal in 0..16 {
+        let key=format!("new-v11-distinct-{ordinal}");
+        assert!(permit.require_new_process_identity("main",Some(&key)).is_ok());
+    }
+    assert!(warmed.elapsed() < std::time::Duration::from_secs(2),
+        "predecessor cache path fell back to a full scan per V11 effect");
+}
+
+#[test]
+fn successor_replay_cache_uses_same_pinned_authority_and_denies_stale_registry() {
+    let f = Fixture::new();
+    let jobs = f.v4_state.join("jobs");
+    fs::create_dir(&jobs).unwrap();
+    fs::set_permissions(&jobs, fs::Permissions::from_mode(0o700)).unwrap();
+    let row = serde_json::json!({"id":"1a14-cafe-1","host":"main",
+        "idempotency_key":"OLD_KEY","request_digest":"a".repeat(64)});
+    let path = jobs.join("1a14-cafe-1.json");
+    fs::write(&path, serde_json::to_vec(&row).unwrap()).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+    f.write_state("v11","admitting",8);
+    let permit = f.admit("v11").unwrap();
+    assert!(permit.require_new_process_identity("main",Some("OLD_KEY")).is_err());
+    for number in 0..25 {
+        assert!(permit.require_new_process_identity("main",
+            Some(&format!("NEW_KEY_{number}"))).is_ok());
+    }
+    // A true after-seal membership change must refuse, even when it
+    // contains a V11-new idempotency key: no automatic rescan.
+    let marker = jobs.join("1a14-cafe-2.json.tmp.987");
+    fs::write(&marker,b"").unwrap();
+    fs::set_permissions(&marker,fs::Permissions::from_mode(0o600)).unwrap();
+    assert!(permit.require_new_process_identity("main",Some("NEW_AFTER_DRIFT")).is_err());
+    fs::remove_file(&marker).unwrap();
+}
+
+#[test]
+fn successor_replay_cache_cannot_be_used_by_second_authority_epoch() {
+    let f = Fixture::new();
+    let jobs = f.v4_state.join("jobs");
+    fs::create_dir(&jobs).unwrap();
+    fs::set_permissions(&jobs, fs::Permissions::from_mode(0o700)).unwrap();
+    f.write_state("v11","admitting",8);
+    let first = f.admit("v11").unwrap();
+    assert!(first.require_new_process_identity("main",Some("SAFE_KEY")).is_ok());
+    drop(first);
+    let marker = jobs.join("1a14-cafe-2.json.tmp.987");
+    fs::write(&marker,b"").unwrap();
+    fs::set_permissions(&marker,fs::Permissions::from_mode(0o600)).unwrap();
+    f.write_state("v11","admitting",10);
+    let later = f.admit("v11").unwrap();
+    assert!(later.require_new_process_identity("main",Some("SAFE_KEY")).is_err());
+}
+
+#[test]
 fn successor_without_predecessor_root_is_not_an_effect_owner() {
     let f=Fixture::new();
     let path=f.root.join(".owner.json");
@@ -319,4 +399,84 @@ fn successor_without_predecessor_root_is_not_an_effect_owner() {
     fs::set_permissions(&path,fs::Permissions::from_mode(0o600)).unwrap();
     assert!(f.admit("v11").is_err());
     assert!(f.admit("v4").is_err());
+}
+
+#[cfg(test)]
+mod isolated_pty_replay_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+    use sha2::Digest;
+    fn fixture() -> (tempfile::TempDir,PathBuf,PathBuf,PathBuf) {
+        let t = tempfile::tempdir().unwrap();
+        let root=t.path().join("authority");
+        let v4=t.path().join("old");
+        let v11=t.path().join("candidate");
+        for d in [&root,&v4,&v11] {
+            std::fs::create_dir(d).unwrap();
+            std::fs::set_permissions(d,std::fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let terminals=v4.join("terminals");
+        std::fs::create_dir(terminals).unwrap();
+        std::fs::set_permissions(v4.join("terminals"),std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::write(root.join(".owner.lock"),b"").unwrap();
+        std::fs::set_permissions(root.join(".owner.lock"),std::fs::Permissions::from_mode(0o600)).unwrap();
+        let doc=serde_json::json!({
+            "schema":"hepta-effect-owner-fence-v1","owner":"v11",
+            "epoch":8,"phase":"admitting","state_root":v11,
+            "predecessor_state_root":v4,
+        });
+        std::fs::write(root.join(".owner.json"),serde_json::to_vec(&doc).unwrap()).unwrap();
+        std::fs::set_permissions(root.join(".owner.json"),std::fs::Permissions::from_mode(0o600)).unwrap();
+        (t,root,v4,v11)
+    }
+    fn persist_old_pty(old:&Path, host:&str,key:&str) -> PathBuf {
+        let digest=sha2::Sha256::digest(format!("{host}\0{key}").as_bytes());
+        let id=format!("dpty-{}", digest.iter().map(|byte|format!("{byte:02x}")).collect::<String>());
+        let p=old.join("terminals").join(format!("{id}.json"));
+        std::fs::write(&p,serde_json::to_vec(&serde_json::json!({"session_id":id,"host":host,"request":{"session_id":id}})).unwrap()).unwrap();
+        std::fs::set_permissions(&p,std::fs::Permissions::from_mode(0o600)).unwrap();
+        p
+    }
+    #[test]
+    fn successor_rejects_untrusted_predecessor_terminal_alias_and_permissions() {
+        use std::os::unix::fs::symlink;
+        let (_t,root,old,new)=fixture();
+        let f=persist_old_pty(&old,"main","owned");
+        let permit=acquire_from_root(&root,"v11",&new).unwrap();
+        std::fs::set_permissions(&f,std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(permit.require_new_pty_identity("main",Some("owned")).is_err());
+        std::fs::set_permissions(&f,std::fs::Permissions::from_mode(0o600)).unwrap();
+        std::fs::remove_file(&f).unwrap();
+        symlink("/tmp/not-trusted",&f).unwrap();
+        assert!(permit.require_new_pty_identity("main",Some("owned")).is_err());
+    }
+    #[test]
+    fn successor_can_start_first_keyed_pty_when_old_terminal_store_absent() {
+        let (_t,root,old,new)=fixture();
+        std::fs::remove_dir(old.join("terminals")).unwrap();
+        let permit=acquire_from_root(&root,"v11",&new).unwrap();
+        assert!(permit.require_new_pty_identity("main",Some("first-key")).is_ok());
+        assert!(permit.require_new_pty_identity("main",None).is_err());
+    }
+    #[test]
+    fn original_v4_unfenced_replay_check_does_not_require_idempotency_key() {
+        let (_t,root,old,new)=fixture();
+        let mut d:serde_json::Value=serde_json::from_slice(&std::fs::read(root.join(".owner.json")).unwrap()).unwrap();
+        d["owner"]=serde_json::json!("v4");
+        d["state_root"]=serde_json::json!(old);
+        d["predecessor_state_root"]=serde_json::Value::Null;
+        std::fs::write(root.join(".owner.json"),serde_json::to_vec(&d).unwrap()).unwrap();
+        let permit=acquire_from_root(&root,"v4",&old).unwrap();
+        assert!(permit.require_new_pty_identity("main",None).is_ok());
+    }
+    #[test]
+    fn successor_rejects_predecessor_pty_key_before_new_session() {
+        let (_t,root,old,new)=fixture();
+        persist_old_pty(&old,"main","same-original-key");
+        let permit=acquire_from_root(&root,"v11",&new).unwrap();
+        assert!(permit.require_new_pty_identity("main",Some("same-original-key")).is_err());
+        assert!(permit.require_new_pty_identity("main",Some("new-safe-key")).is_ok());
+        assert!(permit.require_new_pty_identity("pocket4",Some("same-original-key")).is_ok());
+        assert!(permit.require_new_pty_identity("main",None).is_err());
+    }
 }
