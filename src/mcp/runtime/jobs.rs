@@ -346,6 +346,9 @@ fn read_verified_cached_record(_dir: &Path, _id: &str) -> Result<JobRecord> {
 // Vec of all job records. It must still parse EVERY existing JSON record so
 // malformed history and duplicate original bindings refuse a new effect.
 fn scan_idempotent_binding_in(dir: &Path, host: &str, key: &str) -> Result<Option<JobRecord>> {
+	// A new/unknown key may allocate an effect after this call. Never infer
+	// absence from a scan overlapping a concurrent directory mutation.
+	let before = registry_epoch(dir)?;
 	let mut found: Option<JobRecord> = None;
 	for entry in std::fs::read_dir(dir)? {
 		let entry = entry?;
@@ -361,6 +364,9 @@ fn scan_idempotent_binding_in(dir: &Path, host: &str, key: &str) -> Result<Optio
 			}
 			found = Some(record);
 		}
+	}
+	if registry_epoch(dir)? != before {
+		bail!("idempotency registry changed during scan; no new job may launch");
 	}
 	Ok(found)
 }

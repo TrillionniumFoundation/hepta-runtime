@@ -10,7 +10,7 @@ On the actual R22 host, a read-only directory observation saw 23,347 JSON job re
 
 ## Changed
 
-`scan_idempotent_binding_in` now streams the directory without allocating or sorting all original JobRecords. It still fully deserializes **every** original `*.json` record, rejects corrupt unrelated history, and refuses any duplicate `(host,key)` binding. It does not skip early, negative-cache misses, write a disk index, allocate a new job identity or bypass the original host-scoped launch lock.
+`scan_idempotent_binding_in` now streams the directory without allocating or sorting all original JobRecords. It still fully deserializes **every** original `*.json` record, rejects corrupt unrelated history, and refuses any duplicate `(host,key)` binding. The new race-hardening candidate compares the registry directory's original dev/inode/mtime/ctime before and after the complete scan: observed membership change refuses the result rather than permitting a new identity from a stale miss. This is a fail-closed detection measure, not a proof against hostile in-place writes with unchanged directory metadata. It does not skip early, negative-cache misses, write a disk index, allocate a new job identity or bypass the original host-scoped launch lock.
 
 `all_records_in` remains available for complete sorted inventories. The existing positive-hit cached read retains the strict single-link, current-UID-owned `0600`, `O_NOFOLLOW`, bounded-size, before/after inode identity checks from PR #13.
 
