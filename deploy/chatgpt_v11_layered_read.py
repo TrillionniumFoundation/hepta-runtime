@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+from contextlib import contextmanager
 import json
 import os
 import pathlib
@@ -106,6 +107,58 @@ def _v4_paths(definition,arguments):
     return found
 
 
+class _OriginalSessionGate:
+    """Only independent process starts may overlap; session operations keep custody."""
+    def __init__(self):
+        self._condition=threading.Condition()
+        self._writer=None;self._depth=0;self._readers={};self._waiting_writers=0
+
+    def acquire(self):
+        thread=threading.get_ident()
+        with self._condition:
+            if self._writer==thread:
+                self._depth+=1;return True
+            # There is no shared-to-exclusive path: expiry only takes the
+            # native state lock. Refuse an accidental upgrade instead of hanging.
+            if thread in self._readers:raise RuntimeError('original session gate cannot upgrade a process start')
+            self._waiting_writers+=1
+            try:
+                self._condition.wait_for(lambda:self._writer is None and not self._readers)
+                self._writer=thread;self._depth=1
+            finally:
+                self._waiting_writers-=1;self._condition.notify_all()
+        return True
+
+    def release(self):
+        with self._condition:
+            if self._writer!=threading.get_ident():raise RuntimeError('original session gate is not owned')
+            self._depth-=1
+            if self._depth==0:
+                self._writer=None;self._condition.notify_all()
+
+    def __enter__(self):
+        self.acquire();return self
+
+    def __exit__(self,*exc):
+        self.release()
+
+    @contextmanager
+    def process_start(self):
+        thread=threading.get_ident()
+        with self._condition:
+            # Preserve nested admission by the current holder. A newly arrived
+            # start cannot pass a waiting file/workdir/undo operation.
+            self._condition.wait_for(lambda:self._writer==thread or
+                self._writer is None and (not self._waiting_writers or thread in self._readers))
+            self._readers[thread]=self._readers.get(thread,0)+1
+        try:yield
+        finally:
+            with self._condition:
+                self._readers[thread]-=1
+                if not self._readers[thread]:del self._readers[thread]
+                self._condition.notify_all()
+
+
 class LayeredReadNativeProxy(DualReadNativeProxy):
     def __init__(self,upstream,token,contract,legacy_upstream,legacy_token,legacy_contract,
                  legacy_state,predecessor_upstream,predecessor_token,predecessor_contract,
@@ -138,6 +191,7 @@ class LayeredReadNativeProxy(DualReadNativeProxy):
         finally:
             for fd in descriptors:os.close(fd)
         self._predecessor_lock=threading.RLock()
+        self._legacy_read_lock=_OriginalSessionGate()
         self._v4_epoch=None;self._v4_workdir_bound=False;self._v4_workdir=None
         self._v4_undo_credits={}
         self._assert_empty_native_effects()
@@ -167,10 +221,13 @@ class LayeredReadNativeProxy(DualReadNativeProxy):
             self._v4_undo_credits.clear()
         return epoch
 
-    def _v4_retire_expired_session(self):
+    def _v4_retire_expired_session(self,epoch):
         # Only a verified native session-not-found response can retire this
         # transport. A lost write response never proves that the session expired.
         with self.legacy._state_lock:
+            # Another admitted start may already have initialized a new binding.
+            # A late response from the old binding cannot retire the new one.
+            if self._v4_current_epoch()!=epoch:return
             self.legacy.initialized=False;self.legacy.legacy_ready=False
             self.legacy.session=None;self.legacy.protocol=None
             self._v4_sync_epoch()
@@ -207,11 +264,17 @@ class LayeredReadNativeProxy(DualReadNativeProxy):
                     context.native_id=None;context.binding=None
             with self._state_lock:
                 self._ensure_native(context);self._verify_catalog(context)
-            with self._legacy_read_lock:
+            # Native process_start never reads MCP workdir or undo state. Keep
+            # arguments untouched and all other V4 calls exclusively admitted.
+            cwd=arguments.get('cwd')
+            parallel_start=name=='process_start' and (cwd is None or
+                isinstance(cwd,str) and cwd.startswith('/') and '\0' not in cwd)
+            admission=self._legacy_read_lock.process_start() if parallel_start else self._legacy_read_lock
+            with admission:
                 with self.legacy._state_lock:
                     try:self.legacy._ensure_native();self.legacy._verify_catalog()
                     except NativeSessionExpired:
-                        self._v4_retire_expired_session();raise
+                        self._v4_retire_expired_session(self._v4_current_epoch());raise
                     epoch=self._v4_sync_epoch()
                     paths=_v4_paths(self.legacy.contract.by_name[name],arguments)
                     reset=name=='workdir' and arguments.get('reset') is True
@@ -239,32 +302,33 @@ class LayeredReadNativeProxy(DualReadNativeProxy):
                 submitted=True
                 try:original=self.legacy.exchange(native,binding=binding,context=context,timeout=38)
                 except NativeSessionExpired:
-                    self._v4_retire_expired_session();raise
+                    self._v4_retire_expired_session(epoch);raise
                 response={**original,'id':identity}
                 value=response.get('result')
                 success=('error' not in response and isinstance(value,dict)
                          and value.get('isError',False) is False and isinstance(value.get('content'),list))
-                if self._v4_current_epoch()!=epoch:
-                    self._v4_sync_epoch()
-                elif success:
-                    if changed_workdir:
-                        try:state=self._text_payload(response,identity)
-                        except Exception:state={}
-                        if (state.get('success') is True and reset and state.get('action')=='reset'):
-                            self._v4_workdir_bound=True
-                        elif (state.get('success') is True and state.get('action')=='set'
-                              and _explicit_path(state.get('working_directory'))
-                              and (was_bound or _explicit_path(str(arguments.get('path','')).strip()))):
-                            self._v4_workdir=state['working_directory'];self._v4_workdir_bound=True
-                    if undo:
-                        remaining=old_credits.get(target,0)-1
-                        if remaining>0:self._v4_undo_credits[target]=remaining
-                    else:
-                        history_target=(target if name=='text_editor' and arguments.get('command') in ('str_replace','delete')
-                            or name=='batch_edit' and arguments.get('operations') else
-                            self._v4_path_key(arguments.get('append_path')) if name=='extract_lines' else None)
-                        if history_target is not None:
-                            self._v4_undo_credits[history_target]=min(10,old_credits.get(history_target,0)+1)
+                with self.legacy._state_lock:
+                    if self._v4_current_epoch()!=epoch:
+                        self._v4_sync_epoch()
+                    elif success:
+                        if changed_workdir:
+                            try:state=self._text_payload(response,identity)
+                            except Exception:state={}
+                            if (state.get('success') is True and reset and state.get('action')=='reset'):
+                                self._v4_workdir_bound=True
+                            elif (state.get('success') is True and state.get('action')=='set'
+                                  and _explicit_path(state.get('working_directory'))
+                                  and (was_bound or _explicit_path(str(arguments.get('path','')).strip()))):
+                                self._v4_workdir=state['working_directory'];self._v4_workdir_bound=True
+                        if undo:
+                            remaining=old_credits.get(target,0)-1
+                            if remaining>0:self._v4_undo_credits[target]=remaining
+                        else:
+                            history_target=(target if name=='text_editor' and arguments.get('command') in ('str_replace','delete')
+                                or name=='batch_edit' and arguments.get('operations') else
+                                self._v4_path_key(arguments.get('append_path')) if name=='extract_lines' else None)
+                            if history_target is not None:
+                                self._v4_undo_credits[history_target]=min(10,old_credits.get(history_target,0)+1)
                 if era=='modern' and 'error' not in response:
                     if not isinstance(value,dict) or not isinstance(value.get('content'),list):raise ValueError()
                     return self._modern_result(identity,value)

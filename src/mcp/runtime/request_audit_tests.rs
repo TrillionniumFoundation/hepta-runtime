@@ -79,6 +79,9 @@ fn a_live_archive_scan_does_not_hold_the_global_admission_lock_between_records()
 		finish_sync(ticket, AuditCompletion::Completed).unwrap();
 	}
 	let archive = open_archive(temporary.path()).unwrap();
+	// Other tests share STORE_LOCK while fsyncing large fixtures. This budget
+	// detects a stuck fixture; channels below prove the required admission order.
+	let wait = std::time::Duration::from_secs(60);
 	let (started_tx, started_rx) = std::sync::mpsc::channel();
 	let (continue_tx, continue_rx) = std::sync::mpsc::channel();
 	let scanner = std::thread::spawn(move || {
@@ -86,22 +89,41 @@ fn a_live_archive_scan_does_not_hold_the_global_admission_lock_between_records()
 		scan_archive(&archive, |_| {
 			if first {
 				first = false;
-				started_tx.send(()).unwrap();
-				continue_rx
-					.recv_timeout(std::time::Duration::from_secs(5))
-					.unwrap();
+				started_tx.send(())?;
+				// Only the test coordinator releases this visitor. A local timeout
+				// must not unlock the scanner and let a blocked admission appear valid.
+				continue_rx.recv()?;
 			}
 			Ok(())
 		})
-		.unwrap();
 	});
-	started_rx
-		.recv_timeout(std::time::Duration::from_secs(5))
+	if let Err(error) = started_rx.recv_timeout(wait) {
+		drop(continue_tx);
+		let cleanup = scanner.join();
+		panic!("archive scanner did not reach its first visitor: {error}; cleanup: {cleanup:?}");
+	}
+
+	let admission_root = temporary.path().to_path_buf();
+	let (admitted_tx, admitted_rx) = std::sync::mpsc::channel();
+	let admitter = std::thread::spawn(move || {
+		let result = (|| -> Result<()> {
+			let ticket = begin_at(&admission_root, &session, "host_health")?;
+			finish_sync(ticket, AuditCompletion::Completed)
+		})();
+		let _ = admitted_tx.send(result);
+	});
+	// Capture success while the visitor is still parked. Always release and
+	// join both threads before asserting, including a real lock-scope regression.
+	let admitted_while_paused = admitted_rx.recv_timeout(wait);
+	let resumed = continue_tx.send(());
+	let scan_result = scanner.join();
+	let admission_result = admitter.join();
+	resumed.expect("archive visitor exited before the coordinator released it");
+	scan_result.expect("archive scanner panicked").unwrap();
+	admission_result.expect("admission worker panicked");
+	admitted_while_paused
+		.expect("new admission did not finish while the archive visitor was paused")
 		.unwrap();
-	let ticket = begin_at(temporary.path(), &session, "host_health").unwrap();
-	finish_sync(ticket, AuditCompletion::Completed).unwrap();
-	continue_tx.send(()).unwrap();
-	scanner.join().unwrap();
 }
 
 #[test]

@@ -3,6 +3,7 @@
 """Ephemeral loopback HTTP fixtures; no real controller, credential, GUI or host."""
 import concurrent.futures
 import copy
+import errno
 import http.client
 import json
 import pathlib
@@ -198,6 +199,60 @@ class Fixture(unittest.TestCase):
         self.assertEqual(self.http(call(1, 'forbidden', modern=True),
                         headers={'Origin': 'https://untrusted.invalid'})[0], 403)
         self.assertEqual(self.control.counts, {})
+
+    def test_address_reuse_keeps_the_live_listener_exclusive(self):
+        other = None
+        try:
+            with self.assertRaises(OSError) as raised:
+                other = ComputerHTTPServer(('127.0.0.1', self.port),
+                                           self.control.factory, TOKEN)
+            self.assertEqual(raised.exception.errno, errno.EADDRINUSE)
+        finally:
+            if other is not None:
+                other.server_close()
+
+    def test_closed_server_time_wait_allows_immediate_rebind(self):
+        # Read through EOF so the server is the active closer. Merely reading
+        # Content-Length and closing the client could leave TIME_WAIT only on
+        # the client port and would not exercise the observed restart failure.
+        with socket.create_connection(('127.0.0.1', self.port), timeout=3) as peer:
+            peer.sendall((
+                'GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\n'
+                'X-Hepta-Runtime-Token: ' + TOKEN + '\r\n'
+                'Connection: close\r\n\r\n').encode('ascii'))
+            response = bytearray()
+            while block := peer.recv(65536):
+                response.extend(block)
+        self.assertTrue(response.startswith(b'HTTP/1.1 200 '), response[:128])
+        self.server.shutdown()
+        self.server.server_close()
+        self.worker.join(timeout=3)
+        self.assertFalse(self.worker.is_alive())
+        if sys.platform.startswith('linux'):
+            # Observe the actual kernel state before attempting the new bind.
+            port = ':' + format(self.port, '04X')
+            deadline, time_wait = time.monotonic() + 1, False
+            while time.monotonic() < deadline:
+                with open('/proc/net/tcp', encoding='ascii') as table:
+                    time_wait = any(len(parts := line.split()) > 3
+                                    and parts[1].endswith(port) and parts[3] == '06'
+                                    for line in table)
+                if time_wait:
+                    break
+                time.sleep(.005)
+            self.assertTrue(time_wait, 'closed server did not enter TIME_WAIT')
+        replacement = ComputerHTTPServer(('127.0.0.1', self.port),
+                                         self.control.factory, TOKEN)
+        worker = threading.Thread(target=replacement.serve_forever,
+                                  kwargs={'poll_interval': .01})
+        worker.start()
+        try:
+            self.assertEqual(self.http(method='GET', path='/health')[0], 200)
+        finally:
+            replacement.shutdown()
+            replacement.server_close()
+            worker.join(timeout=3)
+            self.assertFalse(worker.is_alive())
 
     def test_stateless_http_lanes_share_only_readonly_registry_snapshot(self):
         # A modern tool follow-up may run on a different HTTP worker lane.

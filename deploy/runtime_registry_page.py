@@ -29,9 +29,12 @@ from chatgpt_v10_dual_read import (
 )
 from mcp_tool_contract import canonical
 
-# Headroom for controller marker files within MAX_REGISTRY_ENTRIES.
-# V4 writes durable jobs continuously; 16,384 is no longer sufficient.
-MAX_JOB_ROWS = MAX_REGISTRY_ENTRIES - 8
+# Job history grows independently from the bounded small other registries.
+# Keep the prior stream/search registry limit unchanged. A job inventory can
+# reach the native Rust 65,536-row limit, with the existing 128-MiB input
+# budget, 64-MiB cache, private inode validation, and complete-or-refuse rule.
+MAX_PAGED_JOB_ENTRIES = 65_536
+MAX_JOB_ROWS = MAX_PAGED_JOB_ENTRIES - 8
 MAX_TOTAL_METADATA_BYTES = 128 * 1024 * 1024
 MAX_PAGE_ROWS = 128
 MAX_PAGE_ROW_BYTES = 64 * 1024
@@ -157,7 +160,7 @@ class RuntimeRegistryPager:
                     raise UnsafeProvenance("registry_page_directory_not_private")
                 entry["base_stamp"] = _stamp(info, ROOT_FIELDS)
                 names = sorted(os.listdir(base))
-                if len(names) > MAX_REGISTRY_ENTRIES:
+                if len(names) > MAX_PAGED_JOB_ENTRIES:
                     raise UnsafeProvenance("registry_page_entry_bound")
                 members = [name for name in names if name.endswith(".json")]
                 entry["members"], entry["records"] = members, []
@@ -193,7 +196,7 @@ class RuntimeRegistryPager:
             for entry in opened:
                 base, rootfd = entry["base"], entry["rootfd"]
                 current = sorted(os.listdir(base))
-                if (len(current) > MAX_REGISTRY_ENTRIES
+                if (len(current) > MAX_PAGED_JOB_ENTRIES
                         or [name for name in current if name.endswith(".json")] != entry["members"]):
                     raise UnsafeProvenance("registry_page_membership_changed")
                 for name, stamp in entry["records"]:
@@ -262,17 +265,25 @@ class RuntimeRegistryPager:
             for entry in self._snapshots:
                 if entry["host"] != host:
                     continue
-                for index, row in enumerate(entry["rows"]):
-                    if hmac.compare_digest(cursor, self._cursor(entry["snapshot"], row)):
-                        chosen, start = entry, index + 1
-                        break
-                if chosen is not None:
-                    break
+                index = entry["cursor_offsets"].get(cursor)
+                if index is None:
+                    continue
+                # The lookup index contains only private HMAC-derived cursors.
+                # Re-attest the bound row with constant-time digest comparison;
+                # a forged or stale cursor still fails without returning rows.
+                row = entry["rows"][index - 1]
+                if not hmac.compare_digest(
+                    cursor, self._cursor(entry["snapshot"], row)
+                ):
+                    raise UnsafeProvenance("registry_page_cursor_integrity")
+                chosen, start = entry, index
+                break
             if chosen is None:
                 raise UnsafeProvenance("registry_page_snapshot_expired_or_cursor_invalid")
             self._validate_roots(chosen["bindings"])
-            # LRU fairness: an authenticated active cursor must remain recent
-            # while unrelated readers create snapshots. Absolute TTL unchanged.
+            # LRU fairness: a snapshot with an actively used, authenticated
+            # cursor stays recent when unrelated readers create new snapshots.
+            # Do not extend its absolute TTL or change finite cache bounds.
             self._snapshots.remove(chosen)
             self._snapshots.append(chosen)
         else:
@@ -291,6 +302,15 @@ class RuntimeRegistryPager:
             chosen = {"host": host, "rows": rows, "bindings": bindings,
                       "snapshot": hashlib.sha256(secrets.token_bytes(32) + observed).digest(),
                       "expires": self._clock() + SNAPSHOT_TTL_SECONDS}
+            # Build one bounded cursor-to-offset index per immutable snapshot.
+            # This prevents O(page-number * rows) rehashing during pagination;
+            # the existing absolute TTL, inode pins, and cache-byte quota apply.
+            chosen["cursor_offsets"] = {
+                self._cursor(chosen["snapshot"], row): index + 1
+                for index, row in enumerate(rows)
+            }
+            if len(chosen["cursor_offsets"]) != len(rows):
+                raise UnsafeProvenance("registry_page_cursor_collision")
             chosen["bytes"] = _memory_bytes(chosen) + 1024
             if (chosen["bytes"] > MAX_SNAPSHOT_CACHE_BYTES
                     or len(rows) > MAX_SNAPSHOT_CACHE_ROWS):
