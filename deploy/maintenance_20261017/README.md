@@ -108,6 +108,10 @@ verification; this local script never sets it true.
 The recovery helper still reads only the exact `native-cutover-v1-apply.json`
 receipt and controls only `hepta-openai-full-operator.service`. It does not
 retroactively assume a bridge baseline absent from that original receipt.
+Before requesting the tunnel start, it requires a quiet tunnel Job, the
+reviewed Operator/Frontend service dependency graph, and both dependencies
+already active without pending Job. It refuses rather than implicitly starting
+another service. These checks are observations, not an atomic service-state lease.
 
 A collected cutover service is eligible only with a valid finished receipt,
 inactive/dead state, no MainPID or queued service job, exclusive acquisition of

@@ -19,7 +19,8 @@ class RecoveryTests(unittest.TestCase):
     def run_recovery(self, *, cutover='inactive', tunnel='inactive', unfinished=False,
                      corrupt=False, missing=False, contradiction=False, gc=False,
                      timer_overrides=None, cutover_overrides=None, tunnel_load='loaded',
-                     hold_lock=False, check_only=False, raw_statuses=None):
+                     hold_lock=False, check_only=False, raw_statuses=None,
+                     dependency_states=None, dependency_overrides=None, tunnel_overrides=None):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); path = root / 'native-cutover-v1-apply.json'
             value = {'schema': 'hepta-native-rollout-v1', 'mode': 'apply', 'passed': True, 'activated': True,
@@ -40,17 +41,29 @@ class RecoveryTests(unittest.TestCase):
                              'NextElapseUSecRealtime': '', 'NextElapseUSecMonotonic': '0'}
                     value.update(timer_overrides or {})
                     return {key: item for key, item in value.items() if item is not None}
+                if name in (C.OPERATOR, C.FRONT):
+                    state = (dependency_states or {}).get(name, 'active')
+                    value = {'Id': name, 'LoadState': 'loaded', 'ActiveState': state,
+                             'SubState': 'running' if state == 'active' else 'dead',
+                             'MainPID': '100' if state == 'active' else '0',
+                             'Job': '0', 'Requires': '', 'Wants': '', 'BindsTo': '', 'PartOf': ''}
+                    value.update((dependency_overrides or {}).get(name, {}))
+                    return {key: item for key, item in value.items() if item is not None}
                 state = cutover if name == C.CUTOVER else ('active' if starts else tunnel)
                 value = {'Id': name, 'LoadState': ('not-found' if gc else 'loaded') if name == C.CUTOVER else tunnel_load,
                          'ActiveState': state, 'SubState': 'running' if state == 'active' else 'dead',
                          'MainPID': '100' if state == 'active' else '0',
-                         'Result': 'success', 'ExecMainStatus': '0', 'Job': '0'}
+                         'Result': 'success', 'ExecMainStatus': '0', 'Job': '0',
+                         'Requires': ' '.join(sorted((C.OPERATOR, C.FRONT))) if name == C.TUNNEL else '',
+                         'Wants': '', 'BindsTo': '', 'PartOf': ''}
                 if name == C.CUTOVER:
                     value.update(cutover_overrides or {})
+                if name == C.TUNNEL:
+                    value.update(tunnel_overrides or {})
                 return {key: item for key, item in value.items() if item is not None}
             def run(command, **kwargs):
                 if command[:3] == ['systemctl', '--user', 'show']:
-                    self.assertIn(command[3], (C.CUTOVER, C.TIMER, C.TUNNEL))
+                    self.assertIn(command[3], (C.CUTOVER, C.TIMER, C.TUNNEL, C.OPERATOR, C.FRONT))
                     value = status(command[3])
                     requested = [item.removeprefix('--property=') for item in command[4:]]
                     stdout = '\n'.join(key + '=' + value[key] for key in requested if key in value)
@@ -85,6 +98,52 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(starts, [['systemctl', '--user', 'start', C.TUNNEL]])
         self.assertFalse(report['external_mcp_verified'])
+
+    def test_unready_dependency_never_causes_implicit_service_start(self):
+        for name in (C.OPERATOR, C.FRONT):
+            with self.subTest(name=name):
+                code, report, starts = self.run_recovery(dependency_states={name: 'inactive'})
+                self.assertEqual(code, 1); self.assertEqual(starts, [])
+                self.assertEqual(report['service_action'], 'none')
+                self.assertIn('not stably running', report['error'])
+
+    def test_tunnel_dependency_graph_drift_fails_closed(self):
+        bad = ({'Wants': 'unexpected.service'},
+               {'Requires': C.OPERATOR},
+               {'BindsTo': 'other.service'},
+               {'Wants': None})
+        for value in bad:
+            with self.subTest(value=value):
+                code, report, starts = self.run_recovery(tunnel_overrides=value)
+                self.assertEqual(code, 1); self.assertEqual(starts, [])
+                self.assertEqual(report['service_action'], 'none')
+
+    def test_oversized_dependency_graph_cannot_hide_unreviewed_service(self):
+        long_graph = ' '.join((C.OPERATOR, C.FRONT, 'x' * 601 + '.service'))
+        code, report, starts = self.run_recovery(tunnel_overrides={'Requires': long_graph})
+        self.assertEqual(code, 1); self.assertEqual(starts, [])
+        self.assertIn('dependency evidence is oversized', report['error'])
+
+    def test_pending_dependency_job_refuses_tunnel_start(self):
+        code, report, starts = self.run_recovery(
+            dependency_overrides={C.OPERATOR: {'Job': '42'}})
+        self.assertEqual(code, 1); self.assertEqual(starts, [])
+        self.assertIn('not stably running', report['error'])
+
+    def test_pending_tunnel_job_never_submits_duplicate_start(self):
+        code, report, starts = self.run_recovery(tunnel_overrides={'Job': '42'})
+        self.assertEqual(code, 0); self.assertEqual(starts, [])
+        self.assertEqual(report['decision'], 'tunnel_job_pending_no_service_changes')
+
+    def test_missing_tunnel_job_refuses_before_any_service_action(self):
+        code, report, starts = self.run_recovery(tunnel_overrides={'Job': None})
+        self.assertEqual(code, 1); self.assertEqual(starts, [])
+        self.assertIn('pending-job evidence is unavailable', report['error'])
+
+    def test_check_only_requires_already_running_dependencies(self):
+        code, report, starts = self.run_recovery(check_only=True, dependency_states={C.FRONT: 'failed'})
+        self.assertEqual(code, 1); self.assertEqual(starts, [])
+        self.assertEqual(report['service_action'], 'none')
 
     def test_already_active_tunnel_is_not_restarted(self):
         code, report, starts = self.run_recovery(tunnel='active')
