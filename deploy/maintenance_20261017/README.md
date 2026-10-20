@@ -112,7 +112,8 @@ Before requesting the tunnel start, it requires a quiet tunnel Job, the
 reviewed Operator/Frontend dependency graph, and both dependencies already
 active without pending Job. The comparison checks every dependency unit type,
 including `.socket`, `.target` and `.mount`; no unreviewed non-service dependency
-is silently ignored. If a real host exposes additional implicit systemd units,
+is silently ignored. It also rejects nonempty `Upholds=`, `OnFailure=` and
+`OnSuccess=` hooks, since these can automatically activate other units later. If a real host exposes additional implicit systemd units,
 that exact graph requires independent review before any allowlist expansion.
 The helper refuses rather than implicitly starting another service. These
 checks are observations, not an atomic service-state lease.

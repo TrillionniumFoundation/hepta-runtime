@@ -23,7 +23,8 @@ TUNNEL = 'hepta-openai-full-operator.service'
 OPERATOR = 'hepta-runtime-operator.service'
 FRONT = 'hepta-computer-http-unlimited.service'
 BUSY = {'active', 'activating', 'deactivating', 'reloading'}
-UNIT_FIELDS = ('Id', 'LoadState', 'ActiveState', 'SubState', 'MainPID', 'Result', 'ExecMainStatus', 'Requires', 'Wants', 'BindsTo', 'PartOf', 'Job')
+UNIT_FIELDS = ('Id', 'LoadState', 'ActiveState', 'SubState', 'MainPID', 'Result', 'ExecMainStatus',
+               'Requires', 'Wants', 'BindsTo', 'Upholds', 'OnFailure', 'OnSuccess', 'PartOf', 'Job')
 TIMER_FIELDS = ('NextElapseUSecRealtime', 'NextElapseUSecMonotonic')
 
 
@@ -82,7 +83,7 @@ def unit_status(name):
                 ('cutover' if name == CUTOVER else 'timer' if name == TIMER else 'control unit')
                 + ' pending-job evidence is unavailable')
     if name in (TUNNEL, OPERATOR, FRONT):
-        graph_fields = ('Requires', 'Wants', 'BindsTo')
+        graph_fields = ('Requires', 'Wants', 'BindsTo', 'Upholds', 'OnFailure', 'OnSuccess')
         require(all(key in value for key in graph_fields),
                 'control service dependency evidence is incomplete: ' + name)
         require(all(len(value[key]) <= 600 for key in graph_fields),
@@ -106,6 +107,10 @@ def running_tunnel_dependencies(tunnel):
               for dependency in tunnel[field].split()}
     require(actual == {OPERATOR, FRONT},
             'tunnel service dependencies differ from the reviewed operator/frontend graph')
+    # Upholds continuously starts/restarts listed units; OnFailure/OnSuccess
+    # activate units on transitions. All are forbidden in this recovery profile.
+    require(all(not tunnel[field].strip() for field in ('Upholds', 'OnFailure', 'OnSuccess')),
+            'tunnel has unreviewed automatic activation hooks')
     observed = {}
     for name in (OPERATOR, FRONT):
         value = unit_status(name)
