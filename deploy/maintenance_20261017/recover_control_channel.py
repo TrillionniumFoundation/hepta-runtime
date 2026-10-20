@@ -20,8 +20,10 @@ RECEIPT = ROOT / 'native-cutover-v1-apply.json'
 CUTOVER = 'hepta-runtime-native-cutover-20261017-0940.service'
 TIMER = 'hepta-runtime-native-cutover-20261017-0940.timer'
 TUNNEL = 'hepta-openai-full-operator.service'
+OPERATOR = 'hepta-runtime-operator.service'
+FRONT = 'hepta-computer-http-unlimited.service'
 BUSY = {'active', 'activating', 'deactivating', 'reloading'}
-UNIT_FIELDS = ('Id', 'LoadState', 'ActiveState', 'SubState', 'MainPID', 'Result', 'ExecMainStatus', 'Requires', 'BindsTo', 'PartOf', 'Job')
+UNIT_FIELDS = ('Id', 'LoadState', 'ActiveState', 'SubState', 'MainPID', 'Result', 'ExecMainStatus', 'Requires', 'Wants', 'BindsTo', 'PartOf', 'Job')
 TIMER_FIELDS = ('NextElapseUSecRealtime', 'NextElapseUSecMonotonic')
 
 
@@ -73,16 +75,38 @@ def unit_status(name):
     allowed_loads = ('loaded', 'not-found') if name in (CUTOVER, TIMER) else ('loaded',)
     require(value.get('Id') == name and value.get('LoadState') in allowed_loads
             and (name == TIMER or value.get('MainPID', '').isdigit()), 'unit is missing or status is incomplete: ' + name)
-    if name in (CUTOVER, TIMER):
-        # systemctl renders the zero Job ID as an explicit "Job=". A missing
-        # property is not the same evidence and must never become an empty value.
+    if name in (CUTOVER, TIMER, TUNNEL, OPERATOR, FRONT):
+        # Job= is a real zero-job observation; a missing property is not.
         job = value.get('Job')
         require(job is not None and (job == '' or (job.isascii() and job.isdigit())),
-                ('cutover' if name == CUTOVER else 'timer') + ' pending-job evidence is unavailable')
+                ('cutover' if name == CUTOVER else 'timer' if name == TIMER else 'control unit')
+                + ' pending-job evidence is unavailable')
+    if name in (TUNNEL, OPERATOR, FRONT):
+        require(all(key in value for key in ('Requires', 'Wants', 'BindsTo')),
+                'control service dependency evidence is incomplete: ' + name)
     if name == TIMER:
         if value['LoadState'] == 'loaded':
             require(all(key in value for key in TIMER_FIELDS), 'timer next-elapse evidence is unavailable')
     return {key: value.get(key, '')[:600] for key in fields}
+
+
+def running_tunnel_dependencies(tunnel):
+    """Avoid pulling in operator/frontend or unrelated services during recovery.
+
+    This is an observed admission check, not an atomic service-state lease.
+    """
+    actual = {dependency for field in ('Requires', 'Wants', 'BindsTo')
+              for dependency in tunnel[field].split() if dependency.endswith('.service')}
+    require(actual == {OPERATOR, FRONT},
+            'tunnel service dependencies differ from the reviewed operator/frontend graph')
+    observed = {}
+    for name in (OPERATOR, FRONT):
+        value = unit_status(name)
+        require(value['ActiveState'] == 'active' and value['SubState'] == 'running'
+                and int(value['MainPID']) > 0 and value['Job'] in ('', '0'),
+                'tunnel dependency is not stably running: ' + name)
+        observed[name] = value
+    return observed
 
 
 def timer_quiet(status):
@@ -186,9 +210,12 @@ def main():
         if tunnel['ActiveState'] == 'active':
             require(tunnel['SubState'] == 'running' and int(tunnel['MainPID']) > 0, 'tunnel active state is not a running process')
             report['decision'] = 'tunnel_already_active_external_reconnect_must_be_verified'; return 0
+        if tunnel['Job'] not in ('', '0'):
+            report['decision'] = 'tunnel_job_pending_no_service_changes'; return 0
         if tunnel['ActiveState'] not in ('inactive', 'failed'):
             report['decision'] = 'tunnel_transition_in_progress_no_service_changes'; return 0
         require(int(tunnel['MainPID']) == 0, 'inactive tunnel still reports a live MainPID')
+        report['ready_dependencies'] = running_tunnel_dependencies(tunnel)
         if options.check_only:
             report['decision'] = 'eligible_to_start_original_tunnel_check_only'; return 0
         report['service_action'] = 'start_original_tunnel_requested_once'
