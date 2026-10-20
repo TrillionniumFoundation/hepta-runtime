@@ -82,8 +82,11 @@ def unit_status(name):
                 ('cutover' if name == CUTOVER else 'timer' if name == TIMER else 'control unit')
                 + ' pending-job evidence is unavailable')
     if name in (TUNNEL, OPERATOR, FRONT):
-        require(all(key in value for key in ('Requires', 'Wants', 'BindsTo')),
+        graph_fields = ('Requires', 'Wants', 'BindsTo')
+        require(all(key in value for key in graph_fields),
                 'control service dependency evidence is incomplete: ' + name)
+        require(all(len(value[key]) <= 600 for key in graph_fields),
+                'control service dependency evidence is oversized: ' + name)
     if name == TIMER:
         if value['LoadState'] == 'loaded':
             require(all(key in value for key in TIMER_FIELDS), 'timer next-elapse evidence is unavailable')
