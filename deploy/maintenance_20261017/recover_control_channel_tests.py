@@ -118,6 +118,20 @@ class RecoveryTests(unittest.TestCase):
                 self.assertEqual(code, 1); self.assertEqual(starts, [])
                 self.assertEqual(report['service_action'], 'none')
 
+    def test_non_service_dependencies_cannot_hide_implicit_activation(self):
+        approved = ' '.join(sorted((C.OPERATOR, C.FRONT)))
+        for field, value in (('Requires', approved + ' unexpected.target'),
+                             ('Wants', 'unexpected.socket'),
+                             ('BindsTo', 'unexpected.mount')):
+            for check_only in (False, True):
+                with self.subTest(field=field, check_only=check_only):
+                    code, report, starts = self.run_recovery(
+                        tunnel_overrides={field: value}, check_only=check_only)
+                    self.assertEqual(code, 1)
+                    self.assertEqual(starts, [])
+                    self.assertEqual(report['service_action'], 'none')
+                    self.assertIn('dependency', report['error'])
+
     def test_oversized_dependency_graph_cannot_hide_unreviewed_service(self):
         long_graph = ' '.join((C.OPERATOR, C.FRONT, 'x' * 601 + '.service'))
         code, report, starts = self.run_recovery(tunnel_overrides={'Requires': long_graph})
