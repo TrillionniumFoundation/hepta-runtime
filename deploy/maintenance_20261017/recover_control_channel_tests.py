@@ -118,6 +118,18 @@ class RecoveryTests(unittest.TestCase):
                 self.assertEqual(code, 1); self.assertEqual(starts, [])
                 self.assertEqual(report['service_action'], 'none')
 
+    def test_oversized_dependency_graph_cannot_hide_unreviewed_service(self):
+        long_graph = ' '.join((C.OPERATOR, C.FRONT, 'x' * 601 + '.service'))
+        code, report, starts = self.run_recovery(tunnel_overrides={'Requires': long_graph})
+        self.assertEqual(code, 1); self.assertEqual(starts, [])
+        self.assertIn('dependency evidence is oversized', report['error'])
+
+    def test_pending_dependency_job_refuses_tunnel_start(self):
+        code, report, starts = self.run_recovery(
+            dependency_overrides={C.OPERATOR: {'Job': '42'}})
+        self.assertEqual(code, 1); self.assertEqual(starts, [])
+        self.assertIn('not stably running', report['error'])
+
     def test_pending_tunnel_job_never_submits_duplicate_start(self):
         code, report, starts = self.run_recovery(tunnel_overrides={'Job': '42'})
         self.assertEqual(code, 0); self.assertEqual(starts, [])
