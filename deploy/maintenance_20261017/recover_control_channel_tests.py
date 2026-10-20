@@ -46,7 +46,8 @@ class RecoveryTests(unittest.TestCase):
                     value = {'Id': name, 'LoadState': 'loaded', 'ActiveState': state,
                              'SubState': 'running' if state == 'active' else 'dead',
                              'MainPID': '100' if state == 'active' else '0',
-                             'Job': '0', 'Requires': '', 'Wants': '', 'BindsTo': '', 'PartOf': ''}
+                             'Job': '0', 'Requires': '', 'Wants': '', 'BindsTo': '',
+                             'Upholds': '', 'OnFailure': '', 'OnSuccess': '', 'PartOf': ''}
                     value.update((dependency_overrides or {}).get(name, {}))
                     return {key: item for key, item in value.items() if item is not None}
                 state = cutover if name == C.CUTOVER else ('active' if starts else tunnel)
@@ -55,7 +56,8 @@ class RecoveryTests(unittest.TestCase):
                          'MainPID': '100' if state == 'active' else '0',
                          'Result': 'success', 'ExecMainStatus': '0', 'Job': '0',
                          'Requires': ' '.join(sorted((C.OPERATOR, C.FRONT))) if name == C.TUNNEL else '',
-                         'Wants': '', 'BindsTo': '', 'PartOf': ''}
+                         'Wants': '', 'BindsTo': '', 'Upholds': '',
+                         'OnFailure': '', 'OnSuccess': '', 'PartOf': ''}
                 if name == C.CUTOVER:
                     value.update(cutover_overrides or {})
                 if name == C.TUNNEL:
@@ -117,6 +119,32 @@ class RecoveryTests(unittest.TestCase):
                 code, report, starts = self.run_recovery(tunnel_overrides=value)
                 self.assertEqual(code, 1); self.assertEqual(starts, [])
                 self.assertEqual(report['service_action'], 'none')
+
+    def test_non_service_dependencies_cannot_hide_implicit_activation(self):
+        approved = ' '.join(sorted((C.OPERATOR, C.FRONT)))
+        for field, value in (('Requires', approved + ' unexpected.target'),
+                             ('Wants', 'unexpected.socket'),
+                             ('BindsTo', 'unexpected.mount')):
+            for check_only in (False, True):
+                with self.subTest(field=field, check_only=check_only):
+                    code, report, starts = self.run_recovery(
+                        tunnel_overrides={field: value}, check_only=check_only)
+                    self.assertEqual(code, 1)
+                    self.assertEqual(starts, [])
+                    self.assertEqual(report['service_action'], 'none')
+                    self.assertIn('dependency', report['error'])
+
+    def test_automatic_activation_hooks_never_start_other_units(self):
+        for field in ('Upholds', 'OnFailure', 'OnSuccess'):
+            for check_only in (False, True):
+                with self.subTest(field=field, check_only=check_only):
+                    code, report, starts = self.run_recovery(
+                        tunnel_overrides={field: 'unexpected.service'},
+                        check_only=check_only)
+                    self.assertEqual(code, 1)
+                    self.assertEqual(starts, [])
+                    self.assertEqual(report['service_action'], 'none')
+                    self.assertIn('activation hooks', report['error'])
 
     def test_oversized_dependency_graph_cannot_hide_unreviewed_service(self):
         long_graph = ' '.join((C.OPERATOR, C.FRONT, 'x' * 601 + '.service'))
