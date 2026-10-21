@@ -339,3 +339,67 @@ impl tracing::field::Visit for MessageVisitor<'_> {
 		}
 	}
 }
+
+#[cfg(all(test, unix))]
+mod http_auth_file_tests {
+	use super::load_http_auth;
+	use std::os::unix::fs::PermissionsExt;
+
+	fn private_token(path: &std::path::Path, bytes: &[u8]) -> anyhow::Result<()> {
+		std::fs::write(path, bytes)?;
+		std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+		Ok(())
+	}
+
+	#[test]
+	fn http_auth_accepts_private_regular_token_and_one_trailing_newline() -> anyhow::Result<()> {
+		let temp = tempfile::tempdir()?;
+		let path = temp.path().join("auth.token");
+		private_token(&path, b"0123456789abcdef0123456789abcdef\n")?;
+		assert!(load_http_auth(Some(&path), true)?.is_some());
+		assert!(load_http_auth(None, false)?.is_none());
+		assert!(load_http_auth(None, true).is_err());
+		Ok(())
+	}
+
+	#[test]
+	fn http_auth_rejects_group_or_world_permissions() -> anyhow::Result<()> {
+		let temp = tempfile::tempdir()?;
+		let path = temp.path().join("auth.token");
+		private_token(&path, b"0123456789abcdef0123456789abcdef")?;
+		for mode in [0o640, 0o604, 0o666] {
+			std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode))?;
+			assert!(load_http_auth(Some(&path), true).is_err(), "mode {mode:o}");
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn http_auth_rejects_symlink_and_hardlinks() -> anyhow::Result<()> {
+		let temp = tempfile::tempdir()?;
+		let path = temp.path().join("auth.token");
+		private_token(&path, b"0123456789abcdef0123456789abcdef")?;
+		let alias = temp.path().join("alias");
+		std::os::unix::fs::symlink(&path, &alias)?;
+		assert!(load_http_auth(Some(&alias), true).is_err());
+		std::fs::remove_file(&alias)?;
+		std::fs::hard_link(&path, &alias)?;
+		assert!(load_http_auth(Some(&path), true).is_err());
+		assert!(load_http_auth(Some(&alias), true).is_err());
+		Ok(())
+	}
+
+	#[test]
+	fn http_auth_bounds_token_file_reads_and_rejects_nonfiles() -> anyhow::Result<()> {
+		let temp = tempfile::tempdir()?;
+		let path = temp.path().join("auth.token");
+		private_token(&path, &vec![b'x'; 4096])?;
+		assert!(load_http_auth(Some(&path), true)?.is_some());
+		private_token(&path, &vec![b'x'; 4098])?;
+		assert!(load_http_auth(Some(&path), true).is_err());
+		private_token(&path, b"short")?;
+		assert!(load_http_auth(Some(&path), true).is_err());
+		assert!(load_http_auth(Some(temp.path()), true).is_err());
+		Ok(())
+	}
+}
