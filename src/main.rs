@@ -15,6 +15,7 @@
 use anyhow::Result;
 use clap::Parser;
 use tracing::Level;
+use std::io::Read;
 
 mod cli;
 pub mod mcp;
@@ -136,7 +137,18 @@ fn load_http_auth(path: Option<&std::path::Path>, required: bool) -> Result<Opti
 		}
 		return Ok(None);
 	};
-	let metadata = std::fs::metadata(path)?;
+
+	// Check the opened file, not a separate metadata(path) followed by read(path).
+	// A symlink swap between those operations could substitute the auth secret.
+	let mut options = std::fs::OpenOptions::new();
+	options.read(true);
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::OpenOptionsExt;
+		options.custom_flags(libc::O_NOFOLLOW);
+	}
+	let mut file = options.open(path)?;
+	let metadata = file.metadata()?;
 	if !metadata.is_file() {
 		anyhow::bail!(
 			"HTTP auth token path is not a regular file: {}",
@@ -145,19 +157,41 @@ fn load_http_auth(path: Option<&std::path::Path>, required: bool) -> Result<Opti
 	}
 	#[cfg(unix)]
 	{
-		use std::os::unix::fs::PermissionsExt;
-		if metadata.permissions().mode() & 0o007 != 0 {
-			anyhow::bail!("HTTP auth token file must not be accessible to other users");
+		use std::os::unix::fs::{MetadataExt, PermissionsExt};
+		if metadata.permissions().mode() & 0o077 != 0 {
+			anyhow::bail!("HTTP auth token file must be private to its owner");
+		}
+		if metadata.nlink() != 1 {
+			anyhow::bail!("HTTP auth token file must not have multiple hard links");
+		}
+		// The pathname must still designate the inode opened without following
+		// a final-component symlink. The token bytes always come from that fd.
+		let current = std::fs::symlink_metadata(path)?;
+		if !current.is_file()
+			|| current.dev() != metadata.dev()
+			|| current.ino() != metadata.ino()
+		{
+			anyhow::bail!("HTTP auth token file identity changed during open");
 		}
 	}
-	let token = std::fs::read(path)?;
-	let token = token.strip_suffix(b"\n").unwrap_or(&token);
-	if token.len() < 32 || token.len() > 4096 {
+	if metadata.len() > 4_097 {
+		anyhow::bail!("HTTP auth token file exceeds the 4096-byte limit");
+	}
+	// Bound the read as well: the file may grow after the fstat.
+	let mut token = Vec::new();
+	file.take(4_098).read_to_end(&mut token)?;
+	if token.len() > 4_097 {
+		token.fill(0);
+		anyhow::bail!("HTTP auth token file exceeds the 4096-byte limit");
+	}
+	let bytes = token.strip_suffix(b"\n").unwrap_or(&token);
+	if bytes.len() < 32 || bytes.len() > 4096 {
+		token.fill(0);
 		anyhow::bail!("HTTP auth token must contain 32..4096 bytes");
 	}
-	Ok(Some(HttpAuth {
-		token_hash: Sha256::digest(token).into(),
-	}))
+	let token_hash = Sha256::digest(bytes).into();
+	token.fill(0);
+	Ok(Some(HttpAuth { token_hash }))
 }
 
 async fn require_http_auth(
