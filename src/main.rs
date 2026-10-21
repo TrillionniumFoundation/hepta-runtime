@@ -14,8 +14,8 @@
 
 use anyhow::Result;
 use clap::Parser;
-use tracing::Level;
 use std::io::Read;
+use tracing::Level;
 
 mod cli;
 pub mod mcp;
@@ -393,9 +393,9 @@ mod http_auth_file_tests {
 	fn http_auth_bounds_token_file_reads_and_rejects_nonfiles() -> anyhow::Result<()> {
 		let temp = tempfile::tempdir()?;
 		let path = temp.path().join("auth.token");
-		private_token(&path, &vec![b'x'; 4096])?;
+		private_token(&path, &[b'x'; 4096])?;
 		assert!(load_http_auth(Some(&path), true)?.is_some());
-		private_token(&path, &vec![b'x'; 4098])?;
+		private_token(&path, &[b'x'; 4098])?;
 		assert!(load_http_auth(Some(&path), true).is_err());
 		private_token(&path, b"short")?;
 		assert!(load_http_auth(Some(&path), true).is_err());
