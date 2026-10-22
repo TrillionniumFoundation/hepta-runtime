@@ -141,7 +141,8 @@ fn load_http_auth(path: Option<&std::path::Path>) -> Result<HttpAuth> {
 	#[cfg(unix)]
 	{
 		use std::os::unix::fs::OpenOptionsExt;
-		options.custom_flags(libc::O_NOFOLLOW);
+		// A FIFO supplied as a token path must not block open before fstat rejects it.
+		options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
 	}
 	let file = options.open(path)?;
 	let metadata = file.metadata()?;
