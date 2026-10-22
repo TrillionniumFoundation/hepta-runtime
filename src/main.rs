@@ -218,7 +218,9 @@ fn parse_loopback_http_bind(bind_addr: &str) -> Result<std::net::SocketAddr> {
 		.parse::<std::net::SocketAddr>()
 		.map_err(|e| anyhow::anyhow!("Invalid bind address '{}': {}", bind_addr, e))?;
 	if !addr.ip().is_loopback() {
-		anyhow::bail!("HTTP MCP must bind to loopback; use an SSH or TLS tunnel for remote access");
+		anyhow::bail!(
+			"HTTP MCP must bind to loopback; use an SSH or TLS tunnel for remote access"
+		);
 	}
 	Ok(addr)
 }
@@ -405,7 +407,12 @@ mod http_auth_file_tests {
 
 #[cfg(test)]
 mod http_bind_tests {
-	use super::parse_loopback_http_bind;
+	use super::{load_http_auth, parse_loopback_http_bind};
+
+	#[test]
+	fn http_mcp_denies_missing_auth_on_every_platform() {
+		assert!(load_http_auth(None).is_err());
+	}
 
 	#[test]
 	fn http_mcp_accepts_only_loopback_ip_listeners() {
