@@ -9,6 +9,7 @@ import unittest
 
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml"
+RUNTIME_MAIN = Path(__file__).resolve().parents[1] / "src/main.rs"
 
 
 class RuntimeCiContractTests(unittest.TestCase):
@@ -70,6 +71,22 @@ class RuntimeCiContractTests(unittest.TestCase):
             2,
         )
 
+
+    def test_http_mcp_requires_auth_even_without_runtime_config(self):
+        source = RUNTIME_MAIN.read_text(encoding="utf-8")
+        self.assertIn("fn load_http_auth(path: Option<&std::path::Path>) -> Result<HttpAuth>", source)
+        self.assertIn('anyhow::bail!("HTTP MCP requires --auth-token-file")', source)
+        self.assertIn("let auth = load_http_auth(auth_token_file)?;", source)
+        self.assertIn("from_fn_with_state(auth, require_http_auth)", source)
+        self.assertNotIn("if let Some(auth) = auth", source)
+        self.assertNotIn("runtime_enabled", source)
+
+    def test_http_mcp_rejects_nonloopback_listener_without_override(self):
+        source = RUNTIME_MAIN.read_text(encoding="utf-8")
+        self.assertIn("fn parse_loopback_http_bind(bind_addr: &str)", source)
+        self.assertIn("if !addr.ip().is_loopback()", source)
+        self.assertIn("let addr = parse_loopback_http_bind(bind_addr)?;", source)
+        self.assertIn("fn http_mcp_accepts_only_loopback_ip_listeners()", source)
 
 if __name__ == "__main__":
     unittest.main()
