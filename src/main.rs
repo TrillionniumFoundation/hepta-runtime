@@ -143,7 +143,7 @@ fn load_http_auth(path: Option<&std::path::Path>) -> Result<HttpAuth> {
 		use std::os::unix::fs::OpenOptionsExt;
 		options.custom_flags(libc::O_NOFOLLOW);
 	}
-	let mut file = options.open(path)?;
+	let file = options.open(path)?;
 	let metadata = file.metadata()?;
 	if !metadata.is_file() {
 		anyhow::bail!(
