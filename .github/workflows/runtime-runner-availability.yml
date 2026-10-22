@@ -1,0 +1,27 @@
+name: Runtime runner availability (diagnostic only)
+
+on:
+  push:
+    branches:
+      - diagnostics/runtime-runner-availability-20261022
+
+permissions:
+  contents: read
+
+jobs:
+  runner-probe:
+    name: No-code runner probe (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - name: Confirm runner allocation and shell execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'RUNNER_PROBE_OK=%s\n' "$RUNNER_OS"
+          printf 'run_id=%s\n' "$GITHUB_RUN_ID"
+          printf 'head=%s\n' "$GITHUB_SHA"
