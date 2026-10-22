@@ -20,12 +20,25 @@ jobs:
   runtime-ci:
     name: Rust exact-head validation
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Pull requests validate both the exact contributor head and its merge
+    # candidate; shared dependency caches make the second pass incremental.
+    timeout-minutes: 60
     steps:
       - name: Checkout exact head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+
+      - name: Verify exact source commit
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+
+      - name: Check source CI gate contract
+        run: python3 -m unittest discover -s scripts -p 'test_runtime_ci_contract.py' -v
 
       - name: Install pinned Rust toolchain
         run: |
@@ -49,3 +62,27 @@ jobs:
 
       - name: Release build
         run: cargo build --locked --release
+
+      # A pull_request defaults to a synthetic merge commit. Source-head
+      # qualification is required independently, but must not replace
+      # validation against the exact GitHub-provided integration candidate.
+      - name: Checkout exact pull request merge
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify and validate integration merge
+        if: github.event_name == 'pull_request'
+        env:
+          EXPECTED_MERGE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MERGE_SHA"
+          python3 -m unittest discover -s scripts -p 'test_runtime_ci_contract.py' -v
+          cargo fmt --all -- --check
+          cargo check --locked --all-targets
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked --all-targets
+          cargo build --locked --release

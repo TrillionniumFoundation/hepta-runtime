@@ -155,7 +155,11 @@ impl RuntimeConfig {
 				.chain(host.allowed_write_path_prefixes.iter())
 				.chain(host.protected_path_prefixes.iter())
 			{
-				if !Path::new(prefix).is_absolute() {
+				if !Path::new(prefix).is_absolute()
+					|| Path::new(prefix)
+						.components()
+						.any(|part| matches!(part, Component::ParentDir))
+				{
 					bail!("host `{name}` path policy prefix `{prefix}` must be absolute");
 				}
 			}
@@ -327,6 +331,20 @@ pub fn check_protected_input(host_name: &str, value: &str) -> Result<()> {
 	Ok(())
 }
 
+/// Reject lexical escapes before the allowlist prefix match. The remote
+/// execution boundary must independently validate symlink resolution.
+fn execution_cwd_allowed(cwd: &str, roots: &[String]) -> bool {
+	let path = Path::new(cwd);
+	path.is_absolute()
+		&& !path
+			.components()
+			.any(|part| matches!(part, Component::ParentDir))
+		&& (roots.is_empty()
+			|| roots.iter().any(|prefix| {
+				cwd == prefix || cwd.starts_with(&format!("{}/", prefix.trim_end_matches('/')))
+			}))
+}
+
 pub fn check_execution(
 	host_name: &str,
 	executable: &str,
@@ -372,14 +390,8 @@ pub fn check_execution(
         );
 	}
 	if let Some(cwd) = cwd {
-		if !Path::new(cwd).is_absolute() {
-			bail!("cwd must be an absolute path");
-		}
-		if !host.allowed_cwd_prefixes.is_empty()
-			&& !host.allowed_cwd_prefixes.iter().any(|prefix| {
-				cwd == prefix || cwd.starts_with(&format!("{}/", prefix.trim_end_matches('/')))
-			}) {
-			bail!("cwd `{cwd}` is outside configured execution roots on host `{host_name}`");
+		if !execution_cwd_allowed(cwd, &host.allowed_cwd_prefixes) {
+			bail!("cwd `{cwd}` is outside configured execution roots or contains parent traversal on host `{host_name}`");
 		}
 		if let Some(prefix) = protected_value(host, cwd) {
 			bail!("cwd intersects protected value `{prefix}` on host `{host_name}`");
@@ -524,6 +536,32 @@ pub fn check_remote_write(alias: &str, path: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn remote_workdir_policy_rejects_lexical_escape_and_nearby_prefixes() {
+		let roots = vec!["/srv/project".to_owned()];
+		assert!(execution_cwd_allowed("/srv/project", &roots));
+		assert!(execution_cwd_allowed("/srv/project/src", &roots));
+		assert!(!execution_cwd_allowed("/srv/project/../secret", &roots));
+		assert!(!execution_cwd_allowed("/srv/project/src/../../private", &roots));
+		assert!(!execution_cwd_allowed("/srv/project-other", &roots));
+		assert!(!execution_cwd_allowed("srv/project", &roots));
+		assert!(!execution_cwd_allowed("/srv/../etc", &[]));
+	}
+
+	#[test]
+	fn configured_remote_roots_reject_parent_traversal() {
+		let config: RuntimeConfig = serde_json::from_value(serde_json::json!({
+			"hosts": {
+				"build": {
+					"ssh_target": "build",
+					"allowed_cwd_prefixes": ["/srv/project/../private"]
+				}
+			}
+		}))
+		.expect("config fixture");
+		assert!(config.validate().is_err());
+	}
 
 	#[test]
 	fn names_are_strict() {
