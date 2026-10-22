@@ -35,7 +35,6 @@ async fn main() -> Result<()> {
 			runtime_config,
 			auth_token_file,
 		} => {
-			let runtime_enabled = runtime_config.is_some();
 			if let Some(config_path) = runtime_config.as_ref() {
 				let config = mcp::runtime::RuntimeConfig::load(config_path)?;
 				mcp::runtime::init_runtime(config)?;
@@ -64,7 +63,7 @@ async fn main() -> Result<()> {
 			match bind {
 				Some(addr) => {
 					// HTTP mode with Streamable HTTP transport.
-					run_http_server(&addr, auth_token_file.as_deref(), runtime_enabled).await?;
+					run_http_server(&addr, auth_token_file.as_deref()).await?;
 				}
 				None => {
 					// STDIO mode (default)
@@ -128,13 +127,10 @@ struct HttpAuth {
 	token_hash: [u8; 32],
 }
 
-fn load_http_auth(path: Option<&std::path::Path>, required: bool) -> Result<Option<HttpAuth>> {
+fn load_http_auth(path: Option<&std::path::Path>) -> Result<HttpAuth> {
 	use sha2::{Digest, Sha256};
 	let Some(path) = path else {
-		if required {
-			anyhow::bail!("runtime HTTP mode requires --auth-token-file");
-		}
-		return Ok(None);
+		anyhow::bail!("HTTP MCP requires --auth-token-file");
 	};
 
 	// Check the opened file, not a separate metadata(path) followed by read(path).
@@ -190,7 +186,7 @@ fn load_http_auth(path: Option<&std::path::Path>, required: bool) -> Result<Opti
 	}
 	let token_hash = Sha256::digest(bytes).into();
 	token.fill(0);
-	Ok(Some(HttpAuth { token_hash }))
+	Ok(HttpAuth { token_hash })
 }
 
 async fn require_http_auth(
@@ -215,10 +211,21 @@ async fn require_http_auth(
 }
 
 /// Run the MCP server over HTTP with Streamable HTTP transport.
+/// HTTP MCP is a privileged, credential-bearing endpoint. Require an encrypted
+/// tunnel to any remote machine: never send its bearer token on plain remote HTTP.
+fn parse_loopback_http_bind(bind_addr: &str) -> Result<std::net::SocketAddr> {
+	let addr = bind_addr
+		.parse::<std::net::SocketAddr>()
+		.map_err(|e| anyhow::anyhow!("Invalid bind address '{}': {}", bind_addr, e))?;
+	if !addr.ip().is_loopback() {
+		anyhow::bail!("HTTP MCP must bind to loopback; use an SSH or TLS tunnel for remote access");
+	}
+	Ok(addr)
+}
+
 async fn run_http_server(
 	bind_addr: &str,
 	auth_token_file: Option<&std::path::Path>,
-	auth_required: bool,
 ) -> Result<()> {
 	use rmcp::transport::streamable_http_server::{
 		session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
@@ -234,21 +241,15 @@ async fn run_http_server(
 		StreamableHttpServerConfig::default().with_cancellation_token(ct.child_token()),
 	);
 
-	let auth = load_http_auth(auth_token_file, auth_required)?;
-	let mut protected = axum::Router::new().nest_service("/mcp", service);
-	if let Some(auth) = auth {
-		protected = protected.layer(axum::middleware::from_fn_with_state(
-			auth,
-			require_http_auth,
-		));
-	}
+	let auth = load_http_auth(auth_token_file)?;
+	let protected = axum::Router::new()
+		.nest_service("/mcp", service)
+		.layer(axum::middleware::from_fn_with_state(auth, require_http_auth));
 	let router = axum::Router::new()
 		.route("/healthz", axum::routing::get(|| async { "ok\n" }))
 		.route("/readyz", axum::routing::get(|| async { "ready\n" }))
 		.merge(protected);
-	let addr = bind_addr
-		.parse::<std::net::SocketAddr>()
-		.map_err(|e| anyhow::anyhow!("Invalid bind address '{}': {}", bind_addr, e))?;
+	let addr = parse_loopback_http_bind(bind_addr)?;
 
 	let tcp_listener = tokio::net::TcpListener::bind(&addr)
 		.await
@@ -355,9 +356,8 @@ mod http_auth_file_tests {
 		let temp = tempfile::tempdir()?;
 		let path = temp.path().join("auth.token");
 		private_token(&path, b"0123456789abcdef0123456789abcdef\n")?;
-		assert!(load_http_auth(Some(&path), true)?.is_some());
-		assert!(load_http_auth(None, false)?.is_none());
-		assert!(load_http_auth(None, true).is_err());
+		assert!(load_http_auth(Some(&path)).is_ok());
+		assert!(load_http_auth(None).is_err());
 		Ok(())
 	}
 
@@ -368,7 +368,7 @@ mod http_auth_file_tests {
 		private_token(&path, b"0123456789abcdef0123456789abcdef")?;
 		for mode in [0o640, 0o604, 0o666] {
 			std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode))?;
-			assert!(load_http_auth(Some(&path), true).is_err(), "mode {mode:o}");
+			assert!(load_http_auth(Some(&path)).is_err(), "mode {mode:o}");
 		}
 		Ok(())
 	}
@@ -380,11 +380,11 @@ mod http_auth_file_tests {
 		private_token(&path, b"0123456789abcdef0123456789abcdef")?;
 		let alias = temp.path().join("alias");
 		std::os::unix::fs::symlink(&path, &alias)?;
-		assert!(load_http_auth(Some(&alias), true).is_err());
+		assert!(load_http_auth(Some(&alias)).is_err());
 		std::fs::remove_file(&alias)?;
 		std::fs::hard_link(&path, &alias)?;
-		assert!(load_http_auth(Some(&path), true).is_err());
-		assert!(load_http_auth(Some(&alias), true).is_err());
+		assert!(load_http_auth(Some(&path)).is_err());
+		assert!(load_http_auth(Some(&alias)).is_err());
 		Ok(())
 	}
 
@@ -393,12 +393,33 @@ mod http_auth_file_tests {
 		let temp = tempfile::tempdir()?;
 		let path = temp.path().join("auth.token");
 		private_token(&path, &[b'x'; 4096])?;
-		assert!(load_http_auth(Some(&path), true)?.is_some());
+		assert!(load_http_auth(Some(&path)).is_ok());
 		private_token(&path, &[b'x'; 4098])?;
-		assert!(load_http_auth(Some(&path), true).is_err());
+		assert!(load_http_auth(Some(&path)).is_err());
 		private_token(&path, b"short")?;
-		assert!(load_http_auth(Some(&path), true).is_err());
-		assert!(load_http_auth(Some(temp.path()), true).is_err());
+		assert!(load_http_auth(Some(&path)).is_err());
+		assert!(load_http_auth(Some(temp.path())).is_err());
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod http_bind_tests {
+	use super::parse_loopback_http_bind;
+
+	#[test]
+	fn http_mcp_accepts_only_loopback_ip_listeners() {
+		for addr in ["127.0.0.1:12345", "[::1]:12345"] {
+			assert!(parse_loopback_http_bind(addr).is_ok(), "{addr}");
+		}
+		for addr in [
+			"0.0.0.0:12345",
+			"[::]:12345",
+			"192.168.1.2:12345",
+			"10.0.0.42:12345",
+			"invalid:12345",
+		] {
+			assert!(parse_loopback_http_bind(addr).is_err(), "{addr}");
+		}
 	}
 }
