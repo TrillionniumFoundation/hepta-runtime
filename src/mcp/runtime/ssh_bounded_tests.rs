@@ -23,7 +23,7 @@ async fn stream_accepts_exact_byte_budget() -> Result<()> {
 	let producer = tokio::spawn(async move { sender.write_all(b"abcd").await });
 	let output = read_limited(receiver, 4).await?;
 	producer.await??;
-	assert_eq!(output, b"abcd");
+	assert_eq!(output, b"abcd".to_vec());
 	Ok(())
 }
 
@@ -50,7 +50,7 @@ async fn capture_drains_stdout_before_stdin_is_consumed() -> Result<()> {
 	let output = capture_command(command, &input, Duration::from_secs(10), "local").await?;
 	assert!(output.status.success());
 	assert_eq!(output.stdout.len(), 32 * 8192);
-	assert_eq!(output.stderr, b"done");
+	assert_eq!(output.stderr, b"done".to_vec());
 	Ok(())
 }
 
@@ -60,7 +60,7 @@ async fn capture_rejects_over_limit_child_output() -> Result<()> {
 	let mut command = Command::new("sh");
 	command
 		.arg("-c")
-		.arg("dd if=/dev/zero bs=8192 count=1025 2>/dev/null");
+		.arg("exec dd if=/dev/zero bs=8192 count=1025 2>/dev/null");
 	let error = capture_command(command, b"", Duration::from_secs(10), "local")
 		.await
 		.expect_err("8 MiB + 8192 bytes must be rejected");
