@@ -277,13 +277,20 @@ octofs mcp
 
 #### HTTP
 
-Streamable HTTP transport for remote access or multi-client scenarios.
+Streamable HTTP transport for local or tunneled multi-client access. All HTTP
+MCP sessions require a private token file, even without a Hepta Runtime host
+config. Direct public/wildcard listeners are rejected to prevent credential
+leakage over unencrypted HTTP.
 
 ```bash
-octofs mcp --bind 0.0.0.0:12345
+umask 077
+openssl rand -hex 32 > ~/.hepta-runtime-mcp-token
+octofs mcp --bind 127.0.0.1:12345 --auth-token-file ~/.hepta-runtime-mcp-token
 ```
 
-Connect clients to `http://localhost:12345/mcp`.
+Send the file's token as the `X-Hepta-Runtime-Token` header when connecting to
+`http://127.0.0.1:12345/mcp`. For remote clients, use an authenticated SSH
+tunnel or a TLS-terminating local proxy; do not expose the raw HTTP listener.
 
 ### Working Directory
 

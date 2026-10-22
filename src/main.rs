@@ -14,6 +14,7 @@
 
 use anyhow::Result;
 use clap::Parser;
+use std::io::Read;
 use tracing::Level;
 
 mod cli;
@@ -35,7 +36,6 @@ async fn main() -> Result<()> {
 			runtime_config,
 			auth_token_file,
 		} => {
-			let runtime_enabled = runtime_config.is_some();
 			if let Some(config_path) = runtime_config.as_ref() {
 				let config = mcp::runtime::RuntimeConfig::load(config_path)?;
 				mcp::runtime::init_runtime(config)?;
@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
 			match bind {
 				Some(addr) => {
 					// HTTP mode with Streamable HTTP transport.
-					run_http_server(&addr, auth_token_file.as_deref(), runtime_enabled).await?;
+					run_http_server(&addr, auth_token_file.as_deref()).await?;
 				}
 				None => {
 					// STDIO mode (default)
@@ -128,15 +128,23 @@ struct HttpAuth {
 	token_hash: [u8; 32],
 }
 
-fn load_http_auth(path: Option<&std::path::Path>, required: bool) -> Result<Option<HttpAuth>> {
+fn load_http_auth(path: Option<&std::path::Path>) -> Result<HttpAuth> {
 	use sha2::{Digest, Sha256};
 	let Some(path) = path else {
-		if required {
-			anyhow::bail!("runtime HTTP mode requires --auth-token-file");
-		}
-		return Ok(None);
+		anyhow::bail!("HTTP MCP requires --auth-token-file");
 	};
-	let metadata = std::fs::metadata(path)?;
+
+	// Check the opened file, not a separate metadata(path) followed by read(path).
+	// A symlink swap between those operations could substitute the auth secret.
+	let mut options = std::fs::OpenOptions::new();
+	options.read(true);
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::OpenOptionsExt;
+		options.custom_flags(libc::O_NOFOLLOW);
+	}
+	let mut file = options.open(path)?;
+	let metadata = file.metadata()?;
 	if !metadata.is_file() {
 		anyhow::bail!(
 			"HTTP auth token path is not a regular file: {}",
@@ -145,19 +153,41 @@ fn load_http_auth(path: Option<&std::path::Path>, required: bool) -> Result<Opti
 	}
 	#[cfg(unix)]
 	{
-		use std::os::unix::fs::PermissionsExt;
-		if metadata.permissions().mode() & 0o007 != 0 {
-			anyhow::bail!("HTTP auth token file must not be accessible to other users");
+		use std::os::unix::fs::{MetadataExt, PermissionsExt};
+		if metadata.permissions().mode() & 0o077 != 0 {
+			anyhow::bail!("HTTP auth token file must be private to its owner");
+		}
+		if metadata.nlink() != 1 {
+			anyhow::bail!("HTTP auth token file must not have multiple hard links");
+		}
+		// The pathname must still designate the inode opened without following
+		// a final-component symlink. The token bytes always come from that fd.
+		let current = std::fs::symlink_metadata(path)?;
+		if !current.is_file()
+			|| current.dev() != metadata.dev()
+			|| current.ino() != metadata.ino()
+		{
+			anyhow::bail!("HTTP auth token file identity changed during open");
 		}
 	}
-	let token = std::fs::read(path)?;
-	let token = token.strip_suffix(b"\n").unwrap_or(&token);
-	if token.len() < 32 || token.len() > 4096 {
+	if metadata.len() > 4_097 {
+		anyhow::bail!("HTTP auth token file exceeds the 4096-byte limit");
+	}
+	// Bound the read as well: the file may grow after the fstat.
+	let mut token = Vec::new();
+	file.take(4_098).read_to_end(&mut token)?;
+	if token.len() > 4_097 {
+		token.fill(0);
+		anyhow::bail!("HTTP auth token file exceeds the 4096-byte limit");
+	}
+	let bytes = token.strip_suffix(b"\n").unwrap_or(&token);
+	if bytes.len() < 32 || bytes.len() > 4096 {
+		token.fill(0);
 		anyhow::bail!("HTTP auth token must contain 32..4096 bytes");
 	}
-	Ok(Some(HttpAuth {
-		token_hash: Sha256::digest(token).into(),
-	}))
+	let token_hash = Sha256::digest(bytes).into();
+	token.fill(0);
+	Ok(HttpAuth { token_hash })
 }
 
 async fn require_http_auth(
@@ -182,10 +212,23 @@ async fn require_http_auth(
 }
 
 /// Run the MCP server over HTTP with Streamable HTTP transport.
+/// HTTP MCP is a privileged, credential-bearing endpoint. Require an encrypted
+/// tunnel to any remote machine: never send its bearer token on plain remote HTTP.
+fn parse_loopback_http_bind(bind_addr: &str) -> Result<std::net::SocketAddr> {
+	let addr = bind_addr
+		.parse::<std::net::SocketAddr>()
+		.map_err(|e| anyhow::anyhow!("Invalid bind address '{}': {}", bind_addr, e))?;
+	if !addr.ip().is_loopback() {
+		anyhow::bail!(
+			"HTTP MCP must bind to loopback; use an SSH or TLS tunnel for remote access"
+		);
+	}
+	Ok(addr)
+}
+
 async fn run_http_server(
 	bind_addr: &str,
 	auth_token_file: Option<&std::path::Path>,
-	auth_required: bool,
 ) -> Result<()> {
 	use rmcp::transport::streamable_http_server::{
 		session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
@@ -201,21 +244,15 @@ async fn run_http_server(
 		StreamableHttpServerConfig::default().with_cancellation_token(ct.child_token()),
 	);
 
-	let auth = load_http_auth(auth_token_file, auth_required)?;
-	let mut protected = axum::Router::new().nest_service("/mcp", service);
-	if let Some(auth) = auth {
-		protected = protected.layer(axum::middleware::from_fn_with_state(
-			auth,
-			require_http_auth,
-		));
-	}
+	let auth = load_http_auth(auth_token_file)?;
+	let protected = axum::Router::new()
+		.nest_service("/mcp", service)
+		.layer(axum::middleware::from_fn_with_state(auth, require_http_auth));
 	let router = axum::Router::new()
 		.route("/healthz", axum::routing::get(|| async { "ok\n" }))
 		.route("/readyz", axum::routing::get(|| async { "ready\n" }))
 		.merge(protected);
-	let addr = bind_addr
-		.parse::<std::net::SocketAddr>()
-		.map_err(|e| anyhow::anyhow!("Invalid bind address '{}': {}", bind_addr, e))?;
+	let addr = parse_loopback_http_bind(bind_addr)?;
 
 	let tcp_listener = tokio::net::TcpListener::bind(&addr)
 		.await
@@ -302,6 +339,95 @@ impl tracing::field::Visit for MessageVisitor<'_> {
 	fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
 		if field.name() == "message" {
 			self.0.push_str(value);
+		}
+	}
+}
+
+#[cfg(all(test, unix))]
+mod http_auth_file_tests {
+	use super::load_http_auth;
+	use std::os::unix::fs::PermissionsExt;
+
+	fn private_token(path: &std::path::Path, bytes: &[u8]) -> anyhow::Result<()> {
+		std::fs::write(path, bytes)?;
+		std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+		Ok(())
+	}
+
+	#[test]
+	fn http_auth_accepts_private_regular_token_and_one_trailing_newline() -> anyhow::Result<()> {
+		let temp = tempfile::tempdir()?;
+		let path = temp.path().join("auth.token");
+		private_token(&path, b"0123456789abcdef0123456789abcdef\n")?;
+		assert!(load_http_auth(Some(&path)).is_ok());
+		assert!(load_http_auth(None).is_err());
+		Ok(())
+	}
+
+	#[test]
+	fn http_auth_rejects_group_or_world_permissions() -> anyhow::Result<()> {
+		let temp = tempfile::tempdir()?;
+		let path = temp.path().join("auth.token");
+		private_token(&path, b"0123456789abcdef0123456789abcdef")?;
+		for mode in [0o640, 0o604, 0o666] {
+			std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode))?;
+			assert!(load_http_auth(Some(&path)).is_err(), "mode {mode:o}");
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn http_auth_rejects_symlink_and_hardlinks() -> anyhow::Result<()> {
+		let temp = tempfile::tempdir()?;
+		let path = temp.path().join("auth.token");
+		private_token(&path, b"0123456789abcdef0123456789abcdef")?;
+		let alias = temp.path().join("alias");
+		std::os::unix::fs::symlink(&path, &alias)?;
+		assert!(load_http_auth(Some(&alias)).is_err());
+		std::fs::remove_file(&alias)?;
+		std::fs::hard_link(&path, &alias)?;
+		assert!(load_http_auth(Some(&path)).is_err());
+		assert!(load_http_auth(Some(&alias)).is_err());
+		Ok(())
+	}
+
+	#[test]
+	fn http_auth_bounds_token_file_reads_and_rejects_nonfiles() -> anyhow::Result<()> {
+		let temp = tempfile::tempdir()?;
+		let path = temp.path().join("auth.token");
+		private_token(&path, &[b'x'; 4096])?;
+		assert!(load_http_auth(Some(&path)).is_ok());
+		private_token(&path, &[b'x'; 4098])?;
+		assert!(load_http_auth(Some(&path)).is_err());
+		private_token(&path, b"short")?;
+		assert!(load_http_auth(Some(&path)).is_err());
+		assert!(load_http_auth(Some(temp.path())).is_err());
+		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod http_bind_tests {
+	use super::{load_http_auth, parse_loopback_http_bind};
+
+	#[test]
+	fn http_mcp_denies_missing_auth_on_every_platform() {
+		assert!(load_http_auth(None).is_err());
+	}
+
+	#[test]
+	fn http_mcp_accepts_only_loopback_ip_listeners() {
+		for addr in ["127.0.0.1:12345", "[::1]:12345"] {
+			assert!(parse_loopback_http_bind(addr).is_ok(), "{addr}");
+		}
+		for addr in [
+			"0.0.0.0:12345",
+			"[::]:12345",
+			"192.168.1.2:12345",
+			"10.0.0.42:12345",
+			"invalid:12345",
+		] {
+			assert!(parse_loopback_http_bind(addr).is_err(), "{addr}");
 		}
 	}
 }
