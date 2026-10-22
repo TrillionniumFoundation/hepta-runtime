@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from local_qualification import (SHA_RE, blob_hash, check_source_bytes,
                                  execute_bounded, git, qualify, safe_env,
@@ -81,6 +82,31 @@ class LocalQualificationTests(unittest.TestCase):
                                 self.root, safe_env(), self.root / "timeout.log", 1, 1024)
         self.assertEqual(timed["outcome"], "timeout")
         self.assertLess(timed["duration_seconds"], 4)
+
+    def test_distinct_source_and_merge_lanes_run_in_isolated_worktrees(self):
+        # Mock binaries validate the verifier's orchestration only; they are
+        # NOT evidence that real Rust compilation or tests have passed.
+        source = self.make_repo()
+        (self.root / "hello.txt").write_text("merge candidate\n")
+        self.command("git", "add", "hello.txt")
+        self.command("git", "commit", "-qm", "synthetic merge fixture")
+        merge = self.command("git", "rev-parse", "HEAD").stdout.decode().strip()
+        fakebin = self.root / "fakebin"
+        fakebin.mkdir()
+        for binary in ("rustc", "cargo"):
+            file = fakebin / binary
+            file.write_text('#!/bin/sh\necho "' + binary + ' 1.95.0 (mock)"\n')
+            file.chmod(0o755)
+        with tempfile.TemporaryDirectory() as evidence, \
+                mock.patch.dict(os.environ, {"PATH": str(fakebin) + os.pathsep + os.environ["PATH"]}), \
+                mock.patch("local_qualification.CHECKS", (("mock", (sys.executable, "-c", "print('mock')")),)):
+            result = qualify(self.root, source, merge, Path(evidence))
+            self.assertEqual(result["status"], "LOCAL_CHECKS_PASS_NOT_PRODUCTION", result)
+            self.assertEqual([entry["sha"] for entry in result["lanes"]], [source, merge])
+            self.assertEqual([entry["status"] for entry in result["lanes"]],
+                             ["LOCAL_CHECKS_PASS", "LOCAL_CHECKS_PASS"])
+            self.assertFalse(result["production_authority"])
+            self.assertTrue((Path(evidence) / "qualification.json").exists())
 
     def test_missing_merge_object_emits_blocked_receipt(self):
         original = self.make_repo()
