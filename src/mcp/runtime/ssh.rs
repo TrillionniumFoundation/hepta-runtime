@@ -3,7 +3,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::process::Stdio;
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 
 use super::config::HostConfig;
@@ -41,6 +41,89 @@ pub fn ssh_base(host: &HostConfig) -> Command {
 	command
 }
 
+// Enforce the limit while draining: wait_with_output() buffers without a cap
+// and could exhaust controller memory before any length check ran.
+async fn read_limited<R: AsyncRead + Unpin>(mut reader: R, limit: usize) -> Result<Vec<u8>> {
+	let mut output = Vec::new();
+	let mut buffer = [0u8; 8192];
+	loop {
+		let read = reader.read(&mut buffer).await?;
+		if read == 0 {
+			break;
+		}
+		if read > limit.saturating_sub(output.len()) {
+			bail!("remote response exceeded the 8 MiB safety limit");
+		}
+		output.extend_from_slice(&buffer[..read]);
+	}
+	Ok(output)
+}
+
+// Drive stdin, stdout and stderr concurrently. A remote program can write
+// before it reads stdin, so sequential write-then-capture can deadlock.
+// An over-limit stream or timeout cancels all readers and reaps the process.
+async fn capture_command(
+	mut command: Command,
+	stdin_data: &[u8],
+	timeout: Duration,
+	target: &str,
+) -> Result<std::process::Output> {
+	command
+		.stdin(Stdio::piped())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.kill_on_drop(true);
+	let mut child = command
+		.spawn()
+		.with_context(|| format!("failed to start ssh for {}", target))?;
+	let mut stdin = child
+		.stdin
+		.take()
+		.ok_or_else(|| anyhow!("ssh stdin pipe was not created"))?;
+	let stdout = child
+		.stdout
+		.take()
+		.ok_or_else(|| anyhow!("ssh stdout pipe was not created"))?;
+	let stderr = child
+		.stderr
+		.take()
+		.ok_or_else(|| anyhow!("ssh stderr pipe was not created"))?;
+
+	let capture = async {
+		let ((), stdout, stderr, status) = tokio::try_join!(
+			async {
+				stdin.write_all(stdin_data).await?;
+				stdin.shutdown().await?;
+				Ok::<(), anyhow::Error>(())
+			},
+			read_limited(stdout, MAX_CAPTURE_BYTES),
+			read_limited(stderr, MAX_CAPTURE_BYTES),
+			async { Ok::<std::process::ExitStatus, anyhow::Error>(child.wait().await?) },
+		)?;
+		Ok::<std::process::Output, anyhow::Error>(std::process::Output {
+			status,
+			stdout,
+			stderr,
+		})
+	};
+
+	match tokio::time::timeout(timeout, capture).await {
+		Ok(Ok(output)) => Ok(output),
+		Ok(Err(error)) => {
+			let _ = child.kill().await;
+			Err(error)
+		}
+		Err(_) => {
+			let _ = child.kill().await;
+			Err(anyhow!(
+				"ssh to {} timed out after {}s",
+				target,
+				timeout.as_secs()
+			))
+		}
+	}
+}
+
 pub async fn run_capture(
 	host: &HostConfig,
 	remote_command: &str,
@@ -48,32 +131,8 @@ pub async fn run_capture(
 	timeout: Duration,
 ) -> Result<std::process::Output> {
 	let mut command = ssh_base(host);
-	command
-		.arg(remote_command)
-		.stdin(Stdio::piped())
-		.stdout(Stdio::piped())
-		.stderr(Stdio::piped())
-		.kill_on_drop(true);
-	let mut child = command
-		.spawn()
-		.with_context(|| format!("failed to start ssh for {}", host.ssh_target))?;
-	if let Some(mut stdin) = child.stdin.take() {
-		stdin.write_all(stdin_data).await?;
-		stdin.shutdown().await?;
-	}
-	let output = tokio::time::timeout(timeout, child.wait_with_output())
-		.await
-		.map_err(|_| {
-			anyhow!(
-				"ssh to {} timed out after {}s",
-				host.ssh_target,
-				timeout.as_secs()
-			)
-		})??;
-	if output.stdout.len() > MAX_CAPTURE_BYTES || output.stderr.len() > MAX_CAPTURE_BYTES {
-		bail!("remote response exceeded the 8 MiB safety limit");
-	}
-	Ok(output)
+	command.arg(remote_command);
+	capture_command(command, stdin_data, timeout, &host.ssh_target).await
 }
 
 pub async fn run_python_json<I, O>(
@@ -178,3 +237,7 @@ mod tests {
 		assert!(cmd.contains("'a b'\"'\"'c'"));
 	}
 }
+
+#[cfg(test)]
+#[path = "ssh_bounded_tests.rs"]
+mod bounded_tests;
