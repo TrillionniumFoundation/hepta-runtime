@@ -285,7 +285,7 @@ leakage over unencrypted HTTP.
 ```bash
 umask 077
 openssl rand -hex 32 > ~/.hepta-runtime-mcp-token
-octofs mcp --bind 127.0.0.1:12345 --auth-token-file ~/.hepta-runtime-mcp-token
+hepta-runtime mcp --bind 127.0.0.1:12345 --auth-token-file ~/.hepta-runtime-mcp-token
 ```
 
 Send the file's token as the `X-Hepta-Runtime-Token` header when connecting to
