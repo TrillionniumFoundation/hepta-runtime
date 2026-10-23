@@ -41,7 +41,7 @@ non-pinned Rust, missing tests, or any failing check.
 It runs Python source-contract and self-regression suites, then Cargo fmt,
 check, Clippy, tests, and release build using locked dependencies on **both**
 commits. Output is bounded to 8 MiB per command, command trees have wall-clock
-deadlines, and JSON plus SHA-256-digested logs are retained even on failure.
+deadlines, and an outliving child holding an inherited capture pipe triggers\nprocess-group cleanup plus a failed receipt. JSON plus SHA-256-digested logs\nare retained even on failure.
 
 `qualification.json.status` values:
 
