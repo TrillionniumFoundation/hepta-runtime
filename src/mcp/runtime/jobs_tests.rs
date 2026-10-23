@@ -354,12 +354,31 @@ fn audit_append_creates_private_regular_file() {
 
 #[cfg(unix)]
 #[test]
-fn audit_append_rejects_existing_world_readable_file() {
+fn audit_append_migrates_legacy_public_mode_without_changing_content() {
 	use std::os::unix::fs::PermissionsExt;
 	let dir = tempdir().unwrap();
 	let path = dir.path().join("events.jsonl");
 	std::fs::write(&path, b"original").unwrap();
 	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
-	assert!(open_audit_append(&path).is_err());
-	assert_eq!(std::fs::read(path).unwrap(), b"original");
+	let mut file = open_audit_append(&path).unwrap();
+	file.write_all(b"\n").unwrap();
+	file.sync_data().unwrap();
+	assert_eq!(
+		std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+		0o600
+	);
+	assert_eq!(std::fs::read(path).unwrap(), b"original\n");
+}
+
+#[cfg(unix)]
+#[test]
+fn audit_append_denies_hardlinks_to_unrelated_files() {
+	let dir = tempdir().unwrap();
+	let target = dir.path().join("sensitive");
+	let link = dir.path().join("events.jsonl");
+	std::fs::write(&target, b"unchanged").unwrap();
+	std::fs::hard_link(&target, &link).unwrap();
+	let error = open_audit_append(&link).err().unwrap();
+	assert!(error.to_string().contains("hard-linked"));
+	assert_eq!(std::fs::read(target).unwrap(), b"unchanged");
 }
