@@ -8,7 +8,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -16,7 +16,7 @@ use super::config::{check_environment, check_execution, runtime_config, valid_na
 use super::ssh::run_python_json;
 
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
-static START_LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
+static START_LOCKS: OnceLock<Mutex<BTreeMap<String, Arc<AsyncMutex<()>>>>> = OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 const MAX_STDIN_BYTES: usize = 1024 * 1024;
 const MAX_LOG_READ_BYTES: u64 = 1024 * 1024;
@@ -110,6 +110,8 @@ struct JobRecord {
 	created_unix_ms: u128,
 	idempotency_key: Option<String>,
 	request_fingerprint: u64,
+	#[serde(default)]
+	request_digest: Option<String>,
 	#[serde(default = "default_launch_state")]
 	launch_state: String,
 	#[serde(default)]
@@ -120,8 +122,16 @@ fn default_launch_state() -> String {
 	"launched".to_string()
 }
 
-fn start_lock() -> &'static AsyncMutex<()> {
-	START_LOCK.get_or_init(|| AsyncMutex::new(()))
+/// Serialize launches per configured host, not globally across remote hosts.
+fn start_lock(host: &str) -> Result<Arc<AsyncMutex<()>>> {
+	let mut locks = START_LOCKS
+		.get_or_init(|| Mutex::new(BTreeMap::new()))
+		.lock()
+		.map_err(|_| anyhow::anyhow!("process-start lock registry poisoned"))?;
+	Ok(locks
+		.entry(host.to_owned())
+		.or_insert_with(|| Arc::new(AsyncMutex::new(())))
+		.clone())
 }
 
 fn now_ms() -> u128 {
@@ -153,13 +163,25 @@ fn save_record(record: &JobRecord) -> Result<()> {
 	let path = record_path(&record.id)?;
 	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
 	let bytes = serde_json::to_vec_pretty(record)?;
-	std::fs::write(&tmp, bytes)?;
-	#[cfg(unix)]
 	{
-		use std::os::unix::fs::PermissionsExt;
-		std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+		let mut file = OpenOptions::new()
+			.write(true)
+			.create(true)
+			.truncate(true)
+			.open(&tmp)?;
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+		}
+		file.write_all(&bytes)?;
+		file.sync_all()?;
 	}
-	std::fs::rename(tmp, path)?;
+	std::fs::rename(&tmp, &path)?;
+	#[cfg(unix)]
+	if let Some(parent) = path.parent() {
+		std::fs::File::open(parent)?.sync_all()?;
+	}
 	Ok(())
 }
 
@@ -170,29 +192,56 @@ fn load_record(id: &str) -> Result<JobRecord> {
 }
 
 fn all_records() -> Result<Vec<JobRecord>> {
+	read_records_in_dir(&jobs_dir()?)
+}
+
+/// A missing or spoofed effect record must never be interpreted as permission
+/// to start a new remote operation with a formerly used idempotency key.
+fn read_records_in_dir(dir: &std::path::Path) -> Result<Vec<JobRecord>> {
 	let mut records = Vec::new();
-	for entry in std::fs::read_dir(jobs_dir()?)? {
+	for entry in std::fs::read_dir(dir)? {
 		let entry = entry?;
-		if entry.path().extension().and_then(|s| s.to_str()) != Some("json") {
+		let path = entry.path();
+		if path.extension().and_then(|s| s.to_str()) != Some("json") {
 			continue;
 		}
-		if let Ok(bytes) = std::fs::read(entry.path()) {
-			if let Ok(record) = serde_json::from_slice::<JobRecord>(&bytes) {
-				records.push(record);
-			}
+		if !entry.file_type()?.is_file() {
+			bail!("durable job entry is not a regular file; refusing incomplete inventory");
 		}
+		let bytes = std::fs::read(&path)?;
+		let record = serde_json::from_slice::<JobRecord>(&bytes)
+			.context("corrupt job record; refusing to lose idempotency binding")?;
+		if path.file_stem().and_then(|s| s.to_str()) != Some(record.id.as_str()) {
+			bail!("durable job path/identity mismatch; refusing incomplete inventory");
+		}
+		records.push(record);
 	}
 	records.sort_by_key(|record| record.created_unix_ms);
 	Ok(records)
 }
 
-fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
-	Ok(all_records()?
+fn find_idempotent_in_records(
+	records: impl IntoIterator<Item = JobRecord>,
+	host: &str,
+	key: &str,
+) -> Result<Option<JobRecord>> {
+	let mut matches = records
 		.into_iter()
-		.find(|record| record.host == host && record.idempotency_key.as_deref() == Some(key)))
+		.filter(|record| record.host == host && record.idempotency_key.as_deref() == Some(key));
+	let first = matches.next();
+	if matches.next().is_some() {
+		bail!("ambiguous durable idempotency binding; remote start denied");
+	}
+	Ok(first)
 }
 
-fn fingerprint(params: &ProcessStartParams) -> u64 {
+fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
+	find_idempotent_in_records(all_records()?, host, key)
+}
+
+/// The full request digest is authoritative for local idempotency. The old
+/// 64-bit prefix stays on the remote protocol for backward compatibility.
+fn request_digest(params: &ProcessStartParams) -> Result<String> {
 	let binding = json!({
 		"host": params.host,
 		"executable": params.executable,
@@ -205,9 +254,21 @@ fn fingerprint(params: &ProcessStartParams) -> u64 {
 		"cpu_quota_percent": params.cpu_quota_percent,
 		"memory_max_bytes": params.memory_max_bytes,
 	});
-	let bytes = serde_json::to_vec(&binding).expect("process binding serializes");
+	let bytes = serde_json::to_vec(&binding)?;
 	let digest = Sha256::digest(bytes);
-	u64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"))
+	Ok(digest.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+fn fingerprint(params: &ProcessStartParams) -> u64 {
+	let digest = request_digest(params).expect("validated process binding serializes");
+	u64::from_str_radix(&digest[..16], 16).expect("SHA-256 prefix is hexadecimal")
+}
+
+fn matches_request(record: &JobRecord, params: &ProcessStartParams) -> Result<bool> {
+	let existing = record.request_digest.as_deref().context(
+		"legacy idempotency binding lacks a full request digest; inspect existing job instead of relaunching",
+	)?;
+	Ok(existing == request_digest(params)?.as_str())
 }
 
 fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
@@ -831,11 +892,11 @@ async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> R
 
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	validate_start(&params)?;
-	let _start_guard = start_lock().lock().await;
+	let _start_guard = start_lock(&params.host)?.lock_owned().await;
 	let request_fingerprint = fingerprint(&params);
 	if let Some(key) = params.idempotency_key.as_deref() {
 		if let Some(mut existing) = find_idempotent(&params.host, key)? {
-			if existing.request_fingerprint != request_fingerprint {
+			if !matches_request(&existing, &params)? {
 				bail!("idempotency key `{key}` is already bound to a different request");
 			}
 			let retry = matches!(existing.launch_state.as_str(), "pending" | "launch_failed");
@@ -877,6 +938,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 		created_unix_ms: now_ms(),
 		idempotency_key: params.idempotency_key.clone(),
 		request_fingerprint,
+		request_digest: Some(request_digest(&params)?),
 		launch_state: "pending".to_string(),
 		launch_error: None,
 	};
@@ -965,6 +1027,106 @@ pub fn list_jobs(params: ProcessListParams) -> Result<String> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	fn test_record() -> JobRecord {
+		JobRecord {
+			id: "fixture-job".into(),
+			host: "fixture-main".into(),
+			ssh_target: "fixture-target".into(),
+			unit: "fixture-unit".into(),
+			remote_job_dir: "/tmp/fixture-job".into(),
+			executable: "/usr/bin/true".into(),
+			args: Vec::new(),
+			cwd: None,
+			env_keys: Vec::new(),
+			created_unix_ms: 1,
+			idempotency_key: Some("fixed-key".into()),
+			request_fingerprint: 42,
+			request_digest: Some("a".repeat(64)),
+			launch_state: "launched".into(),
+			launch_error: None,
+		}
+	}
+
+	#[test]
+	fn host_launch_locks_do_not_serialize_independent_hosts() {
+		let first = start_lock("fixture-launch-host-a").unwrap();
+		let same_host = start_lock("fixture-launch-host-a").unwrap();
+		let other_host = start_lock("fixture-launch-host-b").unwrap();
+		assert!(Arc::ptr_eq(&first, &same_host));
+		assert!(!Arc::ptr_eq(&first, &other_host));
+		let guard = first.clone().try_lock_owned().unwrap();
+		assert!(same_host.clone().try_lock_owned().is_err());
+		assert!(other_host.try_lock_owned().is_ok());
+		drop(guard);
+		assert!(same_host.try_lock_owned().is_ok());
+	}
+
+	#[test]
+	fn durable_job_scan_rejects_corrupted_spoofed_or_symlinked_records() {
+		let root = tempfile::tempdir().unwrap();
+		let record = test_record();
+		let exact = root.path().join("fixture-job.json");
+		std::fs::write(&exact, serde_json::to_vec(&record).unwrap()).unwrap();
+		assert_eq!(read_records_in_dir(root.path()).unwrap().len(), 1);
+		let corrupt = root.path().join("corrupt.json");
+		std::fs::write(&corrupt, b"{").unwrap();
+		assert!(read_records_in_dir(root.path()).is_err());
+		std::fs::remove_file(&corrupt).unwrap();
+		let wrong = root.path().join("different-id.json");
+		std::fs::write(&wrong, serde_json::to_vec(&record).unwrap()).unwrap();
+		assert!(read_records_in_dir(root.path()).is_err());
+		std::fs::remove_file(&wrong).unwrap();
+		#[cfg(unix)]
+		{
+			std::os::unix::fs::symlink(&exact, &wrong).unwrap();
+			assert!(read_records_in_dir(root.path()).is_err());
+		}
+	}
+
+	#[test]
+	fn duplicate_durable_keys_refuse_to_choose_one_existing_effect() {
+		let first = test_record();
+		let mut second = first.clone();
+		second.id = "other-job".into();
+		assert!(find_idempotent_in_records(
+			vec![first.clone(), second.clone()],
+			"fixture-main",
+			"fixed-key"
+		)
+		.is_err());
+		assert_eq!(
+			find_idempotent_in_records(vec![first.clone()], "fixture-main", "fixed-key")
+				.unwrap()
+				.unwrap()
+				.id,
+			first.id
+		);
+		assert!(find_idempotent_in_records(vec![second], "another-host", "fixed-key")
+			.unwrap()
+			.is_none());
+	}
+
+	#[test]
+	fn legacy_or_mismatched_full_digest_cannot_replay_old_job() {
+		let mut params: ProcessStartParams = serde_json::from_value(
+			json!({"host": "fixture-main", "executable": "/usr/bin/true"}),
+		)
+		.unwrap();
+		let mut record = test_record();
+		record.request_digest = None;
+		assert!(matches_request(&record, &params).is_err());
+		let digest = request_digest(&params).unwrap();
+		assert_eq!(digest.len(), 64);
+		assert_eq!(
+			u64::from_str_radix(&digest[..16], 16).unwrap(),
+			fingerprint(&params)
+		);
+		record.request_digest = Some(digest);
+		assert!(matches_request(&record, &params).unwrap());
+		params.stdin = Some("changed request".into());
+		assert!(!matches_request(&record, &params).unwrap());
+	}
 
 	#[test]
 	fn ids_are_valid_and_unique() {
