@@ -79,6 +79,31 @@ fn same_idempotency_key_uses_same_start_lock() {
 }
 
 #[test]
+fn stored_job_host_binding_rejects_alias_remapping() {
+	let mut previous = record("job-1");
+	previous.remote_job_dir = "/var/lib/hepta/jobs/job-1".into();
+
+	// A restart with unchanged host identity and remote state root may inspect.
+	assert!(verify_host_binding(&previous, "rog", "/var/lib/hepta").is_ok());
+	assert!(verify_host_binding(&previous, "rog", "/var/lib/hepta/").is_ok());
+
+	// Reusing the alias for another physical SSH target must never cancel or
+	// query the new host using the old durable operation's credentials.
+	let error = verify_host_binding(&previous, "different-target", "/var/lib/hepta")
+		.unwrap_err();
+	assert!(error.to_string().contains("host binding changed"));
+
+	// The remote root is part of the operation identity even with the same SSH
+	// address: otherwise the same job ID can resolve to unrelated stored state.
+	let error = verify_host_binding(&previous, "rog", "/var/lib/another")
+		.unwrap_err();
+	assert!(error.to_string().contains("host binding changed"));
+
+	previous.ssh_target = "different-target".into();
+	assert!(verify_host_binding(&previous, "rog", "/var/lib/hepta").is_err());
+}
+
+#[test]
 fn corrupt_record_blocks_idempotency_scan() {
 	let dir = tempdir().unwrap();
 	let valid = record("job-1");
