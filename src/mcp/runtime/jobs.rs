@@ -4,9 +4,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
+use std::hash::{Hash, Hasher};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -16,7 +17,8 @@ use super::config::{check_environment, check_execution, runtime_config, valid_na
 use super::ssh::run_python_json;
 
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
-static START_LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
+const START_LOCK_SHARDS: usize = 256;
+static START_LOCKS: OnceLock<Vec<AsyncMutex<()>>> = OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 const MAX_STDIN_BYTES: usize = 1024 * 1024;
 const MAX_LOG_READ_BYTES: u64 = 1024 * 1024;
@@ -120,8 +122,16 @@ fn default_launch_state() -> String {
 	"launched".to_string()
 }
 
-fn start_lock() -> &'static AsyncMutex<()> {
-	START_LOCK.get_or_init(|| AsyncMutex::new(()))
+fn start_lock(host: &str, key: Option<&str>) -> &'static AsyncMutex<()> {
+	// Only requests sharing the same host and idempotency key must be serialized.
+	// Fixed sharding bounds lock memory and avoids global remote-launch head-of-line blocking.
+	let locks = START_LOCKS.get_or_init(|| {
+		(0..START_LOCK_SHARDS).map(|_| AsyncMutex::new(())).collect()
+	});
+	let mut hasher = std::collections::hash_map::DefaultHasher::new();
+	host.hash(&mut hasher);
+	key.hash(&mut hasher);
+	&locks[(hasher.finish() as usize) % START_LOCK_SHARDS]
 }
 
 fn now_ms() -> u128 {
@@ -149,18 +159,35 @@ fn record_path(id: &str) -> Result<PathBuf> {
 	Ok(jobs_dir()?.join(format!("{id}.json")))
 }
 
-fn save_record(record: &JobRecord) -> Result<()> {
-	let path = record_path(&record.id)?;
+fn save_record_at(path: &Path, record: &JobRecord) -> Result<()> {
 	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
 	let bytes = serde_json::to_vec_pretty(record)?;
-	std::fs::write(&tmp, bytes)?;
 	#[cfg(unix)]
-	{
-		use std::os::unix::fs::PermissionsExt;
-		std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+	let mut file = {
+		use std::os::unix::fs::OpenOptionsExt;
+		OpenOptions::new()
+			.create(true)
+			.write(true)
+			.truncate(true)
+			.mode(0o600)
+			.open(&tmp)?
+	};
+	#[cfg(not(unix))]
+	let mut file = File::create(&tmp)?;
+	file.write_all(&bytes)?;
+	// The identity must be durable before an external process can be launched.
+	file.sync_all()?;
+	drop(file);
+	std::fs::rename(&tmp, path)?;
+	#[cfg(unix)]
+	if let Some(parent) = path.parent() {
+		File::open(parent)?.sync_all()?;
 	}
-	std::fs::rename(tmp, path)?;
 	Ok(())
+}
+
+fn save_record(record: &JobRecord) -> Result<()> {
+	save_record_at(&record_path(&record.id)?, record)
 }
 
 fn load_record(id: &str) -> Result<JobRecord> {
@@ -169,21 +196,31 @@ fn load_record(id: &str) -> Result<JobRecord> {
 	serde_json::from_slice(&bytes).context("corrupt durable job metadata")
 }
 
-fn all_records() -> Result<Vec<JobRecord>> {
+fn scan_records_dir(dir: &Path) -> Result<Vec<JobRecord>> {
 	let mut records = Vec::new();
-	for entry in std::fs::read_dir(jobs_dir()?)? {
+	for entry in std::fs::read_dir(dir)? {
 		let entry = entry?;
-		if entry.path().extension().and_then(|s| s.to_str()) != Some("json") {
+		let path = entry.path();
+		if path.extension().and_then(|s| s.to_str()) != Some("json") {
 			continue;
 		}
-		if let Ok(bytes) = std::fs::read(entry.path()) {
-			if let Ok(record) = serde_json::from_slice::<JobRecord>(&bytes) {
-				records.push(record);
-			}
+		// A corrupt/unreadable record might be the owner of an idempotency key.
+		// Skipping it would allow a second physical launch after a restart.
+		let bytes = std::fs::read(&path)
+			.with_context(|| format!("cannot read durable job record {}", path.display()))?;
+		let record: JobRecord = serde_json::from_slice(&bytes)
+			.with_context(|| format!("corrupt durable job record {}", path.display()))?;
+		if path.file_stem().and_then(|stem| stem.to_str()) != Some(record.id.as_str()) {
+			bail!("durable job filename/identity mismatch: {}", path.display());
 		}
+		records.push(record);
 	}
 	records.sort_by_key(|record| record.created_unix_ms);
 	Ok(records)
+}
+
+fn all_records() -> Result<Vec<JobRecord>> {
+	scan_records_dir(&jobs_dir()?)
 }
 
 fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
@@ -255,10 +292,18 @@ job.mkdir(parents=True, exist_ok=True)
 os.chmod(job, 0o700)
 
 def read_json(name):
+    target = job / name
+    if target.is_symlink():
+        raise SystemExit(f"unsafe remote job state symlink: {name}")
     try:
-        return json.loads((job / name).read_text(encoding="utf-8"))
-    except Exception:
+        value = json.loads(target.read_text(encoding="utf-8"))
+    except FileNotFoundError:
         return None
+    except Exception as exc:
+        raise SystemExit(f"corrupt remote job state {name}: {exc}")
+    if not isinstance(value, dict):
+        raise SystemExit(f"invalid remote job state object: {name}")
+    return value
 
 def atomic(name, value):
     target = job / name
@@ -275,11 +320,20 @@ if existing is not None:
     launch = read_json("launch.json")
     exit_data = read_json("exit.json")
     started = read_json("started.json")
-    if launch or exit_data:
-        print(json.dumps({"ok": True, "reused_remote": True, **(launch or {"backend": "completed"})}, sort_keys=True))
+    if exit_data is not None:
+        print(json.dumps({"ok": True, "reused_remote": True, "backend": "completed"}, sort_keys=True))
         raise SystemExit(0)
-    if started:
+    if launch is not None:
+        if launch.get("backend") not in ("systemd", "detached"):
+            raise SystemExit("prior remote launch failed or has unknown backend; reconcile before retry")
+        print(json.dumps({"ok": True, "reused_remote": True, **launch}, sort_keys=True))
+        raise SystemExit(0)
+    if started is not None:
         raise SystemExit("ambiguous prior launch: supervisor started without launch record")
+    # A request may have crossed the remote dispatch boundary before the
+    # controller lost its acknowledgement. Never infer 'not started' from
+    # missing launch metadata; a later launch would risk a duplicate effect.
+    raise SystemExit("ambiguous prior launch: request exists without terminal evidence")
 else:
     if stdin_text is not None:
         stdin_path = job / "stdin.bin"
@@ -809,7 +863,9 @@ async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> R
 
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	validate_start(&params)?;
-	let _start_guard = start_lock().lock().await;
+	let _start_guard = start_lock(&params.host, params.idempotency_key.as_deref())
+		.lock()
+		.await;
 	let request_fingerprint = fingerprint(&params);
 	if let Some(key) = params.idempotency_key.as_deref() {
 		if let Some(mut existing) = find_idempotent(&params.host, key)? {
@@ -941,37 +997,5 @@ pub fn list_jobs(params: ProcessListParams) -> Result<String> {
 }
 
 #[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn ids_are_valid_and_unique() {
-		let a = next_job_id();
-		let b = next_job_id();
-		assert_ne!(a, b);
-		assert!(valid_name(&a));
-	}
-
-	#[test]
-	fn fingerprint_binds_stdin_and_resource_limits() {
-		let mut base = ProcessStartParams {
-			host: "rog".into(),
-			executable: "/usr/bin/printf".into(),
-			args: vec!["ok".into()],
-			cwd: Some("/tmp".into()),
-			env: BTreeMap::new(),
-			stdin: None,
-			timeout_seconds: Some(10),
-			idempotency_key: Some("key".into()),
-			nice: Some(1),
-			cpu_quota_percent: Some(20),
-			memory_max_bytes: Some(134217728),
-		};
-		let original = fingerprint(&base);
-		base.stdin = Some("different".into());
-		assert_ne!(original, fingerprint(&base));
-		base.stdin = None;
-		base.cpu_quota_percent = Some(21);
-		assert_ne!(original, fingerprint(&base));
-	}
-}
+#[path = "jobs_tests.rs"]
+mod tests;
