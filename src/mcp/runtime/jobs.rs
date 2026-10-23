@@ -638,15 +638,34 @@ print(json.dumps({"ok": True, **launch}, sort_keys=True))
 "#;
 
 const STATUS_CODE: &str = r#"
-import json, os, pathlib, subprocess, sys, time
+import json, os, pathlib, stat, subprocess, sys, time
 q = json.load(sys.stdin)
 job = pathlib.Path(q["job_dir"])
 
 def read_json(name):
+    path = job / name
     try:
-        return json.loads((job / name).read_text(encoding="utf-8"))
-    except Exception:
+        # Reading nonexistent state is distinct from corrupted state. Do not
+        # transform a malformed terminal receipt into "not yet executed".
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
         return None
+    except OSError as exc:
+        raise SystemExit(f"cannot open remote {name}: {exc}")
+    with os.fdopen(fd, "rb") as handle:
+        metadata = os.fstat(handle.fileno())
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 1048576:
+            raise SystemExit(f"remote {name} is not a bounded regular file")
+        raw = handle.read(1048577)
+    if len(raw) > 1048576:
+        raise SystemExit(f"remote {name} exceeds the metadata limit")
+    try:
+        result = json.loads(raw)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise SystemExit(f"corrupt remote {name}: {exc}")
+    if not isinstance(result, dict):
+        raise SystemExit(f"invalid remote {name} object")
+    return result
 
 def process_identity(pid):
     try:
@@ -784,15 +803,34 @@ print(json.dumps({
 "#;
 
 const CANCEL_CODE: &str = r#"
-import json, os, pathlib, signal, subprocess, sys, time
+import json, os, pathlib, signal, stat, subprocess, sys, time
 q = json.load(sys.stdin)
 job = pathlib.Path(q["job_dir"])
 
 def read_json(name):
+    path = job / name
     try:
-        return json.loads((job / name).read_text(encoding="utf-8"))
-    except Exception:
+        # Reading nonexistent state is distinct from corrupted state. Do not
+        # transform a malformed terminal receipt into "not yet executed".
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
         return None
+    except OSError as exc:
+        raise SystemExit(f"cannot open remote {name}: {exc}")
+    with os.fdopen(fd, "rb") as handle:
+        metadata = os.fstat(handle.fileno())
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 1048576:
+            raise SystemExit(f"remote {name} is not a bounded regular file")
+        raw = handle.read(1048577)
+    if len(raw) > 1048576:
+        raise SystemExit(f"remote {name} exceeds the metadata limit")
+    try:
+        result = json.loads(raw)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise SystemExit(f"corrupt remote {name}: {exc}")
+    if not isinstance(result, dict):
+        raise SystemExit(f"invalid remote {name} object")
+    return result
 
 def atomic(name, value):
     target = job / name
@@ -1452,6 +1490,85 @@ mod tests {
 		assert!(String::from_utf8_lossy(&output.stderr).contains("indeterminate child effect"));
 		assert!(job.join("started.json").exists());
 		assert!(!job.join("exit.json").exists(), "unknown effect must not be declared failed");
+	}
+
+
+	#[cfg(unix)]
+	fn run_remote_metadata_probe(code: &str, job: &std::path::Path) -> std::process::Output {
+		use std::io::Write;
+		use std::process::{Command, Stdio};
+		let mut child = Command::new("python3")
+			.arg("-c")
+			.arg(code)
+			.stdin(Stdio::piped())
+			.stdout(Stdio::piped())
+			.stderr(Stdio::piped())
+			.spawn()
+			.unwrap();
+		let q = json!({
+			"job_dir": job,
+			"job_id": "unit-effect",
+			"unit": "unit-fixture-not-present",
+			"wait_seconds": 0,
+			"grace_seconds": 0
+		});
+		child.stdin.take().unwrap().write_all(q.to_string().as_bytes()).unwrap();
+		child.wait_with_output().unwrap()
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn corrupt_terminal_receipts_deny_status_and_cancel_without_signal() {
+		let temp = tempfile::tempdir().unwrap();
+		let job = temp.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		std::fs::write(job.join("request.json"), br#"{"job_id":"unit-effect"}"#).unwrap();
+		std::fs::write(job.join("exit.json"), b"{truncated").unwrap();
+		for code in [STATUS_CODE, CANCEL_CODE] {
+			let output = run_remote_metadata_probe(code, &job);
+			assert!(!output.status.success());
+			assert!(String::from_utf8_lossy(&output.stderr).contains("corrupt remote exit.json"));
+		}
+		assert!(!job.join("cancel-request.json").exists());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn symlinked_terminal_receipts_deny_status_and_cancel() {
+		use std::os::unix::fs::symlink;
+		let temp = tempfile::tempdir().unwrap();
+		let job = temp.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		std::fs::write(job.join("request.json"), br#"{"job_id":"unit-effect"}"#).unwrap();
+		let outside = temp.path().join("outside");
+		std::fs::write(&outside, br#"{"exit_code":0}"#).unwrap();
+		symlink(&outside, job.join("exit.json")).unwrap();
+		for code in [STATUS_CODE, CANCEL_CODE] {
+			let output = run_remote_metadata_probe(code, &job);
+			assert!(!output.status.success());
+			assert!(String::from_utf8_lossy(&output.stderr).contains("cannot open remote exit.json"));
+		}
+		assert!(!job.join("cancel-request.json").exists());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn finished_job_can_be_read_without_replaying_remote_effects() {
+		let temp = tempfile::tempdir().unwrap();
+		let job = temp.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		std::fs::write(job.join("request.json"), br#"{"job_id":"unit-effect"}"#).unwrap();
+		std::fs::write(job.join("exit.json"), br#"{"exit_code":0,"cancelled":false,"timed_out":false}"#).unwrap();
+		let status = run_remote_metadata_probe(STATUS_CODE, &job);
+		assert!(status.status.success(), "{:?}", String::from_utf8_lossy(&status.stderr));
+		assert_eq!(serde_json::from_slice::<Value>(&status.stdout).unwrap()["state"], "succeeded");
+		let cancel = run_remote_metadata_probe(CANCEL_CODE, &job);
+		assert!(cancel.status.success(), "{:?}", String::from_utf8_lossy(&cancel.stderr));
+		assert_eq!(
+			serde_json::from_slice::<Value>(&cancel.stdout).unwrap()["result"],
+			"already_exited"
+		);
+		assert!(!job.join("cancel-request.json").exists());
 	}
 
 	#[cfg(unix)]
