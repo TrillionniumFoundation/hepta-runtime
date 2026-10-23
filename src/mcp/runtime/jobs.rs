@@ -257,6 +257,25 @@ fn fingerprint(params: &ProcessStartParams) -> u64 {
 	request_digest(params).0
 }
 
+fn verify_reuse_binding(
+	existing: &JobRecord,
+	key: &str,
+	legacy_fingerprint: u64,
+	full_digest: &str,
+) -> Result<()> {
+	// Old 64-bit-only records remain inspectable, but do not establish a
+	// collision-resistant authorization to restart a physical process.
+	if existing.request_digest.is_none() {
+		bail!("legacy idempotency record lacks full request binding; reconcile without replay");
+	}
+	if existing.request_fingerprint != legacy_fingerprint
+		|| existing.request_digest.as_deref() != Some(full_digest)
+	{
+		bail!("idempotency key `{key}` is already bound to a different request");
+	}
+	Ok(())
+}
+
 fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
 	let record = load_record(&params.job_id)?;
 	if record.host != params.host {
@@ -890,14 +909,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	let (request_fingerprint, request_digest) = request_digest(&params);
 	if let Some(key) = params.idempotency_key.as_deref() {
 		if let Some(mut existing) = find_idempotent(&params.host, key)? {
-			if existing.request_digest.is_none() {
-				bail!("legacy idempotency record lacks full request binding; reconcile without replay");
-			}
-			if existing.request_fingerprint != request_fingerprint
-				|| existing.request_digest.as_deref() != Some(request_digest.as_str())
-			{
-				bail!("idempotency key `{key}` is already bound to a different request");
-			}
+			verify_reuse_binding(&existing, key, request_fingerprint, &request_digest)?;
 			let retry = matches!(existing.launch_state.as_str(), "pending" | "launch_failed");
 			let launch = if retry {
 				Some(launch_record(&mut existing, &params).await?)
