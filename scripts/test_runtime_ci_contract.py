@@ -66,10 +66,13 @@ class RuntimeCiContractTests(unittest.TestCase):
             self.assertIn(required, merge_section)
 
     def test_contract_checks_run_on_source_and_merge(self):
-        self.assertEqual(
-            self.source.count("python3 -m unittest discover -s scripts -p 'test_runtime_ci_contract.py' -v"),
-            2,
-        )
+        for name in ("test_runtime_ci_contract.py", "test_source_byte_boundary.py",
+                     "test_qualification_path_fence.py"):
+            with self.subTest(name=name):
+                self.assertEqual(
+                    self.source.count(f"python3 -m unittest discover -s scripts -p '{name}' -v"),
+                    2,
+                )
 
 
     def test_http_mcp_requires_auth_even_without_runtime_config(self):
