@@ -83,16 +83,28 @@ fn duplicate_durable_idempotency_owners_fail_closed() {
 	let records = vec![record("job-1"), record("job-2")];
 	let error = select_idempotent_record(records, "rog", "repeat-key").unwrap_err();
 	assert!(error.to_string().contains("multiple durable owners"));
+
 	let mut different_host = record("job-2");
 	different_host.host = "mac".into();
-	let selected = select_idempotent_record(
-		vec![record("job-1"), different_host],
-		"rog",
-		"repeat-key",
-	)
-	.unwrap()
-	.unwrap();
+	let records = vec![record("job-1"), different_host];
+	let selected = select_idempotent_record(records, "rog", "repeat-key")
+		.unwrap()
+		.unwrap();
 	assert_eq!(selected.id, "job-1");
+}
+
+#[test]
+fn duplicate_owners_loaded_from_durable_store_refuse_reuse() {
+	let dir = tempdir().unwrap();
+	for id in ["job-1", "job-2"] {
+		let entry = record(id);
+		let path = dir.path().join(format!("{id}.json"));
+		std::fs::write(path, serde_json::to_vec(&entry).unwrap()).unwrap();
+	}
+	let entries = scan_records_dir(dir.path()).unwrap();
+	assert_eq!(entries.len(), 2);
+	let error = select_idempotent_record(entries, "rog", "repeat-key").unwrap_err();
+	assert!(error.to_string().contains("multiple durable owners"));
 }
 
 #[test]
