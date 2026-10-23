@@ -45,6 +45,14 @@ fixture. Git commands ignore system/global Git configuration by default.
 An active repo-local filter is a blocking qualification result, not a
 reason to whitelist unchecked subprocesses.
 
+Git index source qualification also **rejects every tracked symlink**: the
+Git object for mode `120000` binds only a target path, not the target's
+current bytes. Without this rule, external or local symlink targets can
+change code/test execution while the checkout's Git commit and blob
+identities remain unchanged. The checked P3 source tree currently contains
+no tracked symlinks, so this is a conservative admission rule rather than
+a compatibility waiver.
+
 The checker creates
 separate detached worktrees for both exact SHAs, refuses hidden index source
 flags, missing/modified tracked bytes, replacement refs, non-POSIX execution,

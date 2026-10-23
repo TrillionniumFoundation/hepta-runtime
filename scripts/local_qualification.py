@@ -156,19 +156,21 @@ def check_source_bytes(worktree: Path) -> tuple[str, int]:
             metadata, relative = item.split(b"\t", 1)
             mode, expected, stage = metadata.decode("ascii").split(" ")
             path = worktree / os.fsdecode(relative)
-            if stage != "0" or mode not in ("100644", "100755", "120000"):
-                raise QualificationError(f"unexpected index stage or mode for {os.fsdecode(relative)}")
+            # Git stores a symlink *target pathname*, not the referenced
+            # bytes. A linked source or test could execute mutable bytes from
+            # outside this checkout while all Git/index digests still match.
             if mode == "120000":
-                if not path.is_symlink():
-                    raise QualificationError(f"expected symlink: {os.fsdecode(relative)}")
-                raw = os.fsencode(os.readlink(path))
-            else:
-                if not path.is_file() or path.is_symlink():
-                    raise QualificationError(f"missing/nonregular checked-out source: {os.fsdecode(relative)}")
-                raw = path.read_bytes()
-                executable = bool(path.stat().st_mode & 0o111)
-                if executable != (mode == "100755"):
-                    raise QualificationError(f"source executable bit differs: {os.fsdecode(relative)}")
+                raise QualificationError(
+                    f"tracked symlink has no immutable target-byte proof: {os.fsdecode(relative)}"
+                )
+            if stage != "0" or mode not in ("100644", "100755"):
+                raise QualificationError(f"unexpected index stage or mode for {os.fsdecode(relative)}")
+            if not path.is_file() or path.is_symlink():
+                raise QualificationError(f"missing/nonregular checked-out source: {os.fsdecode(relative)}")
+            raw = path.read_bytes()
+            executable = bool(path.stat().st_mode & 0o111)
+            if executable != (mode == "100755"):
+                raise QualificationError(f"source executable bit differs: {os.fsdecode(relative)}")
             if blob_hash(raw, fmt) != expected:
                 raise QualificationError(f"source bytes differ from Git index: {os.fsdecode(relative)}")
             names.add(relative)
