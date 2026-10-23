@@ -25,12 +25,14 @@ import threading
 import time
 
 from source_byte_boundary import read_indexed_file
+from qualification_path_fence import UnsafeCommandPath, check_command_search_path
 
 RUST_VERSION = "1.95.0"
 SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
 CHECKS = (
     ("source_contract", (sys.executable, "-m", "unittest", "discover", "-s", "scripts", "-p", "test_runtime_ci_contract.py", "-v")),
     ("source_byte_boundary", (sys.executable, "-m", "unittest", "discover", "-s", "scripts", "-p", "test_source_byte_boundary.py", "-v")),
+    ("path_fence", (sys.executable, "-m", "unittest", "discover", "-s", "scripts", "-p", "test_qualification_path_fence.py", "-v")),
     ("local_receipt_regressions", (sys.executable, "-m", "unittest", "discover", "-s", "scripts", "-p", "test_local_qualification.py", "-v")),
     ("format", ("cargo", "fmt", "--all", "--", "--check")),
     ("check", ("cargo", "check", "--locked", "--all-targets")),
@@ -47,7 +49,7 @@ class QualificationError(Exception):
 def git(repo: Path, *args: str) -> bytes:
     # Disabling Git hooks alone does not disable fsmonitor and checkout filters.
     # Examine the passive effective configuration before any effectful Git command.
-    environment = safe_env()
+    environment = safe_env(repo)
     _reject_executable_git_config(repo, environment)
     p = subprocess.run(
         ("git", "-c", "core.hooksPath=/dev/null", *args),
@@ -89,7 +91,7 @@ def _blocked_execution_env_names() -> list[str]:
     )
 
 
-def safe_env() -> dict[str, str]:
+def safe_env(source_root: Path | None = None) -> dict[str, str]:
     blocked = _blocked_execution_env_names()
     if blocked:
         names = ", ".join(name[:96] for name in blocked[:12])
@@ -107,6 +109,10 @@ def safe_env() -> dict[str, str]:
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["RUSTUP_TOOLCHAIN"] = RUST_VERSION
     env["CARGO_INCREMENTAL"] = "0"
+    try:
+        check_command_search_path(env.get("PATH"), source_root)
+    except UnsafeCommandPath as exc:
+        raise QualificationError(f"unreviewed executable PATH: {exc}") from exc
     return env
 
 
@@ -298,6 +304,10 @@ def execute_bounded(args: tuple[str, ...], worktree: Path, env: dict[str, str],
     Reads the pipe independently from the child: a full stdout pipe cannot
     deadlock a tool that is also waiting on input or a process exit.
     """
+    try:
+        check_command_search_path(env.get("PATH"), worktree)
+    except UnsafeCommandPath as exc:
+        raise QualificationError(f"unreviewed executable PATH: {exc}") from exc
     start = time.monotonic()
     digest = hashlib.sha256()
     too_large = threading.Event()
@@ -425,7 +435,7 @@ def qualify(repo: Path, source_sha: str, merge_sha: str, output_dir: Path,
                         raise QualificationError(f"worktree HEAD mismatch on {name}")
                     lane["tree_sha"] = git(p, "rev-parse", "HEAD^{tree}").decode().strip()
                     lane["object_format"], lane["tracked_files"] = check_source_bytes(p)
-                    e = safe_env()
+                    e = safe_env(p)
                     target = workdir / f"target-{name}"
                     e["CARGO_TARGET_DIR"] = str(target)
                     versions = ("rustc", "cargo")

@@ -43,6 +43,12 @@ jobs:
       - name: Regression test no-follow source-byte admission
         run: python3 -m unittest discover -s scripts -p 'test_source_byte_boundary.py' -v
 
+      - name: Refuse unreviewed executable PATH before source qualification
+        run: python3 -m unittest discover -s scripts -p 'test_qualification_path_fence.py' -v
+
+      - name: Verify local qualification command/receipt regressions
+        run: python3 -m unittest discover -s scripts -p 'test_local_qualification.py' -v
+
       - name: Install pinned Rust toolchain
         run: |
           rustup toolchain install 1.95.0 --profile minimal
@@ -85,6 +91,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_MERGE_SHA"
           python3 -m unittest discover -s scripts -p 'test_runtime_ci_contract.py' -v
           python3 -m unittest discover -s scripts -p 'test_source_byte_boundary.py' -v
+          python3 -m unittest discover -s scripts -p 'test_qualification_path_fence.py' -v
+          python3 -m unittest discover -s scripts -p 'test_local_qualification.py' -v
           cargo fmt --all -- --check
           cargo check --locked --all-targets
           cargo clippy --locked --all-targets -- -D warnings

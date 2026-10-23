@@ -333,6 +333,28 @@ class LocalQualificationTests(unittest.TestCase):
                     safe_env()
                 self.assertNotIn("private-test-marker", str(caught.exception))
 
+    def test_path_in_source_root_denied_before_git_preflight(self):
+        self.make_repo()
+        fake_git = self.root / "git"
+        fake_git.write_text("#!/bin/sh\ntouch exploit-marker\n")
+        fake_git.chmod(0o755)
+        malicious = f"{self.root}:/usr/bin:/bin"
+        with mock.patch.dict(os.environ, {"PATH": malicious}, clear=True), \
+                mock.patch("local_qualification.subprocess.run") as spawn:
+            with self.assertRaisesRegex(QualificationError, "unreviewed executable PATH"):
+                git(self.root, "rev-parse", "HEAD")
+            spawn.assert_not_called()
+        self.assertFalse((self.root / "exploit-marker").exists())
+
+    def test_execute_bounded_refuses_source_path_without_spawn(self):
+        malicious = f"{self.root}:/usr/bin:/bin"
+        with mock.patch("local_qualification.subprocess.Popen") as spawn:
+            with self.assertRaisesRegex(QualificationError, "unreviewed executable PATH"):
+                execute_bounded((sys.executable, "-c", "print('hi')"),
+                                self.root, {"PATH": malicious},
+                                self.root / "should-not-exist.log", 2, 2048)
+            spawn.assert_not_called()
+
     def test_allow_benign_diagnostics_but_pin_execution_identity(self):
         with mock.patch.dict(os.environ, {"PATH": os.environ.get("PATH", ""),
                                           "RUST_BACKTRACE": "1", "RUST_LOG": "info",
