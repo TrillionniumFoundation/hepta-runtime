@@ -52,6 +52,10 @@ fn shadow_abi_json_roundtrip_and_deny_unknown_fields() {
 	let bytes = serde_json::to_vec(&value).unwrap();
 	let restored: CanonicalExecutionRecordV1 = serde_json::from_slice(&bytes).unwrap();
 	assert_eq!(serde_json::to_vec(&restored).unwrap(), bytes);
+	assert_eq!(
+		validate_and_digest(&restored).unwrap(),
+		"9ef6afcc1658e9d022a321e0d2decaac71445433c96591a7c1c9afbc5b07f9a9"
+	);
 	let mut changed: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 	changed["record"]["binding"]["untrusted"] = serde_json::json!(true);
 	assert!(serde_json::from_value::<CanonicalExecutionRecordV1>(changed).is_err());
@@ -63,11 +67,14 @@ fn shadow_abi_denies_noncurrent_drift_and_unrehearsed_mutation() {
 	let CanonicalExecutionRecordV1::ExecutionIntent(intent) = &mut v;
 	intent.binding.generation = 0;
 	assert!(validate_and_digest(&v).is_err());
+	let CanonicalExecutionRecordV1::ExecutionIntent(intent) = &mut v;
 	intent.binding.generation = 1;
 	intent.class = CanonicalExecutionClassV1::DurableProcess;
 	assert!(validate_and_digest(&v).is_err());
+	let CanonicalExecutionRecordV1::ExecutionIntent(intent) = &mut v;
 	intent.binding.rollback_reference = Some("rollback-1".into());
 	assert!(validate_and_digest(&v).is_ok());
+	let CanonicalExecutionRecordV1::ExecutionIntent(intent) = &mut v;
 	intent.binding.predecessor = Some(digest('a'));
 	assert!(validate_and_digest(&v).is_err());
 }
