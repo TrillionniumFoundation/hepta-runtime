@@ -46,7 +46,7 @@ class LocalQualificationTests(unittest.TestCase):
         self.make_repo()
         marker = self.root / "unsafe-fsmonitor-fired"
         monitor = self.root / "fsmonitor-helper.sh"
-        monitor.write_text("#!/bin/sh\\nprintf invoked > '" + str(marker) + "'\\n")
+        monitor.write_text("#!/bin/sh\nprintf invoked > '" + str(marker) + "'\n")
         monitor.chmod(0o755)
         self.command("git", "config", "core.fsmonitor", str(monitor))
         with self.assertRaisesRegex(QualificationError, "core.fsmonitor"):

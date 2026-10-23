@@ -143,10 +143,10 @@ def _reject_executable_git_config(repo: Path, environment: dict[str, str]) -> No
     if len(result.stdout) > 256 * 1024:
         raise QualificationError("Git configuration exceeds review bound")
     blocked: set[str] = set()
-    for entry in result.stdout.split(b"\\x00"):
+    for entry in result.stdout.split(b"\x00"):
         if not entry:
             continue
-        key_bytes, separator, _value = entry.partition(b"\\n")
+        key_bytes, separator, _value = entry.partition(b"\n")
         if not separator:
             raise QualificationError("malformed Git configuration entry")
         try:
