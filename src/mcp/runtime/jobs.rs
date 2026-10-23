@@ -1213,9 +1213,10 @@ if existing is not None:
         raise SystemExit(0)
     raise SystemExit("ambiguous prior launch: inspect this job; do not relaunch under another key")
 else:
-    if any(os.path.lexists(job / name) for name in ("stdin.bin","runner.py","owner-intent.json","started.json","child.json","launch.json","exit.json","stdout.log","stderr.log")):
+    if any(os.path.lexists(job / name) for name in ("stdin.bin","runner.py","owner-intent.json","started.json","child.json","launch.json","exit.json","exit.witness.json","exit.witness.json.tmp","stdout.log","stderr.log")):
         raise SystemExit("prior or uncertain job artifacts exist without request binding; no launch submitted")
     req["launch_nonce"] = os.urandom(16).hex()
+    req["terminal_publication_protocol"] = 1
     if stdin_text is not None:
         stage_file("stdin.bin", stdin_text.encode("utf-8"), 0o600)
         req["stdin_path"] = str(pathlib.Path(req["job_dir"]) / "stdin.bin")
@@ -1226,7 +1227,7 @@ else:
     try: os.fsync(fd)
     finally: os.close(fd)
 runner = r'''#!/usr/bin/env python3
-import fcntl, json, os, pathlib, select, shutil, signal, stat, subprocess, sys, threading, time
+import fcntl, hashlib, json, os, pathlib, select, shutil, signal, stat, subprocess, sys, threading, time
 # Only the trusted launcher chooses this argv marker, never request metadata.
 # A legacy unmarked runner retains the original detached nice adjustment.
 if len(sys.argv) not in (3, 4):
@@ -1244,13 +1245,27 @@ def atomic(name, value):
     target = job / name
     tmp = job / (name + ".tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as stream:
-        stream.write(json.dumps(value, sort_keys=True) + "\n")
+    encoded = (json.dumps(value, sort_keys=True) + "\n").encode("utf-8")
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(encoded)
         stream.flush(); os.fsync(stream.fileno())
     os.replace(tmp, target)
-    fd = os.open(job, os.O_RDONLY)
-    try: os.fsync(fd)
-    finally: os.close(fd)
+    os.fsync(_hepta_directory_pins[-1])
+    return encoded
+
+def publish_terminal(value):
+    value = {**value, "terminal_publication_protocol": 1,
+             "job_id": req["job_id"], "launch_nonce": req["launch_nonce"]}
+    encoded = atomic("exit.json", value)
+    # A visible witness proves that the preceding exit file and directory
+    # barriers returned. Losing the witness only makes status unconfirmed;
+    # its presence does not claim its own final directory fsync survived loss.
+    atomic("exit.witness.json", {
+        "terminal_publication_protocol": 1,
+        "job_id": req["job_id"],
+        "launch_nonce": req["launch_nonce"],
+        "exit_sha256": hashlib.sha256(encoded).hexdigest(),
+    })
 
 def process_identity(pid):
     if sys.platform == "linux":
@@ -1272,7 +1287,7 @@ owner_stat = os.fstat(owner_fd)
 if not stat.S_ISREG(owner_stat.st_mode) or owner_stat.st_uid != os.geteuid() or owner_stat.st_nlink != 1 or owner_stat.st_mode & 0o077:
     raise SystemExit("unsafe supervisor lifetime lock")
 fcntl.flock(owner_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-if any(os.path.lexists(job / name) for name in ("owner-intent.json","started.json","exit.json")):
+if any(os.path.lexists(job / name) for name in ("owner-intent.json","started.json","exit.json","exit.witness.json","exit.witness.json.tmp")):
     raise SystemExit("prior supervisor intent or binding exists; workload must not be replayed")
 if sys.platform == "linux":
     if not hasattr(os, "waitid") or not hasattr(os, "WNOWAIT"):
@@ -1350,7 +1365,7 @@ except Exception as exc:
             child_reaped = True
         except (subprocess.TimeoutExpired, OSError):
             pass
-        atomic("exit.json", {
+        publish_terminal({
             "at_unix_ms": int(time.time() * 1000),
             "exit_code": 125,
             "supervisor_error": "child receipt publication failed after spawn",
@@ -1368,7 +1383,7 @@ except Exception as exc:
             "timed_out": False,
         })
         raise SystemExit(125)
-    atomic("exit.json", {
+    publish_terminal({
         "at_unix_ms": int(time.time() * 1000),
         "exit_code": 127,
         "launch_error": str(exc),
@@ -1480,7 +1495,7 @@ for label, reader, sink in zip(("stdout", "stderr"), readers, (out, err)):
         log_errors[label] = log_errors[label] or "sync: " + str(exc)
 output_complete = all(log_eof.values()) and not any(log_errors.values()) and not any(log_truncated.values())
 output_durable = output_complete and all(log_synced.values())
-atomic("exit.json", {
+publish_terminal({
     "at_unix_ms": int(time.time() * 1000),
     "exit_code": int(rc),
     "cancelled": bool(cancel_requested),
@@ -1561,7 +1576,7 @@ print(json.dumps({"ok": True, **launch}, sort_keys=True))
 "#;
 
 const STATUS_CODE: &str = r#"
-import json, os, pathlib, subprocess, sys, time
+import json, os, pathlib, stat, subprocess, sys, time
 q = json.load(sys.stdin)
 job = private_job_directory(q["job_dir"])
 
@@ -1604,6 +1619,68 @@ def process_uid(pid):
     if sys.platform == "linux": return pathlib.Path(f"/proc/{pid}").stat().st_uid
     return int(subprocess.check_output(["ps", "-p", str(pid), "-o", "uid="], text=True, timeout=3).strip())
 
+def publication_pending(reason):
+    return {"state": "finalizing", "outcome": "unknown", "reason": reason,
+            "terminal_publication_confirmed": False,
+            "status_authoritative": False, "automatic_retry": False}
+
+def read_terminal_file(name, limit):
+    # Relative to the already pinned job directory; never follow a receipt
+    # symlink or wait on a substituted FIFO. Hash and parse this one snapshot.
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                 dir_fd=_hepta_directory_pins[-1])
+    with os.fdopen(fd, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid() or
+                before.st_nlink != 1 or stat.S_IMODE(before.st_mode) != 0o600 or before.st_size > limit):
+            raise ValueError("unsafe terminal publication file")
+        encoded = stream.read(limit + 1)
+        after = os.fstat(stream.fileno())
+        current = os.stat(name, dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
+    def stamp(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
+                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    if (len(encoded) > limit or len(encoded) != before.st_size or
+            stamp(before) != stamp(after) or stamp(after) != stamp(current)):
+        raise ValueError("terminal publication file changed")
+    return encoded
+
+def read_terminal_status(request):
+    field = "terminal_publication_protocol"
+    if field in request and (type(request[field]) is not int or request[field] != 1):
+        return publication_pending("terminal publication protocol is unsupported")
+    try:
+        encoded = read_terminal_file("exit.json", 1024 * 1024)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError):
+        return publication_pending("terminal receipt is unavailable or unsafe")
+    try:
+        exit_data = json.loads(encoded)
+        if not isinstance(exit_data, dict):
+            raise ValueError("terminal receipt must be an object")
+        if field not in request and field not in exit_data:
+            return final_status(exit_data)
+        if type(exit_data.get(field)) is not int or exit_data[field] != 1:
+            return publication_pending("terminal publication protocol is missing or unsupported")
+        nonce = request.get("launch_nonce")
+        if (not isinstance(nonce, str) or len(nonce) != 32 or
+                not all(c in "0123456789abcdef" for c in nonce) or
+                exit_data.get("job_id") != request["job_id"] or exit_data.get("launch_nonce") != nonce):
+            return publication_pending("terminal receipt identity does not match the original request")
+        import hashlib
+        witness = json.loads(read_terminal_file("exit.witness.json", 4096))
+        if (not isinstance(witness, dict) or type(witness.get(field)) is not int or witness[field] != 1 or
+                witness.get("job_id") != request["job_id"] or witness.get("launch_nonce") != nonce or
+                witness.get("exit_sha256") != hashlib.sha256(encoded).hexdigest()):
+            return publication_pending("terminal publication witness does not match the original receipt")
+        result = final_status(exit_data)
+        result["terminal_publication_confirmed"] = True
+        result["automatic_retry"] = False
+        return result
+    except (OSError, ValueError, TypeError, KeyError):
+        return publication_pending("terminal publication witness or receipt is unavailable or invalid")
+
 def final_status(exit_data):
     if exit_data.get("effect_outcome") == "unknown":
         state = "effect_unknown"
@@ -1624,9 +1701,10 @@ def one_status():
     request = read_json("request.json")
     if not request or request.get("job_id") != q["job_id"]:
         return {"state": "unknown", "reason": "remote job metadata missing or mismatched"}
-    exit_data = read_json("exit.json")
-    if exit_data:
-        return final_status(exit_data)
+    terminal = read_terminal_status(request)
+    if terminal is not None:
+        return terminal
+    requires_witness = "terminal_publication_protocol" in request
     launch = read_json("launch.json") or {}
     if launch.get("backend") == "systemd":
         uid = os.getuid()
@@ -1643,9 +1721,9 @@ def one_status():
                 k, v = line.split("=", 1); props[k] = v
         # A --collect unit can disappear immediately after the runner exits.
         # Re-read the atomic exit record after querying systemd to close that race.
-        exit_data = read_json("exit.json")
-        if exit_data:
-            return final_status(exit_data)
+        terminal = read_terminal_status(request)
+        if terminal is not None:
+            return terminal
         started = read_json("started.json") or {}
         nonce = request.get("launch_nonce")
         invocation = started.get("invocation_id")
@@ -1666,8 +1744,12 @@ def one_status():
                         "status_authoritative":False,"automatic_retry":False}
             state = "running"
         elif active == "failed":
+            if requires_witness:
+                return publication_pending("supervisor exited without a confirmed terminal receipt")
             state = "failed"
         elif active == "active" and sub == "exited":
+            if requires_witness:
+                return publication_pending("supervisor exited without a confirmed terminal receipt")
             # RemainAfterExit can become visible a few microseconds before the
             # supervisor's atomic exit.json rename. systemd already has the
             # authoritative process result, so use it rather than returning a
@@ -1681,8 +1763,12 @@ def one_status():
                 return {"state": state, "backend": "systemd", "exit_code": exit_code, "systemd": props}
             state = "completed_unknown"
         elif props.get("LoadState") == "not-found":
+            if requires_witness:
+                return publication_pending("supervisor disappeared without a confirmed terminal receipt")
             state = "finalizing"
         else:
+            if requires_witness:
+                return publication_pending("supervisor has no confirmed terminal receipt")
             state = active or "unknown"
         return {"state": state, "backend": "systemd", "systemd": props}
     started = read_json("started.json") or {}
@@ -1693,6 +1779,8 @@ def one_status():
                 "status_authoritative":False,"automatic_retry":False}
     actual = process_identity(pid) if pid else None
     running = bool(pid and actual is not None and (expected is not None and expected == actual))
+    if not running and requires_witness:
+        return publication_pending("supervisor disappeared without a confirmed terminal receipt")
     return {"state": "running" if running else "lost", "backend": launch.get("backend", "detached"), "pid": pid, "identity": actual}
 
 deadline = time.monotonic() + min(float(q.get("wait_seconds", 0)), 30.0)
@@ -1702,7 +1790,8 @@ while True:
     transient = state in ("running", "activating", "finalizing", "completed_unknown")
     now = time.monotonic()
     if not transient or now >= deadline:
-        if now >= deadline and state in ("finalizing", "completed_unknown"):
+        if (now >= deadline and state in ("finalizing", "completed_unknown") and
+                status.get("terminal_publication_confirmed") is not False):
             status["state"] = "lost"
             status["reason"] = "no exit record appeared before the wait deadline"
         status["job_id"] = q["job_id"]
@@ -2882,3 +2971,7 @@ mod output_durability_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "jobs_staging_durability_tests.rs"]
 mod staging_durability_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_terminal_publication_tests.rs"]
+mod terminal_publication_tests;
