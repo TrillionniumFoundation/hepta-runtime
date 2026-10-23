@@ -34,7 +34,7 @@ pub struct ShadowExecutionIntentParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
-#[serde(tag = "kind", content = "record", rename_all = "snake_case")]
+#[serde(tag = "kind", content = "record", rename_all = "snake_case", deny_unknown_fields)]
 pub enum CanonicalExecutionRecordV1 {
 	ExecutionIntent(CanonicalExecutionIntentV1),
 }
@@ -74,7 +74,7 @@ pub enum CanonicalCurrentnessV1 {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
-#[serde(tag = "state", rename_all = "snake_case")]
+#[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ShadowFinalUseV1 {
 	NotGranted,
 }
