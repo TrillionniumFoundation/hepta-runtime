@@ -33,7 +33,7 @@ pub enum Commands {
 		#[arg(long, value_name = "PATH")]
 		path: Option<PathBuf>,
 
-		/// Bind to HTTP server on host:port instead of using stdin/stdout (e.g., "0.0.0.0:12345")
+		/// Bind authenticated HTTP MCP to loopback only (e.g., "127.0.0.1:12345").
 		#[arg(long, value_name = "HOST:PORT")]
 		bind: Option<String>,
 
@@ -49,7 +49,7 @@ pub enum Commands {
 		#[arg(long, value_name = "FILE")]
 		runtime_config: Option<PathBuf>,
 
-		/// File containing the X-Hepta-Runtime-Token value for HTTP MCP requests.
+		/// Required for all HTTP MCP binds; private file with X-Hepta-Runtime-Token value.
 		#[arg(long, value_name = "FILE")]
 		auth_token_file: Option<PathBuf>,
 	},

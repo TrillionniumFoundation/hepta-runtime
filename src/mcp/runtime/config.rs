@@ -155,7 +155,11 @@ impl RuntimeConfig {
 				.chain(host.allowed_write_path_prefixes.iter())
 				.chain(host.protected_path_prefixes.iter())
 			{
-				if !Path::new(prefix).is_absolute() {
+				if !Path::new(prefix).is_absolute()
+					|| Path::new(prefix)
+						.components()
+						.any(|part| matches!(part, Component::ParentDir))
+				{
 					bail!("host `{name}` path policy prefix `{prefix}` must be absolute");
 				}
 			}
@@ -327,6 +331,20 @@ pub fn check_protected_input(host_name: &str, value: &str) -> Result<()> {
 	Ok(())
 }
 
+/// Reject lexical escapes before the allowlist prefix match. The remote
+/// execution boundary must independently validate symlink resolution.
+fn execution_cwd_allowed(cwd: &str, roots: &[String]) -> bool {
+	let path = Path::new(cwd);
+	path.is_absolute()
+		&& !path
+			.components()
+			.any(|part| matches!(part, Component::ParentDir))
+		&& (roots.is_empty()
+			|| roots.iter().any(|prefix| {
+				cwd == prefix || cwd.starts_with(&format!("{}/", prefix.trim_end_matches('/')))
+			}))
+}
+
 pub fn check_execution(
 	host_name: &str,
 	executable: &str,
@@ -371,15 +389,12 @@ pub fn check_execution(
             "executable `{base}` is denied on host `{host_name}`; use a named privileged_action when configured"
         );
 	}
+	if cwd.is_none() && !host.allowed_cwd_prefixes.is_empty() {
+		bail!("cwd is required when execution roots are configured for host `{host_name}`");
+	}
 	if let Some(cwd) = cwd {
-		if !Path::new(cwd).is_absolute() {
-			bail!("cwd must be an absolute path");
-		}
-		if !host.allowed_cwd_prefixes.is_empty()
-			&& !host.allowed_cwd_prefixes.iter().any(|prefix| {
-				cwd == prefix || cwd.starts_with(&format!("{}/", prefix.trim_end_matches('/')))
-			}) {
-			bail!("cwd `{cwd}` is outside configured execution roots on host `{host_name}`");
+		if !execution_cwd_allowed(cwd, &host.allowed_cwd_prefixes) {
+			bail!("cwd `{cwd}` is outside configured execution roots or contains parent traversal on host `{host_name}`");
 		}
 		if let Some(prefix) = protected_value(host, cwd) {
 			bail!("cwd intersects protected value `{prefix}` on host `{host_name}`");
@@ -514,6 +529,24 @@ pub fn check_remote_path(
 	} else if !remote_path_allowed(path, &host.allowed_read_path_prefixes) {
 		bail!("path `{path}` is outside configured read roots on host `{name}`");
 	}
+	// A textual prefix is not an OS filesystem boundary. SFTP follows
+	// intermediate symlinks and a canonicalize-before-open check can race a
+	// rename. Do not advertise an allowlisted remote file as authorized
+	// until the target is confined by an independently qualified OS boundary.
+	check_sftp_physical_boundary()
+}
+
+/// Deny all remote SFTP access while a runtime policy is active. The
+/// existing SFTP API cannot bind an allowlist to the object ultimately
+/// opened by the remote SFTP server, so neither read nor write is safe to
+/// admit on the strength of a path prefix alone. Non-runtime Octofs mode
+/// retains its previous remote-file compatibility behavior.
+pub fn check_sftp_physical_boundary() -> Result<()> {
+	if maybe_runtime_config().is_some() {
+		bail!(
+			"remote SFTP file I/O is quarantined in runtime mode: textual roots cannot contain symlink or rename races; independently qualify a target OS boundary before re-enabling"
+		);
+	}
 	Ok(())
 }
 
@@ -524,6 +557,32 @@ pub fn check_remote_write(alias: &str, path: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn remote_workdir_policy_rejects_lexical_escape_and_nearby_prefixes() {
+		let roots = vec!["/srv/project".to_owned()];
+		assert!(execution_cwd_allowed("/srv/project", &roots));
+		assert!(execution_cwd_allowed("/srv/project/src", &roots));
+		assert!(!execution_cwd_allowed("/srv/project/../secret", &roots));
+		assert!(!execution_cwd_allowed("/srv/project/src/../../private", &roots));
+		assert!(!execution_cwd_allowed("/srv/project-other", &roots));
+		assert!(!execution_cwd_allowed("srv/project", &roots));
+		assert!(!execution_cwd_allowed("/srv/../etc", &[]));
+	}
+
+	#[test]
+	fn configured_remote_roots_reject_parent_traversal() {
+		let config: RuntimeConfig = serde_json::from_value(serde_json::json!({
+			"hosts": {
+				"build": {
+					"ssh_target": "build",
+					"allowed_cwd_prefixes": ["/srv/project/../private"]
+				}
+			}
+		}))
+		.expect("config fixture");
+		assert!(config.validate().is_err());
+	}
 
 	#[test]
 	fn names_are_strict() {
