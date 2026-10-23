@@ -309,24 +309,55 @@ pub(crate) fn audit(action: &str, host: &str, subject: &str, outcome: &Value) ->
 }
 
 const START_CODE: &str = r#"
-import json, os, pathlib, shutil, subprocess, sys, time
+import fcntl, json, os, pathlib, shutil, stat, subprocess, sys, time
 req = json.load(sys.stdin)
 job = pathlib.Path(req["job_dir"])
 job.mkdir(parents=True, exist_ok=True)
 os.chmod(job, 0o700)
 
+# Serialize remote launches when separate controllers race over SSH.
+# A lost SSH acknowledgement does not prove the remote effect never started.
+lock_fd = os.open(job / "dispatch.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+if not stat.S_ISREG(os.fstat(lock_fd).st_mode):
+    raise SystemExit("remote dispatch lock is not a regular file")
+try:
+    fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    raise SystemExit("remote dispatch still in progress; reconcile, do not retry")
+
 def read_json(name):
     try:
-        return json.loads((job / name).read_text(encoding="utf-8"))
-    except Exception:
+        fd = os.open(job / name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
         return None
+    except OSError as exc:
+        raise SystemExit(f"cannot open remote {name}: {exc}")
+    with os.fdopen(fd, "r", encoding="utf-8") as handle:
+        size = os.fstat(handle.fileno())
+        if not stat.S_ISREG(size.st_mode) or size.st_size > 1048576:
+            raise SystemExit(f"remote {name} is not a bounded regular file")
+        try:
+            value = json.load(handle)
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f"corrupt remote {name}: {exc}")
+    if not isinstance(value, dict):
+        raise SystemExit(f"invalid remote {name} structure")
+    return value
 
 def atomic(name, value):
     target = job / name
     tmp = job / (name + ".tmp")
-    tmp.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
-    os.chmod(tmp, 0o600)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+    with os.fdopen(os.open(tmp, flags, 0o600), "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(value, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
     os.replace(tmp, target)
+    dir_fd = os.open(job, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
 
 stdin_text = req.pop("stdin", None)
 existing = read_json("request.json")
@@ -338,12 +369,19 @@ if existing is not None:
     launch = read_json("launch.json")
     exit_data = read_json("exit.json")
     started = read_json("started.json")
-    if launch or exit_data:
-        print(json.dumps({"ok": True, "reused_remote": True, **(launch or {"backend": "completed"})}, sort_keys=True))
+    if launch is not None:
+        if launch.get("backend") not in ("systemd", "detached"):
+            raise SystemExit("prior launch has no confirmed backend; reconcile, do not retry")
+        print(json.dumps({"ok": True, "reused_remote": True, **launch}, sort_keys=True))
         raise SystemExit(0)
-    if started:
-        raise SystemExit("ambiguous prior launch: supervisor started without launch record")
+    if exit_data is not None:
+        print(json.dumps({"ok": True, "reused_remote": True, "backend": "completed"}, sort_keys=True))
+        raise SystemExit(0)
+    # No receipt is not proof of no effect after a lost connection or crash.
+    raise SystemExit("ambiguous prior launch: durable request exists without receipt; reconcile")
 else:
+    if any(read_json(name) is not None for name in ("launch.json", "started.json", "exit.json")):
+        raise SystemExit("remote operation evidence without request; reconcile")
     if stdin_text is not None:
         stdin_path = job / "stdin.bin"
         stdin_path.write_bytes(stdin_text.encode("utf-8"))
@@ -1126,6 +1164,104 @@ mod tests {
 		assert!(matches_request(&record, &params).unwrap());
 		params.stdin = Some("changed request".into());
 		assert!(!matches_request(&record, &params).unwrap());
+	}
+
+
+	#[cfg(unix)]
+	fn remote_start_request(job: &std::path::Path) -> serde_json::Value {
+		json!({
+			"job_dir": job.to_string_lossy(),
+			"job_id": "unit-effect",
+			"request_fingerprint": "abcdef1234567890",
+			"allowed_cwd_prefixes": []
+		})
+	}
+
+	#[cfg(unix)]
+	fn execute_remote_start_fixture(job: &std::path::Path) -> std::process::Output {
+		use std::process::{Command, Stdio};
+		let mut child = Command::new("python3")
+			.arg("-c")
+			.arg(START_CODE)
+			.stdin(Stdio::piped())
+			.stdout(Stdio::piped())
+			.stderr(Stdio::piped())
+			.spawn()
+			.expect("spawn remote Python fixture");
+		child
+			.stdin
+			.take()
+			.unwrap()
+			.write_all(&serde_json::to_vec(&remote_start_request(job)).unwrap())
+			.unwrap();
+		child.wait_with_output().unwrap()
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn remote_start_rejects_corrupt_and_ambiguous_previous_effects() {
+		let fixture = tempfile::tempdir().unwrap();
+		let job = fixture.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		let request_path = job.join("request.json");
+		std::fs::write(&request_path, b"{").unwrap();
+		let result = execute_remote_start_fixture(&job);
+		assert!(!result.status.success());
+		assert!(String::from_utf8_lossy(&result.stderr).contains("corrupt remote request.json"));
+		assert_eq!(std::fs::read(&request_path).unwrap(), b"{");
+
+		std::fs::write(&request_path, serde_json::to_vec(&remote_start_request(&job)).unwrap())
+			.unwrap();
+		let result = execute_remote_start_fixture(&job);
+		assert!(!result.status.success());
+		assert!(String::from_utf8_lossy(&result.stderr).contains("ambiguous prior launch"));
+		assert!(!job.join("launch.json").exists());
+
+		std::fs::write(job.join("launch.json"), b"{").unwrap();
+		let result = execute_remote_start_fixture(&job);
+		assert!(!result.status.success());
+		assert!(String::from_utf8_lossy(&result.stderr).contains("corrupt remote launch.json"));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn remote_start_only_reuses_a_confirmed_backend() {
+		let fixture = tempfile::tempdir().unwrap();
+		let job = fixture.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		std::fs::write(
+			job.join("request.json"),
+			serde_json::to_vec(&remote_start_request(&job)).unwrap(),
+		)
+		.unwrap();
+		std::fs::write(job.join("launch.json"), br#"{"backend":"launch_failed"}"#).unwrap();
+		let result = execute_remote_start_fixture(&job);
+		assert!(!result.status.success());
+		assert!(String::from_utf8_lossy(&result.stderr).contains("no confirmed backend"));
+
+		std::fs::write(job.join("launch.json"), br#"{"backend":"systemd","unit":"unit-test"}"#)
+			.unwrap();
+		let result = execute_remote_start_fixture(&job);
+		assert!(result.status.success());
+		let observed: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+		assert_eq!(observed["reused_remote"], true);
+		assert_eq!(observed["backend"], "systemd");
+		assert_eq!(observed["unit"], "unit-test");
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn remote_start_rejects_symlinked_request_record() {
+		let fixture = tempfile::tempdir().unwrap();
+		let job = fixture.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		let external = fixture.path().join("external.json");
+		std::fs::write(&external, serde_json::to_vec(&remote_start_request(&job)).unwrap())
+			.unwrap();
+		std::os::unix::fs::symlink(external, job.join("request.json")).unwrap();
+		let result = execute_remote_start_fixture(&job);
+		assert!(!result.status.success());
+		assert!(String::from_utf8_lossy(&result.stderr).contains("cannot open remote request.json"));
 	}
 
 	#[test]
