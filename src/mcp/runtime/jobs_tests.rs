@@ -116,8 +116,7 @@ fn multiple_durable_owners_of_one_idempotency_key_fail_closed() {
 	let dir = tempdir().unwrap();
 	let mut first = record("job-1");
 	first.launch_state = "launched".into();
-	let mut second = record("job-2");
-	second.request_digest = Some("conflicting-payload".into());
+	let second = record("job-2");
 	for entry in [first, second] {
 		std::fs::write(
 			dir.path().join(format!("{}.json", entry.id)),
@@ -126,7 +125,12 @@ fn multiple_durable_owners_of_one_idempotency_key_fail_closed() {
 		.unwrap();
 	}
 	let scanned = scan_records_dir(dir.path()).unwrap();
-	let error = select_idempotent_owner(scanned, "rog", "repeat-key").unwrap_err();
+	// Even identical payloads can represent two physical dispatches.
+	let error = select_idempotent_owner(scanned.clone(), "rog", "repeat-key").unwrap_err();
+	assert!(error.to_string().contains("multiple durable job owners"));
+	let mut divergent = scanned;
+	divergent[1].request_digest = Some("conflicting-payload".into());
+	let error = select_idempotent_owner(divergent, "rog", "repeat-key").unwrap_err();
 	assert!(error.to_string().contains("multiple durable job owners"));
 }
 
