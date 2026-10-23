@@ -896,7 +896,7 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = true
 		),
-		description = "Run one exact, administrator-configured sudo action on a configured host. Arbitrary sudo commands, executable paths, services, and PIDs are never accepted from tool input."
+		description = "Run one exact, administrator-configured sudo action on a configured host. Requires a stable idempotency_key. A lost response is indeterminate and is never automatically replayed. Arbitrary sudo commands and executable paths are rejected."
 	)]
 	async fn privileged_action(
 		&self,
