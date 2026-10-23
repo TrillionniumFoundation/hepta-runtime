@@ -90,3 +90,27 @@ fn shadow_abi_denies_stale_intent_and_fake_final_use() {
 		serde_json::json!({"state": "verified", "grant_digest": digest('4')});
 	assert!(serde_json::from_value::<CanonicalExecutionRecordV1>(value).is_err());
 }
+
+#[test]
+fn shadow_abi_refuses_unknown_fields_at_every_tagged_envelope() {
+    let canonical = serde_json::to_value(fixture()).unwrap();
+
+    // A tagged record must not silently drop an injected field and later
+    // compute the same digest as a different wire payload.
+    let mut extra_record = canonical.clone();
+    extra_record["opaque_authority"] = serde_json::json!("forged");
+    assert!(
+        serde_json::from_value::<CanonicalExecutionRecordV1>(extra_record).is_err(),
+        "unknown record envelope field was silently discarded"
+    );
+
+    // The unit final_use variant is never evidence of authorization. Reject
+    // claims smuggled alongside the valid not_granted tag.
+    let mut extra_final_use = canonical.clone();
+    extra_final_use["record"]["binding"]["final_use"]["grant_digest"] =
+        serde_json::json!(digest('4'));
+    assert!(
+        serde_json::from_value::<CanonicalExecutionRecordV1>(extra_final_use).is_err(),
+        "unknown FinalUse fields must not be accepted"
+    );
+}
