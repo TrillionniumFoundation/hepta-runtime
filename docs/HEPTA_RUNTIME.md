@@ -294,8 +294,8 @@ negative tests and independent operator/release reviews are complete.
 ## P3 audit data minimization (source candidate, not production evidence)
 
 The controller audit sink now retains only an allowlisted operational state,
-a literal boolean acknowledgement when available, action, host, subject and
-timestamp. Untrusted command arguments, process stdout/stderr, privileged
+a literal boolean acknowledgement when available, a bounded numeric privileged
+exit code when present, action, host, subject and timestamp. Untrusted command arguments, process stdout/stderr, privileged
 action output and remote error text never become the JSONL `outcome`.
 An ambiguous remote launch stores a stable generic error marker in the local
 durable job record rather than a raw remote stderr string. These controls

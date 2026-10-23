@@ -877,3 +877,33 @@ fn audit_never_persists_untrusted_process_or_privileged_output() {
 	assert_eq!(nested["ok"], json!(false));
 	assert!(!serde_json::to_string(&nested).unwrap().contains(secret));
 }
+
+#[test]
+fn audit_preserves_only_bounded_numeric_privileged_status() {
+	let secret = "credential-contained-in-privileged-stderr";
+	let succeeded = redacted_audit_outcome(&json!({
+		"exit_code": 0,
+		"stdout": secret,
+		"stderr": secret,
+	}));
+	assert_eq!(succeeded["exit_code"], json!(0));
+	assert_eq!(succeeded["ok"], json!(true));
+	assert!(!succeeded.to_string().contains(secret));
+
+	let timed_out = redacted_audit_outcome(&json!({
+		"exit_code": 124,
+		"stderr": secret,
+	}));
+	assert_eq!(timed_out["exit_code"], json!(124));
+	assert_eq!(timed_out["ok"], json!(false));
+	assert!(!timed_out.to_string().contains(secret));
+
+	let forged = redacted_audit_outcome(&json!({
+		"exit_code": secret,
+		"state": secret,
+	}));
+	assert!(forged["exit_code"].is_null());
+	assert!(forged["state"].is_null());
+	assert!(forged["ok"].is_null());
+	assert!(!forged.to_string().contains(secret));
+}
