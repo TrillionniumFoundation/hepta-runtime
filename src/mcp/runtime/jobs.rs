@@ -265,10 +265,27 @@ fn all_records() -> Result<Vec<JobRecord>> {
 	scan_records_dir(&jobs_dir()?)
 }
 
+fn select_idempotent_record(
+	records: impl IntoIterator<Item = JobRecord>,
+	host: &str,
+	key: &str,
+) -> Result<Option<JobRecord>> {
+	let mut selected = None;
+	for record in records {
+		if record.host == host && record.idempotency_key.as_deref() == Some(key) {
+			// Historical duplicate owners cannot be resolved by selecting the oldest
+			// record. The external effect may already have run from either record.
+			if selected.is_some() {
+				bail!("multiple durable owners for one idempotency key; reconcile before reuse");
+			}
+			selected = Some(record);
+		}
+	}
+	Ok(selected)
+}
+
 fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
-	Ok(all_records()?
-		.into_iter()
-		.find(|record| record.host == host && record.idempotency_key.as_deref() == Some(key)))
+	select_idempotent_record(all_records()?, host, key)
 }
 
 fn request_digest(params: &ProcessStartParams) -> (u64, String) {
@@ -1079,8 +1096,8 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 		launch_state: "pending".to_string(),
 		launch_error: None,
 	};
-	// Persist identity before remote launch. A crash can be retried with the same
-	// idempotency key and request, never by inventing a second remote job.
+	// Persist identity before remote launch. Following a crash, the same key
+	// can only reconcile the original request; ambiguous dispatch never retries.
 	save_record(&record)?;
 	let launch = launch_record(&mut record, &params).await?;
 	let result = json!({"reused": false, "job": record, "launch": launch});
