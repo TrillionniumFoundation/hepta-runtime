@@ -313,11 +313,13 @@ import fcntl, json, os, pathlib, shutil, stat, subprocess, sys, time
 req = json.load(sys.stdin)
 job = pathlib.Path(req["job_dir"])
 job.mkdir(parents=True, exist_ok=True)
-os.chmod(job, 0o700)
+# Anchor lock and metadata to the same directory inode, never chmod a job symlink.
+job_fd = os.open(job, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+os.fchmod(job_fd, 0o700)
 
 # Serialize remote launches when separate controllers race over SSH.
 # A lost SSH acknowledgement does not prove the remote effect never started.
-lock_fd = os.open(job / "dispatch.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+lock_fd = os.open("dispatch.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600, dir_fd=job_fd)
 if not stat.S_ISREG(os.fstat(lock_fd).st_mode):
     raise SystemExit("remote dispatch lock is not a regular file")
 try:
@@ -327,7 +329,7 @@ except BlockingIOError:
 
 def read_json(name):
     try:
-        fd = os.open(job / name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=job_fd)
     except FileNotFoundError:
         return None
     except OSError as exc:
@@ -345,26 +347,26 @@ def read_json(name):
     return value
 
 def atomic(name, value):
-    target = job / name
-    tmp = job / (name + ".tmp")
+    tmp = name + ".tmp"
     flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
-    with os.fdopen(os.open(tmp, flags, 0o600), "w", encoding="utf-8") as handle:
+    with os.fdopen(os.open(tmp, flags, 0o600, dir_fd=job_fd), "w", encoding="utf-8") as handle:
         # A crash may leave a preexisting temp file with looser modes.
         os.fchmod(handle.fileno(), 0o600)
         handle.write(json.dumps(value, sort_keys=True) + "\n")
         handle.flush()
         os.fsync(handle.fileno())
-    os.replace(tmp, target)
-    dir_fd = os.open(job, os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        os.fsync(dir_fd)
-    finally:
-        os.close(dir_fd)
+    os.replace(tmp, name, src_dir_fd=job_fd, dst_dir_fd=job_fd)
+    os.fsync(job_fd)
 
 stdin_text = req.pop("stdin", None)
+digest = req.get("request_digest")
+if not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+    raise SystemExit("missing exact remote request digest; start denied")
 existing = read_json("request.json")
 if existing is not None:
-    if existing.get("job_id") != req.get("job_id") or existing.get("request_fingerprint") != req.get("request_fingerprint"):
+    if (existing.get("job_id") != req.get("job_id")
+        or existing.get("request_fingerprint") != req.get("request_fingerprint")
+        or existing.get("request_digest") != digest):
         raise SystemExit("remote job directory is bound to a different request")
     if existing.get("allowed_cwd_prefixes") != req.get("allowed_cwd_prefixes"):
         raise SystemExit("remote job execution root policy changed")
@@ -893,11 +895,16 @@ async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> Result<Value> {
 	let config = runtime_config()?;
 	let host = config.host(&record.host)?;
+	let remote_digest = record
+		.request_digest
+		.as_deref()
+		.context("remote start requires exact full request digest")?;
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
 		"unit": record.unit,
 		"request_fingerprint": format!("{:016x}", record.request_fingerprint),
+		"request_digest": remote_digest,
 		"platform": host.platform,
 		"executable": params.executable,
 		"args": params.args,
@@ -1175,6 +1182,7 @@ mod tests {
 			"job_dir": job.to_string_lossy(),
 			"job_id": "unit-effect",
 			"request_fingerprint": "abcdef1234567890",
+			"request_digest": "a".repeat(64),
 			"allowed_cwd_prefixes": []
 		})
 	}
@@ -1264,6 +1272,28 @@ mod tests {
 		let result = execute_remote_start_fixture(&job);
 		assert!(!result.status.success());
 		assert!(String::from_utf8_lossy(&result.stderr).contains("cannot open remote request.json"));
+	}
+
+
+	#[cfg(unix)]
+	#[test]
+	fn remote_start_rejects_digest_drift_and_job_directory_symlinks() {
+		let fixture = tempfile::tempdir().unwrap();
+		let job = fixture.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		let mut previous = remote_start_request(&job);
+		previous["request_digest"] = serde_json::Value::String("b".repeat(64));
+		std::fs::write(job.join("request.json"), serde_json::to_vec(&previous).unwrap())
+			.unwrap();
+		let result = execute_remote_start_fixture(&job);
+		assert!(!result.status.success());
+		assert!(String::from_utf8_lossy(&result.stderr).contains("bound to a different request"));
+
+		let symlink = fixture.path().join("job-link");
+		std::os::unix::fs::symlink(&job, &symlink).unwrap();
+		let result = execute_remote_start_fixture(&symlink);
+		assert!(!result.status.success());
+		assert!(!symlink.join("dispatch.lock").exists());
 	}
 
 	#[test]
