@@ -123,6 +123,26 @@ class LocalQualificationTests(unittest.TestCase):
         assert_github_merge_parentage(self.root, source, merge)
 
 
+    @unittest.skipUnless(os.name == "posix", "POSIX process-group termination required")
+    def test_orphan_descendant_retaining_output_pipe_is_killed(self):
+        # The immediate command exits zero; its child inherits stdout and
+        # holds the capture reader open. Never leave it alive after an error.
+        launcher = (
+            "import sys, subprocess, pathlib\n"
+            "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'], "
+            "stdout=sys.stdout, stderr=sys.stderr)\\n"
+            "pathlib.Path('descendant.pid').write_text(str(child.pid))\\n"
+        )
+        with mock.patch("local_qualification.os.killpg", wraps=os.killpg) as killpg:
+            result = execute_bounded(
+                (sys.executable, "-c", launcher), self.root, safe_env(),
+                self.root / "descendant.log", 5, 1024,
+            )
+        self.assertEqual(result["outcome"], "io_error", result)
+        self.assertTrue(killpg.called, "abandoned process group was not killed")
+        self.assertLess(result["duration_seconds"], 9)
+
+
     def test_distinct_source_and_merge_lanes_run_in_isolated_worktrees(self):
         # Mock binaries validate the verifier's orchestration only; they are
         # NOT evidence that real Rust compilation or tests have passed.
