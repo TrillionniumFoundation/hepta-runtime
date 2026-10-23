@@ -82,6 +82,14 @@ not claimed as process recovery in v0.1: logs and metadata remain, but an
 in-flight transient unit is reported lost unless the application itself has a
 separate restart policy.
 
+Durable job observations remain bound to the SSH target and remote job root
+recorded at original admission. If an administrator remaps a configured host
+alias to another target or remote state directory, existing job launch retries,
+status/wait, log reads and cancellations fail closed; manually reconcile the
+original remote operation rather than following the changed alias. This guard
+does not attest changes to DNS or OpenSSH alias resolution on its own: retain
+strict host-key verification and independently qualify host identity.
+
 ### PTY tools
 
 `pty_start/read/write/close/list` provide interactive terminal sessions over
