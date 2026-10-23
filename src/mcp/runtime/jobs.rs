@@ -163,13 +163,25 @@ fn save_record(record: &JobRecord) -> Result<()> {
 	let path = record_path(&record.id)?;
 	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
 	let bytes = serde_json::to_vec_pretty(record)?;
-	std::fs::write(&tmp, bytes)?;
-	#[cfg(unix)]
 	{
-		use std::os::unix::fs::PermissionsExt;
-		std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+		let mut file = OpenOptions::new()
+			.write(true)
+			.create(true)
+			.truncate(true)
+			.open(&tmp)?;
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+		}
+		file.write_all(&bytes)?;
+		file.sync_all()?;
 	}
-	std::fs::rename(tmp, path)?;
+	std::fs::rename(&tmp, &path)?;
+	#[cfg(unix)]
+	if let Some(parent) = path.parent() {
+		std::fs::File::open(parent)?.sync_all()?;
+	}
 	Ok(())
 }
 
@@ -1093,6 +1105,27 @@ mod tests {
 		assert!(find_idempotent_in_records(vec![second], "another-host", "fixed-key")
 			.unwrap()
 			.is_none());
+	}
+
+	#[test]
+	fn legacy_or_mismatched_full_digest_cannot_replay_old_job() {
+		let mut params: ProcessStartParams = serde_json::from_value(
+			json!({"host": "fixture-main", "executable": "/usr/bin/true"}),
+		)
+		.unwrap();
+		let mut record = test_record();
+		record.request_digest = None;
+		assert!(matches_request(&record, &params).is_err());
+		let digest = request_digest(&params).unwrap();
+		assert_eq!(digest.len(), 64);
+		assert_eq!(
+			u64::from_str_radix(&digest[..16], 16).unwrap(),
+			fingerprint(&params)
+		);
+		record.request_digest = Some(digest);
+		assert!(matches_request(&record, &params).unwrap());
+		params.stdin = Some("changed request".into());
+		assert!(!matches_request(&record, &params).unwrap());
 	}
 
 	#[test]
