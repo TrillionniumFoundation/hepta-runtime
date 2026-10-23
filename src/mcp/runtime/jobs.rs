@@ -673,15 +673,57 @@ print(json.dumps({"ok": True, **launch}, sort_keys=True))
 "#;
 
 const STATUS_CODE: &str = r#"
-import json, os, pathlib, subprocess, sys, time
+import json, os, pathlib, stat, subprocess, sys, time
 q = json.load(sys.stdin)
 job = pathlib.Path(q["job_dir"])
 
-def read_json(name):
+# Pin the original remote job directory; never follow symlinks in its ancestry.
+def open_bound_directory(path):
+    if not path.is_absolute() or ".." in path.parts:
+        raise SystemExit("unsafe remote job directory path")
+    descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
     try:
-        return json.loads((job / name).read_text(encoding="utf-8"))
-    except Exception:
+        for component in path.parts[1:]:
+            next_descriptor = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                      dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        metadata = os.fstat(descriptor)
+        if metadata.st_uid != os.geteuid() or metadata.st_mode & 0o077:
+            raise SystemExit("remote job directory must be owner-private")
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+directory = open_bound_directory(job)
+
+# A missing optional state is distinct from a corrupt, aliased or linked inode.
+# A forged exit.json must never turn an unknown remote effect into success.
+def read_json(name, required=False):
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+    except FileNotFoundError:
+        if required:
+            raise SystemExit(f"remote job state missing: {name}")
         return None
+    except OSError as exc:
+        raise SystemExit(f"unsafe remote job file {name}: {exc}")
+    with os.fdopen(fd, "rb") as source:
+        metadata = os.fstat(source.fileno())
+        if (not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1
+                or metadata.st_size > 4 * 1024 * 1024):
+            raise SystemExit(f"unsafe remote job file {name}: non-regular, linked or oversized inode")
+        contents = source.read(4 * 1024 * 1024 + 1)
+    if len(contents) > 4 * 1024 * 1024:
+        raise SystemExit(f"oversized remote job file: {name}")
+    try:
+        value = json.loads(contents)
+    except (UnicodeError, ValueError) as exc:
+        raise SystemExit(f"corrupt remote job file {name}: {exc}")
+    if not isinstance(value, dict):
+        raise SystemExit(f"invalid remote job object: {name}")
+    return value
 
 def process_identity(pid):
     try:
@@ -707,7 +749,7 @@ def final_status(exit_data):
     return {"state": state, **exit_data}
 
 def one_status():
-    request = read_json("request.json")
+    request = read_json("request.json", True)
     # A job ID alone does not bind the observed remote state to the original effect.
     if (not isinstance(request, dict)
             or request.get("job_id") != q.get("job_id")
@@ -874,22 +916,77 @@ finally:
 "#;
 
 const CANCEL_CODE: &str = r#"
-import json, os, pathlib, signal, subprocess, sys, time
+import json, os, pathlib, signal, stat, subprocess, sys, time
 q = json.load(sys.stdin)
 job = pathlib.Path(q["job_dir"])
 
-def read_json(name):
+# Pin the original remote job directory; never follow symlinks in its ancestry.
+def open_bound_directory(path):
+    if not path.is_absolute() or ".." in path.parts:
+        raise SystemExit("unsafe remote job directory path")
+    descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
     try:
-        return json.loads((job / name).read_text(encoding="utf-8"))
-    except Exception:
+        for component in path.parts[1:]:
+            next_descriptor = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                      dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        metadata = os.fstat(descriptor)
+        if metadata.st_uid != os.geteuid() or metadata.st_mode & 0o077:
+            raise SystemExit("remote job directory must be owner-private")
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+directory = open_bound_directory(job)
+
+# A missing optional state is distinct from a corrupt, aliased or linked inode.
+# A forged exit.json must never turn an unknown remote effect into success.
+def read_json(name, required=False):
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+    except FileNotFoundError:
+        if required:
+            raise SystemExit(f"remote job state missing: {name}")
         return None
+    except OSError as exc:
+        raise SystemExit(f"unsafe remote job file {name}: {exc}")
+    with os.fdopen(fd, "rb") as source:
+        metadata = os.fstat(source.fileno())
+        if (not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1
+                or metadata.st_size > 4 * 1024 * 1024):
+            raise SystemExit(f"unsafe remote job file {name}: non-regular, linked or oversized inode")
+        contents = source.read(4 * 1024 * 1024 + 1)
+    if len(contents) > 4 * 1024 * 1024:
+        raise SystemExit(f"oversized remote job file: {name}")
+    try:
+        value = json.loads(contents)
+    except (UnicodeError, ValueError) as exc:
+        raise SystemExit(f"corrupt remote job file {name}: {exc}")
+    if not isinstance(value, dict):
+        raise SystemExit(f"invalid remote job object: {name}")
+    return value
 
 def atomic(name, value):
-    target = job / name
-    tmp = job / (name + ".tmp")
-    tmp.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
-    os.chmod(tmp, 0o600)
-    os.replace(tmp, target)
+    # Write only through the verified, pinned directory descriptor.
+    temp_name = f".{name}.{os.getpid()}.{time.monotonic_ns()}.tmp"
+    contents = (json.dumps(value, sort_keys=True) + "\n").encode("utf-8")
+    fd = os.open(temp_name, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW,
+                 0o600, dir_fd=directory)
+    try:
+        with os.fdopen(fd, "wb") as sink:
+            sink.write(contents)
+            sink.flush()
+            os.fsync(sink.fileno())
+        os.replace(temp_name, name, src_dir_fd=directory, dst_dir_fd=directory)
+        os.fsync(directory)
+    except BaseException:
+        try:
+            os.unlink(temp_name, dir_fd=directory)
+        except FileNotFoundError:
+            pass
+        raise
 
 def process_identity(pid):
     try:
@@ -912,7 +1009,7 @@ def command_line(pid):
         except Exception:
             return ""
 
-request = read_json("request.json")
+request = read_json("request.json", True)
 # Cancellation must never act on a job directory merely matching its job ID.
 if (not isinstance(request, dict)
         or request.get("job_id") != q.get("job_id")
@@ -929,6 +1026,8 @@ launch = read_json("launch.json") or {}
 atomic("cancel-request.json", {"at_unix_ms": int(time.time() * 1000)})
 grace = max(0.0, min(float(q.get("grace_seconds", 10)), 30.0))
 result = "not_running"
+if launch.get("backend") not in ("systemd", "detached"):
+    raise SystemExit("remote launch backend missing or unknown; cancel requires reconciliation")
 if launch.get("backend") == "systemd":
     uid = os.getuid()
     env = os.environ.copy()
@@ -945,9 +1044,8 @@ else:
     expected = started.get("supervisor_identity")
     actual = process_identity(pid) if pid else None
     cmdline = command_line(pid) if pid else ""
-    valid = bool(pid and actual is not None and str(job / "runner.py") in cmdline)
-    if expected is not None:
-        valid = valid and expected == actual
+    valid = bool(pid and isinstance(expected, dict) and actual == expected
+                 and str(job / "runner.py") in cmdline)
     if not valid:
         raise SystemExit("refusing to signal PID: ownership verification failed")
     try:
@@ -960,7 +1058,10 @@ else:
         if read_json("exit.json") or not command_line(pid):
             break
         time.sleep(0.2)
-    if command_line(pid) and not read_json("exit.json"):
+    # A process group can disappear and be recycled during the grace period.
+    # Recheck both identity and command before escalating.
+    if (process_identity(pid) == expected and str(job / "runner.py") in command_line(pid)
+            and not read_json("exit.json")):
         try:
             os.killpg(pid, signal.SIGKILL)
             result = "kill_sent"
