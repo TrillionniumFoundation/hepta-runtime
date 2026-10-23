@@ -167,6 +167,11 @@ fn record_path(id: &str) -> Result<PathBuf> {
 fn save_record_at(path: &Path, record: &JobRecord) -> Result<()> {
 	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
 	let bytes = serde_json::to_vec_pretty(record)?;
+	// The durable identity must remain readable by the bounded recovery path.
+	// Reject an oversized request before creating a receipt or remote effect.
+	if bytes.len() as u64 > MAX_JOB_RECORD_BYTES {
+		bail!("durable job record exceeds {} bytes", MAX_JOB_RECORD_BYTES);
+	}
 	#[cfg(unix)]
 	let mut file = {
 		use std::os::unix::fs::OpenOptionsExt;
