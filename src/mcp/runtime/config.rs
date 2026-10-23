@@ -7,6 +7,8 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 
 static RUNTIME_CONFIG: OnceLock<RuntimeConfig> = OnceLock::new();
+// Keep the exact owning file handle alive for the entire controller process.
+static CONTROLLER_OWNER: OnceLock<std::fs::File> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -113,6 +115,9 @@ impl RuntimeConfig {
 	}
 
 	pub fn validate(&self) -> Result<()> {
+		if !self.state_dir.is_absolute() {
+			bail!("controller state directory must be absolute");
+		}
 		if self.hosts.is_empty() {
 			bail!("runtime config must declare at least one host");
 		}
@@ -196,13 +201,46 @@ impl RuntimeConfig {
 	}
 }
 
-pub fn init_runtime(config: RuntimeConfig) -> Result<()> {
+// A lock on the canonical state directory prevents two controllers from treating
+// one durable job journal as independent admission authority. File::try_lock
+// is cross-process on supported local filesystems (Rust >= 1.89).
+fn claim_controller_state_dir(state_dir: &Path) -> Result<std::fs::File> {
+	let path = state_dir.join("controller.owner.lock");
+	let mut options = std::fs::OpenOptions::new();
+	options.read(true).write(true).create(true);
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::OpenOptionsExt;
+		options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+	}
+	let owner = options
+		.open(&path)
+		.with_context(|| format!("failed to open controller owner lock {}", path.display()))?;
+	if !owner.metadata()?.is_file() {
+		bail!("controller owner lock must be a regular file");
+	}
+	owner.try_lock().map_err(|error| {
+		anyhow!(
+			"controller state directory {} is already owned or cannot be locked: {error}",
+			state_dir.display()
+		)
+	})?;
+	Ok(owner)
+}
+
+pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
 	config.validate()?;
+	std::fs::create_dir_all(&config.state_dir)?;
+	config.state_dir = std::fs::canonicalize(&config.state_dir)?;
+	let owner = claim_controller_state_dir(&config.state_dir)?;
 	std::fs::create_dir_all(config.state_dir.join("jobs"))?;
 	std::fs::create_dir_all(config.state_dir.join("audit"))?;
 	RUNTIME_CONFIG
 		.set(config)
-		.map_err(|_| anyhow!("runtime config was already initialized"))
+		.map_err(|_| anyhow!("runtime config was already initialized"))?;
+	CONTROLLER_OWNER
+		.set(owner)
+		.map_err(|_| anyhow!("controller owner lock was already initialized"))
 }
 
 pub fn runtime_config() -> Result<&'static RuntimeConfig> {
@@ -524,6 +562,27 @@ pub fn check_remote_write(alias: &str, path: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn separate_controllers_cannot_claim_same_state_directory() {
+		let dir = tempfile::tempdir().unwrap();
+		let first = claim_controller_state_dir(dir.path()).unwrap();
+		assert!(claim_controller_state_dir(dir.path()).is_err());
+		drop(first);
+		let recovered = claim_controller_state_dir(dir.path()).unwrap();
+		drop(recovered);
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn owner_lock_refuses_symlinked_lockfile() {
+		let dir = tempfile::tempdir().unwrap();
+		let target = dir.path().join("redirect");
+		std::fs::write(&target, b"do not change").unwrap();
+		std::os::unix::fs::symlink(&target, dir.path().join("controller.owner.lock")).unwrap();
+		assert!(claim_controller_state_dir(dir.path()).is_err());
+		assert_eq!(std::fs::read(&target).unwrap(), b"do not change");
+	}
 
 	#[test]
 	fn names_are_strict() {
