@@ -999,6 +999,84 @@ pub fn list_jobs(params: ProcessListParams) -> Result<String> {
 mod tests {
 	use super::*;
 
+	fn test_record() -> JobRecord {
+		JobRecord {
+			id: "fixture-job".into(),
+			host: "fixture-main".into(),
+			ssh_target: "fixture-target".into(),
+			unit: "fixture-unit".into(),
+			remote_job_dir: "/tmp/fixture-job".into(),
+			executable: "/usr/bin/true".into(),
+			args: Vec::new(),
+			cwd: None,
+			env_keys: Vec::new(),
+			created_unix_ms: 1,
+			idempotency_key: Some("fixed-key".into()),
+			request_fingerprint: 42,
+			launch_state: "launched".into(),
+			launch_error: None,
+		}
+	}
+
+	#[test]
+	fn host_launch_locks_do_not_serialize_independent_hosts() {
+		let first = start_lock("fixture-launch-host-a").unwrap();
+		let same_host = start_lock("fixture-launch-host-a").unwrap();
+		let other_host = start_lock("fixture-launch-host-b").unwrap();
+		assert!(Arc::ptr_eq(&first, &same_host));
+		assert!(!Arc::ptr_eq(&first, &other_host));
+		let guard = first.clone().try_lock_owned().unwrap();
+		assert!(same_host.clone().try_lock_owned().is_err());
+		assert!(other_host.try_lock_owned().is_ok());
+		drop(guard);
+		assert!(same_host.try_lock_owned().is_ok());
+	}
+
+	#[test]
+	fn durable_job_scan_rejects_corrupted_spoofed_or_symlinked_records() {
+		let root = tempfile::tempdir().unwrap();
+		let record = test_record();
+		let exact = root.path().join("fixture-job.json");
+		std::fs::write(&exact, serde_json::to_vec(&record).unwrap()).unwrap();
+		assert_eq!(read_records_in_dir(root.path()).unwrap().len(), 1);
+		let corrupt = root.path().join("corrupt.json");
+		std::fs::write(&corrupt, b"{").unwrap();
+		assert!(read_records_in_dir(root.path()).is_err());
+		std::fs::remove_file(&corrupt).unwrap();
+		let wrong = root.path().join("different-id.json");
+		std::fs::write(&wrong, serde_json::to_vec(&record).unwrap()).unwrap();
+		assert!(read_records_in_dir(root.path()).is_err());
+		std::fs::remove_file(&wrong).unwrap();
+		#[cfg(unix)]
+		{
+			std::os::unix::fs::symlink(&exact, &wrong).unwrap();
+			assert!(read_records_in_dir(root.path()).is_err());
+		}
+	}
+
+	#[test]
+	fn duplicate_durable_keys_refuse_to_choose_one_existing_effect() {
+		let first = test_record();
+		let mut second = first.clone();
+		second.id = "other-job".into();
+		assert!(find_idempotent_in_records(
+			vec![first.clone(), second.clone()],
+			"fixture-main",
+			"fixed-key"
+		)
+		.is_err());
+		assert_eq!(
+			find_idempotent_in_records(vec![first.clone()], "fixture-main", "fixed-key")
+				.unwrap()
+				.unwrap()
+				.id,
+			first.id
+		);
+		assert!(find_idempotent_in_records(vec![second], "another-host", "fixed-key")
+			.unwrap()
+			.is_none());
+	}
+
 	#[test]
 	fn ids_are_valid_and_unique() {
 		let a = next_job_id();
