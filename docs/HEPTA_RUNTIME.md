@@ -68,6 +68,18 @@ request, launch, PID/start-time and exit records inside the configured remote
 state directory. The controller stores a separate immutable job identity and
 an append-only audit event.
 
+**Ambiguous remote start is reconcile-only.** The remote executor binds its launch
+record to the full SHA-256 request digest and opens per-job metadata relative to
+one no-follow directory descriptor under an exclusive per-job launch lock.
+The durable request is synced before attempting the process effect. If SSH
+acknowledgement, `launch.json`, or supervisor evidence is missing, a subsequent
+`process_start` with that key must **not** conclude that no process ran and must
+not start a replacement. Corrupt, symlinked, oversized or pre-full-digest records
+also fail closed. An operator must reconcile the remote effect and preserve its
+identity before any recovery decision; automatic retry is intentionally unavailable
+when effect nonoccurrence cannot be independently demonstrated. This is a
+software boundary, not proof of target-host process attestation or Final-use.
+
 A controller restart does not terminate durable jobs. A remote host reboot is
 not claimed as process recovery in v0.1: logs and metadata remain, but an
 in-flight transient unit is reported lost unless the application itself has a
