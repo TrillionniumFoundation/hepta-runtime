@@ -325,7 +325,14 @@ pub async fn privileged_action(params: PrivilegedActionParams) -> Result<String>
 		"args": params.args,
 		"timeout_seconds": action.timeout_seconds.min(300),
 	});
-	// Bind the exact approved executable, arguments and timeout before SSH.
+	// Bind both the configured SSH destination and the exact policy-resolved
+	// executable, arguments and timeout. An alias remap must not turn a prior
+	// observed result into a false success receipt for another target.
+	// This is a config binding, not cryptographic attestation of the remote host.
+	let effect_binding = json!({
+		"configured_ssh_target": host.ssh_target,
+		"execution_request": &request,
+	});
 	// A lost remote acknowledgement leaves an indeterminate durable intent;
 	// retrying the same key never performs a second privileged effect.
 	let admission = privileged_ledger::admit(
@@ -333,7 +340,7 @@ pub async fn privileged_action(params: PrivilegedActionParams) -> Result<String>
 		&params.host,
 		&params.action,
 		&params.idempotency_key,
-		&request,
+		&effect_binding,
 	)
 	.await?;
 	let permit = match admission {
