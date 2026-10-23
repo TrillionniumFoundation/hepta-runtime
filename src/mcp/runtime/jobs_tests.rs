@@ -89,14 +89,12 @@ fn stored_job_host_binding_rejects_alias_remapping() {
 
 	// Reusing the alias for another physical SSH target must never cancel or
 	// query the new host using the old durable operation's credentials.
-	let error = verify_host_binding(&previous, "different-target", "/var/lib/hepta")
-		.unwrap_err();
+	let error = verify_host_binding(&previous, "different-target", "/var/lib/hepta").unwrap_err();
 	assert!(error.to_string().contains("host binding changed"));
 
 	// The remote root is part of the operation identity even with the same SSH
 	// address: otherwise the same job ID can resolve to unrelated stored state.
-	let error = verify_host_binding(&previous, "rog", "/var/lib/another")
-		.unwrap_err();
+	let error = verify_host_binding(&previous, "rog", "/var/lib/another").unwrap_err();
 	assert!(error.to_string().contains("host binding changed"));
 
 	previous.ssh_target = "different-target".into();
