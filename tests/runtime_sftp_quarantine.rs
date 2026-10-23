@@ -54,10 +54,13 @@ async fn configured_remote_file_roots_never_authorize_unconfined_sftp() {
 	// The pool must deny *before* any host resolution, authentication,
 	// cached-session reuse or actual SFTP operation.
 	let pool = SftpPool::new(SshConfig::default());
-	let error = pool
+	let error = match pool
 		.get_or_connect("locked", 22, "never-authenticate", false, false)
 		.await
-		.expect_err("raw pool access must not bypass runtime policy");
+	{
+		Ok(_) => panic!("raw pool access must not bypass runtime policy"),
+		Err(error) => error,
+	};
 	assert!(error.to_string().contains(DENIAL), "{error:#}");
 
 	// Exercise every public unified I/O path, including the mutation
