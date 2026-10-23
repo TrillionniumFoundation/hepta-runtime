@@ -8,6 +8,10 @@ on:
   pull_request:
     branches:
       - hepta-runtime-base
+      # Candidate branches are protected by exact HEAD and synthetic-merge gates.
+      # Stacked fix and integration PRs otherwise receive no CI event.
+      - 'fix/**'
+      - 'dot/**'
 
 permissions:
   contents: read
@@ -17,15 +21,67 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  runtime-ci:
+  runtime-head-ci:
     name: Rust exact-head validation
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - name: Checkout exact head
+      - name: Checkout exact source HEAD
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify checked-out source identity
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          printf 'SOURCE_HEAD_SHA=%s\n' "$EXPECTED_HEAD_SHA"
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup component add rustfmt clippy --toolchain 1.95.0
+          rustup default 1.95.0
+          rustc --version
+          cargo --version
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Check all targets
+        run: cargo check --locked --all-targets
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --locked --all-targets
+
+      - name: Release build
+        run: cargo build --locked --release
+
+  runtime-merge-ci:
+    name: Rust prospective-merge validation
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout GitHub prospective merge
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Verify checked-out merge identity
+        env:
+          EXPECTED_MERGE_SHA: ${{ github.sha }}
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MERGE_SHA"
+          test "$EXPECTED_MERGE_SHA" != "$EXPECTED_HEAD_SHA"
+          printf 'PROSPECTIVE_MERGE_SHA=%s SOURCE_HEAD_SHA=%s\n' "$EXPECTED_MERGE_SHA" "$EXPECTED_HEAD_SHA"
 
       - name: Install pinned Rust toolchain
         run: |
