@@ -265,10 +265,27 @@ fn all_records() -> Result<Vec<JobRecord>> {
 	scan_records_dir(&jobs_dir()?)
 }
 
-fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
-	Ok(all_records()?
+fn select_idempotent_owner(
+	records: impl IntoIterator<Item = JobRecord>,
+	host: &str,
+	key: &str,
+) -> Result<Option<JobRecord>> {
+	let mut owners = records
 		.into_iter()
-		.find(|record| record.host == host && record.idempotency_key.as_deref() == Some(key)))
+		.filter(|record| record.host == host && record.idempotency_key.as_deref() == Some(key));
+	let first = owners.next();
+	// A previous controller may have launched more than one physical job under
+	// the same key. Picking the earliest receipt would conceal an unknown effect.
+	if owners.next().is_some() {
+		bail!(
+			"multiple durable job owners for host `{host}` and idempotency key `{key}`; reconcile before reuse"
+		);
+	}
+	Ok(first)
+}
+
+fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
+	select_idempotent_owner(all_records()?, host, key)
 }
 
 fn request_digest(params: &ProcessStartParams) -> (u64, String) {

@@ -53,7 +53,9 @@ HTTP mode requires a high-entropy token file; every `/mcp` request must carry
   stdin, timeout and resource limits. A nonblank **required** `idempotency_key`
   (at most 256 bytes) binds to one exact request. Retrying with the same host,
   key and request reconciles the original job rather than starting a duplicate;
-  changing the payload under the same key fails closed.
+  changing the payload under the same key fails closed. If recovery finds
+  multiple durable records for one host and idempotency key, it refuses
+  reuse entirely; an operator must reconcile every possible original effect.
 - `process_status`: authoritative remote state.
 - `process_read`: independent stdout/stderr byte offsets, bounded pagination.
 - `process_wait`: bounded wait, never a new process.
