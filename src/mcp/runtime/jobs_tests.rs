@@ -5,6 +5,63 @@
 use super::*;
 
 #[test]
+fn process_starts_on_other_hosts_do_not_share_a_launch_lock() {
+	let first = start_lock("fixture-start-host-a").unwrap();
+	let same_host = start_lock("fixture-start-host-a").unwrap();
+	let other_host = start_lock("fixture-start-host-b").unwrap();
+	assert!(Arc::ptr_eq(&first, &same_host));
+	assert!(!Arc::ptr_eq(&first, &other_host));
+	let guard = first.clone().try_lock_owned().unwrap();
+	assert!(same_host.clone().try_lock_owned().is_err());
+	assert!(other_host.try_lock_owned().is_ok());
+	drop(guard);
+	assert!(same_host.try_lock_owned().is_ok());
+}
+
+#[test]
+fn durable_inventory_rejects_corruption_identity_spoofing_and_symlinks() {
+	let root = tempfile::tempdir().unwrap();
+	let record = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	let exact = root.path().join("same-job-id.json");
+	std::fs::write(&exact, serde_json::to_vec(&record).unwrap()).unwrap();
+	assert_eq!(read_records_in_dir(root.path()).unwrap().len(), 1);
+	let corrupt = root.path().join("corrupt.json");
+	std::fs::write(&corrupt, b"{").unwrap();
+	assert!(read_records_in_dir(root.path()).is_err());
+	std::fs::remove_file(&corrupt).unwrap();
+	let spoofed = root.path().join("wrong-identity.json");
+	std::fs::write(&spoofed, serde_json::to_vec(&record).unwrap()).unwrap();
+	assert!(read_records_in_dir(root.path()).is_err());
+	std::fs::remove_file(&spoofed).unwrap();
+	#[cfg(unix)]
+	{
+		std::os::unix::fs::symlink(&exact, &spoofed).unwrap();
+		assert!(read_records_in_dir(root.path()).is_err());
+	}
+}
+
+#[test]
+fn duplicate_idempotency_key_fails_closed_before_effect_dispatch() {
+	let first = outcome_fixture(ExecutionMode::Operator, false, "launched");
+	let mut second = first.clone();
+	second.id = "another-existing-job".into();
+	assert!(find_idempotent_in_records(
+		vec![first.clone(), second.clone()],
+		"main",
+		"fixed-key"
+	)
+	.is_err());
+	let result =
+		find_idempotent_in_records(vec![first.clone()], "main", "fixed-key")
+			.unwrap()
+			.unwrap();
+	assert_eq!(result.id, first.id);
+	assert!(find_idempotent_in_records(vec![second], "other-host", "fixed-key")
+		.unwrap()
+		.is_none());
+}
+
+#[test]
 fn macos_detached_resource_bounds_reject_before_new_job_identity() {
 	let mut params = ProcessStartParams {
 		host: "mac".into(),
