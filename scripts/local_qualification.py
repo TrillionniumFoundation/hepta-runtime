@@ -95,6 +95,9 @@ def safe_env() -> dict[str, str]:
         "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_BUILD_TARGET",
     )}
     env["GIT_NO_REPLACE_OBJECTS"] = "1"
+    # Global/system Git config can add unreviewed checkout filters.
+    env["GIT_CONFIG_GLOBAL"] = os.devnull
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["RUSTUP_TOOLCHAIN"] = RUST_VERSION
     env["CARGO_INCREMENTAL"] = "0"
@@ -180,6 +183,37 @@ def check_source_bytes(worktree: Path) -> tuple[str, int]:
         raise QualificationError("untracked source files in qualification worktree")
     return fmt, len(names)
 
+
+
+def assert_no_executable_checkout_config(repo: Path) -> None:
+    """Reject executable checkout config before starting any Git worktree.
+
+    Disabling Git hooks does not disable smudge/process filters or fsmonitor.
+    Conditional includes can apply to a new linked worktree but not the root.
+    """
+    settings = git(repo, "config", "--list", "-z")
+    for entry in settings.split(b"\0"):
+        if not entry:
+            continue
+        raw_key, separator, value = entry.partition(b"\n")
+        if not separator:
+            raise QualificationError("malformed Git config entry")
+        try:
+            key = raw_key.decode("ascii").lower()
+        except UnicodeDecodeError as exc:
+            raise QualificationError("noncanonical Git config key") from exc
+        if key == "core.hookspath":
+            if value != b"/dev/null":
+                raise QualificationError("unreviewed Git hooksPath config")
+        elif key == "core.fsmonitor":
+            if value.strip().lower() not in (b"false", b"0", b""):
+                raise QualificationError("unreviewed Git fsmonitor command")
+        elif (key.startswith("filter.")
+              and (key.endswith(".smudge") or key.endswith(".process"))
+              and value.strip()):
+            raise QualificationError("unreviewed Git checkout filter command")
+        elif key == "include.path" or (key.startswith("includeif.") and key.endswith(".path")):
+            raise QualificationError("unreviewed Git included/conditional config")
 
 def kill_tree(proc: subprocess.Popen) -> None:
     # The session leader may have exited while descendants still retain its
@@ -301,6 +335,8 @@ def qualify(repo: Path, source_sha: str, merge_sha: str, output_dir: Path,
                 raise QualificationError("expected both exact 40-character lowercase Git SHAs")
         if source_sha == merge_sha:
             raise QualificationError("source and GitHub merge SHA must be independently identified")
+        # A checkout smudge filter could execute before byte attestation.
+        assert_no_executable_checkout_config(repo)
         # Reject replacement refs before reading either source commit object.
         if git(repo, "for-each-ref", "--format=%(refname)", "refs/replace").strip():
             raise QualificationError("repository contains Git replacement objects")

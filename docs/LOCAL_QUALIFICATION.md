@@ -33,6 +33,18 @@ unrelated or wrong-head commits masquerading as GitHub's PR merge. It does not
 authenticate the GitHub origin of a caller-supplied SHA; retrieve the actual
 `refs/pull/N/merge` from GitHub using a trusted remote.
 
+### Git checkout execution preflight
+
+Before creating any detached worktree, the qualifier checks effective repository
+Git configuration **as data** and rejects executable smudge/process filters,
+active `core.fsmonitor`, custom `core.hooksPath`, or config include directives.
+Disabling Git hooks alone is insufficient: `.gitattributes` plus
+`filter.*.smudge` can run an arbitrary command inside `git worktree add`
+**before** any byte attestation. This was reproduced with an isolated Git
+fixture. Git commands ignore system/global Git configuration by default.
+An active repo-local filter is a blocking qualification result, not a
+reason to whitelist unchecked subprocesses.
+
 The checker creates
 separate detached worktrees for both exact SHAs, refuses hidden index source
 flags, missing/modified tracked bytes, replacement refs, non-POSIX execution,

@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 from local_qualification import (SHA_RE, blob_hash, check_source_bytes,
+                                 assert_no_executable_checkout_config,
                                  execute_bounded, git, qualify, safe_env,
                                  QualificationError)
 
@@ -61,6 +62,56 @@ class LocalQualificationTests(unittest.TestCase):
         (self.root / "surprise.rs").write_text("fn main() {}")
         with self.assertRaisesRegex(QualificationError, "untracked"):
             check_source_bytes(self.root)
+
+
+    def test_checkout_smudge_command_rejected_before_worktree_creation(self):
+        self.make_repo()
+        (self.root / ".gitattributes").write_text("payload.txt filter=untrusted\n")
+        (self.root / "payload.txt").write_text("original\n")
+        self.command("git", "add", ".gitattributes", "payload.txt")
+        self.command("git", "commit", "-qm", "attributes fixture")
+        marker = self.root.parent / (self.root.name + "-smudge-marker")
+        self.command("git", "config", "filter.untrusted.smudge",
+                     f"sh -c 'touch {marker}; cat'")
+        with self.assertRaisesRegex(QualificationError, "checkout filter"):
+            assert_no_executable_checkout_config(self.root)
+        self.assertFalse(marker.exists(), "Git filter must not execute on preflight")
+
+    def test_qualification_denies_process_filter_before_any_worktree(self):
+        source, merge, _ = self.make_diverged_merge_pair()
+        self.command("git", "config", "filter.untrusted.process", "sh -c 'exit 0'")
+        with tempfile.TemporaryDirectory() as evidence:
+            result = qualify(self.root, source, merge, Path(evidence))
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(result["lanes"], [])
+        self.assertIn("checkout filter", result["error"])
+        self.assertFalse(result["production_authority"])
+
+    def test_conditional_include_fsmonitor_and_hooks_override_are_denied(self):
+        self.make_repo()
+        configurations = (
+            ("includeIf.gitdir:/tmp/future-linked-worktree/.path", "/tmp/unreviewed.conf", "included/conditional"),
+            ("core.fsmonitor", "sh -c 'exit 0'", "fsmonitor"),
+            ("core.hooksPath", "/tmp/unreviewed-hooks", "hooksPath"),
+        )
+        for key, value, message in configurations:
+            with self.subTest(key=key):
+                self.command("git", "config", key, value)
+                with self.assertRaisesRegex(QualificationError, message):
+                    assert_no_executable_checkout_config(self.root)
+                self.command("git", "config", "--unset", key)
+
+    def test_global_execution_config_is_isolated(self):
+        self.make_repo()
+        with tempfile.TemporaryDirectory() as temporary:
+            (Path(temporary) / ".gitconfig").write_text(
+                '[filter "foreign"]\n smudge = sh -c "exit 0"\n'
+            )
+            with mock.patch.dict(os.environ, {"HOME": temporary}):
+                environment = safe_env()
+                self.assertEqual(environment["GIT_CONFIG_GLOBAL"], os.devnull)
+                self.assertEqual(environment["GIT_CONFIG_NOSYSTEM"], "1")
+                assert_no_executable_checkout_config(self.root)
 
     def test_bounded_capture_and_nonzero_are_distinct(self):
         pass_log = self.root / "pass.log"
