@@ -89,6 +89,12 @@ status/wait, log reads and cancellations fail closed; manually reconcile the
 original remote operation rather than following the changed alias. This guard
 does not attest changes to DNS or OpenSSH alias resolution on its own: retain
 strict host-key verification and independently qualify host identity.
+Remote status/wait, stdout/stderr reads and cancellations additionally require the
+remote request.json to match the locally persisted job ID, unit, job directory
+and full 64-character SHA-256 request digest. A legacy job record lacking this
+binding remains listable for manual reconciliation, but cannot drive a remote
+observer or cancellation. A matching digest is not independent remote-host
+attestation; separate host identity and terminal-effect acceptance remain required.
 
 ### PTY tools
 
