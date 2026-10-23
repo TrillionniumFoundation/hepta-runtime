@@ -336,7 +336,7 @@ class LocalQualificationTests(unittest.TestCase):
     def test_path_in_source_root_denied_before_git_preflight(self):
         self.make_repo()
         fake_git = self.root / "git"
-        fake_git.write_text("#!/bin/sh\\ntouch exploit-marker\\n")
+        fake_git.write_text("#!/bin/sh\ntouch exploit-marker\n")
         fake_git.chmod(0o755)
         malicious = f"{self.root}:/usr/bin:/bin"
         with mock.patch.dict(os.environ, {"PATH": malicious}, clear=True), \
