@@ -506,11 +506,8 @@ try:
         stderr=err,
         start_new_session=True,
     )
-    atomic("child.json", {
-        "pid": child.pid,
-        "identity": process_identity(child.pid),
-    })
 except Exception as exc:
+    # No physical child was started: this is a confirmed launch failure.
     atomic("exit.json", {
         "at_unix_ms": int(time.time() * 1000),
         "exit_code": 127,
@@ -520,6 +517,31 @@ except Exception as exc:
     })
     print(str(exc), file=err, flush=True)
     raise SystemExit(127)
+try:
+    atomic("child.json", {
+        "pid": child.pid,
+        "identity": process_identity(child.pid),
+    })
+except Exception as exc:
+    # Popen already crossed the physical-effect boundary. Never record an
+    # ordinary launch_failed/exit receipt or allow automatic replay.
+    # Termination is best effort; a child may have performed effects already.
+    if child.poll() is None:
+        try:
+            os.killpg(child.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            child.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            child.wait()
+    raise SystemExit(
+        f"indeterminate child effect: child receipt was not durable: {exc}; reconcile"
+    )
 
 timed_out = False
 try:
@@ -1386,6 +1408,46 @@ mod tests {
 		assert!(!output.status.success());
 		assert!(!effect.exists(), "effect must not launch without a durable started witness");
 		assert!(String::from_utf8_lossy(&output.stderr).contains("injected durable failure"));
+	}
+
+
+	#[cfg(unix)]
+	#[test]
+	fn failed_child_witness_keeps_execution_indeterminate() {
+		let runner = START_CODE
+			.split_once("runner = r'''")
+			.unwrap()
+			.1
+			.split_once("\n'''")
+			.unwrap()
+			.0;
+		// Inject immediately after a real harmless child spawn, before its
+		// receipt, so ordinary pre-launch failures cannot mask this boundary.
+		let patched = runner.replacen(
+			"    atomic(\"child.json\", {",
+			"    raise OSError('injected child witness failure')\n    atomic(\"child.json\", {",
+			1,
+		);
+		let temp = tempfile::tempdir().unwrap();
+		let job = temp.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		std::fs::write(job.join("runner.py"), patched).unwrap();
+		let request = json!({
+			"job_id": "fixture",
+			"executable": "/bin/sleep",
+			"args": ["10"],
+			"allowed_cwd_prefixes": []
+		});
+		std::fs::write(job.join("request.json"), serde_json::to_vec(&request).unwrap())
+			.unwrap();
+		let output = std::process::Command::new("python3")
+			.arg(job.join("runner.py"))
+			.output()
+			.unwrap();
+		assert!(!output.status.success());
+		assert!(String::from_utf8_lossy(&output.stderr).contains("indeterminate child effect"));
+		assert!(job.join("started.json").exists());
+		assert!(!job.join("exit.json").exists(), "unknown effect must not be declared failed");
 	}
 
 	#[cfg(unix)]
