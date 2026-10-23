@@ -82,6 +82,13 @@ not claimed as process recovery in v0.1: logs and metadata remain, but an
 in-flight transient unit is reported lost unless the application itself has a
 separate restart policy.
 
+A duplicate `process_start` is observation-only after a stored `launched`
+acknowledgement. Persisted `pending` and `launch_failed` rows remain
+**indeterminate** and cannot dispatch a second remote launch, even if a prior
+remote directory was erased or the target was rebooted. The operator must
+reconcile exact original effect evidence; the runtime never treats remote
+metadata absence as proof that a command did not execute.
+
 Durable job observations remain bound to the SSH target and remote job root
 recorded at original admission. If an administrator remaps a configured host
 alias to another target or remote state directory, existing job launch retries,
