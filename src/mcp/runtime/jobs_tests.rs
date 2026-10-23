@@ -29,6 +29,7 @@ fn record(id: &str) -> JobRecord {
 		created_unix_ms: 10,
 		idempotency_key: Some("repeat-key".into()),
 		request_fingerprint: 42,
+		request_digest: Some("test-digest".into()),
 		launch_state: "pending".into(),
 		launch_error: None,
 	}
@@ -58,6 +59,10 @@ fn fingerprint_binds_stdin_and_resource_limits() {
 		memory_max_bytes: Some(134217728),
 	};
 	let original = fingerprint(&base);
+	let (legacy, full) = request_digest(&base);
+	assert_eq!(legacy, original);
+	assert_eq!(full.len(), 64);
+	assert!(full.bytes().all(|byte| byte.is_ascii_hexdigit()));
 	base.stdin = Some("different".into());
 	assert_ne!(original, fingerprint(&base));
 	base.stdin = None;
@@ -126,7 +131,7 @@ fn try_remote_resume(request_state: Option<&str>, extra: Option<(&str, &str)>) -
 	let input = json!({
 		"job_id": "job-1",
 		"job_dir": job_dir,
-		"request_fingerprint": "aabb"
+		"request_fingerprint": "aabb",\n\t\t"request_digest": "fullhash"
 	})
 	.to_string();
 	let mut child = Command::new("python3")
@@ -152,7 +157,7 @@ fn corrupt_remote_request_refuses_replay() {
 #[cfg(unix)]
 #[test]
 fn acknowledged_request_without_launch_evidence_refuses_replay() {
-	let request = r#"{"job_id":"job-1","request_fingerprint":"aabb"}"#;
+	let request = r#"{"job_id":"job-1","request_fingerprint":"aabb","request_digest":"fullhash"}"#;
 	let output = try_remote_resume(Some(request), None);
 	assert!(!output.status.success());
 	assert!(String::from_utf8_lossy(&output.stderr).contains("ambiguous prior launch"));
@@ -161,7 +166,7 @@ fn acknowledged_request_without_launch_evidence_refuses_replay() {
 #[cfg(unix)]
 #[test]
 fn failed_remote_launch_is_not_reported_as_successful_reuse() {
-	let request = r#"{"job_id":"job-1","request_fingerprint":"aabb"}"#;
+	let request = r#"{"job_id":"job-1","request_fingerprint":"aabb","request_digest":"fullhash"}"#;
 	let output = try_remote_resume(Some(request), Some(("launch.json", r#"{"backend":"launch_failed"}"#)));
 	assert!(!output.status.success());
 	assert!(String::from_utf8_lossy(&output.stderr).contains("prior remote launch failed"));
@@ -170,7 +175,7 @@ fn failed_remote_launch_is_not_reported_as_successful_reuse() {
 #[cfg(unix)]
 #[test]
 fn confirmed_remote_launch_can_be_reconciled_without_restarting() {
-	let request = r#"{"job_id":"job-1","request_fingerprint":"aabb"}"#;
+	let request = r#"{"job_id":"job-1","request_fingerprint":"aabb","request_digest":"fullhash"}"#;
 	let output = try_remote_resume(Some(request), Some(("launch.json", r#"{"backend":"systemd","unit":"u"}"#)));
 	assert!(output.status.success());
 	assert!(String::from_utf8_lossy(&output.stdout).contains("reused_remote"));
@@ -182,4 +187,24 @@ fn orphaned_remote_effect_state_refuses_new_launch() {
 	let output = try_remote_resume(None, Some(("started.json", r#"{"supervisor_pid":123}"#)));
 	assert!(!output.status.success());
 	assert!(String::from_utf8_lossy(&output.stderr).contains("orphaned remote job state"));
+}
+
+#[test]
+fn full_request_binding_changes_with_resource_limits() {
+	let mut base = ProcessStartParams {
+		host: "rog".into(),
+		executable: "/usr/bin/printf".into(),
+		args: vec!["ok".into()],
+		cwd: None,
+		env: BTreeMap::new(),
+		stdin: Some("first".into()),
+		timeout_seconds: None,
+		idempotency_key: Some("key".into()),
+		nice: None,
+		cpu_quota_percent: None,
+		memory_max_bytes: None,
+	};
+	let before = request_digest(&base).1;
+	base.stdin = Some("second".into());
+	assert_ne!(before, request_digest(&base).1);
 }
