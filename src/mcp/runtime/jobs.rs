@@ -277,7 +277,9 @@ fn select_idempotent_owner(
 	// A previous controller may have launched more than one physical job under
 	// the same key. Picking the earliest receipt would conceal an unknown effect.
 	if owners.next().is_some() {
-		bail!("multiple durable job owners for host `{host}` and idempotency key `{key}`; reconcile before reuse");
+		bail!(
+			"multiple durable job owners for host `{host}` and idempotency key `{key}`; reconcile before reuse"
+		);
 	}
 	Ok(first)
 }
