@@ -116,5 +116,52 @@ class LocalQualificationTests(unittest.TestCase):
         self.assertIn("git rev-parse failed", result["error"])
 
 
+    def test_inherited_pythonpath_denied_before_running_git(self):
+        self.make_repo()
+        with mock.patch.dict(os.environ, {"PYTHONPATH": "untrusted-reference", "PATH": os.environ.get("PATH", "")}, clear=True), \
+                mock.patch("local_qualification.subprocess.run") as spawn:
+            with self.assertRaisesRegex(QualificationError, "PYTHONPATH") as caught:
+                git(self.root, "rev-parse", "HEAD")
+            spawn.assert_not_called()
+            self.assertNotIn("untrusted-reference", str(caught.exception))
+
+    def test_cargo_loader_compiler_git_and_python_environment_fails_closed(self):
+        overrides = (
+            "PYTHONPATH", "LD_PRELOAD", "DYLD_INSERT_LIBRARIES",
+            "RUSTFLAGS", "RUSTC", "RUSTUP_TOOLCHAIN",
+            "CARGO_HOME", "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER",
+            "GIT_CONFIG_COUNT", "GIT_OBJECT_DIRECTORY", "BASH_ENV",
+            "ENV", "CC", "OPENSSL_DIR", "PKG_CONFIG_PATH", "NODE_OPTIONS",
+        )
+        for key in overrides:
+            with self.subTest(key=key), mock.patch.dict(os.environ, {key: "private-test-marker"}, clear=True):
+                with self.assertRaisesRegex(QualificationError, key) as caught:
+                    safe_env()
+                self.assertNotIn("private-test-marker", str(caught.exception))
+
+    def test_allow_benign_diagnostics_but_pin_execution_identity(self):
+        with mock.patch.dict(os.environ, {"PATH": os.environ.get("PATH", ""),
+                                          "RUST_BACKTRACE": "1", "RUST_LOG": "info",
+                                          "CARGO_TERM_COLOR": "never"}, clear=True):
+            env = safe_env()
+            self.assertEqual(env["RUST_BACKTRACE"], "1")
+            self.assertEqual(env["RUST_LOG"], "info")
+            self.assertEqual(env["CARGO_TERM_COLOR"], "never")
+            self.assertEqual(env["RUSTUP_TOOLCHAIN"], "1.95.0")
+            self.assertEqual(env["GIT_NO_REPLACE_OBJECTS"], "1")
+
+    def test_qualification_emits_blocked_report_without_git_launch(self):
+        with tempfile.TemporaryDirectory() as evidence, \
+                mock.patch.dict(os.environ, {"PYTHONPATH": "injected-path"}, clear=True), \
+                mock.patch("local_qualification.subprocess.run") as spawn:
+            result = qualify(self.root, "a" * 40, "b" * 40, Path(evidence))
+            spawn.assert_not_called()
+            self.assertEqual(result["status"], "BLOCKED")
+            self.assertFalse(result["production_authority"])
+            self.assertIn("PYTHONPATH", result["error"])
+            self.assertNotIn("injected-path", result["error"])
+            self.assertTrue((Path(evidence) / "qualification.json").is_file())
+
+
 if __name__ == "__main__":
     unittest.main()

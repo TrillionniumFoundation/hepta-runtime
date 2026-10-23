@@ -53,7 +53,42 @@ def git(repo: Path, *args: str) -> bytes:
     return p.stdout
 
 
+# The source SHA does not attest ambient hooks which alter *how* Cargo, Git,
+# Python, the linker or the dynamic loader execute. Refuse their inherited names
+# before launching Git or a build. Values must never appear in denial receipts.
+_ALLOWED_EXECUTION_ENV = frozenset((
+    "RUST_BACKTRACE", "RUST_LOG", "CARGO_TERM_COLOR", "PYTHONDONTWRITEBYTECODE",
+    "PYTHONUNBUFFERED", "PYTHON_VERSION",
+))
+_BLOCKED_EXECUTION_ENV_EXACT = frozenset((
+    "CC", "CXX", "LD", "AR", "RANLIB", "STRIP", "OBJCOPY", "OBJDUMP",
+    "BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS", "CDPATH", "MAKEFLAGS",
+    "CMAKE_PREFIX_PATH", "PKG_CONFIG_PATH", "PKG_CONFIG_LIBDIR",
+    "LIBRARY_PATH", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH",
+    "NODE_OPTIONS",
+))
+_BLOCKED_EXECUTION_ENV_PREFIXES = (
+    "GIT_", "RUST", "CARGO_", "LD_", "DYLD_", "PYTHON",
+    "PKG_CONFIG_", "CMAKE_", "OPENSSL_", "LIBCLANG_",
+    "BINDGEN_", "CC_", "CXX_",
+)
+
+
+def _blocked_execution_env_names() -> list[str]:
+    return sorted(
+        name for name in os.environ
+        if name not in _ALLOWED_EXECUTION_ENV
+        and (name in _BLOCKED_EXECUTION_ENV_EXACT
+             or name.startswith(_BLOCKED_EXECUTION_ENV_PREFIXES))
+    )
+
+
 def safe_env() -> dict[str, str]:
+    blocked = _blocked_execution_env_names()
+    if blocked:
+        names = ", ".join(name[:96] for name in blocked[:12])
+        suffix = f" (+{len(blocked) - 12} more)" if len(blocked) > 12 else ""
+        raise QualificationError("unreviewed execution environment keys: " + names + suffix)
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") and k not in (
         "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "RUSTFLAGS", "RUSTDOCFLAGS",
         "CARGO_ENCODED_RUSTFLAGS", "CARGO_TARGET_DIR", "RUSTUP_TOOLCHAIN",
