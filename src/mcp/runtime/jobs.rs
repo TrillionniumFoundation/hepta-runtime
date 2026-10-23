@@ -112,6 +112,10 @@ struct JobRecord {
 	created_unix_ms: u128,
 	idempotency_key: Option<String>,
 	request_fingerprint: u64,
+	/// Full, canonical SHA-256 request binding for collision-resistant idempotency.
+	/// Old records remain readable but cannot be automatically re-dispatched.
+	#[serde(default)]
+	request_digest: Option<String>,
 	#[serde(default = "default_launch_state")]
 	launch_state: String,
 	#[serde(default)]
@@ -229,7 +233,7 @@ fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
 		.find(|record| record.host == host && record.idempotency_key.as_deref() == Some(key)))
 }
 
-fn fingerprint(params: &ProcessStartParams) -> u64 {
+fn request_digest(params: &ProcessStartParams) -> (u64, String) {
 	let binding = json!({
 		"host": params.host,
 		"executable": params.executable,
@@ -244,7 +248,13 @@ fn fingerprint(params: &ProcessStartParams) -> u64 {
 	});
 	let bytes = serde_json::to_vec(&binding).expect("process binding serializes");
 	let digest = Sha256::digest(bytes);
-	u64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"))
+	let legacy = u64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"));
+	(legacy, format!("{digest:x}"))
+}
+
+#[cfg(test)]
+fn fingerprint(params: &ProcessStartParams) -> u64 {
+	request_digest(params).0
 }
 
 fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
@@ -315,7 +325,10 @@ def atomic(name, value):
 stdin_text = req.pop("stdin", None)
 existing = read_json("request.json")
 if existing is not None:
-    if existing.get("job_id") != req.get("job_id") or existing.get("request_fingerprint") != req.get("request_fingerprint"):
+    if (existing.get("job_id") != req.get("job_id")
+            or existing.get("request_fingerprint") != req.get("request_fingerprint")
+            or not req.get("request_digest")
+            or existing.get("request_digest") != req.get("request_digest")):
         raise SystemExit("remote job directory is bound to a different request")
     launch = read_json("launch.json")
     exit_data = read_json("exit.json")
@@ -837,6 +850,7 @@ async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> R
 		"job_dir": record.remote_job_dir,
 		"unit": record.unit,
 		"request_fingerprint": format!("{:016x}", record.request_fingerprint),
+		"request_digest": record.request_digest,
 		"platform": host.platform,
 		"executable": params.executable,
 		"args": params.args,
@@ -873,10 +887,15 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	let _start_guard = start_lock(&params.host, params.idempotency_key.as_deref())
 		.lock()
 		.await;
-	let request_fingerprint = fingerprint(&params);
+	let (request_fingerprint, request_digest) = request_digest(&params);
 	if let Some(key) = params.idempotency_key.as_deref() {
 		if let Some(mut existing) = find_idempotent(&params.host, key)? {
-			if existing.request_fingerprint != request_fingerprint {
+			if existing.request_digest.is_none() {
+				bail!("legacy idempotency record lacks full request binding; reconcile without replay");
+			}
+			if existing.request_fingerprint != request_fingerprint
+				|| existing.request_digest.as_deref() != Some(request_digest.as_str())
+			{
 				bail!("idempotency key `{key}` is already bound to a different request");
 			}
 			let retry = matches!(existing.launch_state.as_str(), "pending" | "launch_failed");
@@ -918,6 +937,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 		created_unix_ms: now_ms(),
 		idempotency_key: params.idempotency_key.clone(),
 		request_fingerprint,
+		request_digest: Some(request_digest),
 		launch_state: "pending".to_string(),
 		launch_error: None,
 	};
