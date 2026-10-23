@@ -538,7 +538,12 @@ except Exception as exc:
                 os.killpg(child.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
-            child.wait()
+            try:
+                child.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                # A stuck child is still an unknown effect; never report
+                # launch_failed or block reconciliation indefinitely.
+                pass
     raise SystemExit(
         f"indeterminate child effect: child receipt was not durable: {exc}; reconcile"
     )
@@ -1359,7 +1364,6 @@ mod tests {
 		assert!(!result.status.success());
 		assert!(!symlink.join("dispatch.lock").exists());
 	}
-
 
 	#[cfg(unix)]
 	#[test]
