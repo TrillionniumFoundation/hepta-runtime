@@ -344,9 +344,18 @@ fn open_audit_append(path: &Path) -> Result<File> {
 	}
 	#[cfg(unix)]
 	{
-		use std::os::unix::fs::PermissionsExt;
+		use std::os::unix::fs::{MetadataExt, PermissionsExt};
+		if metadata.nlink() != 1 {
+			bail!("audit sink must not be hard-linked: {}", path.display());
+		}
+		// The prior release created audit files using the caller's umask.
+		// Tighten a regular, independently opened file descriptor during upgrade
+		// rather than breaking every audit operation on legacy mode 0644.
 		if metadata.permissions().mode() & 0o077 != 0 {
-			bail!("audit sink must be owner-private: {}", path.display());
+			file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+			if file.metadata()?.permissions().mode() & 0o077 != 0 {
+				bail!("audit sink must be owner-private: {}", path.display());
+			}
 		}
 	}
 	Ok(file)
