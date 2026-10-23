@@ -602,6 +602,11 @@ mod sftp {
 			user_explicit: bool,
 			port_explicit: bool,
 		) -> Result<Arc<SftpSession>> {
+			// Enforce the runtime-mode physical-root quarantine at the
+			// connection-pool choke point as well as MCP tool admission.
+			// No cached session reuse or direct low-level SFTP caller may
+			// bypass it, and the check runs before any network/agent effect.
+			crate::mcp::runtime::config::check_sftp_physical_boundary()?;
 			let key = format!(
 				"{user}@{host}:{port}:user-explicit={user_explicit}:port-explicit={port_explicit}"
 			);

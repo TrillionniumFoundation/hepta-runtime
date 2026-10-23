@@ -529,6 +529,24 @@ pub fn check_remote_path(
 	} else if !remote_path_allowed(path, &host.allowed_read_path_prefixes) {
 		bail!("path `{path}` is outside configured read roots on host `{name}`");
 	}
+	// A textual prefix is not an OS filesystem boundary. SFTP follows
+	// intermediate symlinks and a canonicalize-before-open check can race a
+	// rename. Do not advertise an allowlisted remote file as authorized
+	// until the target is confined by an independently qualified OS boundary.
+	check_sftp_physical_boundary()
+}
+
+/// Deny all remote SFTP access while a runtime policy is active. The
+/// existing SFTP API cannot bind an allowlist to the object ultimately
+/// opened by the remote SFTP server, so neither read nor write is safe to
+/// admit on the strength of a path prefix alone. Non-runtime Octofs mode
+/// retains its previous remote-file compatibility behavior.
+pub fn check_sftp_physical_boundary() -> Result<()> {
+	if maybe_runtime_config().is_some() {
+		bail!(
+			"remote SFTP file I/O is quarantined in runtime mode: textual roots cannot contain symlink or rename races; independently qualify a target OS boundary before re-enabling"
+		);
+	}
 	Ok(())
 }
 
