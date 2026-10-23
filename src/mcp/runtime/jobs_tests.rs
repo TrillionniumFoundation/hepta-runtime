@@ -200,6 +200,13 @@ fn orphaned_remote_effect_state_refuses_new_launch() {
 }
 
 #[test]
+fn tool_schema_advertises_required_idempotency_key() {
+	let schema = serde_json::to_value(rmcp::schemars::schema_for!(ProcessStartParams)).unwrap();
+	let required = schema["required"].as_array().unwrap();
+	assert!(required.contains(&json!("idempotency_key")));
+}
+
+#[test]
 fn starts_without_stable_idempotency_are_denied_before_external_effects() {
 	let mut params = ProcessStartParams {
 		host: "rog".into(),
