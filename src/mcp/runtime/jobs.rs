@@ -194,10 +194,26 @@ fn save_record(record: &JobRecord) -> Result<()> {
 	save_record_at(&record_path(&record.id)?, record)
 }
 
+fn read_record_at(path: &Path, expected_id: &str) -> Result<JobRecord> {
+	// A symlink or a mismatched identity is not a usable effect-owner receipt.
+	let metadata = std::fs::symlink_metadata(path)
+		.with_context(|| format!("cannot stat durable job record {}", path.display()))?;
+	if !metadata.file_type().is_file() {
+		bail!("unsafe durable job record type: {}", path.display());
+	}
+	let bytes = std::fs::read(path)
+		.with_context(|| format!("cannot read durable job record {}", path.display()))?;
+	let record: JobRecord = serde_json::from_slice(&bytes)
+		.with_context(|| format!("corrupt durable job record {}", path.display()))?;
+	if record.id != expected_id {
+		bail!("durable job filename/identity mismatch: {}", path.display());
+	}
+	Ok(record)
+}
+
 fn load_record(id: &str) -> Result<JobRecord> {
-	let path = record_path(id)?;
-	let bytes = std::fs::read(&path).with_context(|| format!("unknown durable job `{id}`"))?;
-	serde_json::from_slice(&bytes).context("corrupt durable job metadata")
+	read_record_at(&record_path(id)?, id)
+		.with_context(|| format!("unknown or invalid durable job `{id}`"))
 }
 
 fn scan_records_dir(dir: &Path) -> Result<Vec<JobRecord>> {
@@ -210,14 +226,11 @@ fn scan_records_dir(dir: &Path) -> Result<Vec<JobRecord>> {
 		}
 		// A corrupt/unreadable record might be the owner of an idempotency key.
 		// Skipping it would allow a second physical launch after a restart.
-		let bytes = std::fs::read(&path)
-			.with_context(|| format!("cannot read durable job record {}", path.display()))?;
-		let record: JobRecord = serde_json::from_slice(&bytes)
-			.with_context(|| format!("corrupt durable job record {}", path.display()))?;
-		if path.file_stem().and_then(|stem| stem.to_str()) != Some(record.id.as_str()) {
-			bail!("durable job filename/identity mismatch: {}", path.display());
-		}
-		records.push(record);
+		let expected_id = path
+			.file_stem()
+			.and_then(|stem| stem.to_str())
+			.ok_or_else(|| anyhow::anyhow!("invalid durable job record name: {}", path.display()))?;
+		records.push(read_record_at(&path, expected_id)?);
 	}
 	records.sort_by_key(|record| record.created_unix_ms);
 	Ok(records)
