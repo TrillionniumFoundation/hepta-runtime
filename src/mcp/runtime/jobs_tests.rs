@@ -116,7 +116,10 @@ fn atomic_record_replacement_preserves_valid_identity() {
 }
 
 #[cfg(unix)]
-fn try_remote_resume(request_state: Option<&str>, extra: Option<(&str, &str)>) -> std::process::Output {
+fn try_remote_resume(
+	request_state: Option<&str>,
+	extra: Option<(&str, &str)>,
+) -> std::process::Output {
 	use std::io::Write;
 	use std::process::{Command, Stdio};
 	let dir = tempdir().unwrap();
@@ -168,7 +171,10 @@ fn acknowledged_request_without_launch_evidence_refuses_replay() {
 #[test]
 fn failed_remote_launch_is_not_reported_as_successful_reuse() {
 	let request = r#"{"job_id":"job-1","request_fingerprint":"aabb","request_digest":"fullhash"}"#;
-	let output = try_remote_resume(Some(request), Some(("launch.json", r#"{"backend":"launch_failed"}"#)));
+	let output = try_remote_resume(
+		Some(request),
+		Some(("launch.json", r#"{"backend":"launch_failed"}"#)),
+	);
 	assert!(!output.status.success());
 	assert!(String::from_utf8_lossy(&output.stderr).contains("prior remote launch failed"));
 }
@@ -177,7 +183,10 @@ fn failed_remote_launch_is_not_reported_as_successful_reuse() {
 #[test]
 fn confirmed_remote_launch_can_be_reconciled_without_restarting() {
 	let request = r#"{"job_id":"job-1","request_fingerprint":"aabb","request_digest":"fullhash"}"#;
-	let output = try_remote_resume(Some(request), Some(("launch.json", r#"{"backend":"systemd","unit":"u"}"#)));
+	let output = try_remote_resume(
+		Some(request),
+		Some(("launch.json", r#"{"backend":"systemd","unit":"u"}"#)),
+	);
 	assert!(output.status.success());
 	assert!(String::from_utf8_lossy(&output.stdout).contains("reused_remote"));
 }
