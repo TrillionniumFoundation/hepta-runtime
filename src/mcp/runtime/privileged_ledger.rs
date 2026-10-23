@@ -31,7 +31,9 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tokio::sync::{Mutex, MutexGuard};
 
-const LEDGER_VERSION: u8 = 1;
+// V2 binds the resolved configured SSH destination in the admitted effect payload.
+// Legacy V1 intents must be reconciled, not silently upgraded or replayed.
+const LEDGER_VERSION: u8 = 2;
 const MAX_RECORD_BYTES: u64 = 3 * 1024 * 1024;
 const LOCK_SHARDS: usize = 256;
 static OPERATION_LOCKS: OnceLock<Vec<Mutex<()>>> = OnceLock::new();
