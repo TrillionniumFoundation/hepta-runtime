@@ -139,64 +139,6 @@ fn start_lock(host: &str, key: Option<&str>) -> &'static AsyncMutex<()> {
 	&locks[(hasher.finish() as usize) % START_LOCK_SHARDS]
 }
 
-// Two controller processes sharing one state directory must not both admit the
-// same host/idempotency-key operation. The in-process lock shards above cannot
-// provide this guarantee across process boundaries.
-fn start_lock_file_name(host: &str, key: &str) -> String {
-	let identity = serde_json::to_vec(&("hepta.runtime.start-lock.v1", host, key))
-		.expect("fixed string tuple serializes");
-	format!("start-{:x}.lock", Sha256::digest(identity))
-}
-
-fn open_start_lock_file(path: &Path) -> Result<File> {
-	let mut options = OpenOptions::new();
-	options.read(true).write(true).create(true);
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::OpenOptionsExt;
-		options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
-	}
-	let file = options
-		.open(path)
-		.with_context(|| format!("cannot open durable start lock {}", path.display()))?;
-	let metadata = file.metadata()?;
-	if !metadata.is_file() {
-		bail!("durable start lock is not a regular file: {}", path.display());
-	}
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::{MetadataExt, PermissionsExt};
-		if metadata.nlink() != 1 || metadata.permissions().mode() & 0o077 != 0 {
-			bail!("durable start lock must be private and not hard-linked");
-		}
-	}
-	Ok(file)
-}
-
-// File::try_lock was stabilized in Rust 1.89 and is cross-process on local
-// filesystems. Its lifetime is the entire read/admit/launch sequence; dropping
-// this descriptor on cancellation or process exit releases the lock.
-// This is not a distributed fence for controllers with different state dirs.
-async fn lock_start_operation(host: &str, key: &str) -> Result<File> {
-	let path = jobs_dir()?.join(start_lock_file_name(host, key));
-	let file = open_start_lock_file(&path)?;
-	let deadline = tokio::time::Instant::now() + Duration::from_secs(45);
-	loop {
-		match file.try_lock() {
-			Ok(()) => return Ok(file),
-			Err(std::fs::TryLockError::WouldBlock) => {
-				if tokio::time::Instant::now() >= deadline {
-					bail!("cross-process start lock busy; no remote dispatch permitted");
-				}
-				tokio::time::sleep(Duration::from_millis(50)).await;
-			}
-			Err(std::fs::TryLockError::Error(error)) => {
-				return Err(error).context("cannot acquire cross-process start lock");
-			}
-		}
-	}
-}
-
 fn now_ms() -> u128 {
 	SystemTime::now()
 		.duration_since(UNIX_EPOCH)
@@ -1108,15 +1050,9 @@ async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> R
 
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	validate_start(&params)?;
-	let key = params
-		.idempotency_key
-		.as_deref()
-		.context("validated idempotency key missing")?;
-	let _start_guard = start_lock(&params.host, Some(key)).lock().await;
-	// Keep a stable OS lock held through record scan, journal admission and
-	// the remote launch. A second controller with the same local state root
-	// must observe the first record instead of issuing a duplicate effect.
-	let _process_guard = lock_start_operation(&params.host, key).await?;
+	let _start_guard = start_lock(&params.host, params.idempotency_key.as_deref())
+		.lock()
+		.await;
 	let (request_fingerprint, request_digest) = request_digest(&params);
 	if let Some(key) = params.idempotency_key.as_deref() {
 		if let Some(existing) = find_idempotent(&params.host, key)? {
