@@ -309,6 +309,15 @@ By default, Octofs operates in the current directory. Specify a different root:
 
 ### Remote Filesystem (SSH/SFTP)
 
+> **Hepta Runtime security gate:** When started with `--runtime-config`, remote
+> SFTP reads, writes and metadata/list operations are currently quarantined:
+> textual allowlisted prefixes do not prevent remote symlink or rename-race
+> escapes. No runtime host-policy setting re-enables SFTP until an independently
+> qualified remote OS confinement boundary and real host tests are available.
+> Without `--runtime-config`, ordinary Octofs SSH/SFTP compatibility remains
+> available. See [the operating contract](docs/HEPTA_RUNTIME.md#remote-file-rules).
+
+
 All path parameters — and `--path` itself — accept `ssh://` or `sftp://` URLs:
 
 ```bash
