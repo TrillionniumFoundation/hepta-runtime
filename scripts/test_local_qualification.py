@@ -83,14 +83,50 @@ class LocalQualificationTests(unittest.TestCase):
         self.assertEqual(timed["outcome"], "timeout")
         self.assertLess(timed["duration_seconds"], 4)
 
+    def make_diverged_merge_pair(self) -> tuple[str, str, str]:
+        base = self.make_repo()
+        self.command("git", "switch", "-qc", "source")
+        (self.root / "source.txt").write_text("new source\n")
+        self.command("git", "add", "source.txt")
+        self.command("git", "commit", "-qm", "source")
+        source = self.command("git", "rev-parse", "HEAD").stdout.decode().strip()
+        self.command("git", "switch", "-qc", "base", base)
+        (self.root / "base.txt").write_text("new base\n")
+        self.command("git", "add", "base.txt")
+        self.command("git", "commit", "-qm", "base")
+        first_parent = self.command("git", "rev-parse", "HEAD").stdout.decode().strip()
+        self.command("git", "merge", "--no-ff", "--no-edit", source)
+        merge = self.command("git", "rev-parse", "HEAD").stdout.decode().strip()
+        return source, merge, first_parent
+
+    def test_github_merge_requires_exact_second_parent(self):
+        from local_qualification import assert_github_merge_parentage
+        source, merge, first_parent = self.make_diverged_merge_pair()
+        assert_github_merge_parentage(self.root, source, merge)
+        for wrong in (first_parent,):
+            with self.assertRaisesRegex(QualificationError, "second parent"):
+                assert_github_merge_parentage(self.root, wrong, merge)
+
+    def test_linear_commit_cannot_masquerade_as_github_merge(self):
+        from local_qualification import assert_github_merge_parentage
+        source, _merge, linear = self.make_diverged_merge_pair()
+        with self.assertRaisesRegex(QualificationError, "exactly two parents"):
+            assert_github_merge_parentage(self.root, source, linear)
+
+    def test_graft_metadata_cannot_forge_second_parent(self):
+        from local_qualification import assert_github_merge_parentage
+        source, merge, first_parent = self.make_diverged_merge_pair()
+        (self.root / ".git" / "info" / "grafts").write_text(
+            merge + " " + first_parent + " " + first_parent + "\n"
+        )
+        # The SHA-addressed commit object still binds its actual source HEAD.
+        assert_github_merge_parentage(self.root, source, merge)
+
+
     def test_distinct_source_and_merge_lanes_run_in_isolated_worktrees(self):
         # Mock binaries validate the verifier's orchestration only; they are
         # NOT evidence that real Rust compilation or tests have passed.
-        source = self.make_repo()
-        (self.root / "hello.txt").write_text("merge candidate\n")
-        self.command("git", "add", "hello.txt")
-        self.command("git", "commit", "-qm", "synthetic merge fixture")
-        merge = self.command("git", "rev-parse", "HEAD").stdout.decode().strip()
+        source, merge, _base = self.make_diverged_merge_pair()
         fakebin = self.root / "fakebin"
         fakebin.mkdir()
         for binary in ("rustc", "cargo"):
