@@ -253,6 +253,19 @@ def execute_bounded(args: tuple[str, ...], worktree: Path, env: dict[str, str],
                     "descendant held capture pipe" if not t.is_alive()
                     else "reader thread did not settle"
                 )
+            # A parent can return 0 and close stdout while a descendant
+            # continues work with redirected stdio. EOF != group termination.
+            # The launch's start_new_session=True isolates its process group.
+            if not t.is_alive() and not too_large.is_set() and not expired and not failures:
+                try:
+                    os.killpg(proc.pid, 0)
+                except ProcessLookupError:
+                    pass
+                except PermissionError:
+                    failures.append("cannot attest command process-group termination")
+                else:
+                    kill_tree(proc)
+                    failures.append("process-group descendants remain after command exit")
             reason = "log_limit" if too_large.is_set() else "timeout" if expired else "io_error" if failures else "nonzero" if proc.returncode else "pass"
             return {"command": list(args), "outcome": reason, "exit_code": proc.returncode,
                     "duration_seconds": round(time.monotonic() - start, 3),

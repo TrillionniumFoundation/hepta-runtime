@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import signal
 from pathlib import Path
 import subprocess
 import sys
@@ -142,6 +143,37 @@ class LocalQualificationTests(unittest.TestCase):
         self.assertTrue(killpg.called, "abandoned process group was not killed")
         self.assertLess(result["duration_seconds"], 9)
 
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process-group termination required")
+    def test_parent_success_with_closed_pipes_cannot_hide_live_descendant(self):
+        # The child redirects its streams; stdout reaches EOF and parent exits
+        # zero, but the original session group still contains a live child.
+        launcher = (
+            "import sys, subprocess, pathlib\n"
+            "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'], "
+            "stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+            "pathlib.Path('live-descendant.pid').write_text(str(child.pid))\n"
+        )
+        with mock.patch("local_qualification.os.killpg", wraps=os.killpg) as killpg:
+            result = execute_bounded(
+                (sys.executable, "-c", launcher), self.root, safe_env(),
+                self.root / "closed-pipes.log", 5, 1024,
+            )
+        try:
+            self.assertEqual(result["outcome"], "io_error", result)
+            self.assertEqual(result["exit_code"], 0)
+            self.assertTrue(any(
+                call.args[1] == signal.SIGKILL for call in killpg.call_args_list
+            ), "must terminate an orphaned session group")
+        finally:
+            # The deliberately vulnerable baseline must not leak a process
+            # when this regression demonstrates its previous false-positive.
+            pid_file = self.root / "live-descendant.pid"
+            if pid_file.exists():
+                try:
+                    os.kill(int(pid_file.read_text()), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
 
     def test_distinct_source_and_merge_lanes_run_in_isolated_worktrees(self):
         # Mock binaries validate the verifier's orchestration only; they are
