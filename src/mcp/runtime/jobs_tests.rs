@@ -99,7 +99,7 @@ fn duplicate_owners_loaded_from_durable_store_refuse_reuse() {
 	for id in ["job-1", "job-2"] {
 		let entry = record(id);
 		let path = dir.path().join(format!("{id}.json"));
-		std::fs::write(path, serde_json::to_vec(&entry).unwrap()).unwrap();
+		save_record_at(&path, &entry).unwrap();
 	}
 	let entries = scan_records_dir(dir.path()).unwrap();
 	assert_eq!(entries.len(), 2);
