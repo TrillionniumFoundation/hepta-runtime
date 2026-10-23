@@ -42,6 +42,7 @@ pub struct ProcessStartParams {
 	#[serde(default)]
 	pub timeout_seconds: Option<u64>,
 	/// Mandatory stable operation key; retries of one exact host+request never launch twice.
+	#[schemars(required)]
 	pub idempotency_key: Option<String>,
 	/// Non-negative Unix nice adjustment, 0..19.
 	#[serde(default)]
