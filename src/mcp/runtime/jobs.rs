@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
 use std::hash::{Hash, Hasher};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -22,6 +22,7 @@ static START_LOCKS: OnceLock<Vec<AsyncMutex<()>>> = OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 const MAX_STDIN_BYTES: usize = 1024 * 1024;
 const MAX_LOG_READ_BYTES: u64 = 1024 * 1024;
+const MAX_JOB_RECORD_BYTES: u64 = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct ProcessStartParams {
@@ -170,14 +171,13 @@ fn save_record_at(path: &Path, record: &JobRecord) -> Result<()> {
 	let mut file = {
 		use std::os::unix::fs::OpenOptionsExt;
 		OpenOptions::new()
-			.create(true)
+			.create_new(true)
 			.write(true)
-			.truncate(true)
 			.mode(0o600)
 			.open(&tmp)?
 	};
 	#[cfg(not(unix))]
-	let mut file = File::create(&tmp)?;
+	let mut file = OpenOptions::new().write(true).create_new(true).open(&tmp)?;
 	file.write_all(&bytes)?;
 	// The identity must be durable before an external process can be launched.
 	file.sync_all()?;
@@ -201,8 +201,28 @@ fn read_record_at(path: &Path, expected_id: &str) -> Result<JobRecord> {
 	if !metadata.file_type().is_file() {
 		bail!("unsafe durable job record type: {}", path.display());
 	}
-	let bytes = std::fs::read(path)
-		.with_context(|| format!("cannot read durable job record {}", path.display()))?;
+	let mut options = OpenOptions::new();
+	options.read(true);
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::OpenOptionsExt;
+		options.custom_flags(libc::O_NOFOLLOW);
+	}
+	// Recheck the opened file, not only the pathname inspected above:
+	// a concurrent symlink swap must never redirect a credentialed read.
+	let file = options
+		.open(path)
+		.with_context(|| format!("cannot open durable job record {}", path.display()))?;
+	let opened = file.metadata()?;
+	if !opened.is_file() || opened.len() > MAX_JOB_RECORD_BYTES {
+		bail!("invalid or oversized durable job record: {}", path.display());
+	}
+	let mut bytes = Vec::new();
+	let mut bounded = file.take(MAX_JOB_RECORD_BYTES + 1);
+	bounded.read_to_end(&mut bytes)?;
+	if bytes.len() as u64 > MAX_JOB_RECORD_BYTES {
+		bail!("oversized durable job record: {}", path.display());
+	}
 	let record: JobRecord = serde_json::from_slice(&bytes)
 		.with_context(|| format!("corrupt durable job record {}", path.display()))?;
 	if record.id != expected_id {

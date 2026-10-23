@@ -287,3 +287,24 @@ fn full_request_binding_rejects_changed_payload() {
 	assert!(verify_reuse_binding(&entry, "repeat-key", 42, "tampered").is_err());
 	assert!(verify_reuse_binding(&entry, "repeat-key", 43, "test-digest").is_err());
 }
+
+#[test]
+fn stale_temp_record_is_never_overwritten() {
+	let dir = tempdir().unwrap();
+	let path = dir.path().join("job-1.json");
+	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
+	std::fs::write(&tmp, b"uncommitted").unwrap();
+	let error = save_record_at(&path, &record("job-1")).unwrap_err();
+	assert!(error.downcast_ref::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::AlreadyExists));
+	assert_eq!(std::fs::read(&tmp).unwrap(), b"uncommitted");
+	assert!(!path.exists());
+}
+
+#[test]
+fn oversized_job_record_is_rejected_without_deserialization() {
+	let dir = tempdir().unwrap();
+	let path = dir.path().join("job-1.json");
+	std::fs::write(&path, vec![b'a'; (MAX_JOB_RECORD_BYTES + 1) as usize]).unwrap();
+	let error = read_record_at(&path, "job-1").unwrap_err();
+	assert!(error.to_string().contains("oversized durable job record"));
+}

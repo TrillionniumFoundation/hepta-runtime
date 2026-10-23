@@ -248,8 +248,20 @@ pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
 		}
 	}
 	let owner = claim_controller_state_dir(&config.state_dir)?;
-	std::fs::create_dir_all(config.state_dir.join("jobs"))?;
-	std::fs::create_dir_all(config.state_dir.join("audit"))?;
+	// State files and the audit trail must not become readable by other
+	// local users under a permissive process umask. Never chmod a symlink.
+	for name in ["jobs", "audit"] {
+		let dir = config.state_dir.join(name);
+		std::fs::create_dir_all(&dir)?;
+		if !std::fs::symlink_metadata(&dir)?.file_type().is_dir() {
+			bail!("controller state subdirectory {name} must not be a symlink");
+		}
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+		}
+	}
 	RUNTIME_CONFIG
 		.set(config)
 		.map_err(|_| anyhow!("runtime config was already initialized"))?;
