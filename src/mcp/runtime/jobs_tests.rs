@@ -835,3 +835,75 @@ fn remote_cancel_denies_unknown_launch_and_missing_supervisor_identity_without_r
 	);
 	assert!(!job.join("cancel-request.json").exists());
 }
+
+#[test]
+fn audit_never_persists_untrusted_process_or_privileged_output() {
+	let secret = "private-credential-should-never-persist";
+	let input = json!({
+		"ok": true,
+		"state": "succeeded",
+		"stdout": secret,
+		"stderr": secret,
+		"args": ["--access-token", secret],
+		"job": { "launch_error": secret },
+	});
+	let safe = redacted_audit_outcome(&input);
+	assert_eq!(safe["ok"], json!(true));
+	assert_eq!(safe["state"], json!("succeeded"));
+	assert_eq!(safe["redacted"], json!(true));
+	let saved = serde_json::to_string(&safe).unwrap();
+	assert!(!saved.contains(secret));
+	assert!(!saved.contains("access-token"));
+	assert!(!saved.contains("stdout"));
+
+	// Do not allow an untrusted state label to copy arbitrary data into the
+	// audit via what looks like a small, nominally typed status field.
+	let forged = redacted_audit_outcome(&json!({
+		"state": format!("running-{secret}"),
+		"ok": "true",
+		"launch": { "ok": secret },
+	}));
+	assert!(forged["state"].is_null());
+	assert!(forged["ok"].is_null());
+	assert!(!serde_json::to_string(&forged).unwrap().contains(secret));
+
+	// Nested observed status can be summarized without copying systemd
+	// properties, stdout, args, stderr, or any future expanded payload.
+	let nested = redacted_audit_outcome(&json!({
+		"status": {"state": "lost", "systemd": {"ExecStart": secret}},
+		"launch": {"ok": false, "stderr": secret}
+	}));
+	assert_eq!(nested["state"], json!("lost"));
+	assert_eq!(nested["ok"], json!(false));
+	assert!(!serde_json::to_string(&nested).unwrap().contains(secret));
+}
+
+#[test]
+fn audit_preserves_only_bounded_numeric_privileged_status() {
+	let secret = "credential-contained-in-privileged-stderr";
+	let succeeded = redacted_audit_outcome(&json!({
+		"exit_code": 0,
+		"stdout": secret,
+		"stderr": secret,
+	}));
+	assert_eq!(succeeded["exit_code"], json!(0));
+	assert_eq!(succeeded["ok"], json!(true));
+	assert!(!succeeded.to_string().contains(secret));
+
+	let timed_out = redacted_audit_outcome(&json!({
+		"exit_code": 124,
+		"stderr": secret,
+	}));
+	assert_eq!(timed_out["exit_code"], json!(124));
+	assert_eq!(timed_out["ok"], json!(false));
+	assert!(!timed_out.to_string().contains(secret));
+
+	let forged = redacted_audit_outcome(&json!({
+		"exit_code": secret,
+		"state": secret,
+	}));
+	assert!(forged["exit_code"].is_null());
+	assert!(forged["state"].is_null());
+	assert!(forged["ok"].is_null());
+	assert!(!forged.to_string().contains(secret));
+}
