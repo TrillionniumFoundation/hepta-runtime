@@ -328,13 +328,13 @@ fn audit_append_creates_private_regular_file() {
 	let dir = tempdir().unwrap();
 	let path = dir.path().join("events.jsonl");
 	let mut file = open_audit_append(&path).unwrap();
-	file.write_all(b"first\\n").unwrap();
+	file.write_all(b"first\n").unwrap();
 	file.sync_data().unwrap();
 	assert_eq!(
 		std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
 		0o600
 	);
-	assert_eq!(std::fs::read(&path).unwrap(), b"first\\n");
+	assert_eq!(std::fs::read(&path).unwrap(), b"first\n");
 }
 
 #[cfg(unix)]
