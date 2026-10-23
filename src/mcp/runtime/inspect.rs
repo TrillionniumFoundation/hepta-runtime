@@ -376,13 +376,12 @@ mod tests {
 		permissions.set_mode(0o700);
 		std::fs::set_permissions(&sudo, permissions).unwrap();
 
+		let old_path = std::env::var("PATH").unwrap_or_default();
+		let path = format!("{}:{old_path}", dir.path().display());
 		let mut child = Command::new("python3")
 			.arg("-c")
 			.arg(PRIVILEGED_CODE)
-			.env(
-				"PATH",
-				format!("{}:{}", dir.path().display(), std::env::var("PATH").unwrap_or_default()),
-			)
+			.env("PATH", path)
 			.stdin(Stdio::piped())
 			.stdout(Stdio::piped())
 			.stderr(Stdio::piped())
