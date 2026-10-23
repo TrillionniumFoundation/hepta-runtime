@@ -314,6 +314,16 @@ fn verify_reuse_binding(
 	Ok(())
 }
 
+fn admit_observation_only_reuse(record: &JobRecord) -> Result<()> {
+	match record.launch_state.as_str() {
+		"launched" => Ok(()),
+		"pending" | "launch_failed" => bail!(
+			"durable launch outcome indeterminate: reconcile original remote effect without replay"
+		),
+		_ => bail!("unknown durable job launch state; no replay permitted"),
+	}
+}
+
 fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
 	let record = load_record(&params.job_id)?;
 	if record.host != params.host {
@@ -681,8 +691,15 @@ def final_status(exit_data):
 
 def one_status():
     request = read_json("request.json")
-    if not request or request.get("job_id") != q["job_id"]:
-        return {"state": "unknown", "reason": "remote job metadata missing or mismatched"}
+    # A job ID alone does not bind the observed remote state to the original effect.
+    if (not isinstance(request, dict)
+            or request.get("job_id") != q.get("job_id")
+            or request.get("job_dir") != q.get("job_dir")
+            or request.get("unit") != q.get("unit")
+            or request.get("request_digest") != q.get("request_digest")
+            or not isinstance(q.get("request_digest"), str)
+            or len(q["request_digest"]) != 64):
+        raise SystemExit("remote job request binding missing or mismatched")
     exit_data = read_json("exit.json")
     if exit_data:
         return final_status(exit_data)
@@ -760,8 +777,15 @@ try:
     request = json.loads((job / "request.json").read_text(encoding="utf-8"))
 except Exception:
     raise SystemExit("remote job metadata missing")
-if request.get("job_id") != q["job_id"]:
-    raise SystemExit("remote job metadata mismatch")
+# Refuse to read logs from a foreign or legacy unbound remote request.
+if (not isinstance(request, dict)
+        or request.get("job_id") != q.get("job_id")
+        or request.get("job_dir") != q.get("job_dir")
+        or request.get("unit") != q.get("unit")
+        or request.get("request_digest") != q.get("request_digest")
+        or not isinstance(q.get("request_digest"), str)
+        or len(q["request_digest"]) != 64):
+    raise SystemExit("remote job request binding missing or mismatched")
 limit = max(1, min(int(q.get("limit", 65536)), 1048576))
 
 def read_part(name, offset):
@@ -831,8 +855,15 @@ def command_line(pid):
             return ""
 
 request = read_json("request.json")
-if not request or request.get("job_id") != q["job_id"]:
-    raise SystemExit("remote job metadata missing or mismatched")
+# Cancellation must never act on a job directory merely matching its job ID.
+if (not isinstance(request, dict)
+        or request.get("job_id") != q.get("job_id")
+        or request.get("job_dir") != q.get("job_dir")
+        or request.get("unit") != q.get("unit")
+        or request.get("request_digest") != q.get("request_digest")
+        or not isinstance(q.get("request_digest"), str)
+        or len(q["request_digest"]) != 64):
+    raise SystemExit("remote job request binding missing or mismatched")
 if read_json("exit.json"):
     print(json.dumps({"job_id": q["job_id"], "result": "already_exited"}))
     raise SystemExit(0)
@@ -949,6 +980,7 @@ async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
 		"unit": record.unit,
+		"request_digest": record.request_digest,
 		"wait_seconds": wait_seconds.min(30),
 	});
 	run_python_json(
@@ -1006,22 +1038,18 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 		.await;
 	let (request_fingerprint, request_digest) = request_digest(&params);
 	if let Some(key) = params.idempotency_key.as_deref() {
-		if let Some(mut existing) = find_idempotent(&params.host, key)? {
+		if let Some(existing) = find_idempotent(&params.host, key)? {
 			verify_reuse_binding(&existing, key, request_fingerprint, &request_digest)?;
-			let retry = matches!(existing.launch_state.as_str(), "pending" | "launch_failed");
-			let launch = if retry {
-				Some(launch_record(&mut existing, &params).await?)
-			} else {
-				None
-			};
-			let status = status_record(&existing, 0).await.unwrap_or_else(
-				|error| json!({"state": "status_error", "error": error.to_string()}),
-			);
+			// An earlier pending/failed controller attempt may already have crossed
+			// the remote launch boundary. A missing remote state directory is not
+			// proof that the effect did not happen: never dispatch it again.
+			admit_observation_only_reuse(&existing)?;
+			let status = status_record(&existing, 0).await?;
 			let result = json!({
 				"reused": true,
-				"retried_launch": retry,
+				"retried_launch": false,
 				"job": existing,
-				"launch": launch,
+				"launch": null,
 				"status": status,
 			});
 			audit("process_start_reused", &params.host, &existing.id, &result)?;
@@ -1089,6 +1117,8 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
+		"unit": record.unit,
+		"request_digest": record.request_digest,
 		"stdout_offset": params.stdout_offset.unwrap_or(0),
 		"stderr_offset": params.stderr_offset.unwrap_or(0),
 		"limit": params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),
@@ -1114,6 +1144,7 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
 		"unit": record.unit,
+		"request_digest": record.request_digest,
 		"grace_seconds": params.grace_seconds.unwrap_or(10).min(30),
 	});
 	let output: Value =
