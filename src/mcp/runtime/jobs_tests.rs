@@ -200,6 +200,28 @@ fn orphaned_remote_effect_state_refuses_new_launch() {
 }
 
 #[test]
+fn starts_without_stable_idempotency_are_denied_before_external_effects() {
+	let mut params = ProcessStartParams {
+		host: "rog".into(),
+		executable: "/usr/bin/printf".into(),
+		args: vec!["ok".into()],
+		cwd: None,
+		env: BTreeMap::new(),
+		stdin: None,
+		timeout_seconds: None,
+		idempotency_key: None,
+		nice: None,
+		cpu_quota_percent: None,
+		memory_max_bytes: None,
+	};
+	for key in [None, Some(String::new()), Some("   ".into()), Some("x".repeat(257))] {
+		params.idempotency_key = key;
+		let error = validate_start(&params).unwrap_err();
+		assert!(error.to_string().contains("idempotency_key"), "{error}");
+	}
+}
+
+#[test]
 fn full_request_binding_changes_with_resource_limits() {
 	let mut base = ProcessStartParams {
 		host: "rog".into(),
