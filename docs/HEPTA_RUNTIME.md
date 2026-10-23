@@ -82,6 +82,18 @@ not claimed as process recovery in v0.1: logs and metadata remain, but an
 in-flight transient unit is reported lost unless the application itself has a
 separate restart policy.
 
+Duplicate entries in the durable controller store with the same host and
+idempotency key are treated as conflicting owners even when their request
+payloads appear identical. Recovery refuses automatic reuse and requires
+manual reconciliation of each possible effect; selecting the oldest receipt
+would silently discard evidence of a second launch.
+
+The controller state-directory owner lock already serializes processes that
+share one canonical local state directory. In-process start lock sharding does
+not create distributed single-writer authority: controllers with separate
+state directories pointing to one SSH host remain a distinct deployment
+blocker and must not be promoted as a multi-controller configuration.
+
 A duplicate `process_start` is observation-only after a stored `launched`
 acknowledgement. Persisted `pending` and `launch_failed` rows remain
 **indeterminate** and cannot dispatch a second remote launch, even if a prior
