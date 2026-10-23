@@ -132,8 +132,14 @@ fn read_record(path: &Path) -> Result<Option<Record>> {
 	if !metadata.is_file() || metadata.len() > MAX_RECORD_BYTES {
 		bail!("invalid or oversized privileged ledger record");
 	}
+	// Metadata length is only a snapshot. Bound the actual read as well so
+	// concurrent growth cannot cause an unbounded allocation before parsing.
 	let mut bytes = Vec::new();
-	file.read_to_end(&mut bytes)?;
+	let mut bounded = file.take(MAX_RECORD_BYTES + 1);
+	bounded.read_to_end(&mut bytes)?;
+	if bytes.len() as u64 > MAX_RECORD_BYTES {
+		bail!("oversized privileged ledger record: {}", path.display());
+	}
 	let record = serde_json::from_slice(&bytes)
 		.with_context(|| format!("invalid privileged ledger record {}", path.display()))?;
 	Ok(Some(record))
