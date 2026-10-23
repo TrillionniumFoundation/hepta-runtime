@@ -131,7 +131,8 @@ fn try_remote_resume(request_state: Option<&str>, extra: Option<(&str, &str)>) -
 	let input = json!({
 		"job_id": "job-1",
 		"job_dir": job_dir,
-		"request_fingerprint": "aabb",\n\t\t"request_digest": "fullhash"
+		"request_fingerprint": "aabb",
+		"request_digest": "fullhash"
 	})
 	.to_string();
 	let mut child = Command::new("python3")
