@@ -91,3 +91,14 @@ remaining members, and issues an \`io_error\` receipt rather than a false
 an OS sandbox: descendants that create new sessions/cgroups can escape this
 process-group check. An independent host/container sandbox is required before
 production authorization.
+
+### Executable Git config is not source evidence
+
+The dual-SHA verifier now checks effective Git configuration **before each**
+Git command, rejecting `core.fsmonitor`, `core.hooksPath`,
+unreviewed `filter.*.clean/smudge/process`, external diff/merge drivers,
+credential helpers, aliases, pagers and other executable hooks. Only blocked
+configuration **key names** are shown, never their values. The read-only
+preflight is separate from the original checkout-filter check and preserves
+tracked-symlink refusal. This is a local software acceptance guard, not an OS
+sandbox, attested Rust toolchain or production FinalUse qualification.
