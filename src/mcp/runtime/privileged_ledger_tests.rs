@@ -79,6 +79,32 @@ async fn configured_ssh_target_remap_cannot_reuse_old_success_receipt() {
 }
 
 #[tokio::test]
+async fn legacy_v1_observed_receipt_cannot_authorize_v2_target_binding() {
+	let state = tempdir().unwrap();
+	let effect = json!({
+		"configured_ssh_target": "operator@physical-host-a",
+		"execution_request": request(),
+	});
+	let path = record_path(state.path(), &identity("rog", "legacy-key").unwrap()).unwrap();
+	let record = Record {
+		version: 1,
+		host: "rog".to_owned(),
+		action: "controlled".to_owned(),
+		idempotency_key: "legacy-key".to_owned(),
+		request_digest: bound_digest("rog", "controlled", &effect).unwrap(),
+		state: "observed".to_owned(),
+		result: Some(json!({"exit_code": 0})),
+	};
+	write_record(&path, &record).unwrap();
+	let error = admit(state.path(), "rog", "controlled", "legacy-key", &effect)
+		.await
+		.err()
+		.unwrap()
+		.to_string();
+	assert!(error.contains("unrecognized ledger version"));
+}
+
+#[tokio::test]
 async fn lost_ack_is_indeterminate_and_not_replayed() {
 	let state = tempdir().unwrap();
 	let admission = admit(state.path(), "rog", "controlled", "lost-ack", &request())
