@@ -327,6 +327,32 @@ fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
 	Ok(record)
 }
 
+// Persisted operations must never silently follow a host alias that was
+// remapped to another SSH identity or remote job root after controller restart.
+// The record remains readable for independent reconciliation, but cannot drive
+// a remote status, log read, cancellation, or retry under the new mapping.
+fn verify_host_binding(
+	record: &JobRecord,
+	configured_target: &str,
+	configured_state_dir: &str,
+) -> Result<()> {
+	let expected_job_dir = format!(
+		"{}/jobs/{}",
+		configured_state_dir.trim_end_matches('/'),
+		record.id
+	);
+	if record.ssh_target != configured_target || record.remote_job_dir != expected_job_dir {
+		bail!("durable job host binding changed; remote operation requires independent reconciliation");
+	}
+	Ok(())
+}
+
+fn bound_host(record: &JobRecord) -> Result<&'static super::config::HostConfig> {
+	let host = runtime_config()?.host(&record.host)?;
+	verify_host_binding(record, &host.ssh_target, &host.remote_state_dir)?;
+	Ok(host)
+}
+
 // Open the audit sink through a private regular file descriptor, not a path
 // that a symlink can redirect to an unrelated file or credential.
 fn open_audit_append(path: &Path) -> Result<File> {
@@ -918,8 +944,7 @@ fn validate_start(params: &ProcessStartParams) -> Result<()> {
 }
 
 async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
-	let config = runtime_config()?;
-	let host = config.host(&record.host)?;
+	let host = bound_host(record)?;
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
@@ -936,8 +961,7 @@ async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 }
 
 async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> Result<Value> {
-	let config = runtime_config()?;
-	let host = config.host(&record.host)?;
+	let host = bound_host(record)?;
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
@@ -1061,7 +1085,7 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 		job_id: params.job_id.clone(),
 	};
 	let record = check_ref(&reference)?;
-	let host = runtime_config()?.host(&record.host)?;
+	let host = bound_host(&record)?;
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
@@ -1085,7 +1109,7 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 		job_id: params.job_id.clone(),
 	};
 	let record = check_ref(&reference)?;
-	let host = runtime_config()?.host(&record.host)?;
+	let host = bound_host(&record)?;
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
