@@ -122,3 +122,18 @@ async fn leftover_partial_write_is_not_overwritten() {
 	assert!(result.is_err());
 	assert_eq!(std::fs::read(tmp).unwrap(), b"uncommitted");
 }
+
+#[tokio::test]
+async fn oversized_ledger_record_is_never_treated_as_new() {
+	let state = tempdir().unwrap();
+	let path = record_path(state.path(), &identity("rog", "oversized").unwrap()).unwrap();
+	let file = std::fs::OpenOptions::new()
+		.write(true)
+		.create_new(true)
+		.open(&path)
+		.unwrap();
+	file.set_len(MAX_RECORD_BYTES + 1).unwrap();
+	let result = admit(state.path(), "rog", "controlled", "oversized", &request()).await;
+	let error = result.err().unwrap().to_string();
+	assert!(error.contains("oversized privileged ledger record"));
+}
