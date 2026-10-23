@@ -120,7 +120,14 @@ Each \`privileged_action\` request must also include a nonblank caller-stable
 policy-resolved executable, arguments and timeout before any remote SSH effect.
 An observed result is cached for same-key retries; a lost acknowledgement remains
 \`indeterminate\` and MUST be reconciled, never automatically re-executed.
-Changing the action or payload under the same key is rejected. This bounded
+Changing the action or payload under the same key is rejected. The V2 intent
+also binds the configured SSH target string: if a host alias is administratively
+remapped, an old successful result cannot be reused as evidence for the new target.
+V1 intent records are not automatically upgraded, replayed, or counted as V2 success;
+they require independent operator reconciliation. This string binding does **not**
+attest the physical host or protect against underlying DNS/SSH configuration changes
+without separately checked server host keys and target identity.
+This bounded
 no-blind-replay mechanism does not make arbitrary sudo operations transactional,
 does not prevent distinct authorized keys from invoking the same named action,
 and is **not** an independently signed Hepta Final-use grant. Production activation

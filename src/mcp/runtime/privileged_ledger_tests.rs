@@ -44,6 +44,67 @@ async fn observed_operation_is_reused_without_a_second_entry() {
 }
 
 #[tokio::test]
+async fn configured_ssh_target_remap_cannot_reuse_old_success_receipt() {
+	let state = tempdir().unwrap();
+	let effect = request();
+	let original = json!({
+		"configured_ssh_target": "operator@physical-host-a",
+		"execution_request": &effect,
+	});
+	let remapped = json!({
+		"configured_ssh_target": "operator@physical-host-b",
+		"execution_request": &effect,
+	});
+	let admitted = admit(state.path(), "rog", "controlled", "stable-key", &original)
+		.await
+		.unwrap();
+	let permit = match admitted {
+		Admission::Entered(permit) => permit,
+		Admission::Observed(_) => panic!("unexpected prior effect"),
+	};
+	permit.complete(json!({"exit_code": 0})).unwrap();
+	let error = admit(state.path(), "rog", "controlled", "stable-key", &remapped)
+		.await
+		.err()
+		.unwrap()
+		.to_string();
+	assert!(error.contains("idempotency conflict"));
+	match admit(state.path(), "rog", "controlled", "stable-key", &original)
+		.await
+		.unwrap()
+	{
+		Admission::Observed(result) => assert_eq!(result["exit_code"], json!(0)),
+		Admission::Entered(_) => panic!("old effect was replayed"),
+	}
+}
+
+#[tokio::test]
+async fn legacy_v1_observed_receipt_cannot_authorize_v2_target_binding() {
+	let state = tempdir().unwrap();
+	let effect = json!({
+		"configured_ssh_target": "operator@physical-host-a",
+		"execution_request": request(),
+	});
+	let path = record_path(state.path(), &identity("rog", "legacy-key").unwrap()).unwrap();
+	let record = Record {
+		version: 1,
+		host: "rog".to_owned(),
+		action: "controlled".to_owned(),
+		idempotency_key: "legacy-key".to_owned(),
+		request_digest: bound_digest("rog", "controlled", &effect).unwrap(),
+		state: "observed".to_owned(),
+		result: Some(json!({"exit_code": 0})),
+	};
+	write_record(&path, &record).unwrap();
+	let error = admit(state.path(), "rog", "controlled", "legacy-key", &effect)
+		.await
+		.err()
+		.unwrap()
+		.to_string();
+	assert!(error.contains("unrecognized ledger version"));
+}
+
+#[tokio::test]
 async fn lost_ack_is_indeterminate_and_not_replayed() {
 	let state = tempdir().unwrap();
 	let admission = admit(state.path(), "rog", "controlled", "lost-ack", &request())
