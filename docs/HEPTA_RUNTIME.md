@@ -259,3 +259,20 @@ deleted automatically. Inspect or archive them before removal.
 - No GUI capture or desktop input API is included in v0.1.
 - Hardware schemas expose raw kernel values where units vary; consumers must
   preserve field names and interpret units explicitly.
+
+### No-follow durable log observation (source-only candidate)
+
+The remote log reader pins its job directory with a component-by-component
+no-follow directory descriptor. It opens request metadata and both log streams
+relative to that descriptor, rejecting symlinks, hard links, non-regular inodes
+and invalid/missing request metadata. Request metadata has a 4 MiB ceiling;
+log pages retain the previous 1 MiB maximum. Exact job, directory, unit and
+request-digest binding remains mandatory. Remote hosts must configure a physical
+absolute state path without symlinked parent components.
+
+This patch narrows the read-time path substitution risk only. It does not
+make the launch, supervisor writes, cancellation, SFTP or arbitrary target-host
+filesystem operations race-free, does not add cross-controller ownership, and
+does not authorize Final-use. Keep DRAFT / DENY_ALL / HOLD_NO_GO until actual
+exact-source Rust and prospective-merge gates, SSH host negative tests and
+independent production acceptance all succeed.
