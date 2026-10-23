@@ -130,8 +130,8 @@ class LocalQualificationTests(unittest.TestCase):
         launcher = (
             "import sys, subprocess, pathlib\n"
             "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'], "
-            "stdout=sys.stdout, stderr=sys.stderr)\\n"
-            "pathlib.Path('descendant.pid').write_text(str(child.pid))\\n"
+            "stdout=sys.stdout, stderr=sys.stderr)\n"
+            "pathlib.Path('descendant.pid').write_text(str(child.pid))\n"
         )
         with mock.patch("local_qualification.os.killpg", wraps=os.killpg) as killpg:
             result = execute_bounded(
