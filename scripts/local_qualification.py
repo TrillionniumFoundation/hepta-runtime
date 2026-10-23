@@ -116,7 +116,7 @@ def assert_github_merge_parentage(repo: Path, source_sha: str, merge_sha: str) -
     The caller must still obtain the genuine merge SHA from GitHub PR refs.
     """
     raw = git(repo, "cat-file", "commit", merge_sha)
-    header, sep, _message = raw.partition(b"\\n\\n")
+    header, sep, _message = raw.partition(b"\n\n")
     if not sep:
         raise QualificationError("malformed GitHub merge commit object")
     parents = []
