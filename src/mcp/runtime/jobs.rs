@@ -414,6 +414,29 @@ fn open_audit_append(path: &Path) -> Result<File> {
 	Ok(file)
 }
 
+// Only fixed, non-user-authored status fields belong in the persistent audit.
+// Raw process arguments, stdout/stderr, remote errors and privileged command
+// output may contain credentials. A JSONL file with mode 0600 is not a secret
+// store; do not persist these values even behind a private file descriptor.
+// This record is an operational trace, NOT an independent signed effect receipt.
+fn redacted_audit_outcome(outcome: &Value) -> Value {
+	const SAFE_STATES: &[&str] = &[
+		"pending", "running", "succeeded", "failed", "cancelled", "interrupted",
+		"lost", "completed_unknown", "finalizing", "indeterminate", "rejected",
+		"overloaded", "unknown", "status_error", "activating",
+	];
+	let state = outcome
+		.get("state")
+		.or_else(|| outcome.get("status").and_then(|status| status.get("state")))
+		.and_then(Value::as_str)
+		.filter(|state| SAFE_STATES.contains(state));
+	let ok = outcome
+		.get("ok")
+		.and_then(Value::as_bool)
+		.or_else(|| outcome.get("launch").and_then(|launch| launch.get("ok")).and_then(Value::as_bool));
+	json!({ "redacted": true, "ok": ok, "state": state })
+}
+
 pub(crate) fn audit(action: &str, host: &str, subject: &str, outcome: &Value) -> Result<()> {
 	let path = runtime_config()?.state_dir.join("audit/events.jsonl");
 	if let Some(parent) = path.parent() {
@@ -424,7 +447,7 @@ pub(crate) fn audit(action: &str, host: &str, subject: &str, outcome: &Value) ->
 		"action": action,
 		"host": host,
 		"subject": subject,
-		"outcome": outcome,
+		"outcome": redacted_audit_outcome(outcome),
 	});
 	let _guard = AUDIT_LOCK
 		.get_or_init(|| Mutex::new(()))
@@ -1182,10 +1205,10 @@ async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> R
 		}
 		Err(error) => {
 			record.launch_state = "launch_failed".to_string();
-			record.launch_error = Some(error.to_string());
+			// Preserve the uncertain outcome, never persistent untrusted stderr.
+			record.launch_error = Some("remote launch failed or response unknown; reconcile without replay".into());
 			save_record(record)?;
-			let outcome = json!({"error": error.to_string(), "job": record});
-			audit("process_start_failed", &record.host, &record.id, &outcome)?;
+			audit("process_start_failed", &record.host, &record.id, &json!({"ok": false}))?;
 			Err(error)
 		}
 	}

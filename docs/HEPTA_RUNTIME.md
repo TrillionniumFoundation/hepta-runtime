@@ -290,3 +290,19 @@ ownership and independent acceptance remain necessary. No independent
 Final-use or production authority is granted. Retain DRAFT / DENY_ALL /
 HOLD_NO_GO until exact-source and prospective-merge Rust gates, real SSH
 negative tests and independent operator/release reviews are complete.
+
+## P3 audit data minimization (source candidate, not production evidence)
+
+The controller audit sink now retains only an allowlisted operational state,
+a literal boolean acknowledgement when available, action, host, subject and
+timestamp. Untrusted command arguments, process stdout/stderr, privileged
+action output and remote error text never become the JSONL `outcome`.
+An ambiguous remote launch stores a stable generic error marker in the local
+durable job record rather than a raw remote stderr string. These controls
+preserve failure/quarantine and no-blind-replay behavior.
+
+This deliberately changes audit payload shape. Consumers that used the
+historical full `outcome` must instead obtain bounded data from the authenticated
+owner and cannot treat this audit as a signed execution or Final-use receipt.
+The JSONL audit remains unsigned and not tamper-evident. Real host,
+restart/recovery, observer and independent-acceptance tests remain mandatory.
