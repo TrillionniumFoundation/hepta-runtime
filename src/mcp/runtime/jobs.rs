@@ -12,7 +12,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -21,7 +21,7 @@ use super::config::{ExecutionMode, Platform};
 use super::ssh::{run_jobctl, run_python_json};
 
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
-static START_LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
+static START_LOCKS: OnceLock<Mutex<BTreeMap<String, Arc<AsyncMutex<()>>>>> = OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 const MAX_STDIN_BYTES: usize = 1024 * 1024;
 const MAX_LOG_READ_BYTES: u64 = 16 * 1024;
@@ -137,8 +137,17 @@ fn default_launch_state() -> String {
 	"launched".to_string()
 }
 
-fn start_lock() -> &'static AsyncMutex<()> {
-	START_LOCK.get_or_init(|| AsyncMutex::new(()))
+/// Keep a separate launch lock for each configured host. Unrelated remote
+/// hosts must not wait for the duration of one another's SSH calls.
+fn start_lock(host: &str) -> Result<Arc<AsyncMutex<()>>> {
+	let mut locks = START_LOCKS
+		.get_or_init(|| Mutex::new(BTreeMap::new()))
+		.lock()
+		.map_err(|_| anyhow::anyhow!("process-start lock registry poisoned"))?;
+	Ok(locks
+		.entry(host.to_owned())
+		.or_insert_with(|| Arc::new(AsyncMutex::new(())))
+		.clone())
 }
 
 fn now_ms() -> u128 {
@@ -198,25 +207,53 @@ fn load_record(id: &str) -> Result<JobRecord> {
 }
 
 fn all_records() -> Result<Vec<JobRecord>> {
+	read_records_in_dir(&jobs_dir()?)
+}
+
+/// Do not silently discard malformed or spoofed records from a durable effect
+/// registry: both listing and new execution must fail closed.
+fn read_records_in_dir(dir: &std::path::Path) -> Result<Vec<JobRecord>> {
 	let mut records = Vec::new();
-	for entry in std::fs::read_dir(jobs_dir()?)? {
+	for entry in std::fs::read_dir(dir)? {
 		let entry = entry?;
-		if entry.path().extension().and_then(|s| s.to_str()) != Some("json") {
+		let path = entry.path();
+		if path.extension().and_then(|s| s.to_str()) != Some("json") {
 			continue;
 		}
-		let bytes = std::fs::read(entry.path())?;
+		if !entry.file_type()?.is_file() {
+			bail!("durable job entry is not a regular file; refusing incomplete inventory");
+		}
+		let bytes = std::fs::read(&path)?;
 		let record = serde_json::from_slice::<JobRecord>(&bytes)
 			.context("corrupt job record; refusing to lose idempotency binding")?;
+		if path.file_stem().and_then(|s| s.to_str()) != Some(record.id.as_str()) {
+			bail!("durable job path/identity mismatch; refusing incomplete inventory");
+		}
 		records.push(record);
 	}
 	records.sort_by_key(|record| record.created_unix_ms);
 	Ok(records)
 }
 
-fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
-	Ok(all_records()?
+/// Duplicate records for one host/key mean the identity registry is ambiguous.
+/// Never pick the first record and risk accepting a second physical effect.
+fn find_idempotent_in_records(
+	records: impl IntoIterator<Item = JobRecord>,
+	host: &str,
+	key: &str,
+) -> Result<Option<JobRecord>> {
+	let mut matches = records
 		.into_iter()
-		.find(|record| record.host == host && record.idempotency_key.as_deref() == Some(key)))
+		.filter(|record| record.host == host && record.idempotency_key.as_deref() == Some(key));
+	let first = matches.next();
+	if matches.next().is_some() {
+		bail!("ambiguous durable idempotency binding; remote start denied");
+	}
+	Ok(first)
+}
+
+fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
+	find_idempotent_in_records(all_records()?, host, key)
 }
 
 fn request_digest(params: &ProcessStartParams) -> Result<String> {
@@ -1231,7 +1268,7 @@ fn validate_new_host_resource_limits(
 
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	validate_start(&params)?;
-	let _start_guard = start_lock().lock().await;
+	let _start_guard = start_lock(&params.host)?.lock_owned().await;
 	let request_fingerprint = fingerprint(&params);
 	if let Some(key) = params.idempotency_key.as_deref() {
 		if let Some(mut existing) = find_idempotent(&params.host, key)? {
