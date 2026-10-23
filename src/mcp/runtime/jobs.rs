@@ -8,7 +8,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -16,7 +16,7 @@ use super::config::{check_environment, check_execution, runtime_config, valid_na
 use super::ssh::run_python_json;
 
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
-static START_LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
+static START_LOCKS: OnceLock<Mutex<BTreeMap<String, Arc<AsyncMutex<()>>>>> = OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 const MAX_STDIN_BYTES: usize = 1024 * 1024;
 const MAX_LOG_READ_BYTES: u64 = 1024 * 1024;
@@ -110,6 +110,8 @@ struct JobRecord {
 	created_unix_ms: u128,
 	idempotency_key: Option<String>,
 	request_fingerprint: u64,
+	#[serde(default)]
+	request_digest: Option<String>,
 	#[serde(default = "default_launch_state")]
 	launch_state: String,
 	#[serde(default)]
@@ -120,8 +122,16 @@ fn default_launch_state() -> String {
 	"launched".to_string()
 }
 
-fn start_lock() -> &'static AsyncMutex<()> {
-	START_LOCK.get_or_init(|| AsyncMutex::new(()))
+/// Serialize launches per configured host, not globally across remote hosts.
+fn start_lock(host: &str) -> Result<Arc<AsyncMutex<()>>> {
+	let mut locks = START_LOCKS
+		.get_or_init(|| Mutex::new(BTreeMap::new()))
+		.lock()
+		.map_err(|_| anyhow::anyhow!("process-start lock registry poisoned"))?;
+	Ok(locks
+		.entry(host.to_owned())
+		.or_insert_with(|| Arc::new(AsyncMutex::new(())))
+		.clone())
 }
 
 fn now_ms() -> u128 {
@@ -153,13 +163,25 @@ fn save_record(record: &JobRecord) -> Result<()> {
 	let path = record_path(&record.id)?;
 	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
 	let bytes = serde_json::to_vec_pretty(record)?;
-	std::fs::write(&tmp, bytes)?;
-	#[cfg(unix)]
 	{
-		use std::os::unix::fs::PermissionsExt;
-		std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+		let mut file = OpenOptions::new()
+			.write(true)
+			.create(true)
+			.truncate(true)
+			.open(&tmp)?;
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+		}
+		file.write_all(&bytes)?;
+		file.sync_all()?;
 	}
-	std::fs::rename(tmp, path)?;
+	std::fs::rename(&tmp, &path)?;
+	#[cfg(unix)]
+	if let Some(parent) = path.parent() {
+		std::fs::File::open(parent)?.sync_all()?;
+	}
 	Ok(())
 }
 
@@ -170,29 +192,56 @@ fn load_record(id: &str) -> Result<JobRecord> {
 }
 
 fn all_records() -> Result<Vec<JobRecord>> {
+	read_records_in_dir(&jobs_dir()?)
+}
+
+/// A missing or spoofed effect record must never be interpreted as permission
+/// to start a new remote operation with a formerly used idempotency key.
+fn read_records_in_dir(dir: &std::path::Path) -> Result<Vec<JobRecord>> {
 	let mut records = Vec::new();
-	for entry in std::fs::read_dir(jobs_dir()?)? {
+	for entry in std::fs::read_dir(dir)? {
 		let entry = entry?;
-		if entry.path().extension().and_then(|s| s.to_str()) != Some("json") {
+		let path = entry.path();
+		if path.extension().and_then(|s| s.to_str()) != Some("json") {
 			continue;
 		}
-		if let Ok(bytes) = std::fs::read(entry.path()) {
-			if let Ok(record) = serde_json::from_slice::<JobRecord>(&bytes) {
-				records.push(record);
-			}
+		if !entry.file_type()?.is_file() {
+			bail!("durable job entry is not a regular file; refusing incomplete inventory");
 		}
+		let bytes = std::fs::read(&path)?;
+		let record = serde_json::from_slice::<JobRecord>(&bytes)
+			.context("corrupt job record; refusing to lose idempotency binding")?;
+		if path.file_stem().and_then(|s| s.to_str()) != Some(record.id.as_str()) {
+			bail!("durable job path/identity mismatch; refusing incomplete inventory");
+		}
+		records.push(record);
 	}
 	records.sort_by_key(|record| record.created_unix_ms);
 	Ok(records)
 }
 
-fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
-	Ok(all_records()?
+fn find_idempotent_in_records(
+	records: impl IntoIterator<Item = JobRecord>,
+	host: &str,
+	key: &str,
+) -> Result<Option<JobRecord>> {
+	let mut matches = records
 		.into_iter()
-		.find(|record| record.host == host && record.idempotency_key.as_deref() == Some(key)))
+		.filter(|record| record.host == host && record.idempotency_key.as_deref() == Some(key));
+	let first = matches.next();
+	if matches.next().is_some() {
+		bail!("ambiguous durable idempotency binding; remote start denied");
+	}
+	Ok(first)
 }
 
-fn fingerprint(params: &ProcessStartParams) -> u64 {
+fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
+	find_idempotent_in_records(all_records()?, host, key)
+}
+
+/// The full request digest is authoritative for local idempotency. The old
+/// 64-bit prefix stays on the remote protocol for backward compatibility.
+fn request_digest(params: &ProcessStartParams) -> Result<String> {
 	let binding = json!({
 		"host": params.host,
 		"executable": params.executable,
@@ -205,9 +254,21 @@ fn fingerprint(params: &ProcessStartParams) -> u64 {
 		"cpu_quota_percent": params.cpu_quota_percent,
 		"memory_max_bytes": params.memory_max_bytes,
 	});
-	let bytes = serde_json::to_vec(&binding).expect("process binding serializes");
+	let bytes = serde_json::to_vec(&binding)?;
 	let digest = Sha256::digest(bytes);
-	u64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"))
+	Ok(digest.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+fn fingerprint(params: &ProcessStartParams) -> u64 {
+	let digest = request_digest(params).expect("validated process binding serializes");
+	u64::from_str_radix(&digest[..16], 16).expect("SHA-256 prefix is hexadecimal")
+}
+
+fn matches_request(record: &JobRecord, params: &ProcessStartParams) -> Result<bool> {
+	let existing = record.request_digest.as_deref().context(
+		"legacy idempotency binding lacks a full request digest; inspect existing job instead of relaunching",
+	)?;
+	Ok(existing == request_digest(params)?.as_str())
 }
 
 fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
@@ -248,39 +309,83 @@ pub(crate) fn audit(action: &str, host: &str, subject: &str, outcome: &Value) ->
 }
 
 const START_CODE: &str = r#"
-import json, os, pathlib, shutil, subprocess, sys, time
+import fcntl, json, os, pathlib, shutil, stat, subprocess, sys, time
 req = json.load(sys.stdin)
 job = pathlib.Path(req["job_dir"])
 job.mkdir(parents=True, exist_ok=True)
-os.chmod(job, 0o700)
+# Anchor lock and metadata to the same directory inode, never chmod a job symlink.
+job_fd = os.open(job, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+os.fchmod(job_fd, 0o700)
+
+# Serialize remote launches when separate controllers race over SSH.
+# A lost SSH acknowledgement does not prove the remote effect never started.
+lock_fd = os.open("dispatch.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600, dir_fd=job_fd)
+if not stat.S_ISREG(os.fstat(lock_fd).st_mode):
+    raise SystemExit("remote dispatch lock is not a regular file")
+try:
+    fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    raise SystemExit("remote dispatch still in progress; reconcile, do not retry")
 
 def read_json(name):
     try:
-        return json.loads((job / name).read_text(encoding="utf-8"))
-    except Exception:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=job_fd)
+    except FileNotFoundError:
         return None
+    except OSError as exc:
+        raise SystemExit(f"cannot open remote {name}: {exc}")
+    with os.fdopen(fd, "r", encoding="utf-8") as handle:
+        size = os.fstat(handle.fileno())
+        if not stat.S_ISREG(size.st_mode) or size.st_size > 1048576:
+            raise SystemExit(f"remote {name} is not a bounded regular file")
+        try:
+            value = json.load(handle)
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f"corrupt remote {name}: {exc}")
+    if not isinstance(value, dict):
+        raise SystemExit(f"invalid remote {name} structure")
+    return value
 
 def atomic(name, value):
-    target = job / name
-    tmp = job / (name + ".tmp")
-    tmp.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
-    os.chmod(tmp, 0o600)
-    os.replace(tmp, target)
+    tmp = name + ".tmp"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+    with os.fdopen(os.open(tmp, flags, 0o600, dir_fd=job_fd), "w", encoding="utf-8") as handle:
+        # A crash may leave a preexisting temp file with looser modes.
+        os.fchmod(handle.fileno(), 0o600)
+        handle.write(json.dumps(value, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp, name, src_dir_fd=job_fd, dst_dir_fd=job_fd)
+    os.fsync(job_fd)
 
 stdin_text = req.pop("stdin", None)
+digest = req.get("request_digest")
+if not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+    raise SystemExit("missing exact remote request digest; start denied")
 existing = read_json("request.json")
 if existing is not None:
-    if existing.get("job_id") != req.get("job_id") or existing.get("request_fingerprint") != req.get("request_fingerprint"):
+    if (existing.get("job_id") != req.get("job_id")
+        or existing.get("request_fingerprint") != req.get("request_fingerprint")
+        or existing.get("request_digest") != digest):
         raise SystemExit("remote job directory is bound to a different request")
+    if existing.get("allowed_cwd_prefixes") != req.get("allowed_cwd_prefixes"):
+        raise SystemExit("remote job execution root policy changed")
     launch = read_json("launch.json")
     exit_data = read_json("exit.json")
     started = read_json("started.json")
-    if launch or exit_data:
-        print(json.dumps({"ok": True, "reused_remote": True, **(launch or {"backend": "completed"})}, sort_keys=True))
+    if launch is not None:
+        if launch.get("backend") not in ("systemd", "detached"):
+            raise SystemExit("prior launch has no confirmed backend; reconcile, do not retry")
+        print(json.dumps({"ok": True, "reused_remote": True, **launch}, sort_keys=True))
         raise SystemExit(0)
-    if started:
-        raise SystemExit("ambiguous prior launch: supervisor started without launch record")
+    if exit_data is not None:
+        print(json.dumps({"ok": True, "reused_remote": True, "backend": "completed"}, sort_keys=True))
+        raise SystemExit(0)
+    # No receipt is not proof of no effect after a lost connection or crash.
+    raise SystemExit("ambiguous prior launch: durable request exists without receipt; reconcile")
 else:
+    if any(read_json(name) is not None for name in ("launch.json", "started.json", "exit.json")):
+        raise SystemExit("remote operation evidence without request; reconcile")
     if stdin_text is not None:
         stdin_path = job / "stdin.bin"
         stdin_path.write_bytes(stdin_text.encode("utf-8"))
@@ -345,9 +450,28 @@ env = os.environ.copy()
 env.update(req.get("env", {}))
 env["HEPTA_RUNTIME_JOB_ID"] = req["job_id"]
 try:
+    # Resolve on the remote host after chdir. Popen inherits the verified
+    # cwd inode rather than opening a mutable symlink a second time.
+    cwd = req.get("cwd")
+    roots = req.get("allowed_cwd_prefixes")
+    if not isinstance(roots, list) or any(
+        not isinstance(root, str) or not os.path.isabs(root) for root in roots
+    ):
+        raise PermissionError("missing or invalid remote cwd policy")
+    if roots and not cwd:
+        raise PermissionError("cwd required by remote execution policy")
+    if cwd:
+        os.chdir(cwd)
+    actual = os.getcwd()
+    if roots:
+        physical_roots = [os.path.realpath(root) for root in roots]
+        if not any(
+            os.path.commonpath([actual, root]) == root for root in physical_roots
+        ):
+            raise PermissionError("cwd resolves outside allowed execution roots")
     child = subprocess.Popen(
         [req["executable"], *req.get("args", [])],
-        cwd=req.get("cwd") or None,
+        cwd=None,
         env=env,
         stdin=stdin_handle,
         stdout=out,
@@ -771,15 +895,21 @@ async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> Result<Value> {
 	let config = runtime_config()?;
 	let host = config.host(&record.host)?;
+	let remote_digest = record
+		.request_digest
+		.as_deref()
+		.context("remote start requires exact full request digest")?;
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
 		"unit": record.unit,
 		"request_fingerprint": format!("{:016x}", record.request_fingerprint),
+		"request_digest": remote_digest,
 		"platform": host.platform,
 		"executable": params.executable,
 		"args": params.args,
 		"cwd": params.cwd,
+		"allowed_cwd_prefixes": &host.allowed_cwd_prefixes,
 		"env": params.env,
 		"stdin": params.stdin,
 		"timeout_seconds": params.timeout_seconds,
@@ -809,11 +939,11 @@ async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> R
 
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	validate_start(&params)?;
-	let _start_guard = start_lock().lock().await;
+	let _start_guard = start_lock(&params.host)?.lock_owned().await;
 	let request_fingerprint = fingerprint(&params);
 	if let Some(key) = params.idempotency_key.as_deref() {
 		if let Some(mut existing) = find_idempotent(&params.host, key)? {
-			if existing.request_fingerprint != request_fingerprint {
+			if !matches_request(&existing, &params)? {
 				bail!("idempotency key `{key}` is already bound to a different request");
 			}
 			let retry = matches!(existing.launch_state.as_str(), "pending" | "launch_failed");
@@ -855,6 +985,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 		created_unix_ms: now_ms(),
 		idempotency_key: params.idempotency_key.clone(),
 		request_fingerprint,
+		request_digest: Some(request_digest(&params)?),
 		launch_state: "pending".to_string(),
 		launch_error: None,
 	};
@@ -944,6 +1075,228 @@ pub fn list_jobs(params: ProcessListParams) -> Result<String> {
 mod tests {
 	use super::*;
 
+	fn test_record() -> JobRecord {
+		JobRecord {
+			id: "fixture-job".into(),
+			host: "fixture-main".into(),
+			ssh_target: "fixture-target".into(),
+			unit: "fixture-unit".into(),
+			remote_job_dir: "/tmp/fixture-job".into(),
+			executable: "/usr/bin/true".into(),
+			args: Vec::new(),
+			cwd: None,
+			env_keys: Vec::new(),
+			created_unix_ms: 1,
+			idempotency_key: Some("fixed-key".into()),
+			request_fingerprint: 42,
+			request_digest: Some("a".repeat(64)),
+			launch_state: "launched".into(),
+			launch_error: None,
+		}
+	}
+
+	#[test]
+	fn host_launch_locks_do_not_serialize_independent_hosts() {
+		let first = start_lock("fixture-launch-host-a").unwrap();
+		let same_host = start_lock("fixture-launch-host-a").unwrap();
+		let other_host = start_lock("fixture-launch-host-b").unwrap();
+		assert!(Arc::ptr_eq(&first, &same_host));
+		assert!(!Arc::ptr_eq(&first, &other_host));
+		let guard = first.clone().try_lock_owned().unwrap();
+		assert!(same_host.clone().try_lock_owned().is_err());
+		assert!(other_host.try_lock_owned().is_ok());
+		drop(guard);
+		assert!(same_host.try_lock_owned().is_ok());
+	}
+
+	#[test]
+	fn durable_job_scan_rejects_corrupted_spoofed_or_symlinked_records() {
+		let root = tempfile::tempdir().unwrap();
+		let record = test_record();
+		let exact = root.path().join("fixture-job.json");
+		std::fs::write(&exact, serde_json::to_vec(&record).unwrap()).unwrap();
+		assert_eq!(read_records_in_dir(root.path()).unwrap().len(), 1);
+		let corrupt = root.path().join("corrupt.json");
+		std::fs::write(&corrupt, b"{").unwrap();
+		assert!(read_records_in_dir(root.path()).is_err());
+		std::fs::remove_file(&corrupt).unwrap();
+		let wrong = root.path().join("different-id.json");
+		std::fs::write(&wrong, serde_json::to_vec(&record).unwrap()).unwrap();
+		assert!(read_records_in_dir(root.path()).is_err());
+		std::fs::remove_file(&wrong).unwrap();
+		#[cfg(unix)]
+		{
+			std::os::unix::fs::symlink(&exact, &wrong).unwrap();
+			assert!(read_records_in_dir(root.path()).is_err());
+		}
+	}
+
+	#[test]
+	fn duplicate_durable_keys_refuse_to_choose_one_existing_effect() {
+		let first = test_record();
+		let mut second = first.clone();
+		second.id = "other-job".into();
+		assert!(find_idempotent_in_records(
+			vec![first.clone(), second.clone()],
+			"fixture-main",
+			"fixed-key"
+		)
+		.is_err());
+		assert_eq!(
+			find_idempotent_in_records(vec![first.clone()], "fixture-main", "fixed-key")
+				.unwrap()
+				.unwrap()
+				.id,
+			first.id
+		);
+		assert!(find_idempotent_in_records(vec![second], "another-host", "fixed-key")
+			.unwrap()
+			.is_none());
+	}
+
+	#[test]
+	fn legacy_or_mismatched_full_digest_cannot_replay_old_job() {
+		let mut params: ProcessStartParams = serde_json::from_value(
+			json!({"host": "fixture-main", "executable": "/usr/bin/true"}),
+		)
+		.unwrap();
+		let mut record = test_record();
+		record.request_digest = None;
+		assert!(matches_request(&record, &params).is_err());
+		let digest = request_digest(&params).unwrap();
+		assert_eq!(digest.len(), 64);
+		assert_eq!(
+			u64::from_str_radix(&digest[..16], 16).unwrap(),
+			fingerprint(&params)
+		);
+		record.request_digest = Some(digest);
+		assert!(matches_request(&record, &params).unwrap());
+		params.stdin = Some("changed request".into());
+		assert!(!matches_request(&record, &params).unwrap());
+	}
+
+
+	#[cfg(unix)]
+	fn remote_start_request(job: &std::path::Path) -> serde_json::Value {
+		json!({
+			"job_dir": job.to_string_lossy(),
+			"job_id": "unit-effect",
+			"request_fingerprint": "abcdef1234567890",
+			"request_digest": "a".repeat(64),
+			"allowed_cwd_prefixes": []
+		})
+	}
+
+	#[cfg(unix)]
+	fn execute_remote_start_fixture(job: &std::path::Path) -> std::process::Output {
+		use std::process::{Command, Stdio};
+		let mut child = Command::new("python3")
+			.arg("-c")
+			.arg(START_CODE)
+			.stdin(Stdio::piped())
+			.stdout(Stdio::piped())
+			.stderr(Stdio::piped())
+			.spawn()
+			.expect("spawn remote Python fixture");
+		child
+			.stdin
+			.take()
+			.unwrap()
+			.write_all(&serde_json::to_vec(&remote_start_request(job)).unwrap())
+			.unwrap();
+		child.wait_with_output().unwrap()
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn remote_start_rejects_corrupt_and_ambiguous_previous_effects() {
+		let fixture = tempfile::tempdir().unwrap();
+		let job = fixture.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		let request_path = job.join("request.json");
+		std::fs::write(&request_path, b"{").unwrap();
+		let result = execute_remote_start_fixture(&job);
+		assert!(!result.status.success());
+		assert!(String::from_utf8_lossy(&result.stderr).contains("corrupt remote request.json"));
+		assert_eq!(std::fs::read(&request_path).unwrap(), b"{");
+
+		std::fs::write(&request_path, serde_json::to_vec(&remote_start_request(&job)).unwrap())
+			.unwrap();
+		let result = execute_remote_start_fixture(&job);
+		assert!(!result.status.success());
+		assert!(String::from_utf8_lossy(&result.stderr).contains("ambiguous prior launch"));
+		assert!(!job.join("launch.json").exists());
+
+		std::fs::write(job.join("launch.json"), b"{").unwrap();
+		let result = execute_remote_start_fixture(&job);
+		assert!(!result.status.success());
+		assert!(String::from_utf8_lossy(&result.stderr).contains("corrupt remote launch.json"));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn remote_start_only_reuses_a_confirmed_backend() {
+		let fixture = tempfile::tempdir().unwrap();
+		let job = fixture.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		std::fs::write(
+			job.join("request.json"),
+			serde_json::to_vec(&remote_start_request(&job)).unwrap(),
+		)
+		.unwrap();
+		std::fs::write(job.join("launch.json"), br#"{"backend":"launch_failed"}"#).unwrap();
+		let result = execute_remote_start_fixture(&job);
+		assert!(!result.status.success());
+		assert!(String::from_utf8_lossy(&result.stderr).contains("no confirmed backend"));
+
+		std::fs::write(job.join("launch.json"), br#"{"backend":"systemd","unit":"unit-test"}"#)
+			.unwrap();
+		let result = execute_remote_start_fixture(&job);
+		assert!(result.status.success());
+		let observed: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+		assert_eq!(observed["reused_remote"], true);
+		assert_eq!(observed["backend"], "systemd");
+		assert_eq!(observed["unit"], "unit-test");
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn remote_start_rejects_symlinked_request_record() {
+		let fixture = tempfile::tempdir().unwrap();
+		let job = fixture.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		let external = fixture.path().join("external.json");
+		std::fs::write(&external, serde_json::to_vec(&remote_start_request(&job)).unwrap())
+			.unwrap();
+		std::os::unix::fs::symlink(external, job.join("request.json")).unwrap();
+		let result = execute_remote_start_fixture(&job);
+		assert!(!result.status.success());
+		assert!(String::from_utf8_lossy(&result.stderr).contains("cannot open remote request.json"));
+	}
+
+
+	#[cfg(unix)]
+	#[test]
+	fn remote_start_rejects_digest_drift_and_job_directory_symlinks() {
+		let fixture = tempfile::tempdir().unwrap();
+		let job = fixture.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		let mut previous = remote_start_request(&job);
+		previous["request_digest"] = serde_json::Value::String("b".repeat(64));
+		std::fs::write(job.join("request.json"), serde_json::to_vec(&previous).unwrap())
+			.unwrap();
+		let result = execute_remote_start_fixture(&job);
+		assert!(!result.status.success());
+		assert!(String::from_utf8_lossy(&result.stderr).contains("bound to a different request"));
+
+		std::fs::remove_file(job.join("dispatch.lock")).unwrap();
+		let symlink = fixture.path().join("job-link");
+		std::os::unix::fs::symlink(&job, &symlink).unwrap();
+		let result = execute_remote_start_fixture(&symlink);
+		assert!(!result.status.success());
+		assert!(!symlink.join("dispatch.lock").exists());
+	}
+
 	#[test]
 	fn ids_are_valid_and_unique() {
 		let a = next_job_id();
@@ -973,5 +1326,52 @@ mod tests {
 		base.stdin = None;
 		base.cpu_quota_percent = Some(21);
 		assert_ne!(original, fingerprint(&base));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn embedded_python_runner_rejects_remote_cwd_symlink_escape() {
+		use std::os::unix::fs::symlink;
+
+		let after = START_CODE.split_once("runner = r'''").unwrap().1;
+		let runner = after.split_once("\n'''").unwrap().0;
+		let temp = tempfile::tempdir().unwrap();
+		let allowed = temp.path().join("allowed");
+		let outside = temp.path().join("outside");
+		std::fs::create_dir(&allowed).unwrap();
+		std::fs::create_dir(&outside).unwrap();
+		let escape = allowed.join("escape");
+		symlink(&outside, &escape).unwrap();
+
+		for (name, cwd, accepted) in [
+			("allowed", allowed.as_path(), true),
+			("escape", escape.as_path(), false),
+		] {
+			let job = temp.path().join(name);
+			std::fs::create_dir(&job).unwrap();
+			std::fs::write(job.join("runner.py"), runner).unwrap();
+			let request = json!({
+				"job_id": name,
+				"executable": "/bin/pwd",
+				"args": [],
+				"cwd": cwd.to_str().unwrap(),
+				"allowed_cwd_prefixes": [allowed.to_str().unwrap()],
+			});
+			std::fs::write(job.join("request.json"), serde_json::to_vec(&request).unwrap())
+				.unwrap();
+			let output = std::process::Command::new("python3")
+				.arg(job.join("runner.py"))
+				.current_dir(&job)
+				.output()
+				.unwrap();
+			assert_eq!(output.status.success(), accepted, "{name}");
+			if !accepted {
+				let evidence: Value = serde_json::from_slice(
+					&std::fs::read(job.join("exit.json")).unwrap(),
+				)
+				.unwrap();
+				assert_eq!(evidence["exit_code"], 127);
+			}
+		}
 	}
 }

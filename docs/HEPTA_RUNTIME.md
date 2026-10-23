@@ -68,6 +68,18 @@ request, launch, PID/start-time and exit records inside the configured remote
 state directory. The controller stores a separate immutable job identity and
 an append-only audit event.
 
+**Ambiguous remote start is reconcile-only.** The remote executor binds its launch
+record to the full SHA-256 request digest and opens per-job metadata relative to
+one no-follow directory descriptor under an exclusive per-job launch lock.
+The durable request is synced before attempting the process effect. If SSH
+acknowledgement, `launch.json`, or supervisor evidence is missing, a subsequent
+`process_start` with that key must **not** conclude that no process ran and must
+not start a replacement. Corrupt, symlinked, oversized or pre-full-digest records
+also fail closed. An operator must reconcile the remote effect and preserve its
+identity before any recovery decision; automatic retry is intentionally unavailable
+when effect nonoccurrence cannot be independently demonstrated. This is a
+software boundary, not proof of target-host process attestation or Final-use.
+
 A controller restart does not terminate durable jobs. A remote host reboot is
 not claimed as process recovery in v0.1: logs and metadata remain, but an
 in-flight transient unit is reported lost unless the application itself has a
@@ -137,17 +149,29 @@ file-tool-visible.
 
 ## Remote file rules
 
-When `--runtime-config` is active, reads and writes to unregistered SSH hosts are denied.
-Remote URLs may not override the registered user or port, may not use login-home
-relative forms, and must fall under `allowed_read_path_prefixes` or
-`allowed_write_path_prefixes`. Writes additionally require `allow_write=true`.
-A registered host must set `allow_write=true`, provide at least one absolute
-`allowed_write_path_prefixes` entry, and the target must not intersect a
-protected prefix. Login-home-relative forms such as `ssh://host/~/file` are
-read-only; write calls must use an absolute remote path.
+**P0 security quarantine:** With `--runtime-config` enabled, all inherited
+remote SFTP file access is currently **denied**, including reads, writes,
+stat/list operations, directory creation, deletion, and low-level connection
+pool reuse. High-level path admission and the SFTP pool both enforce this
+denial before any remote SSH/SFTP effect. Configuring
+`allowed_read_path_prefixes`, `allowed_write_path_prefixes`, or
+`allow_write=true` does **not** override it.
 
-Without `--runtime-config`, upstream Octofs compatibility is retained and these
-fork-specific host policies are not active.
+The previous path policy checked absolute textual prefixes, explicit parent
+components, user/port overrides and protected paths. Those checks cannot
+constrain the **physical** object reached by an SFTP server when an in-root
+directory is a symlink, or when an adversary swaps that directory between
+canonicalization and open/create/truncate/rename. A canonicalize-only patch is
+not sufficient. Remote SFTP tools must remain disabled until a qualified
+remote OS account/chroot/mount-namespace confinement boundary is in place,
+with independent symlink and mutation-race tests, exact-source Rust gates,
+and real SSH/SFTP host receipts. This change is a temporary containment
+measure, **not** a claim that SFTP isolation is fully implemented.
+
+Without `--runtime-config`, legacy Octofs remote-file support is retained,
+and the Hepta runtime-mode host-policy guarantees do not apply. Local
+controller-workspace file rules and explicit process/PTY tools are separate
+policies; this quarantine does not expand their authority.
 
 ## Secure MCP Tunnel
 
