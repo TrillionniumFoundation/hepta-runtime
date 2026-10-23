@@ -107,6 +107,17 @@ arguments are accepted, and a timeout. The runtime invokes it through
 managers, general-purpose file tools, or a wrapper accepting arbitrary shell
 text as a privileged action.
 
+Each \`privileged_action\` request must also include a nonblank caller-stable
+\`idempotency_key\` (at most 256 bytes). The controller durably enters the
+policy-resolved executable, arguments and timeout before any remote SSH effect.
+An observed result is cached for same-key retries; a lost acknowledgement remains
+\`indeterminate\` and MUST be reconciled, never automatically re-executed.
+Changing the action or payload under the same key is rejected. This bounded
+no-blind-replay mechanism does not make arbitrary sudo operations transactional,
+does not prevent distinct authorized keys from invoking the same named action,
+and is **not** an independently signed Hepta Final-use grant. Production activation
+still requires issuer/revocation/generation binding and target-host fault tests.
+
 ## Policy boundary
 
 The first and strongest boundary is the target operating-system identity. Use a

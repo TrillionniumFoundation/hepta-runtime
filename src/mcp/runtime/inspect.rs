@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use super::config::{check_protected_input, runtime_config, valid_name, Platform};
 use super::jobs::audit;
+use super::privileged_ledger::{self, Admission};
 use super::ssh::run_python_json;
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, schemars::JsonSchema)]
@@ -29,6 +30,8 @@ pub struct PrivilegedActionParams {
 	pub host: String,
 	/// Exact symbolic action name from the host policy.
 	pub action: String,
+	/// Stable operation identity. An uncertain attempt cannot be blindly replayed.
+	pub idempotency_key: String,
 	#[serde(default)]
 	pub args: Vec<String>,
 }
@@ -314,13 +317,38 @@ pub async fn privileged_action(params: PrivilegedActionParams) -> Result<String>
 		"args": params.args,
 		"timeout_seconds": action.timeout_seconds.min(300),
 	});
-	let output: Value = run_python_json(
+	// Bind the exact approved executable, arguments and timeout before SSH.
+	// A lost remote acknowledgement leaves an indeterminate durable intent;
+	// retrying the same key never performs a second privileged effect.
+	let admission = privileged_ledger::admit(
+		&runtime_config()?.state_dir,
+		&params.host,
+		&params.action,
+		&params.idempotency_key,
+		&request,
+	)
+	.await?;
+	let permit = match admission {
+		Admission::Observed(observed) => {
+			audit("privileged_action_reused", &params.host, &params.action, &observed)?;
+			return Ok(serde_json::to_string_pretty(&observed)?);
+		}
+		Admission::Entered(permit) => permit,
+	};
+	audit(
+		"privileged_action_entered",
+		&params.host,
+		&params.action,
+		&json!({"idempotency_key": params.idempotency_key}),
+	)?;
+	let observed: Value = run_python_json(
 		host,
 		PRIVILEGED_CODE,
 		&request,
 		Duration::from_secs(action.timeout_seconds.min(300) + 10),
 	)
 	.await?;
-	audit("privileged_action", &params.host, &params.action, &output)?;
-	Ok(serde_json::to_string_pretty(&output)?)
+	let observed = permit.complete(observed)?;
+	audit("privileged_action", &params.host, &params.action, &observed)?;
+	Ok(serde_json::to_string_pretty(&observed)?)
 }
