@@ -112,6 +112,42 @@ fn corrupt_record_blocks_idempotency_scan() {
 }
 
 #[test]
+fn multiple_durable_owners_of_one_idempotency_key_fail_closed() {
+	let dir = tempdir().unwrap();
+	let mut first = record("job-1");
+	first.launch_state = "launched".into();
+	let mut second = record("job-2");
+	second.request_digest = Some("conflicting-payload".into());
+	for entry in [first, second] {
+		std::fs::write(
+			dir.path().join(format!("{}.json", entry.id)),
+			serde_json::to_vec(&entry).unwrap(),
+		)
+		.unwrap();
+	}
+	let scanned = scan_records_dir(dir.path()).unwrap();
+	let error = select_idempotent_owner(scanned, "rog", "repeat-key").unwrap_err();
+	assert!(error.to_string().contains("multiple durable job owners"));
+}
+
+#[test]
+fn distinct_idempotency_owners_keep_host_and_key_isolation() {
+	let own = record("job-1");
+	let mut other_host = record("job-2");
+	other_host.host = "pocket4".into();
+	let mut other_key = record("job-3");
+	other_key.idempotency_key = Some("different-key".into());
+	let scanned = vec![own, other_host, other_key];
+	let owner = select_idempotent_owner(scanned, "rog", "repeat-key")
+		.unwrap()
+		.unwrap();
+	assert_eq!(owner.id, "job-1");
+	assert!(select_idempotent_owner(Vec::new(), "rog", "repeat-key")
+		.unwrap()
+		.is_none());
+}
+
+#[test]
 fn mismatched_filename_blocks_idempotency_scan() {
 	let dir = tempdir().unwrap();
 	let valid = record("job-1");
