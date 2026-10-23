@@ -16,6 +16,7 @@ use super::config::{check_environment, check_execution, runtime_config, valid_na
 use super::ssh::run_python_json;
 
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+static SAVE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static HOST_START_LOCKS: OnceLock<Mutex<HashMap<String, Weak<AsyncMutex<()>>>>> =
 	OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -165,15 +166,34 @@ fn record_path(id: &str) -> Result<PathBuf> {
 
 fn save_record(record: &JobRecord) -> Result<()> {
 	let path = record_path(&record.id)?;
-	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
+	save_record_to(&path, record)
+}
+
+// The durable identity must hit stable storage before a remote launch starts.
+// A unique, mode-restricted temporary file and atomic rename preserve the
+// predecessor on partial writes; fsync the file and containing directory to
+// close the crash window between local write-ahead and remote execution.
+fn save_record_to(path: &Path, record: &JobRecord) -> Result<()> {
+	let sequence = SAVE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+	let tmp = path.with_extension(format!("json.tmp.{}.{sequence}", std::process::id()));
 	let bytes = serde_json::to_vec_pretty(record)?;
-	std::fs::write(&tmp, bytes)?;
+	let mut options = OpenOptions::new();
+	options.write(true).create_new(true);
 	#[cfg(unix)]
 	{
-		use std::os::unix::fs::PermissionsExt;
-		std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+		use std::os::unix::fs::OpenOptionsExt;
+		options.mode(0o600);
 	}
-	std::fs::rename(tmp, path)?;
+	let mut file = options.open(&tmp)?;
+	file.write_all(&bytes)?;
+	file.sync_all()?;
+	drop(file);
+	std::fs::rename(&tmp, path)?;
+	#[cfg(unix)]
+	{
+		let parent = path.parent().ok_or_else(|| anyhow::anyhow!("missing job parent"))?;
+		std::fs::File::open(parent)?.sync_all()?;
+	}
 	Ok(())
 }
 

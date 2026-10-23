@@ -90,3 +90,32 @@ async fn start_lock_does_not_serialize_unrelated_hosts() {
 	assert!(start_lock("locked-host-a").unwrap().try_lock().is_err());
 	assert!(other.try_lock().is_ok());
 }
+
+#[test]
+fn saved_job_record_is_atomically_replaced_and_private() {
+	let dir = tempfile::tempdir().unwrap();
+	let path = dir.path().join("valid-1.json");
+	let mut record = fixture_record("valid-1");
+	super::save_record_to(&path, &record).unwrap();
+	assert_eq!(read_records_from(dir.path()).unwrap().len(), 1);
+	record.launch_state = "launch_failed".to_owned();
+	super::save_record_to(&path, &record).unwrap();
+	let records = read_records_from(dir.path()).unwrap();
+	assert_eq!(records.len(), 1);
+	assert_eq!(records[0].launch_state, "launch_failed");
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o077, 0);
+	}
+}
+
+#[test]
+fn committed_record_ignores_interrupted_uncommitted_temp() {
+	let dir = tempfile::tempdir().unwrap();
+	let path = dir.path().join("valid-1.json");
+	let record = fixture_record("valid-1");
+	super::save_record_to(&path, &record).unwrap();
+	std::fs::write(dir.path().join("valid-1.json.tmp.interrupted"), b"partial").unwrap();
+	assert_eq!(read_records_from(dir.path()).unwrap()[0].id, "valid-1");
+}
