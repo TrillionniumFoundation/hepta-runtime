@@ -301,6 +301,21 @@ fn stale_temp_record_is_never_overwritten() {
 }
 
 #[test]
+fn oversized_job_record_is_not_persisted_or_dispatched() {
+	let dir = tempdir().unwrap();
+	let path = dir.path().join("job-1.json");
+	let mut entry = record("job-1");
+	entry.args = vec!["x".repeat(MAX_JOB_RECORD_BYTES as usize + 1)];
+	let error = save_record_at(&path, &entry).unwrap_err();
+	assert!(error.to_string().contains("durable job record exceeds"));
+	assert!(!path.exists(), "oversized receipt must not become durable");
+	assert!(
+		!path.with_extension(format!("json.tmp.{}", std::process::id())).exists(),
+		"oversized receipt must not leave an ambiguous temporary owner"
+	);
+}
+
+#[test]
 fn oversized_job_record_is_rejected_without_deserialization() {
 	let dir = tempdir().unwrap();
 	let path = dir.path().join("job-1.json");
