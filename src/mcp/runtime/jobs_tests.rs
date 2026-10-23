@@ -308,3 +308,43 @@ fn oversized_job_record_is_rejected_without_deserialization() {
 	let error = read_record_at(&path, "job-1").unwrap_err();
 	assert!(error.to_string().contains("oversized durable job record"));
 }
+
+#[cfg(unix)]
+#[test]
+fn audit_append_denies_symlink_without_touching_target() {
+	let dir = tempdir().unwrap();
+	let target = dir.path().join("outside");
+	let link = dir.path().join("events.jsonl");
+	std::fs::write(&target, b"untouched").unwrap();
+	std::os::unix::fs::symlink(&target, &link).unwrap();
+	assert!(open_audit_append(&link).is_err());
+	assert_eq!(std::fs::read(target).unwrap(), b"untouched");
+}
+
+#[cfg(unix)]
+#[test]
+fn audit_append_creates_private_regular_file() {
+	use std::os::unix::fs::PermissionsExt;
+	let dir = tempdir().unwrap();
+	let path = dir.path().join("events.jsonl");
+	let mut file = open_audit_append(&path).unwrap();
+	file.write_all(b"first\\n").unwrap();
+	file.sync_data().unwrap();
+	assert_eq!(
+		std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+		0o600
+	);
+	assert_eq!(std::fs::read(&path).unwrap(), b"first\\n");
+}
+
+#[cfg(unix)]
+#[test]
+fn audit_append_rejects_existing_world_readable_file() {
+	use std::os::unix::fs::PermissionsExt;
+	let dir = tempdir().unwrap();
+	let path = dir.path().join("events.jsonl");
+	std::fs::write(&path, b"original").unwrap();
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+	assert!(open_audit_append(&path).is_err());
+	assert_eq!(std::fs::read(path).unwrap(), b"original");
+}
