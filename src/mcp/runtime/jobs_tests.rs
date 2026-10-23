@@ -111,13 +111,15 @@ fn atomic_record_replacement_preserves_valid_identity() {
 }
 
 #[cfg(unix)]
-fn try_remote_resume(request_state: &str, extra: Option<(&str, &str)>) -> std::process::Output {
+fn try_remote_resume(request_state: Option<&str>, extra: Option<(&str, &str)>) -> std::process::Output {
 	use std::io::Write;
 	use std::process::{Command, Stdio};
 	let dir = tempdir().unwrap();
 	let job_dir = dir.path().join("job");
 	std::fs::create_dir_all(&job_dir).unwrap();
-	std::fs::write(job_dir.join("request.json"), request_state).unwrap();
+	if let Some(request_state) = request_state {
+		std::fs::write(job_dir.join("request.json"), request_state).unwrap();
+	}
 	if let Some((filename, content)) = extra {
 		std::fs::write(job_dir.join(filename), content).unwrap();
 	}
@@ -142,7 +144,7 @@ fn try_remote_resume(request_state: &str, extra: Option<(&str, &str)>) -> std::p
 #[cfg(unix)]
 #[test]
 fn corrupt_remote_request_refuses_replay() {
-	let output = try_remote_resume("{partial", None);
+	let output = try_remote_resume(Some("{partial"), None);
 	assert!(!output.status.success());
 	assert!(String::from_utf8_lossy(&output.stderr).contains("corrupt remote job state request.json"));
 }
@@ -151,7 +153,7 @@ fn corrupt_remote_request_refuses_replay() {
 #[test]
 fn acknowledged_request_without_launch_evidence_refuses_replay() {
 	let request = r#"{"job_id":"job-1","request_fingerprint":"aabb"}"#;
-	let output = try_remote_resume(request, None);
+	let output = try_remote_resume(Some(request), None);
 	assert!(!output.status.success());
 	assert!(String::from_utf8_lossy(&output.stderr).contains("ambiguous prior launch"));
 }
@@ -160,7 +162,7 @@ fn acknowledged_request_without_launch_evidence_refuses_replay() {
 #[test]
 fn failed_remote_launch_is_not_reported_as_successful_reuse() {
 	let request = r#"{"job_id":"job-1","request_fingerprint":"aabb"}"#;
-	let output = try_remote_resume(request, Some(("launch.json", r#"{"backend":"launch_failed"}"#)));
+	let output = try_remote_resume(Some(request), Some(("launch.json", r#"{"backend":"launch_failed"}"#)));
 	assert!(!output.status.success());
 	assert!(String::from_utf8_lossy(&output.stderr).contains("prior remote launch failed"));
 }
@@ -169,7 +171,15 @@ fn failed_remote_launch_is_not_reported_as_successful_reuse() {
 #[test]
 fn confirmed_remote_launch_can_be_reconciled_without_restarting() {
 	let request = r#"{"job_id":"job-1","request_fingerprint":"aabb"}"#;
-	let output = try_remote_resume(request, Some(("launch.json", r#"{"backend":"systemd","unit":"u"}"#)));
+	let output = try_remote_resume(Some(request), Some(("launch.json", r#"{"backend":"systemd","unit":"u"}"#)));
 	assert!(output.status.success());
 	assert!(String::from_utf8_lossy(&output.stdout).contains("reused_remote"));
+}
+
+#[cfg(unix)]
+#[test]
+fn orphaned_remote_effect_state_refuses_new_launch() {
+	let output = try_remote_resume(None, Some(("started.json", r#"{"supervisor_pid":123}"#)));
+	assert!(!output.status.success());
+	assert!(String::from_utf8_lossy(&output.stderr).contains("orphaned remote job state"));
 }
