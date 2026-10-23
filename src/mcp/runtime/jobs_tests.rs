@@ -564,78 +564,98 @@ fn remote_status_and_read_accept_only_exact_bound_observations() {
 
 #[cfg(unix)]
 fn bound_remote_read_probe(job_dir: &std::path::Path) -> std::process::Output {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-    let query = json!({
-        "job_id": "job-bound-read",
-        "job_dir": job_dir,
-        "unit": "hepta-runtime-job-bound-read",
-        "request_digest": "a".repeat(64),
-        "stdout_offset": 2,
-        "limit": 4,
-    });
-    let mut child = Command::new("python3")
-        .arg("-c")
-        .arg(READ_CODE)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child.stdin.take().unwrap().write_all(query.to_string().as_bytes()).unwrap();
-    child.wait_with_output().unwrap()
+	use std::io::Write;
+	use std::process::{Command, Stdio};
+
+	let query = json!({
+		"job_id": "job-bound-read",
+		"job_dir": job_dir,
+		"unit": "hepta-runtime-job-bound-read",
+		"request_digest": "a".repeat(64),
+		"stdout_offset": 2,
+		"limit": 4,
+	});
+	let mut child = Command::new("python3")
+		.arg("-c")
+		.arg(READ_CODE)
+		.stdin(Stdio::piped())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.spawn()
+		.unwrap();
+	child
+		.stdin
+		.take()
+		.unwrap()
+		.write_all(query.to_string().as_bytes())
+		.unwrap();
+	child.wait_with_output().unwrap()
 }
 
 #[cfg(unix)]
 #[test]
 fn remote_read_denies_symlink_hardlink_and_foreign_request_file() {
-    use std::os::unix::fs::symlink;
-    let dir = tempdir().unwrap();
-    let root = std::fs::canonicalize(dir.path()).unwrap();
-    let job = root.join("job");
-    std::fs::create_dir(&job).unwrap();
-    let request = json!({
-        "job_id": "job-bound-read",
-        "job_dir": job,
-        "unit": "hepta-runtime-job-bound-read",
-        "request_digest": "a".repeat(64),
-    });
-    std::fs::write(job.join("request.json"), request.to_string()).unwrap();
-    let stdout = job.join("stdout.log");
-    std::fs::write(&stdout, b"0123456789").unwrap();
-    let positive = bound_remote_read_probe(&job);
-    assert!(positive.status.success(), "{}", String::from_utf8_lossy(&positive.stderr));
-    let payload: Value = serde_json::from_slice(&positive.stdout).unwrap();
-    assert_eq!(payload["stdout"]["text"], "2345");
-    assert_eq!(payload["stdout"]["next_offset"], 6);
-    assert_eq!(payload["stderr"]["text"], "");
+	use std::os::unix::fs::symlink;
 
-    let secret = root.join("outside-secret");
-    std::fs::write(&secret, b"DO-NOT-READ-OUTSIDE-LOG").unwrap();
-    std::fs::remove_file(&stdout).unwrap();
-    symlink(&secret, &stdout).unwrap();
-    let blocked = bound_remote_read_probe(&job);
-    assert!(!blocked.status.success());
-    assert!(String::from_utf8_lossy(&blocked.stderr).contains("unsafe remote job file stdout.log"));
-    assert!(!String::from_utf8_lossy(&blocked.stdout).contains("DO-NOT-READ"));
+	let dir = tempdir().unwrap();
+	let root = std::fs::canonicalize(dir.path()).unwrap();
+	let job = root.join("job");
+	std::fs::create_dir(&job).unwrap();
+	let request = json!({
+		"job_id": "job-bound-read",
+		"job_dir": job,
+		"unit": "hepta-runtime-job-bound-read",
+		"request_digest": "a".repeat(64),
+	});
+	std::fs::write(job.join("request.json"), request.to_string()).unwrap();
+	let stdout = job.join("stdout.log");
+	std::fs::write(&stdout, b"0123456789").unwrap();
 
-    std::fs::remove_file(&stdout).unwrap();
-    std::fs::hard_link(&secret, &stdout).unwrap();
-    let blocked = bound_remote_read_probe(&job);
-    assert!(!blocked.status.success());
-    assert!(String::from_utf8_lossy(&blocked.stderr).contains("non-regular or linked inode"));
-    std::fs::remove_file(&stdout).unwrap();
+	let positive = bound_remote_read_probe(&job);
+	assert!(
+		positive.status.success(),
+		"{}",
+		String::from_utf8_lossy(&positive.stderr)
+	);
+	let payload: Value = serde_json::from_slice(&positive.stdout).unwrap();
+	assert_eq!(payload["stdout"]["text"], "2345");
+	assert_eq!(payload["stdout"]["next_offset"], 6);
+	assert_eq!(payload["stderr"]["text"], "");
 
-    let alias = root.join("job-alias");
-    symlink(&job, &alias).unwrap();
-    let blocked = bound_remote_read_probe(&alias);
-    assert!(!blocked.status.success());
-    assert!(String::from_utf8_lossy(&blocked.stderr).contains("unsafe remote job directory"));
+	let secret = root.join("outside-secret");
+	std::fs::write(&secret, b"DO-NOT-READ-OUTSIDE-LOG").unwrap();
+	std::fs::remove_file(&stdout).unwrap();
+	symlink(&secret, &stdout).unwrap();
+	let blocked = bound_remote_read_probe(&job);
+	assert!(!blocked.status.success());
+	assert!(
+		String::from_utf8_lossy(&blocked.stderr).contains("unsafe remote job file stdout.log")
+	);
+	assert!(!String::from_utf8_lossy(&blocked.stdout).contains("DO-NOT-READ"));
 
-    std::fs::remove_file(job.join("request.json")).unwrap();
-    symlink(&secret, job.join("request.json")).unwrap();
-    let blocked = bound_remote_read_probe(&job);
-    assert!(!blocked.status.success());
-    assert!(String::from_utf8_lossy(&blocked.stderr).contains("unsafe remote job file request.json"));
-    assert_eq!(std::fs::read(&secret).unwrap(), b"DO-NOT-READ-OUTSIDE-LOG");
+	std::fs::remove_file(&stdout).unwrap();
+	std::fs::hard_link(&secret, &stdout).unwrap();
+	let blocked = bound_remote_read_probe(&job);
+	assert!(!blocked.status.success());
+	assert!(
+		String::from_utf8_lossy(&blocked.stderr).contains("non-regular or linked inode")
+	);
+	std::fs::remove_file(&stdout).unwrap();
+
+	let alias = root.join("job-alias");
+	symlink(&job, &alias).unwrap();
+	let blocked = bound_remote_read_probe(&alias);
+	assert!(!blocked.status.success());
+	assert!(
+		String::from_utf8_lossy(&blocked.stderr).contains("unsafe remote job directory")
+	);
+
+	std::fs::remove_file(job.join("request.json")).unwrap();
+	symlink(&secret, job.join("request.json")).unwrap();
+	let blocked = bound_remote_read_probe(&job);
+	assert!(!blocked.status.success());
+	assert!(
+		String::from_utf8_lossy(&blocked.stderr).contains("unsafe remote job file request.json")
+	);
+	assert_eq!(std::fs::read(&secret).unwrap(), b"DO-NOT-READ-OUTSIDE-LOG");
 }
