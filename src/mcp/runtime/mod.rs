@@ -2,6 +2,7 @@
 //! policy enforcement, and read-only host inspection.
 
 pub mod config;
+pub mod execution;
 pub mod inspect;
 mod privileged_ledger;
 pub mod jobs;
