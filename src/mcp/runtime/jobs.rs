@@ -314,6 +314,16 @@ fn verify_reuse_binding(
 	Ok(())
 }
 
+fn admit_observation_only_reuse(record: &JobRecord) -> Result<()> {
+	match record.launch_state.as_str() {
+		"launched" => Ok(()),
+		"pending" | "launch_failed" => bail!(
+			"durable launch outcome indeterminate: reconcile original remote effect without replay"
+		),
+		_ => bail!("unknown durable job launch state; no replay permitted"),
+	}
+}
+
 fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
 	let record = load_record(&params.job_id)?;
 	if record.host != params.host {
@@ -1028,22 +1038,18 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 		.await;
 	let (request_fingerprint, request_digest) = request_digest(&params);
 	if let Some(key) = params.idempotency_key.as_deref() {
-		if let Some(mut existing) = find_idempotent(&params.host, key)? {
+		if let Some(existing) = find_idempotent(&params.host, key)? {
 			verify_reuse_binding(&existing, key, request_fingerprint, &request_digest)?;
-			let retry = matches!(existing.launch_state.as_str(), "pending" | "launch_failed");
-			let launch = if retry {
-				Some(launch_record(&mut existing, &params).await?)
-			} else {
-				None
-			};
-			let status = status_record(&existing, 0).await.unwrap_or_else(
-				|error| json!({"state": "status_error", "error": error.to_string()}),
-			);
+			// An earlier pending/failed controller attempt may already have crossed
+			// the remote launch boundary. A missing remote state directory is not
+			// proof that the effect did not happen: never dispatch it again.
+			admit_observation_only_reuse(&existing)?;
+			let status = status_record(&existing, 0).await?;
 			let result = json!({
 				"reused": true,
-				"retried_launch": retry,
+				"retried_launch": false,
 				"job": existing,
-				"launch": launch,
+				"launch": null,
 				"status": status,
 			});
 			audit("process_start_reused", &params.host, &existing.id, &result)?;
