@@ -408,105 +408,113 @@ fn audit_append_denies_hardlinks_to_unrelated_files() {
 
 #[cfg(unix)]
 fn remote_observer_binding_probe(
-    code: &str,
-    stored_digest: &str,
-    claimed_digest: Option<&str>,
-    stored_unit: &str,
+	code: &str,
+	stored_digest: &str,
+	claimed_digest: Option<&str>,
+	stored_unit: &str,
 ) -> (std::process::Output, bool) {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
+	use std::io::Write;
+	use std::process::{Command, Stdio};
 
-    let dir = tempdir().unwrap();
-    let job_dir = dir.path().join("job");
-    std::fs::create_dir(&job_dir).unwrap();
-    std::fs::write(
-        job_dir.join("request.json"),
-        json!({
-            "job_id": "job-1",
-            "job_dir": job_dir,
-            "unit": stored_unit,
-            "request_digest": stored_digest,
-        })
-        .to_string(),
-    )
-    .unwrap();
-    std::fs::write(job_dir.join("exit.json"), r#"{"exit_code":0}"#).unwrap();
-    std::fs::write(job_dir.join("stdout.log"), "verified").unwrap();
-    let query = json!({
-        "job_id": "job-1",
-        "job_dir": job_dir,
-        "unit": "hepta-runtime-job-1",
-        "request_digest": claimed_digest,
-    });
-    let mut child = Command::new("python3")
-        .arg("-c")
-        .arg(code)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(query.to_string().as_bytes())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    (output, job_dir.join("cancel-request.json").exists())
+	let dir = tempdir().unwrap();
+	let job_dir = dir.path().join("job");
+	std::fs::create_dir(&job_dir).unwrap();
+	std::fs::write(
+		job_dir.join("request.json"),
+		json!({
+			"job_id": "job-1",
+			"job_dir": job_dir,
+			"unit": stored_unit,
+			"request_digest": stored_digest,
+		})
+		.to_string(),
+	)
+	.unwrap();
+	std::fs::write(job_dir.join("exit.json"), r#"{"exit_code":0}"#).unwrap();
+	std::fs::write(job_dir.join("stdout.log"), "verified").unwrap();
+	let query = json!({
+		"job_id": "job-1",
+		"job_dir": job_dir,
+		"unit": "hepta-runtime-job-1",
+		"request_digest": claimed_digest,
+	});
+	let mut child = Command::new("python3")
+		.arg("-c")
+		.arg(code)
+		.stdin(Stdio::piped())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.spawn()
+		.unwrap();
+	child
+		.stdin
+		.take()
+		.unwrap()
+		.write_all(query.to_string().as_bytes())
+		.unwrap();
+	let output = child.wait_with_output().unwrap();
+	(output, job_dir.join("cancel-request.json").exists())
 }
 
 #[cfg(unix)]
 #[test]
 fn remote_status_read_and_cancel_reject_wrong_or_missing_effect_binding() {
-    let accepted = "a".repeat(64);
-    let wrong = "b".repeat(64);
-    for code in [STATUS_CODE, READ_CODE, CANCEL_CODE] {
-        for claimed in [None, Some(wrong.as_str())] {
-            let (output, cancelled) = remote_observer_binding_probe(
-                code,
-                &accepted,
-                claimed,
-                "hepta-runtime-job-1",
-            );
-            assert!(!output.status.success());
-            assert!(!cancelled);
-            assert!(
-                String::from_utf8_lossy(&output.stderr)
-                    .contains("remote job request binding missing or mismatched")
-            );
-        }
-        let (output, cancelled) = remote_observer_binding_probe(
-            code,
-            &accepted,
-            Some(accepted.as_str()),
-            "wrong-unit",
-        );
-        assert!(!output.status.success());
-        assert!(!cancelled);
-    }
+	let accepted = "a".repeat(64);
+	let wrong = "b".repeat(64);
+	for code in [STATUS_CODE, READ_CODE, CANCEL_CODE] {
+		for claimed in [None, Some(wrong.as_str())] {
+			let (output, cancelled) = remote_observer_binding_probe(
+				code,
+				&accepted,
+				claimed,
+				"hepta-runtime-job-1",
+			);
+			assert!(!output.status.success());
+			assert!(!cancelled);
+			assert!(
+				String::from_utf8_lossy(&output.stderr)
+					.contains("remote job request binding missing or mismatched")
+			);
+		}
+		let (output, cancelled) = remote_observer_binding_probe(
+			code,
+			&accepted,
+			Some(accepted.as_str()),
+			"wrong-unit",
+		);
+		assert!(!output.status.success());
+		assert!(!cancelled);
+	}
 }
 
 #[cfg(unix)]
 #[test]
 fn remote_status_and_read_accept_only_exact_bound_observations() {
-    let digest = "a".repeat(64);
-    let (status, _) = remote_observer_binding_probe(
-        STATUS_CODE,
-        &digest,
-        Some(&digest),
-        "hepta-runtime-job-1",
-    );
-    assert!(status.status.success(), "{}", String::from_utf8_lossy(&status.stderr));
-    let value: Value = serde_json::from_slice(&status.stdout).unwrap();
-    assert_eq!(value["state"], "succeeded");
-    let (read, _) = remote_observer_binding_probe(
-        READ_CODE,
-        &digest,
-        Some(&digest),
-        "hepta-runtime-job-1",
-    );
-    assert!(read.status.success(), "{}", String::from_utf8_lossy(&read.stderr));
-    let value: Value = serde_json::from_slice(&read.stdout).unwrap();
-    assert_eq!(value["stdout"]["text"], "verified");
+	let digest = "a".repeat(64);
+	let (status, _) = remote_observer_binding_probe(
+		STATUS_CODE,
+		&digest,
+		Some(digest.as_str()),
+		"hepta-runtime-job-1",
+	);
+	assert!(
+		status.status.success(),
+		"{}",
+		String::from_utf8_lossy(&status.stderr)
+	);
+	let value: Value = serde_json::from_slice(&status.stdout).unwrap();
+	assert_eq!(value["state"], "succeeded");
+	let (read, _) = remote_observer_binding_probe(
+		READ_CODE,
+		&digest,
+		Some(digest.as_str()),
+		"hepta-runtime-job-1",
+	);
+	assert!(
+		read.status.success(),
+		"{}",
+		String::from_utf8_lossy(&read.stderr)
+	);
+	let value: Value = serde_json::from_slice(&read.stdout).unwrap();
+	assert_eq!(value["stdout"]["text"], "verified");
 }
