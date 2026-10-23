@@ -787,14 +787,54 @@ while True:
 "#;
 
 const READ_CODE: &str = r#"
-import json, pathlib, sys
+import json, os, pathlib, stat, sys
 q = json.load(sys.stdin)
 job = pathlib.Path(q["job_dir"])
+
+# Pin the target directory inode without following symlinked components.
+def open_bound_directory(path):
+    if not path.is_absolute() or ".." in path.parts:
+        raise SystemExit("unsafe remote job directory path")
+    directory = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for component in path.parts[1:]:
+            next_fd = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                              dir_fd=directory)
+            os.close(directory)
+            directory = next_fd
+        return directory
+    except OSError as exc:
+        os.close(directory)
+        raise SystemExit(f"unsafe remote job directory: {exc}")
+
+directory = open_bound_directory(job)
+
+def open_regular(name, required):
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                     dir_fd=directory)
+    except FileNotFoundError:
+        if required:
+            raise SystemExit("remote job metadata missing")
+        return None
+    except OSError as exc:
+        raise SystemExit(f"unsafe remote job file {name}: {exc}")
+    metadata = os.fstat(fd)
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+        os.close(fd)
+        raise SystemExit(f"unsafe remote job file {name}: non-regular or linked inode")
+    return fd, metadata.st_size
+
 try:
-    request = json.loads((job / "request.json").read_text(encoding="utf-8"))
-except Exception:
-    raise SystemExit("remote job metadata missing")
-# Refuse to read logs from a foreign or legacy unbound remote request.
+    fd, size = open_regular("request.json", True)
+    with os.fdopen(fd, "rb") as source:
+        encoded = source.read(4 * 1024 * 1024 + 1)
+    if size > 4 * 1024 * 1024 or len(encoded) > 4 * 1024 * 1024:
+        raise SystemExit("oversized remote job metadata")
+    request = json.loads(encoded)
+except (ValueError, UnicodeError):
+    raise SystemExit("invalid remote job metadata")
+
 if (not isinstance(request, dict)
         or request.get("job_id") != q.get("job_id")
         or request.get("job_dir") != q.get("job_dir")
@@ -806,17 +846,15 @@ if (not isinstance(request, dict)
 limit = max(1, min(int(q.get("limit", 65536)), 1048576))
 
 def read_part(name, offset):
-    path = job / name
-    try:
-        size = path.stat().st_size
-    except FileNotFoundError:
-        size = 0
-    offset = min(max(0, int(offset or 0)), size)
-    data = b""
-    if size:
-        with path.open("rb") as f:
-            f.seek(offset)
-            data = f.read(limit)
+    opened = open_regular(name, False)
+    if opened is None:
+        size, data, offset = 0, b"", 0
+    else:
+        fd, size = opened
+        offset = min(max(0, int(offset or 0)), size)
+        with os.fdopen(fd, "rb") as stream:
+            stream.seek(offset)
+            data = stream.read(limit)
     return {
         "offset": offset,
         "next_offset": offset + len(data),
@@ -825,11 +863,14 @@ def read_part(name, offset):
         "text": data.decode("utf-8", errors="replace"),
     }
 
-print(json.dumps({
-    "job_id": q["job_id"],
-    "stdout": read_part("stdout.log", q.get("stdout_offset", 0)),
-    "stderr": read_part("stderr.log", q.get("stderr_offset", 0)),
-}, sort_keys=True))
+try:
+    print(json.dumps({
+        "job_id": q["job_id"],
+        "stdout": read_part("stdout.log", q.get("stdout_offset", 0)),
+        "stderr": read_part("stderr.log", q.get("stderr_offset", 0)),
+    }, sort_keys=True))
+finally:
+    os.close(directory)
 "#;
 
 const CANCEL_CODE: &str = r#"
