@@ -462,6 +462,8 @@ fn remote_observer_binding_probe(
 	let dir = tempdir().unwrap();
 	let job_dir = dir.path().join("job");
 	std::fs::create_dir(&job_dir).unwrap();
+	use std::os::unix::fs::PermissionsExt;
+	std::fs::set_permissions(&job_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
 	std::fs::write(
 		job_dir.join("request.json"),
 		json!({
@@ -658,4 +660,178 @@ fn remote_read_denies_symlink_hardlink_and_foreign_request_file() {
 		String::from_utf8_lossy(&blocked.stderr).contains("unsafe remote job file request.json")
 	);
 	assert_eq!(std::fs::read(&secret).unwrap(), b"DO-NOT-READ-OUTSIDE-LOG");
+}
+
+#[cfg(unix)]
+fn bound_remote_control_probe(code: &str, job: &std::path::Path) -> std::process::Output {
+	use std::io::Write;
+	use std::process::{Command, Stdio};
+
+	let query = json!({
+		"job_id": "job-control",
+		"job_dir": job,
+		"unit": "hepta-runtime-job-control",
+		"request_digest": "a".repeat(64),
+	});
+	let mut child = Command::new("python3")
+		.arg("-c")
+		.arg(code)
+		.stdin(Stdio::piped())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.spawn()
+		.unwrap();
+	child
+		.stdin
+		.take()
+		.unwrap()
+		.write_all(query.to_string().as_bytes())
+		.unwrap();
+	child.wait_with_output().unwrap()
+}
+
+#[cfg(unix)]
+fn bound_remote_control_fixture() -> (tempfile::TempDir, std::path::PathBuf, String) {
+	use std::os::unix::fs::PermissionsExt;
+
+	let temporary = tempdir().unwrap();
+	let root = std::fs::canonicalize(temporary.path()).unwrap();
+	let job = root.join("job");
+	std::fs::create_dir(&job).unwrap();
+	std::fs::set_permissions(&job, std::fs::Permissions::from_mode(0o700)).unwrap();
+	let request = json!({
+		"job_id": "job-control",
+		"job_dir": job,
+		"unit": "hepta-runtime-job-control",
+		"request_digest": "a".repeat(64),
+	})
+	.to_string();
+	std::fs::write(job.join("request.json"), &request).unwrap();
+	std::fs::write(job.join("exit.json"), r#"{"exit_code":0}"#).unwrap();
+	(temporary, job, request)
+}
+
+#[cfg(unix)]
+#[test]
+fn remote_status_and_cancel_accept_only_regular_bound_completion() {
+	let (_temporary, job, _request) = bound_remote_control_fixture();
+	let status = bound_remote_control_probe(STATUS_CODE, &job);
+	assert!(
+		status.status.success(),
+		"{}",
+		String::from_utf8_lossy(&status.stderr)
+	);
+	let value: Value = serde_json::from_slice(&status.stdout).unwrap();
+	assert_eq!(value["state"], "succeeded");
+
+	let cancellation = bound_remote_control_probe(CANCEL_CODE, &job);
+	assert!(
+		cancellation.status.success(),
+		"{}",
+		String::from_utf8_lossy(&cancellation.stderr)
+	);
+	let value: Value = serde_json::from_slice(&cancellation.stdout).unwrap();
+	assert_eq!(value["result"], "already_exited");
+	assert!(!job.join("cancel-request.json").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn remote_status_and_cancel_deny_symlinked_and_hardlinked_state() {
+	use std::os::unix::fs::symlink;
+
+	let (_temporary, job, request) = bound_remote_control_fixture();
+	let root = job.parent().unwrap();
+	let outside = root.join("outside-request");
+	std::fs::write(&outside, &request).unwrap();
+	let request_path = job.join("request.json");
+
+	let assert_denied = |code: &str, expected: &str| {
+		let output = bound_remote_control_probe(code, &job);
+		assert!(!output.status.success(), "unexpected control success");
+		assert!(
+			String::from_utf8_lossy(&output.stderr).contains(expected),
+			"{}",
+			String::from_utf8_lossy(&output.stderr)
+		);
+		assert!(!job.join("cancel-request.json").exists());
+	};
+
+	std::fs::remove_file(&request_path).unwrap();
+	symlink(&outside, &request_path).unwrap();
+	for code in [STATUS_CODE, CANCEL_CODE] {
+		assert_denied(code, "unsafe remote job file request.json");
+	}
+	std::fs::remove_file(&request_path).unwrap();
+	std::fs::hard_link(&outside, &request_path).unwrap();
+	for code in [STATUS_CODE, CANCEL_CODE] {
+		assert_denied(code, "linked or oversized inode");
+	}
+	std::fs::remove_file(&request_path).unwrap();
+	std::fs::write(&request_path, &request).unwrap();
+
+	let exit_path = job.join("exit.json");
+	let outside_exit = root.join("outside-exit");
+	std::fs::write(&outside_exit, r#"{"exit_code":0}"#).unwrap();
+	std::fs::remove_file(&exit_path).unwrap();
+	symlink(&outside_exit, &exit_path).unwrap();
+	for code in [STATUS_CODE, CANCEL_CODE] {
+		assert_denied(code, "unsafe remote job file exit.json");
+	}
+	std::fs::remove_file(&exit_path).unwrap();
+	std::fs::hard_link(&outside_exit, &exit_path).unwrap();
+	for code in [STATUS_CODE, CANCEL_CODE] {
+		assert_denied(code, "linked or oversized inode");
+	}
+	std::fs::remove_file(&exit_path).unwrap();
+	std::fs::write(&exit_path, b"{corrupt").unwrap();
+	for code in [STATUS_CODE, CANCEL_CODE] {
+		assert_denied(code, "corrupt remote job file exit.json");
+	}
+	std::fs::remove_file(&exit_path).unwrap();
+	std::fs::write(&exit_path, r#"{"exit_code":0}"#).unwrap();
+
+	let alias = root.join("job-alias");
+	symlink(&job, &alias).unwrap();
+	for code in [STATUS_CODE, CANCEL_CODE] {
+		let output = bound_remote_control_probe(code, &alias);
+		assert!(!output.status.success());
+		assert!(
+			String::from_utf8_lossy(&output.stderr).contains("unsafe remote job directory")
+		);
+	}
+	assert_eq!(std::fs::read(&outside).unwrap(), request.as_bytes());
+	assert_eq!(std::fs::read(&outside_exit).unwrap(), br#"{"exit_code":0}"#);
+}
+
+#[cfg(unix)]
+#[test]
+fn remote_cancel_denies_unknown_launch_and_missing_supervisor_identity_without_receipt() {
+	let (_temporary, job, _request) = bound_remote_control_fixture();
+	std::fs::remove_file(job.join("exit.json")).unwrap();
+
+	std::fs::write(job.join("launch.json"), r#"{"backend":"other"}"#).unwrap();
+	let invalid = bound_remote_control_probe(CANCEL_CODE, &job);
+	assert!(!invalid.status.success());
+	assert!(
+		String::from_utf8_lossy(&invalid.stderr).contains("cancel requires reconciliation")
+	);
+	assert!(!job.join("cancel-request.json").exists());
+
+	std::fs::write(
+		job.join("launch.json"),
+		r#"{"backend":"detached","launcher_pid":123}"#,
+	)
+	.unwrap();
+	std::fs::write(
+		job.join("started.json"),
+		r#"{"supervisor_pid":123,"supervisor_identity":null}"#,
+	)
+	.unwrap();
+	let unowned = bound_remote_control_probe(CANCEL_CODE, &job);
+	assert!(!unowned.status.success());
+	assert!(
+		String::from_utf8_lossy(&unowned.stderr).contains("ownership verification failed")
+	);
+	assert!(!job.join("cancel-request.json").exists());
 }
