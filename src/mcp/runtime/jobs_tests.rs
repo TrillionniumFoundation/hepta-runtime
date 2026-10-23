@@ -98,6 +98,30 @@ fn mismatched_filename_blocks_idempotency_scan() {
 }
 
 #[test]
+fn direct_lookup_rejects_different_durable_job_identity() {
+	let dir = tempdir().unwrap();
+	let path = dir.path().join("job-1.json");
+	std::fs::write(&path, serde_json::to_vec(&record("job-2")).unwrap()).unwrap();
+	let error = read_record_at(&path, "job-1").unwrap_err();
+	assert!(error.to_string().contains("filename/identity mismatch"));
+}
+
+#[cfg(unix)]
+#[test]
+fn direct_and_scan_lookup_reject_symlinked_job_receipts() {
+	let records = tempdir().unwrap();
+	let external = tempdir().unwrap();
+	let target = external.path().join("job-1.json");
+	let link = records.path().join("job-1.json");
+	std::fs::write(&target, serde_json::to_vec(&record("job-1")).unwrap()).unwrap();
+	std::os::unix::fs::symlink(target, &link).unwrap();
+	let error = read_record_at(&link, "job-1").unwrap_err();
+	assert!(error.to_string().contains("unsafe durable job record type"));
+	let error = scan_records_dir(records.path()).unwrap_err();
+	assert!(error.to_string().contains("unsafe durable job record type"));
+}
+
+#[test]
 fn atomic_record_replacement_preserves_valid_identity() {
 	let dir = tempdir().unwrap();
 	let path = dir.path().join("job-1.json");
