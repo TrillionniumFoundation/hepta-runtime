@@ -41,8 +41,7 @@ pub struct ProcessStartParams {
 	/// Optional process timeout. The remote supervisor terminates the process group.
 	#[serde(default)]
 	pub timeout_seconds: Option<u64>,
-	/// Reusing the same host+key returns the existing durable job instead of starting twice.
-	#[serde(default)]
+	/// Mandatory stable operation key; retries of one exact host+request never launch twice.
 	pub idempotency_key: Option<String>,
 	/// Non-negative Unix nice adjustment, 0..19.
 	#[serde(default)]
@@ -783,6 +782,15 @@ print(json.dumps({"job_id": q["job_id"], "result": result}, sort_keys=True))
 "#;
 
 fn validate_start(params: &ProcessStartParams) -> Result<()> {
+	// Without a caller-stable key an ambiguous transport retry is a new launch.
+	// Reject before reaching any host or execution-policy lookup.
+	if params
+		.idempotency_key
+		.as_ref()
+		.is_none_or(|value| value.trim().is_empty() || value.len() > 256)
+	{
+		bail!("idempotency_key is required and must contain 1..256 non-blank bytes");
+	}
 	check_execution(
 		&params.host,
 		&params.executable,
@@ -832,13 +840,6 @@ fn validate_start(params: &ProcessStartParams) -> Result<()> {
 		.is_some_and(|value| value < 16 * 1024 * 1024)
 	{
 		bail!("memory_max_bytes must be at least 16 MiB");
-	}
-	if params
-		.idempotency_key
-		.as_ref()
-		.is_some_and(|value| value.is_empty() || value.len() > 256)
-	{
-		bail!("idempotency_key must contain 1..256 bytes");
 	}
 	Ok(())
 }
