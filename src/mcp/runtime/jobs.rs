@@ -1023,12 +1023,12 @@ if read_json("exit.json"):
     print(json.dumps({"job_id": q["job_id"], "result": "already_exited"}))
     raise SystemExit(0)
 launch = read_json("launch.json") or {}
-atomic("cancel-request.json", {"at_unix_ms": int(time.time() * 1000)})
-grace = max(0.0, min(float(q.get("grace_seconds", 10)), 30.0))
-result = "not_running"
 if launch.get("backend") not in ("systemd", "detached"):
     raise SystemExit("remote launch backend missing or unknown; cancel requires reconciliation")
+grace = max(0.0, min(float(q.get("grace_seconds", 10)), 30.0))
+result = "not_running"
 if launch.get("backend") == "systemd":
+    atomic("cancel-request.json", {"at_unix_ms": int(time.time() * 1000)})
     uid = os.getuid()
     env = os.environ.copy()
     env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
@@ -1048,6 +1048,7 @@ else:
                  and str(job / "runner.py") in cmdline)
     if not valid:
         raise SystemExit("refusing to signal PID: ownership verification failed")
+    atomic("cancel-request.json", {"at_unix_ms": int(time.time() * 1000)})
     try:
         os.killpg(pid, signal.SIGTERM)
         result = "term_sent"
