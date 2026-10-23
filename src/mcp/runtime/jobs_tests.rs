@@ -209,3 +209,19 @@ fn full_request_binding_changes_with_resource_limits() {
 	base.stdin = Some("second".into());
 	assert_ne!(before, request_digest(&base).1);
 }
+
+#[test]
+fn legacy_request_binding_is_readable_but_not_replay_authority() {
+	let mut entry = record("job-1");
+	entry.request_digest = None;
+	let err = verify_reuse_binding(&entry, "repeat-key", 42, "test-digest").unwrap_err();
+	assert!(err.to_string().contains("legacy idempotency record"));
+}
+
+#[test]
+fn full_request_binding_rejects_changed_payload() {
+	let entry = record("job-1");
+	verify_reuse_binding(&entry, "repeat-key", 42, "test-digest").unwrap();
+	assert!(verify_reuse_binding(&entry, "repeat-key", 42, "tampered").is_err());
+	assert!(verify_reuse_binding(&entry, "repeat-key", 43, "test-digest").is_err());
+}
