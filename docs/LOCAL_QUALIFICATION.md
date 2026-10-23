@@ -27,7 +27,13 @@ python3 scripts/local_qualification.py \
   --output "$HOME/hepta-runtime-qualification/N"
 ```
 
-The output directory must be **outside** the repository. The checker creates
+The output directory must be **outside** the repository. The checker reads the raw SHA-addressed merge commit and requires exactly two
+parents, with the provided source SHA as its second parent. This rejects linear,
+unrelated or wrong-head commits masquerading as GitHub's PR merge. It does not
+authenticate the GitHub origin of a caller-supplied SHA; retrieve the actual
+`refs/pull/N/merge` from GitHub using a trusted remote.
+
+The checker creates
 separate detached worktrees for both exact SHAs, refuses hidden index source
 flags, missing/modified tracked bytes, replacement refs, non-POSIX execution,
 non-pinned Rust, missing tests, or any failing check.
