@@ -272,6 +272,8 @@ existing = read_json("request.json")
 if existing is not None:
     if existing.get("job_id") != req.get("job_id") or existing.get("request_fingerprint") != req.get("request_fingerprint"):
         raise SystemExit("remote job directory is bound to a different request")
+    if existing.get("allowed_cwd_prefixes") != req.get("allowed_cwd_prefixes"):
+        raise SystemExit("remote job execution root policy changed")
     launch = read_json("launch.json")
     exit_data = read_json("exit.json")
     started = read_json("started.json")
@@ -345,9 +347,28 @@ env = os.environ.copy()
 env.update(req.get("env", {}))
 env["HEPTA_RUNTIME_JOB_ID"] = req["job_id"]
 try:
+    # Resolve on the remote host after chdir. Popen inherits the verified
+    # cwd inode rather than opening a mutable symlink a second time.
+    cwd = req.get("cwd")
+    roots = req.get("allowed_cwd_prefixes")
+    if not isinstance(roots, list) or any(
+        not isinstance(root, str) or not os.path.isabs(root) for root in roots
+    ):
+        raise PermissionError("missing or invalid remote cwd policy")
+    if roots and not cwd:
+        raise PermissionError("cwd required by remote execution policy")
+    if cwd:
+        os.chdir(cwd)
+    actual = os.getcwd()
+    if roots:
+        physical_roots = [os.path.realpath(root) for root in roots]
+        if not any(
+            os.path.commonpath([actual, root]) == root for root in physical_roots
+        ):
+            raise PermissionError("cwd resolves outside allowed execution roots")
     child = subprocess.Popen(
         [req["executable"], *req.get("args", [])],
-        cwd=req.get("cwd") or None,
+        cwd=None,
         env=env,
         stdin=stdin_handle,
         stdout=out,
@@ -780,6 +801,7 @@ async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> R
 		"executable": params.executable,
 		"args": params.args,
 		"cwd": params.cwd,
+		"allowed_cwd_prefixes": &host.allowed_cwd_prefixes,
 		"env": params.env,
 		"stdin": params.stdin,
 		"timeout_seconds": params.timeout_seconds,
@@ -973,5 +995,52 @@ mod tests {
 		base.stdin = None;
 		base.cpu_quota_percent = Some(21);
 		assert_ne!(original, fingerprint(&base));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn embedded_python_runner_rejects_remote_cwd_symlink_escape() {
+		use std::os::unix::fs::symlink;
+
+		let after = START_CODE.split_once("runner = r'''").unwrap().1;
+		let runner = after.split_once("\n'''").unwrap().0;
+		let temp = tempfile::tempdir().unwrap();
+		let allowed = temp.path().join("allowed");
+		let outside = temp.path().join("outside");
+		std::fs::create_dir(&allowed).unwrap();
+		std::fs::create_dir(&outside).unwrap();
+		let escape = allowed.join("escape");
+		symlink(&outside, &escape).unwrap();
+
+		for (name, cwd, accepted) in [
+			("allowed", allowed.as_path(), true),
+			("escape", escape.as_path(), false),
+		] {
+			let job = temp.path().join(name);
+			std::fs::create_dir(&job).unwrap();
+			std::fs::write(job.join("runner.py"), runner).unwrap();
+			let request = json!({
+				"job_id": name,
+				"executable": "/bin/pwd",
+				"args": [],
+				"cwd": cwd.to_str().unwrap(),
+				"allowed_cwd_prefixes": [allowed.to_str().unwrap()],
+			});
+			std::fs::write(job.join("request.json"), serde_json::to_vec(&request).unwrap())
+				.unwrap();
+			let output = std::process::Command::new("python3")
+				.arg(job.join("runner.py"))
+				.current_dir(&job)
+				.output()
+				.unwrap();
+			assert_eq!(output.status.success(), accepted, "{name}");
+			if !accepted {
+				let evidence: Value = serde_json::from_slice(
+					&std::fs::read(job.join("exit.json")).unwrap(),
+				)
+				.unwrap();
+				assert_eq!(evidence["exit_code"], 127);
+			}
+		}
 	}
 }
