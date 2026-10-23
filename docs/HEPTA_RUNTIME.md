@@ -260,19 +260,33 @@ deleted automatically. Inspect or archive them before removal.
 - Hardware schemas expose raw kernel values where units vary; consumers must
   preserve field names and interpret units explicitly.
 
-### No-follow durable log observation (source-only candidate)
+### No-follow remote observation and cancellation (source-only candidates)
 
-The remote log reader pins its job directory with a component-by-component
-no-follow directory descriptor. It opens request metadata and both log streams
-relative to that descriptor, rejecting symlinks, hard links, non-regular inodes
-and invalid/missing request metadata. Request metadata has a 4 MiB ceiling;
-log pages retain the previous 1 MiB maximum. Exact job, directory, unit and
-request-digest binding remains mandatory. Remote hosts must configure a physical
-absolute state path without symlinked parent components.
+Remote process_read, process_status and process_wait pin the absolute job
+directory component-by-component without following symlinks. Request metadata,
+logs and status state are opened relative to a pinned descriptor, rejecting
+symlinks, hard links, non-regular inodes and corrupt/oversized metadata. The
+request ceiling is 4 MiB and log page ceiling remains 1 MiB. For status and
+cancel, even an optional corrupt exit/launch/started JSON is an error rather
+than silently interpreted as missing terminal evidence.
 
-This patch narrows the read-time path substitution risk only. It does not
-make the launch, supervisor writes, cancellation, SFTP or arbitrary target-host
-filesystem operations race-free, does not add cross-controller ownership, and
-does not authorize Final-use. Keep DRAFT / DENY_ALL / HOLD_NO_GO until actual
-exact-source Rust and prospective-merge gates, SSH host negative tests and
-independent production acceptance all succeed.
+Remote process_cancel additionally requires the pinned job directory to be
+owned by the executing SSH user and owner-private, verifies the immutable job,
+directory, unit and complete SHA-256 request binding, refuses an unknown launch
+backend, and for a detached supervisor requires a stored process-start identity
+matching the current PID plus the recorded runner command. It rechecks this
+identity before escalating to SIGKILL. Its cancel-request marker is written via
+a no-follow, exclusive temporary inode, fsync and descriptor-relative rename
+only after validating the backend and supervisor identity, preventing a denied
+PID cancellation from leaving a misleading marker. Configure a physical
+absolute remote state root without symlinked path components.
+
+These source changes reduce log/status/cancel path substitution and some
+recycled-PID risks. They do NOT make launch/runner writes, remote control-group
+termination, SFTP physical confinement, DNS/SSH identity, cross-controller
+once-only ownership or credentialed target-host effects race-free. A PID can
+still disappear between identity verification and kill; host-side systemd
+ownership and independent acceptance remain necessary. No independent
+Final-use or production authority is granted. Retain DRAFT / DENY_ALL /
+HOLD_NO_GO until exact-source and prospective-merge Rust gates, real SSH
+negative tests and independent operator/release reviews are complete.
