@@ -316,6 +316,13 @@ job.mkdir(parents=True, exist_ok=True)
 # Anchor lock and metadata to the same directory inode, never chmod a job symlink.
 job_fd = os.open(job, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
 os.fchmod(job_fd, 0o700)
+# Commit the new directory entry and the restrictive mode before any effect.
+parent_fd = os.open(job.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+try:
+    os.fsync(parent_fd)
+finally:
+    os.close(parent_fd)
+os.fsync(job_fd)
 
 # Serialize remote launches when separate controllers race over SSH.
 # A lost SSH acknowledgement does not prove the remote effect never started.
@@ -384,12 +391,24 @@ if existing is not None:
     # No receipt is not proof of no effect after a lost connection or crash.
     raise SystemExit("ambiguous prior launch: durable request exists without receipt; reconcile")
 else:
-    if any(read_json(name) is not None for name in ("launch.json", "started.json", "exit.json")):
+    if any(read_json(name) is not None for name in ("launch.json", "started.json", "exit.json", "child.json")):
         raise SystemExit("remote operation evidence without request; reconcile")
+    # A stale runner or stdin payload without its committed identity is not
+    # proof that an earlier physical effect never started.
+    for name in ("runner.py", "stdin.bin"):
+        try:
+            os.stat(name, dir_fd=job_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            continue
+        raise SystemExit("orphaned remote effect input without request; reconcile")
     if stdin_text is not None:
         stdin_path = job / "stdin.bin"
-        stdin_path.write_bytes(stdin_text.encode("utf-8"))
-        os.chmod(stdin_path, 0o600)
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+        with os.fdopen(os.open("stdin.bin", flags, 0o600, dir_fd=job_fd), "wb") as handle:
+            handle.write(stdin_text.encode("utf-8"))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.fsync(job_fd)
         req["stdin_path"] = str(stdin_path)
     atomic("request.json", req)
 runner = r'''#!/usr/bin/env python3
@@ -399,10 +418,19 @@ req = json.loads((job / "request.json").read_text(encoding="utf-8"))
 
 def atomic(name, value):
     target = job / name
-    tmp = job / (name + ".tmp")
-    tmp.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
-    os.chmod(tmp, 0o600)
+    # The runner and cancellation handler are independent processes.
+    tmp = job / (name + ".tmp." + str(os.getpid()))
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    with os.fdopen(os.open(tmp, flags, 0o600), "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(value, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
     os.replace(tmp, target)
+    dirfd = os.open(job, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(dirfd)
+    finally:
+        os.close(dirfd)
 
 def process_identity(pid):
     try:
@@ -478,11 +506,8 @@ try:
         stderr=err,
         start_new_session=True,
     )
-    atomic("child.json", {
-        "pid": child.pid,
-        "identity": process_identity(child.pid),
-    })
 except Exception as exc:
+    # No physical child was started: this is a confirmed launch failure.
     atomic("exit.json", {
         "at_unix_ms": int(time.time() * 1000),
         "exit_code": 127,
@@ -492,6 +517,36 @@ except Exception as exc:
     })
     print(str(exc), file=err, flush=True)
     raise SystemExit(127)
+try:
+    atomic("child.json", {
+        "pid": child.pid,
+        "identity": process_identity(child.pid),
+    })
+except Exception as exc:
+    # Popen already crossed the physical-effect boundary. Never record an
+    # ordinary launch_failed/exit receipt or allow automatic replay.
+    # Termination is best effort; a child may have performed effects already.
+    if child.poll() is None:
+        try:
+            os.killpg(child.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            child.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            try:
+                child.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                # A stuck child is still an unknown effect; never report
+                # launch_failed or block reconciliation indefinitely.
+                pass
+    raise SystemExit(
+        f"indeterminate child effect: child receipt was not durable: {exc}; reconcile"
+    )
 
 timed_out = False
 try:
@@ -521,8 +576,12 @@ atomic("exit.json", {
 raise SystemExit(int(rc) if 0 <= int(rc) <= 255 else 1)
 '''
 runner_path = job / "runner.py"
-runner_path.write_text(runner, encoding="utf-8")
-os.chmod(runner_path, 0o700)
+runner_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+with os.fdopen(os.open("runner.py", runner_flags, 0o700, dir_fd=job_fd), "w", encoding="utf-8") as handle:
+    handle.write(runner)
+    handle.flush()
+    os.fsync(handle.fileno())
+os.fsync(job_fd)
 uid = os.getuid()
 env = os.environ.copy()
 env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
@@ -579,15 +638,34 @@ print(json.dumps({"ok": True, **launch}, sort_keys=True))
 "#;
 
 const STATUS_CODE: &str = r#"
-import json, os, pathlib, subprocess, sys, time
+import json, os, pathlib, stat, subprocess, sys, time
 q = json.load(sys.stdin)
 job = pathlib.Path(q["job_dir"])
 
 def read_json(name):
+    path = job / name
     try:
-        return json.loads((job / name).read_text(encoding="utf-8"))
-    except Exception:
+        # Reading nonexistent state is distinct from corrupted state. Do not
+        # transform a malformed terminal receipt into "not yet executed".
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
         return None
+    except OSError as exc:
+        raise SystemExit(f"cannot open remote {name}: {exc}")
+    with os.fdopen(fd, "rb") as handle:
+        metadata = os.fstat(handle.fileno())
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 1048576:
+            raise SystemExit(f"remote {name} is not a bounded regular file")
+        raw = handle.read(1048577)
+    if len(raw) > 1048576:
+        raise SystemExit(f"remote {name} exceeds the metadata limit")
+    try:
+        result = json.loads(raw)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise SystemExit(f"corrupt remote {name}: {exc}")
+    if not isinstance(result, dict):
+        raise SystemExit(f"invalid remote {name} object")
+    return result
 
 def process_identity(pid):
     try:
@@ -725,22 +803,50 @@ print(json.dumps({
 "#;
 
 const CANCEL_CODE: &str = r#"
-import json, os, pathlib, signal, subprocess, sys, time
+import json, os, pathlib, signal, stat, subprocess, sys, time
 q = json.load(sys.stdin)
 job = pathlib.Path(q["job_dir"])
 
 def read_json(name):
+    path = job / name
     try:
-        return json.loads((job / name).read_text(encoding="utf-8"))
-    except Exception:
+        # Reading nonexistent state is distinct from corrupted state. Do not
+        # transform a malformed terminal receipt into "not yet executed".
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
         return None
+    except OSError as exc:
+        raise SystemExit(f"cannot open remote {name}: {exc}")
+    with os.fdopen(fd, "rb") as handle:
+        metadata = os.fstat(handle.fileno())
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 1048576:
+            raise SystemExit(f"remote {name} is not a bounded regular file")
+        raw = handle.read(1048577)
+    if len(raw) > 1048576:
+        raise SystemExit(f"remote {name} exceeds the metadata limit")
+    try:
+        result = json.loads(raw)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise SystemExit(f"corrupt remote {name}: {exc}")
+    if not isinstance(result, dict):
+        raise SystemExit(f"invalid remote {name} object")
+    return result
 
 def atomic(name, value):
     target = job / name
-    tmp = job / (name + ".tmp")
-    tmp.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
-    os.chmod(tmp, 0o600)
+    # The runner and cancellation handler are independent processes.
+    tmp = job / (name + ".tmp." + str(os.getpid()))
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    with os.fdopen(os.open(tmp, flags, 0o600), "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(value, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
     os.replace(tmp, target)
+    dirfd = os.open(job, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(dirfd)
+    finally:
+        os.close(dirfd)
 
 def process_identity(pid):
     try:
@@ -1295,6 +1401,188 @@ mod tests {
 		let result = execute_remote_start_fixture(&symlink);
 		assert!(!result.status.success());
 		assert!(!symlink.join("dispatch.lock").exists());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn remote_effect_receipts_and_input_writes_have_durable_barriers() {
+		// The controller's request/launch writer, the child supervisor and
+		// the cancellation handler must all persist files and directory entries.
+		assert!(START_CODE.matches("os.fsync(handle.fileno())").count() >= 4);
+		assert!(START_CODE.matches("os.fsync(job_fd)").count() >= 4);
+		assert!(START_CODE.contains("os.fsync(dirfd)"));
+		assert!(CANCEL_CODE.contains("os.fsync(handle.fileno())"));
+		assert!(CANCEL_CODE.contains("os.fsync(dirfd)"));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn embedded_runner_rejects_fsync_failure_before_child_execution() {
+		let runner = START_CODE
+			.split_once("runner = r'''")
+			.unwrap()
+			.1
+			.split_once("\n'''")
+			.unwrap()
+			.0;
+		let patched = runner.replacen(
+			"def atomic(name, value):",
+			"os.fsync = lambda fd: (_ for _ in ()).throw(OSError('injected durable failure'))\n\ndef atomic(name, value):",
+			1,
+		);
+		let temp = tempfile::tempdir().unwrap();
+		let job = temp.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		let effect = temp.path().join("forbidden_effect");
+		std::fs::write(job.join("runner.py"), patched).unwrap();
+		let request = json!({
+			"job_id": "fixture",
+			"executable": "/usr/bin/touch",
+			"args": [effect.to_string_lossy()],
+			"allowed_cwd_prefixes": []
+		});
+		std::fs::write(job.join("request.json"), serde_json::to_vec(&request).unwrap())
+			.unwrap();
+		let output = std::process::Command::new("python3")
+			.arg(job.join("runner.py"))
+			.output()
+			.unwrap();
+		assert!(!output.status.success());
+		assert!(!effect.exists(), "effect must not launch without a durable started witness");
+		assert!(String::from_utf8_lossy(&output.stderr).contains("injected durable failure"));
+	}
+
+
+	#[cfg(unix)]
+	#[test]
+	fn failed_child_witness_keeps_execution_indeterminate() {
+		let runner = START_CODE
+			.split_once("runner = r'''")
+			.unwrap()
+			.1
+			.split_once("\n'''")
+			.unwrap()
+			.0;
+		// Inject immediately after a real harmless child spawn, before its
+		// receipt, so ordinary pre-launch failures cannot mask this boundary.
+		let patched = runner.replacen(
+			"    atomic(\"child.json\", {",
+			"    raise OSError('injected child witness failure')\n    atomic(\"child.json\", {",
+			1,
+		);
+		let temp = tempfile::tempdir().unwrap();
+		let job = temp.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		std::fs::write(job.join("runner.py"), patched).unwrap();
+		let request = json!({
+			"job_id": "fixture",
+			"executable": "/bin/sleep",
+			"args": ["10"],
+			"allowed_cwd_prefixes": []
+		});
+		std::fs::write(job.join("request.json"), serde_json::to_vec(&request).unwrap())
+			.unwrap();
+		let output = std::process::Command::new("python3")
+			.arg(job.join("runner.py"))
+			.output()
+			.unwrap();
+		assert!(!output.status.success());
+		assert!(String::from_utf8_lossy(&output.stderr).contains("indeterminate child effect"));
+		assert!(job.join("started.json").exists());
+		assert!(!job.join("exit.json").exists(), "unknown effect must not be declared failed");
+	}
+
+
+	#[cfg(unix)]
+	fn run_remote_metadata_probe(code: &str, job: &std::path::Path) -> std::process::Output {
+		use std::io::Write;
+		use std::process::{Command, Stdio};
+		let mut child = Command::new("python3")
+			.arg("-c")
+			.arg(code)
+			.stdin(Stdio::piped())
+			.stdout(Stdio::piped())
+			.stderr(Stdio::piped())
+			.spawn()
+			.unwrap();
+		let q = json!({
+			"job_dir": job,
+			"job_id": "unit-effect",
+			"unit": "unit-fixture-not-present",
+			"wait_seconds": 0,
+			"grace_seconds": 0
+		});
+		child.stdin.take().unwrap().write_all(q.to_string().as_bytes()).unwrap();
+		child.wait_with_output().unwrap()
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn corrupt_terminal_receipts_deny_status_and_cancel_without_signal() {
+		let temp = tempfile::tempdir().unwrap();
+		let job = temp.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		std::fs::write(job.join("request.json"), br#"{"job_id":"unit-effect"}"#).unwrap();
+		std::fs::write(job.join("exit.json"), b"{truncated").unwrap();
+		for code in [STATUS_CODE, CANCEL_CODE] {
+			let output = run_remote_metadata_probe(code, &job);
+			assert!(!output.status.success());
+			assert!(String::from_utf8_lossy(&output.stderr).contains("corrupt remote exit.json"));
+		}
+		assert!(!job.join("cancel-request.json").exists());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn symlinked_terminal_receipts_deny_status_and_cancel() {
+		use std::os::unix::fs::symlink;
+		let temp = tempfile::tempdir().unwrap();
+		let job = temp.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		std::fs::write(job.join("request.json"), br#"{"job_id":"unit-effect"}"#).unwrap();
+		let outside = temp.path().join("outside");
+		std::fs::write(&outside, br#"{"exit_code":0}"#).unwrap();
+		symlink(&outside, job.join("exit.json")).unwrap();
+		for code in [STATUS_CODE, CANCEL_CODE] {
+			let output = run_remote_metadata_probe(code, &job);
+			assert!(!output.status.success());
+			assert!(String::from_utf8_lossy(&output.stderr).contains("cannot open remote exit.json"));
+		}
+		assert!(!job.join("cancel-request.json").exists());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn finished_job_can_be_read_without_replaying_remote_effects() {
+		let temp = tempfile::tempdir().unwrap();
+		let job = temp.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		std::fs::write(job.join("request.json"), br#"{"job_id":"unit-effect"}"#).unwrap();
+		std::fs::write(job.join("exit.json"), br#"{"exit_code":0,"cancelled":false,"timed_out":false}"#).unwrap();
+		let status = run_remote_metadata_probe(STATUS_CODE, &job);
+		assert!(status.status.success(), "{:?}", String::from_utf8_lossy(&status.stderr));
+		assert_eq!(serde_json::from_slice::<Value>(&status.stdout).unwrap()["state"], "succeeded");
+		let cancel = run_remote_metadata_probe(CANCEL_CODE, &job);
+		assert!(cancel.status.success(), "{:?}", String::from_utf8_lossy(&cancel.stderr));
+		assert_eq!(
+			serde_json::from_slice::<Value>(&cancel.stdout).unwrap()["result"],
+			"already_exited"
+		);
+		assert!(!job.join("cancel-request.json").exists());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn remote_start_does_not_launch_with_orphaned_stdin() {
+		let temp = tempfile::tempdir().unwrap();
+		let job = temp.path().join("job");
+		std::fs::create_dir(&job).unwrap();
+		std::fs::write(job.join("stdin.bin"), b"orphaned payload").unwrap();
+		let output = execute_remote_start_fixture(&job);
+		assert!(!output.status.success());
+		assert!(String::from_utf8_lossy(&output.stderr).contains("orphaned remote effect input"));
+		assert!(!job.join("request.json").exists());
+		assert!(!job.join("runner.py").exists());
 	}
 
 	#[test]
