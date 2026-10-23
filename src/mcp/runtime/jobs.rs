@@ -349,6 +349,8 @@ def atomic(name, value):
     tmp = job / (name + ".tmp")
     flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
     with os.fdopen(os.open(tmp, flags, 0o600), "w", encoding="utf-8") as handle:
+        # A crash may leave a preexisting temp file with looser modes.
+        os.fchmod(handle.fileno(), 0o600)
         handle.write(json.dumps(value, sort_keys=True) + "\n")
         handle.flush()
         os.fsync(handle.fileno())
