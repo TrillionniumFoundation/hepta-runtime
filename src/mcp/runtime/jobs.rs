@@ -1289,6 +1289,7 @@ mod tests {
 		assert!(!result.status.success());
 		assert!(String::from_utf8_lossy(&result.stderr).contains("bound to a different request"));
 
+		std::fs::remove_file(job.join("dispatch.lock")).unwrap();
 		let symlink = fixture.path().join("job-link");
 		std::os::unix::fs::symlink(&job, &symlink).unwrap();
 		let result = execute_remote_start_fixture(&symlink);
