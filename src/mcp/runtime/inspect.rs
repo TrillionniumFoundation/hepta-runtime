@@ -406,15 +406,15 @@ mod tests {
 
 	#[test]
 	fn privileged_timeout_with_stdout_is_json_serializable() {
-		let output = run_fake_sudo("#!/bin/sh\\nprintf 'started\\\\n'\\nexec sleep 4\\n", 1.0);
+		let output = run_fake_sudo("#!/bin/sh\nprintf 'started\\n'\nexec sleep 4\n", 1.0);
 		assert_eq!(output["exit_code"], 124);
-		assert_eq!(output["stdout"], "started\\n");
+		assert_eq!(output["stdout"], "started\n");
 	}
 
 	#[test]
 	fn privileged_non_utf8_output_is_json_serializable() {
-		let output = run_fake_sudo("#!/bin/sh\\nprintf '\\\\377'\\n", 1.0);
+		let output = run_fake_sudo("#!/bin/sh\nprintf '\\377'\n", 1.0);
 		assert_eq!(output["exit_code"], 0);
-		assert_eq!(output["stdout"], "\\u{fffd}");
+		assert_eq!(output["stdout"], "\u{fffd}");
 	}
 }
