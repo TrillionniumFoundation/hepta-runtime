@@ -1325,6 +1325,40 @@ try:
         "identity": process_identity(child.pid),
     })
 except Exception as exc:
+    if child is not None:
+        # Popen crossed the effect boundary. Keep the original child unreaped
+        # until every group signal is sent, and never report a prelaunch error.
+        group_signal = "submitted"
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            group_signal = "already_absent"
+        except OSError:
+            group_signal = "failed"
+        child_reaped = False
+        try:
+            child.wait(timeout=2)
+            child_reaped = True
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+        atomic("exit.json", {
+            "at_unix_ms": int(time.time() * 1000),
+            "exit_code": 125,
+            "supervisor_error": "child receipt publication failed after spawn",
+            "effect_outcome": "unknown",
+            "status_authoritative": False,
+            "automatic_retry": False,
+            "child_spawned": True,
+            "child_pid": child.pid,
+            "child_group_signal": group_signal,
+            "child_reaped": child_reaped,
+            "child_exit_code": child.returncode if child_reaped else None,
+            "output_complete": False,
+            "output_durable": False,
+            "cancelled": False,
+            "timed_out": False,
+        })
+        raise SystemExit(125)
     atomic("exit.json", {
         "at_unix_ms": int(time.time() * 1000),
         "exit_code": 127,
@@ -1421,11 +1455,22 @@ while True:
 child.wait()
 if exit_queue is not None: exit_queue.close()
 rc = 124 if timed_out else child.returncode
-for label, reader in zip(("stdout", "stderr"), readers):
+log_synced = {"stdout": False, "stderr": False}
+for label, reader, sink in zip(("stdout", "stderr"), readers, (out, err)):
     reader.join(timeout=2)
     if reader.is_alive():
         log_errors[label] = log_errors[label] or "output drain deadline exceeded"
+        continue
+    try:
+        # One barrier per completed stream, never per chunk. A durable exit
+        # receipt must not precede the output bytes whose completion it claims.
+        sink.flush()
+        os.fsync(sink.fileno())
+        log_synced[label] = True
+    except Exception as exc:
+        log_errors[label] = log_errors[label] or "sync: " + str(exc)
 output_complete = all(log_eof.values()) and not any(log_errors.values()) and not any(log_truncated.values())
+output_durable = output_complete and all(log_synced.values())
 atomic("exit.json", {
     "at_unix_ms": int(time.time() * 1000),
     "exit_code": int(rc),
@@ -1435,8 +1480,11 @@ atomic("exit.json", {
     "log_errors": log_errors,
     "log_bytes": log_bytes,
     "output_complete": output_complete,
+    "output_durable": output_durable,
+    "log_synced": log_synced,
 })
-raise SystemExit(int(rc) if 0 <= int(rc) <= 255 else 1)
+supervisor_rc = rc if output_durable or rc != 0 else 74
+raise SystemExit(int(supervisor_rc) if 0 <= int(supervisor_rc) <= 255 else 1)
 '''
 runner_path = job / "runner.py"
 runner = REMOTE_DIRECTORY_SOURCE + "\n" + runner
@@ -1549,15 +1597,20 @@ def process_uid(pid):
     return int(subprocess.check_output(["ps", "-p", str(pid), "-o", "uid="], text=True, timeout=3).strip())
 
 def final_status(exit_data):
-    if exit_data.get("timed_out"):
+    if exit_data.get("effect_outcome") == "unknown":
+        state = "effect_unknown"
+    elif exit_data.get("timed_out"):
         state = "timed_out"
     elif exit_data.get("cancelled"):
         state = "cancelled"
     elif int(exit_data.get("exit_code", -1)) == 0:
-        state = "succeeded"
+        # Legacy receipts without these additive fields remain readable.
+        output_failed = any(name in exit_data and exit_data[name] is not True
+                            for name in ("output_complete", "output_durable"))
+        state = "failed" if output_failed else "succeeded"
     else:
         state = "failed"
-    return {"state": state, **exit_data}
+    return {**exit_data, "state": state}
 
 def one_status():
     request = read_json("request.json")
@@ -2813,3 +2866,7 @@ mod tests;
 #[cfg(test)]
 #[path = "jobs_pagination_tests.rs"]
 mod pagination_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_output_durability_tests.rs"]
+mod output_durability_tests;

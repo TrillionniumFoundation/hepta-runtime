@@ -1347,9 +1347,17 @@ impl Core {
 		}
 		Ok(())
 	}
-	async fn run(self: Arc<Self>, mut receiver: mpsc::Receiver<Request>) -> Result<()> {
-		let global = Arc::new(Semaphore::new(MAX_SESSIONS));
+	async fn run(self: Arc<Self>, receiver: mpsc::Receiver<Request>) -> Result<()> {
+		self.run_with_capacity(receiver, Arc::new(Semaphore::new(MAX_SESSIONS)))
+			.await
+	}
+	async fn run_with_capacity(
+		self: Arc<Self>,
+		mut receiver: mpsc::Receiver<Request>,
+		global: Arc<Semaphore>,
+	) -> Result<()> {
 		let mut work = JoinSet::new();
+		let mut reservation = None;
 		let mut tick = tokio::time::interval(Duration::from_millis(100));
 		let outcome = loop {
 			tokio::select! {
@@ -1358,7 +1366,16 @@ impl Core {
 				Some(result) = work.join_next(), if !work.is_empty() => {
 					if let Err(error) = result { break Err(anyhow!("observation request supervisor failed: {error}")); }
 				},
-				request = receiver.recv() => {
+				permit = global.clone().acquire_owned(), if reservation.is_none() && work.len() < MAX_SESSIONS => {
+					match permit {
+						Ok(permit) => reservation = Some(permit),
+						Err(_) => break Err(anyhow!("observation global capacity closed")),
+					}
+				},
+				// Leave bounded requests in the channel until both a supervisor
+				// slot and the output budget exist. A completed Captured can still
+				// own that budget; its drop directly wakes acquire_owned above.
+				request = receiver.recv(), if reservation.is_some() && work.len() < MAX_SESSIONS => {
 					let Some(request) = request else { break Ok(()); };
 					if request.cancel.is_cancelled() || request.reply.is_closed() || Instant::now() >= request.deadline {
 						let _ = request.reply.send(Err(anyhow!("observation cancelled before admission")));
@@ -1369,14 +1386,10 @@ impl Core {
 					if let Err(error) = Self::reap_completed_requests(&mut work) {
 						break Err(error);
 					}
-					if work.len() >= MAX_SESSIONS {
-						let _ = request.reply.send(Err(anyhow!("observation supervisor capacity unavailable")));
-						continue;
-					}
-					match global.clone().try_acquire_owned() {
-						Ok(permit) => { work.spawn(self.clone().execute(request, permit)); }
-						Err(_) => { let _ = request.reply.send(Err(anyhow!("observation global capacity unavailable"))); }
-					}
+					let Some(permit) = reservation.take() else {
+						break Err(anyhow!("observation admission reservation unavailable"));
+					};
+					work.spawn(self.clone().execute(request, permit));
 				}
 			}
 		};

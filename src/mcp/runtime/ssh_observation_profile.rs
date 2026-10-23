@@ -2,7 +2,6 @@
 //! Explicitly supported, immutable inputs for the opt-in observation transport.
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, VecDeque};
 use std::fs::{File, Metadata};
 use std::io::Read;
@@ -16,6 +15,7 @@ use tokio::time::{timeout_at, Instant};
 
 const MAX_PROFILE_BYTES: usize = 256 * 1024;
 const MAX_AGENT_BYTES: usize = 64 * 1024;
+const VERIFY_BUFFER_BYTES: usize = 16 * 1024;
 const DIRECTIVES: &[&str] = &[
 	"batchmode",
 	"connecttimeout",
@@ -144,13 +144,13 @@ pub(super) fn private_directory(path: &Path) -> Result<Stamp> {
 	Ok(Stamp::of(&info))
 }
 
-fn read_file(
+fn checked_file(
 	path: &Path,
 	maximum: usize,
 	private: bool,
 	executable: bool,
-) -> Result<(Stamp, Vec<u8>)> {
-	let mut file = open_absolute(path, false)?;
+) -> Result<(File, Stamp)> {
+	let file = open_absolute(path, false)?;
 	let before = file.metadata()?;
 	if !before.is_file()
 		|| before.nlink() != 1
@@ -173,23 +173,45 @@ fn read_file(
 			bail!("observation executable capabilities are unsupported");
 		}
 	}
-	let mut bytes = Vec::with_capacity(before.len() as usize);
-	Read::by_ref(&mut file)
-		.take(maximum as u64 + 1)
-		.read_to_end(&mut bytes)?;
-	let stamp = Stamp::of(&before);
-	if bytes.len() as u64 != before.len()
-		|| bytes.len() > maximum
-		|| stamp != Stamp::of(&file.metadata()?)
-		|| stamp != Stamp::of(&open_absolute(path, false)?.metadata()?)
+	Ok((file, Stamp::of(&before)))
+}
+
+fn verify_read(
+	path: &Path,
+	file: &File,
+	stamp: &Stamp,
+	length: usize,
+	maximum: usize,
+) -> Result<()> {
+	if length as u64 != stamp.len
+		|| length > maximum
+		|| *stamp != Stamp::of(&file.metadata()?)
+		|| *stamp != Stamp::of(&open_absolute(path, false)?.metadata()?)
 	{
 		bail!("observation profile input changed");
 	}
+	Ok(())
+}
+
+fn read_file(
+	path: &Path,
+	maximum: usize,
+	private: bool,
+	executable: bool,
+) -> Result<(Stamp, Vec<u8>)> {
+	let (mut file, stamp) = checked_file(path, maximum, private, executable)?;
+	let mut bytes = Vec::with_capacity(stamp.len as usize);
+	Read::by_ref(&mut file)
+		.take(maximum as u64 + 1)
+		.read_to_end(&mut bytes)?;
+	verify_read(path, &file, &stamp, bytes.len(), maximum)?;
 	Ok((stamp, bytes))
 }
 
 pub(super) fn digest(bytes: &[u8]) -> [u8; 32] {
-	Sha256::digest(bytes).into()
+	let mut result = [0; 32];
+	result.copy_from_slice(ring::digest::digest(&ring::digest::SHA256, bytes).as_ref());
+	result
 }
 
 fn hex_digest(value: &str) -> Result<[u8; 32]> {
@@ -233,8 +255,30 @@ impl PinnedFile {
 		))
 	}
 	fn verify(&self) -> Result<()> {
-		let (stamp, bytes) = read_file(&self.path, self.maximum, self.private, self.executable)?;
-		if stamp != self.stamp || digest(&bytes) != self.digest {
+		let (mut file, stamp) =
+			checked_file(&self.path, self.maximum, self.private, self.executable)?;
+		if stamp != self.stamp {
+			bail!("observation profile changed");
+		}
+		// Rehash every byte on every check without allocating a whole executable.
+		// The same descriptor and path stamps still fence the complete read.
+		let mut hash = ring::digest::Context::new(&ring::digest::SHA256);
+		let mut buffer = [0; VERIFY_BUFFER_BYTES];
+		let mut length = 0usize;
+		let mut reader = Read::by_ref(&mut file).take(self.maximum as u64 + 1);
+		loop {
+			let count = match Read::read(&mut reader, &mut buffer) {
+				Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+				result => result?,
+			};
+			if count == 0 {
+				break;
+			}
+			length += count;
+			hash.update(&buffer[..count]);
+		}
+		verify_read(&self.path, &file, &stamp, length, self.maximum)?;
+		if hash.finish().as_ref() != self.digest {
 			bail!("observation profile changed");
 		}
 		Ok(())

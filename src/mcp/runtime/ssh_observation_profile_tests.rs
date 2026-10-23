@@ -1,6 +1,30 @@
 // Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
 use super::*;
+use sha2::Digest;
 use std::os::unix::fs::{symlink, PermissionsExt};
+
+#[test]
+fn profile_hashes_keep_standard_sha256_bytes() {
+	for (bytes, expected) in [
+		(
+			b"".as_slice(),
+			"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		),
+		(
+			b"abc".as_slice(),
+			"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+		),
+	] {
+		assert_eq!(digest(bytes), hex_digest(expected).unwrap());
+	}
+	for length in [
+		1, 55, 56, 63, 64, 65, 4095, 4096, 16383, 16384, 16385, 262151,
+	] {
+		let bytes: Vec<_> = (0..length).map(|index| (index % 251) as u8).collect();
+		let reference: [u8; 32] = sha2::Sha256::digest(&bytes).into();
+		assert_eq!(digest(&bytes), reference);
+	}
+}
 
 #[test]
 fn exact_supported_config_has_no_dynamic_or_undeclared_inputs() {
@@ -54,6 +78,62 @@ fn exact_file_pins_reject_inplace_changes_symlinks_hardlinks_and_permissions() {
 	std::fs::remove_file(link).unwrap();
 	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
 	assert!(PinnedFile::load(&path, None, 1024, true, false).is_err());
+}
+
+#[test]
+fn streamed_pins_check_every_chunk_and_the_partial_tail() {
+	let root = tempfile::tempdir().unwrap();
+	let path = root.path().join("large-pin");
+	let mut bytes: Vec<u8> = (0..VERIFY_BUFFER_BYTES * 13 + 7)
+		.map(|index| (index % 251) as u8)
+		.collect();
+	std::fs::write(&path, &bytes).unwrap();
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+	let (mut pin, _) = PinnedFile::load(&path, None, bytes.len(), true, false).unwrap();
+	pin.verify().unwrap();
+	for position in [
+		0,
+		VERIFY_BUFFER_BYTES - 1,
+		VERIFY_BUFFER_BYTES * 7,
+		bytes.len() - 1,
+	] {
+		bytes[position] ^= 1;
+		std::fs::write(&path, &bytes).unwrap();
+		// Isolate byte verification from the independent metadata fence.
+		pin.stamp = Stamp::of(&std::fs::metadata(&path).unwrap());
+		assert!(pin.verify().is_err(), "missed changed byte {position}");
+		bytes[position] ^= 1;
+		std::fs::write(&path, &bytes).unwrap();
+		pin.stamp = Stamp::of(&std::fs::metadata(&path).unwrap());
+		pin.verify().unwrap();
+	}
+}
+
+#[test]
+fn streamed_pins_keep_length_and_path_identity_fences() {
+	let root = tempfile::tempdir().unwrap();
+	let path = root.path().join("pin");
+	let bytes = vec![7; VERIFY_BUFFER_BYTES + 3];
+	std::fs::write(&path, &bytes).unwrap();
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+	let (pin, _) = PinnedFile::load(&path, None, bytes.len(), true, false).unwrap();
+	for length in [bytes.len() - 1, bytes.len() + 1] {
+		std::fs::OpenOptions::new()
+			.write(true)
+			.open(&path)
+			.unwrap()
+			.set_len(length as u64)
+			.unwrap();
+		assert!(pin.verify().is_err());
+	}
+	std::fs::rename(&path, root.path().join("original")).unwrap();
+	std::fs::write(&path, &bytes).unwrap();
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+	assert!(pin.verify().is_err());
+	let target = root.path().join("target");
+	std::fs::rename(&path, &target).unwrap();
+	symlink(&target, &path).unwrap();
+	assert!(pin.verify().is_err());
 }
 
 #[test]

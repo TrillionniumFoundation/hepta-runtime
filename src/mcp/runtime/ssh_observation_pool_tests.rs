@@ -1,6 +1,7 @@
 // Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
 use super::*;
 use serde_json::json;
+use std::future::Future;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::ExitStatusExt;
 
@@ -633,6 +634,132 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 	}
 }
 
+async fn queued_admission_fixture(core: &Arc<Core>, kind: &str, agent: &Arc<AgentControl>) {
+	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
+	let mut retained = Vec::new();
+	for _ in 0..MAX_SESSIONS {
+		retained.push(Captured {
+			output: Output {
+				status: ExitStatus::from_raw(0),
+				stdout: b"{}".to_vec(),
+				stderr: vec![],
+			},
+			_budget: Arc::new(permits.clone().acquire_owned().await.unwrap()),
+		});
+	}
+	let (sender, receiver) = mpsc::channel(QUEUE);
+	let mut replies = Vec::new();
+	let mut cancellations = Vec::new();
+	for index in 0..QUEUE {
+		let (reply, receive) = oneshot::channel();
+		let cancel = CancellationToken::new();
+		let request = Request {
+			host: "fixture".into(),
+			command: "NEVER_DISPATCH".into(),
+			input: vec![],
+			deadline: if kind == "queue-capacity" && index == 1 {
+				Instant::now() - Duration::from_millis(1)
+			} else {
+				Instant::now() + Duration::from_secs(40)
+			},
+			cancel: cancel.clone(),
+			reply,
+		};
+		assert!(sender.try_send(request).is_ok());
+		replies.push(Some(receive));
+		cancellations.push(cancel);
+	}
+	let mut actor = Box::pin(core.clone().run_with_capacity(receiver, permits.clone()));
+	// Poll the real actor while every output permit is retained. There is no
+	// sleep-based ordering: its first suspension must leave the queue intact.
+	std::future::poll_fn(|cx| {
+		assert!(actor.as_mut().poll(cx).is_pending());
+		std::task::Poll::Ready(())
+	})
+	.await;
+	assert_eq!(sender.capacity(), 0);
+	assert_eq!(permits.available_permits(), 0);
+	for reply in &mut replies {
+		assert!(matches!(
+			reply.as_mut().unwrap().try_recv(),
+			Err(oneshot::error::TryRecvError::Empty)
+		));
+	}
+	let (reply, _) = oneshot::channel();
+	assert!(matches!(
+		sender.try_send(Request {
+			host: "fixture".into(),
+			command: "NEVER_DISPATCH".into(),
+			input: vec![],
+			deadline: Instant::now() + Duration::from_secs(40),
+			cancel: CancellationToken::new(),
+			reply,
+		}),
+		Err(mpsc::error::TrySendError::Full(_))
+	));
+	if kind == "queue-stop" {
+		core.stop.cancel();
+		timeout(Duration::from_secs(3), actor)
+			.await
+			.unwrap()
+			.unwrap();
+		for reply in replies.into_iter().flatten() {
+			let error = reply.await.unwrap().err().unwrap();
+			assert!(error.to_string().contains("pool stopped before admission"));
+		}
+		assert_eq!(permits.available_permits(), 0);
+	} else {
+		for (index, cancel) in cancellations.iter().enumerate() {
+			if !(kind == "queue-admission" && index == 0)
+				&& !(kind == "queue-capacity" && (index == 1 || index == 2))
+			{
+				cancel.cancel();
+			}
+		}
+		if kind == "queue-capacity" {
+			// Independently exercise cancellation, expired deadline and a caller
+			// that disappeared while waiting, without creating any SSH task.
+			drop(replies[2].take());
+		} else {
+			agent.stall.store(true, Ordering::Release);
+		}
+		// Return exactly one parsed-output budget. The actor must admit from
+		// the original queue, not reject or allocate a larger pool.
+		drop(retained.pop());
+		let observe = async {
+			if kind == "queue-admission" {
+				agent.entered.notified().await;
+				assert_eq!(permits.available_permits(), 0);
+				assert!(core.masters.lock().await.is_empty());
+				assert!(core.children.lock().await.is_empty());
+				cancellations[0].cancel();
+			}
+			for (index, reply) in replies.into_iter().enumerate() {
+				let Some(reply) = reply else { continue };
+				let error = reply.await.unwrap().err().unwrap();
+				let expected = if kind == "queue-admission" && index == 0 {
+					"cancelled during admission profile check"
+				} else {
+					"cancelled before admission"
+				};
+				assert!(error.to_string().contains(expected), "{error:#}");
+			}
+			core.stop.cancel();
+		};
+		let (_, result) = timeout(Duration::from_secs(5), async {
+			tokio::join!(observe, actor)
+		})
+		.await
+		.unwrap();
+		result.unwrap();
+		assert_eq!(permits.available_permits(), 1);
+	}
+	drop(retained);
+	assert_eq!(permits.available_permits(), MAX_SESSIONS);
+	assert!(core.masters.lock().await.is_empty());
+	assert!(core.children.lock().await.is_empty());
+}
+
 #[test]
 fn isolated_actual_ssh_guard_cancellation_and_ownership_fixtures() {
 	for kind in [
@@ -651,6 +778,9 @@ fn isolated_actual_ssh_guard_cancellation_and_ownership_fixtures() {
 		"renew-deadline",
 		"renew-maintain",
 		"renew-retirement",
+		"queue-capacity",
+		"queue-stop",
+		"queue-admission",
 	] {
 		let mut child = std::process::Command::new(std::env::current_exe().unwrap())
 			.args([
@@ -764,6 +894,9 @@ async fn isolated_helper() {
 	} else {
 		let core = core(&path).await;
 		match kind.as_str() {
+			"queue-capacity" | "queue-stop" | "queue-admission" => {
+				queued_admission_fixture(&core, &kind, &agent_control).await;
+			}
 			"renew-singleflight" | "renew-refused" | "renew-cleanup" | "renew-deadline"
 			| "renew-maintain" | "renew-retirement" => renewal_fixture(&core, &kind).await,
 			"admission-cancel" => {
@@ -973,7 +1106,7 @@ async fn isolated_helper() {
 }
 
 // Explicit external-driver fixture only; deliberately absent from the normal
-// fifteen-mode parent loop. The external peer must stay alive holding all mux
+// bounded parent loop. The external peer must stay alive holding all mux
 // descriptors while that driver kills only this helper process.
 async fn external_peer_helper(path: &Path) {
 	use sha2::{Digest, Sha256};
