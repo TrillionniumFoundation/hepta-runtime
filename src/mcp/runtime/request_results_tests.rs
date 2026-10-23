@@ -29,6 +29,68 @@ fn private_root() -> tempfile::TempDir {
 	fs::set_permissions(root.path(), fs::Permissions::from_mode(0o700)).unwrap();
 	root
 }
+
+#[test]
+fn startup_preparation_validates_all_shards_and_never_recreates_missing_members() {
+	let root = private_root();
+	prepare_at(root.path()).unwrap();
+	let path = root.path().join(ARCHIVE_STORE_NAME).join(ARCHIVE_NAME);
+	assert_eq!(std::fs::read_dir(&path).unwrap().count(), 256);
+	let anchor = std::fs::read(root.path().join(ARCHIVE_ANCHOR)).unwrap();
+	prepare_at(root.path()).unwrap();
+	assert_eq!(
+		std::fs::read(root.path().join(ARCHIVE_ANCHOR)).unwrap(),
+		anchor
+	);
+	std::fs::remove_dir(path.join("fe")).unwrap();
+	assert!(prepare_at(root.path()).is_err());
+	assert!(!path.join("fe").exists());
+}
+
+#[test]
+fn startup_preparation_refuses_lost_anchor_and_archive_after_introduction() {
+	let root = private_root();
+	prepare_at(root.path()).unwrap();
+	std::fs::remove_file(root.path().join(ARCHIVE_ANCHOR)).unwrap();
+	std::fs::remove_dir_all(root.path().join(ARCHIVE_STORE_NAME)).unwrap();
+	assert!(prepare_at(root.path()).is_err());
+	assert!(!root.path().join(ARCHIVE_ANCHOR).exists());
+	assert!(!root.path().join(ARCHIVE_STORE_NAME).exists());
+}
+
+#[test]
+fn cached_anchor_refuses_changed_bytes_even_when_file_metadata_stamp_matches() {
+	use std::os::unix::fs::MetadataExt;
+	let root = private_root();
+	prepare_at(root.path()).unwrap();
+	let base = open_root(root.path()).unwrap();
+	let original = read_anchor(&base).unwrap();
+	let path = root.path().join(ARCHIVE_ANCHOR);
+	let mut corrupt = fs::read(&path).unwrap();
+	*corrupt.last_mut().unwrap() = b'!';
+	fs::write(&path, &corrupt).unwrap();
+	let metadata = path.metadata().unwrap();
+	// Model a timestamp alias deterministically, rather than sleeping until a
+	// particular filesystem clock tick. The cached parsed anchor remains original.
+	let stamp = AnchorStamp {
+		device: metadata.dev(),
+		inode: metadata.ino(),
+		length: metadata.len(),
+		modified: (metadata.mtime(), metadata.mtime_nsec()),
+		changed: (metadata.ctime(), metadata.ctime_nsec()),
+	};
+	{
+		let mut cache = ANCHOR_CACHE.get().unwrap().lock().unwrap();
+		cache.retain(|(entry, _)| (entry.device, entry.inode) != (stamp.device, stamp.inode));
+		if cache.len() >= 16 {
+			cache.pop_front();
+		}
+		cache.push_back((stamp, original));
+	}
+	assert!(read_anchor(&base).is_err());
+	assert!(prepare_at(root.path()).is_err());
+	assert_eq!(fs::read(path).unwrap(), corrupt);
+}
 fn private_write(path: &Path, bytes: &[u8]) {
 	let mut file = OpenOptions::new()
 		.write(true)

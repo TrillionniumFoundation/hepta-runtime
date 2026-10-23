@@ -15,15 +15,19 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::Mutex as AsyncMutex;
+use tokio::sync::{Mutex as AsyncMutex, Semaphore};
 
 use super::config::{check_environment, check_execution, runtime_config, valid_name};
 use super::config::{ExecutionMode, Platform};
 use super::ssh::{run_jobctl, run_python_json};
 
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
-static START_LOCKS: OnceLock<Mutex<HashMap<String, Arc<AsyncMutex<()>>>>> = OnceLock::new();
-static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+const START_LANE_COUNT: usize = 64;
+type StartLanes = [Arc<AsyncMutex<()>>; START_LANE_COUNT];
+static START_LOCKS: OnceLock<Mutex<HashMap<String, StartLanes>>> = OnceLock::new();
+static AUDIT_LOCK: OnceLock<Mutex<Option<AuditReadiness>>> = OnceLock::new();
+const MAX_OBSERVATION_AUDITS: usize = 8;
+static OBSERVATION_AUDITS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 static REUSE_HITS: OnceLock<Mutex<ReuseHitCache>> = OnceLock::new();
 // Coordinate only this owner process's local metadata reads/publications.
 // Guards remain inside synchronous functions, never across remote awaits.
@@ -158,17 +162,37 @@ fn default_launch_state() -> String {
 	"launched".to_string()
 }
 
-fn start_lock(host: &str) -> Result<Arc<AsyncMutex<()>>> {
-	// Hold the global map mutex only to look up a configured host's lock.
-	// Never hold it during remote launch or any asynchronous wait.
-	let mut locks = START_LOCKS
-		.get_or_init(|| Mutex::new(HashMap::new()))
+fn start_lane(key: Option<&str>) -> usize {
+	// Hash only the original key. A changed payload with the same key must
+	// still wait for the original lookup, durable intent and remote outcome.
+	key.map_or(0, |key| {
+		usize::from(Sha256::digest(key.as_bytes())[0]) % START_LANE_COUNT
+	})
+}
+
+fn start_lock_in(
+	registry: &Mutex<HashMap<String, StartLanes>>,
+	host: &str,
+	key: Option<&str>,
+) -> Result<Arc<AsyncMutex<()>>> {
+	// Only configured hosts reach this map in production. Fixed lanes bound
+	// retained locks regardless of caller key cardinality. Collisions merely
+	// serialize independent starts, and missing keys keep their original lane.
+	let mut locks = registry
 		.lock()
 		.map_err(|_| anyhow::anyhow!("job launch lock registry unavailable"))?;
 	Ok(locks
 		.entry(host.to_owned())
-		.or_insert_with(|| Arc::new(AsyncMutex::new(())))
-		.clone())
+		.or_insert_with(|| std::array::from_fn(|_| Arc::new(AsyncMutex::new(()))))[start_lane(key)]
+	.clone())
+}
+
+fn start_lock(host: &str, key: Option<&str>) -> Result<Arc<AsyncMutex<()>>> {
+	start_lock_in(
+		START_LOCKS.get_or_init(|| Mutex::new(HashMap::new())),
+		host,
+		key,
+	)
 }
 
 fn now_ms() -> u128 {
@@ -258,15 +282,20 @@ struct RegistryEpoch {
 	modified_nanos: i64,
 	changed_seconds: i64,
 	changed_nanos: i64,
+	namespace: super::namespace_version::Version,
 }
 #[cfg(not(unix))]
 type RegistryEpoch = ();
 
 #[cfg(unix)]
 fn registry_epoch(dir: &Path) -> Result<RegistryEpoch> {
-	use std::os::unix::fs::MetadataExt;
-	let m = std::fs::symlink_metadata(dir)?;
-	if !m.file_type().is_dir() {
+	use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+	let directory = OpenOptions::new()
+		.read(true)
+		.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_DIRECTORY)
+		.open(dir)?;
+	let m = directory.metadata()?;
+	if !m.is_dir() {
 		bail!("job registry directory identity is not a directory");
 	}
 	Ok(RegistryEpoch {
@@ -278,6 +307,7 @@ fn registry_epoch(dir: &Path) -> Result<RegistryEpoch> {
 		modified_nanos: m.mtime_nsec(),
 		changed_seconds: m.ctime(),
 		changed_nanos: m.ctime_nsec(),
+		namespace: super::namespace_version::version(&directory)?,
 	})
 }
 #[cfg(not(unix))]
@@ -594,37 +624,71 @@ fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
 	})
 }
 
+// Keep the alphabetical key order of the original serde_json::Value map.
+// Borrow potentially large input while retaining exactly its original JSON bytes.
+#[derive(Serialize)]
+struct RequestBinding<'a> {
+	args: &'a [String],
+	cpu_quota_percent: Option<u16>,
+	cwd: Option<&'a str>,
+	env: &'a BTreeMap<String, String>,
+	executable: &'a str,
+	host: &'a str,
+	memory_max_bytes: Option<u64>,
+	nice: Option<u8>,
+	stdin: Option<&'a str>,
+	timeout_seconds: Option<u64>,
+}
+fn request_binding(params: &ProcessStartParams) -> RequestBinding<'_> {
+	RequestBinding {
+		args: &params.args,
+		cpu_quota_percent: params.cpu_quota_percent,
+		cwd: params.cwd.as_deref(),
+		env: &params.env,
+		executable: &params.executable,
+		host: &params.host,
+		memory_max_bytes: params.memory_max_bytes,
+		nice: params.nice,
+		stdin: params.stdin.as_deref(),
+		timeout_seconds: params.timeout_seconds,
+	}
+}
+struct RequestHashWriter(Sha256);
+impl Write for RequestHashWriter {
+	fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+		self.0.update(bytes);
+		Ok(bytes.len())
+	}
+	fn flush(&mut self) -> std::io::Result<()> {
+		Ok(())
+	}
+}
 fn request_digest(params: &ProcessStartParams) -> Result<String> {
-	let binding = json!({
-		"host": params.host,
-		"executable": params.executable,
-		"args": params.args,
-		"cwd": params.cwd,
-		"env": params.env,
-		"stdin": params.stdin,
-		"timeout_seconds": params.timeout_seconds,
-		"nice": params.nice,
-		"cpu_quota_percent": params.cpu_quota_percent,
-		"memory_max_bytes": params.memory_max_bytes,
-	});
-	let bytes = serde_json::to_vec(&binding)?;
-	let digest = Sha256::digest(bytes);
-	Ok(digest.iter().map(|b| format!("{b:02x}")).collect())
+	let mut writer = RequestHashWriter(Sha256::new());
+	serde_json::to_writer(&mut writer, &request_binding(params))?;
+	let digest = writer.0.finalize();
+	let mut hex = String::with_capacity(64);
+	const HEX: &[u8; 16] = b"0123456789abcdef";
+	for byte in digest {
+		hex.push(HEX[(byte >> 4) as usize] as char);
+		hex.push(HEX[(byte & 15) as usize] as char);
+	}
+	Ok(hex)
 }
 
 // Retain the old prefix only for readable legacy metadata. New idempotent
 // requests compare all 256 bits, and legacy bindings never silently relaunch.
-fn fingerprint(params: &ProcessStartParams) -> u64 {
-	request_digest(params)
-		.ok()
-		.and_then(|v| u64::from_str_radix(&v[..16], 16).ok())
+fn fingerprint(digest: &str) -> u64 {
+	digest
+		.get(..16)
+		.and_then(|prefix| u64::from_str_radix(prefix, 16).ok())
 		.unwrap_or(0)
 }
-fn matches_request(record: &JobRecord, params: &ProcessStartParams) -> Result<bool> {
+fn matches_request(record: &JobRecord, digest: &str) -> Result<bool> {
 	let expected = record.request_digest.as_ref().context(
 		"legacy idempotency binding lacks a full digest; inspect existing job_id instead of relaunching",
 	)?;
-	Ok(*expected == request_digest(params)?)
+	Ok(expected.as_str() == digest)
 }
 
 fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
@@ -641,11 +705,205 @@ fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
 	Ok(record)
 }
 
-pub(crate) fn audit(action: &str, host: &str, subject: &str, outcome: &Value) -> Result<()> {
-	let path = runtime_config()?.state_dir.join("audit/events.jsonl");
-	if let Some(parent) = path.parent() {
-		std::fs::create_dir_all(parent)?;
+struct PreparedAudit {
+	path: PathBuf,
+	line: Vec<u8>,
+}
+
+// One positive publication proof, never an event/history or absence cache.
+// Held descriptors prevent inode reuse from manufacturing an identity match.
+struct AuditReadiness {
+	#[cfg(unix)]
+	binding: AuditBinding,
+}
+
+#[cfg(unix)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct AuditDirectoryStamp {
+	device: u64,
+	inode: u64,
+	modified: (i64, i64),
+	changed: (i64, i64),
+	namespace: super::namespace_version::Version,
+}
+
+#[cfg(unix)]
+fn audit_directory_stamp(directory: &std::fs::File) -> Result<AuditDirectoryStamp> {
+	use std::os::unix::fs::MetadataExt;
+	let metadata = directory.metadata()?;
+	if !metadata.is_dir() {
+		bail!("audit publication parent is not a directory");
 	}
+	Ok(AuditDirectoryStamp {
+		device: metadata.dev(),
+		inode: metadata.ino(),
+		modified: (metadata.mtime(), metadata.mtime_nsec()),
+		changed: (metadata.ctime(), metadata.ctime_nsec()),
+		namespace: super::namespace_version::version(directory)?,
+	})
+}
+
+#[cfg(unix)]
+fn audit_inode(metadata: &std::fs::Metadata) -> (u64, u64) {
+	use std::os::unix::fs::MetadataExt;
+	(metadata.dev(), metadata.ino())
+}
+
+#[cfg(unix)]
+fn open_audit_directory(path: &Path) -> Result<std::fs::File> {
+	use std::os::unix::fs::OpenOptionsExt;
+	// Follow the same configured symlinks as before, while refusing a FIFO or
+	// regular-file substitution before a newly added read open could block.
+	Ok(OpenOptions::new()
+		.read(true)
+		.custom_flags(libc::O_DIRECTORY | libc::O_CLOEXEC)
+		.open(path)?)
+}
+
+#[cfg(unix)]
+fn audit_reliable_generation(stamps: &[AuditDirectoryStamp; 3]) -> bool {
+	#[cfg(target_os = "linux")]
+	{
+		stamps.iter().all(|stamp| {
+			matches!(
+				stamp.namespace,
+				super::namespace_version::Version::Watch(_, _)
+			)
+		})
+	}
+	#[cfg(not(target_os = "linux"))]
+	{
+		let _ = stamps;
+		false
+	}
+}
+
+#[cfg(unix)]
+struct AuditBinding {
+	path: PathBuf,
+	audit_path: PathBuf,
+	state_path: PathBuf,
+	target_path: PathBuf,
+	file: std::fs::File,
+	audit_directory: std::fs::File,
+	state_directory: std::fs::File,
+	target_directory: std::fs::File,
+	stamps: [AuditDirectoryStamp; 3],
+}
+
+#[cfg(unix)]
+impl AuditBinding {
+	fn open(path: PathBuf, file: std::fs::File) -> Result<Self> {
+		let path = if path.is_absolute() {
+			path
+		} else {
+			std::env::current_dir()?.join(path)
+		};
+		let audit_path = path
+			.parent()
+			.context("audit path has no parent")?
+			.to_path_buf();
+		let state_path = audit_path.parent().unwrap_or(Path::new("/")).to_path_buf();
+		// Preserve ordinary open's existing symlink behavior. A file symlink can
+		// cause open(create) to publish a target in a different directory, which
+		// also requires its own parent barrier and named binding fence.
+		let target_path = std::fs::canonicalize(&path)?;
+		let target_parent = target_path.parent().context("audit target has no parent")?;
+		let audit_directory = open_audit_directory(&audit_path)?;
+		let state_directory = open_audit_directory(&state_path)?;
+		let target_directory = open_audit_directory(target_parent)?;
+		let stamps = [
+			audit_directory_stamp(&audit_directory)?,
+			audit_directory_stamp(&state_directory)?,
+			audit_directory_stamp(&target_directory)?,
+		];
+		let binding = Self {
+			path,
+			audit_path,
+			state_path,
+			target_path,
+			file,
+			audit_directory,
+			state_directory,
+			target_directory,
+			stamps,
+		};
+		binding.validate()?;
+		Ok(binding)
+	}
+
+	fn validate(&self) -> Result<()> {
+		let file_identity = audit_inode(&self.file.metadata()?);
+		if audit_inode(&std::fs::metadata(&self.path)?) != file_identity
+			|| std::fs::canonicalize(&self.path)? != self.target_path
+			|| audit_inode(&std::fs::metadata(&self.target_path)?) != file_identity
+		{
+			bail!("audit file binding changed");
+		}
+		let paths: [&Path; 3] = [
+			self.audit_path.as_path(),
+			self.state_path.as_path(),
+			self.target_path.parent().expect("target parent"),
+		];
+		let directories = [
+			&self.audit_directory,
+			&self.state_directory,
+			&self.target_directory,
+		];
+		for ((path, directory), expected) in paths.into_iter().zip(directories).zip(&self.stamps) {
+			if audit_inode(&std::fs::metadata(path)?) != (expected.device, expected.inode)
+				|| audit_directory_stamp(directory)? != *expected
+			{
+				bail!("audit directory publication binding changed");
+			}
+		}
+		Ok(())
+	}
+
+	fn can_reuse_parents(&self, path: &Path, file: &std::fs::File) -> Result<bool> {
+		// A names/inodes fingerprint can return to the same value after an
+		// unlink/relink ABA, especially on a filesystem with coarse timestamps.
+		// It remains a final fence, but never authorizes omitting a later barrier.
+		if !path.is_absolute()
+			|| path.as_os_str() != self.path.as_os_str()
+			|| !audit_reliable_generation(&self.stamps)
+			|| audit_inode(&file.metadata()?) != audit_inode(&self.file.metadata()?)
+		{
+			return Ok(false);
+		}
+		// Resolve all original names and symlink targets again, and validate all
+		// held directory descriptors and reliable namespace generations.
+		self.validate()?;
+		Ok(true)
+	}
+
+	fn synchronize_directories(
+		&self,
+		synchronize: &mut impl FnMut(&std::fs::File) -> Result<()>,
+	) -> Result<()> {
+		// Normal layout performs exactly audit → state. A symlink target outside
+		// that pair adds one bounded target-parent barrier before alias parents.
+		let target = (self.stamps[2].device, self.stamps[2].inode);
+		let audit = (self.stamps[0].device, self.stamps[0].inode);
+		let state = (self.stamps[1].device, self.stamps[1].inode);
+		if target != audit && target != state {
+			synchronize(&self.target_directory)?;
+		}
+		synchronize(&self.audit_directory)?;
+		if state != audit {
+			synchronize(&self.state_directory)?;
+		}
+		Ok(())
+	}
+}
+
+fn prepare_audit_at(
+	path: PathBuf,
+	action: &str,
+	host: &str,
+	subject: &str,
+	outcome: &Value,
+) -> Result<PreparedAudit> {
 	let event = json!({
 		"at_unix_ms": now_ms(),
 		"action": action,
@@ -653,25 +911,260 @@ pub(crate) fn audit(action: &str, host: &str, subject: &str, outcome: &Value) ->
 		"subject": subject,
 		"outcome": outcome,
 	});
-	let _guard = AUDIT_LOCK
-		.get_or_init(|| Mutex::new(()))
-		.lock()
-		.map_err(|_| anyhow::anyhow!("audit lock poisoned"))?;
 	let mut line = serde_json::to_vec(&event)?;
 	line.push(b'\n');
-	let mut file = OpenOptions::new().create(true).append(true).open(path)?;
-	file.write_all(&line)?;
-	file.sync_data()?;
+	Ok(PreparedAudit { path, line })
+}
+
+fn prepare_audit(
+	action: &str,
+	host: &str,
+	subject: &str,
+	outcome: &Value,
+) -> Result<PreparedAudit> {
+	prepare_audit_at(
+		runtime_config()?.state_dir.join("audit/events.jsonl"),
+		action,
+		host,
+		subject,
+		outcome,
+	)
+}
+
+fn append_audit_with(
+	prepared: PreparedAudit,
+	synchronize: impl FnOnce(&std::fs::File) -> Result<()>,
+) -> Result<()> {
+	let preparation = prepared.path.parent().map_or(Ok(()), |parent| {
+		std::fs::create_dir_all(parent).map_err(anyhow::Error::from)
+	});
+	let mut readiness = AUDIT_LOCK
+		.get_or_init(|| Mutex::new(None))
+		.lock()
+		.map_err(|_| anyhow::anyhow!("audit lock poisoned"))?;
+	append_audit_prepared_with(
+		prepared,
+		&mut readiness,
+		preparation,
+		synchronize,
+		|directory| Ok(directory.sync_all()?),
+	)
+}
+
+fn append_audit_prepared_with(
+	prepared: PreparedAudit,
+	readiness: &mut Option<AuditReadiness>,
+	preparation: Result<()>,
+	synchronize_file: impl FnOnce(&std::fs::File) -> Result<()>,
+	synchronize_directory: impl FnMut(&std::fs::File) -> Result<()>,
+) -> Result<()> {
+	if let Err(error) = preparation {
+		*readiness = None;
+		return Err(error);
+	}
+	append_audit_at_with(prepared, readiness, synchronize_file, synchronize_directory)
+}
+
+#[cfg(unix)]
+fn append_audit_at_with(
+	prepared: PreparedAudit,
+	readiness: &mut Option<AuditReadiness>,
+	synchronize_file: impl FnOnce(&std::fs::File) -> Result<()>,
+	mut synchronize_directory: impl FnMut(&std::fs::File) -> Result<()>,
+) -> Result<()> {
+	let previous = readiness.take();
+	let file = OpenOptions::new()
+		.create(true)
+		.append(true)
+		.open(&prepared.path)?;
+	let warm = previous.as_ref().is_some_and(|previous| {
+		previous
+			.binding
+			.can_reuse_parents(&prepared.path, &file)
+			.unwrap_or(false)
+	});
+	let mut binding = if warm {
+		let mut binding = previous.expect("qualified audit readiness").binding;
+		binding.file = file;
+		binding
+	} else {
+		// Any missing/mismatched/failed prior proof is irreversibly cold. A
+		// freshly opened matching binding cannot restore warm authorization.
+		AuditBinding::open(prepared.path, file)?
+	};
+	binding.file.write_all(&prepared.line)?;
+	// The existing per-event fdatasync remains mandatory on both paths.
+	synchronize_file(&binding.file)?;
+	if !warm {
+		binding.synchronize_directories(&mut synchronize_directory)?;
+	}
+	binding.validate()?;
+	*readiness = Some(AuditReadiness { binding });
 	Ok(())
 }
+
+#[cfg(not(unix))]
+fn append_audit_at_with(
+	prepared: PreparedAudit,
+	readiness: &mut Option<AuditReadiness>,
+	synchronize_file: impl FnOnce(&std::fs::File) -> Result<()>,
+	_synchronize_directory: impl FnMut(&std::fs::File) -> Result<()>,
+) -> Result<()> {
+	// Keep the previous platform guarantee and path behavior. This candidate's
+	// directory publication proof applies only to the Unix implementation.
+	*readiness = None;
+	let mut file = OpenOptions::new()
+		.create(true)
+		.append(true)
+		.open(prepared.path)?;
+	file.write_all(&prepared.line)?;
+	synchronize_file(&file)
+}
+
+fn append_audit(prepared: PreparedAudit) -> Result<()> {
+	append_audit_with(prepared, |file| {
+		file.sync_data()?;
+		Ok(())
+	})
+}
+
+pub(crate) fn audit(action: &str, host: &str, subject: &str, outcome: &Value) -> Result<()> {
+	append_audit(prepare_audit(action, host, subject, outcome)?)
+}
+
+fn observation_audit_unavailable() -> anyhow::Error {
+	anyhow::anyhow!("Existing job observation completion audit unavailable")
+}
+
+async fn run_observation_audit(
+	prepared: PreparedAudit,
+	slots: Arc<Semaphore>,
+	append: impl FnOnce(PreparedAudit) -> Result<()> + Send + 'static,
+) -> Result<()> {
+	let permit = slots
+		.acquire_owned()
+		.await
+		.map_err(|_| observation_audit_unavailable())?;
+	let result = tokio::task::spawn_blocking(move || {
+		// A cancelled waiter cannot release capacity while its blocking append
+		// still owns a file or waits for the shared audit synchronization lock.
+		let _permit = permit;
+		append(prepared)
+	})
+	.await;
+	match result {
+		Ok(Ok(())) => Ok(()),
+		_ => Err(observation_audit_unavailable()),
+	}
+}
+
+async fn observation_completion_audit(
+	action: &str,
+	host: &str,
+	subject: &str,
+	outcome: &Value,
+) -> Result<()> {
+	// Freeze the original observation time, destination and identity before
+	// either capacity backpressure or the blocking-pool handoff can suspend.
+	let prepared = prepare_audit(action, host, subject, outcome)
+		.map_err(|_| observation_audit_unavailable())?;
+	let slots = OBSERVATION_AUDITS
+		.get_or_init(|| Arc::new(Semaphore::new(MAX_OBSERVATION_AUDITS)))
+		.clone();
+	run_observation_audit(prepared, slots, append_audit).await
+}
+
+// Shared by start and reconciliation: existing unsafe directories never become a new launch.
+const PRIVATE_DIRECTORY_CODE: &str = r#"
+import os, pathlib, stat, sys
+_hepta_directory_pins = []
+def private_job_directory(raw, create=False):
+    if not isinstance(raw, str) or not raw.startswith("/") or any(p in (".", "..") for p in raw.split("/")):
+        raise SystemExit("unsafe remote job path")
+    parts = [p for p in raw.split("/") if p]
+    if len(parts) < 3 or parts[-2] != "jobs":
+        raise SystemExit("remote job path must name a dedicated state/jobs/job directory")
+    shared_access = getattr(os, "O_PATH", os.O_RDONLY) if sys.platform == "linux" else os.O_RDONLY
+    path_only_shared = shared_access != os.O_RDONLY
+    directory_flags = os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    fd = os.open("/", shared_access | directory_flags)
+    _hepta_directory_pins.append(fd)
+    for offset, part in enumerate(parts):
+        private = offset >= len(parts) - 3
+        if create and private and not path_only_shared:
+            try:
+                os.mkdir(part, mode=0o700, dir_fd=fd)
+                os.fsync(fd)
+            except FileExistsError:
+                pass
+        access = os.O_RDONLY if private else shared_access
+        try:
+            child = os.open(part, access | directory_flags, dir_fd=fd)
+        except FileNotFoundError:
+            if not (create and private and path_only_shared):
+                raise
+            # O_PATH traverses an existing searchable ancestor without reading it.
+            # A new child still needs its parent's original durability barrier:
+            # acquire a readable handle before mkdir, or refuse without creating.
+            sync_parent = os.open(".", os.O_RDONLY | directory_flags, dir_fd=fd)
+            _hepta_directory_pins.append(sync_parent)
+            pinned = os.fstat(fd)
+            readable = os.fstat(sync_parent)
+            if (pinned.st_dev, pinned.st_ino) != (readable.st_dev, readable.st_ino):
+                raise SystemExit("remote parent directory identity changed; no directory created")
+            try:
+                os.mkdir(part, mode=0o700, dir_fd=sync_parent)
+            except FileExistsError:
+                pass
+            else:
+                os.fsync(sync_parent)
+            child = os.open(part, os.O_RDONLY | directory_flags, dir_fd=sync_parent)
+        _hepta_directory_pins.append(child)
+        info = os.fstat(child)
+        if private and (info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700):
+            raise SystemExit("unsafe remote state/jobs/job directory; existing permissions are never repaired")
+        fd = child
+    os.fchdir(fd)
+    return pathlib.Path(".")
+
+def private_bound_job_directory(raw, expected):
+    job = private_job_directory(raw)
+    info = os.fstat(_hepta_directory_pins[-1])
+    if (info.st_dev, info.st_ino) != (expected["device"], expected["inode"]):
+        raise SystemExit("remote job directory identity changed; no workload submitted")
+    return job
+"#;
+
+fn private_remote_code(code: &str) -> Result<String> {
+	Ok(format!(
+		"REMOTE_DIRECTORY_SOURCE = {}\nexec(REMOTE_DIRECTORY_SOURCE)\n{}",
+		serde_json::to_string(PRIVATE_DIRECTORY_CODE)?,
+		code
+	))
+}
+
+pub(super) fn observation_script(kind: super::ssh::ObservationScript) -> Result<String> {
+	private_remote_code(match kind {
+		super::ssh::ObservationScript::Status => STATUS_CODE,
+		super::ssh::ObservationScript::Read => READ_CODE,
+	})
+}
+
+#[cfg(test)]
+#[path = "private_job_directory_tests.rs"]
+mod private_directory_tests;
 
 const START_CODE: &str = r#"
 import fcntl, json, os, pathlib, shutil, subprocess, sys, time
 req = json.load(sys.stdin)
-job = pathlib.Path(req["job_dir"])
-job.mkdir(parents=True, exist_ok=True)
-os.chmod(job, 0o700)
-launch_lock = open(job / "launch.lock", "a")
+req["default_cwd"] = os.getcwd()
+os.umask(0o077)
+job = private_job_directory(req["job_dir"], create=True)
+lock_fd = os.open(job / "launch.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+lock_info = os.fstat(lock_fd)
+if not stat.S_ISREG(lock_info.st_mode) or lock_info.st_uid != os.geteuid() or lock_info.st_nlink != 1 or stat.S_IMODE(lock_info.st_mode) != 0o600:
+    raise SystemExit("unsafe remote launch lock")
+launch_lock = os.fdopen(lock_fd, "a")
 fcntl.flock(launch_lock.fileno(), fcntl.LOCK_EX)
 
 
@@ -716,7 +1209,7 @@ else:
         stdin_path = job / "stdin.bin"
         stdin_path.write_bytes(stdin_text.encode("utf-8"))
         os.chmod(stdin_path, 0o600)
-        req["stdin_path"] = str(stdin_path)
+        req["stdin_path"] = str(pathlib.Path(req["job_dir"]) / "stdin.bin")
     fd = os.open(job / "request.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as stream:
         json.dump(req, stream, sort_keys=True); stream.flush(); os.fsync(stream.fileno())
@@ -725,8 +1218,18 @@ else:
     finally: os.close(fd)
 runner = r'''#!/usr/bin/env python3
 import fcntl, json, os, pathlib, select, shutil, signal, stat, subprocess, sys, threading, time
-job = pathlib.Path(__file__).resolve().parent
+# Only the trusted launcher chooses this argv marker, never request metadata.
+# A legacy unmarked runner retains the original detached nice adjustment.
+if len(sys.argv) not in (3, 4):
+    raise SystemExit("invalid supervisor launch backend; no workload submitted")
+launch_backend = sys.argv[3] if len(sys.argv) == 4 else "detached"
+if launch_backend not in ("systemd", "detached"):
+    raise SystemExit("invalid supervisor launch backend; no workload submitted")
+binding = json.loads(sys.argv[2])
+job = private_bound_job_directory(sys.argv[1], binding)
 req = json.loads((job / "request.json").read_text(encoding="utf-8"))
+if (req.get("job_id"), req.get("launch_nonce"), req.get("request_fingerprint")) != (binding["job_id"], binding["launch_nonce"], binding["request_fingerprint"]):
+    raise SystemExit("remote launch identity changed; no workload submitted")
 
 def atomic(name, value):
     target = job / name
@@ -793,7 +1296,8 @@ def stop_handler(signum, _frame):
 
 signal.signal(signal.SIGTERM, stop_handler)
 signal.signal(signal.SIGINT, stop_handler)
-if req.get("nice"):
+# systemd has already applied Nice=; only the detached path needs an adjustment.
+if launch_backend == "detached" and req.get("nice"):
     try:
         os.nice(int(req["nice"]))
     except OSError:
@@ -802,14 +1306,14 @@ out = open(job / "stdout.log", "ab", buffering=0)
 err = open(job / "stderr.log", "ab", buffering=0)
 stdin_handle = subprocess.DEVNULL
 if req.get("stdin_path"):
-    stdin_handle = open(req["stdin_path"], "rb", buffering=0)
+    stdin_handle = open(job / "stdin.bin", "rb", buffering=0)
 env = os.environ.copy()
 env.update(req.get("env", {}))
 env["HEPTA_RUNTIME_JOB_ID"] = req["job_id"]
 try:
     child = subprocess.Popen(
         [req["executable"], *req.get("args", [])],
-        cwd=req.get("cwd") or None,
+        cwd=req.get("cwd") or req.get("default_cwd"),
         env=env,
         stdin=stdin_handle,
         stdout=subprocess.PIPE,
@@ -935,8 +1439,11 @@ atomic("exit.json", {
 raise SystemExit(int(rc) if 0 <= int(rc) <= 255 else 1)
 '''
 runner_path = job / "runner.py"
+runner = REMOTE_DIRECTORY_SOURCE + "\n" + runner
 runner_path.write_text(runner, encoding="utf-8")
 os.chmod(runner_path, 0o700)
+info = os.fstat(_hepta_directory_pins[-1])
+binding = json.dumps({"device":info.st_dev,"inode":info.st_ino,"job_id":req["job_id"],"launch_nonce":req["launch_nonce"],"request_fingerprint":req["request_fingerprint"]}, sort_keys=True)
 uid = os.getuid()
 env = os.environ.copy()
 env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
@@ -958,7 +1465,9 @@ if req.get("execution_mode", "isolated") != "operator":
     cmd += ["--property", "NoNewPrivileges=yes", "--property", "RestrictSUIDSGID=yes"]
 if not req.get("allow_job_network", False):
     cmd += ["--property", "PrivateNetwork=yes", "--property", "RestrictAddressFamilies=AF_UNIX AF_NETLINK"]
-cmd += ["--", sys.executable, str(runner_path)]
+# Execute the trusted source inline. A renamed shared ancestor must never
+# redirect the interpreter into an unverified replacement runner.py.
+cmd += ["--", sys.executable, "-I", "-S", "-c", runner, req["job_dir"], binding, "systemd"]
 if req.get("platform", "linux") == "linux" and shutil.which("systemd-run"):
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
 else:
@@ -977,7 +1486,7 @@ else:
     if req.get("cpu_quota_percent") or req.get("memory_max_bytes"):
         raise SystemExit("detached backend cannot enforce requested CPU/memory limits")
     process = subprocess.Popen(
-        [sys.executable, str(runner_path)],
+        [sys.executable, "-I", "-S", "-c", runner, req["job_dir"], binding, "detached"],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -998,7 +1507,7 @@ print(json.dumps({"ok": True, **launch}, sort_keys=True))
 const STATUS_CODE: &str = r#"
 import json, os, pathlib, subprocess, sys, time
 q = json.load(sys.stdin)
-job = pathlib.Path(q["job_dir"])
+job = private_job_directory(q["job_dir"])
 
 def read_json(name):
     try:
@@ -1144,7 +1653,7 @@ while True:
 const READ_CODE: &str = r#"
 import json, pathlib, sys
 q = json.load(sys.stdin)
-job = pathlib.Path(q["job_dir"])
+job = private_job_directory(q["job_dir"])
 try:
     request = json.loads((job / "request.json").read_text(encoding="utf-8"))
 except Exception:
@@ -1185,7 +1694,7 @@ print(json.dumps({
 const CANCEL_CODE: &str = r#"
 import json, os, pathlib, signal, subprocess, sys, time
 q = json.load(sys.stdin)
-job = pathlib.Path(q["job_dir"])
+job = private_job_directory(q["job_dir"])
 
 def read_json(name):
     try:
@@ -1381,9 +1890,45 @@ async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 	});
 	run_python_json(
 		host,
-		STATUS_CODE,
+		&private_remote_code(STATUS_CODE)?,
 		&request,
 		Duration::from_secs(wait_seconds.min(30) + 10),
+	)
+	.await
+}
+
+/// Public observation routes opt in explicitly. Start/reuse reconciliation
+/// continues to call the unchanged status_record above.
+async fn status_observation(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
+	if !super::ssh::observation_pool_requested() {
+		return status_record(record, wait_seconds).await;
+	}
+	check_binding(record)?;
+	use super::ssh::{run_job_observation, JobObservation};
+	if record.system_jobctl {
+		let deadline = tokio::time::Instant::now() + Duration::from_secs(wait_seconds.min(30));
+		loop {
+			let value = run_job_observation(
+				&record.host,
+				JobObservation::SystemStatus { job_id: &record.id },
+			)
+			.await?;
+			if value.get("state").and_then(Value::as_str) != Some("running")
+				|| tokio::time::Instant::now() >= deadline
+			{
+				return Ok(value);
+			}
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}
+	run_job_observation(
+		&record.host,
+		JobObservation::PythonStatus {
+			job_id: &record.id,
+			job_dir: &record.remote_job_dir,
+			unit: &record.unit,
+			wait_seconds,
+		},
 	)
 	.await
 }
@@ -1598,7 +2143,13 @@ async fn launch_record(
 		)
 		.await
 	} else {
-		run_python_json(host, START_CODE, &request, Duration::from_secs(20)).await
+		run_python_json(
+			host,
+			&private_remote_code(START_CODE)?,
+			&request,
+			Duration::from_secs(20),
+		)
+		.await
 	};
 	Ok(preserve_launch_outcome(record, launch_result, save_record))
 }
@@ -1623,8 +2174,8 @@ fn validate_new_host_resource_limits(
 
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	validate_start(&params)?;
-	let _host_start_lock = start_lock(&params.host)?;
-	let mut start_guard = Some(_host_start_lock.lock().await);
+	let _start_lane = start_lock(&params.host, params.idempotency_key.as_deref())?;
+	let mut start_guard = Some(_start_lane.lock().await);
 	// Cross-process owner fence: retain the shared admission lock from
 	// idempotency lookup through durable intent, launch and response.
 	let _owner_admission = super::effect_owner_fence::admit_new_effect().await?;
@@ -1634,10 +2185,13 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	// launch intent is allocated. Unknown/corrupt old history fails closed.
 	_owner_admission
 		.require_new_process_identity(&params.host, params.idempotency_key.as_deref())?;
-	let request_fingerprint = fingerprint(&params);
+	// Serialize and hash the full binding once, including potentially large stdin.
+	// Both reuse checks and new metadata retain this same complete SHA256 value.
+	let digest = request_digest(&params)?;
+	let request_fingerprint = fingerprint(&digest);
 	if let Some(key) = params.idempotency_key.as_deref() {
 		if let Some(mut existing) = find_idempotent(&params.host, key)? {
-			if !matches_request(&existing, &params)? {
+			if !matches_request(&existing, &digest)? {
 				bail!("idempotency key `{key}` is already bound to a different request");
 			}
 			check_binding(&existing)?;
@@ -1698,7 +2252,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 		created_unix_ms: now_ms(),
 		idempotency_key: params.idempotency_key.clone(),
 		request_fingerprint,
-		request_digest: Some(request_digest(&params)?),
+		request_digest: Some(digest),
 		launch_state: "pending".to_string(),
 		launch_error: None,
 	};
@@ -1723,13 +2277,14 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 
 pub async fn status_job(params: ProcessRefParams) -> Result<String> {
 	let record = check_ref(&params)?;
-	let status = status_record(&record, 0).await?;
-	let completion = audit(
+	let status = status_observation(&record, 0).await?;
+	let completion = observation_completion_audit(
 		"process_status",
 		&params.host,
 		&params.job_id,
 		&json!({"phase":"observation","ok":true}),
-	);
+	)
+	.await;
 	Ok(serde_json::to_string_pretty(
 		&retain_observation_after_audit(status, completion, &record.host, &record.id),
 	)?)
@@ -1742,13 +2297,14 @@ pub async fn wait_job(params: ProcessWaitParams) -> Result<String> {
 	};
 	let record = check_ref(&reference)?;
 	let wait = params.timeout_seconds.unwrap_or(10).min(30);
-	let status = status_record(&record, wait).await?;
-	let completion = audit(
+	let status = status_observation(&record, wait).await?;
+	let completion = observation_completion_audit(
 		"process_wait",
 		&params.host,
 		&params.job_id,
 		&json!({"phase":"observation","ok":true}),
-	);
+	)
+	.await;
 	Ok(serde_json::to_string_pretty(
 		&retain_observation_after_audit(status, completion, &record.host, &record.id),
 	)?)
@@ -1768,18 +2324,44 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 		"stderr_offset": params.stderr_offset.unwrap_or(0),
 		"limit": params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),
 	});
-	let output: Value = if record.system_jobctl {
+	let output: Value = if super::ssh::observation_pool_requested() {
+		use super::ssh::{run_job_observation, JobObservation};
+		let observation = if record.system_jobctl {
+			JobObservation::SystemRead {
+				job_id: &record.id,
+				stdout_offset: params.stdout_offset.unwrap_or(0),
+				stderr_offset: params.stderr_offset.unwrap_or(0),
+				limit: params.limit.unwrap_or(16384),
+			}
+		} else {
+			JobObservation::PythonRead {
+				job_id: &record.id,
+				job_dir: &record.remote_job_dir,
+				stdout_offset: params.stdout_offset.unwrap_or(0),
+				stderr_offset: params.stderr_offset.unwrap_or(0),
+				limit: params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),
+			}
+		};
+		run_job_observation(&record.host, observation).await?
+	} else if record.system_jobctl {
 		run_jobctl(host, &json!({"op":"read","job_id":record.id,
             "stdout_offset":params.stdout_offset.unwrap_or(0),"stderr_offset":params.stderr_offset.unwrap_or(0),"limit":params.limit.unwrap_or(16384)})).await?
 	} else {
-		run_python_json(host, READ_CODE, &request, Duration::from_secs(15)).await?
+		run_python_json(
+			host,
+			&private_remote_code(READ_CODE)?,
+			&request,
+			Duration::from_secs(15),
+		)
+		.await?
 	};
-	let completion = audit(
+	let completion = observation_completion_audit(
 		"process_read",
 		&params.host,
 		&params.job_id,
 		&json!({"phase":"observation","ok": true}),
-	);
+	)
+	.await;
 	Ok(serde_json::to_string_pretty(
 		&retain_observation_after_audit(output, completion, &record.host, &record.id),
 	)?)
@@ -1819,7 +2401,13 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 	let remote = if record.system_jobctl {
 		run_jobctl(host, &json!({"op":"cancel","job_id":record.id})).await
 	} else {
-		run_python_json(host, CANCEL_CODE, &request, Duration::from_secs(45)).await
+		run_python_json(
+			host,
+			&private_remote_code(CANCEL_CODE)?,
+			&request,
+			Duration::from_secs(45),
+		)
+		.await
 	};
 	let output = retain_cancel_outcome(&params.job_id, remote);
 	let completion = audit(
@@ -1848,18 +2436,48 @@ pub fn list_jobs_page(params: ProcessListPageParams) -> Result<String> {
 	if let Some(host) = params.host.as_deref() {
 		runtime_config()?.host(host)?;
 	}
-	let records = inventory_records_at(&runtime_config()?.state_dir, InventoryLimits::default())?;
+	let rows = inventory_page_rows_at(
+		&runtime_config()?.state_dir,
+		params.host.as_deref(),
+		InventoryLimits::default(),
+	)?;
+	let root = runtime_config()?.state_dir.to_string_lossy();
+	page_job_rows(&rows, &params, &root)
+}
+
+// Retain the original public field types until the complete source scan has
+// passed every final fence. This drops private args/paths per record without
+// serializing unselected records or changing whole-source error ordering.
+struct InventoryRow {
+	id: String,
+	host: String,
+	created_unix_ms: u128,
+	execution_mode: ExecutionMode,
+	launch_state: String,
+}
+
+fn inventory_page_rows_at(
+	root: &Path,
+	host: Option<&str>,
+	limits: InventoryLimits,
+) -> Result<Vec<Value>> {
+	let records = inventory_projected_at(root, limits, |record| InventoryRow {
+		id: record.id,
+		host: record.host,
+		created_unix_ms: record.created_unix_ms,
+		execution_mode: record.execution_mode,
+		launch_state: record.launch_state,
+	})?;
 	let mut rows: Vec<Value> = records
 		.into_iter()
-		.filter(|record| params.host.as_ref().is_none_or(|host| &record.host == host))
+		.filter(|record| host.is_none_or(|host| record.host == host))
 		.map(|record| {
 			json!({"id":record.id,"host":record.host,"created_unix_ms":record.created_unix_ms,
 			"execution_mode":record.execution_mode,"launch_state":record.launch_state})
 		})
 		.collect();
 	rows.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
-	let root = runtime_config()?.state_dir.to_string_lossy();
-	page_job_rows(&rows, &params, &root)
+	Ok(rows)
 }
 
 #[derive(Clone, Copy)]
@@ -1881,8 +2499,17 @@ impl Default for InventoryLimits {
 	}
 }
 
+#[cfg(all(test, unix))]
+fn inventory_records_at(root: &Path, limits: InventoryLimits) -> Result<Vec<JobRecord>> {
+	inventory_projected_at(root, limits, |record| record)
+}
+
 #[cfg(unix)]
-fn inventory_records_at(root: &std::path::Path, limits: InventoryLimits) -> Result<Vec<JobRecord>> {
+fn inventory_projected_at<T>(
+	root: &Path,
+	limits: InventoryLimits,
+	mut project: impl FnMut(JobRecord) -> T,
+) -> Result<Vec<T>> {
 	use std::fs::{File, Metadata};
 	use std::io::Read;
 	use std::os::fd::{AsRawFd, FromRawFd};
@@ -2058,7 +2685,7 @@ fn inventory_records_at(root: &std::path::Path, limits: InventoryLimits) -> Resu
 			bail!("durable inventory record identity mismatch");
 		}
 		stamps.push(stamp(&before));
-		records.push(record);
+		records.push(project(record));
 	}
 	if entries(&base, limits.records, &deadline)? != names {
 		bail!("durable inventory membership changed");
@@ -2083,10 +2710,11 @@ fn inventory_records_at(root: &std::path::Path, limits: InventoryLimits) -> Resu
 }
 
 #[cfg(not(unix))]
-fn inventory_records_at(
-	_root: &std::path::Path,
+fn inventory_projected_at<T>(
+	_root: &Path,
 	_limits: InventoryLimits,
-) -> Result<Vec<JobRecord>> {
+	_project: impl FnMut(JobRecord) -> T,
+) -> Result<Vec<T>> {
 	bail!("bounded durable inventory requires Unix descriptor support")
 }
 

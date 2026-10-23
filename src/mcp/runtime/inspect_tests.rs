@@ -4,6 +4,94 @@
 //! Pinned-action result retention tests; no actions or sudo privileges are configured.
 use super::*;
 
+fn projection_config(hosts: usize) -> super::super::config::RuntimeConfig {
+	let entries = (0..hosts)
+		.map(|index| {
+			(
+				format!("host-{index:03}"),
+				json!({
+					"ssh_target":"private-user@private-target.invalid",
+					"remote_state_dir":"/private-state",
+					"execution_mode":"operator",
+					"allow_execute":true,
+					"allow_pty":index % 2 == 0,
+					"allow_write":index % 3 == 0,
+					"privileged_actions":{"public-action":{
+						"executable":"/private-executable", "fixed_args":["private-argument"]
+					}}
+				}),
+			)
+		})
+		.collect::<serde_json::Map<_, _>>();
+	serde_json::from_value(json!({"state_dir":"/private-controller", "hosts":entries})).unwrap()
+}
+
+#[test]
+fn cached_host_projection_preserves_bytes_and_redaction_across_readers() {
+	let config = projection_config(6);
+	let expected = render_host_list(&config).unwrap();
+	let cache = OnceLock::new();
+	std::thread::scope(|scope| {
+		for _ in 0..16 {
+			let (cache, config, expected) = (&cache, &config, &expected);
+			scope.spawn(move || assert_eq!(cached_host_list(cache, config).unwrap(), *expected));
+		}
+	});
+	let mut returned = cached_host_list(&cache, &config).unwrap();
+	returned.clear();
+	assert_eq!(cached_host_list(&cache, &config).unwrap(), expected);
+	assert!(!expected.contains("private-"));
+	let decoded: Value = serde_json::from_str(&expected).unwrap();
+	assert_eq!(decoded["hosts"].as_array().unwrap().len(), 6);
+	assert_eq!(
+		decoded["hosts"][0]["privileged_actions"],
+		json!(["public-action"])
+	);
+	assert_eq!(decoded["hosts"][0]["allow_pty"], true);
+	assert_eq!(decoded["hosts"][1]["allow_pty"], false);
+}
+
+#[test]
+#[ignore = "manual isolated immutable host projection CPU microbenchmark; not HTTP TPS"]
+fn host_projection_cache_microbenchmark_six_and_256_hosts() {
+	use std::hint::black_box;
+	use std::time::Instant;
+	for hosts in [6, 256] {
+		let config = projection_config(hosts);
+		let cache = OnceLock::new();
+		let expected = render_host_list(&config).unwrap();
+		assert_eq!(cached_host_list(&cache, &config).unwrap(), expected);
+		let iterations = if hosts == 6 { 1024 } else { 64 };
+		for round in 0..6 {
+			let mut elapsed = [0u128; 2];
+			for index in if round % 2 == 0 { [0, 1] } else { [1, 0] } {
+				let started = Instant::now();
+				for _ in 0..iterations {
+					let text = if index == 0 {
+						render_host_list(black_box(&config)).unwrap()
+					} else {
+						cached_host_list(black_box(&cache), black_box(&config)).unwrap()
+					};
+					assert_eq!(text.len(), expected.len());
+					black_box(text);
+				}
+				elapsed[index] = started.elapsed().as_nanos();
+			}
+			println!(
+				"HOST_PROJECTION_BENCH {}",
+				json!({
+					"schema":"hepta-host-projection-cache-microbenchmark/v1",
+					"measurement":"CPU_only", "native_tps_measured":false,
+					"allocations_measured":false, "hosts":hosts, "round":round,
+					"iterations":iterations,"summary_bytes":expected.len(),
+					"old_total_ns":elapsed[0],"cached_total_ns":elapsed[1],
+					"alternating_order":true
+				})
+			);
+		}
+	}
+}
+
 fn pinned_ack(code: i32, stdout: &str, stderr: &str) -> Value {
 	json!({"exit_code":code,"exit_code_authoritative":true,"process_exit_confirmed":true,
 		"stdout":stdout,"stderr":stderr,"timed_out":false,"stdout_truncated":false,

@@ -7,6 +7,8 @@ use anyhow::{anyhow, bail, Result};
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+#[cfg(unix)]
+use std::collections::HashSet;
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -17,6 +19,9 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use super::config::runtime_config;
 
+#[path = "request_audit_trace.rs"]
+pub(super) mod trace;
+
 const MAX_GLOBAL: usize = 512;
 const MAX_OWNER: usize = 128;
 const MAX_RECORD_BYTES: usize = 2048;
@@ -24,9 +29,25 @@ const MAX_PAGE_BYTES: usize = 64 * 1024;
 const STORE_NAME: &str = "request-audit";
 const ARCHIVE_NAME: &str = "request-archive-v11";
 const ARCHIVE_ANCHOR: &str = ".request-archive-v11-anchor.json";
-static STORE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static STORE_LOCK: OnceLock<AuditStoreLock> = OnceLock::new();
 static ACTIVE: OnceLock<Mutex<HashMap<String, Weak<AtomicBool>>>> = OnceLock::new();
 static READ_PINS: OnceLock<Mutex<HashMap<String, Vec<Weak<()>>>>> = OnceLock::new();
+#[cfg(unix)]
+#[path = "request_archive_store.rs"]
+mod archive_store;
+#[cfg(unix)]
+#[path = "request_audit_batch.rs"]
+mod batch;
+#[cfg(unix)]
+#[path = "request_archive_index.rs"]
+mod index;
+#[cfg(unix)]
+#[path = "request_audit_stage.rs"]
+mod stage;
+#[cfg(unix)]
+use archive_store::Archive;
+#[cfg(not(unix))]
+type Archive = File;
 #[cfg(unix)]
 static HOT_CACHE: OnceLock<Mutex<VecDeque<HotSnapshot>>> = OnceLock::new();
 
@@ -37,6 +58,7 @@ struct ArchiveStamp {
 	inode: u64,
 	modified: (i64, i64),
 	changed: (i64, i64),
+	namespace: super::namespace_version::Version,
 }
 #[cfg(unix)]
 struct HotSnapshot {
@@ -100,7 +122,7 @@ struct Record {
 /// The private owner and state-directory handle are deliberately not printable.
 pub struct RequestTicket {
 	directory: File,
-	archive: File,
+	archive: Archive,
 	hot_present: bool,
 	record: Record,
 	started: Instant,
@@ -207,7 +229,7 @@ fn optional_observation_at(root: &Path, owner: &str, id: &str) -> Result<Option<
 /// The archive is the durable admission ledger; hot eviction does not revoke it.
 /// Only a missing member may fall back. Unsafe metadata never becomes absence.
 #[cfg(unix)]
-fn retained_record(hot: &File, archive: &File, id: &str) -> Result<Option<Record>> {
+fn retained_record(hot: &File, archive: &Archive, id: &str) -> Result<Option<Record>> {
 	fn optional(directory: &File, id: &str) -> Result<Option<Record>> {
 		match read_record(directory, &format!("{id}.json")) {
 			Ok(record) => Ok(Some(record)),
@@ -222,7 +244,17 @@ fn retained_record(hot: &File, archive: &File, id: &str) -> Result<Option<Record
 		}
 	}
 	let hot = optional(hot, id)?;
-	let archived = optional(archive, id)?;
+	let archived = match archive.read_record(&format!("{id}.json")) {
+		Ok(record) => Some(record),
+		Err(error)
+			if error
+				.downcast_ref::<std::io::Error>()
+				.is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
+		{
+			None
+		}
+		Err(error) => return Err(error),
+	};
 	if let (Some(hot), Some(archived)) = (&hot, &archived) {
 		if hot.owner != archived.owner
 			|| hot.tool_name != archived.tool_name
@@ -273,16 +305,149 @@ fn valid_tool(value: &str) -> bool {
 }
 
 fn new_id() -> Result<String> {
+	use ring::rand::SecureRandom;
 	let mut entropy = [0u8; 32];
-	File::open("/dev/urandom")?.read_exact(&mut entropy)?;
-	Ok(entropy.iter().map(|byte| format!("{byte:02x}")).collect())
+	ring::rand::SystemRandom::new()
+		.fill(&mut entropy)
+		.map_err(|_| anyhow!("request identity entropy unavailable"))?;
+	let alphabet = b"0123456789abcdef";
+	let mut text = String::with_capacity(64);
+	for byte in entropy {
+		text.push(alphabet[(byte >> 4) as usize] as char);
+		text.push(alphabet[(byte & 15) as usize] as char);
+	}
+	Ok(text)
 }
 
-fn store_lock() -> Result<std::sync::MutexGuard<'static, ()>> {
-	STORE_LOCK
-		.get_or_init(|| Mutex::new(()))
-		.lock()
-		.map_err(|_| anyhow!("request audit state lock unavailable"))
+// Every audit writer and metadata reader reserves a FIFO turn before taking
+// the original mutex. A timed reader can cancel its turn without leaving a
+// blocked thread behind; later writers cannot repeatedly bypass that reader.
+#[derive(Default)]
+struct AuditStoreQueue {
+	next_ticket: u64,
+	active: bool,
+	waiting: VecDeque<u64>,
+}
+
+#[derive(Default)]
+struct AuditStoreLock {
+	inner: Mutex<()>,
+	queue: Mutex<AuditStoreQueue>,
+	changed: std::sync::Condvar,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StoreLockFailure {
+	Deadline,
+	Unavailable,
+}
+
+#[must_use = "the store guard must cover the protected operation"]
+struct AuditStoreGuard<'a> {
+	lock: &'a AuditStoreLock,
+	inner: Option<std::sync::MutexGuard<'a, ()>>,
+}
+
+impl AuditStoreLock {
+	fn cancel(&self, queue: &mut AuditStoreQueue, ticket: u64) {
+		queue.waiting.retain(|queued| *queued != ticket);
+		self.changed.notify_all();
+	}
+
+	fn release(&self) {
+		// Cleanup must still release a reservation during unwinding. Recovering
+		// this bookkeeping guard never clears either mutex's poisoned state.
+		let mut queue = self.queue.lock().unwrap_or_else(|error| error.into_inner());
+		queue.active = false;
+		self.changed.notify_all();
+	}
+
+	fn acquire(
+		&self,
+		deadline: Option<Instant>,
+	) -> std::result::Result<AuditStoreGuard<'_>, StoreLockFailure> {
+		if deadline.is_some_and(|limit| Instant::now() >= limit) {
+			return Err(StoreLockFailure::Deadline);
+		}
+		let mut queue = self
+			.queue
+			.lock()
+			.map_err(|_| StoreLockFailure::Unavailable)?;
+		if deadline.is_some_and(|limit| Instant::now() >= limit) {
+			return Err(StoreLockFailure::Deadline);
+		}
+		let ticket = queue.next_ticket;
+		queue.next_ticket = ticket.checked_add(1).ok_or(StoreLockFailure::Unavailable)?;
+		queue.waiting.push_back(ticket);
+		loop {
+			if deadline.is_some_and(|limit| Instant::now() >= limit) {
+				self.cancel(&mut queue, ticket);
+				return Err(StoreLockFailure::Deadline);
+			}
+			if !queue.active && queue.waiting.front() == Some(&ticket) {
+				queue.waiting.pop_front();
+				queue.active = true;
+				break;
+			}
+			let waited = match deadline {
+				Some(limit) => self
+					.changed
+					.wait_timeout(queue, limit.saturating_duration_since(Instant::now()))
+					.map(|(queue, _)| queue)
+					.map_err(|error| error.into_inner().0),
+				None => self.changed.wait(queue).map_err(|error| error.into_inner()),
+			};
+			queue = match waited {
+				Ok(queue) => queue,
+				Err(mut queue) => {
+					self.cancel(&mut queue, ticket);
+					return Err(StoreLockFailure::Unavailable);
+				}
+			};
+		}
+		drop(queue);
+		let mut guard = AuditStoreGuard {
+			lock: self,
+			inner: None,
+		};
+		if deadline.is_some_and(|limit| Instant::now() >= limit) {
+			return Err(StoreLockFailure::Deadline);
+		}
+		// All callers use this gate, and the previous owner releases inner
+		// before its turn. No second, unbounded mutex wait belongs here.
+		match self.inner.try_lock() {
+			Ok(inner) => guard.inner = Some(inner),
+			Err(std::sync::TryLockError::Poisoned(error)) => {
+				drop(error.into_inner());
+				return Err(StoreLockFailure::Unavailable);
+			}
+			Err(std::sync::TryLockError::WouldBlock) => {
+				return Err(StoreLockFailure::Unavailable);
+			}
+		}
+		if deadline.is_some_and(|limit| Instant::now() >= limit) {
+			return Err(StoreLockFailure::Deadline);
+		}
+		Ok(guard)
+	}
+}
+
+impl Drop for AuditStoreGuard<'_> {
+	fn drop(&mut self) {
+		// Keep standard Mutex poisoning for a panic inside the protected work,
+		// and release that mutex before another caller receives the FIFO turn.
+		drop(self.inner.take());
+		self.lock.release();
+	}
+}
+
+fn store_lock() -> Result<AuditStoreGuard<'static>> {
+	trace::measure("store_lock_wait", 0, None, || {
+		STORE_LOCK
+			.get_or_init(AuditStoreLock::default)
+			.acquire(None)
+			.map_err(|_| anyhow!("request audit state lock unavailable"))
+	})
 }
 
 fn active_registry() -> Result<std::sync::MutexGuard<'static, HashMap<String, Weak<AtomicBool>>>> {
@@ -341,6 +506,11 @@ fn open_at(directory: &File, component: &str, flags: i32, mode: u32) -> Result<F
 
 #[cfg(unix)]
 fn private_directory(directory: &File) -> Result<()> {
+	private_directory_metadata(directory).map(|_| ())
+}
+
+#[cfg(unix)]
+fn private_directory_metadata(directory: &File) -> Result<std::fs::Metadata> {
 	use std::os::unix::fs::MetadataExt;
 	let metadata = directory.metadata()?;
 	if !metadata.is_dir()
@@ -349,7 +519,7 @@ fn private_directory(directory: &File) -> Result<()> {
 	{
 		bail!("private request audit directory refused");
 	}
-	Ok(())
+	Ok(metadata)
 }
 
 #[cfg(unix)]
@@ -359,8 +529,13 @@ fn open_store(root: &Path) -> Result<File> {
 
 #[cfg(unix)]
 fn open_named_store(root: &Path, store_name: &str) -> Result<File> {
-	use std::os::fd::AsRawFd;
 	let base = audit_root(root)?;
+	open_named_store_at(&base, store_name)
+}
+
+#[cfg(unix)]
+fn open_named_store_at(base: &File, store_name: &str) -> Result<File> {
+	use std::os::fd::AsRawFd;
 	let folder = name(store_name)?;
 	let made = unsafe { libc::mkdirat(base.as_raw_fd(), folder.as_ptr(), 0o700) };
 	if made < 0 {
@@ -371,7 +546,7 @@ fn open_named_store(root: &Path, store_name: &str) -> Result<File> {
 	} else {
 		base.sync_all()?;
 	}
-	let directory = open_at(&base, store_name, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+	let directory = open_at(base, store_name, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
 	private_directory(&directory)?;
 	Ok(directory)
 }
@@ -379,26 +554,44 @@ fn open_named_store(root: &Path, store_name: &str) -> Result<File> {
 #[cfg(unix)]
 fn audit_root(root: &Path) -> Result<File> {
 	use std::os::fd::FromRawFd;
+	use std::os::unix::fs::MetadataExt;
 	let raw = root
 		.to_str()
 		.ok_or_else(|| anyhow!("request audit root is not UTF-8"))?;
 	if !root.is_absolute() || raw.split('/').any(|part| part == "." || part == "..") {
 		bail!("invalid request audit root");
 	}
+	let components: Vec<_> = raw.split('/').filter(|part| !part.is_empty()).collect();
+	#[cfg(target_os = "linux")]
+	let ancestor_access = libc::O_PATH;
+	#[cfg(not(target_os = "linux"))]
+	let ancestor_access = libc::O_RDONLY;
 	let slash = name("/")?;
 	let descriptor = unsafe {
 		libc::open(
 			slash.as_ptr(),
-			libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+			ancestor_access | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
 		)
 	};
 	if descriptor < 0 {
 		return Err(std::io::Error::last_os_error().into());
 	}
 	let mut base = unsafe { File::from_raw_fd(descriptor) };
-	for component in raw.split('/').filter(|part| !part.is_empty()) {
-		base = open_at(&base, component, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+	for (index, component) in components.iter().enumerate() {
+		// Linux O_PATH needs search permission, not directory-listing permission.
+		// Keep explicit denial of non-searchable ancestors even for privileged
+		// callers, and open the private final directory as a normal fsync-able FD.
+		if base.metadata()?.mode() & 0o111 == 0 {
+			bail!("request audit ancestor is not searchable");
+		}
+		let access = if index + 1 == components.len() {
+			libc::O_RDONLY
+		} else {
+			ancestor_access
+		};
+		base = open_at(&base, component, access | libc::O_DIRECTORY, 0)?;
 	}
+	private_directory(&base)?;
 	Ok(base)
 }
 
@@ -425,13 +618,13 @@ fn validate_file(file: &File) -> Result<()> {
 #[cfg(unix)]
 fn archive_stamp(directory: &File) -> Result<ArchiveStamp> {
 	use std::os::unix::fs::MetadataExt;
-	private_directory(directory)?;
-	let metadata = directory.metadata()?;
+	let metadata = private_directory_metadata(directory)?;
 	Ok(ArchiveStamp {
 		device: metadata.dev(),
 		inode: metadata.ino(),
 		modified: (metadata.mtime(), metadata.mtime_nsec()),
 		changed: (metadata.ctime(), metadata.ctime_nsec()),
+		namespace: super::namespace_version::version(directory)?,
 	})
 }
 
@@ -492,28 +685,40 @@ fn publish_archive_anchor(root: &File, anchor: &ArchiveAnchor) -> Result<()> {
 
 /// A missing archive after introduction is uncertain history, never an empty archive.
 #[cfg(unix)]
-fn open_archive(root: &Path) -> Result<File> {
-	use std::os::{fd::AsRawFd, unix::fs::MetadataExt};
+fn open_archive(root: &Path) -> Result<Archive> {
 	let base = audit_root(root)?;
+	open_archive_at(&base)
+}
+
+#[cfg(unix)]
+fn open_archive_at(base: &File) -> Result<Archive> {
+	let (legacy, anchor) = open_legacy_archive_at(base)?;
+	Archive::open(base, legacy, anchor)
+}
+
+#[cfg(unix)]
+fn open_legacy_archive_at(base: &File) -> Result<(File, archive_store::PinnedAnchor)> {
+	use std::os::{fd::AsRawFd, unix::fs::MetadataExt};
 	let metadata = base.metadata()?;
-	match read_archive_anchor(&base) {
-		Ok(anchor) => {
+	match archive_store::PinnedAnchor::open(base) {
+		Ok(pinned) => {
+			let anchor = pinned.record();
 			if anchor.root_device != metadata.dev() || anchor.root_inode != metadata.ino() {
 				bail!("request archive root binding changed");
 			}
-			let archive = open_at(&base, ARCHIVE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+			let archive = open_at(base, ARCHIVE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
 			let stamp = archive_stamp(&archive)?;
 			if (stamp.device, stamp.inode) != (anchor.archive_device, anchor.archive_inode) {
 				bail!("request archive identity changed; history never recreated automatically");
 			}
-			Ok(archive)
+			Ok((archive, pinned))
 		}
 		Err(error)
 			if error
 				.downcast_ref::<std::io::Error>()
 				.is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
 		{
-			match open_at(&base, ARCHIVE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0) {
+			match open_at(base, ARCHIVE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0) {
 				Err(error)
 					if error
 						.downcast_ref::<std::io::Error>()
@@ -527,10 +732,10 @@ fn open_archive(root: &Path) -> Result<File> {
 				return Err(std::io::Error::last_os_error().into());
 			}
 			base.sync_all()?;
-			let archive = open_at(&base, ARCHIVE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
+			let archive = open_at(base, ARCHIVE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
 			let stamp = archive_stamp(&archive)?;
 			publish_archive_anchor(
-				&base,
+				base,
 				&ArchiveAnchor {
 					root_device: metadata.dev(),
 					root_inode: metadata.ino(),
@@ -538,7 +743,7 @@ fn open_archive(root: &Path) -> Result<File> {
 					archive_inode: stamp.inode,
 				},
 			)?;
-			Ok(archive)
+			Ok((archive, archive_store::PinnedAnchor::open(base)?))
 		}
 		Err(error) => Err(error),
 	}
@@ -636,6 +841,15 @@ fn entries(directory: &File) -> Result<Vec<Record>> {
 
 #[cfg(unix)]
 fn walk_directory(directory: &File, mut visit: impl FnMut(&str) -> Result<()>) -> Result<()> {
+	walk_directory_with_inode(directory, |filename, _| visit(filename))
+}
+
+#[cfg(unix)]
+#[allow(clippy::unnecessary_cast)] // libc inode widths vary across Unix.
+fn walk_directory_with_inode(
+	directory: &File,
+	mut visit: impl FnMut(&str, u64) -> Result<()>,
+) -> Result<()> {
 	use std::os::fd::AsRawFd;
 	// A fresh directory file description avoids a shared seek cursor between snapshots.
 	let scan = open_at(directory, ".", libc::O_RDONLY | libc::O_DIRECTORY, 0)?;
@@ -665,7 +879,9 @@ fn walk_directory(directory: &File, mut visit: impl FnMut(&str) -> Result<()>) -
 		if filename == "." || filename == ".." {
 			continue;
 		}
-		visit(filename)?;
+		// This inode is only a scheduling hint. Callers needing metadata still
+		// verify the complete named member through the pinned descriptor.
+		visit(filename, unsafe { (*item).d_ino } as u64)?;
 	}
 	Ok(())
 }
@@ -685,9 +901,9 @@ fn directory_members(directory: &File, maximum: usize) -> Result<Vec<String>> {
 
 /// Archive read APIs have bounded working memory and release STORE_LOCK after
 /// each exact record read, so ordinary admissions can progress during a live scan.
-#[cfg(unix)]
-fn scan_archive(archive: &File, mut visit: impl FnMut(Record) -> Result<()>) -> Result<()> {
-	walk_directory(archive, |filename| {
+#[cfg(all(test, unix))]
+fn scan_archive(archive: &Archive, mut visit: impl FnMut(Record) -> Result<()>) -> Result<()> {
+	archive.walk(|directory, filename, _| {
 		if filename.starts_with('.') {
 			let value = filename
 				.strip_prefix('.')
@@ -700,7 +916,7 @@ fn scan_archive(archive: &File, mut visit: impl FnMut(Record) -> Result<()>) -> 
 		}
 		let record = {
 			let _guard = store_lock()?;
-			read_record(archive, filename)?
+			read_record(directory, filename)?
 		};
 		visit(record)
 	})
@@ -772,7 +988,7 @@ fn cleanup_staging(directory: &File, filename: &str) -> Result<()> {
 }
 
 #[cfg(unix)]
-fn remove_record(directory: &File, expected: &Record) -> Result<()> {
+fn remove_record(directory: &File, expected: &Record, sync_directory: bool) -> Result<()> {
 	use std::os::fd::AsRawFd;
 	if read_record(directory, &format!("{}.json", expected.request_id))? != *expected {
 		bail!("request hot cache binding changed");
@@ -781,13 +997,15 @@ fn remove_record(directory: &File, expected: &Record) -> Result<()> {
 	if unsafe { libc::unlinkat(directory.as_raw_fd(), filename.as_ptr(), 0) } < 0 {
 		return Err(std::io::Error::last_os_error().into());
 	}
-	directory.sync_all()?;
+	if sync_directory {
+		directory.sync_all()?;
+	}
 	Ok(())
 }
 
 #[cfg(unix)]
-fn archived_copy_matches(archive: &File, record: &Record) -> bool {
-	let Ok(archived) = read_record(archive, &format!("{}.json", record.request_id)) else {
+fn archived_copy_matches(archive: &Archive, record: &Record) -> bool {
+	let Ok(archived) = archive.read_record(&format!("{}.json", record.request_id)) else {
 		return false;
 	};
 	archived.owner == record.owner
@@ -800,9 +1018,21 @@ fn archived_copy_matches(archive: &File, record: &Record) -> bool {
 #[cfg(unix)]
 fn retain_before_begin(
 	directory: &File,
-	archive: &File,
+	archive: &Archive,
 	owner: &str,
 	records: &mut Vec<Record>,
+) -> Result<bool> {
+	retain_for_batch(directory, archive, owner, records, &HashSet::new(), true)
+}
+
+#[cfg(unix)]
+fn retain_for_batch(
+	directory: &File,
+	archive: &Archive,
+	owner: &str,
+	records: &mut Vec<Record>,
+	pending: &HashSet<String>,
+	sync_directory: bool,
 ) -> Result<bool> {
 	while records
 		.iter()
@@ -813,6 +1043,7 @@ fn retain_before_begin(
 		let mut victim = None;
 		for (index, record) in records.iter().enumerate() {
 			if record.owner == owner
+				&& !pending.contains(&record.request_id)
 				&& !is_active(&record.request_id)?
 				&& archived_copy_matches(archive, record)
 			{
@@ -823,13 +1054,16 @@ fn retain_before_begin(
 		let Some(index) = victim else {
 			return Ok(false);
 		};
-		remove_record(directory, &records[index])?;
+		remove_record(directory, &records[index], sync_directory)?;
 		records.remove(index);
 	}
 	while records.len() >= MAX_GLOBAL {
 		let mut victim = None;
 		for (index, record) in records.iter().enumerate() {
-			if !is_active(&record.request_id)? && archived_copy_matches(archive, record) {
+			if !pending.contains(&record.request_id)
+				&& !is_active(&record.request_id)?
+				&& archived_copy_matches(archive, record)
+			{
 				victim = Some(index);
 				break;
 			}
@@ -837,7 +1071,7 @@ fn retain_before_begin(
 		let Some(index) = victim else {
 			return Ok(false);
 		};
-		remove_record(directory, &records[index])?;
+		remove_record(directory, &records[index], sync_directory)?;
 		records.remove(index);
 	}
 	Ok(true)
@@ -845,7 +1079,49 @@ fn retain_before_begin(
 
 #[cfg(unix)]
 fn save(directory: &File, record: &Record, replacing: bool) -> Result<()> {
+	save_with_sync(directory, record, replacing, true)
+}
+
+/// File contents always sync before publication. Only the batch worker may
+/// defer a directory barrier, and it acknowledges nobody until that barrier.
+#[cfg(unix)]
+fn save_with_sync(
+	directory: &File,
+	record: &Record,
+	replacing: bool,
+	sync_directory: bool,
+) -> Result<()> {
+	save_raw_with_sync(directory, record, replacing, sync_directory)
+}
+
+/// Only authoritative archive writes feed the disposable index. Hot retention
+/// copies must not pay for index lookups or create duplicate pending updates.
+#[cfg(unix)]
+fn save_archive_with_sync(
+	archive: &Archive,
+	record: &Record,
+	replacing: bool,
+	sync_directory: bool,
+) -> Result<()> {
+	archive.fence_at(archive.root())?;
+	let filename = format!("{}.json", record.request_id);
+	let directory = archive.directory_for_write(&filename, replacing)?;
+	index::publication(archive, record, || {
+		save_raw_with_sync(directory, record, replacing, sync_directory)
+	})?;
+	archive.fence_record(&filename, directory)?;
+	archive.fence_at(archive.root())
+}
+
+#[cfg(unix)]
+fn save_raw_with_sync(
+	directory: &File,
+	record: &Record,
+	replacing: bool,
+	sync_directory: bool,
+) -> Result<()> {
 	use std::os::fd::AsRawFd;
+	let total = trace::Span::new("serial_record_write", 1, Some(0));
 	private_directory(directory)?;
 	let filename = format!("{}.json", record.request_id);
 	if replacing {
@@ -862,16 +1138,24 @@ fn save(directory: &File, record: &Record, replacing: bool) -> Result<()> {
 		bail!("request audit record size refused");
 	}
 	let temporary = format!(".{}-{}.tmp", record.request_id, record.request_id);
-	let mut file = open_at(
-		directory,
-		&temporary,
-		libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL,
-		0o600,
-	)?;
+	let mut file = trace::measure("serial_open_temporary", 1, Some(0), || {
+		open_at(
+			directory,
+			&temporary,
+			libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL,
+			0o600,
+		)
+	})?;
 	validate_file(&file)?;
 	let persisted = (|| -> Result<()> {
-		file.write_all(&bytes)?;
-		file.sync_all()?;
+		trace::measure("serial_write_temporary", 1, Some(0), || {
+			file.write_all(&bytes)?;
+			Ok(())
+		})?;
+		trace::measure("serial_file_sync", 1, Some(0), || {
+			file.sync_all()?;
+			Ok(())
+		})?;
 		drop(file);
 		let temp = name(&temporary)?;
 		let target = name(&filename)?;
@@ -904,7 +1188,12 @@ fn save(directory: &File, record: &Record, replacing: bool) -> Result<()> {
 				return Err(std::io::Error::last_os_error().into());
 			}
 		}
-		directory.sync_all()?;
+		if sync_directory {
+			trace::measure("serial_directory_sync", 1, Some(0), || {
+				directory.sync_all()?;
+				Ok(())
+			})?;
+		}
 		Ok(())
 	})();
 	if persisted.is_err() {
@@ -912,15 +1201,32 @@ fn save(directory: &File, record: &Record, replacing: bool) -> Result<()> {
 			unsafe { libc::unlinkat(directory.as_raw_fd(), temp.as_ptr(), 0) };
 		}
 	}
-	persisted
+	total.finish(persisted)
 }
 
 /// An append-retained metadata archive is independent of the bounded hot cache.
 /// Only the exact immutable identity is read; lifetime history is never counted
 /// or scanned in the dispatch path, and no history-count admission limit exists.
 #[cfg(unix)]
-fn archive_record(archive: &File, record: &Record) -> Result<()> {
-	let replacing = match read_record(archive, &format!("{}.json", record.request_id)) {
+fn archive_record(archive: &Archive, record: &Record) -> Result<()> {
+	archive_record_with_sync(archive, record, true)
+}
+
+#[cfg(unix)]
+fn archive_record_with_sync(
+	archive: &Archive,
+	record: &Record,
+	sync_directory: bool,
+) -> Result<()> {
+	let Some(replacing) = archive_replacement(archive, record)? else {
+		return Ok(());
+	};
+	save_archive_with_sync(archive, record, replacing, sync_directory)
+}
+
+#[cfg(unix)]
+fn archive_replacement(archive: &Archive, record: &Record) -> Result<Option<bool>> {
+	let replacing = match archive.read_record(&format!("{}.json", record.request_id)) {
 		Ok(existing) => {
 			if existing.owner != record.owner
 				|| existing.tool_name != record.tool_name
@@ -929,7 +1235,7 @@ fn archive_record(archive: &File, record: &Record) -> Result<()> {
 				bail!("request archive identity changed");
 			}
 			if record.state == DurableState::Unknown && existing.state != DurableState::Unknown {
-				return Ok(());
+				return Ok(None);
 			}
 			if existing.state != DurableState::Unknown && existing.state != record.state {
 				bail!("request archive terminal outcome changed");
@@ -938,7 +1244,7 @@ fn archive_record(archive: &File, record: &Record) -> Result<()> {
 				bail!("request archive terminal outcome changed");
 			}
 			if existing.state == record.state && existing.elapsed_ms == record.elapsed_ms {
-				return Ok(());
+				return Ok(None);
 			}
 			true
 		}
@@ -951,11 +1257,16 @@ fn archive_record(archive: &File, record: &Record) -> Result<()> {
 		}
 		Err(error) => return Err(error),
 	};
-	save(archive, record, replacing)
+	Ok(Some(replacing))
 }
 
 #[cfg(unix)]
 fn cache_hot(directory: &File, records: &[Record]) -> Result<()> {
+	cache_hot_owned(directory, records.to_vec())
+}
+
+#[cfg(unix)]
+fn cache_hot_owned(directory: &File, records: Vec<Record>) -> Result<()> {
 	let stamp = archive_stamp(directory)?;
 	let mut cache = HOT_CACHE
 		.get_or_init(|| Mutex::new(VecDeque::new()))
@@ -966,51 +1277,49 @@ fn cache_hot(directory: &File, records: &[Record]) -> Result<()> {
 	if cache.len() >= 16 {
 		cache.pop_front();
 	}
-	cache.push_back(HotSnapshot {
-		stamp,
-		records: records.to_vec(),
-	});
+	cache.push_back(HotSnapshot { stamp, records });
 	Ok(())
 }
 
 #[cfg(unix)]
-fn seed_missing_archive_record(archive: &File, record: &Record) -> Result<()> {
-	use std::os::fd::AsRawFd;
-	let filename = name(&format!("{}.json", record.request_id))?;
-	let mut metadata = std::mem::MaybeUninit::<libc::stat>::uninit();
-	if unsafe {
-		libc::fstatat(
-			archive.as_raw_fd(),
-			filename.as_ptr(),
-			metadata.as_mut_ptr(),
-			libc::AT_SYMLINK_NOFOLLOW,
-		)
-	} == 0
+fn seed_missing_archive_record(archive: &Archive, record: &Record) -> Result<()> {
+	if archive
+		.existing_directory(&format!("{}.json", record.request_id))?
+		.is_some()
 	{
 		// Existing bytes are never repaired or rebound by an unrelated admission.
 		// A bad counterpart prevents eviction of its good hot copy, not new IDs.
 		return Ok(());
 	}
-	let error = std::io::Error::last_os_error();
-	if error.kind() != std::io::ErrorKind::NotFound {
-		return Err(error.into());
-	}
-	save(archive, record, false)
+	save_archive_with_sync(archive, record, false, true)
 }
 
 /// Callers hold STORE_LOCK. Cold/external namespace changes are validated once;
 /// ordinary writes update the stamp and bounded index after their own fsync.
 #[cfg(unix)]
-fn hot_snapshot(root: &Path, directory: &File) -> Result<(Vec<Record>, File)> {
+fn hot_snapshot(root: &Path, directory: &File) -> Result<(Vec<Record>, Archive)> {
 	let archive = open_archive(root)?;
+	let records = hot_snapshot_at(directory, &archive, false)?;
+	Ok((records, archive))
+}
+
+#[cfg(unix)]
+fn hot_snapshot_at(directory: &File, archive: &Archive, consume: bool) -> Result<Vec<Record>> {
 	let mut stamp = archive_stamp(directory)?;
 	{
-		let cache = HOT_CACHE
+		let mut cache = HOT_CACHE
 			.get_or_init(|| Mutex::new(VecDeque::new()))
 			.lock()
 			.map_err(|_| anyhow!("request hot cache unavailable"))?;
-		if let Some(saved) = cache.iter().find(|entry| entry.stamp == stamp) {
-			return Ok((saved.records.clone(), archive));
+		if let Some(position) = cache.iter().position(|entry| entry.stamp == stamp) {
+			if consume {
+				// A failed cohort leaves a cache miss, so the next caller rereads hot files.
+				return cache
+					.remove(position)
+					.map(|saved| saved.records)
+					.ok_or_else(|| anyhow!("request hot snapshot unavailable"));
+			}
+			return Ok(cache[position].records.clone());
 		}
 	}
 	let mut records = entries(directory)?;
@@ -1026,10 +1335,25 @@ fn hot_snapshot(root: &Path, directory: &File) -> Result<(Vec<Record>, File)> {
 		records = entries(directory)?;
 	}
 	for record in &records {
-		seed_missing_archive_record(&archive, record)?;
+		seed_missing_archive_record(archive, record)?;
 	}
-	cache_hot(directory, &records)?;
-	Ok((records, archive))
+	if !consume {
+		cache_hot(directory, &records)?;
+	}
+	Ok(records)
+}
+
+/// Reuse the anchored initialization/validation path without admitting a call.
+#[cfg(unix)]
+pub(crate) fn prepare_at(root: &Path) -> Result<()> {
+	let _guard = store_lock()?;
+	let directory = open_store(root)?;
+	hot_snapshot(root, &directory)?;
+	Ok(())
+}
+#[cfg(not(unix))]
+pub(crate) fn prepare_at(_root: &Path) -> Result<()> {
+	bail!("private request auditing requires Unix descriptor support")
 }
 
 #[cfg(unix)]
@@ -1093,7 +1417,7 @@ fn begin_with_read_at(
 			.as_millis(),
 		elapsed_ms: None,
 	};
-	save(&archive, &record, false)?;
+	save_archive_with_sync(&archive, &record, false, true)?;
 	if hot_present {
 		save(&directory, &record, false)?;
 		records.push(record.clone());
@@ -1134,24 +1458,102 @@ pub(crate) async fn begin_with_read(
 	tool: &str,
 	target: Option<String>,
 ) -> Result<RequestTicket> {
-	let root = runtime_config()?.state_dir.clone();
+	let total = trace::Span::new("begin_with_read_total", 1, Some(0));
+	let root = trace::measure("begin_with_read_config", 1, Some(0), || {
+		Ok(runtime_config()?.state_dir.clone())
+	})
+	.inspect_err(|_| trace::flush())?;
 	let owner = owner.to_owned();
 	let tool = tool.to_owned();
-	tokio::task::spawn_blocking(move || begin_with_read_at(&root, &owner, &tool, target.as_deref()))
-		.await
-		.map_err(|_| anyhow!("request audit intent unavailable; request was not dispatched"))?
-		.map_err(|_| anyhow!("request audit intent unavailable; request was not dispatched"))
+	let joined = tokio::task::spawn_blocking(move || {
+		let span = trace::Span::new("begin_with_read_blocking", 1, Some(0));
+		let result = span.finish((|| {
+			#[cfg(unix)]
+			if let Some(coordinator) = batch::coordinator() {
+				return coordinator.begin(root, owner, tool, target);
+			}
+			begin_with_read_at(&root, &owner, &tool, target.as_deref())
+		})());
+		trace::flush();
+		result
+	})
+	.await;
+	let result = match joined {
+		Ok(result) => {
+			if let Err(error) = &result {
+				trace::Span::new("begin_with_read_inner_failure", 1, Some(0)).record(Some(error));
+			}
+			result.map_err(|_| {
+				anyhow!("request audit intent unavailable; request was not dispatched")
+			})
+		}
+		Err(error) => {
+			let stage = if error.is_panic() {
+				"begin_with_read_join_panic"
+			} else if error.is_cancelled() {
+				"begin_with_read_join_cancelled"
+			} else {
+				"begin_with_read_join_failure"
+			};
+			let error = anyhow::Error::new(error);
+			trace::Span::new(stage, 1, Some(0)).record(Some(&error));
+			Err(anyhow!(
+				"request audit intent unavailable; request was not dispatched"
+			))
+		}
+	};
+	let result = total.finish(result);
+	trace::flush();
+	result
 }
 
 /// Only canonical router names (or `_unknown_tool`) may reach this internal API.
 pub async fn begin(owner: &str, canonical_tool_name: &str) -> Result<RequestTicket> {
-	let root = runtime_config()?.state_dir.clone();
+	let total = trace::Span::new("begin_total", 1, Some(0));
+	let root = trace::measure("begin_config", 1, Some(0), || {
+		Ok(runtime_config()?.state_dir.clone())
+	})
+	.inspect_err(|_| trace::flush())?;
 	let owner = owner.to_owned();
 	let tool = canonical_tool_name.to_owned();
-	tokio::task::spawn_blocking(move || begin_at(&root, &owner, &tool))
-		.await
-		.map_err(|_| anyhow!("request audit intent unavailable; request was not dispatched"))?
-		.map_err(|_| anyhow!("request audit intent unavailable; request was not dispatched"))
+	let joined = tokio::task::spawn_blocking(move || {
+		let result = trace::measure("begin_blocking", 1, Some(0), || {
+			#[cfg(unix)]
+			if let Some(coordinator) = batch::coordinator() {
+				return coordinator.begin(root, owner, tool, None);
+			}
+			begin_at(&root, &owner, &tool)
+		});
+		trace::flush();
+		result
+	})
+	.await;
+	let result = match joined {
+		Ok(result) => {
+			if let Err(error) = &result {
+				trace::Span::new("begin_inner_failure", 1, Some(0)).record(Some(error));
+			}
+			result.map_err(|_| {
+				anyhow!("request audit intent unavailable; request was not dispatched")
+			})
+		}
+		Err(error) => {
+			let stage = if error.is_panic() {
+				"begin_join_panic"
+			} else if error.is_cancelled() {
+				"begin_join_cancelled"
+			} else {
+				"begin_join_failure"
+			};
+			trace::Span::new(stage, 1, Some(0)).record(Some(&anyhow::Error::new(error)));
+			Err(anyhow!(
+				"request audit intent unavailable; request was not dispatched"
+			))
+		}
+	};
+	let result = total.finish(result);
+	trace::flush();
+	result
 }
 
 #[cfg(not(unix))]
@@ -1195,7 +1597,7 @@ fn begin_reserved_record_at(root: &Path, identity: RequestIdentity) -> Result<Re
 		Err(_) => bail!("reserved request unavailable; never redispatch"),
 	}
 	let (mut records, archive) = hot_snapshot(root, &directory)?;
-	match read_record(&archive, &format!("{}.json", identity.request_id)) {
+	match archive.read_record(&format!("{}.json", identity.request_id)) {
 		Ok(_) => bail!("reserved request already archived; never redispatch"),
 		Err(error)
 			if error
@@ -1212,7 +1614,7 @@ fn begin_reserved_record_at(root: &Path, identity: RequestIdentity) -> Result<Re
 		accepted_unix_ms: identity.accepted_unix_ms,
 		elapsed_ms: None,
 	};
-	save(&archive, &record, false)?;
+	save_archive_with_sync(&archive, &record, false, true)?;
 	if hot_present {
 		save(&directory, &record, false)?;
 		records.push(record.clone());
@@ -1282,46 +1684,15 @@ fn usage_stats_at(root: &Path, owner: &str) -> Result<String> {
 	if !valid_id(owner) {
 		bail!("request usage unavailable to this scope");
 	}
+	let deadline = Instant::now() + index::QUERY_BUDGET;
 	let archive = {
-		let _guard = store_lock()?;
+		let _guard = index::query_lock(deadline)?;
 		let hot = open_store(root)?;
 		hot_snapshot(root, &hot)?.1
 	};
-	let mut counts = std::collections::BTreeMap::<String, u64>::new();
-	let mut completed = 0u64;
-	let mut failed = 0u64;
-	let mut unknown = 0u64;
-	let mut active = 0u64;
-	let mut first: Option<u128> = None;
-	let mut last: Option<u128> = None;
-	scan_archive(&archive, |record| {
-		if record.owner != owner {
-			return Ok(());
-		}
-		*counts.entry(record.tool_name.clone()).or_default() += 1;
-		first = Some(first.map_or(record.accepted_unix_ms, |time| {
-			time.min(record.accepted_unix_ms)
-		}));
-		last = Some(last.map_or(record.accepted_unix_ms, |time| {
-			time.max(record.accepted_unix_ms)
-		}));
-		match record.state {
-			DurableState::Completed => completed += 1,
-			DurableState::Failed => failed += 1,
-			DurableState::Unknown if is_dispatch_active(&record.request_id)? => active += 1,
-			DurableState::Unknown => unknown += 1,
-		}
-		Ok(())
-	})?;
-	Ok(serde_json::to_string(
-		&json!({"schema":"hepta-private-usage-v1",
-		"total_requests":completed+failed+unknown+active,"completed":completed,"failed":failed,
-		"unknown":unknown,"active":active,"tool_counts":counts,"first_accepted_unix_ms":first,
-		"last_accepted_unix_ms":last,"retention":"archive_metadata_not_evicted_with_hot_cache",
-		"coverage":"metadata_retained_at_archive_introduction_and_subsequent_admitted_requests",
-		"semantics":"dispatch_observation_not_transport_delivery_or_business_success",
-		"contains_parameters_or_output":false,"scope":"same_verified_credential_or_native_session"}),
-	)?)
+	Ok(serde_json::to_string(&index::usage(
+		root, &archive, owner, deadline,
+	)?)?)
 }
 
 pub async fn usage_stats(owner: &str, _params: UsageStatsParams) -> Result<String> {
@@ -1329,10 +1700,20 @@ pub async fn usage_stats(owner: &str, _params: UsageStatsParams) -> Result<Strin
 	let owner = owner.to_owned();
 	#[cfg(unix)]
 	{
-		tokio::task::spawn_blocking(move || usage_stats_at(&root, &owner))
-			.await
-			.map_err(|_| anyhow!("request usage unavailable to this scope"))?
-			.map_err(|_| anyhow!("request usage unavailable to this scope"))
+		tokio::time::timeout(
+			std::time::Duration::from_secs(4),
+			tokio::task::spawn_blocking(move || usage_stats_at(&root, &owner)),
+		)
+		.await
+		.map_err(|_| {
+			anyhow!(
+				"archive metadata query total deadline exceeded; repeat only the metadata query"
+			)
+		})?
+		.map_err(|_| anyhow!("request usage unavailable to this scope"))?
+		.map_err(|_| {
+			anyhow!("archive index preparing or validation unavailable; repeat only this metadata query")
+		})
 	}
 	#[cfg(not(unix))]
 	{
@@ -1350,43 +1731,24 @@ fn archive_history_at(root: &Path, owner: &str, params: RequestHistoryParams) ->
 	if !(1..=32).contains(&limit) || params.after_id.as_deref().is_some_and(|id| !valid_id(id)) {
 		bail!("invalid request archive page");
 	}
+	let deadline = Instant::now() + index::QUERY_BUDGET;
 	let (archive, cursor) = {
-		let _guard = store_lock()?;
+		let _guard = index::query_lock(deadline)?;
 		let hot = open_store(root)?;
 		let archive = hot_snapshot(root, &hot)?.1;
 		let cursor = if let Some(id) = params.after_id.as_deref() {
-			let record = read_record(&archive, &format!("{id}.json"))?;
+			let record = archive.read_record(&format!("{id}.json"))?;
 			if record.owner != owner {
 				bail!("request archive cursor unavailable to this scope");
 			}
-			Some((record.accepted_unix_ms, record.request_id))
+			Some(record)
 		} else {
 			None
 		};
 		(archive, cursor)
 	};
-	let mut records = Vec::with_capacity(limit + 1);
-	let mut total = 0u64;
-	scan_archive(&archive, |record| {
-		if record.owner != owner {
-			return Ok(());
-		}
-		total += 1;
-		if cursor
-			.as_ref()
-			.is_some_and(|key| (record.accepted_unix_ms, &record.request_id) <= (key.0, &key.1))
-		{
-			return Ok(());
-		}
-		records.push(record);
-		records.sort_by(|a, b| {
-			(a.accepted_unix_ms, &a.request_id).cmp(&(b.accepted_unix_ms, &b.request_id))
-		});
-		if records.len() > limit + 1 {
-			records.pop();
-		}
-		Ok(())
-	})?;
+	let (mut records, total) =
+		index::page(root, &archive, owner, cursor.as_ref(), limit, deadline)?;
 	let more = records.len() > limit;
 	records.truncate(limit);
 	let mut page = Vec::new();
@@ -1422,10 +1784,20 @@ pub async fn archive_history(owner: &str, params: RequestHistoryParams) -> Resul
 	let owner = owner.to_owned();
 	#[cfg(unix)]
 	{
-		tokio::task::spawn_blocking(move || archive_history_at(&root, &owner, params))
-			.await
-			.map_err(|_| anyhow!("request archive unavailable to this scope"))?
-			.map_err(|_| anyhow!("request archive unavailable to this scope"))
+		tokio::time::timeout(
+			std::time::Duration::from_secs(4),
+			tokio::task::spawn_blocking(move || archive_history_at(&root, &owner, params)),
+		)
+		.await
+		.map_err(|_| {
+			anyhow!(
+				"archive metadata query total deadline exceeded; repeat only the metadata query"
+			)
+		})?
+		.map_err(|_| anyhow!("request archive unavailable to this scope"))?
+		.map_err(|_| {
+			anyhow!("archive index preparing or validation unavailable; repeat only this metadata query")
+		})
 	}
 	#[cfg(not(unix))]
 	{
@@ -1442,14 +1814,69 @@ fn finish_sync(_ticket: RequestTicket, _completion: AuditCompletion) -> Result<(
 /// The caller must preserve its original dispatch result on an error here, and
 /// must not retry the operation. The durable unknown intent is the fallback.
 pub async fn finish(ticket: RequestTicket, completion: AuditCompletion) -> Result<()> {
-	tokio::task::spawn_blocking(move || finish_sync(ticket, completion))
-		.await
-		.map_err(|_| {
-			anyhow!("request audit completion unavailable; operation must not be replayed")
-		})?
-		.map_err(|_| {
-			anyhow!("request audit completion unavailable; operation must not be replayed")
-		})
+	let total = trace::Span::new("finish_total", 1, Some(0));
+	let joined = tokio::task::spawn_blocking(move || {
+		let result = trace::measure("finish_blocking", 1, Some(0), || {
+			#[cfg(unix)]
+			if let Some(coordinator) = batch::coordinator() {
+				return coordinator.finish(runtime_config()?.state_dir.clone(), ticket, completion);
+			}
+			finish_sync(ticket, completion)
+		});
+		trace::flush();
+		result
+	})
+	.await;
+	let result = match joined {
+		Ok(result) => {
+			if let Err(error) = &result {
+				trace::Span::new("finish_inner_failure", 1, Some(0)).record(Some(error));
+			}
+			result.map_err(|_| {
+				anyhow!("request audit completion unavailable; operation must not be replayed")
+			})
+		}
+		Err(error) => {
+			let stage = if error.is_panic() {
+				"finish_join_panic"
+			} else if error.is_cancelled() {
+				"finish_join_cancelled"
+			} else {
+				"finish_join_failure"
+			};
+			trace::Span::new(stage, 1, Some(0)).record(Some(&anyhow::Error::new(error)));
+			Err(anyhow!(
+				"request audit completion unavailable; operation must not be replayed"
+			))
+		}
+	};
+	let result = total.finish(result);
+	trace::flush();
+	result
+}
+
+/// Enable the fixed bounded coordinator only through an administrator CLI flag.
+pub fn enable_group_commit() -> Result<()> {
+	#[cfg(unix)]
+	{
+		batch::enable()
+	}
+	#[cfg(not(unix))]
+	{
+		bail!("audit group commit requires Unix descriptor support")
+	}
+}
+
+/// A failed coordinator refuses readiness as well as new admissions.
+pub fn group_commit_ready() -> bool {
+	#[cfg(unix)]
+	{
+		batch::coordinator().is_none_or(|worker| worker.is_ready())
+	}
+	#[cfg(not(unix))]
+	{
+		true
+	}
 }
 
 fn wire_size(value: &Value) -> Result<usize> {

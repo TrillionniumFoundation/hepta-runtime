@@ -277,3 +277,160 @@ fn effective_config_bounds_the_actual_mcp_wire_envelope() {
 	assert!(bytes > text.len());
 	assert!(bytes <= MAX_SUMMARY_BYTES);
 }
+
+#[test]
+fn effective_config_cache_reuses_exact_summary_and_returns_independent_strings() {
+	let config = config();
+	let expected = render_effective_config(Ok(&config)).unwrap();
+	let cache = OnceLock::new();
+	let mut first =
+		cached_effective_config(&cache, || render_effective_config(Ok(&config))).unwrap();
+	assert_eq!(first, expected);
+	first.clear();
+	let next = cached_effective_config(&cache, || panic!("warm summary was recomputed")).unwrap();
+	assert_eq!(next, expected);
+	assert_eq!(cache.get(), Some(&expected));
+}
+
+#[test]
+fn effective_config_cache_does_not_retain_failed_validation_or_rendering() {
+	let cache = OnceLock::new();
+	let mut invalid = config();
+	invalid.controller_workspace_roots = vec!["SECRET_RELATIVE_ROOT".into()];
+	assert_eq!(
+		cached_effective_config(&cache, || render_effective_config(Ok(&invalid)))
+			.unwrap_err()
+			.to_string(),
+		UNAVAILABLE
+	);
+	assert!(cache.get().is_none());
+	let mut oversized = config();
+	let template = oversized.hosts["primary"].clone();
+	for index in 0..MAX_HOST_ENTRIES {
+		oversized
+			.hosts
+			.insert(format!("extra-{index}"), template.clone());
+	}
+	assert!(cached_effective_config(&cache, || render_effective_config(Ok(&oversized))).is_err());
+	assert!(cache.get().is_none());
+	let valid = config();
+	assert_eq!(
+		cached_effective_config(&cache, || render_effective_config(Ok(&valid))).unwrap(),
+		render_effective_config(Ok(&valid)).unwrap()
+	);
+}
+
+#[test]
+fn effective_config_concurrent_first_readers_receive_identical_redacted_output() {
+	let config = config();
+	let expected = render_effective_config(Ok(&config)).unwrap();
+	let cache = OnceLock::new();
+	let barrier = std::sync::Barrier::new(8);
+	std::thread::scope(|scope| {
+		let readers: Vec<_> = (0..8)
+			.map(|_| {
+				scope.spawn(|| {
+					barrier.wait();
+					cached_effective_config(&cache, || render_effective_config(Ok(&config)))
+						.unwrap()
+				})
+			})
+			.collect();
+		for reader in readers {
+			assert_eq!(reader.join().unwrap(), expected);
+		}
+	});
+	assert!(!cache.get().unwrap().contains("SECRET_"));
+}
+
+fn benchmark_config(host_count: usize, large: bool) -> RuntimeConfig {
+	let mut config = config();
+	let mut template = config.hosts["primary"].clone();
+	if large {
+		for index in 0..64 {
+			template.allowed_read_path_prefixes.push(format!(
+				"/SECRET_READ_ROOT_{index}/{}",
+				"private-policy-component/".repeat(8)
+			));
+		}
+		let mut action = template.privileged_actions.values().next().unwrap().clone();
+		action.extra_arg_patterns = (0..4)
+			.map(|index| format!("SECRET_PRIVATE_{index}_[a-zA-Z0-9_.-]{{1,64}}"))
+			.collect();
+		for index in 0..4 {
+			template
+				.privileged_actions
+				.insert(format!("private-{index}"), action.clone());
+		}
+	}
+	config.hosts.clear();
+	for index in 0..host_count {
+		config
+			.hosts
+			.insert(format!("host-{index:03}"), template.clone());
+	}
+	config
+}
+
+#[test]
+#[ignore = "manual immutable-summary CPU microbenchmark; not native HTTP or process-start TPS"]
+fn effective_config_cache_microbenchmark_six_and_256_hosts() {
+	use std::hint::black_box;
+	use std::time::Instant;
+	let measure = |iterations: usize, compute: &dyn Fn() -> String| {
+		let started = Instant::now();
+		for _ in 0..iterations {
+			black_box(compute());
+		}
+		started.elapsed().as_secs_f64() * 1_000_000.0 / iterations as f64
+	};
+	for (host_count, large) in [(6, false), (6, true), (256, false), (256, true)] {
+		let config = benchmark_config(host_count, large);
+		let expected = render_effective_config(Ok(&config)).unwrap();
+		let cache = OnceLock::new();
+		let cold_started = Instant::now();
+		assert_eq!(
+			cached_effective_config(&cache, || render_effective_config(Ok(&config))).unwrap(),
+			expected
+		);
+		let cold_initialization_us = cold_started.elapsed().as_secs_f64() * 1_000_000.0;
+		let old_iterations = if host_count == 256 { 2 } else { 32 };
+		let warm_iterations = 4096;
+		let old = || render_effective_config(Ok(black_box(&config))).unwrap();
+		let warm = || {
+			cached_effective_config(black_box(&cache), || render_effective_config(Ok(&config)))
+				.unwrap()
+		};
+		let (mut old_round_us, mut warm_round_us) = (Vec::new(), Vec::new());
+		for round in 0..6 {
+			if round % 2 == 0 {
+				old_round_us.push(measure(old_iterations, &old));
+				warm_round_us.push(measure(warm_iterations, &warm));
+			} else {
+				warm_round_us.push(measure(warm_iterations, &warm));
+				old_round_us.push(measure(old_iterations, &old));
+			}
+		}
+		let mut old_sorted = old_round_us.clone();
+		let mut warm_sorted = warm_round_us.clone();
+		old_sorted.sort_by(f64::total_cmp);
+		warm_sorted.sort_by(f64::total_cmp);
+		let old_median_us = (old_sorted[2] + old_sorted[3]) / 2.0;
+		let warm_median_us = (warm_sorted[2] + warm_sorted[3]) / 2.0;
+		println!(
+			"{}",
+			json!({
+				"schema":"hepta-effective-config-cache-microbenchmark/v1",
+				"hosts":host_count,"large_configuration":large,
+				"serialized_config_bytes":serde_json::to_vec(&config).unwrap().len(),
+				"summary_bytes":expected.len(),"cold_initialization_us":cold_initialization_us,
+				"old_iterations_per_round":old_iterations,"warm_iterations_per_round":warm_iterations,
+				"rounds":6,"old_uncached_median_us":old_median_us,"warm_cache_median_us":warm_median_us,
+				"speedup":old_median_us/warm_median_us,"old_uncached_round_us":old_round_us,
+				"warm_cache_round_us":warm_round_us,"alternating_order":true,
+				"first_round_order":"old_then_warm","measurement":"CPU_only",
+				"allocations_measured":false,"native_tps_measured":false
+			})
+		);
+	}
+}
