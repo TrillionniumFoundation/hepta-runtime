@@ -636,7 +636,7 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = true
 		),
-		description = "Start an explicit executable and argv on one configured host. No shell syntax is parsed. Jobs have durable metadata and logs, survive MCP reconnects, support idempotency keys, and may be resource-limited."
+		description = "Start an explicit executable and argv on one configured host. No shell syntax is parsed. Jobs have durable metadata and logs, survive MCP reconnects, require a stable idempotency_key, and may be resource-limited."
 	)]
 	async fn process_start(
 		&self,
