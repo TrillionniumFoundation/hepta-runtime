@@ -335,6 +335,13 @@ if existing is not None:
     # missing launch metadata; a later launch would risk a duplicate effect.
     raise SystemExit("ambiguous prior launch: request exists without terminal evidence")
 else:
+    # Missing request.json does not establish non-execution: a prior controller
+    # may have lost its durable request or encountered remote state corruption.
+    # Never overwrite evidence of a prior effect under the same job identity.
+    for name in ("launch.json", "started.json", "exit.json", "child.json", "runner.py", "stdin.bin"):
+        path = job / name
+        if path.exists() or path.is_symlink():
+            raise SystemExit("orphaned remote job state without request.json; reconcile before launch")
     if stdin_text is not None:
         stdin_path = job / "stdin.bin"
         stdin_path.write_bytes(stdin_text.encode("utf-8"))
