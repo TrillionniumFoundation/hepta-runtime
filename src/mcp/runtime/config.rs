@@ -216,8 +216,16 @@ fn claim_controller_state_dir(state_dir: &Path) -> Result<std::fs::File> {
 	let owner = options
 		.open(&path)
 		.with_context(|| format!("failed to open controller owner lock {}", path.display()))?;
-	if !owner.metadata()?.is_file() {
+	let metadata = owner.metadata()?;
+	if !metadata.is_file() {
 		bail!("controller owner lock must be a regular file");
+	}
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		if metadata.permissions().mode() & 0o077 != 0 {
+			bail!("controller owner lock must not be group/world accessible");
+		}
 	}
 	owner.try_lock().map_err(|error| {
 		anyhow!(
@@ -232,6 +240,13 @@ pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
 	config.validate()?;
 	std::fs::create_dir_all(&config.state_dir)?;
 	config.state_dir = std::fs::canonicalize(&config.state_dir)?;
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		if std::fs::metadata(&config.state_dir)?.permissions().mode() & 0o022 != 0 {
+			bail!("controller state directory must not be group/world writable");
+		}
+	}
 	let owner = claim_controller_state_dir(&config.state_dir)?;
 	std::fs::create_dir_all(config.state_dir.join("jobs"))?;
 	std::fs::create_dir_all(config.state_dir.join("audit"))?;
@@ -571,6 +586,50 @@ mod tests {
 		drop(first);
 		let recovered = claim_controller_state_dir(dir.path()).unwrap();
 		drop(recovered);
+	}
+
+	#[test]
+	fn controller_owner_is_fenced_across_processes() {
+		let dir = tempfile::tempdir().unwrap();
+		let probe = |expected: &str| {
+			let output = std::process::Command::new(std::env::current_exe().unwrap())
+				.arg("controller_owner_child_probe")
+				.env("HEPTA_OWNER_TEST_DIR", dir.path())
+				.env("HEPTA_OWNER_TEST_EXPECT", expected)
+				.output()
+				.unwrap();
+			assert!(
+				output.status.success(),
+				"stdout: {} stderr: {}",
+				String::from_utf8_lossy(&output.stdout),
+				String::from_utf8_lossy(&output.stderr)
+			);
+		};
+		let first = claim_controller_state_dir(dir.path()).unwrap();
+		probe("denied");
+		drop(first);
+		probe("acquired");
+	}
+
+	#[test]
+	fn controller_owner_child_probe() {
+		let Some(directory) = std::env::var_os("HEPTA_OWNER_TEST_DIR") else {
+			return;
+		};
+		let expected = std::env::var("HEPTA_OWNER_TEST_EXPECT").unwrap();
+		let result = claim_controller_state_dir(Path::new(&directory));
+		assert_eq!(result.is_ok(), expected == "acquired");
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn permissive_owner_lock_is_rejected() {
+		use std::os::unix::fs::PermissionsExt;
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("controller.owner.lock");
+		std::fs::write(&path, b"").unwrap();
+		std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+		assert!(claim_controller_state_dir(dir.path()).is_err());
 	}
 
 	#[cfg(unix)]
