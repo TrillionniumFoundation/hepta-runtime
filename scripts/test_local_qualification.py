@@ -41,6 +41,35 @@ class LocalQualificationTests(unittest.TestCase):
         self.assertFalse(SHA_RE.fullmatch("main"))
         self.assertTrue(SHA_RE.fullmatch("a" * 40))
 
+    def test_fsmonitor_denied_before_ls_files(self):
+        self.make_repo()
+        marker = self.root / "unsafe-fsmonitor-fired"
+        monitor = self.root / "fsmonitor-helper.sh"
+        monitor.write_text("#!/bin/sh\nprintf invoked > '" + str(marker) + "'\n")
+        monitor.chmod(0o755)
+        self.command("git", "config", "core.fsmonitor", str(monitor))
+        with self.assertRaisesRegex(QualificationError, "core.fsmonitor"):
+            check_source_bytes(self.root)
+        self.assertFalse(marker.exists(), "unreviewed fsmonitor must not execute")
+
+    def test_git_checkout_filter_denied_before_worktree_checkout(self):
+        self.make_repo()
+        marker = self.root / "unreviewed-smudge"
+        self.command("git", "config", "filter.example.smudge",
+                     "sh -c 'touch " + str(marker) + "'")
+        with self.assertRaisesRegex(QualificationError, "filter.example.smudge"):
+            git(self.root, "worktree", "add", "--detach",
+                str(self.root.parent / "never-created-worktree"), "HEAD")
+        self.assertFalse(marker.exists())
+
+    def test_credential_helper_denied_but_benign_git_config_allowed(self):
+        self.make_repo()
+        expected = self.command("git", "rev-parse", "HEAD").stdout
+        self.assertEqual(git(self.root, "rev-parse", "HEAD"), expected)
+        self.command("git", "config", "credential.helper", "!echo unreviewed")
+        with self.assertRaisesRegex(QualificationError, "credential.helper"):
+            git(self.root, "rev-parse", "HEAD")
+
     def test_tracked_bytes_detect_modification(self):
         self.make_repo()
         fmt, count = check_source_bytes(self.root)

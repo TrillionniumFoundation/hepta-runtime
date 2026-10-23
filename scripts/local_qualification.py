@@ -43,10 +43,12 @@ class QualificationError(Exception):
 
 def git(repo: Path, *args: str) -> bytes:
     # Bypass Git object replacement and executable hooks for all own queries.
+    environment = safe_env()
+    _reject_executable_git_config(repo, environment)
     p = subprocess.run(
         ("git", "-c", "core.hooksPath=/dev/null", *args),
         cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        env=safe_env(), check=False,
+        env=environment, check=False,
     )
     if p.returncode:
         raise QualificationError(f"git {args[0]} failed: {p.stderr.decode('utf-8', 'replace')[:500]}")
@@ -99,6 +101,60 @@ def safe_env() -> dict[str, str]:
     env["RUSTUP_TOOLCHAIN"] = RUST_VERSION
     env["CARGO_INCREMENTAL"] = "0"
     return env
+
+
+# Executable Git configuration can bypass core.hooksPath=/dev/null.
+# Git config queries are passive; check effective included/global/local
+# configuration before every actual Git command, never leaking config values.
+_UNREVIEWED_GIT_EXACT = frozenset((
+    "core.fsmonitor", "core.hookspath", "core.worktree", "core.sshcommand",
+    "core.gitproxy", "core.pager", "core.editor", "core.attributesfile",
+    "core.alternaterefscommand", "diff.external", "credential.helper",
+    "gpg.program", "sequence.editor", "extensions.partialclone",
+))
+
+
+def _executable_git_config_key(key: str) -> bool:
+    return (
+        key in _UNREVIEWED_GIT_EXACT
+        or key.startswith(("alias.", "pager."))
+        or (key.startswith("filter.") and key.endswith((".clean", ".smudge", ".process")))
+        or (key.startswith("diff.") and key.endswith((".command", ".textconv")))
+        or (key.startswith("merge.") and key.endswith(".driver"))
+        or (key.startswith("credential.") and key.endswith(".helper"))
+    )
+
+
+def _reject_executable_git_config(repo: Path, environment: dict[str, str]) -> None:
+    try:
+        query = subprocess.run(
+            ("git", "config", "--includes", "--null", "--list"),
+            cwd=repo, env=environment, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False, timeout=10,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise QualificationError("Git configuration preflight timed out") from exc
+    if query.returncode:
+        raise QualificationError("Git configuration cannot be independently reviewed")
+    if len(query.stdout) > 256 * 1024:
+        raise QualificationError("Git configuration exceeds review bound")
+    blocked: set[str] = set()
+    for entry in query.stdout.split(b"\x00"):
+        if not entry:
+            continue
+        key_bytes, separator, _value = entry.partition(b"\n")
+        if not separator:
+            raise QualificationError("malformed Git configuration entry")
+        try:
+            key = key_bytes.decode("ascii").lower()
+        except UnicodeDecodeError as exc:
+            raise QualificationError("non-ASCII Git configuration key") from exc
+        if _executable_git_config_key(key):
+            blocked.add(key)
+    if blocked:
+        raise QualificationError(
+            "unreviewed executable Git configuration keys: " + ", ".join(sorted(blocked)[:12])
+        )
 
 
 def blob_hash(data: bytes, algo: str) -> str:
