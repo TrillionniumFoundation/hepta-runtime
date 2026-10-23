@@ -3,12 +3,12 @@ use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -16,7 +16,9 @@ use super::config::{check_environment, check_execution, runtime_config, valid_na
 use super::ssh::run_python_json;
 
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
-static START_LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
+static SAVE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+static HOST_START_LOCKS: OnceLock<Mutex<HashMap<String, Weak<AsyncMutex<()>>>>> =
+	OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 const MAX_STDIN_BYTES: usize = 1024 * 1024;
 const MAX_LOG_READ_BYTES: u64 = 1024 * 1024;
@@ -120,8 +122,21 @@ fn default_launch_state() -> String {
 	"launched".to_string()
 }
 
-fn start_lock() -> &'static AsyncMutex<()> {
-	START_LOCK.get_or_init(|| AsyncMutex::new(()))
+// Keep the same host's read-check-launch sequence serialized while allowing
+// unrelated hosts to launch independently. Weak handles avoid retaining a lock
+// permanently for every host ever seen by this controller.
+fn start_lock(host: &str) -> Result<Arc<AsyncMutex<()>>> {
+	let registry = HOST_START_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+	let mut locks = registry
+		.lock()
+		.map_err(|_| anyhow::anyhow!("host start-lock registry poisoned"))?;
+	if let Some(existing) = locks.get(host).and_then(Weak::upgrade) {
+		return Ok(existing);
+	}
+	locks.retain(|_, weak| weak.strong_count() > 0);
+	let lock = Arc::new(AsyncMutex::new(()));
+	locks.insert(host.to_owned(), Arc::downgrade(&lock));
+	Ok(lock)
 }
 
 fn now_ms() -> u128 {
@@ -151,39 +166,82 @@ fn record_path(id: &str) -> Result<PathBuf> {
 
 fn save_record(record: &JobRecord) -> Result<()> {
 	let path = record_path(&record.id)?;
-	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
+	save_record_to(&path, record)
+}
+
+// The durable identity must hit stable storage before a remote launch starts.
+// A unique, mode-restricted temporary file and atomic rename preserve the
+// predecessor on partial writes; fsync the file and containing directory to
+// close the crash window between local write-ahead and remote execution.
+fn save_record_to(path: &Path, record: &JobRecord) -> Result<()> {
+	let sequence = SAVE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+	let tmp = path.with_extension(format!("json.tmp.{}.{sequence}", std::process::id()));
 	let bytes = serde_json::to_vec_pretty(record)?;
-	std::fs::write(&tmp, bytes)?;
+	let mut options = OpenOptions::new();
+	options.write(true).create_new(true);
 	#[cfg(unix)]
 	{
-		use std::os::unix::fs::PermissionsExt;
-		std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+		use std::os::unix::fs::OpenOptionsExt;
+		options.mode(0o600);
 	}
-	std::fs::rename(tmp, path)?;
+	let mut file = options.open(&tmp)?;
+	file.write_all(&bytes)?;
+	file.sync_all()?;
+	drop(file);
+	std::fs::rename(&tmp, path)?;
+	#[cfg(unix)]
+	{
+		let parent = path.parent().ok_or_else(|| anyhow::anyhow!("missing job parent"))?;
+		std::fs::File::open(parent)?.sync_all()?;
+	}
 	Ok(())
 }
 
 fn load_record(id: &str) -> Result<JobRecord> {
 	let path = record_path(id)?;
-	let bytes = std::fs::read(&path).with_context(|| format!("unknown durable job `{id}`"))?;
-	serde_json::from_slice(&bytes).context("corrupt durable job metadata")
+	let kind = std::fs::symlink_metadata(&path)
+		.with_context(|| format!("unknown durable job `{id}`"))?
+		.file_type();
+	if !kind.is_file() {
+		bail!("durable job record `{id}` is not a regular file");
+	}
+	let bytes = std::fs::read(&path).with_context(|| format!("unreadable durable job `{id}`"))?;
+	let record: JobRecord = serde_json::from_slice(&bytes).context("corrupt durable job metadata")?;
+	if record.id != id {
+		bail!("durable job record identity mismatch for `{id}`");
+	}
+	Ok(record)
 }
 
-fn all_records() -> Result<Vec<JobRecord>> {
+// A damaged or unreadable record may contain a previously dispatched idempotency
+// key. Silently skipping it can duplicate an effect on the next process_start.
+// Therefore a job inventory is either complete or an explicit error.
+fn read_records_from(dir: &Path) -> Result<Vec<JobRecord>> {
 	let mut records = Vec::new();
-	for entry in std::fs::read_dir(jobs_dir()?)? {
+	for entry in std::fs::read_dir(dir)? {
 		let entry = entry?;
-		if entry.path().extension().and_then(|s| s.to_str()) != Some("json") {
+		let path = entry.path();
+		if path.extension().and_then(|s| s.to_str()) != Some("json") {
 			continue;
 		}
-		if let Ok(bytes) = std::fs::read(entry.path()) {
-			if let Ok(record) = serde_json::from_slice::<JobRecord>(&bytes) {
-				records.push(record);
-			}
+		if !entry.file_type()?.is_file() {
+			bail!("durable job record is not a regular file: {}", path.display());
 		}
+		let bytes = std::fs::read(&path)
+			.with_context(|| format!("unreadable durable job record: {}", path.display()))?;
+		let record: JobRecord = serde_json::from_slice(&bytes)
+			.with_context(|| format!("corrupt durable job record: {}", path.display()))?;
+		if path.file_stem().and_then(|s| s.to_str()) != Some(record.id.as_str()) {
+			bail!("durable job record path/identity mismatch: {}", path.display());
+		}
+		records.push(record);
 	}
 	records.sort_by_key(|record| record.created_unix_ms);
 	Ok(records)
+}
+
+fn all_records() -> Result<Vec<JobRecord>> {
+	read_records_from(&jobs_dir()?)
 }
 
 fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
@@ -831,7 +889,8 @@ async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> R
 
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	validate_start(&params)?;
-	let _start_guard = start_lock().lock().await;
+	let host_lock = start_lock(&params.host)?;
+	let _start_guard = host_lock.lock().await;
 	let request_fingerprint = fingerprint(&params);
 	if let Some(key) = params.idempotency_key.as_deref() {
 		if let Some(mut existing) = find_idempotent(&params.host, key)? {
@@ -1044,3 +1103,7 @@ mod tests {
 		}
 	}
 }
+
+#[cfg(test)]
+#[path = "jobs_integrity_tests.rs"]
+mod jobs_integrity_tests;
