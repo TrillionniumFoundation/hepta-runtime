@@ -67,7 +67,7 @@ class RuntimeCiContractTests(unittest.TestCase):
 
     def test_contract_checks_run_on_source_and_merge(self):
         for name in ("test_runtime_ci_contract.py", "test_source_byte_boundary.py",
-                     "test_qualification_path_fence.py"):
+                     "test_qualification_path_fence.py", "test_local_qualification.py"):
             with self.subTest(name=name):
                 self.assertEqual(
                     self.source.count(f"python3 -m unittest discover -s scripts -p '{name}' -v"),
