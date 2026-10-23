@@ -59,3 +59,15 @@ earlier exact SHA are not transferable to a new SHA or PR merge.
 The local verifier refuses inherited **execution-affecting environment variable names** before any Git or Cargo child process, including Git configuration/object redirects, Rust toolchain/compiler/flags, Cargo source/target/runner, Python import/startup overrides, dynamic loader injection, build/linker wrappers and OpenSSL/pkg-config overrides. Only reviewed diagnostic controls such as `RUST_BACKTRACE`, `RUST_LOG` and `CARGO_TERM_COLOR` are exempt. Denial receipts include **names only**, not values. Use a clean, controlled shell and rerun rather than passing tests under an unreviewed environment; no automatic allowlist expansion or gate bypass.
 
 This closes an environment-inheritance false-positive in the local evidence harness. It **does not** attest the executable files reachable through `PATH`, installed Rust binaries, kernel, devices or signed operator authority. Two genuine pinned Git commits and real Cargo/host evidence remain mandatory.
+
+
+### Closed-pipe descendant guard
+
+The verifier refuses success when a command's immediate parent exits and
+closes stdout but an in-session child remains alive. After collecting the
+parent's terminal result, it checks the isolated POSIX process group, kills
+remaining members, and issues an \`io_error\` receipt rather than a false
+\`LOCAL_CHECKS_PASS\`. This closes a local qualification acceptance gap, not
+an OS sandbox: descendants that create new sessions/cgroups can escape this
+process-group check. An independent host/container sandbox is required before
+production authorization.

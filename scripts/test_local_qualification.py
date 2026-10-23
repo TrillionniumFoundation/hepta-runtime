@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import signal
 from pathlib import Path
 import subprocess
 import sys
@@ -39,6 +40,35 @@ class LocalQualificationTests(unittest.TestCase):
                          hashlib.sha1(b"blob 6\0hello\n").hexdigest())
         self.assertFalse(SHA_RE.fullmatch("main"))
         self.assertTrue(SHA_RE.fullmatch("a" * 40))
+
+    def test_fsmonitor_denied_before_ls_files(self):
+        self.make_repo()
+        marker = self.root / "unsafe-fsmonitor-fired"
+        monitor = self.root / "fsmonitor-helper.sh"
+        monitor.write_text("#!/bin/sh\nprintf invoked > '" + str(marker) + "'\n")
+        monitor.chmod(0o755)
+        self.command("git", "config", "core.fsmonitor", str(monitor))
+        with self.assertRaisesRegex(QualificationError, "core.fsmonitor"):
+            check_source_bytes(self.root)
+        self.assertFalse(marker.exists(), "unreviewed fsmonitor must not execute")
+
+    def test_git_checkout_filter_denied_before_worktree_checkout(self):
+        self.make_repo()
+        marker = self.root / "unreviewed-smudge"
+        self.command("git", "config", "filter.example.smudge",
+                     "sh -c 'touch " + str(marker) + "'")
+        with self.assertRaisesRegex(QualificationError, "filter.example.smudge"):
+            git(self.root, "worktree", "add", "--detach",
+                str(self.root.parent / "never-created-worktree"), "HEAD")
+        self.assertFalse(marker.exists())
+
+    def test_credential_helper_denied_but_benign_git_config_allowed(self):
+        self.make_repo()
+        expected = self.command("git", "rev-parse", "HEAD").stdout
+        self.assertEqual(git(self.root, "rev-parse", "HEAD"), expected)
+        self.command("git", "config", "credential.helper", "!echo unreviewed")
+        with self.assertRaisesRegex(QualificationError, "credential.helper"):
+            git(self.root, "rev-parse", "HEAD")
 
     def test_tracked_bytes_detect_modification(self):
         self.make_repo()
@@ -142,6 +172,37 @@ class LocalQualificationTests(unittest.TestCase):
         self.assertTrue(killpg.called, "abandoned process group was not killed")
         self.assertLess(result["duration_seconds"], 9)
 
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process-group termination required")
+    def test_parent_success_with_closed_pipes_cannot_hide_live_descendant(self):
+        # The child redirects its streams; stdout reaches EOF and parent exits
+        # zero, but the original session group still contains a live child.
+        launcher = (
+            "import sys, subprocess, pathlib\n"
+            "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'], "
+            "stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+            "pathlib.Path('live-descendant.pid').write_text(str(child.pid))\n"
+        )
+        with mock.patch("local_qualification.os.killpg", wraps=os.killpg) as killpg:
+            result = execute_bounded(
+                (sys.executable, "-c", launcher), self.root, safe_env(),
+                self.root / "closed-pipes.log", 5, 1024,
+            )
+        try:
+            self.assertEqual(result["outcome"], "io_error", result)
+            self.assertEqual(result["exit_code"], 0)
+            self.assertTrue(any(
+                call.args[1] == signal.SIGKILL for call in killpg.call_args_list
+            ), "must terminate an orphaned session group")
+        finally:
+            # The deliberately vulnerable baseline must not leak a process
+            # when this regression demonstrates its previous false-positive.
+            pid_file = self.root / "live-descendant.pid"
+            if pid_file.exists():
+                try:
+                    os.kill(int(pid_file.read_text()), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
 
     def test_distinct_source_and_merge_lanes_run_in_isolated_worktrees(self):
         # Mock binaries validate the verifier's orchestration only; they are
