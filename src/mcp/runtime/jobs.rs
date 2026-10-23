@@ -110,6 +110,8 @@ struct JobRecord {
 	created_unix_ms: u128,
 	idempotency_key: Option<String>,
 	request_fingerprint: u64,
+	#[serde(default)]
+	request_digest: Option<String>,
 	#[serde(default = "default_launch_state")]
 	launch_state: String,
 	#[serde(default)]
@@ -225,7 +227,9 @@ fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
 	find_idempotent_in_records(all_records()?, host, key)
 }
 
-fn fingerprint(params: &ProcessStartParams) -> u64 {
+/// The full request digest is authoritative for local idempotency. The old
+/// 64-bit prefix stays on the remote protocol for backward compatibility.
+fn request_digest(params: &ProcessStartParams) -> Result<String> {
 	let binding = json!({
 		"host": params.host,
 		"executable": params.executable,
@@ -238,9 +242,21 @@ fn fingerprint(params: &ProcessStartParams) -> u64 {
 		"cpu_quota_percent": params.cpu_quota_percent,
 		"memory_max_bytes": params.memory_max_bytes,
 	});
-	let bytes = serde_json::to_vec(&binding).expect("process binding serializes");
+	let bytes = serde_json::to_vec(&binding)?;
 	let digest = Sha256::digest(bytes);
-	u64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"))
+	Ok(digest.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+fn fingerprint(params: &ProcessStartParams) -> u64 {
+	let digest = request_digest(params).expect("validated process binding serializes");
+	u64::from_str_radix(&digest[..16], 16).expect("SHA-256 prefix is hexadecimal")
+}
+
+fn matches_request(record: &JobRecord, params: &ProcessStartParams) -> Result<bool> {
+	let existing = record.request_digest.as_deref().context(
+		"legacy idempotency binding lacks a full request digest; inspect existing job instead of relaunching",
+	)?;
+	Ok(existing == request_digest(params)?.as_str())
 }
 
 fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
@@ -868,7 +884,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	let request_fingerprint = fingerprint(&params);
 	if let Some(key) = params.idempotency_key.as_deref() {
 		if let Some(mut existing) = find_idempotent(&params.host, key)? {
-			if existing.request_fingerprint != request_fingerprint {
+			if !matches_request(&existing, &params)? {
 				bail!("idempotency key `{key}` is already bound to a different request");
 			}
 			let retry = matches!(existing.launch_state.as_str(), "pending" | "launch_failed");
@@ -910,6 +926,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 		created_unix_ms: now_ms(),
 		idempotency_key: params.idempotency_key.clone(),
 		request_fingerprint,
+		request_digest: Some(request_digest(&params)?),
 		launch_state: "pending".to_string(),
 		launch_error: None,
 	};
@@ -1013,6 +1030,7 @@ mod tests {
 			created_unix_ms: 1,
 			idempotency_key: Some("fixed-key".into()),
 			request_fingerprint: 42,
+			request_digest: Some("a".repeat(64)),
 			launch_state: "launched".into(),
 			launch_error: None,
 		}
