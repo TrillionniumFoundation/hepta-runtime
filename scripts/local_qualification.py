@@ -182,8 +182,8 @@ def check_source_bytes(worktree: Path) -> tuple[str, int]:
 
 
 def kill_tree(proc: subprocess.Popen) -> None:
-    if proc.poll() is not None:
-        return
+    # The session leader may have exited while descendants still retain its
+    # stdout/stderr pipe. Kill its process group even after leader exit.
     try:
         os.killpg(proc.pid, signal.SIGKILL)
     except ProcessLookupError:
@@ -245,7 +245,14 @@ def execute_bounded(args: tuple[str, ...], worktree: Path, env: dict[str, str],
                 proc.wait(timeout=3)
             t.join(timeout=3)
             if t.is_alive():
-                failures.append("reader thread did not settle")
+                # A child may outlive its session leader and hold the pipe open.
+                # Without group cleanup that process survives failed evidence.
+                kill_tree(proc)
+                t.join(timeout=3)
+                failures.append(
+                    "descendant held capture pipe" if not t.is_alive()
+                    else "reader thread did not settle"
+                )
             reason = "log_limit" if too_large.is_set() else "timeout" if expired else "io_error" if failures else "nonzero" if proc.returncode else "pass"
             return {"command": list(args), "outcome": reason, "exit_code": proc.returncode,
                     "duration_seconds": round(time.monotonic() - start, 3),
