@@ -389,6 +389,9 @@ pub fn check_execution(
             "executable `{base}` is denied on host `{host_name}`; use a named privileged_action when configured"
         );
 	}
+	if cwd.is_none() && !host.allowed_cwd_prefixes.is_empty() {
+		bail!("cwd is required when execution roots are configured for host `{host_name}`");
+	}
 	if let Some(cwd) = cwd {
 		if !execution_cwd_allowed(cwd, &host.allowed_cwd_prefixes) {
 			bail!("cwd `{cwd}` is outside configured execution roots or contains parent traversal on host `{host_name}`");

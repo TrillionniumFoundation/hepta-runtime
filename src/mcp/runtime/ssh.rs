@@ -175,6 +175,7 @@ pub fn build_exec_command(
 	env: &std::collections::BTreeMap<String, String>,
 	rows: u16,
 	cols: u16,
+	allowed_cwd_prefixes: &[String],
 ) -> Result<String> {
 	for key in env.keys() {
 		if key.is_empty()
@@ -183,6 +184,9 @@ pub fn build_exec_command(
 		{
 			bail!("invalid environment variable name `{key}`");
 		}
+	}
+	if !allowed_cwd_prefixes.is_empty() && cwd.is_none() {
+		bail!("cwd is required for guarded remote execution");
 	}
 	let mut command = String::new();
 	if rows > 0 && cols > 0 {
@@ -194,6 +198,19 @@ pub fn build_exec_command(
 		command.push_str("cd ");
 		command.push_str(&shell_quote(cwd));
 		command.push_str(" && ");
+		if !allowed_cwd_prefixes.is_empty() {
+			// Resolve roots on the target host. The eventual exec inherits the
+			// already-verified physical cwd instead of following the path twice.
+			command.push_str("cwd_physical=$(pwd -P) || exit 125; cwd_guard=0; ");
+			for prefix in allowed_cwd_prefixes {
+				command.push_str("root_physical=$(cd ");
+				command.push_str(&shell_quote(prefix));
+				command.push_str(" && pwd -P) || exit 125; ");
+				command.push_str("if [ \"$root_physical\" = / ]; then cwd_guard=1; else ");
+				command.push_str("case \"$cwd_physical\" in \"$root_physical\"|\"$root_physical\"/*) cwd_guard=1;; esac; fi; ");
+			}
+			command.push_str("[ \"$cwd_guard\" = 1 ] || exit 126; ");
+		}
 	}
 	command.push_str("exec env");
 	for (key, value) in env {
@@ -231,10 +248,54 @@ mod tests {
 			&BTreeMap::new(),
 			24,
 			80,
+			&[],
 		)
 		.unwrap();
 		assert!(cmd.contains("'/tmp/a b'"));
 		assert!(cmd.contains("'a b'\"'\"'c'"));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn remote_cwd_guard_rejects_symlink_escape_before_exec() {
+		use std::os::unix::fs::symlink;
+
+		let dir = tempfile::tempdir().unwrap();
+		let allowed = dir.path().join("allowed");
+		let outside = dir.path().join("outside");
+		std::fs::create_dir(&allowed).unwrap();
+		std::fs::create_dir(&outside).unwrap();
+		let link = allowed.join("escape");
+		symlink(&outside, &link).unwrap();
+		let roots = vec![allowed.to_string_lossy().into_owned()];
+		let env = BTreeMap::new();
+
+		assert!(build_exec_command("/bin/pwd", &[], None, &env, 0, 0, &roots).is_err());
+		let denied = build_exec_command(
+			"/bin/pwd", &[], Some(link.to_str().unwrap()), &env, 0, 0, &roots,
+		)
+		.unwrap();
+		let output = std::process::Command::new("sh")
+			.arg("-c")
+			.arg(denied)
+			.output()
+			.unwrap();
+		assert_eq!(output.status.code(), Some(126));
+
+		let admitted = build_exec_command(
+			"/bin/pwd", &[], Some(allowed.to_str().unwrap()), &env, 0, 0, &roots,
+		)
+		.unwrap();
+		let output = std::process::Command::new("sh")
+			.arg("-c")
+			.arg(admitted)
+			.output()
+			.unwrap();
+		assert!(output.status.success());
+		assert_eq!(
+			String::from_utf8_lossy(&output.stdout).trim(),
+			allowed.canonicalize().unwrap().to_str().unwrap()
+		);
 	}
 }
 
