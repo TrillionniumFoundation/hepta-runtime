@@ -75,7 +75,7 @@ fn identity(host: &str, key: &str) -> Result<String> {
 
 fn bound_digest(host: &str, action: &str, payload: &Value) -> Result<String> {
 	let canonical = json!({
-		"domain": "hepta.runtime.privileged-operation.v1",
+		"domain": "hepta.runtime.privileged-operation.v2",
 		"host": host,
 		"action": action,
 		"payload": payload,
