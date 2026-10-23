@@ -50,8 +50,10 @@ HTTP mode requires a high-entropy token file; every `/mcp` request must carry
 ### Durable process tools
 
 - `process_start`: explicit host, executable, argv, cwd, environment, optional
-  stdin, timeout and resource limits. An idempotency key binds to one exact
-  request and prevents accidental duplicate starts.
+  stdin, timeout and resource limits. A nonblank **required** `idempotency_key`
+  (at most 256 bytes) binds to one exact request. Retrying with the same host,
+  key and request reconciles the original job rather than starting a duplicate;
+  changing the payload under the same key fails closed.
 - `process_status`: authoritative remote state.
 - `process_read`: independent stdout/stderr byte offsets, bounded pagination.
 - `process_wait`: bounded wait, never a new process.
@@ -68,10 +70,25 @@ request, launch, PID/start-time and exit records inside the configured remote
 state directory. The controller stores a separate immutable job identity and
 an append-only audit event.
 
+Controller startup acquires a nonblocking OS-level exclusive lock on
+`controller.owner.lock` inside its canonical, non-world-writable state directory.
+A second controller using that state refuses startup, including after tunnel
+reconnects; the lock lasts for the owning process and is released on exit.
+State directories on network filesystems need separately qualified locking
+semantics and are not assumed safe merely because the file exists.
+
 A controller restart does not terminate durable jobs. A remote host reboot is
 not claimed as process recovery in v0.1: logs and metadata remain, but an
 in-flight transient unit is reported lost unless the application itself has a
 separate restart policy.
+
+Durable job observations remain bound to the SSH target and remote job root
+recorded at original admission. If an administrator remaps a configured host
+alias to another target or remote state directory, existing job launch retries,
+status/wait, log reads and cancellations fail closed; manually reconcile the
+original remote operation rather than following the changed alias. This guard
+does not attest changes to DNS or OpenSSH alias resolution on its own: retain
+strict host-key verification and independently qualify host identity.
 
 ### PTY tools
 
@@ -97,6 +114,17 @@ arguments are accepted, and a timeout. The runtime invokes it through
 `sudo -n`. Do not configure `/bin/sh`, `/usr/bin/env`, interpreters, package
 managers, general-purpose file tools, or a wrapper accepting arbitrary shell
 text as a privileged action.
+
+Each \`privileged_action\` request must also include a nonblank caller-stable
+\`idempotency_key\` (at most 256 bytes). The controller durably enters the
+policy-resolved executable, arguments and timeout before any remote SSH effect.
+An observed result is cached for same-key retries; a lost acknowledgement remains
+\`indeterminate\` and MUST be reconciled, never automatically re-executed.
+Changing the action or payload under the same key is rejected. This bounded
+no-blind-replay mechanism does not make arbitrary sudo operations transactional,
+does not prevent distinct authorized keys from invoking the same named action,
+and is **not** an independently signed Hepta Final-use grant. Production activation
+still requires issuer/revocation/generation binding and target-host fault tests.
 
 ## Policy boundary
 

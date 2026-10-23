@@ -7,6 +7,8 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 
 static RUNTIME_CONFIG: OnceLock<RuntimeConfig> = OnceLock::new();
+// Keep the exact owning file handle alive for the entire controller process.
+static CONTROLLER_OWNER: OnceLock<std::fs::File> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -113,6 +115,9 @@ impl RuntimeConfig {
 	}
 
 	pub fn validate(&self) -> Result<()> {
+		if !self.state_dir.is_absolute() {
+			bail!("controller state directory must be absolute");
+		}
 		if self.hosts.is_empty() {
 			bail!("runtime config must declare at least one host");
 		}
@@ -196,13 +201,73 @@ impl RuntimeConfig {
 	}
 }
 
-pub fn init_runtime(config: RuntimeConfig) -> Result<()> {
+// A lock on the canonical state directory prevents two controllers from treating
+// one durable job journal as independent admission authority. File::try_lock
+// is cross-process on supported local filesystems (Rust >= 1.89).
+fn claim_controller_state_dir(state_dir: &Path) -> Result<std::fs::File> {
+	let path = state_dir.join("controller.owner.lock");
+	let mut options = std::fs::OpenOptions::new();
+	options.read(true).write(true).create(true);
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::OpenOptionsExt;
+		options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+	}
+	let owner = options
+		.open(&path)
+		.with_context(|| format!("failed to open controller owner lock {}", path.display()))?;
+	let metadata = owner.metadata()?;
+	if !metadata.is_file() {
+		bail!("controller owner lock must be a regular file");
+	}
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		if metadata.permissions().mode() & 0o077 != 0 {
+			bail!("controller owner lock must not be group/world accessible");
+		}
+	}
+	owner.try_lock().map_err(|error| {
+		anyhow!(
+			"controller state directory {} is already owned or cannot be locked: {error}",
+			state_dir.display()
+		)
+	})?;
+	Ok(owner)
+}
+
+pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
 	config.validate()?;
-	std::fs::create_dir_all(config.state_dir.join("jobs"))?;
-	std::fs::create_dir_all(config.state_dir.join("audit"))?;
+	std::fs::create_dir_all(&config.state_dir)?;
+	config.state_dir = std::fs::canonicalize(&config.state_dir)?;
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		if std::fs::metadata(&config.state_dir)?.permissions().mode() & 0o022 != 0 {
+			bail!("controller state directory must not be group/world writable");
+		}
+	}
+	let owner = claim_controller_state_dir(&config.state_dir)?;
+	// State files and the audit trail must not become readable by other
+	// local users under a permissive process umask. Never chmod a symlink.
+	for name in ["jobs", "audit"] {
+		let dir = config.state_dir.join(name);
+		std::fs::create_dir_all(&dir)?;
+		if !std::fs::symlink_metadata(&dir)?.file_type().is_dir() {
+			bail!("controller state subdirectory {name} must not be a symlink");
+		}
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+		}
+	}
 	RUNTIME_CONFIG
 		.set(config)
-		.map_err(|_| anyhow!("runtime config was already initialized"))
+		.map_err(|_| anyhow!("runtime config was already initialized"))?;
+	CONTROLLER_OWNER
+		.set(owner)
+		.map_err(|_| anyhow!("controller owner lock was already initialized"))
 }
 
 pub fn runtime_config() -> Result<&'static RuntimeConfig> {
@@ -524,6 +589,71 @@ pub fn check_remote_write(alias: &str, path: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn separate_controllers_cannot_claim_same_state_directory() {
+		let dir = tempfile::tempdir().unwrap();
+		let first = claim_controller_state_dir(dir.path()).unwrap();
+		assert!(claim_controller_state_dir(dir.path()).is_err());
+		drop(first);
+		let recovered = claim_controller_state_dir(dir.path()).unwrap();
+		drop(recovered);
+	}
+
+	#[test]
+	fn controller_owner_is_fenced_across_processes() {
+		let dir = tempfile::tempdir().unwrap();
+		let probe = |expected: &str| {
+			let output = std::process::Command::new(std::env::current_exe().unwrap())
+				.arg("controller_owner_child_probe")
+				.env("HEPTA_OWNER_TEST_DIR", dir.path())
+				.env("HEPTA_OWNER_TEST_EXPECT", expected)
+				.output()
+				.unwrap();
+			assert!(
+				output.status.success(),
+				"stdout: {} stderr: {}",
+				String::from_utf8_lossy(&output.stdout),
+				String::from_utf8_lossy(&output.stderr)
+			);
+		};
+		let first = claim_controller_state_dir(dir.path()).unwrap();
+		probe("denied");
+		drop(first);
+		probe("acquired");
+	}
+
+	#[test]
+	fn controller_owner_child_probe() {
+		let Some(directory) = std::env::var_os("HEPTA_OWNER_TEST_DIR") else {
+			return;
+		};
+		let expected = std::env::var("HEPTA_OWNER_TEST_EXPECT").unwrap();
+		let result = claim_controller_state_dir(Path::new(&directory));
+		assert_eq!(result.is_ok(), expected == "acquired");
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn permissive_owner_lock_is_rejected() {
+		use std::os::unix::fs::PermissionsExt;
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("controller.owner.lock");
+		std::fs::write(&path, b"").unwrap();
+		std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+		assert!(claim_controller_state_dir(dir.path()).is_err());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn owner_lock_refuses_symlinked_lockfile() {
+		let dir = tempfile::tempdir().unwrap();
+		let target = dir.path().join("redirect");
+		std::fs::write(&target, b"do not change").unwrap();
+		std::os::unix::fs::symlink(&target, dir.path().join("controller.owner.lock")).unwrap();
+		assert!(claim_controller_state_dir(dir.path()).is_err());
+		assert_eq!(std::fs::read(&target).unwrap(), b"do not change");
+	}
 
 	#[test]
 	fn names_are_strict() {
