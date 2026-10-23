@@ -296,6 +296,20 @@ fn full_request_binding_changes_with_resource_limits() {
 }
 
 #[test]
+fn ambiguous_controller_launch_state_can_never_dispatch_a_reused_effect() {
+	let mut entry = record("job-1");
+	for state in ["pending", "launch_failed"] {
+		entry.launch_state = state.into();
+		let error = admit_observation_only_reuse(&entry).unwrap_err();
+		assert!(error.to_string().contains("indeterminate"));
+	}
+	entry.launch_state = "unexpected".into();
+	assert!(admit_observation_only_reuse(&entry).is_err());
+	entry.launch_state = "launched".into();
+	admit_observation_only_reuse(&entry).unwrap();
+}
+
+#[test]
 fn legacy_request_binding_is_readable_but_not_replay_authority() {
 	let mut entry = record("job-1");
 	entry.request_digest = None;
