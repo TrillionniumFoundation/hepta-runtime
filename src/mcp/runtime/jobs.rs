@@ -1189,6 +1189,17 @@ def atomic(name, value):
     try: os.fsync(fd)
     finally: os.close(fd)
 
+def stage_file(name, data, mode):
+    # A durable request/launch must never refer to an unsynchronized input or
+    # supervisor archive. Partial creates remain tombstones, never replacements.
+    fd = os.open(job / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, mode)
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(data)
+        os.fchmod(stream.fileno(), mode)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.fsync(_hepta_directory_pins[-1])
+
 stdin_text = req.pop("stdin", None)
 existing = read_json("request.json")
 if existing is not None:
@@ -1202,13 +1213,11 @@ if existing is not None:
         raise SystemExit(0)
     raise SystemExit("ambiguous prior launch: inspect this job; do not relaunch under another key")
 else:
-    if any(os.path.lexists(job / name) for name in ("runner.py","owner-intent.json","started.json","launch.json","exit.json","stdout.log","stderr.log")):
+    if any(os.path.lexists(job / name) for name in ("stdin.bin","runner.py","owner-intent.json","started.json","child.json","launch.json","exit.json","stdout.log","stderr.log")):
         raise SystemExit("prior or uncertain job artifacts exist without request binding; no launch submitted")
     req["launch_nonce"] = os.urandom(16).hex()
     if stdin_text is not None:
-        stdin_path = job / "stdin.bin"
-        stdin_path.write_bytes(stdin_text.encode("utf-8"))
-        os.chmod(stdin_path, 0o600)
+        stage_file("stdin.bin", stdin_text.encode("utf-8"), 0o600)
         req["stdin_path"] = str(pathlib.Path(req["job_dir"]) / "stdin.bin")
     fd = os.open(job / "request.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as stream:
@@ -1488,8 +1497,7 @@ raise SystemExit(int(supervisor_rc) if 0 <= int(supervisor_rc) <= 255 else 1)
 '''
 runner_path = job / "runner.py"
 runner = REMOTE_DIRECTORY_SOURCE + "\n" + runner
-runner_path.write_text(runner, encoding="utf-8")
-os.chmod(runner_path, 0o700)
+stage_file("runner.py", runner.encode("utf-8"), 0o700)
 info = os.fstat(_hepta_directory_pins[-1])
 binding = json.dumps({"device":info.st_dev,"inode":info.st_ino,"job_id":req["job_id"],"launch_nonce":req["launch_nonce"],"request_fingerprint":req["request_fingerprint"]}, sort_keys=True)
 uid = os.getuid()
@@ -2870,3 +2878,7 @@ mod pagination_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "jobs_output_durability_tests.rs"]
 mod output_durability_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_staging_durability_tests.rs"]
+mod staging_durability_tests;

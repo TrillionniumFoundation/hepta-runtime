@@ -5,6 +5,40 @@ use std::future::Future;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::ExitStatusExt;
 
+#[test]
+fn control_paths_reserve_the_real_unix_temporary_socket_boundary() {
+	let root = tempfile::Builder::new()
+		.prefix("hr-socket-")
+		.tempdir_in("/tmp")
+		.unwrap();
+	for multibyte in [false, true] {
+		for (length, accepted) in [
+			(CONTROL_SOCKET_PATH_BYTES, true),
+			(CONTROL_SOCKET_PATH_BYTES + 1, false),
+		] {
+			let tail = if multibyte { "é" } else { "m" };
+			let name_bytes = length - root.path().as_os_str().as_encoded_bytes().len() - 1;
+			let socket = root
+				.path()
+				.join(format!("{}{tail}", "s".repeat(name_bytes - tail.len())));
+			assert_eq!(socket.as_os_str().as_encoded_bytes().len(), length);
+			// Both final names fit: only OpenSSH's actual temporary name crosses
+			// the boundary. Bind real sockets instead of testing strings alone.
+			let _final_listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+			let mut temporary = socket.as_os_str().to_os_string();
+			temporary.push(".0123456789abcdef");
+			let temporary = PathBuf::from(temporary);
+			assert_eq!(
+				temporary.as_os_str().as_encoded_bytes().len(),
+				if accepted { 107 } else { 108 }
+			);
+			let temporary_listener = std::os::unix::net::UnixListener::bind(&temporary);
+			assert_eq!(temporary_listener.is_ok(), accepted);
+			assert_eq!(check_control_socket_path(&socket).is_ok(), accepted);
+		}
+	}
+}
+
 #[tokio::test]
 async fn completed_output_keeps_global_capacity_until_original_caller_finishes() {
 	let permits = Arc::new(Semaphore::new(1));
@@ -781,6 +815,7 @@ fn isolated_actual_ssh_guard_cancellation_and_ownership_fixtures() {
 		"queue-capacity",
 		"queue-stop",
 		"queue-admission",
+		"socket-parent-bound",
 	] {
 		let mut child = std::process::Command::new(std::env::current_exe().unwrap())
 			.args([
@@ -818,6 +853,22 @@ async fn isolated_helper() {
 	let (root, path, agent, agent_control) = fixture().await;
 	if kind == "external-peer" {
 		external_peer_helper(&path).await;
+	} else if kind == "socket-parent-bound" {
+		let name_bytes = format!("hp-o-{}-{}", std::process::id(), "0".repeat(32)).len();
+		// Two separators plus m-1 add five bytes after the parent and root name.
+		let parent_bytes = CONTROL_SOCKET_PATH_BYTES + 1 - name_bytes - 5;
+		let leaf_bytes = parent_bytes - root.path().as_os_str().as_encoded_bytes().len() - 1;
+		let parent = root.path().join("p".repeat(leaf_bytes));
+		std::fs::create_dir(&parent).unwrap();
+		std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700)).unwrap();
+		let mut spec: serde_json::Value =
+			serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+		spec["socket_parent"] = json!(parent);
+		private_write(&path, &serde_json::to_vec(&spec).unwrap());
+		let profile = Profile::load(&path).unwrap();
+		let error = PrivateRoot::create(&profile).err().unwrap();
+		assert!(error.to_string().contains("OpenSSH temporary publication"));
+		assert_eq!(std::fs::read_dir(&parent).unwrap().count(), 0);
 	} else if kind == "off" {
 		let threads = std::fs::read_dir("/proc/self/task").unwrap().count();
 		let descriptors = std::fs::read_dir("/proc/self/fd").unwrap().count();

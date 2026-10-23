@@ -32,7 +32,17 @@ const AGE: Duration = Duration::from_secs(120);
 const START: Duration = Duration::from_secs(12);
 const REAP: Duration = Duration::from_secs(3);
 const STDERR_CAP: usize = 64 * 1024;
+// OpenSSH publishes a ControlPath by first binding path + '.' + 16 random
+// characters. Linux sun_path must also contain the terminating NUL byte.
+const CONTROL_SOCKET_PATH_BYTES: usize = 108 - 17 - 1;
 static POOL: OnceLock<Arc<Proxy>> = OnceLock::new();
+
+fn check_control_socket_path(path: &Path) -> Result<()> {
+	if path.as_os_str().as_encoded_bytes().len() > CONTROL_SOCKET_PATH_BYTES {
+		bail!("observation socket path is too long for OpenSSH temporary publication");
+	}
+	Ok(())
+}
 
 struct Request {
 	host: String,
@@ -270,9 +280,9 @@ impl PrivateRoot {
 				.collect::<String>()
 		);
 		let path = profile.socket_parent.join(&name);
-		if path.as_os_str().as_encoded_bytes().len() + 16 >= 108 {
-			bail!("observation socket path is too long");
-		}
+		// Reject an unusable parent before creating any private root. Subsequent
+		// generations are checked again with their complete sequence number.
+		check_control_socket_path(&path.join("m-1"))?;
 		let component = std::ffi::CString::new(name)?;
 		if unsafe { libc::mkdirat(parent.as_raw_fd(), component.as_ptr(), 0o700) } != 0 {
 			return Err(std::io::Error::last_os_error().into());
@@ -999,9 +1009,7 @@ impl Core {
 				"m-{}",
 				self.sequence.fetch_add(1, Ordering::Relaxed)
 			));
-			if socket.as_os_str().as_encoded_bytes().len() + 1 > 108 {
-				bail!("observation socket path bound");
-			}
+			check_control_socket_path(&socket)?;
 			let (send, receive) = watch::channel(None);
 			let generation = self.sequence.fetch_add(1, Ordering::Relaxed);
 			let ready_deadline = Instant::now() + START + REAP;
@@ -1136,9 +1144,7 @@ impl Core {
 			"m-{}",
 			self.sequence.fetch_add(1, Ordering::Relaxed)
 		));
-		if socket.as_os_str().as_encoded_bytes().len() + 1 > 108 {
-			bail!("observation renewal socket path bound");
-		}
+		check_control_socket_path(&socket)?;
 		self.start_master(
 			host.to_owned(),
 			socket,
