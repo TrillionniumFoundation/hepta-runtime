@@ -113,6 +113,30 @@ class LocalQualificationTests(unittest.TestCase):
                 self.assertEqual(environment["GIT_CONFIG_NOSYSTEM"], "1")
                 assert_no_executable_checkout_config(self.root)
 
+
+    def test_tracked_external_symlink_is_not_immutable_source_evidence(self):
+        self.make_repo()
+        with tempfile.TemporaryDirectory() as out:
+            outside = Path(out) / "external.py"
+            outside.write_text("VALUE = 'first'\n")
+            (self.root / "tracked.py").symlink_to(outside)
+            self.command("git", "add", "tracked.py")
+            self.command("git", "commit", "-qm", "tracked symlink fixture")
+            with self.assertRaisesRegex(QualificationError, "tracked symlink"):
+                check_source_bytes(self.root)
+            outside.write_text("VALUE = 'second'\n")
+            # Moving mutable target bytes does not change Git's symlink blob.
+            with self.assertRaisesRegex(QualificationError, "tracked symlink"):
+                check_source_bytes(self.root)
+
+    def test_in_checkout_relative_symlink_is_also_rejected(self):
+        self.make_repo()
+        (self.root / "alias.txt").symlink_to("hello.txt")
+        self.command("git", "add", "alias.txt")
+        self.command("git", "commit", "-qm", "relative symlink fixture")
+        with self.assertRaisesRegex(QualificationError, "tracked symlink"):
+            check_source_bytes(self.root)
+
     def test_bounded_capture_and_nonzero_are_distinct(self):
         pass_log = self.root / "pass.log"
         r = execute_bounded((sys.executable, "-c", "print('pass')"),
