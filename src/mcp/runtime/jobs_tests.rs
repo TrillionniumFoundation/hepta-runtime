@@ -79,6 +79,90 @@ fn same_idempotency_key_uses_same_start_lock() {
 }
 
 #[test]
+fn start_lock_identity_is_stable_host_and_key_scoped() {
+	let name = start_lock_file_name("rog", "operator-secret-key");
+	assert_eq!(name, start_lock_file_name("rog", "operator-secret-key"));
+	assert_ne!(name, start_lock_file_name("rog", "other-key"));
+	assert_ne!(name, start_lock_file_name("mac", "operator-secret-key"));
+	assert!(name.starts_with("start-") && name.ends_with(".lock"));
+	assert!(!name.contains("operator-secret-key"));
+}
+
+#[test]
+fn independently_opened_start_lock_handles_are_exclusive() {
+	let dir = tempdir().unwrap();
+	let path = dir.path().join(start_lock_file_name("rog", "key"));
+	let first = open_start_lock_file(&path).unwrap();
+	let second = open_start_lock_file(&path).unwrap();
+	first.try_lock().unwrap();
+	assert!(matches!(
+		second.try_lock(),
+		Err(std::fs::TryLockError::WouldBlock)
+	));
+	drop(first);
+	second.try_lock().unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn start_lock_is_visible_to_a_second_process() {
+	let dir = tempdir().unwrap();
+	let path = dir.path().join(start_lock_file_name("rog", "key"));
+	let first = open_start_lock_file(&path).unwrap();
+	first.try_lock().unwrap();
+	// On Unix, Rust File::try_lock and Python fcntl.flock use the same
+	// operating-system advisory lock. This checks a real child process.
+	let probe = "import fcntl, sys\nwith open(sys.argv[1], 'rb+') as f:\n try: fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)\n except BlockingIOError: sys.exit(17)";
+	let denied = std::process::Command::new("python3")
+		.arg("-c")
+		.arg(probe)
+		.arg(&path)
+		.output()
+		.unwrap();
+	assert_eq!(denied.status.code(), Some(17), "{denied:?}");
+	drop(first);
+	let accepted = std::process::Command::new("python3")
+		.arg("-c")
+		.arg(probe)
+		.arg(&path)
+		.output()
+		.unwrap();
+	assert!(accepted.status.success(), "{accepted:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn start_lock_denies_symlinks_and_hardlinks() {
+	let dir = tempdir().unwrap();
+	let target = dir.path().join("unrelated");
+	std::fs::write(&target, b"untouched").unwrap();
+	let symlink = dir.path().join("start-symlink.lock");
+	std::os::unix::fs::symlink(&target, &symlink).unwrap();
+	assert!(open_start_lock_file(&symlink).is_err());
+	let hardlink = dir.path().join("start-hardlink.lock");
+	std::fs::hard_link(&target, &hardlink).unwrap();
+	assert!(open_start_lock_file(&hardlink).is_err());
+	assert_eq!(std::fs::read(target).unwrap(), b"untouched");
+}
+
+#[test]
+fn duplicate_durable_idempotency_owners_fail_closed() {
+	let records = vec![record("job-1"), record("job-2")];
+	let error = select_idempotent_record(records, "rog", "repeat-key").unwrap_err();
+	assert!(error.to_string().contains("multiple durable owners"));
+	let mut different_host = record("job-2");
+	different_host.host = "mac".into();
+	let selected = select_idempotent_record(
+		vec![record("job-1"), different_host],
+		"rog",
+		"repeat-key",
+	)
+	.unwrap()
+	.unwrap();
+	assert_eq!(selected.id, "job-1");
+}
+
+#[test]
 fn stored_job_host_binding_rejects_alias_remapping() {
 	let mut previous = record("job-1");
 	previous.remote_job_dir = "/var/lib/hepta/jobs/job-1".into();
