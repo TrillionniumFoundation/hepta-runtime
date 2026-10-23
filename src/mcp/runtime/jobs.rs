@@ -322,6 +322,31 @@ fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
 	Ok(record)
 }
 
+// Open the audit sink through a private regular file descriptor, not a path
+// that a symlink can redirect to an unrelated file or credential.
+fn open_audit_append(path: &Path) -> Result<File> {
+	let mut options = OpenOptions::new();
+	options.create(true).append(true);
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::OpenOptionsExt;
+		options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+	}
+	let file = options.open(path)?;
+	let metadata = file.metadata()?;
+	if !metadata.is_file() {
+		bail!("audit sink is not a regular file: {}", path.display());
+	}
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		if metadata.permissions().mode() & 0o077 != 0 {
+			bail!("audit sink must be owner-private: {}", path.display());
+		}
+	}
+	Ok(file)
+}
+
 pub(crate) fn audit(action: &str, host: &str, subject: &str, outcome: &Value) -> Result<()> {
 	let path = runtime_config()?.state_dir.join("audit/events.jsonl");
 	if let Some(parent) = path.parent() {
@@ -340,7 +365,7 @@ pub(crate) fn audit(action: &str, host: &str, subject: &str, outcome: &Value) ->
 		.map_err(|_| anyhow::anyhow!("audit lock poisoned"))?;
 	let mut line = serde_json::to_vec(&event)?;
 	line.push(b'\n');
-	let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+	let mut file = open_audit_append(&path)?;
 	file.write_all(&line)?;
 	file.sync_data()?;
 	Ok(())
