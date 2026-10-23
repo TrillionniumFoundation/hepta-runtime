@@ -612,6 +612,24 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "Execution Shadow Admission",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Validate and hash a canonical execution_intent v1 against an allowlisted host. Shadow only: never starts a process, grants FinalUse or acknowledges an effect."
+	)]
+	async fn execution_shadow_admit(
+		&self,
+		Parameters(params): Parameters<runtime::execution::ShadowExecutionIntentParams>,
+	) -> Result<String, String> {
+		runtime::execution::admit_shadow_intent(params)
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
 		title = "Host List",
 		annotations(
 			read_only_hint = true,
