@@ -102,3 +102,21 @@ configuration **key names** are shown, never their values. The read-only
 preflight is separate from the original checkout-filter check and preserves
 tracked-symlink refusal. This is a local software acceptance guard, not an OS
 sandbox, attested Rust toolchain or production FinalUse qualification.
+
+
+### Descriptor-rooted source intake (candidate P3 hardening)
+
+The exact-Git-index verifier now opens a worktree directory descriptor and
+walks **each** tracked pathname component with `O_NOFOLLOW`; it reads bytes,
+file type, size and executable mode from the **same regular-file descriptor**.
+It rejects intermediate/final symlinks, noncanonical components, FIFOs,
+devices, hard-linked source inodes, files larger than 64 MiB and a file whose
+size or inode timestamps change during the read. Six independent POSIX
+regressions run locally and in both exact-source/merge CI lanes. The previous
+`Path.is_file()/is_symlink()` then `Path.read_bytes()` sequence did not
+secure an intermediate directory against a symlink replacement.
+
+These guards reduce deceptive source-intake evidence but do **not** make the
+worktree immutable between checking and Cargo execution. An independent
+read-only filesystem/namespace snapshot or other trusted host confinement is
+still required for production acceptance. Unsupported platforms fail closed.

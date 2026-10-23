@@ -24,10 +24,13 @@ import tempfile
 import threading
 import time
 
+from source_byte_boundary import read_indexed_file
+
 RUST_VERSION = "1.95.0"
 SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
 CHECKS = (
     ("source_contract", (sys.executable, "-m", "unittest", "discover", "-s", "scripts", "-p", "test_runtime_ci_contract.py", "-v")),
+    ("source_byte_boundary", (sys.executable, "-m", "unittest", "discover", "-s", "scripts", "-p", "test_source_byte_boundary.py", "-v")),
     ("local_receipt_regressions", (sys.executable, "-m", "unittest", "discover", "-s", "scripts", "-p", "test_local_qualification.py", "-v")),
     ("format", ("cargo", "fmt", "--all", "--", "--check")),
     ("check", ("cargo", "check", "--locked", "--all-targets")),
@@ -220,20 +223,17 @@ def check_source_bytes(worktree: Path) -> tuple[str, int]:
         try:
             metadata, relative = item.split(b"\t", 1)
             mode, expected, stage = metadata.decode("ascii").split(" ")
-            path = worktree / os.fsdecode(relative)
-            # Git stores a symlink *target pathname*, not the referenced
-            # bytes. A linked source or test could execute mutable bytes from
-            # outside this checkout while all Git/index digests still match.
+            # Git mode 120000 binds only a symlink pathname, not its target.
             if mode == "120000":
                 raise QualificationError(
                     f"tracked symlink has no immutable target-byte proof: {os.fsdecode(relative)}"
                 )
             if stage != "0" or mode not in ("100644", "100755"):
                 raise QualificationError(f"unexpected index stage or mode for {os.fsdecode(relative)}")
-            if not path.is_file() or path.is_symlink():
-                raise QualificationError(f"missing/nonregular checked-out source: {os.fsdecode(relative)}")
-            raw = path.read_bytes()
-            executable = bool(path.stat().st_mode & 0o111)
+            # Refuse symlinks at every directory component and bind bytes,
+            # size and permissions to the SAME already-open file descriptor.
+            raw, source_mode = read_indexed_file(worktree, relative)
+            executable = bool(source_mode & 0o111)
             if executable != (mode == "100755"):
                 raise QualificationError(f"source executable bit differs: {os.fsdecode(relative)}")
             if blob_hash(raw, fmt) != expected:

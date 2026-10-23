@@ -40,6 +40,9 @@ jobs:
       - name: Check source CI gate contract
         run: python3 -m unittest discover -s scripts -p 'test_runtime_ci_contract.py' -v
 
+      - name: Regression test no-follow source-byte admission
+        run: python3 -m unittest discover -s scripts -p 'test_source_byte_boundary.py' -v
+
       - name: Install pinned Rust toolchain
         run: |
           rustup toolchain install 1.95.0 --profile minimal
@@ -81,6 +84,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_MERGE_SHA"
           python3 -m unittest discover -s scripts -p 'test_runtime_ci_contract.py' -v
+          python3 -m unittest discover -s scripts -p 'test_source_byte_boundary.py' -v
           cargo fmt --all -- --check
           cargo check --locked --all-targets
           cargo clippy --locked --all-targets -- -D warnings
