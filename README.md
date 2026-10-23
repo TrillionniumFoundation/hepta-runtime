@@ -277,13 +277,20 @@ octofs mcp
 
 #### HTTP
 
-Streamable HTTP transport for remote access or multi-client scenarios.
+Streamable HTTP transport for local or tunneled multi-client access. All HTTP
+MCP sessions require a private token file, even without a Hepta Runtime host
+config. Direct public/wildcard listeners are rejected to prevent credential
+leakage over unencrypted HTTP.
 
 ```bash
-octofs mcp --bind 0.0.0.0:12345
+umask 077
+openssl rand -hex 32 > ~/.hepta-runtime-mcp-token
+octofs mcp --bind 127.0.0.1:12345 --auth-token-file ~/.hepta-runtime-mcp-token
 ```
 
-Connect clients to `http://localhost:12345/mcp`.
+Send the file's token as the `X-Hepta-Runtime-Token` header when connecting to
+`http://127.0.0.1:12345/mcp`. For remote clients, use an authenticated SSH
+tunnel or a TLS-terminating local proxy; do not expose the raw HTTP listener.
 
 ### Working Directory
 
@@ -301,6 +308,15 @@ By default, Octofs operates in the current directory. Specify a different root:
 ```
 
 ### Remote Filesystem (SSH/SFTP)
+
+> **Hepta Runtime security gate:** When started with `--runtime-config`, remote
+> SFTP reads, writes and metadata/list operations are currently quarantined:
+> textual allowlisted prefixes do not prevent remote symlink or rename-race
+> escapes. No runtime host-policy setting re-enables SFTP until an independently
+> qualified remote OS confinement boundary and real host tests are available.
+> Without `--runtime-config`, ordinary Octofs SSH/SFTP compatibility remains
+> available. See [the operating contract](docs/HEPTA_RUNTIME.md#remote-file-rules).
+
 
 All path parameters — and `--path` itself — accept `ssh://` or `sftp://` URLs:
 
