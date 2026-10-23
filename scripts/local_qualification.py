@@ -108,6 +108,30 @@ def blob_hash(data: bytes, algo: str) -> str:
     return h.hexdigest()
 
 
+def assert_github_merge_parentage(repo: Path, source_sha: str, merge_sha: str) -> None:
+    """Reject unrelated/linear 'merge' evidence by checking raw commit parents.
+
+    Read the content-addressed commit object, not rev-list: local graft and
+    shallow metadata can alter displayed ancestry without changing the object.
+    The caller must still obtain the genuine merge SHA from GitHub PR refs.
+    """
+    raw = git(repo, "cat-file", "commit", merge_sha)
+    header, sep, _message = raw.partition(b"\\n\\n")
+    if not sep:
+        raise QualificationError("malformed GitHub merge commit object")
+    parents = []
+    for line in header.splitlines():
+        if line.startswith(b"parent "):
+            value = line[7:]
+            if not re.fullmatch(rb"[0-9a-f]{40}", value):
+                raise QualificationError("invalid parent in GitHub merge commit")
+            parents.append(value.decode("ascii"))
+    if len(parents) != 2 or parents[0] == source_sha or parents[1] != source_sha:
+        raise QualificationError(
+            "GitHub PR merge must have exactly two parents, with source HEAD as second parent"
+        )
+
+
 def check_source_bytes(worktree: Path) -> tuple[str, int]:
     """Require exact checked-out bytes for every Git index entry.
 
@@ -263,6 +287,7 @@ def qualify(repo: Path, source_sha: str, merge_sha: str, output_dir: Path,
         for sha in (source_sha, merge_sha):
             if git(repo, "rev-parse", "--verify", f"{sha}^{{commit}}").decode().strip() != sha:
                 raise QualificationError(f"not an available exact commit: {sha}")
+        assert_github_merge_parentage(repo, source_sha, merge_sha)
 
         with tempfile.TemporaryDirectory(prefix="hepta-runtime-proof-") as work:
             workdir = Path(work)
