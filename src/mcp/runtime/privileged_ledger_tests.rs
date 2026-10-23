@@ -73,7 +73,7 @@ async fn configured_ssh_target_remap_cannot_reuse_old_success_receipt() {
 		.await
 		.unwrap()
 	{
-		Admission::Observed(result) => assert_eq!(result["exit_code"], 0),
+		Admission::Observed(result) => assert_eq!(result["exit_code"], json!(0)),
 		Admission::Entered(_) => panic!("old effect was replayed"),
 	}
 }
