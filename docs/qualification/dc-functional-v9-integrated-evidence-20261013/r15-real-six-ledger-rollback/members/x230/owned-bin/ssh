@@ -1,0 +1,57 @@
+#!/usr/bin/python3
+import ctypes,hashlib,json,os,pathlib,selectors,signal,stat,subprocess,sys,time
+counter=pathlib.Path('/home/qian-qi/hepta-runtime-dc-functional-20261013/docs/qualification/dc-functional-v9-integrated-evidence-20261013/r15-real-six-ledger-rollback/members/x230/native-ssh-count.log');health_counter=pathlib.Path('/home/qian-qi/hepta-runtime-dc-functional-20261013/docs/qualification/dc-functional-v9-integrated-evidence-20261013/r15-real-six-ledger-rollback/members/x230/ledger-health-probe-count')
+gate=pathlib.Path('/home/qian-qi/hepta-runtime-dc-functional-20261013/docs/qualification/dc-functional-v9-integrated-evidence-20261013/r15-real-six-ledger-rollback/members/x230/ledger-health-ack-gate');observed=pathlib.Path('/home/qian-qi/hepta-runtime-dc-functional-20261013/docs/qualification/dc-functional-v9-integrated-evidence-20261013/r15-real-six-ledger-rollback/members/x230/ledger-health-real-probe.json')
+intent=pathlib.Path('/home/qian-qi/hepta-runtime-dc-functional-20261013/docs/qualification/dc-functional-v9-integrated-evidence-20261013/r15-real-six-ledger-rollback/members/x230/ledger-wrapper-intent.json');child_record=pathlib.Path('/home/qian-qi/hepta-runtime-dc-functional-20261013/docs/qualification/dc-functional-v9-integrated-evidence-20261013/r15-real-six-ledger-rollback/members/x230/ledger-ssh-child.json')
+nonce='1f8b4831baa4f445d8cf655af52367ea';expected=['-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', '-o', 'StrictHostKeyChecking=yes', '-o', 'ForwardAgent=no', '-o', 'ClearAllForwardings=yes', '-o', 'PermitLocalCommand=no', '-o', 'RemoteCommand=none', '-o', 'RequestTTY=no', '--', 'x230-ts', "printf 'hepta-host-health-v1\\n'"];child_code="import ctypes,json,os,pathlib,signal,sys\nexpected_parent=int(sys.argv[1]);dest=pathlib.Path(sys.argv[2]);nonce=sys.argv[3]\nassert sys.platform=='linux'\nlibc=ctypes.CDLL(None,use_errno=True)\nif libc.prctl(1,signal.SIGKILL,0,0,0)!=0:raise SystemExit(86)\nif os.getppid()!=expected_parent:os._exit(86)\nraw=pathlib.Path('/proc/self/stat').read_text();fields=raw.rsplit(') ',1)[1].split()\nrecord={'pid':os.getpid(),'uid':os.getuid(),'boot_id':pathlib.Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'start_ticks':int(fields[19]),'state':fields[0],'parent_pid':expected_parent,'pdeathsig_armed':True,'nonce_sha256':__import__('hashlib').sha256(nonce.encode()).hexdigest()}\ntemporary=dest.with_name(dest.name+'.next')\nfd=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)\nwith os.fdopen(fd,'w') as writer:json.dump(record,writer);writer.flush();os.fsync(writer.fileno())\nos.link(temporary,dest,follow_symlinks=False);temporary.unlink()\ndirectory=os.open(dest.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)\ntry:os.fsync(directory)\nfinally:os.close(directory)\nif os.getppid()!=expected_parent:os._exit(86)\nos.execv('/usr/bin/ssh',['ssh',*sys.argv[4:]])\n"
+def publish(dest,value):
+ temporary=dest.with_name(dest.name+'.next');fd=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+ with os.fdopen(fd,'w') as writer:json.dump(value,writer);writer.flush();os.fsync(writer.fileno())
+ os.link(temporary,dest,follow_symlinks=False);temporary.unlink()
+ directory=os.open(dest.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+ try:os.fsync(directory)
+ finally:os.close(directory)
+def identity():
+ fields=pathlib.Path('/proc/self/stat').read_text().rsplit(') ',1)[1].split()
+ return {'pid':os.getpid(),'uid':os.getuid(),'boot_id':pathlib.Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'start_ticks':int(fields[19]),'state':fields[0]}
+def bounded_capture(child,timeout=8,stdout_limit=256,stderr_limit=65536):
+ streams=selectors.DefaultSelector();buffers={'stdout':bytearray(),'stderr':bytearray()};limits={'stdout':stdout_limit,'stderr':stderr_limit};deadline=time.monotonic()+timeout;reaped=False
+ try:
+  for role,stream in (('stdout',child.stdout),('stderr',child.stderr)):os.set_blocking(stream.fileno(),False);streams.register(stream,selectors.EVENT_READ,role)
+  while streams.get_map():
+   remaining=deadline-time.monotonic()
+   if remaining<=0:raise TimeoutError('owned fixed SSH capture deadline')
+   for entry,_ in streams.select(min(.1,remaining)):
+    role=entry.data;chunk=os.read(entry.fileobj.fileno(),min(4096,limits[role]-len(buffers[role])+1))
+    if not chunk:streams.unregister(entry.fileobj);continue
+    if len(buffers[role])+len(chunk)>limits[role]:raise BufferError('owned fixed SSH capture byte limit')
+    buffers[role].extend(chunk)
+  child.wait(timeout=max(.001,deadline-time.monotonic()));reaped=True
+  return bytes(buffers['stdout']),bytes(buffers['stderr'])
+ finally:
+  streams.close()
+  if not reaped:
+   if child.poll() is None:child.kill()
+   child.wait(timeout=2)
+  child.stdout.close();child.stderr.close()
+with counter.open('ab') as writer:writer.write(b'1')
+if sys.argv[1:]!=expected:os.execv('/usr/bin/ssh',['ssh',*sys.argv[1:]])
+fd=os.open(health_counter,os.O_WRONLY|os.O_CREAT|os.O_APPEND|os.O_NOFOLLOW,0o600)
+with os.fdopen(fd,'ab') as writer:writer.write(b'1');writer.flush();os.fsync(writer.fileno())
+if not gate.exists():os.execv('/usr/bin/ssh',['ssh',*sys.argv[1:]])
+g=gate.lstat();assert stat.S_ISREG(g.st_mode) and g.st_uid==os.getuid() and g.st_nlink==1 and stat.S_IMODE(g.st_mode)==0o600
+assert gate.read_text()==nonce and sys.platform=='linux'
+parent=os.getppid();libc=ctypes.CDLL(None,use_errno=True)
+if libc.prctl(1,signal.SIGKILL,0,0,0)!=0:raise SystemExit(86)
+if os.getppid()!=parent:os._exit(86)
+mine=identity();publish(intent,{'wrapper':mine,'original_parent_pid':parent,'pdeathsig_armed':True,'nonce_sha256':hashlib.sha256(nonce.encode()).hexdigest(),'child_spawn_intent_before_popen':True})
+child=subprocess.Popen(['/usr/bin/python3','-c',child_code,str(os.getpid()),str(child_record),nonce,*sys.argv[1:]],stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+try:stdout,stderr=bounded_capture(child)
+except (TimeoutError,BufferError,subprocess.TimeoutExpired):raise SystemExit(86)
+assert child.returncode==0 and stdout==b'hepta-host-health-v1\n' and len(stderr)<=65536
+assert child_record.exists()
+publish(observed,{'real_fixed_ssh_probe_completed':True,'ssh_exit_code':0,'stdout_sha256':hashlib.sha256(stdout).hexdigest(),'stderr_sha256':hashlib.sha256(stderr).hexdigest(),'wrapper':mine,'original_parent_pid':parent,'gate_nonce_sha256':hashlib.sha256(nonce.encode()).hexdigest(),'ssh_child':json.loads(child_record.read_text()),'ssh_child_reaped':True})
+deadline=time.monotonic()+20
+while gate.exists() and os.getppid()==parent and time.monotonic()<deadline:time.sleep(.01)
+if os.getppid()!=parent or gate.exists():raise SystemExit(86)
+sys.stdout.buffer.write(stdout);sys.stderr.buffer.write(stderr);raise SystemExit(child.returncode)

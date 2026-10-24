@@ -1,8 +1,13 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+//! Read-only host inspection and administrator-defined actions.
 use anyhow::{bail, Result};
 use regex::Regex;
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use super::config::{check_protected_input, runtime_config, valid_name, Platform};
@@ -11,14 +16,17 @@ use super::privileged_ledger::{self, Admission};
 use super::ssh::run_python_json;
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct HostListParams {}
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct HostParams {
 	pub host: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ServiceStatusParams {
 	pub host: String,
 	/// Exact systemd unit or launchd label names, max 64.
@@ -26,18 +34,20 @@ pub struct ServiceStatusParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct PrivilegedActionParams {
 	pub host: String,
 	/// Exact symbolic action name from the host policy.
 	pub action: String,
-	/// Stable operation identity. An uncertain attempt cannot be blindly replayed.
+	/// Stable operation identity; unknown acknowledgements are never replayed.
 	pub idempotency_key: String,
 	#[serde(default)]
 	pub args: Vec<String>,
 }
 
-pub fn host_list() -> Result<String> {
-	let config = runtime_config()?;
+static HOST_LIST_SUMMARY: OnceLock<String> = OnceLock::new();
+
+fn render_host_list(config: &super::config::RuntimeConfig) -> Result<String> {
 	let hosts: Vec<Value> = config
 		.hosts
 		.iter()
@@ -45,6 +55,8 @@ pub fn host_list() -> Result<String> {
 			json!({
 				"name": name,
 				"platform": host.platform,
+				"execution_mode": host.execution_mode,
+				"operator_tools": host.execution_mode == super::config::ExecutionMode::Operator,
 				"allow_execute": host.allow_execute,
 				"allow_pty": host.allow_pty,
 				"allow_write": host.allow_write,
@@ -55,8 +67,25 @@ pub fn host_list() -> Result<String> {
 	Ok(serde_json::to_string_pretty(&json!({"hosts": hosts}))?)
 }
 
+fn cached_host_list(
+	cache: &OnceLock<String>,
+	config: &super::config::RuntimeConfig,
+) -> Result<String> {
+	if let Some(summary) = cache.get() {
+		return Ok(summary.clone());
+	}
+	// Loaded policy is immutable. Cache only its public projection, leaving
+	// per-request identity, durable audit and result retention on their normal paths.
+	let summary = render_host_list(config)?;
+	Ok(cache.get_or_init(|| summary).clone())
+}
+
+pub fn host_list() -> Result<String> {
+	cached_host_list(&HOST_LIST_SUMMARY, runtime_config()?)
+}
+
 const HARDWARE_CODE: &str = r#"
-import glob, json, os, pathlib, platform, subprocess, sys
+import glob, json, os, pathlib, platform, subprocess, sys, time
 
 def read(path, default=None):
     try:
@@ -79,6 +108,8 @@ def cmd(argv):
         return {"exit_code": -1, "stderr": str(exc), "stdout": ""}
 
 result = {
+    "schema": "hepta-hardware-v1",
+    "sampled_at_unix_ms": int(time.time()*1000),
     "hostname": platform.node(),
     "platform": sys.platform,
     "kernel": platform.release(),
@@ -110,6 +141,14 @@ if sys.platform == "linux":
         if values:
             item["values"] = values; hwmon.append(item)
     result["hwmon"] = hwmon
+    normalized = []
+    for monitor in hwmon:
+        for field, raw in monitor['values'].items():
+            unit, scale = ('C', 1000.0) if field.startswith('temp') else ('W', 1000000.0) if field.startswith('power') else ('RPM', 1.0) if field.startswith('fan') else ('Hz', 1.0)
+            try: value = float(raw) / scale
+            except (ValueError, TypeError): value = None
+            normalized.append({'source': monitor['path']+'/'+field, 'sensor': monitor['name'], 'value': value, 'unit': unit, 'available': value is not None})
+    result['sensors'] = normalized
     gpus = []
     for dev in sorted(glob.glob("/sys/class/drm/card[0-9]*/device")):
         if not read(dev + "/vendor"):
@@ -149,6 +188,7 @@ if sys.platform == "linux":
         if value is not None:
             limits["legacy_" + name] = value
     result["power_limits"] = limits
+    result["power_limit_semantics"] = "Driver-reported requests/cached values; not measured sustained power."
     result["accel_devices"] = sorted(glob.glob("/dev/accel/*"))
     thunderbolt = []
     for root in sorted(glob.glob("/sys/bus/thunderbolt/devices/*")):
@@ -159,30 +199,14 @@ if sys.platform == "linux":
         thunderbolt.append(item)
     result["thunderbolt"] = thunderbolt
 else:
-    result["hardware"] = cmd(["system_profiler", "SPHardwareDataType", "-json"])
+    result["cpu"] = cmd(["sysctl", "-n", "machdep.cpu.brand_string"])
+    result["memory_bytes"] = cmd(["sysctl", "-n", "hw.memsize"])
+    result["thermal_sensors_available"] = False
     result["battery"] = cmd(["pmset", "-g", "batt"])
 print(json.dumps(result, sort_keys=True))
 "#;
 
-const SERVICE_CODE: &str = r#"
-import json, subprocess, sys
-q = json.load(sys.stdin)
-result = []
-if q["platform"] == "linux":
-    props = "LoadState,ActiveState,SubState,UnitFileState,Result,MainPID,ExecMainStatus,Description"
-    for name in q["services"]:
-        p = subprocess.run(["systemctl", "show", name, "--no-pager", "--property=" + props], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        values = {}
-        for line in p.stdout.splitlines():
-            if "=" in line:
-                key, value = line.split("=", 1); values[key] = value
-        result.append({"name": name, "exit_code": p.returncode, "properties": values, "stderr": p.stderr.strip()})
-else:
-    for name in q["services"]:
-        p = subprocess.run(["launchctl", "print", "system/" + name], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        result.append({"name": name, "exit_code": p.returncode, "stdout": p.stdout[-65536:], "stderr": p.stderr.strip()})
-print(json.dumps({"services": result}, sort_keys=True))
-"#;
+const SERVICE_CODE: &str = include_str!("service_inspect.py");
 
 const NETWORK_CODE: &str = r#"
 import glob, json, os, pathlib, subprocess, sys
@@ -222,22 +246,66 @@ print(json.dumps(result, sort_keys=True))
 "#;
 
 const PRIVILEGED_CODE: &str = r#"
-import json, subprocess, sys
+import json, os, selectors, subprocess, sys, time
 q = json.load(sys.stdin)
 argv = ["sudo", "-n", q["executable"], *q.get("fixed_args", []), *q.get("args", [])]
+LIMIT = 524288
+def bounded_text(value, seen):
+    encoded = bytes(value).decode("utf-8", "replace").encode("utf-8")
+    return encoded[-LIMIT:].decode("utf-8", "ignore"), seen > LIMIT or len(encoded) > LIMIT
 
-def bounded_text(value):
-    # TimeoutExpired stdout/stderr are bytes even with text=True. A partial
-    # non-UTF8 result is still observed evidence, not a JSON serialization error.
-    if isinstance(value, bytes):
-        return value[-1048576:].decode("utf-8", errors="replace")
-    return (value or "")[-1048576:]
-
+# Bound memory while the action runs; never communicate() on inherited pipes.
+# Only the direct action launcher is killed on timeout. Descendant state remains
+# unconfirmed, and inherited pipe writers cannot hold this helper indefinitely.
+p = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                     stderr=subprocess.PIPE, close_fds=True)
+tails = {"stdout": bytearray(), "stderr": bytearray()}
+seen = {"stdout": 0, "stderr": 0}
+eof = {"stdout": False, "stderr": False}
+selector = selectors.DefaultSelector()
+for name, stream in (("stdout", p.stdout), ("stderr", p.stderr)):
+    os.set_blocking(stream.fileno(), False)
+    selector.register(stream, selectors.EVENT_READ, name)
+deadline = time.monotonic() + float(q.get("timeout_seconds", 30))
+timed_out, kill_deadline, drain_deadline, capture_error = False, None, None, None
 try:
-    p = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace", timeout=float(q.get("timeout_seconds", 30)))
-    result = {"exit_code": p.returncode, "stdout": p.stdout[-1048576:], "stderr": p.stderr[-1048576:]}
-except subprocess.TimeoutExpired as exc:
-    result = {"exit_code": 124, "stdout": bounded_text(exc.stdout), "stderr": "privileged action timed out"}
+    while selector.get_map() or p.poll() is None:
+        now = time.monotonic()
+        if not timed_out and p.poll() is None and now >= deadline:
+            timed_out, kill_deadline = True, now + 2
+            try: p.kill()
+            except ProcessLookupError: pass
+        if p.poll() is not None and drain_deadline is None:
+            drain_deadline = now + 1
+        if (kill_deadline is not None and now >= kill_deadline) or (drain_deadline is not None and now >= drain_deadline):
+            break
+        for key, _ in selector.select(.05):
+            try: chunk = os.read(key.fd, 65536)
+            except BlockingIOError: continue
+            except OSError:
+                capture_error = "read_failed"; chunk = b""
+            if not chunk:
+                eof[key.data] = capture_error is None
+                selector.unregister(key.fileobj); key.fileobj.close()
+                continue
+            name = key.data; seen[name] += len(chunk)
+            tails[name].extend(chunk)
+            if len(tails[name]) > LIMIT: del tails[name][:-LIMIT]
+finally:
+    selector.close()
+    for stream in (p.stdout, p.stderr):
+        if not stream.closed: stream.close()
+confirmed = p.poll() is not None
+stdout, stdout_truncated = bounded_text(tails["stdout"], seen["stdout"])
+stderr, stderr_truncated = bounded_text(tails["stderr"], seen["stderr"])
+result = {"exit_code": 124 if timed_out else p.returncode,
+          "exit_code_authoritative": confirmed and not timed_out,
+          "process_exit_confirmed": confirmed, "stdout": stdout, "stderr": stderr,
+          "timed_out": timed_out, "stdout_truncated": stdout_truncated,
+          "stderr_truncated": stderr_truncated, "stdout_bytes_seen": seen["stdout"],
+          "stderr_bytes_seen": seen["stderr"], "capture_error": capture_error,
+          "output_complete": confirmed and all(eof.values()) and capture_error is None and not stdout_truncated and not stderr_truncated,
+          "output_limit_bytes_per_stream": LIMIT, "descendant_termination_confirmed": False}
 print(json.dumps(result, sort_keys=True))
 "#;
 
@@ -272,11 +340,14 @@ pub async fn service_status(params: ServiceStatusParams) -> Result<String> {
 	Ok(serde_json::to_string_pretty(&output)?)
 }
 
+#[path = "inspection_result.rs"]
+mod inspection_result;
+
 pub async fn network_inspect(params: HostParams) -> Result<String> {
 	let host = runtime_config()?.host(&params.host)?;
 	let output: Value =
 		run_python_json(host, NETWORK_CODE, &json!({}), Duration::from_secs(25)).await?;
-	Ok(serde_json::to_string_pretty(&output)?)
+	inspection_result::network_result(&output)
 }
 
 pub async fn privileged_action(params: PrivilegedActionParams) -> Result<String> {
@@ -325,102 +396,173 @@ pub async fn privileged_action(params: PrivilegedActionParams) -> Result<String>
 		"args": params.args,
 		"timeout_seconds": action.timeout_seconds.min(300),
 	});
-	// Bind both the configured SSH destination and the exact policy-resolved
-	// executable, arguments and timeout. An alias remap must not turn a prior
-	// observed result into a false success receipt for another target.
-	// This is a config binding, not cryptographic attestation of the remote host.
-	let effect_binding = json!({
-		"configured_ssh_target": host.ssh_target,
-		"execution_request": &request,
-	});
-	// A lost remote acknowledgement leaves an indeterminate durable intent;
-	// retrying the same key never performs a second privileged effect.
-	let admission = privileged_ledger::admit(
+	let effect_binding =
+		json!({"configured_ssh_target": host.ssh_target, "execution_request": &request});
+	let permit = match privileged_ledger::admit(
 		&runtime_config()?.state_dir,
 		&params.host,
 		&params.action,
 		&params.idempotency_key,
 		&effect_binding,
 	)
-	.await?;
-	let permit = match admission {
+	.await?
+	{
 		Admission::Observed(observed) => {
-			audit("privileged_action_reused", &params.host, &params.action, &observed)?;
-			return Ok(serde_json::to_string_pretty(&observed)?);
+			let completion = audit(
+				"privileged_action_reused",
+				&params.host,
+				&params.action,
+				&json!({"reused":true}),
+			);
+			return Ok(serde_json::to_string_pretty(
+				&retain_privileged_after_audit(observed, completion),
+			)?);
 		}
 		Admission::Entered(permit) => permit,
 	};
-	audit(
-		"privileged_action_entered",
+	require_privileged_intent(audit(
+		"privileged_action_requested",
 		&params.host,
 		&params.action,
-		&json!({"idempotency_key": params.idempotency_key}),
-	)?;
-	let observed: Value = run_python_json(
+		&json!({"phase":"intent","remote_operation_submitted":false}),
+	))?;
+	let remote: Result<Value> = run_python_json(
 		host,
 		PRIVILEGED_CODE,
 		&request,
 		Duration::from_secs(action.timeout_seconds.min(300) + 10),
 	)
-	.await?;
-	let observed = permit.complete(observed)?;
-	audit("privileged_action", &params.host, &params.action, &observed)?;
-	Ok(serde_json::to_string_pretty(&observed)?)
+	.await;
+	let mut output = retain_privileged_outcome(&params, remote);
+	// An unknown effect leaves the original durable entered record intact.
+	// Even a known result must not be hidden by a later publication failure.
+	if output["outcome"] != "unknown" {
+		match permit.complete(output.clone()) {
+			Ok(retained) => {
+				output = retained;
+				output["ledger_recorded"] = json!(true);
+			}
+			Err(_) => {
+				output["ledger_recorded"] = json!(false);
+				output["ledger_warning"] = json!("Original result retained; durable completion unavailable. Reconcile original key without replay.");
+			}
+		}
+	} else {
+		output["ledger_recorded"] = json!(false);
+	}
+	let completion = audit(
+		"privileged_action",
+		&params.host,
+		&params.action,
+		&json!({"phase":"result","exit_code":output["exit_code"],"timed_out":output["timed_out"]}),
+	);
+	Ok(serde_json::to_string_pretty(
+		&retain_privileged_after_audit(output, completion),
+	)?)
 }
+
+fn retain_privileged_after_audit(mut result: Value, outcome: Result<()>) -> Value {
+	if !result.is_object() {
+		result = json!({"result":"invalid_remote_acknowledgement","outcome":"unknown","automatic_retry":false});
+	}
+	result["audit_recorded"] = json!(outcome.is_ok());
+	result["automatic_retry"] = json!(false);
+	if outcome.is_err() {
+		result["audit_warning"] = json!(
+			"Administrator-pinned action result retained; completion audit unavailable. Do not repeat the action automatically."
+		);
+	}
+	result
+}
+
+fn require_privileged_intent(outcome: Result<()>) -> Result<()> {
+	outcome.map_err(|_| {
+		anyhow::anyhow!("Pinned action intent audit unavailable; no action request dispatched")
+	})
+}
+
+fn unknown_privileged(params: &PrivilegedActionParams) -> Value {
+	json!({"host":params.host,"action":params.action,"result":"action_outcome_unknown","outcome":"unknown","automatic_retry":false,
+		"reconcile_warning":"Administrator-pinned action outcome is not confirmed. Reconcile its existing effect; do not repeat automatically."})
+}
+
+fn retain_privileged_outcome(params: &PrivilegedActionParams, remote: Result<Value>) -> Value {
+	let mut value = match remote {
+		Ok(value) => value,
+		Err(_) => return unknown_privileged(params),
+	};
+	if !value.is_object()
+		|| !value["exit_code"]
+			.as_i64()
+			.is_some_and(|code| (-128..=255).contains(&code))
+		|| !value["timed_out"].is_boolean()
+		|| !value["exit_code_authoritative"].is_boolean()
+		|| !value["process_exit_confirmed"].is_boolean()
+		|| !value["stdout_truncated"].is_boolean()
+		|| !value["stderr_truncated"].is_boolean()
+		|| !value["output_complete"].is_boolean()
+		|| !value["stdout_bytes_seen"].is_u64()
+		|| !value["stderr_bytes_seen"].is_u64()
+		|| value["output_limit_bytes_per_stream"] != 524288
+		|| value["descendant_termination_confirmed"] != false
+		|| !(value["capture_error"].is_null() || value["capture_error"] == "read_failed")
+		|| (value["timed_out"] == true
+			&& (value["exit_code"] != 124 || value["exit_code_authoritative"] != false))
+		|| (value["timed_out"] == false
+			&& (value["process_exit_confirmed"] != true
+				|| value["exit_code_authoritative"] != true))
+		|| (value["output_complete"] == true
+			&& (value["process_exit_confirmed"] != true
+				|| value["stdout_truncated"] != false
+				|| value["stderr_truncated"] != false
+				|| !value["capture_error"].is_null()))
+		|| value["stdout"]
+			.as_str()
+			.is_none_or(|text| text.len() > 524288)
+		|| value["stderr"]
+			.as_str()
+			.is_none_or(|text| text.len() > 524288)
+	{
+		return unknown_privileged(params);
+	}
+	if let Some(fields) = value.as_object_mut() {
+		fields.retain(|key, _| {
+			matches!(
+				key.as_str(),
+				"exit_code"
+					| "exit_code_authoritative"
+					| "process_exit_confirmed"
+					| "stdout" | "stderr"
+					| "timed_out" | "stdout_truncated"
+					| "stderr_truncated"
+					| "stdout_bytes_seen"
+					| "stderr_bytes_seen"
+					| "capture_error"
+					| "output_complete"
+					| "output_limit_bytes_per_stream"
+					| "descendant_termination_confirmed"
+			)
+		});
+	}
+	value["host"] = json!(params.host);
+	value["action"] = json!(params.action);
+	let envelope = serde_json::to_string_pretty(&value).ok().and_then(|text| {
+		serde_json::to_vec(&rmcp::model::CallToolResult::success(vec![
+			rmcp::model::ContentBlock::text(text),
+		]))
+		.ok()
+	});
+	if envelope.is_none_or(|bytes| bytes.len() > crate::utils::truncation::MAX_RESULT_BYTES - 4096)
+	{
+		return unknown_privileged(params);
+	}
+	value
+}
+
+#[cfg(test)]
+#[path = "inspect_tests.rs"]
+mod tests;
 
 #[cfg(all(test, unix))]
-mod tests {
-	use super::*;
-	use std::io::Write;
-	use std::os::unix::fs::PermissionsExt;
-	use std::process::{Command, Stdio};
-
-	fn run_fake_sudo(script: &str, timeout_seconds: f64) -> Value {
-		let dir = tempfile::tempdir().unwrap();
-		let sudo = dir.path().join("sudo");
-		std::fs::write(&sudo, script).unwrap();
-		let mut permissions = std::fs::metadata(&sudo).unwrap().permissions();
-		permissions.set_mode(0o700);
-		std::fs::set_permissions(&sudo, permissions).unwrap();
-
-		let old_path = std::env::var("PATH").unwrap_or_default();
-		let path = format!("{}:{old_path}", dir.path().display());
-		let mut child = Command::new("python3")
-			.arg("-c")
-			.arg(PRIVILEGED_CODE)
-			.env("PATH", path)
-			.stdin(Stdio::piped())
-			.stdout(Stdio::piped())
-			.stderr(Stdio::piped())
-			.spawn()
-			.unwrap();
-		let input = json!({"executable": "/bin/true", "timeout_seconds": timeout_seconds});
-		child
-			.stdin
-			.take()
-			.unwrap()
-			.write_all(input.to_string().as_bytes())
-			.unwrap();
-		let output = child.wait_with_output().unwrap();
-		assert!(
-			output.status.success(),
-			"Python privileged action failed: {}",
-			String::from_utf8_lossy(&output.stderr)
-		);
-		serde_json::from_slice(&output.stdout).unwrap()
-	}
-
-	#[test]
-	fn privileged_timeout_with_stdout_is_json_serializable() {
-		let output = run_fake_sudo("#!/bin/sh\nprintf 'started\\n'\nexec sleep 4\n", 1.0);
-		assert_eq!(output["exit_code"], 124);
-		assert_eq!(output["stdout"], "started\n");
-	}
-
-	#[test]
-	fn privileged_non_utf8_output_is_json_serializable() {
-		let output = run_fake_sudo("#!/bin/sh\nprintf '\\377'\n", 1.0);
-		assert_eq!(output["exit_code"], 0);
-		assert_eq!(output["stdout"], "\u{fffd}");
-	}
-}
+#[path = "inspect_security_tests.rs"]
+mod security_tests;

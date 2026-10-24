@@ -1,0 +1,54 @@
+test_replaced_stage_directory_is_never_removed_during_failure_cleanup (stage_review_tests.SuccessorStage.test_replaced_stage_directory_is_never_removed_during_failure_cleanup) ... 
+  test_replaced_stage_directory_is_never_removed_during_failure_cleanup (stage_review_tests.SuccessorStage.test_replaced_stage_directory_is_never_removed_during_failure_cleanup) (empty_replacement=True) ... FAIL
+test_replaced_publication_directory_is_never_removed_during_failure_cleanup (preflight_review_tests.SuccessorPreflight.test_replaced_publication_directory_is_never_removed_during_failure_cleanup) ... 
+  test_replaced_publication_directory_is_never_removed_during_failure_cleanup (preflight_review_tests.SuccessorPreflight.test_replaced_publication_directory_is_never_removed_during_failure_cleanup) (empty_replacement=True) ... FAIL
+test_missing_durable_registry_never_becomes_complete_empty_inventory (preflight_review_tests.SuccessorPreflight.test_missing_durable_registry_never_becomes_complete_empty_inventory) ... 
+  test_missing_durable_registry_never_becomes_complete_empty_inventory (preflight_review_tests.SuccessorPreflight.test_missing_durable_registry_never_becomes_complete_empty_inventory) (missing=['jobs']) ... FAIL
+  test_missing_durable_registry_never_becomes_complete_empty_inventory (preflight_review_tests.SuccessorPreflight.test_missing_durable_registry_never_becomes_complete_empty_inventory) (missing=['stream_handoffs']) ... FAIL
+  test_missing_durable_registry_never_becomes_complete_empty_inventory (preflight_review_tests.SuccessorPreflight.test_missing_durable_registry_never_becomes_complete_empty_inventory) (missing=['jobs', 'stream_handoffs']) ... FAIL
+
+======================================================================
+FAIL: test_replaced_stage_directory_is_never_removed_during_failure_cleanup (stage_review_tests.SuccessorStage.test_replaced_stage_directory_is_never_removed_during_failure_cleanup) (empty_replacement=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/qian-qi/hepta-runtime-dc-functional-20261013/tests/dc_successor_stage_tests.py", line 566, in test_replaced_stage_directory_is_never_removed_during_failure_cleanup
+    self.assertTrue(destination.is_dir())
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_replaced_publication_directory_is_never_removed_during_failure_cleanup (preflight_review_tests.SuccessorPreflight.test_replaced_publication_directory_is_never_removed_during_failure_cleanup) (empty_replacement=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/qian-qi/hepta-runtime-dc-functional-20261013/tests/dc_successor_preflight_tests.py", line 634, in test_replaced_publication_directory_is_never_removed_during_failure_cleanup
+    self.assertTrue(packet.is_dir())
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_missing_durable_registry_never_becomes_complete_empty_inventory (preflight_review_tests.SuccessorPreflight.test_missing_durable_registry_never_becomes_complete_empty_inventory) (missing=['jobs'])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/qian-qi/hepta-runtime-dc-functional-20261013/tests/dc_successor_preflight_tests.py", line 855, in test_missing_durable_registry_never_becomes_complete_empty_inventory
+    self.assertEqual(observed["jobs_complete"], "jobs" not in missing)
+AssertionError: True != False
+
+======================================================================
+FAIL: test_missing_durable_registry_never_becomes_complete_empty_inventory (preflight_review_tests.SuccessorPreflight.test_missing_durable_registry_never_becomes_complete_empty_inventory) (missing=['stream_handoffs'])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/qian-qi/hepta-runtime-dc-functional-20261013/tests/dc_successor_preflight_tests.py", line 856, in test_missing_durable_registry_never_becomes_complete_empty_inventory
+    self.assertEqual(observed["streams_complete"], "stream_handoffs" not in missing)
+AssertionError: True != False
+
+======================================================================
+FAIL: test_missing_durable_registry_never_becomes_complete_empty_inventory (preflight_review_tests.SuccessorPreflight.test_missing_durable_registry_never_becomes_complete_empty_inventory) (missing=['jobs', 'stream_handoffs'])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/qian-qi/hepta-runtime-dc-functional-20261013/tests/dc_successor_preflight_tests.py", line 855, in test_missing_durable_registry_never_becomes_complete_empty_inventory
+    self.assertEqual(observed["jobs_complete"], "jobs" not in missing)
+AssertionError: True != False
+
+----------------------------------------------------------------------
+Ran 3 tests in 1.064s
+
+FAILED (failures=5)
+EXPECTED_OLD_SOURCE_FAILURES_CONFIRMED_3

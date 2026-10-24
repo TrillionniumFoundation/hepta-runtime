@@ -267,7 +267,9 @@ pub fn resolve_path_source(path_str: &str, workdir: &Path) -> PathSource {
 
 mod sftp {
 	use std::collections::HashMap;
-	use std::sync::Arc;
+	use std::future::Future;
+	use std::sync::atomic::{AtomicBool, Ordering};
+	use std::sync::{Arc, Mutex as MapMutex};
 	use std::time::Duration;
 
 	use anyhow::{anyhow, Result};
@@ -568,20 +570,120 @@ mod sftp {
 		sftp: Arc<SftpSession>,
 	}
 
+	struct ConnectionSlot<T> {
+		value: Mutex<Option<T>>,
+		cached: AtomicBool,
+	}
+
+	struct SlotEntry<T> {
+		slot: Arc<ConnectionSlot<T>>,
+		callers: usize,
+	}
+
+	/// The map lock only finds a slot; connection setup waits on that target's
+	/// own mutex so an unavailable host cannot block a different cached host.
+	pub(super) struct ConnectionSlots<T> {
+		entries: MapMutex<HashMap<String, SlotEntry<T>>>,
+	}
+
+	struct ConnectionLease<'a, T> {
+		pool: &'a ConnectionSlots<T>,
+		key: String,
+		slot: Arc<ConnectionSlot<T>>,
+	}
+
+	impl<T> Drop for ConnectionLease<'_, T> {
+		fn drop(&mut self) {
+			let Ok(mut entries) = self.pool.entries.lock() else {
+				return;
+			};
+			let Some(entry) = entries.get_mut(&self.key) else {
+				return;
+			};
+			if !Arc::ptr_eq(&entry.slot, &self.slot) {
+				return;
+			}
+			// Waiters own leases too. Count their departures under the map lock:
+			// Arc::strong_count could still see another concurrent Drop's field
+			// before that Arc is destroyed and leave an empty slot behind.
+			entry.callers -= 1;
+			if entry.callers == 0 && !self.slot.cached.load(Ordering::Acquire) {
+				entries.remove(&self.key);
+			}
+		}
+	}
+
+	impl<T> ConnectionSlots<T> {
+		pub(super) fn new() -> Self {
+			Self {
+				entries: MapMutex::new(HashMap::new()),
+			}
+		}
+
+		pub(super) async fn get_or_connect<R>(
+			&self,
+			key: String,
+			is_live: impl FnOnce(&T) -> bool,
+			project: impl FnOnce(&T) -> R,
+			connect: impl Future<Output = Result<T>>,
+		) -> Result<R> {
+			let lease = {
+				let mut entries = self
+					.entries
+					.lock()
+					.map_err(|_| anyhow!("SFTP connection slot registry unavailable"))?;
+				let entry = entries.entry(key.clone()).or_insert_with(|| SlotEntry {
+					slot: Arc::new(ConnectionSlot {
+						value: Mutex::new(None),
+						cached: AtomicBool::new(false),
+					}),
+					callers: 0,
+				});
+				entry.callers += 1;
+				ConnectionLease {
+					pool: self,
+					key,
+					slot: entry.slot.clone(),
+				}
+			};
+			let mut cached = lease.slot.value.lock().await;
+			if let Some(value) = cached.as_ref() {
+				if is_live(value) {
+					return Ok(project(value));
+				}
+			}
+			*cached = None;
+			lease.slot.cached.store(false, Ordering::Release);
+			// Errors are never cached: the next caller retries just as before.
+			// Cancellation drops this guard and lease instead of stranding a
+			// connecting marker or a task that continues authenticating unseen.
+			let value = connect.await?;
+			let result = project(&value);
+			*cached = Some(value);
+			lease.slot.cached.store(true, Ordering::Release);
+			Ok(result)
+		}
+
+		#[cfg(test)]
+		pub(super) fn slot_count(&self) -> usize {
+			self.entries.lock().unwrap().len()
+		}
+	}
+
 	/// SFTP connection pool caching sessions per (host, port, user).
 	///
 	/// Sessions are shared as `Arc<SftpSession>`: SFTP multiplexes requests by
 	/// id and every session method takes `&self`, so concurrent tool calls to
 	/// the same host pipeline on one channel instead of serializing.
 	pub struct SftpPool {
-		sessions: Mutex<HashMap<String, PooledSession>>,
+		sessions: ConnectionSlots<PooledSession>,
 		config: SshConfig,
 	}
 
 	impl SftpPool {
 		pub fn new(config: SshConfig) -> Self {
 			Self {
-				sessions: Mutex::new(HashMap::new()),
+				sessions: ConnectionSlots::new(),
 				config,
 			}
 		}
@@ -591,9 +693,9 @@ mod sftp {
 		/// keepalive_max exceeded) are evicted and replaced — without this a
 		/// cached dead session would fail every call to that host forever.
 		///
-		/// The pool lock is held across connection setup on purpose: concurrent
-		/// calls to the same host would otherwise each open a connection and
-		/// each trigger an agent approval prompt (e.g. 1Password).
+		/// A target's slot is held across connection setup: concurrent calls to
+		/// that target share one connection and one agent approval prompt (e.g.
+		/// 1Password), while different targets can connect independently.
 		pub async fn get_or_connect(
 			&self,
 			host: &str,
@@ -605,35 +707,30 @@ mod sftp {
 			let key = format!(
 				"{user}@{host}:{port}:user-explicit={user_explicit}:port-explicit={port_explicit}"
 			);
-			let mut sessions = self.sessions.lock().await;
-			match sessions.get(&key) {
-				Some(pooled)
-					if !pooled.handle.is_closed()
-						&& pooled
-							.proxy_handle
-							.as_ref()
-							.is_none_or(|handle| !handle.is_closed()) =>
-				{
-					return Ok(pooled.sftp.clone());
-				}
-				Some(_) => {
-					sessions.remove(&key);
-				}
-				None => {}
-			}
-
-			let target = resolve_ssh_target(host, port, user, user_explicit, port_explicit).await;
-			let (handle, proxy_handle, session) = self.connect_sftp(&target).await?;
-			let sftp = Arc::new(session);
-			sessions.insert(
-				key,
-				PooledSession {
-					handle,
-					proxy_handle,
-					sftp: sftp.clone(),
-				},
-			);
-			Ok(sftp)
+			self.sessions
+				.get_or_connect(
+					key,
+					|pooled| {
+						!pooled.handle.is_closed()
+							&& pooled
+								.proxy_handle
+								.as_ref()
+								.is_none_or(|handle| !handle.is_closed())
+					},
+					|pooled| pooled.sftp.clone(),
+					async {
+						let target =
+							resolve_ssh_target(host, port, user, user_explicit, port_explicit)
+								.await;
+						let (handle, proxy_handle, session) = self.connect_sftp(&target).await?;
+						Ok(PooledSession {
+							handle,
+							proxy_handle,
+							sftp: Arc::new(session),
+						})
+					},
+				)
+				.await
 		}
 
 		async fn connect_sftp(
@@ -1067,8 +1164,84 @@ mod sftp {
 		pub modified: Option<std::time::SystemTime>,
 	}
 
+	/// Preserve the helper's lowercase hex wire format with one allocation,
+	/// avoiding a temporary formatted String for every byte of a large write.
+	pub(super) fn encode_file_bytes(content: &[u8]) -> String {
+		const DIGITS: &[u8; 16] = b"0123456789abcdef";
+		let mut hex = String::with_capacity(content.len() * 2);
+		for &byte in content {
+			hex.push(char::from(DIGITS[usize::from(byte >> 4)]));
+			hex.push(char::from(DIGITS[usize::from(byte & 15)]));
+		}
+		hex
+	}
+
+	/// Runtime file access stays descriptor-relative on the target: a workspace
+	/// symlink must never expose the controller's SSH identity or private state.
+	async fn runtime_file_io(
+		source: &super::PathSource,
+		op: &str,
+		content: Option<&[u8]>,
+	) -> Result<Option<serde_json::Value>> {
+		use crate::mcp::runtime::{config, ssh};
+		let Some(cfg) = config::maybe_runtime_config() else {
+			return Ok(None);
+		};
+		let (alias, _, _, path, user_explicit, port_explicit) = remote_parts(source);
+		let write = matches!(op, "write" | "mkdir" | "remove");
+		config::check_remote_path(alias, path, user_explicit, port_explicit, write)?;
+		let (_, host) = cfg
+			.host_by_alias(alias)
+			.ok_or_else(|| anyhow!("unknown host"))?;
+		let roots = if write {
+			&host.allowed_write_path_prefixes
+		} else {
+			&host.allowed_read_path_prefixes
+		};
+		let root = roots
+			.iter()
+			.filter(|root| {
+				path == root.as_str()
+					|| path.starts_with(&format!("{}/", root.trim_end_matches('/')))
+			})
+			.max_by_key(|root| root.len())
+			.ok_or_else(|| anyhow!("path outside capability roots"))?;
+		let hex = encode_file_bytes(content.unwrap_or_default());
+		let value = ssh::run_python_json(
+			host,
+			include_str!("../runtime/fileio.py"),
+			&serde_json::json!({"root":root,"path":path,"op":op,"hex":hex}),
+			std::time::Duration::from_secs(20),
+		)
+		.await?;
+		Ok(Some(value))
+	}
+	fn runtime_meta(value: &serde_json::Value) -> RemoteMetadata {
+		RemoteMetadata {
+			size: value["size"].as_u64().unwrap_or(0),
+			is_dir: value["is_dir"].as_bool().unwrap_or(false),
+			is_file: value["is_file"].as_bool().unwrap_or(false),
+			modified: value["modified_secs"]
+				.as_f64()
+				.filter(|v| v.is_finite() && *v >= 0.0)
+				.map(|v| std::time::UNIX_EPOCH + std::time::Duration::from_secs_f64(v)),
+		}
+	}
+
 	/// Read a remote file as bytes.
 	pub async fn remote_read(source: &super::PathSource) -> Result<Vec<u8>> {
+		if let Some(v) = runtime_file_io(source, "read", None).await? {
+			let hex = v["hex"]
+				.as_str()
+				.ok_or_else(|| anyhow!("missing file bytes"))?;
+			if !hex.len().is_multiple_of(2) || !hex.is_ascii() {
+				anyhow::bail!("invalid file encoding");
+			}
+			return (0..hex.len())
+				.step_by(2)
+				.map(|i| u8::from_str_radix(&hex[i..i + 2], 16).map_err(Into::into))
+				.collect();
+		}
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
 		sftp.read(path)
@@ -1087,6 +1260,12 @@ mod sftp {
 
 	/// Write content to a remote file (creates or truncates).
 	pub async fn remote_write(source: &super::PathSource, content: &[u8]) -> Result<()> {
+		if runtime_file_io(source, "write", Some(content))
+			.await?
+			.is_some()
+		{
+			return Ok(());
+		}
 		use tokio::io::AsyncWriteExt;
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
@@ -1104,6 +1283,9 @@ mod sftp {
 
 	/// Check if a remote path exists.
 	pub async fn remote_exists(source: &super::PathSource) -> Result<bool> {
+		if let Some(v) = runtime_file_io(source, "exists", None).await? {
+			return Ok(v["exists"].as_bool().unwrap_or(false));
+		}
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
 		sftp.try_exists(path)
@@ -1113,6 +1295,9 @@ mod sftp {
 
 	/// Get metadata for a remote path.
 	pub async fn remote_metadata(source: &super::PathSource) -> Result<RemoteMetadata> {
+		if let Some(v) = runtime_file_io(source, "metadata", None).await? {
+			return Ok(runtime_meta(&v));
+		}
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
 		let attrs = sftp
@@ -1129,6 +1314,9 @@ mod sftp {
 
 	/// Create directories recursively (SFTP create_dir only creates a single dir).
 	pub async fn remote_create_dir_all(source: &super::PathSource) -> Result<()> {
+		if runtime_file_io(source, "mkdir", None).await?.is_some() {
+			return Ok(());
+		}
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
 		// Home-relative paths (`/~/x`) must stay relative so SFTP resolves them
@@ -1147,6 +1335,9 @@ mod sftp {
 
 	/// Remove a remote file.
 	pub async fn remote_remove_file(source: &super::PathSource) -> Result<()> {
+		if runtime_file_io(source, "remove", None).await?.is_some() {
+			return Ok(());
+		}
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
 		sftp.remove_file(path)
@@ -1158,6 +1349,20 @@ mod sftp {
 	pub async fn remote_list_dir(
 		source: &super::PathSource,
 	) -> Result<Vec<(String, RemoteMetadata)>> {
+		if let Some(v) = runtime_file_io(source, "list", None).await? {
+			let entries = v["entries"]
+				.as_array()
+				.ok_or_else(|| anyhow!("missing directory entries"))?;
+			return Ok(entries
+				.iter()
+				.map(|v| {
+					(
+						v["name"].as_str().unwrap_or_default().to_owned(),
+						runtime_meta(v),
+					)
+				})
+				.collect());
+		}
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
 		let read_dir = sftp
@@ -1184,6 +1389,12 @@ mod sftp {
 
 	/// Canonicalize a remote path.
 	pub async fn remote_canonicalize(source: &super::PathSource) -> Result<String> {
+		if let Some(v) = runtime_file_io(source, "canonicalize", None).await? {
+			return Ok(v["path"]
+				.as_str()
+				.ok_or_else(|| anyhow!("missing canonical path"))?
+				.to_owned());
+		}
 		let path = source.sftp_path();
 		let sftp = remote_session(source).await?;
 		sftp.canonicalize(path)

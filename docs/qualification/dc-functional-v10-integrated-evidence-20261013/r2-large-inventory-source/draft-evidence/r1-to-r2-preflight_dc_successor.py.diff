@@ -1,0 +1,67 @@
+--- R1/deploy/preflight_dc_successor.py
++++ R2/deploy/preflight_dc_successor.py
+@@ -12,6 +12,7 @@
+ import hashlib
+ import http.client
+ import json
++import math
+ import os
+ import pathlib
+ import re
+@@ -411,14 +412,24 @@
+ 
+ 
+ 
++def large_bounded_deadline(protocol, budget_seconds, rpc_timeout):
++    """Refuse invalid requested limits before credential, contract or RPC work."""
++    if (isinstance(rpc_timeout, bool) or not isinstance(rpc_timeout, (int, float))
++            or not 0 < rpc_timeout <= protocol.MAX_RPC_SECONDS or not math.isfinite(rpc_timeout)):
++        raise protocol.InventoryError("DeadlineExpired")
++    deadline = protocol.Deadline(budget_seconds)
++    deadline.timeout(rpc_timeout)
++    return deadline
++
++
+ def large_bounded_inventory_observation(manifest, *, budget_seconds=120.0, rpc_timeout=10.0):
+     """Jobs-only observer; exact installed catalog and six authorities precede status."""
+     import dc_successor_inventory as I
+-    deadline = I.Deadline(budget_seconds)
+-    deadline.timeout(rpc_timeout)
++    deadline = large_bounded_deadline(I, budget_seconds, rpc_timeout)
+     token_path = S.absolute_path(manifest["baseline"]["auth_token_file"])
++    contract_pin = manifest["baseline"]["artifacts"]["contract"]
++    refuse_token_source(contract_pin["path"], token_path)
+     credential_pin = I.credential_inode(token_path)
+-    contract_pin = manifest["baseline"]["artifacts"]["contract"]
+     raw, _ = S.read_pinned(contract_pin["path"], contract_pin["sha256"], "installed inventory contract")
+     expected = I._json(raw)
+     expected_tools = expected.get("tools")
+@@ -891,6 +902,12 @@
+ 
+ def prepare_preflight(args, service_probe=None, inventory_probe=None, process_probe=None):
+     """Read only; even late failure cannot leave an output directory or backup."""
++    observer_mode = getattr(args, "inventory_observer", "legacy")
++    observer_budget = getattr(args, "inventory_budget_seconds", 120.0)
++    observer_timeout = getattr(args, "inventory_rpc_timeout_seconds", 10.0)
++    if observer_mode == "large-bounded":
++        import dc_successor_inventory as protocol
++        large_bounded_deadline(protocol, observer_budget, observer_timeout)
+     output = absent(args.output_directory)
+     if args.prepare_backups:
+         if args.backup_directory is None:
+@@ -996,14 +1013,11 @@
+     if material["native-dropin.conf"] != ("[Service]\nExecStart=\nExecStart=" + dropin_line + "\n").encode():
+         raise ValueError("native drop-in bytes do not match the exact non-starting command")
+     private_profile_review = validate_private_profile_review(args, manifest, material, stage_pin)
+-    observer_mode = getattr(args, "inventory_observer", "legacy")
+-    observer_budget = getattr(args, "inventory_budget_seconds", 120.0)
+-    observer_timeout = getattr(args, "inventory_rpc_timeout_seconds", 10.0)
+     if observer_mode == "legacy":
+         inventory = sanitized_inventory((inventory_probe or inventory_observation)(manifest))
+     elif observer_mode == "large-bounded":
+         import dc_successor_inventory as protocol
+-        protocol.Deadline(observer_budget).timeout(observer_timeout)
++        large_bounded_deadline(protocol, observer_budget, observer_timeout)
+         observer = inventory_probe or (lambda value: large_bounded_inventory_observation(
+             value, budget_seconds=observer_budget, rpc_timeout=observer_timeout))
+         inventory = protocol.sanitized_inventory(observer(manifest))

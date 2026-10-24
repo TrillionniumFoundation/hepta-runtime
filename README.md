@@ -1,8 +1,33 @@
 # Hepta Runtime
 
+**Current capabilities:** [CHECKPOINT_LIFECYCLE.md](docs/CHECKPOINT_LIFECYCLE.md) describes the native, pinned Linux checkpoint API with bounded thread groups and separate stopped-restore/resume actions. [PROTECTED_AND_COMPLEX_PARITY.md](docs/PROTECTED_AND_COMPLEX_PARITY.md) covers native protected PDFs, explicit certificate anchors, complex workbooks and inode-preserving patches. Earlier failed/withdrawn experiments remain historical evidence, not the status of the current implementation; exact installation is established by its dated receipt.
 Policy-enforced, multi-host MCP runtime for durable process execution, interactive PTYs, read-only hardware/service/network inspection, and exact administrator-approved privileged actions.
 
 This project is derived from [Muvon/octofs](https://github.com/Muvon/octofs) at commit `37b5d3d02be511bae86d91fa980996a5fe257d7b` under Apache-2.0. The original Octofs documentation follows below; see [`docs/HEPTA_RUNTIME.md`](docs/HEPTA_RUNTIME.md) for the fork-specific architecture, policy, deployment, and recovery contract.
+
+## Hepta operator deployment
+
+The optional [two-phase process checkpoint API](docs/CHECKPOINT_LIFECYCLE.md) separates memory restoration from explicitly authorized execution; host capability pins remain opt-in.
+
+See [local handoff, restart and format completion](docs/LOCAL_HANDOFF_AND_FORMATS.md) for the current maintenance and parser capabilities, qualified scopes, and local native CLI.
+
+See [native binary/remote document/page/range tools](docs/NATIVE_TRANSFER.md) for the current local replacement APIs and their explicit preservation limits.
+
+See [the v5 native DC-replacement candidate](docs/DC_FUNCTIONAL_V5_NATIVE_CANDIDATE.md) for bounded multi-file UTF-8 reads, configured-host SSH health and durable cancellable search. The [optimized six-host stage receipt](docs/qualification/dc-functional-v5-release-staged-20261013.json) records a staged artifact, not an installed catalog or full replacement. The installed v4 service and Desktop Commander remain active; [the Work handoff](docs/WORK_HANDOFF_DC_REPLACEMENT_20261013.md) lists caller/resume, model-origin, business and recovery/cutover gates.
+
+Current bounded metadata/configuration candidate: [native v6 audit and configuration](docs/DC_FUNCTIONAL_V6_METADATA_CANDIDATE.md). Installed v4 and Desktop Commander remain unchanged; native receipts do not grant full replacement qualification.
+Bounded request cancellation: [native v6 facade candidate](docs/DC_FUNCTIONAL_V6_FACADE_CANCELLATION.md), with actual six-host native/facade receipts; ChatGPT model-origin and production cutover remain open.
+
+
+
+
+The upstream Octofs installation instructions below do **not** install this fork. Build Hepta with `cargo build --release --locked --bin hepta-runtime` and use the configuration and deployment assets in this repository.
+
+For trusted-account shell, external-PID signalling and temporary sudo, see [Operator mode](docs/OPERATOR_MODE.md). For complete operator output archives and target-owned terminals that survive controller restarts, see [Persistent terminals](docs/PERSISTENT_TERMINALS.md). The isolated default remains separate; arbitrary operator execution is not a sandbox.
+
+Follow the exact source/binary qualification receipts under `docs/qualification/`. Source implementation, a parallel installed service, and a completed Desktop Commander cutover are different states. Preserve DC for existing sessions and rescue; cloud/ChatGPT registration is the final, separately authorized step.
+
+The following Octofs material is retained upstream reference, not the authoritative Hepta runtime policy and installation contract.
 
 ---
 

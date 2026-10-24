@@ -1,0 +1,68 @@
+{
+  "schema": "hepta-operator-unit-reuse-helper-v1",
+  "origin": "local_source_pinned_helpers_real_owned_systemd_units",
+  "chatgpt_originated": false,
+  "native_mcp_envelope_tested": false,
+  "installed_service_changed": false,
+  "DC_changed": false,
+  "full_dc_replacement_qualified": false,
+  "recorded_utc": "2026-10-13T15:47:05.411805+00:00",
+  "source_head": "9112938dabc91854fde66c211954897fd577e8f3",
+  "jobs_source_sha256": "751e5b7c87fa16fb8e44cc5d5281261d6076c7e3db594bf463f3ae5f2dfe8d6f",
+  "script_sha256": "dba7f4c1ee93d982b491bdf59ae95502803e196d218dcf3022a2de4b8e9e567c",
+  "checks": [
+    "real runner freezes launch nonce, UID, start identity and systemd invocation",
+    "old_owner_gone refuses cancellation/new-unit status without touching replacement",
+    "missing_frozen_binding refuses cancellation/new-unit status without touching replacement",
+    "original output cursors and final result remain available after same-name reuse"
+  ],
+  "cleanup": {
+    "original_terminal_confirmed": true,
+    "replacement_terminal_confirmed": true,
+    "same_unit_collected": true,
+    "fixture_removed": true
+  },
+  "complete": true,
+  "original_start": {
+    "at_unix_ms": 1791906425565,
+    "invocation_id": "78be9eb63b8f40cda4cda3f747d06cd6",
+    "job_id": "owned-original-71925a74a4124f2d8984bb3a835c1866",
+    "launch_nonce": "49241010accf7d0e3e86db150e1ed7fb",
+    "supervisor_identity": {
+      "kind": "proc_start_ticks",
+      "value": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:1393999"
+    },
+    "supervisor_pid": 277610,
+    "supervisor_uid": 1000
+  },
+  "original_ready": {
+    "pid": 277613,
+    "uid": 1000
+  },
+  "original_unit": {
+    "ExecMainPID": "277610",
+    "Description": "Hepta Runtime job owned-original-71925a74a4124f2d8984bb3a835c1866 49241010accf7d0e3e86db150e1ed7fb",
+    "LoadState": "loaded",
+    "InvocationID": "78be9eb63b8f40cda4cda3f747d06cd6"
+  },
+  "replacement_start": {
+    "pid": 277642,
+    "identity": {
+      "kind": "proc_start_ticks",
+      "value": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:1394028"
+    },
+    "unit_properties": {
+      "ExecMainPID": "277642",
+      "Description": "Owned replacement fixture",
+      "LoadState": "loaded",
+      "InvocationID": "c4aa554d65b64bd882960c3aab307d9c"
+    }
+  },
+  "source_stable": true,
+  "logs": {
+    "helper-dispatch.jsonl": {
+      "sha256": "894704d392b7eba4d79628b81dc33761ed54b000ae6f2bb1d339e418811ddc4e",
+      "bytes": 4662
+    }
+  }
+}

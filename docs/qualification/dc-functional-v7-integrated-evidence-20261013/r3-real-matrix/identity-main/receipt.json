@@ -1,0 +1,151 @@
+{
+  "schema": "hepta-operator-unit-reuse-helper-v1",
+  "origin": "local_source_pinned_helpers_real_owned_systemd_units",
+  "chatgpt_originated": false,
+  "native_mcp_envelope_tested": false,
+  "installed_service_changed": false,
+  "DC_changed": false,
+  "full_dc_replacement_qualified": false,
+  "recorded_utc": "2026-10-13T16:51:19.005228+00:00",
+  "source_head": "e098fb2e9c3ec94bd664d3a80c116a139695876b",
+  "jobs_source_sha256": "89d5c6bff2fa731894a5574e9e2e6778c0935c204a678d8aecfd5e790254efc5",
+  "script_sha256": "c1a1dbd7032125fe5d2406992a9d66d4e953e00ab45e0de0223dc882733bba43",
+  "checks": [
+    "real runner freezes launch nonce, UID, start identity and systemd invocation",
+    "live runner replay and corrupt/null/missing request cannot rebind or launch a second child",
+    "completed or uncertain supervisor intent is never automatically replayed",
+    "old_owner_gone refuses cancellation/new-unit status without touching replacement",
+    "missing_frozen_binding refuses cancellation/new-unit status without touching replacement",
+    "original output cursors and final result remain available after same-name reuse",
+    "fresh helper process cancels the original frozen supervisor; runner escalates owned workload and captures complete output",
+    "actual systemd restart cannot replace original binding or launch workload twice"
+  ],
+  "cleanup": {
+    "all_owned_units_collected": true,
+    "original_terminal_confirmed": true,
+    "replacement_terminal_confirmed": true,
+    "same_unit_collected": true,
+    "live_cancel_terminal_confirmed": true,
+    "restart_terminal_confirmed": true,
+    "fixture_removed": true
+  },
+  "complete": true,
+  "original_start": {
+    "at_unix_ms": 1791910279158,
+    "invocation_id": "e8baaf12cea1412f8eddf3dcd9b8e0cd",
+    "job_id": "owned-original-8bfd7c3d69dd4e34b49675fcd1e5804d",
+    "launch_nonce": "4ce330ae619c7dba8ba013353805447d",
+    "supervisor_identity": {
+      "kind": "proc_start_ticks",
+      "value": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:1779359"
+    },
+    "supervisor_pid": 479003,
+    "supervisor_uid": 1000
+  },
+  "original_ready": {
+    "pid": 479004,
+    "uid": 1000
+  },
+  "original_unit": {
+    "ExecMainPID": "479003",
+    "Description": "Hepta Runtime job owned-original-8bfd7c3d69dd4e34b49675fcd1e5804d 4ce330ae619c7dba8ba013353805447d",
+    "LoadState": "loaded",
+    "InvocationID": "e8baaf12cea1412f8eddf3dcd9b8e0cd"
+  },
+  "replacement_start": {
+    "pid": 479045,
+    "identity": {
+      "kind": "proc_start_ticks",
+      "value": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:1779462"
+    },
+    "unit_properties": {
+      "ExecMainPID": "479045",
+      "Description": "Owned replacement fixture",
+      "LoadState": "loaded",
+      "InvocationID": "6e17b386ce5a466eba79391ea6ef94ac"
+    }
+  },
+  "live_cancel": {
+    "launch": {
+      "backend": "systemd",
+      "launcher_pid": null,
+      "ok": true,
+      "unit": "hepta-job-owner-b9dbf9473385452280028f2cb1323614-cancel"
+    },
+    "start": {
+      "at_unix_ms": 1791910280876,
+      "invocation_id": "1c03f3b5357449b1bf5bcac10a373279",
+      "job_id": "owned-cancel-351a168964684645aab1009f989acd09",
+      "launch_nonce": "315eef78dd9a6fcb0f052991c0d5482d",
+      "supervisor_identity": {
+        "kind": "proc_start_ticks",
+        "value": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:1779531"
+      },
+      "supervisor_pid": 479103,
+      "supervisor_uid": 1000
+    },
+    "ack": {
+      "atomic_identity": true,
+      "job_id": "owned-cancel-351a168964684645aab1009f989acd09",
+      "reconcile_via": "process_status",
+      "result": "stop_requested",
+      "supervisor_pid": 479103,
+      "termination_confirmed": false
+    },
+    "final": {
+      "at_unix_ms": 1791910289118,
+      "cancelled": true,
+      "exit_code": -9,
+      "log_bytes": {
+        "stderr": {
+          "seen": 0,
+          "stored": 0
+        },
+        "stdout": {
+          "seen": 12,
+          "stored": 12
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "timed_out": false
+    }
+  },
+  "restart_fixture": {
+    "original_binding": {
+      "at_unix_ms": 1791910289298,
+      "invocation_id": "f1a9bab2732c42359a724e2a85ca24b8",
+      "job_id": "owned-restart-a2f707e0c3aa461b8dc1ff16f14981b9",
+      "launch_nonce": "d516ebb594f292a2273b52846b4c64de",
+      "supervisor_identity": {
+        "kind": "proc_start_ticks",
+        "value": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:1780373"
+      },
+      "supervisor_pid": 479674,
+      "supervisor_uid": 1000
+    },
+    "restart_command_exit_code": 0,
+    "binding_bytes_unchanged": true,
+    "workload_launch_counter": 1,
+    "after_unit": {
+      "ExecMainPID": "480285",
+      "Description": "Hepta Runtime job owned-restart-a2f707e0c3aa461b8dc1ff16f14981b9 d516ebb594f292a2273b52846b4c64de",
+      "LoadState": "loaded",
+      "InvocationID": "528c2a7721754ffe98db6ac478e8daaa"
+    }
+  },
+  "source_stable": true,
+  "logs": {
+    "helper-dispatch.jsonl": {
+      "sha256": "99cc373bad4d378e5e1142221f3d145464e75b65c25e2a51a1af284d92afc458",
+      "bytes": 15272
+    }
+  }
+}

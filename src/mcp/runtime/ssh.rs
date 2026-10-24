@@ -1,14 +1,253 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+//! Bounded SSH transport using preconfigured hosts and verified keys.
 use anyhow::{anyhow, bail, Context, Result};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::path::{Component, Path};
 use std::process::Stdio;
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 
 use super::config::HostConfig;
 
 const MAX_CAPTURE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_OBSERVATION_BYTES: usize = 64 * 1024;
+
+fn validate_observation_bytes(command: &str, input: &[u8]) -> Result<()> {
+	if command
+		.len()
+		.checked_add(input.len())
+		.is_none_or(|bytes| bytes > MAX_OBSERVATION_BYTES)
+	{
+		bail!("observation_pool_payload_unsupported: queued command and stdin exceed64KiB; no fallback");
+	}
+	Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[path = "ssh_observation_pool.rs"]
+mod observation_pool;
+#[cfg(target_os = "linux")]
+pub use observation_pool::PoolGuard as ObservationPoolGuard;
+
+#[cfg(not(target_os = "linux"))]
+pub struct ObservationPoolGuard;
+#[cfg(not(target_os = "linux"))]
+impl ObservationPoolGuard {
+	pub async fn shutdown(self) -> Result<()> {
+		Ok(())
+	}
+}
+
+pub async fn start_observation_pool(
+	profile: Option<&Path>,
+) -> Result<Option<ObservationPoolGuard>> {
+	let Some(profile) = profile else {
+		return Ok(None);
+	};
+	#[cfg(target_os = "linux")]
+	{
+		Ok(Some(observation_pool::start(profile).await?))
+	}
+	#[cfg(not(target_os = "linux"))]
+	{
+		let _ = profile;
+		bail!("observation SSH pooling requires Linux");
+	}
+}
+
+pub fn freeze_observation_pool() {
+	#[cfg(target_os = "linux")]
+	observation_pool::freeze();
+}
+
+pub(super) fn observation_pool_requested() -> bool {
+	#[cfg(target_os = "linux")]
+	{
+		observation_pool::requested()
+	}
+	#[cfg(not(target_os = "linux"))]
+	{
+		false
+	}
+}
+
+pub(super) enum ObservationScript {
+	Status,
+	Read,
+}
+
+/// Only these existing process observations can enter the new transport.
+/// There is no raw command, executable, address or caller-selected `op`.
+pub(super) enum JobObservation<'a> {
+	PythonStatus {
+		job_id: &'a str,
+		job_dir: &'a str,
+		unit: &'a str,
+		request_digest: &'a str,
+		wait_seconds: u64,
+	},
+	PythonRead {
+		job_id: &'a str,
+		job_dir: &'a str,
+		unit: &'a str,
+		request_digest: &'a str,
+		stdout_offset: u64,
+		stderr_offset: u64,
+		limit: u64,
+	},
+	SystemStatus {
+		job_id: &'a str,
+	},
+	SystemRead {
+		job_id: &'a str,
+		stdout_offset: u64,
+		stderr_offset: u64,
+		limit: u64,
+	},
+}
+
+fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Duration, bool)> {
+	use serde_json::json;
+	let fields: &[&str] = match &value {
+		JobObservation::PythonStatus {
+			job_id,
+			job_dir,
+			unit,
+			request_digest,
+			..
+		} => &[job_id, job_dir, unit, request_digest],
+		JobObservation::PythonRead {
+			job_id,
+			job_dir,
+			unit,
+			request_digest,
+			..
+		} => &[job_id, job_dir, unit, request_digest],
+		JobObservation::SystemStatus { job_id } | JobObservation::SystemRead { job_id, .. } => {
+			&[job_id]
+		}
+	};
+	// Reject before json! clones or expands an oversized original string.
+	if fields
+		.iter()
+		.try_fold(0usize, |total, field| total.checked_add(field.len()))
+		.is_none_or(|bytes| bytes > MAX_OBSERVATION_BYTES)
+	{
+		bail!("observation_pool_payload_unsupported: original observation fields exceed64KiB; no fallback");
+	}
+	let (script, input, timeout, system) = match value {
+		JobObservation::PythonStatus {
+			job_id,
+			job_dir,
+			unit,
+			request_digest,
+			wait_seconds,
+		} => (
+			Some(ObservationScript::Status),
+			json!({"job_id":job_id,"job_dir":job_dir,"request_digest":request_digest,"unit":unit,"wait_seconds":wait_seconds.min(30)}),
+			Duration::from_secs(wait_seconds.min(30) + 10),
+			false,
+		),
+		JobObservation::PythonRead {
+			job_id,
+			job_dir,
+			unit,
+			request_digest,
+			stdout_offset,
+			stderr_offset,
+			limit,
+		} => (
+			Some(ObservationScript::Read),
+			json!({"job_id":job_id,"job_dir":job_dir,"request_digest":request_digest,"unit":unit,"stdout_offset":stdout_offset,"stderr_offset":stderr_offset,"limit":limit}),
+			Duration::from_secs(15),
+			false,
+		),
+		JobObservation::SystemStatus { job_id } => (
+			None,
+			json!({"op":"status","job_id":job_id}),
+			Duration::from_secs(20),
+			true,
+		),
+		JobObservation::SystemRead {
+			job_id,
+			stdout_offset,
+			stderr_offset,
+			limit,
+		} => (
+			None,
+			json!({"op":"read","job_id":job_id,"stdout_offset":stdout_offset,"stderr_offset":stderr_offset,"limit":limit}),
+			Duration::from_secs(20),
+			true,
+		),
+	};
+	let command = match script {
+		Some(script) => python_json_command("python3", &super::jobs::observation_script(script)?)?,
+		None => "sudo -n /usr/local/libexec/hepta-runtime-jobctl".to_owned(),
+	};
+	let mut bytes = serde_json::to_vec(&input)?;
+	if system {
+		bytes.push(b'\n');
+	}
+	validate_observation_bytes(&command, &bytes)?;
+	Ok((command, bytes, timeout, system))
+}
+
+pub(super) async fn run_job_observation(
+	host_name: &str,
+	value: JobObservation<'_>,
+) -> Result<serde_json::Value> {
+	let host = super::config::runtime_config()?.host(host_name)?;
+	let (command, bytes, duration, system) = prepare_observation(value)?;
+	let output = capture_observation(host_name, command, bytes, duration).await?;
+	if !output.status.success() {
+		if system {
+			bail!(
+				"job capability failed: {}",
+				String::from_utf8_lossy(&output.stderr)
+			);
+		}
+		bail!(
+			"remote helper on {} failed with {}\nstdout:\n{}\nstderr:\n{}",
+			host.ssh_target,
+			output.status.code().unwrap_or(-1),
+			String::from_utf8_lossy(&output.stdout).trim(),
+			String::from_utf8_lossy(&output.stderr).trim()
+		);
+	}
+	serde_json::from_slice(&output.stdout).map_err(|error| {
+		anyhow!(
+			"remote helper on {} returned invalid JSON: {error}; output={}",
+			host.ssh_target,
+			String::from_utf8_lossy(&output.stdout)
+		)
+	})
+}
+
+async fn capture_observation(
+	host: &str,
+	command: String,
+	bytes: Vec<u8>,
+	duration: Duration,
+) -> Result<CapturedObservation> {
+	#[cfg(target_os = "linux")]
+	{
+		observation_pool::capture(host, command, bytes, duration).await
+	}
+	#[cfg(not(target_os = "linux"))]
+	{
+		let _ = (host, command, bytes, duration);
+		bail!("observation SSH pooling requires Linux");
+	}
+}
+
+#[cfg(target_os = "linux")]
+type CapturedObservation = observation_pool::Captured;
+#[cfg(not(target_os = "linux"))]
+type CapturedObservation = std::process::Output;
 
 pub fn shell_quote(value: &str) -> String {
 	if value.is_empty() {
@@ -37,8 +276,26 @@ pub fn ssh_base(host: &HostConfig) -> Command {
 		.arg("ConnectTimeout=8")
 		.arg("-o")
 		.arg("StrictHostKeyChecking=yes")
+		.arg("-o")
+		.arg("ForwardAgent=no")
 		.arg(&host.ssh_target);
 	command
+}
+
+async fn read_bounded(mut reader: impl AsyncRead + Unpin) -> Result<Vec<u8>> {
+	let mut result = Vec::new();
+	let mut buf = [0u8; 8192];
+	loop {
+		let n = reader.read(&mut buf).await?;
+		if n == 0 {
+			break;
+		}
+		if result.len() + n > MAX_CAPTURE_BYTES {
+			bail!("remote response exceeds 8 MiB capture limit");
+		}
+		result.extend_from_slice(&buf[..n]);
+	}
+	Ok(result)
 }
 
 pub async fn run_capture(
@@ -57,22 +314,50 @@ pub async fn run_capture(
 	let mut child = command
 		.spawn()
 		.with_context(|| format!("failed to start ssh for {}", host.ssh_target))?;
-	if let Some(mut stdin) = child.stdin.take() {
-		stdin.write_all(stdin_data).await?;
-		stdin.shutdown().await?;
-	}
-	let output = tokio::time::timeout(timeout, child.wait_with_output())
-		.await
-		.map_err(|_| {
-			anyhow!(
-				"ssh to {} timed out after {}s",
-				host.ssh_target,
-				timeout.as_secs()
-			)
-		})??;
-	if output.stdout.len() > MAX_CAPTURE_BYTES || output.stderr.len() > MAX_CAPTURE_BYTES {
-		bail!("remote response exceeded the 8 MiB safety limit");
-	}
+	let mut stdin = child
+		.stdin
+		.take()
+		.ok_or_else(|| anyhow!("missing SSH stdin"))?;
+	let stdout = child
+		.stdout
+		.take()
+		.ok_or_else(|| anyhow!("missing SSH stdout"))?;
+	let stderr = child
+		.stderr
+		.take()
+		.ok_or_else(|| anyhow!("missing SSH stderr"))?;
+	let result = tokio::time::timeout(timeout, async {
+		let input = async {
+			stdin.write_all(stdin_data).await?;
+			stdin.shutdown().await?;
+			drop(stdin);
+			Ok::<(), anyhow::Error>(())
+		};
+		let wait = async { Ok::<_, anyhow::Error>(child.wait().await?) };
+		let (_, stdout, stderr, status) =
+			tokio::try_join!(input, read_bounded(stdout), read_bounded(stderr), wait)?;
+		Ok::<_, anyhow::Error>(std::process::Output {
+			status,
+			stdout,
+			stderr,
+		})
+	})
+	.await;
+	let output = match result {
+		Ok(Ok(output)) => output,
+		other => {
+			let _ = child.start_kill();
+			let _ = child.wait().await;
+			return match other {
+				Ok(Err(error)) => Err(error),
+				_ => Err(anyhow!(
+					"ssh to {} timed out after {}s",
+					host.ssh_target,
+					timeout.as_secs()
+				)),
+			};
+		}
+	};
 	Ok(output)
 }
 
@@ -86,8 +371,47 @@ where
 	I: Serialize + ?Sized,
 	O: DeserializeOwned,
 {
+	run_python_json_with_interpreter(host, "python3", code, input, timeout).await
+}
+
+pub(crate) fn validate_python_interpreter(interpreter: &str) -> Result<()> {
+	if interpreter != "python3"
+		&& (!Path::new(interpreter).is_absolute()
+			|| Path::new(interpreter)
+				.components()
+				.any(|component| matches!(component, Component::ParentDir | Component::CurDir)))
+	{
+		bail!("configured Python interpreter must be absolute or the fixed python3 default");
+	}
+	if interpreter.len() > 4096 || interpreter.chars().any(char::is_control) {
+		bail!("configured Python interpreter contains invalid characters or exceeds 4096 bytes");
+	}
+	Ok(())
+}
+
+fn python_json_command(interpreter: &str, code: &str) -> Result<String> {
+	validate_python_interpreter(interpreter)?;
+	Ok(format!(
+		"{} -c {}",
+		shell_quote(interpreter),
+		shell_quote(code)
+	))
+}
+
+/// Administrator-selected interpreter; tool requests must never choose this executable.
+pub async fn run_python_json_with_interpreter<I, O>(
+	host: &HostConfig,
+	interpreter: &str,
+	code: &str,
+	input: &I,
+	timeout: Duration,
+) -> Result<O>
+where
+	I: Serialize + ?Sized,
+	O: DeserializeOwned,
+{
+	let remote_command = python_json_command(interpreter, code)?;
 	let payload = serde_json::to_vec(input)?;
-	let remote_command = format!("python3 -c {}", shell_quote(code));
 	let output = run_capture(host, &remote_command, &payload, timeout).await?;
 	if !output.status.success() {
 		let stderr = String::from_utf8_lossy(&output.stderr);
@@ -152,29 +476,31 @@ pub fn build_exec_command(
 	Ok(command)
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use std::collections::BTreeMap;
-
-	#[test]
-	fn quotes_shell_data() {
-		assert_eq!(shell_quote("a b"), "'a b'");
-		assert_eq!(shell_quote("a'b"), "'a'\"'\"'b'");
+/// Fixed no-argument capability; the administrator policy, not the caller, owns
+/// systemd properties, DynamicUser selection and protected paths.
+pub async fn run_jobctl(host: &HostConfig, input: &serde_json::Value) -> Result<serde_json::Value> {
+	let mut data = serde_json::to_vec(input)?;
+	data.push(b'\n');
+	let output = run_capture(
+		host,
+		"sudo -n /usr/local/libexec/hepta-runtime-jobctl",
+		&data,
+		Duration::from_secs(20),
+	)
+	.await?;
+	if !output.status.success() {
+		bail!(
+			"job capability failed: {}",
+			String::from_utf8_lossy(&output.stderr)
+		);
 	}
-
-	#[test]
-	fn builds_argv_without_model_side_quoting() {
-		let cmd = build_exec_command(
-			"/bin/printf",
-			&["%s".into(), "a b'c".into()],
-			Some("/tmp/a b"),
-			&BTreeMap::new(),
-			24,
-			80,
-		)
-		.unwrap();
-		assert!(cmd.contains("'/tmp/a b'"));
-		assert!(cmd.contains("'a b'\"'\"'c'"));
-	}
+	Ok(serde_json::from_slice(&output.stdout)?)
 }
+
+#[cfg(test)]
+#[path = "ssh_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "ssh_observation_transport_tests.rs"]
+mod observation_tests;

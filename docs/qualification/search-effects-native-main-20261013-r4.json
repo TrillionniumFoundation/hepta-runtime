@@ -1,0 +1,118 @@
+{
+  "schema": "hepta-search-effects-native-localhost-v1",
+  "complete": true,
+  "origin": "native_python_mcp_client",
+  "binary_sha256": "5ee9d8a4fb03069c5a9b82d180554ec7854577c600928273025277e678ed3d9a",
+  "contract_sha256": "8ad53842e4aa41bbd1567ed99e956088baafea108b6fb0b9a8df979c72c794cc",
+  "harness_sha256": "f73bfc6bc14e95f8879978b1eadd1f95d946224780116fe68a02fb15051800ca",
+  "checks": [
+    {
+      "check": "pre-intent failure dispatches zero real SSH workers",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "start-drop-ack retains one worker same ID and reconciles without replay",
+      "result": "passed",
+      "detail": {
+        "search_id": "fea2e08251f3b707259bbfac175a13b7706c7f2dd2cd62b2bbb9f97f58b4b6b9",
+        "start_rpc_count": 1,
+        "worker_identity_recorded": true
+      }
+    },
+    {
+      "check": "start-save-failure retains one worker same ID and reconciles without replay",
+      "result": "passed",
+      "detail": {
+        "search_id": "09f34d745a7406cc20a19fe49e0692c76eb343e9045a69c3cf87a69dac10f1af",
+        "start_rpc_count": 1,
+        "worker_identity_recorded": true
+      }
+    },
+    {
+      "check": "stop-drop-ack retains same worker identity and accepted cancellation without replay",
+      "result": "passed",
+      "detail": {
+        "search_id": "160c52602c178e39d5593dcf26a286373a5bc4dd77e2df29599e4283d5ea6011",
+        "start_rpc_count": 1,
+        "stop_rpc_count": 1
+      }
+    },
+    {
+      "check": "stop-save-failure retains same worker identity and accepted cancellation without replay",
+      "result": "passed",
+      "detail": {
+        "search_id": "4a2e8474aa52efcdc677136e7d427ee49d7cfef0f756050fd23b01a19e0ab464",
+        "start_rpc_count": 1,
+        "stop_rpc_count": 1
+      }
+    }
+  ],
+  "target": "real fixed localhost SSH worker",
+  "diagnostic_instrumentation": "controller-private SSH shim inserts a non-scheduling observer around the original os.fork; source files are unchanged",
+  "fault_scope": "controller-local ACK discard after RPC and disposable controller publication obstruction",
+  "production_target_outage_claimed": false,
+  "live_configuration_changed": false,
+  "dc_stopped": false,
+  "installed_service_changed": false,
+  "model_origin_qualified": false,
+  "six_host_qualified": false,
+  "full_dc_replacement_qualified": false,
+  "owned_cleanup_confirmed": true,
+  "searches": {
+    "fea2e08251f3b707259bbfac175a13b7706c7f2dd2cd62b2bbb9f97f58b4b6b9": {
+      "observer": {
+        "pid": 575901,
+        "start_identity": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:1895641",
+        "search_id": "fea2e08251f3b707259bbfac175a13b7706c7f2dd2cd62b2bbb9f97f58b4b6b9",
+        "observer": "second_original_fork_return"
+      },
+      "observer_sha256": "1af0bbd5bb3ea8c4b22515bbc9b58b4e790baf1eb46c1542474b4c03eae90aa7",
+      "terminal_state": "limited",
+      "terminal_receipt_sha256": "8ab24ac437073232adafa2eeada5b16a9dac0fca3c46bae226fa9354075df5fe",
+      "same_observer_retained": true,
+      "owned_identity_no_longer_live": true
+    },
+    "09f34d745a7406cc20a19fe49e0692c76eb343e9045a69c3cf87a69dac10f1af": {
+      "observer": {
+        "pid": 576336,
+        "start_identity": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:1896010",
+        "search_id": "09f34d745a7406cc20a19fe49e0692c76eb343e9045a69c3cf87a69dac10f1af",
+        "observer": "second_original_fork_return"
+      },
+      "observer_sha256": "835c896f7d88946d0ef32d52d0147312f1aafef26d80a0afd9b1299613fbbc35",
+      "terminal_state": "limited",
+      "terminal_receipt_sha256": "a211bb7d1ea79ee183bac2a59bd889d069cbbb733c02f79546851c5900596f12",
+      "same_observer_retained": true,
+      "owned_identity_no_longer_live": true
+    },
+    "160c52602c178e39d5593dcf26a286373a5bc4dd77e2df29599e4283d5ea6011": {
+      "observer": {
+        "pid": 578361,
+        "start_identity": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:1896415",
+        "search_id": "160c52602c178e39d5593dcf26a286373a5bc4dd77e2df29599e4283d5ea6011",
+        "observer": "second_original_fork_return"
+      },
+      "observer_sha256": "d960873b5ae0f39196ae5bb22818d64a09834b705d42e17e8aa89ee84487fda3",
+      "terminal_state": "cancelled",
+      "terminal_receipt_sha256": "733a22d3cc44d4a9d696a6b3784d9d228c820037cf68aedb9b6208698fa7cb22",
+      "same_observer_retained": true,
+      "owned_identity_no_longer_live": true
+    },
+    "4a2e8474aa52efcdc677136e7d427ee49d7cfef0f756050fd23b01a19e0ab464": {
+      "observer": {
+        "pid": 578823,
+        "start_identity": "60f81bb0-a4d6-453a-a6e5-3d04e7978cb7:1896624",
+        "search_id": "4a2e8474aa52efcdc677136e7d427ee49d7cfef0f756050fd23b01a19e0ab464",
+        "observer": "second_original_fork_return"
+      },
+      "observer_sha256": "bdb4fefd6bce6646545a4b2880d00bc3578fd98ec8b0a7edc109ad8cc736addc",
+      "terminal_state": "cancelled",
+      "terminal_receipt_sha256": "3216b06eb3086cacd3c3665d854ade1ff34e7c405710611a6da65002ba1ad5ca",
+      "same_observer_retained": true,
+      "owned_identity_no_longer_live": true
+    }
+  },
+  "controller_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "owned_controller_exit": 0
+}

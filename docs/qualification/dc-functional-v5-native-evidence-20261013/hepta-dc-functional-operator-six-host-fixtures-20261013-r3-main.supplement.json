@@ -1,0 +1,128 @@
+{
+  "schema": "hepta-dc-v5-operator-supplement-v1",
+  "host": "main",
+  "origin": "native_python_mcp_client",
+  "binary_sha256": "601403417981d190bcec483149479efbe1cb8b60ee15efbf0f7dcbf0718f3338",
+  "contract_sha256": "f3fd365ae69e1189c550c4314c4fdfb12f4c80d8cc86d1bc0aca6bd1bf7c4cba",
+  "checks": [
+    {
+      "check": "exact reviewed v5 catalog and unchanged original 50 definitions",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "real Unicode stdin and independent exact stdout/stderr byte cursors",
+      "result": "passed",
+      "detail": {
+        "job_id": "1a1336599d8-79199-1",
+        "stdout_bytes": 20,
+        "stderr_bytes": 20
+      }
+    },
+    {
+      "check": "owned disposable job cancellation and retained actual output",
+      "result": "passed",
+      "detail": {
+        "job_id": "1a13365e6fc-79199-2",
+        "terminal_state": "cancelled"
+      }
+    }
+  ],
+  "complete": true,
+  "cancel_launch": {
+    "job": {
+      "args": [
+        "-c",
+        "import time;print('CANCEL_READY',flush=True);time.sleep(90)"
+      ],
+      "created_unix_ms": 1791863678716,
+      "cwd": "/tmp/hepta-operator-canary-df5b4942fb23487aa5bf8539ab6f2787",
+      "env_keys": [],
+      "executable": "/usr/bin/python3",
+      "execution_mode": "operator",
+      "host": "operator",
+      "id": "1a13365e6fc-79199-2",
+      "idempotency_key": null,
+      "launch_error": null,
+      "launch_state": "launched",
+      "remote_job_dir": "/tmp/hepta-operator-canary-df5b4942fb23487aa5bf8539ab6f2787/jobs/1a13365e6fc-79199-2",
+      "request_digest": "0c449c02822f8f3537e9508295f947089e2aaaaf9723ce566636d43d9389673a",
+      "request_fingerprint": 884002961459482421,
+      "ssh_target": "localhost",
+      "system_jobctl": false,
+      "unit": "hepta-runtime-job-1a13365e6fc-79199-2"
+    },
+    "launch": {
+      "backend": "systemd",
+      "launcher_pid": null,
+      "ok": true,
+      "unit": "hepta-runtime-job-1a13365e6fc-79199-2"
+    },
+    "reused": false
+  },
+  "cancel_pre_status": {
+    "backend": "systemd",
+    "job_id": "1a13365e6fc-79199-2",
+    "state": "running",
+    "systemd": {
+      "ActiveState": "active",
+      "ExecMainCode": "0",
+      "ExecMainPID": "499092",
+      "ExecMainStatus": "0",
+      "LoadState": "loaded",
+      "Result": "success",
+      "SubState": "running"
+    }
+  },
+  "cancel_response": {
+    "job_id": "1a13365e6fc-79199-2",
+    "result": "stop_requested"
+  },
+  "cancel_terminal_status": {
+    "at_unix_ms": 1791863680598,
+    "cancelled": true,
+    "exit_code": -15,
+    "job_id": "1a13365e6fc-79199-2",
+    "log_bytes": {
+      "stderr": {
+        "seen": 0,
+        "stored": 0
+      },
+      "stdout": {
+        "seen": 13,
+        "stored": 13
+      }
+    },
+    "log_errors": {
+      "stderr": null,
+      "stdout": null
+    },
+    "log_truncated": {
+      "stderr": false,
+      "stdout": false
+    },
+    "output_complete": true,
+    "state": "cancelled",
+    "timed_out": false
+  },
+  "cancel_retained_output": {
+    "job_id": "1a13365e6fc-79199-2",
+    "stderr": {
+      "bytes_hex": "",
+      "eof": true,
+      "next_offset": 0,
+      "offset": 0,
+      "size": 0,
+      "text": ""
+    },
+    "stdout": {
+      "bytes_hex": "43414e43454c5f52454144590a",
+      "eof": true,
+      "next_offset": 13,
+      "offset": 0,
+      "size": 13,
+      "text": "CANCEL_READY\n"
+    }
+  },
+  "passed": 3
+}

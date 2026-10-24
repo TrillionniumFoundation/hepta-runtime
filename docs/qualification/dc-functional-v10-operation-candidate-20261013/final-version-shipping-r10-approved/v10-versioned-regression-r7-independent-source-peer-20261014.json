@@ -1,0 +1,66 @@
+{
+  "schema": "hepta-v10-versioned-regression-r7-independent-source-peer-v1",
+  "reviewer": "/root/v10_source_boundary_audit",
+  "date_utc": "2026-10-14",
+  "scope": "Read-only source/hash/AST review; no imports, loader execution, tests, Cargo, MCP controller, SSH fixtures or effects executed by reviewer.",
+  "worktree": "/home/qian-qi/hepta-runtime-operation-v10-20261013",
+  "source_package": {
+    "manifest_path": "docs/qualification/dc-functional-v10-operation-candidate-20261013/versioned-regression-r7-approved-guard/manifest.json",
+    "manifest_sha256": "4256eb78231be2c65987c13d3f614f309dba1a37fdfd709402d760dcf9f4034f",
+    "all_eleven_whitelist_byte_and_sha_pins_match": true,
+    "changed_existing_path": "tests/dc_functional_v10_request_async_acceptance.py",
+    "new_path": "tests/dc_functional_v10_contract_approval_tests.py",
+    "other_nine_original_shipping_paths_unchanged": true
+  },
+  "fixed_finding": {
+    "id": "V10-CI-ASYNC-APPROVED-CONTRACT-GATE",
+    "status": "Resolved in new async copy source",
+    "original_async_sha256": "803e36713b234f529ee5d2ae0c7c38100da252b429fe406ade5553d3f87a3a37",
+    "fixed_async_sha256": "1b86c28ed4bceec363b0c8f470dc67ce415086f89ba281202be0a8a4690dac84",
+    "evidence": [
+      "tests/dc_functional_v10_request_async_acceptance.py:457-464",
+      "tests/dc_functional_v10_request_async_acceptance.py:467-469",
+      "tests/dc_functional_v10_request_async_acceptance.py:513-528"
+    ],
+    "conclusion": "Caller-provided expected SHA must equal literal approved129944 and actual raw file SHA must also equal it. Main runs this immediately after args parse, before binary/source/ToolContract.load/controller work; verify_catalog repeats it before loading. Existing exact62 predecessor plus exact4 addition and full actual catalog checks remain.",
+    "export_boundary": "Export-only mode retains its existing unreviewed export path; it does not acquire an execution acceptance claim."
+  },
+  "approval_regression_source": {
+    "path": "tests/dc_functional_v10_contract_approval_tests.py",
+    "sha256": "b1162c9195712b7f0ca3a354a1c37738ab43ac19c36d652c99e74da0042dc7d5",
+    "source_test_count": 13,
+    "checks": "Whole66 comparison before projection; mutations to each actual definition; missing/extra/duplicate; unknown recomputed file; original historical loader branches; source-copy assertion preservation; cold async rejection mocks Controller.start and ToolContract.load and requires zero calls; approved literal positive control does not start MCP.",
+    "executed_by_reviewer": false
+  },
+  "previous_source_review": {
+    "loader_sha256": "4623c4da9493dccfc4bcef18c7267ba96ba7f5f1ddd799441214948c9da161fe",
+    "version_helper_sha256": "399bb9767e84e3d97de0abfd25e38fed31a006ddd9f2e0e1ff21f4c39fd413b0",
+    "business_and_recovery_assertions_preserved": true,
+    "seven_copy_independent_AST_report_path": "v10-versioned-seven-copy-source-peer-20261014.json",
+    "seven_copy_report_sha256": "30a823705dc54206598eae5eb054b257cef4b1988d61089a38568f9d6fbf19c2",
+    "withdrawn_package_review_sha256": "3a7fcce6da8d151d067be6ca35fbceefa18715bfde733c562cb3446c8055901b",
+    "retraction_sha256": "0892e4536eb9a3b62a941e63d0c07c84880b57c05a26b0f4a7280390af48000e",
+    "original_artifacts_preserved": true
+  },
+  "scope_exception": {
+    "path": "tests/dc_functional_v10_operation_acceptance.py",
+    "sha256": "3c3e53a1f9e63954e251580ed643be743da4add4702b166faece762b4486b5fa",
+    "statement": "This is the byte-exact historical R4 harness alias preserved by Root instruction. It retains its original explicit caller-pin contract semantics; it was not changed into the new literal-pin loader. Controlled execution must continue passing separately reviewed129944, and the alias alone is not a general approved-contract allowlist."
+  },
+  "verdict": {
+    "new_async_p1_resolved": true,
+    "new_versioned_copy_source_blocker": false,
+    "source_only_peer_accepted_for_reviewed_r7_package_scope": true,
+    "execution_qualified": false,
+    "native_qualified": false,
+    "full_replacement": false,
+    "model_origin": false,
+    "business_replacement": false,
+    "dc_off": false,
+    "DC_rescue_required": true
+  },
+  "evidence_jobs": [
+    "1a137bc503a-b2f-bab",
+    "1a137bd0932-b2f-bb1"
+  ]
+}

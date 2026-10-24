@@ -1,0 +1,44 @@
+{
+  "schema": "hepta-gateway-verifier-claim-type-boundary-v1",
+  "collected_utc": "2026-10-13T01:34:14.344098+00:00",
+  "previous_commit": "5354014e4db85ea9cbb3a717d8d5f1d231afe3ac",
+  "offline_only": true,
+  "issue": "Malformed trusted-verifier scopes strings/lists/dicts were accepted by Python container membership tests; mistyped expiry/agent generation could produce uncaught errors rather than stable auth denial.",
+  "fix": {
+    "OAuth_scopes_shape": "frozenset[str], each 1..128 chars",
+    "user_expiry": "exact positive integer, not bool or float",
+    "agent_connection_generation": "exact positive integer, not bool or string",
+    "tenant_enrollment_generation_and_expiry": "positive exact integers",
+    "stable_denials": [
+      "OAUTH_INVALID",
+      "AGENT_IDENTITY_INVALID"
+    ],
+    "real_JWT_signature_or_mTLS_validation_implemented": false
+  },
+  "tests": {
+    "policy": {
+      "passed": 35,
+      "sha256_log": "6b28c808fac4e8422a3aa9bfe60e92c2572a3d8dd399152d30ff866ccd20e027"
+    },
+    "catalog": {
+      "passed": 10,
+      "sha256_log": "95c9999828d3b1467a44b27b0bffa5d7d9c3d8e0ed142f781ae2618254907c52"
+    },
+    "authenticated_catalog": {
+      "passed": 7,
+      "sha256_log": "5f744ea53c8ff9486a1bf023741677a49c480a2ba010105d7676585e3e6719a9"
+    }
+  },
+  "source": {
+    "policy_sha256": "0b03e60d59d28df04757c7d291bee2c84a39fa06175ed37322e3aa647a4bb904",
+    "policy_tests_sha256": "67427450794279aed5d484d2bd7fe9850436e5f8bbf8c477b506b5169122af85",
+    "doc_sha256": "93f0b3342698637f6152f95bb71893115d38f87f274b2e9fa6740fe86f63f785"
+  },
+  "native_v4_contract_sha256": "d36610d575146805f4c02d89210abd360b4d42acc8736d1966f20d0d724704b1",
+  "catalog_sha256": "63742708c287e8468d73f27ba85ecc6585afd4adcd76d06b618456730cfaf8ad",
+  "native_contract_modified": false,
+  "private_runtime_or_tunnel_or_DC_restarted": false,
+  "new_exact_head_ci": "not observed before commit",
+  "public_endpoint": false,
+  "no_secrets_logged": true
+}

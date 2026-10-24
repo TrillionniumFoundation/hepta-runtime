@@ -1,3 +1,7 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+//! Fail-closed host configuration and capability policy.
 use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -7,8 +11,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 
 static RUNTIME_CONFIG: OnceLock<RuntimeConfig> = OnceLock::new();
-// Keep the exact owning file handle alive for the entire controller process.
-static CONTROLLER_OWNER: OnceLock<std::fs::File> = OnceLock::new();
+static CONTROLLER_OWNER: OnceLock<ControllerLocks> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -16,6 +19,16 @@ pub enum Platform {
 	#[default]
 	Linux,
 	Macos,
+}
+
+/// Administrator-selected trust boundary, never supplied by a tool invocation.
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionMode {
+	#[default]
+	Isolated,
+	/// Full authority of the configured SSH login, including its existing sudo rights.
+	Operator,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -38,6 +51,14 @@ fn default_action_timeout() -> u64 {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HostConfig {
+	/// Optional administrator-pinned CRIU executable. Disabled when absent.
+	#[serde(default)]
+	pub checkpoint_binary: Option<String>,
+	/// Exact SHA256 for the configured CRIU artifact, never supplied by tool callers.
+	#[serde(default)]
+	pub checkpoint_binary_sha256: Option<String>,
+	#[serde(default)]
+	pub execution_mode: ExecutionMode,
 	/// OpenSSH config alias or user@host target. Never supplied by a tool call.
 	pub ssh_target: String,
 	#[serde(default)]
@@ -130,6 +151,42 @@ impl RuntimeConfig {
 			}
 		}
 		for (name, host) in &self.hosts {
+			match (&host.checkpoint_binary, &host.checkpoint_binary_sha256) {
+				(None, None) => {}
+				(Some(binary), Some(sha)) => {
+					if host.execution_mode != ExecutionMode::Operator
+						|| host.platform != Platform::Linux
+						|| !host.allow_execute
+					{
+						bail!("checkpoint pin requires an executable Linux operator host `{name}`");
+					}
+					if !Path::new(binary).is_absolute()
+						|| binary.contains(['\0', '\n', '\r'])
+						|| Path::new(binary)
+							.components()
+							.any(|c| matches!(c, Component::ParentDir))
+						|| sha.len() != 64 || !sha
+						.bytes()
+						.all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+					{
+						bail!("invalid checkpoint executable or SHA256 on `{name}`");
+					}
+				}
+				_ => bail!("checkpoint executable and SHA256 must be paired on `{name}`"),
+			}
+			if host.execution_mode == ExecutionMode::Operator {
+				if !host.protected_path_prefixes.is_empty()
+					|| !host.protected_argument_substrings.is_empty()
+					|| !host.denied_executables.is_empty()
+					|| !host.allowed_cwd_prefixes.is_empty()
+					|| !host.allowed_dangerous_executables.is_empty()
+				{
+					bail!("operator host `{name}` cannot claim command/path sandboxing; use isolated mode or OS permissions");
+				}
+				if (host.allow_execute || host.allow_pty) && !host.allow_job_network {
+					bail!("operator host `{name}` requires explicit allow_job_network=true");
+				}
+			}
 			if !valid_name(name) {
 				bail!("invalid host name `{name}`; use letters, digits, dot, underscore or dash");
 			}
@@ -201,39 +258,61 @@ impl RuntimeConfig {
 	}
 }
 
-// A lock on the canonical state directory prevents two controllers from treating
-// one durable job journal as independent admission authority. File::try_lock
-// is cross-process on supported local filesystems (Rust >= 1.89).
-fn claim_controller_state_dir(state_dir: &Path) -> Result<std::fs::File> {
-	let path = state_dir.join("controller.owner.lock");
-	let mut options = std::fs::OpenOptions::new();
-	options.read(true).write(true).create(true);
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::OpenOptionsExt;
-		options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
-	}
-	let owner = options
-		.open(&path)
-		.with_context(|| format!("failed to open controller owner lock {}", path.display()))?;
-	let metadata = owner.metadata()?;
-	if !metadata.is_file() {
-		bail!("controller owner lock must be a regular file");
-	}
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::PermissionsExt;
-		if metadata.permissions().mode() & 0o077 != 0 {
-			bail!("controller owner lock must not be group/world accessible");
+struct ControllerLocks {
+	_owner: std::fs::File,
+	_legacy: std::fs::File,
+}
+
+fn claim_controller_state_dir(state_dir: &Path) -> Result<ControllerLocks> {
+	let open = |name: &str, legacy: bool| -> Result<std::fs::File> {
+		let path = state_dir.join(name);
+		let mut options = std::fs::OpenOptions::new();
+		options.read(true).write(true).create(true).truncate(false);
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::OpenOptionsExt;
+			options
+				.mode(0o600)
+				.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK);
 		}
-	}
-	owner.try_lock().map_err(|error| {
-		anyhow!(
-			"controller state directory {} is already owned or cannot be locked: {error}",
-			state_dir.display()
-		)
-	})?;
-	Ok(owner)
+		let owner = options
+			.open(&path)
+			.with_context(|| format!("cannot open controller lock {}", path.display()))?;
+		let metadata = owner.metadata()?;
+		if !metadata.is_file() {
+			bail!("controller owner lock must be a regular file");
+		}
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::{MetadataExt, PermissionsExt};
+			if metadata.nlink() != 1 || metadata.uid() != unsafe { libc::geteuid() } {
+				bail!("controller owner lock has foreign ownership or hard links");
+			}
+			if metadata.permissions().mode() & 0o077 != 0 {
+				if !legacy {
+					bail!("controller owner lock must not be group/world accessible");
+				}
+				owner.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+			}
+		}
+		#[cfg(not(unix))]
+		let _ = legacy;
+		owner.try_lock().map_err(|error| {
+			anyhow!(
+				"controller state directory {} is already owned or cannot be locked: {error}",
+				state_dir.display()
+			)
+		})?;
+		Ok(owner)
+	};
+	// Fixed ordering plus nonblocking acquisition prevents deadlock. Holding
+	// both FDs excludes an old controller that recognizes only one filename.
+	let owner = open("controller.owner.lock", false)?;
+	let legacy = open("controller.lock", true)?;
+	Ok(ControllerLocks {
+		_owner: owner,
+		_legacy: legacy,
+	})
 }
 
 pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
@@ -374,7 +453,10 @@ const DANGEROUS_ENV: &[&str] = &[
 pub fn check_environment(host_name: &str, env: &BTreeMap<String, String>) -> Result<()> {
 	let host = runtime_config()?.host(host_name)?;
 	for (key, value) in env {
-		if DANGEROUS_ENV.contains(&key.as_str()) {
+		if value.contains('\0') {
+			bail!("environment values may not contain NUL bytes");
+		}
+		if host.execution_mode == ExecutionMode::Isolated && DANGEROUS_ENV.contains(&key.as_str()) {
 			bail!("environment variable `{key}` is denied on host `{host_name}`");
 		}
 		if let Some(prefix) = protected_value(host, value) {
@@ -401,6 +483,18 @@ pub fn check_execution(
 ) -> Result<&'static HostConfig> {
 	let config = runtime_config()?;
 	let host = config.host(host_name)?;
+	validate_execution(host_name, host, executable, args, cwd, pty)?;
+	Ok(host)
+}
+
+fn validate_execution(
+	host_name: &str,
+	host: &HostConfig,
+	executable: &str,
+	args: &[String],
+	cwd: Option<&str>,
+	pty: bool,
+) -> Result<()> {
 	if pty && !host.allow_pty {
 		bail!("PTY execution is disabled for host `{host_name}`");
 	}
@@ -431,13 +525,20 @@ pub fn check_execution(
 		.allowed_dangerous_executables
 		.iter()
 		.any(|x| x == base || x == executable);
-	if explicitly_denied || (dangerous && !explicitly_allowed) {
+	if explicitly_denied
+		|| (host.execution_mode == ExecutionMode::Isolated && dangerous && !explicitly_allowed)
+	{
 		bail!(
             "executable `{base}` is denied on host `{host_name}`; use a named privileged_action when configured"
         );
 	}
 	if let Some(cwd) = cwd {
-		if !Path::new(cwd).is_absolute() {
+		if cwd.contains('\0')
+			|| !Path::new(cwd).is_absolute()
+			|| Path::new(cwd)
+				.components()
+				.any(|c| matches!(c, Component::ParentDir))
+		{
 			bail!("cwd must be an absolute path");
 		}
 		if !host.allowed_cwd_prefixes.is_empty()
@@ -458,7 +559,7 @@ pub fn check_execution(
 			bail!("argument intersects protected value `{prefix}` on host `{host_name}`");
 		}
 	}
-	Ok(host)
+	Ok(())
 }
 
 fn normalize_absolute(path: &Path) -> Result<PathBuf> {
@@ -532,6 +633,32 @@ pub fn check_local_path(path: &Path) -> Result<()> {
 	)
 }
 
+/// An administrator-selected controller root is a durable authority boundary.
+/// Even when a process has OS rename permission on that directory, relocating
+/// the root (or one of its ancestors) would silently invalidate workspace
+/// confinement for later operations. This check does not grant new authority.
+/// Directory parents may still be changed concurrently by independent owners;
+/// the fd-relative kernel rename remains the final no-symlink/no-overwrite gate.
+fn check_directory_move_against_roots(source: &Path, roots: &[PathBuf]) -> Result<()> {
+	let candidate = std::fs::canonicalize(source)
+		.with_context(|| "cannot resolve directory move source identity")?;
+	for root in roots {
+		let pinned = std::fs::canonicalize(root)
+			.with_context(|| "configured controller workspace root is unavailable")?;
+		if pinned.starts_with(&candidate) {
+			bail!("directory move would relocate a configured controller workspace root");
+		}
+	}
+	Ok(())
+}
+
+/// Protect every configured root, including a nested root contained in a
+/// larger authorized workspace. Only callable after normal path checks.
+pub fn check_directory_move_source(source: &Path) -> Result<()> {
+	let config = runtime_config()?;
+	check_directory_move_against_roots(source, &config.controller_workspace_roots)
+}
+
 fn remote_path_allowed(path: &str, prefixes: &[String]) -> bool {
 	prefixes.iter().any(|prefix| {
 		path == prefix || path.starts_with(&format!("{}/", prefix.trim_end_matches('/')))
@@ -587,91 +714,5 @@ pub fn check_remote_write(alias: &str, path: &str) -> Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn separate_controllers_cannot_claim_same_state_directory() {
-		let dir = tempfile::tempdir().unwrap();
-		let first = claim_controller_state_dir(dir.path()).unwrap();
-		assert!(claim_controller_state_dir(dir.path()).is_err());
-		drop(first);
-		let recovered = claim_controller_state_dir(dir.path()).unwrap();
-		drop(recovered);
-	}
-
-	#[test]
-	fn controller_owner_is_fenced_across_processes() {
-		let dir = tempfile::tempdir().unwrap();
-		let probe = |expected: &str| {
-			let output = std::process::Command::new(std::env::current_exe().unwrap())
-				.arg("controller_owner_child_probe")
-				.env("HEPTA_OWNER_TEST_DIR", dir.path())
-				.env("HEPTA_OWNER_TEST_EXPECT", expected)
-				.output()
-				.unwrap();
-			assert!(
-				output.status.success(),
-				"stdout: {} stderr: {}",
-				String::from_utf8_lossy(&output.stdout),
-				String::from_utf8_lossy(&output.stderr)
-			);
-		};
-		let first = claim_controller_state_dir(dir.path()).unwrap();
-		probe("denied");
-		drop(first);
-		probe("acquired");
-	}
-
-	#[test]
-	fn controller_owner_child_probe() {
-		let Some(directory) = std::env::var_os("HEPTA_OWNER_TEST_DIR") else {
-			return;
-		};
-		let expected = std::env::var("HEPTA_OWNER_TEST_EXPECT").unwrap();
-		let result = claim_controller_state_dir(Path::new(&directory));
-		assert_eq!(result.is_ok(), expected == "acquired");
-	}
-
-	#[cfg(unix)]
-	#[test]
-	fn permissive_owner_lock_is_rejected() {
-		use std::os::unix::fs::PermissionsExt;
-		let dir = tempfile::tempdir().unwrap();
-		let path = dir.path().join("controller.owner.lock");
-		std::fs::write(&path, b"").unwrap();
-		std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
-		assert!(claim_controller_state_dir(dir.path()).is_err());
-	}
-
-	#[cfg(unix)]
-	#[test]
-	fn owner_lock_refuses_symlinked_lockfile() {
-		let dir = tempfile::tempdir().unwrap();
-		let target = dir.path().join("redirect");
-		std::fs::write(&target, b"do not change").unwrap();
-		std::os::unix::fs::symlink(&target, dir.path().join("controller.owner.lock")).unwrap();
-		assert!(claim_controller_state_dir(dir.path()).is_err());
-		assert_eq!(std::fs::read(&target).unwrap(), b"do not change");
-	}
-
-	#[test]
-	fn names_are_strict() {
-		assert!(valid_name("rog-1.example"));
-		assert!(!valid_name("rog/1"));
-		assert!(!valid_name(&"-".repeat(129)));
-	}
-
-	#[test]
-	fn basename_is_stable() {
-		assert_eq!(executable_basename("/usr/bin/systemctl"), "systemctl");
-		assert_eq!(executable_basename("python3"), "python3");
-	}
-
-	#[test]
-	fn privileged_regexes_are_full_match_capable() {
-		let regex = Regex::new(r"\A(?:[a-z0-9_-]+)\z").unwrap();
-		assert!(regex.is_match("profile-1"));
-		assert!(!regex.is_match("profile-1;id"));
-	}
-}
+#[path = "config_tests.rs"]
+mod tests;

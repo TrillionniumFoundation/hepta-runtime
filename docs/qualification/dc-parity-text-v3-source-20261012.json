@@ -1,0 +1,95 @@
+{
+  "schema": "hepta-dc-plain-text-functional-parity-v3-source-hold-v1",
+  "recorded_at_utc": "2026-10-12T12:04:48.524906+00:00",
+  "source_head_before_new_commit": "333cd8f775e5342efcafb9b7bfd5c73602c6f27f",
+  "tool_contract": {
+    "tools": 49,
+    "prior_v2_count": 48,
+    "prior_v2_tools_unchanged": true,
+    "new_names": [
+      "text_file_write"
+    ],
+    "catalog_sha256": "46ca40e8ad33fd817db4f99839e34243669f36454c95b0055e74a50f94ff4953",
+    "contract_file_sha256": "43ff1985c26555ea4e8edbe76031696e5d7e3bf0804b47ce4c75c6c58213e5eb"
+  },
+  "function": {
+    "name": "text_file_write",
+    "mode": [
+      "create",
+      "replace",
+      "append"
+    ],
+    "controller_local_only": true,
+    "no_shell": true,
+    "requires_explicit_runtime_workspace_root": true,
+    "existing_file_requires_lowercase_sha256": true,
+    "bound_new_content_bytes": 65536,
+    "bound_prior_content_bytes": 4194304,
+    "source_metadata_constraints": [
+      "owner_writable",
+      "single_link",
+      "not_executable",
+      "no_xattrs_or_acl",
+      "UTF8"
+    ],
+    "publication": "Linux fd-relative O_NOFOLLOW + same-directory staging fsync rename; initial files use RENAME_NOREPLACE",
+    "external_concurrent_writer_absolute_CAS": false,
+    "writes_marked_readonly": false
+  },
+  "tests": {
+    "local_main_rust": [
+      [
+        "407",
+        "0",
+        "11"
+      ],
+      [
+        "8",
+        "0",
+        "0"
+      ]
+    ],
+    "rustfmt": "pass",
+    "strict_clippy": "pass",
+    "debug_binary_build": "pass",
+    "isolated_mcp_count": 12,
+    "isolated_mcp_pass": true,
+    "mcp_receipt_path": "/tmp/hepta-v3-gate-native-mcp.json"
+  },
+  "source_sha256": {
+    "src/mcp/fs/mod.rs": "00a77a1c500e274f25983d6827b1db0c4a4a44d0c56d7e4ebe6eeba66b1d7b29",
+    "src/mcp/fs/text_file_write.rs": "63a8abd1aa9edb3475ed9861918fafea6cddc3dccc71ba405400c7849423a898",
+    "src/mcp/fs/text_file_write_tests.rs": "23427c58a91f9972141f40b2fef9d883d2ecabfebf78f5c17282324b6edd666b",
+    "src/mcp/server.rs": "6d78de52da0859da4ff40fac56f4828641c6b1267ba366a3c759bc68b041670f",
+    "src/mcp/server_tests.rs": "ba40472a1c444b82dd799079497a443b5dbb2dc376c8b0b6d5e09b5e3118a3d1",
+    "tests/dc_parity_native_acceptance.py": "ffcd13d322723952bbfbeec9c4750ecdb186705ee14b93bf6e19d1378158eb68",
+    ".github/workflows/operator-parity.yml": "f6ce334d6b3cb7e4fadf8d7d24eb51bfd754cbef5e65259d33d44401a85a0e23",
+    "deploy/contracts/hepta-runtime-full-operator-v3.json": "43ff1985c26555ea4e8edbe76031696e5d7e3bf0804b47ce4c75c6c58213e5eb",
+    "docs/DC_PARITY_TEXT_WRITE_V3.md": "bb18071e49cf4ce5f08f95815c849b97368ec9faa997a3f44c30b75ae4b73616"
+  },
+  "active_services": {
+    "hepta-openai-full-operator.service": {
+      "MainPID": "1270044",
+      "ActiveState": "active"
+    },
+    "hepta-runtime-operator.service": {
+      "MainPID": "2927",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    }
+  },
+  "deployment": {
+    "existing_native_runtime_upgraded": false,
+    "existing_full_operator_tunnel_changed": false,
+    "current_chatgpt_visible_tools": 46,
+    "new_tool_chatgpt_originated_write_accepted": false,
+    "prior_v2_cutover_blocked": true,
+    "new_cutover_attempted": false,
+    "public_gateway_launched": false
+  },
+  "new_exact_head_CI": "not yet triggered at receipt time",
+  "secrets_embedded": false
+}

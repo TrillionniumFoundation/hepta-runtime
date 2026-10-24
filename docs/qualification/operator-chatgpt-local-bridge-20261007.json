@@ -1,0 +1,143 @@
+{
+  "schema": "hepta-chatgpt-secure-tunnel-local-qualification-v1",
+  "recorded_at": "2026-10-07T21:32:02+08:00",
+  "scope": "Local read-only ChatGPT MCP facade and Secure MCP Tunnel client staging; OpenAI account-side tunnel provisioning and ChatGPT-originated calls are intentionally not claimed.",
+  "repository_head_before_evidence_commit": "ef19fdea7d969b547af22ee927f0fa95e3db612a",
+  "runtime": {
+    "service": "hepta-runtime-operator.service",
+    "active": true,
+    "pid": 2927,
+    "binary_sha256": "5bb9dadef53329caa13acec8965d2d6c074c17192c744078d76b689d8c3fb8b3",
+    "listener": "127.0.0.1:8790",
+    "modified_by_chatgpt_integration": false
+  },
+  "desktop_commander": {
+    "service": "desktop-commander-remote.service",
+    "active": true,
+    "pid": 2894,
+    "modified_by_chatgpt_integration": false,
+    "removed": false
+  },
+  "bridge": {
+    "service": "hepta-chatgpt-bridge.service",
+    "active": true,
+    "pid": 70649,
+    "unix_socket": "/run/user/1000/hepta-chatgpt/bridge.sock",
+    "socket_directory_mode": "0700",
+    "socket_mode": "0600",
+    "source_sha256": "9cfccba0ceea4f343333351c0289329de4dd992b524f19c62857f76b8dd7ea46",
+    "installed_sha256": "9cfccba0ceea4f343333351c0289329de4dd992b524f19c62857f76b8dd7ea46",
+    "upstream": "http://127.0.0.1:8790/mcp",
+    "backend_credential_source": "~/.config/hepta-runtime-operator/token",
+    "backend_credential_forwarded_to_openai": false,
+    "caller_authorization_forwarded": false,
+    "allowed_tools": [
+      "document_read",
+      "file_info",
+      "host_list",
+      "process_status",
+      "stream_handoff_list",
+      "stream_handoff_read",
+      "stream_handoff_status"
+    ],
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  "tunnel_client": {
+    "version": "0.0.16",
+    "git_sha": "5f99daabd4aa4a77049e6d81d54a0d8c18335397",
+    "binary_sha256": "01260ee973d5510861bc32979739561edd33869f99f9f8cd324f6d0da5b2e692",
+    "official_release_published_at": "2026-10-06T22:04:53Z",
+    "official_linux_amd64_zip_sha256": "d60cdba019bce451bcc3a15478cc5b9cb11270b049f5b56ea39a80b517f8b117",
+    "official_linux_amd64_spdx_sha256": "6e55f7d59863c7f0313d51c3da211c86ac068ac4cafa28713cf8004138d2a46b",
+    "installed_spdx_sha256": "6e55f7d59863c7f0313d51c3da211c86ac068ac4cafa28713cf8004138d2a46b",
+    "official_linux_amd64_licenses_sha256": "fa2de0dd02c120d9d4283059fa3bd489666808b616c4b788610558b8fb4198e6",
+    "installed_licenses_sha256": "fa2de0dd02c120d9d4283059fa3bd489666808b616c4b788610558b8fb4198e6",
+    "spdx_binary_sha256": "01260ee973d5510861bc32979739561edd33869f99f9f8cd324f6d0da5b2e692",
+    "binary_matches_verified_spdx": true
+  },
+  "tunnel_service": {
+    "service": "hepta-openai-tunnel.service",
+    "enabled": true,
+    "active": false,
+    "condition_gates": [
+      "~/.config/hepta-chatgpt-tunnel/runtime-api-key",
+      "~/.config/hepta-chatgpt-tunnel/tunnel.env"
+    ],
+    "runtime_api_key_present": false,
+    "tunnel_env_present": false,
+    "secret_in_service_unit": false,
+    "admin_key_used_by_daemon": false,
+    "inbound_public_listener_created": false
+  },
+  "local_tests": {
+    "unit": {
+      "passed": 7,
+      "failed": 0,
+      "log": "chatgpt-bridge-unit.log"
+    },
+    "temporary_real_runtime_acceptance": {
+      "passed": 7,
+      "failed": 0,
+      "receipt": "chatgpt-bridge-acceptance.json",
+      "log": "chatgpt-bridge-acceptance-v3.log"
+    },
+    "installed_bridge_acceptance": {
+      "passed": 6,
+      "failed": 0,
+      "receipt": "chatgpt-bridge-installed.json",
+      "log": "chatgpt-bridge-installed.log"
+    },
+    "verified_behaviors": [
+      "private runtime rejects anonymous direct MCP",
+      "bridge uses the local private backend credential while ignoring caller Authorization",
+      "initialize and notifications/initialized work",
+      "discovery exposes exactly seven read-only tools",
+      "host_list crosses bridge into the authenticated runtime and returns all six configured hosts",
+      "shell_start is rejected by the facade before backend forwarding",
+      "stream_handoff_list reaches the installed broker",
+      "MCP GET surface is not accidentally exposed"
+    ]
+  },
+  "retained_failures": [
+    {
+      "stage": "temporary acceptance invocation",
+      "result": "failed before test execution",
+      "reason": "required --token-file and --out arguments were omitted on the first invocation",
+      "correction": "rerun with the documented arguments"
+    },
+    {
+      "stage": "temporary acceptance first real execution",
+      "result": "one harness failure after anonymous-runtime check passed",
+      "reason": "the acceptance client assumed application/json and did not parse text/event-stream",
+      "correction": "test harness now requests and parses both application/json and text/event-stream; bridge/runtime assertions were not relaxed"
+    },
+    {
+      "stage": "tunnel-client doctor prebind",
+      "exit_code": 2,
+      "result": "expected account-side provisioning blocker",
+      "evidence": "profile source and profile path load were found, but control_plane.api_key file reference could not be resolved because runtime-api-key does not yet exist"
+    }
+  ],
+  "account_side_remaining": [
+    "Create or select an OpenAI Platform Secure MCP Tunnel associated with the target ChatGPT workspace.",
+    "Create a separate Restricted Runtime API key whose principal has Tunnels Read + Use.",
+    "Run ~/.local/bin/hepta-chatgpt-tunnel-bind interactively on qian-qi so neither secret is accepted through argv or a pipe.",
+    "Require tunnel-client doctor --profile hepta-chatgpt --explain to pass and /readyz to return 200.",
+    "In ChatGPT web developer mode, create a custom MCP server using Connection: Tunnel and Authentication: None.",
+    "Scan Tools must return exactly the seven read-only facade tools.",
+    "Run ChatGPT-originated read-only golden calls; local bridge acceptance is not a substitute."
+  ],
+  "plan_boundary": {
+    "current_user_plan": "Pro",
+    "intended_first_phase": "read/fetch only",
+    "full_write_modify_mcp_claimed": false,
+    "chatgpt_scan_tools_completed": false,
+    "chatgpt_originated_golden_completed": false,
+    "tunnel_created_or_selected": false
+  }
+}

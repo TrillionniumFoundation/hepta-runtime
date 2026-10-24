@@ -1,0 +1,175 @@
+{
+  "schema": "hepta-private-full-operator-mcp-2026-07-28-repair-v1",
+  "at_utc": "2026-10-12T09:02:33.577653+00:00",
+  "previous_product_error": "ChatGPT custom MCP create: server could not complete MCP setup; check initialization and tools responses.",
+  "actual_prior_live_observation": {
+    "tunnel_id": "tunnel_6acc93cc226081919911d15143cafbdb",
+    "main_channel_forwarded": true,
+    "mcp_state": "failed",
+    "reason_code": "mcp_discovery_error",
+    "initialize_epoch": 4,
+    "no_successful_tools_list_observed": true,
+    "other_channel_harpoon_unsupported": "observed separately, not routed to native main"
+  },
+  "root_cause_class": "Legacy-only facade omitted the mandatory 2026-07-28 server/discover method and request-scoped protocol metadata support, and rejected repeat legacy initialize on a persistent stdio child.",
+  "fixes": [
+    "New MCP 2026-07-28 server/discover with private cache, server info and supportedVersions.",
+    "Modern tools/list, tools/call, ping carry resultType complete and server info.",
+    "Modern direct calls validate per-request protocolVersion and clientCapabilities and bootstrap a verified native 2025-era loopback session.",
+    "Native tool catalog and all annotations remain exact and pinned; modern transport metadata not forwarded as tool arguments.",
+    "Multiple legacy initializations create fresh loopback MCP sessions; legacy actions require their own handshake.",
+    "Structured -32022 unsupported-modern-version response, no unchecked dynamic tool exposure.",
+    "Live stdio_send_initialized_notification compatibility shim enabled for legacy callers.",
+    "Opt-in protocol-only trace records no raw user IDs, arguments, credentials or result payloads."
+  ],
+  "source_sha256": {
+    "full_facade": "fc10e43962bdc8b3083d824476b1f7c0bf2be7ce5e22595c503b593eebcdb690",
+    "unit_tests": "f4de6ebfbcd6b9e27f35a44aaa699a6afb6180fb27739d51a8737c3c67c15e44",
+    "contract": "7e9b4f0769e5496738a16001710e584817bad7fae979218d276f09f06ea3c81e"
+  },
+  "published_official_schema_sha256": "ef70b61f99b6d2e5e3b46863822eab08dff6a45bedc7a08914e0e5b133f40203",
+  "local_official_schema_validation": {
+    "protocol": "2026-07-28",
+    "server_discover": 0,
+    "tools_list": 0,
+    "tools_call": 0,
+    "tool_count": 46
+  },
+  "unit_tests": {
+    "count": 26,
+    "passed": true,
+    "log_sha256": "b8be63b6d98460fbff332329413ede26885c80c13bde66e08a751223e90015d2"
+  },
+  "real_host_matrix": {
+    "pass": true,
+    "tests": [
+      {
+        "host": "main",
+        "exit": 0,
+        "passed": 9,
+        "complete": true,
+        "log": "/tmp/hepta-dual-era-main.log"
+      },
+      {
+        "host": "pocket4",
+        "exit": 0,
+        "passed": 9,
+        "complete": true,
+        "log": "/tmp/hepta-dual-era-pocket4.log"
+      },
+      {
+        "host": "rog",
+        "exit": 0,
+        "passed": 9,
+        "complete": true,
+        "log": "/tmp/hepta-dual-era-rog.log"
+      },
+      {
+        "host": "mac",
+        "exit": 0,
+        "passed": 9,
+        "complete": true,
+        "log": "/tmp/hepta-dual-era-mac.log"
+      },
+      {
+        "host": "x230",
+        "exit": 0,
+        "passed": 9,
+        "complete": true,
+        "log": "/tmp/hepta-dual-era-x230.log"
+      },
+      {
+        "host": "ai395",
+        "exit": 0,
+        "passed": 9,
+        "complete": true,
+        "log": "/tmp/hepta-dual-era-ai395.log"
+      }
+    ],
+    "source_sha256": {
+      "chatgpt_full_operator.py": "fc10e43962bdc8b3083d824476b1f7c0bf2be7ce5e22595c503b593eebcdb690",
+      "mcp_tool_contract.py": "5ea3172f77a6bbdb24255146efb031eb2ba701c3a636e2aee1c0274768747b4e",
+      "hepta-runtime-full-operator-v1.json": "7e9b4f0769e5496738a16001710e584817bad7fae979218d276f09f06ea3c81e",
+      "full_operator_acceptance.py": "ad5bf6c07f133bce1bca03d0ea626195fed354630990bc64c3d68912430fa44f"
+    }
+  },
+  "live": {
+    "full_tunnel_service": {
+      "MainPID": "1118821",
+      "ActiveState": "active",
+      "UnitFileState": "enabled"
+    },
+    "old_readonly_service": {
+      "MainPID": "0",
+      "ActiveState": "inactive",
+      "UnitFileState": "disabled"
+    },
+    "runtime_service": {
+      "MainPID": "2927",
+      "ActiveState": "active",
+      "UnitFileState": "enabled"
+    },
+    "desktop_commander_service": {
+      "MainPID": "2894",
+      "ActiveState": "active",
+      "UnitFileState": "enabled"
+    },
+    "ready": true,
+    "control_plane": {
+      "status": "ok",
+      "state": "polling",
+      "observed_at": "2026-10-12T09:02:22.469373836Z",
+      "limited": false,
+      "details": {
+        "last_attempt": "2026-10-12T09:02:22.469373836Z",
+        "last_success": "2026-10-12T09:02:22.469367347Z",
+        "consecutive_failures": 0,
+        "current_poll_age_seconds": 11.071815396,
+        "configured_wait_seconds": 30,
+        "effective_wait_seconds": 30,
+        "deadline_seconds": 35
+      }
+    },
+    "mcp": {
+      "status": "unknown",
+      "state": "not_observed",
+      "limited": false,
+      "details": {
+        "channel": "main",
+        "transport": "stdio",
+        "child_state": "running",
+        "child_generation": "0ddf18994236118f43748cfbc1f301c2",
+        "initialize_epoch": 0,
+        "evidence": "same_child",
+        "initialize": {
+          "ok": false,
+          "identity_complete": false,
+          "limited": false,
+          "capability_names": []
+        },
+        "tools_list": {
+          "ok": false,
+          "tool_names": [],
+          "retained_count": 0,
+          "complete": false,
+          "partial": false,
+          "limited": false
+        }
+      }
+    },
+    "new_release": "/home/qian-qi/.local/lib/hepta-chatgpt-full/releases/fc10e43962bdc8b3",
+    "profile_mcp_initialized_notification": true,
+    "rollback_profile": "/home/qian-qi/.config/hepta-full-operator/backup-profile-before-mcp-20260728.yaml"
+  },
+  "limits": {
+    "ChatGPT_UI_rescan_after_fix": false,
+    "ChatGPT_originated_MCP_tools_list_after_fix": false,
+    "ChatGPT_originated_shell_write": false,
+    "schema_approval_not_proven": true,
+    "actual_workspace_plan_qualified": false,
+    "public_cloud_gateway_deployed": false
+  },
+  "secrets_logged": false,
+  "native_runtime_restarted": false,
+  "desktop_commander_restarted": false
+}

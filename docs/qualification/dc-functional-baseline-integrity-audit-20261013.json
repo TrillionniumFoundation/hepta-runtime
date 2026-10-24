@@ -1,0 +1,63 @@
+{
+  "schema": "hepta-dc-functional-baseline-integrity-audit-v1",
+  "recorded_utc": "2026-10-13T03:20:33.603917+00:00",
+  "source_head_before_copy": "b29c9ddb3facc43cd79448a1a0bda95b404ce8ce",
+  "baseline_gate_error": "Frozen source receipt dc-parity-v4-model-origin-tool-ledger-v3-20261013.json is changed or absent",
+  "cause": "Referenced model-origin v3 and nested checkpoint-inspect receipt exist only as untracked exact-byte artifacts in original worktree, absent in committed HEAD.",
+  "restored_existing_receipts": [
+    {
+      "path": "docs/qualification/dc-parity-v4-model-origin-tool-ledger-v3-20261013.json",
+      "sha256": "97f751726d8b47207e1481f8803fdd72f0c84f907ddf479d7377df20ef23d71d",
+      "bytes": 3113,
+      "original_untracked": true
+    },
+    {
+      "path": "docs/qualification/dc-parity-v4-model-origin-checkpoint-inspect-20261013.json",
+      "sha256": "e8087118fd3e295040aed6436abbf455599a4a2b6088ffef1f5ff3b713582731",
+      "bytes": 3912,
+      "original_untracked": true
+    }
+  ],
+  "nested_pins_validated": [
+    {
+      "path": "docs/qualification/dc-parity-v4-model-origin-tool-ledger-v2-20261013.json",
+      "sha256": "3ad5d6a0bb897fea9e777f22b39eed60114a5a48009832671552e18eb2e9e9a1"
+    },
+    {
+      "path": "docs/qualification/dc-parity-v4-model-origin-checkpoint-inspect-20261013.json",
+      "sha256": "e8087118fd3e295040aed6436abbf455599a4a2b6088ffef1f5ff3b713582731"
+    }
+  ],
+  "limits": [
+    "Copy preserves original bytes and pinned hashes; does not originate a new ChatGPT action.",
+    "Checkpoint evidence is inspect only; no privileged mutation qualified.",
+    "No installed runtime, tunnel, Desktop Commander, credentials or business job changed."
+  ],
+  "validation": [
+    {
+      "command": "python3 tests/model_origin_tool_ledger_tests.py",
+      "exit": 0
+    },
+    {
+      "command": "python3 tests/dc_replacement_gate_tests.py",
+      "exit": 0
+    },
+    {
+      "command": "python3 deploy/dc_replacement_gate.py",
+      "exit": 0
+    }
+  ],
+  "hosted_exact_head_ci_failure": {
+    "source_head": "b29c9ddb3facc43cd79448a1a0bda95b404ce8ce",
+    "run_id": 38340097765,
+    "workflow": "Operator parity qualification",
+    "conclusion": "failure",
+    "url": "https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/38340097765",
+    "failure_log": {
+      "path": "docs/qualification/dc-functional-baseline-ci-failure-b29c9dd-20261013.log",
+      "sha256": "c150902ad8efdf49cf9853b9641f6aaf64066463aeb125f26bb1aa964af859a4"
+    },
+    "retrieval_exit": 0,
+    "missing_receipt_reported": true
+  }
+}
