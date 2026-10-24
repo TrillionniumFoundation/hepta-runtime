@@ -16,6 +16,8 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
+#[cfg(unix)]
+use tokio::sync::Semaphore;
 
 use super::config::runtime_config;
 
@@ -26,6 +28,10 @@ const MAX_GLOBAL: usize = 512;
 const MAX_OWNER: usize = 128;
 const MAX_RECORD_BYTES: usize = 2048;
 const MAX_PAGE_BYTES: usize = 64 * 1024;
+#[cfg(unix)]
+const MAX_METADATA_QUERIES: usize = 8;
+#[cfg(unix)]
+static METADATA_QUERY_SLOTS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 const STORE_NAME: &str = "request-audit";
 const ARCHIVE_NAME: &str = "request-archive-v11";
 const ARCHIVE_ANCHOR: &str = ".request-archive-v11-anchor.json";
@@ -1680,11 +1686,89 @@ fn finish_sync(mut ticket: RequestTicket, completion: AuditCompletion) -> Result
 }
 
 #[cfg(unix)]
+#[derive(Debug)]
+struct MetadataQueryDeadline;
+
+#[cfg(unix)]
+impl std::fmt::Display for MetadataQueryDeadline {
+	fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		out.write_str(
+			"archive metadata query total deadline exceeded; repeat only the metadata query",
+		)
+	}
+}
+
+#[cfg(unix)]
+impl std::error::Error for MetadataQueryDeadline {}
+
+#[cfg(unix)]
+fn metadata_query_slots() -> Arc<Semaphore> {
+	METADATA_QUERY_SLOTS
+		.get_or_init(|| Arc::new(Semaphore::new(MAX_METADATA_QUERIES)))
+		.clone()
+}
+
+#[cfg(unix)]
+fn metadata_query_public_error(error: anyhow::Error) -> anyhow::Error {
+	if error.is::<MetadataQueryDeadline>() {
+		error
+	} else {
+		anyhow!(
+			"archive index preparing or validation unavailable; repeat only this metadata query"
+		)
+	}
+}
+
+// Admission and blocking-pool queue time consume the original query budget.
+// A cancelled caller cannot release a slot while queued or running I/O still
+// owns it, and a late blocking worker must not open the archive or start a scan.
+#[cfg(unix)]
+async fn run_metadata_query<T: Send + 'static>(
+	deadline: Instant,
+	slots: Arc<Semaphore>,
+	query: impl FnOnce(Instant) -> Result<T> + Send + 'static,
+) -> Result<T> {
+	if Instant::now() >= deadline {
+		return Err(MetadataQueryDeadline.into());
+	}
+	let result = tokio::time::timeout_at(tokio::time::Instant::from_std(deadline), async move {
+		let permit = slots
+			.acquire_owned()
+			.await
+			.map_err(|_| anyhow!("archive metadata query admission unavailable"))?;
+		if Instant::now() >= deadline {
+			return Err(MetadataQueryDeadline.into());
+		}
+		tokio::task::spawn_blocking(move || {
+			let _permit = permit;
+			if Instant::now() >= deadline {
+				return Err(MetadataQueryDeadline.into());
+			}
+			query(deadline)
+		})
+		.await
+		.map_err(|_| anyhow!("archive metadata query worker unavailable"))?
+	})
+	.await
+	.map_err(|_| anyhow::Error::from(MetadataQueryDeadline))??;
+	// A ready worker and an expired timer can be observed together after
+	// owner scheduling delay. Never accept that stale successful result.
+	if Instant::now() >= deadline {
+		return Err(MetadataQueryDeadline.into());
+	}
+	Ok(result)
+}
+
+#[cfg(all(test, unix))]
 fn usage_stats_at(root: &Path, owner: &str) -> Result<String> {
+	usage_stats_at_until(root, owner, Instant::now() + index::QUERY_BUDGET)
+}
+
+#[cfg(unix)]
+fn usage_stats_at_until(root: &Path, owner: &str, deadline: Instant) -> Result<String> {
 	if !valid_id(owner) {
 		bail!("request usage unavailable to this scope");
 	}
-	let deadline = Instant::now() + index::QUERY_BUDGET;
 	let archive = {
 		let _guard = index::query_lock(deadline)?;
 		let hot = open_store(root)?;
@@ -1696,24 +1780,17 @@ fn usage_stats_at(root: &Path, owner: &str) -> Result<String> {
 }
 
 pub async fn usage_stats(owner: &str, _params: UsageStatsParams) -> Result<String> {
+	#[cfg(unix)]
+	let deadline = Instant::now() + index::QUERY_BUDGET;
 	let root = runtime_config()?.state_dir.clone();
 	let owner = owner.to_owned();
 	#[cfg(unix)]
 	{
-		tokio::time::timeout(
-			std::time::Duration::from_secs(4),
-			tokio::task::spawn_blocking(move || usage_stats_at(&root, &owner)),
-		)
-		.await
-		.map_err(|_| {
-			anyhow!(
-				"archive metadata query total deadline exceeded; repeat only the metadata query"
-			)
-		})?
-		.map_err(|_| anyhow!("request usage unavailable to this scope"))?
-		.map_err(|_| {
-			anyhow!("archive index preparing or validation unavailable; repeat only this metadata query")
+		run_metadata_query(deadline, metadata_query_slots(), move |deadline| {
+			usage_stats_at_until(&root, &owner, deadline)
 		})
+		.await
+		.map_err(metadata_query_public_error)
 	}
 	#[cfg(not(unix))]
 	{
@@ -1722,8 +1799,18 @@ pub async fn usage_stats(owner: &str, _params: UsageStatsParams) -> Result<Strin
 	}
 }
 
-#[cfg(unix)]
+#[cfg(all(test, unix))]
 fn archive_history_at(root: &Path, owner: &str, params: RequestHistoryParams) -> Result<String> {
+	archive_history_at_until(root, owner, params, Instant::now() + index::QUERY_BUDGET)
+}
+
+#[cfg(unix)]
+fn archive_history_at_until(
+	root: &Path,
+	owner: &str,
+	params: RequestHistoryParams,
+	deadline: Instant,
+) -> Result<String> {
 	if !valid_id(owner) {
 		bail!("request archive unavailable to this scope");
 	}
@@ -1731,7 +1818,6 @@ fn archive_history_at(root: &Path, owner: &str, params: RequestHistoryParams) ->
 	if !(1..=32).contains(&limit) || params.after_id.as_deref().is_some_and(|id| !valid_id(id)) {
 		bail!("invalid request archive page");
 	}
-	let deadline = Instant::now() + index::QUERY_BUDGET;
 	let (archive, cursor) = {
 		let _guard = index::query_lock(deadline)?;
 		let hot = open_store(root)?;
@@ -1780,24 +1866,17 @@ fn archive_history_at(root: &Path, owner: &str, params: RequestHistoryParams) ->
 }
 
 pub async fn archive_history(owner: &str, params: RequestHistoryParams) -> Result<String> {
+	#[cfg(unix)]
+	let deadline = Instant::now() + index::QUERY_BUDGET;
 	let root = runtime_config()?.state_dir.clone();
 	let owner = owner.to_owned();
 	#[cfg(unix)]
 	{
-		tokio::time::timeout(
-			std::time::Duration::from_secs(4),
-			tokio::task::spawn_blocking(move || archive_history_at(&root, &owner, params)),
-		)
-		.await
-		.map_err(|_| {
-			anyhow!(
-				"archive metadata query total deadline exceeded; repeat only the metadata query"
-			)
-		})?
-		.map_err(|_| anyhow!("request archive unavailable to this scope"))?
-		.map_err(|_| {
-			anyhow!("archive index preparing or validation unavailable; repeat only this metadata query")
+		run_metadata_query(deadline, metadata_query_slots(), move |deadline| {
+			archive_history_at_until(&root, &owner, params, deadline)
 		})
+		.await
+		.map_err(metadata_query_public_error)
 	}
 	#[cfg(not(unix))]
 	{
@@ -1969,3 +2048,7 @@ mod tests;
 #[cfg(all(test, unix))]
 #[path = "request_audit_lookup_tests.rs"]
 mod lookup_tests;
+
+#[cfg(all(test, unix))]
+#[path = "request_audit_query_tests.rs"]
+mod query_tests;

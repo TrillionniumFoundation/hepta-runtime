@@ -1,4 +1,6 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
+//! Profile identity, byte completeness and worker-consumption boundaries.
 use super::*;
 use sha2::Digest;
 use std::os::unix::fs::{symlink, PermissionsExt};
@@ -247,4 +249,73 @@ async fn direct_agent_identity_includes_response_bytes_and_rejects_replaced_sock
 			.await
 			.is_err()
 	);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn owner_rechecks_changed_file_boundaries_after_complete_worker_validation() {
+	use super::super::validation::Workers;
+	use std::sync::Arc;
+	use std::time::Duration;
+	for mutation in ["bytes", "replacement", "permissions", "hardlink"] {
+		let root = tempfile::tempdir().unwrap();
+		let path = root.path().join("worker-pin");
+		std::fs::write(&path, b"original").unwrap();
+		std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+		let (pin, _) = PinnedFile::load(&path, None, 1024, true, false).unwrap();
+		let pin = Arc::new(pin);
+		let checked = pin.clone();
+		let stop = tokio_util::sync::CancellationToken::new();
+		Workers::new()
+			.run(&stop, Instant::now() + Duration::from_secs(2), move || {
+				checked.verify()
+			})
+			.await
+			.unwrap();
+		pin.verify_identity().unwrap();
+		match mutation {
+			"bytes" => std::fs::write(&path, b"modified").unwrap(),
+			"replacement" => {
+				std::fs::rename(&path, root.path().join("old")).unwrap();
+				std::fs::write(&path, b"original").unwrap();
+				std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+			}
+			"permissions" => {
+				std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap()
+			}
+			"hardlink" => std::fs::hard_link(&path, root.path().join("alias")).unwrap(),
+			_ => unreachable!(),
+		}
+		assert!(
+			pin.verify_identity().is_err(),
+			"missed {mutation} after worker completion"
+		);
+	}
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn worker_full_hash_is_not_replaced_by_owner_metadata_check() {
+	use super::super::validation::Workers;
+	use std::time::Duration;
+	let root = tempfile::tempdir().unwrap();
+	let path = root.path().join("complete-worker-pin");
+	let mut bytes = vec![23; VERIFY_BUFFER_BYTES * 3 + 7];
+	std::fs::write(&path, &bytes).unwrap();
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+	let (mut pin, _) = PinnedFile::load(&path, None, bytes.len(), true, false).unwrap();
+	pin.verify().unwrap();
+	*bytes.last_mut().unwrap() ^= 1;
+	std::fs::write(&path, &bytes).unwrap();
+	// Isolate complete-byte verification from the independent metadata fence,
+	// as the existing streamed-pin tests do. Production never rebases a pin.
+	pin.stamp = Stamp::of(&std::fs::metadata(&path).unwrap());
+	pin.verify_identity().unwrap();
+	let stop = tokio_util::sync::CancellationToken::new();
+	let workers = Workers::new();
+	assert!(workers
+		.run(&stop, Instant::now() + Duration::from_secs(2), move || pin
+			.verify())
+		.await
+		.is_err());
+	assert!(stop.is_cancelled());
+	workers.drain().await.unwrap();
 }

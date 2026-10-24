@@ -1,5 +1,15 @@
 # Reproducing the x230 optimization evidence
 
+## Latest checkpoint: A26
+
+The draft optimization PR now carries the exact A26 source qualified on x230.
+The [A26 report](../../docs/X230_A26_20261024.md) and
+[frozen A26 tools](a26/README.md) describe its availability, worker-lifetime,
+and controller-recovery results, including the CPU cost, invalid full performance
+comparison, limited resource sampling, and retained crash sockets. The dated
+candidate sections below describe their respective historical checkpoints.
+
+
 These helpers qualify an isolated source snapshot and measure the native stdio
 MCP controller against original job records. They do not install a runtime,
 replace a service, increase production limits, or retry an ambiguous launch.

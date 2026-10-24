@@ -1,0 +1,18 @@
+--- r01/build_hash_probe_evidence.py
++++ r02/build_hash_probe_evidence.py
+@@ -20,6 +20,7 @@
+ 
+ HOME_DIR = Path.home()
+ BASE = HOME_DIR / "hepta-runtime-optimization-20261023"
++QUALIFIED_TARGET = HOME_DIR / ".local/state/hepta-runtime-native-dev-20261018/target-v61-diagnostic-a1"
+ OUTPUT = BASE / "publication-a26-r01" / "hash-probe-r02"
+ DIRECTORIES = {
+     "bundle-r01": BASE / "a26-hash-probe-bundle-r01",
+@@ -87,6 +88,7 @@
+ 
+ def permitted(path):
+     return (path == Path("/usr/bin/ssh") or path.is_relative_to(BASE)
++            or path.is_relative_to(QUALIFIED_TARGET)
+             or path.is_relative_to(HOME_DIR / ".rustup/toolchains")
+             or path.is_relative_to(HOME_DIR / ".cargo/registry/src"))
+ 

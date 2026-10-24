@@ -1,12 +1,18 @@
-// Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
 //! A separate, explicitly opted-in transport; it never falls back or replays.
+#[path = "ssh_observation_postspawn.rs"]
+mod postspawn;
 #[path = "ssh_observation_profile.rs"]
 mod profile;
+#[path = "ssh_observation_validation.rs"]
+mod validation;
 
 use anyhow::{anyhow, bail, Context, Result};
 use profile::{AgentIdentity, Profile, Stamp};
 use ring::rand::{SecureRandom, SystemRandom};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::fs::File;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::fs::MetadataExt;
@@ -27,6 +33,9 @@ const MAX_MASTERS: usize = 8;
 const MAX_SESSIONS: usize = 8;
 const HOST_SESSIONS: usize = 2;
 const QUEUE: usize = 8;
+// Same logical request bound as eight executing/retained outputs plus the
+// original eight channel entries. Moving a waiter cannot create new capacity.
+const MAX_ADMITTED: usize = MAX_SESSIONS + QUEUE;
 const IDLE: Duration = Duration::from_secs(30);
 const AGE: Duration = Duration::from_secs(120);
 const START: Duration = Duration::from_secs(12);
@@ -44,6 +53,30 @@ fn check_control_socket_path(path: &Path) -> Result<()> {
 	Ok(())
 }
 
+// OpenSSH links its listening temporary socket to the final name before
+// unlinking the temporary name. A two-link inode may still be publishing;
+// retaining its full stamp would mistake the expected unlink for replacement.
+// Only initial readiness waits here. Established-master checks stay exact.
+async fn master_socket_readiness(socket: &Path, owned_pid: u32) -> Result<Option<Stamp>> {
+	let Ok(stamp) = profile::socket_stamp(socket) else {
+		return Ok(None);
+	};
+	match stamp.link_count() {
+		1 => {}
+		2 => return Ok(None),
+		_ => bail!("observation control socket has unexpected link count"),
+	}
+	let stream = UnixStream::connect(socket).await?;
+	let peer = profile::peer(&stream)?;
+	if peer.0 != owned_pid as i32
+		|| peer.1 != unsafe { libc::geteuid() }
+		|| profile::socket_stamp(socket)? != stamp
+	{
+		bail!("observation control socket is not the owned master");
+	}
+	Ok(Some(stamp))
+}
+
 struct Request {
 	host: String,
 	command: String,
@@ -51,12 +84,14 @@ struct Request {
 	deadline: Instant,
 	cancel: CancellationToken,
 	reply: oneshot::Sender<Result<Captured>>,
+	admission: Arc<OwnedSemaphorePermit>,
 }
 
 /// Capacity also covers completed output until its original caller parses it.
 pub(super) struct Captured {
 	output: Output,
 	_budget: Arc<OwnedSemaphorePermit>,
+	_admission: Arc<OwnedSemaphorePermit>,
 }
 impl std::ops::Deref for Captured {
 	type Target = Output;
@@ -67,6 +102,7 @@ impl std::ops::Deref for Captured {
 
 struct Proxy {
 	sender: mpsc::Sender<Request>,
+	admission: Arc<Semaphore>,
 	stop: CancellationToken,
 	healthy: AtomicBool,
 	thread: Mutex<Option<std::thread::JoinHandle<Result<()>>>>,
@@ -121,6 +157,7 @@ pub(super) async fn start(path: &Path) -> Result<PoolGuard> {
 	let (ready_tx, ready_rx) = oneshot::channel();
 	let proxy = Arc::new(Proxy {
 		sender,
+		admission: Arc::new(Semaphore::new(MAX_ADMITTED)),
 		stop: CancellationToken::new(),
 		healthy: AtomicBool::new(false),
 		thread: Mutex::new(None),
@@ -134,6 +171,7 @@ pub(super) async fn start(path: &Path) -> Result<PoolGuard> {
 				.build()?;
 			let core = Arc::new(Core {
 				profile,
+				validation: validation::Workers::new(),
 				root,
 				stop: owner.stop.clone(),
 				agent: OnceLock::new(),
@@ -163,6 +201,9 @@ pub(super) async fn start(path: &Path) -> Result<PoolGuard> {
 			owner.healthy.store(false, Ordering::Release);
 			core.stop.cancel();
 			let cleanup = runtime.block_on(core.shutdown());
+			// Early cleanup errors must not let detached validation outlive its
+			// authority owner. Retain the original cleanup/actor error precedence.
+			let cleanup = runtime.block_on(core.validation.finish_shutdown(cleanup));
 			match outcome {
 				Ok(result) => {
 					result?;
@@ -203,6 +244,26 @@ impl Drop for CancelOnDrop {
 	}
 }
 
+// On this owner runtime, unwinding/drop finishes before any awakened waiter
+// can be polled. A failed already-spawned supervisor therefore freezes child
+// admission even before the actor observes its JoinError.
+struct StopUnlessCompleted {
+	stop: CancellationToken,
+	completed: bool,
+}
+impl StopUnlessCompleted {
+	fn complete(mut self) {
+		self.completed = true;
+	}
+}
+impl Drop for StopUnlessCompleted {
+	fn drop(&mut self) {
+		if !self.completed {
+			self.stop.cancel();
+		}
+	}
+}
+
 pub(super) async fn capture(
 	host: &str,
 	command: String,
@@ -218,22 +279,58 @@ pub(super) async fn capture(
 	let cancel = CancellationToken::new();
 	let _guard = CancelOnDrop(cancel.clone());
 	let (reply, receive) = oneshot::channel();
-	pool.sender
-		.try_send(Request {
+	pool.enqueue(host, command, input, deadline, cancel, reply)
+		.await?;
+	timeout_at(deadline, receive)
+		.await
+		.context("observation transport deadline; no automatic retry")?
+		.context("observation transport unavailable; no automatic retry")?
+}
+
+impl Proxy {
+	async fn enqueue(
+		&self,
+		host: &str,
+		command: String,
+		input: Vec<u8>,
+		deadline: Instant,
+		cancel: CancellationToken,
+		reply: oneshot::Sender<Result<Captured>>,
+	) -> Result<()> {
+		let admission = self.admission.clone().try_acquire_owned().map_err(|_| {
+			anyhow!("observation pool capacity unavailable; no fallback or automatic retry")
+		})?;
+		let request = Request {
 			host: host.to_owned(),
 			command,
 			input,
 			deadline,
 			cancel,
 			reply,
-		})
-		.map_err(|_| {
-			anyhow!("observation pool capacity unavailable; no fallback or automatic retry")
-		})?;
-	timeout_at(deadline, receive)
-		.await
-		.context("observation transport deadline; no automatic retry")?
-		.context("observation transport unavailable; no automatic retry")?
+			admission: Arc::new(admission),
+		};
+		// A channel waiter already owns one of the same sixteen identities.
+		// Wait within its original deadline; do not enlarge the channel or retry.
+		let slot = tokio::select! {
+			value = timeout_at(deadline, self.sender.reserve()) => value
+				.context("observation queue admission deadline; no automatic retry")?
+				.context("observation queue closed; no fallback or automatic retry")?,
+			_ = request.cancel.cancelled() => bail!("observation cancelled before queue submission; no automatic retry"),
+			_ = self.stop.cancelled() => bail!("observation pool stopped before queue submission; no automatic retry"),
+		};
+		// Capacity, shutdown and expiry may become ready together. Recheck after
+		// reservation and leave no await between these fences and the single send.
+		if !self.healthy.load(Ordering::Acquire)
+			|| self.stop.is_cancelled()
+			|| request.cancel.is_cancelled()
+			|| Instant::now() >= deadline
+			|| self.sender.is_closed()
+		{
+			bail!("observation cancelled, expired or unavailable before queue submission; no automatic retry");
+		}
+		slot.send(request);
+		Ok(())
+	}
 }
 
 struct PrivateRoot {
@@ -486,6 +583,7 @@ impl Drop for ActiveMaster {
 
 struct Core {
 	profile: Arc<Profile>,
+	validation: validation::Workers,
 	root: PrivateRoot,
 	stop: CancellationToken,
 	agent: OnceLock<AgentIdentity>,
@@ -501,6 +599,12 @@ enum Mode {
 	Master,
 	Slave,
 }
+
+enum ProfileCheckScope {
+	Lifecycle,
+	Request,
+}
+
 impl Core {
 	async fn initialize(self: &Arc<Self>) -> Result<()> {
 		self.profile.verify_files()?;
@@ -522,8 +626,37 @@ impl Core {
 		self.verify_profile(deadline).await
 	}
 	async fn verify_profile(&self, deadline: Instant) -> Result<()> {
-		let checked = async {
-			self.profile.verify_files()?;
+		// Initialization and master generations keep the original all-error
+		// freeze. A failed generation must not be retired past a stale RPC that
+		// has not observed its watch result, allowing that RPC to create another.
+		self.verify_profile_for(deadline, ProfileCheckScope::Lifecycle)
+			.await
+	}
+	async fn verify_request_profile(&self, deadline: Instant) -> Result<()> {
+		self.verify_profile_for(deadline, ProfileCheckScope::Request)
+			.await
+	}
+	async fn verify_files(&self, deadline: Instant) -> Result<()> {
+		let profile = self.profile.clone();
+		self.validation
+			.run(&self.stop, deadline, move || profile.verify_files())
+			.await?;
+		// The worker performed the full read/hash. Recheck all immutable path,
+		// inode, permission and policy boundaries on their original owner after
+		// the new await; no delayed successful snapshot bypasses this fence.
+		let checked = self.profile.verify_boundaries();
+		if checked.is_err() {
+			self.stop.cancel();
+		}
+		checked?;
+		if self.stop.is_cancelled() || Instant::now() >= deadline {
+			bail!("observation file validation cancelled or expired before acceptance");
+		}
+		Ok(())
+	}
+	async fn verify_profile_for(&self, deadline: Instant, scope: ProfileCheckScope) -> Result<()> {
+		let checked: Result<()> = async {
+			self.verify_files(deadline).await?;
 			self.root.verify(&self.profile)?;
 			let agent = tokio::select! {
 				value = profile::agent_snapshot(&self.profile.agent, deadline.min(Instant::now() + Duration::from_secs(2))) => value?,
@@ -532,11 +665,18 @@ impl Core {
 			if self.agent.get() != Some(&agent) {
 				bail!("observation SSH credential identity changed");
 			}
-			self.profile.verify_files()?;
+			self.verify_files(deadline).await?;
 			Ok(())
 		}
 		.await;
-		if checked.is_err() {
+		// A lookup timer grants no authority: its caller still returns Err and
+		// discards any output. Other requests must perform their own complete
+		// checks; no credential result is substituted or automatically retried.
+		// Every observed mismatch, I/O error and other failure still freezes us.
+		if checked.as_ref().is_err_and(|error| match scope {
+			ProfileCheckScope::Lifecycle => true,
+			ProfileCheckScope::Request => !error.is::<profile::AgentLookupDeadline>(),
+		}) {
 			self.stop.cancel();
 		}
 		checked
@@ -716,16 +856,55 @@ impl Core {
 		// Failed pidfd/identity checks use the same bounded cleanup ledger.
 		children.insert(id, owned.clone());
 		drop(children);
-		let identity = process_identity(pid).ok();
+		// The child has not escaped spawn; shutdown joins owner work before
+		// reaping its ledger. Keep every proc read and try_wait under the same
+		// Child lock used by wait/stop, including the initial observation.
+		let (mut identity, mut terminal) = {
+			let mut child = owned.child.lock().await;
+			let identity = process_identity(pid).ok();
+			let terminal = child
+				.try_wait()
+				.map(|status| status.is_some())
+				.map_err(anyhow::Error::from);
+			(identity, terminal)
+		};
+		if owned.pidfd.is_some() && terminal.as_ref().is_ok_and(|done| !*done) {
+			if let Some(anchor) = identity.as_ref().filter(|value| {
+				value.argv.is_empty()
+					&& value.uid == unsafe { libc::geteuid() }
+					&& (value.dev, value.ino) == self.profile.ssh_inode
+			}) {
+				match postspawn::wait_empty_argv(
+					&owned,
+					anchor,
+					&expected,
+					self.profile.ssh_inode,
+					deadline,
+					cancel,
+					&self.stop,
+				)
+				.await
+				{
+					Ok(ready) => {
+						identity = ready.identity;
+						terminal = Ok(ready.terminal);
+					}
+					Err(error) => {
+						identity = None;
+						terminal = Err(error);
+					}
+				}
+			}
+		}
 		let matches = identity.as_ref().is_some_and(|value| {
 			value.uid == unsafe { libc::geteuid() }
 				&& (value.dev, value.ino) == self.profile.ssh_inode
 				&& value.argv == expected
 		});
+		// An empty snapshot must not occupy OnceLock before readiness resolves.
 		if let Some(identity) = identity {
 			let _ = owned.identity.set(identity);
 		}
-		let terminal = owned.terminal().await;
 		let proof = owned.pidfd.is_some() && terminal.as_ref().is_ok_and(|done| *done || matches);
 		if !proof {
 			self.stop.cancel();
@@ -937,15 +1116,7 @@ impl Core {
 		let readiness = async {
 			loop {
 				owned.verify_live().await?;
-				if let Ok(stamp) = profile::socket_stamp(&socket) {
-					let stream = UnixStream::connect(&socket).await?;
-					let peer = profile::peer(&stream)?;
-					if peer.0 != owned.pid as i32
-						|| peer.1 != unsafe { libc::geteuid() }
-						|| profile::socket_stamp(&socket)? != stamp
-					{
-						bail!("observation control socket is not the owned master");
-					}
+				if let Some(stamp) = master_socket_readiness(&socket, owned.pid).await? {
 					return Ok(stamp);
 				}
 				tokio::time::sleep(Duration::from_millis(20)).await;
@@ -1152,22 +1323,58 @@ impl Core {
 		)
 		.await
 	}
-	async fn execute(self: Arc<Self>, request: Request, global: OwnedSemaphorePermit) {
-		let result = self.clone().execute_inner(&request, global).await;
+	async fn execute(
+		self: Arc<Self>,
+		request: Request,
+		initial: OwnedSemaphorePermit,
+		global: Arc<Semaphore>,
+	) {
+		let result = self.clone().execute_inner(&request, initial, global).await;
 		let _ = request.reply.send(result);
+	}
+	async fn admission_profile(
+		&self,
+		request: &Request,
+		initial: OwnedSemaphorePermit,
+	) -> Result<()> {
+		// The full initial authority check and its bounded agent frame use the
+		// same eight-budget pool as capture. No budget waits behind a hot host.
+		let _budget = initial;
+		tokio::select! {
+			value = self.verify_request_profile(request.deadline) => value?,
+			_ = request.cancel.cancelled() => bail!("observation cancelled during admission profile check"),
+			_ = self.stop.cancelled() => bail!("observation pool stopped during admission profile check"),
+		};
+		Ok(())
+	}
+	async fn request_budget(
+		&self,
+		request: &Request,
+		global: Arc<Semaphore>,
+	) -> Result<Arc<OwnedSemaphorePermit>> {
+		let permit = tokio::select! {
+			value = timeout_at(request.deadline, global.acquire_owned()) => value.context("observation global capacity deadline")??,
+			_ = request.cancel.cancelled() => bail!("observation request cancelled before global capacity"),
+			_ = self.stop.cancelled() => bail!("observation pool stopped before global capacity"),
+		};
+		// A released permit and cancellation can become ready together. Never
+		// let select's choice bypass a failed supervisor's synchronous stop.
+		if self.stop.is_cancelled()
+			|| request.cancel.is_cancelled()
+			|| Instant::now() >= request.deadline
+		{
+			bail!("observation cancelled or expired before global capacity");
+		}
+		Ok(Arc::new(permit))
 	}
 	async fn execute_inner(
 		self: Arc<Self>,
 		request: &Request,
-		global: OwnedSemaphorePermit,
+		initial: OwnedSemaphorePermit,
+		global: Arc<Semaphore>,
 	) -> Result<Captured> {
-		let budget = Arc::new(global);
-		tokio::select! {
-			value = self.verify_profile(request.deadline) => value?,
-			_ = request.cancel.cancelled() => bail!("observation cancelled during admission profile check"),
-			_ = self.stop.cancelled() => bail!("observation pool stopped during admission profile check"),
-		};
-		let (master, host, _active) = loop {
+		self.admission_profile(request, initial).await?;
+		let (master, host, budget, _active) = loop {
 			let mut entry = self
 				.entry(&request.host, &request.cancel, request.deadline)
 				.await?;
@@ -1194,9 +1401,10 @@ impl Core {
 				_ = request.cancel.cancelled() => bail!("observation request cancelled before submission"),
 				_ = self.stop.cancelled() => bail!("observation pool stopped before submission"),
 			};
+			let budget = self.request_budget(request, global.clone()).await?;
 			// Recheck immutable policy/credentials after queueing, before the lease.
 			tokio::select! {
-				value = self.verify_profile(request.deadline) => value?,
+				value = self.verify_request_profile(request.deadline) => value?,
 				_ = request.cancel.cancelled() => bail!("observation cancelled before lease"),
 				_ = self.stop.cancelled() => bail!("observation pool stopped before lease"),
 			};
@@ -1211,10 +1419,11 @@ impl Core {
 			if master.accepting.load(Ordering::Acquire) && request.deadline <= master.created + AGE
 			{
 				let active = ActiveMaster(master.clone());
-				break (master, host, active);
+				break (master, host, budget, active);
 			}
 			master.active.fetch_sub(1, Ordering::AcqRel);
 			drop(host);
+			drop(budget);
 			// No slave has been created. Join a single bounded admission renewal.
 			self.renew(
 				&request.host,
@@ -1249,11 +1458,11 @@ impl Core {
 				&request.input,
 				request.deadline,
 				&request.cancel,
-				vec![budget.clone(), Arc::new(host)],
+				vec![budget.clone(), Arc::new(host), request.admission.clone()],
 			)
 			.await?;
 		tokio::select! {
-			value = self.verify_profile(request.deadline) => value?,
+			value = self.verify_request_profile(request.deadline) => value?,
 			_ = request.cancel.cancelled() => bail!("observation cancelled before response authority check"),
 			_ = self.stop.cancelled() => bail!("observation pool stopped before response authority check"),
 		};
@@ -1264,6 +1473,7 @@ impl Core {
 		Ok(Captured {
 			output,
 			_budget: budget,
+			_admission: request.admission.clone(),
 		})
 	}
 	async fn maintain(&self) -> Result<()> {
@@ -1359,48 +1569,96 @@ impl Core {
 	}
 	async fn run_with_capacity(
 		self: Arc<Self>,
-		mut receiver: mpsc::Receiver<Request>,
+		receiver: mpsc::Receiver<Request>,
 		global: Arc<Semaphore>,
 	) -> Result<()> {
+		let request_global = global.clone();
+		self.run_with_dispatch(receiver, global, move |core, request, permit| {
+			core.execute(request, permit, request_global.clone())
+		})
+		.await
+	}
+	// The same actor is exercised with a controlled executor in isolated tests.
+	// Production always supplies execute above; no caller chooses this function.
+	async fn run_with_dispatch<F, Work>(
+		self: Arc<Self>,
+		mut receiver: mpsc::Receiver<Request>,
+		global: Arc<Semaphore>,
+		dispatch: F,
+	) -> Result<()>
+	where
+		F: Fn(Arc<Self>, Request, OwnedSemaphorePermit) -> Work,
+		Work: std::future::Future<Output = ()> + Send + 'static,
+	{
 		let mut work = JoinSet::new();
-		let mut reservation = None;
+		let mut pending = VecDeque::with_capacity(MAX_ADMITTED);
 		let mut tick = tokio::time::interval(Duration::from_millis(100));
 		let outcome = loop {
+			if let Err(error) = Self::reap_completed_requests(&mut work) {
+				break Err(error);
+			}
+			Self::discard_pending(&mut pending, &self.profile.hosts);
+			let next_deadline = pending
+				.iter()
+				.map(|request| request.deadline)
+				.min()
+				.unwrap_or_else(Instant::now);
 			tokio::select! {
 				_ = self.stop.cancelled() => break Ok(()),
 				_ = tick.tick() => { if let Err(error) = self.maintain().await { break Err(error); } },
+				_ = tokio::time::sleep_until(next_deadline), if !pending.is_empty() => {},
 				Some(result) = work.join_next(), if !work.is_empty() => {
 					if let Err(error) = result { break Err(anyhow!("observation request supervisor failed: {error}")); }
 				},
-				permit = global.clone().acquire_owned(), if reservation.is_none() && work.len() < MAX_SESSIONS => {
-					match permit {
-						Ok(permit) => reservation = Some(permit),
+				// At most sixteen logical requests exist, including these cheap
+				// host waiters. Expensive preflight/capture still share global8.
+				permit = global.clone().acquire_owned(), if !pending.is_empty() && work.len() < MAX_ADMITTED => {
+					let permit = match permit {
+						Ok(permit) => permit,
 						Err(_) => break Err(anyhow!("observation global capacity closed")),
-					}
-				},
-				// Leave bounded requests in the channel until both a supervisor
-				// slot and the output budget exist. A completed Captured can still
-				// own that budget; its drop directly wakes acquire_owned above.
-				request = receiver.recv(), if reservation.is_some() && work.len() < MAX_SESSIONS => {
-					let Some(request) = request else { break Ok(()); };
-					if request.cancel.is_cancelled() || request.reply.is_closed() || Instant::now() >= request.deadline {
-						let _ = request.reply.send(Err(anyhow!("observation cancelled before admission")));
-						continue;
-					}
-					// Completed replies may leave unjoined tasks when select chose
-					// this receiver. They are not live supervisors or new capacity.
+					};
+					// A failed task may have released capacity while select was
+					// asleep. Observe its failure before any replacement is spawned.
 					if let Err(error) = Self::reap_completed_requests(&mut work) {
 						break Err(error);
 					}
-					let Some(permit) = reservation.take() else {
-						break Err(anyhow!("observation admission reservation unavailable"));
+					if self.stop.is_cancelled() {
+						break Ok(());
+					}
+					Self::discard_pending(&mut pending, &self.profile.hosts);
+					let Some(request) = pending.pop_front() else {
+						continue;
 					};
-					work.spawn(self.clone().execute(request, permit));
+					// Construct outside the async body: abort before its first poll
+					// and synchronous dispatcher panic must freeze admission too.
+					let guard = StopUnlessCompleted {
+						stop: self.stop.clone(), completed: false,
+					};
+					let task = dispatch(self.clone(), request, permit);
+					work.spawn(async move {
+						task.await;
+						guard.complete();
+					});
+				},
+				// Drain accepted channel requests even when global or the first
+				// host is full. Their existing admission16 permit moves with them.
+				request = receiver.recv() => {
+					let Some(request) = request else { break Ok(()); };
+					if pending.len() >= MAX_ADMITTED {
+						let _ = request.reply.send(Err(anyhow!("observation pending bound exceeded")));
+						break Err(anyhow!("observation pending bound exceeded"));
+					}
+					pending.push_back(request);
 				}
 			}
 		};
 		self.stop.cancel();
 		receiver.close();
+		for request in pending {
+			let _ = request
+				.reply
+				.send(Err(anyhow!("observation pool stopped before admission")));
+		}
 		while let Ok(request) = receiver.try_recv() {
 			let _ = request
 				.reply
@@ -1410,6 +1668,30 @@ impl Core {
 			result.context("observation request supervisor failed during shutdown")?;
 		}
 		outcome
+	}
+	fn discard_pending(pending: &mut VecDeque<Request>, hosts: &BTreeMap<String, String>) {
+		// One bounded pass, retaining order and the existing allocation. Neither
+		// cancellation nor expiry waits for a global output budget to be returned.
+		for _ in 0..pending.len() {
+			let Some(request) = pending.pop_front() else {
+				break;
+			};
+			let error = if request.cancel.is_cancelled()
+				|| request.reply.is_closed()
+				|| Instant::now() >= request.deadline
+			{
+				Some("observation cancelled before admission")
+			} else if !hosts.contains_key(&request.host) {
+				Some("host is outside observation profile")
+			} else {
+				None
+			};
+			if let Some(error) = error {
+				let _ = request.reply.send(Err(anyhow!(error)));
+			} else {
+				pending.push_back(request);
+			}
+		}
 	}
 	async fn shutdown(&self) -> Result<()> {
 		self.stop.cancel();
@@ -1439,6 +1721,7 @@ impl Core {
 		if uncertain || !self.children.lock().await.is_empty() {
 			bail!("observation child cleanup incomplete; reconciliation required");
 		}
+		self.validation.drain().await?;
 		let mut entries = self.masters.lock().await;
 		for entry in entries.values() {
 			if let Some(master) = &entry.draining {

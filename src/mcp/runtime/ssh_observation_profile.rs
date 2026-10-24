@@ -1,3 +1,4 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
 //! Explicitly supported, immutable inputs for the opt-in observation transport.
 use anyhow::{bail, Context, Result};
@@ -71,6 +72,9 @@ impl Stamp {
 			mtime: (value.mtime(), value.mtime_nsec()),
 			ctime: (value.ctime(), value.ctime_nsec()),
 		}
+	}
+	pub(super) fn link_count(&self) -> u64 {
+		self.nlink
 	}
 	pub(super) fn same_directory(&self, other: &Self) -> bool {
 		(self.dev, self.ino, self.uid, self.mode) == (other.dev, other.ino, other.uid, other.mode)
@@ -254,6 +258,13 @@ impl PinnedFile {
 			bytes,
 		))
 	}
+	fn verify_identity(&self) -> Result<()> {
+		let (_, stamp) = checked_file(&self.path, self.maximum, self.private, self.executable)?;
+		if stamp != self.stamp {
+			bail!("observation profile changed after complete validation");
+		}
+		Ok(())
+	}
 	fn verify(&self) -> Result<()> {
 		let (mut file, stamp) =
 			checked_file(&self.path, self.maximum, self.private, self.executable)?;
@@ -413,7 +424,7 @@ impl PinnedShell {
 		result.verify()?;
 		Ok(result)
 	}
-	fn verify(&self) -> Result<()> {
+	fn verify_resolution(&self) -> Result<()> {
 		let (path, components) = fixed_shell_resolution()?;
 		if path != self.target.path
 			|| components.len() != self.components.len()
@@ -431,6 +442,10 @@ impl PinnedShell {
 				}) {
 			bail!("observation fixed system shell resolution changed");
 		}
+		Ok(())
+	}
+	fn verify(&self) -> Result<()> {
+		self.verify_resolution()?;
 		self.target.verify()
 	}
 }
@@ -598,6 +613,25 @@ fn agent_identities(bytes: &[u8]) -> Result<[u8; 32]> {
 	Ok(digest(bytes))
 }
 
+// Only this exact lookup timer creates the typed error. I/O timeouts, malformed
+// frames and failed socket/peer checks remain ordinary authority failures.
+// Expiry can reflect the RPC budget or owner scheduling; it supplies no
+// credential result and does not identify which part of the lookup was delayed.
+#[derive(Debug)]
+pub(super) struct AgentLookupDeadline(tokio::time::error::Elapsed);
+
+impl std::fmt::Display for AgentLookupDeadline {
+	fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		formatter.write_str("observation SSH agent deadline")
+	}
+}
+
+impl std::error::Error for AgentLookupDeadline {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		Some(&self.0)
+	}
+}
+
 pub(super) async fn agent_snapshot(path: &Path, deadline: Instant) -> Result<AgentIdentity> {
 	// Forwarded agent sockets may be0775; their descriptor-checked0700
 	// account-owned parent is the confidentiality boundary. Control sockets
@@ -629,7 +663,7 @@ pub(super) async fn agent_snapshot(path: &Path, deadline: Instant) -> Result<Age
 		})
 	})
 	.await
-	.context("observation SSH agent deadline")?
+	.map_err(AgentLookupDeadline)?
 }
 
 pub(super) struct Profile {
@@ -726,6 +760,17 @@ impl Profile {
 			file.verify()?;
 		}
 		self.shell.verify()?;
+		self.verify_policy()
+	}
+	pub(super) fn verify_boundaries(&self) -> Result<()> {
+		for file in &self.files {
+			file.verify_identity()?;
+		}
+		self.shell.verify_resolution()?;
+		self.shell.target.verify_identity()?;
+		self.verify_policy()
+	}
+	fn verify_policy(&self) -> Result<()> {
 		if !private_directory(&self.socket_parent)?.same_directory(&self.parent_stamp)
 			|| digest(&serde_json::to_vec(
 				crate::mcp::runtime::config::runtime_config()?,
