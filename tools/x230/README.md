@@ -90,6 +90,44 @@ the elapsed-age boundary; the generic process sampler does not identify SSH
 master generations by executable name, so that duration alone is not a count of
 successful renewals.
 
+Choose the call count from a completed same-binary C8 measurement when a
+particular duration is required, and retain that plan separately. The A23 plan
+uses 10,356 calls to target 360 seconds and checks at least 300 seconds of
+observed request span. Each count remains a multiple of 12 so the six hosts and
+two tools stay balanced. Actual duration, failures and all rows must be retained
+even when the planned duration is not reached.
+
+When aggregating a B-only run whose unused A path points to the same binary,
+use distinct accurate labels such as `--baseline unused-A23 --candidate A23`.
+There are no A observations in that experiment, so it is not an A17/A23
+performance comparison and must not borrow a baseline from another run.
+
+`review_x230_soak_windows.py` analyzes a single B-only cell after measurement.
+It requires the actual raw report, exact binary hash, unchanged six-job reference
+report, and the planned count and concurrency. It preserves every failed row,
+uses separate start and completion windows, and divides a final partial window
+by its actual observed span. It does not assign whole-cell CPU to time windows
+or infer memory trends or master renewals from request timing.
+
+```sh
+python3 review_x230_soak_windows.py analyze \
+  --input "$original_soak_report" --expected-input-sha256 "$raw_sha256" \
+  --output "$new_private_window_review" \
+  --expected-binary-sha256 "$candidate_sha256" \
+  --originals-report "$same_binary_reference_report" \
+  --expected-originals-report-sha256 "$reference_sha256" \
+  --expected-calls 10356 --expected-concurrency 8 --window-seconds 30 \
+  --minimum-observed-seconds 300 --long-request-ms 1000 --completion-gap-ms 1000
+```
+
+Its raw analysis output can contain private identities and requires a separate
+privacy review before publication. The A23 failed-soak summary binds a complete
+sanitized report and a complete relative-time window projection, both stored as
+deterministic gzip files. All 10,356 attempts and 6,132 failures remain present.
+The lower duration and failure verdicts are retained; neither fast refusals nor
+complete consumption of a fixed attempt count satisfies sustained-success
+coverage.
+
 ## Abrupt controller recovery
 
 ```sh
@@ -289,3 +327,19 @@ Use the exact measured fairness and observation helpers for the run's helper
 hash checks. CPU remains attributed to complete cells, including metadata
 queries; it is not allocated to cold probes. A verified provenance chain does
 not imply successful observations, a performance improvement or adoption.
+
+## Qualified version provenance for fairness v3
+
+`build_x230_fairness_evidence_v3.py` adds A23 to the allowed separately qualified
+candidate labels and pins the completed A22 qualification. Existing v1/v2
+builders and their evidence remain unchanged. The v3 statistical and admission
+gate functions are unchanged; the same real A22 input preserves the v2 numerical
+results and verdicts. An A23 label cannot reuse A20, A21 or A22 qualification
+identities. It requires the actual successful original qualification report and
+a registry entry derived from that report, with no placeholder hashes.
+
+Use the v2 command above with the v3 script, `--candidate A23`, and the original
+A23 qualification report plus its matching registry. The qualification input is
+still the raw private report, not a published compact receipt. The two measurement
+helpers must still match the original hashes recorded by the experiment. No
+comparison, provenance check or registry entry implies adoption.

@@ -155,7 +155,7 @@ a WAN partition, production ownership transfer, or transactional exactly-once
 business effects. They establish controller recovery and the specifically
 tested publication/failure boundaries.
 
-## Optimizations rejected by measurement
+## Experiments and adoption decisions
 
 ### A21 early host gating
 
@@ -243,6 +243,148 @@ fairness benefit and remaining failures. Applying its [exact source patch](exper
 to A20 commit `7da3a7ebaded8214bc65e69046b74e6251e21767` reproduces the qualified
 149-file source map `dcc6197816f1d36b515626390f128b6826abd47da30710ab4917ca418ef5c29c`.
 The qualified release binary is `f57b6bf92012de15b2ffe81daedcc69688c65f3b6c63b67c95d486664de6d076`.
+
+### A23 bounded queue admission: qualified and measured candidate
+
+A23 retains A22's phased global budget and adds bounded waiting for a channel
+slot after acquiring one of the existing 16 logical admission permits. It uses
+the original deadline and cancellation/stop signals. After reserve completes,
+it rechecks health, stop, cancellation, expiry and channel closure without an
+intervening await before the single send. It does not retry an RPC, enlarge the
+eight-slot channel or release the logical identity while a request is waiting.
+
+The [qualification receipt](evidence/x230-a23-qualification-20261024.json)
+records 1,093 runtime tests and 26 auxiliary tests passed, 21 existing ignored
+tests, strict Clippy, formatting and a successful release build. The qualified
+149-file source map is `5cf2e5cf8fca60e845a2c8f997abfc28017085bc809086a3ddb42448569a2b4f`;
+the release binary is `64416b53b63ffe7eac05b4d9eb6750092279b5f6e25dbad5a8cfd31067d206a1`.
+The [exact source patch](experiments/x230-a23-scheduling.patch) applies to the
+qualified A20 source commit and reproduces every tested file.
+
+#### C16 capacity
+
+In the [complete C16 ABBA experiment](evidence/x230-a23-capacity-20261024.json),
+A20 succeeded in 48/96 and 44/96 calls; A23 succeeded in 96/96 in both rounds.
+A20 therefore had 100 native refusals and A23 had none. All 24 initial-output
+and 48 same-job restart checks passed, and all eight controllers exited cleanly
+through EOF. Two sampling permission errors remain, both for A23 measurement
+controllers.
+
+Successful throughput was 27.8793/s for A20 and 29.4915/s for A23. Total
+controller CPU divided by successful calls, including the cost of failed
+attempts, was 36.3043 and 33.6458 ms. CPU per attempt was 17.3958 and 33.6458 ms:
+fast baseline refusals must not be mistaken for efficient completed work.
+The whole experiment remains `passed=false` because the baseline failed;
+`candidate_passed=true` is recorded separately.
+
+#### Fairness, including the failed first experiment
+
+The [first complete experiment](evidence/x230-a23-fairness-r01-20261024.json)
+retains all 960 timed calls and 48 full-output checks. Its first A20 controller
+recorded one `pidfd or post-exec identity refused` response, 179 other timed
+stopped/unavailable responses and six failed final-output checks. Five admission
+gates were invalid. The final A20 round and both A23 rounds passed, but this
+experiment emits **no performance comparison**.
+
+The [incident record](evidence/x230-a23-fairness-r01-incident-20261024.json)
+separates that branch evidence from its possible causes. A20 and A23 use the
+same spawn/proof/cleanup code. The final refusal is emitted after the original
+owned child has been reaped and released from the ledger, while the shared
+stop token was already cancelled. The old error discarded pidfd errno and
+identity-read substage details, and the controller stderr was empty. A short
+exit race, resource failure or actual identity mismatch cannot be distinguished
+from this record. A23 has not been credited with fixing that shared path.
+
+A [second same-parameter experiment](evidence/x230-a23-fairness-r02-20261024.json)
+is retained independently. All 960 calls, 96 admission gates, 290 wave metadata
+queries, four initial cursors, 48 complete-output checks and four EOF shutdowns
+passed. Ten sampling permission errors remain, five per version.
+
+| Workload | A20 successful calls/s | A23 successful calls/s | Throughput change | CPU per call change |
+| --- | ---: | ---: | ---: | ---: |
+| Balanced six hosts | 22.0796 | 24.3656 | +10.35% | −0.53% |
+| One hot host | 11.0055 | 11.3311 | +2.96% | −5.95% |
+| Eight hot calls, two cold probes | 13.5452 | 13.0535 | −3.63% | +7.45% |
+
+Cold-host p95 fell from 472.61 to 236.65 ms, a 49.93% decrease. Both adjacent
+AB/BA pairs show the cold-tail benefit and the whole-skew throughput/CPU cost.
+Balanced and hot-only CPU changes differ in direction between their two pairs;
+the total controller CPU across all three cells is 20.53 seconds for each
+version. Skew hot-head p95 rises 5.87%. This is a measured fairness tradeoff,
+not a claim that every latency or resource measure improves. The successful
+second experiment does not resolve the first experiment's shared identity risk.
+
+#### A17 to A23 standard observation comparison
+
+The [standard ABBA comparison](evidence/x230-a23-observation-20261024.json)
+retains all 1,152 successful timed calls, 24 initial checks and 48 same-job
+checks after normal restart. All eight EOF shutdowns passed. Each version has
+192 calls per concurrency, with the same six original completed jobs and small
+outputs as the earlier A20 comparison.
+
+| Concurrent calls | A17 calls/s | A23 calls/s | Throughput change | A17 p95 ms | A23 p95 ms | A17 CPU ms/call | A23 CPU ms/call |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 5.0389 | 5.8497 | +16.09% | 257.75 | 231.29 | 96.04 | 67.86 |
+| 4 | 19.3548 | 22.6367 | +16.96% | 268.36 | 241.24 | 46.30 | 33.18 |
+| 8 | 22.4429 | 28.7461 | +28.09% | 423.43 | 344.68 | 46.09 | 33.70 |
+
+CPU per call falls 29.34%, 28.35% and 26.89%, respectively. Total timed-cell
+controller CPU is 36.18 seconds for A17 and 25.87 seconds for A23.
+
+| Measurement-controller lifetime sampled peak | A17 | A23 |
+| --- | ---: | ---: |
+| Controller RSS/HWM, KiB | 17,352 | 16,284 |
+| Controller file descriptors | 75 | 79 |
+| Controller plus observed descendant RSS, KiB | 94,984 | 109,000 |
+| Controller plus observed descendant file descriptors | 135 | 152 |
+| Observed descendants | 11 | 12 |
+
+These are 100 ms sampled lower bounds, with three A17 and two A23 sampling
+permission errors. They do not establish lower total process-tree memory or
+descriptor use: those observed peaks are higher in this experiment. No
+per-window resource series or SSH-only classification exists. The earlier
+A20 experiment's different resource peaks are not substituted into this one.
+
+#### Sustained observation: failed, candidate not adopted
+
+The [single-candidate sustained experiment](evidence/x230-a23-soak-r01-summary-20261024.json)
+used 10,356 C8 calls, selected from the completed 28.7461/s measurement to target
+360 seconds, with a 300-second minimum observed-span check. All planned calls
+were recorded, but only **4,224 succeeded and 6,132 failed**. The timed cell
+lasted 192.4369 seconds and did not meet the duration requirement. The complete
+[sanitized report, compressed without dropping call rows](evidence/x230-a23-soak-r01-20261024.json.gz)
+is retained alongside the readable summary and its source hashes.
+
+| Timed-call error | Count |
+| --- | ---: |
+| `observation SSH agent deadline` | 1 |
+| Pool stopped before response authority check | 3 |
+| Pool stopped during admission profile check | 4 |
+| Pool unavailable; no fallback or automatic retry | 6,124 |
+
+The specific deadline error was returned by a `process_status` call after
+2,040.44 ms. The existing profile-validation path cancels the shared stop token
+on this error, explaining the subsequent stopped/unavailable refusals. This is
+a different branch from the first fairness experiment's post-spawn proof
+refusal. The evidence identifies the agent-query timer expiring; it does not
+establish whether the agent service, forwarding, controller scheduling or
+another delay was responsible. That timer is also bounded by the remaining
+original request deadline.
+
+Successful throughput was 21.9501 calls/s for this failed experiment. The
+53.8151 attempts/s and low mixed-call CPU/latency values include thousands of
+rapid refusals and are not evidence of useful throughput or efficiency. There
+is no measured A version in this B-only experiment and no performance
+comparison is emitted. Duration alone does not count master renewals, and the
+sampler does not establish a leak-free resource trend.
+
+**A23 is not adopted.** The [decision receipt](evidence/x230-a23-decision-20261024.json)
+binds every completed experiment and the exact source patch. Its short-run capacity and fairness results remain
+valid within their stated scope, but they do not override this stability
+failure. Exact-binary recovery checks for A23 have not been run. Further work
+must preserve full per-request authority validation, reject the timed-out
+request without retry, and independently qualify any narrower timeout-failure
+scope. The adopted runtime source remains A20 at this checkpoint.
 
 ### Request-serialization hash replacement
 

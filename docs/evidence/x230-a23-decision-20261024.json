@@ -1,0 +1,134 @@
+{
+  "adopted": false,
+  "adoption_blockers": [
+    "Sustained observation failed with an agent-query deadline and shared-pool shutdown cascade.",
+    "A prior A20 fairness run exposed a shared post-spawn identity/proof refusal; A23 does not change or resolve that proof path.",
+    "The fairness improvement has a measured whole-skew throughput/CPU tradeoff; resource changes are mixed."
+  ],
+  "candidate": "A23",
+  "candidate_binary_sha256": "64416b53b63ffe7eac05b4d9eb6750092279b5f6e25dbad5a8cfd31067d206a1",
+  "candidate_qualified_source_map_sha256": "5cf2e5cf8fca60e845a2c8f997abfc28017085bc809086a3ddb42448569a2b4f",
+  "capacity": {
+    "A20_failures": 100,
+    "A20_successes": 92,
+    "A23_failures": 0,
+    "A23_successes": 192,
+    "candidate_passed": true,
+    "timed_attempts": 384,
+    "whole_experiment_passed": false
+  },
+  "date": "2026-10-24",
+  "evidence": [
+    {
+      "bytes": 302284,
+      "path": "x230-a23-capacity-20261024.json",
+      "sha256": "9f37dbbe6d5a6620c376455db2913725985d85962c1c2166f6f27e8d1243860b"
+    },
+    {
+      "bytes": 1944004,
+      "path": "x230-a23-fairness-r01-20261024.json",
+      "sha256": "ac5227a8ce12e08e3810bf98380f2d6eb6dfa1b6f2335e028005883ca6502f97"
+    },
+    {
+      "bytes": 5945,
+      "path": "x230-a23-fairness-r01-incident-20261024.json",
+      "sha256": "ca335ff263b5c6f6caa98e994819a3c0141b4157bfceec7ff5dc76804077b6b9"
+    },
+    {
+      "bytes": 1365055,
+      "path": "x230-a23-fairness-r02-20261024.json",
+      "sha256": "7eeebbf214ebf5ac890e6d3dd23aba336466f6371fbfe888ffa40b2727818ab0"
+    },
+    {
+      "bytes": 566868,
+      "path": "x230-a23-observation-20261024.json",
+      "sha256": "8104dc32fa80ef24435c357c46261e05739440461d299872d6b7f0fdfb7a2680"
+    },
+    {
+      "bytes": 2599,
+      "path": "x230-a23-qualification-20261024.json",
+      "sha256": "49e1a2cb81392df7a3dfe78d6643569f626422613d05207cb707a64d4980f2f0"
+    },
+    {
+      "bytes": 1218649,
+      "path": "x230-a23-soak-r01-20261024.json.gz",
+      "sha256": "a28794c19e5dfeb1abd7d6108d5bc4d480ae98d91fc998fd249dfe7097088236"
+    },
+    {
+      "bytes": 526,
+      "path": "x230-a23-soak-r01-plan-20261024.json",
+      "sha256": "4a504191cc7f71d05d9975920d8a7de2a5425a9ffc4e4ed7a284a3fb6d42afab"
+    },
+    {
+      "bytes": 26059,
+      "path": "x230-a23-soak-r01-summary-20261024.json",
+      "sha256": "09cecd126810fba78e18fa93ba5ce6a8166ddf5dcb31336d72b396150b4dccc1"
+    },
+    {
+      "bytes": 382625,
+      "path": "x230-a23-soak-r01-windows-20261024.json.gz",
+      "sha256": "ae02d2f8159f0ff0c2972b1b494125ea809fec5cd7b8fd232def0a6aef6f6692"
+    }
+  ],
+  "exact_candidate_abrupt_recovery_canary": "not run",
+  "fairness": {
+    "cpu_improvement_not_consistent_across_adjacent_pairs": true,
+    "r01_all_960_timed_calls_retained": true,
+    "r01_baseline_postspawn_proof_refusal_cause_unresolved": true,
+    "r01_comparison_valid": false,
+    "r02_all_timed_calls_passed": true,
+    "r02_cold_host_p95_change_percent": -49.9261,
+    "r02_timed_calls": 960,
+    "r02_total_controller_cpu_seconds_by_version": {
+      "A20": 20.53,
+      "A23": 20.53
+    },
+    "r02_whole_skew_cpu_per_call_change_percent": 7.4453,
+    "r02_whole_skew_throughput_change_percent": -3.63
+  },
+  "preserved_boundaries": [
+    "No automatic RPC retry, fallback or replacement job.",
+    "No production runtime replacement or service restart.",
+    "A candidate must retain full request authority verification and be qualified independently before adoption."
+  ],
+  "qualification": {
+    "auxiliary_tests_passed": 26,
+    "ignored_tests": 21,
+    "passed": true,
+    "runtime_tests_passed": 1093
+  },
+  "runtime_source_commit": "7da3a7ebaded8214bc65e69046b74e6251e21767",
+  "runtime_source_remains": "A20",
+  "schema": "hepta-x230-candidate-adoption-decision/v1",
+  "source_patch": {
+    "applies_to_qualified_A20_and_reproduces_all_149_files": true,
+    "path": "../experiments/x230-a23-scheduling.patch",
+    "sha256": "a041b6b935daa911a1746d06e82c5118531c2c43847576e1b54c27b7cf4ab909"
+  },
+  "standard_A17_comparison": {
+    "all_1152_timed_calls_passed": true,
+    "all_resource_measures_improved": false,
+    "c8_controller_cpu_per_call_change_percent": -26.8927,
+    "c8_successful_throughput_change_percent": 28.0856,
+    "controller_rss_peak_lower": true,
+    "observed_tree_rss_fd_and_descendant_peaks_higher": true
+  },
+  "sustained": {
+    "agent_timer_expiry_does_not_identify_delay_cause": true,
+    "cell_seconds": 192.4368726350367,
+    "failure_counts": {
+      "observation SSH agent deadline": 1,
+      "observation pool stopped before response authority check": 3,
+      "observation pool stopped during admission profile check": 4,
+      "observation pool unavailable; no fallback or automatic retry": 6124
+    },
+    "failures": 6132,
+    "minimum_duration_passed": false,
+    "no_performance_gain_claimed_from_fast_refusals": true,
+    "observed_request_span_seconds": 192.43010252993554,
+    "passed": false,
+    "planned_calls": 10356,
+    "required_minimum_seconds": 300,
+    "successes": 4224
+  }
+}
