@@ -203,10 +203,10 @@ microbenchmark by itself establishes native job-launch throughput.
 
 ## Published copies and exact measured hashes
 
-`publication-manifest.json` maps every original helper/source or microbenchmark
+`publication-manifest.json` maps every original helper/source, protocol or microbenchmark
 report to the published artifact, with exact SHA256s and byte sizes for both.
-The original measurement scripts and Rust sources remain frozen. Six published
-helper/source copies differ only by the individually listed edits. Four scripts
+The original measurement scripts and Rust sources remain frozen. Nine published
+tool, source or protocol copies differ only by the individually listed edits. Four original scripts
 have portability edits: the benchmark and soak
 scripts replace one private-account path example in a comment with
 `/home/user/hx230-opt-20261023`; the lifecycle and fairness scripts define their
@@ -215,11 +215,12 @@ development root as
 account this resolves to the same guarded development directory. The two Rust
 microbenchmark sources, `ssh_hash_benchmark.rs` and `request_hash_benchmark.rs`,
 add only the required `// Copyright 2026 Muvon Un Limited` header line before
-their existing Foundation copyright and SPDX line. All other listed
-helper/source files and the request-hash JSONL are exact byte copies.
+their existing Foundation copyright and SPDX line. The D2 driver, reviewer and
+protocol have the additional portability and header edits described below. All
+remaining listed files are exact byte copies.
 
-The six edited publication copies are **not byte-identical** to the scripts or sources
-used in the recorded experiments. An evidence report's `harness_source_sha256`
+The nine edited publication copies are **not byte-identical** to the original
+scripts, sources or protocol used in the recorded experiments. An evidence report's `harness_source_sha256`
 identifies the measured original, and the manifest's `published_sha256`
 identifies this repository copy. The manifest records each changed original
 segment by byte offset, byte length and SHA256 without publishing its private
@@ -343,3 +344,134 @@ A23 qualification report plus its matching registry. The qualification input is
 still the raw private report, not a published compact receipt. The two measurement
 helpers must still match the original hashes recorded by the experiment. No
 comparison, provenance check or registry entry implies adoption.
+
+
+## D2 diagnostic calibration
+
+The separate [D2 driver](x230_observation_diagnostic_d2.py),
+[local reviewer](review_x230_diagnostic_d2.py),
+[review protocol](a23-d2-calibration-review-protocol.md), and
+[exact 151-file source map](a23-diagnostic-d2-r02-source-map.json) reproduce the
+D2 r02 diagnostic scope. They do not change the standard comparison drivers or
+qualify A24. Use the same actually qualified D2 binary for diagnostic off and on.
+An on/off comparison does not measure disabled-hook cost against production A23.
+
+The recorded original driver, reviewer and protocol hashes are respectively
+`7d44502e1977b99aa663260870984b300d2125dab1a19cbef1b27b32b27b9e8a`,
+`ced3c7e0fe19c00c4d7db8338061a0fc31deea58475d850346244ba7ffcee065`, and
+`07de7671208af6714f99312264ffd3fe7987c8c882edd0306be5839e8e812410`.
+The publication manifest binds their distinct portable copies and every edit.
+The driver changes only one comment. The reviewer adds the required copyright
+line, makes local input paths explicit, and replaces its fixed driver SHA with
+the required `--driver-sha256` binding. Its source-map pins, arithmetic, quality
+checks and cost gates are unchanged. The protocol preserves every original byte
+and adds only headers and a publication note.
+
+### Measurement arguments
+
+The driver requires `--baseline`, `--candidate`, `--profile-template`,
+`--frozen-jobs`, `--out`, `--socket-parent`, and `--diagnostic-mode off|on`.
+Both binary paths must hash identically. Inputs are the same six original
+completed-job records and a validated profile template; each output path must be
+new. The current held agent is explicitly rebound for each invocation.
+
+| Optional argument | Driver default | Frozen calibration setting |
+|---|---|---|
+| `--calls` | 96 | 384, a positive multiple of 12 |
+| `--concurrency` | `1 4 8` | `8`, one continuous cell |
+| `--workers` | 2 | 2 |
+| `--order` | `B`, the only accepted order | `B` |
+
+The calibration settings must be passed explicitly: running the driver with its
+defaults does not satisfy this review protocol. There is no default diagnostic
+mode. The driver passes environment value `0` or `1` explicitly, retains native
+errors, and never retries a request. Its `driver_sha256` is its actual current
+file hash, so a new portable run must not be labeled with the recorded original
+driver hash.
+
+Run four separate invocations serially in **off, on, on, off** order. Use the
+following command for each, with a distinct fresh output and the indicated mode:
+
+```sh
+python3 x230_observation_diagnostic_d2.py \
+  --baseline "$qualified_d2_binary" --candidate "$qualified_d2_binary" \
+  --profile-template "$profile_template" --frozen-jobs "$original_records" \
+  --socket-parent "$short_private_socket_parent" --out "$fresh_run_dir" \
+  --calls 384 --concurrency 8 --workers 2 --order B \
+  --diagnostic-mode "$diagnostic_mode"
+```
+
+Retain every raw report and both `round-0-B/first/stderr.log` and
+`round-0-B/restart/stderr.log` as exact bytes, including empty off-mode files.
+Do not substitute a later run for a failure. The protocol asks the operator to
+retain one continuous forwarded-agent session and avoid compilation overlap;
+report timestamps alone do not attest those external conditions.
+
+### Local review arguments and boundaries
+
+All reviewer paths and identity inputs are required: `--qualification`,
+`--qualification-sha256`, `--binary-sha256`, `--source-map`,
+`--source-directory`, `--driver`, `--driver-sha256`, `--protocol`, four ordered
+`--run MODE REPORT RAW_SHA STDERR_ROOT` arguments, and a fresh `--out`.
+There are no optional local path defaults. The raw qualification report must be
+the complete original, not a sanitized compact receipt. The supplied source
+tree must match all 151 fixed D2 r02 files and both qualification source maps.
+The included map's exact file SHA is
+`8f41879846cdf57964f1238de5e6db04d58333cd7797d32baa2325a957c512da`;
+its canonical map SHA is
+`ec4419489f6499bdbecab9402d78e1997171bfeea1eda4be193b0af5f9688dc2`.
+
+```sh
+python3 review_x230_diagnostic_d2.py \
+  --qualification "$actual_qualification_report" \
+  --qualification-sha256 "$qualification_sha256" --binary-sha256 "$binary_sha256" \
+  --source-map a23-diagnostic-d2-r02-source-map.json \
+  --source-directory "$qualified_d2_source" \
+  --driver "$measured_d2_driver" --driver-sha256 "$measured_d2_driver_sha256" \
+  --protocol a23-d2-calibration-review-protocol.md \
+  --run off "$off1_report" "$off1_sha256" "$off1_stderr_root" \
+  --run on  "$on2_report"  "$on2_sha256"  "$on2_stderr_root" \
+  --run on  "$on3_report"  "$on3_sha256"  "$on3_stderr_root" \
+  --run off "$off4_report" "$off4_sha256" "$off4_stderr_root" \
+  --out "$fresh_private_review"
+```
+
+`--driver` identifies the trusted helper that actually produced these reports.
+Its bytes and every report's driver receipt must match `--driver-sha256` before
+the reviewer can accept the binding. Historical reports require the original
+measured driver; new portable reports require the portable driver's own SHA.
+The reviewer imports that explicitly pinned helper's stderr parser and performs
+its own metric, workload and cost arithmetic. A caller-supplied SHA does not
+certify an unrelated helper. This reviewer intentionally keeps the fixed D2 r02
+source scope, 384-call C8 workload, four-run order, and predeclared tolerances.
+
+All 1,536 timed rows, 24 preflight rows, 48 restart rows, eight normal controller
+shutdowns, and diagnostic evidence must pass before cost ratios are trusted.
+Off mode requires zero summary/event records; on mode requires one complete
+32-metric summary per controller. Missing stderr, invalid clocks, lost records,
+or a native failure cannot be rescued by a complete diagnostic event.
+The pooled CPU/goodput/p95 tolerances remain +5%/-5%/+10%, and each temporal
+pair remains +10%/-10%/+20%. These are exploratory gates, not confidence bounds
+or proof of zero instrumentation effect.
+
+Owner-thread lifetime counters include initialization, preflight, background
+activity and shutdown. Keep `first` and `restart` separate, do not add nested
+spans, and do not assign lifetime phase shares to timed-cell or whole-controller
+CPU. `read_and_hash` combines reads, buffers and digest updates; agent wall
+intervals can overlap and have no CPU attribution. See the protocol for the
+complete interpretation and failure rules.
+
+The reviewer reads local inputs only and creates a new review file. Its output
+records its own helper hash and the exact protocol hash used. Raw inputs and
+review output can contain private paths, process identities and resource errors;
+they require separate sanitization before publication. Offline validation of a
+portable reviewer is separate from rerunning a controller experiment. The
+manifest records which occurred; the published measurement driver has not been
+substituted into any already recorded calibration.
+
+Local validation replayed the four existing measured inputs through the portable
+reviewer and rehashed all 151 source files. Every review output field except the
+reviewer's own helper identity and the publication protocol identity matched the
+frozen review. Negative checks rejected a mismatched driver file and prevented
+historical reports from being relabeled with the portable driver's hash. This
+was an offline analysis check; it produced no new controller measurements.

@@ -150,6 +150,14 @@ Accordingly, `read_only_recovery_passed=true` and
 uncertain artifacts to make the result appear cleaner. Three resource-sampling
 permission errors remain in the evidence.
 
+The [crash-cleanup design](OBSERVATION_CRASH_CLEANUP_DESIGN.md) documents why
+recovered read access does not authorize deleting a dead controller's old
+directory or sockets. It identifies the durable ownership and generation
+records a future cleaner would need, the gaps before a spawned process or
+OpenSSH socket can be durably identified, and the leaf-replacement race that
+path checks alone cannot close. It is a design boundary and fault matrix, not
+an implemented cleaner or permission to adopt the existing residues.
+
 These tests do not prove recovery from physical power loss, a target reboot,
 a WAN partition, production ownership transfer, or transactional exactly-once
 business effects. They establish controller recovery and the specifically
@@ -386,6 +394,76 @@ must preserve full per-request authority validation, reject the timed-out
 request without retry, and independently qualify any narrower timeout-failure
 scope. The adopted runtime source remains A20 at this checkpoint.
 
+### D2 bounded diagnostics: qualified, calibrated, not adopted
+
+The [D2 qualification receipt](evidence/x230-a23-d2-qualification-20261024.json)
+binds the actual A23-based diagnostic source, release binary and all five
+qualification stages. It records 1,116 runtime tests plus 18 ownerctl and eight
+jobctl tests passed, with 21 existing ignored tests. Two nested isolated-helper
+result lines are not added to that total. The
+[first qualification failure](evidence/x230-a23-d2-r01-qualification-failure-20261024.json)
+is retained: strict Clippy rejected one test assertion. The subsequent attempt
+changed that assertion while preserving both the error variant and message.
+The [exact diagnostic patch](experiments/x230-a23-d2-instrumentation.patch)
+reproduces the qualified 151-file tree from the qualified A23 source.
+
+D2 records 32 fixed phase counters on the existing controller owner thread.
+Thread CPU is measured only around synchronous work; asynchronous agent queries
+record wall time only. Diagnostics are disabled unless explicitly selected for
+the experiment. Up to 16 post-spawn proof-failure events can retain the original
+pidfd and identity-check substage results without changing the proof predicate,
+cleanup, stop decision or retry policy. These counters and failure records are
+diagnostic work, not an adopted runtime change.
+
+The [calibration summary](evidence/x230-a23-d2-calibration-r01-summary-20261024.json)
+and [complete sanitized experiment](evidence/x230-a23-d2-calibration-r01-20261024.json.gz)
+retain four C8 runs of the same qualified D2 binary in off/on/on/off order. Each
+run has 384 timed calls against the same six original completed jobs. All
+1,536 timed calls, 24 initial-output checks, 48 restart checks and eight EOF
+shutdowns passed. Both first controllers and both restart controllers with
+diagnostics enabled produced complete, internally consistent counter records.
+
+| Pooled timed-cell measure | Diagnostics off | Diagnostics on | Change |
+| --- | ---: | ---: | ---: |
+| Controller CPU per attempt, ms | 35.7682 | 36.8880 | +3.13% |
+| Successful calls/s | 27.8939 | 27.2554 | −2.29% |
+| All-row p95, ms | 367.44 | 359.49 | −2.16% |
+
+The frozen review required pooled CPU overhead at most 5%, useful-throughput
+loss at most 5%, and p95 growth at most 10%; each adjacent off/on pair also had
+its own predeclared limits. All passed. CPU, throughput and p95 changes each
+reverse direction between the two pairs. This supports exploratory attribution
+within those limits, not a precise or stable causal estimate of instrumentation
+cost. It measures enabling D2 on one binary; it does not measure disabled D2
+hooks against uninstrumented A23.
+
+| First-controller diagnostic measure | First enabled run | Second enabled run |
+| --- | ---: | ---: |
+| Owner-thread lifetime CPU, seconds | 13.1992 | 13.2209 |
+| Complete file-validation CPU, seconds | 12.1965 | 12.1912 |
+| File validation / owner CPU | 92.40% | 92.21% |
+| Read-and-hash / file-validation CPU | 89.64% | 89.61% |
+| SSH executable validation / owner CPU | 70.74% | 70.57% |
+| Complete file-validation intervals | 2,357 | 2,357 |
+| Agent snapshot intervals | 1,179 | 1,179 |
+
+These owner-thread denominators include initialization, observations and normal
+drain; they are neither whole-controller CPU nor the timed-cell interval. Each
+restart controller has a separate record, with 89 file-validation intervals
+and 45 agent queries. Parent counters include their children and must not be
+added together. Read-and-hash combines reads, buffering and digest updates; it
+does not isolate pure SHA256 computation. Agent wall intervals overlap and
+cannot be summed into CPU time. The full evidence preserves resource-sampling
+errors and only supports sampled lifetime lower bounds for resource peaks.
+
+No post-spawn proof-failure event occurred in these four runs. That absence
+cannot explain the older fairness failure or prove it fixed. The phase results
+justify an isolated experiment moving complete validation or its read/hash
+work to bounded workers while preserving every authority check. They do not
+establish the cause of A23's sustained agent deadline, guarantee a throughput
+gain, or authorize adopting an unqualified worker implementation. The adopted
+runtime source remains A20.
+
 ### Request-serialization hash replacement
 
 Replacing the request-serialization SHA256 writer unconditionally with ring
@@ -433,4 +511,6 @@ denial while `perf_event_paranoid` was 4. The
 records the original report hash. No runtime was attached and no host setting
 was changed. Aggregate controller CPU measurements remain available, but this
 probe provides no phase-level attribution to hashing, path validation, agent
-queries, or child management.
+queries, or child management. The separate D2 in-process diagnostic experiment
+above provides the narrower, explicitly calibrated phase evidence without
+changing the host's profiler permissions.

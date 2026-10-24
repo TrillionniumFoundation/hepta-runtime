@@ -1,0 +1,1545 @@
+--- /dev/null
++++ b/src/mcp/runtime/ssh_observation_diagnostic.rs
+@@ -0,0 +1,762 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++//! Optional, owner-thread-only measurements for an isolated diagnostic build.
++//! No measurement participates in an authority decision or changes a deadline.
++
++use serde::Serialize;
++use std::cell::{Cell, RefCell};
++use std::io::Write;
++use std::time::{Duration, Instant};
++
++pub(super) const ENVIRONMENT: &str = "HEPTA_X230_PROFILE_DIAGNOSTIC";
++const METRIC_COUNT: usize = 32;
++const FILE_PHASES: usize = 4;
++const FILE_SET: usize = 0;
++const SHELL_RESOLUTION: usize = 29;
++const POLICY: usize = 30;
++const AGENT: usize = 31;
++const FAILURE_EVENT_LIMIT: u64 = 16;
++const FILE_NAMES: [&str; 7] = [
++	"profile",
++	"ssh_config",
++	"known_hosts",
++	"ssh_executable",
++	"false_executable",
++	"shell_executable",
++	"unclassified",
++];
++const PHASE_NAMES: [&str; FILE_PHASES] = [
++	"total",
++	"open_and_before_checks",
++	"read_and_hash",
++	"after_stamps_and_digest",
++];
++
++#[derive(Clone, Copy)]
++#[repr(usize)]
++pub(super) enum FileKind {
++	Profile,
++	Config,
++	KnownHosts,
++	Ssh,
++	False,
++	Shell,
++	Other,
++}
++
++#[derive(Clone, Copy)]
++#[repr(usize)]
++pub(super) enum FilePhase {
++	Total,
++	OpenBefore,
++	ReadHash,
++	AfterStampsDigest,
++}
++
++#[derive(Clone, Copy, Default, Serialize)]
++struct Statistics {
++	started_intervals: u64,
++	closed_intervals: u64,
++	marked_success: u64,
++	not_marked_success: u64,
++	wall_valid_samples: u64,
++	wall_invalid_samples: u64,
++	wall_ns_sum: u64,
++	wall_ns_max: u64,
++	cpu_valid_samples: u64,
++	cpu_invalid_samples: u64,
++	cpu_ns_sum: u64,
++	cpu_ns_max: u64,
++	bytes_on_marked_success: u64,
++	counter_saturated: bool,
++}
++
++fn add(value: &mut u64, amount: u64, saturated: &mut bool) {
++	if let Some(next) = value.checked_add(amount) {
++		*value = next;
++	} else {
++		*value = u64::MAX;
++		*saturated = true;
++	}
++}
++
++impl Statistics {
++	fn started(&mut self) {
++		add(&mut self.started_intervals, 1, &mut self.counter_saturated);
++	}
++	fn closed(
++		&mut self,
++		wall: Option<u64>,
++		cpu: Option<u64>,
++		measure_cpu: bool,
++		success: bool,
++		bytes: u64,
++	) {
++		add(&mut self.closed_intervals, 1, &mut self.counter_saturated);
++		if success {
++			add(&mut self.marked_success, 1, &mut self.counter_saturated);
++			add(
++				&mut self.bytes_on_marked_success,
++				bytes,
++				&mut self.counter_saturated,
++			);
++		} else {
++			add(&mut self.not_marked_success, 1, &mut self.counter_saturated);
++		}
++		if let Some(value) = wall {
++			add(&mut self.wall_valid_samples, 1, &mut self.counter_saturated);
++			add(&mut self.wall_ns_sum, value, &mut self.counter_saturated);
++			self.wall_ns_max = self.wall_ns_max.max(value);
++		} else {
++			add(
++				&mut self.wall_invalid_samples,
++				1,
++				&mut self.counter_saturated,
++			);
++		}
++		if measure_cpu {
++			if let Some(value) = cpu {
++				add(&mut self.cpu_valid_samples, 1, &mut self.counter_saturated);
++				add(&mut self.cpu_ns_sum, value, &mut self.counter_saturated);
++				self.cpu_ns_max = self.cpu_ns_max.max(value);
++			} else {
++				add(
++					&mut self.cpu_invalid_samples,
++					1,
++					&mut self.counter_saturated,
++				);
++			}
++		}
++	}
++}
++
++struct State {
++	owner_started_wall: Instant,
++	owner_started_cpu: Option<u64>,
++	statistics: [Statistics; METRIC_COUNT],
++	failure_events: FailureEventStatistics,
++}
++
++thread_local! {
++	// The disabled path performs one thread-local flag read, with no clock,
++	// environment lookup, statistics borrow, allocation or output.
++	static ENABLED: Cell<bool> = const { Cell::new(false) };
++	static RECORDING_INCOMPLETE: Cell<bool> = const { Cell::new(false) };
++	static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
++}
++
++fn incomplete() {
++	let _ = RECORDING_INCOMPLETE.try_with(|flag| flag.set(true));
++}
++
++fn with_state(action: impl FnOnce(&mut State)) -> bool {
++	let recorded = STATE
++		.try_with(|slot| {
++			let Ok(mut borrowed) = slot.try_borrow_mut() else {
++				return false;
++			};
++			let Some(state) = borrowed.as_mut() else {
++				return false;
++			};
++			action(state);
++			true
++		})
++		.unwrap_or(false);
++	if !recorded {
++		incomplete();
++	}
++	recorded
++}
++
++fn requested(value: Option<&std::ffi::OsStr>) -> bool {
++	value == Some(std::ffi::OsStr::new("1"))
++}
++
++pub(super) fn enabled() -> bool {
++	ENABLED.try_with(Cell::get).unwrap_or(false)
++}
++
++fn thread_cpu_now() -> Option<u64> {
++	let mut time = libc::timespec {
++		tv_sec: 0,
++		tv_nsec: 0,
++	};
++	if unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut time) } != 0 {
++		return None;
++	}
++	let seconds = u64::try_from(time.tv_sec).ok()?;
++	let nanoseconds = u64::try_from(time.tv_nsec).ok()?;
++	if nanoseconds >= 1_000_000_000 {
++		return None;
++	}
++	seconds.checked_mul(1_000_000_000)?.checked_add(nanoseconds)
++}
++
++fn cpu_delta(start: Option<u64>, end: Option<u64>) -> Option<u64> {
++	end?.checked_sub(start?)
++}
++
++fn nanoseconds(value: Option<Duration>) -> Option<u64> {
++	u64::try_from(value?.as_nanos()).ok()
++}
++
++/// Activate only at the entry of the dedicated observation owner thread.
++/// It outlives the runtime, so normal drain and runtime destruction are covered.
++pub(super) struct OwnerGuard {
++	active: bool,
++	owner_thread: std::thread::ThreadId,
++	_not_send: std::marker::PhantomData<std::rc::Rc<()>>,
++}
++
++impl OwnerGuard {
++	pub(super) fn start() -> Self {
++		let wanted = requested(std::env::var_os(ENVIRONMENT).as_deref())
++			&& !ENABLED.try_with(Cell::get).unwrap_or(false);
++		let mut active = false;
++		if wanted {
++			let state = State {
++				owner_started_wall: Instant::now(),
++				owner_started_cpu: thread_cpu_now(),
++				statistics: [Statistics::default(); METRIC_COUNT],
++				failure_events: FailureEventStatistics::default(),
++			};
++			active = STATE
++				.try_with(|slot| {
++					let Ok(mut borrowed) = slot.try_borrow_mut() else {
++						return false;
++					};
++					if borrowed.is_some() {
++						return false;
++					}
++					*borrowed = Some(state);
++					true
++				})
++				.unwrap_or(false);
++			if active {
++				let _ = RECORDING_INCOMPLETE.try_with(|flag| flag.set(false));
++				let _ = ENABLED.try_with(|flag| flag.set(true));
++			}
++		}
++		Self {
++			active,
++			owner_thread: std::thread::current().id(),
++			_not_send: std::marker::PhantomData,
++		}
++	}
++}
++
++#[derive(Serialize)]
++struct MetricSummary {
++	category: &'static str,
++	phase: &'static str,
++	parent_inclusive_metric: Option<&'static str>,
++	cpu_applicable: bool,
++	#[serde(flatten)]
++	statistics: Statistics,
++}
++
++fn metric_summary(index: usize, statistics: Statistics) -> MetricSummary {
++	let (category, phase, parent) = match index {
++		FILE_SET => ("verify_files", "total", None),
++		SHELL_RESOLUTION => ("shell_resolution", "total", Some("verify_files.total")),
++		POLICY => (
++			"policy_parent_and_environment",
++			"total",
++			Some("verify_files.total"),
++		),
++		AGENT => ("agent_snapshot", "wall_only", None),
++		_ => {
++			let file = (index - 1) / FILE_PHASES;
++			let phase = (index - 1) % FILE_PHASES;
++			(
++				FILE_NAMES[file],
++				PHASE_NAMES[phase],
++				Some(if phase == 0 {
++					"verify_files.total"
++				} else {
++					"same_category.total"
++				}),
++			)
++		}
++	};
++	MetricSummary {
++		category,
++		phase,
++		parent_inclusive_metric: parent,
++		cpu_applicable: index != AGENT,
++		statistics,
++	}
++}
++
++#[derive(Serialize)]
++struct Summary {
++	schema: &'static str,
++	enabled: bool,
++	owner_scope: &'static str,
++	owner_wall_ns: Option<u64>,
++	owner_thread_cpu_ns: Option<u64>,
++	owner_thread_cpu_is_whole_controller_cpu: bool,
++	clock: &'static str,
++	thread_cpu_recorded_only_for_synchronous_metrics: bool,
++	recording_incomplete: bool,
++	all_metrics_include_startup_observations_and_shutdown: bool,
++	includes_only_timed_benchmark_cells: bool,
++	agent_wall_intervals_may_overlap: bool,
++	parent_metrics_include_their_children: bool,
++	measurement_overhead_in_parent_and_owner_totals: bool,
++	not_marked_success_definition: &'static str,
++	bytes_definition: &'static str,
++	abrupt_termination_may_omit_summary: bool,
++	failure_event_limit: u64,
++	failure_event_logging_may_perturb_failure_timing: bool,
++	failure_events: FailureEventStatistics,
++	metrics: [MetricSummary; METRIC_COUNT],
++}
++
++impl Drop for OwnerGuard {
++	fn drop(&mut self) {
++		if !self.active || self.owner_thread != std::thread::current().id() {
++			return;
++		}
++		// Stop collecting before serialization or stderr I/O. The denominator
++		// covers the same owner scope as every completed synchronous interval.
++		let ended_wall = Instant::now();
++		let ended_cpu = thread_cpu_now();
++		let _ = ENABLED.try_with(|flag| flag.set(false));
++		let state = STATE
++			.try_with(|slot| slot.try_borrow_mut().ok()?.take())
++			.ok()
++			.flatten();
++		let Some(state) = state else {
++			return;
++		};
++		let summary = Summary {
++			schema: "hepta-x230-profile-diagnostic/v2",
++			enabled: true,
++			owner_scope: "diagnostic activation at owner thread entry through completed runtime drain/destruction; excludes summary serialization, stderr write and final thread teardown; excludes profile loading before owner thread creation",
++			owner_wall_ns: nanoseconds(ended_wall.checked_duration_since(state.owner_started_wall)),
++			owner_thread_cpu_ns: cpu_delta(state.owner_started_cpu, ended_cpu),
++			owner_thread_cpu_is_whole_controller_cpu: false,
++			clock: "CLOCK_THREAD_CPUTIME_ID around synchronous intervals only",
++			thread_cpu_recorded_only_for_synchronous_metrics: true,
++			recording_incomplete: RECORDING_INCOMPLETE.try_with(Cell::get).unwrap_or(true),
++			all_metrics_include_startup_observations_and_shutdown: true,
++			includes_only_timed_benchmark_cells: false,
++			agent_wall_intervals_may_overlap: true,
++			parent_metrics_include_their_children: true,
++			measurement_overhead_in_parent_and_owner_totals: true,
++			not_marked_success_definition: "interval dropped without its explicit success marker; includes errors, cancellation and unwinding, and is not an RPC failure count",
++			bytes_definition: "bytes counted only on a successfully completed read_and_hash interval; a later stamp/digest or request check can still fail",
++			abrupt_termination_may_omit_summary: true,
++			failure_event_limit: FAILURE_EVENT_LIMIT,
++			failure_event_logging_may_perturb_failure_timing: true,
++			failure_events: state.failure_events,
++			metrics: std::array::from_fn(|index| metric_summary(index, state.statistics[index])),
++		};
++		let mut stderr = std::io::stderr().lock();
++		// Diagnostics must not alter runtime results if their sink fails. A
++		// partial/missing JSON line is invalid diagnostic evidence, never zero.
++		if stderr
++			.write_all(b"HEPTA_X230_PROFILE_DIAGNOSTIC_JSON ")
++			.is_ok() && serde_json::to_writer(&mut stderr, &summary).is_ok()
++		{
++			let _ = stderr.write_all(b"\n");
++		}
++	}
++}
++
++struct Started {
++	owner_thread: std::thread::ThreadId,
++	wall: Instant,
++	cpu: Option<u64>,
++}
++
++pub(super) struct Span {
++	index: usize,
++	started: Option<Started>,
++	success: bool,
++	bytes: u64,
++}
++
++impl Span {
++	fn start(index: usize) -> Self {
++		let started = if ENABLED.try_with(Cell::get).unwrap_or(false)
++			&& with_state(|state| state.statistics[index].started())
++		{
++			Some(Started {
++				owner_thread: std::thread::current().id(),
++				wall: Instant::now(),
++				cpu: if index == AGENT {
++					None
++				} else {
++					thread_cpu_now()
++				},
++			})
++		} else {
++			None
++		};
++		Self {
++			index,
++			started,
++			success: false,
++			bytes: 0,
++		}
++	}
++	pub(super) fn files() -> Self {
++		Self::start(FILE_SET)
++	}
++	pub(super) fn file(kind: FileKind, phase: FilePhase) -> Self {
++		Self::start(1 + kind as usize * FILE_PHASES + phase as usize)
++	}
++	pub(super) fn shell_resolution() -> Self {
++		Self::start(SHELL_RESOLUTION)
++	}
++	pub(super) fn policy() -> Self {
++		Self::start(POLICY)
++	}
++	pub(super) fn agent_wall() -> Self {
++		Self::start(AGENT)
++	}
++	pub(super) fn success(mut self) {
++		self.success = true;
++	}
++	pub(super) fn success_with_bytes(mut self, bytes: u64) {
++		self.success = true;
++		self.bytes = bytes;
++	}
++}
++
++impl Drop for Span {
++	fn drop(&mut self) {
++		let Some(started) = &self.started else {
++			return;
++		};
++		if started.owner_thread != std::thread::current().id() {
++			// Never charge another thread's clock or TLS. Its original owner's
++			// started/closed mismatch makes this diagnostic evidence incomplete.
++			return;
++		}
++		let wall = nanoseconds(Instant::now().checked_duration_since(started.wall));
++		let measure_cpu = self.index != AGENT;
++		let cpu = if measure_cpu {
++			cpu_delta(started.cpu, thread_cpu_now())
++		} else {
++			None
++		};
++		with_state(|state| {
++			state.statistics[self.index].closed(wall, cpu, measure_cpu, self.success, self.bytes);
++		});
++	}
++}
++
++#[derive(Clone, Copy, Default, Serialize)]
++struct FailureEventStatistics {
++	seen: u64,
++	attempted: u64,
++	written: u64,
++	capped: u64,
++	write_failed: u64,
++	counter_saturated: bool,
++}
++
++pub(super) fn errno_category(errno: Option<i32>) -> &'static str {
++	match errno {
++		None => "no_os_errno",
++		Some(libc::ENOENT | libc::ESRCH) => "not_found_or_exited",
++		Some(libc::EACCES | libc::EPERM) => "permission",
++		Some(libc::EMFILE | libc::ENFILE | libc::ENOMEM | libc::EAGAIN | libc::ENOSPC) => {
++			"resource"
++		}
++		Some(libc::EINTR) => "interrupted",
++		Some(libc::EINVAL | libc::ENOSYS | libc::ENODEV) => "invalid_or_unsupported",
++		Some(libc::EIO) => "io",
++		Some(_) => "other_os_error",
++	}
++}
++
++#[derive(Clone, Copy, Default, Serialize)]
++pub(super) struct IdentityObservation {
++	#[serde(skip)]
++	active: bool,
++	failure_stage: Option<&'static str>,
++	failure_errno: Option<i32>,
++	failure_errno_category: Option<&'static str>,
++	stat_state: Option<&'static str>,
++	argv_was_empty: Option<bool>,
++	uid_matches: Option<bool>,
++	executable_matches: Option<bool>,
++	argv_matches: Option<bool>,
++}
++
++impl IdentityObservation {
++	pub(super) fn new(active: bool) -> Self {
++		Self {
++			active,
++			..Self::default()
++		}
++	}
++	pub(super) fn failed(&mut self, stage: &'static str, errno: Option<i32>) {
++		if self.active {
++			self.failure_stage = Some(stage);
++			self.failure_errno = errno;
++			self.failure_errno_category = Some(errno_category(errno));
++		}
++	}
++	pub(super) fn state(&mut self, value: Option<&str>) {
++		if self.active {
++			self.stat_state = value.map(|state| match state {
++				"R" => "running",
++				"S" => "sleeping",
++				"D" => "disk_sleep",
++				"Z" => "zombie",
++				"T" => "stopped",
++				"t" => "tracing_stop",
++				"X" | "x" => "dead",
++				"I" => "idle",
++				_ => "other",
++			});
++		}
++	}
++	pub(super) fn argv_empty(&mut self, value: bool) {
++		if self.active {
++			self.argv_was_empty = Some(value);
++		}
++	}
++	pub(super) fn uid(&mut self, value: bool) -> bool {
++		if self.active {
++			self.uid_matches = Some(value);
++		}
++		value
++	}
++	pub(super) fn executable(&mut self, value: bool) -> bool {
++		if self.active {
++			self.executable_matches = Some(value);
++		}
++		value
++	}
++	pub(super) fn argv(&mut self, value: bool) -> bool {
++		if self.active {
++			self.argv_matches = Some(value);
++		}
++		value
++	}
++}
++
++pub(super) fn expected_argv_mode(args: &[String]) -> &'static str {
++	let master = args.iter().any(|value| value == "ControlMaster=yes");
++	let slave = args.iter().any(|value| value == "ControlMaster=no");
++	let effective = args.iter().any(|value| value == "-G");
++	match (master, slave, effective) {
++		(true, false, true) => "effective_master",
++		(false, true, true) => "effective_slave",
++		(true, false, false) => "master",
++		(false, true, false) => "slave",
++		_ => "unknown",
++	}
++}
++
++#[derive(Clone, Copy, Serialize)]
++pub(super) struct ProbeResult {
++	kind: &'static str,
++	errno: Option<i32>,
++	errno_category: Option<&'static str>,
++}
++
++impl ProbeResult {
++	fn status(kind: &'static str) -> Self {
++		Self {
++			kind,
++			errno: None,
++			errno_category: None,
++		}
++	}
++	fn error(error: &anyhow::Error) -> Self {
++		let errno = error.chain().find_map(|cause| {
++			cause
++				.downcast_ref::<std::io::Error>()
++				.and_then(std::io::Error::raw_os_error)
++		});
++		Self {
++			kind: "error",
++			errno,
++			errno_category: Some(errno_category(errno)),
++		}
++	}
++	pub(super) fn terminal(result: &anyhow::Result<bool>) -> Self {
++		match result {
++			Ok(true) => Self::status("exited"),
++			Ok(false) => Self::status("not_exited"),
++			Err(error) => Self::error(error),
++		}
++	}
++	fn cleanup(result: &anyhow::Result<()>) -> Self {
++		match result {
++			Ok(()) => Self::status("succeeded"),
++			Err(error) => Self::error(error),
++		}
++	}
++}
++
++#[derive(Clone, Copy, Serialize)]
++pub(super) struct SpawnProofObservation {
++	pub expected_argv_mode: &'static str,
++	pub pid_available: bool,
++	pub pidfd_available: bool,
++	pub pidfd_errno: Option<i32>,
++	pub identity_available: bool,
++	pub identity_observation: IdentityObservation,
++	pub identity_matches: bool,
++	pub initial_terminal_probe: ProbeResult,
++}
++
++#[derive(Serialize)]
++struct FailureEvent {
++	schema: &'static str,
++	sequence: u64,
++	observed_owner_wall_ns: Option<u64>,
++	emitted_owner_wall_ns: Option<u64>,
++	expected_argv_mode_is_not_verified_process_identity: bool,
++	initial_proof_passed: bool,
++	pool_stop_cancelled_before_cleanup: bool,
++	no_retry_or_fallback: bool,
++	pidfd_probe_kind: &'static str,
++	pidfd_errno_category: Option<&'static str>,
++	#[serde(flatten)]
++	observation: SpawnProofObservation,
++	stop_reap: ProbeResult,
++	ledger_release: ProbeResult,
++}
++
++pub(super) struct SpawnFailureGuard {
++	event: Option<FailureEvent>,
++	owner_thread: Option<std::thread::ThreadId>,
++}
++
++impl SpawnFailureGuard {
++	pub(super) fn new(build: impl FnOnce() -> SpawnProofObservation) -> Self {
++		let mut result = Self {
++			event: None,
++			owner_thread: None,
++		};
++		if !enabled() {
++			return result;
++		}
++		let mut sequence = 0;
++		let mut observed = None;
++		let mut allowed = false;
++		if !with_state(|state| {
++			let counters = &mut state.failure_events;
++			add(&mut counters.seen, 1, &mut counters.counter_saturated);
++			sequence = counters.seen;
++			allowed = sequence <= FAILURE_EVENT_LIMIT;
++			if allowed {
++				observed =
++					nanoseconds(Instant::now().checked_duration_since(state.owner_started_wall));
++			} else {
++				add(&mut counters.capped, 1, &mut counters.counter_saturated);
++			}
++		}) || !allowed
++		{
++			return result;
++		}
++		let observation = build();
++		let (kind, errno_class) = if !observation.pid_available {
++			("not_attempted_pid_unavailable", None)
++		} else if observation.pidfd_available {
++			("acquired", None)
++		} else {
++			("failed", Some(errno_category(observation.pidfd_errno)))
++		};
++		result.owner_thread = Some(std::thread::current().id());
++		result.event = Some(FailureEvent {
++			schema: "hepta-x230-spawn-proof-failure/v1",
++			sequence,
++			observed_owner_wall_ns: observed,
++			emitted_owner_wall_ns: None,
++			expected_argv_mode_is_not_verified_process_identity: true,
++			initial_proof_passed: false,
++			pool_stop_cancelled_before_cleanup: true,
++			no_retry_or_fallback: true,
++			pidfd_probe_kind: kind,
++			pidfd_errno_category: errno_class,
++			observation,
++			stop_reap: ProbeResult::status("not_attempted"),
++			ledger_release: ProbeResult::status("not_attempted"),
++		});
++		result
++	}
++	pub(super) fn stopping(&mut self) {
++		if let Some(event) = self.event.as_mut() {
++			event.stop_reap = ProbeResult::status("in_progress");
++		}
++	}
++	pub(super) fn stopped(&mut self, result: &anyhow::Result<()>) {
++		if let Some(event) = self.event.as_mut() {
++			event.stop_reap = ProbeResult::cleanup(result);
++		}
++	}
++	pub(super) fn releasing(&mut self) {
++		if let Some(event) = self.event.as_mut() {
++			event.ledger_release = ProbeResult::status("in_progress");
++		}
++	}
++	pub(super) fn released(&mut self, result: &anyhow::Result<()>) {
++		if let Some(event) = self.event.as_mut() {
++			event.ledger_release = ProbeResult::cleanup(result);
++		}
++	}
++	fn close_with_writer(&mut self, writer: &mut impl Write) {
++		if self.owner_thread != Some(std::thread::current().id()) {
++			return;
++		}
++		let Some(mut event) = self.event.take() else {
++			return;
++		};
++		if event.stop_reap.kind == "in_progress" {
++			event.stop_reap.kind = "not_completed";
++		}
++		if event.ledger_release.kind == "in_progress" {
++			event.ledger_release.kind = "not_completed";
++		}
++		if !with_state(|state| {
++			event.emitted_owner_wall_ns =
++				nanoseconds(Instant::now().checked_duration_since(state.owner_started_wall));
++			add(
++				&mut state.failure_events.attempted,
++				1,
++				&mut state.failure_events.counter_saturated,
++			);
++		}) {
++			return;
++		}
++		let written = writer
++			.write_all(b"HEPTA_X230_SPAWN_PROOF_FAILURE_JSON ")
++			.is_ok() && serde_json::to_writer(&mut *writer, &event).is_ok()
++			&& writer.write_all(b"\n").is_ok();
++		with_state(|state| {
++			let counters = &mut state.failure_events;
++			if written {
++				add(&mut counters.written, 1, &mut counters.counter_saturated);
++			} else {
++				add(
++					&mut counters.write_failed,
++					1,
++					&mut counters.counter_saturated,
++				);
++			}
++		});
++	}
++}
++
++impl Drop for SpawnFailureGuard {
++	fn drop(&mut self) {
++		if self.event.is_some() {
++			self.close_with_writer(&mut std::io::stderr().lock());
++		}
++	}
++}
++
++#[cfg(test)]
++#[path = "ssh_observation_diagnostic_tests.rs"]
++mod tests;
+--- /dev/null
++++ b/src/mcp/runtime/ssh_observation_diagnostic_tests.rs
+@@ -0,0 +1,457 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++use super::*;
++
++struct TestState;
++impl TestState {
++	fn start() -> Self {
++		assert!(!ENABLED.with(Cell::get));
++		RECORDING_INCOMPLETE.with(|flag| flag.set(false));
++		STATE.with(|slot| {
++			assert!(slot.borrow().is_none());
++			*slot.borrow_mut() = Some(State {
++				owner_started_wall: Instant::now(),
++				owner_started_cpu: thread_cpu_now(),
++				statistics: [Statistics::default(); METRIC_COUNT],
++				failure_events: FailureEventStatistics::default(),
++			});
++		});
++		ENABLED.with(|flag| flag.set(true));
++		Self
++	}
++}
++impl Drop for TestState {
++	fn drop(&mut self) {
++		ENABLED.with(|flag| flag.set(false));
++		STATE.with(|slot| {
++			slot.borrow_mut().take();
++		});
++		RECORDING_INCOMPLETE.with(|flag| flag.set(false));
++	}
++}
++
++fn snapshot(index: usize) -> Statistics {
++	STATE.with(|slot| slot.borrow().as_ref().unwrap().statistics[index])
++}
++
++#[test]
++fn diagnostic_switch_requires_exact_explicit_one() {
++	assert!(!requested(None));
++	for value in ["", "0", "true", "01", "1 ", " 1"] {
++		assert!(!requested(Some(std::ffi::OsStr::new(value))));
++	}
++	assert!(requested(Some(std::ffi::OsStr::new("1"))));
++}
++
++#[test]
++fn diagnostic_clock_failures_and_backwards_values_are_not_zero_samples() {
++	assert_eq!(cpu_delta(None, Some(10)), None);
++	assert_eq!(cpu_delta(Some(10), None), None);
++	assert_eq!(cpu_delta(Some(10), Some(9)), None);
++	assert_eq!(cpu_delta(Some(10), Some(10)), Some(0));
++	assert_eq!(cpu_delta(Some(10), Some(17)), Some(7));
++	assert_eq!(nanoseconds(None), None);
++	assert_eq!(nanoseconds(Some(Duration::ZERO)), Some(0));
++	assert_eq!(nanoseconds(Some(Duration::MAX)), None);
++}
++
++#[test]
++fn diagnostic_aggregation_keeps_missing_clocks_and_unmarked_outcomes_separate() {
++	let mut stats = Statistics::default();
++	stats.started();
++	stats.closed(Some(100), Some(20), true, true, 123);
++	stats.started();
++	stats.closed(Some(200), None, true, false, 999);
++	stats.started();
++	stats.closed(None, Some(30), true, true, 5);
++	assert_eq!((stats.started_intervals, stats.closed_intervals), (3, 3));
++	assert_eq!((stats.marked_success, stats.not_marked_success), (2, 1));
++	assert_eq!(
++		(stats.wall_valid_samples, stats.wall_invalid_samples),
++		(2, 1)
++	);
++	assert_eq!((stats.wall_ns_sum, stats.wall_ns_max), (300, 200));
++	assert_eq!((stats.cpu_valid_samples, stats.cpu_invalid_samples), (2, 1));
++	assert_eq!((stats.cpu_ns_sum, stats.cpu_ns_max), (50, 30));
++	assert_eq!(stats.bytes_on_marked_success, 128);
++	assert!(!stats.counter_saturated);
++}
++
++#[test]
++fn diagnostic_counter_overflow_is_explicit() {
++	let mut stats = Statistics {
++		started_intervals: u64::MAX,
++		wall_ns_sum: u64::MAX,
++		cpu_ns_sum: u64::MAX,
++		bytes_on_marked_success: u64::MAX,
++		..Statistics::default()
++	};
++	stats.started();
++	stats.closed(Some(1), Some(1), true, true, 1);
++	assert_eq!(stats.started_intervals, u64::MAX);
++	assert_eq!(stats.wall_ns_sum, u64::MAX);
++	assert_eq!(stats.cpu_ns_sum, u64::MAX);
++	assert_eq!(stats.bytes_on_marked_success, u64::MAX);
++	assert!(stats.counter_saturated);
++}
++
++#[test]
++fn diagnostic_disabled_spans_leave_no_state_or_started_clock() {
++	assert!(!ENABLED.with(Cell::get));
++	assert!(STATE.with(|slot| slot.borrow().is_none()));
++	let span = Span::files();
++	assert!(span.started.is_none());
++	span.success();
++	let agent = Span::agent_wall();
++	assert!(agent.started.is_none());
++	drop(agent);
++	assert!(STATE.with(|slot| slot.borrow().is_none()));
++}
++
++#[test]
++fn diagnostic_nested_synchronous_scopes_keep_inclusive_parent_measurements() {
++	let _state = TestState::start();
++	let files = Span::files();
++	let total = Span::file(FileKind::Ssh, FilePhase::Total);
++	let reading = Span::file(FileKind::Ssh, FilePhase::ReadHash);
++	for value in 0..100 {
++		std::hint::black_box(value);
++	}
++	reading.success_with_bytes(321);
++	total.success();
++	files.success();
++	let set = snapshot(FILE_SET);
++	let file = snapshot(1 + FileKind::Ssh as usize * FILE_PHASES);
++	let read = snapshot(1 + FileKind::Ssh as usize * FILE_PHASES + FilePhase::ReadHash as usize);
++	for stats in [set, file, read] {
++		assert_eq!((stats.started_intervals, stats.closed_intervals), (1, 1));
++		assert_eq!((stats.marked_success, stats.not_marked_success), (1, 0));
++		assert_eq!(stats.wall_valid_samples + stats.wall_invalid_samples, 1);
++		assert_eq!(stats.cpu_valid_samples + stats.cpu_invalid_samples, 1);
++	}
++	assert_eq!(read.bytes_on_marked_success, 321);
++	assert!(set.wall_ns_sum >= file.wall_ns_sum && file.wall_ns_sum >= read.wall_ns_sum);
++	if set.cpu_valid_samples == 1 && file.cpu_valid_samples == 1 && read.cpu_valid_samples == 1 {
++		assert!(set.cpu_ns_sum >= file.cpu_ns_sum && file.cpu_ns_sum >= read.cpu_ns_sum);
++	}
++}
++
++#[test]
++fn diagnostic_unwinding_closes_interval_without_claiming_rpc_failure() {
++	let _state = TestState::start();
++	let result = std::panic::catch_unwind(|| {
++		let _measurement = Span::files();
++		panic!("diagnostic RAII fixture");
++	});
++	assert!(result.is_err());
++	let stats = snapshot(FILE_SET);
++	assert_eq!((stats.started_intervals, stats.closed_intervals), (1, 1));
++	assert_eq!((stats.marked_success, stats.not_marked_success), (0, 1));
++}
++
++#[test]
++fn diagnostic_agent_span_is_send_and_never_records_cpu() {
++	fn assert_send<T: Send>() {}
++	assert_send::<Span>();
++	let _state = TestState::start();
++	let agent = Span::agent_wall();
++	assert!(agent.started.as_ref().unwrap().cpu.is_none());
++	agent.success();
++	let stats = snapshot(AGENT);
++	assert_eq!((stats.started_intervals, stats.closed_intervals), (1, 1));
++	assert_eq!(
++		(
++			stats.cpu_valid_samples,
++			stats.cpu_invalid_samples,
++			stats.cpu_ns_sum
++		),
++		(0, 0, 0)
++	);
++	assert!(!metric_summary(AGENT, stats).cpu_applicable);
++}
++
++#[test]
++fn diagnostic_wrong_thread_drop_leaves_visible_incomplete_interval() {
++	let _state = TestState::start();
++	let span = Span::files();
++	std::thread::spawn(move || drop(span)).join().unwrap();
++	let stats = snapshot(FILE_SET);
++	assert_eq!((stats.started_intervals, stats.closed_intervals), (1, 0));
++	assert_eq!((stats.cpu_valid_samples, stats.cpu_invalid_samples), (0, 0));
++}
++
++#[test]
++fn diagnostic_recording_conflict_does_not_panic_or_look_complete() {
++	let _state = TestState::start();
++	STATE.with(|slot| {
++		let _borrowed = slot.borrow_mut();
++		let span = Span::files();
++		assert!(span.started.is_none());
++		span.success();
++	});
++	assert!(RECORDING_INCOMPLETE.with(Cell::get));
++	assert_eq!(snapshot(FILE_SET).started_intervals, 0);
++}
++
++#[test]
++fn diagnostic_summary_categories_are_fixed_and_mark_nested_scopes() {
++	for index in 0..METRIC_COUNT {
++		let item = metric_summary(index, Statistics::default());
++		assert!(!item.category.contains('/') && !item.category.contains('@'));
++		assert_eq!(item.cpu_applicable, index != AGENT);
++		if index == FILE_SET || index == AGENT {
++			assert!(item.parent_inclusive_metric.is_none());
++		} else {
++			assert!(item.parent_inclusive_metric.is_some());
++		}
++		let json = serde_json::to_value(&item).unwrap();
++		assert_eq!(json["started_intervals"], 0);
++		assert_eq!(json["closed_intervals"], 0);
++	}
++}
++
++fn proof_observation() -> SpawnProofObservation {
++	let mut identity = IdentityObservation::new(true);
++	identity.state(Some("S"));
++	identity.failed("exe_metadata", Some(libc::ENOENT));
++	SpawnProofObservation {
++		expected_argv_mode: "slave",
++		pid_available: true,
++		pidfd_available: true,
++		pidfd_errno: None,
++		identity_available: false,
++		identity_observation: identity,
++		identity_matches: false,
++		initial_terminal_probe: ProbeResult::terminal(&Ok(false)),
++	}
++}
++
++fn failure_counters() -> FailureEventStatistics {
++	STATE.with(|slot| slot.borrow().as_ref().unwrap().failure_events)
++}
++
++fn decoded_event(bytes: &[u8]) -> serde_json::Value {
++	let json = bytes
++		.strip_prefix(b"HEPTA_X230_SPAWN_PROOF_FAILURE_JSON ")
++		.unwrap();
++	serde_json::from_slice(json).unwrap()
++}
++
++#[test]
++fn diagnostic_identity_sidecar_returns_the_same_comparison_values() {
++	for active in [false, true] {
++		for value in [false, true] {
++			let mut observation = IdentityObservation::new(active);
++			assert_eq!(observation.uid(value), value);
++			assert_eq!(observation.executable(value), value);
++			assert_eq!(observation.argv(value), value);
++			assert_eq!(observation.uid_matches, active.then_some(value));
++			assert_eq!(observation.executable_matches, active.then_some(value));
++			assert_eq!(observation.argv_matches, active.then_some(value));
++		}
++	}
++}
++
++#[test]
++fn diagnostic_identity_observation_keeps_state_outside_identity_equality() {
++	let pid = std::process::id();
++	let original = super::super::process_identity(pid).unwrap();
++	let mut observation = IdentityObservation::new(true);
++	let measured = super::super::process_identity_observed(pid, Some(&mut observation)).unwrap();
++	assert_eq!(original, measured);
++	assert!(observation.failure_stage.is_none());
++	assert!(observation.stat_state.is_some());
++	assert_eq!(observation.argv_was_empty, Some(measured.argv.is_empty()));
++	assert!(observation.uid_matches.is_none());
++}
++
++#[test]
++fn diagnostic_identity_read_failure_preserves_original_error_and_fixed_stage() {
++	let original = super::super::process_identity(0).unwrap_err();
++	let mut observation = IdentityObservation::new(true);
++	let measured = super::super::process_identity_observed(0, Some(&mut observation)).unwrap_err();
++	assert_eq!(original.to_string(), measured.to_string());
++	assert_eq!(observation.failure_stage, Some("stat_read"));
++	assert_eq!(observation.failure_errno, Some(libc::ENOENT));
++	assert_eq!(
++		observation.failure_errno_category,
++		Some("not_found_or_exited")
++	);
++	assert!(observation.stat_state.is_none());
++	assert!(observation.argv_was_empty.is_none());
++}
++
++#[test]
++fn diagnostic_expected_mode_is_a_fixed_description_of_expected_options() {
++	for (args, expected) in [
++		(vec!["ControlMaster=yes"], "master"),
++		(vec!["ControlMaster=no"], "slave"),
++		(vec!["-G", "ControlMaster=yes"], "effective_master"),
++		(vec!["-G", "ControlMaster=no"], "effective_slave"),
++		(vec!["ControlMaster=yes", "ControlMaster=no"], "unknown"),
++		(vec!["unclassified"], "unknown"),
++	] {
++		let arguments: Vec<String> = args.into_iter().map(str::to_owned).collect();
++		assert_eq!(expected_argv_mode(&arguments), expected);
++	}
++}
++
++#[test]
++fn diagnostic_disabled_failure_guard_does_not_build_or_write_an_event() {
++	assert!(!enabled());
++	let built = Cell::new(false);
++	let mut guard = SpawnFailureGuard::new(|| {
++		built.set(true);
++		proof_observation()
++	});
++	guard.stopping();
++	guard.stopped(&Ok(()));
++	guard.releasing();
++	guard.released(&Ok(()));
++	let mut output = Vec::new();
++	guard.close_with_writer(&mut output);
++	assert!(!built.get());
++	assert!(output.is_empty());
++}
++
++#[test]
++fn diagnostic_failure_event_preserves_initial_probe_after_successful_cleanup() {
++	let _state = TestState::start();
++	let mut guard = SpawnFailureGuard::new(proof_observation);
++	guard.stopping();
++	guard.stopped(&Ok(()));
++	guard.releasing();
++	guard.released(&Ok(()));
++	let mut output = Vec::new();
++	guard.close_with_writer(&mut output);
++	let event = decoded_event(&output);
++	assert_eq!(event["initial_terminal_probe"]["kind"], "not_exited");
++	assert_eq!(event["initial_proof_passed"], false);
++	assert_eq!(event["identity_matches"], false);
++	assert_eq!(event["stop_reap"]["kind"], "succeeded");
++	assert_eq!(event["ledger_release"]["kind"], "succeeded");
++	assert_eq!(
++		event["identity_observation"]["failure_stage"],
++		"exe_metadata"
++	);
++	assert!(event["identity_observation"]["argv_matches"].is_null());
++	assert!(
++		event.get("pid").is_none() && event.get("argv").is_none() && event.get("path").is_none()
++	);
++	assert_eq!(
++		(failure_counters().seen, failure_counters().written),
++		(1, 1)
++	);
++}
++
++#[test]
++fn diagnostic_interrupted_cleanup_stays_unknown_and_release_not_attempted() {
++	let _state = TestState::start();
++	let mut guard = SpawnFailureGuard::new(proof_observation);
++	guard.stopping();
++	let mut output = Vec::new();
++	guard.close_with_writer(&mut output);
++	let event = decoded_event(&output);
++	assert_eq!(event["stop_reap"]["kind"], "not_completed");
++	assert_eq!(event["ledger_release"]["kind"], "not_attempted");
++	assert_eq!(event["initial_terminal_probe"]["kind"], "not_exited");
++}
++
++#[test]
++fn diagnostic_cleanup_error_is_not_changed_or_reclassified_as_release_success() {
++	let _state = TestState::start();
++	let mut guard = SpawnFailureGuard::new(proof_observation);
++	let original: anyhow::Result<()> = Err(std::io::Error::from_raw_os_error(libc::EPERM).into());
++	let message = original.as_ref().unwrap_err().to_string();
++	guard.stopping();
++	guard.stopped(&original);
++	let mut output = Vec::new();
++	guard.close_with_writer(&mut output);
++	let event = decoded_event(&output);
++	assert_eq!(original.map_err(|error| error.to_string()), Err(message));
++	assert_eq!(event["stop_reap"]["kind"], "error");
++	assert_eq!(event["stop_reap"]["errno"], libc::EPERM);
++	assert_eq!(event["stop_reap"]["errno_category"], "permission");
++	assert_eq!(event["ledger_release"]["kind"], "not_attempted");
++}
++
++#[test]
++fn diagnostic_failed_ledger_release_is_distinct_from_successful_reap() {
++	let _state = TestState::start();
++	let mut guard = SpawnFailureGuard::new(proof_observation);
++	guard.stopping();
++	guard.stopped(&Ok(()));
++	guard.releasing();
++	guard.released(&Err(std::io::Error::from_raw_os_error(libc::EIO).into()));
++	let mut output = Vec::new();
++	guard.close_with_writer(&mut output);
++	let event = decoded_event(&output);
++	assert_eq!(event["stop_reap"]["kind"], "succeeded");
++	assert_eq!(event["ledger_release"]["kind"], "error");
++	assert_eq!(event["ledger_release"]["errno_category"], "io");
++}
++
++#[test]
++fn diagnostic_failure_event_count_is_bounded_without_hiding_capped_observations() {
++	let _state = TestState::start();
++	let mut output = Vec::new();
++	for _ in 0..FAILURE_EVENT_LIMIT + 2 {
++		let mut guard = SpawnFailureGuard::new(proof_observation);
++		guard.close_with_writer(&mut output);
++	}
++	let counters = failure_counters();
++	assert_eq!(counters.seen, FAILURE_EVENT_LIMIT + 2);
++	assert_eq!(
++		(counters.attempted, counters.written),
++		(FAILURE_EVENT_LIMIT, FAILURE_EVENT_LIMIT)
++	);
++	assert_eq!((counters.capped, counters.write_failed), (2, 0));
++	assert_eq!(
++		output.iter().filter(|byte| **byte == b'\n').count(),
++		FAILURE_EVENT_LIMIT as usize
++	);
++}
++
++#[test]
++fn diagnostic_failure_event_write_error_is_counted_and_never_retried() {
++	struct Broken;
++	impl Write for Broken {
++		fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
++			Err(std::io::Error::from_raw_os_error(libc::EPIPE))
++		}
++		fn flush(&mut self) -> std::io::Result<()> {
++			Ok(())
++		}
++	}
++	let _state = TestState::start();
++	let mut guard = SpawnFailureGuard::new(proof_observation);
++	guard.close_with_writer(&mut Broken);
++	let mut later = Vec::new();
++	guard.close_with_writer(&mut later);
++	assert!(later.is_empty());
++	let counters = failure_counters();
++	assert_eq!(
++		(
++			counters.seen,
++			counters.attempted,
++			counters.written,
++			counters.write_failed
++		),
++		(1, 1, 0, 1)
++	);
++}
++
++#[test]
++fn diagnostic_failure_guard_is_send_but_cross_thread_drop_is_incomplete() {
++	fn assert_send<T: Send>() {}
++	assert_send::<SpawnFailureGuard>();
++	let _state = TestState::start();
++	let guard = SpawnFailureGuard::new(proof_observation);
++	std::thread::spawn(move || drop(guard)).join().unwrap();
++	let counters = failure_counters();
++	assert_eq!(
++		(counters.seen, counters.attempted, counters.capped),
++		(1, 0, 0)
++	);
++}
+--- a/src/mcp/runtime/ssh_observation_pool.rs
++++ b/src/mcp/runtime/ssh_observation_pool.rs
+@@ -2,6 +2,8 @@
+ // Copyright 2026 TrillionniumFoundation
+ // SPDX-License-Identifier: Apache-2.0
+ //! A separate, explicitly opted-in transport; it never falls back or replays.
++#[path = "ssh_observation_diagnostic.rs"]
++mod diagnostic;
+ #[path = "ssh_observation_profile.rs"]
+ mod profile;
+ 
+@@ -138,6 +140,7 @@
+ 	let thread = std::thread::Builder::new()
+ 		.name("hepta-observation-ssh".into())
+ 		.spawn(move || {
++			let _diagnostic_owner = diagnostic::OwnerGuard::start();
+ 			let runtime = tokio::runtime::Builder::new_current_thread()
+ 				.enable_all()
+ 				.build()?;
+@@ -400,24 +403,71 @@
+ 	argv: Vec<u8>,
+ }
+ fn process_identity(pid: u32) -> Result<ProcessIdentity> {
++	process_identity_observed(pid, None)
++}
++fn process_identity_observed(
++	pid: u32,
++	mut observation: Option<&mut diagnostic::IdentityObservation>,
++) -> Result<ProcessIdentity> {
+ 	let root = PathBuf::from(format!("/proc/{pid}"));
+-	let status = std::fs::read_to_string(root.join("stat"))?;
++	let status = std::fs::read_to_string(root.join("stat")).inspect_err(|error| {
++		if let Some(probe) = observation.as_deref_mut() {
++			probe.failed("stat_read", error.raw_os_error());
++		}
++	})?;
+ 	let tail = status
+ 		.rsplit_once(')')
+-		.context("observation child stat unavailable")?
++		.context("observation child stat unavailable")
++		.inspect_err(|_| {
++			if let Some(probe) = observation.as_deref_mut() {
++				probe.failed("stat_layout", None);
++			}
++		})?
+ 		.1;
++	if let Some(probe) = observation.as_deref_mut() {
++		probe.state(tail.split_ascii_whitespace().next());
++	}
+ 	let birth = tail
+ 		.split_ascii_whitespace()
+ 		.nth(19)
+-		.context("observation child birth unavailable")?
+-		.parse()?;
+-	let exe = std::fs::metadata(root.join("exe"))?;
++		.context("observation child birth unavailable")
++		.inspect_err(|_| {
++			if let Some(probe) = observation.as_deref_mut() {
++				probe.failed("birth_field", None);
++			}
++		})?
++		.parse()
++		.inspect_err(|_| {
++			if let Some(probe) = observation.as_deref_mut() {
++				probe.failed("birth_parse", None);
++			}
++		})?;
++	let exe = std::fs::metadata(root.join("exe")).inspect_err(|error| {
++		if let Some(probe) = observation.as_deref_mut() {
++			probe.failed("exe_metadata", error.raw_os_error());
++		}
++	})?;
++	let uid = std::fs::metadata(&root)
++		.inspect_err(|error| {
++			if let Some(probe) = observation.as_deref_mut() {
++				probe.failed("proc_directory_metadata", error.raw_os_error());
++			}
++		})?
++		.uid();
++	let argv = std::fs::read(root.join("cmdline")).inspect_err(|error| {
++		if let Some(probe) = observation.as_deref_mut() {
++			probe.failed("cmdline_read", error.raw_os_error());
++		}
++	})?;
++	if let Some(probe) = observation {
++		probe.argv_empty(argv.is_empty());
++	}
+ 	Ok(ProcessIdentity {
+ 		birth,
+-		uid: std::fs::metadata(&root)?.uid(),
++		uid,
+ 		dev: exe.dev(),
+ 		ino: exe.ino(),
+-		argv: std::fs::read(root.join("cmdline"))?,
++		argv,
+ 	})
+ }
+ 
+@@ -762,6 +812,13 @@
+ 		} else {
+ 			unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) }
+ 		};
++		// Preserve errno immediately, before another syscall can replace it.
++		// A missing PID did not call pidfd_open and has no syscall errno.
++		let pidfd_errno = if pid != 0 && fd < 0 {
++			std::io::Error::last_os_error().raw_os_error()
++		} else {
++			None
++		};
+ 		let pidfd = if fd < 0 {
+ 			None
+ 		} else {
+@@ -781,11 +838,19 @@
+ 		// Failed pidfd/identity checks use the same bounded cleanup ledger.
+ 		children.insert(id, owned.clone());
+ 		drop(children);
+-		let identity = process_identity(pid).ok();
++		let diagnostic_enabled = diagnostic::enabled();
++		let mut identity_observation = diagnostic::IdentityObservation::new(diagnostic_enabled);
++		let identity = if diagnostic_enabled {
++			process_identity_observed(pid, Some(&mut identity_observation))
++		} else {
++			process_identity(pid)
++		}
++		.ok();
++		let identity_available = identity.is_some();
+ 		let matches = identity.as_ref().is_some_and(|value| {
+-			value.uid == unsafe { libc::geteuid() }
+-				&& (value.dev, value.ino) == self.profile.ssh_inode
+-				&& value.argv == expected
++			identity_observation.uid(value.uid == unsafe { libc::geteuid() })
++				&& identity_observation.executable((value.dev, value.ino) == self.profile.ssh_inode)
++				&& identity_observation.argv(value.argv == expected)
+ 		});
+ 		if let Some(identity) = identity {
+ 			let _ = owned.identity.set(identity);
+@@ -794,10 +859,28 @@
+ 		let proof = owned.pidfd.is_some() && terminal.as_ref().is_ok_and(|done| *done || matches);
+ 		if !proof {
+ 			self.stop.cancel();
+-			self.stop_child(&owned, Duration::ZERO)
++			let mut failure =
++				diagnostic::SpawnFailureGuard::new(|| diagnostic::SpawnProofObservation {
++					expected_argv_mode: diagnostic::expected_argv_mode(args),
++					pid_available: pid != 0,
++					pidfd_available: owned.pidfd.is_some(),
++					pidfd_errno,
++					identity_available,
++					identity_observation,
++					identity_matches: matches,
++					initial_terminal_probe: diagnostic::ProbeResult::terminal(&terminal),
++				});
++			failure.stopping();
++			let stopped = self
++				.stop_child(&owned, Duration::ZERO)
+ 				.await
+-				.context("observation early child proof failed; cleanup uncertain")?;
+-			self.release(&owned).await?;
++				.context("observation early child proof failed; cleanup uncertain");
++			failure.stopped(&stopped);
++			stopped?;
++			failure.releasing();
++			let released = self.release(&owned).await;
++			failure.released(&released);
++			released?;
+ 			bail!("observation SSH pidfd or post-exec identity refused; no fallback");
+ 		}
+ 		owned.approved.store(matches, Ordering::Release);
+--- a/src/mcp/runtime/ssh_observation_profile.rs
++++ b/src/mcp/runtime/ssh_observation_profile.rs
+@@ -1,5 +1,6 @@
+ // Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
+ //! Explicitly supported, immutable inputs for the opt-in observation transport.
++use super::diagnostic::{FileKind, FilePhase, Span};
+ use anyhow::{bail, Context, Result};
+ use serde::Deserialize;
+ use std::collections::{BTreeMap, VecDeque};
+@@ -79,6 +80,7 @@
+ 
+ #[derive(Clone)]
+ struct PinnedFile {
++	diagnostic_kind: FileKind,
+ 	path: PathBuf,
+ 	stamp: Stamp,
+ 	digest: [u8; 32],
+@@ -244,6 +246,7 @@
+ 		}
+ 		Ok((
+ 			Self {
++				diagnostic_kind: FileKind::Other,
+ 				path: path.to_owned(),
+ 				stamp,
+ 				digest,
+@@ -254,14 +257,22 @@
+ 			bytes,
+ 		))
+ 	}
++	fn diagnostic_kind(mut self, kind: FileKind) -> Self {
++		self.diagnostic_kind = kind;
++		self
++	}
+ 	fn verify(&self) -> Result<()> {
++		let total = Span::file(self.diagnostic_kind, FilePhase::Total);
++		let before = Span::file(self.diagnostic_kind, FilePhase::OpenBefore);
+ 		let (mut file, stamp) =
+ 			checked_file(&self.path, self.maximum, self.private, self.executable)?;
+ 		if stamp != self.stamp {
+ 			bail!("observation profile changed");
+ 		}
++		before.success();
+ 		// Rehash every byte on every check without allocating a whole executable.
+ 		// The same descriptor and path stamps still fence the complete read.
++		let reading = Span::file(self.diagnostic_kind, FilePhase::ReadHash);
+ 		let mut hash = ring::digest::Context::new(&ring::digest::SHA256);
+ 		let mut buffer = [0; VERIFY_BUFFER_BYTES];
+ 		let mut length = 0usize;
+@@ -277,10 +288,14 @@
+ 			length += count;
+ 			hash.update(&buffer[..count]);
+ 		}
++		reading.success_with_bytes(length as u64);
++		let after = Span::file(self.diagnostic_kind, FilePhase::AfterStampsDigest);
+ 		verify_read(&self.path, &file, &stamp, length, self.maximum)?;
+ 		if hash.finish().as_ref() != self.digest {
+ 			bail!("observation profile changed");
+ 		}
++		after.success();
++		total.success();
+ 		Ok(())
+ 	}
+ }
+@@ -409,11 +424,15 @@
+ 	fn load(expected: &str) -> Result<Self> {
+ 		let (path, components) = fixed_shell_resolution()?;
+ 		let (target, _) = PinnedFile::load(&path, Some(expected), 16 * 1024 * 1024, false, true)?;
+-		let result = Self { components, target };
++		let result = Self {
++			components,
++			target: target.diagnostic_kind(FileKind::Shell),
++		};
+ 		result.verify()?;
+ 		Ok(result)
+ 	}
+ 	fn verify(&self) -> Result<()> {
++		let resolution = Span::shell_resolution();
+ 		let (path, components) = fixed_shell_resolution()?;
+ 		if path != self.target.path
+ 			|| components.len() != self.components.len()
+@@ -431,6 +450,7 @@
+ 				}) {
+ 			bail!("observation fixed system shell resolution changed");
+ 		}
++		resolution.success();
+ 		self.target.verify()
+ 	}
+ }
+@@ -599,11 +619,12 @@
+ }
+ 
+ pub(super) async fn agent_snapshot(path: &Path, deadline: Instant) -> Result<AgentIdentity> {
++	let measurement = Span::agent_wall();
+ 	// Forwarded agent sockets may be0775; their descriptor-checked0700
+ 	// account-owned parent is the confidentiality boundary. Control sockets
+ 	// still use the stricter individual socket mode check above.
+ 	let before = socket_stamp_inner(path, false)?;
+-	timeout_at(deadline, async {
++	let result = timeout_at(deadline, async {
+ 		let mut stream = UnixStream::connect(path).await?;
+ 		let peer = peer(&stream)?;
+ 		if peer.1 != unsafe { libc::geteuid() } {
+@@ -629,7 +650,11 @@
+ 		})
+ 	})
+ 	.await
+-	.context("observation SSH agent deadline")?
++	.context("observation SSH agent deadline")?;
++	if result.is_ok() {
++		measurement.success();
++	}
++	result
+ }
+ 
+ pub(super) struct Profile {
+@@ -710,7 +735,13 @@
+ 		}
+ 		Ok(Self {
+ 			ssh_inode: (ssh.stamp.dev, ssh.stamp.ino),
+-			files: vec![profile, config, known, ssh, false_program],
++			files: vec![
++				profile.diagnostic_kind(FileKind::Profile),
++				config.diagnostic_kind(FileKind::Config),
++				known.diagnostic_kind(FileKind::KnownHosts),
++				ssh.diagnostic_kind(FileKind::Ssh),
++				false_program.diagnostic_kind(FileKind::False),
++			],
+ 			shell,
+ 			config: spec.ssh_config,
+ 			known_hosts: spec.known_hosts,
+@@ -722,10 +753,12 @@
+ 		})
+ 	}
+ 	pub(super) fn verify_files(&self) -> Result<()> {
++		let total = Span::files();
+ 		for file in &self.files {
+ 			file.verify()?;
+ 		}
+ 		self.shell.verify()?;
++		let policy = Span::policy();
+ 		if !private_directory(&self.socket_parent)?.same_directory(&self.parent_stamp)
+ 			|| digest(&serde_json::to_vec(
+ 				crate::mcp::runtime::config::runtime_config()?,
+@@ -734,6 +767,8 @@
+ 		{
+ 			bail!("observation policy or credential profile changed");
+ 		}
++		policy.success();
++		total.success();
+ 		Ok(())
+ 	}
+ }
