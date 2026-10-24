@@ -29,7 +29,7 @@ jobs:
   runtime-head-ci:
     name: Rust exact-head validation
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - name: Checkout exact source HEAD
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -61,8 +61,15 @@ jobs:
       - name: Clippy
         run: cargo clippy --locked --all-targets -- -D warnings
 
-      - name: Test
-        run: cargo test --locked --all-targets
+      - name: Install pinned nextest
+        run: |
+          cargo install --locked --version '=0.9.137' cargo-nextest
+          cargo nextest --version
+
+      - name: Test in isolated processes
+        run: |
+          cargo nextest run --locked --all-targets --all-features \
+            --test-threads 1 --retries 0 --no-fail-fast
 
       - name: Release build
         run: cargo build --locked --release
@@ -71,7 +78,7 @@ jobs:
     name: Rust prospective-merge validation
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - name: Checkout GitHub prospective merge
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -105,8 +112,15 @@ jobs:
       - name: Clippy
         run: cargo clippy --locked --all-targets -- -D warnings
 
-      - name: Test
-        run: cargo test --locked --all-targets
+      - name: Install pinned nextest
+        run: |
+          cargo install --locked --version '=0.9.137' cargo-nextest
+          cargo nextest --version
+
+      - name: Test in isolated processes
+        run: |
+          cargo nextest run --locked --all-targets --all-features \
+            --test-threads 1 --retries 0 --no-fail-fast
 
       - name: Descriptor-relative file safety
         run: python3 tests/file_capabilities.py

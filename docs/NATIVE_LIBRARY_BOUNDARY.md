@@ -107,27 +107,65 @@ concurrency each individual test intentionally creates. This diagnosis does not
 establish a production throughput or tail-latency guarantee, and the failed
 runs remain part of the qualification record.
 
-The next correctness gate uses a fresh process per test, one test at a time and
-zero retries, after other qualification builds have stopped. It retains each
-test's internal concurrency and the bounded-deadline rejection tests. The
-production three-second deadline is unchanged. Run it with the integration's
-own target directory and an explicitly recorded CPU/memory ceiling; the
-intended qualification envelope is two CPUs and 8 GiB, not a load test.
+The correctness gate runs each test in a fresh process, one test at a time and
+with zero retries. It retains every test's internal concurrency and the
+bounded-deadline rejection tests. The production three-second deadline is
+unchanged. Use the integration's own target directory and record the actual
+resource envelope; this is a correctness gate, not a load test.
 
 ```sh
 CARGO_BUILD_JOBS=2 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo nextest run --locked --all-targets --all-features \
-  --test-threads 1 --retries 0
+  --test-threads 1 --retries 0 --no-fail-fast
 ```
 
-At this documentation checkpoint, the repaired runtime gate and real native
-canary are pending their recorded outcomes. A subsequent report must give its
-actual exit status, test count, command, source identity and resource envelope.
-The existing source workflows use `cargo test --locked --all-targets` with the
-default shared-process parallel harness; they do not run this nextest envelope
-or `--all-features`. Those workflow commands remain unchanged. A local nextest
-pass must not be reported as an existing hosted CI pass or a concurrent-load
-service guarantee.
+The repaired source passed formatting, all-target/all-feature strict Clippy and
+the native example build in job `1a16cc27e56-1b6abb-46bd`. The completed nextest
+run then qualified source `dd7bf97f4cbe9b77d35c117ef1584e541129f041` with its
+tracked checkout unchanged before and after the run:
+
+| Recorded field | Actual value |
+| --- | --- |
+| Job | `1a16ce06214-1b6abb-4714` |
+| Result | Exit 0; 1,177 tests run, 1,177 passed, 21 existing opt-in skips |
+| Inventory | 1,198 tests across five binaries; no new test exclusion |
+| Runner | Cargo-nextest 0.9.137, commit `75ddba7e911b44c5c0700dac0415d824403de9bd` |
+| Start / end, UTC | `2026-10-24T07:46:48.065144Z` / `2026-10-24T08:16:40.149505Z` |
+| Test summary / process wall time | 1,790.418 / 1,792.076 seconds |
+| Resource envelope | Two-CPU quota, 8 GiB memory ceiling, nice 10; no other owned qualification build at start; host not exclusive |
+| Complete 1,188-line log SHA256 | `086ba439c7079203527990811dd31076ebb64ec059561579e218a3fa6ac04c3c` |
+
+The earlier warm shared-process run remains recorded as 1,142 passed, seven
+failed and 21 ignored in 2,595.71 seconds. Its two semantic failures were repaired
+in this composition; its five metadata-deadline failures motivated the explicit
+process-isolation policy. An isolated pass does not erase those failures or
+establish a production throughput or tail-latency guarantee.
+
+Both existing source workflows now install the pinned nextest version and use
+this process-isolated test command with zero retries. Their exact-HEAD and
+prospective-merge identities and other gates are retained. The 90-minute job
+budget accommodates the observed roughly 30-minute warm test run, the earlier
+13-minute cold build, tool installation and the remaining gates. This budget is
+not a measured hosted-run duration. The local result above is not a hosted CI
+result; the changed workflows must report their own outcomes. See
+[Runtime test strategy](RUNTIME_TEST_STRATEGY.md) for coverage and policy details.
+
+The real native canary also passed against the same source. Its retained
+80,592-byte report has SHA256
+`4868644068756417162a40e4e3e316dbcecf3561ea4d93568c15bd2a75889d33`; the binary
+SHA256 is
+`c792efcaa3a712acbaeb61e20d99fdf408e5df5c7cad15374cd5a700fb40717a`, and the
+355-file source-input manifest is
+`f62d93ca41f509604e4f3ba1557bdd945dcf545fffdcb6843aacdbf7c76b9fbc`.
+
+The report confirms controller exit -9, the original running job, same-key reuse
+without launch retry, changed-payload refusal, exact output and a publication
+witness, with one recorded worker entry. A separate owned job also recorded one
+entry. Its cancellation request returned `stop_requested` with
+`termination_confirmed: false`; the later authoritative status was `cancelled`,
+exit -15, with a terminal-publication witness. Request acknowledgement and
+terminal proof remain distinct. These are the bounded checks described below,
+not a target-reboot or pre-acknowledgement power-loss experiment.
 
 ## Real, isolated integration check
 
