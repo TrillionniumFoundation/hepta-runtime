@@ -394,6 +394,75 @@ must preserve full per-request authority validation, reject the timed-out
 request without retry, and independently qualify any narrower timeout-failure
 scope. The adopted runtime source remains A20 at this checkpoint.
 
+### A24 request-local agent timeout: qualified, first comparison incomplete
+
+A24 changes only the treatment of the exact typed agent-query timer at three
+direct request validation points: initial admission, before taking a master
+lease, and before accepting a response. A timed-out request still fails and
+discards its output. It supplies no cached credential result, does not extend
+the original deadline, and is never retried automatically. Other requests must
+perform their own complete checks. Initialization, first-master creation and
+renewal retain the original fatal policy for every profile-check error,
+including this timer. Other identity, file, policy, frame and I/O errors retain
+their existing failure policy.
+
+The [actual qualification receipt](evidence/x230-a24-qualification-20261024.json)
+records 1,094 runtime tests plus 18 ownerctl and eight jobctl tests passed, 21
+existing ignored tests, all five qualification stages successful, and the exact
+formatted 150-file source map. Fifteen new isolated scenarios execute inside an
+existing parent test and are not counted as fifteen extra top-level tests. The
+controlled postresponse fixture uses an owned `ssh -G` child; it is not an
+authenticated multiplexing fault-injection test. The
+[exact A23-to-A24 patch](experiments/x230-a24-agent-timeout-isolation.patch)
+reproduces the actual tested source, including the two test files changed by
+formatting.
+
+The first planned series was C16 ABBA, followed by fairness ABBA and the A17/A24
+standard comparison. The [complete partial C16 record](evidence/x230-a24-capacity-r01-20261024.json)
+preserves the actual execution:
+
+| Round | Version | Timed calls | Initial full-output checks | Restart checks |
+| --- | --- | --- | --- | --- |
+| 0 | A20 | 46/96 successful; 50 capacity refusals | 6/6 successful | 12/12 successful |
+| 1 | A24 | 96/96 successful | 6/6 successful | 12/12 successful |
+| 2 | A24 | Not started after preflight failure | 5/6 successful | Not started |
+| 3 | A20 | Not run | Not run | Not run |
+
+The second A24 controller's `pocket4` read returned
+`observation control socket is not the owned master` after 438.84 ms. Its five
+other preflight reads succeeded. This is a different branch from the earlier
+agent deadline and does not establish a permanently stopped pool. Across the
+partial experiment, all 234 observation rows remain: 183 successful and 51
+failed. No complete A20/A24 performance comparison is emitted, and the completed
+first candidate cell is not presented as a passing full candidate experiment.
+
+The [incident record](evidence/x230-a24-capacity-r01-incident-20261024.json)
+binds the source branch, all five exact controller stderr files, the series
+plan/execution records, and a later read-only inventory. The failing master
+readiness check is byte-identical in qualified A20 and A24. Its generic error
+does not distinguish peer PID mismatch, peer UID mismatch, or unequal socket
+stamps before and after the existing connect. A later socket snapshot cannot
+recover those earlier values or establish why they differed. The original
+owned-child stop/reap and ledger release returned before this error could reach
+the RPC; that does not imply successful directory cleanup or no prior effect.
+
+Four controllers completed EOF shutdown with exit zero. The interrupted fifth
+controller exited one with `private root not empty; reconciliation required`
+and `ENOTEMPTY`. All five receipts record no observed descendant survivors,
+reader errors or unmatched replies; two resource-sampling permission errors
+remain. The later inventory found no process at the original controller PID
+and one matching-name directory containing one socket. Filename matching is
+not durable ownership proof. No object was deleted or adopted, and this later
+inventory does not prove an exhaustive absence of processes or restore missing
+startup evidence.
+
+The series stopped at this failure. Fairness, the standard comparison, a
+sustained A24 run and exact-binary abrupt recovery were not executed. **A24 is
+not adopted.** Its narrower timeout behavior has unit and qualification
+evidence, while the shared master-readiness failure needs separate diagnosis.
+The next diagnostic experiment records only already-observed failure details
+and must preserve the original proof and cleanup decisions.
+
 ### D2 bounded diagnostics: qualified, calibrated, not adopted
 
 The [D2 qualification receipt](evidence/x230-a23-d2-qualification-20261024.json)

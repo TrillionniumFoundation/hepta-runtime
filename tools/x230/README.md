@@ -346,6 +346,28 @@ helpers must still match the original hashes recorded by the experiment. No
 comparison, provenance check or registry entry implies adoption.
 
 
+## Qualified version provenance for fairness v4
+
+`build_x230_fairness_evidence_v4.py` and
+`x230-fairness-qualified-versions-a24.json` add the actual, separately qualified
+A24 source and binary. Use the preceding command with the v4 script,
+`--candidate A24`, and this A24 registry. An A24 label must match the complete
+raw qualification report, the actual formatted 150-file source map, and the
+release binary. It cannot borrow another version's qualification.
+
+The earlier helpers and registries remain unchanged. The v4 helper preserves
+v3's statistical calculations, failed rows, admission checks and comparison
+gates. Local analysis replayed both existing A23 fairness attempts with the
+same eleven outcome fields as v3 and rejected 33 invalid provenance cases.
+These two new publication files are exact byte copies of the reviewed inputs.
+
+**No A24 fairness experiment was executed.** The preceding C16 series stopped
+when its second A24 controller failed a master socket ownership check. The
+prepared helper supplies provenance validation for a future experiment; its
+presence does not supply a passing A24 comparison. The complete partial C16
+record and failure explanation are linked from the
+[A24 optimization record](../../docs/X230_OPTIMIZATION_20261023.md#a24-request-local-agent-timeout-qualified-first-comparison-incomplete).
+
 ## D2 diagnostic calibration
 
 The separate [D2 driver](x230_observation_diagnostic_d2.py),

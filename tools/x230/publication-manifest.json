@@ -44,6 +44,22 @@
     "previous_sha256": "da4d55e9c0cc24014b14248f6f1d345e6a57c9cc0ad9cda88decdc957c116ad5",
     "revision_independently_reviewed": true
   },
+  "fairness_v4_publication": {
+    "A24_binary_sha256": "1499e6b1a5588dbb344f4668b241a66b870b232a08a03340efc65b8c30705141",
+    "A24_qualification_report_sha256": "4034c012dafca4ca289252b8fa47beac93130bcf0525c48022b7f1e4634c4877",
+    "A24_source_map_sha256": "fafba08d9c3fc0c269203c679c3e8a111b457c574fa7dd437425a9871d243dff",
+    "actual_A24_fairness_report_exists": false,
+    "local_validation": {
+      "eleven_selected_outcome_fields_equal_to_v3": true,
+      "existing_A23_reports_replayed": 2,
+      "negative_provenance_checks": 33,
+      "new_controller_measurements": false,
+      "validation_receipt_sha256": "d2ad4909fb84c7a5e00cd64ae68f8f2ec25135d49fa0f2933a4bca043ab7a0d2"
+    },
+    "new_publication_copies_exact": true,
+    "original_v3_and_prior_registry_unchanged": true,
+    "purpose": "Allow separately qualified A24 provenance without changing statistical, row-retention or comparison gates. Prepared before a successful A24 fairness experiment exists."
+  },
   "files": [
     {
       "byte_identical": false,
@@ -455,6 +471,26 @@
       "published_bytes": 16097,
       "published_sha256": "8f41879846cdf57964f1238de5e6db04d58333cd7797d32baa2325a957c512da",
       "source_artifact": "a23-diagnostic-d2-r02-source-map.json"
+    },
+    {
+      "byte_identical": true,
+      "edits": [],
+      "original_bytes": 39878,
+      "original_sha256": "48551b8589b0af8ffcc01ec4c68db267959006a79c4b74bc7cf52f3fda7c1b7c",
+      "published_artifact": "tools/x230/build_x230_fairness_evidence_v4.py",
+      "published_bytes": 39878,
+      "published_sha256": "48551b8589b0af8ffcc01ec4c68db267959006a79c4b74bc7cf52f3fda7c1b7c",
+      "source_artifact": "build_x230_fairness_evidence_v4.py"
+    },
+    {
+      "byte_identical": true,
+      "edits": [],
+      "original_bytes": 1900,
+      "original_sha256": "4c638c569b108c6260ba15addd2e4002086ca9b6e5a9cfbcda1f6581434added",
+      "published_artifact": "tools/x230/x230-fairness-qualified-versions-a24.json",
+      "published_bytes": 1900,
+      "published_sha256": "4c638c569b108c6260ba15addd2e4002086ca9b6e5a9cfbcda1f6581434added",
+      "source_artifact": "x230-fairness-qualified-versions-a24.json"
     }
   ],
   "hash_interpretation": "Evidence harness hashes identify the exact original experiment inputs. Published helper hashes identify these repository copies. Nine copies are not byte-identical to their originals: four original scripts have their listed portability edits, two Rust microbenchmark sources add only the required copyright header line, and the D2 driver, reviewer and protocol have the additional explicitly listed comment, input-binding and publication-header edits. The D2 source map is an exact byte copy.",
@@ -470,8 +506,9 @@
   ],
   "publication_copies_reexecuted": true,
   "publication_copy_execution_scope": {
+    "fairness_v4_original_validated_offline_before_byte_identical_copy": true,
     "historical_17_publication_copies_reexecuted": false,
-    "meaning": "The overall flag records that at least one public copy was executed. Only the D2 reviewer was run for local read-only validation against previously measured inputs; no controller experiment was rerun.",
+    "meaning": "The overall flag records that at least one public copy was executed. The D2 reviewer was replayed locally against existing calibration inputs. The exact v4 fairness helper was also validated locally against two existing A23 reports before its byte-identical publication copy was made. No controller experiment was rerun.",
     "new_runtime_measurements_produced": false,
     "public_d2_measurement_driver_ran_controller_or_remote_work": false,
     "public_d2_reviewer_replayed_existing_local_actual_reports": true
