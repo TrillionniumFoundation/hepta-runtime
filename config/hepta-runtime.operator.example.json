@@ -1,0 +1,20 @@
+{
+  "state_dir": "/var/lib/hepta-runtime/operator-state",
+  "controller_workspace_roots": ["/var/lib/hepta-runtime/operator-workspace"],
+  "hosts": {
+    "desktop-operator": {
+      "ssh_target": "admin-provisioned-desktop-alias",
+      "platform": "linux",
+      "execution_mode": "operator",
+      "remote_state_dir": "/home/REPLACE_WITH_OPERATOR_USER/.local/state/hepta-runtime-operator",
+      "allow_execute": true,
+      "allow_pty": true,
+      "allow_write": true,
+      "allow_job_network": true,
+      "allow_detached_fallback": false,
+      "allowed_read_path_prefixes": ["/"],
+      "allowed_write_path_prefixes": ["/"],
+      "privileged_actions": {}
+    }
+  }
+}

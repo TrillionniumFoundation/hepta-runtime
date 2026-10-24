@@ -1,30 +1,46 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+//! Durable host-bound job identities, recovery and log pagination.
 use anyhow::{bail, Context, Result};
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::{File, OpenOptions};
-use std::hash::{Hash, Hasher};
+use std::future::Future;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::Mutex as AsyncMutex;
+use tokio::sync::{Mutex as AsyncMutex, Semaphore};
 
 use super::config::{check_environment, check_execution, runtime_config, valid_name};
-use super::ssh::run_python_json;
+use super::config::{ExecutionMode, Platform};
+use super::ssh::{run_jobctl, run_python_json};
 
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
-const START_LOCK_SHARDS: usize = 256;
-static START_LOCKS: OnceLock<Vec<AsyncMutex<()>>> = OnceLock::new();
-static AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-const MAX_STDIN_BYTES: usize = 1024 * 1024;
-const MAX_LOG_READ_BYTES: u64 = 1024 * 1024;
+const START_LANE_COUNT: usize = 64;
+type StartLanes = [Arc<AsyncMutex<()>>; START_LANE_COUNT];
+static START_LOCKS: OnceLock<Mutex<HashMap<String, StartLanes>>> = OnceLock::new();
+static AUDIT_LOCK: OnceLock<Mutex<Option<AuditReadiness>>> = OnceLock::new();
+const MAX_OBSERVATION_AUDITS: usize = 8;
+static OBSERVATION_AUDITS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+static REUSE_HITS: OnceLock<Mutex<ReuseHitCache>> = OnceLock::new();
+// Coordinate only this owner process's local metadata reads/publications.
+// Guards remain inside synchronous functions, never across remote awaits.
+static REGISTRY_ACCESS: RwLock<()> = RwLock::new(());
+const MAX_REUSE_HITS: usize = 4096;
+const MAX_IDEMPOTENCY_SCAN_ATTEMPTS: usize = 3;
+const MAX_CACHED_RECORD_BYTES: u64 = 1024 * 1024;
 const MAX_JOB_RECORD_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_STDIN_BYTES: usize = 1024 * 1024;
+const MAX_LOG_READ_BYTES: u64 = 16 * 1024;
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ProcessStartParams {
 	/// Configured host name, never a raw SSH destination.
 	pub host: String,
@@ -42,7 +58,7 @@ pub struct ProcessStartParams {
 	/// Optional process timeout. The remote supervisor terminates the process group.
 	#[serde(default)]
 	pub timeout_seconds: Option<u64>,
-	/// Mandatory stable operation key; retries of one exact host+request never launch twice.
+	/// Mandatory stable operation key; exact retries reconcile the original durable job.
 	#[schemars(required)]
 	pub idempotency_key: Option<String>,
 	/// Non-negative Unix nice adjustment, 0..19.
@@ -57,12 +73,14 @@ pub struct ProcessStartParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ProcessRefParams {
 	pub host: String,
 	pub job_id: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ProcessReadParams {
 	pub host: String,
 	pub job_id: String,
@@ -70,12 +88,13 @@ pub struct ProcessReadParams {
 	pub stdout_offset: Option<u64>,
 	#[serde(default)]
 	pub stderr_offset: Option<u64>,
-	/// Maximum bytes returned per stream, capped at 1 MiB.
+	/// Maximum bytes returned per stream, capped at 16 KiB with lossless byte cursors.
 	#[serde(default)]
 	pub limit: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ProcessWaitParams {
 	pub host: String,
 	pub job_id: String,
@@ -85,6 +104,7 @@ pub struct ProcessWaitParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ProcessCancelParams {
 	pub host: String,
 	pub job_id: String,
@@ -94,13 +114,31 @@ pub struct ProcessCancelParams {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ProcessListParams {
 	#[serde(default)]
 	pub host: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProcessListPageParams {
+	#[serde(default)]
+	pub host: Option<String>,
+	/// Opaque continuation from this exact registry snapshot. Changes require a fresh first page.
+	#[serde(default)]
+	pub cursor: Option<String>,
+	/// At most 128 identities per page, additionally bounded to a 64 KiB wire response.
+	#[serde(default)]
+	pub limit: Option<u16>,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct JobRecord {
+	#[serde(default)]
+	execution_mode: ExecutionMode,
+	#[serde(default)]
+	system_jobctl: bool,
 	id: String,
 	host: String,
 	ssh_target: String,
@@ -113,8 +151,6 @@ struct JobRecord {
 	created_unix_ms: u128,
 	idempotency_key: Option<String>,
 	request_fingerprint: u64,
-	/// Full, canonical SHA-256 request binding for collision-resistant idempotency.
-	/// Old records remain readable but cannot be automatically re-dispatched.
 	#[serde(default)]
 	request_digest: Option<String>,
 	#[serde(default = "default_launch_state")]
@@ -127,16 +163,37 @@ fn default_launch_state() -> String {
 	"launched".to_string()
 }
 
-fn start_lock(host: &str, key: Option<&str>) -> &'static AsyncMutex<()> {
-	// Only requests sharing the same host and idempotency key must be serialized.
-	// Fixed sharding bounds lock memory and avoids global remote-launch head-of-line blocking.
-	let locks = START_LOCKS.get_or_init(|| {
-		(0..START_LOCK_SHARDS).map(|_| AsyncMutex::new(())).collect()
-	});
-	let mut hasher = std::collections::hash_map::DefaultHasher::new();
-	host.hash(&mut hasher);
-	key.hash(&mut hasher);
-	&locks[(hasher.finish() as usize) % START_LOCK_SHARDS]
+fn start_lane(key: Option<&str>) -> usize {
+	// Hash only the original key. A changed payload with the same key must
+	// still wait for the original lookup, durable intent and remote outcome.
+	key.map_or(0, |key| {
+		usize::from(Sha256::digest(key.as_bytes())[0]) % START_LANE_COUNT
+	})
+}
+
+fn start_lock_in(
+	registry: &Mutex<HashMap<String, StartLanes>>,
+	host: &str,
+	key: Option<&str>,
+) -> Result<Arc<AsyncMutex<()>>> {
+	// Only configured hosts reach this map in production. Fixed lanes bound
+	// retained locks regardless of caller key cardinality. Collisions merely
+	// serialize independent starts, and missing keys keep their original lane.
+	let mut locks = registry
+		.lock()
+		.map_err(|_| anyhow::anyhow!("job launch lock registry unavailable"))?;
+	Ok(locks
+		.entry(host.to_owned())
+		.or_insert_with(|| std::array::from_fn(|_| Arc::new(AsyncMutex::new(()))))[start_lane(key)]
+	.clone())
+}
+
+fn start_lock(host: &str, key: Option<&str>) -> Result<Arc<AsyncMutex<()>>> {
+	start_lock_in(
+		START_LOCKS.get_or_init(|| Mutex::new(HashMap::new())),
+		host,
+		key,
+	)
 }
 
 fn now_ms() -> u128 {
@@ -162,6 +219,31 @@ fn record_path(id: &str) -> Result<PathBuf> {
 		bail!("invalid job id `{id}`");
 	}
 	Ok(jobs_dir()?.join(format!("{id}.json")))
+}
+
+fn with_registry_read<T>(gate: &RwLock<()>, read: impl FnOnce() -> Result<T>) -> Result<T> {
+	let _read = gate
+		.read()
+		.map_err(|_| anyhow::anyhow!("job registry read lock unavailable"))?;
+	read()
+}
+
+fn save_record(record: &JobRecord) -> Result<()> {
+	save_record_with_registry_gate(record, &REGISTRY_ACCESS, || record_path(&record.id))
+}
+
+fn save_record_with_registry_gate(
+	record: &JobRecord,
+	gate: &RwLock<()>,
+	record_path: impl FnOnce() -> Result<PathBuf>,
+) -> Result<()> {
+	// Include path/directory creation and both fsyncs. Every local publication,
+	// including a launch outcome replacing pending metadata, uses this writer.
+	let _write = gate
+		.write()
+		.map_err(|_| anyhow::anyhow!("job registry write lock unavailable"))?;
+	let path = record_path()?;
+	save_record_at(&path, record)
 }
 
 fn save_record_at(path: &Path, record: &JobRecord) -> Result<()> {
@@ -195,10 +277,6 @@ fn save_record_at(path: &Path, record: &JobRecord) -> Result<()> {
 	Ok(())
 }
 
-fn save_record(record: &JobRecord) -> Result<()> {
-	save_record_at(&record_path(&record.id)?, record)
-}
-
 fn read_record_at(path: &Path, expected_id: &str) -> Result<JobRecord> {
 	// A symlink or a mismatched identity is not a usable effect-owner receipt.
 	let metadata = std::fs::symlink_metadata(path)
@@ -211,7 +289,7 @@ fn read_record_at(path: &Path, expected_id: &str) -> Result<JobRecord> {
 	#[cfg(unix)]
 	{
 		use std::os::unix::fs::OpenOptionsExt;
-		options.custom_flags(libc::O_NOFOLLOW);
+		options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK);
 	}
 	// Recheck the opened file, not only the pathname inspected above:
 	// a concurrent symlink swap must never redirect a credentialed read.
@@ -220,16 +298,53 @@ fn read_record_at(path: &Path, expected_id: &str) -> Result<JobRecord> {
 		.with_context(|| format!("cannot open durable job record {}", path.display()))?;
 	let opened = file.metadata()?;
 	if !opened.is_file() || opened.len() > MAX_JOB_RECORD_BYTES {
-		bail!("invalid or oversized durable job record: {}", path.display());
+		bail!(
+			"invalid or oversized durable job record: {}",
+			path.display()
+		);
+	}
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::MetadataExt;
+		if opened.nlink() != 1
+			|| opened.uid() != unsafe { libc::geteuid() }
+			|| metadata.dev() != opened.dev()
+			|| metadata.ino() != opened.ino()
+		{
+			bail!("unsafe durable job receipt ownership or inode");
+		}
 	}
 	let mut bytes = Vec::new();
-	let mut bounded = file.take(MAX_JOB_RECORD_BYTES + 1);
+	let mut bounded = (&file).take(MAX_JOB_RECORD_BYTES + 1);
 	bounded.read_to_end(&mut bytes)?;
 	if bytes.len() as u64 > MAX_JOB_RECORD_BYTES {
 		bail!("oversized durable job record: {}", path.display());
 	}
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::MetadataExt;
+		let after = file.metadata()?;
+		let current = std::fs::symlink_metadata(path)?;
+		let stamp = |m: &std::fs::Metadata| {
+			(
+				m.dev(),
+				m.ino(),
+				m.mode(),
+				m.uid(),
+				m.nlink(),
+				m.len(),
+				m.mtime(),
+				m.mtime_nsec(),
+				m.ctime(),
+				m.ctime_nsec(),
+			)
+		};
+		if stamp(&opened) != stamp(&after) || stamp(&after) != stamp(&current) {
+			bail!("durable job receipt changed during read");
+		}
+	}
 	let record: JobRecord = serde_json::from_slice(&bytes)
-		.with_context(|| format!("corrupt durable job record {}", path.display()))?;
+		.with_context(|| format!("corrupt job record; durable job receipt {}", path.display()))?;
 	if record.id != expected_id {
 		bail!("durable job filename/identity mismatch: {}", path.display());
 	}
@@ -239,6 +354,83 @@ fn read_record_at(path: &Path, expected_id: &str) -> Result<JobRecord> {
 fn load_record(id: &str) -> Result<JobRecord> {
 	read_record_at(&record_path(id)?, id)
 		.with_context(|| format!("unknown or invalid durable job `{id}`"))
+}
+
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RegistryEpoch {
+	device: u64,
+	inode: u64,
+	owner: u32,
+	mode: u32,
+	modified_seconds: i64,
+	modified_nanos: i64,
+	changed_seconds: i64,
+	changed_nanos: i64,
+	namespace: super::namespace_version::Version,
+}
+#[cfg(not(unix))]
+type RegistryEpoch = ();
+
+#[cfg(unix)]
+fn registry_epoch(dir: &Path) -> Result<RegistryEpoch> {
+	use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+	let directory = OpenOptions::new()
+		.read(true)
+		.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_DIRECTORY)
+		.open(dir)?;
+	let m = directory.metadata()?;
+	if !m.is_dir() {
+		bail!("job registry directory identity is not a directory");
+	}
+	Ok(RegistryEpoch {
+		device: m.dev(),
+		inode: m.ino(),
+		owner: m.uid(),
+		mode: m.mode(),
+		modified_seconds: m.mtime(),
+		modified_nanos: m.mtime_nsec(),
+		changed_seconds: m.ctime(),
+		changed_nanos: m.ctime_nsec(),
+		namespace: super::namespace_version::version(&directory)?,
+	})
+}
+#[cfg(not(unix))]
+fn registry_epoch(_dir: &Path) -> Result<RegistryEpoch> {
+	bail!("positive reuse caching requires a Unix registry identity")
+}
+
+#[cfg(unix)]
+fn same_registry_root(one: &RegistryEpoch, other: &RegistryEpoch) -> bool {
+	one.device == other.device
+		&& one.inode == other.inode
+		&& one.owner == other.owner
+		&& one.mode == other.mode
+}
+#[cfg(not(unix))]
+fn same_registry_root(_one: &RegistryEpoch, _other: &RegistryEpoch) -> bool {
+	false
+}
+
+#[derive(Debug)]
+struct RegistryScanChanged;
+
+impl std::fmt::Display for RegistryScanChanged {
+	fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		formatter.write_str("idempotency registry changed during scan; no new job may launch")
+	}
+}
+
+impl std::error::Error for RegistryScanChanged {}
+
+#[derive(Default)]
+struct ReuseHitCache {
+	root: Option<PathBuf>,
+	epoch: Option<RegistryEpoch>,
+	// Preserve known host/key bindings across ordinary directory updates.
+	// These are refusal evidence, not a negative cache or effect authority.
+	known: HashMap<(String, String), String>,
+	hits: HashMap<(String, String), String>,
 }
 
 fn scan_records_dir(dir: &Path) -> Result<Vec<JobRecord>> {
@@ -254,15 +446,131 @@ fn scan_records_dir(dir: &Path) -> Result<Vec<JobRecord>> {
 		let expected_id = path
 			.file_stem()
 			.and_then(|stem| stem.to_str())
-			.ok_or_else(|| anyhow::anyhow!("invalid durable job record name: {}", path.display()))?;
+			.ok_or_else(|| {
+				anyhow::anyhow!("invalid durable job record name: {}", path.display())
+			})?;
 		records.push(read_record_at(&path, expected_id)?);
 	}
 	records.sort_by_key(|record| record.created_unix_ms);
 	Ok(records)
 }
 
+fn all_records_in(dir: &Path) -> Result<Vec<JobRecord>> {
+	scan_records_dir(dir)
+}
+
 fn all_records() -> Result<Vec<JobRecord>> {
-	scan_records_dir(&jobs_dir()?)
+	all_records_in(&jobs_dir()?)
+}
+
+// Cached reads must be stricter than ordinary compatibility scans: no
+// symlink/hardlink, foreign ownership, mode widening, oversized payload or
+// path/inode replacement may be silently promoted to a known-good job.
+#[cfg(unix)]
+fn read_verified_cached_record(dir: &Path, id: &str) -> Result<JobRecord> {
+	use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+	if !valid_name(id) {
+		bail!("cached job identity invalid");
+	}
+	let path = dir.join(format!("{id}.json"));
+	let before = std::fs::symlink_metadata(&path)
+		.context("cached job record unavailable; reconcile original identity")?;
+	let safe_file = |m: &std::fs::Metadata| {
+		m.file_type().is_file()
+			&& m.nlink() == 1
+			&& m.uid() == unsafe { libc::geteuid() }
+			&& (m.mode() & 0o7777) == 0o600
+			&& m.len() > 0
+			&& m.len() <= MAX_CACHED_RECORD_BYTES
+	};
+	let identity = |m: &std::fs::Metadata| {
+		(
+			m.dev(),
+			m.ino(),
+			m.uid(),
+			m.mode(),
+			m.nlink(),
+			m.len(),
+			m.mtime(),
+			m.mtime_nsec(),
+			m.ctime(),
+			m.ctime_nsec(),
+		)
+	};
+	if !safe_file(&before) {
+		bail!("cached job record inode or permissions unsafe; no relaunch");
+	}
+	let mut file = OpenOptions::new()
+		.read(true)
+		.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+		.open(&path)
+		.context("cached job record path changed; no relaunch")?;
+	let opened = file.metadata()?;
+	if !safe_file(&opened) || identity(&before) != identity(&opened) {
+		bail!("cached job record identity changed before read; no relaunch");
+	}
+	let mut bytes = Vec::with_capacity(before.len() as usize);
+	(&mut file)
+		.take(MAX_CACHED_RECORD_BYTES + 1)
+		.read_to_end(&mut bytes)?;
+	if bytes.len() as u64 > MAX_CACHED_RECORD_BYTES {
+		bail!("cached job record exceeds bounded byte budget");
+	}
+	let read_done = file.metadata()?;
+	let path_done = std::fs::symlink_metadata(&path)?;
+	if !safe_file(&path_done)
+		|| identity(&opened) != identity(&read_done)
+		|| identity(&opened) != identity(&path_done)
+	{
+		bail!("cached job record changed during read; no relaunch");
+	}
+	serde_json::from_slice(&bytes)
+		.context("cached job record corrupted; never relaunch automatically")
+}
+#[cfg(not(unix))]
+fn read_verified_cached_record(_dir: &Path, _id: &str) -> Result<JobRecord> {
+	bail!("cached job record reads require Unix inode identity")
+}
+
+// Unlike the full inventory view, an exact-key lookup does not need a sorted
+// Vec of all job records. It must still parse EVERY existing JSON record so
+// malformed history and duplicate original bindings refuse a new effect.
+fn scan_idempotent_binding_in(dir: &Path, host: &str, key: &str) -> Result<Option<JobRecord>> {
+	scan_idempotent_binding_in_with_retries(dir, host, key, |_| {})
+}
+
+// Independent host launches can atomically add/replace records while another
+// host scans. Retry only that same-directory epoch change, before any job ID,
+// durable intent or remote effect is allocated. Never retry invalid history or
+// a different registry root; sustained churn still fails within a fixed budget.
+fn scan_idempotent_binding_in_with_retries(
+	dir: &Path,
+	host: &str,
+	key: &str,
+	mut after_scan: impl FnMut(usize),
+) -> Result<Option<JobRecord>> {
+	let root = registry_epoch(dir)?;
+	for attempt in 0..MAX_IDEMPOTENCY_SCAN_ATTEMPTS {
+		match scan_idempotent_binding_once(dir, host, key, &root, || after_scan(attempt)) {
+			Err(error)
+				if error.downcast_ref::<RegistryScanChanged>().is_some()
+					&& attempt + 1 < MAX_IDEMPOTENCY_SCAN_ATTEMPTS => {}
+			result => return result,
+		}
+	}
+	unreachable!("bounded registry scan returns its final attempt")
+}
+
+// Preserve the upstream deterministic post-enumeration race fixture for one
+// scan. Production uses the bounded wrapper above with the same scan body.
+#[cfg(test)]
+fn scan_idempotent_binding_in_with_observer(
+	dir: &Path,
+	host: &str,
+	key: &str,
+	after_scan: impl FnOnce(),
+) -> Result<Option<JobRecord>> {
+	scan_idempotent_binding_once(dir, host, key, &registry_epoch(dir)?, after_scan)
 }
 
 fn select_idempotent_record(
@@ -276,7 +584,7 @@ fn select_idempotent_record(
 			// Historical duplicate owners cannot be resolved by selecting the oldest
 			// record. The external effect may already have run from either record.
 			if selected.is_some() {
-				bail!("multiple durable owners for one idempotency key; reconcile before reuse");
+				bail!("duplicate original idempotency binding; multiple durable owners for one key; reconcile before reuse");
 			}
 			selected = Some(record);
 		}
@@ -284,34 +592,211 @@ fn select_idempotent_record(
 	Ok(selected)
 }
 
+fn scan_idempotent_binding_once(
+	dir: &Path,
+	host: &str,
+	key: &str,
+	root: &RegistryEpoch,
+	after_scan: impl FnOnce(),
+) -> Result<Option<JobRecord>> {
+	// Never infer an absent binding from a scan that overlaps a directory
+	// mutation. The original root identity is pinned across all retry attempts.
+	let before = registry_epoch(dir)?;
+	if !same_registry_root(root, &before) {
+		bail!("idempotency registry root identity changed; reconcile before execution");
+	}
+	let mut found: Option<JobRecord> = None;
+	for entry in std::fs::read_dir(dir)? {
+		let entry = entry?;
+		if entry.path().extension().and_then(|s| s.to_str()) != Some("json") {
+			continue;
+		}
+		let path = entry.path();
+		let expected_id = path
+			.file_stem()
+			.and_then(|name| name.to_str())
+			.context("invalid durable job record name")?;
+		let record = read_record_at(&path, expected_id)?;
+		found =
+			select_idempotent_record(found.into_iter().chain(std::iter::once(record)), host, key)?;
+	}
+	after_scan();
+	let after = registry_epoch(dir)?;
+	if !same_registry_root(root, &after) {
+		bail!("idempotency registry root identity changed; reconcile before execution");
+	}
+	if after != before {
+		return Err(RegistryScanChanged.into());
+	}
+	Ok(found)
+}
+
+// Only cache a VERIFIED EXISTING, already launched identity. Unknown keys,
+// pending/uncertain launches, changed registry identity and errors always
+// retain the full historical scan. Never use this cache to authorize a new job.
+fn find_idempotent_in(
+	dir: &Path,
+	host: &str,
+	key: &str,
+	cache: &Mutex<ReuseHitCache>,
+) -> Result<Option<JobRecord>> {
+	let epoch = registry_epoch(dir)?;
+	let identity = (host.to_owned(), key.to_owned());
+	let (cached_id, known_id) = {
+		let mut guard = cache
+			.lock()
+			.map_err(|_| anyhow::anyhow!("reuse cache unavailable"))?;
+		if guard.root.is_some() && guard.root.as_deref() != Some(dir) {
+			bail!("job registry root changed; reconcile existing identities first");
+		}
+		if guard
+			.epoch
+			.is_some_and(|previous| !same_registry_root(&previous, &epoch))
+		{
+			bail!("job registry root identity changed; reconcile existing identities first");
+		}
+		if guard.epoch != Some(epoch) {
+			// A changed registry invalidates fast reads, not prior ownership.
+			guard.hits.clear();
+			guard.epoch = Some(epoch);
+		}
+		guard.root = Some(dir.to_path_buf());
+		(
+			guard.hits.get(&identity).cloned(),
+			guard.known.get(&identity).cloned(),
+		)
+	};
+	if let Some(id) = cached_id {
+		if known_id.as_ref() != Some(&id) {
+			bail!("cached idempotency binding lost original ownership; no new launch");
+		}
+		if !valid_name(&id) {
+			bail!("cached job identity invalid; never allocate a replacement job");
+		}
+		let record = read_verified_cached_record(dir, &id)?;
+		if record.id != id || record.host != host || record.idempotency_key.as_deref() != Some(key)
+		{
+			bail!("cached job binding changed; never allocate a replacement job");
+		}
+		// A pending/unknown record can cause launch reconciliation; that path
+		// must continue scanning every original job before any new effect.
+		if record.launch_state == "launched" && registry_epoch(dir)? == epoch {
+			return Ok(Some(record));
+		}
+	}
+
+	let found = scan_idempotent_binding_in(dir, host, key)?;
+	if !same_registry_root(&epoch, &registry_epoch(dir)?) {
+		bail!("job registry root identity changed during lookup; no new launch");
+	}
+	if let Some(expected) = known_id {
+		if found.as_ref().map(|r| r.id.as_str()) != Some(expected.as_str()) {
+			bail!("previous idempotency binding missing or changed; no new launch");
+		}
+	}
+	if let Some(record) = &found {
+		let after = registry_epoch(dir)?;
+		let mut guard = cache
+			.lock()
+			.map_err(|_| anyhow::anyhow!("reuse cache unavailable"))?;
+		if guard.root.as_deref() == Some(dir) && guard.epoch == Some(epoch) {
+			if guard.known.len() < MAX_REUSE_HITS {
+				guard
+					.known
+					.entry(identity.clone())
+					.or_insert_with(|| record.id.clone());
+			}
+			if record.launch_state == "launched"
+				&& after == epoch
+				&& guard.hits.len() < MAX_REUSE_HITS
+				// Epoch changes clear hits, while known can already be full.
+				// Never cache an identity whose refusal evidence was not retained.
+				&& guard.known.get(&identity) == Some(&record.id)
+			{
+				guard
+					.hits
+					.entry(identity)
+					.or_insert_with(|| record.id.clone());
+			}
+		}
+	}
+	Ok(found)
+}
+
 fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
-	select_idempotent_record(all_records()?, host, key)
+	// Readers may scan concurrently. A local pending/result publication waits
+	// until every lookup, including verified cache reads, has checked its epoch.
+	// External writers still require the bounded epoch checks inside the scan.
+	with_registry_read(&REGISTRY_ACCESS, || {
+		find_idempotent_in(
+			&jobs_dir()?,
+			host,
+			key,
+			REUSE_HITS.get_or_init(|| Mutex::new(ReuseHitCache::default())),
+		)
+	})
 }
 
-fn request_digest(params: &ProcessStartParams) -> (u64, String) {
-	let binding = json!({
-		"host": params.host,
-		"executable": params.executable,
-		"args": params.args,
-		"cwd": params.cwd,
-		"env": params.env,
-		"stdin": params.stdin,
-		"timeout_seconds": params.timeout_seconds,
-		"nice": params.nice,
-		"cpu_quota_percent": params.cpu_quota_percent,
-		"memory_max_bytes": params.memory_max_bytes,
-	});
-	let bytes = serde_json::to_vec(&binding).expect("process binding serializes");
-	let digest = Sha256::digest(bytes);
-	let legacy = u64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"));
-	(legacy, format!("{digest:x}"))
+// Keep the alphabetical key order of the original serde_json::Value map.
+// Borrow potentially large input while retaining exactly its original JSON bytes.
+#[derive(Serialize)]
+struct RequestBinding<'a> {
+	args: &'a [String],
+	cpu_quota_percent: Option<u16>,
+	cwd: Option<&'a str>,
+	env: &'a BTreeMap<String, String>,
+	executable: &'a str,
+	host: &'a str,
+	memory_max_bytes: Option<u64>,
+	nice: Option<u8>,
+	stdin: Option<&'a str>,
+	timeout_seconds: Option<u64>,
+}
+fn request_binding(params: &ProcessStartParams) -> RequestBinding<'_> {
+	RequestBinding {
+		args: &params.args,
+		cpu_quota_percent: params.cpu_quota_percent,
+		cwd: params.cwd.as_deref(),
+		env: &params.env,
+		executable: &params.executable,
+		host: &params.host,
+		memory_max_bytes: params.memory_max_bytes,
+		nice: params.nice,
+		stdin: params.stdin.as_deref(),
+		timeout_seconds: params.timeout_seconds,
+	}
+}
+struct RequestHashWriter(Sha256);
+impl Write for RequestHashWriter {
+	fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+		self.0.update(bytes);
+		Ok(bytes.len())
+	}
+	fn flush(&mut self) -> std::io::Result<()> {
+		Ok(())
+	}
+}
+fn request_digest(params: &ProcessStartParams) -> Result<String> {
+	let mut writer = RequestHashWriter(Sha256::new());
+	serde_json::to_writer(&mut writer, &request_binding(params))?;
+	let digest = writer.0.finalize();
+	let mut hex = String::with_capacity(64);
+	const HEX: &[u8; 16] = b"0123456789abcdef";
+	for byte in digest {
+		hex.push(HEX[(byte >> 4) as usize] as char);
+		hex.push(HEX[(byte & 15) as usize] as char);
+	}
+	Ok(hex)
 }
 
-#[cfg(test)]
-fn fingerprint(params: &ProcessStartParams) -> u64 {
-	request_digest(params).0
+// Retain the old prefix only for readable legacy metadata. New idempotent
+// requests compare all 256 bits, and legacy bindings never silently relaunch.
+fn fingerprint(digest: &str) -> u64 {
+	digest
+		.get(..16)
+		.and_then(|prefix| u64::from_str_radix(prefix, 16).ok())
+		.unwrap_or(0)
 }
-
 fn verify_reuse_binding(
 	existing: &JobRecord,
 	key: &str,
@@ -341,8 +826,23 @@ fn admit_observation_only_reuse(record: &JobRecord) -> Result<()> {
 	}
 }
 
+fn matches_request(record: &JobRecord, digest: &str) -> Result<bool> {
+	let expected = record.request_digest.as_ref().context(
+		"legacy idempotency binding lacks a full digest; inspect existing job_id instead of relaunching",
+	)?;
+	Ok(expected.as_str() == digest
+		&& verify_reuse_binding(
+			record,
+			record.idempotency_key.as_deref().unwrap_or(""),
+			fingerprint(digest),
+			digest,
+		)
+		.is_ok())
+}
+
 fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
 	let record = load_record(&params.job_id)?;
+	check_binding(&record)?;
 	if record.host != params.host {
 		bail!(
 			"job `{}` belongs to host `{}`, not `{}`",
@@ -354,41 +854,274 @@ fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
 	Ok(record)
 }
 
-// Persisted operations must never silently follow a host alias that was
-// remapped to another SSH identity or remote job root after controller restart.
-// The record remains readable for independent reconciliation, but cannot drive
-// a remote status, log read, cancellation, or retry under the new mapping.
-fn verify_host_binding(
-	record: &JobRecord,
-	configured_target: &str,
-	configured_state_dir: &str,
-) -> Result<()> {
-	let expected_job_dir = format!(
-		"{}/jobs/{}",
-		configured_state_dir.trim_end_matches('/'),
-		record.id
-	);
-	if record.ssh_target != configured_target || record.remote_job_dir != expected_job_dir {
-		bail!("durable job host binding changed; remote operation requires independent reconciliation");
+struct PreparedAudit {
+	path: PathBuf,
+	line: Vec<u8>,
+}
+
+// One positive publication proof, never an event/history or absence cache.
+// Held descriptors prevent inode reuse from manufacturing an identity match.
+struct AuditReadiness {
+	#[cfg(unix)]
+	binding: AuditBinding,
+}
+
+#[cfg(unix)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct AuditDirectoryStamp {
+	device: u64,
+	inode: u64,
+	modified: (i64, i64),
+	changed: (i64, i64),
+	namespace: super::namespace_version::Version,
+}
+
+#[cfg(unix)]
+fn audit_directory_stamp(directory: &std::fs::File) -> Result<AuditDirectoryStamp> {
+	use std::os::unix::fs::MetadataExt;
+	let metadata = directory.metadata()?;
+	if !metadata.is_dir() {
+		bail!("audit publication parent is not a directory");
 	}
-	Ok(())
+	Ok(AuditDirectoryStamp {
+		device: metadata.dev(),
+		inode: metadata.ino(),
+		modified: (metadata.mtime(), metadata.mtime_nsec()),
+		changed: (metadata.ctime(), metadata.ctime_nsec()),
+		namespace: super::namespace_version::version(directory)?,
+	})
 }
 
-fn bound_host(record: &JobRecord) -> Result<&'static super::config::HostConfig> {
-	let host = runtime_config()?.host(&record.host)?;
-	verify_host_binding(record, &host.ssh_target, &host.remote_state_dir)?;
-	Ok(host)
+#[cfg(unix)]
+fn audit_inode(metadata: &std::fs::Metadata) -> (u64, u64) {
+	use std::os::unix::fs::MetadataExt;
+	(metadata.dev(), metadata.ino())
 }
 
-// Open the audit sink through a private regular file descriptor, not a path
-// that a symlink can redirect to an unrelated file or credential.
+#[cfg(unix)]
+fn open_audit_directory(path: &Path) -> Result<std::fs::File> {
+	use std::os::unix::fs::OpenOptionsExt;
+	// Follow the same configured symlinks as before, while refusing a FIFO or
+	// regular-file substitution before a newly added read open could block.
+	Ok(OpenOptions::new()
+		.read(true)
+		.custom_flags(libc::O_DIRECTORY | libc::O_CLOEXEC)
+		.open(path)?)
+}
+
+#[cfg(unix)]
+fn audit_reliable_generation(stamps: &[AuditDirectoryStamp; 3]) -> bool {
+	#[cfg(target_os = "linux")]
+	{
+		stamps.iter().all(|stamp| {
+			matches!(
+				stamp.namespace,
+				super::namespace_version::Version::Watch(_, _)
+			)
+		})
+	}
+	#[cfg(not(target_os = "linux"))]
+	{
+		let _ = stamps;
+		false
+	}
+}
+
+#[cfg(unix)]
+struct AuditBinding {
+	path: PathBuf,
+	audit_path: PathBuf,
+	state_path: PathBuf,
+	target_path: PathBuf,
+	file: std::fs::File,
+	audit_directory: std::fs::File,
+	state_directory: std::fs::File,
+	target_directory: std::fs::File,
+	stamps: [AuditDirectoryStamp; 3],
+}
+
+#[cfg(unix)]
+impl AuditBinding {
+	fn open(path: PathBuf, file: std::fs::File) -> Result<Self> {
+		let path = if path.is_absolute() {
+			path
+		} else {
+			std::env::current_dir()?.join(path)
+		};
+		let audit_path = path
+			.parent()
+			.context("audit path has no parent")?
+			.to_path_buf();
+		let state_path = audit_path.parent().unwrap_or(Path::new("/")).to_path_buf();
+		// The file was opened no-follow and owner-private. Keep the complete
+		// path and parent publication fences in addition to that inode check.
+		let target_path = std::fs::canonicalize(&path)?;
+		let target_parent = target_path.parent().context("audit target has no parent")?;
+		let audit_directory = open_audit_directory(&audit_path)?;
+		let state_directory = open_audit_directory(&state_path)?;
+		let target_directory = open_audit_directory(target_parent)?;
+		let stamps = [
+			audit_directory_stamp(&audit_directory)?,
+			audit_directory_stamp(&state_directory)?,
+			audit_directory_stamp(&target_directory)?,
+		];
+		let binding = Self {
+			path,
+			audit_path,
+			state_path,
+			target_path,
+			file,
+			audit_directory,
+			state_directory,
+			target_directory,
+			stamps,
+		};
+		binding.validate()?;
+		Ok(binding)
+	}
+
+	fn validate(&self) -> Result<()> {
+		let file_identity = audit_inode(&self.file.metadata()?);
+		if audit_inode(&std::fs::metadata(&self.path)?) != file_identity
+			|| std::fs::canonicalize(&self.path)? != self.target_path
+			|| audit_inode(&std::fs::metadata(&self.target_path)?) != file_identity
+		{
+			bail!("audit file binding changed");
+		}
+		let paths: [&Path; 3] = [
+			self.audit_path.as_path(),
+			self.state_path.as_path(),
+			self.target_path.parent().expect("target parent"),
+		];
+		let directories = [
+			&self.audit_directory,
+			&self.state_directory,
+			&self.target_directory,
+		];
+		for ((path, directory), expected) in paths.into_iter().zip(directories).zip(&self.stamps) {
+			if audit_inode(&std::fs::metadata(path)?) != (expected.device, expected.inode)
+				|| audit_directory_stamp(directory)? != *expected
+			{
+				bail!("audit directory publication binding changed");
+			}
+		}
+		Ok(())
+	}
+
+	fn can_reuse_parents(&self, path: &Path, file: &std::fs::File) -> Result<bool> {
+		// A names/inodes fingerprint can return to the same value after an
+		// unlink/relink ABA, especially on a filesystem with coarse timestamps.
+		// It remains a final fence, but never authorizes omitting a later barrier.
+		if !path.is_absolute()
+			|| path.as_os_str() != self.path.as_os_str()
+			|| !audit_reliable_generation(&self.stamps)
+			|| audit_inode(&file.metadata()?) != audit_inode(&self.file.metadata()?)
+		{
+			return Ok(false);
+		}
+		// Resolve all original names and symlink targets again, and validate all
+		// held directory descriptors and reliable namespace generations.
+		self.validate()?;
+		Ok(true)
+	}
+
+	fn synchronize_directories(
+		&self,
+		synchronize: &mut impl FnMut(&std::fs::File) -> Result<()>,
+	) -> Result<()> {
+		// Normal layout performs exactly audit → state. A symlink target outside
+		// that pair adds one bounded target-parent barrier before alias parents.
+		let target = (self.stamps[2].device, self.stamps[2].inode);
+		let audit = (self.stamps[0].device, self.stamps[0].inode);
+		let state = (self.stamps[1].device, self.stamps[1].inode);
+		if target != audit && target != state {
+			synchronize(&self.target_directory)?;
+		}
+		synchronize(&self.audit_directory)?;
+		if state != audit {
+			synchronize(&self.state_directory)?;
+		}
+		Ok(())
+	}
+}
+
+fn prepare_audit_at(
+	path: PathBuf,
+	action: &str,
+	host: &str,
+	subject: &str,
+	outcome: &Value,
+) -> Result<PreparedAudit> {
+	let event = json!({
+		"at_unix_ms": now_ms(),
+		"action": action,
+		"host": host,
+		"subject": subject,
+		"outcome": outcome,
+	});
+	let mut line = serde_json::to_vec(&event)?;
+	line.push(b'\n');
+	Ok(PreparedAudit { path, line })
+}
+
+fn prepare_audit(
+	action: &str,
+	host: &str,
+	subject: &str,
+	outcome: &Value,
+) -> Result<PreparedAudit> {
+	prepare_audit_at(
+		runtime_config()?.state_dir.join("audit/events.jsonl"),
+		action,
+		host,
+		subject,
+		outcome,
+	)
+}
+
+fn append_audit_with(
+	prepared: PreparedAudit,
+	synchronize: impl FnOnce(&std::fs::File) -> Result<()>,
+) -> Result<()> {
+	let preparation = prepared.path.parent().map_or(Ok(()), |parent| {
+		std::fs::create_dir_all(parent).map_err(anyhow::Error::from)
+	});
+	let mut readiness = AUDIT_LOCK
+		.get_or_init(|| Mutex::new(None))
+		.lock()
+		.map_err(|_| anyhow::anyhow!("audit lock poisoned"))?;
+	append_audit_prepared_with(
+		prepared,
+		&mut readiness,
+		preparation,
+		synchronize,
+		|directory| Ok(directory.sync_all()?),
+	)
+}
+
+fn append_audit_prepared_with(
+	prepared: PreparedAudit,
+	readiness: &mut Option<AuditReadiness>,
+	preparation: Result<()>,
+	synchronize_file: impl FnOnce(&std::fs::File) -> Result<()>,
+	synchronize_directory: impl FnMut(&std::fs::File) -> Result<()>,
+) -> Result<()> {
+	if let Err(error) = preparation {
+		*readiness = None;
+		return Err(error);
+	}
+	append_audit_at_with(prepared, readiness, synchronize_file, synchronize_directory)
+}
+
 fn open_audit_append(path: &Path) -> Result<File> {
 	let mut options = OpenOptions::new();
 	options.create(true).append(true);
 	#[cfg(unix)]
 	{
 		use std::os::unix::fs::OpenOptionsExt;
-		options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
+		options
+			.mode(0o600)
+			.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK);
 	}
 	let file = options.open(path)?;
 	let metadata = file.metadata()?;
@@ -398,7 +1131,7 @@ fn open_audit_append(path: &Path) -> Result<File> {
 	#[cfg(unix)]
 	{
 		use std::os::unix::fs::{MetadataExt, PermissionsExt};
-		if metadata.nlink() != 1 {
+		if metadata.nlink() != 1 || metadata.uid() != unsafe { libc::geteuid() } {
 			bail!("audit sink must not be hard-linked: {}", path.display());
 		}
 		// The prior release created audit files using the caller's umask.
@@ -414,162 +1147,438 @@ fn open_audit_append(path: &Path) -> Result<File> {
 	Ok(file)
 }
 
-pub(crate) fn audit(action: &str, host: &str, subject: &str, outcome: &Value) -> Result<()> {
-	let path = runtime_config()?.state_dir.join("audit/events.jsonl");
-	if let Some(parent) = path.parent() {
-		std::fs::create_dir_all(parent)?;
-	}
-	let event = json!({
-		"at_unix_ms": now_ms(),
-		"action": action,
-		"host": host,
-		"subject": subject,
-		"outcome": outcome,
+#[cfg(unix)]
+fn append_audit_at_with(
+	prepared: PreparedAudit,
+	readiness: &mut Option<AuditReadiness>,
+	synchronize_file: impl FnOnce(&std::fs::File) -> Result<()>,
+	mut synchronize_directory: impl FnMut(&std::fs::File) -> Result<()>,
+) -> Result<()> {
+	let previous = readiness.take();
+	let file = open_audit_append(&prepared.path)?;
+	let warm = previous.as_ref().is_some_and(|previous| {
+		previous
+			.binding
+			.can_reuse_parents(&prepared.path, &file)
+			.unwrap_or(false)
 	});
-	let _guard = AUDIT_LOCK
-		.get_or_init(|| Mutex::new(()))
-		.lock()
-		.map_err(|_| anyhow::anyhow!("audit lock poisoned"))?;
-	let mut line = serde_json::to_vec(&event)?;
-	line.push(b'\n');
-	let mut file = open_audit_append(&path)?;
-	file.write_all(&line)?;
-	file.sync_data()?;
+	let mut binding = if warm {
+		let mut binding = previous.expect("qualified audit readiness").binding;
+		binding.file = file;
+		binding
+	} else {
+		// Any missing/mismatched/failed prior proof is irreversibly cold. A
+		// freshly opened matching binding cannot restore warm authorization.
+		AuditBinding::open(prepared.path, file)?
+	};
+	binding.file.write_all(&prepared.line)?;
+	// The existing per-event fdatasync remains mandatory on both paths.
+	synchronize_file(&binding.file)?;
+	if !warm {
+		binding.synchronize_directories(&mut synchronize_directory)?;
+	}
+	binding.validate()?;
+	*readiness = Some(AuditReadiness { binding });
 	Ok(())
 }
 
-const START_CODE: &str = r#"
-import json, os, pathlib, shutil, subprocess, sys, time
-req = json.load(sys.stdin)
-job = pathlib.Path(req["job_dir"])
-job.mkdir(parents=True, exist_ok=True)
-os.chmod(job, 0o700)
+#[cfg(not(unix))]
+fn append_audit_at_with(
+	prepared: PreparedAudit,
+	readiness: &mut Option<AuditReadiness>,
+	synchronize_file: impl FnOnce(&std::fs::File) -> Result<()>,
+	_synchronize_directory: impl FnMut(&std::fs::File) -> Result<()>,
+) -> Result<()> {
+	// Keep the previous platform guarantee and path behavior. This candidate's
+	// directory publication proof applies only to the Unix implementation.
+	*readiness = None;
+	let mut file = open_audit_append(&prepared.path)?;
+	file.write_all(&prepared.line)?;
+	synchronize_file(&file)
+}
 
-def read_json(name):
-    target = job / name
-    if target.is_symlink():
-        raise SystemExit(f"unsafe remote job state symlink: {name}")
+fn append_audit(prepared: PreparedAudit) -> Result<()> {
+	append_audit_with(prepared, |file| {
+		file.sync_data()?;
+		Ok(())
+	})
+}
+
+pub(crate) fn audit(action: &str, host: &str, subject: &str, outcome: &Value) -> Result<()> {
+	append_audit(prepare_audit(action, host, subject, outcome)?)
+}
+
+fn observation_audit_unavailable() -> anyhow::Error {
+	anyhow::anyhow!("Existing job observation completion audit unavailable")
+}
+
+async fn run_observation_audit(
+	prepared: PreparedAudit,
+	slots: Arc<Semaphore>,
+	append: impl FnOnce(PreparedAudit) -> Result<()> + Send + 'static,
+) -> Result<()> {
+	let permit = slots
+		.acquire_owned()
+		.await
+		.map_err(|_| observation_audit_unavailable())?;
+	let result = tokio::task::spawn_blocking(move || {
+		// A cancelled waiter cannot release capacity while its blocking append
+		// still owns a file or waits for the shared audit synchronization lock.
+		let _permit = permit;
+		append(prepared)
+	})
+	.await;
+	match result {
+		Ok(Ok(())) => Ok(()),
+		_ => Err(observation_audit_unavailable()),
+	}
+}
+
+async fn observation_completion_audit(
+	action: &str,
+	host: &str,
+	subject: &str,
+	outcome: &Value,
+) -> Result<()> {
+	// Freeze the original observation time, destination and identity before
+	// either capacity backpressure or the blocking-pool handoff can suspend.
+	let prepared = prepare_audit(action, host, subject, outcome)
+		.map_err(|_| observation_audit_unavailable())?;
+	let slots = OBSERVATION_AUDITS
+		.get_or_init(|| Arc::new(Semaphore::new(MAX_OBSERVATION_AUDITS)))
+		.clone();
+	run_observation_audit(prepared, slots, append_audit).await
+}
+
+// Shared by start and reconciliation: existing unsafe directories never become a new launch.
+const PRIVATE_DIRECTORY_CODE: &str = r#"
+import os, pathlib, stat, sys
+_hepta_directory_pins = []
+def private_job_directory(raw, create=False):
+    if not isinstance(raw, str) or not raw.startswith("/") or any(p in (".", "..") for p in raw.split("/")):
+        raise SystemExit("unsafe remote job path")
+    parts = [p for p in raw.split("/") if p]
+    if len(parts) < 3 or parts[-2] != "jobs":
+        raise SystemExit("remote job path must name a dedicated state/jobs/job directory")
+    shared_access = getattr(os, "O_PATH", os.O_RDONLY) if sys.platform == "linux" else os.O_RDONLY
+    path_only_shared = shared_access != os.O_RDONLY
+    directory_flags = os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    fd = os.open("/", shared_access | directory_flags)
+    _hepta_directory_pins.append(fd)
+    for offset, part in enumerate(parts):
+        private = offset >= len(parts) - 3
+        if create and private and not path_only_shared:
+            try:
+                os.mkdir(part, mode=0o700, dir_fd=fd)
+                os.fsync(fd)
+            except FileExistsError:
+                pass
+        access = os.O_RDONLY if private else shared_access
+        try:
+            child = os.open(part, access | directory_flags, dir_fd=fd)
+        except FileNotFoundError:
+            if not (create and private and path_only_shared):
+                raise
+            # O_PATH traverses an existing searchable ancestor without reading it.
+            # A new child still needs its parent's original durability barrier:
+            # acquire a readable handle before mkdir, or refuse without creating.
+            sync_parent = os.open(".", os.O_RDONLY | directory_flags, dir_fd=fd)
+            _hepta_directory_pins.append(sync_parent)
+            pinned = os.fstat(fd)
+            readable = os.fstat(sync_parent)
+            if (pinned.st_dev, pinned.st_ino) != (readable.st_dev, readable.st_ino):
+                raise SystemExit("remote parent directory identity changed; no directory created")
+            try:
+                os.mkdir(part, mode=0o700, dir_fd=sync_parent)
+            except FileExistsError:
+                pass
+            else:
+                os.fsync(sync_parent)
+            child = os.open(part, os.O_RDONLY | directory_flags, dir_fd=sync_parent)
+        _hepta_directory_pins.append(child)
+        info = os.fstat(child)
+        if private and (info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700):
+            raise SystemExit("unsafe remote state/jobs/job directory; existing permissions are never repaired")
+        fd = child
+    os.fchdir(fd)
+    return pathlib.Path(".")
+
+def private_bound_job_directory(raw, expected):
+    job = private_job_directory(raw)
+    info = os.fstat(_hepta_directory_pins[-1])
+    if (info.st_dev, info.st_ino) != (expected["device"], expected["inode"]):
+        raise SystemExit("remote job directory identity changed; no workload submitted")
+    return job
+
+def private_open_job_file(name):
     try:
-        value = json.loads(target.read_text(encoding="utf-8"))
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                     dir_fd=_hepta_directory_pins[-1])
     except FileNotFoundError:
         return None
-    except Exception as exc:
-        raise SystemExit(f"corrupt remote job state {name}: {exc}")
-    if not isinstance(value, dict):
-        raise SystemExit(f"invalid remote job state object: {name}")
-    return value
+    except OSError as error:
+        raise SystemExit("unsafe remote job file " + name) from error
+    info = os.fstat(fd)
+    if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or
+            info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) & 0o022):
+        os.close(fd)
+        raise SystemExit("unsafe remote job file " + name + ": non-regular or linked inode")
+    return fd
+
+def private_read_json(name):
+    import json
+    fd = private_open_job_file(name)
+    if fd is None: return None
+    with os.fdopen(fd, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        if before.st_size > 4 * 1024 * 1024:
+            raise SystemExit("unsafe remote job file " + name + ": linked or oversized inode")
+        encoded = stream.read(4 * 1024 * 1024 + 1)
+        after = os.fstat(stream.fileno())
+        current = os.stat(name, dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
+    def stamp(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
+                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    if len(encoded) > 4 * 1024 * 1024 or stamp(before) != stamp(after) or stamp(after) != stamp(current):
+        raise SystemExit("unsafe remote job file " + name + ": changed while reading")
+    try:
+        value = json.loads(encoded)
+        if not isinstance(value, dict): raise ValueError("not an object")
+        return value
+    except (ValueError, UnicodeError) as error:
+        raise SystemExit("corrupt remote job file " + name) from error
+
+"#;
+
+fn private_remote_code(code: &str) -> Result<String> {
+	Ok(format!(
+		"REMOTE_DIRECTORY_SOURCE = {}\nexec(REMOTE_DIRECTORY_SOURCE)\n{}",
+		serde_json::to_string(PRIVATE_DIRECTORY_CODE)?,
+		code
+	))
+}
+
+const BOUND_OBSERVATION_CODE: &str = r#"
+import io, json
+_original_query = json.load(sys.stdin)
+_bound_job = private_job_directory(_original_query["job_dir"])
+_bound_request = private_read_json("request.json")
+_digest = _original_query.get("request_digest")
+if (not isinstance(_bound_request, dict) or not isinstance(_digest, str) or len(_digest) != 64 or
+        any(c not in "0123456789abcdef" for c in _digest) or
+        _bound_request.get("job_id") != _original_query.get("job_id") or
+        _bound_request.get("job_dir") != _original_query.get("job_dir") or
+        _bound_request.get("unit") != _original_query.get("unit") or
+        _bound_request.get("request_digest", _bound_request.get("request_fingerprint")) != _digest):
+    raise SystemExit("remote job request binding missing or mismatched")
+# Metadata is validated before a status can claim success or cancellation can
+# acknowledge a terminal receipt. A missing witness still remains finalizing.
+for _name in ("launch.json", "started.json", "exit.json"):
+    private_read_json(_name)
+sys.stdin = io.StringIO(json.dumps(_original_query))
+"#;
+
+fn bound_remote_code(code: &str) -> Result<String> {
+	private_remote_code(&format!("{BOUND_OBSERVATION_CODE}\n{code}"))
+}
+
+pub(super) fn observation_script(kind: super::ssh::ObservationScript) -> Result<String> {
+	bound_remote_code(match kind {
+		super::ssh::ObservationScript::Status => STATUS_CODE,
+		super::ssh::ObservationScript::Read => READ_CODE,
+	})
+}
+
+#[cfg(test)]
+#[path = "private_job_directory_tests.rs"]
+mod private_directory_tests;
+
+const START_CODE: &str = r#"
+import fcntl, json, os, pathlib, shutil, subprocess, sys, time
+req = json.load(sys.stdin)
+req["default_cwd"] = os.getcwd()
+os.umask(0o077)
+job = private_job_directory(req["job_dir"], create=True)
+lock_fd = os.open(job / "launch.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+lock_info = os.fstat(lock_fd)
+if not stat.S_ISREG(lock_info.st_mode) or lock_info.st_uid != os.geteuid() or lock_info.st_nlink != 1 or stat.S_IMODE(lock_info.st_mode) != 0o600:
+    raise SystemExit("unsafe remote launch lock")
+launch_lock = os.fdopen(lock_fd, "a")
+fcntl.flock(launch_lock.fileno(), fcntl.LOCK_EX)
+
+
+def read_json(name):
+    return private_read_json(name)
 
 def atomic(name, value):
     target = job / name
     tmp = job / (name + ".tmp")
-    tmp.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
-    os.chmod(tmp, 0o600)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(json.dumps(value, sort_keys=True) + "\n")
+        stream.flush(); os.fsync(stream.fileno())
     os.replace(tmp, target)
+    fd = os.open(job, os.O_RDONLY)
+    try: os.fsync(fd)
+    finally: os.close(fd)
+
+def stage_file(name, data, mode):
+    # A durable request/launch must never refer to an unsynchronized input or
+    # supervisor archive. Partial creates remain tombstones, never replacements.
+    fd = os.open(job / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, mode)
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(data)
+        os.fchmod(stream.fileno(), mode)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.fsync(_hepta_directory_pins[-1])
 
 stdin_text = req.pop("stdin", None)
 existing = read_json("request.json")
 if existing is not None:
-    if (existing.get("job_id") != req.get("job_id")
-            or existing.get("request_fingerprint") != req.get("request_fingerprint")
-            or not req.get("request_digest")
-            or existing.get("request_digest") != req.get("request_digest")):
+    if (existing.get("job_id") != req.get("job_id") or existing.get("request_fingerprint") != req.get("request_fingerprint") or
+            existing.get("job_dir") != req.get("job_dir") or existing.get("unit") != req.get("unit") or
+            existing.get("request_digest", existing.get("request_fingerprint")) != req.get("request_digest", req.get("request_fingerprint"))):
         raise SystemExit("remote job directory is bound to a different request")
     launch = read_json("launch.json")
     exit_data = read_json("exit.json")
     started = read_json("started.json")
-    if exit_data is not None:
-        print(json.dumps({"ok": True, "reused_remote": True, "backend": "completed"}, sort_keys=True))
+    if launch and launch.get("backend") == "launch_failed":
+        raise SystemExit("prior remote launch failed; reconcile original identity without replay")
+    if launch or exit_data:
+        print(json.dumps({"ok": True, "reused_remote": True, **(launch or {"backend": "completed"})}, sort_keys=True))
         raise SystemExit(0)
-    if launch is not None:
-        if launch.get("backend") not in ("systemd", "detached"):
-            raise SystemExit("prior remote launch failed or has unknown backend; reconcile before retry")
-        print(json.dumps({"ok": True, "reused_remote": True, **launch}, sort_keys=True))
-        raise SystemExit(0)
-    if started is not None:
-        raise SystemExit("ambiguous prior launch: supervisor started without launch record")
-    # A request may have crossed the remote dispatch boundary before the
-    # controller lost its acknowledgement. Never infer 'not started' from
-    # missing launch metadata; a later launch would risk a duplicate effect.
-    raise SystemExit("ambiguous prior launch: request exists without terminal evidence")
+    raise SystemExit("ambiguous prior launch: inspect this job; do not relaunch under another key")
 else:
-    # Missing request.json does not establish non-execution: a prior controller
-    # may have lost its durable request or encountered remote state corruption.
-    # Never overwrite evidence of a prior effect under the same job identity.
-    for name in ("launch.json", "started.json", "exit.json", "child.json", "runner.py", "stdin.bin"):
-        path = job / name
-        if path.exists() or path.is_symlink():
-            raise SystemExit("orphaned remote job state without request.json; reconcile before launch")
+    if any(os.path.lexists(job / name) for name in ("stdin.bin","runner.py","owner-intent.json","started.json","child.json","launch.json","exit.json","exit.witness.json","exit.witness.json.tmp","stdout.log","stderr.log")):
+        raise SystemExit("prior or uncertain job artifacts exist without request binding; no launch submitted")
+    req["launch_nonce"] = os.urandom(16).hex()
+    req["terminal_publication_protocol"] = 1
     if stdin_text is not None:
-        stdin_path = job / "stdin.bin"
-        stdin_path.write_bytes(stdin_text.encode("utf-8"))
-        os.chmod(stdin_path, 0o600)
-        req["stdin_path"] = str(stdin_path)
-    atomic("request.json", req)
+        stage_file("stdin.bin", stdin_text.encode("utf-8"), 0o600)
+        req["stdin_path"] = str(pathlib.Path(req["job_dir"]) / "stdin.bin")
+    fd = os.open(job / "request.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        json.dump(req, stream, sort_keys=True); stream.flush(); os.fsync(stream.fileno())
+    fd = os.open(job, os.O_RDONLY)
+    try: os.fsync(fd)
+    finally: os.close(fd)
 runner = r'''#!/usr/bin/env python3
-import json, os, pathlib, shutil, signal, subprocess, sys, time
-job = pathlib.Path(__file__).resolve().parent
-req = json.loads((job / "request.json").read_text(encoding="utf-8"))
+import fcntl, hashlib, json, os, pathlib, select, shutil, signal, stat, subprocess, sys, threading, time
+# Only the trusted launcher chooses this argv marker, never request metadata.
+# A legacy unmarked runner retains the original detached nice adjustment.
+if len(sys.argv) not in (3, 4):
+    raise SystemExit("invalid supervisor launch backend; no workload submitted")
+launch_backend = sys.argv[3] if len(sys.argv) == 4 else "detached"
+if launch_backend not in ("systemd", "detached"):
+    raise SystemExit("invalid supervisor launch backend; no workload submitted")
+binding = json.loads(sys.argv[2])
+job = private_bound_job_directory(sys.argv[1], binding)
+req = private_read_json("request.json")
+if (req.get("job_id"), req.get("launch_nonce"), req.get("request_fingerprint")) != (binding["job_id"], binding["launch_nonce"], binding["request_fingerprint"]):
+    raise SystemExit("remote launch identity changed; no workload submitted")
 
 def atomic(name, value):
     target = job / name
     tmp = job / (name + ".tmp")
-    tmp.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
-    os.chmod(tmp, 0o600)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    encoded = (json.dumps(value, sort_keys=True) + "\n").encode("utf-8")
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(encoded)
+        stream.flush(); os.fsync(stream.fileno())
     os.replace(tmp, target)
+    os.fsync(_hepta_directory_pins[-1])
+    return encoded
+
+def publish_terminal(value):
+    value = {**value, "terminal_publication_protocol": 1,
+             "job_id": req["job_id"], "launch_nonce": req["launch_nonce"]}
+    encoded = atomic("exit.json", value)
+    # A visible witness proves that the preceding exit file and directory
+    # barriers returned. Losing the witness only makes status unconfirmed;
+    # its presence does not claim its own final directory fsync survived loss.
+    atomic("exit.witness.json", {
+        "terminal_publication_protocol": 1,
+        "job_id": req["job_id"],
+        "launch_nonce": req["launch_nonce"],
+        "exit_sha256": hashlib.sha256(encoded).hexdigest(),
+    })
 
 def process_identity(pid):
+    if sys.platform == "linux":
+        try:
+            ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
+            boot = pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+            return {"kind": "proc_start_ticks", "value": boot + ":" + str(ticks)} if boot else None
+        except Exception:
+            return None
     try:
-        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().split()[21])
-        return {"kind": "proc_start_ticks", "value": str(ticks)}
-    except Exception:
-        pass
-    try:
-        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True).strip()
+        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True, timeout=3).strip()
         return {"kind": "ps_lstart", "value": value} if value else None
     except Exception:
         return None
 
 os.umask(0o077)
+owner_fd = os.open(job / "owner.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+owner_stat = os.fstat(owner_fd)
+if not stat.S_ISREG(owner_stat.st_mode) or owner_stat.st_uid != os.geteuid() or owner_stat.st_nlink != 1 or owner_stat.st_mode & 0o077:
+    raise SystemExit("unsafe supervisor lifetime lock")
+fcntl.flock(owner_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+if any(os.path.lexists(job / name) for name in ("owner-intent.json","started.json","exit.json","exit.witness.json","exit.witness.json.tmp")):
+    raise SystemExit("prior supervisor intent or binding exists; workload must not be replayed")
+if sys.platform == "linux":
+    if not hasattr(os, "waitid") or not hasattr(os, "WNOWAIT"):
+        raise SystemExit("non-reaping child identity observation unavailable; no workload submitted")
+elif not all(hasattr(select, name) for name in ("kqueue","kevent","KQ_FILTER_PROC","KQ_NOTE_EXIT")):
+    raise SystemExit("non-reaping child exit observation unavailable; no workload submitted")
+owner_identity = process_identity(os.getpid())
+if not owner_identity:
+    raise SystemExit("supervisor start identity unavailable; no workload submitted")
+owner_binding = {"at_unix_ms":int(time.time()*1000),"job_id":req["job_id"],
+    "launch_nonce":req["launch_nonce"],"supervisor_pid":os.getpid(),
+    "supervisor_uid":os.geteuid(),"supervisor_identity":owner_identity,
+    "invocation_id":os.environ.get("INVOCATION_ID")}
+def publish_owner(name):
+    fd = os.open(job / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        json.dump(owner_binding, stream, sort_keys=True); stream.flush(); os.fsync(stream.fileno())
+    fd = os.open(job, os.O_RDONLY)
+    try: os.fsync(fd)
+    finally: os.close(fd)
+# Even interrupted publication is a tombstone: later owners cannot replay it.
+publish_owner("owner-intent.json")
+publish_owner("started.json")
 child = None
 cancel_requested = False
 
 def stop_handler(signum, _frame):
     global cancel_requested
     cancel_requested = True
-    if child is not None and child.poll() is None:
-        try:
-            os.killpg(child.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
 
 signal.signal(signal.SIGTERM, stop_handler)
 signal.signal(signal.SIGINT, stop_handler)
-if req.get("nice"):
+# systemd has already applied Nice=; only the detached path needs an adjustment.
+if launch_backend == "detached" and req.get("nice"):
     try:
         os.nice(int(req["nice"]))
     except OSError:
         pass
-atomic("started.json", {
-    "at_unix_ms": int(time.time() * 1000),
-    "supervisor_pid": os.getpid(),
-    "supervisor_identity": process_identity(os.getpid()),
-})
 out = open(job / "stdout.log", "ab", buffering=0)
 err = open(job / "stderr.log", "ab", buffering=0)
 stdin_handle = subprocess.DEVNULL
 if req.get("stdin_path"):
-    stdin_handle = open(req["stdin_path"], "rb", buffering=0)
+    stdin_handle = open(job / "stdin.bin", "rb", buffering=0)
 env = os.environ.copy()
 env.update(req.get("env", {}))
 env["HEPTA_RUNTIME_JOB_ID"] = req["job_id"]
 try:
     child = subprocess.Popen(
         [req["executable"], *req.get("args", [])],
-        cwd=req.get("cwd") or None,
+        cwd=req.get("cwd") or req.get("default_cwd"),
         env=env,
         stdin=stdin_handle,
-        stdout=out,
-        stderr=err,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         start_new_session=True,
     )
     atomic("child.json", {
@@ -577,7 +1586,41 @@ try:
         "identity": process_identity(child.pid),
     })
 except Exception as exc:
-    atomic("exit.json", {
+    if child is not None:
+        # Popen crossed the effect boundary. Keep the original child unreaped
+        # until every group signal is sent, and never report a prelaunch error.
+        group_signal = "submitted"
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            group_signal = "already_absent"
+        except OSError:
+            group_signal = "failed"
+        child_reaped = False
+        try:
+            child.wait(timeout=2)
+            child_reaped = True
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+        publish_terminal({
+            "at_unix_ms": int(time.time() * 1000),
+            "exit_code": 125,
+            "supervisor_error": "child receipt publication failed after spawn",
+            "effect_outcome": "unknown",
+            "status_authoritative": False,
+            "automatic_retry": False,
+            "child_spawned": True,
+            "child_pid": child.pid,
+            "child_group_signal": group_signal,
+            "child_reaped": child_reaped,
+            "child_exit_code": child.returncode if child_reaped else None,
+            "output_complete": False,
+            "output_durable": False,
+            "cancelled": False,
+            "timed_out": False,
+        })
+        raise SystemExit(125)
+    publish_terminal({
         "at_unix_ms": int(time.time() * 1000),
         "exit_code": 127,
         "launch_error": str(exc),
@@ -587,36 +1630,128 @@ except Exception as exc:
     print(str(exc), file=err, flush=True)
     raise SystemExit(127)
 
-timed_out = False
-try:
-    timeout = req.get("timeout_seconds")
-    rc = child.wait(timeout=float(timeout) if timeout else None)
-except subprocess.TimeoutExpired:
-    timed_out = True
+# Operator archives retain every byte; isolated compatibility remains bounded.
+# Disk failures are explicit capture errors, never silent tail eviction.
+log_truncated = {"stdout": False, "stderr": False}
+log_errors = {"stdout": None, "stderr": None}
+log_eof = {"stdout": False, "stderr": False}
+log_bytes = {"stdout": {"seen": 0, "stored": 0}, "stderr": {"seen": 0, "stored": 0}}
+def drain(stream, sink, label):
+    stored = 0
     try:
-        os.killpg(child.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    try:
-        rc = child.wait(timeout=10)
-    except subprocess.TimeoutExpired:
+        while True:
+            chunk = stream.read1(65536)
+            if not chunk:
+                log_eof[label] = True
+                break
+            log_bytes[label]["seen"] += len(chunk)
+            keep = chunk if req.get("execution_mode") == "operator" else chunk[:max(0, 16 * 1024 * 1024 - stored)]
+            if len(keep) != len(chunk):
+                log_truncated[label] = True
+            if log_errors[label] is None:
+                try:
+                    pending = memoryview(keep)
+                    while pending:
+                        written = sink.write(pending)
+                        if written is None or written <= 0 or written > len(pending):
+                            raise OSError("log write made invalid progress")
+                        stored += written
+                        log_bytes[label]["stored"] = stored
+                        pending = pending[written:]
+                except Exception as exc:
+                    # Continue draining after storage failure; never deadlock the
+                    # producer or publish silent success for lost output.
+                    log_errors[label] = "write: " + str(exc)
+    except Exception as exc:
+        log_errors[label] = "read: " + str(exc)
+    finally:
         try:
-            os.killpg(child.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        rc = child.wait()
-    rc = 124
-atomic("exit.json", {
+            stream.close()
+        except Exception as exc:
+            if log_errors[label] is None:
+                log_errors[label] = "close: " + str(exc)
+
+readers = [threading.Thread(target=drain, args=(child.stdout, out, "stdout"), daemon=True),
+           threading.Thread(target=drain, args=(child.stderr, err, "stderr"), daemon=True)]
+for reader in readers:
+    reader.start()
+timed_out = False
+timeout = req.get("timeout_seconds")
+deadline = time.monotonic() + float(timeout) if timeout else None
+stop_deadline, kill_submitted = None, False
+exit_queue, exit_seen = None, False
+if sys.platform != "linux":
+    exit_queue = select.kqueue()
+    try:
+        exit_queue.control([select.kevent(child.pid, filter=select.KQ_FILTER_PROC,
+            flags=select.KQ_EV_ADD | select.KQ_EV_ENABLE, fflags=select.KQ_NOTE_EXIT)], 0, 0)
+    except ProcessLookupError:
+        exit_seen = True
+while True:
+    # waitid(WNOWAIT) / kqueue observes exit without reaping. The original
+    # leader holds its PID/PGID until this one path completes all group signals.
+    if sys.platform == "linux":
+        exited = os.waitid(os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+    else:
+        exit_seen = exit_seen or bool(exit_queue.control([], 1, 0))
+        exited = True if exit_seen else None
+    now = time.monotonic()
+    if exited is None and deadline is not None and now >= deadline:
+        timed_out = True
+    stopping = timed_out or cancel_requested
+    if stopping:
+        if stop_deadline is None:
+            stop_deadline = now + 8
+            try: os.killpg(child.pid, signal.SIGTERM)
+            except ProcessLookupError: pass
+        elif now >= stop_deadline and not kill_submitted:
+            kill_submitted = True
+            try: os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError: pass
+        if exited is not None and (all(log_eof.values()) or now >= stop_deadline):
+            break
+    elif exited is not None:
+        break
+    time.sleep(.05)
+child.wait()
+if exit_queue is not None: exit_queue.close()
+rc = 124 if timed_out else child.returncode
+log_synced = {"stdout": False, "stderr": False}
+for label, reader, sink in zip(("stdout", "stderr"), readers, (out, err)):
+    reader.join(timeout=2)
+    if reader.is_alive():
+        log_errors[label] = log_errors[label] or "output drain deadline exceeded"
+        continue
+    try:
+        # One barrier per completed stream, never per chunk. A durable exit
+        # receipt must not precede the output bytes whose completion it claims.
+        sink.flush()
+        os.fsync(sink.fileno())
+        log_synced[label] = True
+    except Exception as exc:
+        log_errors[label] = log_errors[label] or "sync: " + str(exc)
+output_complete = all(log_eof.values()) and not any(log_errors.values()) and not any(log_truncated.values())
+output_durable = output_complete and all(log_synced.values())
+publish_terminal({
     "at_unix_ms": int(time.time() * 1000),
     "exit_code": int(rc),
     "cancelled": bool(cancel_requested),
     "timed_out": bool(timed_out),
+    "log_truncated": log_truncated,
+    "log_errors": log_errors,
+    "log_bytes": log_bytes,
+    "output_complete": output_complete,
+    "output_durable": output_durable,
+    "log_synced": log_synced,
 })
-raise SystemExit(int(rc) if 0 <= int(rc) <= 255 else 1)
+supervisor_rc = rc if output_durable or rc != 0 else 74
+raise SystemExit(int(supervisor_rc) if 0 <= int(supervisor_rc) <= 255 else 1)
 '''
 runner_path = job / "runner.py"
-runner_path.write_text(runner, encoding="utf-8")
-os.chmod(runner_path, 0o700)
+runner = REMOTE_DIRECTORY_SOURCE + "\n" + runner
+stage_file("runner.py", runner.encode("utf-8"), 0o700)
+info = os.fstat(_hepta_directory_pins[-1])
+binding = json.dumps({"device":info.st_dev,"inode":info.st_ino,"job_id":req["job_id"],"launch_nonce":req["launch_nonce"],"request_fingerprint":req["request_fingerprint"]}, sort_keys=True)
 uid = os.getuid()
 env = os.environ.copy()
 env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
@@ -626,7 +1761,7 @@ cmd = [
     "--unit", req["unit"],
     "--property", "KillMode=control-group",
     "--property", "TimeoutStopSec=10s",
-    "--property", f"Description=Hepta Runtime job {req['job_id']}",
+    "--property", f"Description=Hepta Runtime job {req['job_id']} {req['launch_nonce']}",
 ]
 if req.get("cpu_quota_percent"):
     cmd += ["--property", f"CPUQuota={int(req['cpu_quota_percent'])}%"]
@@ -634,10 +1769,13 @@ if req.get("memory_max_bytes"):
     cmd += ["--property", f"MemoryMax={int(req['memory_max_bytes'])}"]
 if req.get("nice"):
     cmd += ["--property", f"Nice={int(req['nice'])}"]
-cmd += ["--property", "NoNewPrivileges=yes", "--property", "RestrictSUIDSGID=yes"]
+if req.get("execution_mode", "isolated") != "operator":
+    cmd += ["--property", "NoNewPrivileges=yes", "--property", "RestrictSUIDSGID=yes"]
 if not req.get("allow_job_network", False):
     cmd += ["--property", "PrivateNetwork=yes", "--property", "RestrictAddressFamilies=AF_UNIX AF_NETLINK"]
-cmd += ["--", sys.executable, str(runner_path)]
+# Execute the trusted source inline. A renamed shared ancestor must never
+# redirect the interpreter into an unverified replacement runner.py.
+cmd += ["--", sys.executable, "-I", "-S", "-c", runner, req["job_dir"], binding, "systemd"]
 if req.get("platform", "linux") == "linux" and shutil.which("systemd-run"):
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
 else:
@@ -653,8 +1791,10 @@ else:
         })
         print(result.stderr.strip(), file=sys.stderr)
         raise SystemExit(result.returncode or 1)
+    if req.get("cpu_quota_percent") or req.get("memory_max_bytes"):
+        raise SystemExit("detached backend cannot enforce requested CPU/memory limits")
     process = subprocess.Popen(
-        [sys.executable, str(runner_path)],
+        [sys.executable, "-I", "-S", "-c", runner, req["job_dir"], binding, "detached"],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -675,93 +1815,127 @@ print(json.dumps({"ok": True, **launch}, sort_keys=True))
 const STATUS_CODE: &str = r#"
 import json, os, pathlib, stat, subprocess, sys, time
 q = json.load(sys.stdin)
-job = pathlib.Path(q["job_dir"])
+job = private_job_directory(q["job_dir"])
 
-# Pin the original remote job directory; never follow symlinks in its ancestry.
-def open_bound_directory(path):
-    if not path.is_absolute() or ".." in path.parts:
-        raise SystemExit("unsafe remote job directory path")
-    descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        for component in path.parts[1:]:
-            next_descriptor = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                                      dir_fd=descriptor)
-            os.close(descriptor)
-            descriptor = next_descriptor
-        metadata = os.fstat(descriptor)
-        if metadata.st_uid != os.geteuid() or metadata.st_mode & 0o077:
-            raise SystemExit("remote job directory must be owner-private")
-        return descriptor
-    except BaseException:
-        os.close(descriptor)
-        raise
-
-directory = open_bound_directory(job)
-
-# A missing optional state is distinct from a corrupt, aliased or linked inode.
-# A forged exit.json must never turn an unknown remote effect into success.
-def read_json(name, required=False):
-    try:
-        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
-    except FileNotFoundError:
-        if required:
-            raise SystemExit(f"remote job state missing: {name}")
-        return None
-    except OSError as exc:
-        raise SystemExit(f"unsafe remote job file {name}: {exc}")
-    with os.fdopen(fd, "rb") as source:
-        metadata = os.fstat(source.fileno())
-        if (not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1
-                or metadata.st_size > 4 * 1024 * 1024):
-            raise SystemExit(f"unsafe remote job file {name}: non-regular, linked or oversized inode")
-        contents = source.read(4 * 1024 * 1024 + 1)
-    if len(contents) > 4 * 1024 * 1024:
-        raise SystemExit(f"oversized remote job file: {name}")
-    try:
-        value = json.loads(contents)
-    except (UnicodeError, ValueError) as exc:
-        raise SystemExit(f"corrupt remote job file {name}: {exc}")
-    if not isinstance(value, dict):
-        raise SystemExit(f"invalid remote job object: {name}")
-    return value
+def read_json(name):
+    return private_read_json(name)
 
 def process_identity(pid):
+    if sys.platform == "linux":
+        try:
+            ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
+            boot = pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+            return {"kind": "proc_start_ticks", "value": boot + ":" + str(ticks)} if boot else None
+        except Exception:
+            return None
     try:
-        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().split()[21])
-        return {"kind": "proc_start_ticks", "value": str(ticks)}
-    except Exception:
-        pass
-    try:
-        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True).strip()
+        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True, timeout=3).strip()
         return {"kind": "ps_lstart", "value": value} if value else None
     except Exception:
         return None
 
+def valid_owner(request, started, systemd=False):
+    nonce = request.get("launch_nonce")
+    identity = started.get("supervisor_identity")
+    return (isinstance(nonce, str) and len(nonce) == 32 and all(c in "0123456789abcdef" for c in nonce) and
+        started.get("job_id") == request.get("job_id") and started.get("launch_nonce") == nonce and
+        type(started.get("supervisor_uid")) is int and started["supervisor_uid"] == os.geteuid() and
+        type(started.get("supervisor_pid")) is int and 1 < started["supervisor_pid"] <= 2147483647 and
+        isinstance(identity, dict) and identity.get("kind") == ("proc_start_ticks" if sys.platform == "linux" else "ps_lstart") and
+        isinstance(identity.get("value"), str) and bool(identity["value"]) and
+        (not systemd or (isinstance(started.get("invocation_id"), str) and len(started["invocation_id"]) == 32 and
+            all(c in "0123456789abcdef" for c in started["invocation_id"]))))
+
+def process_uid(pid):
+    if sys.platform == "linux": return pathlib.Path(f"/proc/{pid}").stat().st_uid
+    return int(subprocess.check_output(["ps", "-p", str(pid), "-o", "uid="], text=True, timeout=3).strip())
+
+def publication_pending(reason):
+    return {"state": "finalizing", "outcome": "unknown", "reason": reason,
+            "terminal_publication_confirmed": False,
+            "status_authoritative": False, "automatic_retry": False}
+
+def read_terminal_file(name, limit):
+    # Relative to the already pinned job directory; never follow a receipt
+    # symlink or wait on a substituted FIFO. Hash and parse this one snapshot.
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                 dir_fd=_hepta_directory_pins[-1])
+    with os.fdopen(fd, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid() or
+                before.st_nlink != 1 or stat.S_IMODE(before.st_mode) != 0o600 or before.st_size > limit):
+            raise ValueError("unsafe terminal publication file")
+        encoded = stream.read(limit + 1)
+        after = os.fstat(stream.fileno())
+        current = os.stat(name, dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
+    def stamp(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
+                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    if (len(encoded) > limit or len(encoded) != before.st_size or
+            stamp(before) != stamp(after) or stamp(after) != stamp(current)):
+        raise ValueError("terminal publication file changed")
+    return encoded
+
+def read_terminal_status(request):
+    field = "terminal_publication_protocol"
+    if field in request and (type(request[field]) is not int or request[field] != 1):
+        return publication_pending("terminal publication protocol is unsupported")
+    try:
+        encoded = read_terminal_file("exit.json", 1024 * 1024)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError):
+        return publication_pending("terminal receipt is unavailable or unsafe")
+    try:
+        exit_data = json.loads(encoded)
+        if not isinstance(exit_data, dict):
+            raise ValueError("terminal receipt must be an object")
+        if field not in request and field not in exit_data:
+            return final_status(exit_data)
+        if type(exit_data.get(field)) is not int or exit_data[field] != 1:
+            return publication_pending("terminal publication protocol is missing or unsupported")
+        nonce = request.get("launch_nonce")
+        if (not isinstance(nonce, str) or len(nonce) != 32 or
+                not all(c in "0123456789abcdef" for c in nonce) or
+                exit_data.get("job_id") != request["job_id"] or exit_data.get("launch_nonce") != nonce):
+            return publication_pending("terminal receipt identity does not match the original request")
+        import hashlib
+        witness = json.loads(read_terminal_file("exit.witness.json", 4096))
+        if (not isinstance(witness, dict) or type(witness.get(field)) is not int or witness[field] != 1 or
+                witness.get("job_id") != request["job_id"] or witness.get("launch_nonce") != nonce or
+                witness.get("exit_sha256") != hashlib.sha256(encoded).hexdigest()):
+            return publication_pending("terminal publication witness does not match the original receipt")
+        result = final_status(exit_data)
+        result["terminal_publication_confirmed"] = True
+        result["automatic_retry"] = False
+        return result
+    except (OSError, ValueError, TypeError, KeyError):
+        return publication_pending("terminal publication witness or receipt is unavailable or invalid")
+
 def final_status(exit_data):
-    if exit_data.get("timed_out"):
+    if exit_data.get("effect_outcome") == "unknown":
+        state = "effect_unknown"
+    elif exit_data.get("timed_out"):
         state = "timed_out"
     elif exit_data.get("cancelled"):
         state = "cancelled"
     elif int(exit_data.get("exit_code", -1)) == 0:
-        state = "succeeded"
+        # Legacy receipts without these additive fields remain readable.
+        output_failed = any(name in exit_data and exit_data[name] is not True
+                            for name in ("output_complete", "output_durable"))
+        state = "failed" if output_failed else "succeeded"
     else:
         state = "failed"
-    return {"state": state, **exit_data}
+    return {**exit_data, "state": state}
 
 def one_status():
-    request = read_json("request.json", True)
-    # A job ID alone does not bind the observed remote state to the original effect.
-    if (not isinstance(request, dict)
-            or request.get("job_id") != q.get("job_id")
-            or request.get("job_dir") != q.get("job_dir")
-            or request.get("unit") != q.get("unit")
-            or request.get("request_digest") != q.get("request_digest")
-            or not isinstance(q.get("request_digest"), str)
-            or len(q["request_digest"]) != 64):
-        raise SystemExit("remote job request binding missing or mismatched")
-    exit_data = read_json("exit.json")
-    if exit_data:
-        return final_status(exit_data)
+    request = read_json("request.json")
+    if not request or request.get("job_id") != q["job_id"]:
+        return {"state": "unknown", "reason": "remote job metadata missing or mismatched"}
+    terminal = read_terminal_status(request)
+    if terminal is not None:
+        return terminal
+    requires_witness = "terminal_publication_protocol" in request
     launch = read_json("launch.json") or {}
     if launch.get("backend") == "systemd":
         uid = os.getuid()
@@ -770,7 +1944,7 @@ def one_status():
         env.setdefault("DBUS_SESSION_BUS_ADDRESS", f"unix:path=/run/user/{uid}/bus")
         p = subprocess.run(
             ["systemctl", "--user", "show", q["unit"], "--no-pager",
-             "--property=LoadState,ActiveState,SubState,Result,ExecMainPID,ExecMainCode,ExecMainStatus"],
+             "--property=LoadState,ActiveState,SubState,Result,ExecMainPID,ExecMainCode,ExecMainStatus,InvocationID,Description"],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
         props = {}
         for line in p.stdout.splitlines():
@@ -778,16 +1952,35 @@ def one_status():
                 k, v = line.split("=", 1); props[k] = v
         # A --collect unit can disappear immediately after the runner exits.
         # Re-read the atomic exit record after querying systemd to close that race.
-        exit_data = read_json("exit.json")
-        if exit_data:
-            return final_status(exit_data)
+        terminal = read_terminal_status(request)
+        if terminal is not None:
+            return terminal
+        started = read_json("started.json") or {}
+        nonce = request.get("launch_nonce")
+        invocation = started.get("invocation_id")
+        if not valid_owner(request, started, systemd=True):
+            return {"state":"owner_unknown","reason":"frozen supervisor binding unavailable",
+                    "status_authoritative":False,"automatic_retry":False}
+        if props.get("LoadState") != "not-found" and (props.get("InvocationID") != invocation or
+                props.get("Description") != f"Hepta Runtime job {q['job_id']} {nonce}"):
+            return {"state":"owner_unknown","reason":"unit incarnation differs from frozen supervisor",
+                    "status_authoritative":False,"automatic_retry":False}
         active = props.get("ActiveState")
         sub = props.get("SubState")
         if active in ("active", "activating") and sub not in ("exited", "dead"):
+            try: matching = process_identity(started["supervisor_pid"]) == started["supervisor_identity"] and process_uid(started["supervisor_pid"]) == started["supervisor_uid"]
+            except (OSError, ValueError, subprocess.SubprocessError): matching = False
+            if not matching:
+                return {"state":"owner_unknown","reason":"frozen supervisor PID/start/UID unavailable or changed",
+                        "status_authoritative":False,"automatic_retry":False}
             state = "running"
         elif active == "failed":
+            if requires_witness:
+                return publication_pending("supervisor exited without a confirmed terminal receipt")
             state = "failed"
         elif active == "active" and sub == "exited":
+            if requires_witness:
+                return publication_pending("supervisor exited without a confirmed terminal receipt")
             # RemainAfterExit can become visible a few microseconds before the
             # supervisor's atomic exit.json rename. systemd already has the
             # authoritative process result, so use it rather than returning a
@@ -801,15 +1994,24 @@ def one_status():
                 return {"state": state, "backend": "systemd", "exit_code": exit_code, "systemd": props}
             state = "completed_unknown"
         elif props.get("LoadState") == "not-found":
+            if requires_witness:
+                return publication_pending("supervisor disappeared without a confirmed terminal receipt")
             state = "finalizing"
         else:
+            if requires_witness:
+                return publication_pending("supervisor has no confirmed terminal receipt")
             state = active or "unknown"
         return {"state": state, "backend": "systemd", "systemd": props}
     started = read_json("started.json") or {}
     pid = int(started.get("supervisor_pid") or launch.get("launcher_pid") or 0)
     expected = started.get("supervisor_identity")
+    if not valid_owner(request, started):
+        return {"state":"owner_unknown","reason":"frozen supervisor binding unavailable",
+                "status_authoritative":False,"automatic_retry":False}
     actual = process_identity(pid) if pid else None
-    running = bool(pid and actual is not None and (expected is None or expected == actual))
+    running = bool(pid and actual is not None and (expected is not None and expected == actual))
+    if not running and requires_witness:
+        return publication_pending("supervisor disappeared without a confirmed terminal receipt")
     return {"state": "running" if running else "lost", "backend": launch.get("backend", "detached"), "pid": pid, "identity": actual}
 
 deadline = time.monotonic() + min(float(q.get("wait_seconds", 0)), 30.0)
@@ -819,7 +2021,8 @@ while True:
     transient = state in ("running", "activating", "finalizing", "completed_unknown")
     now = time.monotonic()
     if not transient or now >= deadline:
-        if now >= deadline and state in ("finalizing", "completed_unknown"):
+        if (now >= deadline and state in ("finalizing", "completed_unknown") and
+                status.get("terminal_publication_confirmed") is not False):
             status["state"] = "lost"
             status["reason"] = "no exit record appeared before the wait deadline"
         status["job_id"] = q["job_id"]
@@ -829,257 +2032,150 @@ while True:
 "#;
 
 const READ_CODE: &str = r#"
-import json, os, pathlib, stat, sys
+import json, pathlib, sys
 q = json.load(sys.stdin)
-job = pathlib.Path(q["job_dir"])
-
-# Pin the target directory inode without following symlinked components.
-def open_bound_directory(path):
-    if not path.is_absolute() or ".." in path.parts:
-        raise SystemExit("unsafe remote job directory path")
-    directory = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        for component in path.parts[1:]:
-            next_fd = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                              dir_fd=directory)
-            os.close(directory)
-            directory = next_fd
-        return directory
-    except OSError as exc:
-        os.close(directory)
-        raise SystemExit(f"unsafe remote job directory: {exc}")
-
-directory = open_bound_directory(job)
-
-def open_regular(name, required):
-    try:
-        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
-                     dir_fd=directory)
-    except FileNotFoundError:
-        if required:
-            raise SystemExit("remote job metadata missing")
-        return None
-    except OSError as exc:
-        raise SystemExit(f"unsafe remote job file {name}: {exc}")
-    metadata = os.fstat(fd)
-    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
-        os.close(fd)
-        raise SystemExit(f"unsafe remote job file {name}: non-regular or linked inode")
-    return fd, metadata.st_size
-
+job = private_job_directory(q["job_dir"])
 try:
-    fd, size = open_regular("request.json", True)
-    with os.fdopen(fd, "rb") as source:
-        encoded = source.read(4 * 1024 * 1024 + 1)
-    if size > 4 * 1024 * 1024 or len(encoded) > 4 * 1024 * 1024:
-        raise SystemExit("oversized remote job metadata")
-    request = json.loads(encoded)
-except (ValueError, UnicodeError):
-    raise SystemExit("invalid remote job metadata")
-
-if (not isinstance(request, dict)
-        or request.get("job_id") != q.get("job_id")
-        or request.get("job_dir") != q.get("job_dir")
-        or request.get("unit") != q.get("unit")
-        or request.get("request_digest") != q.get("request_digest")
-        or not isinstance(q.get("request_digest"), str)
-        or len(q["request_digest"]) != 64):
-    raise SystemExit("remote job request binding missing or mismatched")
-limit = max(1, min(int(q.get("limit", 65536)), 1048576))
+    request = private_read_json("request.json")
+except Exception:
+    raise SystemExit("remote job metadata missing")
+if request.get("job_id") != q["job_id"]:
+    raise SystemExit("remote job metadata mismatch")
+limit = max(1, min(int(q.get("limit", 16384)), 16384))
 
 def read_part(name, offset):
-    opened = open_regular(name, False)
-    if opened is None:
-        size, data, offset = 0, b"", 0
-    else:
-        fd, size = opened
-        offset = min(max(0, int(offset or 0)), size)
+    fd = private_open_job_file(name)
+    offset = max(0, int(offset or 0))
+    data = b""
+    size = 0
+    if fd is not None:
         with os.fdopen(fd, "rb") as stream:
+            before = os.fstat(stream.fileno())
+            size = before.st_size
+            if offset > size: raise SystemExit("cursor exceeds log length; refusing silent rewind")
             stream.seek(offset)
-            data = stream.read(limit)
-    return {
-        "offset": offset,
-        "next_offset": offset + len(data),
-        "size": size,
-        "eof": offset + len(data) >= size,
-        "text": data.decode("utf-8", errors="replace"),
-    }
+            data = stream.read(min(limit, size - offset))
+            current = os.stat(name, dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
+            after = os.fstat(stream.fileno())
+            if (current.st_dev, current.st_ino) != (before.st_dev, before.st_ino) or after.st_nlink != 1 or after.st_size < size:
+                raise SystemExit("remote log identity changed while reading")
+    elif offset:
+        raise SystemExit("cursor exceeds log length; refusing silent rewind")
+    return {"offset": offset, "next_offset": offset + len(data), "size": size,
+            "eof": offset + len(data) >= size, "text": data.decode("utf-8", errors="replace"),
+            "bytes_hex": data.hex()}
 
-try:
-    print(json.dumps({
-        "job_id": q["job_id"],
-        "stdout": read_part("stdout.log", q.get("stdout_offset", 0)),
-        "stderr": read_part("stderr.log", q.get("stderr_offset", 0)),
-    }, sort_keys=True))
-finally:
-    os.close(directory)
+print(json.dumps({
+    "job_id": q["job_id"],
+    "stdout": read_part("stdout.log", q.get("stdout_offset", 0)),
+    "stderr": read_part("stderr.log", q.get("stderr_offset", 0)),
+}, sort_keys=True))
 "#;
 
 const CANCEL_CODE: &str = r#"
-import json, os, pathlib, signal, stat, subprocess, sys, time
+import json, os, pathlib, signal, subprocess, sys, time
 q = json.load(sys.stdin)
-job = pathlib.Path(q["job_dir"])
+job = private_job_directory(q["job_dir"])
 
-# Pin the original remote job directory; never follow symlinks in its ancestry.
-def open_bound_directory(path):
-    if not path.is_absolute() or ".." in path.parts:
-        raise SystemExit("unsafe remote job directory path")
-    descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        for component in path.parts[1:]:
-            next_descriptor = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                                      dir_fd=descriptor)
-            os.close(descriptor)
-            descriptor = next_descriptor
-        metadata = os.fstat(descriptor)
-        if metadata.st_uid != os.geteuid() or metadata.st_mode & 0o077:
-            raise SystemExit("remote job directory must be owner-private")
-        return descriptor
-    except BaseException:
-        os.close(descriptor)
-        raise
-
-directory = open_bound_directory(job)
-
-# A missing optional state is distinct from a corrupt, aliased or linked inode.
-# A forged exit.json must never turn an unknown remote effect into success.
-def read_json(name, required=False):
-    try:
-        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
-    except FileNotFoundError:
-        if required:
-            raise SystemExit(f"remote job state missing: {name}")
-        return None
-    except OSError as exc:
-        raise SystemExit(f"unsafe remote job file {name}: {exc}")
-    with os.fdopen(fd, "rb") as source:
-        metadata = os.fstat(source.fileno())
-        if (not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1
-                or metadata.st_size > 4 * 1024 * 1024):
-            raise SystemExit(f"unsafe remote job file {name}: non-regular, linked or oversized inode")
-        contents = source.read(4 * 1024 * 1024 + 1)
-    if len(contents) > 4 * 1024 * 1024:
-        raise SystemExit(f"oversized remote job file: {name}")
-    try:
-        value = json.loads(contents)
-    except (UnicodeError, ValueError) as exc:
-        raise SystemExit(f"corrupt remote job file {name}: {exc}")
-    if not isinstance(value, dict):
-        raise SystemExit(f"invalid remote job object: {name}")
-    return value
+def read_json(name):
+    return private_read_json(name)
 
 def atomic(name, value):
-    # Write only through the verified, pinned directory descriptor.
-    temp_name = f".{name}.{os.getpid()}.{time.monotonic_ns()}.tmp"
-    contents = (json.dumps(value, sort_keys=True) + "\n").encode("utf-8")
-    fd = os.open(temp_name, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW,
-                 0o600, dir_fd=directory)
-    try:
-        with os.fdopen(fd, "wb") as sink:
-            sink.write(contents)
-            sink.flush()
-            os.fsync(sink.fileno())
-        os.replace(temp_name, name, src_dir_fd=directory, dst_dir_fd=directory)
-        os.fsync(directory)
-    except BaseException:
-        try:
-            os.unlink(temp_name, dir_fd=directory)
-        except FileNotFoundError:
-            pass
-        raise
+    target = job / name
+    tmp = job / (name + ".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(json.dumps(value, sort_keys=True) + "\n")
+        stream.flush(); os.fsync(stream.fileno())
+    os.replace(tmp, target)
+    fd = os.open(job, os.O_RDONLY)
+    try: os.fsync(fd)
+    finally: os.close(fd)
 
 def process_identity(pid):
+    if sys.platform == "linux":
+        try:
+            ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[19])
+            boot = pathlib.Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+            return {"kind": "proc_start_ticks", "value": boot + ":" + str(ticks)} if boot else None
+        except Exception:
+            return None
     try:
-        ticks = int(pathlib.Path(f"/proc/{pid}/stat").read_text().split()[21])
-        return {"kind": "proc_start_ticks", "value": str(ticks)}
-    except Exception:
-        pass
-    try:
-        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True).strip()
+        value = subprocess.check_output(["ps", "-p", str(pid), "-o", "lstart="], text=True, timeout=3).strip()
         return {"kind": "ps_lstart", "value": value} if value else None
     except Exception:
         return None
 
-def command_line(pid):
-    try:
-        return pathlib.Path(f"/proc/{pid}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
-    except Exception:
-        try:
-            return subprocess.check_output(["ps", "-p", str(pid), "-o", "command="], text=True).strip()
-        except Exception:
-            return ""
+def valid_owner(request, started, systemd=False):
+    nonce = request.get("launch_nonce")
+    identity = started.get("supervisor_identity")
+    return (isinstance(nonce, str) and len(nonce) == 32 and all(c in "0123456789abcdef" for c in nonce) and
+        started.get("job_id") == request.get("job_id") and started.get("launch_nonce") == nonce and
+        type(started.get("supervisor_uid")) is int and started["supervisor_uid"] == os.geteuid() and
+        type(started.get("supervisor_pid")) is int and 1 < started["supervisor_pid"] <= 2147483647 and
+        isinstance(identity, dict) and identity.get("kind") == ("proc_start_ticks" if sys.platform == "linux" else "ps_lstart") and
+        isinstance(identity.get("value"), str) and bool(identity["value"]) and
+        (not systemd or (isinstance(started.get("invocation_id"), str) and len(started["invocation_id"]) == 32 and
+            all(c in "0123456789abcdef" for c in started["invocation_id"]))))
 
-request = read_json("request.json", True)
-# Cancellation must never act on a job directory merely matching its job ID.
-if (not isinstance(request, dict)
-        or request.get("job_id") != q.get("job_id")
-        or request.get("job_dir") != q.get("job_dir")
-        or request.get("unit") != q.get("unit")
-        or request.get("request_digest") != q.get("request_digest")
-        or not isinstance(q.get("request_digest"), str)
-        or len(q["request_digest"]) != 64):
-    raise SystemExit("remote job request binding missing or mismatched")
+def process_uid(pid):
+    if sys.platform == "linux": return pathlib.Path(f"/proc/{pid}").stat().st_uid
+    return int(subprocess.check_output(["ps", "-p", str(pid), "-o", "uid="], text=True, timeout=3).strip())
+
+request = read_json("request.json")
+if not request or request.get("job_id") != q["job_id"]:
+    raise SystemExit("remote job metadata missing or mismatched")
 if read_json("exit.json"):
     print(json.dumps({"job_id": q["job_id"], "result": "already_exited"}))
     raise SystemExit(0)
 launch = read_json("launch.json") or {}
-if launch.get("backend") not in ("systemd", "detached"):
-    raise SystemExit("remote launch backend missing or unknown; cancel requires reconciliation")
-grace = max(0.0, min(float(q.get("grace_seconds", 10)), 30.0))
-result = "not_running"
-if launch.get("backend") == "systemd":
-    atomic("cancel-request.json", {"at_unix_ms": int(time.time() * 1000)})
-    uid = os.getuid()
-    env = os.environ.copy()
-    env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{uid}")
-    env.setdefault("DBUS_SESSION_BUS_ADDRESS", f"unix:path=/run/user/{uid}/bus")
-    p = subprocess.run(["systemctl", "--user", "stop", q["unit"]], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-    result = "stop_requested" if p.returncode == 0 else "stop_failed"
-    if p.returncode != 0:
-        print(json.dumps({"job_id": q["job_id"], "result": result, "stderr": p.stderr.strip()}))
-        raise SystemExit(1)
-else:
-    started = read_json("started.json") or {}
-    pid = int(started.get("supervisor_pid") or launch.get("launcher_pid") or 0)
-    expected = started.get("supervisor_identity")
-    actual = process_identity(pid) if pid else None
-    cmdline = command_line(pid) if pid else ""
-    valid = bool(pid and isinstance(expected, dict) and actual == expected
-                 and str(job / "runner.py") in cmdline)
-    if not valid:
-        raise SystemExit("refusing to signal PID: ownership verification failed")
-    atomic("cancel-request.json", {"at_unix_ms": int(time.time() * 1000)})
-    try:
-        os.killpg(pid, signal.SIGTERM)
-        result = "term_sent"
-    except ProcessLookupError:
-        result = "not_running"
+started = read_json("started.json") or {}
+nonce = request.get("launch_nonce")
+pid = int(started.get("supervisor_pid") or 0)
+expected = started.get("supervisor_identity")
+expected_uid = started.get("supervisor_uid")
+if not valid_owner(request, started, systemd=launch.get("backend") == "systemd"):
+    raise SystemExit("frozen supervisor binding unavailable; no cancellation submitted")
+# Never stop by a reusable unit name. This descriptor stays bound to the
+# original supervisor even if its PID or systemd unit name is later recycled.
+atomic_identity = sys.platform == "linux"
+fd = None
+try:
+    if atomic_identity:
+        if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+            raise SystemExit("atomic supervisor signalling unavailable; no cancellation submitted")
+        fd = os.pidfd_open(pid, 0)
+    if process_identity(pid) != expected or process_uid(pid) != expected_uid:
+        raise SystemExit("frozen supervisor identity or UID changed; no cancellation submitted")
+    atomic("cancel-request.json", {"at_unix_ms": int(time.time() * 1000),
+           "job_id": q["job_id"], "launch_nonce": nonce})
+    if atomic_identity:
+        signal.pidfd_send_signal(fd, signal.SIGTERM, None, 0)
+    else:
+        # macOS has no pidfd. Retain its explicitly non-atomic account scope.
+        if process_identity(pid) != expected or process_uid(pid) != expected_uid:
+            raise SystemExit("supervisor changed before best-effort signal")
+        os.kill(pid, signal.SIGTERM)
+    grace = max(0.0, min(float(q.get("grace_seconds", 10)), 30.0))
     deadline = time.monotonic() + grace
     while time.monotonic() < deadline:
-        if read_json("exit.json") or not command_line(pid):
+        if read_json("exit.json") or process_identity(pid) != expected:
             break
-        time.sleep(0.2)
-    # A process group can disappear and be recycled during the grace period.
-    # Recheck both identity and command before escalating.
-    if (process_identity(pid) == expected and str(job / "runner.py") in command_line(pid)
-            and not read_json("exit.json")):
-        try:
-            os.killpg(pid, signal.SIGKILL)
-            result = "kill_sent"
-        except ProcessLookupError:
-            pass
-print(json.dumps({"job_id": q["job_id"], "result": result}, sort_keys=True))
+        time.sleep(.1)
+    # The original runner owns workload termination, escalation and output
+    # drain. Never force-kill a potentially recycled child group from here.
+    result = "stop_requested" if launch.get("backend") == "systemd" else "term_sent"
+    print(json.dumps({"job_id":q["job_id"],"result":result,
+          "atomic_identity":atomic_identity,"supervisor_pid":pid,
+          "termination_confirmed":False,"reconcile_via":"process_status"}, sort_keys=True))
+finally:
+    if fd is not None: os.close(fd)
 "#;
 
 fn validate_start(params: &ProcessStartParams) -> Result<()> {
-	// Without a caller-stable key an ambiguous transport retry is a new launch.
-	// Reject before reaching any host or execution-policy lookup.
-	if params
-		.idempotency_key
-		.as_ref()
-		.is_none_or(|value| value.trim().is_empty() || value.len() > 256)
-	{
-		bail!("idempotency_key is required and must contain 1..256 non-blank bytes");
+	match params.idempotency_key.as_deref() {
+		Some(key) if !key.trim().is_empty() && key.len() <= 256 => {}
+		_ => bail!("idempotency_key is mandatory and must contain 1..256 nonblank bytes"),
 	}
 	check_execution(
 		&params.host,
@@ -1131,36 +2227,303 @@ fn validate_start(params: &ProcessStartParams) -> Result<()> {
 	{
 		bail!("memory_max_bytes must be at least 16 MiB");
 	}
+	if params
+		.idempotency_key
+		.as_ref()
+		.is_some_and(|value| value.is_empty() || value.len() > 256)
+	{
+		bail!("idempotency_key must contain 1..256 bytes");
+	}
+	Ok(())
+}
+
+fn verify_host_binding(
+	record: &JobRecord,
+	configured_target: &str,
+	configured_state_dir: &str,
+) -> Result<()> {
+	let expected_job_dir = format!(
+		"{}/jobs/{}",
+		configured_state_dir.trim_end_matches('/'),
+		record.id
+	);
+	if record.ssh_target != configured_target || record.remote_job_dir != expected_job_dir {
+		bail!("durable job host binding changed; remote operation requires independent reconciliation");
+	}
+	Ok(())
+}
+
+fn check_binding(record: &JobRecord) -> Result<()> {
+	let host = runtime_config()?.host(&record.host)?;
+	verify_host_binding(record, &host.ssh_target, &host.remote_state_dir)?;
+	if host.ssh_target != record.ssh_target || host.execution_mode != record.execution_mode {
+		bail!("host binding changed; refusing to operate an old job");
+	}
 	Ok(())
 }
 
 async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
-	let host = bound_host(record)?;
+	let config = runtime_config()?;
+	let host = config.host(&record.host)?;
+	check_binding(record)?;
+	if record.system_jobctl {
+		let deadline = tokio::time::Instant::now() + Duration::from_secs(wait_seconds.min(30));
+		loop {
+			let value = run_jobctl(host, &json!({"op":"status","job_id":record.id})).await?;
+			if value.get("state").and_then(Value::as_str) != Some("running")
+				|| tokio::time::Instant::now() >= deadline
+			{
+				return Ok(value);
+			}
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
-		"unit": record.unit,
 		"request_digest": record.request_digest,
+		"unit": record.unit,
 		"wait_seconds": wait_seconds.min(30),
 	});
 	run_python_json(
 		host,
-		STATUS_CODE,
+		&bound_remote_code(STATUS_CODE)?,
 		&request,
 		Duration::from_secs(wait_seconds.min(30) + 10),
 	)
 	.await
 }
 
-async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> Result<Value> {
-	let host = bound_host(record)?;
+/// Public observation routes opt in explicitly. Start/reuse reconciliation
+/// continues to call the unchanged status_record above.
+async fn status_observation(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
+	if !super::ssh::observation_pool_requested() {
+		return status_record(record, wait_seconds).await;
+	}
+	check_binding(record)?;
+	use super::ssh::{run_job_observation, JobObservation};
+	if record.system_jobctl {
+		let deadline = tokio::time::Instant::now() + Duration::from_secs(wait_seconds.min(30));
+		loop {
+			let value = run_job_observation(
+				&record.host,
+				JobObservation::SystemStatus { job_id: &record.id },
+			)
+			.await?;
+			if value.get("state").and_then(Value::as_str) != Some("running")
+				|| tokio::time::Instant::now() >= deadline
+			{
+				return Ok(value);
+			}
+			tokio::time::sleep(Duration::from_millis(100)).await;
+		}
+	}
+	run_job_observation(
+		&record.host,
+		JobObservation::PythonStatus {
+			job_id: &record.id,
+			job_dir: &record.remote_job_dir,
+			unit: &record.unit,
+			request_digest: record
+				.request_digest
+				.as_deref()
+				.context("legacy job has no full observation binding")?,
+			wait_seconds,
+		},
+	)
+	.await
+}
+
+fn require_operation_intent(outcome: Result<()>) -> Result<()> {
+	outcome.map_err(|_| {
+		anyhow::anyhow!("Operation intent audit unavailable; no remote operation submitted")
+	})
+}
+
+fn operation_intent(action: &str, host: &str, job_id: &str) -> Result<()> {
+	require_operation_intent(audit(
+		action,
+		host,
+		job_id,
+		&json!({"phase":"intent","remote_operation_submitted":false}),
+	))
+}
+
+fn retain_result_after_audit(mut result: Value, outcome: Result<()>) -> Value {
+	result["audit_recorded"] = json!(outcome.is_ok());
+	if outcome.is_err() {
+		result["audit_warning"] = json!(
+			"Operation result retained; completion audit unavailable. Reconcile using the existing job_id."
+		);
+	}
+	result
+}
+
+#[derive(Debug)]
+struct LaunchOutcome {
+	value: Value,
+	local_record_pending: bool,
+}
+
+fn trusted_launch_ack(record: &JobRecord, value: &Value) -> bool {
+	if value["ok"] != true {
+		return false;
+	}
+	if record.system_jobctl && record.execution_mode == ExecutionMode::Isolated {
+		return value["backend"] == "systemd_system"
+			&& value
+				.pointer("/status/job_id")
+				.is_none_or(|id| id.as_str() == Some(&record.id));
+	}
+	match value["backend"].as_str() {
+		Some("systemd") => value["unit"].as_str() == Some(&record.unit),
+		Some("detached") => value["launcher_pid"]
+			.as_u64()
+			.is_some_and(|pid| pid > 0 && pid <= i32::MAX as u64),
+		Some("completed" | "launch_failed") => value["reused_remote"] == true,
+		_ => false,
+	}
+}
+
+fn preserve_launch_outcome<F>(
+	record: &mut JobRecord,
+	outcome: Result<Value>,
+	persist: F,
+) -> LaunchOutcome
+where
+	F: FnOnce(&JobRecord) -> Result<()>,
+{
+	let value = match outcome {
+		Ok(value) if trusted_launch_ack(record, &value) => {
+			let remote_state = if record.system_jobctl
+				&& record.execution_mode == ExecutionMode::Isolated
+				&& value.get("reused_remote").and_then(Value::as_bool) == Some(true)
+			{
+				value
+					.pointer("/status/launch_state")
+					.and_then(Value::as_str)
+					.filter(|state| {
+						matches!(
+							*state,
+							"pending" | "launch_failed" | "launched" | "cancelled"
+						)
+					})
+					.unwrap_or("launch_unknown")
+			} else if value["backend"] == "launch_failed" {
+				"launch_failed"
+			} else {
+				"launched"
+			};
+			record.launch_state = remote_state.to_string();
+			record.launch_error = (remote_state == "launch_unknown")
+				.then(|| "Remote launch state unavailable".to_string());
+			value
+		}
+		Ok(_) | Err(_) => {
+			// Invalid ACKs and transport failures cannot prove the supervisor did not launch.
+			record.launch_state = "launch_unknown".to_string();
+			record.launch_error = Some("Remote launch outcome unavailable".to_string());
+			json!({
+				"job_id":record.id,
+				"state":"launch_unknown",
+				"outcome":"unknown",
+				"status_authoritative":false,
+				"automatic_retry":false,
+				"reconcile_via":"process_status"
+			})
+		}
+	};
+	LaunchOutcome {
+		value,
+		local_record_pending: persist(record).is_err(),
+	}
+}
+
+fn attach_launch_record_warning(result: &mut Value, outcome: &LaunchOutcome) {
+	result["local_record_pending"] = json!(outcome.local_record_pending);
+	if outcome.local_record_pending {
+		result["reconcile_warning"] = json!(
+			"Remote launch outcome retained; local launch record update is pending. Use process_status with the existing job_id; do not create a new key."
+		);
+	}
+}
+
+fn reconcile_retry_allowed(record: &JobRecord) -> bool {
+	if admit_observation_only_reuse(record).is_ok() {
+		return false;
+	}
+	// The administrator-pinned jobctl first checks the same job ID and full
+	// request digest. Operator helpers never relaunch an uncertain old record.
+	record.system_jobctl
+		&& record.execution_mode == ExecutionMode::Isolated
+		&& matches!(record.launch_state.as_str(), "pending" | "launch_failed")
+}
+
+fn unavailable_status(job_id: &str) -> Value {
+	json!({"job_id":job_id,"state":"status_unavailable","outcome":"unknown",
+        "status_authoritative":false,"automatic_retry":false})
+}
+
+async fn read_reuse_status(
+	record: &JobRecord,
+	retry: bool,
+	start_guard: &mut Option<tokio::sync::MutexGuard<'_, ()>>,
+	read_status: impl Future<Output = Result<Value>>,
+) -> Value {
+	// A confirmed original launch needs only an observation. Keep uncertain
+	// identities and launch reconciliation serialized, but do not make another
+	// same-host start wait for this read-only SSH status roundtrip.
+	if !retry && record.launch_state == "launched" {
+		drop(start_guard.take());
+	}
+	read_status
+		.await
+		.unwrap_or_else(|_| unavailable_status(&record.id))
+}
+
+fn retain_cancel_outcome(job_id: &str, outcome: Result<Value>) -> Value {
+	if let Ok(value) = outcome {
+		if value["job_id"].as_str() == Some(job_id)
+			&& value["result"].as_str().is_some_and(|result| {
+				matches!(
+					result,
+					"already_exited" | "stop_requested" | "term_sent" | "kill_sent" | "not_running"
+				)
+			}) {
+			// An acknowledgement requests or sends a signal; it is not terminal proof.
+			let mut retained = json!({"job_id":job_id,"result":value["result"],"automatic_retry":false,
+				"termination_confirmed":false,"reconcile_via":"process_status"});
+			if value["atomic_identity"].is_boolean() {
+				retained["atomic_identity"] = value["atomic_identity"].clone();
+			}
+			if value["supervisor_pid"]
+				.as_u64()
+				.is_some_and(|pid| pid > 1 && pid <= i32::MAX as u64)
+			{
+				retained["supervisor_pid"] = value["supervisor_pid"].clone();
+			}
+			return retained;
+		}
+	}
+	json!({"job_id":job_id,"result":"cancel_unknown","outcome":"unknown",
+		"status_authoritative":false,"automatic_retry":false,"termination_confirmed":false,
+		"reconcile_via":"process_status"})
+}
+
+async fn launch_record(
+	record: &mut JobRecord,
+	params: &ProcessStartParams,
+) -> Result<LaunchOutcome> {
+	let config = runtime_config()?;
+	let host = config.host(&record.host)?;
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
-		"unit": record.unit,
-		"request_fingerprint": format!("{:016x}", record.request_fingerprint),
 		"request_digest": record.request_digest,
+		"unit": record.unit,
+		"request_fingerprint": record.request_digest.clone().unwrap_or_else(|| format!("{:016x}", record.request_fingerprint)),
 		"platform": host.platform,
+		"execution_mode": record.execution_mode,
 		"executable": params.executable,
 		"args": params.args,
 		"cwd": params.cwd,
@@ -1173,56 +2536,115 @@ async fn launch_record(record: &mut JobRecord, params: &ProcessStartParams) -> R
 		"allow_job_network": host.allow_job_network,
 		"allow_detached_fallback": host.allow_detached_fallback,
 	});
-	match run_python_json(host, START_CODE, &request, Duration::from_secs(20)).await {
-		Ok(launch) => {
-			record.launch_state = "launched".to_string();
-			record.launch_error = None;
-			save_record(record)?;
-			Ok(launch)
-		}
-		Err(error) => {
-			record.launch_state = "launch_failed".to_string();
-			record.launch_error = Some(error.to_string());
-			save_record(record)?;
-			let outcome = json!({"error": error.to_string(), "job": record});
-			audit("process_start_failed", &record.host, &record.id, &outcome)?;
-			Err(error)
-		}
+	let launch_result = if record.system_jobctl {
+		run_jobctl(
+			host,
+			&json!({
+				"op":"start", "job_id":record.id, "executable":params.executable,
+				"args":params.args, "cwd":params.cwd, "env":params.env, "stdin":params.stdin,
+				"timeout_seconds":params.timeout_seconds, "nice":params.nice,
+				"cpu_quota_percent":params.cpu_quota_percent, "memory_max_bytes":params.memory_max_bytes
+			}),
+		)
+		.await
+	} else {
+		run_python_json(
+			host,
+			&private_remote_code(START_CODE)?,
+			&request,
+			Duration::from_secs(20),
+		)
+		.await
+	};
+	Ok(preserve_launch_outcome(record, launch_result, save_record))
+}
+
+/// The macOS operator helper uses a detached process backend. It cannot
+/// enforce systemd CPUQuota/MemoryMax. Refuse a *new* unsupported request
+/// before allocating a durable job identity, persisting launch intent or
+/// contacting SSH; never silently drop the requested resource bounds.
+fn validate_new_host_resource_limits(
+	platform: Platform,
+	params: &ProcessStartParams,
+) -> Result<()> {
+	if platform == Platform::Macos
+		&& (params.cpu_quota_percent.is_some() || params.memory_max_bytes.is_some())
+	{
+		bail!(
+            "macOS detached job backend cannot enforce requested CPU/memory limits;              no new job identity allocated or remote launch submitted"
+        );
 	}
+	Ok(())
 }
 
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	validate_start(&params)?;
-	let _start_guard = start_lock(&params.host, params.idempotency_key.as_deref())
-		.lock()
-		.await;
-	let (request_fingerprint, request_digest) = request_digest(&params);
+	let _start_lane = start_lock(&params.host, params.idempotency_key.as_deref())?;
+	let mut start_guard = Some(_start_lane.lock().await);
+	// Cross-process owner fence: retain the shared admission lock from
+	// idempotency lookup through durable intent, launch and response.
+	let _owner_admission = super::effect_owner_fence::admit_new_effect().await?;
+	// The freshly promoted controller must not relaunch a process_start key
+	// previously accepted by V4. Perform the private predecessor lookup while
+	// the shared epoch-bound admission lock is held, BEFORE any new job ID or
+	// launch intent is allocated. Unknown/corrupt old history fails closed.
+	_owner_admission
+		.require_new_process_identity(&params.host, params.idempotency_key.as_deref())?;
+	// Serialize and hash the full binding once, including potentially large stdin.
+	// Both reuse checks and new metadata retain this same complete SHA256 value.
+	let digest = request_digest(&params)?;
+	let request_fingerprint = fingerprint(&digest);
 	if let Some(key) = params.idempotency_key.as_deref() {
-		if let Some(existing) = find_idempotent(&params.host, key)? {
-			verify_reuse_binding(&existing, key, request_fingerprint, &request_digest)?;
-			// An earlier pending/failed controller attempt may already have crossed
-			// the remote launch boundary. A missing remote state directory is not
-			// proof that the effect did not happen: never dispatch it again.
-			admit_observation_only_reuse(&existing)?;
-			let status = status_record(&existing, 0).await?;
-			let result = json!({
+		if let Some(mut existing) = find_idempotent(&params.host, key)? {
+			if !matches_request(&existing, &digest)? {
+				bail!("idempotency key `{key}` is already bound to a different request");
+			}
+			check_binding(&existing)?;
+			let retry = reconcile_retry_allowed(&existing);
+			let launch = if retry {
+				operation_intent("process_start_reconcile_intent", &params.host, &existing.id)?;
+				Some(launch_record(&mut existing, &params).await?)
+			} else {
+				None
+			};
+			let status = read_reuse_status(
+				&existing,
+				retry,
+				&mut start_guard,
+				status_record(&existing, 0),
+			)
+			.await;
+			let mut result = json!({
 				"reused": true,
-				"retried_launch": false,
+				"retried_launch": retry,
 				"job": existing,
-				"launch": null,
+				"launch": launch.as_ref().map(|outcome| &outcome.value),
 				"status": status,
 			});
-			audit("process_start_reused", &params.host, &existing.id, &result)?;
+			if let Some(outcome) = &launch {
+				attach_launch_record_warning(&mut result, outcome);
+			}
+			let completion = audit(
+				"process_start_reused",
+				&params.host,
+				&existing.id,
+				&json!({"phase":"result","reused":true,"retried_launch":retry}),
+			);
+			let result = retain_result_after_audit(result, completion);
 			return Ok(serde_json::to_string_pretty(&result)?);
 		}
 	}
 
 	let config = runtime_config()?;
 	let host = config.host(&params.host)?;
+	validate_new_host_resource_limits(host.platform, &params)?;
 	let id = next_job_id();
 	let unit = format!("hepta-runtime-job-{id}");
 	let remote_job_dir = format!("{}/jobs/{id}", host.remote_state_dir.trim_end_matches('/'));
 	let mut record = JobRecord {
+		system_jobctl: host.platform == Platform::Linux
+			&& host.execution_mode == ExecutionMode::Isolated,
+		execution_mode: host.execution_mode,
 		id: id.clone(),
 		host: params.host.clone(),
 		ssh_target: host.ssh_target.clone(),
@@ -1235,24 +2657,42 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 		created_unix_ms: now_ms(),
 		idempotency_key: params.idempotency_key.clone(),
 		request_fingerprint,
-		request_digest: Some(request_digest),
+		request_digest: Some(digest),
 		launch_state: "pending".to_string(),
 		launch_error: None,
 	};
-	// Persist identity before remote launch. Following a crash, the same key
-	// can only reconcile the original request; ambiguous dispatch never retries.
-	save_record(&record)?;
+	// Persist identity before remote launch. Later calls reconcile this same
+	// host, job ID and request binding; never invent a second remote job.
+	operation_intent("process_start_intent", &params.host, &id)?;
+	save_record(&record).map_err(|_| {
+		anyhow::anyhow!("Durable job identity could not be saved; no remote launch submitted")
+	})?;
 	let launch = launch_record(&mut record, &params).await?;
-	let result = json!({"reused": false, "job": record, "launch": launch});
-	audit("process_start", &params.host, &id, &result)?;
+	let mut result = json!({"reused": false, "job": record, "launch": launch.value});
+	attach_launch_record_warning(&mut result, &launch);
+	let completion = audit(
+		"process_start",
+		&params.host,
+		&id,
+		&json!({"phase":"result","launch_state":record.launch_state}),
+	);
+	let result = retain_result_after_audit(result, completion);
 	Ok(serde_json::to_string_pretty(&result)?)
 }
 
 pub async fn status_job(params: ProcessRefParams) -> Result<String> {
 	let record = check_ref(&params)?;
-	let status = status_record(&record, 0).await?;
-	audit("process_status", &params.host, &params.job_id, &status)?;
-	Ok(serde_json::to_string_pretty(&status)?)
+	let status = status_observation(&record, 0).await?;
+	let completion = observation_completion_audit(
+		"process_status",
+		&params.host,
+		&params.job_id,
+		&json!({"phase":"observation","ok":true}),
+	)
+	.await;
+	Ok(serde_json::to_string_pretty(
+		&retain_observation_after_audit(status, completion, &record.host, &record.id),
+	)?)
 }
 
 pub async fn wait_job(params: ProcessWaitParams) -> Result<String> {
@@ -1262,9 +2702,17 @@ pub async fn wait_job(params: ProcessWaitParams) -> Result<String> {
 	};
 	let record = check_ref(&reference)?;
 	let wait = params.timeout_seconds.unwrap_or(10).min(30);
-	let status = status_record(&record, wait).await?;
-	audit("process_wait", &params.host, &params.job_id, &status)?;
-	Ok(serde_json::to_string_pretty(&status)?)
+	let status = status_observation(&record, wait).await?;
+	let completion = observation_completion_audit(
+		"process_wait",
+		&params.host,
+		&params.job_id,
+		&json!({"phase":"observation","ok":true}),
+	)
+	.await;
+	Ok(serde_json::to_string_pretty(
+		&retain_observation_after_audit(status, completion, &record.host, &record.id),
+	)?)
 }
 
 pub async fn read_job(params: ProcessReadParams) -> Result<String> {
@@ -1273,24 +2721,79 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 		job_id: params.job_id.clone(),
 	};
 	let record = check_ref(&reference)?;
-	let host = bound_host(&record)?;
+	let host = runtime_config()?.host(&record.host)?;
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
-		"unit": record.unit,
 		"request_digest": record.request_digest,
+		"unit": record.unit,
 		"stdout_offset": params.stdout_offset.unwrap_or(0),
 		"stderr_offset": params.stderr_offset.unwrap_or(0),
 		"limit": params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),
 	});
-	let output: Value = run_python_json(host, READ_CODE, &request, Duration::from_secs(15)).await?;
-	audit(
+	let output: Value = if super::ssh::observation_pool_requested() {
+		use super::ssh::{run_job_observation, JobObservation};
+		let observation = if record.system_jobctl {
+			JobObservation::SystemRead {
+				job_id: &record.id,
+				stdout_offset: params.stdout_offset.unwrap_or(0),
+				stderr_offset: params.stderr_offset.unwrap_or(0),
+				limit: params.limit.unwrap_or(16384),
+			}
+		} else {
+			JobObservation::PythonRead {
+				job_id: &record.id,
+				job_dir: &record.remote_job_dir,
+				unit: &record.unit,
+				request_digest: record
+					.request_digest
+					.as_deref()
+					.context("legacy job has no full observation binding")?,
+				stdout_offset: params.stdout_offset.unwrap_or(0),
+				stderr_offset: params.stderr_offset.unwrap_or(0),
+				limit: params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),
+			}
+		};
+		run_job_observation(&record.host, observation).await?
+	} else if record.system_jobctl {
+		run_jobctl(host, &json!({"op":"read","job_id":record.id,
+            "stdout_offset":params.stdout_offset.unwrap_or(0),"stderr_offset":params.stderr_offset.unwrap_or(0),"limit":params.limit.unwrap_or(16384)})).await?
+	} else {
+		run_python_json(
+			host,
+			&bound_remote_code(READ_CODE)?,
+			&request,
+			Duration::from_secs(15),
+		)
+		.await?
+	};
+	let completion = observation_completion_audit(
 		"process_read",
 		&params.host,
 		&params.job_id,
-		&json!({"ok": true}),
-	)?;
-	Ok(serde_json::to_string_pretty(&output)?)
+		&json!({"phase":"observation","ok": true}),
+	)
+	.await;
+	Ok(serde_json::to_string_pretty(
+		&retain_observation_after_audit(output, completion, &record.host, &record.id),
+	)?)
+}
+
+fn retain_observation_after_audit(
+	mut result: Value,
+	outcome: Result<()>,
+	host: &str,
+	job_id: &str,
+) -> Value {
+	if !result.is_object() {
+		return json!({"host":host,"job_id":job_id,"result":"invalid_remote_observation","outcome":"unknown","automatic_retry":false,"audit_recorded":outcome.is_ok(),"reconcile_warning":"Existing job observation was not a trusted object. No new job was launched."});
+	}
+	result["audit_recorded"] = json!(outcome.is_ok());
+	if outcome.is_err() {
+		result["audit_warning"] =
+			json!("Existing job observation retained; audit unavailable. No new job was launched.");
+	}
+	result
 }
 
 pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
@@ -1299,17 +2802,34 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 		job_id: params.job_id.clone(),
 	};
 	let record = check_ref(&reference)?;
-	let host = bound_host(&record)?;
+	let host = runtime_config()?.host(&record.host)?;
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
-		"unit": record.unit,
 		"request_digest": record.request_digest,
+		"unit": record.unit,
 		"grace_seconds": params.grace_seconds.unwrap_or(10).min(30),
 	});
-	let output: Value =
-		run_python_json(host, CANCEL_CODE, &request, Duration::from_secs(45)).await?;
-	audit("process_cancel", &params.host, &params.job_id, &output)?;
+	operation_intent("process_cancel_intent", &params.host, &params.job_id)?;
+	let remote = if record.system_jobctl {
+		run_jobctl(host, &json!({"op":"cancel","job_id":record.id})).await
+	} else {
+		run_python_json(
+			host,
+			&bound_remote_code(CANCEL_CODE)?,
+			&request,
+			Duration::from_secs(45),
+		)
+		.await
+	};
+	let output = retain_cancel_outcome(&params.job_id, remote);
+	let completion = audit(
+		"process_cancel",
+		&params.host,
+		&params.job_id,
+		&json!({"phase":"result","outcome_unknown":output["outcome"]=="unknown"}),
+	);
+	let output = retain_result_after_audit(output, completion);
 	Ok(serde_json::to_string_pretty(&output)?)
 }
 
@@ -1321,9 +2841,404 @@ pub fn list_jobs(params: ProcessListParams) -> Result<String> {
 		.into_iter()
 		.filter(|record| params.host.as_ref().is_none_or(|host| &record.host == host))
 		.collect();
-	Ok(serde_json::to_string_pretty(&json!({"jobs": records}))?)
+	job_inventory_response(&records)
+}
+
+/// The old unpaginated API remains unchanged; this API never silently truncates it.
+pub fn list_jobs_page(params: ProcessListPageParams) -> Result<String> {
+	if let Some(host) = params.host.as_deref() {
+		runtime_config()?.host(host)?;
+	}
+	let rows = inventory_page_rows_at(
+		&runtime_config()?.state_dir,
+		params.host.as_deref(),
+		InventoryLimits::default(),
+	)?;
+	let root = runtime_config()?.state_dir.to_string_lossy();
+	page_job_rows(&rows, &params, &root)
+}
+
+// Retain the original public field types until the complete source scan has
+// passed every final fence. This drops private args/paths per record without
+// serializing unselected records or changing whole-source error ordering.
+struct InventoryRow {
+	id: String,
+	host: String,
+	created_unix_ms: u128,
+	execution_mode: ExecutionMode,
+	launch_state: String,
+}
+
+fn inventory_page_rows_at(
+	root: &Path,
+	host: Option<&str>,
+	limits: InventoryLimits,
+) -> Result<Vec<Value>> {
+	let records = inventory_projected_at(root, limits, |record| InventoryRow {
+		id: record.id,
+		host: record.host,
+		created_unix_ms: record.created_unix_ms,
+		execution_mode: record.execution_mode,
+		launch_state: record.launch_state,
+	})?;
+	let mut rows: Vec<Value> = records
+		.into_iter()
+		.filter(|record| host.is_none_or(|host| record.host == host))
+		.map(|record| {
+			json!({"id":record.id,"host":record.host,"created_unix_ms":record.created_unix_ms,
+			"execution_mode":record.execution_mode,"launch_state":record.launch_state})
+		})
+		.collect();
+	rows.sort_by(|left, right| left["id"].as_str().cmp(&right["id"].as_str()));
+	Ok(rows)
+}
+
+#[derive(Clone, Copy)]
+struct InventoryLimits {
+	records: usize,
+	bytes: u64,
+	record_bytes: u64,
+	time: Duration,
+}
+
+impl Default for InventoryLimits {
+	fn default() -> Self {
+		Self {
+			records: 65_536,
+			bytes: 128 * 1024 * 1024,
+			record_bytes: 4 * 1024 * 1024 + 64 * 1024,
+			time: Duration::from_secs(5),
+		}
+	}
+}
+
+#[cfg(all(test, unix))]
+fn inventory_records_at(root: &Path, limits: InventoryLimits) -> Result<Vec<JobRecord>> {
+	inventory_projected_at(root, limits, |record| record)
+}
+
+#[cfg(unix)]
+fn inventory_projected_at<T>(
+	root: &Path,
+	limits: InventoryLimits,
+	mut project: impl FnMut(JobRecord) -> T,
+) -> Result<Vec<T>> {
+	use std::fs::{File, Metadata};
+	use std::io::Read;
+	use std::os::fd::{AsRawFd, FromRawFd};
+	use std::os::unix::fs::MetadataExt;
+	use std::time::Instant;
+	let started = Instant::now();
+	let deadline = || -> Result<()> {
+		if started.elapsed() >= limits.time {
+			bail!("durable inventory source time budget exceeded; no partial inventory returned");
+		}
+		Ok(())
+	};
+	fn open_at(base: Option<&File>, component: &str, flags: i32) -> Result<File> {
+		let name = std::ffi::CString::new(component)?;
+		let fd = unsafe {
+			libc::openat(
+				base.map_or(libc::AT_FDCWD, AsRawFd::as_raw_fd),
+				name.as_ptr(),
+				flags | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+			)
+		};
+		if fd < 0 {
+			return Err(std::io::Error::last_os_error().into());
+		}
+		Ok(unsafe { File::from_raw_fd(fd) })
+	}
+	fn open_root(root: &std::path::Path) -> Result<File> {
+		let raw = root
+			.to_str()
+			.ok_or_else(|| anyhow::anyhow!("inventory root must be UTF-8"))?;
+		if !root.is_absolute() || raw.split('/').any(|part| matches!(part, "." | "..")) {
+			bail!("inventory root must be an explicit absolute path");
+		}
+		let mut base = open_at(None, "/", libc::O_RDONLY | libc::O_DIRECTORY)?;
+		for part in raw.split('/').filter(|part| !part.is_empty()) {
+			base = open_at(Some(&base), part, libc::O_RDONLY | libc::O_DIRECTORY)?;
+		}
+		let info = base.metadata()?;
+		if info.uid() != unsafe { libc::geteuid() } || info.mode() & 0o077 != 0 {
+			bail!("durable inventory root must be private and account-owned");
+		}
+		Ok(base)
+	}
+	fn stamp(info: &Metadata) -> (u64, u64, u32, u32, u64, u64, i64, i64, i64, i64) {
+		(
+			info.dev(),
+			info.ino(),
+			info.uid(),
+			info.mode(),
+			info.nlink(),
+			info.len(),
+			info.mtime(),
+			info.mtime_nsec(),
+			info.ctime(),
+			info.ctime_nsec(),
+		)
+	}
+	fn directory_identity(info: &Metadata) -> (u64, u64, u32, u32) {
+		(info.dev(), info.ino(), info.uid(), info.mode())
+	}
+	fn entries(
+		base: &File,
+		maximum: usize,
+		check: &impl Fn() -> Result<()>,
+	) -> Result<Vec<String>> {
+		// A new file description keeps repeated membership scans independent.
+		let scan = open_at(Some(base), ".", libc::O_RDONLY | libc::O_DIRECTORY)?;
+		let fd = unsafe { libc::dup(scan.as_raw_fd()) };
+		if fd < 0 {
+			return Err(std::io::Error::last_os_error().into());
+		}
+		let pointer = unsafe { libc::fdopendir(fd) };
+		if pointer.is_null() {
+			unsafe { libc::close(fd) };
+			return Err(std::io::Error::last_os_error().into());
+		}
+		struct Stream(*mut libc::DIR);
+		impl Drop for Stream {
+			fn drop(&mut self) {
+				unsafe { libc::closedir(self.0) };
+			}
+		}
+		let stream = Stream(pointer);
+		let mut names = Vec::new();
+		loop {
+			check()?;
+			#[cfg(target_os = "linux")]
+			let error = unsafe { libc::__errno_location() };
+			#[cfg(target_os = "macos")]
+			let error = unsafe { libc::__error() };
+			#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+			{
+				bail!("bounded inventory directory scans require Linux or macOS");
+			}
+			#[cfg(any(target_os = "linux", target_os = "macos"))]
+			{
+				unsafe { *error = 0 };
+				let item = unsafe { libc::readdir(stream.0) };
+				if item.is_null() {
+					if unsafe { *error } != 0 {
+						return Err(std::io::Error::last_os_error().into());
+					}
+					break;
+				}
+				let value =
+					unsafe { std::ffi::CStr::from_ptr((*item).d_name.as_ptr()) }.to_str()?;
+				if matches!(value, "." | "..") {
+					continue;
+				}
+				if names.len() >= maximum.saturating_add(32) {
+					bail!("durable inventory source entry bound exceeded");
+				}
+				names.push(value.to_owned());
+			}
+		}
+		names.sort();
+		Ok(names
+			.into_iter()
+			.filter(|name| name.ends_with(".json"))
+			.collect())
+	}
+	let rootfd = open_root(root)?;
+	let root_identity = directory_identity(&rootfd.metadata()?);
+	let base = open_at(Some(&rootfd), "jobs", libc::O_RDONLY | libc::O_DIRECTORY)?;
+	let base_metadata = base.metadata()?;
+	if base_metadata.uid() != unsafe { libc::geteuid() } || base_metadata.mode() & 0o022 != 0 {
+		bail!("durable inventory directory must be account-owned and non-writable by others");
+	}
+	let base_identity = directory_identity(&base_metadata);
+	let names = entries(&base, limits.records, &deadline)?;
+	if names.len() > limits.records {
+		bail!("durable inventory source row bound exceeded");
+	}
+	let mut records = Vec::with_capacity(names.len());
+	let mut stamps = Vec::with_capacity(names.len());
+	let mut bytes = 0u64;
+	for name in &names {
+		deadline()?;
+		let id = name
+			.strip_suffix(".json")
+			.ok_or_else(|| anyhow::anyhow!("invalid inventory identity"))?;
+		if !valid_name(id) {
+			bail!("invalid durable inventory identity");
+		}
+		let mut file = open_at(Some(&base), name, libc::O_RDONLY)?;
+		let before = file.metadata()?;
+		if !before.is_file()
+			|| before.uid() != unsafe { libc::geteuid() }
+			|| before.mode() & 0o7777 != 0o600
+			|| before.nlink() != 1
+			|| before.len() == 0
+			|| before.len() > limits.record_bytes
+		{
+			bail!("durable inventory metadata inode or byte bound refused");
+		}
+		bytes = bytes
+			.checked_add(before.len())
+			.ok_or_else(|| anyhow::anyhow!("durable inventory byte overflow"))?;
+		if bytes > limits.bytes {
+			bail!("durable inventory total source byte bound exceeded");
+		}
+		let mut raw = Vec::with_capacity(before.len() as usize);
+		Read::by_ref(&mut file)
+			.take(before.len() + 1)
+			.read_to_end(&mut raw)?;
+		deadline()?;
+		if raw.len() as u64 != before.len() || stamp(&before) != stamp(&file.metadata()?) {
+			bail!("durable inventory metadata changed during observation");
+		}
+		let record: JobRecord =
+			serde_json::from_slice(&raw).context("corrupt durable inventory metadata")?;
+		if record.id != id || !valid_name(&record.host) {
+			bail!("durable inventory record identity mismatch");
+		}
+		stamps.push(stamp(&before));
+		records.push(project(record));
+	}
+	if entries(&base, limits.records, &deadline)? != names {
+		bail!("durable inventory membership changed");
+	}
+	for (name, before) in names.iter().zip(stamps) {
+		deadline()?;
+		let current = open_at(Some(&base), name, libc::O_RDONLY)?;
+		if stamp(&current.metadata()?) != before {
+			bail!("durable inventory metadata changed");
+		}
+	}
+	let held_base = open_at(Some(&rootfd), "jobs", libc::O_RDONLY | libc::O_DIRECTORY)?;
+	if directory_identity(&held_base.metadata()?) != base_identity
+		|| directory_identity(&base.metadata()?) != base_identity
+		|| directory_identity(&rootfd.metadata()?) != root_identity
+		|| directory_identity(&open_root(root)?.metadata()?) != root_identity
+	{
+		bail!("durable inventory root or directory changed");
+	}
+	deadline()?;
+	Ok(records)
+}
+
+#[cfg(not(unix))]
+fn inventory_projected_at<T>(
+	_root: &Path,
+	_limits: InventoryLimits,
+	_project: impl FnMut(JobRecord) -> T,
+) -> Result<Vec<T>> {
+	bail!("bounded durable inventory requires Unix descriptor support")
+}
+
+fn page_job_rows(
+	rows: &[Value],
+	params: &ProcessListPageParams,
+	namespace: &str,
+) -> Result<String> {
+	let limit = params.limit.unwrap_or(128) as usize;
+	if !(1..=128).contains(&limit)
+		|| params
+			.cursor
+			.as_ref()
+			.is_some_and(|cursor| cursor.len() > 256)
+	{
+		bail!("invalid durable job inventory page");
+	}
+	let binding =
+		serde_json::to_vec(&json!({"namespace":namespace,"host":params.host,"rows":rows}))?;
+	let fingerprint = Sha256::digest(&binding)
+		.iter()
+		.map(|byte| format!("{byte:02x}"))
+		.collect::<String>();
+	let start = match params.cursor.as_deref() {
+		None => 0,
+		Some(cursor) => {
+			let (digest, id) = cursor
+				.split_once(':')
+				.ok_or_else(|| anyhow::anyhow!("invalid inventory cursor"))?;
+			if digest != fingerprint {
+				bail!("durable job inventory changed; restart from the first page");
+			}
+			rows.iter()
+				.position(|row| row["id"].as_str() == Some(id))
+				.ok_or_else(|| anyhow::anyhow!("inventory cursor unavailable"))?
+				+ 1
+		}
+	};
+	let mut end = (start + limit).min(rows.len());
+	loop {
+		let more = end < rows.len();
+		let next = if more {
+			Some(format!(
+				"{}:{}",
+				fingerprint,
+				rows[end - 1]["id"].as_str().unwrap_or_default()
+			))
+		} else {
+			None
+		};
+		let value = json!({"jobs":&rows[start..end],"total":rows.len(),"next_cursor":next,
+			"has_more":more,"inventory_complete":!more,"snapshot_sha256":fingerprint,
+			"status_authoritative":false,"snapshot_semantics":"registry_metadata_at_observation"});
+		let text = serde_json::to_string(&value)?;
+		let wire = rmcp::model::CallToolResult::success(vec![rmcp::model::ContentBlock::text(
+			text.clone(),
+		)]);
+		if serde_json::to_vec(&wire)?.len() <= 64 * 1024 {
+			return Ok(text);
+		}
+		if end <= start + 1 {
+			bail!("one durable job identity exceeds the inventory page budget");
+		}
+		end -= 1;
+	}
+}
+
+fn job_inventory_response(records: &[JobRecord]) -> Result<String> {
+	const MAX_INVENTORY_WIRE_BYTES: usize = 1024 * 1024;
+	let jobs: Vec<Value> = records
+		.iter()
+		.map(|record| {
+			json!({
+				"id":record.id,"host":record.host,"created_unix_ms":record.created_unix_ms,
+				"execution_mode":record.execution_mode,"launch_state":record.launch_state,
+			})
+		})
+		.collect();
+	let text = serde_json::to_string(&json!({"jobs":jobs,"total":records.len(),
+		"inventory_complete":true,"status_authoritative":false}))?;
+	let wire = serde_json::to_vec(&rmcp::model::CallToolResult::success(vec![
+		rmcp::model::ContentBlock::text(text.clone()),
+	]))?;
+	if wire.len() > MAX_INVENTORY_WIRE_BYTES {
+		bail!(
+			"Durable job inventory exceeds the 1 MiB response budget; narrow using the configured host filter. No partial inventory returned."
+		);
+	}
+	Ok(text)
 }
 
 #[cfg(test)]
 #[path = "jobs_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "jobs_pagination_tests.rs"]
+mod pagination_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_output_durability_tests.rs"]
+mod output_durability_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_staging_durability_tests.rs"]
+mod staging_durability_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_terminal_publication_tests.rs"]
+mod terminal_publication_tests;
+
+#[cfg(test)]
+#[path = "jobs_security_tests.rs"]
+mod security_tests;

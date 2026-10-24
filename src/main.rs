@@ -11,14 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//! Runtime startup, private-store preparation, transports and graceful shutdown.
 
 use anyhow::Result;
 use clap::Parser;
 use tracing::Level;
 
 mod cli;
-pub mod mcp;
-pub mod utils;
+use hepta_runtime::mcp;
 
 use cli::{Cli, Commands};
 
@@ -34,11 +34,21 @@ async fn main() -> Result<()> {
 			ssh_timeout,
 			runtime_config,
 			auth_token_file,
+			runtime_prewarm,
+			runtime_audit_group_commit,
+			runtime_observation_pool_profile,
 		} => {
 			let runtime_enabled = runtime_config.is_some();
 			if let Some(config_path) = runtime_config.as_ref() {
 				let config = mcp::runtime::RuntimeConfig::load(config_path)?;
+				mcp::runtime::search_jobs::init_search_interpreters(&config)?;
 				mcp::runtime::init_runtime(config)?;
+				if runtime_prewarm || runtime_audit_group_commit {
+					mcp::runtime::prepare_durable_stores().await?;
+				}
+				if runtime_audit_group_commit {
+					mcp::runtime::request_audit::enable_group_commit()?;
+				}
 			}
 
 			// Resolve working directory
@@ -61,16 +71,24 @@ async fn main() -> Result<()> {
 			// Set the session root directory for all tool calls
 			mcp::set_session_root_directory(working_directory.clone());
 
-			match bind {
+			let observation_pool = mcp::runtime::ssh::start_observation_pool(
+				runtime_observation_pool_profile.as_deref(),
+			)
+			.await?;
+			let transport = match bind {
 				Some(addr) => {
 					// HTTP mode with Streamable HTTP transport.
-					run_http_server(&addr, auth_token_file.as_deref(), runtime_enabled).await?;
+					run_http_server(&addr, auth_token_file.as_deref(), runtime_enabled).await
 				}
 				None => {
 					// STDIO mode (default)
-					run_stdio_server(mcp::server::OctofsServer::new()).await?;
+					run_stdio_server(mcp::server::OctofsServer::new()).await
 				}
+			};
+			if let Some(pool) = observation_pool {
+				pool.shutdown().await?;
 			}
+			transport?;
 		}
 	}
 
@@ -117,8 +135,7 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 
 	// Kill request-scoped shell trees and interactive SSH PTYs. Durable runtime jobs
 	// are deliberately independent and remain queryable after this process restarts.
-	mcp::fs::shell::kill_all_shell_children();
-	mcp::runtime::pty::close_all_ptys();
+	mcp::runtime::shutdown_request_scoped().await;
 
 	Ok(())
 }
@@ -126,6 +143,7 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 #[derive(Clone)]
 struct HttpAuth {
 	token_hash: [u8; 32],
+	scope: mcp::runtime::caller_scope::AuthenticatedOperatorScope,
 }
 
 fn load_http_auth(path: Option<&std::path::Path>, required: bool) -> Result<Option<HttpAuth>> {
@@ -136,38 +154,24 @@ fn load_http_auth(path: Option<&std::path::Path>, required: bool) -> Result<Opti
 		}
 		return Ok(None);
 	};
-	let metadata = std::fs::metadata(path)?;
-	if !metadata.is_file() {
-		anyhow::bail!(
-			"HTTP auth token path is not a regular file: {}",
-			path.display()
-		);
-	}
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::PermissionsExt;
-		if metadata.permissions().mode() & 0o007 != 0 {
-			anyhow::bail!("HTTP auth token file must not be accessible to other users");
-		}
-	}
-	let token = std::fs::read(path)?;
-	let token = token.strip_suffix(b"\n").unwrap_or(&token);
-	if token.len() < 32 || token.len() > 4096 {
-		anyhow::bail!("HTTP auth token must contain 32..4096 bytes");
-	}
+	let token = mcp::runtime::caller_scope::read_private_token(path)?;
 	Ok(Some(HttpAuth {
-		token_hash: Sha256::digest(token).into(),
+		token_hash: Sha256::digest(&token).into(),
+		scope: mcp::runtime::caller_scope::AuthenticatedOperatorScope::from_verified_token(&token),
 	}))
 }
 
 async fn require_http_auth(
 	axum::extract::State(auth): axum::extract::State<HttpAuth>,
-	request: axum::extract::Request,
+	mut request: axum::extract::Request,
 	next: axum::middleware::Next,
 ) -> axum::response::Response {
 	use axum::response::IntoResponse;
 	use sha2::{Digest, Sha256};
 	use subtle::ConstantTimeEq;
+	if request.headers().contains_key("origin") {
+		return axum::http::StatusCode::FORBIDDEN.into_response();
+	}
 	let valid = request
 		.headers()
 		.get("x-hepta-runtime-token")
@@ -178,6 +182,7 @@ async fn require_http_auth(
 	if !valid {
 		return axum::http::StatusCode::UNAUTHORIZED.into_response();
 	}
+	request.extensions_mut().insert(auth.scope.clone());
 	next.run(request).await
 }
 
@@ -211,12 +216,24 @@ async fn run_http_server(
 	}
 	let router = axum::Router::new()
 		.route("/healthz", axum::routing::get(|| async { "ok\n" }))
-		.route("/readyz", axum::routing::get(|| async { "ready\n" }))
+		.route(
+			"/readyz",
+			axum::routing::get(|| async {
+				if mcp::runtime::request_audit::group_commit_ready() {
+					(axum::http::StatusCode::OK, "ready\n")
+				} else {
+					(axum::http::StatusCode::SERVICE_UNAVAILABLE, "not ready\n")
+				}
+			}),
+		)
 		.merge(protected);
 	let addr = bind_addr
 		.parse::<std::net::SocketAddr>()
 		.map_err(|e| anyhow::anyhow!("Invalid bind address '{}': {}", bind_addr, e))?;
 
+	if auth_required && !addr.ip().is_loopback() {
+		anyhow::bail!("runtime HTTP must bind a loopback address");
+	}
 	let tcp_listener = tokio::net::TcpListener::bind(&addr)
 		.await
 		.map_err(|e| anyhow::anyhow!("Failed to bind to {}: {}", addr, e))?;
@@ -242,8 +259,7 @@ async fn run_http_server(
 		.await;
 
 	// Same orphan cleanup as STDIO shutdown. Durable runtime jobs are unaffected.
-	mcp::fs::shell::kill_all_shell_children();
-	mcp::runtime::pty::close_all_ptys();
+	mcp::runtime::shutdown_request_scoped().await;
 
 	Ok(())
 }

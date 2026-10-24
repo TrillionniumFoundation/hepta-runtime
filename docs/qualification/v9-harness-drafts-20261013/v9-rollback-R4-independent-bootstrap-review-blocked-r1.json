@@ -1,0 +1,30 @@
+{
+  "schema": "hepta-v9-rollback-bootstrap-independent-source-review-v1",
+  "reviewed_harness": "/home/qian-qi/hepta-runtime-v9-ledger-rollback-drafts-20261013/tests/dc_functional_v9_rollback_ledger_host_acceptance.py",
+  "reviewed_sha256": "92d01b409825d69e6bcca6a68e6fff3898dd632b37aa766a83952d05f20423ec",
+  "reviewers": [
+    "/root/audit_effects",
+    "/root/audit_effects/v9_source_review"
+  ],
+  "accepted_for_enable": false,
+  "blocking_findings": [
+    {
+      "priority": "P1",
+      "kind": "evidence-input-seal-gap",
+      "source": "tests/dc_successor_contract.py:65-68 calls frozen(8,V8_SHA256); rollback BOOTSTRAP_DEPENDENCIES:37-47/harness_inputs:386-393 omit the V8 JSON",
+      "impact": "A mutation after the final digest-validated baseline load can escape cohort before/after sealed_inputs_stable.",
+      "required_fix": "Add deploy/contracts/hepta-runtime-full-operator-v8.json with exact b64769210b9913fbdab28f7d0e95b7ef300d8710b3f1eeea74afcfac25b08318 SHA to explicit manifest dependency set and before/after seals; freeze new SHA and review again."
+    }
+  ],
+  "accepted_readonly_properties": [
+    "all seven repository Python helper import dependencies covered by explicit source pin map",
+    "self pin, dependency manifest pin and candidate contract pin before repository imports",
+    "source finder compiles SHA-verified current raw bytes and does not trust bytecode cache",
+    "child member argv carries the same manifest/self/contract pins",
+    "dynamic caller-supplied HEAD and compiled source fingerprint gates preserved"
+  ],
+  "harness_source_modified": false,
+  "actual_CI_native_HTTP_SSH_rollback_run": false,
+  "full_DC_replacement_qualified": false,
+  "DC_rescue_modified": false
+}

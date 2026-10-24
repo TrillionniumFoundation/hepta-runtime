@@ -1,0 +1,73 @@
+{
+  "schema": "hepta-dc-functional-gate-adversarial-audit-v1",
+  "recorded_utc": "2026-10-13T03:31:41.325098+00:00",
+  "baseline_source_head": "b29c9ddb3facc43cd79448a1a0bda95b404ce8ce",
+  "source_head_before_patch_commit": "7b2da3212a8c557da11b9e145a4a58b297bf1cee",
+  "probe_scope": "read-only in-memory counterexample; no ledger, machines, services, credentials, DC or business jobs changed",
+  "reproduction": {
+    "promoted_rows": "all partial/unimplemented rows relabelled bounded with view and an existing bounded model-origin receipt",
+    "positive_cutover_gates": "all six flags set true and all six references reused same old valid-hash bounded receipt",
+    "expected_full_dc_replacement_qualified": false,
+    "before_full_dc_replacement_qualified": true,
+    "before_integrity_problems": [],
+    "after_full_dc_replacement_qualified": false,
+    "after_integrity_problems": [
+      "independent_dc_off_smoke: receipt does not qualify this exact cutover gate and authorized scope",
+      "workflow_restart_recovery: receipt does not qualify this exact cutover gate and authorized scope",
+      "cutover_rollback_drill: receipt does not qualify this exact cutover gate and authorized scope",
+      "audit_and_search_session_gap: receipt does not qualify this exact cutover gate and authorized scope",
+      "privileged_action_policy_review: receipt does not qualify this exact cutover gate and authorized scope",
+      "vendor_specific_retirement_decision: receipt does not qualify this exact cutover gate and authorized scope",
+      "Crosswalk falsely asserts full replacement before evidence gates pass"
+    ],
+    "after_required_workflow_qualification_pending": [
+      "list_devices",
+      "get_tool_result",
+      "list_remote_tool_calls",
+      "ping",
+      "get_config",
+      "read_file",
+      "read_multiple_files",
+      "write_file",
+      "write_pdf",
+      "create_directory",
+      "list_directory",
+      "move_file",
+      "start_search",
+      "get_more_search_results",
+      "stop_search",
+      "list_searches",
+      "get_file_info",
+      "edit_block",
+      "start_process",
+      "read_process_output",
+      "interact_with_process",
+      "force_terminate",
+      "list_sessions",
+      "list_processes",
+      "kill_process",
+      "get_recent_tool_calls"
+    ]
+  },
+  "normal_frozen_ledger_after": {
+    "integrity_problems": [],
+    "categories": {
+      "bounded": 14,
+      "partial": 9,
+      "unimplemented": 3,
+      "vendor_specific": 5
+    },
+    "full_dc_replacement_qualified": false
+  },
+  "validation": {
+    "gate_tests": 12,
+    "gate_tests_passed": 12,
+    "py_compile_exit": 0,
+    "diff_check_exit": 0
+  },
+  "limits": [
+    "Typed evidence semantics are not cryptographic attestation of user approval or machine action.",
+    "No actual DC-off, rollback, six-host business replacement or new functional qualification is claimed.",
+    "Original frozen crosswalk, classifications, source receipt hashes and installed v4 catalog remain unchanged."
+  ]
+}

@@ -1,0 +1,524 @@
+{
+  "schema": "hepta-edge-semantics-qualification-v1",
+  "recorded_at": "2026-10-06T14:08:25.628905+00:00",
+  "scope": "Source-level inode extension and real CRIU experiments; current release intentionally retained after blocked publication command",
+  "base_revision": "3262627c82d91c1604ed6b12b0200481cf6a4e3d",
+  "new_commit_created": false,
+  "new_release_built": false,
+  "new_release_installed": false,
+  "new_hosted_ci_run_claimed": false,
+  "final_observed_installation": {
+    "checked_at": "2026-10-06T14:06:08.453560+00:00",
+    "head": "3262627c82d91c1604ed6b12b0200481cf6a4e3d",
+    "tracked_worktree_status": [
+      " M .github/workflows/operator-parity.yml",
+      " M src/mcp/runtime/binary.rs",
+      " M src/mcp/runtime/binary_file.py",
+      " M src/mcp/runtime/binary_tests.rs",
+      " M src/mcp/server.rs"
+    ],
+    "services": {
+      "hepta-runtime-operator.service": {
+        "MainPID": "1081443",
+        "ExecMainStartTimestamp": "Tue 2026-10-06 20:56:50 CST",
+        "ActiveState": "active"
+      },
+      "desktop-commander-remote.service": {
+        "MainPID": "2959",
+        "ExecMainStartTimestamp": "Tue 2026-10-06 12:04:54 CST",
+        "ActiveState": "active"
+      }
+    },
+    "running_sha256": "12579ee5b6db2657d257153c1eecb5a8a8df4bc34868d2022158f81b23c46a6f",
+    "native_tools": [
+      "batch_edit",
+      "binary_read",
+      "binary_upload",
+      "binary_write",
+      "document_edit",
+      "document_read",
+      "document_render",
+      "document_write",
+      "extract_lines",
+      "file_info",
+      "hardware_snapshot",
+      "host_list",
+      "host_processes",
+      "host_signal",
+      "image_read",
+      "network_inspect",
+      "pdf_edit",
+      "privileged_action",
+      "process_cancel",
+      "process_list",
+      "process_read",
+      "process_start",
+      "process_status",
+      "process_wait",
+      "pty_close",
+      "pty_list",
+      "pty_read",
+      "pty_start",
+      "pty_write",
+      "service_status",
+      "shell_start",
+      "sudo_start",
+      "text_editor",
+      "view",
+      "workdir",
+      "worksheet_edit",
+      "worksheet_recalculate"
+    ],
+    "tool_count": 37,
+    "new_inode_tool_installed": false,
+    "new_pdf_tool_installed": false,
+    "rust_suites": [
+      {
+        "passed": 377,
+        "failed": 0,
+        "ignored": 11
+      },
+      {
+        "passed": 8,
+        "failed": 0,
+        "ignored": 0
+      }
+    ],
+    "python_counts": [
+      4,
+      5,
+      9,
+      12,
+      11,
+      8,
+      5,
+      5,
+      6,
+      11,
+      10,
+      12
+    ],
+    "core_tests_exit": "0",
+    "new_release_exit_exists": false,
+    "new_release_log_exists": false,
+    "complex_worksheet_helper_exists": false
+  },
+  "inode_patch": {
+    "source_implemented": true,
+    "rust_router_integrated_in_worktree": true,
+    "installed_tool": false,
+    "name": "binary_patch_inode",
+    "platform": "Linux",
+    "patch_limit_bytes": 65536,
+    "file_size_changes_supported": false,
+    "requires": [
+      "explicit non-atomic visibility acknowledgement",
+      "transaction identity",
+      "expected stat version and full SHA256",
+      "existing target inode ownership",
+      "explicit preservation option for special permission bits"
+    ],
+    "verified": [
+      "same inode across hard-link aliases and an already-open descriptor",
+      "mode 06750 retained on self-owned fixture",
+      "ACL/xattrs retained",
+      "exact request replay",
+      "partial-write rollback from private fsynced receipt",
+      "actual subprocess exit after data fsync before commit receipt",
+      "conflicting content/link count/rights changes refused",
+      "final symlink refused"
+    ],
+    "unit_tests_passed": 11,
+    "native_protocol_acceptance_script_prepared": true,
+    "native_protocol_acceptance_executed": false,
+    "limits": [
+      "noncooperating readers can observe intermediate bytes",
+      "every hardlink alias shares mutation, including aliases outside the requested pathname",
+      "not filesystem-wide atomic compare-and-swap",
+      "immutable/executable-capability flags still refused",
+      "no sudoers/PAM entitlement added"
+    ]
+  },
+  "criu": {
+    "version": "4.2.1",
+    "source_commit": "9539417f3e3cfa4eb84c319cd71f4d52f1f08645",
+    "binary_sha256": "773ebe0534f7934e93ff208819c76e326b773be5e265a8b41e931ca4a196523f",
+    "target": "x230-ts",
+    "binary_path": "/home/qian/.local/src/hepta-criu-4.2.1-20261006/criu/criu",
+    "build_and_kernel_check_passed": true,
+    "build_warning": "no libnftables support; no TCP/network restoration claim",
+    "deployment_changes": "12 additive official-distribution build dependencies, no upgrades/removals; versioned source checkout/build. No kernel/sysctl/PAM policy change or system-wide CRIU replacement.",
+    "memory_and_anonymous_pipe": {
+      "complete": true,
+      "fixture_root": "/home/qian/hepta-criu-memory-pipe-2wzspjqk",
+      "criu_binary_sha256": "773ebe0534f7934e93ff208819c76e326b773be5e265a8b41e931ca4a196523f",
+      "criu_binary": "/home/qian/.local/src/hepta-criu-4.2.1-20261006/criu/criu",
+      "real_process_memory_dumped": true,
+      "application_checkpoint_code": false,
+      "host_policy_changed": false,
+      "cloud_tested": false,
+      "started_uid": 1000,
+      "before": {
+        "pid": 105319,
+        "uid": 1000,
+        "nonce_sha256": "f2b83a372f58389e88fbe3380d3448f7e7c44782983f25ba1a839fd01e9ef92d",
+        "pipe_sha256": "f60cfee04d4bba2fb26afd7bc38d7b3452c2c81621c6862c391657207b44c7a3",
+        "memory_value": 57642401
+      },
+      "log_prefix_sha256": "d9c3ec5843c2efd737db231d1073d01a8e20fb9fdcebc8f66fb9fac97b04f3c4",
+      "dump": {
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "original_process_terminal_returncode": -9,
+      "restore": {
+        "exit_code": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      "after": {
+        "pid": 105319,
+        "uid": 1000,
+        "nonce_sha256": "f2b83a372f58389e88fbe3380d3448f7e7c44782983f25ba1a839fd01e9ef92d",
+        "pipe_sha256": "f60cfee04d4bba2fb26afd7bc38d7b3452c2c81621c6862c391657207b44c7a3",
+        "memory_value": 57642401
+      },
+      "same_pid": true,
+      "random_memory_identity_preserved": true,
+      "unread_anonymous_pipe_preserved": true,
+      "existing_stdout_file_offset_preserved": true,
+      "application_started_once": true,
+      "no_business_process_touched": true,
+      "restore_was_same_host": true,
+      "dc_live_external_pipes_tested": false
+    },
+    "external_pipe_remap": {
+      "complete": true,
+      "fixture_root": "/home/qian/hepta-criu-external-pipes-ibsv8it9",
+      "criu_sha256": "773ebe0534f7934e93ff208819c76e326b773be5e265a8b41e931ca4a196523f",
+      "application_checkpoint_code": false,
+      "business_processes_modified": false,
+      "dc_external_pipes_claimed": false,
+      "ready": {
+        "event": "READY",
+        "pid": 105328,
+        "uid": 1000,
+        "hash": "7530b0b10ca300daa74201b0de43262ea7856ac1552adc7842a76bd83de14144",
+        "count": 0
+      },
+      "before": {
+        "event": "VALUE",
+        "pid": 105328,
+        "uid": 1000,
+        "hash": "7530b0b10ca300daa74201b0de43262ea7856ac1552adc7842a76bd83de14144",
+        "count": 17
+      },
+      "original_resources": {
+        "0": "pipe:[6052102]",
+        "1": "pipe:[6052103]"
+      },
+      "dump": {
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "restore": {
+        "exit_code": 0
+      },
+      "after": {
+        "event": "VALUE",
+        "pid": 105328,
+        "uid": 1000,
+        "hash": "7530b0b10ca300daa74201b0de43262ea7856ac1552adc7842a76bd83de14144",
+        "count": 22
+      },
+      "same_pid": true,
+      "same_random_memory": true,
+      "previously_consumed_input_state_preserved": true,
+      "new_external_stdin_stdout_operational": true,
+      "parent_buffers_drained_before_handoff": true,
+      "old_input_not_replayed": true,
+      "new_stream_endpoint_mapping_explicit": true,
+      "host_policy_changed": false
+    },
+    "failed_attempts_retained": {
+      "initial_memory_harness": {
+        "complete": false,
+        "fixture_root": "/home/qian/hepta-criu-memory-pipe-z6_l0042",
+        "criu_binary_sha256": "773ebe0534f7934e93ff208819c76e326b773be5e265a8b41e931ca4a196523f",
+        "criu_binary": "/home/qian/.local/src/hepta-criu-4.2.1-20261006/criu/criu",
+        "real_process_memory_dumped": true,
+        "application_checkpoint_code": false,
+        "host_policy_changed": false,
+        "cloud_tested": false,
+        "started_uid": 1000,
+        "before": {
+          "pid": 97176,
+          "uid": 1000,
+          "nonce_sha256": "e81170daf3aa6ad3757596b1c54464b79f5a19d2f228922350cf127d5fec52e9",
+          "pipe_sha256": "0b35da3b4d326b803c133f435cd44f0a45f6156ff39b0033295a9645df90f8e9",
+          "memory_value": 63185701
+        },
+        "log_prefix_sha256": "dcd433c59ea11898b66d94fc65d7d2cf817854f39854a79c94cb33f4d683e670",
+        "dump": {
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "original_process_terminal_returncode": -9,
+        "restore": {
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        }
+      },
+      "same_memory_checkpoint_reconciled": {
+        "complete": true,
+        "fixture_root": "/home/qian/hepta-criu-memory-pipe-z6_l0042",
+        "criu_binary_sha256": "773ebe0534f7934e93ff208819c76e326b773be5e265a8b41e931ca4a196523f",
+        "criu_binary": "/home/qian/.local/src/hepta-criu-4.2.1-20261006/criu/criu",
+        "real_process_memory_dumped": true,
+        "application_checkpoint_code": false,
+        "host_policy_changed": false,
+        "cloud_tested": false,
+        "started_uid": 1000,
+        "before": {
+          "pid": 97176,
+          "uid": 1000,
+          "nonce_sha256": "e81170daf3aa6ad3757596b1c54464b79f5a19d2f228922350cf127d5fec52e9",
+          "pipe_sha256": "0b35da3b4d326b803c133f435cd44f0a45f6156ff39b0033295a9645df90f8e9",
+          "memory_value": 63185701
+        },
+        "log_prefix_sha256": "dcd433c59ea11898b66d94fc65d7d2cf817854f39854a79c94cb33f4d683e670",
+        "dump": {
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "original_process_terminal_returncode": -9,
+        "restore": {
+          "exit_code": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "after": {
+          "pid": 97176,
+          "uid": 1000,
+          "nonce_sha256": "e81170daf3aa6ad3757596b1c54464b79f5a19d2f228922350cf127d5fec52e9",
+          "pipe_sha256": "0b35da3b4d326b803c133f435cd44f0a45f6156ff39b0033295a9645df90f8e9",
+          "memory_value": 63185701
+        },
+        "same_pid": true,
+        "random_memory_identity_preserved": true,
+        "unread_anonymous_pipe_preserved": true,
+        "existing_stdout_file_offset_preserved": true,
+        "application_started_once": true,
+        "no_business_process_touched": true,
+        "restore_was_same_host": true,
+        "dc_live_external_pipes_tested": false,
+        "initial_harness_failure": "root-owned restored PID file was not readable without existing sudo",
+        "original_report_sha256": "7e41d64afa966b6035b3358ba6681f9b8e581740c75ead9e6df52818fc1d6709"
+      },
+      "initial_external_restore": {
+        "complete": false,
+        "fixture_root": "/home/qian/hepta-criu-external-pipes-913xwgk0",
+        "criu_sha256": "773ebe0534f7934e93ff208819c76e326b773be5e265a8b41e931ca4a196523f",
+        "application_checkpoint_code": false,
+        "business_processes_modified": false,
+        "dc_external_pipes_claimed": false,
+        "ready": {
+          "event": "READY",
+          "pid": 100932,
+          "uid": 1000,
+          "hash": "c8d86d5795e88c17e8cfdfefe2800859d129280d01cc0d424d09e4da61011adf",
+          "count": 0
+        },
+        "before": {
+          "event": "VALUE",
+          "pid": 100932,
+          "uid": 1000,
+          "hash": "c8d86d5795e88c17e8cfdfefe2800859d129280d01cc0d424d09e4da61011adf",
+          "count": 17
+        },
+        "original_resources": {
+          "0": "pipe[6007669]",
+          "1": "pipe[6007670]"
+        },
+        "dump": {
+          "exit_code": 0,
+          "stderr": ""
+        },
+        "restore": {
+          "exit_code": 1
+        }
+      },
+      "same_external_checkpoint_successful_reconciliation": {
+        "complete": true,
+        "original_report_sha256": "5db8cbf955124600ec6184ec0a273ced4c7f69394cb659b2575c311a7855ef0c",
+        "source_report": {
+          "complete": false,
+          "fixture_root": "/home/qian/hepta-criu-external-pipes-913xwgk0",
+          "criu_sha256": "773ebe0534f7934e93ff208819c76e326b773be5e265a8b41e931ca4a196523f",
+          "application_checkpoint_code": false,
+          "business_processes_modified": false,
+          "dc_external_pipes_claimed": false,
+          "ready": {
+            "event": "READY",
+            "pid": 100932,
+            "uid": 1000,
+            "hash": "c8d86d5795e88c17e8cfdfefe2800859d129280d01cc0d424d09e4da61011adf",
+            "count": 0
+          },
+          "before": {
+            "event": "VALUE",
+            "pid": 100932,
+            "uid": 1000,
+            "hash": "c8d86d5795e88c17e8cfdfefe2800859d129280d01cc0d424d09e4da61011adf",
+            "count": 17
+          },
+          "original_resources": {
+            "0": "pipe[6007669]",
+            "1": "pipe[6007670]"
+          },
+          "dump": {
+            "exit_code": 0,
+            "stderr": ""
+          },
+          "restore": {
+            "exit_code": 1
+          }
+        },
+        "restore_exit_code": 0,
+        "attempt": "8a98226ce169",
+        "after": {
+          "event": "VALUE",
+          "pid": 100932,
+          "uid": 1000,
+          "hash": "c8d86d5795e88c17e8cfdfefe2800859d129280d01cc0d424d09e4da61011adf",
+          "count": 22
+        },
+        "same_pid": true,
+        "same_random_memory": true,
+        "previously_consumed_input_state_preserved": true,
+        "new_external_stdin_stdout_operational": true,
+        "checkpoint_reused_not_application_restarted": true,
+        "business_processes_modified": false,
+        "dc_external_pipes_claimed": false,
+        "diagnosis": "CRIU consumes inherited fd references; duplicated stdio before restore and matched exact CRIU pipe:[inode] resource spelling from pinned pipes.c"
+      },
+      "diagnosis": [
+        "root-owned CRIU PID file required existing sudo read",
+        "inherited descriptors must be duplicated rather than consuming fd 0/1",
+        "exact resource label is pipe:[inode] in pinned CRIU source",
+        "pidfile must be unique per restore attempt"
+      ]
+    },
+    "clean_final_independent_retest": true,
+    "fixture_exit_check": {
+      "boot_id": "0560577c-8576-4368-9cce-67df4b2abe07",
+      "fixture_processes": {
+        "97176": {
+          "exists": false
+        },
+        "100932": {
+          "exists": false
+        },
+        "105319": {
+          "exists": false
+        },
+        "105328": {
+          "exists": false
+        }
+      },
+      "criu": "versioned test installation retained; image bytes not exported"
+    },
+    "native_arbitrary_process_migration_tool_installed": false,
+    "dc_actual_unknown_live_buffers_migrated": false,
+    "scope_limit": "Same-host Linux ordinary Python fixtures without application checkpoints; explicit drained external stream endpoints. No universal GUI/GPU/socket/namespace/cross-host equivalence.",
+    "memory_images_retained_privately": true,
+    "memory_images_exported": false
+  },
+  "protected_pdf": {
+    "prototype_written": true,
+    "standalone_tests_passed": 7,
+    "compiled_or_registered_as_mcp_tool": false,
+    "installed": false,
+    "verified": [
+      "real detached CMS signature integrity with synthetic self-signed certificates",
+      "tampering detected",
+      "original bytes preserved as prefix during explicitly unsigned incremental metadata revision",
+      "AES-256 password-file encryption",
+      "owner-authorized decryption to distinct copy",
+      "user password cannot change protection",
+      "private password files and generic nonsecret errors",
+      "stale/create-only rejection"
+    ],
+    "trust_limit": "Signature byte integrity is not certificate trust/revocation/DocMDP evaluation, nor does an old signature sign the newly appended revision.",
+    "blocker": "The document registration/integration tool call was rejected by the session safety check; not retried by another route."
+  },
+  "complex_excel": {
+    "new_helper_written": false,
+    "new_capabilities_installed": false,
+    "existing_calculation_implementation_unchanged": true,
+    "blocker": "The proposed complex-model helper write was rejected before execution; not retried."
+  },
+  "physical_power_and_controller_reboot": {
+    "new_reboot_performed": false,
+    "cold_power_cycle_performed": false,
+    "controller_reboot_performed": false,
+    "observed": "Initial controller inspection showed active cargo/rustc and interactive business workloads. ROG-to-controller alias resolution failed. X230 RTC wake is exposed and WOL supports magic packets but is disabled. No independent power-return route was verified.",
+    "power_connector_discovery": "Search found no applicable connected BMC/PDU power-control integration; unrelated suggested services were not installed.",
+    "scope_limit": "RTC capability or prior systemd reboot is not evidence of G3 AC/battery power cycling; no poweroff or alarm change performed."
+  },
+  "local_regression": {
+    "rust_passed": 385,
+    "rust_ignored": 11,
+    "python_core_passed": 98,
+    "pdf_prototype_tests_separate": 7,
+    "strict_clippy": "passed",
+    "rustfmt": "passed"
+  },
+  "publication_blocker": "The combined commit/push/release command was rejected before execution. No retry via another command or connector was performed. No new revision or release log exists and the old 37-tool service remains running.",
+  "untouched": [
+    "Desktop Commander main service/configuration",
+    "hepta-runtime installed executable/unit/parser configuration",
+    "business processes and documents",
+    "host sudoers/PAM/sysctl",
+    "cloud/tunnel/ChatGPT workspace configuration",
+    "existing MCP token and SSH identities"
+  ],
+  "source_manifest_sha256": {
+    ".github/workflows/operator-parity.yml": "63ad17f5ad6b6c60312d1c86d040aaa54479fbd92141ce6c93c8b07bec823c84",
+    "src/mcp/runtime/binary.rs": "9a4291a886f0cc39bd4756dadc36554b0ea22de0abc995e544926ed7573c865e",
+    "src/mcp/runtime/binary_file.py": "6e6ab09cf83e2d5b422f54935f12da1f2be5ccb867054e38022ec8d80c0d70a3",
+    "src/mcp/runtime/binary_tests.rs": "6e1d5032b3cfbeb42602671509d4fce9342277a08c9d14889d09ef01a27445e8",
+    "src/mcp/runtime/inode_patch.py": "c005aacc833ece08a862f74430d7d97cf93f2d7b413bcaa955f663f20d4f4e46",
+    "src/mcp/server.rs": "8c987733075f018e5ba9cc207f4453de1ef152c545649afed22b8ff14b8ab6bf",
+    "src/mcp/runtime/pdf_security.py": "96360cd333f2105022a4e48f9744836accd52ca75886b9450ed4707b9bcd5865",
+    "tests/inode_patch_tests.py": "443b1231aa57dc06833743fc9a8806ccaa6dda55484cde132d6b44faf0b626d2",
+    "tests/native_inode_acceptance.py": "9030965b3506e9b8e3bede9e4abd0306e9252537219496ecde64bcf518c02402",
+    "tests/pdf_security_prototype_tests.py": "ba7456b8c0031c93e6578d4e271aef61c4dec6f4a4c70a4dc18abad83a41683d",
+    "tests/criu_memory_pipe_acceptance.py": "8fa872402db6ae33122c018fa37f92a97519148ce0fc9be3244789081f818dc8",
+    "tests/criu_external_pipe_acceptance.py": "f80cc706d2f20e4c7d1c2377ffb050416f980741b27b1978e03731c4274bd9d6",
+    "tests/criu_external_reconcile.py": "ee5059e2c8d8378311cdec7adb18d9e3c59f851a95c915434db531d3f92abf0a",
+    "docs/EDGE_SEMANTICS.md": "9ff170303e1132efa27668bf39235d20aa224488f78d67b7d6098474e64a115b"
+  },
+  "receipt_sha256": {
+    "edge-preflight.json": "3c1599342ec776879a75ec4f53f31260a6dcabf7279330117d6d2f337944430d",
+    "edge-qualified-tests.log": "441b81b98cd8b0fcac9ee241aa6e6d06b3ecee2a675e4e293086f33d02ff32d0",
+    "edge-inode-validated.log": "005dd48411b6d87abd904688360af814f950bc3aa32831f4ab675de86a798e29",
+    "edge-pdf-prototype-validated.log": "cd0924c846ef85faf55f2684a88726be29eb1eb6928d80fa521c4e33dd1ae518",
+    "edge-criu-upstream-tag.txt": "ecc6253e131f80ad442835178368054b1b6dc31cad5c0fd0340f48303d1b2d37",
+    "edge-criu-build.log": "4acae5b46ed283eb51c588456fd4cfc804605d91b1181a1a540d05dea4e125e7",
+    "edge-criu-acceptance.json": "7e41d64afa966b6035b3358ba6681f9b8e581740c75ead9e6df52818fc1d6709",
+    "edge-criu-reconciled.json": "33bd3c4aad77291b37707aa2ebeab5525e07ab40523bd066709214997e1e797c",
+    "edge-criu-external.json": "5db8cbf955124600ec6184ec0a273ced4c7f69394cb659b2575c311a7855ef0c",
+    "edge-criu-external-reconciled.json": "4a92053b825b075b3cbdc120ac465d82db4173fb3f0adf13a094f5eef0f016cb",
+    "edge-criu-external-reconciled-v2.json": "58da8b537bb0c39bd51de14a6e3bf84063f5321b905c3a66fea9c007fc017e13",
+    "edge-criu-external-reconciled-v3.json": "b6dcc4b6aa44dee86905d8288369477ea0d074cdf581549eb3a436ca17c88756",
+    "edge-criu-memory-final.json": "8d805e195c1446f336b3be0e0bc852c27f73f6e359d96bae3be82310466d4ac7",
+    "edge-criu-external-final.json": "5b03c07568d85fca9da844877a52d8f6c89b0b3ae759a6e42c69cc40df6cd84c",
+    "edge-criu-final-cleanup-check.json": "1fc684b2838136e2c7ec593dff9843b40ed60809591da0a0dd8d41d5a40632be",
+    "edge-final-state.json": "ecebdc017fedaae4315664906e3d834472e0c4c37806ae68ac8e9670c9d66cf3"
+  }
+}

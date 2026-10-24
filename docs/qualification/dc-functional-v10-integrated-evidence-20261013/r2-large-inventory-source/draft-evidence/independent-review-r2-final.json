@@ -1,0 +1,125 @@
+{
+  "schema": "hepta-large-jobs-only-adapter-independent-audit-v2",
+  "review_id": "20261013-r2-final",
+  "reviewer": "independent token_reader_review subagent",
+  "scope": {
+    "draft_root": "/home/qian-qi/hepta-successor-inventory-integration-drafts-20261013-r1",
+    "adapter_source_sha256": "7bfcf63208db6992fd31bd398caf4fb5635e5f8253803b1141f71bd0d2d7fb61",
+    "adapter_tests_sha256": "d4c7ec13ba794ef02e0bc3e7f3aa7f5c864947dae912efda8ec9ffbfad9e6d8c",
+    "module_source_sha256": "a198944235a8b71763a612d077bf41c8915028487beb96888da003868e24e5c9",
+    "module_tests_sha256": "3e0431497a23d56b5f8aeb81c4035173a819134ca44cae48d802b9972849876f",
+    "hash_provenance": "Exact source/test pins read from controlled-source-manifest-r2.json and tests-report-r2.json; reviewer did not independently recompute file hashes.",
+    "tests_report_sha256_parent_file_info": "014e9918e0887a92c35240020ba04e6bafb895812076d9414b01c216152d1669",
+    "reviewed_R2_blocks": [
+      "strict limit helper415-422",
+      "wrapper425-473",
+      "prepare upfront903-910 and branch1016-1025",
+      "report1090-1092",
+      "publish observer guard1172-1177",
+      "CLI1226-1228",
+      "new root-review regressions1769-1843"
+    ],
+    "module_internal_security_audit": "Separate root responsibility; this review did not repeat the full824-line module audit. It checked relevant pinned constants and fresh module55 evidence."
+  },
+  "supersession": {
+    "R1_accepted_as_final": false,
+    "prior_independent_R1_acceptance": "withdrawn",
+    "R1_source_sha256": "fc231f525e22ec85bb8e73b173b6632019bcc9d4d3831d0d972370fde854cd43",
+    "R1_tests_sha256": "7b3ec840cc3e6f43a976e254312bb2bb62961adbbe2e02005a7f98dc282dcb8d",
+    "reason": "The prior review treated validated input as a wrapper precondition and missed required standalone no-token-hash enforcement and upfront strict requested RPC limit validation. Root identified two real defects after R1 tests passed.",
+    "root_rejection_receipt_read": "evidence/r1-root-review-rejection.json",
+    "R1_source_tests_raw_results_retained": true,
+    "R1_acceptance_inherited_into_R2": false,
+    "R2_acceptance_basis": "New R2 source and test pins, direct read-only verification of both corrections and regression implementations, and independently read fresh R2 raw execution evidence."
+  },
+  "outcome": {
+    "status": "accepted_for_R2_adapter_scope_with_pinned_module_dependency",
+    "blocking_findings": 0,
+    "unresolved_findings": 0,
+    "production_inventory_qualified": false,
+    "full_DC_replacement_qualified": false,
+    "cutover_or_admin_authorization": false
+  },
+  "resolved_root_findings": [
+    {
+      "code": "TOKEN_CONTRACT_READ_BEFORE_ALIAS_GUARD",
+      "severity": "High",
+      "status": "accepted_and_fixed_in_R2",
+      "R1_evidence": "Standalone wrapper called S.read_pinned on a supplied contract role before refusing token identity; direct credential path could be read and hashed before a wrongSHA was rejected.",
+      "R2_source_evidence": "Wrapper431 calls refuse_token_source(contract_pin.path, token_path) before credential_inode432 and content-reading/hashing S.read_pinned433.",
+      "R2_regression_evidence": "test_contract_token_path_and_alias_refused_before_any_content_hash covers direct path and same-inode hardlink alias with badSHA. It traps S.read_pinned, S.snapshot, P.digest, shared hashlib.sha256, credential_inode and HTTP client construction; all must remain uncalled. Owned fixture bytes/mode are preserved and link count returns1.",
+      "execution": "Fresh new12 and full94 raw logs endOK. No actual installed token was exercised."
+    },
+    {
+      "code": "REQUESTED_RPC_LIMIT_CLIPPED_NOT_REFUSED",
+      "severity": "Medium",
+      "status": "accepted_and_fixed_in_R2",
+      "R1_evidence": "Deadline.timeout could clamp a request above30; injected inventory probes bypassed later real-observer validation and accepted an out-of-range request.",
+      "R2_source_evidence": "Helper415-422 explicitly rejects bool/non-numeric/nonfinite and requests outside0<timeout<=MAX_RPC_SECONDS before Deadline.timeout. Pinned MAX_RPC_SECONDS was independently read as30.0. Wrapper428 and prepare905-910 validate before credential/contract/stage/probe work; branch1020 revalidates before observer invocation.",
+      "R2_regression_evidence": "test_invalid_rpc_timeout_refused_upfront_for_injected_and_real_observers covers0,-1,30.0001,31,NaN,+Inf,-Inf,True,False and string. Both entries must reject with stage, credentials, token reader, content/hash, HTTP and injected service/inventory/process probes all uncalled. Exact30 is accepted without clipping, forwarded to client and observer, and subsequent publication timeout drift is rejected without writes.",
+      "execution": "Fresh new12 and full94 raw logs endOK."
+    }
+  ],
+  "other_R2_adapter_boundaries": [
+    "Legacy remains CLI/getattr default. Module imports remain inside named branch/helper; legacy retains original4096-row sanitizer and observer.",
+    "Named mode uses pinned module sanitizer with16384 cap; jobs-only output keeps PTY/stream/dispatch incomplete and retainsHOLD. Pinned constants MAX_RECORDS16384 and MAX_BUDGET_SECONDS300.0 were read.",
+    "Contract tools/list guard compares typed complete definitions by unique tool name, refuses duplicates and non-null pagination, then requires exactly six unique fixed logical host names before returning each factory client for process work.",
+    "Factory supplies existing auditedP.read_private_token, expected credential identity, shared deadline and requested valid RPC timeout; guard failures close client.",
+    "Prepared pins bind observer mode/budget/timeout and publish compares all three canonically before output writes.",
+    "No new cancellation, service control, candidate execution, live configuration update, Refresh or admission-freeze authority is exposed."
+  ],
+  "fresh_R2_offline_evidence": {
+    "parent_reported_authoritative_job": "1a137aa727a-b2f-b20",
+    "report": "evidence/tests-report-r2.json",
+    "all_four_cohort_exit_codes": 0,
+    "six_input_before_after_pins_equal": true,
+    "source_inputs_stable": true,
+    "new_adapter_methods": 12,
+    "new_root_review_regressions": 3,
+    "full_preflight_methods": 94,
+    "new12_subset_of_full94": true,
+    "stage_methods": 26,
+    "separate_module_methods": 55,
+    "independently_read_raw_evidence": [
+      {
+        "file": "new-adapter-fixtures-r2.stderr.log",
+        "result": "Ran12 tests in3.030s; OK",
+        "sha256_from_report": "72299ca77d8ab524b11fbe34457e3aca6acfdc23f91e159d29f65bbb6862dedc"
+      },
+      {
+        "file": "full-preflight-regression-r2.stderr.log",
+        "result": "Ran94 tests in18.287s; OK",
+        "sha256_from_report": "00ef5424f7c071fd9b22dc805a714b1ac62a1b7bd2296de2ca9740aa9ebb2cec"
+      },
+      {
+        "file": "full-stage-regression-r2.stderr.log",
+        "result": "Ran26 tests in3.948s; OK",
+        "sha256_from_report": "166ea7bc8ad5397b5118d57c9b1c01fb8bc4b6dfb650168da788aa361a34b80c"
+      },
+      {
+        "file": "module-run-main-r2/summary.json and raw_unittest.txt",
+        "result": "Ran55 tests; OK; failures0/errors0; exact module/test pins stable",
+        "raw_sha256_from_summary": "8de34b54659bb088b3c4cc062ba33cb055886c8a204e3e9fb487b1a82c57c9e1"
+      }
+    ],
+    "original91_AST_unchanged": "Read from parent-produced R2 source/test evidence; reviewer did not execute AST comparison.",
+    "reviewer_executed_tests": false,
+    "interpretation": "Passing synthetic offline methods validate regression behavior only. Literal tool count and passing test count are not production inventory, full DC replacement, business acceptance, administrator approval or cutover qualification."
+  },
+  "limits": [
+    "Module internals remain separately audited root responsibility. Adapter review covers wiring, corrected entry guards and fresh evidence rather than claiming a repeated full module audit.",
+    "Token contract path/inode refusal is placed before content work but is not an atomic security boundary against arbitrary same-UID or privileged concurrent pathname replacement.",
+    "PTY pagination, streams, dispatch visibility and admission freeze remain incomplete andHOLD.",
+    "Exact definitions and fixed logical host names establish compatibility, not actual endpoint/target health or business replacement qualification.",
+    "No actualR4 production inventory or legacy4096-bound HOLD outcome was independently inspected in this review.",
+    "Actual server HTTP behavior, production inventory and same-UID adversarial writers remain untested according to fresh module summary."
+  ],
+  "reviewer_actions": {
+    "source_changes": [],
+    "artifact_writes": [],
+    "runtime_execution": [],
+    "actual_token_profile_state_access": [],
+    "actual_HTTP_SSH": [],
+    "final_receipt_delivery": "Complete R2 JSON collaboration message for parent create-only sealing."
+  }
+}

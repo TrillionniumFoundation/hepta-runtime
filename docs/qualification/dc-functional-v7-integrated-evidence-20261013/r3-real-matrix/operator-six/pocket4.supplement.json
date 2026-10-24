@@ -1,0 +1,146 @@
+{
+  "schema": "hepta-dc-v6-operator-supplement-v1",
+  "host": "pocket4",
+  "origin": "native_python_mcp_client",
+  "binary_sha256": "ceaac31a52ab981d8f0b6f003481ea6607ed50685b3ad493a4743671c954f51d",
+  "contract_sha256": "8ad53842e4aa41bbd1567ed99e956088baafea108b6fb0b9a8df979c72c794cc",
+  "checks": [
+    {
+      "check": "exact reviewed v6 catalog and unchanged original 50 definitions",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "real Unicode stdin and independent exact stdout/stderr byte cursors",
+      "result": "passed",
+      "detail": {
+        "job_id": "1a1362b1cf7-736eb-1",
+        "stdout_bytes": 20,
+        "stderr_bytes": 20
+      }
+    },
+    {
+      "check": "owned disposable job cancellation and retained actual output",
+      "result": "passed",
+      "detail": {
+        "job_id": "1a1362b5f38-736eb-2",
+        "terminal_state": "cancelled"
+      }
+    }
+  ],
+  "complete": true,
+  "dispatch_phase": "process_read",
+  "dispatch_params": {
+    "host": "operator",
+    "job_id": "1a1362b5f38-736eb-2"
+  },
+  "cancel_launch": {
+    "audit_recorded": true,
+    "job": {
+      "args": [
+        "-c",
+        "import time;print('CANCEL_READY',flush=True);time.sleep(90)"
+      ],
+      "created_unix_ms": 1791910174520,
+      "cwd": "/tmp/hepta-operator-canary-6080beef86e94be5b0ca23895ccf94d7",
+      "env_keys": [],
+      "executable": "/usr/bin/python3",
+      "execution_mode": "operator",
+      "host": "operator",
+      "id": "1a1362b5f38-736eb-2",
+      "idempotency_key": null,
+      "launch_error": null,
+      "launch_state": "launched",
+      "remote_job_dir": "/tmp/hepta-operator-canary-6080beef86e94be5b0ca23895ccf94d7/jobs/1a1362b5f38-736eb-2",
+      "request_digest": "e6c97515e4d3d389ff08c905e4ebd4e1716e94c1f6b68f4c6f4fbd2abc3c5e9e",
+      "request_fingerprint": 16629951835936117641,
+      "ssh_target": "pocket4",
+      "system_jobctl": false,
+      "unit": "hepta-runtime-job-1a1362b5f38-736eb-2"
+    },
+    "launch": {
+      "backend": "systemd",
+      "launcher_pid": null,
+      "ok": true,
+      "unit": "hepta-runtime-job-1a1362b5f38-736eb-2"
+    },
+    "local_record_pending": false,
+    "reused": false
+  },
+  "cancel_pre_status": {
+    "audit_recorded": true,
+    "backend": "systemd",
+    "job_id": "1a1362b5f38-736eb-2",
+    "state": "running",
+    "systemd": {
+      "ActiveState": "active",
+      "Description": "Hepta Runtime job 1a1362b5f38-736eb-2 fbfb4e67ce0e9fdfa8b90679ef4b8fc5",
+      "ExecMainCode": "0",
+      "ExecMainPID": "177853",
+      "ExecMainStatus": "0",
+      "InvocationID": "861498f3213e463da42d44b09a645467",
+      "LoadState": "loaded",
+      "Result": "success",
+      "SubState": "running"
+    }
+  },
+  "cancel_response": {
+    "atomic_identity": true,
+    "audit_recorded": true,
+    "automatic_retry": false,
+    "job_id": "1a1362b5f38-736eb-2",
+    "reconcile_via": "process_status",
+    "result": "stop_requested",
+    "supervisor_pid": 177853,
+    "termination_confirmed": false
+  },
+  "cancel_terminal_status": {
+    "at_unix_ms": 1791910176177,
+    "audit_recorded": true,
+    "cancelled": true,
+    "exit_code": -15,
+    "job_id": "1a1362b5f38-736eb-2",
+    "log_bytes": {
+      "stderr": {
+        "seen": 0,
+        "stored": 0
+      },
+      "stdout": {
+        "seen": 13,
+        "stored": 13
+      }
+    },
+    "log_errors": {
+      "stderr": null,
+      "stdout": null
+    },
+    "log_truncated": {
+      "stderr": false,
+      "stdout": false
+    },
+    "output_complete": true,
+    "state": "cancelled",
+    "timed_out": false
+  },
+  "cancel_retained_output": {
+    "audit_recorded": true,
+    "job_id": "1a1362b5f38-736eb-2",
+    "stderr": {
+      "bytes_hex": "",
+      "eof": true,
+      "next_offset": 0,
+      "offset": 0,
+      "size": 0,
+      "text": ""
+    },
+    "stdout": {
+      "bytes_hex": "43414e43454c5f52454144590a",
+      "eof": true,
+      "next_offset": 13,
+      "offset": 0,
+      "size": 13,
+      "text": "CANCEL_READY\n"
+    }
+  },
+  "passed": 3
+}

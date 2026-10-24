@@ -1,0 +1,126 @@
+{
+  "schema": "hepta-preflight-token-reader-independent-review-v1",
+  "review_id": "20261013-r2-final",
+  "reviewer": "independent token_reader_review subagent",
+  "review_mode": "static source audit plus read-only inspection of saved offline test evidence",
+  "scope": {
+    "checkout": "/home/qian-qi/hepta-runtime-dc-functional-20261013",
+    "source": "deploy/preflight_dc_successor.py",
+    "tests": "tests/dc_successor_preflight_tests.py",
+    "source_sha256": "5988336189c17358ff90e476440ee5d6b621ab902c57fb2e2095d8b351e4c808",
+    "tests_sha256": "d0230899f17734e1f375ac658cc15e057d5593d07450a4305b3caa74564330e7",
+    "hash_provenance": "Exact full-file hashes read from parent-produced tests-report-r2.json before/after pins. Reviewer independently read source blocks and evidence files, but did not independently recompute full-file SHA256.",
+    "evidence_directory": "docs/qualification/dc-functional-v9-integrated-evidence-20261013/r24-private-token-reader-source"
+  },
+  "outcome": {
+    "status": "accepted_for_stated_offline_reader_fix",
+    "reader_blocking_findings": 0,
+    "unresolved_findings": 0,
+    "production_qualification": false,
+    "production_preflight_executed_by_reviewer": false,
+    "actual_token_read_by_reviewer": false,
+    "actual_token_hashed_by_reviewer": false,
+    "actual_http_or_ssh_executed_by_reviewer": false
+  },
+  "resolved_findings": [
+    {
+      "id": "TOKEN-REVIEW-R1-001",
+      "severity": "Medium",
+      "category": "test validity",
+      "status": "fixed_and_verified_in_R2",
+      "r1_evidence": "The directory case passed the TemporaryDirectory root itself. Its immediate parent was /tmp, causing PermissionError at parent privacy validation instead of the expected directory-token ValueError. R1 raw logs retained one error in new13 and full60; stage26 passed.",
+      "r2_evidence": "tests lines1131-1134 now create self.root / owned-directory with mode0700 and pass that child. Its immediate parent is the valid private self.root; the intended non-regular credential descriptor check is reachable. R2 new13 and full60 raw stderr summaries both end OK.",
+      "impact": "Original defect was in new fixture coverage and did not demonstrate a reader bypass. No source reader change was required to resolve it."
+    }
+  ],
+  "reader_checks": [
+    {
+      "property": "No credential snapshot, digest, returned metadata or publication",
+      "evidence": "Dedicated reader lines195-247 use S.open_parent, fstat, bounded os.read and stat; no S.snapshot, digest or hashlib call exists. Positive0400/0600 test forbids S.snapshot, P.digest and P.hashlib.sha256."
+    },
+    {
+      "property": "No symlink ancestry",
+      "evidence": "S.open_parent lines46-61 walks from / through O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC directory FDs. Already opened ancestors cannot be redirected by later pathname replacement."
+    },
+    {
+      "property": "Immediate parent validated before credential open",
+      "evidence": "Reader lines199-202 require directory type, uid==os.getuid(), and exact S_IMODE0700 before opening the credential."
+    },
+    {
+      "property": "Credential descriptor flags",
+      "evidence": "Reader lines204-205 use O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK with dir_fd=parent. FIFO fixture records the nonblocking, no-follow and close-on-exec flags."
+    },
+    {
+      "property": "Owner, link, type and mode constraints",
+      "evidence": "The same opened credential FD is validated before and after: ordinary regular file, nlink1, current UID, and exact0400 or0600. Group/other/executable and special permission bits are excluded."
+    },
+    {
+      "property": "Bounded read and preserved format",
+      "evidence": "Initial st_size above512 is refused before content read. Short reads accumulate with aggregate maximum513 bytes; actual byte count must equal initial fstat size and be<=512. ASCII decode then strip preserves the existing1..256 printable-character rule with ordinals33..126."
+    },
+    {
+      "property": "Same-FD stability and post-read name binding",
+      "evidence": "Reader lines225-230 compare before/after FD and post-read no-follow linked name across dev, ino, size, mtime_ns, ctime_ns, uid, nlink and complete mode."
+    },
+    {
+      "property": "Parent FD state stability",
+      "evidence": "Reader lines231-235 compare parent dev, ino, uid and complete mode before and after reading."
+    },
+    {
+      "property": "Cleanup and no credential mutation",
+      "evidence": "Nested finally blocks close credential and parent FDs before decode. The reader contains no write, chmod, chown, rename or unlink operation. Positive0400/0600 fixtures compare inode, bytes, mode and identity metadata before/after."
+    }
+  ],
+  "offline_evidence": {
+    "runner_job_parent_reported": "1a13757c6cc-b2f-8b1",
+    "all_cohort_exit_codes": 0,
+    "new_owned_token_fixture_methods": 13,
+    "full_preflight_methods": 60,
+    "new_methods_are_subset_of_full_preflight": true,
+    "original_preflight_methods": 47,
+    "stage_methods": 26,
+    "reviewer_read_raw_summaries": [
+      {
+        "file": "new-owned-token-fixtures-r2.stderr.log",
+        "result": "Ran 13 tests; OK"
+      },
+      {
+        "file": "full-preflight-regression-r2.stderr.log",
+        "result": "Ran 60 tests; OK"
+      },
+      {
+        "file": "full-stage-regression-r2.stderr.log",
+        "result": "Ran 26 tests; OK"
+      }
+    ],
+    "tests_report_before_after_pins_equal": true,
+    "tests_report_source_inputs_stable": true,
+    "r1_failures_retained": true,
+    "original_test_algorithm_preservation": "Claim read from parent source-manifest.json; reviewer did not independently rerun the AST comparison.",
+    "causal_0400_counterexample": {
+      "file": "owned-0400-original-regression-counterexample.json",
+      "old_reader": "PermissionError",
+      "new_reader": "accepted",
+      "snapshot_digest_sha256_forbidden": true,
+      "owned_fixture_mode_bytes_identity_preserved": true,
+      "reviewer_independently_ran_counterexample": false
+    },
+    "interpretation": "Owned local synthetic fixture evidence supports this reader regression fix. It is not production HTTP, SSH, service inventory, cutover or admission qualification."
+  },
+  "limits": [
+    "S.open_parent rejects symlink traversal but does not establish trusted owner/mode for every ancestor or revalidate the full current pathname after ancestor renames.",
+    "FD pinning, metadata comparisons and the post-read linked-name check are consistency checks, not an atomic snapshot against arbitrary concurrent writers.",
+    "Private ownership is not a security boundary against code under the same UID or higher privilege. Metadata timestamps must not be advertised as a cryptographic content guarantee against such actors.",
+    "Parent timestamps are not compared; exposure-and-restore of parent permissions between checkpoints is outside the guaranteed boundary.",
+    "Neither actual installed credential nor live loopback transport was accessed by this reviewer."
+  ],
+  "reviewer_actions": {
+    "source_mutations": [],
+    "runtime_execution": [],
+    "actual_secret_access": [],
+    "artifact_mutations": [
+      "One create-only R1 independent JSON at /home/qian-qi/hepta-preflight-token-reader-independent-review-20261013-r1.json, after absence verification; no further writes after parent stop instruction"
+    ],
+    "final_receipt_delivery": "Complete JSON delivered by collaboration message for parent create-only persistence."
+  }
+}

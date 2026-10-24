@@ -1,0 +1,119 @@
+{
+  "schema": "hepta-dc-parity-chatgpt-model-origin-comparison-v1",
+  "recorded_at_utc": "2026-10-12T12:27:12.538957+00:00",
+  "source_head": "6c64f0ae882cf04390c1ccc613218e90a1e5bf89",
+  "candidate": {
+    "native_mcp_tool_count": 49,
+    "mutating_tools": 30,
+    "read_only_tools": 19,
+    "frozen_catalog_sha256": "46ca40e8ad33fd817db4f99839e34243669f36454c95b0055e74a50f94ff4953",
+    "file_sha256": "43ff1985c26555ea4e8edbe76031696e5d7e3bf0804b47ce4c75c6c58213e5eb",
+    "unchanged_legacy_46": true,
+    "unchanged_v2_48": true,
+    "three_additions": [
+      "directory_create",
+      "file_move",
+      "text_file_write"
+    ],
+    "native_isolated_mcp_checks_passed": 12,
+    "native_isolated_mcp_checks": [
+      "old 46 and v2 48 definitions unchanged; one additive bounded text operation",
+      "49 native tools discovered; directory/move/text-write annotations truthful",
+      "real MCP directory create and idempotent existing directory",
+      "controller workspace isolation enforced before mkdir",
+      "symlink parent refused without side effects",
+      "same private runtime creates and then atomically moves a regular file",
+      "existing destination not overwritten",
+      "file move refuses symlink source",
+      "both file move endpoints constrained to controller roots",
+      "native bounded UTF-8 create/append/replace with pinned prior hashes",
+      "stale/duplicate publication and external workspace writes refused",
+      "plain text publication refuses symlinked target"
+    ],
+    "native_mcp_receipt_sha256": "9f57d1d26e047f6ad15912aa22c5fb5a2bd01147e22c1ad27a5c72962627db31",
+    "production_native_installed": false,
+    "ChatGPT_originated_candidate_write_calls": false,
+    "modern_mcp_2026_07_28_tools_list_schema_validation": {
+      "count": 49,
+      "schema_errors": 0,
+      "response_bytes": 49486,
+      "hosted_scan_verified": false
+    }
+  },
+  "Desktop_Commander": {
+    "model_origin": true,
+    "device": "qian-qi",
+    "verified_operations": [
+      {
+        "tool": "create_directory",
+        "result": "created unique disposable nested directory"
+      },
+      {
+        "tool": "write_file",
+        "mode": "rewrite",
+        "result": "created UTF-8 text"
+      },
+      {
+        "tool": "write_file",
+        "mode": "append",
+        "result": "appended UTF-8 text; readback confirmed"
+      },
+      {
+        "tool": "write_file",
+        "mode": "rewrite",
+        "result": "replaced file text; readback confirmed"
+      },
+      {
+        "tool": "move_file",
+        "result": "renamed temporary file; source path no longer exists"
+      }
+    ],
+    "first_create_async_receipt_verified": true,
+    "final_file": {
+      "sha256": "e241bf1a4f52372d53a90fe8859043732bab3622418610fa494759ffcd2e8448",
+      "bytes": 15,
+      "mode": "0o664",
+      "old_path_absent": true,
+      "content_verified": "final_snapshot\\n"
+    },
+    "not_claimed": "DC has unrestricted sudo or arbitrary protected operations"
+  },
+  "Hepta_live": {
+    "model_origin_true": [
+      "host_list",
+      "file_info",
+      "stream_handoff_list",
+      "workdir(reset=true)"
+    ],
+    "current_app_tool_count": 46,
+    "new_file_tool_names_in_existing_app": false,
+    "shell_start_model_origin": "blocked by platform safety check",
+    "document_write_model_origin": "blocked by platform safety check",
+    "outstanding_write_gate": "HOLD"
+  },
+  "comparable_semantics": {
+    "directory_create": "candidate native pass; DC model-origin pass",
+    "file_move": "candidate native pass on regular Linux file, no overwrite; DC model-origin pass",
+    "text_file_write": "candidate native UTF-8 create/replace/append pass; DC model-origin pass",
+    "permission_difference": "Hepta new file mode 0600 by design, Desktop Commander test file mode 0664",
+    "write_precondition_difference": "Hepta needs absent or prior SHA256, DC write_file offers rewrite/append without prior hash",
+    "remote_filesystem_difference": "Hepta new tools restricted to authorized Linux controller-local workspace; no SSH or cross-filesystem fallback",
+    "bounded_text_input_difference": "Hepta v3 64KiB per call and 4MiB existing source; DC supports repeated larger content chunks",
+    "directory_move_difference": "Hepta file_move accepts regular files only; DC move_file supports broader filesystem semantics, not validated here"
+  },
+  "platform_claims": {
+    "candidate_49_tools_model_originated_write_verified": false,
+    "change_platform_safety_annotations": false,
+    "replay_denied_tool_using_alternate_executor": false,
+    "public_gateway_published": false
+  },
+  "hosted_exact_head_ci": {
+    "workflow_run_id": 38246775111,
+    "conclusion": "success",
+    "url": "https://github.com/TrillionniumFoundation/hepta-runtime/actions/runs/38246775111"
+  },
+  "source_conflict_hygiene": {
+    "existing_uncommitted_test_diff": "tests/full_operator_acceptance.py",
+    "touched_existing_uncommitted_test": false
+  }
+}

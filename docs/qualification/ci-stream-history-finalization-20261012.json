@@ -1,0 +1,38 @@
+{
+  "schema": "hepta-ci-stream-broker-finalization-test-v1",
+  "recorded_at_utc": "2026-10-12T10:24:20.698351+00:00",
+  "failed_CI": {
+    "run_id": 38234766399,
+    "conclusion": "failure",
+    "failed_test": "History.test_finalized_history_is_prefix_of_runtime_archive",
+    "error": "OSError: [Errno 39] Directory not empty: stream-...",
+    "classification": "transient broker finalization/TemporaryDirectory cleanup race; not the six new support diagnostic tests"
+  },
+  "fix": {
+    "scope": "test-only wait for native broker durable final state and both handoff/control Unix sockets unlinked; no production broker/service changes",
+    "path": "tests/stream_history_tests.py",
+    "source_sha256": "0fc4025e0a2eb054ac3794041323bbd801f027d6f69f3025608e28af7dd0ffd9",
+    "bounded_max_wait_seconds": 10,
+    "used_by_history_and_dual_stream_tests": 2
+  },
+  "local": {
+    "full_stream_history_runs": 20,
+    "tests_per_run": 4,
+    "test_passes_total": 80,
+    "stress_log_sha256": "48abecd612ec5fcdfb6152f3324e342c3df27d46b943d91013c4c3c2f32d8460",
+    "separate_full_suite_exit_code": 0,
+    "support_snapshot_unit_tests": "pass",
+    "protected_services_restarted": false
+  },
+  "workspace_admin_gate": {
+    "app_permissions_allow_all_actions": true,
+    "action_control_inspected": false,
+    "new_tool_or_safety_annotations_modified": false,
+    "description": "App action enablement is distinct from approval; admin UI inspection required."
+  },
+  "external_gate": {
+    "ChatGPT_originated_shell_write": "HOLD",
+    "public_gateway": "HOLD",
+    "new_exact_head_CI": "not yet run at time of receipt"
+  }
+}

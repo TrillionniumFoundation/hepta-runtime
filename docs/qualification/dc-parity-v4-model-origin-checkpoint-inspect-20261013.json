@@ -1,0 +1,122 @@
+{
+  "schema": "hepta-v4-model-origin-checkpoint-inspect-bounded-v1",
+  "recorded_local_date": "2026-10-13",
+  "source_head_before_receipt": "5e34c189693a8b6f8720e9ac5560b94d573b66c7",
+  "origin": "Current ChatGPT model's direct mcp__Hepta_Runtime_Full_Operator__process_start/process_checkpoint/process_cancel/process_wait invocations; there is no cryptographic ChatGPT-origin request attestation.",
+  "contract": {
+    "tool_count": 50,
+    "non_read_only_tool_count": 31,
+    "pinned_catalog_sha256": "63742708c287e8468d73f27ba85ecc6585afd4adcd76d06b618456730cfaf8ad",
+    "annotations_unchanged": true
+  },
+  "negative_privileged_action": {
+    "six_hosts_advertise_zero_privileged_actions": true,
+    "attempted_action": "__hepta_probe_no_such_admin_action_20261013__",
+    "host": "main",
+    "outcome": "INVALID_ARGUMENT: privileged action is not configured for main",
+    "action_executed": false,
+    "positive_model_origin_mutation_claim": false,
+    "policy_changed": false
+  },
+  "first_checkpoint_inspect": {
+    "host": "x230",
+    "job_id": "1a1319076e3-1f807d-b",
+    "pid": 3199457,
+    "executable": "/usr/bin/sleep",
+    "requested_sleep_seconds": 90,
+    "action": "inspect",
+    "returned_successfully": true,
+    "ready": false,
+    "limitations": [
+      "another process owns a supposedly internal pipe endpoint",
+      "external pipe endpoint requires an ownership manifest"
+    ],
+    "kernel_state": "S",
+    "thread_count": 1,
+    "resources": [
+      {
+        "fd": 0,
+        "kind": "basic_device"
+      },
+      {
+        "fd": 1,
+        "kind": "pipe"
+      },
+      {
+        "fd": 2,
+        "kind": "pipe"
+      }
+    ],
+    "cleanup": {
+      "result": "stop_requested",
+      "state": "cancelled",
+      "output_complete": true,
+      "exit_code": -15
+    }
+  },
+  "second_checkpoint_inspect": {
+    "host": "x230",
+    "job_id": "1a13193c073-1f807d-c",
+    "executable": "/usr/bin/python3",
+    "fixture": "-I Python singleton; prints own PID, then dup2 /dev/null to fd0/fd1/fd2 and sleeps up to 80 seconds",
+    "fixture_created_only_for_test": true,
+    "action": "inspect",
+    "returned_successfully": true,
+    "ready": true,
+    "identity": {
+      "boot_id": "b19bd1b9-4dbe-4335-96cf-ed98d393efea",
+      "pid": 3201334,
+      "start_ticks": 53519060,
+      "uid": 1000
+    },
+    "kernel_state": "S",
+    "thread_count": 1,
+    "process_count": 1,
+    "mapped_file_count": 8,
+    "regular_file_count": 0,
+    "application_checkpoint_required": false,
+    "limitations": [],
+    "resources": [
+      {
+        "fd": 0,
+        "kind": "basic_device"
+      },
+      {
+        "fd": 1,
+        "kind": "basic_device"
+      },
+      {
+        "fd": 2,
+        "kind": "basic_device"
+      }
+    ],
+    "cleanup": {
+      "result": "stop_requested",
+      "state": "cancelled",
+      "output_complete": true,
+      "exit_code": -15,
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      }
+    }
+  },
+  "evidence_semantics": {
+    "inspect_only": true,
+    "dump_called": false,
+    "restore_called": false,
+    "resume_called": false,
+    "checkpoint_images_produced": false,
+    "existing_business_process_modified": false,
+    "native_runtime_service_restarted": false,
+    "full_operator_tunnel_restarted": false,
+    "desktop_commander_service_restarted": false,
+    "positive_tool_name": "process_checkpoint",
+    "positive_operation": "inspect only",
+    "non_read_only_annotation_does_not_imply_actual_mutation": true,
+    "arbitrary_CRiU_restore_qualified": false,
+    "privileged_action_positive": false,
+    "public_cloud_gateway_deployed": false
+  },
+  "next_gate": "Do not dump a production task. A separate disposable CRIU dump/restore/resume qualification needs explicit lifecycle/cleanup receipts; privileged_action requires administrator-pinned actions and must not be given arbitrary new authority merely to increase the score."
+}

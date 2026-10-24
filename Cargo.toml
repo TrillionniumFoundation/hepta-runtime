@@ -32,7 +32,7 @@ lto = true              # Enable Link Time Optimization
 codegen-units = 1       # Reduce parallel code generation units for better optimization
 panic = "abort"         # Abort on panic for smaller binary size
 strip = true            # Strip symbols from binary
-opt-level = "s"         # Optimize for size, but keep loop vectorization ("z" disables it)
+opt-level = 3           # Prioritize runtime throughput and bounded cold-validation latency
 overflow-checks = false # Disable overflow checks in release mode
 
 [dependencies]
@@ -42,7 +42,10 @@ serde_json = "1.0.151"
 anyhow = "1.0.104"
 sha2 = "0.11"
 subtle = "2.6"
+ring = "=0.17.14"
+zeroize = "=1.9.0"
 ignore = "0.4.33"
+globset = "=0.4.20"
 regex = "1.13.1"
 rayon = "1.12.0"
 tracing = { version = "0.1", features = ["std"] }
@@ -62,6 +65,8 @@ russh = { version = "0.63", default-features = false, features = ["flate2", "rin
 russh-sftp = "3.0"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+# A bounded page cache over one pinned file; no C toolchain or sidecar paths.
+redb = "=4.4.0"
 
 [dev-dependencies]
 tempfile = "3.27.0"
@@ -79,3 +84,7 @@ lto = false
 codegen-units = 256
 incremental = true
 rpath = false
+
+[[bin]]
+name = "hepta-runtime-jobctl"
+path = "src/bin/jobctl.rs"

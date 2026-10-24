@@ -1,0 +1,113 @@
+{
+  "schema": "hepta-private-chatgpt-native-session-recovery-v1",
+  "generated_utc": "2026-10-12T09:53:32.897676+00:00",
+  "source_commit": "37a7b69e90bc1aa073395ac14167017a72bab68f",
+  "before": {
+    "native_rmcp_invalid_session_probe": {
+      "method": "tools/list",
+      "http_status": 404,
+      "response": "Not Found: Session not found",
+      "side_effect": false
+    },
+    "adapter_injected_stale_session_response": {
+      "method": "host_list",
+      "error_code": -32603,
+      "message": "Native operation result unavailable; do not replay a write blindly",
+      "side_effect": false
+    },
+    "problem": "Long-lived stdio adapter retained backend MCP-Session-Id and did not renew a known-expired internal native session during catalog preflight."
+  },
+  "fix": {
+    "name": "Typed NativeSessionExpired and bounded internal reinitialization before target tool execution",
+    "source_sha256": "71c339ec00d35c272162358f464a17b3e0ba6bdfad681558e02652a97f825a32",
+    "source_file": "deploy/chatgpt_full_operator.py",
+    "code_still_uses_same_46_tool_contract": true,
+    "opens_new_network_listener": false,
+    "new_authority": false,
+    "legacy_session_automatic_reinit": false,
+    "automatic_retry_after_unknown_mutation": false,
+    "read_catalog_retry_only_on_authoritative_http404_session_not_found": true
+  },
+  "verification": {
+    "adapter_tests_passed": 30,
+    "adapter_test_log_sha256": "e45334b4edc9a332e92ead8333ffc62756cc1c6752abc6b2ac82f8156cf20b46",
+    "new_cases": [
+      "modern expired session read-only recovery",
+      "expired preflight prior to one fixture mutation",
+      "persistent expiry bounded failure without write",
+      "legacy expiry requires explicit reinitialization"
+    ],
+    "live_native_invalid_session_recovery_repetitions": 3,
+    "live_native_hosts_per_test": 6,
+    "live_native_discovered_tools_per_test": 46,
+    "live_native_mutations": 0,
+    "official_mcp_schema_errors": {
+      "DiscoverResultResponse": 0,
+      "ListToolsResultResponse": 0
+    },
+    "chatgpt_originated_postcutover_reads": [
+      {
+        "tool": "host_list",
+        "result": "six operator hosts"
+      },
+      {
+        "tool": "file_info",
+        "result": "existing file size/version/SHA256"
+      },
+      {
+        "tool": "stream_handoff_list",
+        "result": "retained session"
+      }
+    ],
+    "chatgpt_originated_write_calls_accepted": false
+  },
+  "deployment": {
+    "new_immutable_release": "/home/qian-qi/.local/lib/hepta-chatgpt-full/releases/71c339ec00d35c27",
+    "installed_sha256": "71c339ec00d35c272162358f464a17b3e0ba6bdfad681558e02652a97f825a32",
+    "profile_sha256": "1a6b9452159360bffee4b14e68f1355b360ef525e3500981dcfb7e780b0033ed",
+    "prechange_profile_backup": "/home/qian-qi/.config/hepta-full-operator/backup-profile-before-session-renewal-20261012.yaml",
+    "backup_sha256": "89499bbc6b56ff59691bcfe5b415e853331a40b5ffe8f890c872545c8ddd5908",
+    "health_ready": true,
+    "control_plane_status": "ok",
+    "dispatcher_completed_after_restart": 3,
+    "response_accepted_after_restart": 3,
+    "dispatcher_failures": 0,
+    "units": {
+      "hepta-runtime-operator.service": {
+        "MainPID": "2927",
+        "ActiveState": "active",
+        "UnitFileState": "enabled"
+      },
+      "desktop-commander-remote.service": {
+        "MainPID": "2894",
+        "ActiveState": "active",
+        "UnitFileState": "enabled"
+      },
+      "hepta-openai-full-operator.service": {
+        "MainPID": "1270044",
+        "ActiveState": "active",
+        "UnitFileState": "enabled"
+      }
+    },
+    "runtime_restarted": false,
+    "desktop_commander_restarted": false,
+    "old_profile_preserved": true
+  },
+  "client_action_boundary": {
+    "hepta_loaded_tools": 46,
+    "desktop_commander_loaded_tools": 31,
+    "app_specific_permissions_for_both": "Allow all actions",
+    "full_hepta_shell_start_client_safety_check": "blocked; not verified on target",
+    "full_hepta_document_write_client_safety_check": "blocked; not verified on target",
+    "platform_decision_rule_known": false,
+    "tool_security_annotations_relabelled": false,
+    "frontend_or_advertised_action_risk_bypassed": false
+  },
+  "release_gate": {
+    "read_channel_after_repair": "passed 3 ChatGPT-origin calls",
+    "full_shell_and_write_channel": "HOLD due pre-tool safety rejections",
+    "public_gateway": "HOLD until real ChatGPT-origin write/PTY/sudo qualification",
+    "hosted_CI_with_new_30_tests": "not asserted"
+  },
+  "no_secrets_captured": true
+}

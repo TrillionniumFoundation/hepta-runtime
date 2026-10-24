@@ -1,0 +1,145 @@
+{
+  "schema": "hepta-v4-additional-seven-model-origin-nonreadonly-v1",
+  "captured_utc": "2026-10-12T18:45:46.699970+00:00",
+  "source_head_before_receipt": "818182b1e97af617a33a05ebb9fec2c14c2791ac",
+  "native_tool_count": 50,
+  "nonreadonly_tool_count": 31,
+  "prior_model_origin_positive_count": 22,
+  "new_positive_tool_names": [
+    "binary_patch_inode",
+    "document_edit",
+    "pdf_security",
+    "stream_handoff_close",
+    "stream_handoff_prepare",
+    "stream_handoff_write",
+    "sudo_start"
+  ],
+  "combined_positive_tool_count": 29,
+  "remaining_unverified_tool_names": [
+    "privileged_action",
+    "process_checkpoint"
+  ],
+  "origin": "Direct Hepta plugin calls in this ChatGPT session; Desktop Commander used only for cooperating old I/O owner launch and independent read-only verification. No cryptographic ChatGPT-origin attestation.",
+  "checks": {
+    "document_edit": {
+      "path": "/tmp/hepta-v4-parity-20261013-0231-5d3f.docx",
+      "zip_test_ok": true,
+      "sha256": "10b3468ca3ba126a43076f1b45d4b3466ff3159890836571682192a3ebbb7de5",
+      "old_marker_absent": true,
+      "new_marker_count": 1
+    },
+    "pdf_security": {
+      "source": "/tmp/hepta-v4-parity-20261013-0231-5d3f.pdf",
+      "source_sha256": "2f65f1c83924d85e0bfea3289a9d3ab31ba2c1f3f65e55a5df6ed80e0e3e40b2",
+      "incremental_output": "/tmp/hepta-v4-parity-20261013-0231-5d3f-metadata.pdf",
+      "output_sha256": "79ae03639a583013be13fb015642000587382407b71bfc9262f414f8b0a0a9d1",
+      "source_bytes_are_exact_prefix": true,
+      "unsigned_incremental_revision": true,
+      "no_certificate_trust_claim": true
+    },
+    "binary_patch_inode": {
+      "scratch_path": "/tmp/hepta-v4-parity-20261013-0231-5d3f.bin",
+      "sha256": "7247b55d36bf1e6fc6fe384141097c602f49d2547dce96b1b8450cbe8f03bfe7",
+      "size": 10,
+      "inode": 37021829,
+      "content": "01ABC56789",
+      "committed_receipt": true,
+      "atomic_visibility": false
+    },
+    "sudo_start": {
+      "host": "main",
+      "command": "/usr/bin/id -u",
+      "non_interactive": true,
+      "exit_code": 0,
+      "readback_sha256": "13bf7b3039c63bf5a50491fa3cfd8eb4e699d1ba1436315aef9cbe5711530354",
+      "uid_output": "0\\r\\n",
+      "no_privileged_write": true
+    },
+    "stream_handoff": {
+      "session_id": "stream-1390bbb6e0c71419ac280c5b9ccd54d6a55f0062cbf92a4a6c54a853729235cb",
+      "cooperating_dc_owner": true,
+      "other_sessions_untouched": true,
+      "prepare_write_close_via_model_Hepta": true,
+      "old_owner_history_sha256": "36a6cc3ac0cf7fe876b89e1205a9dddbc4931f8ce1f86cb3ab047f049cfa344b",
+      "history_prefix_exact": true,
+      "archive_sha256": "ccda334a2ff2149d24879e8e41ee0bba58f912670aeaa60ed3fcd15bfc18c580",
+      "handoff_receipt_sha256": "a80da997e309d1aef1974a5473073f23b8fc68120132d706e11f849eb93a1db8",
+      "final_receipt_sha256": "bf8e61d47029ea8f1374816aba3c5b9691b2391c0d3fb0a49041a9ea9948aeac",
+      "events": [
+        {
+          "event": "READY",
+          "pid": 2614041,
+          "total": 0
+        },
+        {
+          "event": "VALUE",
+          "pid": 2614041,
+          "total": 17
+        },
+        {
+          "event": "VALUE",
+          "pid": 2614041,
+          "total": 22
+        }
+      ],
+      "application_pid_and_memory_unchanged": true,
+      "request_id": "model-stream-5d3f-0001",
+      "input_receipt_confirmed": true,
+      "raw_input_absent_from_receipts": true,
+      "stdin_closed": true,
+      "output_complete": true,
+      "owner_unaccounted_read_ahead_bytes": 0
+    }
+  },
+  "services": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2064509",
+      "ActiveState": "active"
+    },
+    "hepta-openai-full-operator.service": {
+      "MainPID": "2064582",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    }
+  },
+  "tunnel": {
+    "ready": true,
+    "control_plane": "ok",
+    "dispatcher_completed": 216,
+    "dispatcher_failures": 0
+  },
+  "limits": {
+    "arbitrary_sudo_operations_qualified": false,
+    "binary_patch_atomic_visibility": false,
+    "signature_trust_evaluated": false,
+    "unrelated_dc_session_adoption": false,
+    "existing_runtime_restarted": false,
+    "desktop_commander_restarted": false,
+    "public_gateway_deployed": false,
+    "action_annotations_modified": false,
+    "all_hosts_and_parameters_qualified": false,
+    "process_checkpoint_model_origin_qualified": false,
+    "privileged_action_has_no_configured_host_actions": true
+  },
+  "checkpoint_inspect_probe": {
+    "host": "x230",
+    "pinned_criu_binary_available": true,
+    "action": "inspect",
+    "target": "isolated disposable /usr/bin/sleep 60 job only",
+    "target_pid": 3188051,
+    "native_model_result": "UNAVAILABLE: Connection failed; no positive inspect receipt",
+    "native_job_cancel_requested": true,
+    "native_job_final_state": "cancelled",
+    "native_job_output_complete": true,
+    "no_dump_restore_resume_or_existing_process_modified": true,
+    "not_counted_as_positive": true
+  },
+  "privileged_action_policy": {
+    "host_actions_advertised": 0,
+    "policy_modified": false,
+    "not_counted_as_positive": true
+  }
+}

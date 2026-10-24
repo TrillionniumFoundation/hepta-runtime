@@ -19,11 +19,12 @@ use std::sync::{Arc, RwLock};
 use rmcp::{
 	handler::server::{wrapper::Parameters, ServerHandler},
 	model::{
-		CacheScope, CallToolResult, ContentBlock, CustomNotification, ExperimentalCapabilities,
-		Implementation, JsonObject, ListResourcesResult, ListToolsResult, PaginatedRequestParams,
-		ProtocolVersion, ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult,
-		RequestId, Resource, ResourceContents, ServerCapabilities, ServerConfig,
-		ServerNotification, SubscribeRequestParams, SubscriptionFilter, UnsubscribeRequestParams,
+		CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock,
+		CustomNotification, ExperimentalCapabilities, Implementation, JsonObject,
+		ListResourcesResult, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
+		ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, RequestId, Resource,
+		ResourceContents, ServerCapabilities, ServerConfig, ServerNotification,
+		SubscribeRequestParams, SubscriptionFilter, UnsubscribeRequestParams,
 	},
 	schemars,
 	service::{Peer, RequestContext, SubscriptionContext, SubscriptionSink},
@@ -171,6 +172,50 @@ async fn notify_peer_resource_updated(peer: &Peer<RoleServer>, uri: &str) {
 /// interactive sessions, on pre-2026-07-28 connections; other clients ignore it.
 const CLAUDE_CHANNEL_CAPABILITY: &str = "claude/channel";
 const RUNTIME_TOOL_NAMES: &[&str] = &[
+	"execution_shadow_admit",
+	"effective_config",
+	"usage_stats",
+	"request_archive",
+	"request_history",
+	"request_status",
+	"request_result",
+	"request_start",
+	"request_cancel",
+	"operation_start",
+	"operation_status",
+	"operation_result",
+	"operation_cancel",
+	"host_health",
+	"read_multiple_files",
+	"search_start",
+	"search_results",
+	"search_list",
+	"search_stop",
+	"stream_handoff_prepare",
+	"stream_handoff_status",
+	"stream_handoff_read",
+	"stream_handoff_write",
+	"stream_handoff_close",
+	"stream_handoff_list",
+	"process_checkpoint",
+	"pdf_security",
+	"binary_patch_inode",
+	"document_render",
+	"worksheet_recalculate",
+	"worksheet_edit",
+	"pdf_edit",
+	"file_info",
+	"binary_read",
+	"binary_write",
+	"binary_upload",
+	"document_read",
+	"image_read",
+	"document_write",
+	"document_edit",
+	"shell_start",
+	"host_processes",
+	"host_signal",
+	"sudo_start",
 	"host_list",
 	"process_start",
 	"process_status",
@@ -178,6 +223,7 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"process_wait",
 	"process_cancel",
 	"process_list",
+	"process_list_page",
 	"pty_start",
 	"pty_read",
 	"pty_write",
@@ -225,6 +271,11 @@ const SHELL_HEARTBEAT_INTERVAL: std::time::Duration = std::time::Duration::from_
 /// MCP server with per-session working directory isolation.
 #[derive(Debug, Clone)]
 pub struct OctofsServer {
+	/// Opaque native-session owner; failed entropy disables searches.
+	search_owner: Arc<Option<String>>,
+	/// Trusted metadata authority, fixed for each native session.
+	owner_binding: Arc<runtime::caller_scope::SessionOwnerBinding>,
+	operation_crypto: Option<Arc<runtime::operation_crypto::ResultCryptoScope>>,
 	/// Per-session working directory state.
 	workdir: Arc<SessionWorkdir>,
 	/// Whether the session context (workdir) has been applied from client
@@ -250,6 +301,11 @@ impl OctofsServer {
 	/// per-cwd background-job guard from sibling tests.
 	pub fn with_root(root: PathBuf) -> Self {
 		Self {
+			search_owner: Arc::new(runtime::search_jobs::new_owner_id().ok()),
+			owner_binding: Arc::new(runtime::caller_scope::SessionOwnerBinding::default()),
+			operation_crypto: runtime::operation_crypto::ResultCryptoScope::stdio()
+				.ok()
+				.map(Arc::new),
 			workdir: Arc::new(SessionWorkdir::new(root)),
 			session_applied: Arc::new(std::sync::atomic::AtomicBool::new(false)),
 			subscriptions: Arc::new(SubscriptionRegistry::default()),
@@ -348,6 +404,358 @@ fn enforce_runtime_path_spec(
 #[tool_router]
 impl OctofsServer {
 	#[tool(
+		title = "Read Redacted Effective Configuration",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read bounded effective Hepta capabilities and configured host aliases from a strict allowlist projection. Returns authorization switches and counts, never SSH destinations, private paths, credentials, environment values, privileged commands or raw policy. Does not modify configuration; administrator changes require reviewed version-controlled configuration and rollback."
+	)]
+	async fn effective_config(
+		&self,
+		Parameters(params): Parameters<runtime::effective_config::EffectiveConfigParams>,
+	) -> Result<String, String> {
+		runtime::effective_config::effective_config(params).map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Private Local Usage Statistics",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read per-tool counts, dispatch outcomes and first/last admission times owned by the same verified private HTTP credential or native stdio session. Includes metadata retained when the archive was introduced and all subsequent admitted native requests; it is not retroactive lifetime accounting. Metadata archive is retained when the bounded hot history cache evicts entries. Never returns parameters, output, secrets or vendor billing. Counts describe dispatch observations, not delivery or business success."
+	)]
+	async fn usage_stats(
+		&self,
+		Parameters(params): Parameters<runtime::request_audit::UsageStatsParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::request_audit::usage_stats(scope.owner(), params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Page Retained Request Metadata Archive",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Page private dispatch metadata retained at archive introduction and all subsequent admitted native requests. This archive is not automatically evicted with the hot request_history cache. At most 32 records per page, independent after_id cursors; no parameters or output are stored. Uses the same verified private HTTP credential or native stdio session ownership. History is live, and observed completion proves neither delivery nor business success. No dispatch or replay occurs."
+	)]
+	async fn request_archive(
+		&self,
+		Parameters(params): Parameters<runtime::request_audit::RequestHistoryParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::request_audit::archive_history(scope.owner(), params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Credential or Native Session Request History",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read bounded redacted dispatch metadata owned by the verified private HTTP operator credential; the same credential resumes its retained metadata after reconnect or controller restart. All users sharing that credential share this scope; this is not authenticated ChatGPT caller isolation. Stdio remains native-session-only. Independent retained-record cursors; server request identity, canonical tool name, timing and observed status only. Unknown effects must never be replayed automatically. Records prove neither delivery nor business success. Transport-invalid requests and facade-local refusals are outside native dispatch history."
+	)]
+	async fn request_history(
+		&self,
+		Parameters(params): Parameters<runtime::request_audit::RequestHistoryParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::request_audit::history(scope.owner(), params)
+			.await
+			.and_then(|result| scope.annotate(result, false))
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Owned Request Status",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read dispatch and bounded original-result retention state by an exact server-generated request id owned by the verified private HTTP credential or this stdio native session. Never accepts caller-selected owner. Retention currently supports only host_list, host_health and effective_config validated DTO results; other tools, history and result lookup are metadata-only. Configuration changes revoke retained-result access. Unknown, unavailable or overflow does not prove an effect failed; never replay automatically. Does not prove delivery, business completion, ChatGPT caller isolation or early-return asynchronous execution."
+	)]
+	async fn request_status(
+		&self,
+		Parameters(params): Parameters<runtime::request_results::RequestStatusParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|e| e.to_string())?;
+		let async_observation =
+			runtime::request_async::observation(scope.owner(), &params.request_id)
+				.await
+				.map_err(|error| error.to_string())?;
+		let request_id = params.request_id.clone();
+		let text = match runtime::request_results::request_status(scope.owner(), params).await {
+			Ok(text) => text,
+			Err(error) => {
+				let absent_at_first_observation = async_observation
+					.as_ref()
+					.and_then(|observation| observation.get("audit_metadata_available"))
+					== Some(&serde_json::Value::Bool(false));
+				if !absent_at_first_observation
+					|| runtime::request_audit::optional_observation(scope.owner(), &request_id)
+						.await
+						.map_err(|error| error.to_string())?
+						.is_some()
+				{
+					return Err(error.to_string());
+				}
+				serde_json::json!({
+					"request_id": request_id, "dispatch_state": "unknown", "result_state": "unavailable",
+					"inner_receipt_available": false, "automatic_retry": false,
+					"metadata_lookup_does_not_prove_delivery_or_business_success": true
+				})
+				.to_string()
+			}
+		};
+		let mut value: serde_json::Value =
+			serde_json::from_str(&text).map_err(|_| "request status unavailable".to_string())?;
+		if let Some(observation) = async_observation {
+			if let (Some(object), Some(extra)) = (value.as_object_mut(), observation.as_object()) {
+				object.extend(extra.clone());
+			}
+		}
+		scope
+			.annotate(value.to_string(), false)
+			.map_err(|error| error.to_string())
+	}
+	#[tool(
+		title = "Read Bounded Original Request Result",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Page immutable serialized original native CallToolResult bytes using an exact server-generated owned request id and independent byte offset. At most 16384 bytes per page, base64 plus full SHA256; at most 64 KiB retained per result. Only validated host_list, host_health and effective_config DTO successes are retained; arbitrary output, errors, request parameters and credentials are not stored. Original boundary includes the server request identity before retention acknowledgement and transport-version normalization. The same verified private HTTP credential may resume after restart only while the complete current policy binding is unchanged; stdio remains native-session-only. Unknown, overflow, expired or unretained results are refused without replay. Not universal DC get_tool_result equivalence, early-return async start, business completion or authenticated ChatGPT caller isolation."
+	)]
+	async fn request_result(
+		&self,
+		Parameters(params): Parameters<runtime::request_results::RequestResultParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|e| e.to_string())?;
+		runtime::request_async::observation(scope.owner(), &params.request_id)
+			.await
+			.map_err(|error| error.to_string())?;
+		runtime::request_results::request_result(scope.owner(), params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Start Idempotent Owned Read Request",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Admit one background request from the explicit host_list, host_health or effective_config typed whitelist. Requires a private idempotency key: identical retries under the same verified HTTP credential or native stdio session return the original server-generated inner request_id without redispatch; changed arguments or policy refuse reuse. Durable private key hashes precede admission and effects. Only eight requests globally and four per owner may be active; key retention is finite and never silently evicts or rebinds keys. Response acknowledges admission, not dispatch completion or transport delivery. Use request_status/request_result for the inner id. A controller restart makes unfinished work unknown; no request is automatically replayed or resumed. Users sharing a private credential share this scope; no authenticated ChatGPT caller isolation. No arbitrary tools, commands, addresses or process ids."
+	)]
+	async fn request_start(
+		&self,
+		Parameters(params): Parameters<runtime::request_async::RequestStartParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::request_async::start(scope.owner(), params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|error| error.to_string())
+	}
+	#[tool(
+		title = "Cancel Owned Read Request Future",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Request cancellation of this controller's own background Rust future using the exact request_start inner request_id and the same verified private credential or native stdio session. Current policy must still authorize the immutable key binding. Never accepts an OS pid, command or arbitrary tool. Cancellation does not kill arbitrary processes or prove remote work stopped; effects started before cancellation may continue. Result settlement cannot be cancelled and late cancellation never discards a retained original result. Missing futures after controller restart remain unknown and are never recreated or replayed."
+	)]
+	async fn request_cancel(
+		&self,
+		Parameters(params): Parameters<runtime::request_async::RequestCancelParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::request_async::cancel(scope.owner(), params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Start Owned Native Read Operation",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Admit one background operation from ten closed native read APIs: read_multiple_files, file_info, binary_read, process_status, process_read, process_wait, process_list, hardware_snapshot, service_status and network_inspect. Original configured-host, filesystem and operator-account policies apply. No write, command, privilege, maintenance, recursive async or arbitrary tool dispatch. Required private idempotency key has a secret HMAC binding; identical retries return the original operation_id without replay. Admission acknowledges neither completion nor delivery. Original SDK success/tool-error/RPC-error bytes up to 1 MiB are encrypted at rest with trusted credential-derived keys; all users sharing that credential share retrieval. Stdio keys are ephemeral. Shared request/operation concurrency is eight globally and four per owner; immutable key retention defaults to 512 globally and 128 per owner and may be raised by validated administrator startup limits up to 65536. Capacity refuses new keys without deleting, expiring or rebinding previous identities. No restart execution resume, ChatGPT caller isolation or full Desktop Commander replacement is implied."
+	)]
+	async fn operation_start(
+		&self,
+		Parameters(params): Parameters<runtime::operation_async::OperationStartParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		let (scope, crypto) = self
+			.owner_binding
+			.resolve_operation_crypto(
+				&context,
+				self.search_owner.as_ref().as_deref(),
+				self.operation_crypto.as_ref(),
+			)
+			.map_err(|e| e.to_string())?;
+		runtime::operation_async::start(scope.owner(), crypto, params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|e| e.to_string())
+	}
+	#[tool(
+		title = "Read Owned Native Operation Status",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read the same trusted credential or native stdio session's immutable operation_id state and authenticated encrypted-result availability. Current policy must match. Ordinary redacted audit eviction does not erase the separate operation binding or encrypted payload. Completion means a handler generated a result, not delivery or business success. Unfinished restart work remains unknown with no replay; users sharing a credential share this scope."
+	)]
+	async fn operation_status(
+		&self,
+		Parameters(params): Parameters<runtime::operation_async::OperationStatusParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let (scope, crypto) = self
+			.owner_binding
+			.resolve_operation_crypto(
+				&context,
+				self.search_owner.as_ref().as_deref(),
+				self.operation_crypto.as_ref(),
+			)
+			.map_err(|e| e.to_string())?;
+		runtime::operation_async::status(scope.owner(), crypto, params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|e| e.to_string())
+	}
+	#[tool(
+		title = "Read Original Owned Native Operation Result",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Page up to 16384 bytes of the immutable original native SDK payload by operation_id, independent byte offset and SHA256. Supports serialized CallToolResult success/tool-error or ErrorData RPC-error bytes, before operation metadata and transport normalization; at most 1 MiB per retained result. Payloads are encrypted at rest with trusted token-derived private keys and an authenticated ID/tool/policy/ledger binding. Token or policy changes require controller restart and then revoke old retrieval; there is no live file-reload revocation; stdio restart cannot recover ephemeral-key results. This API never dispatches, interprets or follows payload links. Missing/corrupt/overflow/unknown output never grants replay and does not prove an effect failed."
+	)]
+	async fn operation_result(
+		&self,
+		Parameters(params): Parameters<runtime::operation_async::OperationResultParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let (scope, crypto) = self
+			.owner_binding
+			.resolve_operation_crypto(
+				&context,
+				self.search_owner.as_ref().as_deref(),
+				self.operation_crypto.as_ref(),
+			)
+			.map_err(|e| e.to_string())?;
+		runtime::operation_async::result(scope.owner(), crypto, params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|e| e.to_string())
+	}
+	#[tool(
+		title = "Cancel Owned Native Read Operation Future",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Request cancellation of this controller's owned read-operation future by immutable operation_id under the same verified private credential or native stdio session and unchanged policy. Never accepts a process ID, shell, signal or arbitrary tool. This does not prove remote work stopped or reverse an effect. Settlement cannot be cancelled; late cancellation cannot discard committed result bytes. Missing futures after restart remain unknown and are never reconstructed or replayed."
+	)]
+	async fn operation_cancel(
+		&self,
+		Parameters(params): Parameters<runtime::operation_async::OperationCancelParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let (scope, crypto) = self
+			.owner_binding
+			.resolve_operation_crypto(
+				&context,
+				self.search_owner.as_ref().as_deref(),
+				self.operation_crypto.as_ref(),
+			)
+			.map_err(|e| e.to_string())?;
+		runtime::operation_async::cancel(scope.owner(), crypto, params)
+			.await
+			.and_then(|text| scope.annotate(text, false))
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
 		title = "View",
 		annotations(
 			read_only_hint = true,
@@ -405,6 +813,12 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 		Parameters(params): Parameters<TextEditorParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
 		enforce_runtime_path_spec(&params.path, &workdir, true)?;
@@ -416,6 +830,172 @@ impl OctofsServer {
 		};
 		request_ctx::with_request_context(self.view_cache.clone(), async move {
 			let result = fs::execute_text_editor(&call)
+				.await
+				.map_err(|e| e.to_string())?;
+			Ok(append_hints(result))
+		})
+		.await
+	}
+
+	#[tool(
+		title = "Create Workspace Directory",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Create a directory tree only inside the configured controller-local workspace. \
+			Existing directories succeed without change, while files or symlink components are refused. \
+			No command execution, remote host selection, privilege escalation or overwrite. Linux only."
+	)]
+	async fn directory_create(
+		&self,
+		context: RequestContext<RoleServer>,
+		Parameters(params): Parameters<DirectoryCreateParams>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		self.ensure_session_workdir(&context);
+		let workdir = self.workdir.get_current();
+		enforce_runtime_path_spec(&params.path, &workdir, true)?;
+		let call = McpToolCall {
+			tool_name: "directory_create".to_string(),
+			parameters: serde_json::to_value(&params).unwrap_or_default(),
+			tool_id: String::new(),
+			workdir,
+		};
+		request_ctx::with_request_context(self.view_cache.clone(), async move {
+			let result = fs::parity_ops::execute_directory_create(&call)
+				.await
+				.map_err(|e| e.to_string())?;
+			Ok(append_hints(result))
+		})
+		.await
+	}
+
+	#[tool(
+		title = "Move Workspace File Without Overwrite",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Move one regular file between two configured controller-local workspace paths. \
+			Never overwrite an existing destination or follow source/parent symlinks. Requires an \
+			existing destination parent and same-device atomic rename support; no copy/delete fallback. \
+			This removes the old filename but retains the file inode. Linux only."
+	)]
+	async fn file_move(
+		&self,
+		context: RequestContext<RoleServer>,
+		Parameters(params): Parameters<FileMoveParams>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		self.ensure_session_workdir(&context);
+		let workdir = self.workdir.get_current();
+		enforce_runtime_path_spec(&params.source, &workdir, true)?;
+		enforce_runtime_path_spec(&params.destination, &workdir, true)?;
+		let call = McpToolCall {
+			tool_name: "file_move".to_string(),
+			parameters: serde_json::to_value(&params).unwrap_or_default(),
+			tool_id: String::new(),
+			workdir,
+		};
+		request_ctx::with_request_context(self.view_cache.clone(), async move {
+			let result = fs::parity_ops::execute_file_move(&call)
+				.await
+				.map_err(|e| e.to_string())?;
+			Ok(append_hints(result))
+		})
+		.await
+	}
+
+	#[tool(
+		title = "Publish Bounded Workspace UTF-8 Text",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Create a new UTF-8 file, replace its full content, or append bounded text only in a configured controller-local workspace. Creates require expected_sha256='absent'; replace/append require the existing content's exact SHA256. Refuses symlinks, hard links, executable files, xattrs/ACLs, large content, remote targets and unmanaged overwrite. Publication uses a temporary file and atomic same-directory rename, changing inode on replacement; not a transaction against external concurrent writers. No shell, remote execution or privilege escalation. Never blindly retry an unknown outcome."
+	)]
+	async fn text_file_write(
+		&self,
+		context: RequestContext<RoleServer>,
+		Parameters(params): Parameters<TextFileWriteParams>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		self.ensure_session_workdir(&context);
+		let workdir = self.workdir.get_current();
+		enforce_runtime_path_spec(&params.path, &workdir, true)?;
+		let call = McpToolCall {
+			tool_name: "text_file_write".to_string(),
+			parameters: serde_json::to_value(&params).unwrap_or_default(),
+			tool_id: String::new(),
+			workdir,
+		};
+		request_ctx::with_request_context(self.view_cache.clone(), async move {
+			let result = fs::text_file_write::execute_text_file_write(&call)
+				.await
+				.map_err(|e| e.to_string())?;
+			Ok(append_hints(result))
+		})
+		.await
+	}
+
+	#[tool(
+		title = "Move Workspace Directory Without Overwrite",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Atomically rename one existing controller-local directory tree inside configured workspace roots to an absent target path. \
+            Existing destination, symlinked parents/source, missing destination parent and cross-device moves are refused. \
+            This moves an entire directory tree without traversing its entries and removes the original pathname. \
+            No shell, remote host, privilege escalation or copy/delete fallback. Linux only; not a transaction with independent writers."
+	)]
+	async fn directory_move(
+		&self,
+		context: RequestContext<RoleServer>,
+		Parameters(params): Parameters<DirectoryMoveParams>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		self.ensure_session_workdir(&context);
+		let workdir = self.workdir.get_current();
+		enforce_runtime_path_spec(&params.source, &workdir, true)?;
+		enforce_runtime_path_spec(&params.destination, &workdir, true)?;
+		let call = McpToolCall {
+			tool_name: "directory_move".to_string(),
+			parameters: serde_json::to_value(&params).unwrap_or_default(),
+			tool_id: String::new(),
+			workdir,
+		};
+		request_ctx::with_request_context(self.view_cache.clone(), async move {
+			let result = fs::parity_ops::execute_directory_move(&call)
 				.await
 				.map_err(|e| e.to_string())?;
 			Ok(append_hints(result))
@@ -445,6 +1025,12 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 		Parameters(params): Parameters<BatchEditParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
 		enforce_runtime_path_spec(&params.path, &workdir, true)?;
@@ -480,6 +1066,12 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 		Parameters(params): Parameters<ExtractLinesParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		self.ensure_session_workdir(&context);
 		let workdir = self.workdir.get_current();
 		enforce_runtime_path_spec(&params.from_path, &workdir, false)?;
@@ -526,6 +1118,12 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 		Parameters(params): Parameters<ShellParams>,
 	) -> Result<CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		if runtime::config::maybe_runtime_config().is_some() {
 			return Err(
 				"the unrestricted local shell tool is disabled in runtime mode; use process_start or an exact privileged_action"
@@ -612,6 +1210,117 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "Shell Start",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Run a shell command on an administrator-configured operator host with the SSH account authority. Durable job identity, logs and idempotency use process_status/read/wait/cancel. Never retry uncertain execution with a new key. Isolated hosts deny this tool."
+	)]
+	async fn shell_start(
+		&self,
+		Parameters(params): Parameters<runtime::operator::ShellStartParams>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::operator::shell_start(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Host Processes",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = true
+		),
+		description = "List actual host processes with bounded PID pagination and start identities, not only runtime jobs. Operator hosts only. Command arguments are omitted to avoid exposing secrets."
+	)]
+	async fn host_processes(
+		&self,
+		Parameters(params): Parameters<runtime::operator::HostProcessesParams>,
+	) -> Result<String, String> {
+		runtime::operator::host_processes(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Host Signal",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Signal one positive target-host PID, including processes not created by this runtime. Operator hosts only; existing OS permissions and sudoers apply. Prefer expected_identity from host_processes. Result confirms signal delivery, not process termination. Never blindly retry uncertain delivery."
+	)]
+	async fn host_signal(
+		&self,
+		Parameters(params): Parameters<runtime::operator::HostSignalParams>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::operator::host_signal(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Sudo Start",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Start a temporary arbitrary sudo command through an operator-host SSH PTY, using only that login account existing sudoers/PAM rights. Does not grant permissions or install NOPASSWD. Use pty_read/write/close. Never put passwords in arguments; input is not persisted by the runtime audit but may be retained by the MCP client."
+	)]
+	async fn sudo_start(
+		&self,
+		Parameters(params): Parameters<runtime::operator::SudoStartParams>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::operator::sudo_start(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Execution Shadow Admission",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Validate and hash a canonical execution_intent v1 against an allowlisted host. Shadow only: never starts a process, grants FinalUse or acknowledges an effect."
+	)]
+	async fn execution_shadow_admit(
+		&self,
+		Parameters(params): Parameters<runtime::execution::ShadowExecutionIntentParams>,
+	) -> Result<String, String> {
+		runtime::execution::admit_shadow_intent(params).map_err(|error| error.to_string())
+	}
+
+	#[tool(
 		title = "Host List",
 		annotations(
 			read_only_hint = true,
@@ -626,6 +1335,150 @@ impl OctofsServer {
 		Parameters(_params): Parameters<runtime::inspect::HostListParams>,
 	) -> Result<String, String> {
 		runtime::inspect::host_list().map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Start Bounded Native Search",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Start a bounded background file-name or content search under one configured read root. Omitted options preserve case-sensitive literal matching; explicit query_mode selects literal, regex or file glob. Supports case folding, file/exclusion globs, context lines and early exact-name termination. DOCX/XLSX text is extracted under expansion limits; PDF requires the administrator-configured host interpreter with a bounded pypdf parser. Skipped formats and limits are explicit in statistics. No shell or arbitrary targets. Refuses symlinks and hard links; skips binary content and bounds traversal, bytes, results and time. HTTP ownership is the verified private operator credential, shared by all its users; stdio ownership remains this native session. Never takes caller-selected ownership. The same HTTP credential can resume retained metadata and immutable terminal pages after reconnect or controller restart only while the current host binding and read-root policy authorize access; unfinished searches become interrupted without relaunch. Not authenticated ChatGPT caller isolation or running-program resume. Regex uses bounded Python syntax; glob filters do not imply gitignore parity."
+	)]
+	async fn search_start(
+		&self,
+		Parameters(params): Parameters<runtime::search_jobs::SearchStartParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::search_jobs::search_start(scope.owner(), params)
+			.await
+			.map(|result| scope.annotate_search_effect(result))
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Search Snapshot Page",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read an immutable terminal page for a search owned by the verified private HTTP operator credential, or by this stdio native session. Same-credential HTTP reconnect and controller restart preserve metadata access only while the current host binding and read-root policy authorize access; credential changes never grant older ownership. Running work reports snapshot_ready=false and exposes only its fsynced committed result prefix with progressive=true. Terminal pages remain immutable. Maximum 32 rows and 96 KiB per page, independent row cursors. No host or owner override, running-program restore or authenticated ChatGPT caller isolation."
+	)]
+	async fn search_results(
+		&self,
+		Parameters(params): Parameters<runtime::search_jobs::SearchResultsParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::search_jobs::search_results(scope.owner(), params)
+			.await
+			.and_then(|result| scope.annotate(result, true))
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "List Owned Searches",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "List bounded persisted searches owned by the verified private HTTP operator credential, shared by all its users, or this stdio native session. Independent pagination; never accepts caller-selected ownership. The same HTTP credential resumes retained metadata after reconnect or controller restart only while the current host binding and read-root policy authorize access. Revoked receipts are omitted. Stdio and legacy native-session receipts remain inaccessible to fresh sessions. Not authenticated ChatGPT caller isolation."
+	)]
+	async fn search_list(
+		&self,
+		Parameters(params): Parameters<runtime::search_jobs::SearchListParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::search_jobs::search_list(scope.owner(), params)
+			.await
+			.and_then(|result| scope.annotate(result, true))
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Cancel Own Native Search",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Request cooperative cancellation only for a bounded search owned by the verified private HTTP operator credential, or this stdio native session. Current host binding and read-root authorization are checked even for terminal receipts. Uses its pinned job cancellation marker, never an arbitrary PID or signal. Repeated stop is idempotent; retained terminal snapshots are preserved. After controller restart, unfinished searches are interrupted and are never relaunched. Not authenticated ChatGPT caller isolation."
+	)]
+	async fn search_stop(
+		&self,
+		Parameters(params): Parameters<runtime::search_jobs::SearchRefParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		runtime::search_jobs::search_stop(scope.owner(), params)
+			.await
+			.map(|result| scope.annotate_search_effect(result))
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Multiple UTF-8 Files",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read 1 to 16 complete small UTF-8 files on one configured operator host. Each path is authorized independently and opened without symlinks or hard links. Per-file byte cap defaults to 16 KiB, maximum 64 KiB; serialized MCP text response budget defaults to 64 KiB, maximum 256 KiB including escaping. Any bad path, invalid UTF-8, changed file or exceeded budget fails the whole call without partial content. Returns independent file versions and SHA256; not an atomic snapshot across files. No shell or arbitrary SSH targets."
+	)]
+	async fn read_multiple_files(
+		&self,
+		Parameters(params): Parameters<runtime::multi_read::MultiReadParams>,
+	) -> Result<String, String> {
+		runtime::multi_read::read(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Configured Host Health",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Measure authenticated SSH reachability and command roundtrip latency for one configured host alias, including authentication and remote startup. Uses a fixed bounded read-only challenge and a 10-second deadline. No caller-supplied network destinations or commands; failures are redacted. This is not ICMP ping or pure network RTT."
+	)]
+	async fn host_health(
+		&self,
+		Parameters(params): Parameters<runtime::health::HostHealthParams>,
+	) -> Result<String, String> {
+		runtime::health::host_health(params)
+			.await
+			.map_err(|error| error.to_string())
 	}
 
 	#[tool(
@@ -741,6 +1594,496 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "Page Durable Job Identities",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Page retained durable job metadata with an optional configured-host filter, opaque snapshot cursor and independent page limit of 1..128. Every response is bounded to 64 KiB. Continue next_cursor until null; inventory_complete is true only on the last page. A fresh first page observes current metadata. Continuations refer to that observation and may be invalidated by source changes, controller restart or bounded snapshot-cache expiry; start a new first page when refused. No job is started, stopped or replayed. Use process_status for authoritative live status."
+	)]
+	async fn process_list_page(
+		&self,
+		Parameters(params): Parameters<runtime::jobs::ProcessListPageParams>,
+	) -> Result<String, String> {
+		tokio::task::spawn_blocking(move || runtime::jobs::list_jobs_page(params))
+			.await
+			.map_err(|_| "Durable job inventory worker unavailable".to_string())?
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "document_read",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read PDF pages, DOCX outline/XML, XLS stored results and XLSX worksheet ranges on the controller or an explicit configured operator host. Native remote transfers verify versions and SHA256. Optional PDF render returns native MCP images. No URL fetching, decryption, macros or recalculation."
+	)]
+	async fn document_read(
+		&self,
+		Parameters(params): Parameters<runtime::documents::DocumentReadParams>,
+	) -> Result<CallToolResult, String> {
+		runtime::documents::read(params, false)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "image_read",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read a raster image on the controller or an explicit configured operator host as native MCP image content, with original SHA256 and dimensions. Preview is resized; use binary_read for lossless original bytes."
+	)]
+	async fn image_read(
+		&self,
+		Parameters(params): Parameters<runtime::documents::DocumentReadParams>,
+	) -> Result<CallToolResult, String> {
+		runtime::documents::read(params, true)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "document_write",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Create or replace PDF/DOCX from basic markdown, or XLSX from sheet row arrays, locally or on a configured operator host. Requires expected_sha256 or absent for create-only; no executable HTML, URL fetching or formula calculation."
+	)]
+	async fn document_write(
+		&self,
+		Parameters(params): Parameters<runtime::documents::DocumentWriteParams>,
+	) -> Result<CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::documents::write(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "document_edit",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Apply a fingerprint-checked exact XML replacement to a local or configured-operator-host DOCX body/header/footer. Preserve unselected package payloads. Reject invalid XML, stale versions and unexpected match counts. No shell operation."
+	)]
+	async fn document_edit(
+		&self,
+		Parameters(params): Parameters<runtime::documents::DocumentEditParams>,
+	) -> Result<CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::documents::edit(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "file_info",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = true
+		),
+		description = "Return a regular target file size, immutable-read version token, POSIX mode and full SHA256. Explicit configured operator host; rejects symlinks and special files."
+	)]
+	async fn file_info(
+		&self,
+		Parameters(params): Parameters<runtime::binary::FileInfoParams>,
+	) -> Result<String, String> {
+		runtime::binary::info(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "binary_read",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = true
+		),
+		description = "Read bounded base64 file bytes with independent chunk SHA256 and next_offset. Pin expected_version from the first chunk. No 1 MiB total file limit."
+	)]
+	async fn binary_read(
+		&self,
+		Parameters(params): Parameters<runtime::binary::BinaryReadParams>,
+	) -> Result<String, String> {
+		runtime::binary::read(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "binary_write",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Atomically publish at most 1 MiB of decoded base64 under the target account. expected_version is mandatory; absent is create-only. Preserves supported descriptor-bound ownership/mode, xattrs and ACLs with verification; rejects hard-link splits and special execution flags before publication."
+	)]
+	async fn binary_write(
+		&self,
+		Parameters(params): Parameters<runtime::binary::BinaryWriteParams>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::binary::write(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "binary_upload",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Stage binary files in bounded chunks and commit only after total size and SHA256 verification. Retries are bound to upload ID and offsets; destination is unchanged until commit. Commit replay verifies the published destination; abort never deletes committed output. This does not lock out noncooperating writers."
+	)]
+	async fn binary_upload(
+		&self,
+		Parameters(params): Parameters<runtime::binary::BinaryUploadParams>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::binary::upload(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "PDF Page Edit",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Insert/delete PDF pages into a distinct output file, preserving the source. Source/output fingerprints are required; inserted PDF sources also need SHA256. Supports local or explicitly configured operator-host paths. Page deletion is not secure redaction; signed/encrypted PDFs are rejected."
+	)]
+	async fn pdf_edit(
+		&self,
+		Parameters(params): Parameters<runtime::documents::PdfEditParams>,
+	) -> Result<rmcp::model::CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::documents::edit_pdf(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Worksheet Range Edit",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Edit a bounded XLSX/XLSM cell range with source SHA256 validation. Preserves unselected OOXML package payloads and cell styles; invalidates formula caches and requests recalculation on open. Does NOT calculate formulas. Signed workbooks, merged sheets and shared/array formula edits are refused. Supports local and explicit operator-host files."
+	)]
+	async fn worksheet_edit(
+		&self,
+		Parameters(params): Parameters<runtime::documents::WorksheetEditParams>,
+	) -> Result<rmcp::model::CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::documents::edit_worksheet(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Rich Document PDF Render",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Render HTML/CSS, Markdown or inline SVG to PDF locally or on a configured operator host. Assets require declared names, paths and SHA256 and are referenced as asset:name. No implicit file/HTTP requests, scripts or external resources. Return render warnings and actual page count; no pixel-identity claim to a browser."
+	)]
+	async fn document_render(
+		&self,
+		Parameters(params): Parameters<runtime::documents::DocumentRenderParams>,
+	) -> Result<rmcp::model::CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::documents::render_rich(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+	#[tool(
+		title = "Worksheet Formula Recalculate",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Compute supported XLSX/XLSM dependencies offline, including static global/local names, shared formulas, bounded declared fixed arrays and 1904 calendar serials. Preserve source formula encoding and unmodified OOXML payloads; require current SHA256. Reject circular/dynamic/external/relative-name/unsupported constructs before publication. Returns calculated caches and explicit error cells, not Microsoft Excel engine identity."
+	)]
+	async fn worksheet_recalculate(
+		&self,
+		Parameters(params): Parameters<runtime::documents::WorksheetRecalculateParams>,
+	) -> Result<rmcp::model::CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::documents::recalculate(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Recoverable Inode Patch",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Linux-only explicit same-size patch of at most 64 KiB, preserving inode/hard links/open-file identity. Requires expected version/hash, transaction ID and acknowledgement of NON-ATOMIC visibility. Durable private receipts support status/recovery. Optional special mode-bit preservation uses existing owner rights only. Not a transactional snapshot for concurrent readers; capabilities/immutable flags are refused."
+	)]
+	async fn binary_patch_inode(
+		&self,
+		Parameters(params): Parameters<runtime::binary::InodePatchParams>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::binary::patch_inode(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "PDF Protection and Signature Integrity",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Inspect PDF detached-CMS byte-range integrity, create AES-256 encrypted or owner-authorized decrypted copies, or append an explicitly acknowledged unsigned metadata revision. Source/output SHA256 required. Passwords are private owned files on the chosen host, never raw parameters. Original files remain unchanged. Optional trust_store_file plus SHA256 validates the chain only against caller-supplied public roots. validate_policy additionally checks DocMDP/FieldMDP revision differences offline. fill_form_copy creates a distinct incremental text-form output only with explicit roots, allow_unsigned_revision and verified form-filling permission; locked fields or invalid revisions are refused. Revocation, trusted signing time and certificate-purpose policy remain unevaluated. Existing signatures do not sign a new revision."
+	)]
+	async fn pdf_security(
+		&self,
+		Parameters(params): Parameters<runtime::documents::PdfSecurityParams>,
+	) -> Result<rmcp::model::CallToolResult, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::documents::secure_pdf(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Stream Handoff Prepare",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Prepare a controller-local receiver for a cooperating same-login old I/O owner. The first PID is the application leader; optional additional PIDs must be descendants. This does not open /proc fds, signal/capture processes, or steal DC sessions. Reuse the same idempotency key after uncertain acknowledgement. The returned private Unix socket is consumed by the reviewed owner-export helper; runtime restarts do not close accepted kernel pipe objects."
+	)]
+	async fn stream_handoff_prepare(
+		&self,
+		Parameters(params): Parameters<runtime::stream::StreamPrepareParams>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::stream::prepare(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Stream Handoff Status",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read the status of a controller-local cooperative stream receiver, including bound application identities, accepted owner state and retained output lengths. This never adopts a new descriptor or starts an application."
+	)]
+	async fn stream_handoff_status(
+		&self,
+		Parameters(params): Parameters<runtime::stream::StreamRefParams>,
+	) -> Result<String, String> {
+		runtime::stream::status(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Stream Handoff Read",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read exact bounded bytes from the retained stdout or stderr archive of an accepted cooperative handoff. Uses byte offsets/base64 and SHA256; it never consumes the application's kernel pipe directly."
+	)]
+	async fn stream_handoff_read(
+		&self,
+		Parameters(params): Parameters<runtime::stream::StreamReadParams>,
+	) -> Result<String, String> {
+		runtime::stream::read(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Stream Handoff Write",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Write up to 64 KiB of exact base64-decoded input to a previously accepted cooperative stdin pipe. request_id is mandatory: same ID/same bytes returns the prior receipt; partial or uncertain writes are never blindly replayed. This does not signal the application."
+	)]
+	async fn stream_handoff_write(
+		&self,
+		Parameters(params): Parameters<runtime::stream::StreamWriteParams>,
+	) -> Result<String, String> {
+		runtime::stream::write(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Stream Handoff Close Input",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Close only the runtime owner's accepted stdin-writer pipe. This may deliver EOF to the application when no other writer remains. It does not send a signal or claim termination."
+	)]
+	async fn stream_handoff_close(
+		&self,
+		Parameters(params): Parameters<runtime::stream::StreamRefParams>,
+	) -> Result<String, String> {
+		runtime::stream::close(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Stream Handoff List",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "List bounded controller-local cooperative stream sessions persisted by this runtime. Use status/read for authoritative state. No remote host or descriptor source can be supplied by the caller."
+	)]
+	async fn stream_handoff_list(
+		&self,
+		Parameters(params): Parameters<runtime::stream::StreamListParams>,
+	) -> Result<String, String> {
+		runtime::stream::list(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Process Checkpoint Lifecycle",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = true,
+			idempotent_hint = false,
+			open_world_hint = true
+		),
+		description = "Same-boot single-process Linux CRIU snapshots, only on administrator-pinned operator hosts. Inspect returns exact identity and resource limits. Dump stops/exits the original only after a validated private snapshot. Restore returns restored_stopped, never claims the program is running. A separate resume requires exact restored identity and acknowledge_resume. Old requests never silently relaunch; status exposes uncertain states. Internal pipes/unchanged files only; external sockets/terminals/GPU/multi-process state not supported. Uses existing sudo authority; no images or secrets returned."
+	)]
+	async fn process_checkpoint(
+		&self,
+		Parameters(params): Parameters<runtime::checkpoint::CheckpointParams>,
+	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
+		runtime::checkpoint::execute(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
 		title = "PTY Start",
 		annotations(
 			read_only_hint = false,
@@ -748,7 +2091,7 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = true
 		),
-		description = "Start an interactive SSH PTY on a configured host with explicit executable and argv. PTY sessions survive MCP requests but not a runtime process restart; use durable process tools for long jobs."
+		description = "Start a real terminal on a configured host. Operator terminals are owned by a target-account daemon, retain a full disk archive and survive controller restarts. Use an idempotency_key to reconcile uncertain launches. Target reboot does not resume a running program. Isolated-host terminals remain controller-scoped."
 	)]
 	async fn pty_start(
 		&self,
@@ -767,13 +2110,15 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Read bounded terminal output from an interactive PTY using a monotonic byte offset. The bounded ring buffer reports if earlier bytes were dropped."
+		description = "Read bounded PTY output using byte cursors. By default text pages preserve complete UTF-8 characters (a tiny limit may extend up to 3 bytes); utf8_pending means an incomplete live character needs more input. Set raw_bytes=true for exact byte pages and decode bytes_hex for binary output. text_is_lossy labels invalid text; output_complete is false on capture errors. The ring reports dropped prefixes."
 	)]
 	async fn pty_read(
 		&self,
 		Parameters(params): Parameters<runtime::pty::PtyReadParams>,
 	) -> Result<String, String> {
-		runtime::pty::read_pty(params).map_err(|error| error.to_string())
+		runtime::pty::read_pty_async(params)
+			.await
+			.map_err(|error| error.to_string())
 	}
 
 	#[tool(
@@ -803,7 +2148,7 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = true
 		),
-		description = "Close stdin and terminate the local SSH PTY transport for an interactive session created by this runtime."
+		description = "Close a runtime-created terminal. Operator mode asks its target owner to terminate the terminal child group and retains the complete archive. This does not guarantee containment of privileged or deliberately detached descendants."
 	)]
 	async fn pty_close(
 		&self,
@@ -828,7 +2173,9 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::pty::PtyListParams>,
 	) -> Result<String, String> {
-		runtime::pty::list_ptys(params).map_err(|error| error.to_string())
+		runtime::pty::list_ptys_async(params)
+			.await
+			.map_err(|error| error.to_string())
 	}
 
 	#[tool(
@@ -902,6 +2249,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::inspect::PrivilegedActionParams>,
 	) -> Result<String, String> {
+		// Optional cross-process new-effect admission. Must be configured on
+		// every controller and ingress before any owner transfer is eligible.
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+
 		runtime::inspect::privileged_action(params)
 			.await
 			.map_err(|error| error.to_string())
@@ -1062,6 +2415,154 @@ fn supports_cache_hints(context: &RequestContext<RoleServer>) -> bool {
 
 #[tool_handler(router = Self::tool_router())]
 impl ServerHandler for OctofsServer {
+	async fn call_tool(
+		&self,
+		request: CallToolRequestParams,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResponse, ErrorData> {
+		use runtime::request_audit::AuditCompletion;
+		let cancelled = context.ct.clone();
+		let router = Self::tool_router();
+		let enabled = runtime::config::maybe_runtime_config().is_some();
+		let known = router.get(request.name.as_ref());
+		let visible = known.is_some()
+			&& if enabled {
+				request.name.as_ref() != "shell"
+			} else {
+				!RUNTIME_TOOL_NAMES.contains(&request.name.as_ref())
+			};
+		let readonly = known
+			.and_then(|tool| tool.annotations.as_ref())
+			.and_then(|hints| hints.read_only_hint)
+			== Some(true);
+		let canonical = known.map_or("_unknown_tool", |tool| tool.name.as_ref());
+		// Observation must not change its own totals or keep invalidating the
+		// archive index. Only exact canonical metadata routes omit admission.
+		let metadata_observer = matches!(
+			canonical,
+			"request_history" | "request_archive" | "usage_stats"
+		);
+		let ticket = if enabled && !metadata_observer {
+			let scope = self
+				.owner_binding
+				.resolve(&context, self.search_owner.as_ref().as_deref())
+				.map_err(|_| {
+					ErrorData::internal_error(
+						"request authority unavailable; dispatch refused",
+						None,
+					)
+				})?;
+			Some(
+				runtime::request_audit::begin_with_read(
+					scope.owner(),
+					canonical,
+					if matches!(canonical, "request_status" | "request_result") {
+						match request
+							.arguments
+							.as_ref()
+							.and_then(|a| a.get("request_id"))
+							.and_then(serde_json::Value::as_str)
+						{
+							Some(id) => {
+								runtime::request_async::audit_read_target(scope.owner(), id)
+									.await
+									.map_err(|_| {
+										ErrorData::invalid_params(
+											"request unavailable to this scope or current policy",
+											None,
+										)
+									})?
+							}
+							None => None,
+						}
+					} else {
+						None
+					},
+				)
+				.await
+				.map_err(|_| {
+					ErrorData::internal_error("request audit unavailable; dispatch refused", None)
+				})?,
+			)
+		} else {
+			None
+		};
+		let result_intent = if let Some(ticket) = ticket
+			.as_ref()
+			.filter(|t| runtime::request_results::eligible(&t.identity().tool_name))
+		{
+			match runtime::request_results::admit(ticket.identity()).await {
+				Ok(intent) => Some(intent),
+				Err(_) => {
+					let mut result = Err(ErrorData::internal_error(
+						"result admission unavailable; tool was not dispatched",
+						None,
+					));
+					runtime::request_results::attach_identity(&mut result, ticket.request_id());
+					runtime::request_results::attach_ack(
+						&mut result,
+						"durability_unknown_not_dispatched",
+						false,
+					);
+					return result;
+				}
+			}
+		} else {
+			None
+		};
+		let mut result = if visible {
+			let call = rmcp::handler::server::tool::ToolCallContext::new(self, request, context);
+			router.call(call).await
+		} else {
+			Err(ErrorData::invalid_params(
+				"tool not found in this runtime mode",
+				None,
+			))
+		};
+		if let Some(ticket) = ticket {
+			let id = ticket.request_id().to_owned();
+			let tool = ticket.identity().tool_name;
+			let expose_id = runtime::request_results::exposes_identity(&tool);
+			if expose_id {
+				runtime::request_results::attach_identity(&mut result, &id);
+				runtime::request_results::reserve_final_wire(&mut result, &tool, &id);
+			}
+			let completion = match &result {
+				_ if cancelled.is_cancelled() => AuditCompletion::Unknown,
+				Ok(CallToolResponse::Complete(value)) if !value.is_error.unwrap_or(false) => {
+					AuditCompletion::Completed
+				}
+				_ if !visible || readonly => AuditCompletion::Failed,
+				_ => AuditCompletion::Unknown,
+			};
+			let retained = if let Some(intent) = result_intent {
+				let response = match &result {
+					Ok(CallToolResponse::Complete(value))
+						if !cancelled.is_cancelled() && !value.is_error.unwrap_or(false) =>
+					{
+						Some(value.clone())
+					}
+					_ => None,
+				};
+				runtime::request_results::complete(intent, response)
+					.await
+					.unwrap_or("durability_unknown")
+			} else {
+				"not_retained_policy"
+			};
+			let audit_durable = runtime::request_audit::finish(ticket, completion)
+				.await
+				.is_ok();
+			if !audit_durable {
+				warn!("request audit completion unavailable; dispatch result preserved; no automatic retry");
+			}
+			if expose_id {
+				runtime::request_results::attach_ack(&mut result, retained, audit_durable);
+			}
+		}
+		result
+	}
+
 	fn get_info(&self) -> ServerConfig {
 		ServerConfig::new(
 			// Resources (read/list) advertise automatically promoted shell jobs
@@ -1344,6 +2845,49 @@ pub enum TextEditorCommand {
 	StrReplace,
 	Delete,
 	UndoEdit,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TextFileWriteMode {
+	Create,
+	Replace,
+	Append,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct TextFileWriteParams {
+	/// Controller-local target path under an explicitly configured workspace.
+	pub path: String,
+	/// Explicit create, replace or append semantics.
+	pub mode: TextFileWriteMode,
+	/// UTF-8 input up to 64 KiB. Repeated unknown-outcome writes must not be blindly retried.
+	pub content: String,
+	/// 'absent' for create; lowercase 64-hex original SHA256 for replace or append.
+	pub expected_sha256: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct DirectoryCreateParams {
+	/// Directory path in the configured local controller workspace. Remote paths are refused.
+	pub path: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct DirectoryMoveParams {
+	/// Existing controller-local workspace directory, never a symlink or file.
+	pub source: String,
+	/// Absent target directory path with an existing authorized parent.
+	pub destination: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
+pub struct FileMoveParams {
+	/// Existing local ordinary file to move, never a symlink or directory.
+	pub source: String,
+	/// Absent destination path with an existing non-symlink parent directory.
+	pub destination: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]

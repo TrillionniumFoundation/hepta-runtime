@@ -1,0 +1,103 @@
+{
+  "schema": "hepta-public-gateway-offline-https-origin-validation-v1",
+  "recorded_at_utc": "2026-10-13T01:59:15.051563+00:00",
+  "source_parent": "01ae54756126b13ca751c12ad470ddb241344b17",
+  "target": "offline policy and OAuth issuer/resource metadata only",
+  "issue": {
+    "previously_accepted_resource_examples": [
+      "https://127.0.0.2/mcp",
+      "https://10.9.8.7/mcp",
+      "https://192.168.3.2/mcp",
+      "https://[fe80::1]/mcp",
+      "https://[fc00::2]/mcp",
+      "https://gateway.example.test:bad/mcp",
+      "https://localhost.localdomain/mcp"
+    ],
+    "previously_accepted_issuer_examples": [
+      "https://127.0.0.2",
+      "https://[fe80::1]",
+      "https://issuer.example.test:bad"
+    ],
+    "real_internet_request_handled": false,
+    "root_cause": "Prior URL parsing checked hostname against a three-item localhost set without excluding other literal IPs/special-use DNS; .port was not accessed so malformed ports were accepted."
+  },
+  "changes": {
+    "shared_module": "deploy/cloud_gateway_https.py",
+    "checks": [
+      "explicit HTTPS DNS name with at least two valid ASCII labels",
+      "reject IP literal IPv4/IPv6/private/loopback",
+      "reject special local hostname suffixes",
+      "strict authority and port syntax with HTTPS default/443 only",
+      "resource exact /mcp vs issuer origin only",
+      "reject URL credentials, whitespace, invalid path/query/fragment"
+    ],
+    "applied_at": [
+      "GatewayPolicy public resource config",
+      "TenantBinding issuer origin",
+      "OAuth protected-resource metadata",
+      "WWW-Authenticate resource metadata location"
+    ],
+    "trusted_dns_ownership_verified": false,
+    "live_dns_rebinding_tested": false,
+    "real_https_certificate_verified": false
+  },
+  "tests": {
+    "url": {
+      "count": 5,
+      "passed": true,
+      "log_sha256": "092818100bcc8ff4207f9be61ccb82178862db03d68a1491e8c6f1d8acb723d3"
+    },
+    "policy": {
+      "count": 40,
+      "passed": true,
+      "log_sha256": "776a3e0c4f5505e9e8a3042c7df0081dfff577f30566daf4e459768d52db59a6"
+    },
+    "catalog": {
+      "count": 11,
+      "passed": true,
+      "log_sha256": "b489cc2620e983ba8ccacc87a0efad1243c4dc16b0a8b949ca2c473d5bf66a99"
+    },
+    "authenticated": {
+      "count": 7,
+      "passed": true,
+      "log_sha256": "304da0b130625040e91ad9b13d4a118664ba7b3331a1f1dd6e1369ef0c7d4f09"
+    },
+    "private_facade": {
+      "count": 31,
+      "passed": true,
+      "log_sha256": "66eb7a0e3381e6a1ea602f726d34408719fe3d876515369d6a12d7bcd46ef0f3"
+    }
+  },
+  "shared_50_tool_native_catalog_sha256": "63742708c287e8468d73f27ba85ecc6585afd4adcd76d06b618456730cfaf8ad",
+  "unchanged_v4_native_contract": true,
+  "source_sha256": {
+    "deploy/cloud_gateway_https.py": "40880f37a5a4a8d61165153e84e7db310c35f707f25c245ea8bb13fec6fb3985",
+    "deploy/cloud_gateway_policy.py": "d381d45e572a72621d8e7fb57932f809e02c0453777a7af83cad013c6bf15e55",
+    "deploy/cloud_gateway_mcp_catalog.py": "93c284b76eb49638c4a3e6555022d5a3ed77a5bd64ba04baf2553280c79a00d4",
+    "tests/cloud_gateway_https_tests.py": "ed5f8b9f2bd1ce2c66996c50faad8a2484ea9ed1eeb194cc3a2daf409c684484",
+    "tests/cloud_gateway_policy_tests.py": "c04550ea7036a10b08652cdaf1400393e2e111a174ba87094b2b61d3ef060a77",
+    "tests/cloud_gateway_mcp_catalog_tests.py": "dbe95d3f5705afb201f4c8a3b462e58d0663f6238201c71ff62c384e2e1ec04a",
+    ".github/workflows/operator-parity.yml": "e0cea3e0b489c779ead794f007240eb247c398875e90a79575d90db53e1371d8"
+  },
+  "live_private_services": {
+    "hepta-runtime-operator.service": {
+      "MainPID": "2064509",
+      "ActiveState": "active"
+    },
+    "desktop-commander-remote.service": {
+      "MainPID": "2894",
+      "ActiveState": "active"
+    },
+    "hepta-openai-full-operator.service": {
+      "MainPID": "2064582",
+      "ActiveState": "active"
+    }
+  },
+  "private_runtime_tunnel_DC_restarted": false,
+  "public_https_endpoint_started": false,
+  "real_oauth_verifier_started": false,
+  "real_mtls_agent_started": false,
+  "public_plugin_submitted": false,
+  "hosted_ci": "not yet observed for this candidate",
+  "secrets_collected": false
+}

@@ -1,0 +1,22 @@
+{
+  "execution_mode": "operator",
+  "system_jobctl": false,
+  "id": "1a136890b39-101139-1",
+  "host": "ai395",
+  "ssh_target": "ai395",
+  "unit": "hepta-runtime-job-1a136890b39-101139-1",
+  "remote_job_dir": "/tmp/hepta-v8-rollback-target-d44ff13d1a403c06dd25288b407bccbf/remote-state/jobs/1a136890b39-101139-1",
+  "executable": "/usr/bin/python3",
+  "args": [
+    "-c",
+    "import json,os,time,pathlib,subprocess,sys\np=pathlib.Path('once');f=p.open('a');f.write('1');f.flush();os.fsync(f.fileno());f.close()\nif sys.platform=='linux':\n raw=pathlib.Path('/proc/'+str(os.getpid())+'/stat').read_text();ticks=int(raw.rsplit(') ',1)[1].split()[19])\n identity={'kind':'proc_start_ticks','value':pathlib.Path('/proc/sys/kernel/random/boot_id').read_text().strip()+':'+str(ticks)}\nelse:\n identity={'kind':'ps_lstart','value':subprocess.check_output(['ps','-p',str(os.getpid()),'-o','lstart='],text=True,timeout=3).strip()}\nassert identity['value']\npathlib.Path('new-process-identity.json').write_text(json.dumps({'pid':os.getpid(),'uid':os.geteuid(),'identity':identity}))\nprint('BEGIN',flush=True);deadline=time.monotonic()+180\nwhile not pathlib.Path('release-new').exists() and time.monotonic()<deadline:time.sleep(.05)\nprint('END',flush=True)\n"
+  ],
+  "cwd": "/tmp/hepta-v8-rollback-target-d44ff13d1a403c06dd25288b407bccbf/data",
+  "env_keys": [],
+  "created_unix_ms": 1791916313401,
+  "idempotency_key": "v8-rollback-d44ff13d1a403c06dd25288b407bccbf-job",
+  "request_fingerprint": 7888762091884436469,
+  "request_digest": "6d7a83537c56dbf5a5988308e70db48dae85d25c9c722d8922ff750669d99642",
+  "launch_state": "launched",
+  "launch_error": null
+}

@@ -1,0 +1,99 @@
+diff --git a/src/mcp/runtime/jobs.rs b/src/mcp/runtime/jobs.rs
+index f42280e..bf58e0a 100644
+--- a/src/mcp/runtime/jobs.rs
++++ b/src/mcp/runtime/jobs.rs
+@@ -1429,7 +1429,7 @@ fn job_inventory_response(records: &[JobRecord]) -> Result<String> {
+ 			})
+ 		})
+ 		.collect();
+-	let text = serde_json::to_string_pretty(&json!({"jobs":jobs,"total":records.len(),
++	let text = serde_json::to_string(&json!({"jobs":jobs,"total":records.len(),
+ 		"inventory_complete":true,"status_authoritative":false}))?;
+ 	let wire = serde_json::to_vec(&rmcp::model::CallToolResult::success(vec![
+ 		rmcp::model::ContentBlock::text(text.clone()),
+diff --git a/src/mcp/runtime/jobs_tests.rs b/src/mcp/runtime/jobs_tests.rs
+index 27205d4..06e2bb7 100644
+--- a/src/mcp/runtime/jobs_tests.rs
++++ b/src/mcp/runtime/jobs_tests.rs
+@@ -44,6 +44,81 @@ fn large_job_inventory_is_complete_redacted_and_wire_bounded() {
+ 	}
+ }
+ 
++
++#[test]
++fn compact_inventory_preserves_complete_five_field_inventory_at_real_registry_scale() {
++	for count in [4220_usize, 6000] {
++		let hosts = ["main", "pocket4", "rog", "mac", "x230", "ai395"];
++		let records: Vec<JobRecord> = (0..count)
++			.map(|index| {
++				let mode = if index.is_multiple_of(2) {
++					ExecutionMode::Operator
++				} else {
++					ExecutionMode::Isolated
++				};
++				let state = if index.is_multiple_of(3) {
++					"launched"
++				} else {
++					"pending"
++				};
++				let mut record = outcome_fixture(mode, false, state);
++				record.id = format!("1a137800000-b2f-{index:x}");
++				record.host = hosts[index % hosts.len()].to_string();
++				record.created_unix_ms = 1_791_932_000_000;
++				record.args = vec!["PRIVATE_ARG_DO_NOT_PUBLISH".into()];
++				record.env_keys = vec!["PRIVATE_ENV_DO_NOT_PUBLISH".into()];
++				record
++			})
++			.collect();
++		let text = job_inventory_response(&records).unwrap();
++		let value: Value = serde_json::from_str(&text).unwrap();
++		let jobs = value["jobs"].as_array().unwrap();
++		assert_eq!(value["total"], count);
++		assert_eq!(value["inventory_complete"], true);
++		assert_eq!(value["status_authoritative"], false);
++		assert_eq!(jobs.len(), count);
++		assert_eq!(
++			value.as_object().unwrap().keys().cloned().collect::<std::collections::BTreeSet<_>>(),
++			["inventory_complete", "jobs", "status_authoritative", "total"]
++				.into_iter().map(str::to_string).collect()
++		);
++		let expected_ids: std::collections::BTreeSet<_> =
++			records.iter().map(|record| record.id.as_str()).collect();
++		let actual_ids: std::collections::BTreeSet<_> =
++			jobs.iter().map(|row| row["id"].as_str().unwrap()).collect();
++		assert_eq!(actual_ids, expected_ids);
++		for (record, row) in records.iter().zip(jobs) {
++			assert_eq!(
++				row.as_object().unwrap().keys().cloned().collect::<std::collections::BTreeSet<_>>(),
++				["created_unix_ms", "execution_mode", "host", "id", "launch_state"]
++					.into_iter().map(str::to_string).collect()
++			);
++			assert_eq!(row["id"], record.id);
++			assert_eq!(row["host"], record.host);
++			assert_eq!(row["created_unix_ms"], serde_json::to_value(record.created_unix_ms).unwrap());
++			assert_eq!(row["execution_mode"], serde_json::to_value(&record.execution_mode).unwrap());
++			assert_eq!(row["launch_state"], record.launch_state);
++		}
++		assert!(!text.contains("PRIVATE_"));
++		assert!(!text.contains("configured-private-target"));
++		assert!(!text.contains("/private-job-root/"));
++		let wire = serde_json::to_vec(&rmcp::model::CallToolResult::success(vec![
++			rmcp::model::ContentBlock::text(text.clone()),
++		])).unwrap();
++		assert!(wire.len() <= 1024 * 1024);
++		let original_pretty = serde_json::to_string_pretty(&value).unwrap();
++		let original_wire = serde_json::to_vec(&rmcp::model::CallToolResult::success(vec![
++			rmcp::model::ContentBlock::text(original_pretty),
++		])).unwrap();
++		assert!(wire.len() < original_wire.len());
++		if count == 6000 {
++			assert!(original_wire.len() > 1024 * 1024);
++		} else {
++			assert!(original_wire.len() <= 1024 * 1024);
++		}
++	}
++}
++
+ #[test]
+ fn inventory_overflow_refuses_the_whole_result_instead_of_silent_partial() {
+ 	let records: Vec<JobRecord> = (0..10000)

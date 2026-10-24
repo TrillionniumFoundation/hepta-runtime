@@ -1,0 +1,83 @@
+{
+  "checks": [
+    {
+      "check": "real SSH target account",
+      "result": "passed",
+      "detail": {
+        "uid": 501,
+        "platform": "macos",
+        "workdir": "/private/tmp/hepta-operator-canary-37bc9a5334e241d78602f97a3225a0b9"
+      }
+    },
+    {
+      "check": "real authenticated MCP discovery and explicit capability mode",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "all operator entry points rejected on isolated host without target execution",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "shell pipes/redirects/env/Unicode/real UID/idempotency",
+      "result": "passed",
+      "detail": {
+        "backend": {
+          "backend": "detached",
+          "launcher_pid": 60292,
+          "ok": true,
+          "systemd_error": "systemd user units unavailable on this platform",
+          "unit": "hepta-runtime-job-1a136034bc0-5575e-1"
+        },
+        "uid": 501
+      }
+    },
+    {
+      "check": "native remote file API sees the same operator-created file",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "actual host PID pagination",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "external disposable PID: stale identity denied, actual signal delivered",
+      "result": "passed",
+      "detail": {
+        "atomic_identity": false,
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "effective_uid": 501,
+        "identity": "ps:\u4e09 10\u6708/14 00:05:53 2026",
+        "pid": 60397,
+        "result": "signal_sent",
+        "signal": 15,
+        "termination_confirmed": false
+      }
+    },
+    {
+      "check": "real SSH PTY shell input/output/Ctrl-C/close",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "real split-write Unicode PTY: text-safe pages and exact raw-byte pages",
+      "result": "passed",
+      "detail": null
+    },
+    {
+      "check": "actual test-controller restart: same job, logs, once-only side effect",
+      "result": "passed",
+      "detail": null
+    }
+  ],
+  "complete": true,
+  "passed": 10,
+  "ssh_target": "macbook-pro",
+  "target_test_directory": "/private/tmp/hepta-operator-canary-37bc9a5334e241d78602f97a3225a0b9",
+  "password_prompt_tested": false,
+  "chatgpt_tunnel_tested": false
+}

@@ -1,0 +1,22 @@
+{
+  "execution_mode": "operator",
+  "system_jobctl": false,
+  "id": "1a1362f27c3-772a6-1",
+  "host": "main",
+  "ssh_target": "localhost",
+  "unit": "hepta-runtime-job-1a1362f27c3-772a6-1",
+  "remote_job_dir": "/tmp/hepta-v7-rollback-target-umxg4mkl/remote-state/jobs/1a1362f27c3-772a6-1",
+  "executable": "/usr/bin/python3",
+  "args": [
+    "-c",
+    "import json,os,time,pathlib\np=pathlib.Path('once');f=p.open('a');f.write('1');f.flush();os.fsync(f.fileno());f.close()\nraw=pathlib.Path('/proc/'+str(os.getpid())+'/stat').read_text();ticks=int(raw.rsplit(') ',1)[1].split()[19])\nidentity=pathlib.Path('/proc/sys/kernel/random/boot_id').read_text().strip()+':'+str(ticks)\npathlib.Path('new-process-identity.json').write_text(json.dumps({'pid':os.getpid(),'uid':os.geteuid(),'identity':identity}))\nprint('BEGIN',flush=True);deadline=time.monotonic()+90\nwhile not pathlib.Path('release-new').exists() and time.monotonic()<deadline:time.sleep(.05)\nprint('END',flush=True)\n"
+  ],
+  "cwd": "/tmp/hepta-v7-rollback-target-umxg4mkl/data",
+  "env_keys": [],
+  "created_unix_ms": 1791910422467,
+  "idempotency_key": "v7-rollback-4b6b228b934ace2454e3f1f763511133-job",
+  "request_fingerprint": 3327980252679317236,
+  "request_digest": "2e2f5c684c7726f4762abb407bd846d885c367484be626b68e56b71812a7405d",
+  "launch_state": "launched",
+  "launch_error": null
+}

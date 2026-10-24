@@ -1,0 +1,23 @@
+{
+  "execution_mode": "operator",
+  "system_jobctl": false,
+  "id": "1a136f703a3-173c0c-1",
+  "host": "mac",
+  "ssh_target": "macbook-pro",
+  "unit": "hepta-runtime-job-1a136f703a3-173c0c-1",
+  "remote_job_dir": "/private/var/folders/4b/3k3pz4g52rqf29hjr083nzd00000gn/T/hepta-v9-rollback-target-fec8bf50eba704cc5920d303654c1e9a/remote-state/jobs/1a136f703a3-173c0c-1",
+  "executable": "/usr/bin/python3",
+  "args": [
+    "-u",
+    "-c",
+    "import json,os,pathlib,signal,time,subprocess,sys\nbase=pathlib.Path('.');once=base/'legacy-once';f=once.open('a');f.write('1');f.flush();os.fsync(f.fileno());f.close()\nif sys.platform=='linux':\n raw=pathlib.Path('/proc/'+str(os.getpid())+'/stat').read_text();ticks=int(raw.rsplit(') ',1)[1].split()[19])\n identity={'kind':'proc_start_ticks','value':pathlib.Path('/proc/sys/kernel/random/boot_id').read_text().strip()+':'+str(ticks)}\nelse:\n identity={'kind':'ps_lstart','value':subprocess.check_output(['ps','-p',str(os.getpid()),'-o','lstart='],text=True,timeout=3).strip()}\nassert identity['value']\nterm_count=0;tick=0\ndef store():\n p=base/'legacy-activity.json';t=base/'legacy-activity.tmp';t.write_text(json.dumps({'pid':os.getpid(),'uid':os.geteuid(),'identity':identity,'tick':tick,'term_count':term_count}));os.replace(t,p)\ndef term(sig,frame):\n global term_count\n term_count+=1;store()\nsignal.signal(signal.SIGTERM,term);store();print('LEGACY_BEGIN',flush=True)\ndeadline=time.monotonic()+180\nwhile not (base/'release-legacy').exists() and time.monotonic()<deadline:\n tick+=1;store();time.sleep(.1)\nprint('LEGACY_END',flush=True)\n"
+  ],
+  "cwd": "/private/var/folders/4b/3k3pz4g52rqf29hjr083nzd00000gn/T/hepta-v9-rollback-target-fec8bf50eba704cc5920d303654c1e9a/data",
+  "env_keys": [],
+  "created_unix_ms": 1791923520419,
+  "idempotency_key": "v9-rollback-fec8bf50eba704cc5920d303654c1e9a-legacy-job",
+  "request_fingerprint": 17825966933983042830,
+  "request_digest": "f7628e7afdeb1d0e5ff3622730ceb183ece81e2de34ef20313bde6142bb30bb5",
+  "launch_state": "launched",
+  "launch_error": null
+}

@@ -1,0 +1,22 @@
+{
+  "execution_mode": "operator",
+  "system_jobctl": false,
+  "id": "1a13647c131-a01e0-1",
+  "host": "mac",
+  "ssh_target": "macbook-pro",
+  "unit": "hepta-runtime-job-1a13647c131-a01e0-1",
+  "remote_job_dir": "/private/var/folders/4b/3k3pz4g52rqf29hjr083nzd00000gn/T/hepta-v7-rollback-target-29015c12bf960bf6d61aa12110098f8b/remote-state/jobs/1a13647c131-a01e0-1",
+  "executable": "/usr/bin/python3",
+  "args": [
+    "-c",
+    "import json,os,time,pathlib,subprocess,sys\np=pathlib.Path('once');f=p.open('a');f.write('1');f.flush();os.fsync(f.fileno());f.close()\nif sys.platform=='linux':\n raw=pathlib.Path('/proc/'+str(os.getpid())+'/stat').read_text();ticks=int(raw.rsplit(') ',1)[1].split()[19])\n identity={'kind':'proc_start_ticks','value':pathlib.Path('/proc/sys/kernel/random/boot_id').read_text().strip()+':'+str(ticks)}\nelse:\n identity={'kind':'ps_lstart','value':subprocess.check_output(['ps','-p',str(os.getpid()),'-o','lstart='],text=True,timeout=3).strip()}\nassert identity['value']\npathlib.Path('new-process-identity.json').write_text(json.dumps({'pid':os.getpid(),'uid':os.geteuid(),'identity':identity}))\nprint('BEGIN',flush=True);deadline=time.monotonic()+180\nwhile not pathlib.Path('release-new').exists() and time.monotonic()<deadline:time.sleep(.05)\nprint('END',flush=True)\n"
+  ],
+  "cwd": "/private/var/folders/4b/3k3pz4g52rqf29hjr083nzd00000gn/T/hepta-v7-rollback-target-29015c12bf960bf6d61aa12110098f8b/data",
+  "env_keys": [],
+  "created_unix_ms": 1791912034609,
+  "idempotency_key": "v7-rollback-29015c12bf960bf6d61aa12110098f8b-job",
+  "request_fingerprint": 8516871786568822106,
+  "request_digest": "763201c3fbfb2d5acab35060aa72e20c85605768878b5adaabaeca8d95e6f1d1",
+  "launch_state": "launched",
+  "launch_error": null
+}

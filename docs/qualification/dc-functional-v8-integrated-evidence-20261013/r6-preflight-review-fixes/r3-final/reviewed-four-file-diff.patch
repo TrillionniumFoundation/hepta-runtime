@@ -1,0 +1,336 @@
+--- old/deploy/preflight_dc_successor.py
++++ new/deploy/preflight_dc_successor.py
+@@ -452,9 +452,13 @@
+         # Actual v4 process_list has no complete flag. Independent complete
+         # durable membership equality supplies an observational proof, not a freeze.
+         registry_stable = registry_after == registry_before
+-        result["jobs_complete"] = (registry_stable and job_listing_hosts == set(HOSTS)
++        missing = set(registry_before["missing_directories"]) | set(registry_after["missing_directories"])
++        result["jobs_complete"] = (registry_stable and "jobs" not in missing
++                                   and job_listing_hosts == set(HOSTS)
+                                    and observed_job_ids == registry_before["jobs"])
+         result["registry_pin"] = digest(raw_json(registry_after))
++        if missing:
++            result["errors"].append({"scope": "registry", "error_type": "MissingDirectory"})
+         if not registry_stable:
+             result["errors"].append({"scope": "registry", "error_type": "MembershipChanged"})
+         result["ptys_complete"] = complete_ptys
+@@ -465,7 +469,8 @@
+                 if not isinstance(rows, list) or len(rows) > 128:
+                     raise ValueError("stream inventory exceeds bounded observation")
+                 # API has no paging/fullness guarantee. Saturation can never imply completeness.
+-                result["streams_complete"] = registry_stable and {row.get("session_id") for row in rows} == set(registry_before["streams"])
++                result["streams_complete"] = (registry_stable and "stream_handoffs" not in missing
++                                              and {row.get("session_id") for row in rows} == set(registry_before["streams"]))
+                 for row in rows:
+                     sid = safe_identity(row["session_id"], "stream")
+                     status = client.call("stream_handoff_status", {"session_id": sid})
+@@ -749,16 +754,19 @@
+     path = absent(path)
+     parent, name = S.open_parent(path)
+     directory = None
++    identity = None
+     created = []
+     made = False
+     try:
++        S.require_trusted_publication_parent(parent)
+         os.mkdir(name, mode=0o700, dir_fd=parent)
+         made = True
+         directory = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent)
++        observed = os.fstat(directory)
++        if observed.st_uid != os.getuid():
++            raise PermissionError("publication owner differs")
++        identity = observed
+         os.fchmod(directory, 0o700)
+-        identity = os.fstat(directory)
+-        if identity.st_uid != os.getuid():
+-            raise PermissionError("publication owner differs")
+         for filename, (raw, mode) in files.items():
+             if not S.NAME.fullmatch(filename):
+                 raise ValueError("bounded safe publication name required")
+@@ -784,10 +792,7 @@
+                 except FileNotFoundError:
+                     pass
+         if made:
+-            try:
+-                os.rmdir(name, dir_fd=parent)
+-            except OSError:
+-                pass
++            S.remove_owned_directory(parent, name, identity)
+         raise
+     finally:
+         if directory is not None:
+--- old/tests/dc_successor_preflight_tests.py
++++ new/tests/dc_successor_preflight_tests.py
+@@ -606,6 +606,64 @@
+         self.assertEqual(tree_snapshot(self.root), before)
+         self.assertFalse(self.args.backup_directory.exists())
+ 
++    def test_untrusted_publication_parent_refuses_before_creating_packet(self):
++        original_fstat = os.fstat
++        for reason in ("writable", "foreign_owner"):
++            with self.subTest(reason=reason):
++                parent = self.root / ("publication-parent-" + reason)
++                parent.mkdir(mode=0o700)
++                packet = parent / "packet"
++                if reason == "writable":
++                    parent.chmod(0o777)
++                pin = parent.stat()
++                def untrusted_parent(descriptor):
++                    info = original_fstat(descriptor)
++                    if reason == "foreign_owner" and (info.st_dev, info.st_ino) == (pin.st_dev, pin.st_ino):
++                        fields = list(info)
++                        fields[4] = os.getuid() + 100000
++                        return os.stat_result(fields)
++                    return info
++                before = tree_snapshot(self.root)
++                with mock.patch.object(os, "fstat", side_effect=untrusted_parent):
++                    with self.assertRaisesRegex(PermissionError, "publication parent"):
++                        P.write_private_bundle(packet, {"report.json": (b"owned fixture", 0o600)})
++                self.assertEqual(tree_snapshot(self.root), before)
++                self.assertFalse(packet.exists())
++                self.assertFalse(self.marker.exists())
++
++    def test_replaced_publication_directory_is_never_removed_during_failure_cleanup(self):
++        original_stat = os.stat
++        for empty in (True, False):
++            with self.subTest(empty_replacement=empty):
++                packet = self.root / ("race-packet-" + str(empty))
++                displaced = self.root / ("displaced-packet-" + str(empty))
++                replaced = False
++                def replace_before_path_check(path, *arguments, **kwargs):
++                    nonlocal replaced
++                    if path == packet.name and kwargs.get("dir_fd") is not None and not replaced:
++                        try:
++                            original_stat(packet / "owned.bin")
++                        except FileNotFoundError:
++                            pass
++                        else:
++                            packet.rename(displaced)
++                            packet.mkdir(mode=0o700)
++                            if not empty:
++                                write(packet / "foreign-marker", b"replacement must survive")
++                            replaced = True
++                    return original_stat(path, *arguments, **kwargs)
++                with mock.patch.object(os, "stat", side_effect=replace_before_path_check):
++                    with self.assertRaisesRegex(ValueError, "pathname changed"):
++                        P.write_private_bundle(packet, {"owned.bin": (b"owned fixture", 0o600)})
++                self.assertTrue(replaced)
++                self.assertTrue(packet.is_dir())
++                self.assertEqual(list(displaced.iterdir()), [])
++                if empty:
++                    self.assertEqual(list(packet.iterdir()), [])
++                else:
++                    self.assertEqual((packet / "foreign-marker").read_bytes(), b"replacement must survive")
++                self.assertFalse(self.marker.exists())
++
+     def test_report_write_failure_preserves_verified_private_hold_packet_and_live_inputs(self):
+         self.args.prepare_backups = True
+         self.args.backup_directory = self.root / "private-packet"
+@@ -785,7 +843,57 @@
+         self.assertTrue(calls)
+         self.assertFalse(any("cancel" in name or "start" in name or "write" in name for name, args in calls))
+ 
++    def test_missing_durable_registry_never_becomes_complete_empty_inventory(self):
++        owner = self
++        contract = json.loads(self.v4raw)
++        class Client:
++            def __init__(self, token_path):
++                owner.assertEqual(str(token_path), str(owner.token))
++            def rpc(self, method, arguments):
++                owner.assertEqual((method, arguments), ("tools/list", {}))
++                return {"tools": contract["tools"]}
++            def call(self, name, args):
++                owner.assertIn(name, P.READ_TOOLS)
++                if name == "host_list":
++                    return {"hosts": [{"name": host} for host in HOSTS]}
++                if name == "process_list":
++                    return {"jobs": [], "inventory_complete": True}
++                if name == "pty_list":
++                    return {"sessions": [], "has_more": False}
++                if name == "stream_handoff_list":
++                    return {"sessions": []}
++                owner.fail("Unexpected read tool")
++            def close(self):
++                pass
++        for missing in (set(), {"jobs"}, {"stream_handoffs"}, {"jobs", "stream_handoffs"}):
++            with self.subTest(missing=sorted(missing)):
++                for kind in ("jobs", "stream_handoffs"):
++                    path = self.state / kind
++                    if kind in missing:
++                        if path.exists():
++                            path.rmdir()
++                    else:
++                        path.mkdir(mode=0o700, exist_ok=True)
++                before = tree_snapshot(self.root)
++                with mock.patch.object(P, "LoopbackReadClient", Client):
++                    observed = P.inventory_observation(self.manifest)
++                self.assertEqual(observed["jobs_complete"], "jobs" not in missing)
++                self.assertEqual(observed["streams_complete"], "stream_handoffs" not in missing)
++                codes = {row["code"] for row in P.inventory_holds(observed)}
++                if "jobs" in missing:
++                    self.assertIn("JOB_INVENTORY_INCOMPLETE", codes)
++                if "stream_handoffs" in missing:
++                    self.assertIn("STREAM_INVENTORY_INCOMPLETE", codes)
++                if missing:
++                    self.assertIn({"scope": "registry", "error_type": "MissingDirectory"}, observed["errors"])
++                self.assertIn("DISPATCH_INVENTORY_UNAVAILABLE", codes)
++                self.assertIn("ADMISSION_NOT_FROZEN", codes)
++                self.assertEqual(tree_snapshot(self.root), before)
++                self.assertFalse(self.marker.exists())
++
+     def test_default_inventory_records_error_types_without_exception_or_tool_payload(self):
++        for kind in ("jobs", "stream_handoffs"):
++            (self.state / kind).mkdir(mode=0o700)
+         contract = json.loads(self.v4raw)
+         owner = self
+         class Client:
+--- old/deploy/stage_dc_successor.py
++++ new/deploy/stage_dc_successor.py
+@@ -59,6 +59,30 @@
+     except BaseException:
+         os.close(descriptor)
+         raise
++
++
++def require_trusted_publication_parent(parent):
++    info = os.fstat(parent)
++    if (not stat.S_ISDIR(info.st_mode) or info.st_uid not in (0, os.getuid())
++            or info.st_mode & 0o022):
++        raise PermissionError("publication parent requires trusted owner and no group/other writes")
++
++
++def remove_owned_directory(parent, name, identity):
++    """Leave an observed replacement untouched in a trusted publication parent.
++
++    The stat/rmdir pair is not atomic against another same-UID writer. Private
++    publication is not a security boundary against code running under our UID.
++    """
++    if identity is None:
++        return
++    try:
++        linked = os.stat(name, dir_fd=parent, follow_symlinks=False)
++        if (stat.S_ISDIR(linked.st_mode)
++                and (linked.st_dev, linked.st_ino) == (identity.st_dev, identity.st_ino)):
++            os.rmdir(name, dir_fd=parent)
++    except OSError:
++        pass
+ 
+ 
+ def validate_inode(info, label):
+@@ -411,17 +435,20 @@
+     destination = bundle["destination"]
+     parent, name = open_parent(destination)
+     directory = None
++    identity = None
+     created = []
+     made = False
+     try:
++        require_trusted_publication_parent(parent)
+         os.mkdir(name, mode=0o700, dir_fd=parent)
+         made = True
+         directory = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                             dir_fd=parent)
++        observed = os.fstat(directory)
++        if observed.st_uid != os.getuid():
++            raise PermissionError("new stage directory has an unexpected owner")
++        identity = observed
+         os.fchmod(directory, 0o700)
+-        identity = os.fstat(directory)
+-        if identity.st_uid != os.getuid():
+-            raise PermissionError("new stage directory has an unexpected owner")
+         for filename, (contents, mode) in bundle["files"].items():
+             fd = os.open(filename, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                          mode, dir_fd=directory)
+@@ -438,8 +465,9 @@
+                 if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != mode or reader.read() != contents:
+                     raise ValueError("staged artifact differs from the validated snapshot")
+         os.fsync(directory)
+-        if (os.stat(name, dir_fd=parent, follow_symlinks=False).st_ino != identity.st_ino
+-                or os.stat(name, dir_fd=parent, follow_symlinks=False).st_dev != identity.st_dev):
++        linked = os.stat(name, dir_fd=parent, follow_symlinks=False)
++        if (not stat.S_ISDIR(linked.st_mode)
++                or (linked.st_dev, linked.st_ino) != (identity.st_dev, identity.st_ino)):
+             raise ValueError("stage pathname changed during publication")
+         os.fsync(parent)
+         return {"staged": True, "activated": False, "destination": str(destination),
+@@ -453,10 +481,7 @@
+                 except FileNotFoundError:
+                     pass
+         if made:
+-            try:
+-                os.rmdir(name, dir_fd=parent)
+-            except OSError:
+-                pass
++            remove_owned_directory(parent, name, identity)
+         raise
+     finally:
+         if directory is not None:
+--- old/tests/dc_successor_stage_tests.py
++++ new/tests/dc_successor_stage_tests.py
+@@ -537,6 +537,65 @@
+         self.assertIs(manifest["credentials_copied"], False)
+         self.assertFalse(self.marker.exists())
+ 
++    def test_untrusted_publication_parent_refuses_before_creating_stage(self):
++        original_fstat = os.fstat
++        for reason in ("writable", "foreign_owner"):
++            with self.subTest(reason=reason):
++                parent = self.root / ("publication-parent-" + reason)
++                parent.mkdir(mode=0o700)
++                self.args.destination = parent / "release"
++                if reason == "writable":
++                    parent.chmod(0o777)
++                pin = parent.stat()
++                def untrusted_parent(descriptor):
++                    info = original_fstat(descriptor)
++                    if reason == "foreign_owner" and (info.st_dev, info.st_ino) == (pin.st_dev, pin.st_ino):
++                        fields = list(info)
++                        fields[4] = os.getuid() + 100000
++                        return os.stat_result(fields)
++                    return info
++                before = snapshot(self.root)
++                with mock.patch.object(os, "fstat", side_effect=untrusted_parent):
++                    with self.assertRaisesRegex(PermissionError, "publication parent"):
++                        S.stage(self.args)
++                self.assertEqual(snapshot(self.root), before)
++                self.assertFalse(self.args.destination.exists())
++                self.assertFalse(self.marker.exists())
++
++    def test_replaced_stage_directory_is_never_removed_during_failure_cleanup(self):
++        original_stat = os.stat
++        for empty in (True, False):
++            with self.subTest(empty_replacement=empty):
++                self.args.destination = self.root / ("race-stage-" + str(empty))
++                destination = self.args.destination
++                displaced = self.root / ("displaced-stage-" + str(empty))
++                replaced = False
++                def replace_before_path_check(path, *arguments, **kwargs):
++                    nonlocal replaced
++                    if path == destination.name and kwargs.get("dir_fd") is not None and not replaced:
++                        try:
++                            original_stat(destination / "manifest.json")
++                        except FileNotFoundError:
++                            pass
++                        else:
++                            destination.rename(displaced)
++                            destination.mkdir(mode=0o700)
++                            if not empty:
++                                write(destination / "foreign-marker", b"replacement must survive")
++                            replaced = True
++                    return original_stat(path, *arguments, **kwargs)
++                with mock.patch.object(os, "stat", side_effect=replace_before_path_check):
++                    with self.assertRaisesRegex(ValueError, "pathname changed"):
++                        S.stage(self.args)
++                self.assertTrue(replaced)
++                self.assertTrue(destination.is_dir())
++                self.assertEqual(list(displaced.iterdir()), [])
++                if empty:
++                    self.assertEqual(list(destination.iterdir()), [])
++                else:
++                    self.assertEqual((destination / "foreign-marker").read_bytes(), b"replacement must survive")
++                self.assertFalse(self.marker.exists())
++
+ 
+ if __name__ == "__main__":
+     unittest.main(verbosity=2)

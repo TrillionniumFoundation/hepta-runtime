@@ -1,4 +1,6 @@
 // Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -523,7 +525,19 @@ fn generator_noise_is_stripped_but_parameters_named_like_it_survive() {
 async fn served_tool_schemas_carry_no_generator_noise() {
 	let (client, _server_task, _unsolicited) = connect_legacy().await;
 	let tools = client.list_tools(None).await.expect("list tools");
-	assert_eq!(tools.tools.len(), 6);
+	assert_eq!(tools.tools.len(), 10);
+	for name in [
+		"directory_create",
+		"file_move",
+		"directory_move",
+		"text_file_write",
+	] {
+		assert!(
+			tools.tools.iter().any(|t| t.name == name),
+			"registered explicit {name}"
+		);
+	}
+
 	for tool in &tools.tools {
 		let schema = serde_json::to_string(tool.input_schema.as_ref()).expect("schema json");
 		assert!(
@@ -1027,4 +1041,99 @@ async fn runtime_linux_and_macos_backends_e2e() {
 		matches!(value["state"].as_str(), Some("cancelled" | "failed")),
 		"{waited}"
 	);
+}
+
+async fn runtime_observer_audit_snapshot(
+	state: &std::path::Path,
+) -> Vec<(std::ffi::OsString, Vec<u8>)> {
+	let mut entries = tokio::fs::read_dir(state.join("request-archive-v11"))
+		.await
+		.unwrap();
+	let mut files = Vec::new();
+	while let Some(entry) = entries.next_entry().await.unwrap() {
+		let path = entry.path();
+		let bytes = tokio::fs::read(&path).await.unwrap();
+		files.push((path.file_name().unwrap().to_owned(), bytes));
+	}
+	files.sort_by(|a, b| a.0.cmp(&b.0));
+	files
+}
+
+/// Use a child test process so the runtime's global configuration cannot
+/// alter filesystem-only protocol tests running in parallel in the parent.
+#[tokio::test(flavor = "multi_thread")]
+async fn runtime_metadata_observers_do_not_admit_themselves_over_real_mcp() {
+	const CHILD: &str = "HEPTA_METADATA_OBSERVER_TEST_CHILD";
+	if std::env::var_os(CHILD).is_none() {
+		let output = std::process::Command::new(std::env::current_exe().unwrap())
+			.args(["mcp::server::server_tests::runtime_metadata_observers_do_not_admit_themselves_over_real_mcp", "--exact", "--test-threads=1"])
+			.env(CHILD, "1").output().unwrap();
+		assert!(
+			output.status.success(),
+			"{}\n{}",
+			String::from_utf8_lossy(&output.stdout),
+			String::from_utf8_lossy(&output.stderr)
+		);
+		return;
+	}
+	let root = tempfile::Builder::new()
+		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
+		.unwrap();
+	let state = root.path().join("state");
+	tokio::fs::create_dir(&state).await.unwrap();
+	let config_path = root.path().join("runtime.json");
+	tokio::fs::write(&config_path, serde_json::to_vec(&json!({"state_dir":state,"hosts":{"fixture":{"ssh_target":"never-connect.invalid","platform":"linux","remote_state_dir":"/never-launch","allow_execute":false,"allow_pty":false,"allow_write":false}}})).unwrap()).await.unwrap();
+	let config = crate::mcp::runtime::RuntimeConfig::load(&config_path).unwrap();
+	crate::mcp::runtime::init_runtime(config).unwrap();
+	let (client, _server_task, _) = connect().await;
+	let (failed, _) = call_runtime_tool_text(&client, "host_list", json!({})).await;
+	assert!(!failed);
+
+	let before = runtime_observer_audit_snapshot(&state).await;
+	assert_eq!(before.len(), 1);
+	for _ in 0..3 {
+		for (name, args) in [
+			("request_history", json!({"limit":32})),
+			("request_archive", json!({"limit":32})),
+			("usage_stats", json!({})),
+		] {
+			let (failed, text) = call_runtime_tool_text(&client, name, args).await;
+			assert!(!failed, "{name}: {text}");
+			let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+			if name == "request_archive" {
+				assert_eq!(value["total"], 1);
+			}
+			if name == "usage_stats" {
+				assert_eq!(value["total_requests"], 1);
+				assert_eq!(value["completed"], 1);
+			}
+		}
+	}
+	for name in ["request_history", "request_archive"] {
+		let (failed, _) = call_runtime_tool_text(&client, name, json!({"limit":0})).await;
+		assert!(failed);
+	}
+	assert_eq!(
+		runtime_observer_audit_snapshot(&state).await,
+		before,
+		"both successful and invalid metadata queries leave original admissions unchanged"
+	);
+	let unknown = client
+		.call_tool(CallToolRequestParams::new("request_archive_hidden"))
+		.await;
+	assert!(unknown.is_err());
+	assert_eq!(
+		runtime_observer_audit_snapshot(&state).await.len(),
+		2,
+		"unknown routes must retain their ordinary audit admission"
+	);
+}
+
+#[test]
+fn execution_shadow_tool_requires_runtime_mode_discovery() {
+	assert!(super::RUNTIME_TOOL_NAMES.contains(&"execution_shadow_admit"));
+	assert!(super::OctofsServer::tool_router()
+		.list_all()
+		.iter()
+		.any(|tool| tool.name.as_ref() == "execution_shadow_admit"));
 }
