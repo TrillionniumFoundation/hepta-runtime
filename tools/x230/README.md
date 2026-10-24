@@ -239,3 +239,53 @@ smoke`. Smoke retains distinct A/B records and never emits a performance
 comparison, even if its call counts happen to match the full experiment.
 Incomplete or invalid comparisons retain their complete available evidence and
 show the unmet comparison requirements. Output files are create-only.
+
+## Qualified version provenance for fairness v2
+
+`build_x230_fairness_evidence_v2.py` preserves the reviewed v1 statistics,
+admission gates, failure retention and separate A/B verdicts. It adds explicit
+qualification provenance for A20/A21 or A20/A22 comparisons. The v1 builder and
+its existing evidence remain unchanged. Both v2 and its qualified-version
+registry are separate artifacts with their own exact hashes.
+
+The registry maps each version label to its binary SHA256, tested-source-map
+SHA256, source-file count and original qualification-report SHA256. Create an
+A22 entry only from its completed, successful qualification; do not prefill
+unmeasured or placeholder hashes. The builder requires matching binary hashes
+in the fairness report and the original qualification report, a qualified
+verdict, successful format/fmt-check/Clippy/test/release stages, and identical
+tested/after source maps. Known A20/A21 entries are pinned; an A22 label cannot
+reuse either known binary, source map or original qualification report.
+
+```sh
+python3 build_x230_fairness_evidence_v2.py \
+  --input "$original_fairness_report" --output "$new_fairness_evidence" \
+  --baseline A20 --candidate A22 --mode comparison \
+  --harness "$measured_fairness_harness" \
+  --base-driver "$measured_observation_driver" \
+  --registry "$qualified_version_registry" \
+  --baseline-qualification "$original_A20_qualification_report" \
+  --candidate-qualification "$original_A22_qualification_report"
+```
+
+The two qualification inputs are the complete original
+`qualification-report.json` files retained in the private x230 qualification
+directories. Preserve their exact bytes when copying them locally. The registry
+binds their raw-file SHA256s. A published compact qualification receipt can
+corroborate the binary/source-map values; the registry separately declares the
+original-report hashes. A compact receipt's sanitized or wrapped bytes are not
+the original report and cannot be substituted for these CLI inputs. Original
+qualification reports can contain private paths and belong outside the public
+repository.
+
+Source-map hashes use sorted, compact UTF-8 JSON with `(',', ':')` separators
+and no trailing newline. This differs from the newline-terminated evidence-file
+serialization. The v2 helper reads and hashes the original qualification report
+bytes; it does not independently rehash the executable or every source file and
+reports that boundary explicitly. Reconstructing source or binary artifacts is
+a separate verification step.
+
+Use the exact measured fairness and observation helpers for the run's helper
+hash checks. CPU remains attributed to complete cells, including metadata
+queries; it is not allocated to cold probes. A verified provenance chain does
+not imply successful observations, a performance improvement or adoption.

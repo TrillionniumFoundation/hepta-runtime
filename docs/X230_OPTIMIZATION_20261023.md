@@ -155,7 +155,96 @@ a WAN partition, production ownership transfer, or transactional exactly-once
 business effects. They establish controller recovery and the specifically
 tested publication/failure boundaries.
 
-## Optimization rejected by measurement
+## Optimizations rejected by measurement
+
+### A21 early host gating
+
+A21 completed formatting, strict Clippy, all 1,088 runtime tests and 26 auxiliary
+tests, and a source-pinned release build. It added seven scheduling scenarios
+inside existing isolated tests. Qualification alone did not establish that its
+scheduling tradeoff was useful.
+
+The complete A20/A21 fairness experiment retained 960 timed calls across balanced,
+hot-only, and skew workloads in ABBA order. Each wave submitted eight head calls,
+observed their native admission while they remained unfinished, and submitted two
+tail calls. All 96 admission gates, 292 wave metadata observations, four initial
+cursor receipts, and 48 complete-output checks were valid. This observes native
+admission, not exact pool-permit ownership.
+
+| Workload | A20 attempts/s | A21 attempts/s | Throughput change | CPU per call change |
+| --- | ---: | ---: | ---: | ---: |
+| Balanced six hosts | 24.0028 | 25.0581 | +4.40% | +0.73% |
+| One hot host | 11.9875 | 9.4192 | −21.42% | +18.83% |
+| Eight hot calls, two cold probes | 14.7479 | 12.1165 | −17.84% | +16.19% |
+
+The cold-host p95 in the skew case improved from 448.10 to 169.23 ms, but the
+hot-only p95 worsened from 852.18 to 1,059.96 ms. Both adjacent AB/BA hot-only
+comparisons showed the throughput regression. A21 is therefore **not adopted**.
+Its early per-host gate also serialized initial validation and response validation,
+reducing the overlap available to a hot host.
+
+A20 completed 479 of 480 timed calls and A21 completed 480 of 480. The baseline's
+single native capacity refusal in the balanced case remains in every relevant
+count and latency distribution; its balanced-cell successful rate was 23.8528/s.
+There were no client timeouts or automatic retries. All four EOF shutdowns were
+clean. Ten resource-sampling permission errors remain recorded (three for A20,
+seven for A21).
+
+The [full comparison](evidence/x230-a21-fairness-20261023.json),
+[qualification receipt](evidence/x230-a21-qualification-20261023.json), and
+[rejection decision](evidence/x230-a21-decision-20261023.json) preserve these
+separate outcomes. Applying the [exact source patch](experiments/x230-a21-scheduling.patch)
+to A20 commit `7da3a7ebaded8214bc65e69046b74e6251e21767` reproduces all 149 files in
+the qualified A21 source map. The adopted runtime source remains A20 until a
+successor independently passes qualification and workload comparisons.
+
+### A22 phased scheduling and remaining C16 refusals
+
+A22 keeps one global execution/output budget of eight but acquires it in two
+phases: initial full validation, then remote execution and response validation.
+It releases the first-phase permit before waiting for a host's existing
+two-slot admission, preserving overlap without holding all global slots behind
+one hot host. Sixteen logical admission permits bound requests throughout queue
+waiting, execution, captured responses and child cleanup. The channel remains
+eight slots. Stop-on-drop coverage also freezes admission after dispatcher or
+request-task failure, including an unpolled aborted task.
+
+The [A22 qualification](evidence/x230-a22-qualification-20261023.json) passed
+1,089 runtime tests plus 26 auxiliary tests, strict Clippy, formatting and a
+source-pinned release build. Its complete [fairness comparison](evidence/x230-a22-fairness-20261023.json)
+passed all 960 calls, 96 admission gates, 288 wave metadata observations, four
+initial cursors, 48 full-output checks and four clean EOF shutdowns.
+
+| Workload | A20 successful calls/s | A22 successful calls/s | Throughput change | CPU per call change |
+| --- | ---: | ---: | ---: | ---: |
+| Balanced six hosts | 22.9685 | 24.0954 | +4.91% | −2.13% |
+| One hot host | 11.0864 | 11.3468 | +2.35% | −1.64% |
+| Eight hot calls, two cold probes | 13.7884 | 13.3344 | −3.29% | +5.69% |
+
+Cold-host p95 fell from 469.52 to 226.21 ms, a 51.82% decrease. Both adjacent
+AB/BA pairs improved cold p95 by more than 51%, but both also showed lower whole
+skew throughput and higher CPU cost. The hot-only pairs differed in direction;
+the small combined hot-only improvement is not evidence of a stable speedup.
+Seven resource-sampling permission errors remain recorded. These observations
+avoid A21's large hot-host regression while retaining a real fairness tradeoff.
+
+A separate [C16 ABBA capacity comparison](evidence/x230-a22-capacity-20261023.json)
+retained all 384 timed calls. A20 succeeded in 47/96 and 42/96 calls; A22 in
+89/96 and 96/96. Thus both versions failed this workload's zero-refusal gate.
+A20 had 103 refusals and A22 had seven. Successful throughput was 27.6914/s and
+29.3286/s, respectively. Fast failures are not useful completed observations:
+their effect on attempt throughput, mixed latency and CPU per attempt is kept
+separate from successful throughput. The shared capacity-error text does not
+identify the internal gate that refused a particular call.
+
+A22 is **not adopted** while bounded queue admission is corrected and rechecked.
+The [decision receipt](evidence/x230-a22-decision-20261023.json) records both the
+fairness benefit and remaining failures. Applying its [exact source patch](experiments/x230-a22-scheduling.patch)
+to A20 commit `7da3a7ebaded8214bc65e69046b74e6251e21767` reproduces the qualified
+149-file source map `dcc6197816f1d36b515626390f128b6826abd47da30710ab4917ca418ef5c29c`.
+The qualified release binary is `f57b6bf92012de15b2ffe81daedcc69688c65f3b6c63b67c95d486664de6d076`.
+
+### Request-serialization hash replacement
 
 Replacing the request-serialization SHA256 writer unconditionally with ring
 was rejected. Six ABBA cycles retained all 72 timing cells and checked complete
@@ -180,7 +269,8 @@ this microbenchmark.
 The [x230 helper guide](../tools/x230/README.md) documents source qualification,
 the frozen comparison, sustained observation, and controller recovery. The
 publication manifest distinguishes measured originals from the few portable
-copies whose private path constants or comments were changed. Their hashes
+copies whose private path constants or comments were changed, plus two
+copyright-header-only changes. Their hashes
 must not be presented as byte-identical.
 
 Public evidence retains all call outcomes and sampling errors while replacing
@@ -193,3 +283,12 @@ A bounded optimization session cannot establish that no further improvement is
 possible. Remaining candidates must preserve authority checks, workload
 identity, bounded output retention, and truthful failure states, and must earn
 adoption through complete correctness and representative performance evidence.
+
+The x230's installed perf 6.8.12 could not measure even an own-process
+`perf stat -e task-clock -- /bin/true` probe: it returned 255 with an access
+denial while `perf_event_paranoid` was 4. The
+[profiler-availability receipt](evidence/x230-profiler-availability-20261023.json)
+records the original report hash. No runtime was attached and no host setting
+was changed. Aggregate controller CPU measurements remain available, but this
+probe provides no phase-level attribution to hashing, path validation, agent
+queries, or child management.

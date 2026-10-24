@@ -146,13 +146,22 @@ NUL within the 108-byte address field. It checks the shortest initial path
 before making a private directory, and checks complete sequence-specific paths
 before initial creation and renewal.
 
-Current global admission precedes the per-host permit. A sufficiently skewed
-queue can therefore spend global capacity waiting on one host. The balanced
-six-host benchmark does not prove fairness under that load. A future fair
-scheduler should select eligible hosts from one bounded pending budget, retain
-the captured-output budget through parsing, expire/cancel pending requests
-without launching them, and preserve all master-generation ownership rules.
-Increasing channel or session limits alone would not establish that property.
+In the adopted A20 scheduler, global admission precedes the per-host permit. A
+sufficiently skewed queue can therefore spend global capacity waiting on one
+host. The balanced six-host benchmark does not prove fairness under that load.
+The separately qualified A21 early-host-gate experiment improved cold-host tail
+latency but regressed hot-only throughput and CPU cost; it was rejected. Its
+[complete comparison and decision](evidence/x230-a21-decision-20261023.json)
+remain available, including the baseline's capacity refusal.
+
+A successor must preserve useful validation/execution overlap while avoiding
+global output-budget occupancy during hot-host waiting. It must keep a bounded
+total logical-request budget, retain captured-output permits through parsing,
+expire/cancel waiting requests without launching them, and preserve all
+master-generation ownership rules. Already spawned waiters must recheck stop,
+cancellation, and deadlines after a budget wakeup; a failed supervisor must
+freeze admission before such a waiter can cross the execution boundary.
+Increasing channel or session limits alone would not establish those properties.
 
 ## Recovery validation and its limits
 
