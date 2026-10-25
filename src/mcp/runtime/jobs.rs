@@ -1398,6 +1398,7 @@ except Exception as exc:
 log_truncated = {"stdout": False, "stderr": False}
 log_errors = {"stdout": None, "stderr": None}
 log_eof = {"stdout": False, "stderr": False}
+log_drain_finished = {"stdout": None, "stderr": None}
 log_bytes = {"stdout": {"seen": 0, "stored": 0}, "stderr": {"seen": 0, "stored": 0}}
 def drain(stream, sink, label):
     stored = 0
@@ -1433,6 +1434,7 @@ def drain(stream, sink, label):
         except Exception as exc:
             if log_errors[label] is None:
                 log_errors[label] = "close: " + str(exc)
+        log_drain_finished[label] = time.monotonic()
 
 readers = None
 try:
@@ -1500,6 +1502,15 @@ timed_out = False
 timeout = req.get("timeout_seconds")
 deadline = time.monotonic() + float(timeout) if timeout else None
 stop_deadline, kill_submitted = None, False
+# Preserve both original join budgets while the leader remains unreaped:
+# stdout gets two seconds, then stderr gets two seconds after stdout finishes.
+# The absolute four-second cap also bounds any cleanup after a failed join.
+leader_drain_until, leader_reader_deadline = None, None
+leader_reader_index, leader_reader_expired = 0, False
+leader_drain_error, leader_group_signal = None, "not_submitted"
+leader_group_signal_number = None
+leader_kill_submitted, leader_cancel_signalled = False, False
+leader_cleanup_errors = []
 exit_queue, exit_seen = None, False
 if sys.platform != "linux":
     exit_queue = select.kqueue()
@@ -1520,7 +1531,70 @@ while True:
     if exited is None and deadline is not None and now >= deadline:
         timed_out = True
     stopping = timed_out or cancel_requested
-    if stopping:
+    if exited is not None and not stopping and leader_drain_until is None:
+        leader_reader_deadline, leader_drain_until = now + 2, now + 4
+    if leader_drain_until is not None:
+        if not leader_kill_submitted:
+            while leader_reader_index < len(readers):
+                label = ("stdout", "stderr")[leader_reader_index]
+                finished = log_drain_finished[label]
+                # Natural completion requires EOF and an ended thread: a read
+                # failure also ends drain without releasing inherited writers.
+                # A completion timestamp later than this reader's deadline
+                # cannot turn an expired join into success.
+                if (log_eof[label] and not readers[leader_reader_index].is_alive() and finished is not None
+                        and finished <= leader_reader_deadline):
+                    leader_reader_index += 1
+                    if leader_reader_index < len(readers):
+                        leader_reader_deadline = min(leader_drain_until, now + 2)
+                    continue
+                if now >= leader_reader_deadline:
+                    leader_reader_expired = True
+                break
+            if leader_reader_index == len(readers):
+                break
+        elif not any(reader.is_alive() for reader in readers):
+            break
+        # Cancellation during this existing drain window must not renew it
+        # with a fresh eight-second cancellation grace period.
+        if cancel_requested and not leader_cancel_signalled and not leader_kill_submitted:
+            leader_cancel_signalled = True
+            # SIGTERM can close the inherited pipes immediately. Record the
+            # interrupted capture before signalling, not only on escalation.
+            leader_drain_error = "output drain cancelled after leader exit"
+            for label in log_errors:
+                if not log_eof[label]:
+                    log_errors[label] = log_errors[label] or leader_drain_error
+            leader_group_signal, leader_group_signal_number = "submitted", int(signal.SIGTERM)
+            try:
+                os.killpg(child.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                leader_group_signal = "already_absent"
+            except Exception as cleanup:
+                leader_group_signal = "failed"
+                leader_cleanup_errors.append("signal: " + str(cleanup))
+        if leader_reader_expired and not leader_kill_submitted:
+            leader_kill_submitted = True
+            leader_drain_error = leader_drain_error or "output drain deadline exceeded after leader exit"
+            expired_label = ("stdout", "stderr")[leader_reader_index]
+            log_errors[expired_label] = log_errors[expired_label] or leader_drain_error
+            for label in log_errors:
+                if not log_eof[label]:
+                    log_errors[label] = log_errors[label] or leader_drain_error
+            leader_group_signal, leader_group_signal_number = "submitted", int(signal.SIGKILL)
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                leader_group_signal = "already_absent"
+            except Exception as cleanup:
+                leader_group_signal = "failed"
+                leader_cleanup_errors.append("signal: " + str(cleanup))
+        if now >= leader_drain_until:
+            # A late stderr timeout may leave no join time. Signal while the
+            # original leader is still held, then report any undrained reader;
+            # never grant another interval or claim cleanup completed.
+            break
+    elif stopping:
         if stop_deadline is None:
             stop_deadline = now + 8
             try: os.killpg(child.pid, signal.SIGTERM)
@@ -1531,17 +1605,18 @@ while True:
             except ProcessLookupError: pass
         if exited is not None and (all(log_eof.values()) or now >= stop_deadline):
             break
-    elif exited is not None:
-        break
     time.sleep(.05)
 child.wait()
 if exit_queue is not None: exit_queue.close()
 rc = 124 if timed_out else child.returncode
 log_synced = {"stdout": False, "stderr": False}
 for label, reader, sink in zip(("stdout", "stderr"), readers, (out, err)):
-    reader.join(timeout=2)
+    remaining = max(0, leader_drain_until - time.monotonic()) if leader_drain_until is not None else 2
+    reader.join(timeout=remaining)
     if reader.is_alive():
         log_errors[label] = log_errors[label] or "output drain deadline exceeded"
+        if leader_drain_error is not None:
+            leader_cleanup_errors.append(label + ": output reader did not stop")
         continue
     try:
         # One barrier per completed stream, never per chunk. A durable exit
@@ -1551,9 +1626,9 @@ for label, reader, sink in zip(("stdout", "stderr"), readers, (out, err)):
         log_synced[label] = True
     except Exception as exc:
         log_errors[label] = log_errors[label] or "sync: " + str(exc)
-output_complete = all(log_eof.values()) and not any(log_errors.values()) and not any(log_truncated.values())
+output_complete = leader_drain_error is None and all(log_eof.values()) and not any(log_errors.values()) and not any(log_truncated.values())
 output_durable = output_complete and all(log_synced.values())
-publish_terminal({
+terminal = {
     "at_unix_ms": int(time.time() * 1000),
     "exit_code": int(rc),
     "cancelled": bool(cancel_requested),
@@ -1564,8 +1639,26 @@ publish_terminal({
     "output_complete": output_complete,
     "output_durable": output_durable,
     "log_synced": log_synced,
-})
-supervisor_rc = rc if output_durable or rc != 0 else 74
+}
+if leader_drain_error is not None:
+    # EOF after terminating an inherited writer cannot restore successful
+    # capture or establish which external effects that writer performed.
+    terminal.update({
+        "exit_code": 125,
+        "supervisor_error": leader_drain_error,
+        "supervisor_cleanup_errors": leader_cleanup_errors,
+        "effect_outcome": "unknown",
+        "status_authoritative": False,
+        "automatic_retry": False,
+        "child_spawned": True,
+        "child_pid": child.pid,
+        "child_group_signal": leader_group_signal,
+        "child_group_signal_number": leader_group_signal_number,
+        "child_reaped": True,
+        "child_exit_code": child.returncode,
+    })
+publish_terminal(terminal)
+supervisor_rc = 125 if leader_drain_error is not None else rc if output_durable or rc != 0 else 74
 raise SystemExit(int(supervisor_rc) if 0 <= int(supervisor_rc) <= 255 else 1)
 '''
 runner_path = job / "runner.py"

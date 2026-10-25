@@ -1,0 +1,573 @@
+--- a/src/mcp/runtime/jobs.rs
++++ b/src/mcp/runtime/jobs.rs
+@@ -1398,6 +1398,7 @@
+ log_truncated = {"stdout": False, "stderr": False}
+ log_errors = {"stdout": None, "stderr": None}
+ log_eof = {"stdout": False, "stderr": False}
++log_drain_finished = {"stdout": None, "stderr": None}
+ log_bytes = {"stdout": {"seen": 0, "stored": 0}, "stderr": {"seen": 0, "stored": 0}}
+ def drain(stream, sink, label):
+     stored = 0
+@@ -1433,6 +1434,7 @@
+         except Exception as exc:
+             if log_errors[label] is None:
+                 log_errors[label] = "close: " + str(exc)
++        log_drain_finished[label] = time.monotonic()
+ 
+ readers = None
+ try:
+@@ -1500,6 +1502,15 @@
+ timeout = req.get("timeout_seconds")
+ deadline = time.monotonic() + float(timeout) if timeout else None
+ stop_deadline, kill_submitted = None, False
++# Preserve both original join budgets while the leader remains unreaped:
++# stdout gets two seconds, then stderr gets two seconds after stdout finishes.
++# The absolute four-second cap also bounds any cleanup after a failed join.
++leader_drain_until, leader_reader_deadline = None, None
++leader_reader_index, leader_reader_expired = 0, False
++leader_drain_error, leader_group_signal = None, "not_submitted"
++leader_group_signal_number = None
++leader_kill_submitted, leader_cancel_signalled = False, False
++leader_cleanup_errors = []
+ exit_queue, exit_seen = None, False
+ if sys.platform != "linux":
+     exit_queue = select.kqueue()
+@@ -1520,7 +1531,69 @@
+     if exited is None and deadline is not None and now >= deadline:
+         timed_out = True
+     stopping = timed_out or cancel_requested
+-    if stopping:
++    if exited is not None and not stopping and leader_drain_until is None:
++        leader_reader_deadline, leader_drain_until = now + 2, now + 4
++    if leader_drain_until is not None:
++        if not leader_kill_submitted:
++            while leader_reader_index < len(readers):
++                label = ("stdout", "stderr")[leader_reader_index]
++                finished = log_drain_finished[label]
++                # EOF alone is not thread completion: drain still closes its
++                # stream in finally. A completion timestamp later than this
++                # reader's deadline cannot turn an expired join into success.
++                if (not readers[leader_reader_index].is_alive() and finished is not None
++                        and finished <= leader_reader_deadline):
++                    leader_reader_index += 1
++                    if leader_reader_index < len(readers):
++                        leader_reader_deadline = min(leader_drain_until, now + 2)
++                    continue
++                if now >= leader_reader_deadline:
++                    leader_reader_expired = True
++                break
++            if leader_reader_index == len(readers):
++                break
++        elif not any(reader.is_alive() for reader in readers):
++            break
++        # Cancellation during this existing drain window must not renew it
++        # with a fresh eight-second cancellation grace period.
++        if cancel_requested and not leader_cancel_signalled and not leader_kill_submitted:
++            leader_cancel_signalled = True
++            # SIGTERM can close the inherited pipes immediately. Record the
++            # interrupted capture before signalling, not only on escalation.
++            leader_drain_error = "output drain cancelled after leader exit"
++            for label in log_errors:
++                if not log_eof[label]:
++                    log_errors[label] = log_errors[label] or leader_drain_error
++            leader_group_signal, leader_group_signal_number = "submitted", int(signal.SIGTERM)
++            try:
++                os.killpg(child.pid, signal.SIGTERM)
++            except ProcessLookupError:
++                leader_group_signal = "already_absent"
++            except Exception as cleanup:
++                leader_group_signal = "failed"
++                leader_cleanup_errors.append("signal: " + str(cleanup))
++        if leader_reader_expired and not leader_kill_submitted:
++            leader_kill_submitted = True
++            leader_drain_error = leader_drain_error or "output drain deadline exceeded after leader exit"
++            expired_label = ("stdout", "stderr")[leader_reader_index]
++            log_errors[expired_label] = log_errors[expired_label] or leader_drain_error
++            for label in log_errors:
++                if not log_eof[label]:
++                    log_errors[label] = log_errors[label] or leader_drain_error
++            leader_group_signal, leader_group_signal_number = "submitted", int(signal.SIGKILL)
++            try:
++                os.killpg(child.pid, signal.SIGKILL)
++            except ProcessLookupError:
++                leader_group_signal = "already_absent"
++            except Exception as cleanup:
++                leader_group_signal = "failed"
++                leader_cleanup_errors.append("signal: " + str(cleanup))
++        if now >= leader_drain_until:
++            # A late stderr timeout may leave no join time. Signal while the
++            # original leader is still held, then report any undrained reader;
++            # never grant another interval or claim cleanup completed.
++            break
++    elif stopping:
+         if stop_deadline is None:
+             stop_deadline = now + 8
+             try: os.killpg(child.pid, signal.SIGTERM)
+@@ -1531,17 +1604,18 @@
+             except ProcessLookupError: pass
+         if exited is not None and (all(log_eof.values()) or now >= stop_deadline):
+             break
+-    elif exited is not None:
+-        break
+     time.sleep(.05)
+ child.wait()
+ if exit_queue is not None: exit_queue.close()
+ rc = 124 if timed_out else child.returncode
+ log_synced = {"stdout": False, "stderr": False}
+ for label, reader, sink in zip(("stdout", "stderr"), readers, (out, err)):
+-    reader.join(timeout=2)
++    remaining = max(0, leader_drain_until - time.monotonic()) if leader_drain_until is not None else 2
++    reader.join(timeout=remaining)
+     if reader.is_alive():
+         log_errors[label] = log_errors[label] or "output drain deadline exceeded"
++        if leader_drain_error is not None:
++            leader_cleanup_errors.append(label + ": output reader did not stop")
+         continue
+     try:
+         # One barrier per completed stream, never per chunk. A durable exit
+@@ -1551,9 +1625,9 @@
+         log_synced[label] = True
+     except Exception as exc:
+         log_errors[label] = log_errors[label] or "sync: " + str(exc)
+-output_complete = all(log_eof.values()) and not any(log_errors.values()) and not any(log_truncated.values())
++output_complete = leader_drain_error is None and all(log_eof.values()) and not any(log_errors.values()) and not any(log_truncated.values())
+ output_durable = output_complete and all(log_synced.values())
+-publish_terminal({
++terminal = {
+     "at_unix_ms": int(time.time() * 1000),
+     "exit_code": int(rc),
+     "cancelled": bool(cancel_requested),
+@@ -1564,8 +1638,26 @@
+     "output_complete": output_complete,
+     "output_durable": output_durable,
+     "log_synced": log_synced,
+-})
+-supervisor_rc = rc if output_durable or rc != 0 else 74
++}
++if leader_drain_error is not None:
++    # EOF after terminating an inherited writer cannot restore successful
++    # capture or establish which external effects that writer performed.
++    terminal.update({
++        "exit_code": 125,
++        "supervisor_error": leader_drain_error,
++        "supervisor_cleanup_errors": leader_cleanup_errors,
++        "effect_outcome": "unknown",
++        "status_authoritative": False,
++        "automatic_retry": False,
++        "child_spawned": True,
++        "child_pid": child.pid,
++        "child_group_signal": leader_group_signal,
++        "child_group_signal_number": leader_group_signal_number,
++        "child_reaped": True,
++        "child_exit_code": child.returncode,
++    })
++publish_terminal(terminal)
++supervisor_rc = 125 if leader_drain_error is not None else rc if output_durable or rc != 0 else 74
+ raise SystemExit(int(supervisor_rc) if 0 <= int(supervisor_rc) <= 255 else 1)
+ '''
+ runner_path = job / "runner.py"
+--- a/src/mcp/runtime/jobs_output_durability_tests.rs
++++ b/src/mcp/runtime/jobs_output_durability_tests.rs
+@@ -561,3 +561,402 @@
+ 		]
+ 	);
+ }
++
++// The fixture becomes a Linux subreaper only to collect its own adopted
++// grandchild after the real runner finishes. The fixed grandchild self-exits
++// after eight seconds even when the product fails to terminate it; fixture
++// rescue and product signals/waits are recorded separately.
++const INHERITED_PIPE_FIXTURE: &str = r#"
++import ctypes,hashlib,json,os,pathlib,signal,subprocess,sys,threading,time
++q=json.load(sys.stdin)
++job=pathlib.Path(q['job'])
++libc=ctypes.CDLL(None,use_errno=True)
++if libc.prctl(36,1,0,0,0)!=0:
++    raise OSError(ctypes.get_errno(),'fixture child-subreaper setup failed')
++child_code='''import os,pathlib,signal,time
++descendant=os.fork()
++if descendant==0:
++    signal.signal(signal.SIGTERM,signal.SIG_IGN)
++    pathlib.Path('descendant').write_text(str(os.getpid()))
++    time.sleep(8)
++    os._exit(0)
++until=time.monotonic()+2
++while not pathlib.Path('descendant').exists() and time.monotonic()<until:
++    time.sleep(.005)
++if not pathlib.Path('descendant').exists():
++    raise RuntimeError('original descendant did not start')
++pathlib.Path('effect').write_bytes(b'original leader executed once\\n')
++os._exit(0)
++'''
++if not q['ignore_term']:
++    child_code=child_code.replace('signal.SIG_IGN','signal.SIG_DFL')
++if q['staggered']:
++    child_code=child_code.replace('    time.sleep(8)',
++        "    os.write(1,b'original staggered stdout\\n')\n"
++        "    os.write(2,b'original staggered stderr\\n')\n"
++        "    time.sleep(1.0)\n"
++        "    os.close(1)\n"
++        "    time.sleep(1.5)\n"
++        "    os.close(2)")
++req={'job_id':'inherited-pipe-durability','job_dir':str(job),
++     'launch_nonce':'c'*32,'terminal_publication_protocol':1,
++     'request_fingerprint':'original-leader-exit-held-pipes',
++     'executable':sys.executable,'args':['-I','-S','-c',child_code],
++     'execution_mode':'operator','cwd':str(job),'timeout_seconds':10,'env':{}}
++(job/'request.json').write_text(json.dumps(req))
++os.chmod(job/'request.json',0o600)
++info=job.stat()
++binding={'device':info.st_dev,'inode':info.st_ino,'job_id':req['job_id'],
++         'launch_nonce':req['launch_nonce'],'request_fingerprint':req['request_fingerprint']}
++real_popen,real_killpg,real_waitid=subprocess.Popen,os.killpg,os.waitid
++spawned,signals,waits,adopted,cleanup=[],[],[],[],[]
++scope={'__name__':'__main__'}
++state={'phase':'runner','runner_exit':None,'runner_exception':None,
++       'cancel_delivered_during_drain':False}
++
++def popen(*args,**kwargs):
++    if spawned:
++        raise AssertionError('fixture permits exactly one workload Popen')
++    child=real_popen(*args,**kwargs)
++    spawned.append(child)
++    original_wait=child.wait
++    def wait(timeout=None):
++        event={'phase':state['phase'],'returned':False,'returncode':None}
++        waits.append(event)
++        result=original_wait(timeout=timeout)
++        event.update(returned=True,returncode=result)
++        return result
++    child.wait=wait
++    return child
++
++def waitid(*args,**kwargs):
++    result=real_waitid(*args,**kwargs)
++    if (q['cancel_overlap'] and scope.get('leader_drain_until') is not None
++            and not state['cancel_delivered_during_drain']):
++        state['cancel_delivered_during_drain']=True
++        os.kill(os.getpid(),signal.SIGTERM)
++    return result
++
++def killpg(group,signum):
++    child=spawned[0]
++    unreaped=child.returncode is None
++    observed=real_waitid(os.P_PID,child.pid,os.WEXITED|os.WNOHANG|os.WNOWAIT) if unreaped else None
++    event={'phase':state['phase'],'group':group,'signal':signum,
++           'original_child_unreaped':unreaped,'returned':False,
++           'original_leader_exited':observed is not None and observed.si_pid==child.pid,
++           'leader_exit_code':None if observed is None else observed.si_status}
++    signals.append(event)
++    result=real_killpg(group,signum)
++    event['returned']=True
++    return result
++
++def alarm(_signum,_frame):
++    raise TimeoutError('fixture original 30-second cleanup trigger')
++
++signal.signal(signal.SIGALRM,alarm)
++signal.setitimer(signal.ITIMER_REAL,30)
++subprocess.Popen,os.killpg,os.waitid=popen,killpg,waitid
++sys.argv=['-c',str(job),json.dumps(binding),'detached']
++try:
++    exec(q['runner'],scope)
++except SystemExit as stopped:
++    state['runner_exit']=stopped.code if isinstance(stopped.code,int) else 1
++except BaseException as error:
++    state['runner_exception']=type(error).__name__+': '+str(error)
++finally:
++    signal.setitimer(signal.ITIMER_REAL,0)
++    subprocess.Popen,os.killpg,os.waitid=real_popen,real_killpg,real_waitid
++    readers=scope.get('readers') or []
++    state['readers_alive_at_runner_return']=[r.is_alive() for r in readers]
++    state['normal_drain_window_present']=scope.get('leader_drain_until') is not None
++    state['cancellation_deadline']=scope.get('stop_deadline')
++    state['phase']='rescue'
++    # No poll/wait before the last rescue group signal: only an unreaped
++    # original child permits this cleanup signal. Never signal a saved PID.
++    for child in spawned:
++        if child.returncode is None:
++            try:
++                real_killpg(child.pid,signal.SIGKILL)
++                cleanup.append('fixture submitted rescue group SIGKILL')
++            except ProcessLookupError:
++                cleanup.append('fixture rescue group was absent')
++            except BaseException as error:
++                cleanup.append('fixture rescue signal: '+str(error))
++            try:
++                child.wait(timeout=12)
++            except BaseException as error:
++                cleanup.append('fixture rescue wait: '+str(error))
++    # Every possible fixture workload is fixed and bounded. Adopted-child
++    # collection can therefore wait for the eight-second self-exit on a red
++    # baseline; it never supplies a group signal after leader reap.
++    while True:
++        try:
++            pid,status=os.waitpid(-1,0)
++        except ChildProcessError:
++            break
++        adopted.append({'pid':pid,'returncode':os.waitstatus_to_exitcode(status)})
++    for reader in readers:
++        if reader.ident is not None:
++            reader.join(timeout=2)
++            if reader.is_alive():
++                cleanup.append('fixture reader did not stop')
++    if not any(r.is_alive() for r in readers):
++        for child in spawned:
++            for stream in (child.stdout,child.stderr):
++                if stream is not None:
++                    stream.close()
++        for name in ('out','err','stdin_handle'):
++            stream=scope.get(name)
++            if hasattr(stream,'close'):
++                stream.close()
++    if isinstance(scope.get('owner_fd'),int):
++        os.close(scope['owner_fd'])
++    for fd in scope.get('_hepta_directory_pins',[]):
++        os.close(fd)
++
++originals={}
++for name in ('request.json','child.json','exit.json','exit.witness.json',
++             'stdout.log','stderr.log','effect','descendant'):
++    path=job/name
++    raw=path.read_bytes() if path.exists() else None
++    originals[name]=None if raw is None else {
++        'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'utf8':raw.decode('utf-8')}
++receipt=None if originals['exit.json'] is None else json.loads(originals['exit.json']['utf8'])
++witness=None if originals['exit.witness.json'] is None else json.loads(originals['exit.witness.json']['utf8'])
++status_scope={}
++exec(q['status_function'],status_scope)
++print(json.dumps({'schema':'hepta-inherited-pipe-drain-fixture/v1','state':state,
++                  'workload_popen_count':len(spawned),'workload_pid':None if not spawned else spawned[0].pid,
++                  'signals':signals,'waits':waits,'adopted':adopted,'cleanup':cleanup,
++                  'originals':originals,'receipt':receipt,'witness':witness,
++                  'final_status':None if receipt is None else status_scope['final_status'](receipt)},sort_keys=True))
++"#;
++
++fn inherited_pipe_fault(cancel_overlap: bool, ignore_term: bool, staggered: bool) -> Value {
++	use std::process::{Command, Stdio};
++	use std::time::{Duration, Instant};
++	let root = tempfile::Builder::new()
++		.prefix("hepta-inherited-pipe-fault-")
++		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
++		.unwrap()
++		.keep();
++	let state = root.join("state");
++	let jobs = state.join("jobs");
++	let job = jobs.join("inherited-pipe-durability");
++	std::fs::create_dir_all(&job).unwrap();
++	for directory in [&state, &jobs, &job] {
++		std::fs::set_permissions(directory, std::fs::Permissions::from_mode(0o700)).unwrap();
++	}
++	let status_function = STATUS_CODE
++		.split_once("def final_status(exit_data):")
++		.unwrap()
++		.1
++		.split_once("\ndef one_status():")
++		.unwrap()
++		.0;
++	let input = root.join("input.json");
++	let stdout = root.join("fixture.stdout");
++	let stderr = root.join("fixture.stderr");
++	std::fs::write(
++		&input,
++		serde_json::to_vec(
++			&json!({"job":job,"runner":runner_source(),"cancel_overlap":cancel_overlap,
++			"ignore_term":ignore_term,"staggered":staggered,
++			"status_function":format!("def final_status(exit_data):{status_function}")}),
++		)
++		.unwrap(),
++	)
++	.unwrap();
++	let mut child = Command::new("python3")
++		.args(["-I", "-S", "-c", INHERITED_PIPE_FIXTURE])
++		.stdin(Stdio::from(std::fs::File::open(&input).unwrap()))
++		.stdout(Stdio::from(std::fs::File::create(&stdout).unwrap()))
++		.stderr(Stdio::from(std::fs::File::create(&stderr).unwrap()))
++		.spawn()
++		.unwrap();
++	let deadline = Instant::now() + Duration::from_secs(45);
++	let status = loop {
++		match child.try_wait() {
++			Ok(Some(status)) => break status,
++			Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
++			outcome => {
++				let killed = child.kill();
++				let waited = child.wait();
++				panic!(
++					"inherited-pipe fixture failed: {outcome:?}; kill={killed:?}; wait={waited:?}; retained={root:?}"
++				);
++			}
++		}
++	};
++	assert!(
++		status.success(),
++		"inherited-pipe fixture failed; retained={root:?}; stderr={}",
++		std::fs::read_to_string(&stderr).unwrap_or_default()
++	);
++	serde_json::from_slice(&std::fs::read(stdout).unwrap()).unwrap()
++}
++
++#[test]
++fn inherited_pipe_timeout_keeps_original_group_identity_and_unknown_effect() {
++	for (cancel_overlap, ignore_term) in [(false, true), (true, true), (true, false)] {
++		let result = inherited_pipe_fault(cancel_overlap, ignore_term, false);
++		assert_eq!(result["workload_popen_count"], 1);
++		assert_eq!(result["state"]["runner_exit"], 125);
++		assert!(result["state"]["runner_exception"].is_null());
++		assert_eq!(result["state"]["normal_drain_window_present"], true);
++		assert!(result["state"]["cancellation_deadline"].is_null());
++		assert_eq!(
++			result["state"]["cancel_delivered_during_drain"],
++			cancel_overlap
++		);
++		assert_eq!(
++			result["state"]["readers_alive_at_runner_return"],
++			json!([false, false])
++		);
++		assert_eq!(
++			result["cleanup"],
++			json!([]),
++			"fixture rescue must not supply product cleanup"
++		);
++		let waits = result["waits"].as_array().unwrap();
++		assert_eq!(waits.len(), 1);
++		assert_eq!(waits[0]["phase"], "runner");
++		assert_eq!(waits[0]["returned"], true);
++		assert_eq!(waits[0]["returncode"], 0);
++		let signals = result["signals"].as_array().unwrap();
++		assert_eq!(
++			signals.len(),
++			if cancel_overlap && ignore_term { 2 } else { 1 }
++		);
++		for event in signals {
++			assert_eq!(event["phase"], "runner");
++			assert_eq!(event["group"], result["workload_pid"]);
++			assert_eq!(event["original_child_unreaped"], true);
++			assert_eq!(event["original_leader_exited"], true);
++			assert_eq!(event["leader_exit_code"], 0);
++			assert_eq!(event["returned"], true);
++		}
++		let final_signal = if cancel_overlap && !ignore_term {
++			15
++		} else {
++			9
++		};
++		assert_eq!(signals.last().unwrap()["signal"], final_signal);
++		let adopted = result["adopted"].as_array().unwrap();
++		assert_eq!(adopted.len(), 1);
++		assert_eq!(adopted[0]["returncode"], -final_signal);
++		assert_eq!(
++			adopted[0]["pid"].as_u64().unwrap(),
++			result["originals"]["descendant"]["utf8"]
++				.as_str()
++				.unwrap()
++				.parse::<u64>()
++				.unwrap()
++		);
++		assert_eq!(
++			result["originals"]["effect"]["utf8"],
++			"original leader executed once\n"
++		);
++		let receipt = &result["receipt"];
++		assert_eq!(receipt["exit_code"], 125);
++		assert_eq!(receipt["child_exit_code"], 0);
++		assert_eq!(receipt["child_reaped"], true);
++		assert_eq!(receipt["child_group_signal"], "submitted");
++		assert_eq!(receipt["child_group_signal_number"], final_signal);
++		assert_eq!(
++			receipt["supervisor_error"],
++			if cancel_overlap {
++				"output drain cancelled after leader exit"
++			} else {
++				"output drain deadline exceeded after leader exit"
++			}
++		);
++		assert_eq!(receipt["supervisor_cleanup_errors"], json!([]));
++		assert_eq!(receipt["effect_outcome"], "unknown");
++		assert_eq!(receipt["automatic_retry"], false);
++		assert_eq!(receipt["status_authoritative"], false);
++		assert_eq!(receipt["output_complete"], false);
++		assert_eq!(receipt["output_durable"], false);
++		assert_eq!(receipt["cancelled"], cancel_overlap);
++		assert_eq!(receipt["timed_out"], false);
++		assert_eq!(result["final_status"]["state"], "effect_unknown");
++		assert_eq!(result["witness"]["job_id"], receipt["job_id"]);
++		assert_eq!(result["witness"]["launch_nonce"], receipt["launch_nonce"]);
++		assert_eq!(
++			result["witness"]["exit_sha256"],
++			result["originals"]["exit.json"]["sha256"]
++		);
++	}
++}
++
++#[test]
++fn staggered_output_eof_preserves_each_original_reader_budget() {
++	let result = inherited_pipe_fault(false, true, true);
++	assert_eq!(result["workload_popen_count"], 1);
++	assert_eq!(result["state"]["runner_exit"], 0);
++	assert!(result["state"]["runner_exception"].is_null());
++	assert_eq!(
++		result["signals"],
++		json!([]),
++		"natural staggered output must not be interrupted"
++	);
++	assert_eq!(
++		result["cleanup"],
++		json!([]),
++		"fixture rescue must not complete the product path"
++	);
++	assert_eq!(
++		result["state"]["readers_alive_at_runner_return"],
++		json!([false, false])
++	);
++	assert_eq!(result["state"]["cancel_delivered_during_drain"], false);
++	let waits = result["waits"].as_array().unwrap();
++	assert_eq!(waits.len(), 1);
++	assert_eq!(waits[0]["phase"], "runner");
++	assert_eq!(waits[0]["returned"], true);
++	assert_eq!(waits[0]["returncode"], 0);
++	let adopted = result["adopted"].as_array().unwrap();
++	assert_eq!(adopted.len(), 1);
++	assert_eq!(adopted[0]["returncode"], 0);
++	assert_eq!(
++		adopted[0]["pid"].as_u64().unwrap(),
++		result["originals"]["descendant"]["utf8"]
++			.as_str()
++			.unwrap()
++			.parse::<u64>()
++			.unwrap()
++	);
++	assert_eq!(
++		result["originals"]["effect"]["utf8"],
++		"original leader executed once\n"
++	);
++	assert_eq!(
++		result["originals"]["stdout.log"]["utf8"],
++		"original staggered stdout\n"
++	);
++	assert_eq!(
++		result["originals"]["stderr.log"]["utf8"],
++		"original staggered stderr\n"
++	);
++	let receipt = &result["receipt"];
++	assert_eq!(receipt["exit_code"], 0);
++	assert_eq!(receipt["output_complete"], true);
++	assert_eq!(receipt["output_durable"], true);
++	assert_eq!(receipt["log_errors"], json!({"stdout":null,"stderr":null}));
++	assert_eq!(receipt["log_synced"], json!({"stdout":true,"stderr":true}));
++	assert_eq!(
++		receipt["log_truncated"],
++		json!({"stdout":false,"stderr":false})
++	);
++	assert_eq!(receipt["cancelled"], false);
++	assert_eq!(receipt["timed_out"], false);
++	assert_eq!(result["final_status"]["state"], "succeeded");
++	assert!(receipt.get("effect_outcome").is_none());
++	assert!(receipt.get("child_group_signal").is_none());
++	assert_eq!(result["witness"]["job_id"], receipt["job_id"]);
++	assert_eq!(result["witness"]["launch_nonce"], receipt["launch_nonce"]);
++	assert_eq!(
++		result["witness"]["exit_sha256"],
++		result["originals"]["exit.json"]["sha256"]
++	);
++}
