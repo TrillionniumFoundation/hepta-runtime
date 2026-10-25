@@ -7,6 +7,7 @@ use regex::Regex;
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use super::config::{check_protected_input, runtime_config, valid_name, Platform};
@@ -41,8 +42,9 @@ pub struct PrivilegedActionParams {
 	pub args: Vec<String>,
 }
 
-pub fn host_list() -> Result<String> {
-	let config = runtime_config()?;
+static HOST_LIST_SUMMARY: OnceLock<String> = OnceLock::new();
+
+fn render_host_list(config: &super::config::RuntimeConfig) -> Result<String> {
 	let hosts: Vec<Value> = config
 		.hosts
 		.iter()
@@ -60,6 +62,23 @@ pub fn host_list() -> Result<String> {
 		})
 		.collect();
 	Ok(serde_json::to_string_pretty(&json!({"hosts": hosts}))?)
+}
+
+fn cached_host_list(
+	cache: &OnceLock<String>,
+	config: &super::config::RuntimeConfig,
+) -> Result<String> {
+	if let Some(summary) = cache.get() {
+		return Ok(summary.clone());
+	}
+	// Loaded policy is immutable. Cache only its public projection, leaving
+	// per-request identity, durable audit and result retention on their normal paths.
+	let summary = render_host_list(config)?;
+	Ok(cache.get_or_init(|| summary).clone())
+}
+
+pub fn host_list() -> Result<String> {
+	cached_host_list(&HOST_LIST_SUMMARY, runtime_config()?)
 }
 
 const HARDWARE_CODE: &str = r#"

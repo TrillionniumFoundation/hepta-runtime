@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Durable original native results for three reviewed credential-free DTO tools.
 //! Request parameters, caller-selected identities, arbitrary output and errors are never stored.
+use crate::utils::json_size::serialized_json_size;
 use anyhow::{anyhow, bail, Result};
 use rmcp::{
 	model::{CallToolResponse, CallToolResult, ErrorData, MetaObject},
@@ -21,7 +22,7 @@ use std::{
 
 use super::{
 	config::runtime_config,
-	request_audit::{self, RequestIdentity},
+	request_audit::{self, trace, RequestIdentity},
 };
 
 #[cfg(test)]
@@ -40,6 +41,7 @@ static STORE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 static RECORD_LOCKS: OnceLock<[Mutex<()>; 256]> = OnceLock::new();
 type AnchorCache = VecDeque<(AnchorStamp, Arc<CachedAnchor>)>;
 static ANCHOR_CACHE: OnceLock<Mutex<AnchorCache>> = OnceLock::new();
+static POLICY_BINDING: OnceLock<String> = OnceLock::new();
 
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -157,9 +159,11 @@ fn record_lock(id: &str) -> Result<std::sync::MutexGuard<'static, ()>> {
 		bail!("invalid retained result identity");
 	}
 	let index = u8::from_str_radix(&id[..2], 16)? as usize;
-	RECORD_LOCKS.get_or_init(|| std::array::from_fn(|_| Mutex::new(())))[index]
-		.lock()
-		.map_err(|_| anyhow!("result state unavailable"))
+	trace::measure("result_record_lock", 1, None, || {
+		RECORD_LOCKS.get_or_init(|| std::array::from_fn(|_| Mutex::new(())))[index]
+			.lock()
+			.map_err(|_| anyhow!("result state unavailable"))
+	})
 }
 fn new_id() -> Result<String> {
 	let mut data = [0u8; 32];
@@ -172,11 +176,31 @@ fn digest(data: &[u8]) -> String {
 		.map(|b| format!("{b:02x}"))
 		.collect()
 }
-pub(crate) fn policy_binding() -> Result<String> {
+fn policy_binding_for<T: Serialize + ?Sized>(config: &T) -> Result<String> {
 	let mut hash = Sha256::new();
 	hash.update(b"hepta-runtime/result-policy/v1\0");
-	hash.update(serde_json::to_vec(runtime_config()?)?);
+	hash.update(serde_json::to_vec(config)?);
 	Ok(hash.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
+
+fn cached_policy_binding(
+	cache: &OnceLock<String>,
+	compute: impl FnOnce() -> Result<String>,
+) -> Result<String> {
+	if let Some(binding) = cache.get() {
+		return Ok(binding.clone());
+	}
+	// A failure leaves the cell empty. Racing first successes are equivalent
+	// because the production configuration is immutable for this process.
+	let binding = compute()?;
+	Ok(cache.get_or_init(|| binding).clone())
+}
+
+pub(crate) fn policy_binding() -> Result<String> {
+	// RuntimeConfig is held in a OnceLock and has no reload or mutation path.
+	// Cache only its successful digest; all storage/identity checks still run.
+	let config = runtime_config()?;
+	cached_policy_binding(&POLICY_BINDING, || policy_binding_for(config))
 }
 fn base64(data: &[u8]) -> String {
 	const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -406,7 +430,7 @@ pub fn reserve_final_wire(result: &mut Result<CallToolResponse, ErrorData>, tool
 	attach_ack(&mut candidate, "durability_unknown_not_dispatched", false);
 	let too_large = match candidate {
 		Ok(CallToolResponse::Complete(ref value)) => {
-			serde_json::to_vec(value).map_or(true, |v| v.len() > cap)
+			serialized_json_size(value).map_or(true, |size| size > cap)
 		}
 		_ => false,
 	};
@@ -624,15 +648,6 @@ fn read_anchor(root: &File) -> Result<Arc<CachedAnchor>> {
 		changed: (metadata.ctime(), metadata.ctime_nsec()),
 	};
 	let cache = ANCHOR_CACHE.get_or_init(|| Mutex::new(VecDeque::new()));
-	if let Some(anchor) = cache
-		.lock()
-		.map_err(|_| anyhow!("result anchor cache unavailable"))?
-		.iter()
-		.find(|(existing, _)| *existing == stamp)
-		.map(|(_, anchor)| Arc::clone(anchor))
-	{
-		return Ok(anchor);
-	}
 	let mut bytes = Vec::new();
 	Read::by_ref(&mut file)
 		.take((MAX_RECORD_BYTES + 1) as u64)
@@ -649,14 +664,26 @@ fn read_anchor(root: &File) -> Result<Arc<CachedAnchor>> {
 	{
 		bail!("result archive anchor changed during read");
 	}
+	// The file can be edited in place without advancing a coarse filesystem
+	// timestamp. Cache parsed identities only after checking the actual bytes.
+	let sha256 = digest(&bytes);
+	if let Some(anchor) = cache
+		.lock()
+		.map_err(|_| anyhow!("result anchor cache unavailable"))?
+		.iter()
+		.find(|(existing, _)| *existing == stamp)
+		.map(|(_, anchor)| Arc::clone(anchor))
+	{
+		if anchor.sha256 != sha256 {
+			bail!("result archive anchor bytes changed; history never repaired automatically");
+		}
+		return Ok(anchor);
+	}
 	let anchor: ArchiveAnchor = serde_json::from_slice(&bytes)?;
 	if anchor.schema != 2 || anchor.shards.len() != 256 {
 		bail!("result archive anchor schema refused");
 	}
-	let anchor = Arc::new(CachedAnchor {
-		sha256: digest(&bytes),
-		anchor,
-	});
+	let anchor = Arc::new(CachedAnchor { sha256, anchor });
 	let mut cache = cache
 		.lock()
 		.map_err(|_| anyhow!("result anchor cache unavailable"))?;
@@ -851,6 +878,24 @@ fn shard(archive: &ArchiveStore, id: &str) -> Result<File> {
 		bail!("result archive shard binding changed; history never recreated automatically");
 	}
 	Ok(directory)
+}
+
+/// Build the existing256-shard layout before readiness, then verify every pin.
+/// An anchored missing/replaced directory remains a refusal, never a repair.
+#[cfg(unix)]
+pub(crate) fn prepare_at(root: &Path) -> Result<()> {
+	let directory = open_store(root)?;
+	let archive = open_archive_store(root, &directory, true)?
+		.ok_or_else(|| anyhow!("result archive preparation unavailable"))?;
+	for index in 0..256 {
+		let id = format!("{index:02x}{}", "0".repeat(62));
+		shard(&archive, &id)?;
+	}
+	Ok(())
+}
+#[cfg(not(unix))]
+pub(crate) fn prepare_at(_root: &Path) -> Result<()> {
+	bail!("private result retention requires Unix")
 }
 
 #[cfg(unix)]
@@ -1077,12 +1122,21 @@ fn cleanup_target_staging(directory: &File, id: &str) -> Result<()> {
 
 #[cfg(unix)]
 fn save(directory: &File, record: &Record, replacing: bool) -> Result<()> {
+	trace::measure("result_save", 1, None, || {
+		save_inner(directory, record, replacing)
+	})
+}
+
+#[cfg(unix)]
+fn save_inner(directory: &File, record: &Record, replacing: bool) -> Result<()> {
 	use std::os::fd::AsRawFd;
 	private_directory(directory)?;
 	cleanup_target_staging(directory, &record.request_id)?;
 	let filename = format!("{}.json", record.request_id);
 	if replacing {
-		let existing = read_record(directory, &filename)?;
+		let existing = trace::measure("result_read_existing", 1, None, || {
+			read_record(directory, &filename)
+		})?;
 		if existing.owner != record.owner
 			|| existing.tool_name != record.tool_name
 			|| existing.accepted_unix_ms != record.accepted_unix_ms
@@ -1102,19 +1156,28 @@ fn save(directory: &File, record: &Record, replacing: bool) -> Result<()> {
 		bail!("request audit record size refused");
 	}
 	let temporary = format!(".{}-{}.tmp", record.request_id, record.request_id);
-	let mut file = open_at(
-		directory,
-		&temporary,
-		libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL,
-		0o600,
-	)?;
+	let mut file = trace::measure("result_open_temporary", 1, None, || {
+		open_at(
+			directory,
+			&temporary,
+			libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL,
+			0o600,
+		)
+	})?;
 	validate_file(&file)?;
 	let persisted = (|| -> Result<()> {
-		file.write_all(&bytes)?;
-		file.sync_all()?;
+		trace::measure("result_file_write", 1, None, || {
+			file.write_all(&bytes)?;
+			Ok(())
+		})?;
+		trace::measure("result_file_sync", 1, None, || {
+			file.sync_all()?;
+			Ok(())
+		})?;
 		drop(file);
 		let temp = name(&temporary)?;
 		let target = name(&filename)?;
+		let publication = trace::Span::new("result_publish", 1, None);
 		if replacing {
 			if unsafe {
 				libc::renameat(
@@ -1144,7 +1207,11 @@ fn save(directory: &File, record: &Record, replacing: bool) -> Result<()> {
 				return Err(std::io::Error::last_os_error().into());
 			}
 		}
-		directory.sync_all()?;
+		publication.record(None);
+		trace::measure("result_directory_sync", 1, None, || {
+			directory.sync_all()?;
+			Ok(())
+		})?;
 		Ok(())
 	})();
 	if persisted.is_err() {
@@ -1226,11 +1293,20 @@ fn admit_at(root: &Path, identity: RequestIdentity, binding: String) -> Result<R
 
 /// Explicit async requests require a durable result slot before dispatch.
 pub(crate) async fn admit(identity: RequestIdentity) -> Result<ResultIntent> {
+	let total = trace::Span::new("result_admit_total", 1, None);
 	let root = runtime_config()?.state_dir.clone();
 	let binding = policy_binding()?;
-	tokio::task::spawn_blocking(move || admit_at(&root, identity, binding))
-		.await
-		.map_err(|_| anyhow!("result admission unavailable; dispatch refused"))?
+	let result = tokio::task::spawn_blocking(move || {
+		trace::measure("result_admit_blocking", 1, None, || {
+			admit_at(&root, identity, binding)
+		})
+	})
+	.await
+	.map_err(|_| anyhow!("result admission unavailable; dispatch refused"))
+	.and_then(|result| result);
+	let result = total.finish(result);
+	trace::flush();
+	result
 }
 #[cfg(unix)]
 fn complete_sync(mut intent: ResultIntent, result: Option<CallToolResult>) -> Result<&'static str> {
@@ -1253,7 +1329,7 @@ fn complete_sync(mut intent: ResultIntent, result: Option<CallToolResult>) -> Re
 		let mut final_preview = Ok(result.clone().into());
 		attach_ack(&mut final_preview, "stored", false);
 		let final_bytes = match final_preview {
-			Ok(CallToolResponse::Complete(value)) => serde_json::to_vec(&value)?.len(),
+			Ok(CallToolResponse::Complete(value)) => serialized_json_size(&value)?,
 			_ => MAX_RESULT_BYTES + 1,
 		};
 		if bytes.len() > MAX_RESULT_BYTES || final_bytes > MAX_RESULT_BYTES {
@@ -1292,11 +1368,20 @@ pub(crate) async fn complete(
 	intent: ResultIntent,
 	result: Option<CallToolResult>,
 ) -> Result<&'static str> {
-	tokio::task::spawn_blocking(move || complete_sync(intent, result))
-		.await
-		.map_err(|_| {
-			anyhow!("result completion durability unknown; original request identity retained")
-		})?
+	let total = trace::Span::new("result_complete_total", 1, None);
+	let result = tokio::task::spawn_blocking(move || {
+		trace::measure("result_complete_blocking", 1, None, || {
+			complete_sync(intent, result)
+		})
+	})
+	.await
+	.map_err(|_| {
+		anyhow!("result completion durability unknown; original request identity retained")
+	})
+	.and_then(|result| result);
+	let result = total.finish(result);
+	trace::flush();
+	result
 }
 fn page(value: Value) -> Result<String> {
 	let text = serde_json::to_string(&value)?;
@@ -1415,3 +1500,7 @@ mod tests;
 #[cfg(all(test, unix))]
 #[path = "request_results_growth_tests.rs"]
 mod growth_tests;
+
+#[cfg(test)]
+#[path = "request_results_policy_tests.rs"]
+mod policy_tests;

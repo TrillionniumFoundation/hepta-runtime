@@ -1,0 +1,875 @@
+{
+  "all_requests_from_ordinal_4232_failed_unavailable": true,
+  "baseline_status": "not_run; unused-A23 is only the unmeasured A slot",
+  "candidate": "A23",
+  "cause_boundary": "The recorded specific error is an SSH-agent deadline. It establishes expiry of that timer, not whether the agent service, forwarding/network path, CPU scheduling or another condition caused it. This is distinct from the earlier pidfd/post-exec refusal; no such refusal appears in this soak.",
+  "complete_relative_window_evidence": {
+    "all_timed_rows_with_relative_start_and_completion_retained": true,
+    "gzip_bytes": 382625,
+    "gzip_sha256": "ae02d2f8159f0ff0c2972b1b494125ea809fec5cd7b8fd232def0a6aef6f6692",
+    "path": "x230-a23-soak-r01-windows-20261024.json.gz",
+    "uncompressed_json_bytes": 5381052,
+    "uncompressed_json_sha256": "4c1f3dcaf381f6d616ac72aa968038f7573c568087ad0cd9ebe35f6591e87c8c"
+  },
+  "complete_sanitized_evidence": {
+    "all_10356_timed_rows_and_6132_failures_retained": true,
+    "all_18_non_timed_checks_retained": true,
+    "gzip_bytes": 1218649,
+    "gzip_sha256": "a28794c19e5dfeb1abd7d6108d5bc4d480ae98d91fc998fd249dfe7097088236",
+    "path": "x230-a23-soak-r01-20261024.json.gz",
+    "uncompressed_json_bytes": 9178310,
+    "uncompressed_json_sha256": "e50f48ebf615a579060147ca4be5e9bf714fc5a5e0abb77d0f3e2dcb6ebfb8d0"
+  },
+  "completion_gap_observations": [
+    {
+      "cause": null,
+      "end_seconds": 162.91506357095204,
+      "gap_ms": 1488.1066030357033,
+      "inflight_ordinals_at_start": [
+        4092,
+        4093,
+        4094,
+        4095,
+        4096,
+        4097,
+        4098
+      ],
+      "initial_interval_before_first_completion": false,
+      "multiple_hosts_inflight_without_a_completion": true,
+      "spanning_hosts": [
+        "ai395",
+        "mac",
+        "main",
+        "pocket4",
+        "rog",
+        "x230"
+      ],
+      "spanning_request_ordinals": [
+        4092,
+        4093,
+        4094,
+        4095,
+        4096,
+        4097,
+        4098
+      ],
+      "start_seconds": 161.42695696791634,
+      "started_during_gap_ordinals": [
+        4099
+      ]
+    },
+    {
+      "cause": null,
+      "end_seconds": 174.57468006503768,
+      "gap_ms": 1778.0675161629915,
+      "inflight_ordinals_at_start": [
+        4221,
+        4225,
+        4226,
+        4227,
+        4228,
+        4229,
+        4230
+      ],
+      "initial_interval_before_first_completion": false,
+      "multiple_hosts_inflight_without_a_completion": true,
+      "spanning_hosts": [
+        "ai395",
+        "mac",
+        "main",
+        "pocket4",
+        "rog",
+        "x230"
+      ],
+      "spanning_request_ordinals": [
+        4221,
+        4225,
+        4226,
+        4227,
+        4228,
+        4229,
+        4230
+      ],
+      "start_seconds": 172.7966125488747,
+      "started_during_gap_ordinals": [
+        4231
+      ]
+    }
+  ],
+  "cross_window_request_count": 48,
+  "earliest_submitted_request_that_later_failed": {
+    "completion_seconds": 174.59679620084353,
+    "elapsed_ms": 2519.487837795168,
+    "host": "pocket4",
+    "native_error": "observation pool stopped before response authority check",
+    "ordinal": 4221,
+    "start_seconds": 172.07730836304836,
+    "tool": "process_read"
+  },
+  "experiment_passed": false,
+  "failure_counts": {
+    "observation SSH agent deadline": 1,
+    "observation pool stopped before response authority check": 3,
+    "observation pool stopped during admission profile check": 4,
+    "observation pool unavailable; no fallback or automatic retry": 6124
+  },
+  "first_completed_failure_ordinal": 4227,
+  "generator_bindings": {
+    "frozen_full_evidence_builder_sha256": "d868f8aab6db0b8d35fd38116241355660758a1e4b336b64cda3f7b945ffa4fb",
+    "frozen_measurement_helper_sha256": "9aed77048e91757034877c9d117781e6f36873db5c9e8d70fe0dfca76eb098ff",
+    "frozen_window_analysis_script_sha256": "ede4bbcf0a741651bc8892373a04eaae41e3d989bbcfdd194904a3130c464cc9",
+    "frozen_window_review_sha256": "38b3319f336655abfe69e68876a1e0dfa2cb3870088bc6bc50ba95ada967c8cf",
+    "packaging_script_sha256": "bc592f5efedb03131f486b6aa9a7ebfff2f2c323fe609cd4b185c849343eed11"
+  },
+  "hosts": {
+    "ai395": {
+      "attempts": 1726,
+      "latency_ms_including_failures": {
+        "count": 1726,
+        "max": 2041.2790158297867,
+        "p50": 26.8160339910537,
+        "p95": 337.0652289595455,
+        "p99": 535.9909730032086
+      },
+      "long_request_ordinals": [
+        4092,
+        4098,
+        4170,
+        4230
+      ],
+      "longest_request_ordinals": [
+        4230,
+        4092,
+        4098,
+        4170,
+        4110,
+        4158,
+        4146,
+        2646,
+        3960,
+        3942
+      ],
+      "successes": 705
+    },
+    "mac": {
+      "attempts": 1726,
+      "latency_ms_including_failures": {
+        "count": 1726,
+        "max": 2230.7081590406597,
+        "p50": 26.514948112890124,
+        "p95": 408.48779887892306,
+        "p99": 656.3586450647563
+      },
+      "long_request_ordinals": [
+        4093,
+        4099,
+        4141,
+        4153,
+        4171,
+        4225,
+        4231
+      ],
+      "longest_request_ordinals": [
+        4225,
+        4231,
+        4093,
+        4099,
+        4171,
+        4153,
+        4141,
+        4111,
+        4105,
+        4147
+      ],
+      "successes": 704
+    },
+    "main": {
+      "attempts": 1726,
+      "latency_ms_including_failures": {
+        "count": 1726,
+        "max": 2101.874546846375,
+        "p50": 26.626515202224255,
+        "p95": 371.492292964831,
+        "p99": 594.0500949509442
+      },
+      "long_request_ordinals": [
+        4094,
+        4166,
+        4226
+      ],
+      "longest_request_ordinals": [
+        4226,
+        4094,
+        4166,
+        2672,
+        4112,
+        4106,
+        4148,
+        4142,
+        2678,
+        4160
+      ],
+      "successes": 704
+    },
+    "pocket4": {
+      "attempts": 1726,
+      "latency_ms_including_failures": {
+        "count": 1726,
+        "max": 2519.487837795168,
+        "p50": 26.39942290261388,
+        "p95": 347.78516204096377,
+        "p99": 645.303577883169
+      },
+      "long_request_ordinals": [
+        4095,
+        4161,
+        4167,
+        4173,
+        4215,
+        4221,
+        4227
+      ],
+      "longest_request_ordinals": [
+        4221,
+        4227,
+        4095,
+        4167,
+        4215,
+        4173,
+        4161,
+        4143,
+        4107,
+        3939
+      ],
+      "successes": 703
+    },
+    "rog": {
+      "attempts": 1726,
+      "latency_ms_including_failures": {
+        "count": 1726,
+        "max": 2052.8712740633637,
+        "p50": 26.66908293031156,
+        "p95": 345.04581592045724,
+        "p99": 524.0310679655522
+      },
+      "long_request_ordinals": [
+        4096,
+        4162,
+        4168,
+        4228
+      ],
+      "longest_request_ordinals": [
+        4228,
+        4096,
+        4168,
+        4162,
+        4108,
+        4144,
+        3940,
+        2686,
+        3946,
+        3952
+      ],
+      "successes": 704
+    },
+    "x230": {
+      "attempts": 1726,
+      "latency_ms_including_failures": {
+        "count": 1726,
+        "max": 2046.67003499344,
+        "p50": 26.90157201141119,
+        "p95": 380.0781210884452,
+        "p99": 539.9654528591782
+      },
+      "long_request_ordinals": [
+        4097,
+        4163,
+        4169,
+        4229
+      ],
+      "longest_request_ordinals": [
+        4229,
+        4097,
+        4169,
+        4163,
+        4109,
+        2699,
+        4157,
+        4145,
+        3941,
+        3917
+      ],
+      "successes": 704
+    }
+  },
+  "inflight_stop_related_failures": 7,
+  "interpretation": [
+    "All fixed-count attempts were processed. Fast stopped-pool failures consumed the remaining attempt budget, so the complete report still fails the required duration and zero-failure conditions.",
+    "53.815 attempts/s, the mixed latency distribution and 17.030 CPU ms/attempt include 6132 failures; none is an optimization benefit. Successful observations total 21.950/s over the complete cell.",
+    "The observed request span is 192.430 seconds, below the planned minimum 300 and target 360. A complete row set does not imply sufficient successful-duration coverage.",
+    "The last 12.430-second window contains 4313 failures and zero successes. All seven windows and all 48 cross-window requests remain available.",
+    "The two cross-host completion gaps are symptoms only. No master lifecycle events were recorded; duration or gap position does not establish any renewal count.",
+    "Resource figures are lifetime sampled lower bounds without an RSS/FD time series or SSH-only process classification; all eight permission errors remain.",
+    "This B-only failure record is separate from the standard ABBA and fairness runs and cannot generate an A/B performance comparison."
+  ],
+  "later_unavailable_failures": 6124,
+  "minimum_observed_duration_requirement_passed": false,
+  "order": "B",
+  "performance_comparison": null,
+  "performance_improvement_claimed": false,
+  "plan": {
+    "automatic_rpc_retries": 0,
+    "binary_sha256": "64416b53b63ffe7eac05b4d9eb6750092279b5f6e25dbad5a8cfd31067d206a1",
+    "candidate": "A23",
+    "concurrency": 8,
+    "no_new_remote_workloads": true,
+    "order": "B",
+    "planned_calls": 10356,
+    "reference_c8_successful_rps": 28.746106296179516,
+    "reference_observation_report_sha256": "6201c2dd21e5aed6eaed4fce878c9be3dbc08d29a9cd2718d300260f35f56cab",
+    "required_minimum_observed_seconds": 300,
+    "schema": "hepta-x230-single-candidate-soak-plan/v1",
+    "target_seconds": 360
+  },
+  "plan_sha256": "4a504191cc7f71d05d9975920d8a7de2a5425a9ffc4e4ed7a284a3fb6d42afab",
+  "record_sequence_and_arithmetic_verified": true,
+  "resources": {
+    "measurement_controller_resources": {
+      "controller_count": 1,
+      "max_of_controller_lifetime_sampled_peaks": {
+        "controller_fd": 87,
+        "controller_hwm_kib": 16480,
+        "controller_rss_kib": 16480,
+        "descendants": 13,
+        "tree_fd": 199,
+        "tree_rss_kib": 107900
+      },
+      "peak_coverage": {
+        "controller_fd": {
+          "controllers": 1,
+          "controllers_with_sampled_peak": 1
+        },
+        "controller_hwm_kib": {
+          "controllers": 1,
+          "controllers_with_sampled_peak": 1
+        },
+        "controller_rss_kib": {
+          "controllers": 1,
+          "controllers_with_sampled_peak": 1
+        },
+        "descendants": {
+          "controllers": 1,
+          "controllers_with_sampled_peak": 1
+        },
+        "tree_fd": {
+          "controllers": 1,
+          "controllers_with_sampled_peak": 1
+        },
+        "tree_rss_kib": {
+          "controllers": 1,
+          "controllers_with_sampled_peak": 1
+        }
+      },
+      "recorded_sampling_error_count": 8,
+      "sample_count_sum": 1758,
+      "sampled_peaks_are_lower_bounds": true,
+      "sampling_error_types": {
+        "PermissionError": 8
+      },
+      "sampling_errors": [
+        {
+          "message": "PermissionError: [Errno 13] Permission denied: '/proc/<pid>/fd'",
+          "original_message_sha256": "42f11c9afc48d257979daa5ff359bda8f32422d71e260f11417b3509b3468ac4",
+          "type": "PermissionError"
+        },
+        {
+          "message": "PermissionError: [Errno 13] Permission denied: '/proc/<pid>/fd'",
+          "original_message_sha256": "9b97c4d1d9c1ca6974980d1ff868594fedb0328e0aecd26818b260bea4dac090",
+          "type": "PermissionError"
+        },
+        {
+          "message": "PermissionError: [Errno 13] Permission denied: '/proc/<pid>/fd'",
+          "original_message_sha256": "b923ca8313e72322b6e706b75221b90300d406e56473fed99b9ba18ded84bb79",
+          "type": "PermissionError"
+        },
+        {
+          "message": "PermissionError: [Errno 13] Permission denied: '/proc/<pid>/fd'",
+          "original_message_sha256": "993d2ad7b2b062788e84efa5b9f6e18a9bbac61ce57a7f6124d38ff21f9a706c",
+          "type": "PermissionError"
+        },
+        {
+          "message": "PermissionError: [Errno 13] Permission denied: '/proc/<pid>/fd'",
+          "original_message_sha256": "9047f21ea92add1de31b9ce1f983e9346c85b2cef5cacc5b91c3d8941a3c6c24",
+          "type": "PermissionError"
+        },
+        {
+          "message": "PermissionError: [Errno 13] Permission denied: '/proc/<pid>/fd'",
+          "original_message_sha256": "38fe4fa1fea1b875bdb05fd31301dd149701df683b17e30b33669bff9fa2b02b",
+          "type": "PermissionError"
+        },
+        {
+          "message": "PermissionError: [Errno 13] Permission denied: '/proc/<pid>/fd'",
+          "original_message_sha256": "8fe8324eab2e26134faee4c02eebe9c8db76b06ca12f8dfbaa5dd9d04c9f905f",
+          "type": "PermissionError"
+        },
+        {
+          "message": "PermissionError: [Errno 13] Permission denied: '/proc/<pid>/fd'",
+          "original_message_sha256": "2b6f35b3755ea1134f0e3c12faacf56083620e994a54c3445153251e3b630ab7",
+          "type": "PermissionError"
+        }
+      ],
+      "ssh_only_child_peak": null,
+      "ssh_only_child_peak_reason": "The sampler records descendant PIDs without executable classification."
+    },
+    "restart_controller_resources": {
+      "controller_count": 1,
+      "max_of_controller_lifetime_sampled_peaks": {
+        "controller_fd": 50,
+        "controller_hwm_kib": 13092,
+        "controller_rss_kib": 13092,
+        "descendants": 7,
+        "tree_fd": 104,
+        "tree_rss_kib": 68120
+      },
+      "peak_coverage": {
+        "controller_fd": {
+          "controllers": 1,
+          "controllers_with_sampled_peak": 1
+        },
+        "controller_hwm_kib": {
+          "controllers": 1,
+          "controllers_with_sampled_peak": 1
+        },
+        "controller_rss_kib": {
+          "controllers": 1,
+          "controllers_with_sampled_peak": 1
+        },
+        "descendants": {
+          "controllers": 1,
+          "controllers_with_sampled_peak": 1
+        },
+        "tree_fd": {
+          "controllers": 1,
+          "controllers_with_sampled_peak": 1
+        },
+        "tree_rss_kib": {
+          "controllers": 1,
+          "controllers_with_sampled_peak": 1
+        }
+      },
+      "recorded_sampling_error_count": 0,
+      "sample_count_sum": 98,
+      "sampled_peaks_are_lower_bounds": true,
+      "sampling_error_types": {},
+      "sampling_errors": [],
+      "ssh_only_child_peak": null,
+      "ssh_only_child_peak_reason": "The sampler records descendant PIDs without executable classification."
+    }
+  },
+  "schema": "hepta-x230-failed-soak-summary/v1",
+  "source_report": {
+    "bytes": 4989146,
+    "sha256": "0298789cbe498cd5d87275bbeb07da9239b01446fe39505d306bc5e643828503"
+  },
+  "specific_authority_timer_failure": {
+    "completion_seconds": 174.57468006503768,
+    "elapsed_ms": 2040.444710990414,
+    "host": "pocket4",
+    "native_error": "observation SSH agent deadline",
+    "ordinal": 4227,
+    "start_seconds": 172.53423535404727,
+    "tool": "process_status"
+  },
+  "verification": {
+    "all_timed_attempts_recorded": 10356,
+    "automatic_rpc_retries": 0,
+    "binary_hashes_unchanged": true,
+    "clean_stdin_eof_shutdowns": 2,
+    "initial_complete_output_checks": 6,
+    "initial_complete_output_successes": 6,
+    "new_remote_workloads": 0,
+    "normal_restarts_with_distinct_controller_identity": 1,
+    "observed_descendant_survivors": 0,
+    "public_observation_rows_matched": 10374,
+    "reader_errors": 0,
+    "resource_sampling_errors": 8,
+    "same_job_restart_checks": 12,
+    "same_job_restart_successes": 12,
+    "source_originals_unchanged": true,
+    "successful_read_output_receipts_matching_originals": 2123,
+    "timed_failures": 6132,
+    "timed_successes": 4224,
+    "unmatched_responses": 0
+  },
+  "whole_cell": {
+    "attempts": 10356,
+    "attempts_per_driver_cell_second": 53.81505040169988,
+    "concurrency": 8,
+    "controller_cpu_ms_per_attempt_including_fast_failures": 17.02974121282348,
+    "controller_cpu_seconds": 176.35999999999999,
+    "controller_cpu_source": "same-PID/start-ticks /proc/stat utime+stime before/after cell",
+    "driver_cell_seconds": 192.4368726350367,
+    "failures": 6132,
+    "latency_ms_including_failures": {
+      "count": 10356,
+      "max": 2519.487837795168,
+      "p50": 26.653639040887356,
+      "p95": 373.3459198847413,
+      "p99": 581.3772049732506
+    },
+    "observed_request_span_seconds": 192.43010252993554,
+    "successes": 4224,
+    "successes_per_driver_cell_second": 21.950055320276196,
+    "total_controller_cpu_ms_per_success_including_all_failed_attempt_costs": 41.75189393939393,
+    "unlocated_cell_overhead_seconds": 0.006770105101168156
+  },
+  "windows": [
+    {
+      "actual_observed_span_seconds": 30.0,
+      "completed_attempts": 776,
+      "completed_attempts_per_second": 25.866666666666667,
+      "completed_failures": 0,
+      "completed_successes": 776,
+      "completed_successes_per_second": 25.866666666666667,
+      "end_seconds": 30.0,
+      "index": 0,
+      "is_first": true,
+      "is_last": false,
+      "latency_ms_of_all_requests_completed_here": {
+        "count": 776,
+        "max": 467.46392198838294,
+        "p50": 305.3753690328449,
+        "p95": 385.8114047907293,
+        "p99": 442.4788530450314
+      },
+      "latency_ms_of_all_requests_started_here": {
+        "count": 784,
+        "max": 467.46392198838294,
+        "p50": 305.3753690328449,
+        "p95": 385.8114047907293,
+        "p99": 442.4788530450314
+      },
+      "nominal_window_seconds": 30.0,
+      "partial_window": false,
+      "requests_finished_here_started_in_earlier_windows": [],
+      "requests_started_here_finishing_in_later_windows": [
+        775,
+        777,
+        778,
+        779,
+        780,
+        781,
+        782,
+        783
+      ],
+      "right_endpoint_included": false,
+      "start_seconds": 0.0,
+      "started_attempts": 784,
+      "started_eventual_successes": 784
+    },
+    {
+      "actual_observed_span_seconds": 30.0,
+      "completed_attempts": 771,
+      "completed_attempts_per_second": 25.7,
+      "completed_failures": 0,
+      "completed_successes": 771,
+      "completed_successes_per_second": 25.7,
+      "end_seconds": 60.0,
+      "index": 1,
+      "is_first": false,
+      "is_last": false,
+      "latency_ms_of_all_requests_completed_here": {
+        "count": 771,
+        "max": 510.0834129843861,
+        "p50": 306.62528797984123,
+        "p95": 392.47109089046717,
+        "p99": 461.3489101175219
+      },
+      "latency_ms_of_all_requests_started_here": {
+        "count": 771,
+        "max": 510.0834129843861,
+        "p50": 306.7784081213176,
+        "p95": 391.3763859309256,
+        "p99": 461.3489101175219
+      },
+      "nominal_window_seconds": 30.0,
+      "partial_window": false,
+      "requests_finished_here_started_in_earlier_windows": [
+        775,
+        777,
+        778,
+        779,
+        780,
+        781,
+        782,
+        783
+      ],
+      "requests_started_here_finishing_in_later_windows": [
+        1547,
+        1548,
+        1549,
+        1550,
+        1551,
+        1552,
+        1553,
+        1554
+      ],
+      "right_endpoint_included": false,
+      "start_seconds": 30.0,
+      "started_attempts": 771,
+      "started_eventual_successes": 771
+    },
+    {
+      "actual_observed_span_seconds": 30.0,
+      "completed_attempts": 781,
+      "completed_attempts_per_second": 26.033333333333335,
+      "completed_failures": 0,
+      "completed_successes": 781,
+      "completed_successes_per_second": 26.033333333333335,
+      "end_seconds": 90.0,
+      "index": 2,
+      "is_first": false,
+      "is_last": false,
+      "latency_ms_of_all_requests_completed_here": {
+        "count": 781,
+        "max": 476.90159315243363,
+        "p50": 303.8462409749627,
+        "p95": 381.73886202275753,
+        "p99": 420.9949797950685
+      },
+      "latency_ms_of_all_requests_started_here": {
+        "count": 781,
+        "max": 476.90159315243363,
+        "p50": 303.20612411014736,
+        "p95": 381.9628639612347,
+        "p99": 420.9949797950685
+      },
+      "nominal_window_seconds": 30.0,
+      "partial_window": false,
+      "requests_finished_here_started_in_earlier_windows": [
+        1547,
+        1548,
+        1549,
+        1550,
+        1551,
+        1552,
+        1553,
+        1554
+      ],
+      "requests_started_here_finishing_in_later_windows": [
+        2327,
+        2329,
+        2330,
+        2331,
+        2332,
+        2333,
+        2334,
+        2335
+      ],
+      "right_endpoint_included": false,
+      "start_seconds": 60.0,
+      "started_attempts": 781,
+      "started_eventual_successes": 781
+    },
+    {
+      "actual_observed_span_seconds": 30.0,
+      "completed_attempts": 752,
+      "completed_attempts_per_second": 25.066666666666666,
+      "completed_failures": 0,
+      "completed_successes": 752,
+      "completed_successes_per_second": 25.066666666666666,
+      "end_seconds": 120.0,
+      "index": 3,
+      "is_first": false,
+      "is_last": false,
+      "latency_ms_of_all_requests_completed_here": {
+        "count": 752,
+        "max": 992.0512030366808,
+        "p50": 309.37401787377894,
+        "p95": 399.19258491136134,
+        "p99": 745.9335571620613
+      },
+      "latency_ms_of_all_requests_started_here": {
+        "count": 752,
+        "max": 992.0512030366808,
+        "p50": 309.82519616372883,
+        "p95": 399.19258491136134,
+        "p99": 745.9335571620613
+      },
+      "nominal_window_seconds": 30.0,
+      "partial_window": false,
+      "requests_finished_here_started_in_earlier_windows": [
+        2327,
+        2329,
+        2330,
+        2331,
+        2332,
+        2333,
+        2334,
+        2335
+      ],
+      "requests_started_here_finishing_in_later_windows": [
+        3079,
+        3081,
+        3082,
+        3083,
+        3084,
+        3085,
+        3086,
+        3087
+      ],
+      "right_endpoint_included": false,
+      "start_seconds": 90.0,
+      "started_attempts": 752,
+      "started_eventual_successes": 752
+    },
+    {
+      "actual_observed_span_seconds": 30.0,
+      "completed_attempts": 770,
+      "completed_attempts_per_second": 25.666666666666668,
+      "completed_failures": 0,
+      "completed_successes": 770,
+      "completed_successes_per_second": 25.666666666666668,
+      "end_seconds": 150.0,
+      "index": 4,
+      "is_first": false,
+      "is_last": false,
+      "latency_ms_of_all_requests_completed_here": {
+        "count": 770,
+        "max": 850.1236529555172,
+        "p50": 305.58270518667996,
+        "p95": 396.4459439739585,
+        "p99": 491.1866469774395
+      },
+      "latency_ms_of_all_requests_started_here": {
+        "count": 770,
+        "max": 850.1236529555172,
+        "p50": 305.3354718722403,
+        "p95": 399.3033419828862,
+        "p99": 502.75229290127754
+      },
+      "nominal_window_seconds": 30.0,
+      "partial_window": false,
+      "requests_finished_here_started_in_earlier_windows": [
+        3079,
+        3081,
+        3082,
+        3083,
+        3084,
+        3085,
+        3086,
+        3087
+      ],
+      "requests_started_here_finishing_in_later_windows": [
+        3847,
+        3851,
+        3852,
+        3853,
+        3854,
+        3855,
+        3856,
+        3857
+      ],
+      "right_endpoint_included": false,
+      "start_seconds": 120.0,
+      "started_attempts": 770,
+      "started_eventual_successes": 770
+    },
+    {
+      "actual_observed_span_seconds": 30.0,
+      "completed_attempts": 2193,
+      "completed_attempts_per_second": 73.1,
+      "completed_failures": 1819,
+      "completed_successes": 374,
+      "completed_successes_per_second": 12.466666666666667,
+      "end_seconds": 180.0,
+      "index": 5,
+      "is_first": false,
+      "is_last": false,
+      "latency_ms_of_all_requests_completed_here": {
+        "count": 2193,
+        "max": 2519.487837795168,
+        "p50": 23.455341812223196,
+        "p95": 532.9147682059556,
+        "p99": 1309.7655661404133
+      },
+      "latency_ms_of_all_requests_started_here": {
+        "count": 2193,
+        "max": 2519.487837795168,
+        "p50": 23.452590918168426,
+        "p95": 532.9147682059556,
+        "p99": 1309.7655661404133
+      },
+      "nominal_window_seconds": 30.0,
+      "partial_window": false,
+      "requests_finished_here_started_in_earlier_windows": [
+        3847,
+        3851,
+        3852,
+        3853,
+        3854,
+        3855,
+        3856,
+        3857
+      ],
+      "requests_started_here_finishing_in_later_windows": [
+        6043,
+        6044,
+        6045,
+        6046,
+        6047,
+        6048,
+        6049,
+        6050
+      ],
+      "right_endpoint_included": false,
+      "start_seconds": 150.0,
+      "started_attempts": 2193,
+      "started_eventual_successes": 366
+    },
+    {
+      "actual_observed_span_seconds": 12.430102529935539,
+      "completed_attempts": 4313,
+      "completed_attempts_per_second": 346.9802432934853,
+      "completed_failures": 4313,
+      "completed_successes": 0,
+      "completed_successes_per_second": 0.0,
+      "end_seconds": 192.43010252993554,
+      "index": 6,
+      "is_first": false,
+      "is_last": true,
+      "latency_ms_of_all_requests_completed_here": {
+        "count": 4313,
+        "max": 70.24886412546039,
+        "p50": 21.611405070871115,
+        "p95": 35.57360987178981,
+        "p99": 48.452581046149135
+      },
+      "latency_ms_of_all_requests_started_here": {
+        "count": 4305,
+        "max": 70.24886412546039,
+        "p50": 21.599496016278863,
+        "p95": 35.57360987178981,
+        "p99": 48.452581046149135
+      },
+      "nominal_window_seconds": 30.0,
+      "partial_window": true,
+      "requests_finished_here_started_in_earlier_windows": [
+        6043,
+        6044,
+        6045,
+        6046,
+        6047,
+        6048,
+        6049,
+        6050
+      ],
+      "requests_started_here_finishing_in_later_windows": [],
+      "right_endpoint_included": true,
+      "start_seconds": 180.0,
+      "started_attempts": 4305,
+      "started_eventual_successes": 0
+    }
+  ],
+  "workload_passed": false
+}

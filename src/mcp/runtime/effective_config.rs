@@ -5,12 +5,15 @@
 use anyhow::{anyhow, bail, Result};
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 
 use super::config::{runtime_config, ExecutionMode, Platform, RuntimeConfig};
+use crate::utils::json_size::serialized_json_size;
 
 const MAX_HOST_ENTRIES: usize = 256;
 const MAX_SUMMARY_BYTES: usize = 256 * 1024;
 const UNAVAILABLE: &str = "effective runtime configuration is unavailable";
+static EFFECTIVE_SUMMARY: OnceLock<String> = OnceLock::new();
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -126,14 +129,30 @@ fn render_effective_config(config: Result<&RuntimeConfig>) -> Result<String> {
 	let text = serde_json::to_string_pretty(&summary)?;
 	let wire =
 		rmcp::model::CallToolResult::success(vec![rmcp::model::ContentBlock::text(text.clone())]);
-	if serde_json::to_vec(&wire)?.len() > MAX_SUMMARY_BYTES {
+	if serialized_json_size(&wire)? > MAX_SUMMARY_BYTES {
 		bail!("effective configuration exceeds the bounded response limit");
 	}
 	Ok(text)
 }
 
+fn cached_effective_config(
+	cache: &OnceLock<String>,
+	compute: impl FnOnce() -> Result<String>,
+) -> Result<String> {
+	if let Some(summary) = cache.get() {
+		return Ok(summary.clone());
+	}
+	// Only immutable loaded policy reaches the production cache. Failed
+	// validation or rendering leaves the cell empty; racing successes agree.
+	let summary = compute()?;
+	Ok(cache.get_or_init(|| summary).clone())
+}
+
 pub fn effective_config(_params: EffectiveConfigParams) -> Result<String> {
-	render_effective_config(runtime_config())
+	let config = runtime_config().map_err(|_| anyhow!(UNAVAILABLE))?;
+	// The loaded RuntimeConfig has no reload or mutation path. Retain just the
+	// bounded redacted summary, avoiding repeated private regex compilation.
+	cached_effective_config(&EFFECTIVE_SUMMARY, || render_effective_config(Ok(config)))
 }
 
 #[cfg(test)]

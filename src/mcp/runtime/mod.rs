@@ -15,6 +15,8 @@ pub mod health;
 pub mod inspect;
 pub mod jobs;
 pub mod multi_read;
+#[cfg(unix)]
+mod namespace_version;
 pub mod operator;
 pub mod pty;
 pub mod request_async;
@@ -36,3 +38,15 @@ pub use pty::{close_all_ptys, close_pty, list_ptys, read_pty, start_pty, write_p
 pub mod operation_crypto;
 
 pub mod operation_async;
+
+/// Startup completes the existing durable store protocol before readiness.
+/// No request identity is admitted and no handler runs during preparation.
+pub async fn prepare_durable_stores() -> anyhow::Result<()> {
+	let root = runtime_config()?.state_dir.clone();
+	tokio::task::spawn_blocking(move || {
+		request_audit::prepare_at(&root)?;
+		request_results::prepare_at(&root)
+	})
+	.await
+	.map_err(|_| anyhow::anyhow!("private runtime store preparation failed"))?
+}

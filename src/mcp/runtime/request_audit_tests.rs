@@ -29,6 +29,30 @@ fn root() -> tempfile::TempDir {
 }
 
 #[test]
+fn startup_preparation_creates_no_request_and_keeps_existing_identity() {
+	let temporary = root();
+	prepare_at(temporary.path()).unwrap();
+	assert_eq!(
+		page(temporary.path(), &owner('b'), None, 32)["requests"],
+		json!([])
+	);
+	let ticket = begin_at(temporary.path(), &owner('b'), "host_list").unwrap();
+	let id = ticket.request_id().to_owned();
+	finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	let path = temporary
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!("{id}.json"));
+	let bytes = std::fs::read(&path).unwrap();
+	prepare_at(temporary.path()).unwrap();
+	assert_eq!(std::fs::read(&path).unwrap(), bytes);
+	std::fs::remove_file(temporary.path().join(ARCHIVE_ANCHOR)).unwrap();
+	assert!(prepare_at(temporary.path()).is_err());
+	assert!(!temporary.path().join(ARCHIVE_ANCHOR).exists());
+	assert_eq!(std::fs::read(path).unwrap(), bytes);
+}
+
+#[test]
 fn warm_hot_cache_does_not_reread_unrelated_payloads_but_exact_lookup_refuses_corruption() {
 	let temporary = root();
 	let session = owner('8');

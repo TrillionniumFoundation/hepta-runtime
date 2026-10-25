@@ -2417,7 +2417,14 @@ impl ServerHandler for OctofsServer {
 			.and_then(|tool| tool.annotations.as_ref())
 			.and_then(|hints| hints.read_only_hint)
 			== Some(true);
-		let ticket = if enabled {
+		let canonical = known.map_or("_unknown_tool", |tool| tool.name.as_ref());
+		// Observation must not change its own totals or keep invalidating the
+		// archive index. Only exact canonical metadata routes omit admission.
+		let metadata_observer = matches!(
+			canonical,
+			"request_history" | "request_archive" | "usage_stats"
+		);
+		let ticket = if enabled && !metadata_observer {
 			let scope = self
 				.owner_binding
 				.resolve(&context, self.search_owner.as_ref().as_deref())
@@ -2427,7 +2434,6 @@ impl ServerHandler for OctofsServer {
 						None,
 					)
 				})?;
-			let canonical = known.map_or("_unknown_tool", |tool| tool.name.as_ref());
 			Some(
 				runtime::request_audit::begin_with_read(
 					scope.owner(),

@@ -32,7 +32,7 @@ lto = true              # Enable Link Time Optimization
 codegen-units = 1       # Reduce parallel code generation units for better optimization
 panic = "abort"         # Abort on panic for smaller binary size
 strip = true            # Strip symbols from binary
-opt-level = "s"         # Optimize for size, but keep loop vectorization ("z" disables it)
+opt-level = 3           # Prioritize runtime throughput and bounded cold-validation latency
 overflow-checks = false # Disable overflow checks in release mode
 
 [dependencies]
@@ -65,6 +65,8 @@ russh = { version = "0.63", default-features = false, features = ["flate2", "rin
 russh-sftp = "3.0"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+# A bounded page cache over one pinned file; no C toolchain or sidecar paths.
+redb = "=4.4.0"
 
 [dev-dependencies]
 tempfile = "3.27.0"

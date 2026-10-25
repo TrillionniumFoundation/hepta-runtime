@@ -1,0 +1,27 @@
+{
+  "schema": "hepta-x230-full-file-hash-microprobe-plan/v1",
+  "scope": "isolated complete-file read plus ring SHA256 only",
+  "target": "/usr/bin/ssh",
+  "maximum_file_bytes": 16777216,
+  "variants": {"A": 16384, "B": 65536},
+  "reference_reads": 1,
+  "warmup_order": "AB",
+  "warmup_iterations_per_cell": 8,
+  "blocks": 8,
+  "order_per_block": "ABBA",
+  "iterations_per_cell": 128,
+  "measured_cells": 32,
+  "measured_full_file_hashes": 4096,
+  "decision": {
+    "minimum_median_paired_thread_cpu_improvement_percent": 3.0,
+    "minimum_blocks_with_positive_thread_cpu_improvement": 7,
+    "median_cpu_improvement_must_exceed_this_multiple_of_MAD": 2.0,
+    "maximum_median_paired_wall_regression_percent": 2.0,
+    "result_if_all_gates_pass": "eligible for a separately qualified runtime candidate",
+    "result_otherwise": "keep the current 16 KiB buffer"
+  },
+  "successful_cells_are_never_filtered": true,
+  "repeat_failed_runs": false,
+  "runtime_change_authorized_by_microprobe_alone": false,
+  "compile_and_run_only_after_A26_series_has_finished": true
+}

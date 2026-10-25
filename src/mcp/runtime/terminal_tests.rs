@@ -4,6 +4,92 @@
 //! Lost acknowledgements retain the authorized persistent terminal identity.
 use super::*;
 
+#[tokio::test]
+async fn terminal_starts_serialize_only_the_same_identity() {
+	let locks = TerminalStartLocks::default();
+	let slow = locks.get("dpty-slow-host").unwrap();
+	let held = slow.lock().await;
+	let same = locks.get("dpty-slow-host").unwrap();
+	assert!(Arc::ptr_eq(&slow, &same));
+	assert!(same.try_lock().is_err());
+	let healthy = locks.get("dpty-healthy-host").unwrap();
+	assert!(healthy.try_lock().is_ok());
+	// A cancelled waiter releases its reference; later requests retain the same lock.
+	{
+		let waiting = same.clone().lock_owned();
+		tokio::pin!(waiting);
+		assert!(
+			std::future::poll_fn(|cx| std::task::Poll::Ready(
+				std::future::Future::poll(waiting.as_mut(), cx).is_pending()
+			))
+			.await
+		);
+	}
+	drop(held);
+	assert!(same.try_lock().is_ok());
+}
+
+#[test]
+fn terminal_start_lock_registry_reclaims_dormant_ids_without_splitting_live_ids() {
+	let locks = TerminalStartLocks::default();
+	let active = locks.get("dpty-active").unwrap();
+	for serial in 0..4096 {
+		drop(locks.get(&format!("dpty-{serial}")).unwrap());
+	}
+	assert!(locks.locks.lock().unwrap().len() <= 1024);
+	assert!(Arc::ptr_eq(&active, &locks.get("dpty-active").unwrap()));
+}
+
+#[test]
+fn terminal_start_lock_registry_reclaims_burst_on_hot_lookup_and_shrinks_capacity() {
+	let locks = TerminalStartLocks::default();
+	let hot = locks.get("dpty-hot").unwrap();
+	let burst: Vec<_> = (0..4096)
+		.map(|serial| locks.get(&format!("dpty-burst-{serial}")).unwrap())
+		.collect();
+	let peak_capacity = locks.locks.lock().unwrap().capacity();
+	assert!(peak_capacity > START_LOCK_CLEANUP_THRESHOLD * 4);
+	drop(burst);
+	assert!(Arc::ptr_eq(&hot, &locks.get("dpty-hot").unwrap()));
+	let retained = locks.locks.lock().unwrap();
+	assert_eq!(retained.len(), 1);
+	assert!(retained.capacity() <= START_LOCK_CLEANUP_THRESHOLD * 4);
+	assert!(retained.capacity() < peak_capacity);
+}
+
+#[tokio::test]
+async fn terminal_start_lock_registry_keeps_owned_waiter_during_cleanup_and_cancel() {
+	let locks = TerminalStartLocks::default();
+	let initial = locks.get("dpty-owned-waiter").unwrap();
+	let identity = Arc::as_ptr(&initial);
+	let held = initial.lock_owned().await;
+	let surviving;
+	{
+		let waiting = locks.get("dpty-owned-waiter").unwrap().lock_owned();
+		tokio::pin!(waiting);
+		assert!(
+			std::future::poll_fn(|cx| std::task::Poll::Ready(
+				std::future::Future::poll(waiting.as_mut(), cx).is_pending()
+			))
+			.await
+		);
+		// Only the queued owned future retains this lock during the cleanup below.
+		drop(held);
+		for serial in 0..START_LOCK_CLEANUP_THRESHOLD {
+			drop(locks.get(&format!("dpty-cleanup-{serial}")).unwrap());
+		}
+		surviving = locks.get("dpty-owned-waiter").unwrap();
+		assert_eq!(identity, Arc::as_ptr(&surviving));
+		assert!(surviving.try_lock().is_err());
+	}
+	// Cancelling the queued future releases its reserved permit for the next call.
+	assert!(surviving.try_lock().is_ok());
+	assert!(Arc::ptr_eq(
+		&surviving,
+		&locks.get("dpty-owned-waiter").unwrap()
+	));
+}
+
 fn record() -> TerminalRecord {
 	TerminalRecord {
 		session_id: "dpty-existing".into(),

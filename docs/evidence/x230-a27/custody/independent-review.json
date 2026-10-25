@@ -1,0 +1,106 @@
+{
+  "checks": {
+    "AST_has_no_deletion_or_numeric_kill_calls": true,
+    "all_four_child_log_receipts_are_empty_exact_sha256": true,
+    "artifact_receipts_exact_named_set_without_duplicates": true,
+    "authoritative_process_status_logs_complete_without_errors": true,
+    "authoritative_process_status_success_and_complete": true,
+    "before_after_socket_identity_receipt_bytes_and_sha256_match": true,
+    "exact_fourteen_checks_all_boolean_true": true,
+    "frozen_manifest_all_bytes_sha256_git_blob_sha1_match": true,
+    "frozen_manifest_exact_file_set": true,
+    "live_writer_at_EOF_and_retained_socket_events_recorded": true,
+    "locally_returned_plan_and_events_match_report_artifact_receipts": true,
+    "no_parent_death_signal_configuration_in_embedded_children": true,
+    "original_child_terminal_and_final_reaping_results_match": true,
+    "owner_and_both_embedded_children_parse": true,
+    "private_identity_receipts_marked_and_raw_files_absent_locally": true,
+    "report_matches_parent_observed_sha256": true,
+    "reported_success_has_no_main_or_cleanup_error": true,
+    "scope_flags_match_exact_tested_topology_and_exclusions": true,
+    "seven_events_have_exact_sequence_order_and_finite_monotonic_times": true,
+    "source_before_after_and_plan_match_frozen_source": true,
+    "source_matches_parent_frozen_receipt": true,
+    "static_check_receipt_matches_source_and_declared_checks": true
+  },
+  "child_log_bytes_reopened_by_reviewer": false,
+  "child_log_independent_read": "parent separately reported all four remote files empty; this review checks their exact report receipts",
+  "clarifications": [
+    "The source manifest and README remain preparation-era frozen inputs; execution facts are added in this separate review.",
+    "A pre-existing surviving owner was the original parent of both fixed children from creation; this was not transfer of custody from the killed controller.",
+    "The admission-frozen flag records one request and one EOF transition; no concurrent admission was attempted.",
+    "The public report records private identity assertions; this review binds that exact source and verifies hashes but does not independently reopen private identities.",
+    "Five-second select/socket/wait budgets do not bound filesystem operations, fsync, process creation, or blocked kernel I/O.",
+    "The new fixture socket was deliberately retained. Reaping this known writer does not solve same-UID namespace replacement or authorize legacy-root cleanup."
+  ],
+  "frozen_source_files_modified": false,
+  "inputs": [
+    {
+      "bytes": 782,
+      "file": "MANIFEST.json",
+      "sha256": "4b540b1a8220251a65cfbbebb93f63b17091bd1f60209d13733270d8a627afe0"
+    },
+    {
+      "bytes": 22991,
+      "file": "custody_harness.py",
+      "sha256": "5a94feef090e251937e99b77ee8854e046f6ce485f558c7a946161a30600b667"
+    },
+    {
+      "bytes": 4513,
+      "file": "README.md",
+      "sha256": "6b3388db98802f035cd9f70c455c7ad97945d2ddb72113e9fe87f4ca217418cf"
+    },
+    {
+      "bytes": 1168,
+      "file": "STATIC_CHECKS.json",
+      "sha256": "ffa7701d1da3e2f540e27b9a28f79d44943719241a070beb127ac10ebb89b40f"
+    },
+    {
+      "bytes": 3481,
+      "file": "evidence-x230-r01/report.json",
+      "sha256": "c89a057498b287d4a806e0b127259dbfa66091313404f0a7ff92704c343ed04f"
+    },
+    {
+      "bytes": 848,
+      "file": "evidence-x230-r01/plan.json",
+      "sha256": "bdc490b391d486def5874e48a0f1bef9ab6702c36f3e69e119db2bbe43ee7e45"
+    },
+    {
+      "bytes": 699,
+      "file": "evidence-x230-r01/events.jsonl",
+      "sha256": "73034352cb985e611864cdb52a6f5669866ca82b6392ea30cbc3aac72b39acac"
+    },
+    {
+      "bytes": 482,
+      "file": "evidence-x230-r01/process-status.json",
+      "sha256": "9aed968ac64a7953b4b77e16607f550117215c55a77358f4cc5f4a37a35c489c"
+    }
+  ],
+  "new_execution_by_reviewer": false,
+  "observed_event_order": [
+    "owner_ready",
+    "controller_start_request",
+    "both_original_children_ready",
+    "controller_sigkill_sent",
+    "control_EOF_admission_frozen",
+    "original_writer_reaped",
+    "custody_observations_complete"
+  ],
+  "private_raw_identity_files_reopened_by_reviewer": false,
+  "remote_calls_by_reviewer": false,
+  "review_kind": "static source-to-receipt and local artifact consistency review",
+  "review_passed": true,
+  "runtime_claim_boundaries": {
+    "A26_historical_sockets_deleted": false,
+    "automatic_socket_reclamation_implemented": false,
+    "exactly_once_external_effects_proved": false,
+    "general_kernel_IO_time_bound_proved": false,
+    "owner_failure_or_restart_tested": false,
+    "power_loss_or_reboot_recovery_tested": false,
+    "production_controller_to_owner_startup_tested": false,
+    "queued_or_competing_client_admission_tested": false,
+    "real_SSH_master_or_descendant_custody_tested": false,
+    "same_UID_path_replacement_protection_proved": false
+  },
+  "schema": "hepta-x230-custody-independent-local-review/v1"
+}

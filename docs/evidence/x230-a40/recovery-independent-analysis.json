@@ -1,0 +1,717 @@
+{
+  "analysis_scope": "Offline verification of archived requests, replies and original-file snapshots for all 6 inherited-pipe cases and all 6 controller-recovery jobs; no new workloads or remote observations.",
+  "analysis_script_sha256": "d474cad41a3fdde1087350a7d9f876e9f252546749a5dfc52d3abb7edca6bacd",
+  "archive": {
+    "bytes": 2612169,
+    "path": "final-evidence.tar.gz",
+    "sha256": "2fd95f6ab697ddda7d746752e5c3083eb96e2e23d9933a05ebf1093976c8a0e4"
+  },
+  "harness_source_bindings": {
+    "controller_helper": {
+      "filename": "x230_observation_benchmark.py",
+      "sha256": "fe33910ee709e227001338de3ca9a32cd01309efa3f406fcb2a2f2b54d2742cb"
+    },
+    "native_driver": {
+      "filename": "x230_inherited_pipe_canary_a40.py",
+      "sha256": "197d009acc0fd3b6984db42bb586846f2b47636396cf9806b58a5661d43b6219"
+    },
+    "six_driver": {
+      "filename": "x230_six_running_recovery_canary.py",
+      "sha256": "817ba6a1ca8d1fca55e5bdc6a52b5e3d79c7a1e9a1615d46f8c646e8be21324a"
+    }
+  },
+  "limitations": [
+    "This is an offline audit of retained observations. It does not reread the remote original files or repeat an experiment.",
+    "The same-ELF claim is a digest binding across qualification, validation-series and both recovery reports. The executable is excluded from the evidence archive and is not rehashed by this offline audit.",
+    "Execution-once markers, retained original IDs, same-key no-relaunch replies and bounded request counts support these fixed workloads only; they do not prove general exactly-once external effects or universal transport delivery semantics.",
+    "Original controller registry files are excluded from the evidence bundle. Their retained before/after digests and the reported equality checks agree; this audit cannot independently reread those excluded registry bytes.",
+    "Native timeout receipts bind the original group/child metadata and report SIGKILL submission and child reap. Direct signal-before-reap event tracing belongs to the separate source-bound prequalification fixtures; these native cases do not independently hook kernel group-signal and wait events.",
+    "All six native descendant observations report absent at the observation instant. Empty observed-controller-descendant survivor lists are limited to sampled identities and are not exhaustive process-tree proofs.",
+    "The inherited-pipe report has a verified complete inbound stdio capture and an explicit ended stdio-reader flag. The six-running report retains individual native replies and shutdown wait outcomes but does not include that same raw-capture/end-thread instrumentation.",
+    "The optional native cancellation-during-drain case was not requested in the six-case final inherited-pipe run; cancellation and read-error injection are covered by the separate prequalification fixtures and qualified tests.",
+    "Controller SIGKILL while remote supervisors remain alive is not supervisor death, host reboot, abrupt power loss, escaped process-group recovery, WAN partition, or authoritative cleanup of ownerless socket roots.",
+    "A matching witness proves the exact exit-receipt binding and the documented prior publication order; it does not certify witness-own final directory sync, log-file hashes, real power-cut durability, or external business effects.",
+    "Native staged EOF markers do not independently timestamp actual EOF; no signal-delivery or recovery deadline is inferred from harness elapsed time."
+  ],
+  "native_inherited_pipe": {
+    "all_raw_rpc_request_ids_match_replies_and_inbound_wire": true,
+    "cases": [
+      {
+        "automatic_retry": false,
+        "case": "natural",
+        "checks_passed": true,
+        "child_exit_code": null,
+        "controller_record_before_after_sha256": "7feb1d65d072e5a98bbeb6c16f2fdc66f8e502c5f7651659e8f5f5549e8f498b",
+        "descendant_observation": {
+          "present": false
+        },
+        "execution_marker_count": 1,
+        "exit_code": 0,
+        "exit_sha256": "8686160d029671c329d8b3299b9ecf19f528281e8731b91408125d8b6d01bef8",
+        "harness_rescue_signals": 0,
+        "host": "x230",
+        "job_id": "1a1710aaaf1-1a40e3-1",
+        "launch_request_count": 1,
+        "launch_rpc_id": 2,
+        "original_descendant_pid": 1720632,
+        "original_leader_pid": 1720625,
+        "output_complete": true,
+        "output_durable": true,
+        "outputs": {
+          "stderr": {
+            "bytes": 22,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 22,
+            "offset": 0,
+            "sha256": "8bb9eeef8aaabcaa5f8e995c0f2facc2cf62557d93dddf48333b54b0017f988b"
+          },
+          "stdout": {
+            "bytes": 68,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 68,
+            "offset": 0,
+            "sha256": "59184581f51df9de9cd40c6ee3664c342d7b5a4dce598ad77973d3236ad6e7b0"
+          }
+        },
+        "reported_group_signal": null,
+        "request_sha256": "e656f56c23539eda9de87156c54af5674ab0c34eb381d798f93e1866e66447c6",
+        "state": "succeeded",
+        "witness_exact_exit_hash_matches": true,
+        "witness_sha256": "7ec4df406815bc11f0c5d3dbe1fc2f3a5a589ecaf2ecd2936bbeec2d49052475"
+      },
+      {
+        "automatic_retry": false,
+        "case": "staggered",
+        "checks_passed": true,
+        "child_exit_code": null,
+        "controller_record_before_after_sha256": "14adc420aa0ff29ba94dbc104fe247264c0c48e746500066e404cdbf13994472",
+        "descendant_observation": {
+          "present": false
+        },
+        "execution_marker_count": 1,
+        "exit_code": 0,
+        "exit_sha256": "ee7130b07eaa6fcc57f1ec5adf2ad398919211efcae5ff18c6385f0e4b777330",
+        "harness_rescue_signals": 0,
+        "host": "x230",
+        "job_id": "1a1710ab1a3-1a40e3-2",
+        "launch_request_count": 1,
+        "launch_rpc_id": 5,
+        "original_descendant_pid": 1720807,
+        "original_leader_pid": 1720802,
+        "output_complete": true,
+        "output_durable": true,
+        "outputs": {
+          "stderr": {
+            "bytes": 56,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 56,
+            "offset": 0,
+            "sha256": "e883c0a534aacbb82fb1cfea78b72e39519e4b0b441709c29be9be389cd11ebc"
+          },
+          "stdout": {
+            "bytes": 81,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 81,
+            "offset": 0,
+            "sha256": "0122ad1aabd4da7b3e23192710d30d4d237c4bc5f2c6b7fdb9b13616988179dd"
+          }
+        },
+        "reported_group_signal": null,
+        "request_sha256": "a3488b04e63aa3c208e1d26fd5dea6120c48bd7e7ee63a95328760204024a8b0",
+        "state": "succeeded",
+        "witness_exact_exit_hash_matches": true,
+        "witness_sha256": "fde84d1ca53938ca43bcd7dbb79a252e46e79f20020f1103f4522ad8076e329e"
+      },
+      {
+        "automatic_retry": false,
+        "case": "timeout",
+        "checks_passed": true,
+        "child_exit_code": 0,
+        "controller_record_before_after_sha256": "7ceb681e6c1e49fdb274d2451785b2f4bb0c5abe37c8cda8b009d4473a38ee67",
+        "descendant_observation": {
+          "present": false
+        },
+        "execution_marker_count": 1,
+        "exit_code": 125,
+        "exit_sha256": "0940b601a25342f3ab1e369405f8d1a50d342216f681fa31f4358c32143eb066",
+        "harness_rescue_signals": 0,
+        "host": "x230",
+        "job_id": "1a1710ac1a8-1a40e3-3",
+        "launch_request_count": 1,
+        "launch_rpc_id": 16,
+        "original_descendant_pid": 1720967,
+        "original_leader_pid": 1720962,
+        "output_complete": false,
+        "output_durable": false,
+        "outputs": {
+          "stderr": {
+            "bytes": 22,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 22,
+            "offset": 0,
+            "sha256": "3711af9139ded52b8959e9ac8436a83e71f67c267044f3379c14bf58f9a6cd45"
+          },
+          "stdout": {
+            "bytes": 45,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 45,
+            "offset": 0,
+            "sha256": "0f206b1a168a04ff64f9a7a9a6eb7975901f4352fdb612840f8d0e12227ccb45"
+          }
+        },
+        "reported_group_signal": 9,
+        "request_sha256": "4224ab72abd54112d2d5f7e40f3b2b46b67103d2c572564d1989edd1412bbdc6",
+        "state": "effect_unknown",
+        "witness_exact_exit_hash_matches": true,
+        "witness_sha256": "5894fb1ad290eeea0e28859dfad17667a86b0a9f0e53c5da63baf6b9ad53d961"
+      },
+      {
+        "automatic_retry": false,
+        "case": "natural",
+        "checks_passed": true,
+        "child_exit_code": null,
+        "controller_record_before_after_sha256": "a81b3f45e883f0ef856a343a0431a6e4fd98012962005783ce6efe6e3706443d",
+        "descendant_observation": {
+          "present": false
+        },
+        "execution_marker_count": 1,
+        "exit_code": 0,
+        "exit_sha256": "cd977f110a504f694f72dfcd96cc7d2457ed913255116574e57cc5363188dda1",
+        "harness_rescue_signals": 0,
+        "host": "mac",
+        "job_id": "1a1710acf52-1a40e3-4",
+        "launch_request_count": 1,
+        "launch_rpc_id": 25,
+        "original_descendant_pid": 32534,
+        "original_leader_pid": 32532,
+        "output_complete": true,
+        "output_durable": true,
+        "outputs": {
+          "stderr": {
+            "bytes": 22,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 22,
+            "offset": 0,
+            "sha256": "8bb9eeef8aaabcaa5f8e995c0f2facc2cf62557d93dddf48333b54b0017f988b"
+          },
+          "stdout": {
+            "bytes": 68,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 68,
+            "offset": 0,
+            "sha256": "59184581f51df9de9cd40c6ee3664c342d7b5a4dce598ad77973d3236ad6e7b0"
+          }
+        },
+        "reported_group_signal": null,
+        "request_sha256": "7e9c0dd90405c3e78ad4002f1f41f44b722422053f959577c2800ed2a0782a26",
+        "state": "succeeded",
+        "witness_exact_exit_hash_matches": true,
+        "witness_sha256": "949c101d00569ae240ce07ae33966e35743668c673129889a6b5bfd236eb573e"
+      },
+      {
+        "automatic_retry": false,
+        "case": "staggered",
+        "checks_passed": true,
+        "child_exit_code": null,
+        "controller_record_before_after_sha256": "1a743e735f4a460ad7261a096b3273d11212540e22e78506474417ff327d2062",
+        "descendant_observation": {
+          "present": false
+        },
+        "execution_marker_count": 1,
+        "exit_code": 0,
+        "exit_sha256": "9d4ac320627a54dc7870cd38b8ac60474793499380d86e9c7e1e64907867bcc8",
+        "harness_rescue_signals": 0,
+        "host": "mac",
+        "job_id": "1a1710ad658-1a40e3-5",
+        "launch_request_count": 1,
+        "launch_rpc_id": 28,
+        "original_descendant_pid": 32568,
+        "original_leader_pid": 32566,
+        "output_complete": true,
+        "output_durable": true,
+        "outputs": {
+          "stderr": {
+            "bytes": 56,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 56,
+            "offset": 0,
+            "sha256": "e883c0a534aacbb82fb1cfea78b72e39519e4b0b441709c29be9be389cd11ebc"
+          },
+          "stdout": {
+            "bytes": 81,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 81,
+            "offset": 0,
+            "sha256": "0122ad1aabd4da7b3e23192710d30d4d237c4bc5f2c6b7fdb9b13616988179dd"
+          }
+        },
+        "reported_group_signal": null,
+        "request_sha256": "33d788285699f09dd78098f073cffe5528165378f7a03159364920c52eadb110",
+        "state": "succeeded",
+        "witness_exact_exit_hash_matches": true,
+        "witness_sha256": "a0ab8ed1ffc16b5f57f764c09863bbb6984c75e4c98a6de771b6fcf01e497300"
+      },
+      {
+        "automatic_retry": false,
+        "case": "timeout",
+        "checks_passed": true,
+        "child_exit_code": 0,
+        "controller_record_before_after_sha256": "11057c896be500381d6b0ac90bb10e4730a909841657f1fccbedb9abafc7c889",
+        "descendant_observation": {
+          "present": false
+        },
+        "execution_marker_count": 1,
+        "exit_code": 125,
+        "exit_sha256": "7871250dd6c95bd36ea49bc25e8e9cfdba4872dbaad86e8f4102a554afa3b3ba",
+        "harness_rescue_signals": 0,
+        "host": "mac",
+        "job_id": "1a1710ae5d2-1a40e3-6",
+        "launch_request_count": 1,
+        "launch_rpc_id": 37,
+        "original_descendant_pid": 32624,
+        "original_leader_pid": 32619,
+        "output_complete": false,
+        "output_durable": false,
+        "outputs": {
+          "stderr": {
+            "bytes": 22,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 22,
+            "offset": 0,
+            "sha256": "3711af9139ded52b8959e9ac8436a83e71f67c267044f3379c14bf58f9a6cd45"
+          },
+          "stdout": {
+            "bytes": 45,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 45,
+            "offset": 0,
+            "sha256": "0f206b1a168a04ff64f9a7a9a6eb7975901f4352fdb612840f8d0e12227ccb45"
+          }
+        },
+        "reported_group_signal": 9,
+        "request_sha256": "8e2a381644a0de9b8972d8ae9ae857043c750e513fce34e67b856cd42958eebe",
+        "state": "effect_unknown",
+        "witness_exact_exit_hash_matches": true,
+        "witness_sha256": "3994b00133a34c12db0515e7a3932694601fa197b2d2f16e030ad94204b4e0fb"
+      }
+    ],
+    "cases_checked": 6,
+    "controller_shutdown": {
+      "exit_code": 0,
+      "inbound_wire_bytes": 59964,
+      "inbound_wire_complete": true,
+      "inbound_wire_sha256": "610936f14cb1c9a14d863714f6296cf7f860da732dfc66e4a5c23dd55ea36b02",
+      "observed_descendant_survivors": [],
+      "reader_error": null,
+      "saved_and_wire_replies": 45,
+      "shutdown_method": "stdin_eof",
+      "stdio_reader_alive": false,
+      "unmatched_responses": 0
+    },
+    "default_cancel_case_executed": false,
+    "driver_subprocess_elapsed_seconds": 20.379990302026272,
+    "fresh_process_start_requests": 6,
+    "harness_elapsed_seconds": 20.23271346092224,
+    "native_tool_calls": {
+      "process_read": 6,
+      "process_start": 6,
+      "process_status": 32
+    },
+    "natural_successes": 4,
+    "report_bytes": 180211,
+    "report_member": "a40r02-inherited-pipe-native-r01/report.json",
+    "report_sha256": "2cc0d072194c150a4fbd1b63f7ddeab5ffe8f9010d7dbb001da61c34467b0a4d",
+    "saved_rpc_responses": 45,
+    "ssh_helper_calls": {
+      "ssh-inspect": 6,
+      "ssh-prepare": 2
+    },
+    "timeout_unknown_results": 2
+  },
+  "passed": true,
+  "qualification": {
+    "binary_sha256": "3238c9d4bb2f8dc4dbb86e591ce774bea70c6785c159cf27b70003f00623540c",
+    "current_stage": "complete",
+    "existing_ignored": 23,
+    "formatted_source_files": 165,
+    "preformat_delta_paths": [
+      "src/mcp/runtime/jobs_output_durability_tests.rs"
+    ],
+    "qualified": true,
+    "report_sha256": "1a72fbc56c4659a42416baddfaba66c17c39bdd74aeb8d12793b8789a6398719",
+    "source_map_sha256": "d2db270888ca4dae105f61030a705ce7592e944394e1ca07870cb430d28ed574",
+    "source_tested_equals_after_and_local_source": true,
+    "test_and_release_cached": false,
+    "top_level_tests_passed": 1226
+  },
+  "schema": "hepta-a40-recovery-independent-analysis/v1",
+  "six_running_controller_recovery": {
+    "automatic_rpc_retries": 0,
+    "cases": [
+      {
+        "automatic_retry": false,
+        "checks_passed": true,
+        "controller_record_before_after_sha256": "6c0c750dc22b2d1f8e8f015f681ed800f38193f352b5f175c53b61f69278ca32",
+        "execution_marker_count_after_crash": 1,
+        "execution_marker_count_at_terminal": 1,
+        "execution_marker_count_before_crash": 1,
+        "exit_code": 0,
+        "exit_sha256": "586012afe467d4371d4f8422c7687bcf092a57b6666cdfeb96e7374fe95508eb",
+        "fresh_start_count": 1,
+        "host": "ai395",
+        "job_id": "1a1710afe06-1a4352-2",
+        "lookup_launch_is_null": true,
+        "original_remote_request_bytes_unchanged": true,
+        "original_request_sha256": "2fbd8cd5a0418459dfcd53e9f5dc1b3c01aa556d8e3181e728abf8a04e2b72f7",
+        "original_running_identity_before_after": {
+          "backend": "systemd",
+          "description": "Hepta Runtime job 1a1710afe06-1a4352-2 44fb4e1d7b1a018b1e495ea900ae9c87",
+          "invocation_id": "5da6bc3005594ec49930a5ca9d77cbd1",
+          "pid": "341737"
+        },
+        "outputs": {
+          "stderr": {
+            "bytes": 26,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 26,
+            "offset": 0,
+            "sha256": "4a7d15d40a11ad316df546e5053f8a358ce90f06d1ef498cde03a539627d2abb"
+          },
+          "stdout": {
+            "bytes": 87,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 87,
+            "offset": 0,
+            "sha256": "5e7d2b0f2bd812daba2d6267457896d86c938201efcecfd5620ec087b7a864f2"
+          }
+        },
+        "release_operation_count": 1,
+        "remote_request_sha256": "4054ce844890288a1caba2f4bfdd5542b13120eca108981cd3d50574c9fb99d7",
+        "retried_launch": false,
+        "reused": true,
+        "same_key_lookup_count": 1,
+        "state": "succeeded",
+        "witness_exact_exit_hash_matches": true,
+        "witness_sha256": "3f8f6e4fce53a83977be8bf371a72f6e1add19ac3dd8137c95de04ae696ce8eb"
+      },
+      {
+        "automatic_retry": false,
+        "checks_passed": true,
+        "controller_record_before_after_sha256": "3a2a64e8051dfa91dd722561e068cc36ca2f3a26633b479eeba806e7db605f00",
+        "execution_marker_count_after_crash": 1,
+        "execution_marker_count_at_terminal": 1,
+        "execution_marker_count_before_crash": 1,
+        "exit_code": 0,
+        "exit_sha256": "8dec818fe7c18a697aa526d96e524be8a0330337a474b4bdd9900d5cfce78be4",
+        "fresh_start_count": 1,
+        "host": "mac",
+        "job_id": "1a1710afe02-1a4352-1",
+        "lookup_launch_is_null": true,
+        "original_remote_request_bytes_unchanged": true,
+        "original_request_sha256": "94a75ec5443a7be64db4143c571be1d167ceff0e56612afccd0a63d78b784efb",
+        "original_running_identity_before_after": {
+          "backend": "detached",
+          "identity": {
+            "kind": "ps_lstart",
+            "value": "Sun Oct 25 11:11:48 2026"
+          },
+          "pid": 32685
+        },
+        "outputs": {
+          "stderr": {
+            "bytes": 24,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 24,
+            "offset": 0,
+            "sha256": "03eafb7653ab84c62a64e29f766a5aa11723ef0aa8b720d686206cc6b1227189"
+          },
+          "stdout": {
+            "bytes": 83,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 83,
+            "offset": 0,
+            "sha256": "2802f0525742b8767bd30efde55be806af02cbb794abf058b07e1dafdf76617e"
+          }
+        },
+        "release_operation_count": 1,
+        "remote_request_sha256": "1cc6352d34a4ebd2b0f47d1f9ebf9607b75a81544102976c9715e7f59ee21d33",
+        "retried_launch": false,
+        "reused": true,
+        "same_key_lookup_count": 1,
+        "state": "succeeded",
+        "witness_exact_exit_hash_matches": true,
+        "witness_sha256": "658b47e97dafdb0782bd87209b49573c727dd66642a989d86abc3ed00a62fe31"
+      },
+      {
+        "automatic_retry": false,
+        "checks_passed": true,
+        "controller_record_before_after_sha256": "909cb0d85b1b0d5e0b3f60c35b18ee5a0983791a0e7988efe53a1f97db884e8b",
+        "execution_marker_count_after_crash": 1,
+        "execution_marker_count_at_terminal": 1,
+        "execution_marker_count_before_crash": 1,
+        "exit_code": 0,
+        "exit_sha256": "6af45e2a9578d999f8341192eab607a6b16671c0e4a98592d200b0d92cb0bd35",
+        "fresh_start_count": 1,
+        "host": "main",
+        "job_id": "1a1710afe09-1a4352-4",
+        "lookup_launch_is_null": true,
+        "original_remote_request_bytes_unchanged": true,
+        "original_request_sha256": "93b987f29f39de2567b33fcbfdb90c33be8cde5d4c25530e7bb4ba8e47399d79",
+        "original_running_identity_before_after": {
+          "backend": "systemd",
+          "description": "Hepta Runtime job 1a1710afe09-1a4352-4 b3ada674ccd59f81a7e2ca3c59bf7a4c",
+          "invocation_id": "424565a5088948b2aef5f7163bbf181a",
+          "pid": "3823528"
+        },
+        "outputs": {
+          "stderr": {
+            "bytes": 25,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 25,
+            "offset": 0,
+            "sha256": "ec3adb6fc2f166a6038ff6af7785e3bb561dcc5d15ea31df672f401e236b584d"
+          },
+          "stdout": {
+            "bytes": 85,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 85,
+            "offset": 0,
+            "sha256": "3fe274c53c4e77d1231a5eb95a4d51776424000a9b40cab55f998799b7bf7264"
+          }
+        },
+        "release_operation_count": 1,
+        "remote_request_sha256": "a6fc06b43e0ae9be90035cb1acd0c246cfd43f1e947f8769492e92b37a5ae501",
+        "retried_launch": false,
+        "reused": true,
+        "same_key_lookup_count": 1,
+        "state": "succeeded",
+        "witness_exact_exit_hash_matches": true,
+        "witness_sha256": "aa6e89ad3f2024aac8385f6ae1d4da2922934ad2e6f5cdf1673bfcaf47f9cc76"
+      },
+      {
+        "automatic_retry": false,
+        "checks_passed": true,
+        "controller_record_before_after_sha256": "514fb3801d5f9632ea822939d99d54ddfab8b366ec77a7df49f1716f86d7df29",
+        "execution_marker_count_after_crash": 1,
+        "execution_marker_count_at_terminal": 1,
+        "execution_marker_count_before_crash": 1,
+        "exit_code": 0,
+        "exit_sha256": "e3fcfae27a8811faa63ba8b2341fe397900a44e935ba19048c7463a1f023d8bd",
+        "fresh_start_count": 1,
+        "host": "pocket4",
+        "job_id": "1a1710afe06-1a4352-3",
+        "lookup_launch_is_null": true,
+        "original_remote_request_bytes_unchanged": true,
+        "original_request_sha256": "ff3309401b7f505e4d59194a8ef699dc7992ce1cfc95c155ed9b23ce3cba820e",
+        "original_running_identity_before_after": {
+          "backend": "systemd",
+          "description": "Hepta Runtime job 1a1710afe06-1a4352-3 f4cc8c93dd21bb3f92532840dcc84044",
+          "invocation_id": "9bfd22ffb3d944b19d56bea59b5f805b",
+          "pid": "843414"
+        },
+        "outputs": {
+          "stderr": {
+            "bytes": 28,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 28,
+            "offset": 0,
+            "sha256": "fae656e40fdd539191a00194cad8f284c8963939ac8735b1227bce347381a1ae"
+          },
+          "stdout": {
+            "bytes": 91,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 91,
+            "offset": 0,
+            "sha256": "cb16c2c4ca5dfa62bd75a318b00eb0ff7b228043e31e455e0abc386039982251"
+          }
+        },
+        "release_operation_count": 1,
+        "remote_request_sha256": "b6b04bf9b8925251ae69607c3328d33ea4707d1fd6f4cbc9ddb854505657ee6d",
+        "retried_launch": false,
+        "reused": true,
+        "same_key_lookup_count": 1,
+        "state": "succeeded",
+        "witness_exact_exit_hash_matches": true,
+        "witness_sha256": "21e6c8d1c8c7db560b8474a746f370c86cb878ceea25e5ab3070de95b676e8c1"
+      },
+      {
+        "automatic_retry": false,
+        "checks_passed": true,
+        "controller_record_before_after_sha256": "d9f9f13888081248e869287135f383c2f82560b7bbd6c0a5f4a8f8c6bbf9dd75",
+        "execution_marker_count_after_crash": 1,
+        "execution_marker_count_at_terminal": 1,
+        "execution_marker_count_before_crash": 1,
+        "exit_code": 0,
+        "exit_sha256": "d6a948d2a36ba2b3d1faddf3d1f03f5123ecaa6202b5ea6bedd8c252f96495bf",
+        "fresh_start_count": 1,
+        "host": "rog",
+        "job_id": "1a1710afe09-1a4352-5",
+        "lookup_launch_is_null": true,
+        "original_remote_request_bytes_unchanged": true,
+        "original_request_sha256": "91f4a04a1ddd1c73650d05942418c0cfcbf8d1384985f8413345979fa32f39aa",
+        "original_running_identity_before_after": {
+          "backend": "systemd",
+          "description": "Hepta Runtime job 1a1710afe09-1a4352-5 ee81267d3a2bc7494929f3abed1d2b8b",
+          "invocation_id": "6ed3b04535a6403c8979724e7eb8911c",
+          "pid": "2341982"
+        },
+        "outputs": {
+          "stderr": {
+            "bytes": 24,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 24,
+            "offset": 0,
+            "sha256": "aa626f2b90447359a7399824f2597bfac63ad955470868d92b7b02b44985e56a"
+          },
+          "stdout": {
+            "bytes": 83,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 83,
+            "offset": 0,
+            "sha256": "9c9a95f8acd108c74b812bc76a815d0c1dafb5e3ea11837ae8df935d21e1e01b"
+          }
+        },
+        "release_operation_count": 1,
+        "remote_request_sha256": "37d214e89bc799337bf3a0cd982acca4f4ef53e17de7e16352afcec010067f5d",
+        "retried_launch": false,
+        "reused": true,
+        "same_key_lookup_count": 1,
+        "state": "succeeded",
+        "witness_exact_exit_hash_matches": true,
+        "witness_sha256": "641e93a28aaa21fbfa972c9bc1093a8709a808d36ecc74f5a01d8b25c710c2bd"
+      },
+      {
+        "automatic_retry": false,
+        "checks_passed": true,
+        "controller_record_before_after_sha256": "89e4f1a5c35e24d7206eed787c8ae095d367a420ec835198b1de39d77cf7b2a0",
+        "execution_marker_count_after_crash": 1,
+        "execution_marker_count_at_terminal": 1,
+        "execution_marker_count_before_crash": 1,
+        "exit_code": 0,
+        "exit_sha256": "2c99432d5537fd53a1d861b18c134c4e66b266a3b01c67fc69fdfc09808b6e8e",
+        "fresh_start_count": 1,
+        "host": "x230",
+        "job_id": "1a1710afe13-1a4352-6",
+        "lookup_launch_is_null": true,
+        "original_remote_request_bytes_unchanged": true,
+        "original_request_sha256": "7ca53dcb2704d56315a81b445da0734443c5ac6a98419a4ffa76f203e99b031f",
+        "original_running_identity_before_after": {
+          "backend": "systemd",
+          "description": "Hepta Runtime job 1a1710afe13-1a4352-6 082345a3713c4c774d03853b10d18369",
+          "invocation_id": "5848ec7e0c6f402ca57781b455a63768",
+          "pid": "1721266"
+        },
+        "outputs": {
+          "stderr": {
+            "bytes": 25,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 25,
+            "offset": 0,
+            "sha256": "e04bf3db8f70dcdee7896ec9fd1fc2175ce29affac44e857ee04cd650374b05d"
+          },
+          "stdout": {
+            "bytes": 85,
+            "eof": true,
+            "exact_original_and_native_match": true,
+            "next_offset": 85,
+            "offset": 0,
+            "sha256": "223bc38763f2c7ad599b3512d86cefd7703d43eaa3a2957944b480815fbc6752"
+          }
+        },
+        "release_operation_count": 1,
+        "remote_request_sha256": "7f6fa57d69eff78a2417c5be057eeec306d6a4309a9c6c020e6491f2a07ce56d",
+        "retried_launch": false,
+        "reused": true,
+        "same_key_lookup_count": 1,
+        "state": "succeeded",
+        "witness_exact_exit_hash_matches": true,
+        "witness_sha256": "856ec64b00ca3f5a88e20d70b9d022b443ab6c9c8443aeb3a7b55f8b288bfd7b"
+      }
+    ],
+    "driver_subprocess_elapsed_seconds": 19.02190129784867,
+    "fresh_process_start_requests": 6,
+    "harness_elapsed_seconds": 18.86373209953308,
+    "hosts_checked": 6,
+    "native_reply_count": 54,
+    "original_controller": {
+      "startup": {
+        "birth_ticks": 159996876,
+        "pid": 1721170,
+        "ready_ms": 284.41603295505047,
+        "server_info": {
+          "name": "rmcp",
+          "version": "3.4.1"
+        },
+        "stdio_protocol": "2025-03-26"
+      },
+      "waited_crash": {
+        "exit_code": -9,
+        "observed_descendant_survivors": [],
+        "reader_error": null,
+        "shutdown_method": "already_exited",
+        "unmatched_responses": 0
+      }
+    },
+    "report_bytes": 301199,
+    "report_member": "a40r02-six-running-recovery-r01/report.json",
+    "report_sha256": "74a6691464c37a5101008151f28f6119078f26d86338c6ae6f27f08806e0f33c",
+    "restarted_controller": {
+      "startup": {
+        "birth_ticks": 159997542,
+        "pid": 1721452,
+        "ready_ms": 189.70877001993358,
+        "server_info": {
+          "name": "rmcp",
+          "version": "3.4.1"
+        },
+        "stdio_protocol": "2025-03-26"
+      },
+      "waited_shutdown": {
+        "exit_code": 0,
+        "observed_descendant_survivors": [],
+        "reader_error": null,
+        "shutdown_method": "stdin_eof",
+        "unmatched_responses": 0
+      }
+    },
+    "same_key_process_start_lookups": 6,
+    "ssh_helper_call_count": 30,
+    "timing_interpretation": "Whole harness includes preparation, launch, deliberate hold/release, polling, verification and shutdown. It is not a recovery-time objective, a measured RTO, or a general failover deadline."
+  },
+  "validation_series": {
+    "member": "a40-staggered-output-recovery-20261025-r02/validation-series-r01/report.json",
+    "recovery_report_hashes_independently_matched": true,
+    "recovery_runs_started_after_qualification_completed": true,
+    "same_binary_and_qualification_bound": true,
+    "sha256": "7c72ab104091e74e900ca40fa6ecf032cf583147c6e2f028f3ad1b7e9442a928",
+    "stages_reported_successful": 6
+  },
+  "verification_coverage": {
+    "checks_completed": 2684,
+    "distinct_archive_members_read": 239,
+    "embedded_original_file_snapshots_rehashed": 168
+  }
+}

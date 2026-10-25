@@ -1,0 +1,4740 @@
+diff --git a/src/mcp/runtime/request_audit.rs b/src/mcp/runtime/request_audit.rs
+index 966c566..cf82217 100644
+--- a/src/mcp/runtime/request_audit.rs
++++ b/src/mcp/runtime/request_audit.rs
+@@ -16,6 +16,8 @@ use std::path::Path;
+ use std::sync::atomic::{AtomicBool, Ordering};
+ use std::sync::{Arc, Mutex, OnceLock, Weak};
+ use std::time::{Instant, SystemTime, UNIX_EPOCH};
++#[cfg(unix)]
++use tokio::sync::Semaphore;
+ 
+ use super::config::runtime_config;
+ 
+@@ -26,6 +28,10 @@ const MAX_GLOBAL: usize = 512;
+ const MAX_OWNER: usize = 128;
+ const MAX_RECORD_BYTES: usize = 2048;
+ const MAX_PAGE_BYTES: usize = 64 * 1024;
++#[cfg(unix)]
++const MAX_METADATA_QUERIES: usize = 8;
++#[cfg(unix)]
++static METADATA_QUERY_SLOTS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+ const STORE_NAME: &str = "request-audit";
+ const ARCHIVE_NAME: &str = "request-archive-v11";
+ const ARCHIVE_ANCHOR: &str = ".request-archive-v11-anchor.json";
+@@ -1680,11 +1686,89 @@ fn finish_sync(mut ticket: RequestTicket, completion: AuditCompletion) -> Result
+ }
+ 
+ #[cfg(unix)]
++#[derive(Debug)]
++struct MetadataQueryDeadline;
++
++#[cfg(unix)]
++impl std::fmt::Display for MetadataQueryDeadline {
++	fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++		out.write_str(
++			"archive metadata query total deadline exceeded; repeat only the metadata query",
++		)
++	}
++}
++
++#[cfg(unix)]
++impl std::error::Error for MetadataQueryDeadline {}
++
++#[cfg(unix)]
++fn metadata_query_slots() -> Arc<Semaphore> {
++	METADATA_QUERY_SLOTS
++		.get_or_init(|| Arc::new(Semaphore::new(MAX_METADATA_QUERIES)))
++		.clone()
++}
++
++#[cfg(unix)]
++fn metadata_query_public_error(error: anyhow::Error) -> anyhow::Error {
++	if error.is::<MetadataQueryDeadline>() {
++		error
++	} else {
++		anyhow!(
++			"archive index preparing or validation unavailable; repeat only this metadata query"
++		)
++	}
++}
++
++// Admission and blocking-pool queue time consume the original query budget.
++// A cancelled caller cannot release a slot while queued or running I/O still
++// owns it, and a late blocking worker must not open the archive or start a scan.
++#[cfg(unix)]
++async fn run_metadata_query<T: Send + 'static>(
++	deadline: Instant,
++	slots: Arc<Semaphore>,
++	query: impl FnOnce(Instant) -> Result<T> + Send + 'static,
++) -> Result<T> {
++	if Instant::now() >= deadline {
++		return Err(MetadataQueryDeadline.into());
++	}
++	let result = tokio::time::timeout_at(tokio::time::Instant::from_std(deadline), async move {
++		let permit = slots
++			.acquire_owned()
++			.await
++			.map_err(|_| anyhow!("archive metadata query admission unavailable"))?;
++		if Instant::now() >= deadline {
++			return Err(MetadataQueryDeadline.into());
++		}
++		tokio::task::spawn_blocking(move || {
++			let _permit = permit;
++			if Instant::now() >= deadline {
++				return Err(MetadataQueryDeadline.into());
++			}
++			query(deadline)
++		})
++		.await
++		.map_err(|_| anyhow!("archive metadata query worker unavailable"))?
++	})
++	.await
++	.map_err(|_| anyhow::Error::from(MetadataQueryDeadline))??;
++	// A ready worker and an expired timer can be observed together after
++	// owner scheduling delay. Never accept that stale successful result.
++	if Instant::now() >= deadline {
++		return Err(MetadataQueryDeadline.into());
++	}
++	Ok(result)
++}
++
++#[cfg(all(test, unix))]
+ fn usage_stats_at(root: &Path, owner: &str) -> Result<String> {
++	usage_stats_at_until(root, owner, Instant::now() + index::QUERY_BUDGET)
++}
++
++#[cfg(unix)]
++fn usage_stats_at_until(root: &Path, owner: &str, deadline: Instant) -> Result<String> {
+ 	if !valid_id(owner) {
+ 		bail!("request usage unavailable to this scope");
+ 	}
+-	let deadline = Instant::now() + index::QUERY_BUDGET;
+ 	let archive = {
+ 		let _guard = index::query_lock(deadline)?;
+ 		let hot = open_store(root)?;
+@@ -1696,24 +1780,17 @@ fn usage_stats_at(root: &Path, owner: &str) -> Result<String> {
+ }
+ 
+ pub async fn usage_stats(owner: &str, _params: UsageStatsParams) -> Result<String> {
++	#[cfg(unix)]
++	let deadline = Instant::now() + index::QUERY_BUDGET;
+ 	let root = runtime_config()?.state_dir.clone();
+ 	let owner = owner.to_owned();
+ 	#[cfg(unix)]
+ 	{
+-		tokio::time::timeout(
+-			std::time::Duration::from_secs(4),
+-			tokio::task::spawn_blocking(move || usage_stats_at(&root, &owner)),
+-		)
+-		.await
+-		.map_err(|_| {
+-			anyhow!(
+-				"archive metadata query total deadline exceeded; repeat only the metadata query"
+-			)
+-		})?
+-		.map_err(|_| anyhow!("request usage unavailable to this scope"))?
+-		.map_err(|_| {
+-			anyhow!("archive index preparing or validation unavailable; repeat only this metadata query")
++		run_metadata_query(deadline, metadata_query_slots(), move |deadline| {
++			usage_stats_at_until(&root, &owner, deadline)
+ 		})
++		.await
++		.map_err(metadata_query_public_error)
+ 	}
+ 	#[cfg(not(unix))]
+ 	{
+@@ -1722,8 +1799,18 @@ pub async fn usage_stats(owner: &str, _params: UsageStatsParams) -> Result<Strin
+ 	}
+ }
+ 
+-#[cfg(unix)]
++#[cfg(all(test, unix))]
+ fn archive_history_at(root: &Path, owner: &str, params: RequestHistoryParams) -> Result<String> {
++	archive_history_at_until(root, owner, params, Instant::now() + index::QUERY_BUDGET)
++}
++
++#[cfg(unix)]
++fn archive_history_at_until(
++	root: &Path,
++	owner: &str,
++	params: RequestHistoryParams,
++	deadline: Instant,
++) -> Result<String> {
+ 	if !valid_id(owner) {
+ 		bail!("request archive unavailable to this scope");
+ 	}
+@@ -1731,7 +1818,6 @@ fn archive_history_at(root: &Path, owner: &str, params: RequestHistoryParams) ->
+ 	if !(1..=32).contains(&limit) || params.after_id.as_deref().is_some_and(|id| !valid_id(id)) {
+ 		bail!("invalid request archive page");
+ 	}
+-	let deadline = Instant::now() + index::QUERY_BUDGET;
+ 	let (archive, cursor) = {
+ 		let _guard = index::query_lock(deadline)?;
+ 		let hot = open_store(root)?;
+@@ -1780,24 +1866,17 @@ fn archive_history_at(root: &Path, owner: &str, params: RequestHistoryParams) ->
+ }
+ 
+ pub async fn archive_history(owner: &str, params: RequestHistoryParams) -> Result<String> {
++	#[cfg(unix)]
++	let deadline = Instant::now() + index::QUERY_BUDGET;
+ 	let root = runtime_config()?.state_dir.clone();
+ 	let owner = owner.to_owned();
+ 	#[cfg(unix)]
+ 	{
+-		tokio::time::timeout(
+-			std::time::Duration::from_secs(4),
+-			tokio::task::spawn_blocking(move || archive_history_at(&root, &owner, params)),
+-		)
+-		.await
+-		.map_err(|_| {
+-			anyhow!(
+-				"archive metadata query total deadline exceeded; repeat only the metadata query"
+-			)
+-		})?
+-		.map_err(|_| anyhow!("request archive unavailable to this scope"))?
+-		.map_err(|_| {
+-			anyhow!("archive index preparing or validation unavailable; repeat only this metadata query")
++		run_metadata_query(deadline, metadata_query_slots(), move |deadline| {
++			archive_history_at_until(&root, &owner, params, deadline)
+ 		})
++		.await
++		.map_err(metadata_query_public_error)
+ 	}
+ 	#[cfg(not(unix))]
+ 	{
+@@ -1969,3 +2048,7 @@ mod tests;
+ #[cfg(all(test, unix))]
+ #[path = "request_audit_lookup_tests.rs"]
+ mod lookup_tests;
++
++#[cfg(all(test, unix))]
++#[path = "request_audit_query_tests.rs"]
++mod query_tests;
+diff --git a/source-a26-r01/src/mcp/runtime/request_audit_query_tests.rs b/src/mcp/runtime/request_audit_query_tests.rs
+new file mode 100644
+index 0000000..a355fa9
+--- /dev/null
++++ b/src/mcp/runtime/request_audit_query_tests.rs
+@@ -0,0 +1,275 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++//! Deterministic admission, cancellation and deadline checks for archive queries.
++use super::{
++	archive_history_at_until, metadata_query_public_error, run_metadata_query,
++	usage_stats_at_until, MetadataQueryDeadline, RequestHistoryParams,
++};
++use std::future::{poll_fn, Future};
++use std::sync::atomic::{AtomicUsize, Ordering};
++use std::sync::mpsc;
++use std::sync::Arc;
++use std::task::Poll;
++use std::time::{Duration, Instant};
++use tokio::sync::{oneshot, Semaphore};
++
++fn isolated_runtime() -> tokio::runtime::Runtime {
++	tokio::runtime::Builder::new_current_thread()
++		.enable_all()
++		.max_blocking_threads(1)
++		.build()
++		.unwrap()
++}
++
++async fn blocking_queue_fence() {
++	tokio::time::timeout(Duration::from_secs(5), tokio::task::spawn_blocking(|| ()))
++		.await
++		.unwrap()
++		.unwrap();
++}
++
++#[test]
++fn metadata_query_expired_before_admission_never_runs() {
++	isolated_runtime().block_on(async {
++		let slots = Arc::new(Semaphore::new(1));
++		let calls = Arc::new(AtomicUsize::new(0));
++		let observed = calls.clone();
++		let error = run_metadata_query(Instant::now(), slots.clone(), move |_| {
++			observed.fetch_add(1, Ordering::SeqCst);
++			Ok(())
++		})
++		.await
++		.unwrap_err();
++		assert!(error.is::<MetadataQueryDeadline>());
++		assert_eq!(calls.load(Ordering::SeqCst), 0);
++		assert_eq!(slots.available_permits(), 1);
++	});
++}
++
++#[test]
++fn metadata_query_preserves_result_and_original_deadline() {
++	isolated_runtime().block_on(async {
++		let slots = Arc::new(Semaphore::new(1));
++		let deadline = Instant::now() + Duration::from_secs(5);
++		let result = run_metadata_query(deadline, slots.clone(), move |actual| {
++			assert_eq!(actual, deadline);
++			Ok("original query result")
++		})
++		.await
++		.unwrap();
++		assert_eq!(result, "original query result");
++		assert_eq!(slots.available_permits(), 1);
++	});
++}
++
++#[test]
++fn metadata_query_expired_in_blocking_queue_never_runs() {
++	isolated_runtime().block_on(async {
++		let (started, ready) = oneshot::channel();
++		let (release, blocked) = mpsc::channel();
++		let blocker = tokio::task::spawn_blocking(move || {
++			started.send(()).unwrap();
++			blocked.recv().unwrap();
++		});
++		ready.await.unwrap();
++		let slots = Arc::new(Semaphore::new(1));
++		let calls = Arc::new(AtomicUsize::new(0));
++		let observed = calls.clone();
++		let mut query = Box::pin(run_metadata_query(
++			Instant::now() + Duration::from_millis(250),
++			slots.clone(),
++			move |_| {
++				observed.fetch_add(1, Ordering::SeqCst);
++				Ok(())
++			},
++		));
++		// The only blocking worker is held. Poll once to submit the query and
++		// establish its slot ownership before waiting for its original deadline.
++		poll_fn(|cx| {
++			assert!(query.as_mut().poll(cx).is_pending());
++			Poll::Ready(())
++		})
++		.await;
++		assert_eq!(slots.available_permits(), 0);
++		let error = query.await.unwrap_err();
++		assert!(error.is::<MetadataQueryDeadline>());
++		assert_eq!(slots.available_permits(), 0);
++		release.send(()).unwrap();
++		blocker.await.unwrap();
++		blocking_queue_fence().await;
++		assert_eq!(calls.load(Ordering::SeqCst), 0);
++		assert_eq!(slots.available_permits(), 1);
++	});
++}
++
++#[test]
++fn metadata_query_cancelled_while_waiting_never_spawns() {
++	isolated_runtime().block_on(async {
++		let slots = Arc::new(Semaphore::new(1));
++		let held = slots.clone().acquire_owned().await.unwrap();
++		let calls = Arc::new(AtomicUsize::new(0));
++		let observed = calls.clone();
++		let mut query = Box::pin(run_metadata_query(
++			Instant::now() + Duration::from_secs(5),
++			slots.clone(),
++			move |_| {
++				observed.fetch_add(1, Ordering::SeqCst);
++				Ok(())
++			},
++		));
++		poll_fn(|cx| {
++			assert!(query.as_mut().poll(cx).is_pending());
++			Poll::Ready(())
++		})
++		.await;
++		drop(query);
++		drop(held);
++		blocking_queue_fence().await;
++		assert_eq!(calls.load(Ordering::SeqCst), 0);
++		assert_eq!(slots.available_permits(), 1);
++	});
++}
++
++#[test]
++fn metadata_query_cancelled_worker_retains_capacity_until_exit() {
++	isolated_runtime().block_on(async {
++		let slots = Arc::new(Semaphore::new(1));
++		let (started, ready) = oneshot::channel();
++		let (release, blocked) = mpsc::channel();
++		let query = tokio::spawn(run_metadata_query(
++			Instant::now() + Duration::from_secs(5),
++			slots.clone(),
++			move |_| {
++				started.send(()).unwrap();
++				blocked.recv().unwrap();
++				Ok(())
++			},
++		));
++		ready.await.unwrap();
++		query.abort();
++		assert!(query.await.unwrap_err().is_cancelled());
++		assert_eq!(slots.available_permits(), 0);
++		assert!(slots.clone().try_acquire_owned().is_err());
++		release.send(()).unwrap();
++		blocking_queue_fence().await;
++		assert_eq!(slots.available_permits(), 1);
++	});
++}
++
++#[test]
++fn metadata_query_timed_out_worker_retains_capacity_until_exit() {
++	isolated_runtime().block_on(async {
++		let slots = Arc::new(Semaphore::new(1));
++		let (started, ready) = oneshot::channel();
++		let (release, blocked) = mpsc::channel();
++		let query = tokio::spawn(run_metadata_query(
++			Instant::now() + Duration::from_millis(250),
++			slots.clone(),
++			move |_| {
++				started.send(()).unwrap();
++				blocked.recv().unwrap();
++				Ok(())
++			},
++		));
++		// Readiness proves that this case expires during the query itself,
++		// distinct from the blocked-pool case above.
++		ready.await.unwrap();
++		assert!(query
++			.await
++			.unwrap()
++			.unwrap_err()
++			.is::<MetadataQueryDeadline>());
++		assert_eq!(slots.available_permits(), 0);
++		assert!(slots.clone().try_acquire_owned().is_err());
++		release.send(()).unwrap();
++		blocking_queue_fence().await;
++		assert_eq!(slots.available_permits(), 1);
++	});
++}
++
++#[test]
++fn archive_query_expired_deadline_does_not_open_missing_store() {
++	let directory = tempfile::tempdir().unwrap();
++	let root = directory.path().join("missing");
++	let owner = "a".repeat(64);
++	let expired = Instant::now();
++	let usage = usage_stats_at_until(&root, &owner, expired).unwrap_err();
++	assert!(usage.to_string().contains("total deadline exceeded"));
++	let archive = archive_history_at_until(
++		&root,
++		&owner,
++		RequestHistoryParams {
++			after_id: None,
++			limit: Some(1),
++		},
++		expired,
++	)
++	.unwrap_err();
++	assert!(archive.to_string().contains("total deadline exceeded"));
++	assert!(!root.exists());
++}
++
++#[test]
++fn metadata_query_errors_preserve_timeout_and_redact_inner_details() {
++	let timeout = metadata_query_public_error(MetadataQueryDeadline.into());
++	assert!(timeout.is::<MetadataQueryDeadline>());
++	let error = metadata_query_public_error(anyhow::anyhow!("private path detail"));
++	assert_eq!(
++		error.to_string(),
++		"archive index preparing or validation unavailable; repeat only this metadata query"
++	);
++}
++
++#[test]
++fn metadata_query_ready_success_consumed_after_deadline_is_refused() {
++	isolated_runtime().block_on(async {
++		let slots = Arc::new(Semaphore::new(1));
++		let calls = Arc::new(AtomicUsize::new(0));
++		let observed = calls.clone();
++		let (started, ready) = oneshot::channel();
++		let (release, blocked) = mpsc::channel();
++		let deadline = Instant::now() + Duration::from_secs(2);
++		let mut query = Box::pin(run_metadata_query(deadline, slots.clone(), move |actual| {
++			assert_eq!(actual, deadline);
++			observed.fetch_add(1, Ordering::SeqCst);
++			started.send(()).unwrap();
++			blocked.recv_timeout(Duration::from_secs(5)).unwrap();
++			Ok("completed original metadata result")
++		}));
++		// The barrier makes this first poll pending regardless of worker speed.
++		poll_fn(|cx| {
++			assert!(query.as_mut().poll(cx).is_pending());
++			Poll::Ready(())
++		})
++		.await;
++		tokio::time::timeout(Duration::from_secs(5), ready)
++			.await
++			.unwrap()
++			.unwrap();
++		release.send(()).unwrap();
++		// The isolated runtime has one blocking thread. This subsequent fence
++		// proves the query closure and its JoinHandle result are ready while
++		// the caller future is deliberately left unpolled.
++		blocking_queue_fence().await;
++		assert_eq!(calls.load(Ordering::SeqCst), 1);
++		assert_eq!(slots.available_permits(), 1);
++		assert!(
++			Instant::now() < deadline,
++			"fixture missed its pre-deadline ready window"
++		);
++		// Pause this current-thread owner explicitly, not through system load.
++		std::thread::sleep(
++			deadline.saturating_duration_since(Instant::now()) + Duration::from_millis(1),
++		);
++		assert!(Instant::now() >= deadline);
++		let error = query.await.unwrap_err();
++		assert!(error.is::<MetadataQueryDeadline>());
++		assert_eq!(
++			calls.load(Ordering::SeqCst),
++			1,
++			"metadata query was replayed"
++		);
++		assert_eq!(slots.available_permits(), 1);
++	});
++}
+diff --git a/source-a26-r01/src/mcp/runtime/ssh_observation_agent_timeout_tests.rs b/src/mcp/runtime/ssh_observation_agent_timeout_tests.rs
+new file mode 100644
+index 0000000..ebf0ef2
+--- /dev/null
++++ b/src/mcp/runtime/ssh_observation_agent_timeout_tests.rs
+@@ -0,0 +1,404 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++//! Isolated fixtures for missing lookup authority, never cached acceptance.
++use super::*;
++
++#[tokio::test(flavor = "current_thread")]
++async fn unrelated_timeouts_and_identical_error_text_are_not_lookup_deadlines() {
++	let elapsed = timeout(Duration::ZERO, std::future::pending::<()>())
++		.await
++		.unwrap_err();
++	for error in [
++		anyhow!("observation SSH agent deadline"),
++		anyhow!(std::io::Error::new(
++			std::io::ErrorKind::TimedOut,
++			"observation SSH agent deadline",
++		)),
++		anyhow!(elapsed).context("observation SSH agent deadline"),
++	] {
++		assert!(!error.is::<profile::AgentLookupDeadline>());
++	}
++}
++
++async fn lookup_closed(control: &Arc<AgentControl>, expected: usize) {
++	timeout(Duration::from_secs(3), async {
++		while control.deadline_closed.load(Ordering::Acquire) < expected {
++			tokio::task::yield_now().await;
++		}
++	})
++	.await
++	.unwrap();
++	assert_eq!(control.deadline_closed.load(Ordering::Acquire), expected);
++}
++
++fn arm_next_lookup(control: &Arc<AgentControl>, offset: usize) -> usize {
++	let before = control.requests.load(Ordering::Acquire);
++	control
++		.deadline_request
++		.store(before + offset, Ordering::Release);
++	before
++}
++
++pub(super) async fn startup(path: &Path, control: &Arc<AgentControl>, kind: &str) {
++	let selected = match kind {
++		"agent-startup-unbound-timeout" => 1,
++		"agent-startup-bound-timeout" => 2,
++		"agent-startup-final-timeout" => 3,
++		_ => panic!("unsupported startup lookup fixture"),
++	};
++	control.deadline_request.store(selected, Ordering::Release);
++	let error = timeout(Duration::from_secs(12), start(path))
++		.await
++		.unwrap()
++		.err()
++		.expect("missing initial authority must refuse the whole pool");
++	assert!(error.to_string().contains("observation SSH agent deadline"));
++	lookup_closed(control, 1).await;
++	let pool = POOL.get().unwrap();
++	assert!(!pool.healthy.load(Ordering::Acquire));
++	assert!(pool.stop.is_cancelled());
++	assert!(pool.thread.lock().unwrap().is_none());
++	assert_eq!(pool.admission.available_permits(), MAX_ADMITTED);
++	assert_eq!(control.requests.load(Ordering::Acquire), selected);
++	assert!(capture(
++		"fixture",
++		"NEVER_DISPATCH".into(),
++		vec![],
++		Duration::from_secs(1),
++	)
++	.await
++	.is_err());
++	assert_eq!(control.requests.load(Ordering::Acquire), selected);
++}
++
++async fn request_phase(core: &Arc<Core>, control: &Arc<AgentControl>, prelease: bool) {
++	// The terminal ssh -G generation reaches the real prelease check but must
++	// never be presented as an authenticated master or reach slave creation.
++	let retired = if prelease {
++		Some(retired_generation(core, Duration::from_secs(10)).await)
++	} else {
++		None
++	};
++	let offset = if prelease { 2 } else { 1 };
++	let before = arm_next_lookup(control, offset);
++	let sequence = core.sequence.load(Ordering::Acquire);
++	let global = Arc::new(Semaphore::new(MAX_SESSIONS));
++	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
++	let (reply, receive) = oneshot::channel();
++	let request = Request {
++		host: "fixture".into(),
++		command: "NEVER_DISPATCH".into(),
++		input: vec![],
++		deadline: Instant::now() + Duration::from_millis(500),
++		cancel: CancellationToken::new(),
++		reply,
++		admission: Arc::new(admissions.clone().try_acquire_owned().unwrap()),
++	};
++	let initial = global.clone().try_acquire_owned().unwrap();
++	timeout(
++		Duration::from_secs(3),
++		core.clone().execute(request, initial, global.clone()),
++	)
++	.await
++	.unwrap();
++	let error = receive.await.unwrap().err().unwrap();
++	assert!(error.is::<profile::AgentLookupDeadline>(), "{error:#}");
++	assert!(error
++		.context("caller context preserves the exact failure type")
++		.is::<profile::AgentLookupDeadline>());
++	lookup_closed(control, 1).await;
++	assert!(!core.stop.is_cancelled());
++	assert_eq!(control.requests.load(Ordering::Acquire), before + offset);
++	assert_eq!(core.sequence.load(Ordering::Acquire), sequence);
++	assert_eq!(global.available_permits(), MAX_SESSIONS);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
++	if let Some((master, generation, _)) = &retired {
++		let entries = core.masters.lock().await;
++		let entry = entries.get("fixture").unwrap();
++		assert_eq!(entry.generation, *generation);
++		assert_eq!(entry.permits.available_permits(), HOST_SESSIONS);
++		assert_eq!(master.active.load(Ordering::Acquire), 0);
++		assert!(master.accepting.load(Ordering::Acquire));
++		assert_eq!(core.children.lock().await.len(), 1);
++	} else {
++		assert!(core.masters.lock().await.is_empty());
++		assert!(core.children.lock().await.is_empty());
++	}
++	core.verify_request_profile(Instant::now() + Duration::from_secs(3))
++		.await
++		.unwrap();
++	assert_eq!(
++		control.requests.load(Ordering::Acquire),
++		before + offset + 1
++	);
++	assert!(!core.stop.is_cancelled());
++}
++
++async fn postresponse(core: &Arc<Core>, agent: &Arc<AgentControl>) {
++	let global = Arc::new(Semaphore::new(MAX_SESSIONS));
++	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
++	let host = Arc::new(Semaphore::new(HOST_SESSIONS));
++	let release = Arc::new(Semaphore::new(0));
++	let (completed_send, mut completed) = mpsc::channel(MAX_SESSIONS);
++	let control = Arc::new(PostverifyControl {
++		global: global.clone(),
++		host: host.clone(),
++		completed: completed_send,
++		release: release.clone(),
++	});
++	let (sender, receiver) = mpsc::channel(QUEUE);
++	let actor = tokio::task::spawn_local(core.clone().run_with_dispatch(
++		receiver,
++		global.clone(),
++		move |core, request, initial| postverify_dispatch(core, request, initial, control.clone()),
++	));
++	let before = agent.requests.load(Ordering::Acquire);
++	let first = enqueue_fair_request(
++		&sender,
++		&admissions,
++		"fixture",
++		"must-discard-completed-output",
++		Instant::now() + Duration::from_secs(15),
++	);
++	assert_eq!(phase_notice(&mut completed).await, first.command);
++	assert_eq!(agent.requests.load(Ordering::Acquire), before + 2);
++	assert!(core.children.lock().await.is_empty());
++	assert_eq!(host.available_permits(), HOST_SESSIONS);
++	assert_eq!(global.available_permits(), MAX_SESSIONS - 1);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED - 1);
++	arm_next_lookup(agent, 1);
++	release.add_permits(1);
++	let error = timeout(Duration::from_secs(5), first.reply)
++		.await
++		.unwrap()
++		.unwrap()
++		.err()
++		.expect("captured bytes cannot survive a missing response authority check");
++	assert!(error.is::<profile::AgentLookupDeadline>(), "{error:#}");
++	lookup_closed(agent, 1).await;
++	assert_eq!(agent.requests.load(Ordering::Acquire), before + 3);
++	assert_eq!(global.available_permits(), MAX_SESSIONS);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
++	assert!(core.children.lock().await.is_empty());
++	assert!(!core.stop.is_cancelled());
++	assert!(!actor.is_finished());
++	// A distinct later request performs initial, prelease and postresponse
++	// checks again. It runs a new real, owned ssh -G child; it is not a replay
++	// or an authenticated-mux integration fixture.
++	let second = enqueue_fair_request(
++		&sender,
++		&admissions,
++		"fixture",
++		"separate-request-with-fresh-checks",
++		Instant::now() + Duration::from_secs(15),
++	);
++	assert_eq!(phase_notice(&mut completed).await, second.command);
++	release.add_permits(1);
++	let output = timeout(Duration::from_secs(5), second.reply)
++		.await
++		.unwrap()
++		.unwrap()
++		.unwrap();
++	assert_eq!(agent.requests.load(Ordering::Acquire), before + 6);
++	assert!(output.status.success());
++	assert!(!output.stdout.is_empty());
++	assert_eq!(host.available_permits(), HOST_SESSIONS);
++	assert_eq!(global.available_permits(), MAX_SESSIONS - 1);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED - 1);
++	assert!(!core.stop.is_cancelled());
++	drop(output);
++	assert_eq!(global.available_permits(), MAX_SESSIONS);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
++	core.stop.cancel();
++	timeout(Duration::from_secs(3), actor)
++		.await
++		.unwrap()
++		.unwrap()
++		.unwrap();
++}
++
++async fn failed_master(core: &Arc<Core>, control: &Arc<AgentControl>) {
++	let before = arm_next_lookup(control, 1);
++	let cancel = CancellationToken::new();
++	let mut failed = core
++		.entry("fixture", &cancel, Instant::now() + Duration::from_secs(1))
++		.await
++		.unwrap();
++	let held = failed.permits.clone().try_acquire_owned().unwrap();
++	assert!(renewal_error(&mut failed.ready)
++		.await
++		.contains("observation SSH agent deadline"));
++	lookup_closed(control, 1).await;
++	assert!(core.stop.is_cancelled());
++	assert!(core.children.lock().await.is_empty());
++	assert_eq!(std::fs::read_dir(&core.root.path).unwrap().count(), 0);
++	assert_eq!(control.requests.load(Ordering::Acquire), before + 1);
++	let sequence = core.sequence.load(Ordering::Acquire);
++	core.maintain().await.unwrap();
++	{
++		let entries = core.masters.lock().await;
++		let still_failed = entries.get("fixture").unwrap();
++		assert_eq!(still_failed.generation, failed.generation);
++		assert!(still_failed.ready.same_channel(&failed.ready));
++		assert!(Arc::ptr_eq(&still_failed.permits, &failed.permits));
++		assert_eq!(still_failed.permits.available_permits(), HOST_SESSIONS - 1);
++		assert!(still_failed.draining.is_none());
++		assert!(matches!(&*still_failed.ready.borrow(), Some(Err(_))));
++	}
++	assert!(core
++		.entry("fixture", &cancel, Instant::now() + Duration::from_secs(1))
++		.await
++		.is_err());
++	assert_eq!(core.sequence.load(Ordering::Acquire), sequence);
++	assert_eq!(control.requests.load(Ordering::Acquire), before + 1);
++	drop(held);
++	core.maintain().await.unwrap();
++	assert!(core.masters.lock().await.is_empty());
++	// Lifecycle failure stays fatal even after clean retirement; no stale RPC
++	// or later caller can silently turn this failure into another generation.
++	assert!(core
++		.entry("fixture", &cancel, Instant::now() + Duration::from_secs(1))
++		.await
++		.is_err());
++	assert!(matches!(&*failed.ready.borrow(), Some(Err(_))));
++	assert_eq!(control.requests.load(Ordering::Acquire), before + 1);
++	assert_eq!(core.sequence.load(Ordering::Acquire), sequence);
++	assert!(core.children.lock().await.is_empty());
++	assert!(core.stop.is_cancelled());
++}
++
++async fn failed_renewal(core: &Arc<Core>, control: &Arc<AgentControl>) {
++	let (old, generation, _listener) = retired_generation(core, Duration::from_secs(10)).await;
++	let cancel = CancellationToken::new();
++	let deadline = Instant::now() + Duration::from_secs(15);
++	let stale = core.entry("fixture", &cancel, deadline).await.unwrap();
++	let held = stale.permits.clone().try_acquire_owned().unwrap();
++	let before = arm_next_lookup(control, 1);
++	core.renew("fixture", generation, &old, deadline, &cancel)
++		.await
++		.unwrap();
++	let mut failed = core.entry("fixture", &cancel, deadline).await.unwrap();
++	assert_ne!(failed.generation, generation);
++	assert!(Arc::ptr_eq(&failed.permits, &stale.permits));
++	assert!(renewal_error(&mut failed.ready)
++		.await
++		.contains("observation SSH agent deadline"));
++	lookup_closed(control, 1).await;
++	assert!(!old.accepting.load(Ordering::Acquire));
++	assert_eq!(old.active.load(Ordering::Acquire), 0);
++	assert!(!old.socket.exists());
++	assert!(core.children.lock().await.is_empty());
++	assert!(core.stop.is_cancelled());
++	assert_eq!(control.requests.load(Ordering::Acquire), before + 1);
++	{
++		let entries = core.masters.lock().await;
++		let current = entries.get("fixture").unwrap();
++		assert_eq!(current.generation, failed.generation);
++		assert!(current.draining.is_none());
++		assert!(Arc::ptr_eq(&current.permits, &stale.permits));
++		assert_eq!(current.permits.available_permits(), HOST_SESSIONS - 1);
++		assert!(matches!(&*current.ready.borrow(), Some(Err(_))));
++	}
++	let sequence = core.sequence.load(Ordering::Acquire);
++	assert!(core
++		.renew("fixture", generation, &old, deadline, &cancel)
++		.await
++		.is_err());
++	assert_eq!(core.sequence.load(Ordering::Acquire), sequence);
++	assert_eq!(control.requests.load(Ordering::Acquire), before + 1);
++	core.maintain().await.unwrap();
++	assert!(core.masters.lock().await.contains_key("fixture"));
++	drop(held);
++	core.maintain().await.unwrap();
++	assert!(core.masters.lock().await.is_empty());
++	assert!(matches!(&*failed.ready.borrow(), Some(Err(_))));
++	assert!(core.entry("fixture", &cancel, deadline).await.is_err());
++	assert!(core
++		.renew("fixture", generation, &old, deadline, &cancel)
++		.await
++		.is_err());
++	assert_eq!(core.sequence.load(Ordering::Acquire), sequence);
++	assert_eq!(control.requests.load(Ordering::Acquire), before + 1);
++}
++
++async fn later_authority_failure(core: &Arc<Core>, control: &Arc<AgentControl>, kind: &str) {
++	let bound = core.agent.get().unwrap().clone();
++	let before = arm_next_lookup(control, 1);
++	let first = core
++		.verify_request_profile(Instant::now() + Duration::from_millis(500))
++		.await
++		.unwrap_err();
++	assert!(first.is::<profile::AgentLookupDeadline>());
++	lookup_closed(control, 1).await;
++	assert!(!core.stop.is_cancelled());
++	let agent_requests = match kind {
++		"agent-timeout-then-key-change" => {
++			control.response_fault.store(1, Ordering::Release);
++			1
++		}
++		"agent-timeout-then-frame-error" => {
++			control.response_fault.store(2, Ordering::Release);
++			1
++		}
++		"agent-timeout-then-io-error" => {
++			control.response_fault.store(3, Ordering::Release);
++			1
++		}
++		"agent-timeout-then-socket-change" => {
++			std::fs::remove_file(&core.profile.agent).unwrap();
++			private_write(&core.profile.agent, b"not a socket");
++			0
++		}
++		"agent-timeout-then-file-change" => {
++			private_write(
++				&core.profile.known_hosts,
++				b"changed after missing authority\n",
++			);
++			0
++		}
++		"agent-timeout-then-environment-change" => {
++			std::env::set_var("SSH_AUTH_SOCK", core.root.path.join("undeclared-agent"));
++			0
++		}
++		_ => panic!("unsupported later authority failure fixture"),
++	};
++	let error = core
++		.verify_request_profile(Instant::now() + Duration::from_secs(3))
++		.await
++		.unwrap_err();
++	assert!(!error.is::<profile::AgentLookupDeadline>(), "{error:#}");
++	assert!(core.stop.is_cancelled());
++	assert_eq!(core.agent.get(), Some(&bound));
++	assert_eq!(
++		control.requests.load(Ordering::Acquire),
++		before + 1 + agent_requests,
++	);
++	assert!(core.children.lock().await.is_empty());
++	assert!(core.masters.lock().await.is_empty());
++}
++
++pub(super) async fn run(core: &Arc<Core>, control: &Arc<AgentControl>, kind: &str) {
++	match kind {
++		"agent-initial-timeout" => request_phase(core, control, false).await,
++		"agent-prelease-timeout" => request_phase(core, control, true).await,
++		"agent-postresponse-timeout" => {
++			tokio::task::LocalSet::new()
++				.run_until(postresponse(core, control))
++				.await;
++		}
++		"agent-master-timeout" => failed_master(core, control).await,
++		"agent-renewal-timeout" => failed_renewal(core, control).await,
++		"agent-renewal-cleanup-error" => {
++			let before = arm_next_lookup(control, 1);
++			renewal_fixture(core, "renew-cleanup").await;
++			assert!(core.stop.is_cancelled());
++			assert_eq!(control.requests.load(Ordering::Acquire), before);
++			assert_eq!(control.deadline_closed.load(Ordering::Acquire), 0);
++		}
++		kind if kind.starts_with("agent-timeout-then-") => {
++			later_authority_failure(core, control, kind).await;
++		}
++		_ => panic!("unsupported lookup deadline fixture"),
++	}
++}
+diff --git a/src/mcp/runtime/ssh_observation_pool.rs b/src/mcp/runtime/ssh_observation_pool.rs
+index f09ee7f..17a99e5 100644
+--- a/src/mcp/runtime/ssh_observation_pool.rs
++++ b/src/mcp/runtime/ssh_observation_pool.rs
+@@ -1,12 +1,18 @@
+-// Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
+ //! A separate, explicitly opted-in transport; it never falls back or replays.
++#[path = "ssh_observation_postspawn.rs"]
++mod postspawn;
+ #[path = "ssh_observation_profile.rs"]
+ mod profile;
++#[path = "ssh_observation_validation.rs"]
++mod validation;
+ 
+ use anyhow::{anyhow, bail, Context, Result};
+ use profile::{AgentIdentity, Profile, Stamp};
+ use ring::rand::{SecureRandom, SystemRandom};
+-use std::collections::BTreeMap;
++use std::collections::{BTreeMap, VecDeque};
+ use std::fs::File;
+ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+ use std::os::unix::fs::MetadataExt;
+@@ -27,6 +33,9 @@ const MAX_MASTERS: usize = 8;
+ const MAX_SESSIONS: usize = 8;
+ const HOST_SESSIONS: usize = 2;
+ const QUEUE: usize = 8;
++// Same logical request bound as eight executing/retained outputs plus the
++// original eight channel entries. Moving a waiter cannot create new capacity.
++const MAX_ADMITTED: usize = MAX_SESSIONS + QUEUE;
+ const IDLE: Duration = Duration::from_secs(30);
+ const AGE: Duration = Duration::from_secs(120);
+ const START: Duration = Duration::from_secs(12);
+@@ -44,6 +53,30 @@ fn check_control_socket_path(path: &Path) -> Result<()> {
+ 	Ok(())
+ }
+ 
++// OpenSSH links its listening temporary socket to the final name before
++// unlinking the temporary name. A two-link inode may still be publishing;
++// retaining its full stamp would mistake the expected unlink for replacement.
++// Only initial readiness waits here. Established-master checks stay exact.
++async fn master_socket_readiness(socket: &Path, owned_pid: u32) -> Result<Option<Stamp>> {
++	let Ok(stamp) = profile::socket_stamp(socket) else {
++		return Ok(None);
++	};
++	match stamp.link_count() {
++		1 => {}
++		2 => return Ok(None),
++		_ => bail!("observation control socket has unexpected link count"),
++	}
++	let stream = UnixStream::connect(socket).await?;
++	let peer = profile::peer(&stream)?;
++	if peer.0 != owned_pid as i32
++		|| peer.1 != unsafe { libc::geteuid() }
++		|| profile::socket_stamp(socket)? != stamp
++	{
++		bail!("observation control socket is not the owned master");
++	}
++	Ok(Some(stamp))
++}
++
+ struct Request {
+ 	host: String,
+ 	command: String,
+@@ -51,12 +84,14 @@ struct Request {
+ 	deadline: Instant,
+ 	cancel: CancellationToken,
+ 	reply: oneshot::Sender<Result<Captured>>,
++	admission: Arc<OwnedSemaphorePermit>,
+ }
+ 
+ /// Capacity also covers completed output until its original caller parses it.
+ pub(super) struct Captured {
+ 	output: Output,
+ 	_budget: Arc<OwnedSemaphorePermit>,
++	_admission: Arc<OwnedSemaphorePermit>,
+ }
+ impl std::ops::Deref for Captured {
+ 	type Target = Output;
+@@ -67,6 +102,7 @@ impl std::ops::Deref for Captured {
+ 
+ struct Proxy {
+ 	sender: mpsc::Sender<Request>,
++	admission: Arc<Semaphore>,
+ 	stop: CancellationToken,
+ 	healthy: AtomicBool,
+ 	thread: Mutex<Option<std::thread::JoinHandle<Result<()>>>>,
+@@ -121,6 +157,7 @@ pub(super) async fn start(path: &Path) -> Result<PoolGuard> {
+ 	let (ready_tx, ready_rx) = oneshot::channel();
+ 	let proxy = Arc::new(Proxy {
+ 		sender,
++		admission: Arc::new(Semaphore::new(MAX_ADMITTED)),
+ 		stop: CancellationToken::new(),
+ 		healthy: AtomicBool::new(false),
+ 		thread: Mutex::new(None),
+@@ -134,6 +171,7 @@ pub(super) async fn start(path: &Path) -> Result<PoolGuard> {
+ 				.build()?;
+ 			let core = Arc::new(Core {
+ 				profile,
++				validation: validation::Workers::new(),
+ 				root,
+ 				stop: owner.stop.clone(),
+ 				agent: OnceLock::new(),
+@@ -163,6 +201,9 @@ pub(super) async fn start(path: &Path) -> Result<PoolGuard> {
+ 			owner.healthy.store(false, Ordering::Release);
+ 			core.stop.cancel();
+ 			let cleanup = runtime.block_on(core.shutdown());
++			// Early cleanup errors must not let detached validation outlive its
++			// authority owner. Retain the original cleanup/actor error precedence.
++			let cleanup = runtime.block_on(core.validation.finish_shutdown(cleanup));
+ 			match outcome {
+ 				Ok(result) => {
+ 					result?;
+@@ -203,6 +244,26 @@ impl Drop for CancelOnDrop {
+ 	}
+ }
+ 
++// On this owner runtime, unwinding/drop finishes before any awakened waiter
++// can be polled. A failed already-spawned supervisor therefore freezes child
++// admission even before the actor observes its JoinError.
++struct StopUnlessCompleted {
++	stop: CancellationToken,
++	completed: bool,
++}
++impl StopUnlessCompleted {
++	fn complete(mut self) {
++		self.completed = true;
++	}
++}
++impl Drop for StopUnlessCompleted {
++	fn drop(&mut self) {
++		if !self.completed {
++			self.stop.cancel();
++		}
++	}
++}
++
+ pub(super) async fn capture(
+ 	host: &str,
+ 	command: String,
+@@ -218,22 +279,58 @@ pub(super) async fn capture(
+ 	let cancel = CancellationToken::new();
+ 	let _guard = CancelOnDrop(cancel.clone());
+ 	let (reply, receive) = oneshot::channel();
+-	pool.sender
+-		.try_send(Request {
++	pool.enqueue(host, command, input, deadline, cancel, reply)
++		.await?;
++	timeout_at(deadline, receive)
++		.await
++		.context("observation transport deadline; no automatic retry")?
++		.context("observation transport unavailable; no automatic retry")?
++}
++
++impl Proxy {
++	async fn enqueue(
++		&self,
++		host: &str,
++		command: String,
++		input: Vec<u8>,
++		deadline: Instant,
++		cancel: CancellationToken,
++		reply: oneshot::Sender<Result<Captured>>,
++	) -> Result<()> {
++		let admission = self.admission.clone().try_acquire_owned().map_err(|_| {
++			anyhow!("observation pool capacity unavailable; no fallback or automatic retry")
++		})?;
++		let request = Request {
+ 			host: host.to_owned(),
+ 			command,
+ 			input,
+ 			deadline,
+ 			cancel,
+ 			reply,
+-		})
+-		.map_err(|_| {
+-			anyhow!("observation pool capacity unavailable; no fallback or automatic retry")
+-		})?;
+-	timeout_at(deadline, receive)
+-		.await
+-		.context("observation transport deadline; no automatic retry")?
+-		.context("observation transport unavailable; no automatic retry")?
++			admission: Arc::new(admission),
++		};
++		// A channel waiter already owns one of the same sixteen identities.
++		// Wait within its original deadline; do not enlarge the channel or retry.
++		let slot = tokio::select! {
++			value = timeout_at(deadline, self.sender.reserve()) => value
++				.context("observation queue admission deadline; no automatic retry")?
++				.context("observation queue closed; no fallback or automatic retry")?,
++			_ = request.cancel.cancelled() => bail!("observation cancelled before queue submission; no automatic retry"),
++			_ = self.stop.cancelled() => bail!("observation pool stopped before queue submission; no automatic retry"),
++		};
++		// Capacity, shutdown and expiry may become ready together. Recheck after
++		// reservation and leave no await between these fences and the single send.
++		if !self.healthy.load(Ordering::Acquire)
++			|| self.stop.is_cancelled()
++			|| request.cancel.is_cancelled()
++			|| Instant::now() >= deadline
++			|| self.sender.is_closed()
++		{
++			bail!("observation cancelled, expired or unavailable before queue submission; no automatic retry");
++		}
++		slot.send(request);
++		Ok(())
++	}
+ }
+ 
+ struct PrivateRoot {
+@@ -486,6 +583,7 @@ impl Drop for ActiveMaster {
+ 
+ struct Core {
+ 	profile: Arc<Profile>,
++	validation: validation::Workers,
+ 	root: PrivateRoot,
+ 	stop: CancellationToken,
+ 	agent: OnceLock<AgentIdentity>,
+@@ -501,6 +599,12 @@ enum Mode {
+ 	Master,
+ 	Slave,
+ }
++
++enum ProfileCheckScope {
++	Lifecycle,
++	Request,
++}
++
+ impl Core {
+ 	async fn initialize(self: &Arc<Self>) -> Result<()> {
+ 		self.profile.verify_files()?;
+@@ -522,8 +626,37 @@ impl Core {
+ 		self.verify_profile(deadline).await
+ 	}
+ 	async fn verify_profile(&self, deadline: Instant) -> Result<()> {
+-		let checked = async {
+-			self.profile.verify_files()?;
++		// Initialization and master generations keep the original all-error
++		// freeze. A failed generation must not be retired past a stale RPC that
++		// has not observed its watch result, allowing that RPC to create another.
++		self.verify_profile_for(deadline, ProfileCheckScope::Lifecycle)
++			.await
++	}
++	async fn verify_request_profile(&self, deadline: Instant) -> Result<()> {
++		self.verify_profile_for(deadline, ProfileCheckScope::Request)
++			.await
++	}
++	async fn verify_files(&self, deadline: Instant) -> Result<()> {
++		let profile = self.profile.clone();
++		self.validation
++			.run(&self.stop, deadline, move || profile.verify_files())
++			.await?;
++		// The worker performed the full read/hash. Recheck all immutable path,
++		// inode, permission and policy boundaries on their original owner after
++		// the new await; no delayed successful snapshot bypasses this fence.
++		let checked = self.profile.verify_boundaries();
++		if checked.is_err() {
++			self.stop.cancel();
++		}
++		checked?;
++		if self.stop.is_cancelled() || Instant::now() >= deadline {
++			bail!("observation file validation cancelled or expired before acceptance");
++		}
++		Ok(())
++	}
++	async fn verify_profile_for(&self, deadline: Instant, scope: ProfileCheckScope) -> Result<()> {
++		let checked: Result<()> = async {
++			self.verify_files(deadline).await?;
+ 			self.root.verify(&self.profile)?;
+ 			let agent = tokio::select! {
+ 				value = profile::agent_snapshot(&self.profile.agent, deadline.min(Instant::now() + Duration::from_secs(2))) => value?,
+@@ -532,11 +665,18 @@ impl Core {
+ 			if self.agent.get() != Some(&agent) {
+ 				bail!("observation SSH credential identity changed");
+ 			}
+-			self.profile.verify_files()?;
++			self.verify_files(deadline).await?;
+ 			Ok(())
+ 		}
+ 		.await;
+-		if checked.is_err() {
++		// A lookup timer grants no authority: its caller still returns Err and
++		// discards any output. Other requests must perform their own complete
++		// checks; no credential result is substituted or automatically retried.
++		// Every observed mismatch, I/O error and other failure still freezes us.
++		if checked.as_ref().is_err_and(|error| match scope {
++			ProfileCheckScope::Lifecycle => true,
++			ProfileCheckScope::Request => !error.is::<profile::AgentLookupDeadline>(),
++		}) {
+ 			self.stop.cancel();
+ 		}
+ 		checked
+@@ -716,16 +856,55 @@ impl Core {
+ 		// Failed pidfd/identity checks use the same bounded cleanup ledger.
+ 		children.insert(id, owned.clone());
+ 		drop(children);
+-		let identity = process_identity(pid).ok();
++		// The child has not escaped spawn; shutdown joins owner work before
++		// reaping its ledger. Keep every proc read and try_wait under the same
++		// Child lock used by wait/stop, including the initial observation.
++		let (mut identity, mut terminal) = {
++			let mut child = owned.child.lock().await;
++			let identity = process_identity(pid).ok();
++			let terminal = child
++				.try_wait()
++				.map(|status| status.is_some())
++				.map_err(anyhow::Error::from);
++			(identity, terminal)
++		};
++		if owned.pidfd.is_some() && terminal.as_ref().is_ok_and(|done| !*done) {
++			if let Some(anchor) = identity.as_ref().filter(|value| {
++				value.argv.is_empty()
++					&& value.uid == unsafe { libc::geteuid() }
++					&& (value.dev, value.ino) == self.profile.ssh_inode
++			}) {
++				match postspawn::wait_empty_argv(
++					&owned,
++					anchor,
++					&expected,
++					self.profile.ssh_inode,
++					deadline,
++					cancel,
++					&self.stop,
++				)
++				.await
++				{
++					Ok(ready) => {
++						identity = ready.identity;
++						terminal = Ok(ready.terminal);
++					}
++					Err(error) => {
++						identity = None;
++						terminal = Err(error);
++					}
++				}
++			}
++		}
+ 		let matches = identity.as_ref().is_some_and(|value| {
+ 			value.uid == unsafe { libc::geteuid() }
+ 				&& (value.dev, value.ino) == self.profile.ssh_inode
+ 				&& value.argv == expected
+ 		});
++		// An empty snapshot must not occupy OnceLock before readiness resolves.
+ 		if let Some(identity) = identity {
+ 			let _ = owned.identity.set(identity);
+ 		}
+-		let terminal = owned.terminal().await;
+ 		let proof = owned.pidfd.is_some() && terminal.as_ref().is_ok_and(|done| *done || matches);
+ 		if !proof {
+ 			self.stop.cancel();
+@@ -937,15 +1116,7 @@ impl Core {
+ 		let readiness = async {
+ 			loop {
+ 				owned.verify_live().await?;
+-				if let Ok(stamp) = profile::socket_stamp(&socket) {
+-					let stream = UnixStream::connect(&socket).await?;
+-					let peer = profile::peer(&stream)?;
+-					if peer.0 != owned.pid as i32
+-						|| peer.1 != unsafe { libc::geteuid() }
+-						|| profile::socket_stamp(&socket)? != stamp
+-					{
+-						bail!("observation control socket is not the owned master");
+-					}
++				if let Some(stamp) = master_socket_readiness(&socket, owned.pid).await? {
+ 					return Ok(stamp);
+ 				}
+ 				tokio::time::sleep(Duration::from_millis(20)).await;
+@@ -1152,22 +1323,58 @@ impl Core {
+ 		)
+ 		.await
+ 	}
+-	async fn execute(self: Arc<Self>, request: Request, global: OwnedSemaphorePermit) {
+-		let result = self.clone().execute_inner(&request, global).await;
++	async fn execute(
++		self: Arc<Self>,
++		request: Request,
++		initial: OwnedSemaphorePermit,
++		global: Arc<Semaphore>,
++	) {
++		let result = self.clone().execute_inner(&request, initial, global).await;
+ 		let _ = request.reply.send(result);
+ 	}
+-	async fn execute_inner(
+-		self: Arc<Self>,
++	async fn admission_profile(
++		&self,
+ 		request: &Request,
+-		global: OwnedSemaphorePermit,
+-	) -> Result<Captured> {
+-		let budget = Arc::new(global);
++		initial: OwnedSemaphorePermit,
++	) -> Result<()> {
++		// The full initial authority check and its bounded agent frame use the
++		// same eight-budget pool as capture. No budget waits behind a hot host.
++		let _budget = initial;
+ 		tokio::select! {
+-			value = self.verify_profile(request.deadline) => value?,
++			value = self.verify_request_profile(request.deadline) => value?,
+ 			_ = request.cancel.cancelled() => bail!("observation cancelled during admission profile check"),
+ 			_ = self.stop.cancelled() => bail!("observation pool stopped during admission profile check"),
+ 		};
+-		let (master, host, _active) = loop {
++		Ok(())
++	}
++	async fn request_budget(
++		&self,
++		request: &Request,
++		global: Arc<Semaphore>,
++	) -> Result<Arc<OwnedSemaphorePermit>> {
++		let permit = tokio::select! {
++			value = timeout_at(request.deadline, global.acquire_owned()) => value.context("observation global capacity deadline")??,
++			_ = request.cancel.cancelled() => bail!("observation request cancelled before global capacity"),
++			_ = self.stop.cancelled() => bail!("observation pool stopped before global capacity"),
++		};
++		// A released permit and cancellation can become ready together. Never
++		// let select's choice bypass a failed supervisor's synchronous stop.
++		if self.stop.is_cancelled()
++			|| request.cancel.is_cancelled()
++			|| Instant::now() >= request.deadline
++		{
++			bail!("observation cancelled or expired before global capacity");
++		}
++		Ok(Arc::new(permit))
++	}
++	async fn execute_inner(
++		self: Arc<Self>,
++		request: &Request,
++		initial: OwnedSemaphorePermit,
++		global: Arc<Semaphore>,
++	) -> Result<Captured> {
++		self.admission_profile(request, initial).await?;
++		let (master, host, budget, _active) = loop {
+ 			let mut entry = self
+ 				.entry(&request.host, &request.cancel, request.deadline)
+ 				.await?;
+@@ -1194,9 +1401,10 @@ impl Core {
+ 				_ = request.cancel.cancelled() => bail!("observation request cancelled before submission"),
+ 				_ = self.stop.cancelled() => bail!("observation pool stopped before submission"),
+ 			};
++			let budget = self.request_budget(request, global.clone()).await?;
+ 			// Recheck immutable policy/credentials after queueing, before the lease.
+ 			tokio::select! {
+-				value = self.verify_profile(request.deadline) => value?,
++				value = self.verify_request_profile(request.deadline) => value?,
+ 				_ = request.cancel.cancelled() => bail!("observation cancelled before lease"),
+ 				_ = self.stop.cancelled() => bail!("observation pool stopped before lease"),
+ 			};
+@@ -1211,10 +1419,11 @@ impl Core {
+ 			if master.accepting.load(Ordering::Acquire) && request.deadline <= master.created + AGE
+ 			{
+ 				let active = ActiveMaster(master.clone());
+-				break (master, host, active);
++				break (master, host, budget, active);
+ 			}
+ 			master.active.fetch_sub(1, Ordering::AcqRel);
+ 			drop(host);
++			drop(budget);
+ 			// No slave has been created. Join a single bounded admission renewal.
+ 			self.renew(
+ 				&request.host,
+@@ -1249,11 +1458,11 @@ impl Core {
+ 				&request.input,
+ 				request.deadline,
+ 				&request.cancel,
+-				vec![budget.clone(), Arc::new(host)],
++				vec![budget.clone(), Arc::new(host), request.admission.clone()],
+ 			)
+ 			.await?;
+ 		tokio::select! {
+-			value = self.verify_profile(request.deadline) => value?,
++			value = self.verify_request_profile(request.deadline) => value?,
+ 			_ = request.cancel.cancelled() => bail!("observation cancelled before response authority check"),
+ 			_ = self.stop.cancelled() => bail!("observation pool stopped before response authority check"),
+ 		};
+@@ -1264,6 +1473,7 @@ impl Core {
+ 		Ok(Captured {
+ 			output,
+ 			_budget: budget,
++			_admission: request.admission.clone(),
+ 		})
+ 	}
+ 	async fn maintain(&self) -> Result<()> {
+@@ -1359,48 +1569,96 @@ impl Core {
+ 	}
+ 	async fn run_with_capacity(
+ 		self: Arc<Self>,
+-		mut receiver: mpsc::Receiver<Request>,
++		receiver: mpsc::Receiver<Request>,
+ 		global: Arc<Semaphore>,
+ 	) -> Result<()> {
++		let request_global = global.clone();
++		self.run_with_dispatch(receiver, global, move |core, request, permit| {
++			core.execute(request, permit, request_global.clone())
++		})
++		.await
++	}
++	// The same actor is exercised with a controlled executor in isolated tests.
++	// Production always supplies execute above; no caller chooses this function.
++	async fn run_with_dispatch<F, Work>(
++		self: Arc<Self>,
++		mut receiver: mpsc::Receiver<Request>,
++		global: Arc<Semaphore>,
++		dispatch: F,
++	) -> Result<()>
++	where
++		F: Fn(Arc<Self>, Request, OwnedSemaphorePermit) -> Work,
++		Work: std::future::Future<Output = ()> + Send + 'static,
++	{
+ 		let mut work = JoinSet::new();
+-		let mut reservation = None;
++		let mut pending = VecDeque::with_capacity(MAX_ADMITTED);
+ 		let mut tick = tokio::time::interval(Duration::from_millis(100));
+ 		let outcome = loop {
++			if let Err(error) = Self::reap_completed_requests(&mut work) {
++				break Err(error);
++			}
++			Self::discard_pending(&mut pending, &self.profile.hosts);
++			let next_deadline = pending
++				.iter()
++				.map(|request| request.deadline)
++				.min()
++				.unwrap_or_else(Instant::now);
+ 			tokio::select! {
+ 				_ = self.stop.cancelled() => break Ok(()),
+ 				_ = tick.tick() => { if let Err(error) = self.maintain().await { break Err(error); } },
++				_ = tokio::time::sleep_until(next_deadline), if !pending.is_empty() => {},
+ 				Some(result) = work.join_next(), if !work.is_empty() => {
+ 					if let Err(error) = result { break Err(anyhow!("observation request supervisor failed: {error}")); }
+ 				},
+-				permit = global.clone().acquire_owned(), if reservation.is_none() && work.len() < MAX_SESSIONS => {
+-					match permit {
+-						Ok(permit) => reservation = Some(permit),
++				// At most sixteen logical requests exist, including these cheap
++				// host waiters. Expensive preflight/capture still share global8.
++				permit = global.clone().acquire_owned(), if !pending.is_empty() && work.len() < MAX_ADMITTED => {
++					let permit = match permit {
++						Ok(permit) => permit,
+ 						Err(_) => break Err(anyhow!("observation global capacity closed")),
+-					}
+-				},
+-				// Leave bounded requests in the channel until both a supervisor
+-				// slot and the output budget exist. A completed Captured can still
+-				// own that budget; its drop directly wakes acquire_owned above.
+-				request = receiver.recv(), if reservation.is_some() && work.len() < MAX_SESSIONS => {
+-					let Some(request) = request else { break Ok(()); };
+-					if request.cancel.is_cancelled() || request.reply.is_closed() || Instant::now() >= request.deadline {
+-						let _ = request.reply.send(Err(anyhow!("observation cancelled before admission")));
+-						continue;
+-					}
+-					// Completed replies may leave unjoined tasks when select chose
+-					// this receiver. They are not live supervisors or new capacity.
++					};
++					// A failed task may have released capacity while select was
++					// asleep. Observe its failure before any replacement is spawned.
+ 					if let Err(error) = Self::reap_completed_requests(&mut work) {
+ 						break Err(error);
+ 					}
+-					let Some(permit) = reservation.take() else {
+-						break Err(anyhow!("observation admission reservation unavailable"));
++					if self.stop.is_cancelled() {
++						break Ok(());
++					}
++					Self::discard_pending(&mut pending, &self.profile.hosts);
++					let Some(request) = pending.pop_front() else {
++						continue;
+ 					};
+-					work.spawn(self.clone().execute(request, permit));
++					// Construct outside the async body: abort before its first poll
++					// and synchronous dispatcher panic must freeze admission too.
++					let guard = StopUnlessCompleted {
++						stop: self.stop.clone(), completed: false,
++					};
++					let task = dispatch(self.clone(), request, permit);
++					work.spawn(async move {
++						task.await;
++						guard.complete();
++					});
++				},
++				// Drain accepted channel requests even when global or the first
++				// host is full. Their existing admission16 permit moves with them.
++				request = receiver.recv() => {
++					let Some(request) = request else { break Ok(()); };
++					if pending.len() >= MAX_ADMITTED {
++						let _ = request.reply.send(Err(anyhow!("observation pending bound exceeded")));
++						break Err(anyhow!("observation pending bound exceeded"));
++					}
++					pending.push_back(request);
+ 				}
+ 			}
+ 		};
+ 		self.stop.cancel();
+ 		receiver.close();
++		for request in pending {
++			let _ = request
++				.reply
++				.send(Err(anyhow!("observation pool stopped before admission")));
++		}
+ 		while let Ok(request) = receiver.try_recv() {
+ 			let _ = request
+ 				.reply
+@@ -1411,6 +1669,30 @@ impl Core {
+ 		}
+ 		outcome
+ 	}
++	fn discard_pending(pending: &mut VecDeque<Request>, hosts: &BTreeMap<String, String>) {
++		// One bounded pass, retaining order and the existing allocation. Neither
++		// cancellation nor expiry waits for a global output budget to be returned.
++		for _ in 0..pending.len() {
++			let Some(request) = pending.pop_front() else {
++				break;
++			};
++			let error = if request.cancel.is_cancelled()
++				|| request.reply.is_closed()
++				|| Instant::now() >= request.deadline
++			{
++				Some("observation cancelled before admission")
++			} else if !hosts.contains_key(&request.host) {
++				Some("host is outside observation profile")
++			} else {
++				None
++			};
++			if let Some(error) = error {
++				let _ = request.reply.send(Err(anyhow!(error)));
++			} else {
++				pending.push_back(request);
++			}
++		}
++	}
+ 	async fn shutdown(&self) -> Result<()> {
+ 		self.stop.cancel();
+ 		let mut uncertain = false;
+@@ -1439,6 +1721,7 @@ impl Core {
+ 		if uncertain || !self.children.lock().await.is_empty() {
+ 			bail!("observation child cleanup incomplete; reconciliation required");
+ 		}
++		self.validation.drain().await?;
+ 		let mut entries = self.masters.lock().await;
+ 		for entry in entries.values() {
+ 			if let Some(master) = &entry.draining {
+diff --git a/src/mcp/runtime/ssh_observation_pool_tests.rs b/src/mcp/runtime/ssh_observation_pool_tests.rs
+index 19e806c..8d3d389 100644
+--- a/src/mcp/runtime/ssh_observation_pool_tests.rs
++++ b/src/mcp/runtime/ssh_observation_pool_tests.rs
+@@ -1,10 +1,336 @@
+-// Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++//! Isolated observation scheduling, ownership and recovery fixtures.
+ use super::*;
+ use serde_json::json;
+ use std::future::Future;
+ use std::os::unix::fs::PermissionsExt;
+ use std::os::unix::process::ExitStatusExt;
+ 
++#[path = "ssh_observation_agent_timeout_tests.rs"]
++mod agent_timeout;
++
++#[path = "ssh_observation_socket_publication_tests.rs"]
++mod socket_publication;
++
++// Direct lifecycle fixtures own a private admission; actor capacity fixtures
++// below instead share the actual sixteen-permit admission pool.
++fn test_admission() -> Arc<OwnedSemaphorePermit> {
++	Arc::new(
++		Arc::new(Semaphore::new(MAX_ADMITTED))
++			.try_acquire_owned()
++			.unwrap(),
++	)
++}
++
++fn proxy_admission_fixture() -> (Arc<Proxy>, mpsc::Receiver<Request>) {
++	let (sender, receiver) = mpsc::channel(QUEUE);
++	let proxy = Arc::new(Proxy {
++		sender,
++		admission: Arc::new(Semaphore::new(MAX_ADMITTED)),
++		stop: CancellationToken::new(),
++		healthy: AtomicBool::new(true),
++		thread: Mutex::new(None),
++	});
++	(proxy, receiver)
++}
++
++async fn proxy_submission(
++	proxy: Arc<Proxy>,
++	command: String,
++	deadline: Instant,
++	cancel: CancellationToken,
++) -> Result<oneshot::Receiver<Result<Captured>>> {
++	let (reply, receive) = oneshot::channel();
++	let input = command.as_bytes().to_vec();
++	proxy
++		.enqueue("fixture", command, input, deadline, cancel, reply)
++		.await?;
++	Ok(receive)
++}
++
++async fn fill_proxy_channel(
++	proxy: &Arc<Proxy>,
++	deadline: Instant,
++) -> Vec<oneshot::Receiver<Result<Captured>>> {
++	let mut replies = Vec::new();
++	for index in 0..QUEUE {
++		replies.push(
++			proxy_submission(
++				proxy.clone(),
++				format!("queued-{index}"),
++				deadline,
++				CancellationToken::new(),
++			)
++			.await
++			.unwrap(),
++		);
++	}
++	assert_eq!(proxy.sender.capacity(), 0);
++	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED - QUEUE);
++	replies
++}
++
++async fn assert_proxy_submission_pending<F: Future>(mut task: std::pin::Pin<&mut F>) {
++	std::future::poll_fn(|context| {
++		assert!(task.as_mut().poll(context).is_pending());
++		std::task::Poll::Ready(())
++	})
++	.await;
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn queued_proxy_waiters_keep_sixteen_identities_and_send_each_request_once() {
++	let (proxy, mut receiver) = proxy_admission_fixture();
++	let deadline = Instant::now() + Duration::from_secs(30);
++	let mut replies = fill_proxy_channel(&proxy, deadline).await;
++	let mut waiters = Vec::new();
++	for index in 0..MAX_ADMITTED - QUEUE {
++		let mut task = Box::pin(proxy_submission(
++			proxy.clone(),
++			format!("waiting-{index}"),
++			deadline,
++			CancellationToken::new(),
++		));
++		assert_proxy_submission_pending(task.as_mut()).await;
++		waiters.push(task);
++	}
++	assert_eq!(receiver.len(), QUEUE);
++	assert_eq!(proxy.sender.capacity(), 0);
++	assert_eq!(proxy.admission.available_permits(), 0);
++	// All sixteen are real queued or reserve-waiting requests. The next call
++	// must fail in its first poll without creating another channel waiter.
++	let mut excess = Box::pin(proxy_submission(
++		proxy.clone(),
++		"seventeenth".to_owned(),
++		deadline,
++		CancellationToken::new(),
++	));
++	std::future::poll_fn(|context| {
++		match excess.as_mut().poll(context) {
++			std::task::Poll::Ready(Err(error)) => {
++				assert!(error.to_string().contains("pool capacity unavailable"));
++			}
++			_ => panic!("the seventeenth identity must be refused immediately"),
++		}
++		std::task::Poll::Ready(())
++	})
++	.await;
++	assert_eq!(proxy.admission.available_permits(), 0);
++	let mut requests = Vec::new();
++	for (index, waiter) in waiters.into_iter().enumerate() {
++		let request = receiver.try_recv().unwrap();
++		assert_eq!(request.command, format!("queued-{index}"));
++		// Keep the received identity alive as an actor/child would. Draining
++		// the channel cannot create a seventeenth accepted identity.
++		requests.push(request);
++		replies.push(
++			timeout(Duration::from_secs(5), waiter)
++				.await
++				.unwrap()
++				.unwrap(),
++		);
++		assert_eq!(receiver.len(), QUEUE);
++		assert_eq!(proxy.sender.capacity(), 0);
++		assert_eq!(proxy.admission.available_permits(), 0);
++	}
++	for index in 0..MAX_ADMITTED - QUEUE {
++		let request = receiver.try_recv().unwrap();
++		assert_eq!(request.command, format!("waiting-{index}"));
++		requests.push(request);
++	}
++	assert!(matches!(
++		receiver.try_recv(),
++		Err(mpsc::error::TryRecvError::Empty)
++	));
++	assert_eq!(requests.len(), MAX_ADMITTED);
++	for request in &requests {
++		assert_eq!(request.host, "fixture");
++		assert_eq!(request.input.as_slice(), request.command.as_bytes());
++		assert_eq!(
++			request.deadline, deadline,
++			"queue waiting cannot extend the deadline"
++		);
++		assert!(!request.cancel.is_cancelled());
++	}
++	drop(requests);
++	for reply in replies {
++		assert!(reply.await.is_err());
++	}
++	assert_eq!(proxy.sender.capacity(), QUEUE);
++	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED);
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn queued_proxy_waiters_release_identity_on_cancel_deadline_stop_and_close() {
++	for reason in ["cancel", "deadline", "stop", "close"] {
++		let (proxy, mut receiver) = proxy_admission_fixture();
++		let queued_deadline = Instant::now() + Duration::from_secs(30);
++		let replies = fill_proxy_channel(&proxy, queued_deadline).await;
++		let deadline = if reason == "deadline" {
++			Instant::now() + Duration::from_secs(1)
++		} else {
++			queued_deadline
++		};
++		let cancel = CancellationToken::new();
++		let mut task = Box::pin(proxy_submission(
++			proxy.clone(),
++			"must-not-send".to_owned(),
++			deadline,
++			cancel.clone(),
++		));
++		assert_proxy_submission_pending(task.as_mut()).await;
++		assert_eq!(
++			proxy.admission.available_permits(),
++			MAX_ADMITTED - QUEUE - 1
++		);
++		match reason {
++			"cancel" => cancel.cancel(),
++			"stop" => proxy.stop.cancel(),
++			"close" => receiver.close(),
++			"deadline" => {}
++			_ => unreachable!(),
++		}
++		let error = timeout(Duration::from_secs(5), task)
++			.await
++			.unwrap()
++			.err()
++			.unwrap();
++		assert!(error.to_string().contains(match reason {
++			"cancel" => "cancelled before queue",
++			"deadline" => "queue admission deadline",
++			"stop" => "stopped before queue",
++			"close" => "queue closed",
++			_ => unreachable!(),
++		}));
++		assert_eq!(receiver.len(), QUEUE);
++		assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED - QUEUE);
++		for index in 0..QUEUE {
++			let request = receiver.try_recv().unwrap();
++			assert_eq!(request.command, format!("queued-{index}"));
++		}
++		for reply in replies {
++			assert!(reply.await.is_err());
++		}
++		assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED);
++		assert_eq!(proxy.stop.is_cancelled(), reason == "stop");
++	}
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn queued_proxy_rechecks_submission_fences_after_capacity_wakes() {
++	for reason in ["cancel", "deadline", "stop", "unhealthy", "close"] {
++		let (proxy, mut receiver) = proxy_admission_fixture();
++		let queued_deadline = Instant::now() + Duration::from_secs(30);
++		let replies = fill_proxy_channel(&proxy, queued_deadline).await;
++		let deadline = if reason == "deadline" {
++			Instant::now() + Duration::from_secs(1)
++		} else {
++			queued_deadline
++		};
++		let cancel = CancellationToken::new();
++		let mut task = Box::pin(proxy_submission(
++			proxy.clone(),
++			"must-not-send".to_owned(),
++			deadline,
++			cancel.clone(),
++		));
++		assert_proxy_submission_pending(task.as_mut()).await;
++		let held = receiver.try_recv().unwrap();
++		// The waiter now has channel capacity, but cannot be polled between
++		// this wake and the new fence. In the unhealthy case neither select
++		// cancellation arm is ready, so only the post-reserve check can refuse.
++		match reason {
++			"cancel" => cancel.cancel(),
++			"stop" => proxy.stop.cancel(),
++			"unhealthy" => proxy.healthy.store(false, Ordering::Release),
++			"close" => receiver.close(),
++			"deadline" => tokio::time::sleep_until(deadline).await,
++			_ => unreachable!(),
++		}
++		assert!(timeout(Duration::from_secs(5), task)
++			.await
++			.unwrap()
++			.is_err());
++		assert_eq!(
++			receiver.len(),
++			QUEUE - 1,
++			"a wake cannot bypass a submission fence"
++		);
++		assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED - QUEUE);
++		if reason == "unhealthy" {
++			assert!(!proxy.stop.is_cancelled());
++			assert!(!cancel.is_cancelled());
++		}
++		drop(held);
++		for index in 1..QUEUE {
++			let request = receiver.try_recv().unwrap();
++			assert_eq!(request.command, format!("queued-{index}"));
++		}
++		for reply in replies {
++			assert!(reply.await.is_err());
++		}
++		assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED);
++	}
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn queued_proxy_future_drop_and_receiver_drop_return_their_own_identities() {
++	let (proxy, receiver) = proxy_admission_fixture();
++	let deadline = Instant::now() + Duration::from_secs(30);
++	let replies = fill_proxy_channel(&proxy, deadline).await;
++	let unpolled = proxy_submission(
++		proxy.clone(),
++		"unpolled".to_owned(),
++		deadline,
++		CancellationToken::new(),
++	);
++	drop(unpolled);
++	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED - QUEUE);
++	let cancel = CancellationToken::new();
++	let mut abandoned = Box::pin(async {
++		// Match capture's cancellation guard while its enqueue is suspended.
++		let _guard = CancelOnDrop(cancel.clone());
++		proxy_submission(
++			proxy.clone(),
++			"abandoned".to_owned(),
++			deadline,
++			cancel.clone(),
++		)
++		.await
++	});
++	assert_proxy_submission_pending(abandoned.as_mut()).await;
++	assert_eq!(
++		proxy.admission.available_permits(),
++		MAX_ADMITTED - QUEUE - 1
++	);
++	drop(abandoned);
++	assert!(cancel.is_cancelled());
++	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED - QUEUE);
++	assert_eq!(receiver.len(), QUEUE);
++	let mut waiting = Box::pin(proxy_submission(
++		proxy.clone(),
++		"receiver-dropped".to_owned(),
++		deadline,
++		CancellationToken::new(),
++	));
++	assert_proxy_submission_pending(waiting.as_mut()).await;
++	drop(receiver);
++	// Dropping the receiver releases only its eight queued identities. The
++	// ninth still belongs to the suspended submission until it sees closure.
++	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED - 1);
++	assert!(timeout(Duration::from_secs(5), waiting)
++		.await
++		.unwrap()
++		.is_err());
++	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED);
++	for reply in replies {
++		assert!(reply.await.is_err());
++	}
++	assert!(!proxy.stop.is_cancelled());
++}
++
+ #[test]
+ fn control_paths_reserve_the_real_unix_temporary_socket_boundary() {
+ 	let root = tempfile::Builder::new()
+@@ -50,6 +376,7 @@ async fn completed_output_keeps_global_capacity_until_original_caller_finishes()
+ 			stderr: vec![],
+ 		},
+ 		_budget: budget.clone(),
++		_admission: test_admission(),
+ 	};
+ 	let (send, receive) = oneshot::channel();
+ 	assert!(send.send(output).is_ok());
+@@ -83,6 +410,7 @@ async fn completed_reply_supervisors_do_not_consume_replacement_slots() {
+ 					stderr: vec![],
+ 				},
+ 				_budget: Arc::new(permit),
++				_admission: test_admission(),
+ 			};
+ 			assert!(send.send(output).is_ok());
+ 			// Match execute: reply send through return contains no await/yield.
+@@ -128,6 +456,7 @@ async fn reaping_supervisors_does_not_release_unparsed_output_budget() {
+ 						stderr: vec![],
+ 					},
+ 					_budget: Arc::new(permit),
++					_admission: test_admission(),
+ 				})
+ 				.is_ok());
+ 		});
+@@ -247,6 +576,26 @@ async fn admission_reap_propagates_panicked_and_cancelled_supervisors() {
+ 	}
+ }
+ 
++#[tokio::test(flavor = "current_thread")]
++async fn unpolled_supervisor_abort_stops_before_any_body_can_run() {
++	let stop = CancellationToken::new();
++	let guard = StopUnlessCompleted {
++		stop: stop.clone(),
++		completed: false,
++	};
++	let (entered, receive) = oneshot::channel();
++	let mut work = JoinSet::new();
++	let task = work.spawn(async move {
++		entered.send(()).unwrap();
++		std::future::pending::<()>().await;
++		guard.complete();
++	});
++	task.abort();
++	assert!(work.join_next().await.unwrap().is_err());
++	assert!(receive.await.is_err());
++	assert!(stop.is_cancelled());
++}
++
+ fn private_write(path: &Path, bytes: &[u8]) {
+ 	std::fs::write(path, bytes).unwrap();
+ 	std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
+@@ -255,6 +604,15 @@ fn private_write(path: &Path, bytes: &[u8]) {
+ struct AgentControl {
+ 	stall: AtomicBool,
+ 	entered: tokio::sync::Notify,
++	requests: AtomicUsize,
++	// A single selected lookup withholds its response until the original
++	// caller closes that exact stream. It neither accepts a retry nor changes
++	// the socket/peer/key identity used by later successful lookups.
++	deadline_request: AtomicUsize,
++	deadline_closed: AtomicUsize,
++	// Fixture-only complete response faults: 1 key change, 2 malformed frame,
++	// 3 an unexplained connection close. Zero preserves the original response.
++	response_fault: AtomicUsize,
+ }
+ 
+ async fn fixture() -> (
+@@ -262,20 +620,36 @@ async fn fixture() -> (
+ 	PathBuf,
+ 	tokio::task::JoinHandle<()>,
+ 	Arc<AgentControl>,
++) {
++	fixture_with_cold_host(false).await
++}
++
++async fn fixture_with_cold_host(
++	cold: bool,
++) -> (
++	tempfile::TempDir,
++	PathBuf,
++	tokio::task::JoinHandle<()>,
++	Arc<AgentControl>,
+ ) {
+ 	let root = tempfile::tempdir().unwrap();
+ 	std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+ 	let state = root.path().join("state");
+ 	std::fs::create_dir(&state).unwrap();
+ 	std::fs::set_permissions(&state, std::fs::Permissions::from_mode(0o700)).unwrap();
+-	let runtime = serde_json::from_value(json!({"state_dir":state,"hosts":{"fixture":{
++	let mut spec = json!({"state_dir":state,"hosts":{"fixture":{
+ 		"ssh_target":"hepta-observation-fixture","platform":"linux","remote_state_dir":"/private/jobs-fixture",
+-		"allow_execute":false,"allow_pty":false,"allow_write":false}}})).unwrap();
++		"allow_execute":false,"allow_pty":false,"allow_write":false}}});
++	if cold {
++		spec["hosts"]["cold"] = spec["hosts"]["fixture"].clone();
++		spec["hosts"]["cold"]["ssh_target"] = json!("hepta-observation-cold-fixture");
++	}
++	let runtime = serde_json::from_value(spec).unwrap();
+ 	crate::mcp::runtime::config::init_runtime(runtime).unwrap();
+ 	let known = root.path().join("known_hosts");
+ 	private_write(&known, b"");
+ 	let config = root.path().join("ssh_config");
+-	private_write(&config, format!("Host hepta-observation-fixture\n HostName 127.0.0.1\n Port 9\n User nobody\n BatchMode yes\n ForwardAgent no\n StrictHostKeyChecking yes\n UserKnownHostsFile {}\n GlobalKnownHostsFile /dev/null\n", known.display()).as_bytes());
++	private_write(&config, format!("Host hepta-observation-fixture hepta-observation-cold-fixture\n HostName 127.0.0.1\n Port 9\n User nobody\n BatchMode yes\n ForwardAgent no\n StrictHostKeyChecking yes\n UserKnownHostsFile {}\n GlobalKnownHostsFile /dev/null\n", known.display()).as_bytes());
+ 	let agent = root.path().join("agent");
+ 	let listener = tokio::net::UnixListener::bind(&agent).unwrap();
+ 	std::fs::set_permissions(&agent, std::fs::Permissions::from_mode(0o775)).unwrap();
+@@ -285,6 +659,10 @@ async fn fixture() -> (
+ 	let control = Arc::new(AgentControl {
+ 		stall: AtomicBool::new(false),
+ 		entered: tokio::sync::Notify::new(),
++		requests: AtomicUsize::new(0),
++		deadline_request: AtomicUsize::new(0),
++		deadline_closed: AtomicUsize::new(0),
++		response_fault: AtomicUsize::new(0),
+ 	});
+ 	let server_control = control.clone();
+ 	let server = tokio::spawn(async move {
+@@ -297,15 +675,39 @@ async fn fixture() -> (
+ 				continue;
+ 			}
+ 			assert_eq!(request, [0, 0, 0, 1, 11]);
++			let request_number = server_control.requests.fetch_add(1, Ordering::Release) + 1;
+ 			if server_control.stall.load(Ordering::Acquire) {
+ 				server_control.entered.notify_one();
+ 				std::future::pending::<()>().await;
+ 			}
+-			let key = b"bounded-public-key-fixture";
++			if server_control.deadline_request.load(Ordering::Acquire) == request_number {
++				server_control.entered.notify_one();
++				let mut unexpected = [0; 1];
++				let closed = timeout(Duration::from_secs(8), stream.read(&mut unexpected))
++					.await
++					.expect("expired lookup must drop its original agent stream");
++				assert!(matches!(closed, Ok(0)), "{closed:?}");
++				server_control
++					.deadline_closed
++					.fetch_add(1, Ordering::Release);
++				continue;
++			}
++			let fault = server_control.response_fault.load(Ordering::Acquire);
++			if fault == 3 {
++				continue;
++			}
++			let key: &[u8] = if fault == 1 {
++				b"different-public-key-fixture"
++			} else {
++				b"bounded-public-key-fixture"
++			};
+ 			let mut response = vec![12, 0, 0, 0, 1];
+ 			response.extend_from_slice(&(key.len() as u32).to_be_bytes());
+ 			response.extend_from_slice(key);
+ 			response.extend_from_slice(&0u32.to_be_bytes());
++			if fault == 2 {
++				response[0] = 5;
++			}
+ 			if stream
+ 				.write_all(&(response.len() as u32).to_be_bytes())
+ 				.await
+@@ -335,6 +737,7 @@ async fn core(path: &Path) -> Arc<Core> {
+ 	let root = PrivateRoot::create(&profile).unwrap();
+ 	let core = Arc::new(Core {
+ 		profile,
++		validation: validation::Workers::new(),
+ 		root,
+ 		stop: CancellationToken::new(),
+ 		agent: OnceLock::new(),
+@@ -558,12 +961,17 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
+ 				deadline,
+ 				cancel: request_cancel.clone(),
+ 				reply,
++				admission: test_admission(),
+ 			};
+ 			assert!(request.deadline > old.created + AGE);
+ 			let permits = Arc::new(Semaphore::new(1));
+ 			let permit = permits.clone().acquire_owned().await.unwrap();
+ 			let task_core = core.clone();
+-			let task = tokio::spawn(async move { task_core.execute_inner(&request, permit).await });
++			let global = permits.clone();
++			let task =
++				tokio::spawn(
++					async move { task_core.execute_inner(&request, permit, global).await },
++				);
+ 			timeout(Duration::from_secs(3), async {
+ 				while old.accepting.load(Ordering::Acquire) {
+ 					tokio::task::yield_now().await;
+@@ -577,6 +985,11 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
+ 				.draining
+ 				.as_ref()
+ 				.is_some_and(|value| Arc::ptr_eq(value, &old)));
++			assert_eq!(
++				permits.available_permits(),
++				1,
++				"renewal waiting must return global capacity"
++			);
+ 			assert_eq!(
+ 				core.children.lock().await.len(),
+ 				1,
+@@ -670,6 +1083,7 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
+ 
+ async fn queued_admission_fixture(core: &Arc<Core>, kind: &str, agent: &Arc<AgentControl>) {
+ 	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
++	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
+ 	let mut retained = Vec::new();
+ 	for _ in 0..MAX_SESSIONS {
+ 		retained.push(Captured {
+@@ -679,58 +1093,65 @@ async fn queued_admission_fixture(core: &Arc<Core>, kind: &str, agent: &Arc<Agen
+ 				stderr: vec![],
+ 			},
+ 			_budget: Arc::new(permits.clone().acquire_owned().await.unwrap()),
++			_admission: Arc::new(admissions.clone().try_acquire_owned().unwrap()),
+ 		});
+ 	}
+ 	let (sender, receiver) = mpsc::channel(QUEUE);
+ 	let mut replies = Vec::new();
+ 	let mut cancellations = Vec::new();
+-	for index in 0..QUEUE {
++	let initially_queued = if kind == "queue-stop" {
++		QUEUE - 1
++	} else {
++		QUEUE
++	};
++	for _ in 0..initially_queued {
+ 		let (reply, receive) = oneshot::channel();
+ 		let cancel = CancellationToken::new();
+ 		let request = Request {
+ 			host: "fixture".into(),
+ 			command: "NEVER_DISPATCH".into(),
+ 			input: vec![],
+-			deadline: if kind == "queue-capacity" && index == 1 {
+-				Instant::now() - Duration::from_millis(1)
+-			} else {
+-				Instant::now() + Duration::from_secs(40)
+-			},
++			deadline: Instant::now() + Duration::from_secs(40),
+ 			cancel: cancel.clone(),
+ 			reply,
++			admission: Arc::new(admissions.clone().try_acquire_owned().unwrap()),
+ 		};
+ 		assert!(sender.try_send(request).is_ok());
+ 		replies.push(Some(receive));
+ 		cancellations.push(cancel);
+ 	}
+ 	let mut actor = Box::pin(core.clone().run_with_capacity(receiver, permits.clone()));
+-	// Poll the real actor while every output permit is retained. There is no
+-	// sleep-based ordering: its first suspension must leave the queue intact.
++	// Poll the real actor while every output permit is retained. Moving all
++	// channel entries into pending must not admit a seventeenth request.
+ 	std::future::poll_fn(|cx| {
+ 		assert!(actor.as_mut().poll(cx).is_pending());
+ 		std::task::Poll::Ready(())
+ 	})
+ 	.await;
+-	assert_eq!(sender.capacity(), 0);
++	assert_eq!(sender.capacity(), QUEUE);
+ 	assert_eq!(permits.available_permits(), 0);
++	assert_eq!(admissions.available_permits(), QUEUE - initially_queued);
+ 	for reply in &mut replies {
+ 		assert!(matches!(
+ 			reply.as_mut().unwrap().try_recv(),
+ 			Err(oneshot::error::TryRecvError::Empty)
+ 		));
+ 	}
+-	let (reply, _) = oneshot::channel();
+-	assert!(matches!(
+-		sender.try_send(Request {
+-			host: "fixture".into(),
+-			command: "NEVER_DISPATCH".into(),
+-			input: vec![],
+-			deadline: Instant::now() + Duration::from_secs(40),
+-			cancel: CancellationToken::new(),
+-			reply,
+-		}),
+-		Err(mpsc::error::TrySendError::Full(_))
+-	));
++	if kind == "queue-stop" {
++		// The actor is not polled between enqueue and cancellation: seven
++		// requests are pending and one remains in the channel when stop fires.
++		let waiting = enqueue_fair_request(
++			&sender,
++			&admissions,
++			"fixture",
++			"NEVER_DISPATCH",
++			Instant::now() + Duration::from_secs(40),
++		);
++		replies.push(Some(waiting.reply));
++		assert_eq!(sender.capacity(), QUEUE - 1);
++	}
++	assert_eq!(admissions.available_permits(), 0);
++	assert!(admissions.clone().try_acquire_owned().is_err());
+ 	if kind == "queue-stop" {
+ 		core.stop.cancel();
+ 		timeout(Duration::from_secs(3), actor)
+@@ -744,15 +1165,14 @@ async fn queued_admission_fixture(core: &Arc<Core>, kind: &str, agent: &Arc<Agen
+ 		assert_eq!(permits.available_permits(), 0);
+ 	} else {
+ 		for (index, cancel) in cancellations.iter().enumerate() {
+-			if !(kind == "queue-admission" && index == 0)
+-				&& !(kind == "queue-capacity" && (index == 1 || index == 2))
++			if !(kind == "queue-admission" && index == 0 || kind == "queue-capacity" && index == 2)
+ 			{
+ 				cancel.cancel();
+ 			}
+ 		}
+ 		if kind == "queue-capacity" {
+-			// Independently exercise cancellation, expired deadline and a caller
+-			// that disappeared while waiting, without creating any SSH task.
++			// Exercise cancellation and a caller that disappeared while waiting,
++			// without creating any SSH task. Fairness fixtures also cover expiry.
+ 			drop(replies[2].take());
+ 		} else {
+ 			agent.stall.store(true, Ordering::Release);
+@@ -790,10 +1210,1048 @@ async fn queued_admission_fixture(core: &Arc<Core>, kind: &str, agent: &Arc<Agen
+ 	}
+ 	drop(retained);
+ 	assert_eq!(permits.available_permits(), MAX_SESSIONS);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
++	assert!(core.masters.lock().await.is_empty());
++	assert!(core.children.lock().await.is_empty());
++}
++
++struct FairRequest {
++	reply: oneshot::Receiver<Result<Captured>>,
++	cancel: CancellationToken,
++	command: String,
++}
++
++fn enqueue_fair_request(
++	sender: &mpsc::Sender<Request>,
++	admissions: &Arc<Semaphore>,
++	host: &str,
++	command: &str,
++	deadline: Instant,
++) -> FairRequest {
++	let (reply, receive) = oneshot::channel();
++	let cancel = CancellationToken::new();
++	let request = Request {
++		host: host.into(),
++		command: command.into(),
++		input: vec![],
++		deadline,
++		cancel: cancel.clone(),
++		reply,
++		admission: Arc::new(admissions.clone().try_acquire_owned().unwrap()),
++	};
++	assert!(sender.try_send(request).is_ok());
++	FairRequest {
++		reply: receive,
++		cancel,
++		command: command.into(),
++	}
++}
++
++fn fair_output(budget: OwnedSemaphorePermit, admission: Arc<OwnedSemaphorePermit>) -> Captured {
++	Captured {
++		output: Output {
++			status: ExitStatus::from_raw(0),
++			stdout: b"{}".to_vec(),
++			stderr: vec![],
++		},
++		_budget: Arc::new(budget),
++		_admission: admission,
++	}
++}
++
++struct ControlledDispatch {
++	global: Arc<Semaphore>,
++	hosts: BTreeMap<String, Arc<Semaphore>>,
++	started: mpsc::Sender<(String, String)>,
++	preflight: mpsc::Sender<String>,
++	budget_waiting: mpsc::Sender<String>,
++	preflight_gate: Option<Arc<Semaphore>>,
++	release: Arc<Semaphore>,
++}
++
++async fn controlled_dispatch(
++	core: Arc<Core>,
++	request: Request,
++	initial: OwnedSemaphorePermit,
++	control: Arc<ControlledDispatch>,
++) {
++	let result = async {
++		core.admission_profile(&request, initial).await?;
++		assert!(control.preflight.try_send(request.command.clone()).is_ok());
++		if let Some(gate) = &control.preflight_gate {
++			tokio::select! {
++				value = gate.clone().acquire_owned() => value.unwrap().forget(),
++				_ = request.cancel.cancelled() => bail!("controlled request cancelled"),
++				_ = core.stop.cancelled() => bail!("controlled pool stopped"),
++				_ = tokio::time::sleep_until(request.deadline) => bail!("controlled deadline"),
++			};
++		}
++		let host = tokio::select! {
++			value = control.hosts[&request.host].clone().acquire_owned() => value.unwrap(),
++			_ = request.cancel.cancelled() => bail!("controlled request cancelled"),
++			_ = core.stop.cancelled() => bail!("controlled pool stopped"),
++			_ = tokio::time::sleep_until(request.deadline) => bail!("controlled deadline"),
++		};
++		assert!(control
++			.budget_waiting
++			.try_send(request.command.clone())
++			.is_ok());
++		let budget = core
++			.request_budget(&request, control.global.clone())
++			.await?;
++		assert!(control
++			.started
++			.try_send((request.host.clone(), request.command.clone()))
++			.is_ok());
++		tokio::select! {
++			value = control.release.clone().acquire_owned() => value.unwrap().forget(),
++			_ = request.cancel.cancelled() => bail!("controlled request cancelled"),
++			_ = core.stop.cancelled() => bail!("controlled pool stopped"),
++			_ = tokio::time::sleep_until(request.deadline) => bail!("controlled deadline"),
++		};
++		assert_ne!(request.command, "PANIC", "controlled supervisor panic");
++		drop(host);
++		Ok(Captured {
++			output: Output {
++				status: ExitStatus::from_raw(0),
++				stdout: b"{}".to_vec(),
++				stderr: vec![],
++			},
++			_budget: budget,
++			_admission: request.admission.clone(),
++		})
++	}
++	.await;
++	let _ = request.reply.send(result);
++}
++
++async fn phase_notice(notices: &mut mpsc::Receiver<String>) -> String {
++	timeout(Duration::from_secs(5), notices.recv())
++		.await
++		.unwrap()
++		.unwrap()
++}
++
++async fn drained(sender: &mpsc::Sender<Request>) {
++	timeout(Duration::from_secs(3), async {
++		while sender.capacity() != QUEUE {
++			tokio::task::yield_now().await;
++		}
++	})
++	.await
++	.unwrap();
++}
++
++async fn started_host(started: &mut mpsc::Receiver<(String, String)>, host: &str) -> String {
++	let (actual, command) = timeout(Duration::from_secs(3), started.recv())
++		.await
++		.unwrap()
++		.unwrap();
++	assert_eq!(actual, host);
++	command
++}
++
++// These fixtures exercise the production actor with controlled work, so no
++// network timing is used as evidence of scheduling or of resource bounds.
++async fn fairness_fixture(core: &Arc<Core>, kind: &str) {
++	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
++	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
++	let (sender, receiver) = mpsc::channel(QUEUE);
++	let (started_send, mut started) = mpsc::channel(MAX_ADMITTED);
++	let (preflight_send, mut preflight) = mpsc::channel(MAX_ADMITTED + 1);
++	let (budget_send, mut budget_waiting) = mpsc::channel(MAX_ADMITTED + 1);
++	let release = Arc::new(Semaphore::new(0));
++	let preflight_gate = matches!(
++		kind,
++		"fair-panic" | "fair-budget-cancel" | "fair-budget-deadline"
++	)
++	.then(|| Arc::new(Semaphore::new(0)));
++	let control = Arc::new(ControlledDispatch {
++		global: permits.clone(),
++		hosts: core
++			.profile
++			.hosts
++			.keys()
++			.map(|host| (host.clone(), Arc::new(Semaphore::new(HOST_SESSIONS))))
++			.collect(),
++		started: started_send,
++		preflight: preflight_send,
++		budget_waiting: budget_send,
++		preflight_gate: preflight_gate.clone(),
++		release: release.clone(),
++	});
++	let actor = tokio::task::spawn_local(core.clone().run_with_dispatch(
++		receiver,
++		permits.clone(),
++		move |core, request, permit| controlled_dispatch(core, request, permit, control.clone()),
++	));
++	let deadline = Instant::now() + Duration::from_secs(40);
++	let mut requests = Vec::new();
++	let mut retained = Vec::new();
++	match kind {
++		"fair-hot-cold" | "fair-capacity" => {
++			for index in 0..QUEUE {
++				requests.push(enqueue_fair_request(
++					&sender,
++					&admissions,
++					"fixture",
++					&format!("hot-{index}"),
++					deadline,
++				));
++			}
++			let first = started_host(&mut started, "fixture").await;
++			let second = started_host(&mut started, "fixture").await;
++			assert_ne!(first, second);
++			for _ in 0..QUEUE {
++				phase_notice(&mut preflight).await;
++			}
++			drained(&sender).await;
++			assert_eq!(permits.available_permits(), MAX_SESSIONS - HOST_SESSIONS);
++			if kind == "fair-hot-cold" {
++				for index in 0..HOST_SESSIONS {
++					requests.push(enqueue_fair_request(
++						&sender,
++						&admissions,
++						"cold",
++						&format!("cold-{index}"),
++						deadline,
++					));
++				}
++				// Both cold tasks start while all eight earlier hot requests are
++				// unfinished. Hot host waiters hold no global budget.
++				let mut cold = [
++					started_host(&mut started, "cold").await,
++					started_host(&mut started, "cold").await,
++				];
++				cold.sort();
++				assert_eq!(cold, ["cold-0", "cold-1"]);
++				assert_eq!(
++					permits.available_permits(),
++					MAX_SESSIONS - 2 * HOST_SESSIONS
++				);
++				assert_eq!(admissions.available_permits(), MAX_ADMITTED - 10);
++			} else {
++				// The channel still has capacity eight. Drain the first batch
++				// before proving the unchanged pure-hot admission bound of 16.
++				for index in QUEUE..MAX_ADMITTED {
++					requests.push(enqueue_fair_request(
++						&sender,
++						&admissions,
++						"fixture",
++						&format!("hot-{index}"),
++						deadline,
++					));
++				}
++				drained(&sender).await;
++				for _ in QUEUE..MAX_ADMITTED {
++					phase_notice(&mut preflight).await;
++				}
++				assert_eq!(admissions.available_permits(), 0);
++				assert!(admissions.clone().try_acquire_owned().is_err());
++				assert_eq!(permits.available_permits(), MAX_SESSIONS - HOST_SESSIONS);
++				let index = requests
++					.iter()
++					.position(|request| request.command != first && request.command != second)
++					.unwrap();
++				let cancelled = requests.remove(index);
++				cancelled.cancel.cancel();
++				assert!(timeout(Duration::from_secs(3), cancelled.reply)
++					.await
++					.unwrap()
++					.unwrap()
++					.is_err());
++				assert_eq!(admissions.available_permits(), 1);
++				requests.push(enqueue_fair_request(
++					&sender,
++					&admissions,
++					"fixture",
++					"replacement",
++					deadline,
++				));
++				drained(&sender).await;
++				assert_eq!(phase_notice(&mut preflight).await, "replacement");
++				assert_eq!(admissions.available_permits(), 0);
++			}
++			assert!(started.try_recv().is_err());
++		}
++		"fair-retained" => {
++			release.add_permits(MAX_SESSIONS);
++			for index in 0..MAX_SESSIONS {
++				requests.push(enqueue_fair_request(
++					&sender,
++					&admissions,
++					"fixture",
++					&format!("output-{index}"),
++					deadline,
++				));
++			}
++			for request in requests.drain(..) {
++				retained.push(
++					timeout(Duration::from_secs(3), request.reply)
++						.await
++						.unwrap()
++						.unwrap()
++						.unwrap(),
++				);
++			}
++			let mut executed = Vec::new();
++			for _ in 0..MAX_SESSIONS {
++				executed.push(started_host(&mut started, "fixture").await);
++				phase_notice(&mut preflight).await;
++			}
++			executed.sort();
++			assert_eq!(
++				executed,
++				(0..MAX_SESSIONS)
++					.map(|index| format!("output-{index}"))
++					.collect::<Vec<_>>()
++			);
++			assert_eq!(permits.available_permits(), 0);
++			assert_eq!(admissions.available_permits(), QUEUE);
++			for index in 0..QUEUE {
++				requests.push(enqueue_fair_request(
++					&sender,
++					&admissions,
++					"fixture",
++					&format!("pending-{index}"),
++					deadline,
++				));
++			}
++			drained(&sender).await;
++			// Captured outputs count toward the same 16: eight retained plus
++			// eight pending cannot turn into eight retained plus 16 pending.
++			assert_eq!(admissions.available_permits(), 0);
++			assert!(admissions.clone().try_acquire_owned().is_err());
++			assert!(started.try_recv().is_err());
++			release.add_permits(1);
++			drop(retained.pop());
++			let executed = started_host(&mut started, "fixture").await;
++			let index = requests
++				.iter()
++				.position(|request| request.command == executed)
++				.unwrap();
++			let next = requests.remove(index);
++			retained.push(
++				timeout(Duration::from_secs(3), next.reply)
++					.await
++					.unwrap()
++					.unwrap()
++					.unwrap(),
++			);
++			assert_eq!(permits.available_permits(), 0);
++			assert_eq!(admissions.available_permits(), 1);
++			requests.push(enqueue_fair_request(
++				&sender,
++				&admissions,
++				"fixture",
++				"new-pending",
++				deadline,
++			));
++			drained(&sender).await;
++			assert_eq!(admissions.available_permits(), 0);
++			assert!(started.try_recv().is_err());
++		}
++		"fair-cancel-deadline" => {
++			for _ in 0..MAX_SESSIONS {
++				retained.push(fair_output(
++					permits.clone().try_acquire_owned().unwrap(),
++					Arc::new(admissions.clone().try_acquire_owned().unwrap()),
++				));
++			}
++			let cancelled =
++				enqueue_fair_request(&sender, &admissions, "fixture", "cancelled", deadline);
++			let expired = enqueue_fair_request(
++				&sender,
++				&admissions,
++				"fixture",
++				"expired",
++				Instant::now() - Duration::from_millis(1),
++			);
++			let closed = enqueue_fair_request(&sender, &admissions, "fixture", "closed", deadline);
++			let unknown =
++				enqueue_fair_request(&sender, &admissions, "outside-profile", "unknown", deadline);
++			requests.push(enqueue_fair_request(
++				&sender,
++				&admissions,
++				"cold",
++				"still-pending",
++				deadline,
++			));
++			drained(&sender).await;
++			cancelled.cancel.cancel();
++			drop(closed);
++			// Introduce the future deadline only after the earlier queue is
++			// drained. With no intervening await, this assertion has no race
++			// against the actor or a slow three-second drain timeout.
++			let mut expiring = enqueue_fair_request(
++				&sender,
++				&admissions,
++				"fixture",
++				"expiring",
++				Instant::now() + Duration::from_secs(1),
++			);
++			assert!(matches!(
++				expiring.reply.try_recv(),
++				Err(oneshot::error::TryRecvError::Empty)
++			));
++			for request in [cancelled, expired, expiring] {
++				let error = timeout(Duration::from_secs(3), request.reply)
++					.await
++					.unwrap()
++					.unwrap()
++					.err()
++					.unwrap();
++				assert!(error.to_string().contains("cancelled before admission"));
++			}
++			let error = unknown.reply.await.unwrap().err().unwrap();
++			assert!(error.to_string().contains("outside observation profile"));
++			assert_eq!(
++				admissions.available_permits(),
++				MAX_ADMITTED - MAX_SESSIONS - 1
++			);
++			assert_eq!(permits.available_permits(), 0);
++			assert!(started.try_recv().is_err());
++		}
++		"fair-panic" | "fair-budget-cancel" | "fair-budget-deadline" => {
++			for _ in 0..MAX_SESSIONS - 1 {
++				retained.push(fair_output(
++					permits.clone().try_acquire_owned().unwrap(),
++					Arc::new(admissions.clone().try_acquire_owned().unwrap()),
++				));
++			}
++			let command = if kind == "fair-panic" {
++				"PANIC"
++			} else {
++				"HOLD"
++			};
++			let held = enqueue_fair_request(&sender, &admissions, "fixture", command, deadline);
++			assert_eq!(phase_notice(&mut preflight).await, command);
++			let waiting_deadline = if kind == "fair-budget-deadline" {
++				Instant::now() + Duration::from_secs(10)
++			} else {
++				deadline
++			};
++			let replacement = enqueue_fair_request(
++				&sender,
++				&admissions,
++				"cold",
++				"MUST_NOT_START",
++				waiting_deadline,
++			);
++			assert_eq!(phase_notice(&mut preflight).await, "MUST_NOT_START");
++			// Both supervisors already exist. Let the first own the only global
++			// budget, then prove the second has entered the same budget wait.
++			let gate = preflight_gate.as_ref().unwrap();
++			gate.add_permits(1);
++			assert_eq!(started_host(&mut started, "fixture").await, command);
++			assert_eq!(phase_notice(&mut budget_waiting).await, command);
++			gate.add_permits(1);
++			assert_eq!(phase_notice(&mut budget_waiting).await, "MUST_NOT_START");
++			assert_eq!(permits.available_permits(), 0);
++			if kind != "fair-panic" {
++				if kind == "fair-budget-cancel" {
++					replacement.cancel.cancel();
++				}
++				let error = timeout(Duration::from_secs(12), replacement.reply)
++					.await
++					.unwrap()
++					.unwrap()
++					.err()
++					.unwrap();
++				assert!(error.to_string().contains("global capacity"));
++				assert_eq!(permits.available_permits(), 0);
++				assert_eq!(
++					admissions.available_permits(),
++					MAX_ADMITTED - retained.len() - 1
++				);
++				assert!(started.try_recv().is_err());
++				assert!(!core.stop.is_cancelled());
++				core.stop.cancel();
++				timeout(Duration::from_secs(3), actor)
++					.await
++					.unwrap()
++					.unwrap()
++					.unwrap();
++				assert!(held.reply.await.unwrap().is_err());
++				assert_eq!(
++					admissions.available_permits(),
++					MAX_ADMITTED - retained.len()
++				);
++				drop(retained);
++				assert_eq!(permits.available_permits(), MAX_SESSIONS);
++				assert_eq!(admissions.available_permits(), MAX_ADMITTED);
++				return;
++			}
++			release.add_permits(1);
++			// The guard synchronously stops the pool before the awakened peer
++			// can cross request_budget, independently of when the actor reaps.
++			let error = timeout(Duration::from_secs(3), actor)
++				.await
++				.unwrap()
++				.unwrap()
++				.unwrap_err();
++			assert!(error.to_string().contains("supervisor failed"));
++			assert!(core.stop.is_cancelled());
++			assert!(held.reply.await.is_err());
++			let error = replacement.reply.await.unwrap().err().unwrap();
++			assert!(error.to_string().contains("global capacity"));
++			assert!(started.try_recv().is_err());
++			assert_eq!(permits.available_permits(), 1);
++			assert_eq!(
++				admissions.available_permits(),
++				MAX_ADMITTED - retained.len()
++			);
++			drop(retained);
++			assert_eq!(permits.available_permits(), MAX_SESSIONS);
++			assert_eq!(admissions.available_permits(), MAX_ADMITTED);
++			return;
++		}
++		_ => panic!("unsupported fairness fixture"),
++	}
++	core.stop.cancel();
++	timeout(Duration::from_secs(3), actor)
++		.await
++		.unwrap()
++		.unwrap()
++		.unwrap();
++	for request in requests {
++		assert!(request.reply.await.unwrap().is_err());
++	}
++	// Stopping the actor never refunds output held by the original caller.
++	assert_eq!(permits.available_permits(), MAX_SESSIONS - retained.len());
++	assert_eq!(
++		admissions.available_permits(),
++		MAX_ADMITTED - retained.len()
++	);
++	drop(retained);
++	assert_eq!(permits.available_permits(), MAX_SESSIONS);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
+ 	assert!(core.masters.lock().await.is_empty());
+ 	assert!(core.children.lock().await.is_empty());
+ }
+ 
++async fn owned_admission_fixture(core: &Arc<Core>) {
++	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
++	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
++	let host = Arc::new(Semaphore::new(HOST_SESSIONS));
++	let admission = Arc::new(admissions.clone().try_acquire_owned().unwrap());
++	let budget = Arc::new(permits.clone().try_acquire_owned().unwrap());
++	let (reply, _receive) = oneshot::channel();
++	let request = Request {
++		host: "fixture".into(),
++		command: "NEVER_EXECUTE".into(),
++		input: vec![],
++		deadline: Instant::now() + Duration::from_secs(5),
++		cancel: CancellationToken::new(),
++		reply,
++		admission: admission.clone(),
++	};
++	let socket = core.root.path.join("owned-budget");
++	let listener = tokio::net::UnixListener::bind(&socket).unwrap();
++	std::fs::set_permissions(&socket, std::fs::Permissions::from_mode(0o600)).unwrap();
++	let mut args = core
++		.arguments("fixture", Mode::Slave, &socket, false)
++		.unwrap();
++	args.push(request.command.clone());
++	let mut command = core.command(&args);
++	command
++		.stdin(Stdio::null())
++		.stdout(Stdio::null())
++		.stderr(Stdio::null());
++	let owned = core
++		.spawn(
++			&args,
++			command,
++			vec![
++				budget.clone(),
++				Arc::new(host.clone().try_acquire_owned().unwrap()),
++				admission.clone(),
++			],
++			request.deadline,
++			&request.cancel,
++		)
++		.await
++		.unwrap();
++	let (_stream, _) = timeout(Duration::from_secs(3), listener.accept())
++		.await
++		.unwrap()
++		.unwrap();
++	drop(request);
++	drop(admission);
++	drop(budget);
++	// A caller/supervisor can disappear, but its exact unreaped child keeps
++	// all three permits. Refusing premature release also freezes dispatch.
++	assert!(core.release(&owned).await.is_err());
++	assert!(core.stop.is_cancelled());
++	assert_eq!(core.children.lock().await.len(), 1);
++	assert_eq!(permits.available_permits(), MAX_SESSIONS - 1);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED - 1);
++	assert_eq!(host.available_permits(), HOST_SESSIONS - 1);
++	core.stop_child(&owned, Duration::ZERO).await.unwrap();
++	core.release(&owned).await.unwrap();
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED - 1);
++	drop(owned);
++	assert_eq!(permits.available_permits(), MAX_SESSIONS);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
++	assert_eq!(host.available_permits(), HOST_SESSIONS);
++	std::fs::remove_file(socket).unwrap();
++}
++
++async fn fair_renewal_fixture(core: &Arc<Core>) {
++	let (old, generation, _listener) = retired_generation(core, Duration::from_secs(20)).await;
++	old.active.store(1, Ordering::Release);
++	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
++	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
++	let (sender, receiver) = mpsc::channel(QUEUE);
++	let (started_send, mut started) = mpsc::channel(MAX_ADMITTED);
++	let request_global = permits.clone();
++	let actor = tokio::task::spawn_local(core.clone().run_with_dispatch(
++		receiver,
++		permits.clone(),
++		move |core, request, permit| {
++			assert!(started_send
++				.try_send((request.host.clone(), request.command.clone()))
++				.is_ok());
++			let global = request_global.clone();
++			async move {
++				if request.host == "cold" {
++					let output = fair_output(permit, request.admission.clone());
++					assert!(request.reply.send(Ok(output)).is_ok());
++				} else {
++					core.execute(request, permit, global).await;
++				}
++			}
++		},
++	));
++	let deadline = Instant::now() + Duration::from_secs(40);
++	let first = enqueue_fair_request(&sender, &admissions, "fixture", "renew-first", deadline);
++	let second = enqueue_fair_request(&sender, &admissions, "fixture", "renew-second", deadline);
++	let waiting = enqueue_fair_request(
++		&sender,
++		&admissions,
++		"fixture",
++		"waiting-for-renewal",
++		deadline,
++	);
++	assert_eq!(started_host(&mut started, "fixture").await, "renew-first");
++	assert_eq!(started_host(&mut started, "fixture").await, "renew-second");
++	assert_eq!(
++		started_host(&mut started, "fixture").await,
++		"waiting-for-renewal"
++	);
++	timeout(Duration::from_secs(3), async {
++		loop {
++			let changed = core
++				.masters
++				.lock()
++				.await
++				.get("fixture")
++				.is_some_and(|entry| entry.generation != generation && entry.draining.is_some());
++			if changed && permits.available_permits() == MAX_SESSIONS {
++				break;
++			}
++			tokio::task::yield_now().await;
++		}
++	})
++	.await
++	.unwrap();
++	let cold = enqueue_fair_request(
++		&sender,
++		&admissions,
++		"cold",
++		"cold-during-renewal",
++		deadline,
++	);
++	assert_eq!(
++		started_host(&mut started, "cold").await,
++		"cold-during-renewal"
++	);
++	let output = cold.reply.await.unwrap().unwrap();
++	assert!(started.try_recv().is_err());
++	assert_eq!(permits.available_permits(), MAX_SESSIONS - 1);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED - 4);
++	waiting.cancel.cancel();
++	assert!(timeout(Duration::from_secs(3), waiting.reply)
++		.await
++		.unwrap()
++		.unwrap()
++		.is_err());
++	core.stop.cancel();
++	old.active.store(0, Ordering::Release);
++	timeout(Duration::from_secs(5), actor)
++		.await
++		.unwrap()
++		.unwrap()
++		.unwrap();
++	assert!(first.reply.await.unwrap().is_err());
++	assert!(second.reply.await.unwrap().is_err());
++	assert!(started.try_recv().is_err());
++	drop(output);
++	assert_eq!(permits.available_permits(), MAX_SESSIONS);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
++}
++
++async fn phased_preflight_fixture(core: &Arc<Core>, agent: &Arc<AgentControl>) {
++	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
++	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
++	let host = Arc::new(Semaphore::new(HOST_SESSIONS));
++	let occupied = host
++		.clone()
++		.acquire_many_owned(HOST_SESSIONS as u32)
++		.await
++		.unwrap();
++	let (_ready, receive_ready) = watch::channel(None);
++	core.masters.lock().await.insert(
++		"fixture".into(),
++		Entry {
++			ready: receive_ready,
++			permits: host.clone(),
++			generation: core.sequence.fetch_add(1, Ordering::Relaxed),
++			ready_deadline: Instant::now() + Duration::from_secs(40),
++			draining: None,
++		},
++	);
++	let before = agent.requests.load(Ordering::Acquire);
++	let (sender, receiver) = mpsc::channel(QUEUE);
++	let actor = tokio::task::spawn_local(core.clone().run_with_capacity(receiver, permits.clone()));
++	let mut requests = Vec::new();
++	for index in 0..MAX_SESSIONS {
++		requests.push(enqueue_fair_request(
++			&sender,
++			&admissions,
++			"fixture",
++			&format!("preflight-{index}"),
++			Instant::now() + Duration::from_secs(40),
++		));
++	}
++	// Run the actual execute path. All eight real agent/profile checks finish
++	// while the original host semaphore is occupied and no SSH child exists.
++	timeout(Duration::from_secs(5), async {
++		loop {
++			let checked = agent.requests.load(Ordering::Acquire) - before;
++			assert!(checked <= MAX_SESSIONS);
++			if checked == MAX_SESSIONS && permits.available_permits() == MAX_SESSIONS {
++				break;
++			}
++			tokio::task::yield_now().await;
++		}
++	})
++	.await
++	.unwrap();
++	assert_eq!(host.available_permits(), 0);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED - MAX_SESSIONS);
++	assert!(core.children.lock().await.is_empty());
++	for request in &requests {
++		request.cancel.cancel();
++	}
++	for request in requests {
++		assert!(timeout(Duration::from_secs(3), request.reply)
++			.await
++			.unwrap()
++			.unwrap()
++			.is_err());
++	}
++	assert!(!core.stop.is_cancelled());
++	core.stop.cancel();
++	timeout(Duration::from_secs(3), actor)
++		.await
++		.unwrap()
++		.unwrap()
++		.unwrap();
++	drop(occupied);
++	assert_eq!(host.available_permits(), HOST_SESSIONS);
++	assert_eq!(permits.available_permits(), MAX_SESSIONS);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
++}
++
++struct PostverifyControl {
++	global: Arc<Semaphore>,
++	host: Arc<Semaphore>,
++	completed: mpsc::Sender<String>,
++	release: Arc<Semaphore>,
++}
++
++async fn postverify_dispatch(
++	core: Arc<Core>,
++	request: Request,
++	initial: OwnedSemaphorePermit,
++	control: Arc<PostverifyControl>,
++) {
++	let result = async {
++		core.admission_profile(&request, initial).await?;
++		let host = tokio::select! {
++			value = control.host.clone().acquire_owned() => value.unwrap(),
++			_ = core.stop.cancelled() => bail!("postverify fixture stopped"),
++			_ = request.cancel.cancelled() => bail!("postverify fixture cancelled"),
++			_ = tokio::time::sleep_until(request.deadline) => bail!("postverify fixture deadline"),
++		};
++		let budget = core
++			.request_budget(&request, control.global.clone())
++			.await?;
++		core.verify_request_profile(request.deadline).await?;
++		let args = core.arguments(
++			"fixture",
++			Mode::Slave,
++			&core.root.path.join("phase-effective"),
++			true,
++		)?;
++		// This is a real pinned, descriptor-owned ssh -G child. Its real wait,
++		// release and output capture determine when the host permit is free.
++		let output = core
++			.captured(
++				args,
++				&[],
++				request.deadline,
++				&request.cancel,
++				vec![budget.clone(), Arc::new(host), request.admission.clone()],
++			)
++			.await?;
++		assert!(output.status.success());
++		assert!(!output.stdout.is_empty());
++		assert!(control.completed.try_send(request.command.clone()).is_ok());
++		tokio::select! {
++			value = control.release.clone().acquire_owned() => value.unwrap().forget(),
++			_ = core.stop.cancelled() => bail!("postverify fixture stopped"),
++			_ = request.cancel.cancelled() => bail!("postverify fixture cancelled"),
++			_ = tokio::time::sleep_until(request.deadline) => bail!("postverify fixture deadline"),
++		};
++		core.verify_request_profile(request.deadline).await?;
++		Ok(Captured {
++			output,
++			_budget: budget,
++			_admission: request.admission.clone(),
++		})
++	}
++	.await;
++	let _ = request.reply.send(result);
++}
++
++async fn phased_postverify_fixture(core: &Arc<Core>) {
++	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
++	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
++	let host = Arc::new(Semaphore::new(HOST_SESSIONS));
++	let release = Arc::new(Semaphore::new(0));
++	let (completed_send, mut completed) = mpsc::channel(MAX_SESSIONS);
++	let control = Arc::new(PostverifyControl {
++		global: permits.clone(),
++		host: host.clone(),
++		completed: completed_send,
++		release: release.clone(),
++	});
++	let (sender, receiver) = mpsc::channel(QUEUE);
++	let actor = tokio::task::spawn_local(core.clone().run_with_dispatch(
++		receiver,
++		permits.clone(),
++		move |core, request, permit| postverify_dispatch(core, request, permit, control.clone()),
++	));
++	let mut requests = Vec::new();
++	let count = HOST_SESSIONS * 2;
++	for index in 0..count {
++		requests.push(enqueue_fair_request(
++			&sender,
++			&admissions,
++			"fixture",
++			&format!("postverify-{index}"),
++			Instant::now() + Duration::from_secs(40),
++		));
++	}
++	let mut finished = Vec::new();
++	for _ in 0..count {
++		finished.push(phase_notice(&mut completed).await);
++	}
++	finished.sort();
++	assert_eq!(
++		finished,
++		(0..count)
++			.map(|index| format!("postverify-{index}"))
++			.collect::<Vec<_>>()
++	);
++	// Four children have been captured and reaped while all four response
++	// checks are blocked. Host2 is free; four output budgets remain charged.
++	assert_eq!(host.available_permits(), HOST_SESSIONS);
++	assert_eq!(permits.available_permits(), MAX_SESSIONS - count);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED - count);
++	assert!(core.children.lock().await.is_empty());
++	for request in &mut requests {
++		assert!(matches!(
++			request.reply.try_recv(),
++			Err(oneshot::error::TryRecvError::Empty)
++		));
++	}
++	release.add_permits(count);
++	let mut outputs = Vec::new();
++	for request in requests {
++		outputs.push(
++			timeout(Duration::from_secs(5), request.reply)
++				.await
++				.unwrap()
++				.unwrap()
++				.unwrap(),
++		);
++	}
++	core.stop.cancel();
++	timeout(Duration::from_secs(3), actor)
++		.await
++		.unwrap()
++		.unwrap()
++		.unwrap();
++	assert_eq!(permits.available_permits(), MAX_SESSIONS - count);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED - count);
++	drop(outputs);
++	assert_eq!(permits.available_permits(), MAX_SESSIONS);
++	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
++}
++
++async fn validation_early_shutdown_drain_fixture(core: &Arc<Core>, poison_lock: bool) {
++	let marker = core.root.path.join("validation-drain-fixture");
++	private_write(&marker, b"validation authority remains alive");
++	let reads = Arc::new(AtomicUsize::new(0));
++	let mut releases = Vec::new();
++	// Occupy both real validation slots. Aborting the async callers must leave
++	// the blocking closures and their permits alive across failed cleanup.
++	for _ in 0..2 {
++		let (entered, receive) = oneshot::channel();
++		let (release, wait) = std::sync::mpsc::channel();
++		let worker_core = core.clone();
++		let worker_marker = marker.clone();
++		let worker_reads = reads.clone();
++		let caller = tokio::spawn(async move {
++			worker_core
++				.validation
++				.run(
++					&worker_core.stop,
++					Instant::now() + Duration::from_secs(10),
++					move || {
++						let _ = entered.send(());
++						wait.recv_timeout(Duration::from_secs(8))
++							.context("test validation closure was not released")?;
++						let bytes = std::fs::read(&worker_marker)?;
++						if bytes != b"validation authority remains alive" {
++							bail!("test validation authority changed before closure completion");
++						}
++						worker_reads.fetch_add(1, Ordering::SeqCst);
++						Ok(())
++					},
++				)
++				.await
++		});
++		timeout(Duration::from_secs(2), receive)
++			.await
++			.unwrap()
++			.unwrap();
++		caller.abort();
++		assert!(caller.await.unwrap_err().is_cancelled());
++		releases.push(release);
++	}
++	let refused_reads = Arc::new(AtomicUsize::new(0));
++	let queued_core = core.clone();
++	let queued_marker = marker.clone();
++	let queued_reads = refused_reads.clone();
++	let (waiting, admitted) = oneshot::channel();
++	let queued = tokio::spawn(async move {
++		let _ = waiting.send(());
++		queued_core
++			.validation
++			.run(
++				&queued_core.stop,
++				Instant::now() + Duration::from_secs(10),
++				move || {
++					queued_reads.fetch_add(1, Ordering::SeqCst);
++					std::fs::read(queued_marker)?;
++					Ok(())
++				},
++			)
++			.await
++	});
++	admitted.await.unwrap();
++	assert!(!queued.is_finished());
++	if poison_lock {
++		let poisoned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
++			let _held = core.background.lock().unwrap();
++			panic!("controlled observation supervisor lock poison");
++		}));
++		assert!(poisoned.is_err());
++	} else {
++		core.background(async { bail!("controlled observation supervisor cleanup failure") })
++			.unwrap();
++	}
++	// These are actual early Core::shutdown errors, before its successful-path
++	// validation drain. Neither error establishes that the detached work ended.
++	let cleanup = timeout(Duration::from_secs(2), core.shutdown())
++		.await
++		.unwrap();
++	let error = cleanup.as_ref().unwrap_err();
++	assert_eq!(
++		error.to_string(),
++		if poison_lock {
++			"observation supervisor unavailable"
++		} else {
++			"observation child cleanup incomplete; reconciliation required"
++		}
++	);
++	let original_error = error.root_cause() as *const _;
++	assert!(core.stop.is_cancelled());
++	assert!(timeout(Duration::from_secs(2), queued)
++		.await
++		.unwrap()
++		.unwrap()
++		.is_err());
++	let new_marker = marker.clone();
++	let new_reads = refused_reads.clone();
++	assert!(core
++		.validation
++		.run(
++			&core.stop,
++			Instant::now() + Duration::from_secs(2),
++			move || {
++				new_reads.fetch_add(1, Ordering::SeqCst);
++				std::fs::read(new_marker)?;
++				Ok(())
++			},
++		)
++		.await
++		.is_err());
++	assert_eq!(refused_reads.load(Ordering::SeqCst), 0);
++	let finished = core.validation.finish_shutdown(cleanup);
++	tokio::pin!(finished);
++	// Poll the actual barrier: no wall-clock delay is used to establish that
++	// it is pending while either real closure still owns its permit.
++	assert!(
++		std::future::poll_fn(|cx| std::task::Poll::Ready(finished.as_mut().poll(cx)))
++			.await
++			.is_pending()
++	);
++	assert!(marker.exists());
++	releases.pop().unwrap().send(()).unwrap();
++	timeout(Duration::from_secs(2), async {
++		while reads.load(Ordering::SeqCst) != 1 {
++			tokio::task::yield_now().await;
++		}
++	})
++	.await
++	.unwrap();
++	assert!(
++		std::future::poll_fn(|cx| std::task::Poll::Ready(finished.as_mut().poll(cx)))
++			.await
++			.is_pending()
++	);
++	releases.pop().unwrap().send(()).unwrap();
++	let error = timeout(Duration::from_secs(2), finished)
++		.await
++		.unwrap()
++		.unwrap_err();
++	assert!(std::ptr::eq(error.root_cause(), original_error));
++	assert_eq!(reads.load(Ordering::SeqCst), 2);
++	assert_eq!(refused_reads.load(Ordering::SeqCst), 0);
++	assert!(marker.exists());
++	// Only this fixture clears its deliberate poison and removes its own file;
++	// the outer fixture then performs ordinary Core cleanup and root assertions.
++	if poison_lock {
++		core.background.clear_poison();
++	}
++	std::fs::remove_file(marker).unwrap();
++}
++
+ #[test]
+ fn isolated_actual_ssh_guard_cancellation_and_ownership_fixtures() {
+ 	for kind in [
+@@ -806,6 +2264,8 @@ fn isolated_actual_ssh_guard_cancellation_and_ownership_fixtures() {
+ 		"admission-cancel",
+ 		"spawn-cancel",
+ 		"proof-failure",
++		"validation-cleanup-error-drain",
++		"validation-lock-error-drain",
+ 		"renew-singleflight",
+ 		"renew-refused",
+ 		"renew-cleanup",
+@@ -815,7 +2275,33 @@ fn isolated_actual_ssh_guard_cancellation_and_ownership_fixtures() {
+ 		"queue-capacity",
+ 		"queue-stop",
+ 		"queue-admission",
++		"fair-hot-cold",
++		"fair-capacity",
++		"fair-retained",
++		"fair-cancel-deadline",
++		"fair-panic",
++		"fair-budget-cancel",
++		"fair-budget-deadline",
++		"fair-owned-child",
++		"fair-renewal",
++		"fair-preflight",
++		"fair-postverify",
+ 		"socket-parent-bound",
++		"agent-startup-unbound-timeout",
++		"agent-startup-bound-timeout",
++		"agent-startup-final-timeout",
++		"agent-initial-timeout",
++		"agent-prelease-timeout",
++		"agent-postresponse-timeout",
++		"agent-master-timeout",
++		"agent-renewal-timeout",
++		"agent-renewal-cleanup-error",
++		"agent-timeout-then-key-change",
++		"agent-timeout-then-frame-error",
++		"agent-timeout-then-io-error",
++		"agent-timeout-then-socket-change",
++		"agent-timeout-then-file-change",
++		"agent-timeout-then-environment-change",
+ 	] {
+ 		let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+ 			.args([
+@@ -850,9 +2336,15 @@ fn isolated_actual_ssh_guard_cancellation_and_ownership_fixtures() {
+ #[ignore = "launched only by the bounded isolated subprocess test"]
+ async fn isolated_helper() {
+ 	let kind = std::env::var("HEPTA_A15_TEST_FIXTURE").expect("isolated fixture required");
+-	let (root, path, agent, agent_control) = fixture().await;
++	let (root, path, agent, agent_control) = if kind.starts_with("fair-") {
++		fixture_with_cold_host(true).await
++	} else {
++		fixture().await
++	};
+ 	if kind == "external-peer" {
+ 		external_peer_helper(&path).await;
++	} else if kind.starts_with("agent-startup-") {
++		agent_timeout::startup(&path, &agent_control, &kind).await;
+ 	} else if kind == "socket-parent-bound" {
+ 		let name_bytes = format!("hp-o-{}-{}", std::process::id(), "0".repeat(32)).len();
+ 		// Two separators plus m-1 add five bytes after the parent and root name.
+@@ -945,6 +2437,45 @@ async fn isolated_helper() {
+ 	} else {
+ 		let core = core(&path).await;
+ 		match kind.as_str() {
++			"validation-cleanup-error-drain" | "validation-lock-error-drain" => {
++				validation_early_shutdown_drain_fixture(
++					&core,
++					kind == "validation-lock-error-drain",
++				)
++				.await;
++			}
++			kind if kind.starts_with("agent-") => {
++				agent_timeout::run(&core, &agent_control, kind).await;
++			}
++			"fair-hot-cold"
++			| "fair-capacity"
++			| "fair-retained"
++			| "fair-cancel-deadline"
++			| "fair-panic"
++			| "fair-budget-cancel"
++			| "fair-budget-deadline" => {
++				// The real actor is intentionally not Send: all maintenance and
++				// child ownership stay on this same current-thread runtime.
++				tokio::task::LocalSet::new()
++					.run_until(fairness_fixture(&core, &kind))
++					.await;
++			}
++			"fair-owned-child" => owned_admission_fixture(&core).await,
++			"fair-renewal" => {
++				tokio::task::LocalSet::new()
++					.run_until(fair_renewal_fixture(&core))
++					.await;
++			}
++			"fair-preflight" => {
++				tokio::task::LocalSet::new()
++					.run_until(phased_preflight_fixture(&core, &agent_control))
++					.await;
++			}
++			"fair-postverify" => {
++				tokio::task::LocalSet::new()
++					.run_until(phased_postverify_fixture(&core))
++					.await;
++			}
+ 			"queue-capacity" | "queue-stop" | "queue-admission" => {
+ 				queued_admission_fixture(&core, &kind, &agent_control).await;
+ 			}
+@@ -961,12 +2492,16 @@ async fn isolated_helper() {
+ 					deadline: Instant::now() + Duration::from_secs(40),
+ 					cancel: cancel.clone(),
+ 					reply,
++					admission: test_admission(),
+ 				};
+ 				let permits = Arc::new(Semaphore::new(1));
+ 				let permit = permits.clone().acquire_owned().await.unwrap();
+ 				let task_core = core.clone();
++				let global = permits.clone();
+ 				let task =
+-					tokio::spawn(async move { task_core.execute_inner(&request, permit).await });
++					tokio::spawn(
++						async move { task_core.execute_inner(&request, permit, global).await },
++					);
+ 				timeout(Duration::from_secs(1), agent_control.entered.notified())
+ 					.await
+ 					.unwrap();
+diff --git a/source-a26-r01/src/mcp/runtime/ssh_observation_postspawn.rs b/src/mcp/runtime/ssh_observation_postspawn.rs
+new file mode 100644
+index 0000000..c00ecb1
+--- /dev/null
++++ b/src/mcp/runtime/ssh_observation_postspawn.rs
+@@ -0,0 +1,129 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++//! Resolve only an owned live child with verified UID/inode and empty argv.
++use super::{process_identity, OwnedChild, ProcessIdentity};
++use anyhow::{bail, Context, Result};
++use std::time::Duration;
++use tokio::time::{sleep_until, timeout_at, Instant};
++use tokio_util::sync::CancellationToken;
++
++pub(super) struct Ready {
++	pub identity: Option<ProcessIdentity>,
++	pub terminal: bool,
++}
++
++pub(super) async fn wait_empty_argv(
++	owned: &OwnedChild,
++	anchor: &ProcessIdentity,
++	expected: &[u8],
++	ssh_inode: (u64, u64),
++	deadline: Instant,
++	cancel: &CancellationToken,
++	stop: &CancellationToken,
++) -> Result<Ready> {
++	Waiting {
++		owned,
++		anchor,
++		expected,
++		ssh_inode,
++		deadline,
++		cancel,
++		stop,
++	}
++	.run_with(process_identity)
++	.await
++}
++
++struct Waiting<'a> {
++	owned: &'a OwnedChild,
++	anchor: &'a ProcessIdentity,
++	expected: &'a [u8],
++	ssh_inode: (u64, u64),
++	deadline: Instant,
++	cancel: &'a CancellationToken,
++	stop: &'a CancellationToken,
++}
++
++impl Waiting<'_> {
++	fn active(&self) -> Result<()> {
++		if self.cancel.is_cancelled() || self.stop.is_cancelled() || Instant::now() >= self.deadline
++		{
++			bail!("observation empty argv readiness cancelled or expired");
++		}
++		Ok(())
++	}
++
++	async fn run_with(
++		&self,
++		mut observe: impl FnMut(u32) -> Result<ProcessIdentity>,
++	) -> Result<Ready> {
++		self.active()?;
++		if self.owned.pid == 0
++			|| self.owned.pidfd.is_none()
++			|| self.expected.is_empty()
++			|| !self.anchor.argv.is_empty()
++			|| self.anchor.uid != unsafe { libc::geteuid() }
++			|| (self.anchor.dev, self.anchor.ino) != self.ssh_inode
++		{
++			bail!("observation empty argv readiness precondition refused");
++		}
++		let mut pause = Duration::from_millis(1);
++		loop {
++			// Waiting grants no authority and never refreshes the caller's deadline.
++			tokio::select! {
++				biased;
++				_ = self.cancel.cancelled() => bail!("observation empty argv readiness cancelled"),
++				_ = self.stop.cancelled() => bail!("observation empty argv readiness stopped"),
++				_ = sleep_until(self.deadline.min(Instant::now() + pause)) => {},
++			}
++			self.active()?;
++			let mut child = tokio::select! {
++				biased;
++				_ = self.cancel.cancelled() => bail!("observation empty argv readiness cancelled"),
++				_ = self.stop.cancelled() => bail!("observation empty argv readiness stopped"),
++				value = timeout_at(self.deadline, self.owned.child.lock()) =>
++					value.context("observation empty argv child ownership deadline")?,
++			};
++			self.active()?;
++			// All owner wait/reap paths share this lock. A pidfd alone does not
++			// protect numeric /proc lookups from reuse after another reaper runs.
++			if child.try_wait()?.is_some() {
++				self.active()?;
++				return Ok(Ready {
++					identity: None,
++					terminal: true,
++				});
++			}
++			// No errno allowlist: a read failure immediately leaves readiness.
++			let identity = observe(self.owned.pid)?;
++			if identity.birth != self.anchor.birth
++				|| identity.uid != self.anchor.uid
++				|| (identity.dev, identity.ino) != self.ssh_inode
++				|| (!identity.argv.is_empty() && identity.argv != self.expected)
++			{
++				bail!("observation empty argv child identity changed");
++			}
++			let terminal = child.try_wait()?.is_some();
++			self.active()?;
++			if identity.argv == self.expected {
++				return Ok(Ready {
++					identity: Some(identity),
++					terminal,
++				});
++			}
++			if terminal {
++				return Ok(Ready {
++					identity: None,
++					terminal: true,
++				});
++			}
++			drop(child);
++			pause = (pause * 2).min(Duration::from_millis(20));
++		}
++	}
++}
++
++#[cfg(test)]
++#[path = "ssh_observation_postspawn_tests.rs"]
++mod tests;
+diff --git a/source-a26-r01/src/mcp/runtime/ssh_observation_postspawn_tests.rs b/src/mcp/runtime/ssh_observation_postspawn_tests.rs
+new file mode 100644
+index 0000000..21e6555
+--- /dev/null
++++ b/src/mcp/runtime/ssh_observation_postspawn_tests.rs
+@@ -0,0 +1,497 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++use super::*;
++use std::cell::Cell;
++use std::future::Future;
++use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
++use std::process::Stdio;
++use std::sync::atomic::{AtomicBool, Ordering};
++use std::sync::{Arc, OnceLock};
++use tokio::process::Command;
++use tokio::sync::{Mutex, Semaphore};
++
++async fn fixture() -> (Arc<OwnedChild>, ProcessIdentity, Arc<Semaphore>) {
++	let capacity = Arc::new(Semaphore::new(1));
++	let permit = Arc::new(capacity.clone().acquire_owned().await.unwrap());
++	let child = Command::new("/usr/bin/cat")
++		.stdin(Stdio::piped())
++		.stdout(Stdio::null())
++		.stderr(Stdio::null())
++		.kill_on_drop(true)
++		.spawn()
++		.unwrap();
++	let pid = child.id().unwrap();
++	let descriptor = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
++	assert!(descriptor >= 0);
++	let owned = Arc::new(OwnedChild {
++		id: 701,
++		pid,
++		pidfd: Some(unsafe { OwnedFd::from_raw_fd(descriptor as i32) }),
++		identity: OnceLock::new(),
++		approved: AtomicBool::new(false),
++		child: Mutex::new(child),
++		_permits: vec![permit],
++	});
++	// Only fixture preparation may wait for a real long-lived test executable.
++	// The production helper below has no errno retry or generic readiness rule.
++	let deadline = Instant::now() + Duration::from_secs(5);
++	let identity = loop {
++		if let Ok(identity) = process_identity(pid) {
++			if identity.argv == b"/usr/bin/cat\0" {
++				break identity;
++			}
++		}
++		assert!(Instant::now() < deadline, "fixture identity unavailable");
++		tokio::time::sleep(Duration::from_millis(2)).await;
++	};
++	assert_eq!(identity.uid, unsafe { libc::geteuid() });
++	assert_eq!(capacity.available_permits(), 0);
++	(owned, identity, capacity)
++}
++
++async fn dispose(owned: Arc<OwnedChild>, capacity: Arc<Semaphore>) {
++	owned.stop(Duration::ZERO).await.unwrap();
++	assert!(owned.terminal().await.unwrap());
++	assert_eq!(
++		capacity.available_permits(),
++		0,
++		"reaping alone must not release ownership"
++	);
++	drop(owned);
++	assert_eq!(capacity.available_permits(), 1);
++}
++
++fn empty(identity: &ProcessIdentity) -> ProcessIdentity {
++	let mut result = identity.clone();
++	result.argv.clear();
++	result
++}
++
++fn await_exited_without_reaping(owned: &OwnedChild) {
++	let fd = owned.pidfd.as_ref().unwrap().as_raw_fd();
++	let deadline = std::time::Instant::now() + Duration::from_secs(5);
++	let mut polling = libc::pollfd {
++		fd,
++		events: libc::POLLIN,
++		revents: 0,
++	};
++	loop {
++		let remaining = deadline.saturating_duration_since(std::time::Instant::now());
++		assert!(!remaining.is_zero(), "fixture exit observation deadline");
++		let milliseconds = remaining.as_millis().clamp(1, i32::MAX as u128) as i32;
++		let result = unsafe { libc::poll(&mut polling, 1, milliseconds) };
++		if result < 0 {
++			assert_eq!(
++				std::io::Error::last_os_error().raw_os_error(),
++				Some(libc::EINTR)
++			);
++			continue;
++		}
++		assert_eq!(result, 1);
++		assert_ne!(polling.revents & libc::POLLIN, 0);
++		break;
++	}
++	loop {
++		assert!(
++			std::time::Instant::now() < deadline,
++			"fixture exit observation deadline"
++		);
++		let mut status = std::mem::MaybeUninit::<libc::siginfo_t>::zeroed();
++		let result = unsafe {
++			libc::waitid(
++				libc::P_PIDFD,
++				fd as libc::id_t,
++				status.as_mut_ptr(),
++				libc::WEXITED | libc::WNOWAIT | libc::WNOHANG,
++			)
++		};
++		if result < 0 {
++			assert_eq!(
++				std::io::Error::last_os_error().raw_os_error(),
++				Some(libc::EINTR)
++			);
++			continue;
++		}
++		assert_eq!(result, 0);
++		let status = unsafe { status.assume_init() };
++		let pid = unsafe { status.si_pid() };
++		if pid != 0 {
++			assert_eq!(pid as u32, owned.pid);
++			assert_eq!(status.si_code, libc::CLD_KILLED);
++			assert_eq!(unsafe { status.si_status() }, libc::SIGKILL);
++			break;
++		}
++		std::thread::sleep(
++			Duration::from_millis(1)
++				.min(deadline.saturating_duration_since(std::time::Instant::now())),
++		);
++	}
++}
++
++fn waiting<'a>(
++	owned: &'a OwnedChild,
++	anchor: &'a ProcessIdentity,
++	expected: &'a ProcessIdentity,
++	deadline: Instant,
++	cancel: &'a CancellationToken,
++	stop: &'a CancellationToken,
++) -> Waiting<'a> {
++	Waiting {
++		owned,
++		anchor,
++		expected: &expected.argv,
++		ssh_inode: (expected.dev, expected.ino),
++		deadline,
++		cancel,
++		stop,
++	}
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn empty_argv_readiness_requires_exact_match_before_identity_is_stored() {
++	let (owned, exact, capacity) = fixture().await;
++	let anchor = empty(&exact);
++	let cancel = CancellationToken::new();
++	let stop = CancellationToken::new();
++	let samples = Cell::new(0);
++	let ready = waiting(
++		&owned,
++		&anchor,
++		&exact,
++		Instant::now() + Duration::from_secs(5),
++		&cancel,
++		&stop,
++	)
++	.run_with(|pid| {
++		assert_eq!(pid, owned.pid);
++		assert!(
++			owned.child.try_lock().is_err(),
++			"proc sampling must hold the original Child lock"
++		);
++		assert!(
++			owned.identity.get().is_none(),
++			"empty snapshots must not fill OnceLock"
++		);
++		samples.set(samples.get() + 1);
++		Ok(if samples.get() == 1 {
++			anchor.clone()
++		} else {
++			exact.clone()
++		})
++	})
++	.await
++	.unwrap();
++	assert_eq!(samples.get(), 2);
++	assert!(!ready.terminal);
++	assert_eq!(ready.identity.as_ref(), Some(&exact));
++	assert!(!owned.approved.load(Ordering::Acquire));
++	assert!(owned.identity.get().is_none());
++	owned.identity.set(ready.identity.unwrap()).unwrap();
++	assert_eq!(owned.identity.get(), Some(&exact));
++	dispose(owned, capacity).await;
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn empty_argv_readiness_serializes_reaping_and_never_reads_proc_after_terminal() {
++	let (owned, exact, capacity) = fixture().await;
++	let anchor = empty(&exact);
++	let cancel = CancellationToken::new();
++	let stop = CancellationToken::new();
++	let probe = waiting(
++		&owned,
++		&anchor,
++		&exact,
++		Instant::now() + Duration::from_secs(5),
++		&cancel,
++		&stop,
++	);
++	let samples = Cell::new(0);
++	let mut child = owned.child.lock().await;
++	let mut future = Box::pin(probe.run_with(|_| {
++		samples.set(samples.get() + 1);
++		panic!("a reaped Child must not be followed through its numeric PID")
++	}));
++	std::future::poll_fn(|context| {
++		assert!(future.as_mut().poll(context).is_pending());
++		std::task::Poll::Ready(())
++	})
++	.await;
++	tokio::time::sleep(Duration::from_millis(3)).await;
++	std::future::poll_fn(|context| {
++		assert!(future.as_mut().poll(context).is_pending());
++		std::task::Poll::Ready(())
++	})
++	.await;
++	assert_eq!(samples.get(), 0);
++	drop(child.stdin.take());
++	assert!(
++		timeout_at(Instant::now() + Duration::from_secs(5), child.wait())
++			.await
++			.unwrap()
++			.unwrap()
++			.success()
++	);
++	drop(child);
++	let ready = future.await.unwrap();
++	assert!(ready.terminal);
++	assert!(ready.identity.is_none());
++	assert_eq!(samples.get(), 0);
++	assert!(owned.identity.get().is_none());
++	assert!(!owned.approved.load(Ordering::Acquire));
++	dispose(owned, capacity).await;
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn empty_argv_readiness_rejects_every_identity_contradiction_without_another_sample() {
++	let (owned, exact, capacity) = fixture().await;
++	let anchor = empty(&exact);
++	let cancel = CancellationToken::new();
++	let stop = CancellationToken::new();
++	for field in ["birth", "uid", "dev", "ino", "argv"] {
++		let samples = Cell::new(0);
++		let mut wrong = exact.clone();
++		match field {
++			"birth" => wrong.birth ^= 1,
++			"uid" => wrong.uid ^= 1,
++			"dev" => wrong.dev ^= 1,
++			"ino" => wrong.ino ^= 1,
++			_ => wrong.argv = b"unexpected-nonempty-argv\0".to_vec(),
++		}
++		let result = waiting(
++			&owned,
++			&anchor,
++			&exact,
++			Instant::now() + Duration::from_secs(5),
++			&cancel,
++			&stop,
++		)
++		.run_with(|_| {
++			samples.set(samples.get() + 1);
++			Ok(if samples.get() == 1 {
++				wrong.clone()
++			} else {
++				exact.clone()
++			})
++		})
++		.await;
++		assert!(result.is_err(), "{field}");
++		assert_eq!(
++			samples.get(),
++			1,
++			"{field} must not be washed away by a later match"
++		);
++		assert!(owned.identity.get().is_none());
++	}
++	dispose(owned, capacity).await;
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn empty_argv_readiness_does_not_retry_any_proc_errno() {
++	let (owned, exact, capacity) = fixture().await;
++	let anchor = empty(&exact);
++	let cancel = CancellationToken::new();
++	let stop = CancellationToken::new();
++	for errno in [
++		libc::ENOENT,
++		libc::ESRCH,
++		libc::EACCES,
++		libc::EPERM,
++		libc::EINTR,
++		libc::EIO,
++	] {
++		let samples = Cell::new(0);
++		let result = waiting(
++			&owned,
++			&anchor,
++			&exact,
++			Instant::now() + Duration::from_secs(5),
++			&cancel,
++			&stop,
++		)
++		.run_with(|_| {
++			samples.set(samples.get() + 1);
++			Err(std::io::Error::from_raw_os_error(errno).into())
++		})
++		.await;
++		assert_eq!(
++			result
++				.err()
++				.unwrap()
++				.downcast_ref::<std::io::Error>()
++				.unwrap()
++				.raw_os_error(),
++			Some(errno)
++		);
++		assert_eq!(samples.get(), 1);
++	}
++	dispose(owned, capacity).await;
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn empty_argv_readiness_checks_cancellation_after_an_otherwise_matching_observation() {
++	let (owned, exact, capacity) = fixture().await;
++	let anchor = empty(&exact);
++	for pool_stop in [false, true] {
++		let cancel = CancellationToken::new();
++		let stop = CancellationToken::new();
++		let samples = Cell::new(0);
++		let result = waiting(
++			&owned,
++			&anchor,
++			&exact,
++			Instant::now() + Duration::from_secs(5),
++			&cancel,
++			&stop,
++		)
++		.run_with(|_| {
++			samples.set(samples.get() + 1);
++			if pool_stop {
++				stop.cancel();
++			} else {
++				cancel.cancel();
++			}
++			Ok(exact.clone())
++		})
++		.await;
++		assert!(result.is_err());
++		assert_eq!(samples.get(), 1);
++		assert!(owned.identity.get().is_none());
++		assert!(!owned.approved.load(Ordering::Acquire));
++	}
++	dispose(owned, capacity).await;
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn empty_argv_readiness_respects_original_deadline_and_retains_capacity_until_reap() {
++	let (owned, exact, capacity) = fixture().await;
++	let anchor = empty(&exact);
++	let cancel = CancellationToken::new();
++	let stop = CancellationToken::new();
++	let expired = waiting(&owned, &anchor, &exact, Instant::now(), &cancel, &stop)
++		.run_with(|_| panic!("expired readiness cannot read a process"))
++		.await;
++	assert!(expired.is_err());
++	let deadline = Instant::now() + Duration::from_millis(30);
++	let unresolved = waiting(&owned, &anchor, &exact, deadline, &cancel, &stop)
++		.run_with(|_| Ok(anchor.clone()))
++		.await;
++	assert!(unresolved.is_err());
++	assert!(Instant::now() >= deadline);
++	assert!(!owned.terminal().await.unwrap());
++	assert_eq!(capacity.available_permits(), 0);
++	assert!(owned.identity.get().is_none());
++	dispose(owned, capacity).await;
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn empty_argv_readiness_requires_original_pidfd_and_exact_entry_identity() {
++	let (mut owned, exact, capacity) = fixture().await;
++	let cancel = CancellationToken::new();
++	let stop = CancellationToken::new();
++	for field in ["uid", "ino", "argv"] {
++		let mut anchor = empty(&exact);
++		match field {
++			"uid" => anchor.uid ^= 1,
++			"ino" => anchor.ino ^= 1,
++			_ => anchor.argv = b"not-empty\0".to_vec(),
++		}
++		let result = waiting(
++			&owned,
++			&anchor,
++			&exact,
++			Instant::now() + Duration::from_secs(5),
++			&cancel,
++			&stop,
++		)
++		.run_with(|_| panic!("incorrect entry must not start polling"))
++		.await;
++		assert!(result.is_err());
++	}
++	let pidfd = Arc::get_mut(&mut owned).unwrap().pidfd.take();
++	let anchor = empty(&exact);
++	let result = waiting(
++		&owned,
++		&anchor,
++		&exact,
++		Instant::now() + Duration::from_secs(5),
++		&cancel,
++		&stop,
++	)
++	.run_with(|_| panic!("missing original pidfd must not start polling"))
++	.await;
++	assert!(result.is_err());
++	Arc::get_mut(&mut owned).unwrap().pidfd = pidfd;
++	dispose(owned, capacity).await;
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn empty_argv_readiness_does_not_accept_a_late_matching_observation() {
++	let (owned, exact, capacity) = fixture().await;
++	let anchor = empty(&exact);
++	let cancel = CancellationToken::new();
++	let stop = CancellationToken::new();
++	let deadline = Instant::now() + Duration::from_millis(300);
++	let observed = Cell::new(false);
++	let result = waiting(&owned, &anchor, &exact, deadline, &cancel, &stop)
++		.run_with(|_| {
++			observed.set(true);
++			// Model the owner returning from a synchronous proc read after its
++			// original deadline. The post-observation fence must still refuse.
++			std::thread::sleep(
++				deadline.saturating_duration_since(Instant::now()) + Duration::from_millis(2),
++			);
++			Ok(exact.clone())
++		})
++		.await;
++	assert!(observed.get());
++	assert!(result.is_err());
++	assert!(owned.identity.get().is_none());
++	assert!(!owned.approved.load(Ordering::Acquire));
++	dispose(owned, capacity).await;
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn empty_argv_readiness_rejects_a_mismatch_even_when_the_same_child_exits() {
++	let (owned, exact, capacity) = fixture().await;
++	let anchor = empty(&exact);
++	let cancel = CancellationToken::new();
++	let stop = CancellationToken::new();
++	let mut wrong = exact.clone();
++	wrong.argv = b"wrong-nonempty-argv\0".to_vec();
++	let result = waiting(
++		&owned,
++		&anchor,
++		&exact,
++		Instant::now() + Duration::from_secs(10),
++		&cancel,
++		&stop,
++	)
++	.run_with(|_| {
++		let fd = owned.pidfd.as_ref().unwrap().as_raw_fd();
++		assert_eq!(
++			unsafe {
++				libc::syscall(
++					libc::SYS_pidfd_send_signal,
++					fd,
++					libc::SIGKILL,
++					std::ptr::null::<libc::siginfo_t>(),
++					0,
++				)
++			},
++			0
++		);
++		// Same pidfd, same lock, WNOWAIT: confirm exit without another reaper.
++		await_exited_without_reaping(&owned);
++		Ok(wrong.clone())
++	})
++	.await;
++	assert!(
++		result.is_err(),
++		"terminal must not erase an observed identity mismatch"
++	);
++	assert!(owned.terminal().await.unwrap());
++	assert!(owned.identity.get().is_none());
++	assert!(!owned.approved.load(Ordering::Acquire));
++	dispose(owned, capacity).await;
++}
+diff --git a/src/mcp/runtime/ssh_observation_profile.rs b/src/mcp/runtime/ssh_observation_profile.rs
+index 5d3707f..e2477c6 100644
+--- a/src/mcp/runtime/ssh_observation_profile.rs
++++ b/src/mcp/runtime/ssh_observation_profile.rs
+@@ -1,3 +1,4 @@
++// Copyright 2026 Muvon Un Limited
+ // Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
+ //! Explicitly supported, immutable inputs for the opt-in observation transport.
+ use anyhow::{bail, Context, Result};
+@@ -72,6 +73,9 @@ impl Stamp {
+ 			ctime: (value.ctime(), value.ctime_nsec()),
+ 		}
+ 	}
++	pub(super) fn link_count(&self) -> u64 {
++		self.nlink
++	}
+ 	pub(super) fn same_directory(&self, other: &Self) -> bool {
+ 		(self.dev, self.ino, self.uid, self.mode) == (other.dev, other.ino, other.uid, other.mode)
+ 	}
+@@ -254,6 +258,13 @@ impl PinnedFile {
+ 			bytes,
+ 		))
+ 	}
++	fn verify_identity(&self) -> Result<()> {
++		let (_, stamp) = checked_file(&self.path, self.maximum, self.private, self.executable)?;
++		if stamp != self.stamp {
++			bail!("observation profile changed after complete validation");
++		}
++		Ok(())
++	}
+ 	fn verify(&self) -> Result<()> {
+ 		let (mut file, stamp) =
+ 			checked_file(&self.path, self.maximum, self.private, self.executable)?;
+@@ -413,7 +424,7 @@ impl PinnedShell {
+ 		result.verify()?;
+ 		Ok(result)
+ 	}
+-	fn verify(&self) -> Result<()> {
++	fn verify_resolution(&self) -> Result<()> {
+ 		let (path, components) = fixed_shell_resolution()?;
+ 		if path != self.target.path
+ 			|| components.len() != self.components.len()
+@@ -431,6 +442,10 @@ impl PinnedShell {
+ 				}) {
+ 			bail!("observation fixed system shell resolution changed");
+ 		}
++		Ok(())
++	}
++	fn verify(&self) -> Result<()> {
++		self.verify_resolution()?;
+ 		self.target.verify()
+ 	}
+ }
+@@ -598,6 +613,25 @@ fn agent_identities(bytes: &[u8]) -> Result<[u8; 32]> {
+ 	Ok(digest(bytes))
+ }
+ 
++// Only this exact lookup timer creates the typed error. I/O timeouts, malformed
++// frames and failed socket/peer checks remain ordinary authority failures.
++// Expiry can reflect the RPC budget or owner scheduling; it supplies no
++// credential result and does not identify which part of the lookup was delayed.
++#[derive(Debug)]
++pub(super) struct AgentLookupDeadline(tokio::time::error::Elapsed);
++
++impl std::fmt::Display for AgentLookupDeadline {
++	fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++		formatter.write_str("observation SSH agent deadline")
++	}
++}
++
++impl std::error::Error for AgentLookupDeadline {
++	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
++		Some(&self.0)
++	}
++}
++
+ pub(super) async fn agent_snapshot(path: &Path, deadline: Instant) -> Result<AgentIdentity> {
+ 	// Forwarded agent sockets may be0775; their descriptor-checked0700
+ 	// account-owned parent is the confidentiality boundary. Control sockets
+@@ -629,7 +663,7 @@ pub(super) async fn agent_snapshot(path: &Path, deadline: Instant) -> Result<Age
+ 		})
+ 	})
+ 	.await
+-	.context("observation SSH agent deadline")?
++	.map_err(AgentLookupDeadline)?
+ }
+ 
+ pub(super) struct Profile {
+@@ -726,6 +760,17 @@ impl Profile {
+ 			file.verify()?;
+ 		}
+ 		self.shell.verify()?;
++		self.verify_policy()
++	}
++	pub(super) fn verify_boundaries(&self) -> Result<()> {
++		for file in &self.files {
++			file.verify_identity()?;
++		}
++		self.shell.verify_resolution()?;
++		self.shell.target.verify_identity()?;
++		self.verify_policy()
++	}
++	fn verify_policy(&self) -> Result<()> {
+ 		if !private_directory(&self.socket_parent)?.same_directory(&self.parent_stamp)
+ 			|| digest(&serde_json::to_vec(
+ 				crate::mcp::runtime::config::runtime_config()?,
+diff --git a/src/mcp/runtime/ssh_observation_profile_tests.rs b/src/mcp/runtime/ssh_observation_profile_tests.rs
+index 9e56c08..b0c9007 100644
+--- a/src/mcp/runtime/ssh_observation_profile_tests.rs
++++ b/src/mcp/runtime/ssh_observation_profile_tests.rs
+@@ -1,4 +1,6 @@
++// Copyright 2026 Muvon Un Limited
+ // Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
++//! Profile identity, byte completeness and worker-consumption boundaries.
+ use super::*;
+ use sha2::Digest;
+ use std::os::unix::fs::{symlink, PermissionsExt};
+@@ -248,3 +250,72 @@ async fn direct_agent_identity_includes_response_bytes_and_rejects_replaced_sock
+ 			.is_err()
+ 	);
+ }
++
++#[tokio::test(flavor = "current_thread")]
++async fn owner_rechecks_changed_file_boundaries_after_complete_worker_validation() {
++	use super::super::validation::Workers;
++	use std::sync::Arc;
++	use std::time::Duration;
++	for mutation in ["bytes", "replacement", "permissions", "hardlink"] {
++		let root = tempfile::tempdir().unwrap();
++		let path = root.path().join("worker-pin");
++		std::fs::write(&path, b"original").unwrap();
++		std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
++		let (pin, _) = PinnedFile::load(&path, None, 1024, true, false).unwrap();
++		let pin = Arc::new(pin);
++		let checked = pin.clone();
++		let stop = tokio_util::sync::CancellationToken::new();
++		Workers::new()
++			.run(&stop, Instant::now() + Duration::from_secs(2), move || {
++				checked.verify()
++			})
++			.await
++			.unwrap();
++		pin.verify_identity().unwrap();
++		match mutation {
++			"bytes" => std::fs::write(&path, b"modified").unwrap(),
++			"replacement" => {
++				std::fs::rename(&path, root.path().join("old")).unwrap();
++				std::fs::write(&path, b"original").unwrap();
++				std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
++			}
++			"permissions" => {
++				std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap()
++			}
++			"hardlink" => std::fs::hard_link(&path, root.path().join("alias")).unwrap(),
++			_ => unreachable!(),
++		}
++		assert!(
++			pin.verify_identity().is_err(),
++			"missed {mutation} after worker completion"
++		);
++	}
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn worker_full_hash_is_not_replaced_by_owner_metadata_check() {
++	use super::super::validation::Workers;
++	use std::time::Duration;
++	let root = tempfile::tempdir().unwrap();
++	let path = root.path().join("complete-worker-pin");
++	let mut bytes = vec![23; VERIFY_BUFFER_BYTES * 3 + 7];
++	std::fs::write(&path, &bytes).unwrap();
++	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
++	let (mut pin, _) = PinnedFile::load(&path, None, bytes.len(), true, false).unwrap();
++	pin.verify().unwrap();
++	*bytes.last_mut().unwrap() ^= 1;
++	std::fs::write(&path, &bytes).unwrap();
++	// Isolate complete-byte verification from the independent metadata fence,
++	// as the existing streamed-pin tests do. Production never rebases a pin.
++	pin.stamp = Stamp::of(&std::fs::metadata(&path).unwrap());
++	pin.verify_identity().unwrap();
++	let stop = tokio_util::sync::CancellationToken::new();
++	let workers = Workers::new();
++	assert!(workers
++		.run(&stop, Instant::now() + Duration::from_secs(2), move || pin
++			.verify())
++		.await
++		.is_err());
++	assert!(stop.is_cancelled());
++	workers.drain().await.unwrap();
++}
+diff --git a/source-a26-r01/src/mcp/runtime/ssh_observation_socket_publication_tests.rs b/src/mcp/runtime/ssh_observation_socket_publication_tests.rs
+new file mode 100644
+index 0000000..7e5cbb6
+--- /dev/null
++++ b/src/mcp/runtime/ssh_observation_socket_publication_tests.rs
+@@ -0,0 +1,100 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++//! Deterministic initial control-socket publication and ownership regressions.
++use super::*;
++
++fn listener_fixture() -> (
++	tempfile::TempDir,
++	PathBuf,
++	PathBuf,
++	tokio::net::UnixListener,
++) {
++	let root = tempfile::tempdir().unwrap();
++	std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
++	let temporary = root.path().join("control.temporary");
++	let socket = root.path().join("control");
++	let listener = tokio::net::UnixListener::bind(&temporary).unwrap();
++	std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600)).unwrap();
++	std::fs::hard_link(&temporary, &socket).unwrap();
++	(root, temporary, socket, listener)
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn initial_socket_waits_for_temporary_link_removal_before_exact_proof() {
++	let (_root, temporary, socket, _listener) = listener_fixture();
++	let before = profile::socket_stamp(&socket).unwrap();
++	assert_eq!(before.link_count(), 2);
++	assert!(master_socket_readiness(&socket, std::process::id())
++		.await
++		.unwrap()
++		.is_none());
++	let probe = UnixStream::connect(&socket).await.unwrap();
++	let original_peer = profile::peer(&probe).unwrap();
++	assert_eq!(original_peer.0, std::process::id() as i32);
++	assert_eq!(original_peer.1, unsafe { libc::geteuid() });
++	std::fs::remove_file(&temporary).unwrap();
++	let after = profile::socket_stamp(&socket).unwrap();
++	assert_eq!(after.link_count(), 1);
++	assert_eq!((before.dev, before.ino), (after.dev, after.ino));
++	assert_eq!(profile::peer(&probe).unwrap(), original_peer);
++	assert_ne!(
++		before, after,
++		"the original full-stamp check rejects this publication"
++	);
++	let ready = master_socket_readiness(&socket, std::process::id())
++		.await
++		.unwrap()
++		.unwrap();
++	assert_eq!(ready, after);
++	assert_eq!(profile::socket_stamp(&socket).unwrap(), ready);
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn initial_socket_rejects_extra_links_and_wrong_owned_peer() {
++	let (root, temporary, socket, _listener) = listener_fixture();
++	let third = root.path().join("third");
++	std::fs::hard_link(&socket, &third).unwrap();
++	assert!(master_socket_readiness(&socket, std::process::id())
++		.await
++		.unwrap_err()
++		.to_string()
++		.contains("unexpected link count"));
++	std::fs::remove_file(&third).unwrap();
++	std::fs::remove_file(&temporary).unwrap();
++	assert!(
++		master_socket_readiness(&socket, std::process::id().wrapping_add(1))
++			.await
++			.unwrap_err()
++			.to_string()
++			.contains("not the owned master")
++	);
++	assert!(master_socket_readiness(&socket, std::process::id())
++		.await
++		.unwrap()
++		.is_some());
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn initial_two_link_socket_stays_unadmitted_until_original_deadline() {
++	let (_root, _temporary, socket, listener) = listener_fixture();
++	let original = profile::socket_stamp(&socket).unwrap();
++	let deadline = Instant::now() + Duration::from_millis(60);
++	let result = timeout_at(deadline, async {
++		loop {
++			if master_socket_readiness(&socket, std::process::id())
++				.await?
++				.is_some()
++			{
++				return Ok::<(), anyhow::Error>(());
++			}
++			tokio::time::sleep(Duration::from_millis(20)).await;
++		}
++	})
++	.await;
++	assert!(result.is_err());
++	assert_eq!(profile::socket_stamp(&socket).unwrap(), original);
++	assert!(timeout(Duration::from_millis(10), listener.accept())
++		.await
++		.is_err());
++}
+diff --git a/source-a26-r01/src/mcp/runtime/ssh_observation_validation.rs b/src/mcp/runtime/ssh_observation_validation.rs
+new file mode 100644
+index 0000000..e1f8cca
+--- /dev/null
++++ b/src/mcp/runtime/ssh_observation_validation.rs
+@@ -0,0 +1,136 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++//! Bounded complete-file validation that never owns an SSH child or credential lease.
++
++use anyhow::{anyhow, bail, Context, Result};
++use std::sync::Arc;
++use tokio::sync::{OwnedSemaphorePermit, Semaphore};
++use tokio::time::{timeout_at, Instant};
++use tokio_util::sync::CancellationToken;
++
++const WORKERS: usize = 2;
++
++pub(super) struct Workers {
++	permits: Arc<Semaphore>,
++}
++
++// The closure owns this guard, including when its caller times out or drops
++// the JoinHandle. Failure freezes admission before releasing worker capacity.
++struct Completion {
++	_permit: OwnedSemaphorePermit,
++	stop: CancellationToken,
++	completed: bool,
++}
++
++impl Completion {
++	fn finish(mut self) {
++		// Consuming the whole guard forces the blocking closure to own its
++		// permit and Drop state together, rather than capturing copied fields.
++		self.completed = true;
++	}
++}
++
++impl Drop for Completion {
++	fn drop(&mut self) {
++		if !self.completed {
++			self.stop.cancel();
++		}
++	}
++}
++
++impl Workers {
++	pub(super) fn new() -> Self {
++		Self {
++			permits: Arc::new(Semaphore::new(WORKERS)),
++		}
++	}
++
++	pub(super) async fn run<F>(
++		&self,
++		stop: &CancellationToken,
++		deadline: Instant,
++		check: F,
++	) -> Result<()>
++	where
++		F: FnOnce() -> Result<()> + Send + 'static,
++	{
++		let permit = tokio::select! {
++			biased;
++			_ = stop.cancelled() => bail!("observation validation stopped before admission"),
++			value = timeout_at(deadline, self.permits.clone().acquire_owned()) => value
++				.context("observation validation capacity deadline")?
++				.context("observation validation capacity closed")?,
++		};
++		if stop.is_cancelled() || Instant::now() >= deadline {
++			bail!("observation validation cancelled or expired before submission");
++		}
++		// Construct before spawn so even a discarded unstarted closure freezes
++		// admission. At most WORKERS closures are submitted; Tokio's otherwise
++		// unbounded blocking queue cannot accumulate validation work.
++		let completion = Completion {
++			_permit: permit,
++			stop: stop.clone(),
++			completed: false,
++		};
++		let mut work = tokio::task::spawn_blocking(move || {
++			// Admission can precede execution in Tokio's blocking queue. Keep
++			// the original deadline and refuse stale work before opening files.
++			if completion.stop.is_cancelled() || Instant::now() >= deadline {
++				completion.stop.cancel();
++				completion.finish();
++				bail!("observation validation cancelled or expired before worker execution");
++			}
++			let result = check();
++			if result.is_err() {
++				completion.stop.cancel();
++			}
++			completion.finish();
++			result
++		});
++		let result = tokio::select! {
++			biased;
++			value = &mut work => value.map_err(|error| {
++				stop.cancel();
++				anyhow!("observation validation worker unavailable: {error}")
++			})?,
++			_ = stop.cancelled() => bail!("observation validation stopped before authority acceptance"),
++			_ = tokio::time::sleep_until(deadline) => {
++				stop.cancel();
++				bail!("observation validation deadline; no result accepted");
++			},
++		};
++		result?;
++		// Completion and a timer/cancellation can become ready together. A
++		// successfully hashed earlier snapshot grants no late authority.
++		if stop.is_cancelled() || Instant::now() >= deadline {
++			bail!("observation validation cancelled or expired before authority acceptance");
++		}
++		Ok(())
++	}
++
++	pub(super) async fn finish_shutdown(&self, cleanup: Result<()>) -> Result<()> {
++		// The owner calls this even when child/supervisor cleanup returned early.
++		// Await real closure completion before propagating the original error.
++		let drained = self.drain().await;
++		cleanup.and(drained)
++	}
++
++	pub(super) async fn drain(&self) -> Result<()> {
++		// Admission is stopped first. Normal cleanup also joins supervisors;
++		// the owner's final barrier still runs if that cleanup returned early.
++		// Detached checks own permits until their actual closures return, so
++		// filesystem cleanup or dropping the owner cannot overtake their work.
++		let _all = self
++			.permits
++			.clone()
++			.acquire_many_owned(WORKERS as u32)
++			.await
++			.context("observation validation drain unavailable")?;
++		Ok(())
++	}
++}
++
++#[cfg(test)]
++#[path = "ssh_observation_validation_tests.rs"]
++mod tests;
+diff --git a/source-a26-r01/src/mcp/runtime/ssh_observation_validation_tests.rs b/src/mcp/runtime/ssh_observation_validation_tests.rs
+new file mode 100644
+index 0000000..3b27c74
+--- /dev/null
++++ b/src/mcp/runtime/ssh_observation_validation_tests.rs
+@@ -0,0 +1,287 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++//! Exercise real blocking closures, cancellation, late failure and drain ownership.
++
++use super::*;
++use std::sync::atomic::{AtomicUsize, Ordering};
++use std::time::Duration;
++use tokio::sync::oneshot;
++use tokio::time::timeout;
++
++type HeldCheck = (
++	Box<dyn FnOnce() -> Result<()> + Send + 'static>,
++	oneshot::Receiver<()>,
++	std::sync::mpsc::Sender<()>,
++);
++
++fn held_check(result: Result<()>) -> HeldCheck {
++	let (entered, receive) = oneshot::channel();
++	let (release, wait) = std::sync::mpsc::channel();
++	let check = move || {
++		let _ = entered.send(());
++		wait.recv_timeout(Duration::from_secs(5))
++			.context("test worker was not released")?;
++		result
++	};
++	(Box::new(check), receive, release)
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn workers_leave_owner_responsive_and_hash_each_call() {
++	let workers = Arc::new(Workers::new());
++	let stop = CancellationToken::new();
++	let (check, entered, release) = held_check(Ok(()));
++	let task_workers = workers.clone();
++	let task_stop = stop.clone();
++	let task = tokio::spawn(async move {
++		task_workers
++			.run(&task_stop, Instant::now() + Duration::from_secs(4), check)
++			.await
++	});
++	timeout(Duration::from_secs(2), entered)
++		.await
++		.unwrap()
++		.unwrap();
++	// This single-thread executor must still advance its own timer while a
++	// real blocking validation closure waits on a separate OS thread.
++	timeout(
++		Duration::from_millis(500),
++		tokio::time::sleep(Duration::from_millis(10)),
++	)
++	.await
++	.unwrap();
++	assert!(!task.is_finished());
++	release.send(()).unwrap();
++	task.await.unwrap().unwrap();
++	let count = Arc::new(AtomicUsize::new(0));
++	for expected in 1..=8 {
++		let checked = count.clone();
++		workers
++			.run(&stop, Instant::now() + Duration::from_secs(2), move || {
++				checked.fetch_add(1, Ordering::SeqCst);
++				Ok(())
++			})
++			.await
++			.unwrap();
++		assert_eq!(count.load(Ordering::SeqCst), expected);
++	}
++	assert!(!stop.is_cancelled());
++	assert_eq!(workers.permits.available_permits(), WORKERS);
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn dropped_callers_keep_worker_capacity_and_shutdown_waits() {
++	let workers = Arc::new(Workers::new());
++	let stop = CancellationToken::new();
++	let mut releases = Vec::new();
++	for _ in 0..WORKERS {
++		let (check, entered, release) = held_check(Ok(()));
++		let task_workers = workers.clone();
++		let task_stop = stop.clone();
++		let task = tokio::spawn(async move {
++			task_workers
++				.run(&task_stop, Instant::now() + Duration::from_secs(4), check)
++				.await
++		});
++		timeout(Duration::from_secs(2), entered)
++			.await
++			.unwrap()
++			.unwrap();
++		task.abort();
++		assert!(task.await.unwrap_err().is_cancelled());
++		releases.push(release);
++	}
++	assert_eq!(workers.permits.available_permits(), 0);
++	let called = Arc::new(AtomicUsize::new(0));
++	let observed = called.clone();
++	assert!(workers
++		.run(
++			&stop,
++			Instant::now() + Duration::from_millis(25),
++			move || {
++				observed.fetch_add(1, Ordering::SeqCst);
++				Ok(())
++			}
++		)
++		.await
++		.is_err());
++	assert_eq!(called.load(Ordering::SeqCst), 0);
++	assert_eq!(workers.permits.available_permits(), 0);
++	stop.cancel();
++	assert!(timeout(Duration::from_millis(25), workers.drain())
++		.await
++		.is_err());
++	for release in releases {
++		release.send(()).unwrap();
++	}
++	timeout(Duration::from_secs(2), workers.drain())
++		.await
++		.unwrap()
++		.unwrap();
++	assert_eq!(workers.permits.available_permits(), WORKERS);
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn late_authority_failure_freezes_even_after_caller_cancellation() {
++	let workers = Arc::new(Workers::new());
++	let stop = CancellationToken::new();
++	let (check, entered, release) = held_check(Err(anyhow!("late file identity mismatch")));
++	let task_workers = workers.clone();
++	let task_stop = stop.clone();
++	let task = tokio::spawn(async move {
++		task_workers
++			.run(&task_stop, Instant::now() + Duration::from_secs(4), check)
++			.await
++	});
++	timeout(Duration::from_secs(2), entered)
++		.await
++		.unwrap()
++		.unwrap();
++	task.abort();
++	assert!(task.await.unwrap_err().is_cancelled());
++	assert!(!stop.is_cancelled());
++	assert_eq!(workers.permits.available_permits(), WORKERS - 1);
++	release.send(()).unwrap();
++	timeout(Duration::from_secs(2), stop.cancelled())
++		.await
++		.unwrap();
++	timeout(Duration::from_secs(2), workers.drain())
++		.await
++		.unwrap()
++		.unwrap();
++	assert_eq!(workers.permits.available_permits(), WORKERS);
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn deadline_discards_late_success_but_does_not_release_running_worker() {
++	let workers = Arc::new(Workers::new());
++	let stop = CancellationToken::new();
++	let (check, entered, release) = held_check(Ok(()));
++	let task_workers = workers.clone();
++	let task_stop = stop.clone();
++	let task = tokio::spawn(async move {
++		task_workers
++			.run(
++				&task_stop,
++				Instant::now() + Duration::from_millis(500),
++				check,
++			)
++			.await
++	});
++	timeout(Duration::from_secs(2), entered)
++		.await
++		.unwrap()
++		.unwrap();
++	assert!(timeout(Duration::from_secs(2), task)
++		.await
++		.unwrap()
++		.unwrap()
++		.is_err());
++	assert!(stop.is_cancelled());
++	assert_eq!(workers.permits.available_permits(), WORKERS - 1);
++	assert!(timeout(Duration::from_millis(25), workers.drain())
++		.await
++		.is_err());
++	release.send(()).unwrap();
++	timeout(Duration::from_secs(2), workers.drain())
++		.await
++		.unwrap()
++		.unwrap();
++	assert_eq!(workers.permits.available_permits(), WORKERS);
++}
++
++#[tokio::test(flavor = "current_thread")]
++async fn worker_panic_freezes_before_capacity_is_reused() {
++	let workers = Workers::new();
++	let stop = CancellationToken::new();
++	let error = workers
++		.run(&stop, Instant::now() + Duration::from_secs(2), || {
++			panic!("controlled validation worker panic");
++		})
++		.await;
++	assert!(error.is_err());
++	assert!(stop.is_cancelled());
++	timeout(Duration::from_secs(2), workers.drain())
++		.await
++		.unwrap()
++		.unwrap();
++	let called = Arc::new(AtomicUsize::new(0));
++	let observed = called.clone();
++	assert!(workers
++		.run(&stop, Instant::now() + Duration::from_secs(2), move || {
++			observed.fetch_add(1, Ordering::SeqCst);
++			Ok(())
++		})
++		.await
++		.is_err());
++	assert_eq!(called.load(Ordering::SeqCst), 0);
++}
++
++#[test]
++fn queued_worker_rechecks_original_deadline_and_stop_before_full_read() {
++	let runtime = tokio::runtime::Builder::new_current_thread()
++		.enable_all()
++		.max_blocking_threads(1)
++		.build()
++		.unwrap();
++	runtime.block_on(async {
++		for cause in ["deadline", "stop"] {
++			// Occupy the only blocking thread first, so the validation closure
++			// must remain queued even though it already owns its worker permit.
++			let (entered, receive) = oneshot::channel();
++			let (release, wait) = std::sync::mpsc::channel();
++			let occupant = tokio::task::spawn_blocking(move || {
++				entered.send(()).unwrap();
++				wait.recv_timeout(Duration::from_secs(5)).unwrap();
++			});
++			timeout(Duration::from_secs(2), receive)
++				.await
++				.unwrap()
++				.unwrap();
++			let workers = Arc::new(Workers::new());
++			let stop = CancellationToken::new();
++			let called = Arc::new(AtomicUsize::new(0));
++			let observed = called.clone();
++			let task_workers = workers.clone();
++			let task_stop = stop.clone();
++			let deadline = Instant::now() + Duration::from_millis(500);
++			let task = tokio::spawn(async move {
++				task_workers
++					.run(&task_stop, deadline, move || {
++						observed.fetch_add(1, Ordering::SeqCst);
++						Ok(())
++					})
++					.await
++			});
++			timeout(Duration::from_secs(2), async {
++				while workers.permits.available_permits() == WORKERS {
++					tokio::task::yield_now().await;
++				}
++			})
++			.await
++			.unwrap();
++			// Discard the waiting future before expiry, preventing its timer
++			// from setting stop. The closure itself must notice the old budget.
++			task.abort();
++			assert!(task.await.unwrap_err().is_cancelled());
++			assert_eq!(workers.permits.available_permits(), WORKERS - 1);
++			assert!(!stop.is_cancelled());
++			if cause == "deadline" {
++				tokio::time::sleep_until(deadline).await;
++				assert!(!stop.is_cancelled());
++			} else {
++				stop.cancel();
++			}
++			release.send(()).unwrap();
++			occupant.await.unwrap();
++			timeout(Duration::from_secs(2), workers.drain())
++				.await
++				.unwrap()
++				.unwrap();
++			assert!(stop.is_cancelled());
++			assert_eq!(called.load(Ordering::SeqCst), 0, "executed after {cause}");
++			assert_eq!(workers.permits.available_permits(), WORKERS);
++		}
++	});
++}

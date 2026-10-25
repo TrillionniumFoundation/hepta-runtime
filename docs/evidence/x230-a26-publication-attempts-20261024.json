@@ -1,0 +1,51 @@
+{
+  "schema": "hepta-x230-a26-publication-attempt-history/v1",
+  "scope": "Publication utilities only; these attempts did not rerun runtime workloads, relaunch canary targets, or mutate qualified runtime source.",
+  "publisher_attempts": [
+    {
+      "script": "build_x230_a26_series_evidence.py",
+      "sha256": "8b87f117e212dbca6558cb22e18b47d8d2fb95725dcf72d6f617c93f01e20642",
+      "timeout_seconds": 300,
+      "state": "timed_out",
+      "exit_code": 124,
+      "stdout_bytes": 0,
+      "stderr_bytes": 0,
+      "unique_timeout_cause_established": false
+    },
+    {
+      "script": "build_x230_a26_series_evidence_r02.py",
+      "sha256": "610b7c95dfa46b25e677b29095f0b813c1074aefef4f8a101910b95b2978748f",
+      "timeout_seconds": 600,
+      "state": "succeeded",
+      "exit_code": 0,
+      "stdout_bytes": 174,
+      "stderr_bytes": 0,
+      "change": "Precompute fixed sanitization rules and bound pure short-string memoization; preserve all record traversals, identities, checks and outcomes.",
+      "candidate_validation_passed": true,
+      "artifact_integrity_passed": true,
+      "comparison_valid": false
+    }
+  ],
+  "source_manifest_attempts": [
+    {
+      "script": "build_x230_a26_source_publication_manifest.py",
+      "sha256": "4280aeca3fd022c0eb9fc406ea0f339fea16772d0c822665f97eecba0592b71c",
+      "exit_code": 1,
+      "manifest_written": false,
+      "stderr": "{\"manifest_written\": false, \"error_type\": \"ValueError\", \"error_errno\": null, \"reason\": \"A20 qualification source path differs\", \"source_adopted\": false}\n",
+      "cause": "The original utility assumed source-a20-r01. The pinned successful A20 qualification records source-a20."
+    },
+    {
+      "script": "build_x230_a26_source_publication_manifest_r02.py",
+      "sha256": "4abb36d3e58588b5373d5b9a5d5c438c853effc95fb37ba25699acf14c38a099",
+      "manifest_written": true,
+      "manifest_sha256": "337e6a9f01b678436fe2c634585086a230bff0dbd979c7fd0895eb57377a49cd",
+      "change": "Use the exact A20 source directory recorded by its pinned qualification; all file-set, hash, identity and stability checks remain."
+    }
+  ],
+  "hash_probe_attempts_reference": "x230-a26-hash-probe-r02/summary.json",
+  "hash_probe_archive_verification_passed": true,
+  "measured_hash_probe_executions": 1,
+  "qualified_runtime_workload_reexecutions_for_publication": 0,
+  "production_runtime_changed": false
+}

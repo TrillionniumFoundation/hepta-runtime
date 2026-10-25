@@ -1,0 +1,178 @@
+{
+  "actual_sustained_fault_recovery_established_by_this_receipt": false,
+  "adopted": false,
+  "all_150_tested_files_locally_rehashed": true,
+  "all_five_stage_log_hashes_locally_verified": true,
+  "baseline": "A23",
+  "binary_and_test_binary_bound_to_own_compiler_source": true,
+  "binary_sha256": "1499e6b1a5588dbb344f4668b241a66b870b232a08a03340efc65b8c30705141",
+  "both_production_files_unchanged_by_formatting": true,
+  "candidate": "A24",
+  "change_scope": {
+    "all_non_marker_authority_errors_still_stop_pool": true,
+    "budgets_unchanged": {
+      "admitted": 16,
+      "global_sessions": 8,
+      "host_sessions": 2,
+      "masters": 8,
+      "queue": 8
+    },
+    "captured_output_not_accepted": true,
+    "classification": "Only profile::AgentLookupDeadline, constructed by the exact outer agent_snapshot timeout_at; not matching error text, generic Elapsed or io::TimedOut.",
+    "direct_request_check_call_sites": 3,
+    "initialization_initial_master_and_renewal_checks_remain_fatal": true,
+    "later_requests_require_their_own_complete_authority_checks": true,
+    "no_automatic_retry_or_deadline_extension": true,
+    "no_cached_identity_substitution": true,
+    "only_request_stages": [
+      "initial admission",
+      "prelease",
+      "postresponse"
+    ],
+    "original_validation_body_unchanged": true,
+    "post_spawn_proof_and_cleanup_section_sha256": "3b0292cbe76d4eac5fdf0ccc772c2cfa98e836cd0315a8dbaede22a8e9f94231",
+    "post_spawn_proof_and_cleanup_section_unchanged": true,
+    "preexisting_global_stop_never_cleared": true,
+    "this_marker_alone_does_not_newly_cancel_global_stop_in_request_scope": true,
+    "timed_out_request_still_returns_error": true
+  },
+  "finished_utc": "2026-10-24T03:18:52.690242+00:00",
+  "formatting_changed_only_test_files": [
+    "src/mcp/runtime/ssh_observation_agent_timeout_tests.rs",
+    "src/mcp/runtime/ssh_observation_pool_tests.rs"
+  ],
+  "isolated_scenario_coverage": {
+    "actual_classification_negative_test_passed": true,
+    "actual_parent_test_passed": true,
+    "classification_negative_test": "unrelated_timeouts_and_identical_error_text_are_not_lookup_deadlines",
+    "evidence_method": "The exact tested parent loop starts the ignored isolated_helper separately for each listed scenario, applies a 45-second watchdog, and asserts each child exit succeeds. The actual test log records that parent test passing.",
+    "new_scenario_count": 15,
+    "new_scenarios": [
+      "agent-startup-unbound-timeout",
+      "agent-startup-bound-timeout",
+      "agent-startup-final-timeout",
+      "agent-initial-timeout",
+      "agent-prelease-timeout",
+      "agent-postresponse-timeout",
+      "agent-master-timeout",
+      "agent-renewal-timeout",
+      "agent-renewal-cleanup-error",
+      "agent-timeout-then-key-change",
+      "agent-timeout-then-frame-error",
+      "agent-timeout-then-io-error",
+      "agent-timeout-then-socket-change",
+      "agent-timeout-then-file-change",
+      "agent-timeout-then-environment-change"
+    ],
+    "parent_test": "isolated_actual_ssh_guard_cancellation_and_ownership_fixtures",
+    "postresponse_fixture_scope": "Controlled dispatch with real owned, captured and reaped ssh -G output; not authenticated multi-host mux fault injection.",
+    "previous_scenarios_retained": 30,
+    "scenario_count_is_not_extra_top_level_test_count": true,
+    "separate_per_scenario_result_lines_present": false,
+    "total_scenarios_in_passing_wrapper": 45
+  },
+  "notes": [
+    "Qualification proves this source build and controlled test results. A24 remains unadopted pending separate actual capacity, fairness, sustained observation and recovery evidence.",
+    "Top-level passes are 1094 runtime plus 18 ownerctl plus 8 jobctl, totaling 1120; retain 21 ignored tests. Neither the two nested one-test summaries nor 15 scenarios are added again.",
+    "The input source map differs after cargo fmt in two test files. This receipt and patch bind actual tested/after source, not the earlier input map.",
+    "A typed lookup timer expiry supplies no credential result and does not identify an agent-service, network, CPU or scheduler root cause. The current request still fails and any captured output is discarded.",
+    "Only the three direct request checks narrow the newly-triggered global-stop policy. Initialization and master generation lifecycle checks remain fatal, including renewal.",
+    "The controlled postresponse fixture is not evidence that a real authenticated multi-host session recovered from the earlier A23 sustained deadline.",
+    "The post-spawn identity/proof and cleanup block is unchanged; this change does not claim to fix the earlier fairness identity refusal or abrupt socket-residue cleanup."
+  ],
+  "performance_comparison_emitted": false,
+  "production_services_changed": false,
+  "qualification_attempt": "r02",
+  "qualified": true,
+  "schema": "hepta-x230-qualification-summary/v1",
+  "source_after_map_sha256": "fafba08d9c3fc0c269203c679c3e8a111b457c574fa7dd437425a9871d243dff",
+  "source_file_count": 150,
+  "source_input_equals_source_tested": false,
+  "source_input_map_sha256": "f0f7c7bc2b71baa0bdbc1aa12c74dd0b1d6bc9d38991c9098372471ee50c9cb3",
+  "source_map_hash_encoding": "SHA-256 of sorted JSON with comma/colon separators; UTF-8, no terminal newline",
+  "source_map_sha256": "fafba08d9c3fc0c269203c679c3e8a111b457c574fa7dd437425a9871d243dff",
+  "source_patch": {
+    "added_files": [
+      "src/mcp/runtime/ssh_observation_agent_timeout_tests.rs"
+    ],
+    "base_qualification_report_sha256": "f0758bbab9cd767b4601dec9236959a18766673e87e985729a741f8ccbde3584",
+    "base_source_map_sha256": "5cf2e5cf8fca60e845a2c8f997abfc28017085bc809086a3ddb42448569a2b4f",
+    "bytes": 24753,
+    "changed_files": {
+      "src/mcp/runtime/ssh_observation_agent_timeout_tests.rs": {
+        "after_sha256": "0fbea30700ae807b88d24e03be746b2f93b58088f57b401a473a1ffeda401d84",
+        "before_sha256": null
+      },
+      "src/mcp/runtime/ssh_observation_pool.rs": {
+        "after_sha256": "01d194fc82141c6dff30a031659b9f094219074ec701b8e4a37c3e3226146677",
+        "before_sha256": "db5825f614b8470f680c18c55bbe84f82bf40f4c0aec4ad99583a6d93b2c14b6"
+      },
+      "src/mcp/runtime/ssh_observation_pool_tests.rs": {
+        "after_sha256": "4b32cd9e6e68c7777e1c89c7886e834b7a2586ffaeb1d20fdb452fb8959d2462",
+        "before_sha256": "81631273368af9ae471369d270ce653e68dab593de26caae0bb13bd5392022fb"
+      },
+      "src/mcp/runtime/ssh_observation_profile.rs": {
+        "after_sha256": "04eddcd829bc62b363a287e27d9f4cba3e717c552a7951fe15eba728aedefd8d",
+        "before_sha256": "33bbad82853c3fee866131dacdba5d9ecb6fc931d14f98654ec7aeebe4c891da"
+      }
+    },
+    "modified_existing_files": [
+      "src/mcp/runtime/ssh_observation_pool.rs",
+      "src/mcp/runtime/ssh_observation_pool_tests.rs",
+      "src/mcp/runtime/ssh_observation_profile.rs"
+    ],
+    "path": "docs/experiments/x230-a24-agent-timeout-isolation.patch",
+    "reapplied_exact_file_set_and_all_150_hashes_match": true,
+    "reapplied_to_exact_qualified_A23": true,
+    "sha256": "cd01dfab423370eaccb0a0b515a5795298bcdd0167b382e08040ccb218c9b2e7",
+    "target_source_map_sha256": "fafba08d9c3fc0c269203c679c3e8a111b457c574fa7dd437425a9871d243dff",
+    "zero_fuzz_and_no_offsets": true
+  },
+  "source_report_bytes": 52364,
+  "source_report_sha256": "4034c012dafca4ca289252b8fa47beac93130bcf0525c48022b7f1e4634c4877",
+  "source_tested_equals_source_after": true,
+  "source_tested_map_sha256": "fafba08d9c3fc0c269203c679c3e8a111b457c574fa7dd437425a9871d243dff",
+  "stages": [
+    {
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "format",
+      "returncode": 0,
+      "seconds": 2.932928476948291
+    },
+    {
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "fmt-check",
+      "returncode": 0,
+      "seconds": 2.840720928972587
+    },
+    {
+      "log_sha256": "e234be31ec9ced285e00a329b3aa6d20a716388cca4a07918420959f7e5f38e4",
+      "name": "clippy",
+      "returncode": 0,
+      "seconds": 46.019500605994835
+    },
+    {
+      "log_sha256": "5a2e56972c1455baf3d5a47a0de64f00be7a0970d55c5c3d70b46fdb2b6ea34d",
+      "name": "test",
+      "returncode": 0,
+      "seconds": 505.4526416971348
+    },
+    {
+      "log_sha256": "15be4fd047524227fe6c5aaa28b1b43d13c96f83901c0c002505f914988fd3f5",
+      "name": "release",
+      "returncode": 0,
+      "seconds": 374.12977645592764
+    }
+  ],
+  "started_utc": "2026-10-24T03:03:17.693998+00:00",
+  "test_binary_sha256": "427fc6ee6bffb5c2503c1bf5c9deedafa333e0785ea40e0924088741bee105bf",
+  "test_counts": {
+    "jobctl_passed": 8,
+    "nested_one_test_result_lines_not_added": 2,
+    "new_top_level_rust_tests": 1,
+    "ownerctl_passed": 18,
+    "runtime_ignored_existing": 21,
+    "runtime_passed": 1094,
+    "top_level_passed_total": 1120
+  }
+}

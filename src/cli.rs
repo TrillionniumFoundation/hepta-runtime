@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//! Runtime command-line transport, policy and optional durability settings.
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -52,5 +53,25 @@ pub enum Commands {
 		/// File containing the X-Hepta-Runtime-Token value for HTTP MCP requests.
 		#[arg(long, value_name = "FILE")]
 		auth_token_file: Option<PathBuf>,
+
+		/// Prepare verified private audit/result stores before accepting requests.
+		#[arg(long, requires = "runtime_config")]
+		runtime_prewarm: bool,
+
+		/// Batch at most 32 already queued audit operations, without a gather timer.
+		#[arg(long, requires = "runtime_config")]
+		runtime_audit_group_commit: bool,
+
+		/// Explicit private profile authorizing bounded cached SSH authentication for job observations.
+		#[arg(long, value_name = "FILE", requires = "runtime_config")]
+		runtime_observation_pool_profile: Option<PathBuf>,
+
+		/// Also use the explicitly configured observation pool for file_info and binary_read.
+		#[arg(long, requires_all = ["runtime_config", "runtime_observation_pool_profile"])]
+		runtime_file_observation_pool: bool,
 	},
 }
+
+#[cfg(test)]
+#[path = "cli_tests.rs"]
+mod tests;

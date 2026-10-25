@@ -821,6 +821,7 @@ struct DirectoryStamp {
 	inode: u64,
 	modified: (i64, i64),
 	changed: (i64, i64),
+	namespace: super::namespace_version::Version,
 }
 #[cfg(unix)]
 #[derive(Clone, PartialEq, Eq)]
@@ -839,6 +840,7 @@ fn namespace_stamp(directory: &File) -> Result<NamespaceStamp> {
 			inode: metadata.ino(),
 			modified: (metadata.mtime(), metadata.mtime_nsec()),
 			changed: (metadata.ctime(), metadata.ctime_nsec()),
+			namespace: super::namespace_version::version(directory)?,
 		})
 	}
 	let occupied = open_at(

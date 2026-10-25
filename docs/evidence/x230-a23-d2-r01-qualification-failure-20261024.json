@@ -1,0 +1,51 @@
+{
+  "adopted": false,
+  "candidate": "A23-D2-r01",
+  "clippy_error_excerpt": "error: used `unwrap_err()` on `Err` value\n   --> src/mcp/runtime/ssh_observation_diagnostic_tests.rs:372:13\n    |\n372 |     assert_eq!(original.unwrap_err().to_string(), message);\n    |                ^^^^^^^^^^^^^^^^^^^^^\n    |\nhelp: remove the `Err` and `unwrap_err()`\n   --> src/mcp/runtime/ssh_observation_diagnostic_tests.rs:365:37\n    |\n365 |     let original: anyhow::Result<()> = Err(std::io::Error::from_raw_os_error(libc::EPERM).into());\n    |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_literal_unwrap\n    = note: `-D clippy::unnecessary-literal-unwrap` implied by `-D warnings`\n    = help: to override `-D warnings` add `#[allow(clippy::unnecessary_literal_unwrap)]`\n\nerror: could not compile `hepta-runtime` (bin \"hepta-runtime\" test) due to 1 previous error\n",
+  "clippy_log_bytes": 8119,
+  "clippy_log_sha256": "3b9a28518f4ec493ea688a22450ff4ca6d026b9efcbed60931c478343746aeb5",
+  "correction": "r02 changes only that diagnostic test assertion to compare the original Result mapped to its error text with Err(message); it preserves the error variant and message without lint suppression.",
+  "diagnostic_only": true,
+  "error": "clippy failed with exit 101",
+  "failed_stage": "clippy",
+  "finding": "Strict Clippy rejected unnecessary_literal_unwrap in one diagnostic cleanup-error test assertion.",
+  "finished_utc": "2026-10-24T02:25:25.952024+00:00",
+  "no_qualified_binary_produced": true,
+  "performance_comparison_emitted": false,
+  "production_services_changed": false,
+  "qualified": false,
+  "r02_is_separate_qualification_attempt": true,
+  "r02_non_test_runtime_sources_changed": false,
+  "r02_only_changed_file": "src/mcp/runtime/ssh_observation_diagnostic_tests.rs",
+  "release_stage_reached": false,
+  "schema": "hepta-x230-qualification-attempt/v1",
+  "source_after_recorded": false,
+  "source_file_count": 151,
+  "source_input_map_sha256": "d537664b7ce4a55d62f71412ccb86b09107186f4c89d70b7e5f765f573376657",
+  "source_map_hash_encoding": "SHA-256 of sorted JSON with comma/colon separators; UTF-8, no terminal newline",
+  "source_report_bytes": 34291,
+  "source_report_sha256": "2eb7aa7ebcd535f82ed85be990c1daac4890ad7d03a7ccec65a86522f7cdb639",
+  "source_tested_map_sha256": "9c13e4552fac602714762c1730b3071f566bb1429c5004c8a1c1677b001fed2b",
+  "stages": [
+    {
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "format",
+      "returncode": 0,
+      "seconds": 2.070208946010098
+    },
+    {
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "fmt-check",
+      "returncode": 0,
+      "seconds": 1.6689168030861765
+    },
+    {
+      "log_sha256": "3b9a28518f4ec493ea688a22450ff4ca6d026b9efcbed60931c478343746aeb5",
+      "name": "clippy",
+      "returncode": 101,
+      "seconds": 144.43988155690022
+    }
+  ],
+  "started_utc": "2026-10-24T02:22:57.559915+00:00",
+  "test_stage_reached": false
+}

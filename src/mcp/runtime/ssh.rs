@@ -7,6 +7,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::path::{Component, Path};
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
@@ -14,6 +15,337 @@ use tokio::process::Command;
 use super::config::HostConfig;
 
 const MAX_CAPTURE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_OBSERVATION_BYTES: usize = 64 * 1024;
+// Published only after successful startup, before accepting MCP requests.
+// Shutdown never clears intent: a failed/stopped pool must not select direct SSH.
+static FILE_OBSERVATIONS_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+fn validate_observation_bytes(command: &str, input: &[u8]) -> Result<()> {
+	if command
+		.len()
+		.checked_add(input.len())
+		.is_none_or(|bytes| bytes > MAX_OBSERVATION_BYTES)
+	{
+		bail!("observation_pool_payload_unsupported: queued command and stdin exceed64KiB; no fallback");
+	}
+	Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[path = "ssh_observation_pool.rs"]
+mod observation_pool;
+#[cfg(target_os = "linux")]
+pub use observation_pool::PoolGuard as ObservationPoolGuard;
+
+#[cfg(not(target_os = "linux"))]
+pub struct ObservationPoolGuard;
+#[cfg(not(target_os = "linux"))]
+impl ObservationPoolGuard {
+	pub async fn shutdown(self) -> Result<()> {
+		Ok(())
+	}
+}
+
+pub async fn start_observation_pool(
+	profile: Option<&Path>,
+	file_observations: bool,
+) -> Result<Option<ObservationPoolGuard>> {
+	let Some(profile) = profile else {
+		if file_observations {
+			bail!("file observation pooling requires an explicit observation pool profile");
+		}
+		return Ok(None);
+	};
+	#[cfg(target_os = "linux")]
+	{
+		let guard = observation_pool::start(profile).await?;
+		if file_observations {
+			FILE_OBSERVATIONS_REQUESTED.store(true, Ordering::Release);
+		}
+		Ok(Some(guard))
+	}
+	#[cfg(not(target_os = "linux"))]
+	{
+		let _ = profile;
+		bail!("observation SSH pooling requires Linux");
+	}
+}
+
+pub(super) fn file_observation_pool_requested() -> bool {
+	FILE_OBSERVATIONS_REQUESTED.load(Ordering::Acquire)
+}
+
+pub fn freeze_observation_pool() {
+	#[cfg(target_os = "linux")]
+	observation_pool::freeze();
+}
+
+pub(super) fn observation_pool_requested() -> bool {
+	#[cfg(target_os = "linux")]
+	{
+		observation_pool::requested()
+	}
+	#[cfg(not(target_os = "linux"))]
+	{
+		false
+	}
+}
+
+pub(super) enum ObservationScript {
+	Status,
+	Read,
+}
+
+/// Only these existing process observations can enter the new transport.
+/// There is no raw command, executable, address or caller-selected `op`.
+pub(super) enum JobObservation<'a> {
+	PythonStatus {
+		job_id: &'a str,
+		job_dir: &'a str,
+		unit: &'a str,
+		wait_seconds: u64,
+	},
+	PythonRead {
+		job_id: &'a str,
+		job_dir: &'a str,
+		stdout_offset: u64,
+		stderr_offset: u64,
+		limit: u64,
+	},
+	SystemStatus {
+		job_id: &'a str,
+	},
+	SystemRead {
+		job_id: &'a str,
+		stdout_offset: u64,
+		stderr_offset: u64,
+		limit: u64,
+	},
+}
+
+/// File policy has already selected the configured read root. No caller can
+/// choose an operation, script, executable, address, or extra JSON fields here.
+pub(super) enum FileObservation<'a> {
+	Info {
+		root: &'a str,
+		path: &'a str,
+	},
+	Read {
+		root: &'a str,
+		path: &'a str,
+		offset: Option<u64>,
+		limit: u64,
+		expected_version: Option<&'a str>,
+	},
+}
+
+fn prepare_file_observation(value: FileObservation<'_>) -> Result<(String, Vec<u8>)> {
+	use serde_json::json;
+	let fields: &[&str] = match &value {
+		FileObservation::Info { root, path } => &[root, path],
+		FileObservation::Read {
+			root,
+			path,
+			expected_version,
+			..
+		} => &[root, path, expected_version.unwrap_or("")],
+	};
+	// Check borrowed originals before JSON clones or escaping can expand them.
+	if fields
+		.iter()
+		.try_fold(0usize, |total, field| total.checked_add(field.len()))
+		.is_none_or(|bytes| bytes > MAX_OBSERVATION_BYTES)
+	{
+		bail!(
+			"observation_pool_payload_unsupported: original file fields exceed64KiB; no fallback"
+		);
+	}
+	let input = match value {
+		FileObservation::Info { root, path } => json!({"op":"info","root":root,"path":path}),
+		FileObservation::Read {
+			root,
+			path,
+			offset,
+			limit,
+			expected_version,
+		} => {
+			json!({"op":"read","root":root,"path":path,"offset":offset,"limit":limit,"expected_version":expected_version})
+		}
+	};
+	let command = python_json_command("python3", super::binary::observation_source())?;
+	let bytes = serde_json::to_vec(&input)?;
+	validate_observation_bytes(&command, &bytes)?;
+	Ok((command, bytes))
+}
+
+pub(super) async fn run_file_observation(
+	host_name: &str,
+	value: FileObservation<'_>,
+) -> Result<serde_json::Value> {
+	if !file_observation_pool_requested() {
+		bail!("file observation pool was not requested");
+	}
+	let host = super::config::runtime_config()?.host(host_name)?;
+	let (command, bytes) = prepare_file_observation(value)?;
+	// This single capture establishes the original absolute budget before queueing.
+	let output = capture_observation(host_name, command, bytes, Duration::from_secs(30)).await?;
+	parse_file_observation(host, &output)
+}
+
+fn parse_file_observation(
+	host: &HostConfig,
+	output: &CapturedObservation,
+) -> Result<serde_json::Value> {
+	// Borrow the wrapper through status and JSON parsing. Global/admission leases
+	// remain held here; the host lease already ended at the original SSH reap.
+	if !output.status.success() {
+		bail!(
+			"remote helper on {} failed with {}\nstdout:\n{}\nstderr:\n{}",
+			host.ssh_target,
+			output.status.code().unwrap_or(-1),
+			String::from_utf8_lossy(&output.stdout).trim(),
+			String::from_utf8_lossy(&output.stderr).trim()
+		);
+	}
+	serde_json::from_slice(&output.stdout).map_err(|error| {
+		anyhow!(
+			"remote helper on {} returned invalid JSON: {error}; output={}",
+			host.ssh_target,
+			String::from_utf8_lossy(&output.stdout)
+		)
+	})
+}
+
+fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Duration, bool)> {
+	use serde_json::json;
+	let fields: &[&str] = match &value {
+		JobObservation::PythonStatus {
+			job_id,
+			job_dir,
+			unit,
+			..
+		} => &[job_id, job_dir, unit],
+		JobObservation::PythonRead {
+			job_id, job_dir, ..
+		} => &[job_id, job_dir],
+		JobObservation::SystemStatus { job_id } | JobObservation::SystemRead { job_id, .. } => {
+			&[job_id]
+		}
+	};
+	// Reject before json! clones or expands an oversized original string.
+	if fields
+		.iter()
+		.try_fold(0usize, |total, field| total.checked_add(field.len()))
+		.is_none_or(|bytes| bytes > MAX_OBSERVATION_BYTES)
+	{
+		bail!("observation_pool_payload_unsupported: original observation fields exceed64KiB; no fallback");
+	}
+	let (script, input, timeout, system) = match value {
+		JobObservation::PythonStatus {
+			job_id,
+			job_dir,
+			unit,
+			wait_seconds,
+		} => (
+			Some(ObservationScript::Status),
+			json!({"job_id":job_id,"job_dir":job_dir,"unit":unit,"wait_seconds":wait_seconds.min(30)}),
+			Duration::from_secs(wait_seconds.min(30) + 10),
+			false,
+		),
+		JobObservation::PythonRead {
+			job_id,
+			job_dir,
+			stdout_offset,
+			stderr_offset,
+			limit,
+		} => (
+			Some(ObservationScript::Read),
+			json!({"job_id":job_id,"job_dir":job_dir,"stdout_offset":stdout_offset,"stderr_offset":stderr_offset,"limit":limit}),
+			Duration::from_secs(15),
+			false,
+		),
+		JobObservation::SystemStatus { job_id } => (
+			None,
+			json!({"op":"status","job_id":job_id}),
+			Duration::from_secs(20),
+			true,
+		),
+		JobObservation::SystemRead {
+			job_id,
+			stdout_offset,
+			stderr_offset,
+			limit,
+		} => (
+			None,
+			json!({"op":"read","job_id":job_id,"stdout_offset":stdout_offset,"stderr_offset":stderr_offset,"limit":limit}),
+			Duration::from_secs(20),
+			true,
+		),
+	};
+	let command = match script {
+		Some(script) => python_json_command("python3", &super::jobs::observation_script(script)?)?,
+		None => "sudo -n /usr/local/libexec/hepta-runtime-jobctl".to_owned(),
+	};
+	let mut bytes = serde_json::to_vec(&input)?;
+	if system {
+		bytes.push(b'\n');
+	}
+	validate_observation_bytes(&command, &bytes)?;
+	Ok((command, bytes, timeout, system))
+}
+
+pub(super) async fn run_job_observation(
+	host_name: &str,
+	value: JobObservation<'_>,
+) -> Result<serde_json::Value> {
+	let host = super::config::runtime_config()?.host(host_name)?;
+	let (command, bytes, duration, system) = prepare_observation(value)?;
+	let output = capture_observation(host_name, command, bytes, duration).await?;
+	if !output.status.success() {
+		if system {
+			bail!(
+				"job capability failed: {}",
+				String::from_utf8_lossy(&output.stderr)
+			);
+		}
+		bail!(
+			"remote helper on {} failed with {}\nstdout:\n{}\nstderr:\n{}",
+			host.ssh_target,
+			output.status.code().unwrap_or(-1),
+			String::from_utf8_lossy(&output.stdout).trim(),
+			String::from_utf8_lossy(&output.stderr).trim()
+		);
+	}
+	serde_json::from_slice(&output.stdout).map_err(|error| {
+		anyhow!(
+			"remote helper on {} returned invalid JSON: {error}; output={}",
+			host.ssh_target,
+			String::from_utf8_lossy(&output.stdout)
+		)
+	})
+}
+
+async fn capture_observation(
+	host: &str,
+	command: String,
+	bytes: Vec<u8>,
+	duration: Duration,
+) -> Result<CapturedObservation> {
+	#[cfg(target_os = "linux")]
+	{
+		observation_pool::capture(host, command, bytes, duration).await
+	}
+	#[cfg(not(target_os = "linux"))]
+	{
+		let _ = (host, command, bytes, duration);
+		bail!("observation SSH pooling requires Linux");
+	}
+}
+
+#[cfg(target_os = "linux")]
+type CapturedObservation = observation_pool::Captured;
+#[cfg(not(target_os = "linux"))]
+type CapturedObservation = std::process::Output;
 
 pub fn shell_quote(value: &str) -> String {
 	if value.is_empty() {
@@ -266,3 +598,11 @@ pub async fn run_jobctl(host: &HostConfig, input: &serde_json::Value) -> Result<
 #[cfg(test)]
 #[path = "ssh_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ssh_observation_transport_tests.rs"]
+mod observation_tests;
+
+#[cfg(test)]
+#[path = "ssh_file_observation_tests.rs"]
+mod file_observation_tests;

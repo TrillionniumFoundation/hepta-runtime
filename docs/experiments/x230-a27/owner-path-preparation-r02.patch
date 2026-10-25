@@ -1,0 +1,155 @@
+--- r01/prepare_owner_probe.py
++++ r02/prepare_owner_probe.py
+@@ -32,7 +32,8 @@
+ # Exact A26 source receipts; no dependency version re-resolution.
+ DIRECT = ("anyhow", "libc", "regex", "ring", "serde", "serde_json", "tokio", "tokio_util")
+ BUNDLE_FILES = ("PLAN.json", "PLAN.md", "owner_probe.rs", "owner_module.rs.in", "path_semantics.rs",
+-                "prepare_owner_probe.py", "run_owner_probe.py", "summarize_owner_probe.py", "test_probe_tools.py")
++                "prepare_owner_probe.py", "run_owner_probe.py", "summarize_owner_probe.py", "test_probe_tools.py",
++                "FAILED_PREPARE_R01.md")
+ 
+ 
+ def need(value, message):
+@@ -180,13 +181,34 @@
+     return records
+ 
+ 
+-def select_dependency(records, name, locked):
+-    found = [row for row in records if row.get("reason") == "compiler-artifact"
+-             and row.get("target", {}).get("name") == name and row.get("profile", {}).get("test") is False
+-             and "lib" in row.get("target", {}).get("kind", [])
+-             and any(Path(value).suffix == ".rlib" for value in row.get("filenames", []))]
+-    need(len(found) == 1, "unique qualified release compiler-artifact required: " + name)
+-    row = found[0]
++def release_artifact(records, name, runtime):
++    runtime_profile = runtime.get("profile")
++    need(isinstance(runtime_profile, dict) and runtime_profile.get("test") is False
++         and runtime_profile.get("opt_level") == "3", "qualified runtime release profile required")
++    dependency_dir = Path(runtime["executable"]).parent / "deps"
++    decisions, found = [], []
++    for row in records:
++        if row.get("reason") != "compiler-artifact" or row.get("target", {}).get("name") != name:
++            continue
++        reasons = []
++        if row.get("profile") != runtime_profile:
++            reasons.append("profile_differs_from_qualified_runtime")
++        if "lib" not in row.get("target", {}).get("kind", []):
++            reasons.append("not_library_target")
++        artifacts = [Path(value) for value in row.get("filenames", []) if Path(value).suffix == ".rlib"]
++        if not (len(artifacts) == 1 and artifacts[0].is_absolute() and artifacts[0].parent == dependency_dir):
++            reasons.append("not_single_rlib_in_runtime_release_deps")
++        decisions.append({"compiler_artifact": row, "selected": not reasons, "excluded_reasons": reasons})
++        if not reasons:
++            found.append(row)
++    need(len(found) == 1, "unique compiler-artifact matching qualified runtime profile/deps required: " + name)
++    return found[0], {"rule": "complete profile equals qualified runtime and one rlib in its release deps directory",
++                      "runtime_profile": runtime_profile, "runtime_dependency_dir": str(dependency_dir),
++                      "considered_artifacts": decisions}
++
++
++def select_dependency(records, name, locked, runtime):
++    row, selection = release_artifact(records, name, runtime)
+     artifacts = [Path(value) for value in row["filenames"] if Path(value).suffix == ".rlib"]
+     need(len(artifacts) == 1 and artifacts[0].is_absolute(), "unique absolute rlib required")
+     manifest, raw = receipt(Path(row["manifest_path"]), True)
+@@ -200,7 +222,8 @@
+                and item["version"] == version and item.get("source") == source]
+     need(len(matches) == 1, "dependency does not match qualified lockfile")
+     return {"name": name, "package_id": row["package_id"], "version": version, "manifest": manifest,
+-            "compiler_artifact": row, "lock_package": matches[0], "rlib": receipt(artifacts[0])}
++            "compiler_artifact": row, "lock_package": matches[0], "rlib": receipt(artifacts[0]),
++            "selection": selection}
+ 
+ 
+ def run_logged(command, output, prefix, env=None):
+@@ -269,7 +292,10 @@
+              and Path(runtime[0]["target"]["src_path"]) == source / "src/main.rs", "qualified runtime source/artifact mismatch")
+         runtime_artifact = receipt(Path(runtime[0]["executable"]))
+         need(runtime_artifact["sha256"] == runtime_binary["sha256"], "original qualified artifact changed")
+-        deps = {name: select_dependency(records, name, tomllib.loads((source / "Cargo.lock").read_text())) for name in DIRECT}
++        need(runtime[0]["profile"]["opt_level"] == str(cargo["profile"]["release"]["opt-level"]),
++             "qualified runtime artifact and Cargo release optimization differ")
++        deps = {name: select_dependency(records, name, tomllib.loads((source / "Cargo.lock").read_text()), runtime[0])
++                for name in DIRECT}
+         dependency_dir = Path(runtime[0]["executable"]).parent / "deps"
+         need(all(Path(value["rlib"]["path"]).parent == dependency_dir for value in deps.values()),
+              "direct dependencies differ from qualified artifact directory")
+--- r01/test_probe_tools.py
++++ r02/test_probe_tools.py
+@@ -11,7 +11,7 @@
+ import tempfile
+ import unittest
+ 
+-from prepare_owner_probe import HERE, PINNED, candidate_profile, generate
++from prepare_owner_probe import HERE, PINNED, candidate_profile, generate, release_artifact, select_dependency
+ from summarize_owner_probe import summarize
+ 
+ 
+@@ -140,5 +140,67 @@
+                 self.assertEqual((Path(directory) / "A" / name).read_bytes(), (Path(directory) / "B" / name).read_bytes())
+ 
+ 
++class DependencySelection(unittest.TestCase):
++    PROFILE = {"debug_assertions": False, "debuginfo": 0, "opt_level": "3", "overflow_checks": False, "test": False}
++
++    def records(self, directory):
++        runtime = {"executable": str(directory / "release/hepta-runtime"), "profile": dict(self.PROFILE)}
++        target = {"reason": "compiler-artifact", "target": {"name": "serde_json", "kind": ["lib"]},
++                  "profile": dict(self.PROFILE), "features": ["alloc", "default", "std"],
++                  "filenames": [str(directory / "release/deps/libserde_json-target.rlib")]}
++        host = copy.deepcopy(target)
++        host["profile"]["opt_level"] = "0"
++        host["features"] = ["default", "std"]
++        host["filenames"] = [str(directory / "release/deps/libserde_json-host.rlib")]
++        return runtime, host, target
++
++    def test_host_target_selection_is_profile_based_and_order_independent(self):
++        runtime, host, target = self.records(Path("/fixture"))
++        for records in ([host, target], [target, host]):
++            chosen, evidence = release_artifact(records, "serde_json", runtime)
++            self.assertEqual(chosen, target)
++            self.assertEqual(len(evidence["considered_artifacts"]), 2)
++            rejected = [row for row in evidence["considered_artifacts"] if not row["selected"]]
++            self.assertEqual(rejected[0]["compiler_artifact"], host)
++            self.assertEqual(rejected[0]["excluded_reasons"], ["profile_differs_from_qualified_runtime"])
++
++    def test_no_match_duplicate_or_nonmatching_full_profile_never_falls_back(self):
++        runtime, host, target = self.records(Path("/fixture"))
++        duplicate = copy.deepcopy(target)
++        duplicate["filenames"] = ["/fixture/release/deps/libserde_json-other.rlib"]
++        for rows in ([host], [target, duplicate]):
++            with self.assertRaises(ValueError):
++                release_artifact(rows, "serde_json", runtime)
++        for changed in ("profile", "path"):
++            different = copy.deepcopy(target)
++            if changed == "profile":
++                different["profile"]["overflow_checks"] = True
++            else:
++                different["filenames"] = ["/other/release/deps/libserde_json-target.rlib"]
++            with self.assertRaises(ValueError):
++                release_artifact([different], "serde_json", runtime)
++
++    def test_selected_dependency_still_requires_exact_manifest_lock_and_hash(self):
++        with tempfile.TemporaryDirectory(prefix="a27-selector-", dir=HERE) as temporary:
++            directory = Path(temporary)
++            runtime, host, target = self.records(directory)
++            artifact = Path(target["filenames"][0])
++            artifact.parent.mkdir(parents=True)
++            artifact.write_bytes(b"synthetic metadata fixture, not a Rust executable")
++            manifest = directory / "Cargo.toml"
++            manifest.write_text('[package]\nname = "serde_json"\nversion = "1.0.151"\n')
++            source = "registry+https://github.com/rust-lang/crates.io-index"
++            for row in (host, target):
++                row["manifest_path"] = str(manifest)
++                row["package_id"] = source + "#serde_json@1.0.151"
++            locked = {"package": [{"name": "serde_json", "version": "1.0.151", "source": source}]}
++            selected = select_dependency([host, target], "serde_json", locked, runtime)
++            self.assertEqual(selected["compiler_artifact"], target)
++            self.assertEqual(selected["rlib"]["sha256"], hashlib.sha256(artifact.read_bytes()).hexdigest())
++            locked["package"][0]["version"] = "1.0.150"
++            with self.assertRaises(ValueError):
++                select_dependency([host, target], "serde_json", locked, runtime)
++
++
+ if __name__ == "__main__":
+     unittest.main()

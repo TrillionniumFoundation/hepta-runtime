@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//! Runtime startup, private-store preparation, transports and graceful shutdown.
 
 use anyhow::Result;
 use clap::Parser;
@@ -34,12 +35,22 @@ async fn main() -> Result<()> {
 			ssh_timeout,
 			runtime_config,
 			auth_token_file,
+			runtime_prewarm,
+			runtime_audit_group_commit,
+			runtime_observation_pool_profile,
+			runtime_file_observation_pool,
 		} => {
 			let runtime_enabled = runtime_config.is_some();
 			if let Some(config_path) = runtime_config.as_ref() {
 				let config = mcp::runtime::RuntimeConfig::load(config_path)?;
 				mcp::runtime::search_jobs::init_search_interpreters(&config)?;
 				mcp::runtime::init_runtime(config)?;
+				if runtime_prewarm || runtime_audit_group_commit {
+					mcp::runtime::prepare_durable_stores().await?;
+				}
+				if runtime_audit_group_commit {
+					mcp::runtime::request_audit::enable_group_commit()?;
+				}
 			}
 
 			// Resolve working directory
@@ -62,16 +73,25 @@ async fn main() -> Result<()> {
 			// Set the session root directory for all tool calls
 			mcp::set_session_root_directory(working_directory.clone());
 
-			match bind {
+			let observation_pool = mcp::runtime::ssh::start_observation_pool(
+				runtime_observation_pool_profile.as_deref(),
+				runtime_file_observation_pool,
+			)
+			.await?;
+			let transport = match bind {
 				Some(addr) => {
 					// HTTP mode with Streamable HTTP transport.
-					run_http_server(&addr, auth_token_file.as_deref(), runtime_enabled).await?;
+					run_http_server(&addr, auth_token_file.as_deref(), runtime_enabled).await
 				}
 				None => {
 					// STDIO mode (default)
-					run_stdio_server(mcp::server::OctofsServer::new()).await?;
+					run_stdio_server(mcp::server::OctofsServer::new()).await
 				}
+			};
+			if let Some(pool) = observation_pool {
+				pool.shutdown().await?;
 			}
+			transport?;
 		}
 	}
 
@@ -119,6 +139,7 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 	// Kill request-scoped shell trees and interactive SSH PTYs. Durable runtime jobs
 	// are deliberately independent and remain queryable after this process restarts.
 	mcp::runtime::request_async::freeze_admission();
+	mcp::runtime::ssh::freeze_observation_pool();
 	mcp::runtime::operation_async::freeze_admission();
 	tokio::join!(
 		mcp::runtime::request_async::shutdown(),
@@ -206,7 +227,16 @@ async fn run_http_server(
 	}
 	let router = axum::Router::new()
 		.route("/healthz", axum::routing::get(|| async { "ok\n" }))
-		.route("/readyz", axum::routing::get(|| async { "ready\n" }))
+		.route(
+			"/readyz",
+			axum::routing::get(|| async {
+				if mcp::runtime::request_audit::group_commit_ready() {
+					(axum::http::StatusCode::OK, "ready\n")
+				} else {
+					(axum::http::StatusCode::SERVICE_UNAVAILABLE, "not ready\n")
+				}
+			}),
+		)
 		.merge(protected);
 	let addr = bind_addr
 		.parse::<std::net::SocketAddr>()
@@ -241,6 +271,7 @@ async fn run_http_server(
 
 	// Same orphan cleanup as STDIO shutdown. Durable runtime jobs are unaffected.
 	mcp::runtime::request_async::freeze_admission();
+	mcp::runtime::ssh::freeze_observation_pool();
 	mcp::runtime::operation_async::freeze_admission();
 	tokio::join!(
 		mcp::runtime::request_async::shutdown(),

@@ -1,0 +1,120 @@
+{
+  "adopted": false,
+  "all_five_stage_log_hashes_locally_verified": true,
+  "all_source_files_locally_rehashed": true,
+  "baseline": "A23",
+  "binary_copied_from_own_compiler_artifact": true,
+  "binary_sha256": "58c3e16564921f7882a91d3f3e484802c711a71160b73732b3d67084430ed3e6",
+  "candidate": "A23-D2-r02",
+  "diagnostic_only": true,
+  "finished_utc": "2026-10-24T02:53:12.914775+00:00",
+  "instrumentation_patch": {
+    "added_files": [
+      "src/mcp/runtime/ssh_observation_diagnostic.rs",
+      "src/mcp/runtime/ssh_observation_diagnostic_tests.rs"
+    ],
+    "base_candidate": "A23",
+    "base_qualification_report_sha256": "f0758bbab9cd767b4601dec9236959a18766673e87e985729a741f8ccbde3584",
+    "base_source_map_sha256": "5cf2e5cf8fca60e845a2c8f997abfc28017085bc809086a3ddb42448569a2b4f",
+    "bytes": 47523,
+    "changed_files": {
+      "src/mcp/runtime/ssh_observation_diagnostic.rs": {
+        "after_sha256": "9bf57f5ef9783b61e90d701f3ebb51df780ebc329f03cb7849d218375fcde8de",
+        "before_sha256": null
+      },
+      "src/mcp/runtime/ssh_observation_diagnostic_tests.rs": {
+        "after_sha256": "f3f192da499583baeb90ed5e6f15422c198349966bc0520ebe8e0a4debef3a60",
+        "before_sha256": null
+      },
+      "src/mcp/runtime/ssh_observation_pool.rs": {
+        "after_sha256": "5ef36b10ec49b4fb0457336e2dc62ef7e4bad2dca64dc85654a0d0a8da2cc6e1",
+        "before_sha256": "db5825f614b8470f680c18c55bbe84f82bf40f4c0aec4ad99583a6d93b2c14b6"
+      },
+      "src/mcp/runtime/ssh_observation_profile.rs": {
+        "after_sha256": "e767fd4455d796494384f76ee5366825e00f368cdd7c133b17dbcd33e7c4b62b",
+        "before_sha256": "33bbad82853c3fee866131dacdba5d9ecb6fc931d14f98654ec7aeebe4c891da"
+      }
+    },
+    "modified_files": [
+      "src/mcp/runtime/ssh_observation_pool.rs",
+      "src/mcp/runtime/ssh_observation_profile.rs"
+    ],
+    "path": "docs/experiments/x230-a23-d2-instrumentation.patch",
+    "reapplied_all_151_file_hashes_match_qualified_target": true,
+    "reapplied_to_exact_qualified_base": true,
+    "reapply_zero_fuzz_no_offsets": true,
+    "sha256": "2791cd8eb57ee7e61b90849dcc6c3cfe97432897f2c80548277efc8ef84fc137",
+    "target_source_map_sha256": "ec4419489f6499bdbecab9402d78e1997171bfeea1eda4be193b0af5f9688dc2"
+  },
+  "notes": [
+    "D2 is a separate optional diagnostic build, not an adopted runtime optimization.",
+    "The 1116 runtime, 18 ownerctl and 8 jobctl top-level passes total 1142; the two nested one-test helper summaries are not counted again. All 21 ignored tests remain reported.",
+    "The r01 strict-Clippy failure remains a separate receipt. Its r02 repair changes one diagnostic test assertion only, without weakening the assertion or adding a lint suppression.",
+    "Instrumentation records owner-thread lifetime synchronous spans, overlapping agent wall spans, and bounded spawn-proof failure events. These counters do not allocate timed-cell or whole-controller CPU.",
+    "Qualification establishes this build and its test results. Instrumentation overhead, actual fault observations, and any later optimization decision require separate complete evidence.",
+    "No performance gain, production hotspot, runtime fault fix, physical power-loss recovery, or master renewal count is established by this qualification receipt."
+  ],
+  "performance_comparison_emitted": false,
+  "previous_failed_attempt": {
+    "evidence": "x230-a23-d2-r01-qualification-failure-20261024.json",
+    "retained": true,
+    "sha256": "490152ee966b609aaf4533b9ea9db847748f3a8c465c46b59dd785ce4efb1659"
+  },
+  "production_hotspot_or_root_cause_proven": false,
+  "production_services_changed": false,
+  "qualified": true,
+  "schema": "hepta-x230-qualification-summary/v1",
+  "source_after_map_sha256": "ec4419489f6499bdbecab9402d78e1997171bfeea1eda4be193b0af5f9688dc2",
+  "source_file_count": 151,
+  "source_input_map_sha256": "ec4419489f6499bdbecab9402d78e1997171bfeea1eda4be193b0af5f9688dc2",
+  "source_input_tested_after_identical": true,
+  "source_map_hash_encoding": "SHA-256 of sorted JSON with comma/colon separators; UTF-8, no terminal newline",
+  "source_map_sha256": "ec4419489f6499bdbecab9402d78e1997171bfeea1eda4be193b0af5f9688dc2",
+  "source_report_bytes": 52758,
+  "source_report_sha256": "387188bd439d282ce47e7a2ab1049af67a288da37b51e777b0dadc97757c264f",
+  "source_tested_map_sha256": "ec4419489f6499bdbecab9402d78e1997171bfeea1eda4be193b0af5f9688dc2",
+  "source_unchanged_during_qualification": true,
+  "stages": [
+    {
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "format",
+      "returncode": 0,
+      "seconds": 3.3383911540731788
+    },
+    {
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "name": "fmt-check",
+      "returncode": 0,
+      "seconds": 2.4796692330855876
+    },
+    {
+      "log_sha256": "a5827377fe6265d4ef79e6e6298834841f3bd530454e2fd0365a9f9d5150c676",
+      "name": "clippy",
+      "returncode": 0,
+      "seconds": 48.40701726498082
+    },
+    {
+      "log_sha256": "85c52ae45a7efe638e35850298cfe4efb851d75f18cc7e6e9744087dc2a96650",
+      "name": "test",
+      "returncode": 0,
+      "seconds": 818.3150832320098
+    },
+    {
+      "log_sha256": "df9c7e84abd704bd302f57bad1642feb67a4b254ba1fe26f8d1709408a80b7a1",
+      "name": "release",
+      "returncode": 0,
+      "seconds": 539.5041822730564
+    }
+  ],
+  "started_utc": "2026-10-24T02:29:35.358696+00:00",
+  "test_binary_copied_from_own_compiler_artifact": true,
+  "test_binary_sha256": "dc602c3ceaeb987b7ae9f627fed2b5b6acb8744ece40a86d9f0316487cf3d58b",
+  "test_counts": {
+    "jobctl_passed": 8,
+    "nested_isolated_helper_result_lines_not_added": 2,
+    "ownerctl_passed": 18,
+    "runtime_ignored_existing": 21,
+    "runtime_passed": 1116,
+    "top_level_passed_total": 1142
+  }
+}

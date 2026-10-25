@@ -1,0 +1,353 @@
+{
+  "cases": [
+    {
+      "fixture_exit_code": 0,
+      "label": "A38",
+      "observed": {
+        "adopted": [
+          {
+            "pid": 1696697,
+            "returncode": 0
+          }
+        ],
+        "cleanup": [],
+        "final_status": {
+          "at_unix_ms": 1792896330330,
+          "cancelled": false,
+          "exit_code": 0,
+          "job_id": "inherited-pipe-durability",
+          "launch_nonce": "cccccccccccccccccccccccccccccccc",
+          "log_bytes": {
+            "stderr": {
+              "seen": 0,
+              "stored": 0
+            },
+            "stdout": {
+              "seen": 0,
+              "stored": 0
+            }
+          },
+          "log_errors": {
+            "stderr": null,
+            "stdout": null
+          },
+          "log_synced": {
+            "stderr": true,
+            "stdout": true
+          },
+          "log_truncated": {
+            "stderr": false,
+            "stdout": false
+          },
+          "output_complete": true,
+          "output_durable": true,
+          "state": "succeeded",
+          "terminal_publication_protocol": 1,
+          "timed_out": false
+        },
+        "originals": {
+          "child.json": {
+            "bytes": 118,
+            "sha256": "dffe9321f34c1161241c463b14a0a48863cb667259cbbb8ec0bbf985039fe132",
+            "utf8": "{\"identity\": {\"kind\": \"proc_start_ticks\", \"value\": \"b19bd1b9-4dbe-4335-96cf-ed98d393efea:159838863\"}, \"pid\": 1696694}\n"
+          },
+          "descendant": {
+            "bytes": 7,
+            "sha256": "4573eacfa446c72a285a04ea4e5a7a84b9719c18374e0000cc3bf48e9b5b3030",
+            "utf8": "1696697"
+          },
+          "effect": {
+            "bytes": 30,
+            "sha256": "653b608925f8b5bf288aec7626bfe2ee32403d36099b7d73f17a672bcb98d15e",
+            "utf8": "original leader executed once\n"
+          },
+          "exit.json": {
+            "bytes": 498,
+            "sha256": "1343db6a245e1ecd0008f5d5676d47da71612a153abe2e51bb34ef673ce6909a",
+            "utf8": "{\"at_unix_ms\": 1792896330330, \"cancelled\": false, \"exit_code\": 0, \"job_id\": \"inherited-pipe-durability\", \"launch_nonce\": \"cccccccccccccccccccccccccccccccc\", \"log_bytes\": {\"stderr\": {\"seen\": 0, \"stored\": 0}, \"stdout\": {\"seen\": 0, \"stored\": 0}}, \"log_errors\": {\"stderr\": null, \"stdout\": null}, \"log_synced\": {\"stderr\": true, \"stdout\": true}, \"log_truncated\": {\"stderr\": false, \"stdout\": false}, \"output_complete\": true, \"output_durable\": true, \"terminal_publication_protocol\": 1, \"timed_out\": false}\n"
+          },
+          "exit.witness.json": {
+            "bytes": 211,
+            "sha256": "060f607c3ec4b1bcf89253f764a60caef33039a4f691c7b20d3b2b12c74adb1a",
+            "utf8": "{\"exit_sha256\": \"1343db6a245e1ecd0008f5d5676d47da71612a153abe2e51bb34ef673ce6909a\", \"job_id\": \"inherited-pipe-durability\", \"launch_nonce\": \"cccccccccccccccccccccccccccccccc\", \"terminal_publication_protocol\": 1}\n"
+          },
+          "request.json": {
+            "bytes": 1238,
+            "sha256": "2cbffe0650ae96e29014a6065d040ec85ca31468625f0403e5fcf868908baed7",
+            "utf8": "{\"job_id\": \"inherited-pipe-durability\", \"job_dir\": \"/home/qian/hepta-runtime-optimization-20261023/a39-inherited-pipe-recovery-20261025-r01/staggered-regression-r01/A38/state/jobs/inherited-pipe-durability\", \"launch_nonce\": \"cccccccccccccccccccccccccccccccc\", \"terminal_publication_protocol\": 1, \"request_fingerprint\": \"original-leader-exit-held-pipes\", \"executable\": \"/usr/bin/python3\", \"args\": [\"-I\", \"-S\", \"-c\", \"import os,pathlib,signal,time\\ndescendant=os.fork()\\nif descendant==0:\\n    signal.signal(signal.SIGTERM,signal.SIG_IGN)\\n    pathlib.Path('descendant').write_text(str(os.getpid()))\\n    time.sleep(1.0)\\n    os.close(1)\\n    time.sleep(1.5)\\n    os.close(2)\\n    os._exit(0)\\nuntil=time.monotonic()+2\\nwhile not pathlib.Path('descendant').exists() and time.monotonic()<until:\\n    time.sleep(.005)\\nif not pathlib.Path('descendant').exists():\\n    raise RuntimeError('original descendant did not start')\\npathlib.Path('effect').write_bytes(b'original leader executed once\\\\n')\\nos._exit(0)\\n\"], \"execution_mode\": \"operator\", \"cwd\": \"/home/qian/hepta-runtime-optimization-20261023/a39-inherited-pipe-recovery-20261025-r01/staggered-regression-r01/A38/state/jobs/inherited-pipe-durability\", \"timeout_seconds\": 10, \"env\": {}}"
+          },
+          "stderr.log": {
+            "bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "utf8": ""
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "utf8": ""
+          }
+        },
+        "receipt": {
+          "at_unix_ms": 1792896330330,
+          "cancelled": false,
+          "exit_code": 0,
+          "job_id": "inherited-pipe-durability",
+          "launch_nonce": "cccccccccccccccccccccccccccccccc",
+          "log_bytes": {
+            "stderr": {
+              "seen": 0,
+              "stored": 0
+            },
+            "stdout": {
+              "seen": 0,
+              "stored": 0
+            }
+          },
+          "log_errors": {
+            "stderr": null,
+            "stdout": null
+          },
+          "log_synced": {
+            "stderr": true,
+            "stdout": true
+          },
+          "log_truncated": {
+            "stderr": false,
+            "stdout": false
+          },
+          "output_complete": true,
+          "output_durable": true,
+          "terminal_publication_protocol": 1,
+          "timed_out": false
+        },
+        "schema": "hepta-inherited-pipe-drain-fixture/v1",
+        "signals": [],
+        "state": {
+          "cancel_delivered_during_drain": false,
+          "cancellation_deadline": null,
+          "normal_drain_window_present": false,
+          "phase": "rescue",
+          "readers_alive_at_runner_return": [
+            false,
+            false
+          ],
+          "runner_exception": null,
+          "runner_exit": 0
+        },
+        "waits": [
+          {
+            "phase": "runner",
+            "returncode": 0,
+            "returned": true
+          }
+        ],
+        "witness": {
+          "exit_sha256": "1343db6a245e1ecd0008f5d5676d47da71612a153abe2e51bb34ef673ce6909a",
+          "job_id": "inherited-pipe-durability",
+          "launch_nonce": "cccccccccccccccccccccccccccccccc",
+          "terminal_publication_protocol": 1
+        },
+        "workload_pid": 1696694,
+        "workload_popen_count": 1
+      },
+      "runner_sha256": "2cb4535c3056bb4adadb4f41dc48be5ce0405d071a0570d2782500f88acfc022",
+      "seconds": 2.614488545106724,
+      "source_sha256": "7e25165ef3ced0614f1c171270b753da2f83bee62cb1088acfbdeed74afdc381",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "f00fbd73087f52bdde178ca90c90305845dee8a43a1becb356c3ae380e8615f6"
+    },
+    {
+      "fixture_exit_code": 0,
+      "label": "A39",
+      "observed": {
+        "adopted": [
+          {
+            "pid": 1696778,
+            "returncode": -9
+          }
+        ],
+        "cleanup": [],
+        "final_status": {
+          "at_unix_ms": 1792896332549,
+          "automatic_retry": false,
+          "cancelled": false,
+          "child_exit_code": 0,
+          "child_group_signal": "submitted",
+          "child_group_signal_number": 9,
+          "child_pid": 1696773,
+          "child_reaped": true,
+          "child_spawned": true,
+          "effect_outcome": "unknown",
+          "exit_code": 125,
+          "job_id": "inherited-pipe-durability",
+          "launch_nonce": "cccccccccccccccccccccccccccccccc",
+          "log_bytes": {
+            "stderr": {
+              "seen": 0,
+              "stored": 0
+            },
+            "stdout": {
+              "seen": 0,
+              "stored": 0
+            }
+          },
+          "log_errors": {
+            "stderr": "output drain deadline exceeded after leader exit",
+            "stdout": null
+          },
+          "log_synced": {
+            "stderr": true,
+            "stdout": true
+          },
+          "log_truncated": {
+            "stderr": false,
+            "stdout": false
+          },
+          "output_complete": false,
+          "output_durable": false,
+          "state": "effect_unknown",
+          "status_authoritative": false,
+          "supervisor_cleanup_errors": [],
+          "supervisor_error": "output drain deadline exceeded after leader exit",
+          "terminal_publication_protocol": 1,
+          "timed_out": false
+        },
+        "originals": {
+          "child.json": {
+            "bytes": 118,
+            "sha256": "b71f31304031822452bacb4c21da8a385fc1cff40e07a39efde2fd24272a1625",
+            "utf8": "{\"identity\": {\"kind\": \"proc_start_ticks\", \"value\": \"b19bd1b9-4dbe-4335-96cf-ed98d393efea:159839126\"}, \"pid\": 1696773}\n"
+          },
+          "descendant": {
+            "bytes": 7,
+            "sha256": "f4f58cfa7feaae4840e032f3c26bfe8d0004991515c8ddd01971ea793009d617",
+            "utf8": "1696778"
+          },
+          "effect": {
+            "bytes": 30,
+            "sha256": "653b608925f8b5bf288aec7626bfe2ee32403d36099b7d73f17a672bcb98d15e",
+            "utf8": "original leader executed once\n"
+          },
+          "exit.json": {
+            "bytes": 895,
+            "sha256": "289ff923dc5740ce37f12132bb4a82a8b89813640cc5e27308806533de9571ae",
+            "utf8": "{\"at_unix_ms\": 1792896332549, \"automatic_retry\": false, \"cancelled\": false, \"child_exit_code\": 0, \"child_group_signal\": \"submitted\", \"child_group_signal_number\": 9, \"child_pid\": 1696773, \"child_reaped\": true, \"child_spawned\": true, \"effect_outcome\": \"unknown\", \"exit_code\": 125, \"job_id\": \"inherited-pipe-durability\", \"launch_nonce\": \"cccccccccccccccccccccccccccccccc\", \"log_bytes\": {\"stderr\": {\"seen\": 0, \"stored\": 0}, \"stdout\": {\"seen\": 0, \"stored\": 0}}, \"log_errors\": {\"stderr\": \"output drain deadline exceeded after leader exit\", \"stdout\": null}, \"log_synced\": {\"stderr\": true, \"stdout\": true}, \"log_truncated\": {\"stderr\": false, \"stdout\": false}, \"output_complete\": false, \"output_durable\": false, \"status_authoritative\": false, \"supervisor_cleanup_errors\": [], \"supervisor_error\": \"output drain deadline exceeded after leader exit\", \"terminal_publication_protocol\": 1, \"timed_out\": false}\n"
+          },
+          "exit.witness.json": {
+            "bytes": 211,
+            "sha256": "a77705fd2fbccbdf977ab276ff4b831e695b5bd1df889b9ef659cd7070799964",
+            "utf8": "{\"exit_sha256\": \"289ff923dc5740ce37f12132bb4a82a8b89813640cc5e27308806533de9571ae\", \"job_id\": \"inherited-pipe-durability\", \"launch_nonce\": \"cccccccccccccccccccccccccccccccc\", \"terminal_publication_protocol\": 1}\n"
+          },
+          "request.json": {
+            "bytes": 1238,
+            "sha256": "b10faaf4c67a3318a6c44ba01fc9b9275ce5ed15665449004b08a123080ae9ca",
+            "utf8": "{\"job_id\": \"inherited-pipe-durability\", \"job_dir\": \"/home/qian/hepta-runtime-optimization-20261023/a39-inherited-pipe-recovery-20261025-r01/staggered-regression-r01/A39/state/jobs/inherited-pipe-durability\", \"launch_nonce\": \"cccccccccccccccccccccccccccccccc\", \"terminal_publication_protocol\": 1, \"request_fingerprint\": \"original-leader-exit-held-pipes\", \"executable\": \"/usr/bin/python3\", \"args\": [\"-I\", \"-S\", \"-c\", \"import os,pathlib,signal,time\\ndescendant=os.fork()\\nif descendant==0:\\n    signal.signal(signal.SIGTERM,signal.SIG_IGN)\\n    pathlib.Path('descendant').write_text(str(os.getpid()))\\n    time.sleep(1.0)\\n    os.close(1)\\n    time.sleep(1.5)\\n    os.close(2)\\n    os._exit(0)\\nuntil=time.monotonic()+2\\nwhile not pathlib.Path('descendant').exists() and time.monotonic()<until:\\n    time.sleep(.005)\\nif not pathlib.Path('descendant').exists():\\n    raise RuntimeError('original descendant did not start')\\npathlib.Path('effect').write_bytes(b'original leader executed once\\\\n')\\nos._exit(0)\\n\"], \"execution_mode\": \"operator\", \"cwd\": \"/home/qian/hepta-runtime-optimization-20261023/a39-inherited-pipe-recovery-20261025-r01/staggered-regression-r01/A39/state/jobs/inherited-pipe-durability\", \"timeout_seconds\": 10, \"env\": {}}"
+          },
+          "stderr.log": {
+            "bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "utf8": ""
+          },
+          "stdout.log": {
+            "bytes": 0,
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "utf8": ""
+          }
+        },
+        "receipt": {
+          "at_unix_ms": 1792896332549,
+          "automatic_retry": false,
+          "cancelled": false,
+          "child_exit_code": 0,
+          "child_group_signal": "submitted",
+          "child_group_signal_number": 9,
+          "child_pid": 1696773,
+          "child_reaped": true,
+          "child_spawned": true,
+          "effect_outcome": "unknown",
+          "exit_code": 125,
+          "job_id": "inherited-pipe-durability",
+          "launch_nonce": "cccccccccccccccccccccccccccccccc",
+          "log_bytes": {
+            "stderr": {
+              "seen": 0,
+              "stored": 0
+            },
+            "stdout": {
+              "seen": 0,
+              "stored": 0
+            }
+          },
+          "log_errors": {
+            "stderr": "output drain deadline exceeded after leader exit",
+            "stdout": null
+          },
+          "log_synced": {
+            "stderr": true,
+            "stdout": true
+          },
+          "log_truncated": {
+            "stderr": false,
+            "stdout": false
+          },
+          "output_complete": false,
+          "output_durable": false,
+          "status_authoritative": false,
+          "supervisor_cleanup_errors": [],
+          "supervisor_error": "output drain deadline exceeded after leader exit",
+          "terminal_publication_protocol": 1,
+          "timed_out": false
+        },
+        "schema": "hepta-inherited-pipe-drain-fixture/v1",
+        "signals": [
+          {
+            "group": 1696773,
+            "leader_exit_code": 0,
+            "original_child_unreaped": true,
+            "original_leader_exited": true,
+            "phase": "runner",
+            "returned": true,
+            "signal": 9
+          }
+        ],
+        "state": {
+          "cancel_delivered_during_drain": false,
+          "cancellation_deadline": null,
+          "normal_drain_window_present": true,
+          "phase": "rescue",
+          "readers_alive_at_runner_return": [
+            false,
+            false
+          ],
+          "runner_exception": null,
+          "runner_exit": 125
+        },
+        "waits": [
+          {
+            "phase": "runner",
+            "returncode": 0,
+            "returned": true
+          }
+        ],
+        "witness": {
+          "exit_sha256": "289ff923dc5740ce37f12132bb4a82a8b89813640cc5e27308806533de9571ae",
+          "job_id": "inherited-pipe-durability",
+          "launch_nonce": "cccccccccccccccccccccccccccccccc",
+          "terminal_publication_protocol": 1
+        },
+        "workload_pid": 1696773,
+        "workload_popen_count": 1
+      },
+      "runner_sha256": "ad5683ffaa8569d04f5f95aace9c016d5ebff64086abe6dbf28c6d6012b28bf9",
+      "seconds": 2.2242034261580557,
+      "source_sha256": "9ebb26b22fa874825f9dfec134bb227b8df7e9b10a3e4b0a1814c06e42c82776",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "0bc81a0bd065e8bf99466d3a7a46ebe53f0f0d93d9355d048ddb2e0b682709c4"
+    }
+  ],
+  "fixture_change": "One bounded original grandchild closes stdout at about 1 s and stderr at about 2.5 s instead of holding both for 8 s; no cancellation.",
+  "fixture_source_sha256": "cbd15ee18131af6984d5bcb206cb96e2ecddce3eb2db0ced3318f100f9f6cf72",
+  "modified_fixture_sha256": "69687ac91888bcf1a73a166e30f10f833e429c5a027551f2705f2b180df2d00a",
+  "regression_reproduced": true,
+  "schema": "hepta-staggered-output-compatibility-regression/v1"
+}

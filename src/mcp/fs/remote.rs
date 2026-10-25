@@ -267,7 +267,9 @@ pub fn resolve_path_source(path_str: &str, workdir: &Path) -> PathSource {
 
 mod sftp {
 	use std::collections::HashMap;
-	use std::sync::Arc;
+	use std::future::Future;
+	use std::sync::atomic::{AtomicBool, Ordering};
+	use std::sync::{Arc, Mutex as MapMutex};
 	use std::time::Duration;
 
 	use anyhow::{anyhow, Result};
@@ -568,20 +570,120 @@ mod sftp {
 		sftp: Arc<SftpSession>,
 	}
 
+	struct ConnectionSlot<T> {
+		value: Mutex<Option<T>>,
+		cached: AtomicBool,
+	}
+
+	struct SlotEntry<T> {
+		slot: Arc<ConnectionSlot<T>>,
+		callers: usize,
+	}
+
+	/// The map lock only finds a slot; connection setup waits on that target's
+	/// own mutex so an unavailable host cannot block a different cached host.
+	pub(super) struct ConnectionSlots<T> {
+		entries: MapMutex<HashMap<String, SlotEntry<T>>>,
+	}
+
+	struct ConnectionLease<'a, T> {
+		pool: &'a ConnectionSlots<T>,
+		key: String,
+		slot: Arc<ConnectionSlot<T>>,
+	}
+
+	impl<T> Drop for ConnectionLease<'_, T> {
+		fn drop(&mut self) {
+			let Ok(mut entries) = self.pool.entries.lock() else {
+				return;
+			};
+			let Some(entry) = entries.get_mut(&self.key) else {
+				return;
+			};
+			if !Arc::ptr_eq(&entry.slot, &self.slot) {
+				return;
+			}
+			// Waiters own leases too. Count their departures under the map lock:
+			// Arc::strong_count could still see another concurrent Drop's field
+			// before that Arc is destroyed and leave an empty slot behind.
+			entry.callers -= 1;
+			if entry.callers == 0 && !self.slot.cached.load(Ordering::Acquire) {
+				entries.remove(&self.key);
+			}
+		}
+	}
+
+	impl<T> ConnectionSlots<T> {
+		pub(super) fn new() -> Self {
+			Self {
+				entries: MapMutex::new(HashMap::new()),
+			}
+		}
+
+		pub(super) async fn get_or_connect<R>(
+			&self,
+			key: String,
+			is_live: impl FnOnce(&T) -> bool,
+			project: impl FnOnce(&T) -> R,
+			connect: impl Future<Output = Result<T>>,
+		) -> Result<R> {
+			let lease = {
+				let mut entries = self
+					.entries
+					.lock()
+					.map_err(|_| anyhow!("SFTP connection slot registry unavailable"))?;
+				let entry = entries.entry(key.clone()).or_insert_with(|| SlotEntry {
+					slot: Arc::new(ConnectionSlot {
+						value: Mutex::new(None),
+						cached: AtomicBool::new(false),
+					}),
+					callers: 0,
+				});
+				entry.callers += 1;
+				ConnectionLease {
+					pool: self,
+					key,
+					slot: entry.slot.clone(),
+				}
+			};
+			let mut cached = lease.slot.value.lock().await;
+			if let Some(value) = cached.as_ref() {
+				if is_live(value) {
+					return Ok(project(value));
+				}
+			}
+			*cached = None;
+			lease.slot.cached.store(false, Ordering::Release);
+			// Errors are never cached: the next caller retries just as before.
+			// Cancellation drops this guard and lease instead of stranding a
+			// connecting marker or a task that continues authenticating unseen.
+			let value = connect.await?;
+			let result = project(&value);
+			*cached = Some(value);
+			lease.slot.cached.store(true, Ordering::Release);
+			Ok(result)
+		}
+
+		#[cfg(test)]
+		pub(super) fn slot_count(&self) -> usize {
+			self.entries.lock().unwrap().len()
+		}
+	}
+
 	/// SFTP connection pool caching sessions per (host, port, user).
 	///
 	/// Sessions are shared as `Arc<SftpSession>`: SFTP multiplexes requests by
 	/// id and every session method takes `&self`, so concurrent tool calls to
 	/// the same host pipeline on one channel instead of serializing.
 	pub struct SftpPool {
-		sessions: Mutex<HashMap<String, PooledSession>>,
+		sessions: ConnectionSlots<PooledSession>,
 		config: SshConfig,
 	}
 
 	impl SftpPool {
 		pub fn new(config: SshConfig) -> Self {
 			Self {
-				sessions: Mutex::new(HashMap::new()),
+				sessions: ConnectionSlots::new(),
 				config,
 			}
 		}
@@ -591,9 +693,9 @@ mod sftp {
 		/// keepalive_max exceeded) are evicted and replaced — without this a
 		/// cached dead session would fail every call to that host forever.
 		///
-		/// The pool lock is held across connection setup on purpose: concurrent
-		/// calls to the same host would otherwise each open a connection and
-		/// each trigger an agent approval prompt (e.g. 1Password).
+		/// A target's slot is held across connection setup: concurrent calls to
+		/// that target share one connection and one agent approval prompt (e.g.
+		/// 1Password), while different targets can connect independently.
 		pub async fn get_or_connect(
 			&self,
 			host: &str,
@@ -605,35 +707,30 @@ mod sftp {
 			let key = format!(
 				"{user}@{host}:{port}:user-explicit={user_explicit}:port-explicit={port_explicit}"
 			);
-			let mut sessions = self.sessions.lock().await;
-			match sessions.get(&key) {
-				Some(pooled)
-					if !pooled.handle.is_closed()
-						&& pooled
-							.proxy_handle
-							.as_ref()
-							.is_none_or(|handle| !handle.is_closed()) =>
-				{
-					return Ok(pooled.sftp.clone());
-				}
-				Some(_) => {
-					sessions.remove(&key);
-				}
-				None => {}
-			}
-
-			let target = resolve_ssh_target(host, port, user, user_explicit, port_explicit).await;
-			let (handle, proxy_handle, session) = self.connect_sftp(&target).await?;
-			let sftp = Arc::new(session);
-			sessions.insert(
-				key,
-				PooledSession {
-					handle,
-					proxy_handle,
-					sftp: sftp.clone(),
-				},
-			);
-			Ok(sftp)
+			self.sessions
+				.get_or_connect(
+					key,
+					|pooled| {
+						!pooled.handle.is_closed()
+							&& pooled
+								.proxy_handle
+								.as_ref()
+								.is_none_or(|handle| !handle.is_closed())
+					},
+					|pooled| pooled.sftp.clone(),
+					async {
+						let target =
+							resolve_ssh_target(host, port, user, user_explicit, port_explicit)
+								.await;
+						let (handle, proxy_handle, session) = self.connect_sftp(&target).await?;
+						Ok(PooledSession {
+							handle,
+							proxy_handle,
+							sftp: Arc::new(session),
+						})
+					},
+				)
+				.await
 		}
 
 		async fn connect_sftp(
@@ -1067,6 +1164,18 @@ mod sftp {
 		pub modified: Option<std::time::SystemTime>,
 	}
 
+	/// Preserve the helper's lowercase hex wire format with one allocation,
+	/// avoiding a temporary formatted String for every byte of a large write.
+	pub(super) fn encode_file_bytes(content: &[u8]) -> String {
+		const DIGITS: &[u8; 16] = b"0123456789abcdef";
+		let mut hex = String::with_capacity(content.len() * 2);
+		for &byte in content {
+			hex.push(char::from(DIGITS[usize::from(byte >> 4)]));
+			hex.push(char::from(DIGITS[usize::from(byte & 15)]));
+		}
+		hex
+	}
+
 	/// Runtime file access stays descriptor-relative on the target: a workspace
 	/// symlink must never expose the controller's SSH identity or private state.
 	async fn runtime_file_io(
@@ -1097,11 +1206,7 @@ mod sftp {
 			})
 			.max_by_key(|root| root.len())
 			.ok_or_else(|| anyhow!("path outside capability roots"))?;
-		let hex: String = content
-			.unwrap_or_default()
-			.iter()
-			.map(|b| format!("{b:02x}"))
-			.collect();
+		let hex = encode_file_bytes(content.unwrap_or_default());
 		let value = ssh::run_python_json(
 			host,
 			include_str!("../runtime/fileio.py"),

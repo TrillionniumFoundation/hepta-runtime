@@ -12,14 +12,46 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex as MapMutex, OnceLock, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
 
 static SERIAL: AtomicU64 = AtomicU64::new(1);
-static START_LOCK: Mutex<()> = Mutex::const_new(());
+static START_LOCKS: OnceLock<TerminalStartLocks> = OnceLock::new();
+const START_LOCK_CLEANUP_THRESHOLD: usize = 1024;
 const SOURCE: &str = include_str!("terminal_host.py");
+
+#[derive(Default)]
+struct TerminalStartLocks {
+	locks: MapMutex<HashMap<String, Weak<Mutex<()>>>>,
+}
+
+impl TerminalStartLocks {
+	fn get(&self, id: &str) -> Result<Arc<Mutex<()>>> {
+		let mut locks = self
+			.locks
+			.lock()
+			.map_err(|_| anyhow::anyhow!("terminal start locks unavailable"))?;
+		// Waiting requests own an Arc, so pruning cannot split an active identity.
+		// Also prune on hot lookups after a burst, and release excessive peak capacity.
+		if locks.len() >= START_LOCK_CLEANUP_THRESHOLD {
+			locks.retain(|_, lock| lock.strong_count() > 0);
+			let retained_capacity = locks.len().max(START_LOCK_CLEANUP_THRESHOLD);
+			if locks.capacity() > retained_capacity.saturating_mul(4) {
+				locks.shrink_to(retained_capacity);
+			}
+		}
+		if let Some(lock) = locks.get(id).and_then(Weak::upgrade) {
+			return Ok(lock);
+		}
+		let lock = Arc::new(Mutex::new(()));
+		locks.insert(id.to_owned(), Arc::downgrade(&lock));
+		Ok(lock)
+	}
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TerminalRecord {
@@ -169,7 +201,6 @@ async fn dispatch_operation(
 }
 
 pub async fn start(params: &PtyStartParams) -> Result<String> {
-	let _guard = START_LOCK.lock().await;
 	let host = runtime_config()?.host(&params.host)?;
 	if host.execution_mode != ExecutionMode::Operator {
 		bail!("persistent terminal requires an operator host");
@@ -195,6 +226,12 @@ pub async fn start(params: &PtyStartParams) -> Result<String> {
 			SERIAL.fetch_add(1, Ordering::Relaxed)
 		)
 	};
+	// Serialize only this durable identity. A slow target must not stall starts
+	// on unrelated hosts or terminals; equal keys still share the full intent/RPC.
+	let start_lock = START_LOCKS
+		.get_or_init(TerminalStartLocks::default)
+		.get(&id)?;
+	let _guard = start_lock.lock().await;
 	let path = record_path(&id)?;
 	if tokio::fs::try_exists(&path).await? {
 		let record = load(&params.host, &id).await?;
