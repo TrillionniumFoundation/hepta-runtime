@@ -38,6 +38,7 @@ async fn main() -> Result<()> {
 			runtime_prewarm,
 			runtime_audit_group_commit,
 			runtime_observation_pool_profile,
+			runtime_file_observation_pool,
 		} => {
 			let runtime_enabled = runtime_config.is_some();
 			if let Some(config_path) = runtime_config.as_ref() {
@@ -74,6 +75,7 @@ async fn main() -> Result<()> {
 
 			let observation_pool = mcp::runtime::ssh::start_observation_pool(
 				runtime_observation_pool_profile.as_deref(),
+				runtime_file_observation_pool,
 			)
 			.await?;
 			let transport = match bind {

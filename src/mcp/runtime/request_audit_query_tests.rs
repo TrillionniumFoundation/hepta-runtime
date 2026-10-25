@@ -194,7 +194,7 @@ fn archive_query_expired_deadline_does_not_open_missing_store() {
 	let root = directory.path().join("missing");
 	let owner = "a".repeat(64);
 	let expired = Instant::now();
-	let usage = usage_stats_at_until(&root, &owner, expired).unwrap_err();
+	let usage = usage_stats_at_until(&root, std::array::from_ref(&owner), expired).unwrap_err();
 	assert!(usage.to_string().contains("total deadline exceeded"));
 	let archive = archive_history_at_until(
 		&root,

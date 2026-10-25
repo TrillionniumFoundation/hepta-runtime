@@ -638,21 +638,27 @@ impl Core {
 	}
 	async fn verify_files(&self, deadline: Instant) -> Result<()> {
 		let profile = self.profile.clone();
-		self.validation
-			.run(&self.stop, deadline, move || profile.verify_files())
+		let ticket = self
+			.validation
+			.run_retained(&self.stop, deadline, move |ticket| {
+				profile.verify_files_checked(&|| ticket.check_current())
+			})
 			.await?;
-		// The worker performed the full read/hash. Recheck all immutable path,
-		// inode, permission and policy boundaries on their original owner after
-		// the new await; no delayed successful snapshot bypasses this fence.
-		let checked = self.profile.verify_boundaries();
-		if checked.is_err() {
-			self.stop.cancel();
-		}
-		checked?;
-		if self.stop.is_cancelled() || Instant::now() >= deadline {
-			bail!("observation file validation cancelled or expired before acceptance");
-		}
-		Ok(())
+		// A same-length change can retain every timestamp/metadata field. Keep
+		// the original permit through a second fresh complete read on the owner;
+		// metadata-only acceptance after the await is not content validation.
+		ticket.finish(|ticket| {
+			if unsafe { libc::syscall(libc::SYS_gettid) } != self.owner_tid {
+				bail!("observation file acceptance attempted outside its lifetime owner thread");
+			}
+			self.profile
+				.verify_files_checked(&|| ticket.check_current())?;
+			self.profile.verify_boundaries(&|| ticket.check_current())?;
+			if self.stop.is_cancelled() || Instant::now() >= deadline {
+				bail!("observation file validation cancelled or expired before acceptance");
+			}
+			Ok(())
+		})
 	}
 	async fn verify_profile_for(&self, deadline: Instant, scope: ProfileCheckScope) -> Result<()> {
 		let checked: Result<()> = async {

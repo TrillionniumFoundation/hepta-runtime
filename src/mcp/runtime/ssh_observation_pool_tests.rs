@@ -14,6 +14,9 @@ mod agent_timeout;
 #[path = "ssh_observation_socket_publication_tests.rs"]
 mod socket_publication;
 
+#[path = "ssh_file_observation_pool_tests.rs"]
+mod file_observations;
+
 // Direct lifecycle fixtures own a private admission; actor capacity fixtures
 // below instead share the actual sixteen-permit admission pool.
 fn test_admission() -> Arc<OwnedSemaphorePermit> {
@@ -632,6 +635,18 @@ async fn fixture_with_cold_host(
 	tokio::task::JoinHandle<()>,
 	Arc<AgentControl>,
 ) {
+	fixture_with_file_policy(cold, false).await
+}
+
+async fn fixture_with_file_policy(
+	cold: bool,
+	files: bool,
+) -> (
+	tempfile::TempDir,
+	PathBuf,
+	tokio::task::JoinHandle<()>,
+	Arc<AgentControl>,
+) {
 	let root = tempfile::tempdir().unwrap();
 	std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
 	let state = root.path().join("state");
@@ -643,6 +658,11 @@ async fn fixture_with_cold_host(
 	if cold {
 		spec["hosts"]["cold"] = spec["hosts"]["fixture"].clone();
 		spec["hosts"]["cold"]["ssh_target"] = json!("hepta-observation-cold-fixture");
+	}
+	if files {
+		spec["hosts"]["fixture"]["execution_mode"] = json!("operator");
+		spec["hosts"]["fixture"]["allowed_read_path_prefixes"] =
+			json!(["/allowed", "/allowed/nested"]);
 	}
 	let runtime = serde_json::from_value(spec).unwrap();
 	crate::mcp::runtime::config::init_runtime(runtime).unwrap();
@@ -2365,7 +2385,7 @@ async fn isolated_helper() {
 		let threads = std::fs::read_dir("/proc/self/task").unwrap().count();
 		let descriptors = std::fs::read_dir("/proc/self/fd").unwrap().count();
 		assert!(!requested());
-		assert!(super::super::start_observation_pool(None)
+		assert!(super::super::start_observation_pool(None, false)
 			.await
 			.unwrap()
 			.is_none());

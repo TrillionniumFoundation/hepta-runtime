@@ -51,6 +51,9 @@ mod index;
 #[path = "request_audit_stage.rs"]
 mod stage;
 #[cfg(unix)]
+#[path = "request_usage_batch.rs"]
+mod usage_batch;
+#[cfg(unix)]
 use archive_store::Archive;
 #[cfg(not(unix))]
 type Archive = File;
@@ -1761,22 +1764,16 @@ async fn run_metadata_query<T: Send + 'static>(
 
 #[cfg(all(test, unix))]
 fn usage_stats_at(root: &Path, owner: &str) -> Result<String> {
-	usage_stats_at_until(root, owner, Instant::now() + index::QUERY_BUDGET)
+	let deadline = Instant::now() + index::QUERY_BUDGET;
+	let owner = owner.to_owned();
+	usage_stats_at_until(root, std::array::from_ref(&owner), deadline)
 }
 
 #[cfg(unix)]
-fn usage_stats_at_until(root: &Path, owner: &str, deadline: Instant) -> Result<String> {
-	if !valid_id(owner) {
-		bail!("request usage unavailable to this scope");
-	}
-	let archive = {
-		let _guard = index::query_lock(deadline)?;
-		let hot = open_store(root)?;
-		hot_snapshot(root, &hot)?.1
-	};
-	Ok(serde_json::to_string(&index::usage(
-		root, &archive, owner, deadline,
-	)?)?)
+fn usage_stats_at_until(root: &Path, owners: &[String; 1], deadline: Instant) -> Result<String> {
+	// The admitted blocking closure reaches the coordinator before opening
+	// hot/archive state. Its original permit remains owned by that closure.
+	usage_batch::run(root, owners, deadline)
 }
 
 pub async fn usage_stats(owner: &str, _params: UsageStatsParams) -> Result<String> {
@@ -1787,7 +1784,7 @@ pub async fn usage_stats(owner: &str, _params: UsageStatsParams) -> Result<Strin
 	#[cfg(unix)]
 	{
 		run_metadata_query(deadline, metadata_query_slots(), move |deadline| {
-			usage_stats_at_until(&root, &owner, deadline)
+			usage_stats_at_until(&root, std::array::from_ref(&owner), deadline)
 		})
 		.await
 		.map_err(metadata_query_public_error)

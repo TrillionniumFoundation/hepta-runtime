@@ -1009,7 +1009,22 @@ impl Archive {
 		if self.directory_for_existing(filename)?.as_raw_fd() != directory.as_raw_fd() {
 			bail!("request archive record changed physical namespace");
 		}
-		self.fence_target(directory)
+		if directory.as_raw_fd() == self.legacy().as_raw_fd() {
+			return named_directory(self.root(), ARCHIVE_NAME, directory);
+		}
+		let layout = self
+			.0
+			.layout
+			.get()
+			.ok_or_else(|| anyhow!("request archive target unavailable"))?;
+		// The successful lookup already validated the lowercase hex filename and
+		// selected this held shard. Keep the exact FD and final named-directory
+		// checks without searching the immutable shard vector a second time.
+		let prefix = &filename[..2];
+		if layout.shards[shard_index(prefix)].as_raw_fd() != directory.as_raw_fd() {
+			bail!("foreign request archive target directory");
+		}
+		named_directory(&layout.root, prefix, directory)
 	}
 
 	pub(super) fn read_record(&self, filename: &str) -> Result<Record> {
@@ -1023,9 +1038,25 @@ impl Archive {
 
 	pub(super) fn walk<'a>(
 		&'a self,
-		visit: impl FnMut(&'a File, &str, u64) -> Result<()>,
+		mut visit: impl FnMut(&'a File, &str, u64) -> Result<()>,
 	) -> Result<()> {
-		self.walk_members(visit, true)
+		self.walk_members(
+			&mut (),
+			|_, directory, filename, inode| visit(directory, filename, inode),
+			|_| Ok(()),
+			true,
+		)
+	}
+
+	/// A strict reader with bounded child work must finish and join that work
+	/// before the original complete terminal layout fence, including flat stores.
+	pub(super) fn walk_with_finish<'a, S>(
+		&'a self,
+		state: &mut S,
+		visit: impl FnMut(&mut S, &'a File, &str, u64) -> Result<()>,
+		finish: impl FnOnce(&mut S) -> Result<()>,
+	) -> Result<()> {
+		self.walk_members(state, visit, finish, true)
 	}
 
 	/// Only complete cold observations may defer cross-namespace duplicates to
@@ -1035,14 +1066,21 @@ impl Archive {
 	/// callers must finish the exact merge and epoch check before publishing.
 	pub(super) fn walk_for_complete_identity_join<'a>(
 		&'a self,
-		visit: impl FnMut(&'a File, &str, u64) -> Result<()>,
+		mut visit: impl FnMut(&'a File, &str, u64) -> Result<()>,
 	) -> Result<()> {
-		self.walk_members(visit, false)
+		self.walk_members(
+			&mut (),
+			|_, directory, filename, inode| visit(directory, filename, inode),
+			|_| Ok(()),
+			false,
+		)
 	}
 
-	fn walk_members<'a>(
+	fn walk_members<'a, S>(
 		&'a self,
-		mut visit: impl FnMut(&'a File, &str, u64) -> Result<()>,
+		state: &mut S,
+		mut visit: impl FnMut(&mut S, &'a File, &str, u64) -> Result<()>,
+		finish: impl FnOnce(&mut S) -> Result<()>,
 		check_legacy_duplicates: bool,
 	) -> Result<()> {
 		self.fence_at(self.root())?;
@@ -1051,9 +1089,10 @@ impl Archive {
 		}
 		walk_directory_with_inode(self.legacy(), |filename, inode| {
 			entry_id(filename)?;
-			visit(self.legacy(), filename, inode)
+			visit(state, self.legacy(), filename, inode)
 		})?;
-		if let Some(layout) = self.0.layout.get() {
+		let layout = self.0.layout.get();
+		if let Some(layout) = layout {
 			for (index, shard) in layout.shards.iter().enumerate() {
 				walk_directory_with_inode(shard, |filename, inode| {
 					let id = entry_id(filename)?;
@@ -1066,9 +1105,12 @@ impl Archive {
 					{
 						bail!("duplicate request archive identity across namespaces");
 					}
-					visit(shard, filename, inode)
+					visit(state, shard, filename, inode)
 				})?;
 			}
+		}
+		finish(state)?;
+		if let Some(layout) = layout {
 			self.validate_layout(layout, true)?;
 		}
 		self.fence_at(self.root())

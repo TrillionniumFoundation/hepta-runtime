@@ -15,8 +15,8 @@ pub(super) struct Workers {
 	permits: Arc<Semaphore>,
 }
 
-// The closure owns this guard, including when its caller times out or drops
-// the JoinHandle. Failure freezes admission before releasing worker capacity.
+// The same guard follows queued/running work, its returned result, and the
+// final owner check. Failure freezes admission before releasing capacity.
 struct Completion {
 	_permit: OwnedSemaphorePermit,
 	stop: CancellationToken,
@@ -39,6 +39,35 @@ impl Drop for Completion {
 	}
 }
 
+// Send is required for the blocking task's result. Core separately enforces
+// its lifetime owner thread before using this ticket; it is not a file lease.
+pub(super) struct OwnerTicket {
+	completion: Completion,
+	deadline: Instant,
+}
+
+impl OwnerTicket {
+	pub(super) fn check_current(&self) -> Result<()> {
+		if self.completion.stop.is_cancelled() || Instant::now() >= self.deadline {
+			bail!("observation validation cancelled or expired before authority acceptance");
+		}
+		Ok(())
+	}
+
+	pub(super) fn finish<F>(self, check: F) -> Result<()>
+	where
+		F: FnOnce(&Self) -> Result<()>,
+	{
+		self.check_current()?;
+		check(&self)?;
+		self.check_current()?;
+		// No fresh acquisition or early permit release separates the complete
+		// worker read from this owner result. Errors/unwind retain failure Drop.
+		self.completion.finish();
+		Ok(())
+	}
+}
+
 impl Workers {
 	pub(super) fn new() -> Self {
 		Self {
@@ -46,6 +75,9 @@ impl Workers {
 		}
 	}
 
+	// Existing worker-lifecycle tests retain the no-owner-work wrapper. The
+	// production owner must explicitly consume its ticket with a full recheck.
+	#[cfg(test)]
 	pub(super) async fn run<F>(
 		&self,
 		stop: &CancellationToken,
@@ -55,6 +87,20 @@ impl Workers {
 	where
 		F: FnOnce() -> Result<()> + Send + 'static,
 	{
+		self.run_retained(stop, deadline, move |_| check())
+			.await?
+			.finish(|_| Ok(()))
+	}
+
+	pub(super) async fn run_retained<F>(
+		&self,
+		stop: &CancellationToken,
+		deadline: Instant,
+		check: F,
+	) -> Result<OwnerTicket>
+	where
+		F: FnOnce(&OwnerTicket) -> Result<()> + Send + 'static,
+	{
 		let permit = tokio::select! {
 			biased;
 			_ = stop.cancelled() => bail!("observation validation stopped before admission"),
@@ -62,31 +108,25 @@ impl Workers {
 				.context("observation validation capacity deadline")?
 				.context("observation validation capacity closed")?,
 		};
-		if stop.is_cancelled() || Instant::now() >= deadline {
-			bail!("observation validation cancelled or expired before submission");
-		}
 		// Construct before spawn so even a discarded unstarted closure freezes
 		// admission. At most WORKERS closures are submitted; Tokio's otherwise
 		// unbounded blocking queue cannot accumulate validation work.
-		let completion = Completion {
-			_permit: permit,
-			stop: stop.clone(),
-			completed: false,
+		let ticket = OwnerTicket {
+			completion: Completion {
+				_permit: permit,
+				stop: stop.clone(),
+				completed: false,
+			},
+			deadline,
 		};
+		ticket.check_current()?;
 		let mut work = tokio::task::spawn_blocking(move || {
 			// Admission can precede execution in Tokio's blocking queue. Keep
 			// the original deadline and refuse stale work before opening files.
-			if completion.stop.is_cancelled() || Instant::now() >= deadline {
-				completion.stop.cancel();
-				completion.finish();
-				bail!("observation validation cancelled or expired before worker execution");
-			}
-			let result = check();
-			if result.is_err() {
-				completion.stop.cancel();
-			}
-			completion.finish();
-			result
+			ticket.check_current()?;
+			check(&ticket)?;
+			ticket.check_current()?;
+			Ok::<_, anyhow::Error>(ticket)
 		});
 		let result = tokio::select! {
 			biased;
@@ -100,13 +140,11 @@ impl Workers {
 				bail!("observation validation deadline; no result accepted");
 			},
 		};
-		result?;
+		let ticket = result?;
 		// Completion and a timer/cancellation can become ready together. A
 		// successfully hashed earlier snapshot grants no late authority.
-		if stop.is_cancelled() || Instant::now() >= deadline {
-			bail!("observation validation cancelled or expired before authority acceptance");
-		}
-		Ok(())
+		ticket.check_current()?;
+		Ok(ticket)
 	}
 
 	pub(super) async fn finish_shutdown(&self, cleanup: Result<()>) -> Result<()> {
@@ -119,8 +157,8 @@ impl Workers {
 	pub(super) async fn drain(&self) -> Result<()> {
 		// Admission is stopped first. Normal cleanup also joins supervisors;
 		// the owner's final barrier still runs if that cleanup returned early.
-		// Detached checks own permits until their actual closures return, so
-		// filesystem cleanup or dropping the owner cannot overtake their work.
+		// Detached checks and unconsumed/active owner tickets retain the same
+		// permits, so cleanup cannot overtake either phase of validation.
 		let _all = self
 			.permits
 			.clone()

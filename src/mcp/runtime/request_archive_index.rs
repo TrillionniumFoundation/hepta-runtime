@@ -16,6 +16,9 @@ use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::sync::Condvar;
 use std::time::Duration;
 
+#[path = "request_archive_content.rs"]
+mod content;
+
 const CACHE_NAME: &str = ".request-archive-index-v2.redb";
 const CACHE_BYTES: usize = 16 * 1024 * 1024;
 // This bounds a transient write queue, never the number of retained records.
@@ -271,6 +274,25 @@ struct Slot {
 	#[cfg(test)]
 	seal_hook: Mutex<Option<SealHook>>,
 }
+
+// An observed original/pending record may legally complete, but its stable
+// identity and an already terminal outcome cannot change. Preserve this error
+// across cold validation; treating it as an empty-cache rebuild would erase the
+// very disagreement that the original comparison found.
+#[derive(Debug)]
+enum OriginalRecordConflict {
+	Identity,
+	Terminal,
+}
+impl std::fmt::Display for OriginalRecordConflict {
+	fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		out.write_str(match self {
+			Self::Identity => "archive index identity changed",
+			Self::Terminal => "archive index terminal changed",
+		})
+	}
+}
+impl std::error::Error for OriginalRecordConflict {}
 
 #[derive(Debug)]
 struct ColdEpochChanged;
@@ -787,7 +809,7 @@ fn apply_traced(
 					|| old.record.tool_name != entry.record.tool_name
 					|| old.record.accepted_unix_ms != entry.record.accepted_unix_ms
 				{
-					bail!("archive index identity changed");
+					return Err(OriginalRecordConflict::Identity.into());
 				}
 				if old.record.state != DurableState::Unknown
 					&& entry.record.state == DurableState::Unknown
@@ -795,7 +817,7 @@ fn apply_traced(
 					continue;
 				}
 				if old.record.state != DurableState::Unknown && old.record != entry.record {
-					bail!("archive index terminal changed");
+					return Err(OriginalRecordConflict::Terminal.into());
 				}
 				*delta.entry(state_key(&old.record)?).or_default() -= 1;
 				*delta.entry(tool_key(&old.record)?).or_default() -= 1;
@@ -1191,11 +1213,23 @@ fn cached(slot: &Slot, deadline: Instant) -> Result<Option<ValidatedDatabase>> {
 		epoch.check(slot)?;
 	}
 	match valid {
-		Ok(true) => Ok(Some(ValidatedDatabase {
-			database: db,
-			parallel_epoch,
-		})),
-		Err(error) if error.is::<ColdEpochChanged>() => Err(error),
+		Ok(true) => {
+			// Content disagreement must not become a cache miss and disappear in
+			// an empty rebuild. This stage uses a pure reader and retains the
+			// existing recovery transitions before its complete final check.
+			content::validate_cached(slot, &db, deadline)?;
+			if let Some(epoch) = &parallel_epoch {
+				epoch.check(slot)?;
+			}
+			cold_phase("complete_record_contents", opened);
+			Ok(Some(ValidatedDatabase {
+				database: db,
+				parallel_epoch,
+			}))
+		}
+		Err(error) if error.is::<ColdEpochChanged>() || error.is::<OriginalRecordConflict>() => {
+			Err(error)
+		}
 		_ => Ok(None),
 	}
 }
@@ -1791,7 +1825,7 @@ impl PendingView {
 					|| old.record.tool_name != entry.record.tool_name
 					|| old.record.accepted_unix_ms != entry.record.accepted_unix_ms
 				{
-					bail!("archive index identity changed");
+					return Err(OriginalRecordConflict::Identity.into());
 				}
 				if old.record.state != DurableState::Unknown
 					&& entry.record.state == DurableState::Unknown
@@ -1799,7 +1833,7 @@ impl PendingView {
 					continue;
 				}
 				if old.record.state != DurableState::Unknown && old.record != entry.record {
-					bail!("archive index terminal changed");
+					return Err(OriginalRecordConflict::Terminal.into());
 				}
 				*view.delta.entry(state_key(&old.record)?).or_default() -= 1;
 				*view.delta.entry(tool_key(&old.record)?).or_default() -= 1;
@@ -1849,51 +1883,33 @@ impl PendingView {
 		}
 	}
 }
-// Preserve the previous bounded streaming fallback on platforms without content
-// watches. Small archives remain readable; a large unverified snapshot refuses
-// within the existing query deadline instead of serving cached totals.
+// Keep the preexisting fallback regression helper; production uses the same
+// complete gate with its actual pending view for both watched and unwatched reads.
+#[cfg(test)]
 fn verify_members(database: &Database, archive: &Archive, deadline: Instant) -> Result<()> {
-	let transaction = database.begin_read()?;
-	let rows = transaction.open_table(ROWS)?;
-	let order = transaction.open_table(ORDER)?;
-	let mut count = 0u64;
-	archive.walk(|_, filename, _| {
-		if Instant::now() >= deadline {
-			bail!("archive metadata query total deadline exceeded");
-		}
-		if staging(filename)? {
-			return Ok(());
-		}
-		let raw_id = filename
-			.strip_suffix(".json")
-			.filter(|v| valid_id(v))
-			.ok_or_else(|| anyhow!("archive namespace changed"))?;
-		let key = id(raw_id)?;
-		let raw = rows
-			.get(key.as_slice())?
-			.ok_or_else(|| anyhow!("archive namespace changed"))?;
-		let entry = codec::decode(raw.value())?;
-		let expected_order = cold::order_value(&entry)?;
-		if entry.record.request_id != raw_id
-			|| stamp(archive, filename)? != entry.stamp
-			|| order
-				.get(order_key(&entry.record)?.as_slice())?
-				.is_none_or(|v| v.value() != expected_order)
-		{
-			bail!("archive content changed");
-		}
-		count += 1;
-		Ok(())
-	})?;
-	if count != rows.len()? || count != order.len()? {
-		bail!("archive namespace changed");
-	}
-	Ok(())
+	content::verify_members(database, archive, &PendingView::default(), deadline)
 }
+
 fn read_snapshot<T>(
 	root: &Path,
 	archive: &Archive,
 	deadline: Instant,
+	read: impl FnOnce(&Database, &PendingView) -> Result<T>,
+) -> Result<T> {
+	read_snapshot_with_mode(root, archive, deadline, SnapshotReadMode::Serial, read)
+}
+
+#[derive(Clone, Copy)]
+enum SnapshotReadMode {
+	Serial,
+	Usage,
+}
+
+fn read_snapshot_with_mode<T>(
+	root: &Path,
+	archive: &Archive,
+	deadline: Instant,
+	mode: SnapshotReadMode,
 	read: impl FnOnce(&Database, &PendingView) -> Result<T>,
 ) -> Result<T> {
 	loop {
@@ -1933,17 +1949,29 @@ fn read_snapshot<T>(
 		} else {
 			PendingView::default()
 		};
-		if state.version.is_none() {
-			verify_members(&database, archive, deadline)?;
+		// Watches remain invalidation fences; neither Some nor None certifies
+		// original bytes. Check every effective record within this same budget.
+		match mode {
+			SnapshotReadMode::Serial => {
+				content::verify_members(&database, archive, &view, deadline)?;
+			}
+			SnapshotReadMode::Usage => {
+				content::verify_usage_members(&database, archive, &view, deadline, &_guard)?;
+			}
 		}
 		let result = read(&database, &view)?;
-		if readonly_pending && Instant::now() >= deadline {
+		if Instant::now() >= deadline {
 			bail!("archive metadata query total deadline exceeded");
 		}
 		if readonly_pending {
 			query_database_for_read(&state, archive, true)?;
 		} else {
 			query_database(&state, archive)?;
+		}
+		// The final watch/layout fence may itself take time. No successful
+		// response may leave after the caller's original absolute deadline.
+		if Instant::now() >= deadline {
+			bail!("archive metadata query total deadline exceeded");
 		}
 		trace.outcome = if readonly_pending && !state.pending.is_empty() {
 			"readonly_pending"
@@ -2143,105 +2171,144 @@ pub(super) fn page(
 		Ok((result, count))
 	})
 }
+pub(super) struct UsageBatch {
+	pub(super) values: Vec<Result<Value>>,
+	pub(super) large: bool,
+}
+
 pub(super) fn usage(
 	root: &Path,
 	archive: &Archive,
+	owners: &[String],
+	deadline: Instant,
+) -> Result<UsageBatch> {
+	if owners.is_empty() || owners.len() > MAX_METADATA_QUERIES {
+		bail!("usage query group exceeded its admitted bound");
+	}
+	read_snapshot_with_mode(
+		root,
+		archive,
+		deadline,
+		SnapshotReadMode::Usage,
+		|database, view| usage_from_view(database, view, owners, deadline),
+	)
+}
+
+fn usage_from_view(
+	database: &Database,
+	view: &PendingView,
+	owners: &[String],
+	deadline: Instant,
+) -> Result<UsageBatch> {
+	// Every owner projection uses this one transaction and pending view.
+	// The surrounding snapshot retains full validation and the final fences.
+	let transaction = database.begin_read()?;
+	let rows = transaction.open_table(ROWS)?;
+	let order = transaction.open_table(ORDER)?;
+	let counts = transaction.open_table(COUNTS)?;
+	let large = rows.len()? > LARGE_ARCHIVE_ROWS;
+	let values = owners
+		.iter()
+		.map(|owner| usage_for_owner(&rows, &order, &counts, view, owner, deadline))
+		.collect();
+	// Local projection/wire errors stay in their own slots. A common final
+	// fence error still rejects this entire, not-yet-published result.
+	Ok(UsageBatch { values, large })
+}
+
+fn usage_for_owner(
+	rows: &impl ReadableTable<&'static [u8], &'static [u8]>,
+	order: &impl ReadableTable<&'static [u8], &'static [u8]>,
+	counts: &impl ReadableTable<&'static [u8], u64>,
+	view: &PendingView,
 	owner: &str,
 	deadline: Instant,
 ) -> Result<Value> {
-	read_snapshot(root, archive, deadline, |database, view| {
-		let transaction = database.begin_read()?;
-		let rows = transaction.open_table(ROWS)?;
-		let order = transaction.open_table(ORDER)?;
-		let counts = transaction.open_table(COUNTS)?;
-		let owner_id = id(owner)?;
-		let values = view.totals(&counts, &owner_id)?;
-		let mut active = 0u64;
-		{
-			let mut registry = active_registry()?;
-			registry.retain(|_, marker| marker.strong_count() > 0);
-			for (request_id, marker) in registry.iter() {
-				if Instant::now() >= deadline {
-					bail!("archive metadata query total deadline exceeded");
-				}
-				if marker.upgrade().is_some_and(|v| v.load(Ordering::Acquire)) {
-					if let Some(entry) = view.entry(&rows, &id(request_id)?)? {
-						if entry.record.owner == owner
-							&& entry.record.state == DurableState::Unknown
-						{
-							active += 1;
-						}
+	let owner_id = id(owner)?;
+	let values = view.totals(counts, &owner_id)?;
+	let mut active = 0u64;
+	{
+		let mut registry = active_registry()?;
+		registry.retain(|_, marker| marker.strong_count() > 0);
+		for (request_id, marker) in registry.iter() {
+			if Instant::now() >= deadline {
+				bail!("archive metadata query total deadline exceeded");
+			}
+			if marker.upgrade().is_some_and(|v| v.load(Ordering::Acquire)) {
+				if let Some(entry) = view.entry(rows, &id(request_id)?)? {
+					if entry.record.owner == owner && entry.record.state == DurableState::Unknown {
+						active += 1;
 					}
 				}
 			}
 		}
-		let mut tools = BTreeMap::new();
-		let mut prefix = owner_id.to_vec();
-		prefix.push(b't');
-		let mut bytes = 0;
-		for pair in counts.range(prefix.as_slice()..)? {
-			if Instant::now() >= deadline {
-				bail!("archive metadata query total deadline exceeded");
-			}
-			let (key, count) = pair?;
-			if !key.value().starts_with(&prefix) {
-				break;
-			}
-			bytes += key.value().len() + 32;
-			if bytes > MAX_PAGE_BYTES {
-				bail!("usage tool count wire budget exceeded");
-			}
-			tools.insert(
-				std::str::from_utf8(&key.value()[33..])?.to_owned(),
-				count.value(),
-			);
+	}
+	let mut tools = BTreeMap::new();
+	let mut prefix = owner_id.to_vec();
+	prefix.push(b't');
+	let mut bytes = 0;
+	for pair in counts.range(prefix.as_slice()..)? {
+		if Instant::now() >= deadline {
+			bail!("archive metadata query total deadline exceeded");
 		}
-		for (key, change) in &view.delta {
-			if !key.starts_with(&prefix) || *change == 0 {
-				continue;
-			}
-			let tool = std::str::from_utf8(&key[33..])?;
-			let count = PendingView::changed_count(*tools.get(tool).unwrap_or(&0), *change)?;
-			if count == 0 {
-				tools.remove(tool);
-			} else {
-				tools.insert(tool.to_owned(), count);
-			}
+		let (key, count) = pair?;
+		if !key.value().starts_with(&prefix) {
+			break;
 		}
-		let mut low = [0u8; 80];
-		low[..32].copy_from_slice(&owner_id);
-		let mut high = [255u8; 80];
-		high[..32].copy_from_slice(&owner_id);
-		let mut ordered = order.range(low.as_slice()..=high.as_slice())?;
-		let mut first = ordered
-			.next()
-			.transpose()?
-			.map(|(k, _)| k.value()[32..48].try_into().map(u128::from_be_bytes))
-			.transpose()?;
-		let mut last = ordered
-			.next_back()
-			.transpose()?
-			.map(|(k, _)| k.value()[32..48].try_into().map(u128::from_be_bytes))
-			.transpose()?
-			.or(first);
-		// A publication never changes owner or accepted time and never deletes
-		// an original. Pending additions can only extend these exact bounds.
-		for entry in view.entries.values() {
-			if entry.record.owner == owner {
-				let time = entry.record.accepted_unix_ms;
-				first = Some(first.map_or(time, |before| before.min(time)));
-				last = Some(last.map_or(time, |before| before.max(time)));
-			}
+		bytes += key.value().len() + 32;
+		if bytes > MAX_PAGE_BYTES {
+			bail!("usage tool count wire budget exceeded");
 		}
-		let unknown = values[0]
-			.checked_sub(active)
-			.ok_or_else(|| anyhow!("archive active count changed"))?;
-		let value = json!({"schema":"hepta-private-usage-v1","total_requests":values.iter().sum::<u64>(),"completed":values[1],"failed":values[2],"unknown":unknown,"active":active,"tool_counts":tools,"first_accepted_unix_ms":first,"last_accepted_unix_ms":last,"retention":"archive_metadata_not_evicted_with_hot_cache","coverage":"metadata_retained_at_archive_introduction_and_subsequent_admitted_requests","semantics":"dispatch_observation_not_transport_delivery_or_business_success","contains_parameters_or_output":false,"scope":"same_verified_credential_or_native_session"});
-		if wire_size(&value)? > MAX_PAGE_BYTES {
-			bail!("usage statistics wire budget exceeded");
+		tools.insert(
+			std::str::from_utf8(&key.value()[33..])?.to_owned(),
+			count.value(),
+		);
+	}
+	for (key, change) in &view.delta {
+		if !key.starts_with(&prefix) || *change == 0 {
+			continue;
 		}
-		Ok(value)
-	})
+		let tool = std::str::from_utf8(&key[33..])?;
+		let count = PendingView::changed_count(*tools.get(tool).unwrap_or(&0), *change)?;
+		if count == 0 {
+			tools.remove(tool);
+		} else {
+			tools.insert(tool.to_owned(), count);
+		}
+	}
+	let mut low = [0u8; 80];
+	low[..32].copy_from_slice(&owner_id);
+	let mut high = [255u8; 80];
+	high[..32].copy_from_slice(&owner_id);
+	let mut ordered = order.range(low.as_slice()..=high.as_slice())?;
+	let mut first = ordered
+		.next()
+		.transpose()?
+		.map(|(k, _)| k.value()[32..48].try_into().map(u128::from_be_bytes))
+		.transpose()?;
+	let mut last = ordered
+		.next_back()
+		.transpose()?
+		.map(|(k, _)| k.value()[32..48].try_into().map(u128::from_be_bytes))
+		.transpose()?
+		.or(first);
+	// A publication never changes owner or accepted time and never deletes
+	// an original. Pending additions can only extend these exact bounds.
+	for entry in view.entries.values() {
+		if entry.record.owner == owner {
+			let time = entry.record.accepted_unix_ms;
+			first = Some(first.map_or(time, |before| before.min(time)));
+			last = Some(last.map_or(time, |before| before.max(time)));
+		}
+	}
+	let unknown = values[0]
+		.checked_sub(active)
+		.ok_or_else(|| anyhow!("archive active count changed"))?;
+	let value = json!({"schema":"hepta-private-usage-v1","total_requests":values.iter().sum::<u64>(),"completed":values[1],"failed":values[2],"unknown":unknown,"active":active,"tool_counts":tools,"first_accepted_unix_ms":first,"last_accepted_unix_ms":last,"retention":"archive_metadata_not_evicted_with_hot_cache","coverage":"metadata_retained_at_archive_introduction_and_subsequent_admitted_requests","semantics":"dispatch_observation_not_transport_delivery_or_business_success","contains_parameters_or_output":false,"scope":"same_verified_credential_or_native_session"});
+	if wire_size(&value)? > MAX_PAGE_BYTES {
+		bail!("usage statistics wire budget exceeded");
+	}
+	Ok(value)
 }
 
 #[cfg(test)]
@@ -2251,3 +2318,7 @@ mod tests;
 #[cfg(test)]
 #[path = "request_archive_parallel_tests.rs"]
 mod parallel_tests;
+
+#[cfg(test)]
+#[path = "request_usage_projection_tests.rs"]
+mod usage_projection_tests;

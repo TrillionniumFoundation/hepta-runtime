@@ -265,10 +265,13 @@ async fn owner_rechecks_changed_file_boundaries_after_complete_worker_validation
 		let pin = Arc::new(pin);
 		let checked = pin.clone();
 		let stop = tokio_util::sync::CancellationToken::new();
-		Workers::new()
-			.run(&stop, Instant::now() + Duration::from_secs(2), move || {
-				checked.verify()
-			})
+		let workers = Workers::new();
+		let ticket = workers
+			.run_retained(
+				&stop,
+				Instant::now() + Duration::from_secs(2),
+				move |ticket| checked.verify_checked(&|| ticket.check_current()),
+			)
 			.await
 			.unwrap();
 		pin.verify_identity().unwrap();
@@ -286,10 +289,85 @@ async fn owner_rechecks_changed_file_boundaries_after_complete_worker_validation
 			_ => unreachable!(),
 		}
 		assert!(
-			pin.verify_identity().is_err(),
+			ticket
+				.finish(|ticket| pin.verify_checked(&|| ticket.check_current()))
+				.is_err(),
 			"missed {mutation} after worker completion"
 		);
+		assert!(stop.is_cancelled());
+		workers.drain().await.unwrap();
 	}
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn owner_full_hash_rejects_existing_shared_mapping_tail_change() {
+	use super::super::validation::Workers;
+	use std::time::Duration;
+
+	struct Mapping {
+		address: *mut u8,
+		length: usize,
+	}
+	impl Drop for Mapping {
+		fn drop(&mut self) {
+			unsafe { libc::munmap(self.address.cast(), self.length) };
+		}
+	}
+
+	let root = tempfile::tempdir().unwrap();
+	let path = root.path().join("owner-mapped-pin");
+	let bytes = vec![31; VERIFY_BUFFER_BYTES * 3 + 7];
+	std::fs::write(&path, &bytes).unwrap();
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+	let (mut pin, _) = PinnedFile::load(&path, None, bytes.len(), true, false).unwrap();
+	let file = std::fs::OpenOptions::new()
+		.read(true)
+		.write(true)
+		.open(&path)
+		.unwrap();
+	let address = unsafe {
+		libc::mmap(
+			std::ptr::null_mut(),
+			bytes.len(),
+			libc::PROT_READ | libc::PROT_WRITE,
+			libc::MAP_SHARED,
+			file.as_raw_fd(),
+			0,
+		)
+	};
+	assert_ne!(address, libc::MAP_FAILED);
+	let mapping = Mapping {
+		address: address.cast(),
+		length: bytes.len(),
+	};
+	let checked = pin.clone();
+	let stop = tokio_util::sync::CancellationToken::new();
+	let workers = Workers::new();
+	let ticket = workers
+		.run_retained(
+			&stop,
+			Instant::now() + Duration::from_secs(8),
+			move |ticket| checked.verify_checked(&|| ticket.check_current()),
+		)
+		.await
+		.unwrap();
+	// The writable MAP_SHARED mapping predates the worker. It changes the
+	// partial tail after completion without a write/open event as authority.
+	unsafe { mapping.address.add(bytes.len() - 1).write_volatile(30) };
+	assert_eq!(
+		unsafe { libc::msync(address, bytes.len(), libc::MS_SYNC) },
+		0
+	);
+	// Test-only metadata rebasing isolates the content check from timestamp
+	// precision. Production never rebases the pin or its expected digest.
+	pin.stamp = Stamp::of(&std::fs::metadata(&path).unwrap());
+	pin.verify_identity().unwrap();
+	let error = ticket
+		.finish(|ticket| pin.verify_checked(&|| ticket.check_current()))
+		.unwrap_err();
+	assert_eq!(error.to_string(), "observation profile changed");
+	assert!(stop.is_cancelled());
+	workers.drain().await.unwrap();
 }
 
 #[tokio::test(flavor = "current_thread")]

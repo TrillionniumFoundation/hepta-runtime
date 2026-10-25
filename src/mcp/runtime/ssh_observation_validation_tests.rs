@@ -285,3 +285,210 @@ fn queued_worker_rechecks_original_deadline_and_stop_before_full_read() {
 		}
 	});
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn returned_owner_tickets_keep_the_original_two_slot_budget() {
+	let workers = Workers::new();
+	let stop = CancellationToken::new();
+	let deadline = Instant::now() + Duration::from_secs(4);
+	let mut tickets = Vec::new();
+	for _ in 0..WORKERS {
+		let ticket = workers
+			.run_retained(&stop, deadline, |_| Ok(()))
+			.await
+			.unwrap();
+		assert_eq!(ticket.deadline, deadline);
+		tickets.push(ticket);
+	}
+	assert_eq!(workers.permits.available_permits(), 0);
+	let called = Arc::new(AtomicUsize::new(0));
+	let observed = called.clone();
+	assert!(workers
+		.run_retained(
+			&stop,
+			Instant::now() + Duration::from_millis(25),
+			move |_| {
+				observed.fetch_add(1, Ordering::SeqCst);
+				Ok(())
+			}
+		)
+		.await
+		.is_err());
+	assert_eq!(called.load(Ordering::SeqCst), 0);
+	assert!(!stop.is_cancelled());
+	for (index, ticket) in tickets.into_iter().enumerate() {
+		ticket
+			.finish(|_| {
+				assert_eq!(workers.permits.available_permits(), index);
+				Ok(())
+			})
+			.unwrap();
+		assert_eq!(workers.permits.available_permits(), index + 1);
+	}
+	assert!(!stop.is_cancelled());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn shutdown_waits_for_every_returned_owner_ticket() {
+	use std::future::{poll_fn, Future};
+	use std::task::Poll;
+	let workers = Workers::new();
+	let stop = CancellationToken::new();
+	let mut tickets = Vec::new();
+	for _ in 0..WORKERS {
+		tickets.push(
+			workers
+				.run_retained(&stop, Instant::now() + Duration::from_secs(4), |_| Ok(()))
+				.await
+				.unwrap(),
+		);
+	}
+	stop.cancel();
+	let mut drain = Box::pin(workers.drain());
+	assert!(poll_fn(|cx| Poll::Ready(drain.as_mut().poll(cx)))
+		.await
+		.is_pending());
+	drop(tickets.pop().unwrap());
+	assert!(poll_fn(|cx| Poll::Ready(drain.as_mut().poll(cx)))
+		.await
+		.is_pending());
+	drop(tickets.pop().unwrap());
+	drain.await.unwrap();
+	assert_eq!(workers.permits.available_permits(), WORKERS);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn owner_error_and_panic_freeze_before_ticket_capacity_is_reused() {
+	for panic in [false, true] {
+		let workers = Workers::new();
+		let stop = CancellationToken::new();
+		let ticket = workers
+			.run_retained(&stop, Instant::now() + Duration::from_secs(4), |_| Ok(()))
+			.await
+			.unwrap();
+		let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+			ticket.finish(|_| {
+				assert_eq!(workers.permits.available_permits(), WORKERS - 1);
+				if panic {
+					panic!("controlled owner check panic");
+				}
+				Err(anyhow!("original owner content mismatch"))
+			})
+		}));
+		if panic {
+			assert!(result.is_err());
+		} else {
+			assert_eq!(
+				result.unwrap().unwrap_err().to_string(),
+				"original owner content mismatch"
+			);
+		}
+		assert!(stop.is_cancelled());
+		assert_eq!(workers.permits.available_permits(), WORKERS);
+		workers.drain().await.unwrap();
+	}
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn owner_finish_checks_stop_before_and_after_its_fresh_read() {
+	for cancel_before in [false, true] {
+		let workers = Workers::new();
+		let stop = CancellationToken::new();
+		let ticket = workers
+			.run_retained(&stop, Instant::now() + Duration::from_secs(4), |_| Ok(()))
+			.await
+			.unwrap();
+		if cancel_before {
+			stop.cancel();
+		}
+		let mut called = false;
+		assert!(ticket
+			.finish(|_| {
+				called = true;
+				stop.cancel();
+				Ok(())
+			})
+			.is_err());
+		assert_eq!(called, !cancel_before);
+		assert!(stop.is_cancelled());
+		assert_eq!(workers.permits.available_permits(), WORKERS);
+	}
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn expired_owner_ticket_cannot_begin_or_accept_a_late_success() {
+	for expire_before in [false, true] {
+		let workers = Workers::new();
+		let stop = CancellationToken::new();
+		// Construct the expiry boundary directly: no sleep is used to change
+		// file stamps, and the production ticket never resets its deadline.
+		let ticket = OwnerTicket {
+			completion: Completion {
+				_permit: workers.permits.clone().acquire_owned().await.unwrap(),
+				stop: stop.clone(),
+				completed: false,
+			},
+			deadline: if expire_before {
+				Instant::now()
+			} else {
+				Instant::now() + Duration::from_secs(1)
+			},
+		};
+		let mut called = false;
+		assert!(ticket
+			.finish(|ticket| {
+				called = true;
+				// A synchronous operation cannot be preempted by the Tokio
+				// timer; the final original deadline must still refuse it.
+				while Instant::now() < ticket.deadline {
+					std::thread::yield_now();
+				}
+				Ok(())
+			})
+			.is_err());
+		assert_eq!(called, !expire_before);
+		assert!(stop.is_cancelled());
+		assert_eq!(workers.permits.available_permits(), WORKERS);
+	}
+}
+
+#[test]
+fn dropping_an_unpolled_completed_worker_result_freezes_and_releases_its_ticket() {
+	use std::future::{poll_fn, Future};
+	use std::task::Poll;
+	let runtime = tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.max_blocking_threads(1)
+		.build()
+		.unwrap();
+	runtime.block_on(async {
+		let workers = Workers::new();
+		let stop = CancellationToken::new();
+		let (check, entered, release) = held_check(Ok(()));
+		let mut pending = Box::pin(workers.run_retained(
+			&stop,
+			Instant::now() + Duration::from_secs(8),
+			move |_| check(),
+		));
+		assert!(poll_fn(|cx| Poll::Ready(pending.as_mut().poll(cx)))
+			.await
+			.is_pending());
+		timeout(Duration::from_secs(2), entered)
+			.await
+			.unwrap()
+			.unwrap();
+		release.send(()).unwrap();
+		// The only blocking thread must return the first result before this
+		// sentinel can run. The owner deliberately never repolls that result.
+		let (sent, receive) = std::sync::mpsc::channel();
+		let sentinel = tokio::task::spawn_blocking(move || sent.send(()).unwrap());
+		receive.recv_timeout(Duration::from_secs(4)).unwrap();
+		assert_eq!(workers.permits.available_permits(), WORKERS - 1);
+		assert!(!stop.is_cancelled());
+		drop(pending);
+		assert!(stop.is_cancelled());
+		sentinel.await.unwrap();
+		workers.drain().await.unwrap();
+		assert_eq!(workers.permits.available_permits(), WORKERS);
+	});
+}

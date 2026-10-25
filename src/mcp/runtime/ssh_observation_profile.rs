@@ -266,8 +266,13 @@ impl PinnedFile {
 		Ok(())
 	}
 	fn verify(&self) -> Result<()> {
+		self.verify_checked(&|| Ok(()))
+	}
+	fn verify_checked(&self, check_current: &impl Fn() -> Result<()>) -> Result<()> {
+		check_current()?;
 		let (mut file, stamp) =
 			checked_file(&self.path, self.maximum, self.private, self.executable)?;
+		check_current()?;
 		if stamp != self.stamp {
 			bail!("observation profile changed");
 		}
@@ -278,20 +283,29 @@ impl PinnedFile {
 		let mut length = 0usize;
 		let mut reader = Read::by_ref(&mut file).take(self.maximum as u64 + 1);
 		loop {
+			check_current()?;
 			let count = match Read::read(&mut reader, &mut buffer) {
-				Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+				Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
+					check_current()?;
+					continue;
+				}
 				result => result?,
 			};
+			check_current()?;
 			if count == 0 {
 				break;
 			}
 			length += count;
 			hash.update(&buffer[..count]);
+			check_current()?;
 		}
+		check_current()?;
 		verify_read(&self.path, &file, &stamp, length, self.maximum)?;
+		check_current()?;
 		if hash.finish().as_ref() != self.digest {
 			bail!("observation profile changed");
 		}
+		check_current()?;
 		Ok(())
 	}
 }
@@ -762,13 +776,36 @@ impl Profile {
 		self.shell.verify()?;
 		self.verify_policy()
 	}
-	pub(super) fn verify_boundaries(&self) -> Result<()> {
+	pub(super) fn verify_files_checked(
+		&self,
+		check_current: &impl Fn() -> Result<()>,
+	) -> Result<()> {
 		for file in &self.files {
-			file.verify_identity()?;
+			check_current()?;
+			file.verify_checked(check_current)?;
+			check_current()?;
 		}
+		check_current()?;
 		self.shell.verify_resolution()?;
+		check_current()?;
+		self.shell.target.verify_checked(check_current)?;
+		check_current()?;
+		self.verify_policy()?;
+		check_current()
+	}
+	pub(super) fn verify_boundaries(&self, check_current: &impl Fn() -> Result<()>) -> Result<()> {
+		for file in &self.files {
+			check_current()?;
+			file.verify_identity()?;
+			check_current()?;
+		}
+		check_current()?;
+		self.shell.verify_resolution()?;
+		check_current()?;
 		self.shell.target.verify_identity()?;
-		self.verify_policy()
+		check_current()?;
+		self.verify_policy()?;
+		check_current()
 	}
 	fn verify_policy(&self) -> Result<()> {
 		if !private_directory(&self.socket_parent)?.same_directory(&self.parent_stamp)

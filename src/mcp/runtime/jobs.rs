@@ -1434,10 +1434,68 @@ def drain(stream, sink, label):
             if log_errors[label] is None:
                 log_errors[label] = "close: " + str(exc)
 
-readers = [threading.Thread(target=drain, args=(child.stdout, out, "stdout"), daemon=True),
-           threading.Thread(target=drain, args=(child.stderr, err, "stderr"), daemon=True)]
-for reader in readers:
-    reader.start()
+readers = None
+try:
+    readers = [threading.Thread(target=drain, args=(child.stdout, out, "stdout"), daemon=True),
+               threading.Thread(target=drain, args=(child.stderr, err, "stderr"), daemon=True)]
+    for reader in readers:
+        reader.start()
+except Exception as exc:
+    # Reader startup is after Popen and the durable child receipt. Keep the
+    # original child unreaped until the last group signal, just as for a
+    # post-spawn receipt failure; this must never become a prelaunch error.
+    primary_error = type(exc).__name__ + ": " + str(exc)
+    cleanup_errors = []
+    group_signal = "submitted"
+    try:
+        os.killpg(child.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        group_signal = "already_absent"
+    except Exception as cleanup:
+        group_signal = "failed"
+        cleanup_errors.append("signal: " + str(cleanup))
+    child_reaped = False
+    try:
+        child.wait(timeout=2)
+        child_reaped = True
+    except Exception as cleanup:
+        cleanup_errors.append("wait: " + str(cleanup))
+    for index, (label, stream) in enumerate((("stdout", child.stdout), ("stderr", child.stderr))):
+        reader = readers[index] if readers is not None else None
+        # ident remains set after a thread exits. Join every reader whose
+        # startup is observable; do not join one without an observed ident.
+        try:
+            if reader is not None and reader.ident is not None:
+                reader.join(timeout=2)
+                if reader.is_alive():
+                    cleanup_errors.append(label + ": output reader did not stop")
+            else:
+                stream.close()
+        except Exception as cleanup:
+            cleanup_errors.append(label + ": " + str(cleanup))
+    try:
+        publish_terminal({
+            "at_unix_ms": int(time.time() * 1000),
+            "exit_code": 125,
+            "supervisor_error": "output reader startup failed after spawn: " + primary_error,
+            "supervisor_cleanup_errors": cleanup_errors,
+            "effect_outcome": "unknown",
+            "status_authoritative": False,
+            "automatic_retry": False,
+            "child_spawned": True,
+            "child_pid": child.pid,
+            "child_group_signal": group_signal,
+            "child_reaped": child_reaped,
+            "child_exit_code": child.returncode if child_reaped else None,
+            "output_complete": False,
+            "output_durable": False,
+            "cancelled": False,
+            "timed_out": False,
+        })
+    except Exception as publication_error:
+        # A failed error receipt must not replace the original startup error.
+        raise exc from publication_error
+    raise SystemExit(125)
 timed_out = False
 timeout = req.get("timeout_seconds")
 deadline = time.monotonic() + float(timeout) if timeout else None

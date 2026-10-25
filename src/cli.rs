@@ -65,5 +65,13 @@ pub enum Commands {
 		/// Explicit private profile authorizing bounded cached SSH authentication for job observations.
 		#[arg(long, value_name = "FILE", requires = "runtime_config")]
 		runtime_observation_pool_profile: Option<PathBuf>,
+
+		/// Also use the explicitly configured observation pool for file_info and binary_read.
+		#[arg(long, requires_all = ["runtime_config", "runtime_observation_pool_profile"])]
+		runtime_file_observation_pool: bool,
 	},
 }
+
+#[cfg(test)]
+#[path = "cli_tests.rs"]
+mod tests;

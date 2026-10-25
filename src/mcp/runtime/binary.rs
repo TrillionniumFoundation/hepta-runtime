@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Version-bound, descriptor-relative native binary file tools and atomic uploads.
 use super::config::{check_remote_path, runtime_config, ExecutionMode};
-use super::ssh::run_python_json;
+use super::ssh::{self, run_python_json, FileObservation};
 use anyhow::{bail, Result};
 use rmcp::schemars;
 use serde::{Deserialize, Serialize};
@@ -17,6 +17,10 @@ const SOURCE: &str = concat!(
 	"\n",
 	include_str!("binary_file.py")
 );
+
+pub(super) fn observation_source() -> &'static str {
+	SOURCE
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -140,11 +144,54 @@ async fn rpc(host_name: &str, path: &str, write: bool, mut q: Value) -> Result<S
 	Ok(serde_json::to_string(&value)?)
 }
 
+fn observation_read_root(host_name: &str, path: &str) -> Result<&'static str> {
+	let host = runtime_config()?.host(host_name)?;
+	if host.execution_mode != ExecutionMode::Operator {
+		bail!("native binary tools require an operator host");
+	}
+	check_remote_path(host_name, path, false, false, false)?;
+	host.allowed_read_path_prefixes
+		.iter()
+		.filter(|root| {
+			path == root.as_str() || path.starts_with(&format!("{}/", root.trim_end_matches('/')))
+		})
+		.max_by_key(|root| root.len())
+		.map(String::as_str)
+		.ok_or_else(|| anyhow::anyhow!("file outside configured roots"))
+}
+
 pub async fn info(p: FileInfoParams) -> Result<String> {
+	if ssh::file_observation_pool_requested() {
+		let root = observation_read_root(&p.host, &p.path)?;
+		let value = ssh::run_file_observation(
+			&p.host,
+			FileObservation::Info {
+				root,
+				path: &p.path,
+			},
+		)
+		.await?;
+		return Ok(serde_json::to_string(&value)?);
+	}
 	rpc(&p.host, &p.path, false, json!({"op":"info"})).await
 }
 
 pub async fn read(p: BinaryReadParams) -> Result<String> {
+	if ssh::file_observation_pool_requested() {
+		let root = observation_read_root(&p.host, &p.path)?;
+		let value = ssh::run_file_observation(
+			&p.host,
+			FileObservation::Read {
+				root,
+				path: &p.path,
+				offset: p.offset,
+				limit: p.limit.unwrap_or(32768).clamp(1, 65536),
+				expected_version: p.expected_version.as_deref(),
+			},
+		)
+		.await?;
+		return Ok(serde_json::to_string(&value)?);
+	}
 	rpc(&p.host,&p.path,false,json!({"op":"read","offset":p.offset,"limit":p.limit.unwrap_or(32768).clamp(1,65536),"expected_version":p.expected_version})).await
 }
 
