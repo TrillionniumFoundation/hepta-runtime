@@ -1891,6 +1891,7 @@ fn verify_members(database: &Database, archive: &Archive, deadline: Instant) -> 
 	content::verify_members(database, archive, &PendingView::default(), deadline)
 }
 
+#[cfg(test)]
 fn read_snapshot<T>(
 	root: &Path,
 	archive: &Archive,
@@ -1902,8 +1903,10 @@ fn read_snapshot<T>(
 
 #[derive(Clone, Copy)]
 enum SnapshotReadMode {
+	#[cfg(test)]
 	Serial,
 	Usage,
+	Pages,
 }
 
 fn read_snapshot_with_mode<T>(
@@ -1953,11 +1956,15 @@ fn read_snapshot_with_mode<T>(
 		// Watches remain invalidation fences; neither Some nor None certifies
 		// original bytes. Check every effective record within this same budget.
 		match mode {
+			#[cfg(test)]
 			SnapshotReadMode::Serial => {
 				content::verify_members(&database, archive, &view, deadline)?;
 			}
 			SnapshotReadMode::Usage => {
 				content::verify_usage_members(&database, archive, &view, deadline, &_guard)?;
+			}
+			SnapshotReadMode::Pages => {
+				content::verify_page_members(&database, archive, &view, deadline, &_guard)?;
 			}
 		}
 		let result = read(&database, &view)?;
@@ -2102,36 +2109,43 @@ pub(super) fn pages(
 	}
 	// Freeze happened before even the hot store or any cursor was opened.
 	// All pages share one complete fresh Record join, one immutable transaction
-	// and pending view. Their individual selected-record rereads are retained.
-	read_snapshot(root, archive, deadline, |database, view| {
-		let transaction = database.begin_read()?;
-		let rows = transaction.open_table(ROWS)?;
-		let order = transaction.open_table(ORDER)?;
-		let counts = transaction.open_table(COUNTS)?;
-		let large = rows.len()? > LARGE_ARCHIVE_ROWS;
-		let values = queries
-			.into_iter()
-			.map(|query| {
-				query.and_then(|query| {
-					let (records, total) = page_from_view(
-						&rows,
-						&order,
-						&counts,
-						archive,
-						view,
-						&query.owner,
-						query.cursor.as_ref(),
-						query.limit,
-						deadline,
-					)?;
-					archive_page_output(records, total, query.limit, deadline)
+	// and pending view. Large joins use the existing two owned readers; small
+	// joins stay serial. Individual selected-record rereads are retained.
+	read_snapshot_with_mode(
+		root,
+		archive,
+		deadline,
+		SnapshotReadMode::Pages,
+		|database, view| {
+			let transaction = database.begin_read()?;
+			let rows = transaction.open_table(ROWS)?;
+			let order = transaction.open_table(ORDER)?;
+			let counts = transaction.open_table(COUNTS)?;
+			let large = rows.len()? > LARGE_ARCHIVE_ROWS;
+			let values = queries
+				.into_iter()
+				.map(|query| {
+					query.and_then(|query| {
+						let (records, total) = page_from_view(
+							&rows,
+							&order,
+							&counts,
+							archive,
+							view,
+							&query.owner,
+							query.cursor.as_ref(),
+							query.limit,
+							deadline,
+						)?;
+						archive_page_output(records, total, query.limit, deadline)
+					})
 				})
-			})
-			.collect();
-		// No individual success is exposed until read_snapshot's original
-		// final namespace/layout and absolute-deadline fences have succeeded.
-		Ok(PageBatch { values, large })
-	})
+				.collect();
+			// No individual success is exposed until read_snapshot's original
+			// final namespace/layout and absolute-deadline fences have succeeded.
+			Ok(PageBatch { values, large })
+		},
+	)
 }
 
 #[allow(clippy::too_many_arguments)]

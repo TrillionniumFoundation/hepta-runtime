@@ -605,3 +605,61 @@ fn async_metadata_timeout_retains_its_permit_until_original_children_join() {
 		assert_eq!(slots.available_permits(), MAX_METADATA_QUERIES);
 	});
 }
+
+#[test]
+fn parallel_page_observation_rechecks_warm_off_page_originals() {
+	let fixture = Fixture::new(false, 4);
+	let database = fixture.database(fixture.entries.clone());
+	let view = PendingView::default();
+	let selected = {
+		let _guard = store_lock().unwrap();
+		let transaction = database.begin_read().unwrap();
+		let rows = transaction.open_table(ROWS).unwrap();
+		let order = transaction.open_table(ORDER).unwrap();
+		let counts = transaction.open_table(COUNTS).unwrap();
+		let (selected, total) = page_from_view(
+			&rows,
+			&order,
+			&counts,
+			&fixture.archive,
+			&view,
+			&fixture.entries[0].record.owner,
+			None,
+			1,
+			budget(),
+		)
+		.unwrap();
+		assert_eq!(total, 4);
+		// Exclude both the returned page and its extra lookahead record.
+		assert_eq!(selected.len(), 2);
+		selected
+	};
+	let victim = fixture
+		.entries
+		.iter()
+		.find(|entry| {
+			selected
+				.iter()
+				.all(|record| record.request_id != entry.record.request_id)
+		})
+		.unwrap();
+	// Use the real two-reader kernel on a small synthetic archive. This tests
+	// fresh complete observations, not the production large-row selector.
+	parallel_check(&fixture, &database, &view, 4).unwrap();
+	let mut changed = victim.record.clone();
+	changed.elapsed_ms = Some(changed.elapsed_ms.unwrap() + 1);
+	let path = fixture
+		.root
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!("{}.json", changed.request_id));
+	std::fs::write(path, serde_json::to_vec(&changed).unwrap()).unwrap();
+	let originals_before_refusal = fixture.original_bytes();
+	let cache_before_refusal = std::fs::read(fixture.root.path().join(CACHE_NAME)).unwrap();
+	assert!(parallel_check(&fixture, &database, &view, 4).is_err());
+	assert_eq!(fixture.original_bytes(), originals_before_refusal);
+	assert_eq!(
+		std::fs::read(fixture.root.path().join(CACHE_NAME)).unwrap(),
+		cache_before_refusal
+	);
+}

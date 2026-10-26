@@ -131,9 +131,19 @@ pub(super) fn verify_members(
 	verify_members_in_mode(database, archive, view, deadline, None)
 }
 
-// Only the usage snapshot calls this entry, while it owns the actual global
-// store guard and state. Cold validation and page reads retain the serial gate.
+// Online usage and page snapshots own the actual global store guard and state.
+// Their large views share the bounded reader kernel; cold validation stays serial.
 pub(super) fn verify_usage_members(
+	database: &Database,
+	archive: &Archive,
+	view: &PendingView,
+	deadline: Instant,
+	guard: &AuditStoreGuard<'_>,
+) -> Result<()> {
+	verify_members_in_mode(database, archive, view, deadline, Some(guard))
+}
+
+pub(super) fn verify_page_members(
 	database: &Database,
 	archive: &Archive,
 	view: &PendingView,
@@ -148,7 +158,7 @@ fn verify_members_in_mode(
 	archive: &Archive,
 	view: &PendingView,
 	deadline: Instant,
-	usage_guard: Option<&AuditStoreGuard<'_>>,
+	online_guard: Option<&AuditStoreGuard<'_>>,
 ) -> Result<()> {
 	live(deadline)?;
 	let transaction = database.begin_read()?;
@@ -167,7 +177,7 @@ fn verify_members_in_mode(
 				.ok_or_else(|| anyhow!("archive index count overflow"))?;
 		}
 	}
-	if let Some(guard) = usage_guard.filter(|_| base_count > LARGE_ARCHIVE_ROWS) {
+	if let Some(guard) = online_guard.filter(|_| base_count > LARGE_ARCHIVE_ROWS) {
 		return verify_members_parallel(
 			archive,
 			(&rows, &order),

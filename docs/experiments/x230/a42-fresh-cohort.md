@@ -1,3 +1,5 @@
+> **Current follow-up, 2026-10-26 UTC:** A48 completed a new six-stage qualification (1,266 passed, 23 ignored) and passed the fixed small-archive guard. Its complete large comparison failed C4 correctness and two CPU gates. See [A48 results](a48/README.md), the [retained A46 comparison](a42-a46-release-small.md), and [current multi-host admission](native-auth-20261026.md). The original checkpoint below is retained verbatim. Neither candidate is presented as an adopted performance gain.
+
 # A42 fresh archive cohorts: tested source, release admission pending
 
 **Validation checkpoint: 2026-10-25 21:55 EDT (2026-10-26 01:55 UTC).**
@@ -117,3 +119,21 @@ multi-host recovery result is claimed. An admissible release window, an actual
 fresh release and all fixed benchmark gates remain required before performance
 adoption. The current inability to complete those steps does not establish a
 global optimization limit.
+
+
+
+## A46 subsequent evidence — 2026-10-26 UTC
+
+The dated checkpoint above remains preserved. A separate A46 attempt has now
+completed the source-bound release and passed the fixed small C1 regression
+guard. The large C1/C4 comparison completed all 80 measurements; C4 improved
+from 8/32 to 30/32 correct responses, but two candidate deadline failures
+prevented adoption. See [A46 release and complete archive evidence](a42-a46-release-small.md) and its
+[machine-readable summary](a42-a46-summary.json). The original release refusals
+and A45 `no_clear_observed` remain retained. A46 is a complete failed adoption
+comparison, not a successful subset or a replacement for the older records.
+
+
+## A48 follow-up
+
+The exact qualified A48 source and the complete failed large comparison are recorded in [the A48 result index](a48/README.md). A separate bounded diagnostic and a possible record-batch candidate cannot replace or be pooled into either historical failed comparison.

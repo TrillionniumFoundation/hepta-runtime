@@ -1,0 +1,118 @@
+{
+  "added_source_files": 0,
+  "candidate_source_map_file": {
+    "bytes": 18132,
+    "path": "candidate-source-map.json",
+    "sha256": "88aa00ec2e7285b0ad4a183ead9ab842adbd0c54a506fd378ceeb2dac2ac6436"
+  },
+  "candidate_source_map_sha256": "f7e2d63efdefd2001519de66e09a5b2ae0f2673db6c36522f56c0040191f332b",
+  "changed_existing_files": 4,
+  "changed_files": [
+    {
+      "bytes": 19459,
+      "parent_bytes": 19210,
+      "parent_sha256": "47e4decc621e32ae813e76be5c69349a439bb7f9b97f1d54285ca2c0c13128f9",
+      "path": "src/mcp/runtime/request_archive_content.rs",
+      "sha256": "5517200af9889d571a625b31ae30b761f81f0154016181bf6ffd0a8f8357af38"
+    },
+    {
+      "bytes": 19485,
+      "parent_bytes": 17638,
+      "parent_sha256": "7dc81bb5e26cd5c31888ef2d1c91f4084b624fcbcb5152724ef001de0bf0a9e8",
+      "path": "src/mcp/runtime/request_archive_content_parallel_tests.rs",
+      "sha256": "8b9dddfd5b9fb2577452016d5818ca87c91fb790605e7061d822794b6212851f"
+    },
+    {
+      "bytes": 75046,
+      "parent_bytes": 74729,
+      "parent_sha256": "6cae7533fe9f1613789336a3ed36ec66874b5726f92984dbe22415b88c9fa867",
+      "path": "src/mcp/runtime/request_archive_index.rs",
+      "sha256": "5cec6362637d1ac17c9b6ae55e4d5b9c317ae893e818ac8c8d54b5e8b7cd389d"
+    },
+    {
+      "bytes": 4905,
+      "parent_bytes": 2601,
+      "parent_sha256": "52ce38560c7e82aabea8b41bef888d3656eb4862c32d88ac56cac768d09a9281",
+      "path": "src/mcp/runtime/request_archive_page_batch_tests.rs",
+      "sha256": "2fc048af5c5e2e71bdfa34aae37303a5e86377f85545ea71b75f0439102eb437"
+    }
+  ],
+  "invariants": {
+    "a43_owner_changes_included": false,
+    "cold_validation_serial": true,
+    "collection_window_milliseconds": 1,
+    "coordinator_source_unchanged": true,
+    "full_original_record_and_stamp_join_retained": true,
+    "large_base_row_threshold_strictly_greater_than": 16384,
+    "metadata_admission_and_public_deadline_source_unchanged": true,
+    "metadata_query_slots": 8,
+    "original_read_workers": 2,
+    "original_worker_kernel_unchanged": true,
+    "page_projection_and_selected_original_rereads_retained": true,
+    "product_metadata_deadline_seconds": 3,
+    "shared_final_namespace_and_deadline_fences_retained": true,
+    "small_views_serial": true
+  },
+  "new_tests": [
+    "parallel_page_observation_rechecks_warm_off_page_originals",
+    "late_off_page_content_change_discards_every_shared_page"
+  ],
+  "parent_commit": "eb57edfbb0db8b934534bb511674ab4635e5e31a",
+  "parent_pr": 71,
+  "parent_qualification_report_sha256": "d6ee0938ef816c5f472edb967fe2764fc3bc05b4e958243e102f1d542c4fa46f",
+  "parent_qualified_release_sha256": "dde7f516d39ec8f6b7ee010e5747f55b0b10d742c419df22fd96ecbfffdd5299",
+  "parent_repository": "TrillionniumFoundation/hepta-runtime",
+  "parent_source_map_sha256": "c1ae8a69901aee16e03871e920a6a7e321672c9b30b3a6e75d3560390b8c2e11",
+  "performance_claim": null,
+  "prepared_utc": "2026-10-26T03:35:23.507120+00:00",
+  "qualification": {
+    "clippy_executed": false,
+    "expected_linux_top_level_tests_if_all_pass": {
+      "failed": 0,
+      "ignored": 23,
+      "passed": 1266
+    },
+    "format_executed": false,
+    "new_tests_passed": null,
+    "note": "Counts are expected coverage, not a claimed test result. Parent r03 totals were 1264/0/23; two Linux-executed tests were added.",
+    "release_executed": false,
+    "remote_builds_started_by_overlay_author": 0,
+    "required_stages": [
+      "format",
+      "fmt-check",
+      "clean-package",
+      "clippy",
+      "test",
+      "release"
+    ],
+    "source_state": "unformatted input overlay; qualify the actual post-format source separately",
+    "tests_executed": false
+  },
+  "required_existing_test_coverage": [
+    "original_workers_expired_budget_does_not_detach_held_children",
+    "async_metadata_timeout_retains_its_permit_until_original_children_join",
+    "strict_walk_finishes_child_work_before_full_terminal_fences_in_both_layouts",
+    "original_worker_second_spawn_failure_joins_the_first_waiting_thread",
+    "original_worker_panic_resumes_through_the_coordinator_lock_after_all_joins",
+    "original_workers_bound_submitted_unconsumed_work_to_one_per_lane",
+    "both_async_timeouts_keep_all_admitted_permits_until_actual_io_cleanup",
+    "completion_after_fixed_minimum_deadline_rejects_even_a_later_deadline_member",
+    "fixed_cutoff_is_one_millisecond_and_new_members_never_extend_it",
+    "a_final_epoch_change_discards_every_already_projected_page",
+    "shared_page_projection_errors_stay_local_before_the_common_final_fence"
+  ],
+  "review_diff": {
+    "bytes": 9615,
+    "path": "source.diff",
+    "sha256": "a09d4ace873b3c6d25d8570ba926ae6a310f31a9e4bb9de5a5aba221f5ff7214"
+  },
+  "schema": "hepta-runtime-a48-source-overlay/v1",
+  "source_files": 168,
+  "source_map_digest_encoding": "UTF-8 JSON path-to-SHA256 mapping, sorted keys and compact separators comma/colon, no trailing newline",
+  "status": "prepared_not_qualified",
+  "test_scope": {
+    "late_off_page_content_change_discards_every_shared_page": "Actual pages path with two owners and final BeforeSnapshotFence hook; Linux small fixture; no production threshold/performance claim.",
+    "parallel_page_observation_rechecks_warm_off_page_originals": "Explicit real two-reader kernel on four records; excludes actual page plus lookahead; no production threshold/performance claim."
+  },
+  "unchanged_files": 164
+}
