@@ -1,3 +1,14 @@
+> **Current status — 2026-10-26 UTC:** A43 has passed all six X230 A46
+> qualification stages (1,241 tests passed, 23 ignored) and A47's 10 correctness
+> cases plus all 128 measured local business jobs. This does not establish a
+> stable performance or memory improvement. See the [current A46/A47 results](a43-a46-a47-results.md)
+> and [summary](a43-a46-a47-summary.json), including original archived evidence.
+> The original unqualified checkpoint below is retained at its historical date.
+
+---
+
+## Historical checkpoint - original document retained verbatim
+
 # A43 owner publication barrier: independent experimental source
 
 **Validation checkpoint: 2026-10-25 21:55 EDT (2026-10-26 01:55 UTC).**
@@ -117,3 +128,65 @@ before the changed owner barrier and can miss the intended effect.
 No global exactly-once business guarantee, reboot or power-loss guarantee is
 claimed. Combining this candidate with A42 creates a new source tree that
 requires independent qualification and acceptance.
+
+
+## A46 qualification and A47 real owner-lifecycle update — 2026-10-26 UTC
+
+The earlier preformat/unqualified checkpoint and its no-clear observations
+are preserved. A separately admitted A46 attempt subsequently executed all
+six qualification stages on X230, from **03:29:15.471 to 03:43:18.853 UTC**.
+Format, format check, package clean, strict Clippy, all-feature tests and release
+all returned 0. Every stage retained its own complete 2 GiB memory/disk gate,
+two jobs/workers/test threads and the original budgets; the original worker
+was raw-reaped with status 0 and retained custody.
+
+The complete test inventory is **1,241 passed, 0 failed, 23 ignored**
+(18 + 1,215 + 8); the two filtered child summaries are not counted twice.
+All seven new owner-publication tests executed successfully. Test and release
+artifacts were strictly `fresh=false`. Only `jobs_owner_publication_tests.rs`
+changed during format. The final **166-file** tested map is
+`b9eaddec7cb30de7e18f2131bebeee98145e3d41e00243b13ec50f6fe01c0d9b`.
+The 13,497,648-byte release copy has SHA-256
+`60f6955cc77a07b5a95b24c175611a59901c7d912abfb960f7c8673e472354f7`.
+The r07 parent remained unchanged; A42/A48 changes are not included.
+
+A47 then completed **10/10 declared local correctness cases and 128/128 measured
+jobs** in fixed r07/A43/A43/r07 order, with 32 jobs per version at each of C1
+and C4. Normal cases executed real business `Popen`, preserved exit 0 and exit
+7, and reached confirmed durable terminal publication. Six real SIGKILLs,
+three cuts per version, occurred after owner-intent close, started close or
+the final owner-directory sync, all before business launch. Bound original
+pidfds and raw wait4 status 9 (decoded return code −9) established the kills.
+Restart and ambiguous same-key relaunch were refused, with no second business
+effect. No unexpected
+failure, measurement timeout, retry or unexecuted slot occurred.
+
+| Pooled r07 → A43 observation | C1 | C4 |
+| --- | ---: | ---: |
+| Completed jobs/s | 6.787901 → 6.835106 (+0.695%) | 15.337808 → 15.548363 (+1.373%) |
+| Whole-lifecycle supervisor wait4 CPU | 4.229883 → 4.186100 s (−1.035%) | 6.185351 → 6.361896 s (+2.854%) |
+| Median submit → business completion | 119.925 → 118.746 ms (−0.983%) | 182.631 → 188.244 ms (+3.074%) |
+
+The A47 pass means correct, complete execution, not a performance-superiority
+gate. This one fixed ABBA does not establish a stable performance gain.
+Wait4 RSS maxima increased strictly across all eight cells and A43 occupied
+the middle rounds, so the lower pooled candidate maxima are not attributed
+to memory optimization. Both original file syncs remain; the pre-business
+directory barrier count changes from two to one as a structural fact.
+
+This comparison executes exact Python owner-path code extracted from the
+qualified sources with isolated Linux effects. It does not establish full
+MCP, SSH, multi-host, macOS, reboot or power-loss acceptance, or recovery after
+partial business effects. Previous CI records remain historical. Full
+stage/case/cell details and retained SHA-bound evidence are in
+[A46/A47 results](a43-a46-a47-results.md) and the
+[machine-readable summary](a43-a46-a47-summary.json).
+
+The complete qualified-source Git-object proof also binds this publication:
+165 of the 166 prepared-source blobs stay identical to the checkpoint, and
+only the formatted owner-publication test changes. The five captured original
+qualification/lifecycle report and log files are archived losslessly with
+original and compressed SHA-256 identities; their owned fixture metadata and
+synthetic identifiers contain no authentication credentials or private keys.
+The results document links the archive, source proof and read-only recomputation
+helper, and identifies referenced sidecars that are not bundled.

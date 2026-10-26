@@ -310,7 +310,8 @@ fn both_owner_files_are_synced_and_closed_before_one_directory_barrier_and_workl
 				1
 			);
 		}
-		let value: Value = serde_json::from_str(first["owner_files"][name].as_str().unwrap()).unwrap();
+		let value: Value =
+			serde_json::from_str(first["owner_files"][name].as_str().unwrap()).unwrap();
 		assert_eq!(value["job_id"], "owner-publication");
 		assert_eq!(value["launch_nonce"], "a".repeat(32));
 		assert_eq!(value["supervisor_pid"], first["fixture_pid"]);
@@ -387,7 +388,9 @@ fn shared_owner_directory_sync_failure_preserves_both_tombstones_without_work() 
 	for name in ["owner-intent.json", "started.json"] {
 		for operation in ["fsync", "close"] {
 			assert!(events.iter().any(|event| {
-				event["name"] == name && event["operation"] == operation && event["returned"] == true
+				event["name"] == name
+					&& event["operation"] == operation
+					&& event["returned"] == true
 			}));
 		}
 	}
