@@ -233,6 +233,7 @@ fn verify_members_in_mode(
 }
 
 const ORIGINAL_READ_WORKERS: usize = 2;
+const ORIGINAL_READ_BATCH: usize = 32;
 
 struct OriginalTask<'a> {
 	number: u64,
@@ -243,21 +244,32 @@ struct OriginalTask<'a> {
 	deadline: Instant,
 }
 
+struct OriginalBatch<'a> {
+	first: u64,
+	tasks: Vec<OriginalTask<'a>>,
+}
+
+#[derive(Debug)]
 struct OriginalReply {
-	number: u64,
+	first: u64,
+	count: u64,
+	verified: u64,
 	result: Result<()>,
 }
 
 struct OriginalLane<'scope, 'env> {
-	send: Option<SyncSender<OriginalTask<'env>>>,
+	send: Option<SyncSender<OriginalBatch<'env>>>,
 	receive: Option<Receiver<OriginalReply>>,
 	thread: Option<ScopedJoinHandle<'scope, u64>>,
-	outstanding: Option<u64>,
+	pending: Vec<OriginalTask<'env>>,
+	outstanding: Option<(u64, u64)>,
 	verified: u64,
 }
 
-// A lane includes both a queued/running job and its unconsumed result. Its next
-// job cannot be submitted until that one result has been consumed successfully.
+// Each lane owns at most 32 original tasks, including a coordinator-side partial
+// batch. Pending tasks and an outstanding queued/running/unconsumed batch are
+// mutually exclusive: receive the previous reply before filling the next batch.
+// The two lanes therefore retain at most 64 tasks, not 64 plus a producer queue.
 struct OriginalWorkers<'scope, 'env: 'scope> {
 	lanes: [OriginalLane<'scope, 'env>; ORIGINAL_READ_WORKERS],
 	cancelled: &'env AtomicBool,
@@ -275,6 +287,8 @@ struct OriginalWorkers<'scope, 'env: 'scope> {
 enum OriginalWorkerEvent {
 	BeforeSpawn(usize),
 	Started(usize),
+	BatchSubmitted(usize, u64, u64),
+	CancellationStarted,
 	Exiting(usize),
 }
 
@@ -300,6 +314,7 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 				send: None,
 				receive: None,
 				thread: None,
+				pending: Vec::new(),
 				outstanding: None,
 				verified: 0,
 			}),
@@ -332,11 +347,12 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 					std::io::Error::other("synthetic original worker spawn failure").into(),
 				);
 			}
-			let (send_job, receive_job) = std::sync::mpsc::sync_channel::<OriginalTask<'env>>(1);
+			let (send_job, receive_job) = std::sync::mpsc::sync_channel::<OriginalBatch<'env>>(1);
 			let (send_result, receive_result) = std::sync::mpsc::sync_channel(1);
 			self.lanes[lane].send = Some(send_job);
 			self.lanes[lane].receive = Some(receive_result);
 			let cancelled = self.cancelled;
+			let deadline = self.deadline;
 			#[cfg(test)]
 			let hook = self.hook;
 			self.lanes[lane].thread = Some(
@@ -350,19 +366,19 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 							hook(OriginalWorkerEvent::Started(lane));
 						}
 						let mut reported = 0u64;
-						while let Ok(task) = receive_job.recv() {
+						while let Ok(batch) = receive_job.recv() {
 							if cancelled.load(Ordering::Acquire) {
 								break;
 							}
-							let number = task.number;
-							let result = perform(task);
-							let failed = result.is_err();
-							if send_result.send(OriginalReply { number, result }).is_err() {
+							let reply = perform_original_batch(batch, cancelled, deadline, perform);
+							let verified = reply.verified;
+							let failed = reply.result.is_err();
+							if send_result.send(reply).is_err() {
 								break;
 							}
-							// Each reply belongs to a checked, non-wrapping submitted
-							// number; neither lane can report more than that bound.
-							reported += 1;
+							// Every verified prefix lies within checked, non-wrapping
+							// submitted record numbers, even when a batch fails.
+							reported += verified;
 							if failed {
 								break;
 							}
@@ -375,7 +391,7 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 	}
 
 	fn receive(&mut self, lane: usize) -> Result<()> {
-		let Some(number) = self.lanes[lane].outstanding.take() else {
+		let Some((first, count)) = self.lanes[lane].outstanding.take() else {
 			return Ok(());
 		};
 		live(self.deadline)?;
@@ -387,21 +403,82 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 			.map_err(|error| {
 				anyhow::Error::new(error).context("archive original worker result unavailable")
 			})?;
-		if reply.number != number {
+		if reply.first != first || reply.count != count {
 			bail!("archive original worker task identity changed");
 		}
 		// Preserve the actual original-read error, including its source chain;
 		// subsequent cancellation/disconnect/join bookkeeping cannot replace it.
 		reply.result?;
+		if reply.verified != count {
+			bail!("archive original worker completion changed");
+		}
 		live(self.deadline)?;
 		self.lanes[lane].verified = self.lanes[lane]
 			.verified
-			.checked_add(1)
+			.checked_add(count)
 			.ok_or_else(|| anyhow!("archive original worker count overflow"))?;
 		self.verified = self
 			.verified
-			.checked_add(1)
+			.checked_add(count)
 			.ok_or_else(|| anyhow!("archive original worker count overflow"))?;
+		Ok(())
+	}
+
+	// Called before producing the next expected Entry as well as by submit.
+	// Do not hold an extra admitted record while both 32-record lanes are full.
+	fn ready_for_record(&mut self) -> Result<usize> {
+		let lane =
+			((self.submitted / ORIGINAL_READ_BATCH as u64) % ORIGINAL_READ_WORKERS as u64) as usize;
+		if self.lanes[lane].pending.is_empty() {
+			self.receive(lane)?;
+		}
+		live(self.deadline)?;
+		if self.cancelled.load(Ordering::Acquire) {
+			bail!("archive original worker cancelled");
+		}
+		if self.lanes[lane].outstanding.is_some()
+			|| self.lanes[lane].pending.len() >= ORIGINAL_READ_BATCH
+		{
+			bail!("archive original worker input coverage changed");
+		}
+		Ok(lane)
+	}
+
+	fn dispatch(&mut self, lane: usize) -> Result<()> {
+		let count = self.lanes[lane].pending.len();
+		if count == 0 {
+			return Ok(());
+		}
+		live(self.deadline)?;
+		if self.cancelled.load(Ordering::Acquire) {
+			bail!("archive original worker cancelled");
+		}
+		if count > ORIGINAL_READ_BATCH || self.lanes[lane].outstanding.is_some() {
+			bail!("archive original worker input coverage changed");
+		}
+		let first = self.lanes[lane].pending[0].number;
+		let batch = OriginalBatch {
+			first,
+			tasks: std::mem::take(&mut self.lanes[lane].pending),
+		};
+		let sender = self.lanes[lane]
+			.send
+			.as_ref()
+			.ok_or_else(|| anyhow!("archive original worker input unavailable"))?;
+		// Filling the batch already consumed this lane's previous reply. Its
+		// capacity-one channel must have room; never add an unbounded send wait.
+		if sender.try_send(batch).is_err() {
+			bail!("archive original worker input unavailable");
+		}
+		self.lanes[lane].outstanding = Some((first, count as u64));
+		#[cfg(test)]
+		if let Some(hook) = self.hook {
+			hook(OriginalWorkerEvent::BatchSubmitted(
+				lane,
+				first,
+				count as u64,
+			));
+		}
 		Ok(())
 	}
 
@@ -412,9 +489,7 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 		filename: &str,
 		expected: Entry,
 	) -> Result<()> {
-		let lane = (self.submitted % ORIGINAL_READ_WORKERS as u64) as usize;
-		self.receive(lane)?;
-		live(self.deadline)?;
+		let lane = self.ready_for_record()?;
 		let next = self
 			.submitted
 			.checked_add(1)
@@ -427,21 +502,23 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 			expected,
 			deadline: self.deadline,
 		};
-		let sender = self.lanes[lane]
-			.send
-			.as_ref()
-			.ok_or_else(|| anyhow!("archive original worker input unavailable"))?;
-		// The previous result was consumed, so this lane's capacity-one input
-		// must have room. Never add an unbounded send wait to the caller budget.
-		if sender.try_send(task).is_err() {
-			bail!("archive original worker input unavailable");
+		if self.lanes[lane].pending.is_empty() {
+			self.lanes[lane].pending.reserve_exact(ORIGINAL_READ_BATCH);
 		}
-		self.lanes[lane].outstanding = Some(self.submitted);
+		self.lanes[lane].pending.push(task);
 		self.submitted = next;
+		if self.lanes[lane].pending.len() == ORIGINAL_READ_BATCH {
+			self.dispatch(lane)?;
+		}
 		Ok(())
 	}
 
 	fn finish(&mut self, expected_count: u64) -> Result<()> {
+		// A nonempty partial tail must run through the same original readers
+		// before coverage, joins and the walk's terminal namespace fences.
+		for lane in 0..ORIGINAL_READ_WORKERS {
+			self.dispatch(lane)?;
+		}
 		for lane in 0..ORIGINAL_READ_WORKERS {
 			self.receive(lane)?;
 		}
@@ -454,9 +531,15 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 
 	fn stop_and_join(&mut self) -> Result<()> {
 		self.cancelled.store(true, Ordering::Release);
+		#[cfg(test)]
+		if let Some(hook) = self.hook {
+			hook(OriginalWorkerEvent::CancellationStarted);
+		}
 		for lane in &mut self.lanes {
 			drop(lane.send.take());
 			drop(lane.receive.take());
+			// Never turn producer failure, timeout or unwind into new reads.
+			lane.pending.clear();
 		}
 		let mut failure = None;
 		let mut panics: [Option<Box<dyn std::any::Any + Send>>; ORIGINAL_READ_WORKERS] =
@@ -499,6 +582,49 @@ impl Drop for OriginalWorkers<'_, '_> {
 	}
 }
 
+fn perform_original_batch<'a, F>(
+	batch: OriginalBatch<'a>,
+	cancelled: &AtomicBool,
+	deadline: Instant,
+	perform: &F,
+) -> OriginalReply
+where
+	F: Fn(OriginalTask<'a>) -> Result<()> + Sync,
+{
+	let first = batch.first;
+	let count = batch.tasks.len() as u64;
+	let mut verified = 0u64;
+	let result = (|| {
+		if count == 0 || count > ORIGINAL_READ_BATCH as u64 || first.checked_add(count).is_none() {
+			bail!("archive original worker batch coverage changed");
+		}
+		for (offset, task) in batch.tasks.into_iter().enumerate() {
+			if cancelled.load(Ordering::Acquire) {
+				bail!("archive original worker cancelled");
+			}
+			live(deadline)?;
+			if task.number != first + offset as u64 || task.deadline != deadline {
+				bail!("archive original worker task identity changed");
+			}
+			// Keep each task's own directory and the exact original error chain.
+			// A failed prefix is never reported or credited as a complete batch.
+			perform(task)?;
+			live(deadline)?;
+			if cancelled.load(Ordering::Acquire) {
+				bail!("archive original worker cancelled");
+			}
+			verified += 1;
+		}
+		Ok(())
+	})();
+	OriginalReply {
+		first,
+		count,
+		verified,
+		result,
+	}
+}
+
 fn verify_original_task(task: OriginalTask<'_>) -> Result<()> {
 	let actual = read_original(task.archive, task.directory, &task.filename, task.deadline)?;
 	if actual.record != task.expected.record || actual.stamp != task.expected.stamp {
@@ -525,7 +651,9 @@ fn verify_members_parallel(
 		archive.walk_with_finish(
 			&mut state,
 			|(workers, seen_pending), directory, filename, _| {
-				live(deadline)?;
+				// Admit space before decoding/cloning this expected record. No
+				// additional producer batch accumulates behind two full lanes.
+				workers.ready_for_record()?;
 				let key = original_name(filename)?;
 				let base = rows
 					.get(key.as_slice())?

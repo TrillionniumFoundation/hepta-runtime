@@ -1,3 +1,7 @@
+> **Current follow-up, 2026-10-26 UTC — A50:** [Bounded original-reader batches](a50/README.md) passed all six fresh qualification stages (1,272 passed, 23 ignored) and all six fixed small-archive regression gates. The large ABBA attempt is **failed and incomplete**: 60/80 measured attempts, 46 successes, 14 failures, 20 unexecuted; candidate C4 is 30/32. The final baseline's one fixed warmup failed, so partial ratios are not accepted as performance gains. [A50 full results](a50/large-results.md), [A49's retained failed diagnostic](a49/results.md), and [next evidence/design boundaries](a50/next-steps.md) preserve all failure states. No adoption, native multi-host acceptance, deployment or absolute optimization limit is claimed.
+>
+> The earlier A48/A46/A42 checkpoint follows verbatim as history.
+
 > **Current follow-up, 2026-10-26 UTC:** A48 completed a new six-stage qualification (1,266 passed, 23 ignored) and passed the fixed small-archive guard. Its complete large comparison failed C4 correctness and two CPU gates. See [A48 results](a48/README.md), the [retained A46 comparison](a42-a46-release-small.md), and [current multi-host admission](native-auth-20261026.md). The original checkpoint below is retained verbatim. Neither candidate is presented as an adopted performance gain.
 
 # A42 fresh archive cohorts: tested source, release admission pending

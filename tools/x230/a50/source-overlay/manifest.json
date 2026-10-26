@@ -1,0 +1,183 @@
+{
+  "adapted_existing_test_semantics": {
+    "held_children_exit": "Two actual full batches (64 records), hold first records 0/32, deterministic cancellation acknowledgement before releasing suffixes; producer/read errors, two panic cases, poisoning and original deadline/join still tested.",
+    "original_workers_bound_submitted_unconsumed_work_to_one_per_lane": "One batch per lane, including queued/running/unconsumed work; 65th record must wait while both 32-record batches remain outstanding.",
+    "parallel_page_observation_rechecks_warm_off_page_originals": "33 originals; one full batch and second-lane tail, preserve off-page mutation refusal and original/cache byte checks.",
+    "strict_walk_finishes_child_work_before_full_terminal_fences_in_both_layouts": "33 originals so a full batch and a second-lane partial tail both join before a synthetic final namespace mutation."
+  },
+  "added_source_files": 0,
+  "benchmark_executions": 0,
+  "candidate_source_map_file": {
+    "bytes": 18132,
+    "path": "candidate-source-map.json",
+    "sha256": "3155d3ec9e5bc5f1d730ae84e3fcbb4fc2d09c4ed5d452fa67f139a35f636be8"
+  },
+  "candidate_source_map_sha256": "e348cb3fb70a1d9dde8f97d722e65052c2ffba7807d409a2c822d75c314f4dd0",
+  "changed_existing_files": 2,
+  "changed_files": [
+    {
+      "bytes": 23373,
+      "parent_bytes": 19459,
+      "parent_sha256": "5517200af9889d571a625b31ae30b761f81f0154016181bf6ffd0a8f8357af38",
+      "path": "src/mcp/runtime/request_archive_content.rs",
+      "sha256": "2c634c74cd492a344ddce6e36efa63b18dee1e4d2144cb2d14ac80590623d26a"
+    },
+    {
+      "bytes": 35424,
+      "parent_bytes": 19485,
+      "parent_sha256": "8b9dddfd5b9fb2577452016d5818ca87c91fb790605e7061d822794b6212851f",
+      "path": "src/mcp/runtime/request_archive_content_parallel_tests.rs",
+      "sha256": "3308bb8515a7f0c742f96feeafe6811977e7d0f8ae29f1ef793e3b630f18fe63"
+    }
+  ],
+  "invariants": {
+    "a43_owner_changes_included": false,
+    "additional_producer_queue": false,
+    "cleanup_discards_unsubmitted_partial_batches": true,
+    "cold_validation_serial": true,
+    "collection_window_milliseconds": 1,
+    "complete_original_read_function_byte_unchanged": true,
+    "coordinator_source_unchanged": true,
+    "full_original_record_and_stamp_join_retained": true,
+    "full_partial_tail_verification_before_terminal_fences": true,
+    "lane_selection": "floor(submitted / 32) % 2",
+    "large_base_row_threshold_strictly_greater_than": 16384,
+    "maximum_retained_original_tasks_including_pending": 64,
+    "metadata_admission_and_public_deadline_source_unchanged": true,
+    "metadata_query_slots": 8,
+    "original_join_loop_byte_unchanged": true,
+    "original_read_batch_records": 32,
+    "original_read_workers": 2,
+    "page_projection_and_selected_original_rereads_retained": true,
+    "panic_propagation_guard_poisoning_and_actual_original_join_retained": true,
+    "pending_and_outstanding_per_lane_mutually_exclusive": true,
+    "per_record_archive_directory_filename_record_stamp_retained": true,
+    "per_record_cancellation_and_same_absolute_deadline": true,
+    "product_metadata_deadline_seconds": 3,
+    "record_numbers_and_counters_nonwrapping": true,
+    "reply_identity": "first record number and original batch record count; success additionally requires verified prefix == count",
+    "serial_verifier_and_cold_validation_byte_unchanged": true,
+    "shared_final_namespace_and_deadline_fences_retained": true,
+    "small_views_serial": true
+  },
+  "motivation_evidence": {
+    "a48_complete_failed_large_report": {
+      "bytes": 247764,
+      "local_path": "runtime-tools/a48-evidence/large/large-report.json",
+      "sha256": "8c0377e52d930d93597f7b4e551d68101a29bffe6dd9aaa3d9bcdf22a036215f"
+    },
+    "a49_existing_steady_trace": {
+      "bytes": 1992,
+      "local_path": "runtime-tools/a49-evidence/steady-trace.json",
+      "sha256": "7d6c5a7b1a5a18af348562467b064340d4ff9b341cf78031ab801b75abf1eb28"
+    },
+    "a49_failed_diagnostic_report": {
+      "bytes": 53651,
+      "local_path": "runtime-tools/a49-evidence/report.json",
+      "sha256": "a50e218f891bb39f5dc1b4aada44d64d4781215ff0d0901399d9247c54fb3b9a"
+    },
+    "inference": "Per-record channel handshakes are a testable source of CPU/context-switch overhead. A49 supports snapshot-read dominance in its failed warmup only; it does not attribute C4 or prove this hypothesis."
+  },
+  "new_tests": [
+    "original_worker_batches_cover_exact_boundaries_and_partial_tails",
+    "original_worker_batch_failures_preserve_original_chain_and_join_other_lane",
+    "original_worker_batch_cancellation_discards_partial_tail_and_running_suffix",
+    "original_worker_batch_reply_identity_and_complete_coverage_are_required",
+    "original_worker_batches_refuse_invalid_task_sequences_and_extended_deadlines",
+    "original_worker_batches_keep_each_original_directory_across_shard_boundaries"
+  ],
+  "old_results_modified_or_pooled": false,
+  "parent_commit": "a9ba701676138f7e379dab07b38af27c72c46ed8",
+  "parent_pr": 71,
+  "parent_qualification_report_sha256": "2787841b5242c22e314d46a4e99074fb0b91f04ed4240f230004b5d635c3cd0b",
+  "parent_qualified_release_sha256": "252cb58e08559d6cc68a5db19008c20ec858f7693a44ae353e60bbda81a2b386",
+  "parent_repository": "TrillionniumFoundation/hepta-runtime",
+  "parent_source_map_sha256": "be631e20eb7ec586c77807bb4e38b6529c5cda1fcc906eb1fac20f793c8c0ff1",
+  "parent_tree": "40df74c05e8ea3a62aff157b1be571c09f5807a1",
+  "performance_claim": null,
+  "prepared_utc": "2026-10-26T05:42:41.449335+00:00",
+  "qualification": {
+    "clippy_executed": false,
+    "expected_linux_top_level_tests_if_all_pass": {
+      "failed": 0,
+      "ignored": 23,
+      "passed": 1272
+    },
+    "format_executed": false,
+    "new_tests_passed": null,
+    "note": "Expected counts only: actual qualified A48 1266 passed/23 ignored plus six new tests. No A50 format/build/test result exists yet.",
+    "release_executed": false,
+    "remote_builds_started_by_overlay_author": 0,
+    "required_stages": [
+      "format",
+      "fmt-check",
+      "clean-package",
+      "clippy",
+      "test",
+      "release"
+    ],
+    "source_state": "unformatted input overlay; qualify and record the actual post-format map separately",
+    "tests_executed": false
+  },
+  "readme": {
+    "bytes": 7230,
+    "path": "README.md",
+    "sha256": "59f3debca200d443a44c3bb339df8e26dedbe9608d98846fad209f382e404589"
+  },
+  "required_existing_test_coverage": [
+    "original_workers_expired_budget_does_not_detach_held_children",
+    "async_metadata_timeout_retains_its_permit_until_original_children_join",
+    "strict_walk_finishes_child_work_before_full_terminal_fences_in_both_layouts",
+    "original_worker_second_spawn_failure_joins_the_first_waiting_thread",
+    "original_worker_panic_resumes_through_the_coordinator_lock_after_all_joins",
+    "original_workers_bound_submitted_unconsumed_work_to_one_per_lane",
+    "both_async_timeouts_keep_all_admitted_permits_until_actual_io_cleanup",
+    "completion_after_fixed_minimum_deadline_rejects_even_a_later_deadline_member",
+    "fixed_cutoff_is_one_millisecond_and_new_members_never_extend_it",
+    "a_final_epoch_change_discards_every_already_projected_page",
+    "shared_page_projection_errors_stay_local_before_the_common_final_fence",
+    "parallel_page_observation_rechecks_warm_off_page_originals",
+    "late_off_page_content_change_discards_every_shared_page"
+  ],
+  "retained_existing_parallel_tests": [
+    "original_workers_preserve_producer_error_until_held_children_have_joined",
+    "original_workers_preserve_read_error_chain_until_other_child_has_joined",
+    "original_workers_finish_cleanup_during_existing_coordinator_unwind",
+    "original_worker_panic_resumes_through_the_coordinator_lock_after_all_joins",
+    "original_workers_do_not_resume_a_second_panic_during_coordinator_unwind",
+    "original_workers_expired_budget_does_not_detach_held_children",
+    "original_worker_second_spawn_failure_joins_the_first_waiting_thread",
+    "original_workers_bound_submitted_unconsumed_work_to_one_per_lane",
+    "parallel_original_join_keeps_one_db_view_with_pending_replacement_and_addition",
+    "parallel_original_join_refuses_complete_record_disagreement_and_missing_coverage",
+    "strict_walk_finishes_child_work_before_full_terminal_fences_in_both_layouts",
+    "strict_walk_with_finish_still_rejects_cross_namespace_duplicates_before_finish",
+    "async_metadata_timeout_retains_its_permit_until_original_children_join",
+    "parallel_page_observation_rechecks_warm_off_page_originals"
+  ],
+  "review": {
+    "candidate_source_bodies_final_sha_independently_reviewed": true,
+    "independent_agent": "github_audit",
+    "independent_static_review_completed_before_freeze": true,
+    "root_logic_review_completed_before_freeze": true,
+    "rust_compilation_or_test_claimed": false
+  },
+  "review_diff": {
+    "bytes": 35622,
+    "path": "source.diff",
+    "sha256": "de16c3cd35eb743482fe54cc94ebd62ee5b372a3441d14da190daa07968c7aa4"
+  },
+  "schema": "hepta-runtime-a50-source-overlay/v1",
+  "source_files": 168,
+  "source_map_digest_encoding": "UTF-8 JSON path-to-SHA256 mapping, sorted keys and compact separators comma/colon, no trailing newline",
+  "status": "prepared_not_qualified",
+  "test_scope": {
+    "original_worker_batch_cancellation_discards_partial_tail_and_running_suffix": "Prepared source test only; no execution claimed. See README for exact real-kernel versus forged-protocol scope.",
+    "original_worker_batch_failures_preserve_original_chain_and_join_other_lane": "Prepared source test only; no execution claimed. See README for exact real-kernel versus forged-protocol scope.",
+    "original_worker_batch_reply_identity_and_complete_coverage_are_required": "Prepared source test only; no execution claimed. See README for exact real-kernel versus forged-protocol scope.",
+    "original_worker_batches_cover_exact_boundaries_and_partial_tails": "Prepared source test only; no execution claimed. See README for exact real-kernel versus forged-protocol scope.",
+    "original_worker_batches_keep_each_original_directory_across_shard_boundaries": "Prepared source test only; no execution claimed. See README for exact real-kernel versus forged-protocol scope.",
+    "original_worker_batches_refuse_invalid_task_sequences_and_extended_deadlines": "Prepared source test only; no execution claimed. See README for exact real-kernel versus forged-protocol scope."
+  },
+  "unchanged_files": 166
+}
