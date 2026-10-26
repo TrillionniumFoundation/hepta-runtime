@@ -9,10 +9,22 @@ use std::path::{Component, Path};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
 
 use super::config::HostConfig;
+
+#[path = "ssh_direct.rs"]
+mod direct;
+pub use direct::Guard as DirectTransportGuard;
+
+pub fn start_direct_transport() -> Result<DirectTransportGuard> {
+	direct::start()
+}
+
+pub fn freeze_direct_transport() {
+	direct::freeze();
+}
 
 const MAX_CAPTURE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_OBSERVATION_BYTES: usize = 64 * 1024;
@@ -402,6 +414,18 @@ pub async fn run_capture(
 	stdin_data: &[u8],
 	timeout: Duration,
 ) -> Result<std::process::Output> {
+	let deadline = tokio::time::Instant::now()
+		.checked_add(timeout)
+		.context("SSH deadline exceeds the monotonic clock range")?;
+	run_capture_until(host, remote_command, stdin_data, deadline).await
+}
+
+async fn run_capture_until(
+	host: &HostConfig,
+	remote_command: &str,
+	stdin_data: &[u8],
+	deadline: tokio::time::Instant,
+) -> Result<std::process::Output> {
 	let mut command = ssh_base(host);
 	command
 		.arg(remote_command)
@@ -409,54 +433,7 @@ pub async fn run_capture(
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
 		.kill_on_drop(true);
-	let mut child = command
-		.spawn()
-		.with_context(|| format!("failed to start ssh for {}", host.ssh_target))?;
-	let mut stdin = child
-		.stdin
-		.take()
-		.ok_or_else(|| anyhow!("missing SSH stdin"))?;
-	let stdout = child
-		.stdout
-		.take()
-		.ok_or_else(|| anyhow!("missing SSH stdout"))?;
-	let stderr = child
-		.stderr
-		.take()
-		.ok_or_else(|| anyhow!("missing SSH stderr"))?;
-	let result = tokio::time::timeout(timeout, async {
-		let input = async {
-			stdin.write_all(stdin_data).await?;
-			stdin.shutdown().await?;
-			drop(stdin);
-			Ok::<(), anyhow::Error>(())
-		};
-		let wait = async { Ok::<_, anyhow::Error>(child.wait().await?) };
-		let (_, stdout, stderr, status) =
-			tokio::try_join!(input, read_bounded(stdout), read_bounded(stderr), wait)?;
-		Ok::<_, anyhow::Error>(std::process::Output {
-			status,
-			stdout,
-			stderr,
-		})
-	})
-	.await;
-	let output = match result {
-		Ok(Ok(output)) => output,
-		other => {
-			let _ = child.start_kill();
-			let _ = child.wait().await;
-			return match other {
-				Ok(Err(error)) => Err(error),
-				_ => Err(anyhow!(
-					"ssh to {} timed out after {}s",
-					host.ssh_target,
-					timeout.as_secs()
-				)),
-			};
-		}
-	};
-	Ok(output)
+	direct::capture(&host.ssh_target, command, stdin_data, deadline).await
 }
 
 pub async fn run_python_json<I, O>(
@@ -508,9 +485,12 @@ where
 	I: Serialize + ?Sized,
 	O: DeserializeOwned,
 {
+	let deadline = tokio::time::Instant::now()
+		.checked_add(timeout)
+		.context("SSH deadline exceeds the monotonic clock range")?;
 	let remote_command = python_json_command(interpreter, code)?;
 	let payload = serde_json::to_vec(input)?;
-	let output = run_capture(host, &remote_command, &payload, timeout).await?;
+	let output = run_capture_until(host, &remote_command, &payload, deadline).await?;
 	if !output.status.success() {
 		let stderr = String::from_utf8_lossy(&output.stderr);
 		let stdout = String::from_utf8_lossy(&output.stdout);
@@ -577,13 +557,14 @@ pub fn build_exec_command(
 /// Fixed no-argument capability; the administrator policy, not the caller, owns
 /// systemd properties, DynamicUser selection and protected paths.
 pub async fn run_jobctl(host: &HostConfig, input: &serde_json::Value) -> Result<serde_json::Value> {
+	let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
 	let mut data = serde_json::to_vec(input)?;
 	data.push(b'\n');
-	let output = run_capture(
+	let output = run_capture_until(
 		host,
 		"sudo -n /usr/local/libexec/hepta-runtime-jobctl",
 		&data,
-		Duration::from_secs(20),
+		deadline,
 	)
 	.await?;
 	if !output.status.success() {
