@@ -1318,16 +1318,15 @@ owner_binding = {"at_unix_ms":int(time.time()*1000),"job_id":req["job_id"],
     "launch_nonce":req["launch_nonce"],"supervisor_pid":os.getpid(),
     "supervisor_uid":os.geteuid(),"supervisor_identity":owner_identity,
     "invocation_id":os.environ.get("INVOCATION_ID")}
-def publish_owner(name):
+def stage_owner(name):
     fd = os.open(job / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as stream:
         json.dump(owner_binding, stream, sort_keys=True); stream.flush(); os.fsync(stream.fileno())
-    fd = os.open(job, os.O_RDONLY)
-    try: os.fsync(fd)
-    finally: os.close(fd)
-# Even interrupted publication is a tombstone: later owners cannot replay it.
-publish_owner("owner-intent.json")
-publish_owner("started.json")
+# Both files must be synced and closed before one barrier publishes their names.
+# Surviving partial creates remain tombstones; no workload precedes this barrier.
+stage_owner("owner-intent.json")
+stage_owner("started.json")
+os.fsync(_hepta_directory_pins[-1])
 child = None
 cancel_requested = False
 

@@ -2545,3 +2545,6 @@ fn normal_wait_custody_loss_never_renews_exhausted_drain_deadline() {
 		assert!(join["remaining_drain_seconds"].as_f64().unwrap() <= 0.0);
 	}
 }
+
+#[path = "jobs_owner_publication_tests.rs"]
+mod owner_publication_tests;
