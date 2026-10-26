@@ -119,6 +119,64 @@ fn original_name(filename: &str) -> Result<Id> {
 	id(raw_id)
 }
 
+// Borrow only the expected compact ROW within its original read transaction.
+// Authoritative originals still undergo the complete read_original observation.
+enum ExpectedRow<'a> {
+	Compact(codec::View<'a>),
+	Legacy(Entry),
+}
+impl<'a> ExpectedRow<'a> {
+	fn parse(raw: &'a [u8]) -> Result<Self> {
+		match codec::view_if_compact(raw)? {
+			Some(value) => Ok(Self::Compact(value)),
+			None => Ok(Self::Legacy(codec::decode(raw)?)),
+		}
+	}
+	fn order_value(&self) -> Result<Id> {
+		match self {
+			Self::Compact(value) => Ok(value.identity),
+			Self::Legacy(entry) => cold::order_value(entry),
+		}
+	}
+	fn order_key(&self) -> Result<[u8; 80]> {
+		match self {
+			Self::Compact(value) => {
+				let mut key = [0u8; 80];
+				key[..32].copy_from_slice(&value.owner);
+				key[32..48].copy_from_slice(&value.accepted.to_be_bytes());
+				key[48..].copy_from_slice(&value.identity);
+				Ok(key)
+			}
+			Self::Legacy(entry) => order_key(&entry.record),
+		}
+	}
+	fn matches(&self, actual: &Entry) -> Result<bool> {
+		match self {
+			Self::Compact(value) => {
+				// Exhaustive matching makes any future Record field a compile-time
+				// obligation. id() retains the canonical lowercase identity domain;
+				// decoded JSON escapes remain valid, uppercase aliases do not.
+				let Record {
+					request_id,
+					owner,
+					tool_name,
+					state,
+					accepted_unix_ms,
+					elapsed_ms,
+				} = &actual.record;
+				Ok(id(request_id)? == value.identity
+					&& id(owner)? == value.owner
+					&& tool_name.as_str() == value.tool
+					&& *state == value.state
+					&& *accepted_unix_ms == value.accepted
+					&& *elapsed_ms == value.elapsed
+					&& actual.stamp == value.stamp)
+			}
+			Self::Legacy(entry) => Ok(actual.record == entry.record && actual.stamp == entry.stamp),
+		}
+	}
+}
+
 // The online caller holds STORE_LOCK and state. Cold validation instead fixes
 // the generation/watch before and after this pass and refuses any overlap.
 // The database view itself is immutable throughout this complete identity join.
@@ -196,33 +254,42 @@ fn verify_members_in_mode(
 	archive.walk(|directory, filename, _| {
 		live(deadline)?;
 		let key = original_name(filename)?;
-		let base = rows
-			.get(key.as_slice())?
-			.map(|raw| codec::decode(raw.value()))
+		// Keep this access guard alive through the full comparison below. No
+		// borrowed ROW escapes this member or the immutable ROWS/ORDER view.
+		let raw = rows.get(key.as_slice())?;
+		let base = raw
+			.as_ref()
+			.map(|raw| ExpectedRow::parse(raw.value()))
 			.transpose()?;
 		if let Some(entry) = &base {
-			let expected_order = cold::order_value(entry)?;
-			if id(&entry.record.request_id)? != key
+			let expected_order = entry.order_value()?;
+			if expected_order != key
 				|| order
-					.get(order_key(&entry.record)?.as_slice())?
+					.get(entry.order_key()?.as_slice())?
 					.is_none_or(|value| value.value() != expected_order)
 			{
 				bail!("archive order projection changed");
 			}
 		}
-		let expected = match view.entries.get(&key) {
-			Some(entry) => {
-				if !seen_pending.insert(key) {
-					bail!("archive pending identity repeated");
-				}
-				entry
+		// Validate the base before consulting its pending replacement. An
+		// effective terminal row cannot conceal corrupt base bytes or ORDER.
+		let pending = view.entries.get(&key);
+		if pending.is_some() {
+			if !seen_pending.insert(key) {
+				bail!("archive pending identity repeated");
 			}
+		} else if base.is_none() {
+			bail!("archive namespace changed");
+		}
+		let actual = read_original(archive, directory, filename, deadline)?;
+		let matches = match pending {
+			Some(entry) => actual.record == entry.record && actual.stamp == entry.stamp,
 			None => base
 				.as_ref()
-				.ok_or_else(|| anyhow!("archive namespace changed"))?,
+				.ok_or_else(|| anyhow!("archive namespace changed"))?
+				.matches(&actual)?,
 		};
-		let actual = read_original(archive, directory, filename, deadline)?;
-		if actual.record != expected.record || actual.stamp != expected.stamp {
+		if !matches {
 			bail!("archive full record content changed");
 		}
 		observed = observed
