@@ -39,6 +39,9 @@ static STORE_LOCK: OnceLock<AuditStoreLock> = OnceLock::new();
 static ACTIVE: OnceLock<Mutex<HashMap<String, Weak<AtomicBool>>>> = OnceLock::new();
 static READ_PINS: OnceLock<Mutex<HashMap<String, Vec<Weak<()>>>>> = OnceLock::new();
 #[cfg(unix)]
+#[path = "request_archive_batch.rs"]
+mod archive_batch;
+#[cfg(unix)]
 #[path = "request_archive_store.rs"]
 mod archive_store;
 #[cfg(unix)]
@@ -1808,34 +1811,23 @@ fn archive_history_at_until(
 	params: RequestHistoryParams,
 	deadline: Instant,
 ) -> Result<String> {
-	if !valid_id(owner) {
-		bail!("request archive unavailable to this scope");
-	}
-	let limit = params.limit.unwrap_or(32) as usize;
-	if !(1..=32).contains(&limit) || params.after_id.as_deref().is_some_and(|id| !valid_id(id)) {
-		bail!("invalid request archive page");
-	}
-	let (archive, cursor) = {
-		let _guard = index::query_lock(deadline)?;
-		let hot = open_store(root)?;
-		let archive = hot_snapshot(root, &hot)?.1;
-		let cursor = if let Some(id) = params.after_id.as_deref() {
-			let record = archive.read_record(&format!("{id}.json"))?;
-			if record.owner != owner {
-				bail!("request archive cursor unavailable to this scope");
-			}
-			Some(record)
-		} else {
-			None
-		};
-		(archive, cursor)
-	};
-	let (mut records, total) =
-		index::page(root, &archive, owner, cursor.as_ref(), limit, deadline)?;
+	archive_batch::run(root, owner, params, deadline)
+}
+
+#[cfg(unix)]
+fn archive_page_output(
+	mut records: Vec<Record>,
+	total: u64,
+	limit: usize,
+	deadline: Instant,
+) -> Result<String> {
 	let more = records.len() > limit;
 	records.truncate(limit);
 	let mut page = Vec::new();
 	for record in &records {
+		if Instant::now() >= deadline {
+			return Err(MetadataQueryDeadline.into());
+		}
 		let state = match record.state {
 			DurableState::Unknown if is_dispatch_active(&record.request_id)? => "accepted",
 			DurableState::Unknown => "unknown",
@@ -1859,7 +1851,11 @@ fn archive_history_at_until(
 	if wire_size(&output)? > MAX_PAGE_BYTES {
 		bail!("request archive wire page limit exceeded");
 	}
-	Ok(serde_json::to_string(&output)?)
+	let serialized = serde_json::to_string(&output)?;
+	if Instant::now() >= deadline {
+		return Err(MetadataQueryDeadline.into());
+	}
+	Ok(serialized)
 }
 
 pub async fn archive_history(owner: &str, params: RequestHistoryParams) -> Result<String> {
