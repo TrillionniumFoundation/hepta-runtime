@@ -30,6 +30,12 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+      - name: Install integration test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ripgrep python3-jsonschema
+          rg --version
+
       - name: Install pinned Rust toolchain
         run: |
           rustup toolchain install 1.95.0 --profile minimal
@@ -48,28 +54,31 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
 
       - name: Test
-        run: cargo test --locked --all-targets
+        run: |
+          # Private fixtures must declare their own permissions under a normal umask.
+          umask 022
+          cargo test --locked --all-targets
 
       - name: Descriptor-relative file safety
-        run: python3 tests/file_capabilities.py
+        run: /usr/bin/python3 tests/file_capabilities.py
 
       - name: Control-plane regression
         run: |
           set -euo pipefail
-          python3 -B tests/runtime_registry_page_tests.py
-          python3 -B tests/chatgpt_v11_layered_read_tests.py
-          python3 -B tests/chatgpt_v11_process_start_concurrency_tests.py
-          python3 -B tests/chatgpt_v11_v4_session_binding_tests.py
-          python3 -B tests/runtime_workflow_owner_tests.py
-          python3 -B tests/chatgpt_v10_single_v4_effect_tests.py
-          python3 -B tests/chatgpt_v10_stream_custody_tests.py
-          python3 -B tests/test_computer_http.py
-          python3 -B tests/full_operator_facade_tests.py
-          python3 -B tests/full_operator_cancel_tests.py
-          python3 -B tests/chatgpt_request_identity_tests.py
-          python3 -B tests/full_operator_session_recovery_tests.py
-          python3 -B deploy/maintenance_20261017/native_rollout_tests.py
-          python3 -B deploy/maintenance_20261017/recover_control_channel_tests.py
+          /usr/bin/python3 -B tests/runtime_registry_page_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v11_layered_read_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v11_process_start_concurrency_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v11_v4_session_binding_tests.py
+          /usr/bin/python3 -B tests/runtime_workflow_owner_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v10_single_v4_effect_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v10_stream_custody_tests.py
+          /usr/bin/python3 -B tests/test_computer_http.py
+          /usr/bin/python3 -B tests/full_operator_facade_tests.py
+          /usr/bin/python3 -B tests/full_operator_cancel_tests.py
+          /usr/bin/python3 -B tests/chatgpt_request_identity_tests.py
+          /usr/bin/python3 -B tests/full_operator_session_recovery_tests.py
+          /usr/bin/python3 -B deploy/maintenance_20261017/native_rollout_tests.py
+          /usr/bin/python3 -B deploy/maintenance_20261017/recover_control_channel_tests.py
 
       - name: Release build
         run: cargo build --locked --release

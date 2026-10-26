@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Synthetic original/view agreement, pure refusal and bounded cold recovery.
 use super::*;
+use std::os::unix::fs::PermissionsExt;
 
 struct Fixture {
 	database: Database,
@@ -29,6 +30,7 @@ fn budget() -> Instant {
 impl Fixture {
 	fn new(original: Record, indexed: Record) -> Self {
 		let root = tempfile::Builder::new()
+			.permissions(std::fs::Permissions::from_mode(0o700))
 			.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
 			.unwrap();
 		let archive = open_archive(root.path()).unwrap();

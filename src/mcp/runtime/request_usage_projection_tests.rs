@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Real owner projections over one redb transaction and a validated pending view.
 use super::*;
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 fn record(owner: &str, tool: &str, time: u128, state: DurableState) -> Record {
 	Record {
@@ -34,6 +34,7 @@ fn database(root: &Path) -> Database {
 #[test]
 fn one_validated_view_has_exact_private_counts_for_four_owners() {
 	let root = tempfile::Builder::new()
+		.permissions(std::fs::Permissions::from_mode(0o700))
 		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
 		.unwrap();
 	let _guard = store_lock().unwrap();
@@ -95,6 +96,7 @@ fn one_validated_view_has_exact_private_counts_for_four_owners() {
 #[test]
 fn legitimate_completion_and_addition_share_the_same_readonly_pending_view() {
 	let root = tempfile::Builder::new()
+		.permissions(std::fs::Permissions::from_mode(0o700))
 		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
 		.unwrap();
 	let _guard = store_lock().unwrap();

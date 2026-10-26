@@ -7,7 +7,10 @@ use std::os::unix::fs::PermissionsExt;
 use std::time::Duration;
 
 fn root() -> tempfile::TempDir {
-	tempfile::tempdir().unwrap()
+	tempfile::Builder::new()
+		.permissions(std::fs::Permissions::from_mode(0o700))
+		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
+		.unwrap()
 }
 fn begin(root: &Path, owner: char, tool: &str, target: Option<String>) -> Work {
 	Work::Begin(Begin {
