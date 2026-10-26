@@ -57,10 +57,15 @@ fn parallel_original_publication_keeps_the_exact_watch_and_generation_fence() {
 }
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
-pub(super) fn fixture() -> (tempfile::TempDir, String) {
-	let root = tempfile::Builder::new()
+fn private_root() -> tempfile::TempDir {
+	tempfile::Builder::new()
+		.permissions(std::fs::Permissions::from_mode(0o700))
 		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
-		.unwrap();
+		.unwrap()
+}
+
+pub(super) fn fixture() -> (tempfile::TempDir, String) {
+	let root = private_root();
 	let owner = "a".repeat(64);
 	let ticket = begin_at(root.path(), &owner, "host_list").unwrap();
 	finish_sync(ticket, AuditCompletion::Completed).unwrap();
@@ -707,7 +712,7 @@ fn crashed_archive_mode(root: &Path, bad_counts: bool, sealed: bool) {
 
 #[test]
 fn successful_open_reports_full_recovery_only_after_unclean_exit() {
-	let root = tempfile::tempdir().unwrap();
+	let root = private_root();
 	crashed_archive(root.path(), false);
 	let directory = audit_root(root.path()).unwrap();
 	let file = open_at(&directory, CACHE_NAME, libc::O_RDWR, 0).unwrap();
@@ -731,7 +736,7 @@ fn successful_open_reports_full_recovery_only_after_unclean_exit() {
 #[test]
 fn recovered_database_still_checks_originals_and_valid_crc_counter_inconsistency() {
 	for bad in [false, true] {
-		let root = tempfile::tempdir().unwrap();
+		let root = private_root();
 		crashed_archive(root.path(), bad);
 		let archive = open_archive(root.path()).unwrap();
 		let slot = slot_at(root.path(), &archive).unwrap();
@@ -952,7 +957,7 @@ fn cold_coverage_repairs_mixed_owner_tail_and_preserves_original_bytes() {
 #[test]
 fn sealed_crash_recovery_keeps_full_logical_and_original_validation() {
 	for kind in 0..3 {
-		let root = tempfile::tempdir().unwrap();
+		let root = private_root();
 		crashed_archive_mode(root.path(), kind == 1, true);
 		let archive = open_archive(root.path()).unwrap();
 		let slot = slot_at(root.path(), &archive).unwrap();

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Fixed membership, private replies and actual blocking-closure custody.
 use super::*;
+use std::os::unix::fs::PermissionsExt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 
@@ -923,6 +924,7 @@ fn actual_execute_cancellation_keeps_the_original_permit_through_cleanup_in_both
 
 fn page_fixture() -> (tempfile::TempDir, Vec<Query>, Vec<Vec<String>>) {
 	let root = tempfile::Builder::new()
+		.permissions(std::fs::Permissions::from_mode(0o700))
 		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
 		.unwrap();
 	let owners = vec![owner(1), owner(2)];
@@ -1006,6 +1008,7 @@ fn real_pages_preserve_each_owner_cursor_limit_and_local_cursor_failure() {
 #[serial_test::serial]
 fn a_completion_after_membership_freeze_is_seen_by_the_fresh_group_observation() {
 	let root = tempfile::Builder::new()
+		.permissions(std::fs::Permissions::from_mode(0o700))
 		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
 		.unwrap();
 	let request = owner(1);
