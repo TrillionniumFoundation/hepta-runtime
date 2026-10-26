@@ -24,6 +24,7 @@ fn page(root: &Path, session: &str, after_id: Option<String>, limit: u16) -> Val
 }
 fn root() -> tempfile::TempDir {
 	tempfile::Builder::new()
+		.permissions(std::fs::Permissions::from_mode(0o700))
 		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
 		.unwrap()
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Bounded original-read ownership, error propagation and terminal-fence ordering.
 use super::*;
+use std::os::unix::fs::PermissionsExt;
 use std::sync::atomic::AtomicUsize;
 
 fn budget() -> Instant {
@@ -51,6 +52,7 @@ struct Fixture {
 impl Fixture {
 	fn new(sharded: bool, count: usize) -> Self {
 		let root = tempfile::Builder::new()
+			.permissions(std::fs::Permissions::from_mode(0o700))
 			.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
 			.unwrap();
 		let _guard = store_lock().unwrap();
