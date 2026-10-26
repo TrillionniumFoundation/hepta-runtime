@@ -131,8 +131,8 @@ pub(super) fn verify_members(
 	verify_members_in_mode(database, archive, view, deadline, None)
 }
 
-// Online usage and page snapshots own the actual global store guard and state.
-// Their large views share the bounded reader kernel; cold validation stays serial.
+// Online usage snapshots own the actual global store guard and state.
+// Their large views use the bounded reader kernel; cold validation stays serial.
 pub(super) fn verify_usage_members(
 	database: &Database,
 	archive: &Archive,
@@ -143,14 +143,18 @@ pub(super) fn verify_usage_members(
 	verify_members_in_mode(database, archive, view, deadline, Some(guard))
 }
 
+// A fresh page cohort shares one complete serial observation. On the X230,
+// passing tiny originals between reader threads costs more CPU than the reads.
+// The caller still owns the store guard, and every original and final fence is
+// checked by the same serial kernel used before page-reader parallelization.
 pub(super) fn verify_page_members(
 	database: &Database,
 	archive: &Archive,
 	view: &PendingView,
 	deadline: Instant,
-	guard: &AuditStoreGuard<'_>,
+	_guard: &AuditStoreGuard<'_>,
 ) -> Result<()> {
-	verify_members_in_mode(database, archive, view, deadline, Some(guard))
+	verify_members(database, archive, view, deadline)
 }
 
 fn verify_members_in_mode(
@@ -514,6 +518,7 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 	}
 
 	fn finish(&mut self, expected_count: u64) -> Result<()> {
+		metadata_trace::mark("reader_finish", 0, self.submitted);
 		// A nonempty partial tail must run through the same original readers
 		// before coverage, joins and the walk's terminal namespace fences.
 		for lane in 0..ORIGINAL_READ_WORKERS {
@@ -530,6 +535,7 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 	}
 
 	fn stop_and_join(&mut self) -> Result<()> {
+		let _trace = metadata_trace::Stage::new("original_reader_join");
 		self.cancelled.store(true, Ordering::Release);
 		#[cfg(test)]
 		if let Some(hook) = self.hook {
@@ -556,6 +562,7 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 				}
 			}
 		}
+		metadata_trace::mark("original_readers_joined", 0, self.verified);
 		// All children and their I/O have ended. A worker panic must still
 		// unwind through the original coordinator's STORE_LOCK/state guards,
 		// preserving their poisoning. Never start a second coordinator unwind.
@@ -645,6 +652,7 @@ fn verify_members_parallel(
 	_guard: &AuditStoreGuard<'_>,
 ) -> Result<()> {
 	let cancelled = AtomicBool::new(false);
+	let _trace = metadata_trace::Stage::new("original_parallel_walk_and_fences");
 	std::thread::scope(|scope| {
 		let mut state = (OriginalWorkers::new(&cancelled, deadline), BTreeSet::new());
 		state.0.start(scope, &verify_original_task)?;

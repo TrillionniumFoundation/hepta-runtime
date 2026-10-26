@@ -53,14 +53,14 @@ fn replies(requests: &[Query]) -> ObservedPages {
 // not depend on scheduling four OS threads within 1 ms. The real fixed cutoff
 // and its elapsed collection path are checked separately below.
 struct FixedGroup<'a> {
-	coordinator: &'a Coordinator,
+	coordinator: &'a Arc<Coordinator>,
 	root: PathBuf,
-	completion: Option<Completion<'a>>,
+	completion: Option<Completion>,
 	leader: Option<Waiter>,
 	followers: Vec<Waiter>,
 }
 impl<'a> FixedGroup<'a> {
-	fn at(coordinator: &'a Coordinator, root: &Path, first: &Query, entered: Instant) -> Self {
+	fn at(coordinator: &'a Arc<Coordinator>, root: &Path, first: &Query, entered: Instant) -> Self {
 		match coordinator
 			.register(root, first, budget(), entered)
 			.unwrap()
@@ -81,7 +81,7 @@ impl<'a> FixedGroup<'a> {
 			}
 		}
 	}
-	fn new(coordinator: &'a Coordinator, root: &Path, first: &Query) -> Self {
+	fn new(coordinator: &'a Arc<Coordinator>, root: &Path, first: &Query) -> Self {
 		Self::at(
 			coordinator,
 			root,
@@ -135,7 +135,7 @@ impl std::error::Error for OriginalFailure {}
 
 #[test]
 fn frozen_different_owners_share_one_new_observation_and_private_slots() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let root = Path::new("/synthetic/fixed-page");
 	let mut group = FixedGroup::new(&coordinator, root, &owner(0));
 	for index in 1..4 {
@@ -167,7 +167,7 @@ fn frozen_different_owners_share_one_new_observation_and_private_slots() {
 
 #[test]
 fn local_projection_failure_does_not_reject_another_owner() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let mut group = FixedGroup::new(&coordinator, Path::new("/synthetic/local"), &owner(0));
 	group.add(&owner(1), budget());
 	group.freeze();
@@ -189,7 +189,7 @@ fn local_projection_failure_does_not_reject_another_owner() {
 
 #[test]
 fn common_failure_retains_its_cause_chain_and_typed_deadline_category() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let mut group = FixedGroup::new(&coordinator, Path::new("/synthetic/common"), &owner(0));
 	group.add(&owner(1), budget());
 	group.freeze();
@@ -209,7 +209,7 @@ fn common_failure_retains_its_cause_chain_and_typed_deadline_category() {
 
 #[test]
 fn late_error_gets_typed_common_deadline_without_losing_the_original_cause() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let deadline = Instant::now() + Duration::from_secs(1);
 	let result = coordinator.observe(
 		Path::new("/synthetic/late-error"),
@@ -230,7 +230,7 @@ fn late_error_gets_typed_common_deadline_without_losing_the_original_cause() {
 
 #[test]
 fn freeze_excludes_late_callers_and_completed_results_are_not_reused() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let root = Path::new("/synthetic/no-late-join");
 	let mut first = FixedGroup::new(&coordinator, root, &owner(0));
 	let a = first.freeze();
@@ -252,7 +252,7 @@ fn freeze_excludes_late_callers_and_completed_results_are_not_reused() {
 
 #[test]
 fn expired_old_group_cannot_remove_or_freeze_its_new_same_root_successor() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let root = Path::new("/synthetic/cutoff-race");
 	let mut old = FixedGroup::at(
 		&coordinator,
@@ -274,7 +274,7 @@ fn expired_old_group_cannot_remove_or_freeze_its_new_same_root_successor() {
 
 #[test]
 fn different_root_keys_never_share_a_group() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let mut first = FixedGroup::new(&coordinator, Path::new("/synthetic/root-a"), &owner(0));
 	let mut second = FixedGroup::new(&coordinator, Path::new("/synthetic/root-b"), &owner(0));
 	assert_eq!(coordinator.registry.lock().unwrap().collecting.len(), 2);
@@ -295,7 +295,7 @@ fn different_root_keys_never_share_a_group() {
 
 #[test]
 fn fixed_cutoff_is_one_millisecond_and_new_members_never_extend_it() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let entered = Instant::now() + Duration::from_secs(30);
 	let mut group = FixedGroup::at(
 		&coordinator,
@@ -318,7 +318,7 @@ fn fixed_cutoff_is_one_millisecond_and_new_members_never_extend_it() {
 
 #[test]
 fn real_collect_waits_only_for_the_original_fixed_cutoff() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let entered = Instant::now();
 	let mut group = FixedGroup::at(
 		&coordinator,
@@ -335,7 +335,7 @@ fn real_collect_waits_only_for_the_original_fixed_cutoff() {
 
 #[test]
 fn unregistered_expired_member_cannot_poison_a_healthy_groups_deadline() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let root = Path::new("/synthetic/expired-arrival");
 	let mut group = FixedGroup::new(&coordinator, root, &owner(0));
 	let before = group
@@ -361,7 +361,7 @@ fn unregistered_expired_member_cannot_poison_a_healthy_groups_deadline() {
 
 #[test]
 fn invalid_owner_and_expired_entry_do_not_observe_or_change_membership() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let root = Path::new("/synthetic/invalid-scope");
 	coordinator.remember(root, true);
 	let mut group = FixedGroup::new(&coordinator, root, &owner(0));
@@ -396,7 +396,7 @@ fn invalid_owner_and_expired_entry_do_not_observe_or_change_membership() {
 
 #[test]
 fn hints_are_bounded_and_never_replace_a_complete_observation() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let root = Path::new("/synthetic/hint");
 	let calls = AtomicUsize::new(0);
 	assert!(!coordinator.large_hint(root));
@@ -430,7 +430,7 @@ fn hints_are_bounded_and_never_replace_a_complete_observation() {
 
 #[test]
 fn one_group_cannot_accept_more_than_the_existing_eight_admitted_slots() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let root = Path::new("/synthetic/eight");
 	let mut full = FixedGroup::new(&coordinator, root, &owner(0));
 	for index in 1..MAX_METADATA_QUERIES {
@@ -449,7 +449,7 @@ fn one_group_cannot_accept_more_than_the_existing_eight_admitted_slots() {
 
 #[test]
 fn final_common_failure_discards_all_staged_owner_successes() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let mut group = FixedGroup::new(&coordinator, Path::new("/synthetic/final-fence"), &owner(0));
 	group.add(&owner(1), budget());
 	let frozen = group.freeze();
@@ -684,7 +684,7 @@ fn unwinding_leader_releases_every_waiter_only_after_io_guard_cleanup() {
 
 #[test]
 fn follower_unwind_custody_and_spurious_wakeup_do_not_escape_unfinished_work() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	std::thread::scope(|scope| {
 		let mut group = FixedGroup::new(
 			&coordinator,
@@ -738,7 +738,7 @@ fn follower_unwind_custody_and_spurious_wakeup_do_not_escape_unfinished_work() {
 
 #[test]
 fn poisoned_group_waits_for_real_completion_then_refuses_success() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	std::thread::scope(|scope| {
 		let mut group = FixedGroup::new(&coordinator, Path::new("/synthetic/poison"), &owner(0));
 		group.add(&owner(1), budget());
@@ -780,7 +780,7 @@ fn poisoned_group_waits_for_real_completion_then_refuses_success() {
 
 #[test]
 fn completion_after_fixed_minimum_deadline_rejects_even_a_later_deadline_member() {
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let mut group = FixedGroup::new(
 		&coordinator,
 		Path::new("/synthetic/shared-expiry"),
@@ -805,7 +805,7 @@ fn completion_after_fixed_minimum_deadline_rejects_even_a_later_deadline_member(
 fn actual_execute_keeps_small_archives_out_of_collection_and_collects_known_large_archives() {
 	let root = Path::new("/synthetic/execute-scheduling");
 	for (large, registrations) in [(false, 0), (true, 1)] {
-		let coordinator = Coordinator::default();
+		let coordinator = Arc::new(Coordinator::default());
 		coordinator.remember(root, large);
 		let calls = AtomicUsize::new(0);
 		let value = coordinator
@@ -827,7 +827,7 @@ fn actual_execute_keeps_small_archives_out_of_collection_and_collects_known_larg
 #[test]
 fn invalid_page_cursors_and_limits_never_join_or_observe() {
 	let root = Path::new("/synthetic/invalid-pages");
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	coordinator.remember(root, true);
 	for params in [
 		RequestHistoryParams {
@@ -1018,7 +1018,7 @@ fn a_completion_after_membership_freeze_is_seen_by_the_fresh_group_observation()
 	let before: Value =
 		serde_json::from_str(&before.replies.into_iter().next().unwrap().unwrap()).unwrap();
 	assert_eq!(before["requests"][0]["state"], "accepted");
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	let mut group = FixedGroup::new(&coordinator, root.path(), &request);
 	group.add(&request, budget());
 	let frozen = group.freeze();
@@ -1038,7 +1038,7 @@ fn changed_original_after_freeze_refuses_the_whole_group_instead_of_reusing_a_wa
 	let (root, owners, ids) = page_fixture();
 	let warm = read_pages(root.path(), &owners, budget()).unwrap();
 	assert!(warm.replies.iter().all(Result::is_ok));
-	let coordinator = Coordinator::default();
+	let coordinator = Arc::new(Coordinator::default());
 	coordinator.remember(root.path(), true);
 	let mut group = FixedGroup::new(&coordinator, root.path(), &owners[0]);
 	group.add(&owners[1], budget());

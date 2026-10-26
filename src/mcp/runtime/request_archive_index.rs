@@ -1681,6 +1681,7 @@ fn large_preparation_hint(root: &File) -> bool {
 }
 
 fn ready(root: &Path, archive: &Archive, deadline: Instant) -> Result<Arc<Slot>> {
+	let _trace = metadata_trace::Stage::new("index_ready");
 	let slot = slot_at_until(root, archive, deadline)?;
 	let mut started = false;
 	loop {
@@ -1741,6 +1742,7 @@ fn ready(root: &Path, archive: &Archive, deadline: Instant) -> Result<Arc<Slot>>
 	}
 }
 pub(super) fn query_lock(deadline: Instant) -> Result<AuditStoreGuard<'static>> {
+	let _trace = metadata_trace::Stage::new("store_lock_wait");
 	STORE_LOCK
 		.get_or_init(AuditStoreLock::default)
 		.acquire(Some(deadline))
@@ -1925,6 +1927,7 @@ fn read_snapshot_with_mode<T>(
 		let mut trace = SteadyTrace::new("metadata_drain", Some(false));
 		trace.enter(SteadyPhase::StoreLockWait);
 		let _guard = query_lock(deadline)?;
+		metadata_trace::mark("snapshot_lock_acquired", 0, 0);
 		if !drain_for_query(&slot, deadline, &mut trace)? {
 			trace.enter(SteadyPhase::Other);
 			trace.outcome = "preparing";
@@ -1953,6 +1956,7 @@ fn read_snapshot_with_mode<T>(
 		} else {
 			PendingView::default()
 		};
+		let content_trace = metadata_trace::Stage::new("complete_original_verification");
 		// Watches remain invalidation fences; neither Some nor None certifies
 		// original bytes. Check every effective record within this same budget.
 		match mode {
@@ -1967,7 +1971,11 @@ fn read_snapshot_with_mode<T>(
 				content::verify_page_members(&database, archive, &view, deadline, &_guard)?;
 			}
 		}
+		drop(content_trace);
+		let projection_trace = metadata_trace::Stage::new("page_or_usage_projection");
 		let result = read(&database, &view)?;
+		drop(projection_trace);
+		let _final_trace = metadata_trace::Stage::new("snapshot_final_fences");
 		#[cfg(test)]
 		parallel_event(&slot, ParallelEvent::BeforeSnapshotFence);
 		if Instant::now() >= deadline {
@@ -1996,6 +2004,7 @@ fn read_snapshot_with_mode<T>(
 // read-only; the existing small/unwatched path writes its disposable cohort with
 // Durability::None. Original ACK barriers are unchanged in either case.
 fn drain_for_query(slot: &Slot, deadline: Instant, trace: &mut SteadyTrace) -> Result<bool> {
+	let _trace = metadata_trace::Stage::new("query_drain");
 	trace.enter(SteadyPhase::State);
 	let mut state = slot
 		.state

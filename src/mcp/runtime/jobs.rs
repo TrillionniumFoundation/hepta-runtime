@@ -1207,7 +1207,8 @@ if existing is not None:
         raise SystemExit("remote job directory is bound to a different request")
     launch = read_json("launch.json")
     exit_data = read_json("exit.json")
-    started = read_json("started.json")
+    # An existing request never launches again. Owner tombstones need not be
+    # parsed here; status owns their conservative interpretation.
     if launch or exit_data:
         print(json.dumps({"ok": True, "reused_remote": True, **(launch or {"backend": "completed"})}, sort_keys=True))
         raise SystemExit(0)
@@ -1318,16 +1319,15 @@ owner_binding = {"at_unix_ms":int(time.time()*1000),"job_id":req["job_id"],
     "launch_nonce":req["launch_nonce"],"supervisor_pid":os.getpid(),
     "supervisor_uid":os.geteuid(),"supervisor_identity":owner_identity,
     "invocation_id":os.environ.get("INVOCATION_ID")}
-def publish_owner(name):
+def stage_owner(name):
     fd = os.open(job / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as stream:
         json.dump(owner_binding, stream, sort_keys=True); stream.flush(); os.fsync(stream.fileno())
-    fd = os.open(job, os.O_RDONLY)
-    try: os.fsync(fd)
-    finally: os.close(fd)
-# Even interrupted publication is a tombstone: later owners cannot replay it.
-publish_owner("owner-intent.json")
-publish_owner("started.json")
+# Both files must be synced and closed before one barrier publishes their names.
+# Surviving partial creates remain tombstones; no workload precedes this barrier.
+stage_owner("owner-intent.json")
+stage_owner("started.json")
+os.fsync(_hepta_directory_pins[-1])
 child = None
 cancel_requested = False
 
@@ -1921,11 +1921,16 @@ def publication_pending(reason):
             "terminal_publication_confirmed": False,
             "status_authoritative": False, "automatic_retry": False}
 
-def read_terminal_file(name, limit):
+def read_terminal_file(name, limit, missing_ok=False):
     # Relative to the already pinned job directory; never follow a receipt
     # symlink or wait on a substituted FIFO. Hash and parse this one snapshot.
-    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
-                 dir_fd=_hepta_directory_pins[-1])
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                     dir_fd=_hepta_directory_pins[-1])
+    except FileNotFoundError:
+        if missing_ok:
+            return None
+        raise
     with os.fdopen(fd, "rb") as stream:
         before = os.fstat(stream.fileno())
         if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid() or
@@ -1941,6 +1946,19 @@ def read_terminal_file(name, limit):
             stamp(before) != stamp(after) or stamp(after) != stamp(current)):
         raise ValueError("terminal publication file changed")
     return encoded
+
+def read_owner_binding():
+    # An interrupted O_EXCL owner write is a permanent no-replay tombstone.
+    # Only malformed bytes in a verified private regular file become Unknown;
+    # unsafe paths, ownership/mode changes and read failures still propagate.
+    encoded = read_terminal_file("started.json", 16 * 1024, missing_ok=True)
+    if encoded is None:
+        return {}
+    try:
+        value = json.loads(encoded)
+    except ValueError:
+        return {}
+    return value if isinstance(value, dict) else {}
 
 def read_terminal_status(request):
     field = "terminal_publication_protocol"
@@ -2021,7 +2039,7 @@ def one_status():
         terminal = read_terminal_status(request)
         if terminal is not None:
             return terminal
-        started = read_json("started.json") or {}
+        started = read_owner_binding()
         nonce = request.get("launch_nonce")
         invocation = started.get("invocation_id")
         if not valid_owner(request, started, systemd=True):
@@ -2068,13 +2086,13 @@ def one_status():
                 return publication_pending("supervisor has no confirmed terminal receipt")
             state = active or "unknown"
         return {"state": state, "backend": "systemd", "systemd": props}
-    started = read_json("started.json") or {}
-    pid = int(started.get("supervisor_pid") or launch.get("launcher_pid") or 0)
-    expected = started.get("supervisor_identity")
+    started = read_owner_binding()
     if not valid_owner(request, started):
         return {"state":"owner_unknown","reason":"frozen supervisor binding unavailable",
                 "status_authoritative":False,"automatic_retry":False}
-    actual = process_identity(pid) if pid else None
+    pid = started["supervisor_pid"]
+    expected = started["supervisor_identity"]
+    actual = process_identity(pid)
     running = bool(pid and actual is not None and (expected is not None and expected == actual))
     if not running and requires_witness:
         return publication_pending("supervisor disappeared without a confirmed terminal receipt")
@@ -3272,3 +3290,7 @@ mod staging_durability_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "jobs_terminal_publication_tests.rs"]
 mod terminal_publication_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_owner_metadata_tests.rs"]
+mod owner_metadata_tests;

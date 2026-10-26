@@ -1,18 +1,19 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! Fresh archive-page groups with fixed membership and original blocking custody.
+//! Fresh archive-page groups with fixed membership and original work custody.
 //! The shared observation starts after freeze; no result or content lease is reused.
 use super::*;
 use std::path::PathBuf;
 use std::sync::{Condvar, MutexGuard};
 use std::time::Duration;
+use tokio::sync::{Notify, OwnedSemaphorePermit};
 
 // Large snapshots amortize one complete observation across already admitted calls.
 // The fixed 1 ms is included in every member's original deadline, including C1.
 const COLLECT_WINDOW: Duration = Duration::from_millis(1);
 const MAX_HINTS: usize = MAX_METADATA_QUERIES;
-static COORDINATOR: OnceLock<Coordinator> = OnceLock::new();
+static COORDINATOR: OnceLock<Arc<Coordinator>> = OnceLock::new();
 
 #[derive(Clone)]
 struct Query {
@@ -93,8 +94,10 @@ struct Member {
 }
 struct GroupState {
 	members: Vec<Member>,
+	permits: Vec<OwnedSemaphorePermit>,
 	deadline: Instant,
 	frozen: bool,
+	finishing: bool,
 	complete: bool,
 	failed: bool,
 	expired: bool,
@@ -106,9 +109,11 @@ impl GroupState {
 }
 
 struct Group {
+	trace_id: u64,
 	collect_until: Instant,
 	state: Mutex<GroupState>,
 	changed: Condvar,
+	completed: Notify,
 }
 impl Group {
 	fn cleanup_state(&self) -> MutexGuard<'_, GroupState> {
@@ -146,25 +151,23 @@ struct Waiter {
 	follower_custody: bool,
 }
 impl Waiter {
+	#[cfg(test)]
 	fn result(self) -> Result<String> {
+		metadata_trace::mark("group_wait", self.group.trace_id, 0);
 		let (healthy, expired) = self.group.wait_complete();
-		if !healthy {
-			bail!("archive page query group coordination unavailable");
+		metadata_trace::mark("group_ready", self.group.trace_id, u64::from(expired));
+		self.reply.result(self.deadline, healthy, expired)
+	}
+
+	fn into_async(mut self) -> AsyncWaiter {
+		// register_owned has already put the permit in the group. The async
+		// waiter must never inherit a Condvar-blocking destructor.
+		self.follower_custody = false;
+		AsyncWaiter {
+			group: self.group.clone(),
+			reply: self.reply.clone(),
+			deadline: self.deadline,
 		}
-		let result = self
-			.reply
-			.value
-			.lock()
-			.unwrap_or_else(std::sync::PoisonError::into_inner)
-			.take()
-			.ok_or_else(|| anyhow!("archive page query result unavailable"))?;
-		if expired || Instant::now() >= self.deadline {
-			return Err(match result {
-				Ok(_) => MetadataQueryDeadline.into(),
-				Err(error) => error.context(MetadataQueryDeadline),
-			});
-		}
-		result
 	}
 }
 impl Drop for Waiter {
@@ -174,6 +177,114 @@ impl Drop for Waiter {
 			// while shared I/O is still owned by the actual leader closure.
 			self.group.wait_complete();
 		}
+	}
+}
+
+impl Reply {
+	fn result(&self, deadline: Instant, healthy: bool, expired: bool) -> Result<String> {
+		if !healthy {
+			bail!("archive page query group coordination unavailable");
+		}
+		let result = self
+			.value
+			.lock()
+			.unwrap_or_else(std::sync::PoisonError::into_inner)
+			.take()
+			.ok_or_else(|| anyhow!("archive page query result unavailable"))?;
+		if expired || Instant::now() >= deadline {
+			return Err(match result {
+				Ok(_) => MetadataQueryDeadline.into(),
+				Err(error) => error.context(MetadataQueryDeadline),
+			});
+		}
+		result
+	}
+}
+
+// Dropping an async caller releases only these Arc snapshots. Every admitted
+// permit stays in the original group until its work owner finishes cleanup.
+struct AsyncWaiter {
+	group: Arc<Group>,
+	reply: Arc<Reply>,
+	deadline: Instant,
+}
+impl AsyncWaiter {
+	async fn result(self, trace: metadata_trace::QueryTrace) -> Result<String> {
+		trace.mark_cohort("group_wait", self.group.trace_id, 0);
+		loop {
+			let notified = self.group.completed.notified();
+			tokio::pin!(notified);
+			// Register before checking persistent terminal state. A completion
+			// between that check and await must not lose notify_waiters.
+			notified.as_mut().enable();
+			let terminal = {
+				let state = self.group.cleanup_state();
+				state.complete.then_some((!state.failed, state.expired))
+			};
+			if let Some((healthy, expired)) = terminal {
+				trace.mark_cohort("group_ready", self.group.trace_id, u64::from(expired));
+				return self.reply.result(self.deadline, healthy, expired);
+			}
+			notified.await;
+		}
+	}
+}
+
+enum OwnedRegistration {
+	Leader {
+		completion: Completion,
+		waiter: AsyncWaiter,
+	},
+	Follower(AsyncWaiter),
+}
+
+// No I/O handles exist here before run. Field order keeps arbitrary test
+// operation captures and the path alive no longer than the unique finalizer.
+struct Work<Q> {
+	operation: Option<Q>,
+	root: PathBuf,
+	completion: Completion,
+}
+impl<Q> Work<Q>
+where
+	Q: FnOnce(&Path, &[Query], Instant) -> Result<ObservedPages>,
+{
+	fn run(self, trace: metadata_trace::QueryTrace) {
+		let _context = trace.enter();
+		let mut work = self;
+		trace.mark("blocking_entered", 0);
+		let result = (|| {
+			work.completion.collect()?;
+			let frozen = work.completion.freeze()?;
+			let operation = work
+				.operation
+				.take()
+				.ok_or_else(|| anyhow!("archive page query operation unavailable"))?;
+			work.completion.coordinator.observe(
+				&work.root,
+				&frozen.requests,
+				frozen.deadline,
+				operation,
+			)
+		})();
+		trace.mark("blocking_result", u64::from(result.is_err()));
+		work.completion.stage(result);
+		// The observed call and all its original-reader joins have returned.
+		// On unwind Work's finalizer also runs before the trace context drops.
+		drop(work);
+	}
+}
+
+fn registration_mark(
+	trace: Option<metadata_trace::QueryTrace>,
+	phase: &'static str,
+	cohort: u64,
+	value: u64,
+) {
+	if let Some(trace) = trace {
+		trace.mark_cohort(phase, cohort, value);
+	} else {
+		metadata_trace::mark(phase, cohort, value);
 	}
 }
 
@@ -189,9 +300,9 @@ struct Coordinator {
 	registrations: std::sync::atomic::AtomicUsize,
 }
 
-enum Registration<'a> {
+enum Registration {
 	Leader {
-		completion: Completion<'a>,
+		completion: Completion,
 		waiter: Waiter,
 	},
 	Follower(Waiter),
@@ -205,14 +316,16 @@ struct Frozen {
 // shorter inner scopes, and all archive I/O is a nested synchronous call. Its
 // destructor therefore runs after those resources, including on Rust unwind.
 // Release panic=abort still terminates the process; it does not run this Drop.
-struct Completion<'a> {
-	coordinator: &'a Coordinator,
+struct Completion {
+	coordinator: Arc<Coordinator>,
+	trace: Option<metadata_trace::QueryTrace>,
 	group: Arc<Group>,
 	replies: Option<Vec<Result<String>>>,
 	armed: bool,
 }
-impl Completion<'_> {
+impl Completion {
 	fn collect(&self) -> Result<()> {
+		let _trace = metadata_trace::Stage::new("cohort_collect");
 		let mut state = self
 			.group
 			.state
@@ -245,10 +358,15 @@ impl Completion<'_> {
 			.state
 			.lock()
 			.map_err(|_| anyhow!("archive page query group coordination unavailable"))?;
-		if state.frozen || state.complete || state.failed {
+		if state.frozen || state.finishing || state.complete || state.failed {
 			bail!("archive page query group no longer collecting");
 		}
 		state.frozen = true;
+		metadata_trace::mark(
+			"cohort_frozen",
+			self.group.trace_id,
+			state.members.len() as u64,
+		);
 		registry
 			.collecting
 			.retain(|(_, group)| !Arc::ptr_eq(group, &self.group));
@@ -282,7 +400,7 @@ impl Completion<'_> {
 		});
 	}
 }
-impl Drop for Completion<'_> {
+impl Drop for Completion {
 	fn drop(&mut self) {
 		if !self.armed {
 			return;
@@ -299,27 +417,46 @@ impl Drop for Completion<'_> {
 				.retain(|(_, group)| !Arc::ptr_eq(group, &self.group));
 			poisoned
 		};
-		let mut state = self.group.cleanup_state();
-		state.failed |= registry_poisoned;
-		if !state.failed {
-			if let Some(replies) = self.replies.take() {
-				let mut reply_poisoned = false;
-				for (member, result) in state.members.iter().zip(replies) {
-					let mut slot = match member.reply.value.lock() {
-						Ok(slot) => slot,
-						Err(error) => {
-							reply_poisoned = true;
-							error.into_inner()
-						}
-					};
-					*slot = Some(result);
+		let permits = {
+			let mut state = self.group.cleanup_state();
+			state.frozen = true;
+			state.finishing = true;
+			state.failed |= registry_poisoned;
+			if !state.failed {
+				if let Some(replies) = self.replies.take() {
+					let mut reply_poisoned = false;
+					for (member, result) in state.members.iter().zip(replies) {
+						let mut slot = match member.reply.value.lock() {
+							Ok(slot) => slot,
+							Err(error) => {
+								reply_poisoned = true;
+								error.into_inner()
+							}
+						};
+						*slot = Some(result);
+					}
+					state.failed |= reply_poisoned;
 				}
-				state.failed |= reply_poisoned;
 			}
-		}
-		state.expired = Instant::now() >= state.deadline();
-		state.complete = true;
+			std::mem::take(&mut state.permits)
+		};
+		// No observation, original-reader join or coordination lock survives
+		// here. Releasing permits can wake another admitted async caller.
+		drop(permits);
+		let expired = {
+			let mut state = self.group.cleanup_state();
+			state.expired = Instant::now() >= state.deadline();
+			state.complete = true;
+			state.expired
+		};
+		registration_mark(
+			self.trace,
+			"cohort_complete",
+			self.group.trace_id,
+			u64::from(expired),
+		);
 		self.group.changed.notify_all();
+		self.group.completed.notify_waiters();
 	}
 }
 
@@ -345,13 +482,45 @@ impl Coordinator {
 			}
 		}
 	}
+	#[cfg(test)]
 	fn register(
-		&self,
+		self: &Arc<Self>,
 		root: &Path,
 		request: &Query,
 		deadline: Instant,
 		entered: Instant,
-	) -> Result<Registration<'_>> {
+	) -> Result<Registration> {
+		self.register_inner(root, request, deadline, entered, None, None)
+	}
+
+	fn register_owned(
+		self: &Arc<Self>,
+		root: &Path,
+		request: &Query,
+		deadline: Instant,
+		entered: Instant,
+		permit: OwnedSemaphorePermit,
+		trace: metadata_trace::QueryTrace,
+	) -> Result<OwnedRegistration> {
+		match self.register_inner(root, request, deadline, entered, Some(permit), Some(trace))? {
+			Registration::Leader { completion, waiter } => Ok(OwnedRegistration::Leader {
+				completion,
+				waiter: waiter.into_async(),
+			}),
+			Registration::Follower(waiter) => Ok(OwnedRegistration::Follower(waiter.into_async())),
+		}
+	}
+
+	fn register_inner(
+		self: &Arc<Self>,
+		root: &Path,
+		request: &Query,
+		deadline: Instant,
+		entered: Instant,
+		mut permit: Option<OwnedSemaphorePermit>,
+		trace: Option<metadata_trace::QueryTrace>,
+	) -> Result<Registration> {
+		let owned = permit.is_some();
 		#[cfg(test)]
 		self.registrations.fetch_add(1, Ordering::Relaxed);
 		let fallback = SharedFailure::new(anyhow!("archive page query leader unavailable"));
@@ -362,20 +531,27 @@ impl Coordinator {
 			request: request.to_owned(),
 			reply: reply.clone(),
 		};
+		let mut members = Vec::with_capacity(MAX_METADATA_QUERIES);
+		members.push(member.clone());
 		let candidate = Arc::new(Group {
+			trace_id: metadata_trace::next_cohort(),
 			collect_until: entered + COLLECT_WINDOW,
 			state: Mutex::new(GroupState {
-				members: vec![member.clone()],
+				members,
+				permits: Vec::with_capacity(MAX_METADATA_QUERIES),
 				deadline,
 				frozen: false,
+				finishing: false,
 				complete: false,
 				failed: false,
 				expired: false,
 			}),
 			changed: Condvar::new(),
+			completed: Notify::new(),
 		});
 		let mut completion = Completion {
-			coordinator: self,
+			coordinator: self.clone(),
+			trace,
 			group: candidate.clone(),
 			replies: None,
 			armed: true,
@@ -404,6 +580,7 @@ impl Coordinator {
 				return Err(MetadataQueryDeadline.into());
 			}
 			if !state.frozen
+				&& !state.finishing
 				&& !state.complete
 				&& !state.failed
 				&& state.members.len() < MAX_METADATA_QUERIES
@@ -414,10 +591,21 @@ impl Coordinator {
 					group: group.clone(),
 					reply: reply.clone(),
 					deadline,
-					follower_custody: true,
+					follower_custody: !owned,
 				});
+				// Transfer ownership before exposing this new member. Both
+				// vectors were preallocated to the fixed admission bound.
+				if let Some(permit) = permit.take() {
+					state.permits.push(permit);
+				}
 				state.deadline = state.deadline.min(deadline);
 				state.members.push(member);
+				registration_mark(
+					trace,
+					"cohort_follower",
+					group.trace_id,
+					state.members.len() as u64,
+				);
 				group.changed.notify_all();
 			}
 		}
@@ -438,9 +626,13 @@ impl Coordinator {
 		if registry.collecting.len() >= MAX_METADATA_QUERIES {
 			bail!("archive page query group admission bound exceeded");
 		}
+		if let Some(permit) = permit.take() {
+			candidate.cleanup_state().permits.push(permit);
+		}
 		registry
 			.collecting
 			.push((root.to_path_buf(), candidate.clone()));
+		registration_mark(trace, "cohort_leader", candidate.trace_id, 1);
 		drop(registry);
 		Ok(Registration::Leader {
 			completion,
@@ -483,8 +675,9 @@ impl Coordinator {
 		}
 		Ok(observed)
 	}
+	#[cfg(test)]
 	fn execute(
-		&self,
+		self: &Arc<Self>,
 		root: &Path,
 		requests: &[Query; 1],
 		deadline: Instant,
@@ -496,6 +689,7 @@ impl Coordinator {
 			return Err(MetadataQueryDeadline.into());
 		}
 		if !self.large_hint(root) {
+			metadata_trace::mark("cohort_singleton_no_hint", 0, 1);
 			return self
 				.observe(root, requests, deadline, query)?
 				.replies
@@ -519,10 +713,98 @@ impl Coordinator {
 			}
 		}
 	}
+	async fn execute_owned<Q>(
+		self: Arc<Self>,
+		root: PathBuf,
+		request: Query,
+		deadline: Instant,
+		slots: Arc<Semaphore>,
+		trace: metadata_trace::QueryTrace,
+		operation: Q,
+	) -> Result<String>
+	where
+		Q: FnOnce(&Path, &[Query], Instant) -> Result<ObservedPages> + Send + 'static,
+	{
+		let _trace_boundary = trace.boundary("caller_scope_end");
+		if Instant::now() >= deadline {
+			trace.mark("expired_before_admission", 1);
+			return Err(MetadataQueryDeadline.into());
+		}
+		let result =
+			tokio::time::timeout_at(tokio::time::Instant::from_std(deadline), async move {
+				request.validate()?;
+				trace.mark("permit_wait", 0);
+				let permit = slots
+					.acquire_owned()
+					.await
+					.map_err(|_| anyhow!("archive metadata query admission unavailable"))?;
+				trace.mark("permit_acquired", 0);
+				if Instant::now() >= deadline {
+					return Err(MetadataQueryDeadline.into());
+				}
+				if !self.large_hint(&root) {
+					// A poisoned hint must not refuse an otherwise valid singleton.
+					trace.mark_cohort("cohort_singleton_no_hint", 0, 1);
+					trace.mark("blocking_submitted", 0);
+					return tokio::task::spawn_blocking(move || {
+						let _context = trace.enter();
+						let _permit = permit;
+						trace.mark("blocking_entered", 0);
+						let result = self
+							.observe(&root, std::slice::from_ref(&request), deadline, operation)
+							.and_then(|mut observed| {
+								observed.replies.pop().ok_or_else(|| {
+									anyhow!("archive page query result unavailable")
+								})?
+							});
+						trace.mark("blocking_result", u64::from(result.is_err()));
+						result
+					})
+					.await
+					.map_err(|_| anyhow!("archive metadata query worker unavailable"))?;
+				}
+
+				// Registration and transfer to the original queued Work contain no
+				// await. Its Completion already exists before registry exposure.
+				let registration =
+					self.register_owned(&root, &request, deadline, Instant::now(), permit, trace)?;
+				let waiter = match registration {
+					OwnedRegistration::Leader { completion, waiter } => {
+						let work = Work {
+							operation: Some(operation),
+							root,
+							completion,
+						};
+						trace.mark("blocking_submitted", 0);
+						drop(tokio::task::spawn_blocking(move || work.run(trace)));
+						waiter
+					}
+					OwnedRegistration::Follower(waiter) => {
+						// The follower contributes only a private projection request.
+						// Its operation cannot issue an independent observation.
+						drop(operation);
+						waiter
+					}
+				};
+				waiter.result(trace).await
+			})
+			.await
+			.map_err(|_| anyhow::Error::from(MetadataQueryDeadline))
+			.and_then(|result| result);
+		trace.mark("caller_result_ready", u64::from(result.is_err()));
+		let result = result?;
+		if Instant::now() >= deadline {
+			trace.mark("caller_late_result", 1);
+			return Err(MetadataQueryDeadline.into());
+		}
+		Ok(result)
+	}
 }
 
 fn read_pages(root: &Path, requests: &[Query], deadline: Instant) -> Result<ObservedPages> {
+	let _trace = metadata_trace::Stage::new("read_pages");
 	let (archive, queries) = {
+		let _trace = metadata_trace::Stage::new("hot_snapshot_and_cursors");
 		let _guard = index::query_lock(deadline)?;
 		let hot = open_store(root)?;
 		let archive = hot_snapshot(root, &hot)?.1;
@@ -568,6 +850,7 @@ fn read_pages(root: &Path, requests: &[Query], deadline: Instant) -> Result<Obse
 	})
 }
 
+#[cfg(test)]
 pub(super) fn run(
 	root: &Path,
 	owner: &str,
@@ -579,9 +862,34 @@ pub(super) fn run(
 		params,
 	}];
 	COORDINATOR
-		.get_or_init(Coordinator::default)
+		.get_or_init(|| Arc::new(Coordinator::default()))
 		.execute(root, &requests, deadline, read_pages)
 }
+pub(super) async fn run_owned(
+	root: PathBuf,
+	owner: String,
+	params: RequestHistoryParams,
+	deadline: Instant,
+	slots: Arc<Semaphore>,
+	trace: metadata_trace::QueryTrace,
+) -> Result<String> {
+	COORDINATOR
+		.get_or_init(|| Arc::new(Coordinator::default()))
+		.clone()
+		.execute_owned(
+			root,
+			Query { owner, params },
+			deadline,
+			slots,
+			trace,
+			read_pages,
+		)
+		.await
+}
+
+#[cfg(test)]
+#[path = "request_archive_owned_tests.rs"]
+mod owned_tests;
 
 #[cfg(test)]
 #[path = "request_archive_batch_tests.rs"]
