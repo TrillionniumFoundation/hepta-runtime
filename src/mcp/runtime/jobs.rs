@@ -699,8 +699,10 @@ def open_bound_directory(path):
         if metadata.st_uid != os.geteuid() or metadata.st_mode & 0o077:
             raise SystemExit("remote job directory must be owner-private")
         return descriptor
-    except BaseException:
+    except BaseException as exc:
         os.close(descriptor)
+        if isinstance(exc, OSError):
+            raise SystemExit(f"unsafe remote job directory: {exc}") from exc
         raise
 
 directory = open_bound_directory(job)
@@ -942,8 +944,10 @@ def open_bound_directory(path):
         if metadata.st_uid != os.geteuid() or metadata.st_mode & 0o077:
             raise SystemExit("remote job directory must be owner-private")
         return descriptor
-    except BaseException:
+    except BaseException as exc:
         os.close(descriptor)
+        if isinstance(exc, OSError):
+            raise SystemExit(f"unsafe remote job directory: {exc}") from exc
         raise
 
 directory = open_bound_directory(job)
