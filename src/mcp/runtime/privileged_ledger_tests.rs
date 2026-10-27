@@ -28,7 +28,8 @@ fn request() -> Value {
 async fn observed_operation_is_reused_without_a_second_entry() {
 	let state = tempdir().unwrap();
 	let first = admit(state.path(), "rog", "controlled", "stable-key", &request())
-		.await.unwrap();
+		.await
+		.unwrap();
 	let permit = match first {
 		Admission::Entered(permit) => permit,
 		Admission::Observed(_) => panic!("unexpected previous effect"),
@@ -36,7 +37,8 @@ async fn observed_operation_is_reused_without_a_second_entry() {
 	let response = json!({"exit_code": 0, "stdout": "ok", "stderr": ""});
 	assert_eq!(permit.complete(response.clone()).unwrap(), response);
 	match admit(state.path(), "rog", "controlled", "stable-key", &request())
-		.await.unwrap()
+		.await
+		.unwrap()
 	{
 		Admission::Observed(observed) => assert_eq!(observed, response),
 		Admission::Entered(_) => panic!("a duplicate privileged action was admitted"),
@@ -108,7 +110,8 @@ async fn legacy_v1_observed_receipt_cannot_authorize_v2_target_binding() {
 async fn lost_ack_is_indeterminate_and_not_replayed() {
 	let state = tempdir().unwrap();
 	let admission = admit(state.path(), "rog", "controlled", "lost-ack", &request())
-		.await.unwrap();
+		.await
+		.unwrap();
 	assert!(matches!(&admission, Admission::Entered(_)));
 	drop(admission);
 	let result = admit(state.path(), "rog", "controlled", "lost-ack", &request()).await;
@@ -119,7 +122,8 @@ async fn lost_ack_is_indeterminate_and_not_replayed() {
 async fn same_key_with_changed_effect_is_rejected() {
 	let state = tempdir().unwrap();
 	let original = admit(state.path(), "rog", "controlled", "stable", &request())
-		.await.unwrap();
+		.await
+		.unwrap();
 	match original {
 		Admission::Entered(permit) => {
 			permit.complete(json!({"exit_code": 0})).unwrap();
@@ -138,10 +142,18 @@ async fn bad_idempotency_keys_fail_before_any_effect() {
 	let state = tempdir().unwrap();
 	for key in ["", "  ", "a\u{0}b"] {
 		assert!(admit(state.path(), "rog", "controlled", key, &request())
-			.await.is_err());
+			.await
+			.is_err());
 	}
-	assert!(admit(state.path(), "rog", "controlled", &"a".repeat(257), &request())
-		.await.is_err());
+	assert!(admit(
+		state.path(),
+		"rog",
+		"controlled",
+		&"a".repeat(257),
+		&request()
+	)
+	.await
+	.is_err());
 	assert!(!state.path().join("privileged-actions").exists());
 }
 
@@ -149,12 +161,17 @@ async fn bad_idempotency_keys_fail_before_any_effect() {
 async fn corrupt_ledger_record_is_never_treated_as_new() {
 	let state = tempdir().unwrap();
 	let admission = admit(state.path(), "rog", "controlled", "corrupt", &request())
-		.await.unwrap();
+		.await
+		.unwrap();
 	drop(admission);
 	let path = record_path(state.path(), &identity("rog", "corrupt").unwrap()).unwrap();
 	std::fs::write(path, b"{truncated").unwrap();
 	let result = admit(state.path(), "rog", "controlled", "corrupt", &request()).await;
-	assert!(result.err().unwrap().to_string().contains("invalid privileged ledger record"));
+	assert!(result
+		.err()
+		.unwrap()
+		.to_string()
+		.contains("invalid privileged ledger record"));
 }
 
 #[cfg(unix)]
@@ -167,9 +184,14 @@ async fn forged_symlink_does_not_authorize_an_effect() {
 	std::os::unix::fs::symlink(
 		&target,
 		dir.join(format!("{}.json", identity("rog", "spoof").unwrap())),
-	).unwrap();
+	)
+	.unwrap();
 	let result = admit(state.path(), "rog", "controlled", "spoof", &request()).await;
-	assert!(result.err().unwrap().to_string().contains("not a regular file"));
+	assert!(result
+		.err()
+		.unwrap()
+		.to_string()
+		.contains("not a regular file"));
 	assert_eq!(std::fs::read(&target).unwrap(), b"untouched");
 }
 

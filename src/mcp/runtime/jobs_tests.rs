@@ -134,7 +134,11 @@ fn stored_job_host_binding_rejects_alias_remapping() {
 fn corrupt_record_blocks_idempotency_scan() {
 	let dir = tempdir().unwrap();
 	let valid = record("job-1");
-	std::fs::write(dir.path().join("job-1.json"), serde_json::to_vec(&valid).unwrap()).unwrap();
+	std::fs::write(
+		dir.path().join("job-1.json"),
+		serde_json::to_vec(&valid).unwrap(),
+	)
+	.unwrap();
 	std::fs::write(dir.path().join("job-2.json"), b"{truncated").unwrap();
 	let error = scan_records_dir(dir.path()).unwrap_err();
 	assert!(error.to_string().contains("corrupt durable job record"));
@@ -144,7 +148,11 @@ fn corrupt_record_blocks_idempotency_scan() {
 fn mismatched_filename_blocks_idempotency_scan() {
 	let dir = tempdir().unwrap();
 	let valid = record("job-1");
-	std::fs::write(dir.path().join("wrong.json"), serde_json::to_vec(&valid).unwrap()).unwrap();
+	std::fs::write(
+		dir.path().join("wrong.json"),
+		serde_json::to_vec(&valid).unwrap(),
+	)
+	.unwrap();
 	let error = scan_records_dir(dir.path()).unwrap_err();
 	assert!(error.to_string().contains("filename/identity mismatch"));
 }
@@ -187,7 +195,10 @@ fn atomic_record_replacement_preserves_valid_identity() {
 	#[cfg(unix)]
 	{
 		use std::os::unix::fs::PermissionsExt;
-		assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+		assert_eq!(
+			std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+			0o600
+		);
 	}
 }
 
@@ -222,7 +233,12 @@ fn try_remote_resume(
 		.stderr(Stdio::piped())
 		.spawn()
 		.unwrap();
-	child.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
+	child
+		.stdin
+		.take()
+		.unwrap()
+		.write_all(input.as_bytes())
+		.unwrap();
 	child.wait_with_output().unwrap()
 }
 
@@ -231,7 +247,9 @@ fn try_remote_resume(
 fn corrupt_remote_request_refuses_replay() {
 	let output = try_remote_resume(Some("{partial"), None);
 	assert!(!output.status.success());
-	assert!(String::from_utf8_lossy(&output.stderr).contains("corrupt remote job state request.json"));
+	assert!(
+		String::from_utf8_lossy(&output.stderr).contains("corrupt remote job state request.json")
+	);
 }
 
 #[cfg(unix)]
@@ -297,7 +315,12 @@ fn starts_without_stable_idempotency_are_denied_before_external_effects() {
 		cpu_quota_percent: None,
 		memory_max_bytes: None,
 	};
-	for key in [None, Some(String::new()), Some("   ".into()), Some("x".repeat(257))] {
+	for key in [
+		None,
+		Some(String::new()),
+		Some("   ".into()),
+		Some("x".repeat(257)),
+	] {
 		params.idempotency_key = key;
 		let error = validate_start(&params).unwrap_err();
 		assert!(error.to_string().contains("idempotency_key"), "{error}");
@@ -361,7 +384,9 @@ fn stale_temp_record_is_never_overwritten() {
 	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
 	std::fs::write(&tmp, b"uncommitted").unwrap();
 	let error = save_record_at(&path, &record("job-1")).unwrap_err();
-	assert!(error.downcast_ref::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::AlreadyExists));
+	assert!(error
+		.downcast_ref::<std::io::Error>()
+		.is_some_and(|io| io.kind() == std::io::ErrorKind::AlreadyExists));
 	assert_eq!(std::fs::read(&tmp).unwrap(), b"uncommitted");
 	assert!(!path.exists());
 }
@@ -376,7 +401,9 @@ fn oversized_job_record_is_not_persisted_or_dispatched() {
 	assert!(error.to_string().contains("durable job record exceeds"));
 	assert!(!path.exists(), "oversized receipt must not become durable");
 	assert!(
-		!path.with_extension(format!("json.tmp.{}", std::process::id())).exists(),
+		!path
+			.with_extension(format!("json.tmp.{}", std::process::id()))
+			.exists(),
 		"oversized receipt must not leave an ambiguous temporary owner"
 	);
 }
@@ -508,25 +535,15 @@ fn remote_status_read_and_cancel_reject_wrong_or_missing_effect_binding() {
 	let wrong = "b".repeat(64);
 	for code in [STATUS_CODE, READ_CODE, CANCEL_CODE] {
 		for claimed in [None, Some(wrong.as_str())] {
-			let (output, cancelled) = remote_observer_binding_probe(
-				code,
-				&accepted,
-				claimed,
-				"hepta-runtime-job-1",
-			);
+			let (output, cancelled) =
+				remote_observer_binding_probe(code, &accepted, claimed, "hepta-runtime-job-1");
 			assert!(!output.status.success());
 			assert!(!cancelled);
-			assert!(
-				String::from_utf8_lossy(&output.stderr)
-					.contains("remote job request binding missing or mismatched")
-			);
+			assert!(String::from_utf8_lossy(&output.stderr)
+				.contains("remote job request binding missing or mismatched"));
 		}
-		let (output, cancelled) = remote_observer_binding_probe(
-			code,
-			&accepted,
-			Some(accepted.as_str()),
-			"wrong-unit",
-		);
+		let (output, cancelled) =
+			remote_observer_binding_probe(code, &accepted, Some(accepted.as_str()), "wrong-unit");
 		assert!(!output.status.success());
 		assert!(!cancelled);
 	}
@@ -630,27 +647,21 @@ fn remote_read_denies_symlink_hardlink_and_foreign_request_file() {
 	symlink(&secret, &stdout).unwrap();
 	let blocked = bound_remote_read_probe(&job);
 	assert!(!blocked.status.success());
-	assert!(
-		String::from_utf8_lossy(&blocked.stderr).contains("unsafe remote job file stdout.log")
-	);
+	assert!(String::from_utf8_lossy(&blocked.stderr).contains("unsafe remote job file stdout.log"));
 	assert!(!String::from_utf8_lossy(&blocked.stdout).contains("DO-NOT-READ"));
 
 	std::fs::remove_file(&stdout).unwrap();
 	std::fs::hard_link(&secret, &stdout).unwrap();
 	let blocked = bound_remote_read_probe(&job);
 	assert!(!blocked.status.success());
-	assert!(
-		String::from_utf8_lossy(&blocked.stderr).contains("non-regular or linked inode")
-	);
+	assert!(String::from_utf8_lossy(&blocked.stderr).contains("non-regular or linked inode"));
 	std::fs::remove_file(&stdout).unwrap();
 
 	let alias = root.join("job-alias");
 	symlink(&job, &alias).unwrap();
 	let blocked = bound_remote_read_probe(&alias);
 	assert!(!blocked.status.success());
-	assert!(
-		String::from_utf8_lossy(&blocked.stderr).contains("unsafe remote job directory")
-	);
+	assert!(String::from_utf8_lossy(&blocked.stderr).contains("unsafe remote job directory"));
 
 	std::fs::remove_file(job.join("request.json")).unwrap();
 	symlink(&secret, job.join("request.json")).unwrap();
@@ -796,9 +807,7 @@ fn remote_status_and_cancel_deny_symlinked_and_hardlinked_state() {
 	for code in [STATUS_CODE, CANCEL_CODE] {
 		let output = bound_remote_control_probe(code, &alias);
 		assert!(!output.status.success());
-		assert!(
-			String::from_utf8_lossy(&output.stderr).contains("unsafe remote job directory")
-		);
+		assert!(String::from_utf8_lossy(&output.stderr).contains("unsafe remote job directory"));
 	}
 	assert_eq!(std::fs::read(&outside).unwrap(), request.as_bytes());
 	assert_eq!(std::fs::read(&outside_exit).unwrap(), br#"{"exit_code":0}"#);
@@ -813,9 +822,7 @@ fn remote_cancel_denies_unknown_launch_and_missing_supervisor_identity_without_r
 	std::fs::write(job.join("launch.json"), r#"{"backend":"other"}"#).unwrap();
 	let invalid = bound_remote_control_probe(CANCEL_CODE, &job);
 	assert!(!invalid.status.success());
-	assert!(
-		String::from_utf8_lossy(&invalid.stderr).contains("cancel requires reconciliation")
-	);
+	assert!(String::from_utf8_lossy(&invalid.stderr).contains("cancel requires reconciliation"));
 	assert!(!job.join("cancel-request.json").exists());
 
 	std::fs::write(
@@ -830,8 +837,6 @@ fn remote_cancel_denies_unknown_launch_and_missing_supervisor_identity_without_r
 	.unwrap();
 	let unowned = bound_remote_control_probe(CANCEL_CODE, &job);
 	assert!(!unowned.status.success());
-	assert!(
-		String::from_utf8_lossy(&unowned.stderr).contains("ownership verification failed")
-	);
+	assert!(String::from_utf8_lossy(&unowned.stderr).contains("ownership verification failed"));
 	assert!(!job.join("cancel-request.json").exists());
 }

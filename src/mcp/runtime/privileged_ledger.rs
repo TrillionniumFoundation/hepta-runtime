@@ -23,9 +23,9 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::fs::OpenOptions;
 #[cfg(unix)]
 use std::fs::File;
+use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -80,7 +80,10 @@ fn bound_digest(host: &str, action: &str, payload: &Value) -> Result<String> {
 		"action": action,
 		"payload": payload,
 	});
-	Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(&canonical)?)))
+	Ok(format!(
+		"{:x}",
+		Sha256::digest(serde_json::to_vec(&canonical)?)
+	))
 }
 
 fn ledger_dir(state_dir: &Path) -> Result<PathBuf> {
@@ -118,7 +121,10 @@ fn read_record(path: &Path) -> Result<Option<Record>> {
 			return Err(error).with_context(|| format!("cannot inspect {}", path.display()));
 		}
 		Ok(metadata) if !metadata.file_type().is_file() => {
-			bail!("privileged ledger record is not a regular file: {}", path.display())
+			bail!(
+				"privileged ledger record is not a regular file: {}",
+				path.display()
+			)
 		}
 		Ok(_) => {}
 	}
@@ -219,7 +225,11 @@ pub async fn admit(
 		result: None,
 	};
 	write_record(&path, &record)?;
-	Ok(Admission::Entered(Entered { _guard, path, record }))
+	Ok(Admission::Entered(Entered {
+		_guard,
+		path,
+		record,
+	}))
 }
 
 impl Entered {
