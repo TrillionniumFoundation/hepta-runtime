@@ -345,7 +345,12 @@ pub async fn privileged_action(params: PrivilegedActionParams) -> Result<String>
 	.await?;
 	let permit = match admission {
 		Admission::Observed(observed) => {
-			audit("privileged_action_reused", &params.host, &params.action, &observed)?;
+			audit(
+				"privileged_action_reused",
+				&params.host,
+				&params.action,
+				&observed,
+			)?;
 			return Ok(serde_json::to_string_pretty(&observed)?);
 		}
 		Admission::Entered(permit) => permit,

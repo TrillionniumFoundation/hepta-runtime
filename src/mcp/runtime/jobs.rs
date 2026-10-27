@@ -131,7 +131,9 @@ fn start_lock(host: &str, key: Option<&str>) -> &'static AsyncMutex<()> {
 	// Only requests sharing the same host and idempotency key must be serialized.
 	// Fixed sharding bounds lock memory and avoids global remote-launch head-of-line blocking.
 	let locks = START_LOCKS.get_or_init(|| {
-		(0..START_LOCK_SHARDS).map(|_| AsyncMutex::new(())).collect()
+		(0..START_LOCK_SHARDS)
+			.map(|_| AsyncMutex::new(()))
+			.collect()
 	});
 	let mut hasher = std::collections::hash_map::DefaultHasher::new();
 	host.hash(&mut hasher);
@@ -220,7 +222,10 @@ fn read_record_at(path: &Path, expected_id: &str) -> Result<JobRecord> {
 		.with_context(|| format!("cannot open durable job record {}", path.display()))?;
 	let opened = file.metadata()?;
 	if !opened.is_file() || opened.len() > MAX_JOB_RECORD_BYTES {
-		bail!("invalid or oversized durable job record: {}", path.display());
+		bail!(
+			"invalid or oversized durable job record: {}",
+			path.display()
+		);
 	}
 	let mut bytes = Vec::new();
 	let mut bounded = file.take(MAX_JOB_RECORD_BYTES + 1);
@@ -254,7 +259,9 @@ fn scan_records_dir(dir: &Path) -> Result<Vec<JobRecord>> {
 		let expected_id = path
 			.file_stem()
 			.and_then(|stem| stem.to_str())
-			.ok_or_else(|| anyhow::anyhow!("invalid durable job record name: {}", path.display()))?;
+			.ok_or_else(|| {
+				anyhow::anyhow!("invalid durable job record name: {}", path.display())
+			})?;
 		records.push(read_record_at(&path, expected_id)?);
 	}
 	records.sort_by_key(|record| record.created_unix_ms);
@@ -304,7 +311,7 @@ fn request_digest(params: &ProcessStartParams) -> (u64, String) {
 	let bytes = serde_json::to_vec(&binding).expect("process binding serializes");
 	let digest = Sha256::digest(bytes);
 	let legacy = u64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"));
-	(legacy, format!("{digest:x}"))
+	(legacy, super::sha256_hex(&digest))
 }
 
 #[cfg(test)]
