@@ -80,7 +80,9 @@ fn bound_digest(host: &str, action: &str, payload: &Value) -> Result<String> {
 		"action": action,
 		"payload": payload,
 	});
-	Ok(super::sha256_hex(&Sha256::digest(serde_json::to_vec(&canonical)?)))
+	Ok(super::sha256_hex(&Sha256::digest(serde_json::to_vec(
+		&canonical,
+	)?)))
 }
 
 fn ledger_dir(state_dir: &Path) -> Result<PathBuf> {
