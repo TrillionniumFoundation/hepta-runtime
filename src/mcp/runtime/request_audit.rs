@@ -24,6 +24,10 @@ use super::config::runtime_config;
 #[path = "request_audit_trace.rs"]
 pub(super) mod trace;
 
+#[cfg(unix)]
+#[path = "request_metadata_trace.rs"]
+mod metadata_trace;
+
 const MAX_GLOBAL: usize = 512;
 const MAX_OWNER: usize = 128;
 const MAX_RECORD_BYTES: usize = 2048;
@@ -38,6 +42,9 @@ const ARCHIVE_ANCHOR: &str = ".request-archive-v11-anchor.json";
 static STORE_LOCK: OnceLock<AuditStoreLock> = OnceLock::new();
 static ACTIVE: OnceLock<Mutex<HashMap<String, Weak<AtomicBool>>>> = OnceLock::new();
 static READ_PINS: OnceLock<Mutex<HashMap<String, Vec<Weak<()>>>>> = OnceLock::new();
+#[cfg(unix)]
+#[path = "request_archive_batch.rs"]
+mod archive_batch;
 #[cfg(unix)]
 #[path = "request_archive_store.rs"]
 mod archive_store;
@@ -497,8 +504,18 @@ fn name(value: &str) -> Result<std::ffi::CString> {
 
 #[cfg(unix)]
 fn open_at(directory: &File, component: &str, flags: i32, mode: u32) -> Result<File> {
-	use std::os::fd::{AsRawFd, FromRawFd};
 	let component = name(component)?;
+	open_at_component(directory, &component, flags, mode)
+}
+
+#[cfg(unix)]
+fn open_at_component(
+	directory: &File,
+	component: &std::ffi::CStr,
+	flags: i32,
+	mode: u32,
+) -> Result<File> {
+	use std::os::fd::{AsRawFd, FromRawFd};
 	let descriptor = unsafe {
 		libc::openat(
 			directory.as_raw_fd(),
@@ -1725,38 +1742,68 @@ fn metadata_query_public_error(error: anyhow::Error) -> anyhow::Error {
 // Admission and blocking-pool queue time consume the original query budget.
 // A cancelled caller cannot release a slot while queued or running I/O still
 // owns it, and a late blocking worker must not open the archive or start a scan.
-#[cfg(unix)]
+#[cfg(all(test, unix))]
 async fn run_metadata_query<T: Send + 'static>(
 	deadline: Instant,
 	slots: Arc<Semaphore>,
 	query: impl FnOnce(Instant) -> Result<T> + Send + 'static,
 ) -> Result<T> {
+	run_metadata_query_traced(
+		deadline,
+		slots,
+		metadata_trace::QueryTrace::new("test", deadline, 0, false),
+		query,
+	)
+	.await
+}
+
+#[cfg(unix)]
+async fn run_metadata_query_traced<T: Send + 'static>(
+	deadline: Instant,
+	slots: Arc<Semaphore>,
+	trace: metadata_trace::QueryTrace,
+	query: impl FnOnce(Instant) -> Result<T> + Send + 'static,
+) -> Result<T> {
+	let _trace_boundary = trace.boundary("caller_scope_end");
 	if Instant::now() >= deadline {
+		trace.mark("expired_before_admission", 1);
 		return Err(MetadataQueryDeadline.into());
 	}
 	let result = tokio::time::timeout_at(tokio::time::Instant::from_std(deadline), async move {
+		trace.mark("permit_wait", 0);
 		let permit = slots
 			.acquire_owned()
 			.await
 			.map_err(|_| anyhow!("archive metadata query admission unavailable"))?;
+		trace.mark("permit_acquired", 0);
 		if Instant::now() >= deadline {
 			return Err(MetadataQueryDeadline.into());
 		}
+		trace.mark("blocking_submitted", 0);
 		tokio::task::spawn_blocking(move || {
+			let _context = trace.enter();
 			let _permit = permit;
-			if Instant::now() >= deadline {
-				return Err(MetadataQueryDeadline.into());
-			}
-			query(deadline)
+			trace.mark("blocking_entered", 0);
+			let result = if Instant::now() >= deadline {
+				Err(MetadataQueryDeadline.into())
+			} else {
+				query(deadline)
+			};
+			trace.mark("blocking_result", u64::from(result.is_err()));
+			result
 		})
 		.await
 		.map_err(|_| anyhow!("archive metadata query worker unavailable"))?
 	})
 	.await
-	.map_err(|_| anyhow::Error::from(MetadataQueryDeadline))??;
+	.map_err(|_| anyhow::Error::from(MetadataQueryDeadline))
+	.and_then(|result| result);
+	trace.mark("caller_result_ready", u64::from(result.is_err()));
+	let result = result?;
 	// A ready worker and an expired timer can be observed together after
 	// owner scheduling delay. Never accept that stale successful result.
 	if Instant::now() >= deadline {
+		trace.mark("caller_late_result", 1);
 		return Err(MetadataQueryDeadline.into());
 	}
 	Ok(result)
@@ -1779,11 +1826,13 @@ fn usage_stats_at_until(root: &Path, owners: &[String; 1], deadline: Instant) ->
 pub async fn usage_stats(owner: &str, _params: UsageStatsParams) -> Result<String> {
 	#[cfg(unix)]
 	let deadline = Instant::now() + index::QUERY_BUDGET;
+	#[cfg(unix)]
+	let trace = metadata_trace::QueryTrace::new("usage_stats", deadline, 0, false);
 	let root = runtime_config()?.state_dir.clone();
 	let owner = owner.to_owned();
 	#[cfg(unix)]
 	{
-		run_metadata_query(deadline, metadata_query_slots(), move |deadline| {
+		run_metadata_query_traced(deadline, metadata_query_slots(), trace, move |deadline| {
 			usage_stats_at_until(&root, std::array::from_ref(&owner), deadline)
 		})
 		.await
@@ -1801,41 +1850,30 @@ fn archive_history_at(root: &Path, owner: &str, params: RequestHistoryParams) ->
 	archive_history_at_until(root, owner, params, Instant::now() + index::QUERY_BUDGET)
 }
 
-#[cfg(unix)]
+#[cfg(all(test, unix))]
 fn archive_history_at_until(
 	root: &Path,
 	owner: &str,
 	params: RequestHistoryParams,
 	deadline: Instant,
 ) -> Result<String> {
-	if !valid_id(owner) {
-		bail!("request archive unavailable to this scope");
-	}
-	let limit = params.limit.unwrap_or(32) as usize;
-	if !(1..=32).contains(&limit) || params.after_id.as_deref().is_some_and(|id| !valid_id(id)) {
-		bail!("invalid request archive page");
-	}
-	let (archive, cursor) = {
-		let _guard = index::query_lock(deadline)?;
-		let hot = open_store(root)?;
-		let archive = hot_snapshot(root, &hot)?.1;
-		let cursor = if let Some(id) = params.after_id.as_deref() {
-			let record = archive.read_record(&format!("{id}.json"))?;
-			if record.owner != owner {
-				bail!("request archive cursor unavailable to this scope");
-			}
-			Some(record)
-		} else {
-			None
-		};
-		(archive, cursor)
-	};
-	let (mut records, total) =
-		index::page(root, &archive, owner, cursor.as_ref(), limit, deadline)?;
+	archive_batch::run(root, owner, params, deadline)
+}
+
+#[cfg(unix)]
+fn archive_page_output(
+	mut records: Vec<Record>,
+	total: u64,
+	limit: usize,
+	deadline: Instant,
+) -> Result<String> {
 	let more = records.len() > limit;
 	records.truncate(limit);
 	let mut page = Vec::new();
 	for record in &records {
+		if Instant::now() >= deadline {
+			return Err(MetadataQueryDeadline.into());
+		}
 		let state = match record.state {
 			DurableState::Unknown if is_dispatch_active(&record.request_id)? => "accepted",
 			DurableState::Unknown => "unknown",
@@ -1859,21 +1897,30 @@ fn archive_history_at_until(
 	if wire_size(&output)? > MAX_PAGE_BYTES {
 		bail!("request archive wire page limit exceeded");
 	}
-	Ok(serde_json::to_string(&output)?)
+	let serialized = serde_json::to_string(&output)?;
+	if Instant::now() >= deadline {
+		return Err(MetadataQueryDeadline.into());
+	}
+	Ok(serialized)
 }
 
 pub async fn archive_history(owner: &str, params: RequestHistoryParams) -> Result<String> {
 	#[cfg(unix)]
 	let deadline = Instant::now() + index::QUERY_BUDGET;
+	#[cfg(unix)]
+	let trace = metadata_trace::QueryTrace::new(
+		"request_archive",
+		deadline,
+		params.limit.unwrap_or(32),
+		params.after_id.is_some(),
+	);
 	let root = runtime_config()?.state_dir.clone();
 	let owner = owner.to_owned();
 	#[cfg(unix)]
 	{
-		run_metadata_query(deadline, metadata_query_slots(), move |deadline| {
-			archive_history_at_until(&root, &owner, params, deadline)
-		})
-		.await
-		.map_err(metadata_query_public_error)
+		archive_batch::run_owned(root, owner, params, deadline, metadata_query_slots(), trace)
+			.await
+			.map_err(metadata_query_public_error)
 	}
 	#[cfg(not(unix))]
 	{

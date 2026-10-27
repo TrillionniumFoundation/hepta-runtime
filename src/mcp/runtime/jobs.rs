@@ -1207,7 +1207,8 @@ if existing is not None:
         raise SystemExit("remote job directory is bound to a different request")
     launch = read_json("launch.json")
     exit_data = read_json("exit.json")
-    started = read_json("started.json")
+    # An existing request never launches again. Owner tombstones need not be
+    # parsed here; status owns their conservative interpretation.
     if launch or exit_data:
         print(json.dumps({"ok": True, "reused_remote": True, **(launch or {"backend": "completed"})}, sort_keys=True))
         raise SystemExit(0)
@@ -1227,7 +1228,7 @@ else:
     try: os.fsync(fd)
     finally: os.close(fd)
 runner = r'''#!/usr/bin/env python3
-import fcntl, hashlib, json, os, pathlib, select, shutil, signal, stat, subprocess, sys, threading, time
+import errno, fcntl, hashlib, json, os, pathlib, select, shutil, signal, stat, subprocess, sys, threading, time
 # Only the trusted launcher chooses this argv marker, never request metadata.
 # A legacy unmarked runner retains the original detached nice adjustment.
 if len(sys.argv) not in (3, 4):
@@ -1267,6 +1268,23 @@ def publish_terminal(value):
         "exit_sha256": hashlib.sha256(encoded).hexdigest(),
     })
 
+def reap_original_child(child, timeout):
+    # Finish every original-group signal before entering this bounded wait.
+    # Popen.wait maps ECHILD to a successful-looking zero; only an actual
+    # waitpid return for this original child can prove a reap and exit code.
+    wait_deadline = time.monotonic() + timeout
+    while True:
+        waited_pid, status = os.waitpid(child.pid, os.WNOHANG)
+        if waited_pid == child.pid:
+            child.returncode = os.waitstatus_to_exitcode(status)
+            return child.returncode
+        if waited_pid != 0:
+            raise RuntimeError("wait returned an unexpected child identity")
+        remaining = wait_deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("original child wait deadline exceeded")
+        time.sleep(min(0.01, remaining))
+
 def process_identity(pid):
     if sys.platform == "linux":
         try:
@@ -1301,16 +1319,15 @@ owner_binding = {"at_unix_ms":int(time.time()*1000),"job_id":req["job_id"],
     "launch_nonce":req["launch_nonce"],"supervisor_pid":os.getpid(),
     "supervisor_uid":os.geteuid(),"supervisor_identity":owner_identity,
     "invocation_id":os.environ.get("INVOCATION_ID")}
-def publish_owner(name):
+def stage_owner(name):
     fd = os.open(job / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as stream:
         json.dump(owner_binding, stream, sort_keys=True); stream.flush(); os.fsync(stream.fileno())
-    fd = os.open(job, os.O_RDONLY)
-    try: os.fsync(fd)
-    finally: os.close(fd)
-# Even interrupted publication is a tombstone: later owners cannot replay it.
-publish_owner("owner-intent.json")
-publish_owner("started.json")
+# Both files must be synced and closed before one barrier publishes their names.
+# Surviving partial creates remain tombstones; no workload precedes this barrier.
+stage_owner("owner-intent.json")
+stage_owner("started.json")
+os.fsync(_hepta_directory_pins[-1])
 child = None
 cancel_requested = False
 
@@ -1361,9 +1378,9 @@ except Exception as exc:
             group_signal = "failed"
         child_reaped = False
         try:
-            child.wait(timeout=2)
+            reap_original_child(child, 2)
             child_reaped = True
-        except (subprocess.TimeoutExpired, OSError):
+        except Exception:
             pass
         publish_terminal({
             "at_unix_ms": int(time.time() * 1000),
@@ -1458,7 +1475,7 @@ except Exception as exc:
         cleanup_errors.append("signal: " + str(cleanup))
     child_reaped = False
     try:
-        child.wait(timeout=2)
+        reap_original_child(child, 2)
         child_reaped = True
     except Exception as cleanup:
         cleanup_errors.append("wait: " + str(cleanup))
@@ -1512,21 +1529,95 @@ leader_group_signal_number = None
 leader_kill_submitted, leader_cancel_signalled = False, False
 leader_cleanup_errors = []
 exit_queue, exit_seen = None, False
-if sys.platform != "linux":
-    exit_queue = select.kqueue()
+def exit_observation_failed(exc):
+    # A failed observer does not establish that the submitted child stopped.
+    # Except for ECHILD, this owner has never reaped its original child: finish
+    # every group signal before its bounded wait. ECHILD expressly removes
+    # that custody; neither a saved PID nor Popen's ECHILD compatibility result
+    # may then authorize signalling or be presented as a known child exit.
+    primary_error = type(exc).__name__ + ": " + str(exc)
+    cleanup_errors = []
+    custody_retained = not isinstance(exc, ChildProcessError) and getattr(exc, "errno", None) != errno.ECHILD
+    group_signal, group_signal_number, child_reaped = "not_submitted", None, False
+    if custody_retained:
+        group_signal, group_signal_number = "submitted", int(signal.SIGKILL)
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            group_signal = "already_absent"
+        except Exception as cleanup:
+            group_signal = "failed"
+            cleanup_errors.append("signal: " + str(cleanup))
+        try:
+            reap_original_child(child, 2)
+            child_reaped = True
+        except Exception as cleanup:
+            if isinstance(cleanup, ChildProcessError) or getattr(cleanup, "errno", None) == errno.ECHILD:
+                custody_retained = False
+            cleanup_errors.append("wait: " + str(cleanup))
+    else:
+        cleanup_errors.append("wait: original child custody unavailable; no signal or wait submitted")
+    # This is a separate failure cleanup budget, never a new workload timeout
+    # or a retry. One absolute join budget covers both already-started readers.
+    join_deadline = time.monotonic() + 2
+    for label, reader in zip(("stdout", "stderr"), readers):
+        try:
+            reader.join(timeout=max(0, join_deadline - time.monotonic()))
+            if reader.is_alive():
+                cleanup_errors.append(label + ": output reader did not stop")
+        except Exception as cleanup:
+            cleanup_errors.append(label + ": " + str(cleanup))
+    if exit_queue is not None:
+        try:
+            exit_queue.close()
+        except Exception as cleanup:
+            cleanup_errors.append("observer close: " + str(cleanup))
     try:
-        exit_queue.control([select.kevent(child.pid, filter=select.KQ_FILTER_PROC,
-            flags=select.KQ_EV_ADD | select.KQ_EV_ENABLE, fflags=select.KQ_NOTE_EXIT)], 0, 0)
-    except ProcessLookupError:
-        exit_seen = True
+        publish_terminal({
+            "at_unix_ms": int(time.time() * 1000),
+            "exit_code": 125,
+            "supervisor_error": "child exit observation failed after spawn: " + primary_error,
+            "supervisor_cleanup_errors": cleanup_errors,
+            "effect_outcome": "unknown",
+            "status_authoritative": False,
+            "automatic_retry": False,
+            "child_spawned": True,
+            "child_pid": child.pid,
+            "child_custody_retained": custody_retained,
+            "child_group_signal": group_signal,
+            "child_group_signal_number": group_signal_number,
+            "child_reaped": child_reaped,
+            "child_exit_code": child.returncode if child_reaped else None,
+            "output_complete": False,
+            "output_durable": False,
+            "cancelled": bool(cancel_requested),
+            "timed_out": bool(timed_out),
+        })
+    except Exception as publication_error:
+        raise exc from publication_error
+    raise SystemExit(125)
+
+if sys.platform != "linux":
+    try:
+        exit_queue = select.kqueue()
+        try:
+            exit_queue.control([select.kevent(child.pid, filter=select.KQ_FILTER_PROC,
+                flags=select.KQ_EV_ADD | select.KQ_EV_ENABLE, fflags=select.KQ_NOTE_EXIT)], 0, 0)
+        except ProcessLookupError:
+            exit_seen = True
+    except Exception as exc:
+        exit_observation_failed(exc)
 while True:
     # waitid(WNOWAIT) / kqueue observes exit without reaping. The original
     # leader holds its PID/PGID until this one path completes all group signals.
-    if sys.platform == "linux":
-        exited = os.waitid(os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
-    else:
-        exit_seen = exit_seen or bool(exit_queue.control([], 1, 0))
-        exited = True if exit_seen else None
+    try:
+        if sys.platform == "linux":
+            exited = os.waitid(os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+        else:
+            exit_seen = exit_seen or bool(exit_queue.control([], 1, 0))
+            exited = True if exit_seen else None
+    except Exception as exc:
+        exit_observation_failed(exc)
     now = time.monotonic()
     if exited is None and deadline is not None and now >= deadline:
         timed_out = True
@@ -1606,7 +1697,62 @@ while True:
         if exited is not None and (all(log_eof.values()) or now >= stop_deadline):
             break
     time.sleep(.05)
-child.wait()
+try:
+    # Every loop exit already observed the original leader's exit. Consume its
+    # actual status once, without creating another child-wait interval.
+    reap_original_child(child, 0)
+except Exception as exc:
+    # This is after the final reap boundary, unlike observer failures above.
+    # A failed final wait grants no further signal or wait authority: ECHILD
+    # may mean the original identity is already gone. Never rescue by old PGID.
+    cleanup_errors = list(leader_cleanup_errors)
+    # An existing leader drain deadline also bounds this error path, including
+    # the zero remaining time after expiry; do not grant another two seconds.
+    join_deadline = leader_drain_until if leader_drain_until is not None else time.monotonic() + 2
+    for label, reader in zip(("stdout", "stderr"), readers):
+        try:
+            reader.join(timeout=max(0, join_deadline - time.monotonic()))
+            if reader.is_alive():
+                cleanup_errors.append(label + ": output reader did not stop")
+        except Exception as cleanup:
+            cleanup_errors.append(label + ": " + str(cleanup))
+    if exit_queue is not None:
+        try:
+            exit_queue.close()
+        except Exception as cleanup:
+            cleanup_errors.append("observer close: " + str(cleanup))
+    terminal = {
+        "at_unix_ms": int(time.time() * 1000),
+        "exit_code": 125,
+        "supervisor_error": "final child wait failed after exit observation: " + type(exc).__name__ + ": " + str(exc),
+        "supervisor_cleanup_errors": cleanup_errors,
+        "effect_outcome": "unknown",
+        "status_authoritative": False,
+        "automatic_retry": False,
+        "child_spawned": True,
+        "child_pid": child.pid,
+        "child_reaped": False,
+        "child_exit_code": None,
+        "output_complete": False,
+        "output_durable": False,
+        "log_truncated": log_truncated,
+        "log_errors": log_errors,
+        "log_bytes": log_bytes,
+        "log_synced": {"stdout": False, "stderr": False},
+        "cancelled": bool(cancel_requested),
+        "timed_out": bool(timed_out),
+    }
+    if leader_drain_error is not None:
+        terminal.update({
+            "prior_output_drain_error": leader_drain_error,
+            "child_group_signal": leader_group_signal,
+            "child_group_signal_number": leader_group_signal_number,
+        })
+    try:
+        publish_terminal(terminal)
+    except Exception as publication_error:
+        raise exc from publication_error
+    raise SystemExit(125)
 if exit_queue is not None: exit_queue.close()
 rc = 124 if timed_out else child.returncode
 log_synced = {"stdout": False, "stderr": False}
@@ -1775,11 +1921,16 @@ def publication_pending(reason):
             "terminal_publication_confirmed": False,
             "status_authoritative": False, "automatic_retry": False}
 
-def read_terminal_file(name, limit):
+def read_terminal_file(name, limit, missing_ok=False):
     # Relative to the already pinned job directory; never follow a receipt
     # symlink or wait on a substituted FIFO. Hash and parse this one snapshot.
-    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
-                 dir_fd=_hepta_directory_pins[-1])
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                     dir_fd=_hepta_directory_pins[-1])
+    except FileNotFoundError:
+        if missing_ok:
+            return None
+        raise
     with os.fdopen(fd, "rb") as stream:
         before = os.fstat(stream.fileno())
         if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid() or
@@ -1795,6 +1946,19 @@ def read_terminal_file(name, limit):
             stamp(before) != stamp(after) or stamp(after) != stamp(current)):
         raise ValueError("terminal publication file changed")
     return encoded
+
+def read_owner_binding():
+    # An interrupted O_EXCL owner write is a permanent no-replay tombstone.
+    # Only malformed bytes in a verified private regular file become Unknown;
+    # unsafe paths, ownership/mode changes and read failures still propagate.
+    encoded = read_terminal_file("started.json", 16 * 1024, missing_ok=True)
+    if encoded is None:
+        return {}
+    try:
+        value = json.loads(encoded)
+    except ValueError:
+        return {}
+    return value if isinstance(value, dict) else {}
 
 def read_terminal_status(request):
     field = "terminal_publication_protocol"
@@ -1875,7 +2039,7 @@ def one_status():
         terminal = read_terminal_status(request)
         if terminal is not None:
             return terminal
-        started = read_json("started.json") or {}
+        started = read_owner_binding()
         nonce = request.get("launch_nonce")
         invocation = started.get("invocation_id")
         if not valid_owner(request, started, systemd=True):
@@ -1922,13 +2086,13 @@ def one_status():
                 return publication_pending("supervisor has no confirmed terminal receipt")
             state = active or "unknown"
         return {"state": state, "backend": "systemd", "systemd": props}
-    started = read_json("started.json") or {}
-    pid = int(started.get("supervisor_pid") or launch.get("launcher_pid") or 0)
-    expected = started.get("supervisor_identity")
+    started = read_owner_binding()
     if not valid_owner(request, started):
         return {"state":"owner_unknown","reason":"frozen supervisor binding unavailable",
                 "status_authoritative":False,"automatic_retry":False}
-    actual = process_identity(pid) if pid else None
+    pid = started["supervisor_pid"]
+    expected = started["supervisor_identity"]
+    actual = process_identity(pid)
     running = bool(pid and actual is not None and (expected is not None and expected == actual))
     if not running and requires_witness:
         return publication_pending("supervisor disappeared without a confirmed terminal receipt")
@@ -3126,3 +3290,7 @@ mod staging_durability_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "jobs_terminal_publication_tests.rs"]
 mod terminal_publication_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_owner_metadata_tests.rs"]
+mod owner_metadata_tests;

@@ -1,0 +1,127 @@
+--- unbound-A46-template-with-A50-labels
++++ unbound-A50-large-main-adapter-only
+@@ -1093,6 +1093,68 @@
+     report_path = out / 'report.json'
+     bundles, inputs = {}, [protocol_receipt]
+     journal = (out / 'calls.jsonl').open('xb')
++    owned_controllers = []
++    report['original_controller_custody_adapter'] = []
++
++    def registered_controller(*arguments):
++        controller = Controller(*arguments)
++        state = {'controller': controller, 'row': report['controllers'][-1],
++                 'close_attempted': False, 'close_returned': False, 'finalized': False}
++        owned_controllers.append(state)  # Before the unchanged run_controller calls start.
++        original_close = controller.close
++
++        def close_once():
++            if state['close_attempted']:
++                need(state['close_returned'],
++                     'original cleanup was already attempted; no renewed wait or signal budget')
++                return state['close_result']
++            state['close_attempted'] = True
++            value = original_close()
++            state['close_returned'] = True
++            state['close_result'] = value
++            return value
++
++        controller.close = close_once
++        return controller
++
++    def finish_owned_controllers():
++        for state in owned_controllers:
++            if state['finalized']:
++                continue
++            state['finalized'] = True
++            controller, current = state['controller'], state['row']
++            cleanup = {'controller': current['index'], 'arm': current['arm'],
++                       'close_attempted_before_fallback': state['close_attempted'],
++                       'original_child_started': controller.child is not None,
++                       'original_child_reaped_before_fallback': controller.reaped,
++                       'fallback_used': False}
++            if not state['close_attempted']:
++                cleanup['fallback_used'] = True
++                current['status'] = 'failed'
++                message = 'original close was skipped; outer custody attempted its first close only'
++                current['errors'].append({'where': 'outer_custody', 'error': message})
++                report['errors'].append(message)
++                report['complete'] = report['passed'] = False
++                try:
++                    value = controller.close()
++                    current['startup'], current['shutdown'] = controller.startup, value
++                except BaseException as error:
++                    cleanup['error'] = type(error).__name__ + ': ' + str(error)
++                    current['errors'].append({'where': 'fallback_close', 'error': cleanup['error']})
++                    report['errors'].append('fallback_close: ' + cleanup['error'])
++            cleanup.update(close_attempted=state['close_attempted'],
++                           close_returned=state['close_returned'],
++                           original_child_reaped=controller.reaped,
++                           shutdown_receipt_present=controller.shutdown is not None)
++            report['original_controller_custody_adapter'].append(cleanup)
++            if not state['close_returned'] or (controller.child is not None and
++                    (not controller.reaped or controller.shutdown is None
++                     or controller.shutdown.get('waited') is None)):
++                message = 'original controller custody/evidence incomplete; no repeated cleanup or reconstructed wait4'
++                current['status'] = 'failed'
++                current['errors'].append({'where': 'outer_custody', 'error': message})
++                report['errors'].append(message)
++                report['complete'] = report['passed'] = False
+ 
+     def checkpoint():
+         report['observed_measured_write_attempts'] = sum(row.get('write_attempts') == 1 for row in slots)
+@@ -1157,8 +1219,14 @@
+                 for index in controllers:
+                     arm = ORDER[index]
+                     report['phase'] = 'controller-' + str(index) + '-' + arm
+-                    need(run_controller(index, arm, bundles[arm], out, report, slots, waves,
+-                                        native, small, Controller, journal, checkpoint),
++                    try:
++                        controller_complete = run_controller(index, arm, bundles[arm], out, report, slots, waves,
++                            native, small, registered_controller, journal, checkpoint)
++                    finally:
++                        # A skipped first close is handled before the block's host/source postchecks.
++                        # No attempted close, wait4 or signal budget is ever restarted.
++                        finish_owned_controllers()
++                    need(controller_complete,
+                          'controller setup/workload/integrity failed; future controllers unexecuted')
+                 current_block['status'] = 'complete'
+             except BaseException as error:
+@@ -1193,11 +1261,23 @@
+         report['phase'] = 'failed'
+         report['errors'].append(type(error).__name__ + ': ' + str(error))
+     finally:
+-        retain_interrupted_rows(journal, slots)
+-        journal.flush()
+-        os.fsync(journal.fileno())
+-        journal.close()
+-        report['calls_file'] = bytes_receipt(out / 'calls.jsonl', maximum=16 * 1024 * 1024)
++        finish_owned_controllers()
++        # Retain independent evidence errors; journal failure cannot skip custody or final status.
++        for label, operation in (
++                ('retain_interrupted_rows', lambda: retain_interrupted_rows(journal, slots)),
++                ('flush', journal.flush), ('fsync', lambda: os.fsync(journal.fileno()))):
++            try:
++                operation()
++            except BaseException as error:
++                report['errors'].append('journal_' + label + ': ' + type(error).__name__ + ': ' + str(error))
++        try:
++            journal.close()
++        except BaseException as error:
++            report['errors'].append('journal_close: ' + type(error).__name__ + ': ' + str(error))
++        try:
++            report['calls_file'] = bytes_receipt(out / 'calls.jsonl', maximum=16 * 1024 * 1024)
++        except BaseException as error:
++            report['errors'].append('journal_receipt: ' + type(error).__name__ + ': ' + str(error))
+         for row in slots:
+             if row['status'] == 'unexecuted':
+                 row['unexecuted_reason'] = 'fixed experiment not reached after setup, host, input, custody, transport or oracle failure; never retried'
+@@ -1213,6 +1293,9 @@
+             report['complete'] = False
+             report['phase'] = 'failed'
+             report['errors'].append('first termination signal retained: ' + str(STOP_SIGNUM))
++        if report['errors']:
++            report['complete'] = False
++            report['phase'] = 'failed'
+         report['passed'] = (report['complete'] and report['analysis']['candidate_performance_gates_passed']
+                             and STOP_SIGNUM is None)
+         report['finished_utc'] = utc()

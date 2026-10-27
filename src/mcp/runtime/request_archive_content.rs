@@ -7,6 +7,127 @@ use std::collections::BTreeSet;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread::{Scope, ScopedJoinHandle};
 
+#[derive(Clone, Copy)]
+enum ContentPhase {
+	Walk,
+	Row,
+	Order,
+	Pending,
+	Name,
+	NamespaceBefore,
+	StampBefore,
+	Open,
+	DescriptorBefore,
+	Read,
+	Parse,
+	DescriptorAfter,
+	StampAfter,
+	NamespaceAfter,
+	Compare,
+}
+
+const CONTENT_PHASE_NAMES: [&str; 15] = [
+	"content_walk_and_fences_us",
+	"content_row_lookup_us",
+	"content_order_check_us",
+	"content_pending_selection_us",
+	"content_filename_us",
+	"content_namespace_before_us",
+	"content_stamp_before_us",
+	"content_open_us",
+	"content_descriptor_before_us",
+	"content_body_read_us",
+	"content_parse_and_domain_us",
+	"content_descriptor_after_us",
+	"content_stamp_after_us",
+	"content_namespace_after_us",
+	"content_compare_and_close_us",
+];
+
+// Static dispatch gives ordinary and parallel reads a zero-sized observer with
+// no clocks, counters, allocation, or per-record channel operation.
+trait ContentTrace {
+	fn enter(&mut self, _phase: ContentPhase) {}
+	fn attempt(&mut self) {}
+	fn verified(&mut self) {}
+	fn complete(&mut self) {}
+}
+
+struct UntracedContent;
+impl ContentTrace for UntracedContent {}
+
+struct ContentPhases {
+	phase: ContentPhase,
+	last: Instant,
+	nanos: [u128; CONTENT_PHASE_NAMES.len()],
+	attempted: u64,
+	verified: u64,
+	complete: bool,
+}
+
+impl ContentPhases {
+	fn new() -> Self {
+		Self::at(Instant::now())
+	}
+
+	fn at(now: Instant) -> Self {
+		Self {
+			phase: ContentPhase::Walk,
+			last: now,
+			nanos: [0; CONTENT_PHASE_NAMES.len()],
+			attempted: 0,
+			verified: 0,
+			complete: false,
+		}
+	}
+
+	fn advance(&mut self, now: Instant) {
+		let elapsed = now.saturating_duration_since(self.last).as_nanos();
+		let total = &mut self.nanos[self.phase as usize];
+		*total = total.saturating_add(elapsed);
+		self.last = now;
+	}
+
+	fn micros(&self) -> [u64; CONTENT_PHASE_NAMES.len()] {
+		self.nanos
+			.map(|value| (value / 1_000).min(u64::MAX as u128) as u64)
+	}
+}
+
+impl ContentTrace for ContentPhases {
+	fn enter(&mut self, phase: ContentPhase) {
+		self.advance(Instant::now());
+		self.phase = phase;
+	}
+
+	fn attempt(&mut self) {
+		self.attempted = self.attempted.saturating_add(1);
+	}
+
+	fn verified(&mut self) {
+		self.verified = self.verified.saturating_add(1);
+	}
+
+	fn complete(&mut self) {
+		self.complete = true;
+	}
+}
+
+impl Drop for ContentPhases {
+	fn drop(&mut self) {
+		self.advance(Instant::now());
+		// Exactly eighteen bounded, nonblocking events per serial scan, including
+		// errors and partial walks. Keep nanosecond sums until this final rounding;
+		// rounding each tiny record operation would systematically lose its cost.
+		for (phase, value) in CONTENT_PHASE_NAMES.into_iter().zip(self.micros()) {
+			metadata_trace::mark(phase, 0, value);
+		}
+		metadata_trace::mark("content_members_attempted", 0, self.attempted);
+		metadata_trace::mark("content_members_verified", 0, self.verified);
+		metadata_trace::mark("content_scan_complete", 0, u64::from(self.complete));
+	}
+}
+
 fn live(deadline: Instant) -> Result<()> {
 	if Instant::now() >= deadline {
 		bail!("archive metadata query total deadline exceeded");
@@ -57,15 +178,34 @@ fn read_original(
 	filename: &str,
 	deadline: Instant,
 ) -> Result<Entry> {
+	read_original_with_trace(archive, directory, filename, deadline, &mut UntracedContent)
+}
+
+fn read_original_with_trace(
+	archive: &Archive,
+	directory: &File,
+	filename: &str,
+	deadline: Instant,
+	trace: &mut impl ContentTrace,
+) -> Result<Entry> {
+	trace.enter(ContentPhase::Name);
 	live(deadline)?;
 	let raw_id = filename
 		.strip_suffix(".json")
 		.filter(|value| valid_id(value))
 		.ok_or_else(|| anyhow!("invalid request metadata filename"))?;
-	archive.fence_record(filename, directory)?;
-	let before = stamp_at(directory, filename)?;
-	let mut file = open_at(directory, filename, libc::O_RDONLY | libc::O_NONBLOCK, 0)?;
+	// Reuse only the owned name representation. Every pre/post namespace,
+	// member and descriptor observation below remains independently fresh.
+	let component = name(filename)?;
+	trace.enter(ContentPhase::NamespaceBefore);
+	archive.fence_record_component(&component, directory)?;
+	trace.enter(ContentPhase::StampBefore);
+	let before = stamp_at_component(directory, &component)?;
+	trace.enter(ContentPhase::Open);
+	let mut file = open_at_component(directory, &component, libc::O_RDONLY | libc::O_NONBLOCK, 0)?;
+	trace.enter(ContentPhase::DescriptorBefore);
 	descriptor_matches(&file, before)?;
+	trace.enter(ContentPhase::Read);
 	let mut bytes = [0u8; MAX_RECORD_BYTES + 1];
 	let mut length = 0;
 	loop {
@@ -88,6 +228,7 @@ fn read_original(
 	if length as u64 != before.length {
 		bail!("archive content length changed");
 	}
+	trace.enter(ContentPhase::Parse);
 	let record: Record = serde_json::from_slice(&bytes[..length])?;
 	if !valid_id(&record.request_id)
 		|| !valid_id(&record.owner)
@@ -96,12 +237,16 @@ fn read_original(
 	{
 		bail!("request audit metadata identity refused");
 	}
+	trace.enter(ContentPhase::DescriptorAfter);
 	descriptor_matches(&file, before)?;
-	if stamp_at(directory, filename)? != before {
+	trace.enter(ContentPhase::StampAfter);
+	if stamp_at_component(directory, &component)? != before {
 		bail!("archive content member changed");
 	}
-	archive.fence_record(filename, directory)?;
+	trace.enter(ContentPhase::NamespaceAfter);
+	archive.fence_record_component(&component, directory)?;
 	live(deadline)?;
+	trace.enter(ContentPhase::Compare);
 	Ok(Entry {
 		record,
 		stamp: before,
@@ -119,6 +264,64 @@ fn original_name(filename: &str) -> Result<Id> {
 	id(raw_id)
 }
 
+// Borrow only the expected compact ROW within its original read transaction.
+// Authoritative originals still undergo the complete read_original observation.
+enum ExpectedRow<'a> {
+	Compact(codec::View<'a>),
+	Legacy(Entry),
+}
+impl<'a> ExpectedRow<'a> {
+	fn parse(raw: &'a [u8]) -> Result<Self> {
+		match codec::view_if_compact(raw)? {
+			Some(value) => Ok(Self::Compact(value)),
+			None => Ok(Self::Legacy(codec::decode(raw)?)),
+		}
+	}
+	fn order_value(&self) -> Result<Id> {
+		match self {
+			Self::Compact(value) => Ok(value.identity),
+			Self::Legacy(entry) => cold::order_value(entry),
+		}
+	}
+	fn order_key(&self) -> Result<[u8; 80]> {
+		match self {
+			Self::Compact(value) => {
+				let mut key = [0u8; 80];
+				key[..32].copy_from_slice(&value.owner);
+				key[32..48].copy_from_slice(&value.accepted.to_be_bytes());
+				key[48..].copy_from_slice(&value.identity);
+				Ok(key)
+			}
+			Self::Legacy(entry) => order_key(&entry.record),
+		}
+	}
+	fn matches(&self, actual: &Entry) -> Result<bool> {
+		match self {
+			Self::Compact(value) => {
+				// Exhaustive matching makes any future Record field a compile-time
+				// obligation. id() retains the canonical lowercase identity domain;
+				// decoded JSON escapes remain valid, uppercase aliases do not.
+				let Record {
+					request_id,
+					owner,
+					tool_name,
+					state,
+					accepted_unix_ms,
+					elapsed_ms,
+				} = &actual.record;
+				Ok(id(request_id)? == value.identity
+					&& id(owner)? == value.owner
+					&& tool_name.as_str() == value.tool
+					&& *state == value.state
+					&& *accepted_unix_ms == value.accepted
+					&& *elapsed_ms == value.elapsed
+					&& actual.stamp == value.stamp)
+			}
+			Self::Legacy(entry) => Ok(actual.record == entry.record && actual.stamp == entry.stamp),
+		}
+	}
+}
+
 // The online caller holds STORE_LOCK and state. Cold validation instead fixes
 // the generation/watch before and after this pass and refuses any overlap.
 // The database view itself is immutable throughout this complete identity join.
@@ -131,8 +334,8 @@ pub(super) fn verify_members(
 	verify_members_in_mode(database, archive, view, deadline, None)
 }
 
-// Only the usage snapshot calls this entry, while it owns the actual global
-// store guard and state. Cold validation and page reads retain the serial gate.
+// Online usage snapshots own the actual global store guard and state.
+// Their large views use the bounded reader kernel; cold validation stays serial.
 pub(super) fn verify_usage_members(
 	database: &Database,
 	archive: &Archive,
@@ -143,12 +346,26 @@ pub(super) fn verify_usage_members(
 	verify_members_in_mode(database, archive, view, deadline, Some(guard))
 }
 
+// A fresh page cohort shares one complete serial observation. On the X230,
+// passing tiny originals between reader threads costs more CPU than the reads.
+// The caller still owns the store guard, and every original and final fence is
+// checked by the same serial kernel used before page-reader parallelization.
+pub(super) fn verify_page_members(
+	database: &Database,
+	archive: &Archive,
+	view: &PendingView,
+	deadline: Instant,
+	_guard: &AuditStoreGuard<'_>,
+) -> Result<()> {
+	verify_members(database, archive, view, deadline)
+}
+
 fn verify_members_in_mode(
 	database: &Database,
 	archive: &Archive,
 	view: &PendingView,
 	deadline: Instant,
-	usage_guard: Option<&AuditStoreGuard<'_>>,
+	online_guard: Option<&AuditStoreGuard<'_>>,
 ) -> Result<()> {
 	live(deadline)?;
 	let transaction = database.begin_read()?;
@@ -167,7 +384,7 @@ fn verify_members_in_mode(
 				.ok_or_else(|| anyhow!("archive index count overflow"))?;
 		}
 	}
-	if let Some(guard) = usage_guard.filter(|_| base_count > LARGE_ARCHIVE_ROWS) {
+	if let Some(guard) = online_guard.filter(|_| base_count > LARGE_ARCHIVE_ROWS) {
 		return verify_members_parallel(
 			archive,
 			(&rows, &order),
@@ -177,52 +394,105 @@ fn verify_members_in_mode(
 			guard,
 		);
 	}
+	if metadata_trace::active() {
+		verify_members_serial(
+			archive,
+			(&rows, &order),
+			view,
+			expected_count,
+			deadline,
+			&mut ContentPhases::new(),
+		)
+	} else {
+		verify_members_serial(
+			archive,
+			(&rows, &order),
+			view,
+			expected_count,
+			deadline,
+			&mut UntracedContent,
+		)
+	}
+}
+
+fn verify_members_serial(
+	archive: &Archive,
+	(rows, order): (
+		&impl ReadableTable<&'static [u8], &'static [u8]>,
+		&impl ReadableTable<&'static [u8], &'static [u8]>,
+	),
+	view: &PendingView,
+	expected_count: u64,
+	deadline: Instant,
+	trace: &mut impl ContentTrace,
+) -> Result<()> {
 	let mut seen_pending = BTreeSet::new();
 	let mut observed = 0u64;
 	archive.walk(|directory, filename, _| {
-		live(deadline)?;
-		let key = original_name(filename)?;
-		let base = rows
-			.get(key.as_slice())?
-			.map(|raw| codec::decode(raw.value()))
-			.transpose()?;
-		if let Some(entry) = &base {
-			let expected_order = cold::order_value(entry)?;
-			if id(&entry.record.request_id)? != key
-				|| order
-					.get(order_key(&entry.record)?.as_slice())?
-					.is_none_or(|value| value.value() != expected_order)
-			{
-				bail!("archive order projection changed");
+		let result = (|| {
+			live(deadline)?;
+			trace.attempt();
+			trace.enter(ContentPhase::Row);
+			let key = original_name(filename)?;
+			// Keep this access guard alive through the full comparison below. No
+			// borrowed ROW escapes this member or the immutable ROWS/ORDER view.
+			let raw = rows.get(key.as_slice())?;
+			let base = raw
+				.as_ref()
+				.map(|raw| ExpectedRow::parse(raw.value()))
+				.transpose()?;
+			trace.enter(ContentPhase::Order);
+			if let Some(entry) = &base {
+				let expected_order = entry.order_value()?;
+				if expected_order != key
+					|| order
+						.get(entry.order_key()?.as_slice())?
+						.is_none_or(|value| value.value() != expected_order)
+				{
+					bail!("archive order projection changed");
+				}
 			}
-		}
-		let expected = match view.entries.get(&key) {
-			Some(entry) => {
+			// Validate the base before consulting its pending replacement. An
+			// effective terminal row cannot conceal corrupt base bytes or ORDER.
+			trace.enter(ContentPhase::Pending);
+			let pending = view.entries.get(&key);
+			if pending.is_some() {
 				if !seen_pending.insert(key) {
 					bail!("archive pending identity repeated");
 				}
-				entry
+			} else if base.is_none() {
+				bail!("archive namespace changed");
 			}
-			None => base
-				.as_ref()
-				.ok_or_else(|| anyhow!("archive namespace changed"))?,
-		};
-		let actual = read_original(archive, directory, filename, deadline)?;
-		if actual.record != expected.record || actual.stamp != expected.stamp {
-			bail!("archive full record content changed");
-		}
-		observed = observed
-			.checked_add(1)
-			.ok_or_else(|| anyhow!("archive index count overflow"))?;
-		Ok(())
+			let actual = read_original_with_trace(archive, directory, filename, deadline, trace)?;
+			let matches = match pending {
+				Some(entry) => actual.record == entry.record && actual.stamp == entry.stamp,
+				None => base
+					.as_ref()
+					.ok_or_else(|| anyhow!("archive namespace changed"))?
+					.matches(&actual)?,
+			};
+			if !matches {
+				bail!("archive full record content changed");
+			}
+			observed = observed
+				.checked_add(1)
+				.ok_or_else(|| anyhow!("archive index count overflow"))?;
+			trace.verified();
+			Ok(())
+		})();
+		trace.enter(ContentPhase::Walk);
+		result
 	})?;
 	if observed != expected_count || seen_pending.len() != view.entries.len() {
 		bail!("archive content view coverage changed");
 	}
-	live(deadline)
+	live(deadline)?;
+	trace.complete();
+	Ok(())
 }
 
 const ORIGINAL_READ_WORKERS: usize = 2;
+const ORIGINAL_READ_BATCH: usize = 32;
 
 struct OriginalTask<'a> {
 	number: u64,
@@ -233,21 +503,32 @@ struct OriginalTask<'a> {
 	deadline: Instant,
 }
 
+struct OriginalBatch<'a> {
+	first: u64,
+	tasks: Vec<OriginalTask<'a>>,
+}
+
+#[derive(Debug)]
 struct OriginalReply {
-	number: u64,
+	first: u64,
+	count: u64,
+	verified: u64,
 	result: Result<()>,
 }
 
 struct OriginalLane<'scope, 'env> {
-	send: Option<SyncSender<OriginalTask<'env>>>,
+	send: Option<SyncSender<OriginalBatch<'env>>>,
 	receive: Option<Receiver<OriginalReply>>,
 	thread: Option<ScopedJoinHandle<'scope, u64>>,
-	outstanding: Option<u64>,
+	pending: Vec<OriginalTask<'env>>,
+	outstanding: Option<(u64, u64)>,
 	verified: u64,
 }
 
-// A lane includes both a queued/running job and its unconsumed result. Its next
-// job cannot be submitted until that one result has been consumed successfully.
+// Each lane owns at most 32 original tasks, including a coordinator-side partial
+// batch. Pending tasks and an outstanding queued/running/unconsumed batch are
+// mutually exclusive: receive the previous reply before filling the next batch.
+// The two lanes therefore retain at most 64 tasks, not 64 plus a producer queue.
 struct OriginalWorkers<'scope, 'env: 'scope> {
 	lanes: [OriginalLane<'scope, 'env>; ORIGINAL_READ_WORKERS],
 	cancelled: &'env AtomicBool,
@@ -265,6 +546,8 @@ struct OriginalWorkers<'scope, 'env: 'scope> {
 enum OriginalWorkerEvent {
 	BeforeSpawn(usize),
 	Started(usize),
+	BatchSubmitted(usize, u64, u64),
+	CancellationStarted,
 	Exiting(usize),
 }
 
@@ -290,6 +573,7 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 				send: None,
 				receive: None,
 				thread: None,
+				pending: Vec::new(),
 				outstanding: None,
 				verified: 0,
 			}),
@@ -322,11 +606,12 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 					std::io::Error::other("synthetic original worker spawn failure").into(),
 				);
 			}
-			let (send_job, receive_job) = std::sync::mpsc::sync_channel::<OriginalTask<'env>>(1);
+			let (send_job, receive_job) = std::sync::mpsc::sync_channel::<OriginalBatch<'env>>(1);
 			let (send_result, receive_result) = std::sync::mpsc::sync_channel(1);
 			self.lanes[lane].send = Some(send_job);
 			self.lanes[lane].receive = Some(receive_result);
 			let cancelled = self.cancelled;
+			let deadline = self.deadline;
 			#[cfg(test)]
 			let hook = self.hook;
 			self.lanes[lane].thread = Some(
@@ -340,19 +625,19 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 							hook(OriginalWorkerEvent::Started(lane));
 						}
 						let mut reported = 0u64;
-						while let Ok(task) = receive_job.recv() {
+						while let Ok(batch) = receive_job.recv() {
 							if cancelled.load(Ordering::Acquire) {
 								break;
 							}
-							let number = task.number;
-							let result = perform(task);
-							let failed = result.is_err();
-							if send_result.send(OriginalReply { number, result }).is_err() {
+							let reply = perform_original_batch(batch, cancelled, deadline, perform);
+							let verified = reply.verified;
+							let failed = reply.result.is_err();
+							if send_result.send(reply).is_err() {
 								break;
 							}
-							// Each reply belongs to a checked, non-wrapping submitted
-							// number; neither lane can report more than that bound.
-							reported += 1;
+							// Every verified prefix lies within checked, non-wrapping
+							// submitted record numbers, even when a batch fails.
+							reported += verified;
 							if failed {
 								break;
 							}
@@ -365,7 +650,7 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 	}
 
 	fn receive(&mut self, lane: usize) -> Result<()> {
-		let Some(number) = self.lanes[lane].outstanding.take() else {
+		let Some((first, count)) = self.lanes[lane].outstanding.take() else {
 			return Ok(());
 		};
 		live(self.deadline)?;
@@ -377,21 +662,82 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 			.map_err(|error| {
 				anyhow::Error::new(error).context("archive original worker result unavailable")
 			})?;
-		if reply.number != number {
+		if reply.first != first || reply.count != count {
 			bail!("archive original worker task identity changed");
 		}
 		// Preserve the actual original-read error, including its source chain;
 		// subsequent cancellation/disconnect/join bookkeeping cannot replace it.
 		reply.result?;
+		if reply.verified != count {
+			bail!("archive original worker completion changed");
+		}
 		live(self.deadline)?;
 		self.lanes[lane].verified = self.lanes[lane]
 			.verified
-			.checked_add(1)
+			.checked_add(count)
 			.ok_or_else(|| anyhow!("archive original worker count overflow"))?;
 		self.verified = self
 			.verified
-			.checked_add(1)
+			.checked_add(count)
 			.ok_or_else(|| anyhow!("archive original worker count overflow"))?;
+		Ok(())
+	}
+
+	// Called before producing the next expected Entry as well as by submit.
+	// Do not hold an extra admitted record while both 32-record lanes are full.
+	fn ready_for_record(&mut self) -> Result<usize> {
+		let lane =
+			((self.submitted / ORIGINAL_READ_BATCH as u64) % ORIGINAL_READ_WORKERS as u64) as usize;
+		if self.lanes[lane].pending.is_empty() {
+			self.receive(lane)?;
+		}
+		live(self.deadline)?;
+		if self.cancelled.load(Ordering::Acquire) {
+			bail!("archive original worker cancelled");
+		}
+		if self.lanes[lane].outstanding.is_some()
+			|| self.lanes[lane].pending.len() >= ORIGINAL_READ_BATCH
+		{
+			bail!("archive original worker input coverage changed");
+		}
+		Ok(lane)
+	}
+
+	fn dispatch(&mut self, lane: usize) -> Result<()> {
+		let count = self.lanes[lane].pending.len();
+		if count == 0 {
+			return Ok(());
+		}
+		live(self.deadline)?;
+		if self.cancelled.load(Ordering::Acquire) {
+			bail!("archive original worker cancelled");
+		}
+		if count > ORIGINAL_READ_BATCH || self.lanes[lane].outstanding.is_some() {
+			bail!("archive original worker input coverage changed");
+		}
+		let first = self.lanes[lane].pending[0].number;
+		let batch = OriginalBatch {
+			first,
+			tasks: std::mem::take(&mut self.lanes[lane].pending),
+		};
+		let sender = self.lanes[lane]
+			.send
+			.as_ref()
+			.ok_or_else(|| anyhow!("archive original worker input unavailable"))?;
+		// Filling the batch already consumed this lane's previous reply. Its
+		// capacity-one channel must have room; never add an unbounded send wait.
+		if sender.try_send(batch).is_err() {
+			bail!("archive original worker input unavailable");
+		}
+		self.lanes[lane].outstanding = Some((first, count as u64));
+		#[cfg(test)]
+		if let Some(hook) = self.hook {
+			hook(OriginalWorkerEvent::BatchSubmitted(
+				lane,
+				first,
+				count as u64,
+			));
+		}
 		Ok(())
 	}
 
@@ -402,9 +748,7 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 		filename: &str,
 		expected: Entry,
 	) -> Result<()> {
-		let lane = (self.submitted % ORIGINAL_READ_WORKERS as u64) as usize;
-		self.receive(lane)?;
-		live(self.deadline)?;
+		let lane = self.ready_for_record()?;
 		let next = self
 			.submitted
 			.checked_add(1)
@@ -417,21 +761,24 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 			expected,
 			deadline: self.deadline,
 		};
-		let sender = self.lanes[lane]
-			.send
-			.as_ref()
-			.ok_or_else(|| anyhow!("archive original worker input unavailable"))?;
-		// The previous result was consumed, so this lane's capacity-one input
-		// must have room. Never add an unbounded send wait to the caller budget.
-		if sender.try_send(task).is_err() {
-			bail!("archive original worker input unavailable");
+		if self.lanes[lane].pending.is_empty() {
+			self.lanes[lane].pending.reserve_exact(ORIGINAL_READ_BATCH);
 		}
-		self.lanes[lane].outstanding = Some(self.submitted);
+		self.lanes[lane].pending.push(task);
 		self.submitted = next;
+		if self.lanes[lane].pending.len() == ORIGINAL_READ_BATCH {
+			self.dispatch(lane)?;
+		}
 		Ok(())
 	}
 
 	fn finish(&mut self, expected_count: u64) -> Result<()> {
+		metadata_trace::mark("reader_finish", 0, self.submitted);
+		// A nonempty partial tail must run through the same original readers
+		// before coverage, joins and the walk's terminal namespace fences.
+		for lane in 0..ORIGINAL_READ_WORKERS {
+			self.dispatch(lane)?;
+		}
 		for lane in 0..ORIGINAL_READ_WORKERS {
 			self.receive(lane)?;
 		}
@@ -443,10 +790,17 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 	}
 
 	fn stop_and_join(&mut self) -> Result<()> {
+		let _trace = metadata_trace::Stage::new("original_reader_join");
 		self.cancelled.store(true, Ordering::Release);
+		#[cfg(test)]
+		if let Some(hook) = self.hook {
+			hook(OriginalWorkerEvent::CancellationStarted);
+		}
 		for lane in &mut self.lanes {
 			drop(lane.send.take());
 			drop(lane.receive.take());
+			// Never turn producer failure, timeout or unwind into new reads.
+			lane.pending.clear();
 		}
 		let mut failure = None;
 		let mut panics: [Option<Box<dyn std::any::Any + Send>>; ORIGINAL_READ_WORKERS] =
@@ -463,6 +817,7 @@ impl<'scope, 'env: 'scope> OriginalWorkers<'scope, 'env> {
 				}
 			}
 		}
+		metadata_trace::mark("original_readers_joined", 0, self.verified);
 		// All children and their I/O have ended. A worker panic must still
 		// unwind through the original coordinator's STORE_LOCK/state guards,
 		// preserving their poisoning. Never start a second coordinator unwind.
@@ -489,6 +844,49 @@ impl Drop for OriginalWorkers<'_, '_> {
 	}
 }
 
+fn perform_original_batch<'a, F>(
+	batch: OriginalBatch<'a>,
+	cancelled: &AtomicBool,
+	deadline: Instant,
+	perform: &F,
+) -> OriginalReply
+where
+	F: Fn(OriginalTask<'a>) -> Result<()> + Sync,
+{
+	let first = batch.first;
+	let count = batch.tasks.len() as u64;
+	let mut verified = 0u64;
+	let result = (|| {
+		if count == 0 || count > ORIGINAL_READ_BATCH as u64 || first.checked_add(count).is_none() {
+			bail!("archive original worker batch coverage changed");
+		}
+		for (offset, task) in batch.tasks.into_iter().enumerate() {
+			if cancelled.load(Ordering::Acquire) {
+				bail!("archive original worker cancelled");
+			}
+			live(deadline)?;
+			if task.number != first + offset as u64 || task.deadline != deadline {
+				bail!("archive original worker task identity changed");
+			}
+			// Keep each task's own directory and the exact original error chain.
+			// A failed prefix is never reported or credited as a complete batch.
+			perform(task)?;
+			live(deadline)?;
+			if cancelled.load(Ordering::Acquire) {
+				bail!("archive original worker cancelled");
+			}
+			verified += 1;
+		}
+		Ok(())
+	})();
+	OriginalReply {
+		first,
+		count,
+		verified,
+		result,
+	}
+}
+
 fn verify_original_task(task: OriginalTask<'_>) -> Result<()> {
 	let actual = read_original(task.archive, task.directory, &task.filename, task.deadline)?;
 	if actual.record != task.expected.record || actual.stamp != task.expected.stamp {
@@ -509,13 +907,16 @@ fn verify_members_parallel(
 	_guard: &AuditStoreGuard<'_>,
 ) -> Result<()> {
 	let cancelled = AtomicBool::new(false);
+	let _trace = metadata_trace::Stage::new("original_parallel_walk_and_fences");
 	std::thread::scope(|scope| {
 		let mut state = (OriginalWorkers::new(&cancelled, deadline), BTreeSet::new());
 		state.0.start(scope, &verify_original_task)?;
 		archive.walk_with_finish(
 			&mut state,
 			|(workers, seen_pending), directory, filename, _| {
-				live(deadline)?;
+				// Admit space before decoding/cloning this expected record. No
+				// additional producer batch accumulates behind two full lanes.
+				workers.ready_for_record()?;
 				let key = original_name(filename)?;
 				let base = rows
 					.get(key.as_slice())?

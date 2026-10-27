@@ -1,0 +1,89 @@
+{
+  "attempt_nonce": "e45c3ce6e0da50f4ccaf2fe150a3db2e715da23c6b51c82cc8791e8806ebe3b1",
+  "base_harness_sha256": "8ed769c4ca6a44cfd4c38ab31a6b378025f4e84ab13f77e564bbd70a1e594f7a",
+  "business_code": "import hashlib,json,os,pathlib,sys,time\ndata=sys.stdin.buffer.read()\nassert len(data)==4096 and hashlib.sha256(data).hexdigest()==sys.argv[2]\neffect=pathlib.Path(sys.argv[1]);release=pathlib.Path(sys.argv[3])\nfd=os.open(effect,os.O_WRONLY|os.O_CREAT|os.O_APPEND|os.O_NOFOLLOW,0o600)\ntry:assert os.write(fd,b'EXECUTED\\n')==9;os.fsync(fd)\nfinally:os.close(fd)\nfd=os.open(effect.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)\ntry:os.fsync(fd)\nfinally:os.close(fd)\nfd=os.open(effect.with_name(effect.name+'.ready'),os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)\ntry:assert os.write(fd,b'READY\\n')==6;os.fsync(fd)\nfinally:os.close(fd)\nprint('BEGIN',flush=True)\nprint('RECOVERY-STDERR',file=sys.stderr,flush=True)\ndeadline=time.monotonic()+75\nwhile not release.exists():\n    if time.monotonic()>=deadline:raise SystemExit(81)\n    time.sleep(.05)\nassert release.read_bytes()==b'RELEASE\\n'\nprint('END '+hashlib.sha256(data).hexdigest(),flush=True)\n",
+  "business_code_sha256": "3daba9e7d256125490c215edb035279bd1943c672356b634629abd993db7d87d",
+  "cases": [
+    "controller-loss",
+    "reply-loss",
+    "owner-loss"
+  ],
+  "controller_identity": {
+    "boot_id": "b19bd1b9-4dbe-4335-96cf-ed98d393efea",
+    "uid": 1000
+  },
+  "execution_policy": {
+    "automatic_retry": false,
+    "business_launches": 3,
+    "business_release_deadline_seconds": 75,
+    "business_timeout_seconds": 90,
+    "controller_workers": 2,
+    "detached_fallback": false,
+    "helper_cleanup_seconds": 20,
+    "helper_session_seconds": 150,
+    "service_changes": false,
+    "ssh_cleanup_seconds": 40
+  },
+  "harness_sha256": "29729635f2a7d0430cc488da02e257ba3d4512f5d2b21fac313b8b3717f26a91",
+  "helper_sha256": "b83c26974312eca3eb2ec644babfb572492fd220be98c92e17f7774b53a96146",
+  "independent_admission": {
+    "operator_job_id": "1a177d55de6-96a-1114",
+    "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a52-native-ssh-profile-r01/ai395-independent-identity.original.json",
+    "sha256": "464d503f925044f7dd4f13288c31f7735ea427ee9f863531ecbb55a52238237b"
+  },
+  "input_sha256": "929b11f47a02202e710632002203f7ea8dd3c1bc51ef818e59b6a3cd1dc2d5dc",
+  "known_hosts": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a52-native-ssh-profile-r01/known_hosts",
+  "known_hosts_sha256": "2bc880a7949593d946e5d77ee22381ddffecabc5db76594f3245698e4de0343e",
+  "local_out": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a54-native-owner-remote-r01",
+  "private_identity_metadata": {
+    "identity": [
+      2053,
+      1185750,
+      1000,
+      33152,
+      1,
+      419,
+      1791123564636036424,
+      1791123564637036429
+    ],
+    "path": "/home/qian/.ssh/id_ed25519_ai395_mesh"
+  },
+  "public_identity_receipt": {
+    "bytes": 106,
+    "identity": [
+      2053,
+      1185751,
+      1000,
+      33188,
+      1,
+      106,
+      1791123564636036424,
+      1791123564637036429
+    ],
+    "path": "/home/qian/.ssh/id_ed25519_ai395_mesh.pub",
+    "sha256": "978911353de7277875419f48b8e180babc1f735a0dca426738075e95af14c8de"
+  },
+  "qualification": {
+    "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/qualification-a54-compact-view-r01/report.json",
+    "release_sha256": "d2134c1b2b1999f46f0808b0d523ae51f54821c09afa6ecbf8188c883bbf3d70",
+    "sha256": "49b0019ece7405d455ace8cb638080a203a24fca01c6985a6cdda6d51180a51c",
+    "source_files": 175,
+    "tested_map_compact_sha256": "7d4143971feeb9b1fcbf1f3e567ba367c36770cdf050fe496b1e2778a1025176"
+  },
+  "ready": true,
+  "remote_identity": {
+    "boot_id": "b1620269-aaef-43e7-bf47-bc6eb1c1a447",
+    "home": "/home/qq",
+    "hostname": "ai395",
+    "machine": "x86_64",
+    "machine_id": "85e535eb5a7442faac0c00e601f1e954",
+    "python_realpath": "/usr/bin/python3.14",
+    "uid": 1000,
+    "username": "qq"
+  },
+  "remote_parent": "/home/qq/hepta-runtime-native-owner-a54-r01",
+  "schema": "hepta-native-remote-owner-plan/v1",
+  "ssh_config": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a52-native-ssh-profile-r01/ssh_config",
+  "ssh_config_sha256": "00dd6f7168ec9ecd892100dd667a79da00173d1348373a717ae269b88ad3e117",
+  "ssh_target": "native-ai395"
+}

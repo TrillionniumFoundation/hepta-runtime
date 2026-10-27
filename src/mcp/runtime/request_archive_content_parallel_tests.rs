@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Bounded original-read ownership, error propagation and terminal-fence ordering.
 use super::*;
+use std::os::unix::fs::PermissionsExt;
 use std::sync::atomic::AtomicUsize;
 
 fn budget() -> Instant {
@@ -50,7 +51,11 @@ struct Fixture {
 
 impl Fixture {
 	fn new(sharded: bool, count: usize) -> Self {
+		Self::with_ids(sharded, (0..count).map(|number| format!("{number:064x}")))
+	}
+	fn with_ids(sharded: bool, ids: impl IntoIterator<Item = String>) -> Self {
 		let root = tempfile::Builder::new()
+			.permissions(std::fs::Permissions::from_mode(0o700))
 			.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
 			.unwrap();
 		let _guard = store_lock().unwrap();
@@ -59,9 +64,9 @@ impl Fixture {
 			archive.initialize_shards().unwrap();
 		}
 		let mut entries = Vec::new();
-		for number in 0..count {
+		for (number, request_id) in ids.into_iter().enumerate() {
 			let record = Record {
-				request_id: format!("{number:064x}"),
+				request_id,
 				owner: "a".repeat(64),
 				tool_name: "host_list".into(),
 				state: DurableState::Completed,
@@ -87,6 +92,7 @@ impl Fixture {
 		workers: &mut OriginalWorkers<'scope, 'env>,
 		number: usize,
 	) -> Result<()> {
+		workers.ready_for_record()?;
 		let entry = self.entries[number].clone();
 		let filename = format!("{}.json", entry.record.request_id);
 		let directory = self.archive.directory_for_existing(&filename)?;
@@ -162,12 +168,15 @@ enum ExitCase {
 }
 
 fn held_children_exit(case: ExitCase) {
-	let fixture = Fixture::new(false, 2);
+	let count = ORIGINAL_READ_WORKERS * ORIGINAL_READ_BATCH;
+	let fixture = Fixture::new(false, count);
 	let started: [Arc<Gate>; 2] = std::array::from_fn(|_| Arc::new(Gate::default()));
 	let release: [Arc<Gate>; 2] = std::array::from_fn(|_| Arc::new(Gate::default()));
 	let trigger = Arc::new(Gate::default());
 	let leaving = Arc::new(Gate::default());
+	let cancelling = Arc::new(Gate::default());
 	let exited = AtomicUsize::new(0);
+	let performed = Mutex::new(Vec::new());
 	let (send_done, receive_done) = std::sync::mpsc::channel();
 	let deadline = if case == ExitCase::Deadline {
 		Instant::now() + Duration::from_secs(2)
@@ -187,8 +196,12 @@ fn held_children_exit(case: ExitCase) {
 			let cancelled = AtomicBool::new(false);
 			let perform = |task: OriginalTask<'_>| {
 				let number = task.number as usize;
-				started[number].release();
-				release[number].wait();
+				performed.lock().unwrap().push(number);
+				if number.is_multiple_of(ORIGINAL_READ_BATCH) {
+					let lane = number / ORIGINAL_READ_BATCH;
+					started[lane].release();
+					release[lane].wait();
+				}
 				if number == 0 && case == ExitCase::OriginalError {
 					return Err(
 						anyhow::Error::new(OriginalFailure).context("original read context")
@@ -199,10 +212,12 @@ fn held_children_exit(case: ExitCase) {
 				}
 				verify_original_task(task)
 			};
-			let hook = |event| {
-				if matches!(event, OriginalWorkerEvent::Exiting(_)) {
+			let hook = |event| match event {
+				OriginalWorkerEvent::Exiting(_) => {
 					exited.fetch_add(1, Ordering::SeqCst);
 				}
+				OriginalWorkerEvent::CancellationStarted => cancelling.release(),
+				_ => {}
 			};
 			let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 				let _guard = protected.lock().unwrap();
@@ -210,8 +225,9 @@ fn held_children_exit(case: ExitCase) {
 					let mut workers = OriginalWorkers::new(&cancelled, deadline);
 					workers.hook = Some(&hook);
 					workers.start(scope, &perform)?;
-					fixture.submit(&mut workers, 0)?;
-					fixture.submit(&mut workers, 1)?;
+					for number in 0..count {
+						fixture.submit(&mut workers, number)?;
+					}
 					trigger.wait();
 					leaving.release();
 					match case {
@@ -221,7 +237,7 @@ fn held_children_exit(case: ExitCase) {
 						ExitCase::ProducerPanic | ExitCase::BothPanic => {
 							std::panic::panic_any("coordinator panic")
 						}
-						_ => workers.finish(2),
+						_ => workers.finish(count as u64),
 					}
 				})
 			}));
@@ -246,6 +262,7 @@ fn held_children_exit(case: ExitCase) {
 		) {
 			release[0].release();
 		}
+		cancelling.wait();
 		assert!(matches!(
 			receive_done.recv_timeout(Duration::from_millis(25)),
 			Err(std::sync::mpsc::RecvTimeoutError::Timeout)
@@ -255,6 +272,16 @@ fn held_children_exit(case: ExitCase) {
 		let (outcome, poisoned, exited) =
 			receive_done.recv_timeout(Duration::from_secs(10)).unwrap();
 		assert_eq!(exited, 2);
+		assert_eq!(
+			performed
+				.lock()
+				.unwrap()
+				.iter()
+				.copied()
+				.collect::<BTreeSet<_>>(),
+			BTreeSet::from([0, ORIGINAL_READ_BATCH]),
+			"cancellation/deadline must stop both original batch suffixes"
+		);
 		match case {
 			ExitCase::ProducerPanic | ExitCase::OriginalPanic | ExitCase::BothPanic => {
 				let payload = outcome.expect_err("the original panic must propagate after joins");
@@ -356,9 +383,10 @@ fn original_worker_second_spawn_failure_joins_the_first_waiting_thread() {
 
 #[test]
 fn original_workers_bound_submitted_unconsumed_work_to_one_per_lane() {
-	let fixture = Fixture::new(false, 4);
+	let full = ORIGINAL_READ_WORKERS * ORIGINAL_READ_BATCH;
+	let fixture = Fixture::new(false, full + 2);
 	let release: [Arc<Gate>; 2] = std::array::from_fn(|_| Arc::new(Gate::default()));
-	let submitting_third = Arc::new(Gate::default());
+	let submitting_next = Arc::new(Gate::default());
 	let (send_started, receive_started) = std::sync::mpsc::channel();
 	let (send_done, receive_done) = std::sync::mpsc::channel();
 	std::thread::scope(|outer| {
@@ -367,20 +395,33 @@ fn original_workers_bound_submitted_unconsumed_work_to_one_per_lane() {
 			let cancelled = AtomicBool::new(false);
 			let perform = |task: OriginalTask<'_>| {
 				send_started.send(task.number).unwrap();
-				if task.number < 2 {
-					release[task.number as usize].wait();
+				if task.number == 0 || task.number == ORIGINAL_READ_BATCH as u64 {
+					release[task.number as usize / ORIGINAL_READ_BATCH].wait();
 				}
 				verify_original_task(task)
 			};
 			let result = std::thread::scope(|scope| {
 				let mut workers = OriginalWorkers::new(&cancelled, budget());
 				workers.start(scope, &perform)?;
-				fixture.submit(&mut workers, 0)?;
-				fixture.submit(&mut workers, 1)?;
-				submitting_third.release();
-				fixture.submit(&mut workers, 2)?;
-				fixture.submit(&mut workers, 3)?;
-				workers.finish(4)
+				for number in 0..full {
+					fixture.submit(&mut workers, number)?;
+				}
+				assert_eq!(workers.submitted, full as u64);
+				assert_eq!(workers.verified, 0);
+				for (lane, state) in workers.lanes.iter().enumerate() {
+					assert!(state.pending.is_empty());
+					assert_eq!(
+						state.outstanding,
+						Some((
+							(lane * ORIGINAL_READ_BATCH) as u64,
+							ORIGINAL_READ_BATCH as u64
+						))
+					);
+				}
+				submitting_next.release();
+				fixture.submit(&mut workers, full)?;
+				fixture.submit(&mut workers, full + 1)?;
+				workers.finish((full + 2) as u64)
 			});
 			send_done.send(result).unwrap();
 		});
@@ -390,25 +431,44 @@ fn original_workers_bound_submitted_unconsumed_work_to_one_per_lane() {
 		let second = receive_started
 			.recv_timeout(Duration::from_secs(10))
 			.unwrap();
-		assert_eq!(BTreeSet::from([first, second]), BTreeSet::from([0, 1]));
-		submitting_third.wait();
+		assert_eq!(
+			BTreeSet::from([first, second]),
+			BTreeSet::from([0, ORIGINAL_READ_BATCH as u64])
+		);
+		submitting_next.wait();
 		assert!(matches!(
 			receive_started.recv_timeout(Duration::from_millis(25)),
 			Err(std::sync::mpsc::RecvTimeoutError::Timeout)
 		));
+		// The next batch may use lane 0 only after every one of its original
+		// 32 records completes. Lane 1 remains held throughout this step.
 		release[0].release();
-		assert_eq!(
-			receive_started
-				.recv_timeout(Duration::from_secs(10))
-				.unwrap(),
-			2
-		);
+		let after_first: BTreeSet<_> = (0..ORIGINAL_READ_BATCH + 1)
+			.map(|_| {
+				receive_started
+					.recv_timeout(Duration::from_secs(10))
+					.unwrap()
+			})
+			.collect();
+		let expected: BTreeSet<_> = (1..ORIGINAL_READ_BATCH as u64)
+			.chain([full as u64, full as u64 + 1])
+			.collect();
+		assert_eq!(after_first, expected);
+		assert!(matches!(
+			receive_done.recv_timeout(Duration::from_millis(25)),
+			Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+		));
 		release[1].release();
+		let rest: BTreeSet<_> = (1..ORIGINAL_READ_BATCH)
+			.map(|_| {
+				receive_started
+					.recv_timeout(Duration::from_secs(10))
+					.unwrap()
+			})
+			.collect();
 		assert_eq!(
-			receive_started
-				.recv_timeout(Duration::from_secs(10))
-				.unwrap(),
-			3
+			rest,
+			((ORIGINAL_READ_BATCH + 1) as u64..full as u64).collect()
 		);
 		receive_done
 			.recv_timeout(Duration::from_secs(10))
@@ -476,7 +536,13 @@ fn parallel_original_join_refuses_complete_record_disagreement_and_missing_cover
 #[test]
 fn strict_walk_finishes_child_work_before_full_terminal_fences_in_both_layouts() {
 	for sharded in [false, true] {
-		let fixture = Fixture::new(sharded, 1);
+		let count = ORIGINAL_READ_BATCH + 1;
+		let fixture = Fixture::new(sharded, count);
+		let expected: BTreeMap<_, _> = fixture
+			.entries
+			.iter()
+			.map(|entry| (format!("{}.json", entry.record.request_id), entry.clone()))
+			.collect();
 		let cancelled = AtomicBool::new(false);
 		let exited = AtomicUsize::new(0);
 		let hook = |event| {
@@ -491,15 +557,16 @@ fn strict_walk_finishes_child_work_before_full_terminal_fences_in_both_layouts()
 			fixture.archive.walk_with_finish(
 				&mut workers,
 				|workers, directory, filename, _| {
+					workers.ready_for_record()?;
 					workers.submit(
 						&fixture.archive,
 						directory,
 						filename,
-						fixture.entries[0].clone(),
+						expected.get(filename).unwrap().clone(),
 					)
 				},
 				|workers| {
-					workers.finish(1)?;
+					workers.finish(count as u64)?;
 					assert_eq!(exited.load(Ordering::SeqCst), 2);
 					// A new synthetic namespace entry after all jobs have joined
 					// must still be seen by the original full terminal fence.
@@ -604,4 +671,469 @@ fn async_metadata_timeout_retains_its_permit_until_original_children_join() {
 		drop(reserved);
 		assert_eq!(slots.available_permits(), MAX_METADATA_QUERIES);
 	});
+}
+
+#[test]
+fn parallel_page_observation_rechecks_warm_off_page_originals() {
+	let count = ORIGINAL_READ_BATCH + 1;
+	let fixture = Fixture::new(false, count);
+	let database = fixture.database(fixture.entries.clone());
+	let view = PendingView::default();
+	let selected = {
+		let _guard = store_lock().unwrap();
+		let transaction = database.begin_read().unwrap();
+		let rows = transaction.open_table(ROWS).unwrap();
+		let order = transaction.open_table(ORDER).unwrap();
+		let counts = transaction.open_table(COUNTS).unwrap();
+		let (selected, total) = page_from_view(
+			&rows,
+			&order,
+			&counts,
+			&fixture.archive,
+			&view,
+			&fixture.entries[0].record.owner,
+			None,
+			1,
+			budget(),
+		)
+		.unwrap();
+		assert_eq!(total, count as u64);
+		// Exclude both the returned page and its extra lookahead record.
+		assert_eq!(selected.len(), 2);
+		selected
+	};
+	let victim = fixture
+		.entries
+		.iter()
+		.find(|entry| {
+			selected
+				.iter()
+				.all(|record| record.request_id != entry.record.request_id)
+		})
+		.unwrap();
+	// Use the real two-reader kernel on a small synthetic archive. This tests
+	// fresh complete observations, not the production large-row selector.
+	parallel_check(&fixture, &database, &view, count as u64).unwrap();
+	let mut changed = victim.record.clone();
+	changed.elapsed_ms = Some(changed.elapsed_ms.unwrap() + 1);
+	let path = fixture
+		.root
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!("{}.json", changed.request_id));
+	std::fs::write(path, serde_json::to_vec(&changed).unwrap()).unwrap();
+	let originals_before_refusal = fixture.original_bytes();
+	let cache_before_refusal = std::fs::read(fixture.root.path().join(CACHE_NAME)).unwrap();
+	assert!(parallel_check(&fixture, &database, &view, count as u64).is_err());
+	assert_eq!(fixture.original_bytes(), originals_before_refusal);
+	assert_eq!(
+		std::fs::read(fixture.root.path().join(CACHE_NAME)).unwrap(),
+		cache_before_refusal
+	);
+}
+
+fn original_batch(
+	fixture: &Fixture,
+	first: usize,
+	count: usize,
+	deadline: Instant,
+) -> OriginalBatch<'_> {
+	let tasks = (first..first + count)
+		.map(|number| {
+			let expected = fixture.entries[number].clone();
+			let filename = format!("{}.json", expected.record.request_id);
+			let directory = fixture.archive.directory_for_existing(&filename).unwrap();
+			OriginalTask {
+				number: number as u64,
+				archive: &fixture.archive,
+				directory,
+				filename,
+				expected,
+				deadline,
+			}
+		})
+		.collect();
+	OriginalBatch {
+		first: first as u64,
+		tasks,
+	}
+}
+
+#[test]
+fn original_worker_batches_cover_exact_boundaries_and_partial_tails() {
+	let fixture = Fixture::new(false, 129);
+	let originals = fixture.original_bytes();
+	for count in [0usize, 1, 2, 31, 32, 33, 63, 64, 65, 66, 127, 128, 129] {
+		let cancelled = AtomicBool::new(false);
+		let performed = Mutex::new(Vec::new());
+		let batches = Mutex::new(Vec::new());
+		let perform = |task: OriginalTask<'_>| {
+			performed.lock().unwrap().push(task.number);
+			verify_original_task(task)
+		};
+		let hook = |event| {
+			if let OriginalWorkerEvent::BatchSubmitted(lane, first, count) = event {
+				batches.lock().unwrap().push((lane, first, count));
+			}
+		};
+		std::thread::scope(|scope| {
+			let mut workers = OriginalWorkers::new(&cancelled, budget());
+			workers.hook = Some(&hook);
+			workers.start(scope, &perform).unwrap();
+			for number in 0..count {
+				fixture.submit(&mut workers, number).unwrap();
+				let retained: u64 = workers
+					.lanes
+					.iter()
+					.map(|lane| {
+						assert!(lane.pending.is_empty() || lane.outstanding.is_none());
+						lane.pending.len() as u64 + lane.outstanding.map_or(0, |(_, length)| length)
+					})
+					.sum();
+				assert!(retained <= (ORIGINAL_READ_BATCH * ORIGINAL_READ_WORKERS) as u64);
+				assert_eq!(retained, workers.submitted - workers.verified);
+			}
+			workers.finish(count as u64).unwrap();
+			assert_eq!(workers.submitted, count as u64);
+			assert_eq!(workers.verified, count as u64);
+			assert!(workers.lanes.iter().all(|lane| lane.pending.is_empty()
+				&& lane.outstanding.is_none()
+				&& lane.thread.is_none()));
+		});
+		let mut actual = performed.into_inner().unwrap();
+		actual.sort_unstable();
+		assert_eq!(actual, (0..count as u64).collect::<Vec<_>>());
+		let expected: Vec<_> = (0..count)
+			.step_by(ORIGINAL_READ_BATCH)
+			.map(|first| {
+				(
+					(first / ORIGINAL_READ_BATCH) % ORIGINAL_READ_WORKERS,
+					first as u64,
+					(count - first).min(ORIGINAL_READ_BATCH) as u64,
+				)
+			})
+			.collect();
+		assert_eq!(batches.into_inner().unwrap(), expected);
+	}
+	assert_eq!(fixture.original_bytes(), originals);
+}
+
+#[test]
+fn original_worker_batch_failures_preserve_original_chain_and_join_other_lane() {
+	for fail_at in [0usize, 15, 31] {
+		let count = ORIGINAL_READ_BATCH * ORIGINAL_READ_WORKERS;
+		let fixture = Fixture::new(false, count);
+		let other_started = Arc::new(Gate::default());
+		let release_other = Arc::new(Gate::default());
+		let cancelling = Arc::new(Gate::default());
+		let performed = Mutex::new(Vec::new());
+		let exited = AtomicUsize::new(0);
+		let (send_done, receive_done) = std::sync::mpsc::channel();
+		std::thread::scope(|outer| {
+			let _release = ReleaseGates(vec![other_started.clone(), release_other.clone()]);
+			outer.spawn(|| {
+				let cancelled = AtomicBool::new(false);
+				let perform = |task: OriginalTask<'_>| {
+					let number = task.number as usize;
+					performed.lock().unwrap().push(number);
+					if number == 0 {
+						other_started.wait();
+					}
+					if number == ORIGINAL_READ_BATCH {
+						other_started.release();
+						release_other.wait();
+					}
+					if number == fail_at {
+						return Err(anyhow::Error::new(OriginalFailure)
+							.context("batched original read context"));
+					}
+					verify_original_task(task)
+				};
+				let hook = |event| match event {
+					OriginalWorkerEvent::CancellationStarted => cancelling.release(),
+					OriginalWorkerEvent::Exiting(_) => {
+						exited.fetch_add(1, Ordering::SeqCst);
+					}
+					_ => {}
+				};
+				let result = std::thread::scope(|scope| {
+					let mut workers = OriginalWorkers::new(&cancelled, budget());
+					workers.hook = Some(&hook);
+					workers.start(scope, &perform)?;
+					for number in 0..count {
+						fixture.submit(&mut workers, number)?;
+					}
+					workers.finish(count as u64)
+				});
+				send_done.send(result).unwrap();
+			});
+			cancelling.wait();
+			assert!(matches!(
+				receive_done.recv_timeout(Duration::from_millis(25)),
+				Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+			));
+			release_other.release();
+			let error = receive_done
+				.recv_timeout(Duration::from_secs(10))
+				.unwrap()
+				.unwrap_err();
+			assert!(error.is::<OriginalFailure>());
+			assert_eq!(error.to_string(), "batched original read context");
+			assert_eq!(error.root_cause().to_string(), "original synthetic failure");
+			assert_eq!(exited.load(Ordering::SeqCst), ORIGINAL_READ_WORKERS);
+		});
+		let mut actual = performed.into_inner().unwrap();
+		actual.sort_unstable();
+		let expected: Vec<_> = (0..=fail_at).chain([ORIGINAL_READ_BATCH]).collect();
+		assert_eq!(actual, expected, "no failing batch suffix may run");
+	}
+}
+
+#[test]
+fn original_worker_batch_cancellation_discards_partial_tail_and_running_suffix() {
+	let fixture = Fixture::new(false, ORIGINAL_READ_WORKERS * ORIGINAL_READ_BATCH - 1);
+	let started = Arc::new(Gate::default());
+	let release = Arc::new(Gate::default());
+	let cancelling = Arc::new(Gate::default());
+	let performed = Mutex::new(Vec::new());
+	let batches = Mutex::new(Vec::new());
+	let exited = AtomicUsize::new(0);
+	let (send_done, receive_done) = std::sync::mpsc::channel();
+	std::thread::scope(|outer| {
+		let _release = ReleaseGates(vec![started.clone(), release.clone()]);
+		outer.spawn(|| {
+			let cancelled = AtomicBool::new(false);
+			let perform = |task: OriginalTask<'_>| {
+				performed.lock().unwrap().push(task.number);
+				assert_eq!(
+					task.number, 0,
+					"neither the queued suffix nor the pending tail may run"
+				);
+				started.release();
+				release.wait();
+				verify_original_task(task)
+			};
+			let hook = |event| match event {
+				OriginalWorkerEvent::BatchSubmitted(lane, first, count) => {
+					batches.lock().unwrap().push((lane, first, count));
+				}
+				OriginalWorkerEvent::CancellationStarted => cancelling.release(),
+				OriginalWorkerEvent::Exiting(_) => {
+					exited.fetch_add(1, Ordering::SeqCst);
+				}
+				_ => {}
+			};
+			let result: Result<()> = std::thread::scope(|scope| {
+				let mut workers = OriginalWorkers::new(&cancelled, budget());
+				workers.hook = Some(&hook);
+				workers.start(scope, &perform)?;
+				for number in 0..fixture.entries.len() {
+					fixture.submit(&mut workers, number)?;
+				}
+				assert_eq!(
+					workers.lanes[0].outstanding,
+					Some((0, ORIGINAL_READ_BATCH as u64))
+				);
+				assert_eq!(workers.lanes[1].pending.len(), ORIGINAL_READ_BATCH - 1);
+				assert!(workers.lanes[1].outstanding.is_none());
+				started.wait();
+				Err(anyhow::Error::new(OriginalFailure).context("producer left a partial batch"))
+			});
+			send_done.send(result).unwrap();
+		});
+		cancelling.wait();
+		assert!(matches!(
+			receive_done.recv_timeout(Duration::from_millis(25)),
+			Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+		));
+		release.release();
+		let error = receive_done
+			.recv_timeout(Duration::from_secs(10))
+			.unwrap()
+			.unwrap_err();
+		assert!(error.is::<OriginalFailure>());
+		assert_eq!(error.to_string(), "producer left a partial batch");
+		assert_eq!(exited.load(Ordering::SeqCst), ORIGINAL_READ_WORKERS);
+	});
+	assert_eq!(*performed.lock().unwrap(), vec![0]);
+	assert_eq!(
+		*batches.lock().unwrap(),
+		vec![(0, 0, ORIGINAL_READ_BATCH as u64)]
+	);
+}
+
+#[test]
+fn original_worker_batch_reply_identity_and_complete_coverage_are_required() {
+	for (first, count, verified, text) in [
+		(1, 32, 32, "task identity changed"),
+		(0, 0, 0, "task identity changed"),
+		(0, 31, 31, "task identity changed"),
+		(0, 33, 33, "task identity changed"),
+		(0, 32, 31, "completion changed"),
+		(0, 32, 33, "completion changed"),
+	] {
+		let cancelled = AtomicBool::new(false);
+		let (send, receive) = std::sync::mpsc::sync_channel(1);
+		send.send(OriginalReply {
+			first,
+			count,
+			verified,
+			result: Ok(()),
+		})
+		.unwrap();
+		let mut workers = OriginalWorkers::new(&cancelled, budget());
+		workers.submitted = ORIGINAL_READ_BATCH as u64;
+		workers.lanes[0].receive = Some(receive);
+		workers.lanes[0].outstanding = Some((0, ORIGINAL_READ_BATCH as u64));
+		assert!(workers.receive(0).unwrap_err().to_string().contains(text));
+		assert_eq!(workers.verified, 0);
+		assert_eq!(workers.lanes[0].verified, 0);
+	}
+	// A real read error after a successful prefix must survive the smaller
+	// verified count; it is not a fabricated coverage error or full success.
+	let cancelled = AtomicBool::new(false);
+	let (send, receive) = std::sync::mpsc::sync_channel(1);
+	let mut workers = OriginalWorkers::new(&cancelled, budget());
+	workers.lanes[0].receive = Some(receive);
+	workers.lanes[0].outstanding = Some((0, ORIGINAL_READ_BATCH as u64));
+	send.send(OriginalReply {
+		first: 0,
+		count: ORIGINAL_READ_BATCH as u64,
+		verified: 15,
+		result: Err(anyhow::Error::new(OriginalFailure).context("partial original batch")),
+	})
+	.unwrap();
+	let error = workers.receive(0).unwrap_err();
+	assert!(error.is::<OriginalFailure>());
+	assert_eq!(error.root_cause().to_string(), "original synthetic failure");
+	assert_eq!(workers.verified, 0);
+	drop(workers);
+	// A duplicate old reply cannot be accepted for the next generation of the
+	// same lane, even though its count and successful prefix are well formed.
+	let cancelled = AtomicBool::new(false);
+	let (send, receive) = std::sync::mpsc::sync_channel(1);
+	let mut workers = OriginalWorkers::new(&cancelled, budget());
+	workers.submitted = 65;
+	workers.lanes[0].receive = Some(receive);
+	workers.lanes[0].outstanding = Some((0, ORIGINAL_READ_BATCH as u64));
+	send.send(OriginalReply {
+		first: 0,
+		count: ORIGINAL_READ_BATCH as u64,
+		verified: ORIGINAL_READ_BATCH as u64,
+		result: Ok(()),
+	})
+	.unwrap();
+	workers.receive(0).unwrap();
+	workers.lanes[0].outstanding = Some((64, 1));
+	send.send(OriginalReply {
+		first: 0,
+		count: ORIGINAL_READ_BATCH as u64,
+		verified: ORIGINAL_READ_BATCH as u64,
+		result: Ok(()),
+	})
+	.unwrap();
+	assert!(workers
+		.receive(0)
+		.unwrap_err()
+		.to_string()
+		.contains("task identity changed"));
+	assert_eq!(workers.verified, ORIGINAL_READ_BATCH as u64);
+}
+
+#[test]
+fn original_worker_batches_refuse_invalid_task_sequences_and_extended_deadlines() {
+	let fixture = Fixture::new(false, ORIGINAL_READ_BATCH + 1);
+	for (case, count, expected_prefix, text) in [
+		(0, 0, 0, "batch coverage changed"),
+		(1, 33, 0, "batch coverage changed"),
+		(2, 2, 0, "batch coverage changed"),
+		(3, 2, 1, "task identity changed"),
+		(4, 2, 1, "task identity changed"),
+	] {
+		let deadline = budget();
+		let cancelled = AtomicBool::new(false);
+		let performed = AtomicUsize::new(0);
+		let mut batch = original_batch(&fixture, 0, count, deadline);
+		match case {
+			2 => batch.first = u64::MAX - 1,
+			3 => batch.tasks[1].number = 7,
+			4 => batch.tasks[1].deadline = deadline + Duration::from_secs(1),
+			_ => {}
+		}
+		let perform = |task: OriginalTask<'_>| {
+			performed.fetch_add(1, Ordering::SeqCst);
+			verify_original_task(task)
+		};
+		let reply = perform_original_batch(batch, &cancelled, deadline, &perform);
+		assert_eq!(reply.count, count as u64);
+		assert_eq!(reply.verified, expected_prefix as u64);
+		assert_eq!(performed.load(Ordering::SeqCst), expected_prefix);
+		assert!(reply.result.unwrap_err().to_string().contains(text));
+	}
+	let deadline = budget();
+	let cancelled = AtomicBool::new(true);
+	let perform = |_task: OriginalTask<'_>| -> Result<()> {
+		panic!("an already cancelled batch must not start its first original read")
+	};
+	let reply = perform_original_batch(
+		original_batch(&fixture, 0, 2, deadline),
+		&cancelled,
+		deadline,
+		&perform,
+	);
+	assert_eq!(reply.verified, 0);
+	assert!(reply
+		.result
+		.unwrap_err()
+		.to_string()
+		.contains("worker cancelled"));
+}
+
+#[test]
+fn original_worker_batches_keep_each_original_directory_across_shard_boundaries() {
+	let count = ORIGINAL_READ_WORKERS * ORIGINAL_READ_BATCH + 1;
+	let ids = (0..count).map(|number| {
+		let prefix = if number < ORIGINAL_READ_BATCH - 1 {
+			"00"
+		} else {
+			"01"
+		};
+		format!("{prefix}{number:062x}")
+	});
+	let fixture = Fixture::with_ids(true, ids);
+	let database = fixture.database(fixture.entries.clone());
+	let originals = fixture.original_bytes();
+	let cache = std::fs::read(fixture.root.path().join(CACHE_NAME)).unwrap();
+	// Two full batches and the last record exercise the real complete walk,
+	// original readers, DB identity join and all terminal namespace fences.
+	parallel_check(&fixture, &database, &PendingView::default(), count as u64).unwrap();
+	assert_eq!(fixture.original_bytes(), originals);
+	assert_eq!(
+		std::fs::read(fixture.root.path().join(CACHE_NAME)).unwrap(),
+		cache
+	);
+	// Explicitly cross the directory boundary inside one batch, independent
+	// of directory enumeration order; the same filename under a wrong shard
+	// descriptor must be refused, never silently read through a batch-wide fd.
+	let deadline = budget();
+	let cancelled = AtomicBool::new(false);
+	let good = perform_original_batch(
+		original_batch(&fixture, 0, ORIGINAL_READ_BATCH, deadline),
+		&cancelled,
+		deadline,
+		&verify_original_task,
+	);
+	assert_eq!(good.verified, ORIGINAL_READ_BATCH as u64);
+	good.result.unwrap();
+	let mut wrong = original_batch(&fixture, 0, ORIGINAL_READ_BATCH, deadline);
+	let first_directory = wrong.tasks[0].directory;
+	wrong.tasks[ORIGINAL_READ_BATCH - 1].directory = first_directory;
+	let bad = perform_original_batch(wrong, &cancelled, deadline, &verify_original_task);
+	assert!(bad.result.is_err());
+	assert_eq!(bad.verified, (ORIGINAL_READ_BATCH - 1) as u64);
+	assert_eq!(fixture.original_bytes(), originals);
+	assert_eq!(
+		std::fs::read(fixture.root.path().join(CACHE_NAME)).unwrap(),
+		cache
+	);
 }

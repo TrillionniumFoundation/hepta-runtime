@@ -404,6 +404,7 @@ enum ParallelEvent {
 	VerifiedOriginalCoverage,
 	AfterCachedBeforeClaim,
 	BeforePublish,
+	BeforeSnapshotFence,
 }
 #[cfg(test)]
 type ParallelHook = Arc<dyn Fn(ParallelEvent) + Send + Sync>;
@@ -539,9 +540,12 @@ fn stamp(archive: &Archive, filename: &str) -> Result<FileStamp> {
 	let directory = archive.directory_for_existing(filename)?;
 	stamp_at(directory, filename)
 }
-#[allow(clippy::unnecessary_cast)] // libc inode/device widths vary across Unix.
 fn stamp_at(directory: &File, filename: &str) -> Result<FileStamp> {
 	let filename = name(filename)?;
+	stamp_at_component(directory, &filename)
+}
+#[allow(clippy::unnecessary_cast)] // libc inode/device widths vary across Unix.
+fn stamp_at_component(directory: &File, filename: &std::ffi::CStr) -> Result<FileStamp> {
 	let mut raw = std::mem::MaybeUninit::<libc::stat>::uninit();
 	if unsafe {
 		libc::fstatat(
@@ -1680,6 +1684,7 @@ fn large_preparation_hint(root: &File) -> bool {
 }
 
 fn ready(root: &Path, archive: &Archive, deadline: Instant) -> Result<Arc<Slot>> {
+	let _trace = metadata_trace::Stage::new("index_ready");
 	let slot = slot_at_until(root, archive, deadline)?;
 	let mut started = false;
 	loop {
@@ -1740,6 +1745,7 @@ fn ready(root: &Path, archive: &Archive, deadline: Instant) -> Result<Arc<Slot>>
 	}
 }
 pub(super) fn query_lock(deadline: Instant) -> Result<AuditStoreGuard<'static>> {
+	let _trace = metadata_trace::Stage::new("store_lock_wait");
 	STORE_LOCK
 		.get_or_init(AuditStoreLock::default)
 		.acquire(Some(deadline))
@@ -1890,6 +1896,7 @@ fn verify_members(database: &Database, archive: &Archive, deadline: Instant) -> 
 	content::verify_members(database, archive, &PendingView::default(), deadline)
 }
 
+#[cfg(test)]
 fn read_snapshot<T>(
 	root: &Path,
 	archive: &Archive,
@@ -1901,8 +1908,10 @@ fn read_snapshot<T>(
 
 #[derive(Clone, Copy)]
 enum SnapshotReadMode {
+	#[cfg(test)]
 	Serial,
 	Usage,
+	Pages,
 }
 
 fn read_snapshot_with_mode<T>(
@@ -1921,6 +1930,7 @@ fn read_snapshot_with_mode<T>(
 		let mut trace = SteadyTrace::new("metadata_drain", Some(false));
 		trace.enter(SteadyPhase::StoreLockWait);
 		let _guard = query_lock(deadline)?;
+		metadata_trace::mark("snapshot_lock_acquired", 0, 0);
 		if !drain_for_query(&slot, deadline, &mut trace)? {
 			trace.enter(SteadyPhase::Other);
 			trace.outcome = "preparing";
@@ -1949,17 +1959,28 @@ fn read_snapshot_with_mode<T>(
 		} else {
 			PendingView::default()
 		};
+		let content_trace = metadata_trace::Stage::new("complete_original_verification");
 		// Watches remain invalidation fences; neither Some nor None certifies
 		// original bytes. Check every effective record within this same budget.
 		match mode {
+			#[cfg(test)]
 			SnapshotReadMode::Serial => {
 				content::verify_members(&database, archive, &view, deadline)?;
 			}
 			SnapshotReadMode::Usage => {
 				content::verify_usage_members(&database, archive, &view, deadline, &_guard)?;
 			}
+			SnapshotReadMode::Pages => {
+				content::verify_page_members(&database, archive, &view, deadline, &_guard)?;
+			}
 		}
+		drop(content_trace);
+		let projection_trace = metadata_trace::Stage::new("page_or_usage_projection");
 		let result = read(&database, &view)?;
+		drop(projection_trace);
+		let _final_trace = metadata_trace::Stage::new("snapshot_final_fences");
+		#[cfg(test)]
+		parallel_event(&slot, ParallelEvent::BeforeSnapshotFence);
 		if Instant::now() >= deadline {
 			bail!("archive metadata query total deadline exceeded");
 		}
@@ -1986,6 +2007,7 @@ fn read_snapshot_with_mode<T>(
 // read-only; the existing small/unwatched path writes its disposable cohort with
 // Durability::None. Original ACK barriers are unchanged in either case.
 fn drain_for_query(slot: &Slot, deadline: Instant, trace: &mut SteadyTrace) -> Result<bool> {
+	let _trace = metadata_trace::Stage::new("query_drain");
 	trace.enter(SteadyPhase::State);
 	let mut state = slot
 		.state
@@ -2057,6 +2079,7 @@ fn drain_for_query(slot: &Slot, deadline: Instant, trace: &mut SteadyTrace) -> R
 	}
 	Ok(true)
 }
+#[cfg(test)]
 pub(super) fn page(
 	root: &Path,
 	archive: &Archive,
@@ -2070,95 +2093,117 @@ pub(super) fn page(
 		let rows = transaction.open_table(ROWS)?;
 		let order = transaction.open_table(ORDER)?;
 		let counts = transaction.open_table(COUNTS)?;
-		let owner = id(owner)?;
-		let mut low = [0u8; 80];
-		low[..32].copy_from_slice(&owner);
-		let mut high = [255u8; 80];
-		high[..32].copy_from_slice(&owner);
-		let lower = match cursor {
-			Some(record) => std::ops::Bound::Excluded(order_key(record)?.to_vec()),
-			None => std::ops::Bound::Included(low.to_vec()),
-		};
-		let upper = std::ops::Bound::Included(high.to_vec());
-		if view.entries.is_empty() {
-			// Preserve the original streaming page path when no overlay is needed.
-			let mut result = Vec::with_capacity(limit + 1);
-			for pair in order
-				.range::<&[u8]>((
-					lower.as_ref().map(|v| v.as_slice()),
-					upper.as_ref().map(|v| v.as_slice()),
-				))?
-				.take(limit + 1)
-			{
-				if Instant::now() >= deadline {
-					bail!("archive metadata query total deadline exceeded");
-				}
-				let (ordered_key, key) = pair?;
-				let raw = rows
-					.get(cold::order_identity(key.value())?)?
-					.ok_or_else(|| anyhow!("archive index row missing"))?;
-				let entry = codec::decode(raw.value())?;
-				if ordered_key.value() != order_key(&entry.record)?
-					|| key.value() != cold::order_value(&entry)?
-				{
-					bail!("archive order projection changed");
-				}
-				let filename = format!("{}.json", entry.record.request_id);
-				let actual = archive.read_record(&filename)?;
-				if actual != entry.record || stamp(archive, &filename)? != entry.stamp {
-					bail!("archive page identity changed");
-				}
-				result.push(actual);
-			}
-			let count = total(&counts, &owner)?.iter().sum();
-			return Ok((result, count));
-		}
-		let mut selected = Vec::with_capacity(limit + 1 + view.entries.len());
-		for pair in order.range::<&[u8]>((
-			lower.as_ref().map(|v| v.as_slice()),
-			upper.as_ref().map(|v| v.as_slice()),
-		))? {
+		page_from_view(
+			&rows, &order, &counts, archive, view, owner, cursor, limit, deadline,
+		)
+	})
+}
+
+pub(super) struct PageQuery {
+	pub(super) owner: String,
+	pub(super) cursor: Option<Record>,
+	pub(super) limit: usize,
+}
+
+pub(super) struct PageBatch {
+	pub(super) values: Vec<Result<String>>,
+	pub(super) large: bool,
+}
+
+pub(super) fn pages(
+	root: &Path,
+	archive: &Archive,
+	queries: Vec<Result<PageQuery>>,
+	deadline: Instant,
+) -> Result<PageBatch> {
+	if queries.is_empty() || queries.len() > MAX_METADATA_QUERIES {
+		bail!("archive page group exceeded its admitted bound");
+	}
+	// Freeze happened before even the hot store or any cursor was opened.
+	// All pages share one complete fresh Record join, one immutable transaction
+	// and pending view. Large joins use the existing two owned readers; small
+	// joins stay serial. Individual selected-record rereads are retained.
+	read_snapshot_with_mode(
+		root,
+		archive,
+		deadline,
+		SnapshotReadMode::Pages,
+		|database, view| {
+			let transaction = database.begin_read()?;
+			let rows = transaction.open_table(ROWS)?;
+			let order = transaction.open_table(ORDER)?;
+			let counts = transaction.open_table(COUNTS)?;
+			let large = rows.len()? > LARGE_ARCHIVE_ROWS;
+			let values = queries
+				.into_iter()
+				.map(|query| {
+					query.and_then(|query| {
+						let (records, total) = page_from_view(
+							&rows,
+							&order,
+							&counts,
+							archive,
+							view,
+							&query.owner,
+							query.cursor.as_ref(),
+							query.limit,
+							deadline,
+						)?;
+						archive_page_output(records, total, query.limit, deadline)
+					})
+				})
+				.collect();
+			// No individual success is exposed until read_snapshot's original
+			// final namespace/layout and absolute-deadline fences have succeeded.
+			Ok(PageBatch { values, large })
+		},
+	)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn page_from_view(
+	rows: &impl ReadableTable<&'static [u8], &'static [u8]>,
+	order: &impl ReadableTable<&'static [u8], &'static [u8]>,
+	counts: &impl ReadableTable<&'static [u8], u64>,
+	archive: &Archive,
+	view: &PendingView,
+	owner: &str,
+	cursor: Option<&Record>,
+	limit: usize,
+	deadline: Instant,
+) -> Result<(Vec<Record>, u64)> {
+	let owner = id(owner)?;
+	let mut low = [0u8; 80];
+	low[..32].copy_from_slice(&owner);
+	let mut high = [255u8; 80];
+	high[..32].copy_from_slice(&owner);
+	let lower = match cursor {
+		Some(record) => std::ops::Bound::Excluded(order_key(record)?.to_vec()),
+		None => std::ops::Bound::Included(low.to_vec()),
+	};
+	let upper = std::ops::Bound::Included(high.to_vec());
+	if view.entries.is_empty() {
+		// Preserve the original streaming page path when no overlay is needed.
+		let mut result = Vec::with_capacity(limit + 1);
+		for pair in order
+			.range::<&[u8]>((
+				lower.as_ref().map(|v| v.as_slice()),
+				upper.as_ref().map(|v| v.as_slice()),
+			))?
+			.take(limit + 1)
+		{
 			if Instant::now() >= deadline {
 				bail!("archive metadata query total deadline exceeded");
 			}
 			let (ordered_key, key) = pair?;
-			let identity: Id = cold::order_identity(key.value())?.try_into()?;
 			let raw = rows
-				.get(identity.as_slice())?
+				.get(cold::order_identity(key.value())?)?
 				.ok_or_else(|| anyhow!("archive index row missing"))?;
 			let entry = codec::decode(raw.value())?;
-			let projected_key = order_key(&entry.record)?;
-			if ordered_key.value() != projected_key || key.value() != cold::order_value(&entry)? {
+			if ordered_key.value() != order_key(&entry.record)?
+				|| key.value() != cold::order_value(&entry)?
+			{
 				bail!("archive order projection changed");
-			}
-			if view.entries.contains_key(&identity) {
-				continue;
-			}
-			selected.push((projected_key, entry));
-			if selected.len() == limit + 1 {
-				break;
-			}
-		}
-		for entry in view.entries.values() {
-			if Instant::now() >= deadline {
-				bail!("archive metadata query total deadline exceeded");
-			}
-			if id(&entry.record.owner)? != owner {
-				continue;
-			}
-			let key = order_key(&entry.record)?;
-			if let std::ops::Bound::Excluded(after) = &lower {
-				if key.as_slice() <= after.as_slice() {
-					continue;
-				}
-			}
-			selected.push((key, entry.clone()));
-		}
-		selected.sort_unstable_by_key(|entry| entry.0);
-		let mut result = Vec::with_capacity(limit + 1);
-		for (_, entry) in selected.into_iter().take(limit + 1) {
-			if Instant::now() >= deadline {
-				bail!("archive metadata query total deadline exceeded");
 			}
 			let filename = format!("{}.json", entry.record.request_id);
 			let actual = archive.read_record(&filename)?;
@@ -2167,9 +2212,65 @@ pub(super) fn page(
 			}
 			result.push(actual);
 		}
-		let count = view.totals(&counts, &owner)?.iter().sum();
-		Ok((result, count))
-	})
+		let count = total(counts, &owner)?.iter().sum();
+		return Ok((result, count));
+	}
+	let mut selected = Vec::with_capacity(limit + 1 + view.entries.len());
+	for pair in order.range::<&[u8]>((
+		lower.as_ref().map(|v| v.as_slice()),
+		upper.as_ref().map(|v| v.as_slice()),
+	))? {
+		if Instant::now() >= deadline {
+			bail!("archive metadata query total deadline exceeded");
+		}
+		let (ordered_key, key) = pair?;
+		let identity: Id = cold::order_identity(key.value())?.try_into()?;
+		let raw = rows
+			.get(identity.as_slice())?
+			.ok_or_else(|| anyhow!("archive index row missing"))?;
+		let entry = codec::decode(raw.value())?;
+		let projected_key = order_key(&entry.record)?;
+		if ordered_key.value() != projected_key || key.value() != cold::order_value(&entry)? {
+			bail!("archive order projection changed");
+		}
+		if view.entries.contains_key(&identity) {
+			continue;
+		}
+		selected.push((projected_key, entry));
+		if selected.len() == limit + 1 {
+			break;
+		}
+	}
+	for entry in view.entries.values() {
+		if Instant::now() >= deadline {
+			bail!("archive metadata query total deadline exceeded");
+		}
+		if id(&entry.record.owner)? != owner {
+			continue;
+		}
+		let key = order_key(&entry.record)?;
+		if let std::ops::Bound::Excluded(after) = &lower {
+			if key.as_slice() <= after.as_slice() {
+				continue;
+			}
+		}
+		selected.push((key, entry.clone()));
+	}
+	selected.sort_unstable_by_key(|entry| entry.0);
+	let mut result = Vec::with_capacity(limit + 1);
+	for (_, entry) in selected.into_iter().take(limit + 1) {
+		if Instant::now() >= deadline {
+			bail!("archive metadata query total deadline exceeded");
+		}
+		let filename = format!("{}.json", entry.record.request_id);
+		let actual = archive.read_record(&filename)?;
+		if actual != entry.record || stamp(archive, &filename)? != entry.stamp {
+			bail!("archive page identity changed");
+		}
+		result.push(actual);
+	}
+	let count = view.totals(counts, &owner)?.iter().sum();
+	Ok((result, count))
 }
 pub(super) struct UsageBatch {
 	pub(super) values: Vec<Result<Value>>,
@@ -2322,3 +2423,7 @@ mod parallel_tests;
 #[cfg(test)]
 #[path = "request_usage_projection_tests.rs"]
 mod usage_projection_tests;
+
+#[cfg(test)]
+#[path = "request_archive_page_batch_tests.rs"]
+mod page_batch_tests;

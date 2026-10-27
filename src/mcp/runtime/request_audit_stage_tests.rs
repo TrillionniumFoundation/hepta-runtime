@@ -3,9 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Real staged files remain unpublished until persistent jobs drain, also on unwind.
 use super::*;
+use std::os::unix::fs::PermissionsExt;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{mpsc, Condvar};
 use std::time::Duration;
+
+fn private_root() -> tempfile::TempDir {
+	tempfile::Builder::new()
+		.permissions(std::fs::Permissions::from_mode(0o700))
+		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
+		.unwrap()
+}
 
 fn records(count: usize) -> Vec<Record> {
 	(0..count)
@@ -49,8 +57,8 @@ fn release(gate: &(Mutex<bool>, Condvar)) {
 
 #[test]
 fn one_file_barrier_cohort_spans_directories_and_preserves_exact_failure_slot() {
-	let first = tempfile::tempdir().unwrap();
-	let second = tempfile::tempdir().unwrap();
+	let first = private_root();
+	let second = private_root();
 	let left = File::open(first.path()).unwrap();
 	let right = File::open(second.path()).unwrap();
 	let records = records(4);
@@ -104,7 +112,7 @@ fn one_file_barrier_cohort_spans_directories_and_preserves_exact_failure_slot() 
 
 #[test]
 fn overlapping_file_barriers_are_bounded_and_nothing_publishes_until_all_complete() {
-	let root = tempfile::tempdir().unwrap();
+	let root = private_root();
 	let path = root.path().to_owned();
 	let gate = Arc::new((Mutex::new(false), Condvar::new()));
 	let allow = gate.clone();
@@ -148,7 +156,7 @@ fn overlapping_file_barriers_are_bounded_and_nothing_publishes_until_all_complet
 
 #[test]
 fn one_file_barrier_stays_on_the_caller_thread() {
-	let root = tempfile::tempdir().unwrap();
+	let root = private_root();
 	let directory = File::open(root.path()).unwrap();
 	let records = records(1);
 	let caller = std::thread::current().id();
@@ -167,7 +175,7 @@ fn one_file_barrier_stays_on_the_caller_thread() {
 
 #[test]
 fn failed_file_barrier_never_publishes_its_original_and_other_results_remain_exact() {
-	let root = tempfile::tempdir().unwrap();
+	let root = private_root();
 	let directory = File::open(root.path()).unwrap();
 	let records = records(12);
 	let writes: Vec<_> = records.iter().map(|record| (record, false)).collect();
@@ -201,7 +209,7 @@ fn failed_file_barrier_never_publishes_its_original_and_other_results_remain_exa
 
 #[test]
 fn panicking_worker_drains_every_other_file_before_refusing_the_entire_cohort() {
-	let root = tempfile::tempdir().unwrap();
+	let root = private_root();
 	let path = root.path().to_owned();
 	let gate = Arc::new((Mutex::new(false), Condvar::new()));
 	let allow = gate.clone();
@@ -246,7 +254,7 @@ fn panicking_worker_drains_every_other_file_before_refusing_the_entire_cohort() 
 
 #[test]
 fn caller_unwind_after_submission_drains_jobs_before_prepared_can_unlink() {
-	let root = tempfile::tempdir().unwrap();
+	let root = private_root();
 	let path = root.path().to_owned();
 	let gate = Arc::new((Mutex::new(false), Condvar::new()));
 	let allow = gate.clone();
@@ -289,7 +297,7 @@ fn caller_unwind_after_submission_drains_jobs_before_prepared_can_unlink() {
 
 #[test]
 fn parallel_staging_refuses_changed_owner_and_keeps_the_existing_original() {
-	let root = tempfile::tempdir().unwrap();
+	let root = private_root();
 	let directory = File::open(root.path()).unwrap();
 	let mut records = records(2);
 	let before = serde_json::to_vec(&records[0]).unwrap();
@@ -304,7 +312,7 @@ fn parallel_staging_refuses_changed_owner_and_keeps_the_existing_original() {
 
 #[test]
 fn oversized_cohort_is_refused_before_any_temporary_is_created() {
-	let root = tempfile::tempdir().unwrap();
+	let root = private_root();
 	let directory = File::open(root.path()).unwrap();
 	let records = records(MAX_FILES + 1);
 	let writes: Vec<_> = records.iter().map(|record| (record, false)).collect();

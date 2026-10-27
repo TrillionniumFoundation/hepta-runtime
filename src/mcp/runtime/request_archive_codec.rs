@@ -76,6 +76,15 @@ pub(super) fn view(raw: &[u8]) -> Result<View<'_>> {
 		tool,
 	})
 }
+// A recognized compact row must pass the complete parser. Corruption cannot
+// become absence or fall through to the legacy JSON decoder.
+pub(super) fn view_if_compact(raw: &[u8]) -> Result<Option<View<'_>>> {
+	if raw.starts_with(MAGIC) {
+		view(raw).map(Some)
+	} else {
+		Ok(None)
+	}
+}
 fn hex(value: &Id) -> String {
 	const DIGITS: &[u8; 16] = b"0123456789abcdef";
 	let mut result = String::with_capacity(64);

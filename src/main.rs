@@ -73,11 +73,25 @@ async fn main() -> Result<()> {
 			// Set the session root directory for all tool calls
 			mcp::set_session_root_directory(working_directory.clone());
 
-			let observation_pool = mcp::runtime::ssh::start_observation_pool(
+			let direct_transport = if runtime_enabled {
+				Some(mcp::runtime::ssh::start_direct_transport()?)
+			} else {
+				None
+			};
+			let observation_pool = match mcp::runtime::ssh::start_observation_pool(
 				runtime_observation_pool_profile.as_deref(),
 				runtime_file_observation_pool,
 			)
-			.await?;
+			.await
+			{
+				Ok(pool) => pool,
+				Err(error) => {
+					if let Some(owner) = direct_transport {
+						owner.shutdown().await?;
+					}
+					return Err(error);
+				}
+			};
 			let transport = match bind {
 				Some(addr) => {
 					// HTTP mode with Streamable HTTP transport.
@@ -88,9 +102,25 @@ async fn main() -> Result<()> {
 					run_stdio_server(mcp::server::OctofsServer::new()).await
 				}
 			};
-			if let Some(pool) = observation_pool {
-				pool.shutdown().await?;
-			}
+			// Join both original transport owners before propagating either error.
+			let direct_cleanup = async {
+				if let Some(owner) = direct_transport {
+					owner.shutdown().await
+				} else {
+					Ok(())
+				}
+			};
+			let observation_cleanup = async {
+				if let Some(pool) = observation_pool {
+					pool.shutdown().await
+				} else {
+					Ok(())
+				}
+			};
+			let (direct_cleanup, observation_cleanup) =
+				tokio::join!(direct_cleanup, observation_cleanup);
+			direct_cleanup?;
+			observation_cleanup?;
 			transport?;
 		}
 	}
@@ -139,6 +169,7 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 	// Kill request-scoped shell trees and interactive SSH PTYs. Durable runtime jobs
 	// are deliberately independent and remain queryable after this process restarts.
 	mcp::runtime::request_async::freeze_admission();
+	mcp::runtime::ssh::freeze_direct_transport();
 	mcp::runtime::ssh::freeze_observation_pool();
 	mcp::runtime::operation_async::freeze_admission();
 	tokio::join!(
@@ -271,6 +302,7 @@ async fn run_http_server(
 
 	// Same orphan cleanup as STDIO shutdown. Durable runtime jobs are unaffected.
 	mcp::runtime::request_async::freeze_admission();
+	mcp::runtime::ssh::freeze_direct_transport();
 	mcp::runtime::ssh::freeze_observation_pool();
 	mcp::runtime::operation_async::freeze_admission();
 	tokio::join!(

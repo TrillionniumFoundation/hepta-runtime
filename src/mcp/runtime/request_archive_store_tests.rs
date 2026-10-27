@@ -375,6 +375,7 @@ fn record_fence_preserves_legacy_before_and_after_layout_activation() {
 	let (_root, archive) = fixture();
 	let value = record(0xa5, 1);
 	let name = filename(&value);
+	let component = super::name(&name).unwrap();
 	save_archive_with_sync(&archive, &value, false, true).unwrap();
 	let held = archive.legacy();
 	let alias = held.try_clone().unwrap();
@@ -384,16 +385,23 @@ fn record_fence_preserves_legacy_before_and_after_layout_activation() {
 	);
 	assert_ne!(held.as_raw_fd(), alias.as_raw_fd());
 	archive.fence_record(&name, held).unwrap();
+	archive.fence_record_component(&component, held).unwrap();
 	assert!(archive.fence_record(&name, &alias).is_err());
+	assert!(archive.fence_record_component(&component, &alias).is_err());
 	archive.initialize_shards().unwrap();
 	assert_eq!(
 		archive.directory_for_existing(&name).unwrap().as_raw_fd(),
 		held.as_raw_fd()
 	);
 	archive.fence_record(&name, held).unwrap();
+	archive.fence_record_component(&component, held).unwrap();
 	assert!(archive.fence_record(&name, &alias).is_err());
+	assert!(archive.fence_record_component(&component, &alias).is_err());
 	assert!(archive
 		.fence_record(&name, &archive.0.layout.get().unwrap().shards[0xa5])
+		.is_err());
+	assert!(archive
+		.fence_record_component(&component, &archive.0.layout.get().unwrap().shards[0xa5])
 		.is_err());
 }
 
@@ -406,9 +414,11 @@ fn record_fence_checks_exact_held_fd_across_shard_prefix_boundaries() {
 	for prefix in [0x00, 0x09, 0x0a, 0x0f, 0x10, 0x7f, 0x80, 0xf0, 0xff] {
 		let value = record(prefix, u64::from(prefix) + 1);
 		let name = filename(&value);
+		let component = super::name(&name).unwrap();
 		save_archive_with_sync(&archive, &value, false, true).unwrap();
 		let held = archive.directory_for_existing(&name).unwrap();
 		archive.fence_record(&name, held).unwrap();
+		archive.fence_record_component(&component, held).unwrap();
 		let alias = held.try_clone().unwrap();
 		assert_eq!(
 			identity(&held.metadata().unwrap()),
@@ -420,9 +430,19 @@ fn record_fence_checks_exact_held_fd_across_shard_prefix_boundaries() {
 			.unwrap_err()
 			.to_string()
 			.contains("record changed physical namespace"));
+		assert!(archive
+			.fence_record_component(&component, &alias)
+			.unwrap_err()
+			.to_string()
+			.contains("record changed physical namespace"));
 		let wrong = &layout.shards[(usize::from(prefix) + 1) % SHARDS];
 		assert!(archive
 			.fence_record(&name, wrong)
+			.unwrap_err()
+			.to_string()
+			.contains("record changed physical namespace"));
+		assert!(archive
+			.fence_record_component(&component, wrong)
 			.unwrap_err()
 			.to_string()
 			.contains("record changed physical namespace"));
@@ -435,6 +455,7 @@ fn record_fence_rejects_duplicate_namespaces_for_both_held_targets() {
 	let (root, archive) = fixture();
 	let value = record(0x23, 1);
 	let name = filename(&value);
+	let component = super::name(&name).unwrap();
 	save_archive_with_sync(&archive, &value, false, true).unwrap();
 	archive.initialize_shards().unwrap();
 	let original = root.path().join(ARCHIVE_NAME).join(&name);
@@ -445,6 +466,11 @@ fn record_fence_rejects_duplicate_namespaces_for_both_held_targets() {
 	for held in [archive.legacy(), shard] {
 		assert!(archive
 			.fence_record(&name, held)
+			.unwrap_err()
+			.to_string()
+			.contains("duplicate request archive identity across namespaces"));
+		assert!(archive
+			.fence_record_component(&component, held)
 			.unwrap_err()
 			.to_string()
 			.contains("duplicate request archive identity across namespaces"));
@@ -465,16 +491,42 @@ fn record_fence_refuses_invalid_names_before_prefix_indexing() {
 		"界.json".to_owned(),
 		format!("{}.json", "A".repeat(64)),
 		format!(".{}-{}.tmp", "a".repeat(64), "b".repeat(64)),
+		format!("{}/{}.json", "a", "b".repeat(64)),
+		format!("{}.JSON", "a".repeat(64)),
+		format!("{}.json\0hidden", "a".repeat(64)),
+		format!("{}\0{}.json", "a".repeat(32), "b".repeat(31)),
 	] {
 		assert!(archive
 			.fence_record(&name, archive.legacy())
 			.unwrap_err()
 			.to_string()
 			.contains("invalid request archive filename"));
+		if let Ok(component) = super::name(&name) {
+			assert!(archive
+				.fence_record_component(&component, archive.legacy())
+				.unwrap_err()
+				.to_string()
+				.contains("invalid request archive filename"));
+		}
 	}
+	let non_utf8_bytes = [0xff, b'.', b'j', b's', b'o', b'n'];
+	let non_utf8 = std::ffi::CString::new(non_utf8_bytes).unwrap();
+	assert!(archive
+		.fence_record_component(&non_utf8, archive.legacy())
+		.unwrap_err()
+		.to_string()
+		.contains("invalid request archive filename"));
 	let missing = format!("{}.json", "e".repeat(64));
 	let error = archive
 		.fence_record(&missing, archive.legacy())
+		.unwrap_err();
+	assert_eq!(
+		error.downcast_ref::<std::io::Error>().unwrap().kind(),
+		std::io::ErrorKind::NotFound
+	);
+	let component = super::name(&missing).unwrap();
+	let error = archive
+		.fence_record_component(&component, archive.legacy())
 		.unwrap_err();
 	assert_eq!(
 		error.downcast_ref::<std::io::Error>().unwrap().kind(),
@@ -489,12 +541,14 @@ fn record_fence_keeps_the_final_legacy_named_directory_check() {
 		let (root, archive) = fixture();
 		let value = record(0x91, 1);
 		let name = filename(&value);
+		let component = super::name(&name).unwrap();
 		save_archive_with_sync(&archive, &value, false, true).unwrap();
 		if with_layout {
 			archive.initialize_shards().unwrap();
 		}
 		let held = archive.legacy();
 		archive.fence_record(&name, held).unwrap();
+		archive.fence_record_component(&component, held).unwrap();
 		let named = root.path().join(ARCHIVE_NAME);
 		let retained = root.path().join("retained-legacy");
 		let bytes = std::fs::read(named.join(&name)).unwrap();
@@ -509,6 +563,11 @@ fn record_fence_keeps_the_final_legacy_named_directory_check() {
 		);
 		assert!(archive
 			.fence_record(&name, held)
+			.unwrap_err()
+			.to_string()
+			.contains("request archive directory binding changed"));
+		assert!(archive
+			.fence_record_component(&component, held)
 			.unwrap_err()
 			.to_string()
 			.contains("request archive directory binding changed"));
@@ -564,7 +623,10 @@ fn wrong_shard_and_replaced_target_never_enter_the_logical_namespace() {
 	let (root, archive) = fixture();
 	archive.initialize_shards().unwrap();
 	let value = record(0x34, 1);
+	let component = super::name(&filename(&value)).unwrap();
 	save_archive_with_sync(&archive, &value, false, true).unwrap();
+	let held = &archive.0.layout.get().unwrap().shards[0x34];
+	archive.fence_record_component(&component, held).unwrap();
 	let invalid = root.path().join(SHARD_ROOT).join("34").join("invalid.json");
 	std::fs::write(&invalid, b"invalid").unwrap();
 	assert!(archive
@@ -584,15 +646,18 @@ fn wrong_shard_and_replaced_target_never_enter_the_logical_namespace() {
 		.join("35")
 		.join(filename(&value));
 	std::fs::rename(&source, &wrong).unwrap();
+	assert!(archive.fence_record_component(&component, held).is_err());
 	assert!(archive.walk(|_, _, _| Ok(())).is_err());
 	assert!(archive
 		.walk_for_complete_identity_join(|_, _, _| Ok(()))
 		.is_err());
 	std::fs::rename(&wrong, &source).unwrap();
+	archive.fence_record_component(&component, held).unwrap();
 	let path = root.path().join(SHARD_ROOT).join("34");
 	std::fs::rename(&path, root.path().join("held-shard")).unwrap();
 	std::fs::create_dir(&path).unwrap();
 	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+	assert!(archive.fence_record_component(&component, held).is_err());
 	assert!(archive.read_record(&filename(&value)).is_err());
 	assert!(archive.walk(|_, _, _| Ok(())).is_err());
 	assert!(archive

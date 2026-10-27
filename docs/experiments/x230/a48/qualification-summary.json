@@ -1,0 +1,558 @@
+{
+  "artifacts": {
+    "original_compiler_events_strictly_fresh_false": true,
+    "release": {
+      "cached": false,
+      "compiler_source": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/source-a48-page-fullscan-r01/src/main.rs",
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/qualification-a48-page-fullscan-r01/hepta-runtime",
+      "sha256": "252cb58e08559d6cc68a5db19008c20ec858f7693a44ae353e60bbda81a2b386"
+    },
+    "source_bound": true,
+    "test": {
+      "cached": false,
+      "compiler_source": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/source-a48-page-fullscan-r01/src/main.rs",
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/qualification-a48-page-fullscan-r01/hepta-runtime-tests",
+      "sha256": "125d238ca27ad1a1c6f4610cd1bb8207d8078084a0771297170d344a1e81f0bc"
+    }
+  },
+  "benchmark_binding": {
+    "actual_guardian_pins_verified": true,
+    "actual_output_pins_verified": true,
+    "benchmark_executions_by_binder": 0,
+    "binding_is_benchmark_success": false,
+    "manifest": {
+      "bytes": 3714,
+      "sha256": "92b42677e27cb894f586ed8913d75881c77b1a535a1900fd62344c202164e1f3"
+    },
+    "measurement_helpers_ast_independently_unchanged": true,
+    "numeric_algorithms_ast_independently_unchanged": true,
+    "numeric_protocol_gates_independently_unchanged": true,
+    "qualification_sha256": "2787841b5242c22e314d46a4e99074fb0b91f04ed4240f230004b5d635c3cd0b",
+    "release_sha256": "252cb58e08559d6cc68a5db19008c20ec858f7693a44ae353e60bbda81a2b386"
+  },
+  "design": {
+    "change": "Route online page full validation through the existing bounded two-reader kernel when base rows exceed LARGE_ARCHIVE_ROWS (16384).",
+    "collection_cutoff_ms": 1,
+    "complete_fresh_original_observation_required": true,
+    "deadline_join_coverage": "Existing full-suite expiry, timeout-permit, spawn-failure, panic, bounded-lane and all-child-join tests remain required and passed.",
+    "existing_worker_join_and_permit_custody_preserved": true,
+    "freeze_and_per_caller_results_preserved": true,
+    "metadata_deadline_seconds": 3,
+    "new_test_scope": [
+      "Real two-reader validation rejects warmed off-page original corruption without repairing source/cache; tiny synthetic fixture does not exercise the production large-row selector.",
+      "Actual shared page path rejects all projected pages when an off-page foreign record changes before the common final fence; tiny fixture remains serial."
+    ],
+    "reader_count": 2,
+    "selected_record_rereads_preserved": true,
+    "shared_final_fence_preserved": true,
+    "small_and_cold_observations_serial": true,
+    "store_and_state_guard_lifetime_preserved": true
+  },
+  "guardian": {
+    "entry": {
+      "bytes": 309398,
+      "local_export": "runtime-tools/a48-evidence/qualification/entry-report.json",
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a48-page-fullscan-entry-r01/entry-report.json",
+      "schema": "hepta-a48-page-fullscan-qualification-entry/v1",
+      "sha256": "871814ec2e5d3b870623fd6496a044626292efbc9b5658f488a6470e2a2cf851"
+    },
+    "guarded_qualification_complete": true,
+    "matching_final_q_and_worker_receipts": true,
+    "parent_unchanged_after_attempt": true,
+    "passed": true,
+    "per_stage_gates": [
+      {
+        "executed": true,
+        "execution_count": 1,
+        "gate_clear": true,
+        "host_gate": {
+          "bytes": 58505,
+          "identity": [
+            2053,
+            5807521,
+            33152,
+            1000,
+            1000,
+            1,
+            58505,
+            1792986593447707856,
+            1792986593447707856
+          ],
+          "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a48-page-fullscan-entry-r01/stage-0-format.host-gate.json",
+          "sha256": "05afa1240c8f79bc9774c7c7b6eae63221c4d5e6883e2a966d99cf27b09dce1c"
+        },
+        "name": "format",
+        "timeout_seconds": 1800
+      },
+      {
+        "executed": true,
+        "execution_count": 1,
+        "gate_clear": true,
+        "host_gate": {
+          "bytes": 58510,
+          "identity": [
+            2053,
+            5807520,
+            33152,
+            1000,
+            1000,
+            1,
+            58510,
+            1792986595593662229,
+            1792986595593662229
+          ],
+          "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a48-page-fullscan-entry-r01/stage-1-fmt-check.host-gate.json",
+          "sha256": "d77f2917355d7e8bd6c728e102113badba4f8412979da152843ca7b1b68e1ee8"
+        },
+        "name": "fmt-check",
+        "timeout_seconds": 1800
+      },
+      {
+        "executed": true,
+        "execution_count": 1,
+        "gate_clear": true,
+        "host_gate": {
+          "bytes": 58497,
+          "identity": [
+            2053,
+            5807522,
+            33152,
+            1000,
+            1000,
+            1,
+            58497,
+            1792986597582619967,
+            1792986597582619967
+          ],
+          "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a48-page-fullscan-entry-r01/stage-2-clean-package.host-gate.json",
+          "sha256": "01ea8bba3f414ef56c094fccc4142cffa38de53be6a9aa56c1acae2a609b9334"
+        },
+        "name": "clean-package",
+        "timeout_seconds": 1800
+      },
+      {
+        "executed": true,
+        "execution_count": 1,
+        "gate_clear": true,
+        "host_gate": {
+          "bytes": 58506,
+          "identity": [
+            2053,
+            5807523,
+            33152,
+            1000,
+            1000,
+            1,
+            58506,
+            1792986597923612724,
+            1792986597923612724
+          ],
+          "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a48-page-fullscan-entry-r01/stage-3-clippy.host-gate.json",
+          "sha256": "041c53d8cbd062d32315f5de5ee76766c76d19350bb152c636b6d054e62a5b20"
+        },
+        "name": "clippy",
+        "timeout_seconds": 1800
+      },
+      {
+        "executed": true,
+        "execution_count": 1,
+        "gate_clear": true,
+        "host_gate": {
+          "bytes": 58054,
+          "identity": [
+            2053,
+            5807524,
+            33152,
+            1000,
+            1000,
+            1,
+            58054,
+            1792986637923768234,
+            1792986637923768234
+          ],
+          "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a48-page-fullscan-entry-r01/stage-4-test.host-gate.json",
+          "sha256": "27a1079e7dd8542ee3bcbebdc9574f308d9e4d7946b486f1c2c9df77cfed3c7b"
+        },
+        "name": "test",
+        "timeout_seconds": 1800
+      },
+      {
+        "executed": true,
+        "execution_count": 1,
+        "gate_clear": true,
+        "host_gate": {
+          "bytes": 58313,
+          "identity": [
+            2053,
+            5807525,
+            33152,
+            1000,
+            1000,
+            1,
+            58313,
+            1792987136124121304,
+            1792987136124121304
+          ],
+          "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a48-page-fullscan-entry-r01/stage-5-release.host-gate.json",
+          "sha256": "56070292f999f8816fd8ea9baa5d7837a7c074e19f95fbd469dbf5a212047fd1"
+        },
+        "name": "release",
+        "timeout_seconds": 1800
+      }
+    ],
+    "qualified": true,
+    "required_test_coverage_verified": true,
+    "reused_dependencies_unchanged": true,
+    "strict_fresh_artifacts_verified": true,
+    "worker": {
+      "bytes": 22281,
+      "local_export": "runtime-tools/a48-evidence/qualification/worker-report.json",
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/a48-page-fullscan-entry-r01/worker-report.json",
+      "schema": "hepta-a48-page-fullscan-guarded-qualifier-worker/v1",
+      "sha256": "758785ba8ecbaef30818cb21e7daa62ce45f3b86c575436c870c1e5f52dea940"
+    },
+    "worker_custody": {
+      "actual_waitpid": 2562595,
+      "custody_retained_until_reap": true,
+      "elapsed_seconds": 864.0502889540512,
+      "execution_count": 1,
+      "group_quiet_before_reap": true,
+      "original_child_reaped": true,
+      "outer_work_budget_exceeded": false,
+      "pid": 2562595,
+      "pidfd_opened": true,
+      "raw_wait_status": 0,
+      "returncode": 0,
+      "signals": []
+    },
+    "worker_reused_dependencies_unchanged": true
+  },
+  "independent_local_review_scope": {
+    "ELF_bodies_locally_rehashed": false,
+    "all_168_source_bodies_locally_rehashed": false,
+    "four_changed_source_bodies_rehashed": true,
+    "full_168_file_map_compared_with_exact_parent_map": true,
+    "qualification_entry_worker_bodies_rehashed": true,
+    "release_log_body_locally_rehashed": false,
+    "remaining_originals": "retained and receipt-bound on X230; local publication review does not claim to have recopied their bodies",
+    "stage_host_gate_bodies_locally_rehashed": false,
+    "test_log_body_rehashed": true
+  },
+  "multihost_acceptance_established": false,
+  "optimization_exhausted_claim": false,
+  "performance_adopted": false,
+  "performance_result_in_this_section": null,
+  "prior_failed_a46_comparison_preserved": true,
+  "production_deployed_by_this_section": false,
+  "qualification": {
+    "current_stage": "complete",
+    "finished_utc": "2026-10-26T04:04:17.085695+00:00",
+    "local_export": "runtime-tools/a48-evidence/qualification/qualification.json",
+    "qualified": true,
+    "receipt": {
+      "bytes": 59526,
+      "identity": [
+        2053,
+        6066166,
+        33152,
+        1000,
+        1000,
+        1,
+        59526,
+        1792987457085946805,
+        1792987457086946825
+      ],
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/qualification-a48-page-fullscan-r01/report.json",
+      "sha256": "2787841b5242c22e314d46a4e99074fb0b91f04ed4240f230004b5d635c3cd0b"
+    },
+    "schema": "runtime-candidate-qualification/v1",
+    "stages": [
+      {
+        "command": [
+          "/home/qian/.cargo/bin/cargo",
+          "+1.95.0",
+          "fmt",
+          "--all"
+        ],
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "name": "format",
+        "returncode": 0,
+        "seconds": 2.0521140990313143
+      },
+      {
+        "command": [
+          "/home/qian/.cargo/bin/cargo",
+          "+1.95.0",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "name": "fmt-check",
+        "returncode": 0,
+        "seconds": 1.9644167909864336
+      },
+      {
+        "command": [
+          "/home/qian/.cargo/bin/cargo",
+          "+1.95.0",
+          "clean",
+          "--offline",
+          "--locked",
+          "--package",
+          "hepta-runtime"
+        ],
+        "log_sha256": "0f8924405cd3dae042194302605fec2b786f0d801938332d92b43db71325e199",
+        "name": "clean-package",
+        "returncode": 0,
+        "seconds": 0.33392869983799756
+      },
+      {
+        "command": [
+          "/home/qian/.cargo/bin/cargo",
+          "+1.95.0",
+          "clippy",
+          "--offline",
+          "--locked",
+          "--all-features",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "log_sha256": "ba58d5f93b4cebd642d9097b74cf7c0aa512a2427d73ed33d8ac84800ae83f1c",
+        "name": "clippy",
+        "returncode": 0,
+        "seconds": 39.99216171493754
+      },
+      {
+        "command": [
+          "/home/qian/.cargo/bin/cargo",
+          "+1.95.0",
+          "test",
+          "--offline",
+          "--locked",
+          "--all-features",
+          "--message-format=json-render-diagnostics"
+        ],
+        "log_sha256": "121a5e1d0aa8f4f7029e404620f7c22b3c48e019794090bcf7fdb5eff2f62120",
+        "name": "test",
+        "results": [
+          "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1262 filtered out; finished in 1.57s",
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1262 filtered out; finished in 1.51s",
+          "test result: ok. 1240 passed; 0 failed; 23 ignored; 0 measured; 0 filtered out; finished in 105.76s",
+          "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+        ],
+        "returncode": 0,
+        "seconds": 495.2118222960271
+      },
+      {
+        "command": [
+          "/home/qian/.cargo/bin/cargo",
+          "+1.95.0",
+          "build",
+          "--offline",
+          "--locked",
+          "--all-features",
+          "--release",
+          "--bins",
+          "--message-format=json-render-diagnostics"
+        ],
+        "log_sha256": "0ffcae6feaa0b3ae01d28f19922637914bce3297fbce37f60bbbf7d8e1542237",
+        "name": "release",
+        "returncode": 0,
+        "seconds": 320.776321826037
+      }
+    ],
+    "started_utc": "2026-10-26T03:49:53.391041+00:00"
+  },
+  "schema": "hepta-a48-qualification-design-publication/v1",
+  "scope": "Actual full qualification and design only; benchmark outcomes are separate.",
+  "source": {
+    "a43_owner_barrier_source_used": false,
+    "changed_source_files": [
+      {
+        "bytes": 19459,
+        "formatted_during_qualification": false,
+        "local_export_path": "/workspace/scratch/6778193a30d3/runtime-tools/a48-evidence/qualification/source/src/mcp/runtime/request_archive_content.rs",
+        "parent_sha256": "47e4decc621e32ae813e76be5c69349a439bb7f9b97f1d54285ca2c0c13128f9",
+        "prepared_input_sha256": "5517200af9889d571a625b31ae30b761f81f0154016181bf6ffd0a8f8357af38",
+        "repository_source_path": "src/mcp/runtime/request_archive_content.rs",
+        "sha256": "5517200af9889d571a625b31ae30b761f81f0154016181bf6ffd0a8f8357af38"
+      },
+      {
+        "bytes": 19485,
+        "formatted_during_qualification": false,
+        "local_export_path": "/workspace/scratch/6778193a30d3/runtime-tools/a48-evidence/qualification/source/src/mcp/runtime/request_archive_content_parallel_tests.rs",
+        "parent_sha256": "7dc81bb5e26cd5c31888ef2d1c91f4084b624fcbcb5152724ef001de0bf0a9e8",
+        "prepared_input_sha256": "8b9dddfd5b9fb2577452016d5818ca87c91fb790605e7061d822794b6212851f",
+        "repository_source_path": "src/mcp/runtime/request_archive_content_parallel_tests.rs",
+        "sha256": "8b9dddfd5b9fb2577452016d5818ca87c91fb790605e7061d822794b6212851f"
+      },
+      {
+        "bytes": 75046,
+        "formatted_during_qualification": false,
+        "local_export_path": "/workspace/scratch/6778193a30d3/runtime-tools/a48-evidence/qualification/source/src/mcp/runtime/request_archive_index.rs",
+        "parent_sha256": "6cae7533fe9f1613789336a3ed36ec66874b5726f92984dbe22415b88c9fa867",
+        "prepared_input_sha256": "5cec6362637d1ac17c9b6ae55e4d5b9c317ae893e818ac8c8d54b5e8b7cd389d",
+        "repository_source_path": "src/mcp/runtime/request_archive_index.rs",
+        "sha256": "5cec6362637d1ac17c9b6ae55e4d5b9c317ae893e818ac8c8d54b5e8b7cd389d"
+      },
+      {
+        "bytes": 4912,
+        "formatted_during_qualification": true,
+        "local_export_path": "/workspace/scratch/6778193a30d3/runtime-tools/a48-evidence/qualification/source/src/mcp/runtime/request_archive_page_batch_tests.rs",
+        "parent_sha256": "52ce38560c7e82aabea8b41bef888d3656eb4862c32d88ac56cac768d09a9281",
+        "prepared_input_sha256": "2fc048af5c5e2e71bdfa34aae37303a5e86377f85545ea71b75f0439102eb437",
+        "repository_source_path": "src/mcp/runtime/request_archive_page_batch_tests.rs",
+        "sha256": "93b1f5031025746227368ab02f259fe3251a597ba3f4af79304e66018a9ded67"
+      }
+    ],
+    "full_tested_map": {
+      "bytes": 18132,
+      "filename": "source-tested-map.json",
+      "sha256": "4dfcbd870806e6f75f425473b0addd2dfe4e25b9a3d4be069f1543d2acb14638"
+    },
+    "parent_source_map_compact_sha256": "c1ae8a69901aee16e03871e920a6a7e321672c9b30b3a6e75d3560390b8c2e11",
+    "prepared_source_map_compact_sha256": "f7e2d63efdefd2001519de66e09a5b2ae0f2673db6c36522f56c0040191f332b",
+    "source_export_manifest": {
+      "bytes": 3848,
+      "filename": "source-export-manifest.json",
+      "sha256": "42c74842a4a3a302e223ab3007ecaf5db86b45c2bcaac462fa9bfc6c0c286a35"
+    },
+    "source_files": 168,
+    "source_tested_equals_after_and_entry": true,
+    "source_tested_map_compact_sha256": "be631e20eb7ec586c77807bb4e38b6529c5cda1fcc906eb1fac20f793c8c0ff1",
+    "unchanged_parent_files": 164
+  },
+  "tests": {
+    "focused_reruns": 0,
+    "nested_filtered_child_summaries_not_double_counted": 2,
+    "raw_summary_lines": [
+      {
+        "counted_as_top_level": true,
+        "failed": 0,
+        "filtered_out": 0,
+        "ignored": 0,
+        "line": "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+        "passed": 18
+      },
+      {
+        "counted_as_top_level": false,
+        "failed": 0,
+        "filtered_out": 1262,
+        "ignored": 0,
+        "line": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1262 filtered out; finished in 1.57s",
+        "passed": 1
+      },
+      {
+        "counted_as_top_level": false,
+        "failed": 0,
+        "filtered_out": 1262,
+        "ignored": 0,
+        "line": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1262 filtered out; finished in 1.51s",
+        "passed": 1
+      },
+      {
+        "counted_as_top_level": true,
+        "failed": 0,
+        "filtered_out": 0,
+        "ignored": 23,
+        "line": "test result: ok. 1240 passed; 0 failed; 23 ignored; 0 measured; 0 filtered out; finished in 105.76s",
+        "passed": 1240
+      },
+      {
+        "counted_as_top_level": true,
+        "failed": 0,
+        "filtered_out": 0,
+        "ignored": 0,
+        "line": "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "passed": 8
+      }
+    ],
+    "required_full_suite_names": [
+      "parallel_page_observation_rechecks_warm_off_page_originals",
+      "late_off_page_content_change_discards_every_shared_page",
+      "original_workers_expired_budget_does_not_detach_held_children",
+      "async_metadata_timeout_retains_its_permit_until_original_children_join",
+      "strict_walk_finishes_child_work_before_full_terminal_fences_in_both_layouts",
+      "original_worker_second_spawn_failure_joins_the_first_waiting_thread",
+      "original_worker_panic_resumes_through_the_coordinator_lock_after_all_joins",
+      "original_workers_bound_submitted_unconsumed_work_to_one_per_lane",
+      "both_async_timeouts_keep_all_admitted_permits_until_actual_io_cleanup",
+      "completion_after_fixed_minimum_deadline_rejects_even_a_later_deadline_member",
+      "fixed_cutoff_is_one_millisecond_and_new_members_never_extend_it",
+      "a_final_epoch_change_discards_every_already_projected_page",
+      "shared_page_projection_errors_stay_local_before_the_common_final_fence"
+    ],
+    "required_name_count": 13,
+    "required_names_observed_ok": true,
+    "successful_execution_lines": {
+      "a_final_epoch_change_discards_every_already_projected_page": [
+        "test mcp::runtime::request_audit::index::page_batch_tests::a_final_epoch_change_discards_every_already_projected_page ... ok"
+      ],
+      "async_metadata_timeout_retains_its_permit_until_original_children_join": [
+        "test mcp::runtime::request_audit::index::content::parallel_tests::async_metadata_timeout_retains_its_permit_until_original_children_join ... ok"
+      ],
+      "both_async_timeouts_keep_all_admitted_permits_until_actual_io_cleanup": [
+        "test mcp::runtime::request_audit::archive_batch::tests::both_async_timeouts_keep_all_admitted_permits_until_actual_io_cleanup ... ok",
+        "test mcp::runtime::request_audit::usage_batch::tests::both_async_timeouts_keep_all_admitted_permits_until_actual_io_cleanup ... ok"
+      ],
+      "completion_after_fixed_minimum_deadline_rejects_even_a_later_deadline_member": [
+        "test mcp::runtime::request_audit::archive_batch::tests::completion_after_fixed_minimum_deadline_rejects_even_a_later_deadline_member ... ok",
+        "test mcp::runtime::request_audit::usage_batch::tests::completion_after_fixed_minimum_deadline_rejects_even_a_later_deadline_member ... ok"
+      ],
+      "fixed_cutoff_is_one_millisecond_and_new_members_never_extend_it": [
+        "test mcp::runtime::request_audit::archive_batch::tests::fixed_cutoff_is_one_millisecond_and_new_members_never_extend_it ... ok",
+        "test mcp::runtime::request_audit::usage_batch::tests::fixed_cutoff_is_one_millisecond_and_new_members_never_extend_it ... ok"
+      ],
+      "late_off_page_content_change_discards_every_shared_page": [
+        "test mcp::runtime::request_audit::index::page_batch_tests::late_off_page_content_change_discards_every_shared_page ... ok"
+      ],
+      "original_worker_panic_resumes_through_the_coordinator_lock_after_all_joins": [
+        "test mcp::runtime::request_audit::index::content::parallel_tests::original_worker_panic_resumes_through_the_coordinator_lock_after_all_joins ... ok"
+      ],
+      "original_worker_second_spawn_failure_joins_the_first_waiting_thread": [
+        "test mcp::runtime::request_audit::index::content::parallel_tests::original_worker_second_spawn_failure_joins_the_first_waiting_thread ... ok"
+      ],
+      "original_workers_bound_submitted_unconsumed_work_to_one_per_lane": [
+        "test mcp::runtime::request_audit::index::content::parallel_tests::original_workers_bound_submitted_unconsumed_work_to_one_per_lane ... ok"
+      ],
+      "original_workers_expired_budget_does_not_detach_held_children": [
+        "test mcp::runtime::request_audit::index::content::parallel_tests::original_workers_expired_budget_does_not_detach_held_children ... ok"
+      ],
+      "parallel_page_observation_rechecks_warm_off_page_originals": [
+        "test mcp::runtime::request_audit::index::content::parallel_tests::parallel_page_observation_rechecks_warm_off_page_originals ... ok"
+      ],
+      "shared_page_projection_errors_stay_local_before_the_common_final_fence": [
+        "test mcp::runtime::request_audit::index::page_batch_tests::shared_page_projection_errors_stay_local_before_the_common_final_fence ... ok"
+      ],
+      "strict_walk_finishes_child_work_before_full_terminal_fences_in_both_layouts": [
+        "test mcp::runtime::request_audit::index::content::parallel_tests::strict_walk_finishes_child_work_before_full_terminal_fences_in_both_layouts ... ok"
+      ]
+    },
+    "test_log": {
+      "bytes": 420694,
+      "identity": [
+        2053,
+        6063699,
+        33152,
+        1000,
+        1000,
+        1,
+        420694,
+        1792987133067985068,
+        1792987133067985068
+      ],
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/qualification-a48-page-fullscan-r01/test.log",
+      "sha256": "121a5e1d0aa8f4f7029e404620f7c22b3c48e019794090bcf7fdb5eff2f62120"
+    },
+    "top_level": {
+      "failed": 0,
+      "ignored": 23,
+      "passed": 1266
+    }
+  }
+}

@@ -24,8 +24,67 @@ fn page(root: &Path, session: &str, after_id: Option<String>, limit: u16) -> Val
 }
 fn root() -> tempfile::TempDir {
 	tempfile::Builder::new()
+		.permissions(std::fs::Permissions::from_mode(0o700))
 		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
 		.unwrap()
+}
+
+#[test]
+fn reused_component_open_keeps_flags_and_reobserves_the_named_inode() {
+	use std::os::fd::AsRawFd;
+	let temporary = root();
+	let directory = File::open(temporary.path()).unwrap();
+	let component = name("original").unwrap();
+	let mut created = open_at_component(
+		&directory,
+		&component,
+		libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL,
+		0o600,
+	)
+	.unwrap();
+	created.write_all(b"original bytes").unwrap();
+	drop(created);
+	let mut retained =
+		open_at_component(&directory, &component, libc::O_RDONLY | libc::O_NONBLOCK, 0).unwrap();
+	let descriptor_flags = unsafe { libc::fcntl(retained.as_raw_fd(), libc::F_GETFD) };
+	let status_flags = unsafe { libc::fcntl(retained.as_raw_fd(), libc::F_GETFL) };
+	assert!(descriptor_flags >= 0 && descriptor_flags & libc::FD_CLOEXEC != 0);
+	assert!(status_flags >= 0 && status_flags & libc::O_NONBLOCK != 0);
+	assert_eq!(
+		retained.metadata().unwrap().permissions().mode() & 0o7777,
+		0o600
+	);
+	let original = temporary.path().join("original");
+	let moved = temporary.path().join("retained");
+	std::fs::rename(&original, &moved).unwrap();
+	let mut replacement = open_at_component(
+		&directory,
+		&component,
+		libc::O_RDWR | libc::O_CREAT | libc::O_EXCL,
+		0o600,
+	)
+	.unwrap();
+	replacement.write_all(b"replacement bytes").unwrap();
+	drop(replacement);
+	assert!(open_at_component(
+		&directory,
+		&component,
+		libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL,
+		0o600,
+	)
+	.is_err());
+	let mut current = open_at_component(&directory, &component, libc::O_RDONLY, 0).unwrap();
+	let mut bytes = Vec::new();
+	current.read_to_end(&mut bytes).unwrap();
+	assert_eq!(bytes, b"replacement bytes");
+	bytes.clear();
+	retained.read_to_end(&mut bytes).unwrap();
+	assert_eq!(bytes, b"original bytes");
+	std::fs::remove_file(&original).unwrap();
+	symlink(&moved, &original).unwrap();
+	assert!(open_at_component(&directory, &component, libc::O_RDONLY, 0).is_err());
+	assert_eq!(std::fs::read(&moved).unwrap(), b"original bytes");
+	assert!(open_at(&directory, "original\0hidden", libc::O_RDONLY, 0).is_err());
 }
 
 #[test]
