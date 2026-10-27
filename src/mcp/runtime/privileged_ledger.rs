@@ -70,7 +70,7 @@ fn shard(identity: &str) -> &'static Mutex<()> {
 
 fn identity(host: &str, key: &str) -> Result<String> {
 	let bytes = serde_json::to_vec(&(host, key))?;
-	Ok(format!("{:x}", Sha256::digest(bytes)))
+	Ok(super::sha256_hex(&Sha256::digest(bytes)))
 }
 
 fn bound_digest(host: &str, action: &str, payload: &Value) -> Result<String> {
@@ -80,10 +80,7 @@ fn bound_digest(host: &str, action: &str, payload: &Value) -> Result<String> {
 		"action": action,
 		"payload": payload,
 	});
-	Ok(format!(
-		"{:x}",
-		Sha256::digest(serde_json::to_vec(&canonical)?)
-	))
+	Ok(super::sha256_hex(&Sha256::digest(serde_json::to_vec(&canonical)?)))
 }
 
 fn ledger_dir(state_dir: &Path) -> Result<PathBuf> {
@@ -135,7 +132,7 @@ fn read_record(path: &Path) -> Result<Option<Record>> {
 		use std::os::unix::fs::OpenOptionsExt;
 		options.custom_flags(libc::O_NOFOLLOW);
 	}
-	let mut file = options.open(path)?;
+	let file = options.open(path)?;
 	let metadata = file.metadata()?;
 	if !metadata.is_file() || metadata.len() > MAX_RECORD_BYTES {
 		bail!("invalid or oversized privileged ledger record");

@@ -311,7 +311,7 @@ fn request_digest(params: &ProcessStartParams) -> (u64, String) {
 	let bytes = serde_json::to_vec(&binding).expect("process binding serializes");
 	let digest = Sha256::digest(bytes);
 	let legacy = u64::from_be_bytes(digest[..8].try_into().expect("SHA-256 prefix"));
-	(legacy, format!("{digest:x}"))
+	(legacy, super::sha256_hex(&digest))
 }
 
 #[cfg(test)]
