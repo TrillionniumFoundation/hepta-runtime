@@ -66,8 +66,15 @@ jobs:
           cargo install --locked --version '=0.9.137' cargo-nextest
           cargo nextest --version
 
+      - name: Install independent search oracle
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ripgrep
+          rg --version
+
       - name: Test in isolated processes
         run: |
+          umask 022
           cargo nextest run --locked --all-targets --all-features \
             --test-threads 1 --retries 0 --no-fail-fast
 
@@ -117,8 +124,15 @@ jobs:
           cargo install --locked --version '=0.9.137' cargo-nextest
           cargo nextest --version
 
+      - name: Install independent search oracle
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ripgrep
+          rg --version
+
       - name: Test in isolated processes
         run: |
+          umask 022
           cargo nextest run --locked --all-targets --all-features \
             --test-threads 1 --retries 0 --no-fail-fast
 

@@ -17,6 +17,10 @@ async fn missing_or_empty_key_fails_before_runtime_initialization() {
 		assert!(error
 			.to_string()
 			.contains("original nonempty idempotency key"));
+		let error = observe_request(request(key)).await.unwrap_err();
+		assert!(error
+			.to_string()
+			.contains("original nonempty idempotency key"));
 	}
 }
 

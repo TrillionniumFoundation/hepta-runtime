@@ -23,9 +23,31 @@ fn page(root: &Path, session: &str, after_id: Option<String>, limit: u16) -> Val
 	.unwrap()
 }
 fn root() -> tempfile::TempDir {
-	tempfile::Builder::new()
+	let root = tempfile::Builder::new()
 		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
-		.unwrap()
+		.unwrap();
+	std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+	root
+}
+
+#[test]
+fn wide_state_root_is_refused_without_repair_or_partial_audit_creation() {
+	let temporary = root();
+	std::fs::set_permissions(temporary.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+	let error = prepare_at(temporary.path()).unwrap_err();
+	assert!(error
+		.to_string()
+		.contains("private request audit directory refused"));
+	assert_eq!(
+		std::fs::metadata(temporary.path())
+			.unwrap()
+			.permissions()
+			.mode() & 0o7777,
+		0o755
+	);
+	assert_eq!(std::fs::read_dir(temporary.path()).unwrap().count(), 0);
+	std::fs::set_permissions(temporary.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+	prepare_at(temporary.path()).unwrap();
 }
 
 #[test]

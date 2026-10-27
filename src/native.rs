@@ -31,6 +31,13 @@ pub async fn execute_or_observe(params: ProcessStartParams) -> Result<String> {
 	jobs::start_job(params).await
 }
 
+/// Resolve and observe the original request without submitting or relaunching it.
+/// A missing local binding is not evidence that an external effect did not occur.
+pub async fn observe_request(params: ProcessStartParams) -> Result<Option<String>> {
+	require_key(&params)?;
+	jobs::observe_request(params).await
+}
+
 /// Read the original job. This cannot launch or repair an unknown effect.
 pub async fn status(params: ProcessRefParams) -> Result<String> {
 	jobs::status_job(params).await

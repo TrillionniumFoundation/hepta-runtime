@@ -35,6 +35,14 @@ The public facade is `hepta_runtime::native`:
 
 - `execute_or_observe(ProcessStartParams)` requires an explicit nonblank stable
   idempotency key and delegates to the existing durable `jobs::start_job`.
+- `observe_request(ProcessStartParams)` resolves the original host/key and full
+  request binding when the start acknowledgement and job ID were lost. It returns
+  the original record and status without any launch, including pending jobctl
+  records. `None` means no binding was found in the current local registry; it
+  does not authorize replay or prove that no external effect occurred. Current
+  allow_execute=false blocks new execution but does not block this original
+  request observation; physical host/state-root and full payload binding remain
+  mandatory.
 - `status(ProcessRefParams)` observes the original host/job identity.
 - `read(ProcessReadParams)` preserves independent bounded stdout/stderr cursors.
 - `cancel(ProcessCancelParams)` requests cancellation of the original stored job;

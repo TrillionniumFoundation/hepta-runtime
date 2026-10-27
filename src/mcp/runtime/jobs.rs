@@ -2577,6 +2577,43 @@ fn validate_new_host_resource_limits(
 	Ok(())
 }
 
+/// Observe an original request when its start acknowledgement (and job ID) was lost.
+/// Absence is only a local-registry observation, never permission to replay an effect.
+pub async fn observe_request(params: ProcessStartParams) -> Result<Option<String>> {
+	// Revoking new execution must not prevent observing a previously admitted
+	// request. Preserve its original identity, digest and physical binding.
+	match params.idempotency_key.as_deref() {
+		Some(key) if !key.trim().is_empty() && key.len() <= 256 => {}
+		_ => bail!("request observation requires its original nonempty idempotency key"),
+	}
+	runtime_config()?.host(&params.host)?;
+	let lane = start_lock(&params.host, params.idempotency_key.as_deref())?;
+	let mut guard = Some(lane.lock().await);
+	let key = params
+		.idempotency_key
+		.as_deref()
+		.context("request observation requires its original idempotency key")?;
+	let Some(existing) = find_idempotent(&params.host, key)? else {
+		return Ok(None);
+	};
+	let digest = request_digest(&params)?;
+	if !matches_request(&existing, &digest)? {
+		bail!("idempotency key `{key}` is already bound to a different request");
+	}
+	check_binding(&existing)?;
+	// Even pending isolated/jobctl records are observation-only here. In
+	// particular, do not use start_job's optional launch reconciliation path.
+	let status = read_reuse_status(&existing, false, &mut guard, status_record(&existing, 0)).await;
+	Ok(Some(serde_json::to_string_pretty(&json!({
+		"observation_only": true,
+		"reused": true,
+		"retried_launch": false,
+		"launch": null,
+		"job": existing,
+		"status": status,
+	}))?))
+}
+
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	validate_start(&params)?;
 	let _start_lane = start_lock(&params.host, params.idempotency_key.as_deref())?;
@@ -3242,3 +3279,7 @@ mod terminal_publication_tests;
 #[cfg(test)]
 #[path = "jobs_security_tests.rs"]
 mod security_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_observe_request_tests.rs"]
+mod observe_request_tests;
