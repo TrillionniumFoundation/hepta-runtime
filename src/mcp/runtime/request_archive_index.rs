@@ -540,9 +540,12 @@ fn stamp(archive: &Archive, filename: &str) -> Result<FileStamp> {
 	let directory = archive.directory_for_existing(filename)?;
 	stamp_at(directory, filename)
 }
-#[allow(clippy::unnecessary_cast)] // libc inode/device widths vary across Unix.
 fn stamp_at(directory: &File, filename: &str) -> Result<FileStamp> {
 	let filename = name(filename)?;
+	stamp_at_component(directory, &filename)
+}
+#[allow(clippy::unnecessary_cast)] // libc inode/device widths vary across Unix.
+fn stamp_at_component(directory: &File, filename: &std::ffi::CStr) -> Result<FileStamp> {
 	let mut raw = std::mem::MaybeUninit::<libc::stat>::uninit();
 	if unsafe {
 		libc::fstatat(

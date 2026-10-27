@@ -1,0 +1,144 @@
+{
+  "actual_a55_qualification_observed": true,
+  "all_source_and_elf_fences_and_original_wait4_custody_retained": true,
+  "bindings_ready": true,
+  "diagnostic_executed": false,
+  "exact_full_inverse_to_actual_a54_diagnostic": true,
+  "finite_changes": [
+    {
+      "after": "REFERENCE_SHA = '43d1dfe9b173b0eba620fe9b5fd4140666aa66359f4e4845398ac484a4644bfb'",
+      "before": "REFERENCE_SHA = '9f03083dcb6754952ea27ae531dd5f353119704257ffb56e43dcb180052eafc1'",
+      "count": 1
+    },
+    {
+      "after": "QUALIFICATION_SHA = '67abac1fa0c3a0b496b0101a551ce828e697d43fd94b9de82ecc5875d9f16688'",
+      "before": "QUALIFICATION_SHA = '49b0019ece7405d455ace8cb638080a203a24fca01c6985a6cdda6d51180a51c'",
+      "count": 1
+    },
+    {
+      "after": "ENTRY_SHA = '50c8272612c8f923b496279aff37da51f75eb4b50de789f283840064d425dd3b'",
+      "before": "ENTRY_SHA = 'a98b564f5db07c64b497b68098902192f71f7be6884e687e68b38e9e41f3e6c3'",
+      "count": 1
+    },
+    {
+      "after": "WORKER_SHA = '3256f99182d1d3b73c6e289cbe634bf84ff33b4f60694c65c59db5c84a735a8a'",
+      "before": "WORKER_SHA = 'b7ee93502f5ba0a3861e4578da8301ebac9af8ceb9e1b535ad2e5a8c6af73a90'",
+      "count": 1
+    },
+    {
+      "after": "TESTED_MAP_SHA = '03537b606d582b5c1cd85e5a24d3ff99044e258ac3cebc1c5abb16c04affa447'",
+      "before": "TESTED_MAP_SHA = '7d4143971feeb9b1fcbf1f3e567ba367c36770cdf050fe496b1e2778a1025176'",
+      "count": 1
+    },
+    {
+      "after": "RELEASE_SHA = 'e78eae3e563ef4112f1639cc833a4023e91c6b27a26b02e93b2a541a95f34014'",
+      "before": "RELEASE_SHA = 'd2134c1b2b1999f46f0808b0d523ae51f54821c09afa6ecbf8188c883bbf3d70'",
+      "count": 1
+    },
+    {
+      "after": "TRACE_ENV = {'HEPTA_METADATA_TRACE': '1', 'HEPTA_ARCHIVE_INDEX_TRACE': '1'}\nFINAL_BINDINGS_READY = True\nREFERENCE_BYTES = 83569",
+      "before": "TRACE_ENV = {'HEPTA_METADATA_TRACE': '1', 'HEPTA_ARCHIVE_INDEX_TRACE': '1'}",
+      "count": 1
+    },
+    {
+      "after": "def require_bindings():\n    require(FINAL_BINDINGS_READY is True\n            and all(type(value) is str and len(value) == 64\n                    and all(character in '0123456789abcdef' for character in value)\n                    for value in (REFERENCE_SHA, QUALIFICATION_SHA, ENTRY_SHA,\n                                  WORKER_SHA, TESTED_MAP_SHA, RELEASE_SHA))\n            and type(REFERENCE_BYTES) is int and 0 < REFERENCE_BYTES < 128 * 1024,\n            'actual A55 qualification/source/ELF/reference bindings required before any evidence access')\n\n\ndef main(args):\n    require_bindings()\n",
+      "before": "def main(args):\n",
+      "count": 1
+    },
+    {
+      "after": "require(len(raw) == REFERENCE_BYTES and sha(raw) == REFERENCE_SHA,",
+      "before": "require(len(raw) == 83584 and sha(raw) == REFERENCE_SHA,",
+      "count": 1
+    }
+  ],
+  "fixed_workload": {
+    "archive_records": 65536,
+    "client_deadline_seconds": 10,
+    "cohort_window_milliseconds": 1,
+    "controller_count": 1,
+    "controller_round_seconds": 300,
+    "fixed_idle_seconds": 60,
+    "hot_records": 512,
+    "measured_calls": 20,
+    "measured_waves": 8,
+    "outer_timeout_seconds": 600,
+    "product_deadline_seconds": 3,
+    "readiness_retries": 0
+  },
+  "input_receipts": {
+    "actual_reports": {
+      "entry": {
+        "bytes": 59505,
+        "path": "/workspace/scratch/6778193a30d3/ci-audit/a55/qualification-actual-r01/entry.original.json",
+        "sha256": "50c8272612c8f923b496279aff37da51f75eb4b50de789f283840064d425dd3b"
+      },
+      "qualification": {
+        "bytes": 61968,
+        "path": "/workspace/scratch/6778193a30d3/ci-audit/a55/qualification-actual-r01/qualification.original.json",
+        "sha256": "67abac1fa0c3a0b496b0101a551ce828e697d43fd94b9de82ecc5875d9f16688"
+      },
+      "worker": {
+        "bytes": 8085,
+        "path": "/workspace/scratch/6778193a30d3/ci-audit/a55/qualification-actual-r01/worker.original.json",
+        "sha256": "3256f99182d1d3b73c6e289cbe634bf84ff33b4f60694c65c59db5c84a735a8a"
+      }
+    },
+    "actual_validator": {
+      "bytes": 14568,
+      "path": "/workspace/scratch/6778193a30d3/ci-audit/a55/actual_qualification_support_r01.py",
+      "sha256": "2455ff42cb2ff2a6d6607063970c4fa4d294a51a32ebd83af62207991e975b66"
+    },
+    "archive_bindings": {
+      "bytes": 6731,
+      "path": "/workspace/scratch/6778193a30d3/ci-audit/a55/archive-frozen-r01/binding-manifest.json",
+      "sha256": "993a7048ba0e188d6b465f63c9fc19ea3234f0449162fbd60122986b19e26100"
+    },
+    "parent": {
+      "bytes": 17196,
+      "path": "/workspace/scratch/6778193a30d3/ci-audit/a54/trace-frozen-r01/run_a54_metadata_diagnostic_r01.py",
+      "sha256": "3515bf348ff803e7f43dda8ee43cfbfc9b0596150682213536c6502328c3535a"
+    },
+    "reference": {
+      "bytes": 83569,
+      "sha256": "43d1dfe9b173b0eba620fe9b5fd4140666aa66359f4e4845398ac484a4644bfb"
+    }
+  },
+  "main_first_statement_refuses_pending_before_any_evidence_access": false,
+  "new_aggregate_event_semantics_must_be_independently_audited": true,
+  "only_controller_changes": {
+    "HEPTA_ARCHIVE_INDEX_TRACE": "1",
+    "HEPTA_METADATA_TRACE": "1"
+  },
+  "performance_adopted": false,
+  "protected_renames": [
+    [
+      "a54-compact-view-entry-r01",
+      "a55-cstr-scan-entry-r01"
+    ],
+    [
+      "a54-compact-view-r01",
+      "a55-cstr-scan-r01"
+    ],
+    [
+      "hepta-a54-compact-view-qualification-",
+      "hepta-a55-cstr-scan-qualification-"
+    ],
+    [
+      "a54",
+      "a55"
+    ],
+    [
+      "A54",
+      "A55"
+    ]
+  ],
+  "remote_calls": 0,
+  "rust_commands": 0,
+  "schema": "hepta-a55-same-elf-diagnostic-preparation/v1",
+  "source": {
+    "bytes": 17821,
+    "path": "/home/qian/hepta-runtime-optimization-20261023/a41-phase-timing-20261025-r01/tools/run_a55_metadata_diagnostic_r01.py",
+    "sha256": "7f9b13773c6ea5e143e6b7d0484b5af840e152d68cb0801600feb4f95266b9f9"
+  },
+  "three_original_transport_must_be_frozen_from_actual_file_sizes": true
+}

@@ -504,8 +504,18 @@ fn name(value: &str) -> Result<std::ffi::CString> {
 
 #[cfg(unix)]
 fn open_at(directory: &File, component: &str, flags: i32, mode: u32) -> Result<File> {
-	use std::os::fd::{AsRawFd, FromRawFd};
 	let component = name(component)?;
+	open_at_component(directory, &component, flags, mode)
+}
+
+#[cfg(unix)]
+fn open_at_component(
+	directory: &File,
+	component: &std::ffi::CStr,
+	flags: i32,
+	mode: u32,
+) -> Result<File> {
+	use std::os::fd::{AsRawFd, FromRawFd};
 	let descriptor = unsafe {
 		libc::openat(
 			directory.as_raw_fd(),

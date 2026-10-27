@@ -102,6 +102,147 @@ impl Fixture {
 }
 
 #[test]
+fn content_phase_aggregates_preserve_submicrosecond_cost_and_saturate_output() {
+	let start = Instant::now();
+	let mut trace = ContentPhases::at(start);
+	trace.phase = ContentPhase::Row;
+	for count in 1..=3 {
+		trace.advance(start + Duration::from_nanos(count * 400));
+	}
+	assert_eq!(trace.nanos[ContentPhase::Row as usize], 1_200);
+	assert_eq!(trace.micros()[ContentPhase::Row as usize], 1);
+	assert_eq!(trace.nanos[ContentPhase::Walk as usize], 0);
+	trace.nanos[ContentPhase::Order as usize] = u128::MAX;
+	assert_eq!(trace.micros()[ContentPhase::Order as usize], u64::MAX);
+	assert!(!trace.complete);
+}
+
+#[test]
+fn instrumented_serial_scan_preserves_refusal_and_reports_incomplete_work() {
+	fn observe(fixture: &Fixture, deadline: Instant, trace: &mut ContentPhases) -> Result<()> {
+		let transaction = fixture.database.begin_read()?;
+		let rows = transaction.open_table(ROWS)?;
+		let order = transaction.open_table(ORDER)?;
+		verify_members_serial(
+			&fixture.slot.archive,
+			(&rows, &order),
+			&PendingView::default(),
+			rows.len()?,
+			deadline,
+			trace,
+		)
+	}
+
+	let original = record(1, DurableState::Completed);
+	let fixture = Fixture::new(original.clone(), original);
+	let original_bytes = std::fs::read(fixture.path()).unwrap();
+	fixture.verify(&PendingView::default()).unwrap();
+	let mut complete = ContentPhases::new();
+	observe(&fixture, budget(), &mut complete).unwrap();
+	assert_eq!(
+		(complete.attempted, complete.verified, complete.complete),
+		(1, 1, true)
+	);
+	assert_eq!(std::fs::read(fixture.path()).unwrap(), original_bytes);
+
+	std::fs::write(fixture.path(), b"{").unwrap();
+	let ordinary_error = fixture
+		.verify(&PendingView::default())
+		.unwrap_err()
+		.to_string();
+	let mut refused = ContentPhases::new();
+	let diagnostic_error = observe(&fixture, budget(), &mut refused)
+		.unwrap_err()
+		.to_string();
+	assert_eq!(diagnostic_error, ordinary_error);
+	assert_eq!(
+		(refused.attempted, refused.verified, refused.complete),
+		(1, 0, false)
+	);
+	assert_eq!(std::fs::read(fixture.path()).unwrap(), b"{");
+
+	let mut expired = ContentPhases::new();
+	let error = observe(&fixture, Instant::now(), &mut expired).unwrap_err();
+	assert!(error.to_string().contains("deadline exceeded"));
+	assert_eq!(
+		(expired.attempted, expired.verified, expired.complete),
+		(0, 0, false)
+	);
+	assert_eq!(std::fs::read(fixture.path()).unwrap(), b"{");
+}
+
+#[test]
+fn reused_component_stamps_reobserve_replacement_and_private_inode_policy() {
+	let original = record(1, DurableState::Completed);
+	let fixture = Fixture::new(original.clone(), original);
+	let filename = format!("{}.json", fixture.original.request_id);
+	let component = name(&filename).unwrap();
+	let directory = fixture.slot.archive.legacy();
+	let before = stamp_at_component(directory, &component).unwrap();
+	assert!(before == stamp_at(directory, &filename).unwrap());
+	let held = open_at_component(directory, &component, libc::O_RDONLY, 0).unwrap();
+	descriptor_matches(&held, before).unwrap();
+	let path = fixture.path();
+	let retained = path.with_extension("retained");
+	let bytes = std::fs::read(&path).unwrap();
+	std::fs::rename(&path, &retained).unwrap();
+	std::fs::copy(&retained, &path).unwrap();
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+	let after = stamp_at_component(directory, &component).unwrap();
+	assert_ne!((before.device, before.inode), (after.device, after.inode));
+	assert!(descriptor_matches(&held, after).is_err());
+	let alias = path.with_extension("linked");
+	std::fs::hard_link(&path, &alias).unwrap();
+	assert!(stamp_at_component(directory, &component).is_err());
+	std::fs::remove_file(&alias).unwrap();
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+	assert!(stamp_at_component(directory, &component).is_err());
+	std::fs::remove_file(&path).unwrap();
+	std::os::unix::fs::symlink(&retained, &path).unwrap();
+	assert!(stamp_at_component(directory, &component).is_err());
+	assert!(open_at_component(directory, &component, libc::O_RDONLY, 0).is_err());
+	assert_eq!(std::fs::read(&retained).unwrap(), bytes);
+}
+
+#[test]
+fn reused_component_complete_reads_keep_all_physical_namespace_choices() {
+	for (with_layout, sharded) in [(false, false), (true, false), (true, true)] {
+		let root = tempfile::Builder::new()
+			.permissions(std::fs::Permissions::from_mode(0o700))
+			.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
+			.unwrap();
+		let archive = open_archive(root.path()).unwrap();
+		let original = record(1, DurableState::Completed);
+		{
+			let _guard = store_lock().unwrap();
+			if sharded {
+				archive.initialize_shards().unwrap();
+			}
+			save_archive_with_sync(&archive, &original, false, true).unwrap();
+			if with_layout && !sharded {
+				archive.initialize_shards().unwrap();
+			}
+		}
+		let filename = format!("{}.json", original.request_id);
+		let directory = archive.directory_for_existing(&filename).unwrap();
+		let observed = read_original(&archive, directory, &filename, budget()).unwrap();
+		assert!(observed.record == original);
+		assert!(observed.stamp == stamp_at(directory, &filename).unwrap());
+		let relative = if sharded {
+			std::path::PathBuf::from(super::super::super::archive_store::SHARD_ROOT)
+				.join(&original.request_id[..2])
+		} else {
+			std::path::PathBuf::from(ARCHIVE_NAME)
+		};
+		let path = root.path().join(relative).join(&filename);
+		let bytes = std::fs::read(&path).unwrap();
+		let repeated = read_original(&archive, directory, &filename, budget()).unwrap();
+		assert!(repeated.record == original && repeated.stamp == observed.stamp);
+		assert_eq!(std::fs::read(&path).unwrap(), bytes);
+	}
+}
+
+#[test]
 fn complete_content_gate_reads_originals_and_refuses_a_different_time_in_the_derived_view() {
 	let original = record(1, DurableState::Completed);
 	let exact = Fixture::new(original.clone(), original.clone());

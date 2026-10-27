@@ -200,6 +200,12 @@ pub(super) fn mark(phase: &'static str, cohort: u64, value: u64) {
 	});
 }
 
+// Select the instrumented full-scan implementation once, before walking any
+// original. The ordinary implementation has no per-record clock or trace work.
+pub(super) fn active() -> bool {
+	CURRENT.with(|current| current.get().is_some())
+}
+
 pub(super) struct Stage {
 	context: Option<Context>,
 	phase: &'static str,

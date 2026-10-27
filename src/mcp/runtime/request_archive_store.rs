@@ -959,10 +959,21 @@ impl Archive {
 
 	pub(super) fn existing_directory(&self, filename: &str) -> Result<Option<&File>> {
 		let id = filename_id(filename)?;
-		let legacy = named_stat(self.legacy(), filename)?.is_some();
+		let component = name(filename)?;
+		self.existing_directory_component(id, &component)
+	}
+
+	// Callers bind id and component to one validated filename before lookup.
+	// Keep the pair private so another module cannot mix two physical names.
+	fn existing_directory_component(
+		&self,
+		id: &str,
+		component: &std::ffi::CStr,
+	) -> Result<Option<&File>> {
+		let legacy = named_stat_with_component(self.legacy(), component)?.is_some();
 		let shard = self.shard_for(id)?;
 		let sharded = match shard {
-			Some(directory) => named_stat(directory, filename)?.is_some(),
+			Some(directory) => named_stat_with_component(directory, component)?.is_some(),
 			None => false,
 		};
 		match (legacy, sharded) {
@@ -1006,7 +1017,33 @@ impl Archive {
 	}
 
 	pub(super) fn fence_record(&self, filename: &str, directory: &File) -> Result<()> {
-		if self.directory_for_existing(filename)?.as_raw_fd() != directory.as_raw_fd() {
+		let id = filename_id(filename)?;
+		let component = name(filename)?;
+		self.fence_record_named(id, &component, directory)
+	}
+
+	pub(super) fn fence_record_component(
+		&self,
+		component: &std::ffi::CStr,
+		directory: &File,
+	) -> Result<()> {
+		let filename = component
+			.to_str()
+			.map_err(|_| anyhow!("invalid request archive filename"))?;
+		let id = filename_id(filename)?;
+		self.fence_record_named(id, component, directory)
+	}
+
+	fn fence_record_named(
+		&self,
+		id: &str,
+		component: &std::ffi::CStr,
+		directory: &File,
+	) -> Result<()> {
+		let existing = self
+			.existing_directory_component(id, component)?
+			.ok_or_else(|| std::io::Error::from(std::io::ErrorKind::NotFound))?;
+		if existing.as_raw_fd() != directory.as_raw_fd() {
 			bail!("request archive record changed physical namespace");
 		}
 		if directory.as_raw_fd() == self.legacy().as_raw_fd() {
@@ -1020,7 +1057,7 @@ impl Archive {
 		// The successful lookup already validated the lowercase hex filename and
 		// selected this held shard. Keep the exact FD and final named-directory
 		// checks without searching the immutable shard vector a second time.
-		let prefix = &filename[..2];
+		let prefix = &id[..2];
 		if layout.shards[shard_index(prefix)].as_raw_fd() != directory.as_raw_fd() {
 			bail!("foreign request archive target directory");
 		}

@@ -7,6 +7,127 @@ use std::collections::BTreeSet;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread::{Scope, ScopedJoinHandle};
 
+#[derive(Clone, Copy)]
+enum ContentPhase {
+	Walk,
+	Row,
+	Order,
+	Pending,
+	Name,
+	NamespaceBefore,
+	StampBefore,
+	Open,
+	DescriptorBefore,
+	Read,
+	Parse,
+	DescriptorAfter,
+	StampAfter,
+	NamespaceAfter,
+	Compare,
+}
+
+const CONTENT_PHASE_NAMES: [&str; 15] = [
+	"content_walk_and_fences_us",
+	"content_row_lookup_us",
+	"content_order_check_us",
+	"content_pending_selection_us",
+	"content_filename_us",
+	"content_namespace_before_us",
+	"content_stamp_before_us",
+	"content_open_us",
+	"content_descriptor_before_us",
+	"content_body_read_us",
+	"content_parse_and_domain_us",
+	"content_descriptor_after_us",
+	"content_stamp_after_us",
+	"content_namespace_after_us",
+	"content_compare_and_close_us",
+];
+
+// Static dispatch gives ordinary and parallel reads a zero-sized observer with
+// no clocks, counters, allocation, or per-record channel operation.
+trait ContentTrace {
+	fn enter(&mut self, _phase: ContentPhase) {}
+	fn attempt(&mut self) {}
+	fn verified(&mut self) {}
+	fn complete(&mut self) {}
+}
+
+struct UntracedContent;
+impl ContentTrace for UntracedContent {}
+
+struct ContentPhases {
+	phase: ContentPhase,
+	last: Instant,
+	nanos: [u128; CONTENT_PHASE_NAMES.len()],
+	attempted: u64,
+	verified: u64,
+	complete: bool,
+}
+
+impl ContentPhases {
+	fn new() -> Self {
+		Self::at(Instant::now())
+	}
+
+	fn at(now: Instant) -> Self {
+		Self {
+			phase: ContentPhase::Walk,
+			last: now,
+			nanos: [0; CONTENT_PHASE_NAMES.len()],
+			attempted: 0,
+			verified: 0,
+			complete: false,
+		}
+	}
+
+	fn advance(&mut self, now: Instant) {
+		let elapsed = now.saturating_duration_since(self.last).as_nanos();
+		let total = &mut self.nanos[self.phase as usize];
+		*total = total.saturating_add(elapsed);
+		self.last = now;
+	}
+
+	fn micros(&self) -> [u64; CONTENT_PHASE_NAMES.len()] {
+		self.nanos
+			.map(|value| (value / 1_000).min(u64::MAX as u128) as u64)
+	}
+}
+
+impl ContentTrace for ContentPhases {
+	fn enter(&mut self, phase: ContentPhase) {
+		self.advance(Instant::now());
+		self.phase = phase;
+	}
+
+	fn attempt(&mut self) {
+		self.attempted = self.attempted.saturating_add(1);
+	}
+
+	fn verified(&mut self) {
+		self.verified = self.verified.saturating_add(1);
+	}
+
+	fn complete(&mut self) {
+		self.complete = true;
+	}
+}
+
+impl Drop for ContentPhases {
+	fn drop(&mut self) {
+		self.advance(Instant::now());
+		// Exactly eighteen bounded, nonblocking events per serial scan, including
+		// errors and partial walks. Keep nanosecond sums until this final rounding;
+		// rounding each tiny record operation would systematically lose its cost.
+		for (phase, value) in CONTENT_PHASE_NAMES.into_iter().zip(self.micros()) {
+			metadata_trace::mark(phase, 0, value);
+		}
+		metadata_trace::mark("content_members_attempted", 0, self.attempted);
+		metadata_trace::mark("content_members_verified", 0, self.verified);
+		metadata_trace::mark("content_scan_complete", 0, u64::from(self.complete));
+	}
+}
+
 fn live(deadline: Instant) -> Result<()> {
 	if Instant::now() >= deadline {
 		bail!("archive metadata query total deadline exceeded");
@@ -57,15 +178,34 @@ fn read_original(
 	filename: &str,
 	deadline: Instant,
 ) -> Result<Entry> {
+	read_original_with_trace(archive, directory, filename, deadline, &mut UntracedContent)
+}
+
+fn read_original_with_trace(
+	archive: &Archive,
+	directory: &File,
+	filename: &str,
+	deadline: Instant,
+	trace: &mut impl ContentTrace,
+) -> Result<Entry> {
+	trace.enter(ContentPhase::Name);
 	live(deadline)?;
 	let raw_id = filename
 		.strip_suffix(".json")
 		.filter(|value| valid_id(value))
 		.ok_or_else(|| anyhow!("invalid request metadata filename"))?;
-	archive.fence_record(filename, directory)?;
-	let before = stamp_at(directory, filename)?;
-	let mut file = open_at(directory, filename, libc::O_RDONLY | libc::O_NONBLOCK, 0)?;
+	// Reuse only the owned name representation. Every pre/post namespace,
+	// member and descriptor observation below remains independently fresh.
+	let component = name(filename)?;
+	trace.enter(ContentPhase::NamespaceBefore);
+	archive.fence_record_component(&component, directory)?;
+	trace.enter(ContentPhase::StampBefore);
+	let before = stamp_at_component(directory, &component)?;
+	trace.enter(ContentPhase::Open);
+	let mut file = open_at_component(directory, &component, libc::O_RDONLY | libc::O_NONBLOCK, 0)?;
+	trace.enter(ContentPhase::DescriptorBefore);
 	descriptor_matches(&file, before)?;
+	trace.enter(ContentPhase::Read);
 	let mut bytes = [0u8; MAX_RECORD_BYTES + 1];
 	let mut length = 0;
 	loop {
@@ -88,6 +228,7 @@ fn read_original(
 	if length as u64 != before.length {
 		bail!("archive content length changed");
 	}
+	trace.enter(ContentPhase::Parse);
 	let record: Record = serde_json::from_slice(&bytes[..length])?;
 	if !valid_id(&record.request_id)
 		|| !valid_id(&record.owner)
@@ -96,12 +237,16 @@ fn read_original(
 	{
 		bail!("request audit metadata identity refused");
 	}
+	trace.enter(ContentPhase::DescriptorAfter);
 	descriptor_matches(&file, before)?;
-	if stamp_at(directory, filename)? != before {
+	trace.enter(ContentPhase::StampAfter);
+	if stamp_at_component(directory, &component)? != before {
 		bail!("archive content member changed");
 	}
-	archive.fence_record(filename, directory)?;
+	trace.enter(ContentPhase::NamespaceAfter);
+	archive.fence_record_component(&component, directory)?;
 	live(deadline)?;
+	trace.enter(ContentPhase::Compare);
 	Ok(Entry {
 		record,
 		stamp: before,
@@ -249,58 +394,101 @@ fn verify_members_in_mode(
 			guard,
 		);
 	}
+	if metadata_trace::active() {
+		verify_members_serial(
+			archive,
+			(&rows, &order),
+			view,
+			expected_count,
+			deadline,
+			&mut ContentPhases::new(),
+		)
+	} else {
+		verify_members_serial(
+			archive,
+			(&rows, &order),
+			view,
+			expected_count,
+			deadline,
+			&mut UntracedContent,
+		)
+	}
+}
+
+fn verify_members_serial(
+	archive: &Archive,
+	(rows, order): (
+		&impl ReadableTable<&'static [u8], &'static [u8]>,
+		&impl ReadableTable<&'static [u8], &'static [u8]>,
+	),
+	view: &PendingView,
+	expected_count: u64,
+	deadline: Instant,
+	trace: &mut impl ContentTrace,
+) -> Result<()> {
 	let mut seen_pending = BTreeSet::new();
 	let mut observed = 0u64;
 	archive.walk(|directory, filename, _| {
-		live(deadline)?;
-		let key = original_name(filename)?;
-		// Keep this access guard alive through the full comparison below. No
-		// borrowed ROW escapes this member or the immutable ROWS/ORDER view.
-		let raw = rows.get(key.as_slice())?;
-		let base = raw
-			.as_ref()
-			.map(|raw| ExpectedRow::parse(raw.value()))
-			.transpose()?;
-		if let Some(entry) = &base {
-			let expected_order = entry.order_value()?;
-			if expected_order != key
-				|| order
-					.get(entry.order_key()?.as_slice())?
-					.is_none_or(|value| value.value() != expected_order)
-			{
-				bail!("archive order projection changed");
-			}
-		}
-		// Validate the base before consulting its pending replacement. An
-		// effective terminal row cannot conceal corrupt base bytes or ORDER.
-		let pending = view.entries.get(&key);
-		if pending.is_some() {
-			if !seen_pending.insert(key) {
-				bail!("archive pending identity repeated");
-			}
-		} else if base.is_none() {
-			bail!("archive namespace changed");
-		}
-		let actual = read_original(archive, directory, filename, deadline)?;
-		let matches = match pending {
-			Some(entry) => actual.record == entry.record && actual.stamp == entry.stamp,
-			None => base
+		let result = (|| {
+			live(deadline)?;
+			trace.attempt();
+			trace.enter(ContentPhase::Row);
+			let key = original_name(filename)?;
+			// Keep this access guard alive through the full comparison below. No
+			// borrowed ROW escapes this member or the immutable ROWS/ORDER view.
+			let raw = rows.get(key.as_slice())?;
+			let base = raw
 				.as_ref()
-				.ok_or_else(|| anyhow!("archive namespace changed"))?
-				.matches(&actual)?,
-		};
-		if !matches {
-			bail!("archive full record content changed");
-		}
-		observed = observed
-			.checked_add(1)
-			.ok_or_else(|| anyhow!("archive index count overflow"))?;
-		Ok(())
+				.map(|raw| ExpectedRow::parse(raw.value()))
+				.transpose()?;
+			trace.enter(ContentPhase::Order);
+			if let Some(entry) = &base {
+				let expected_order = entry.order_value()?;
+				if expected_order != key
+					|| order
+						.get(entry.order_key()?.as_slice())?
+						.is_none_or(|value| value.value() != expected_order)
+				{
+					bail!("archive order projection changed");
+				}
+			}
+			// Validate the base before consulting its pending replacement. An
+			// effective terminal row cannot conceal corrupt base bytes or ORDER.
+			trace.enter(ContentPhase::Pending);
+			let pending = view.entries.get(&key);
+			if pending.is_some() {
+				if !seen_pending.insert(key) {
+					bail!("archive pending identity repeated");
+				}
+			} else if base.is_none() {
+				bail!("archive namespace changed");
+			}
+			let actual = read_original_with_trace(archive, directory, filename, deadline, trace)?;
+			let matches = match pending {
+				Some(entry) => actual.record == entry.record && actual.stamp == entry.stamp,
+				None => base
+					.as_ref()
+					.ok_or_else(|| anyhow!("archive namespace changed"))?
+					.matches(&actual)?,
+			};
+			if !matches {
+				bail!("archive full record content changed");
+			}
+			observed = observed
+				.checked_add(1)
+				.ok_or_else(|| anyhow!("archive index count overflow"))?;
+			trace.verified();
+			Ok(())
+		})();
+		trace.enter(ContentPhase::Walk);
+		result
 	})?;
 	if observed != expected_count || seen_pending.len() != view.entries.len() {
 		bail!("archive content view coverage changed");
 	}
-	live(deadline)
+	live(deadline)?;
+	trace.complete();
+	Ok(())
 }
 
 const ORIGINAL_READ_WORKERS: usize = 2;
