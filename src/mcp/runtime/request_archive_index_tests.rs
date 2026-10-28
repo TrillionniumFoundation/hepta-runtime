@@ -4,6 +4,816 @@
 //! Index correctness across publication, corruption, cold validation and deadlines.
 use super::*;
 
+#[cfg(target_os = "linux")]
+fn shared_test_request(owner: &str, after_id: Option<String>) -> SharedPageRequest {
+	SharedPageRequest {
+		owner: owner.to_owned(),
+		after_id,
+		limit: 32,
+	}
+}
+
+#[cfg(target_os = "linux")]
+fn shared_test_isolation(fixture: &PausedLargeView) -> AuditStoreGuard<'static> {
+	let guard = store_lock().unwrap();
+	// Older tests are not all serial_test participants. Re-warm only this
+	// fixture after acquiring real writer custody, closing the interval in
+	// which another root could legitimately evict its bounded hot-cache entry.
+	let hot = open_store(fixture.root.path()).unwrap();
+	let records = entries(&hot).unwrap();
+	cache_hot(&hot, &records).unwrap();
+	guard
+}
+
+#[cfg(target_os = "linux")]
+fn shared_test_entry(fixture: &PausedLargeView) -> Entry {
+	let transaction = fixture.database.begin_read().unwrap();
+	let rows = transaction.open_table(ROWS).unwrap();
+	let (_, value) = rows.first().unwrap().unwrap();
+	codec::decode(value.value()).unwrap()
+}
+
+#[cfg(target_os = "linux")]
+fn shared_test_image(path: &Path) -> (Vec<u8>, [u64; 10]) {
+	let metadata = std::fs::symlink_metadata(path).unwrap();
+	(
+		std::fs::read(path).unwrap(),
+		[
+			metadata.dev(),
+			metadata.ino(),
+			metadata.len(),
+			metadata.mode() as u64,
+			metadata.uid() as u64,
+			metadata.nlink(),
+			metadata.mtime() as u64,
+			metadata.mtime_nsec() as u64,
+			metadata.ctime() as u64,
+			metadata.ctime_nsec() as u64,
+		],
+	)
+}
+
+#[cfg(target_os = "linux")]
+fn shared_test_scan_counter(slot: &Slot) -> Arc<AtomicUsize> {
+	let count = Arc::new(AtomicUsize::new(0));
+	let observed = count.clone();
+	*slot.parallel_hook.lock().unwrap() = Some(Arc::new(move |event| {
+		if event == ParallelEvent::SharedScanStarted {
+			observed.fetch_add(1, Ordering::SeqCst);
+		}
+	}));
+	count
+}
+
+#[cfg(target_os = "linux")]
+#[derive(Debug, PartialEq, Eq)]
+struct SharedDatabaseImage {
+	rows: Vec<(Vec<u8>, Vec<u8>)>,
+	order: Vec<(Vec<u8>, Vec<u8>)>,
+	ids: Vec<(Vec<u8>, u8)>,
+	counts: Vec<(Vec<u8>, u64)>,
+	meta: Vec<(String, Vec<u8>)>,
+}
+
+#[cfg(target_os = "linux")]
+fn shared_test_database_image(read: &redb::ReadTransaction) -> SharedDatabaseImage {
+	SharedDatabaseImage {
+		rows: read
+			.open_table(ROWS)
+			.unwrap()
+			.iter()
+			.unwrap()
+			.map(|row| {
+				let (key, value) = row.unwrap();
+				(key.value().to_vec(), value.value().to_vec())
+			})
+			.collect(),
+		order: read
+			.open_table(ORDER)
+			.unwrap()
+			.iter()
+			.unwrap()
+			.map(|row| {
+				let (key, value) = row.unwrap();
+				(key.value().to_vec(), value.value().to_vec())
+			})
+			.collect(),
+		ids: read
+			.open_table(IDS)
+			.unwrap()
+			.iter()
+			.unwrap()
+			.map(|row| {
+				let (key, value) = row.unwrap();
+				(key.value().to_vec(), value.value())
+			})
+			.collect(),
+		counts: read
+			.open_table(COUNTS)
+			.unwrap()
+			.iter()
+			.unwrap()
+			.map(|row| {
+				let (key, value) = row.unwrap();
+				(key.value().to_vec(), value.value())
+			})
+			.collect(),
+		meta: read
+			.open_table(META)
+			.unwrap()
+			.iter()
+			.unwrap()
+			.map(|row| {
+				let (key, value) = row.unwrap();
+				(key.value().to_owned(), value.value().to_vec())
+			})
+			.collect(),
+	}
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[serial_test::serial]
+fn shared_reader_keeps_its_logical_epoch_across_an_empty_durable_checkpoint() {
+	let fixture = PausedLargeView::new();
+	let isolation = shared_test_isolation(&fixture);
+	let gate = Arc::new(AuditStoreLock::default());
+	let original_entry = shared_test_entry(&fixture);
+	let original = fixture
+		.root
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!("{}.json", original_entry.record.request_id));
+	let image = shared_test_image(&original);
+	let pending = fixture.pending_image();
+	let logical = shared_test_database_image(&fixture.database.begin_read().unwrap());
+	let (started_send, started_receive) = std::sync::mpsc::channel();
+	let release = Arc::new((Mutex::new(false), Condvar::new()));
+	let released = release.clone();
+	let database = fixture.database.clone();
+	let held_view_unchanged = Arc::new(AtomicBool::new(false));
+	let unchanged = held_view_unchanged.clone();
+	*fixture.slot.parallel_hook.lock().unwrap() = Some(Arc::new(move |event| {
+		if event == ParallelEvent::SharedScanStarted {
+			// A real immutable redb transaction stays live across the real
+			// durable empty commit; neither fixture State nor a write slot is held.
+			let read = database.begin_read().unwrap();
+			let before = shared_test_database_image(&read);
+			let _ = started_send.send(());
+			let (lock, changed) = &*released;
+			let mut ready = lock.lock().unwrap();
+			while !*ready {
+				let (next, timeout) = changed
+					.wait_timeout(ready, Duration::from_secs(15))
+					.unwrap();
+				ready = next;
+				if timeout.timed_out() {
+					break;
+				}
+			}
+			unchanged.store(
+				shared_test_database_image(&read) == before,
+				Ordering::SeqCst,
+			);
+		}
+	}));
+	let root = fixture.root.path().to_owned();
+	let owner = fixture.owner.clone();
+	let reader_gate = gate.clone();
+	let reader = std::thread::spawn(move || {
+		try_shared_pages_with_gate(
+			&root,
+			&[shared_test_request(&owner, None)],
+			Instant::now() + Duration::from_secs(20),
+			&reader_gate,
+		)
+	});
+	let began = started_receive.recv_timeout(Duration::from_secs(5));
+	let state_was_free = fixture.slot.state.try_lock().is_ok();
+	let (committed_send, committed_receive) = std::sync::mpsc::channel();
+	let database = fixture.database.clone();
+	let checkpoint = std::thread::spawn(move || {
+		let _ = committed_send.send(apply(&database, std::iter::empty(), None, true));
+	});
+	let committed_while_read_was_held = committed_receive.recv_timeout(Duration::from_secs(5));
+	{
+		let (lock, changed) = &*release;
+		*lock.lock().unwrap() = true;
+		changed.notify_all();
+	}
+	// Release the held transaction and join both owners even if begin/commit
+	// failed or timed out. A regression must not leak a blocked cache writer.
+	let read_result = reader.join();
+	let checkpoint_result = checkpoint.join();
+	*fixture.slot.parallel_hook.lock().unwrap() = None;
+	let after = shared_test_database_image(&fixture.database.begin_read().unwrap());
+	let same_original = shared_test_image(&original) == image;
+	let same_pending = fixture.pending_image() == pending;
+	drop(isolation);
+	began.unwrap();
+	checkpoint_result.unwrap();
+	committed_while_read_was_held.unwrap().unwrap();
+	assert!(state_was_free);
+	assert!(held_view_unchanged.load(Ordering::SeqCst));
+	assert_eq!(after, logical);
+	assert!(same_original && same_pending);
+	assert_audit_store_idle(&gate);
+	let page = read_result.unwrap().unwrap().unwrap();
+	assert!(page.values.into_iter().all(|value| value.is_ok()));
+	// Physical redb allocator/checkpoint bytes may change; the assertion is
+	// deliberately about the immutable logical tables and authoritative files.
+}
+
+#[cfg(target_os = "linux")]
+fn shared_test_intent(fixture: &PausedLargeView) -> std::path::PathBuf {
+	let root = fixture.slot.archive.root().metadata().unwrap();
+	let legacy = fixture.slot.archive.legacy().metadata().unwrap();
+	let path = fixture.root.path().join(archive_store::SHARD_INTENT);
+	let mut file = std::fs::OpenOptions::new()
+		.write(true)
+		.create_new(true)
+		.mode(0o600)
+		.open(&path)
+		.unwrap();
+	file.write_all(
+		&serde_json::to_vec(&json!({
+			"format": 12,
+			"root": [root.dev(), root.ino()],
+			"legacy": [legacy.dev(), legacy.ino()],
+			"archive": null,
+			"shards": [],
+		}))
+		.unwrap(),
+	)
+	.unwrap();
+	file.sync_all().unwrap();
+	path
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[serial_test::serial]
+fn shared_large_snapshots_overlap_without_holding_state_or_writing_cache() {
+	let fixture = PausedLargeView::new();
+	// serial_test alone does not isolate older, unannotated store tests. Hold
+	// their real gate after fixture preparation and exercise the complete same
+	// production body on one private gate, so an unrelated FIFO writer cannot
+	// prevent the second reader from reaching this overlap barrier.
+	let isolation = shared_test_isolation(&fixture);
+	let gate = Arc::new(AuditStoreLock::default());
+	let cache = fixture.cache_bytes();
+	let before = fixture.pending_image();
+	let entry = shared_test_entry(&fixture);
+	let original = fixture
+		.root
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!("{}.json", entry.record.request_id));
+	let image = shared_test_image(&original);
+	let (entered_send, entered_receive) = std::sync::mpsc::channel();
+	let release = Arc::new((Mutex::new(false), Condvar::new()));
+	let released = release.clone();
+	*fixture.slot.parallel_hook.lock().unwrap() = Some(Arc::new(move |event| {
+		if event == ParallelEvent::SharedScanStarted {
+			let _ = entered_send.send(());
+			let (lock, changed) = &*released;
+			let mut ready = lock.lock().unwrap();
+			while !*ready {
+				let (next, timeout) = changed
+					.wait_timeout(ready, Duration::from_secs(15))
+					.unwrap();
+				ready = next;
+				if timeout.timed_out() {
+					break;
+				}
+			}
+		}
+	}));
+	let deadline = Instant::now() + Duration::from_secs(20);
+	let mut readers = Vec::new();
+	for _ in 0..2 {
+		let root = fixture.root.path().to_owned();
+		let owner = fixture.owner.clone();
+		let gate = gate.clone();
+		readers.push(std::thread::spawn(move || {
+			try_shared_pages_with_gate(&root, &[shared_test_request(&owner, None)], deadline, &gate)
+		}));
+	}
+	let first = entered_receive.recv_timeout(Duration::from_secs(5));
+	let second = entered_receive.recv_timeout(Duration::from_secs(5));
+	let state_was_free = fixture.slot.state.try_lock().is_ok();
+	let simultaneous = gate.queue.lock().unwrap().readers;
+	{
+		let (lock, changed) = &*release;
+		*lock.lock().unwrap() = true;
+		changed.notify_all();
+	}
+	// Always release and join both workers, remove the hook and release the
+	// global isolation guard before any assertion about the overlapping run.
+	let results: Vec<_> = readers.into_iter().map(|reader| reader.join()).collect();
+	*fixture.slot.parallel_hook.lock().unwrap() = None;
+	let same_cache = fixture.cache_bytes() == cache;
+	let same_pending = fixture.pending_image() == before;
+	let same_original = shared_test_image(&original) == image;
+	drop(isolation);
+	assert!(first.is_ok() && second.is_ok());
+	assert_eq!(simultaneous, 2);
+	assert!(state_was_free);
+	assert!(same_cache && same_pending && same_original);
+	assert_audit_store_idle(&gate);
+	for result in results {
+		let observed = result.unwrap().unwrap().unwrap();
+		let value: Value =
+			serde_json::from_str(&observed.values.into_iter().next().unwrap().unwrap()).unwrap();
+		assert_eq!(value["total"], 1);
+		assert_eq!(value["requests"][0]["request_id"], entry.record.request_id);
+	}
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[serial_test::serial]
+fn shared_preflight_misses_preserve_pending_busy_and_unavailable_epochs() {
+	for case in 0..10 {
+		let fixture = PausedLargeView::new();
+		let isolation = shared_test_isolation(&fixture);
+		let gate = AuditStoreLock::default();
+		let entry = shared_test_entry(&fixture);
+		let cache = fixture.cache_bytes();
+		let count = shared_test_scan_counter(&fixture.slot);
+		match case {
+			0 => fixture.slot.state.lock().unwrap().busy = true,
+			1 => {
+				fixture
+					.slot
+					.state
+					.lock()
+					.unwrap()
+					.pending
+					.insert(id(&entry.record.request_id).unwrap(), entry.clone());
+			}
+			2 => fixture.slot.state.lock().unwrap().generation += 1,
+			3 => fixture.slot.state.lock().unwrap().version = None,
+			4 => fixture.slot.state.lock().unwrap().large_archive = false,
+			5 => fixture.slot.state.lock().unwrap().database = None,
+			6 => fixture.slot.state.lock().unwrap().failed = true,
+			7 => fixture.slot.state.lock().unwrap().retired = true,
+			8 => {
+				let hot = open_store(fixture.root.path()).unwrap();
+				let stamp = archive_stamp(&hot).unwrap();
+				HOT_CACHE
+					.get()
+					.unwrap()
+					.lock()
+					.unwrap()
+					.retain(|entry| entry.stamp != stamp);
+			}
+			_ => INDEXES
+				.get()
+				.unwrap()
+				.lock()
+				.unwrap()
+				.retain(|slot| !Arc::ptr_eq(slot, &fixture.slot)),
+		}
+		let pending = fixture.pending_image();
+		let result = try_shared_pages_with_gate(
+			fixture.root.path(),
+			&[shared_test_request(&fixture.owner, None)],
+			Instant::now() + Duration::from_secs(10),
+			&gate,
+		);
+		let unchanged = fixture.pending_image() == pending && fixture.cache_bytes() == cache;
+		*fixture.slot.parallel_hook.lock().unwrap() = None;
+		drop(isolation);
+		assert!(matches!(result, Ok(None)), "shared preflight case {case}");
+		assert!(unchanged);
+		assert_eq!(count.load(Ordering::SeqCst), 0);
+		assert_audit_store_idle(&gate);
+	}
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[serial_test::serial]
+fn shared_cursors_keep_owner_and_missing_refusals_local() {
+	let fixture = PausedLargeView::new();
+	let isolation = shared_test_isolation(&fixture);
+	let gate = AuditStoreLock::default();
+	let entry = shared_test_entry(&fixture);
+	let count = shared_test_scan_counter(&fixture.slot);
+	let requests = [
+		shared_test_request(&fixture.owner, None),
+		shared_test_request(&fixture.owner, Some(entry.record.request_id.clone())),
+		shared_test_request(&"b".repeat(64), Some(entry.record.request_id.clone())),
+		shared_test_request(&fixture.owner, Some("f".repeat(64))),
+	];
+	let observed = try_shared_pages_with_gate(
+		fixture.root.path(),
+		&requests,
+		Instant::now() + Duration::from_secs(10),
+		&gate,
+	);
+	let refused = try_shared_pages_with_gate(
+		fixture.root.path(),
+		&requests[2..],
+		Instant::now() + Duration::from_secs(10),
+		&gate,
+	);
+	*fixture.slot.parallel_hook.lock().unwrap() = None;
+	drop(isolation);
+	let observed = observed.unwrap().unwrap();
+	assert_eq!(observed.values.len(), 4);
+	let mut values = observed.values.into_iter();
+	let first: Value = serde_json::from_str(&values.next().unwrap().unwrap()).unwrap();
+	let after: Value = serde_json::from_str(&values.next().unwrap().unwrap()).unwrap();
+	assert_eq!(first["requests"].as_array().unwrap().len(), 1);
+	assert_eq!(after["requests"].as_array().unwrap().len(), 0);
+	assert!(values.next().unwrap().is_err());
+	assert!(values.next().unwrap().is_err());
+	let refused = refused.unwrap().unwrap();
+	assert!(!refused.large);
+	assert!(refused.values.into_iter().all(|value| value.is_err()));
+	assert_eq!(count.load(Ordering::SeqCst), 1);
+	assert_audit_store_idle(&gate);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[serial_test::serial]
+fn shared_cursor_recovery_handoff_preserves_staging_and_original_bytes() {
+	for deterministic in [true, false] {
+		let fixture = PausedLargeView::new();
+		let isolation = shared_test_isolation(&fixture);
+		let gate = AuditStoreLock::default();
+		let entry = shared_test_entry(&fixture);
+		let request_id = &entry.record.request_id;
+		let original = fixture
+			.root
+			.path()
+			.join(ARCHIVE_NAME)
+			.join(format!("{request_id}.json"));
+		let nonce = if deterministic {
+			request_id.clone()
+		} else {
+			"e".repeat(64)
+		};
+		let staging = fixture
+			.root
+			.path()
+			.join(ARCHIVE_NAME)
+			.join(format!(".{request_id}-{nonce}.tmp"));
+		std::fs::hard_link(&original, &staging).unwrap();
+		// Isolate the cursor recovery classification from the earlier watch
+		// cache-miss branch. This fixture does not certify the altered row stamp.
+		fixture.slot.state.lock().unwrap().version =
+			content_version(&fixture.slot.archive).unwrap();
+		let before = shared_test_image(&original);
+		let staged = shared_test_image(&staging);
+		let count = shared_test_scan_counter(&fixture.slot);
+		let result = try_shared_pages_with_gate(
+			fixture.root.path(),
+			&[shared_test_request(
+				&fixture.owner,
+				Some(request_id.clone()),
+			)],
+			Instant::now() + Duration::from_secs(10),
+			&gate,
+		);
+		let preserved =
+			shared_test_image(&original) == before && shared_test_image(&staging) == staged;
+		*fixture.slot.parallel_hook.lock().unwrap() = None;
+		// The original recovery reader still owns the real exclusive guard.
+		// Do not claim that this paused test worker rebuilt its disposable DB.
+		let recovered = fixture
+			.slot
+			.archive
+			.read_record(&format!("{request_id}.json"));
+		let removed = !staging.exists();
+		drop(isolation);
+		assert!(matches!(result, Ok(None)));
+		assert!(preserved && removed);
+		assert!(recovered.unwrap() == entry.record);
+		assert_eq!(count.load(Ordering::SeqCst), 0);
+		assert_audit_store_idle(&gate);
+	}
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[serial_test::serial]
+fn shared_cursor_corruption_is_terminal_before_a_later_recovery_handoff() {
+	let fixture = PausedLargeView::new();
+	let first = shared_test_entry(&fixture);
+	let ticket = begin_at(fixture.root.path(), &fixture.owner, "file_info").unwrap();
+	let second = ticket.request_id().to_owned();
+	finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	fixture.flush_worker();
+	let isolation = shared_test_isolation(&fixture);
+	let gate = AuditStoreLock::default();
+	let corrupt = fixture
+		.root
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!("{}.json", first.record.request_id));
+	let original = fixture
+		.root
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!("{second}.json"));
+	let staging = fixture
+		.root
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!(".{second}-{second}.tmp"));
+	std::fs::write(&corrupt, b"{invalid original").unwrap();
+	std::fs::hard_link(&original, &staging).unwrap();
+	fixture.slot.state.lock().unwrap().version = content_version(&fixture.slot.archive).unwrap();
+	let damaged = shared_test_image(&corrupt);
+	let staged = shared_test_image(&staging);
+	let count = shared_test_scan_counter(&fixture.slot);
+	let result = try_shared_pages_with_gate(
+		fixture.root.path(),
+		&[
+			shared_test_request(&fixture.owner, Some(first.record.request_id)),
+			shared_test_request(&fixture.owner, Some(second)),
+		],
+		Instant::now() + Duration::from_secs(10),
+		&gate,
+	);
+	let preserved = shared_test_image(&corrupt) == damaged && shared_test_image(&staging) == staged;
+	*fixture.slot.parallel_hook.lock().unwrap() = None;
+	drop(isolation);
+	assert!(result.is_err());
+	assert!(preserved);
+	assert_eq!(count.load(Ordering::SeqCst), 0);
+	assert_audit_store_idle(&gate);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[serial_test::serial]
+fn shared_final_snapshot_refuses_each_changed_logical_epoch() {
+	for case in 0..9 {
+		let fixture = PausedLargeView::new();
+		let isolation = shared_test_isolation(&fixture);
+		let gate = AuditStoreLock::default();
+		let entry = shared_test_entry(&fixture);
+		let replacement_file = std::fs::OpenOptions::new()
+			.read(true)
+			.write(true)
+			.create_new(true)
+			.mode(0o600)
+			.open(fixture.root.path().join("unrelated-shared-test.redb"))
+			.unwrap();
+		let replacement =
+			Arc::new(database(replacement_file, Instant::now() + Duration::from_secs(10)).unwrap());
+		let weak = Arc::downgrade(&fixture.slot);
+		*fixture.slot.parallel_hook.lock().unwrap() = Some(Arc::new(move |event| {
+			if event == ParallelEvent::BeforeSnapshotFence {
+				let slot = weak.upgrade().unwrap();
+				let mut state = slot.state.lock().unwrap();
+				match case {
+					0 => state.generation += 1,
+					1 => state.applied += 1,
+					2 => state.version = None,
+					3 => state.database = Some(replacement.clone()),
+					4 => state.busy = true,
+					5 => {
+						state
+							.pending
+							.insert(id(&entry.record.request_id).unwrap(), entry.clone());
+					}
+					6 => invalidate(&mut state),
+					7 => state.retired = true,
+					_ => state.large_archive = false,
+				}
+			}
+		}));
+		let result = try_shared_pages_with_gate(
+			fixture.root.path(),
+			&[shared_test_request(&fixture.owner, None)],
+			Instant::now() + Duration::from_secs(10),
+			&gate,
+		);
+		*fixture.slot.parallel_hook.lock().unwrap() = None;
+		drop(isolation);
+		assert!(result.is_err(), "changed shared token case {case}");
+		assert_audit_store_idle(&gate);
+	}
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[serial_test::serial]
+fn shared_projection_refuses_late_staging_without_recovery_or_success() {
+	for deterministic in [true, false] {
+		let fixture = PausedLargeView::new();
+		let isolation = shared_test_isolation(&fixture);
+		let gate = AuditStoreLock::default();
+		let entry = shared_test_entry(&fixture);
+		let request_id = &entry.record.request_id;
+		let original = fixture
+			.root
+			.path()
+			.join(ARCHIVE_NAME)
+			.join(format!("{request_id}.json"));
+		let bytes = std::fs::read(&original).unwrap();
+		let nonce = if deterministic {
+			request_id.clone()
+		} else {
+			"e".repeat(64)
+		};
+		let staging = fixture
+			.root
+			.path()
+			.join(ARCHIVE_NAME)
+			.join(format!(".{request_id}-{nonce}.tmp"));
+		let staged = staging.clone();
+		let source = original.clone();
+		let reached = Arc::new(AtomicUsize::new(0));
+		let observed = reached.clone();
+		*fixture.slot.parallel_hook.lock().unwrap() = Some(Arc::new(move |event| {
+			if event == ParallelEvent::SharedScanComplete {
+				std::fs::hard_link(&source, &staged).unwrap();
+				observed.fetch_add(1, Ordering::SeqCst);
+			}
+		}));
+		let result = try_shared_pages_with_gate(
+			fixture.root.path(),
+			&[shared_test_request(&fixture.owner, None)],
+			Instant::now() + Duration::from_secs(10),
+			&gate,
+		);
+		*fixture.slot.parallel_hook.lock().unwrap() = None;
+		let preserved = staging.exists()
+			&& std::fs::read(&staging).unwrap() == bytes
+			&& std::fs::read(&original).unwrap() == bytes;
+		drop(isolation);
+		assert!(result.is_err());
+		assert_eq!(reached.load(Ordering::SeqCst), 1);
+		assert!(preserved);
+		assert_audit_store_idle(&gate);
+	}
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[serial_test::serial]
+fn shared_flat_layout_intent_is_preserved_for_the_original_exclusive_open() {
+	let fixture = PausedLargeView::new();
+	let isolation = shared_test_isolation(&fixture);
+	let gate = AuditStoreLock::default();
+	let entry = shared_test_entry(&fixture);
+	let original = fixture
+		.root
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!("{}.json", entry.record.request_id));
+	let image = shared_test_image(&original);
+	let intent = shared_test_intent(&fixture);
+	let control = shared_test_image(&intent);
+	let deadline = Instant::now() + Duration::from_secs(20);
+	let count = shared_test_scan_counter(&fixture.slot);
+	let result = try_shared_pages_with_gate(
+		fixture.root.path(),
+		&[shared_test_request(&fixture.owner, None)],
+		deadline,
+		&gate,
+	);
+	let preserved = shared_test_image(&intent) == control && shared_test_image(&original) == image;
+	*fixture.slot.parallel_hook.lock().unwrap() = None;
+	drop(isolation);
+	// Exercise the original exclusive open/hot recovery, without pretending
+	// that this deliberately paused cache worker can rebuild its new watch set.
+	let recovered = {
+		let _guard = query_lock(deadline).unwrap();
+		let hot = open_store(fixture.root.path()).unwrap();
+		hot_snapshot(fixture.root.path(), &hot)
+	};
+	assert!(matches!(result, Ok(None)));
+	assert!(preserved);
+	assert!(recovered.is_ok());
+	assert!(!intent.exists());
+	assert!(fixture.root.path().join(archive_store::SHARD_ROOT).is_dir());
+	assert_eq!(shared_test_image(&original), image);
+	assert_eq!(count.load(Ordering::SeqCst), 0);
+	assert_audit_store_idle(&gate);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[serial_test::serial]
+fn shared_flat_layout_controls_handoff_before_scan_and_original_path_refuses_damage() {
+	for control in [
+		archive_store::SHARD_ANCHOR,
+		archive_store::SHARD_INTENT,
+		archive_store::SHARD_ROOT,
+	] {
+		let fixture = PausedLargeView::new();
+		let isolation = shared_test_isolation(&fixture);
+		let gate = AuditStoreLock::default();
+		let entry = shared_test_entry(&fixture);
+		let original = fixture
+			.root
+			.path()
+			.join(ARCHIVE_NAME)
+			.join(format!("{}.json", entry.record.request_id));
+		let image = shared_test_image(&original);
+		let path = fixture.root.path().join(control);
+		let was_clean = !fixture.slot.archive.needs_exclusive_open().unwrap();
+		if control == archive_store::SHARD_ROOT {
+			std::fs::create_dir(&path).unwrap();
+			std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+			std::fs::write(path.join("retained-original-evidence"), b"retain").unwrap();
+		} else {
+			let mut file = std::fs::OpenOptions::new()
+				.write(true)
+				.create_new(true)
+				.mode(0o600)
+				.open(&path)
+				.unwrap();
+			file.write_all(b"{invalid control").unwrap();
+		}
+		let late_fence = fixture.slot.archive.fence_at(fixture.slot.archive.root());
+		let count = shared_test_scan_counter(&fixture.slot);
+		let deadline = Instant::now() + Duration::from_secs(20);
+		let result = try_shared_pages_with_gate(
+			fixture.root.path(),
+			&[shared_test_request(&fixture.owner, None)],
+			deadline,
+			&gate,
+		);
+		*fixture.slot.parallel_hook.lock().unwrap() = None;
+		drop(isolation);
+		let original_result = archive_batch::run(
+			fixture.root.path(),
+			&fixture.owner,
+			RequestHistoryParams {
+				after_id: None,
+				limit: Some(32),
+			},
+			deadline,
+		);
+		assert!(was_clean && late_fence.is_err());
+		assert!(matches!(result, Ok(None)));
+		assert!(original_result.is_err());
+		assert_eq!(count.load(Ordering::SeqCst), 0);
+		assert_eq!(shared_test_image(&original), image);
+		if control == archive_store::SHARD_ROOT {
+			assert_eq!(
+				std::fs::read(path.join("retained-original-evidence")).unwrap(),
+				b"retain"
+			);
+		} else {
+			assert_eq!(std::fs::read(path).unwrap(), b"{invalid control");
+		}
+		assert_audit_store_idle(&gate);
+	}
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[serial_test::serial]
+fn shared_loaded_layout_refusal_is_terminal_without_recovery_handoff() {
+	let fixture = PausedLargeView::new();
+	let isolation = shared_test_isolation(&fixture);
+	let gate = AuditStoreLock::default();
+	let intent = shared_test_intent(&fixture);
+	let hot = open_store(fixture.root.path()).unwrap();
+	hot_snapshot(fixture.root.path(), &hot).unwrap();
+	assert!(!intent.exists());
+	assert!(!fixture.slot.archive.needs_exclusive_open().unwrap());
+	fixture.slot.state.lock().unwrap().version = content_version(&fixture.slot.archive).unwrap();
+	let mut control = std::fs::OpenOptions::new()
+		.write(true)
+		.create_new(true)
+		.mode(0o600)
+		.open(&intent)
+		.unwrap();
+	control.write_all(b"reappeared intent must remain").unwrap();
+	let before = shared_test_image(&intent);
+	let count = shared_test_scan_counter(&fixture.slot);
+	let result = try_shared_pages_with_gate(
+		fixture.root.path(),
+		&[shared_test_request(&fixture.owner, None)],
+		Instant::now() + Duration::from_secs(10),
+		&gate,
+	);
+	let classified_loaded = !fixture.slot.archive.needs_exclusive_open().unwrap();
+	let preserved = shared_test_image(&intent) == before;
+	*fixture.slot.parallel_hook.lock().unwrap() = None;
+	drop(isolation);
+	assert!(classified_loaded && preserved);
+	let error = result
+		.err()
+		.expect("loaded-layout refusal must be terminal");
+	assert!(error
+		.to_string()
+		.contains("initialization intent reappeared"));
+	assert_eq!(count.load(Ordering::SeqCst), 0);
+	assert_audit_store_idle(&gate);
+}
+
 #[test]
 fn parallel_original_publication_keeps_the_exact_watch_and_generation_fence() {
 	let (root, owner) = fixture();
@@ -207,6 +1017,7 @@ fn wait_for_audit_store_waiters(lock: &AuditStoreLock, expected: usize) {
 fn assert_audit_store_idle(lock: &AuditStoreLock) {
 	let queue = lock.queue.lock().unwrap();
 	assert!(!queue.active);
+	assert_eq!(queue.readers, 0);
 	assert!(queue.waiting.is_empty());
 }
 

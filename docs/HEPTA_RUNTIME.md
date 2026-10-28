@@ -50,8 +50,10 @@ HTTP mode requires a high-entropy token file; every `/mcp` request must carry
 ### Durable process tools
 
 - `process_start`: explicit host, executable, argv, cwd, environment, optional
-  stdin, timeout and resource limits. An idempotency key binds to one exact
-  request and prevents accidental duplicate starts.
+  stdin, timeout and resource limits. A nonblank **required** `idempotency_key`
+  (at most 256 bytes) binds to one exact request. Retrying with the same host,
+  key and request reconciles the original job rather than starting a duplicate;
+  changing the payload under the same key fails closed.
 - `process_status`: authoritative remote state.
 - `process_read`: independent stdout/stderr byte offsets, bounded pagination.
 - `process_wait`: bounded wait, never a new process.
@@ -67,6 +69,20 @@ hides controller state/credentials and user homes, uses a private network by
 default, and grants write access only to the workspace and its own result data.
 The independent aggregate job slice limits CPU, memory and task counts.
 
+Controller startup acquires a nonblocking OS-level exclusive lock on
+both `controller.lock` and `controller.owner.lock` inside its canonical,
+non-world-writable state directory. Holding the legacy lock also fences an
+older controller that only recognizes that filename.
+A second controller using that state refuses startup, including after tunnel
+reconnects; the lock lasts for the owning process and is released on exit.
+State directories on network filesystems need separately qualified locking
+semantics and are not assumed safe merely because the file exists.
+
+A controller restart does not terminate durable jobs. A remote host reboot is
+not claimed as process recovery in v0.1: logs and metadata remain, but an
+in-flight transient unit is reported lost unless the application itself has a
+separate restart policy.
+
 Root-owned records bind the job ID, full SHA-256 request digest, boot ID, random
 nonce, unit name and systemd invocation identity. New idempotent requests bind
 all 256 bits; legacy controller records remain readable but cannot silently
@@ -80,14 +96,43 @@ does **not** provide Linux namespace/DynamicUser isolation; administrators must
 explicitly enable its fallback/network policy.
 
 A controller-side `launch_failed` record means the launch acknowledgement failed,
-not proof that no target process exists. A retry reuses the exact root-owned
-job ID and request digest; the root helper resolves an existing record instead
-of issuing a second execution. Status errors are reported explicitly rather
-than fabricated as success. Never retry an uncertain job under a new key.
+not proof that no target process exists. Pending and failed acknowledgements
+remain indeterminate and never authorize another launch. Reconcile the exact
+original job ID and full request digest; status errors are reported explicitly.
+Never retry an uncertain effect under a new key.
 
-A controller restart does not terminate durable jobs. A remote host reboot does not resume a running workload: completed results and
-logs remain readable, while in-flight transient jobs become lost. Application
-checkpoint/restart policy is outside this runtime.
+Duplicate entries in the durable controller store with the same host and
+idempotency key are treated as conflicting owners even when their request
+payloads appear identical. Recovery refuses automatic reuse and requires
+manual reconciliation of each possible effect; selecting the oldest receipt
+would silently discard evidence of a second launch.
+
+The controller state-directory owner lock already serializes processes that
+share one canonical local state directory. In-process start lock sharding does
+not create distributed single-writer authority: controllers with separate
+state directories pointing to one SSH host remain a distinct deployment
+blocker and must not be promoted as a multi-controller configuration.
+
+A duplicate `process_start` is observation-only after a stored `launched`
+acknowledgement. Persisted `pending` and `launch_failed` rows remain
+**indeterminate** and cannot dispatch a second remote launch, even if a prior
+remote directory was erased or the target was rebooted. The operator must
+reconcile exact original effect evidence; the runtime never treats remote
+metadata absence as proof that a command did not execute.
+
+Durable job observations remain bound to the SSH target and remote job root
+recorded at original admission. If an administrator remaps a configured host
+alias to another target or remote state directory, existing job launch retries,
+status/wait, log reads and cancellations fail closed; manually reconcile the
+original remote operation rather than following the changed alias. This guard
+does not attest changes to DNS or OpenSSH alias resolution on its own: retain
+strict host-key verification and independently qualify host identity.
+Remote status/wait, stdout/stderr reads and cancellations additionally require the
+remote request.json to match the locally persisted job ID, unit, job directory
+and full 64-character SHA-256 request digest. A legacy job record lacking this
+binding remains listable for manual reconciliation, but cannot drive a remote
+observer or cancellation. A matching digest is not independent remote-host
+attestation; separate host identity and terminal-effect acceptance remain required.
 
 ### PTY tools
 
@@ -113,6 +158,24 @@ arguments are accepted, and a timeout. The runtime invokes it through
 `sudo -n`. Do not configure `/bin/sh`, `/usr/bin/env`, interpreters, package
 managers, general-purpose file tools, or a wrapper accepting arbitrary shell
 text as a privileged action.
+
+Each \`privileged_action\` request must also include a nonblank caller-stable
+\`idempotency_key\` (at most 256 bytes). The controller durably enters the
+policy-resolved executable, arguments and timeout before any remote SSH effect.
+An observed result is cached for same-key retries; a lost acknowledgement remains
+\`indeterminate\` and MUST be reconciled, never automatically re-executed.
+Changing the action or payload under the same key is rejected. The V2 intent
+also binds the configured SSH target string: if a host alias is administratively
+remapped, an old successful result cannot be reused as evidence for the new target.
+V1 intent records are not automatically upgraded, replayed, or counted as V2 success;
+they require independent operator reconciliation. This string binding does **not**
+attest the physical host or protect against underlying DNS/SSH configuration changes
+without separately checked server host keys and target identity.
+This bounded
+no-blind-replay mechanism does not make arbitrary sudo operations transactional,
+does not prevent distinct authorized keys from invoking the same named action,
+and is **not** an independently signed Hepta Final-use grant. Production activation
+still requires issuer/revocation/generation binding and target-host fault tests.
 
 ## Policy boundary
 
@@ -222,8 +285,40 @@ deleted automatically. Inspect or archive them before removal.
 - Jobs may alter their own workspace/output; outputs are not a proof of trusted
   computation. Audit records are not cryptographic attestations.
 - No GUI capture or desktop input API is included in v0.1.
-- Hardware includes raw values and normalized C/W/RPM/Hz readings, unavailable
-  readings are null, and power-limit requests are not sustained-power evidence.
+- Hardware includes raw kernel fields and normalized C/W/RPM/Hz readings.
+  Preserve field names and units; unavailable readings are null and requested
+  power limits are not sustained-power evidence.
+
+### No-follow remote observation and cancellation (source-only candidates)
+
+Remote process_read, process_status and process_wait pin the absolute job
+directory component-by-component without following symlinks. Request metadata,
+logs and status state are opened relative to a pinned descriptor, rejecting
+symlinks, hard links, non-regular inodes and corrupt/oversized metadata. The
+request ceiling is 4 MiB and log page ceiling remains 1 MiB. For status and
+cancel, even an optional corrupt exit/launch/started JSON is an error rather
+than silently interpreted as missing terminal evidence.
+
+Remote process_cancel additionally requires the pinned job directory to be
+owned by the executing SSH user and owner-private, verifies the immutable job,
+directory, unit and complete SHA-256 request binding, refuses an unknown launch
+backend, and for a detached supervisor requires a stored process-start identity
+matching the current PID plus the recorded runner command. It rechecks this
+identity before escalating to SIGKILL. Its cancel-request marker is written via
+a no-follow, exclusive temporary inode, fsync and descriptor-relative rename
+only after validating the backend and supervisor identity, preventing a denied
+PID cancellation from leaving a misleading marker. Configure a physical
+absolute remote state root without symlinked path components.
+
+These source changes reduce log/status/cancel path substitution and some
+recycled-PID risks. They do NOT make launch/runner writes, remote control-group
+termination, SFTP physical confinement, DNS/SSH identity, cross-controller
+once-only ownership or credentialed target-host effects race-free. A PID can
+still disappear between identity verification and kill; host-side systemd
+ownership and independent acceptance remain necessary. No independent
+Final-use or production authority is granted. Retain DRAFT / DENY_ALL /
+HOLD_NO_GO until exact-source and prospective-merge Rust gates, real SSH
+negative tests and independent operator/release reviews are complete.
 
 ## Tunnel account binding
 

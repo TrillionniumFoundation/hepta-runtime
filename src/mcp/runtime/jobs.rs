@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::future::Future;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -29,12 +29,15 @@ static AUDIT_LOCK: OnceLock<Mutex<Option<AuditReadiness>>> = OnceLock::new();
 const MAX_OBSERVATION_AUDITS: usize = 8;
 static OBSERVATION_AUDITS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 static REUSE_HITS: OnceLock<Mutex<ReuseHitCache>> = OnceLock::new();
+const MAX_REGISTRY_LOOKUPS: usize = 4;
+static REGISTRY_LOOKUPS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 // Coordinate only this owner process's local metadata reads/publications.
 // Guards remain inside synchronous functions, never across remote awaits.
 static REGISTRY_ACCESS: RwLock<()> = RwLock::new(());
 const MAX_REUSE_HITS: usize = 4096;
 const MAX_IDEMPOTENCY_SCAN_ATTEMPTS: usize = 3;
 const MAX_CACHED_RECORD_BYTES: u64 = 1024 * 1024;
+const MAX_JOB_RECORD_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_STDIN_BYTES: usize = 1024 * 1024;
 const MAX_LOG_READ_BYTES: u64 = 16 * 1024;
 
@@ -57,8 +60,8 @@ pub struct ProcessStartParams {
 	/// Optional process timeout. The remote supervisor terminates the process group.
 	#[serde(default)]
 	pub timeout_seconds: Option<u64>,
-	/// Reusing the same host+key returns the existing durable job instead of starting twice.
-	#[serde(default)]
+	/// Mandatory stable operation key; exact retries reconcile the original durable job.
+	#[schemars(required)]
 	pub idempotency_key: Option<String>,
 	/// Non-negative Unix nice adjustment, 0..19.
 	#[serde(default)]
@@ -242,33 +245,143 @@ fn save_record_with_registry_gate(
 		.write()
 		.map_err(|_| anyhow::anyhow!("job registry write lock unavailable"))?;
 	let path = record_path()?;
+	save_record_at(&path, record)
+}
+
+fn save_record_at(path: &Path, record: &JobRecord) -> Result<()> {
 	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
 	let bytes = serde_json::to_vec_pretty(record)?;
-	{
-		let mut file = OpenOptions::new()
-			.write(true)
-			.create(true)
-			.truncate(true)
-			.open(&tmp)?;
-		file.write_all(&bytes)?;
-		file.sync_all()?;
+	// The durable identity must remain readable by the bounded recovery path.
+	// Reject an oversized request before creating a receipt or remote effect.
+	if bytes.len() as u64 > MAX_JOB_RECORD_BYTES {
+		bail!("durable job record exceeds {} bytes", MAX_JOB_RECORD_BYTES);
 	}
 	#[cfg(unix)]
-	{
-		use std::os::unix::fs::PermissionsExt;
-		std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
-	}
-	std::fs::rename(tmp, &path)?;
+	let mut file = {
+		use std::os::unix::fs::OpenOptionsExt;
+		OpenOptions::new()
+			.create_new(true)
+			.write(true)
+			.mode(0o600)
+			.open(&tmp)?
+	};
+	#[cfg(not(unix))]
+	let mut file = OpenOptions::new().write(true).create_new(true).open(&tmp)?;
+	file.write_all(&bytes)?;
+	// The identity must be durable before an external process can be launched.
+	file.sync_all()?;
+	drop(file);
+	std::fs::rename(&tmp, path)?;
+	#[cfg(unix)]
 	if let Some(parent) = path.parent() {
-		std::fs::File::open(parent)?.sync_all()?;
+		File::open(parent)?.sync_all()?;
 	}
 	Ok(())
 }
 
+fn read_record_at(path: &Path, expected_id: &str) -> Result<JobRecord> {
+	read_record_at_with_buffer(path, expected_id, &mut Vec::new())
+}
+
+fn read_record_at_with_buffer(
+	path: &Path,
+	expected_id: &str,
+	bytes: &mut Vec<u8>,
+) -> Result<JobRecord> {
+	// A scan owns this scratch buffer; returned records own their decoded data.
+	// Clear even an early failure so later reads cannot observe earlier bytes.
+	bytes.clear();
+	let result = read_record_at_into(path, expected_id, bytes);
+	bytes.clear();
+	// A concurrent growth/read error can make read_to_end overallocate. Do not
+	// retain that capacity across receipts, even though the scan will refuse it.
+	if bytes.capacity() > (MAX_JOB_RECORD_BYTES + 1) as usize {
+		*bytes = Vec::new();
+	}
+	result
+}
+
+fn read_record_at_into(path: &Path, expected_id: &str, bytes: &mut Vec<u8>) -> Result<JobRecord> {
+	// A symlink or a mismatched identity is not a usable effect-owner receipt.
+	let metadata = std::fs::symlink_metadata(path)
+		.with_context(|| format!("cannot stat durable job record {}", path.display()))?;
+	if !metadata.file_type().is_file() {
+		bail!("unsafe durable job record type: {}", path.display());
+	}
+	let mut options = OpenOptions::new();
+	options.read(true);
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::OpenOptionsExt;
+		options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK);
+	}
+	// Recheck the opened file, not only the pathname inspected above:
+	// a concurrent symlink swap must never redirect a credentialed read.
+	let file = options
+		.open(path)
+		.with_context(|| format!("cannot open durable job record {}", path.display()))?;
+	let opened = file.metadata()?;
+	if !opened.is_file() || opened.len() > MAX_JOB_RECORD_BYTES {
+		bail!(
+			"invalid or oversized durable job record: {}",
+			path.display()
+		);
+	}
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::MetadataExt;
+		if opened.nlink() != 1
+			|| opened.uid() != unsafe { libc::geteuid() }
+			|| metadata.dev() != opened.dev()
+			|| metadata.ino() != opened.ino()
+		{
+			bail!("unsafe durable job receipt ownership or inode");
+		}
+	}
+	// The descriptor length is already bounded. One spare byte lets the same
+	// buffer observe EOF without growing for every unchanged regular receipt.
+	bytes
+		.try_reserve_exact(opened.len() as usize + 1)
+		.context("cannot allocate bounded durable job read buffer")?;
+	let mut bounded = (&file).take(MAX_JOB_RECORD_BYTES + 1);
+	bounded.read_to_end(bytes)?;
+	if bytes.len() as u64 > MAX_JOB_RECORD_BYTES {
+		bail!("oversized durable job record: {}", path.display());
+	}
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::MetadataExt;
+		let after = file.metadata()?;
+		let current = std::fs::symlink_metadata(path)?;
+		let stamp = |m: &std::fs::Metadata| {
+			(
+				m.dev(),
+				m.ino(),
+				m.mode(),
+				m.uid(),
+				m.nlink(),
+				m.len(),
+				m.mtime(),
+				m.mtime_nsec(),
+				m.ctime(),
+				m.ctime_nsec(),
+			)
+		};
+		if stamp(&opened) != stamp(&after) || stamp(&after) != stamp(&current) {
+			bail!("durable job receipt changed during read");
+		}
+	}
+	let record: JobRecord = serde_json::from_slice(bytes)
+		.with_context(|| format!("corrupt job record; durable job receipt {}", path.display()))?;
+	if record.id != expected_id {
+		bail!("durable job filename/identity mismatch: {}", path.display());
+	}
+	Ok(record)
+}
+
 fn load_record(id: &str) -> Result<JobRecord> {
-	let path = record_path(id)?;
-	let bytes = std::fs::read(&path).with_context(|| format!("unknown durable job `{id}`"))?;
-	serde_json::from_slice(&bytes).context("corrupt durable job metadata")
+	read_record_at(&record_path(id)?, id)
+		.with_context(|| format!("unknown or invalid durable job `{id}`"))
 }
 
 #[cfg(unix)]
@@ -282,7 +395,7 @@ struct RegistryEpoch {
 	modified_nanos: i64,
 	changed_seconds: i64,
 	changed_nanos: i64,
-	namespace: super::namespace_version::Version,
+	content: Option<super::namespace_version::Version>,
 }
 #[cfg(not(unix))]
 type RegistryEpoch = ();
@@ -307,12 +420,27 @@ fn registry_epoch(dir: &Path) -> Result<RegistryEpoch> {
 		modified_nanos: m.mtime_nsec(),
 		changed_seconds: m.ctime(),
 		changed_nanos: m.ctime_nsec(),
-		namespace: super::namespace_version::version(&directory)?,
+		content: super::namespace_version::content_version(&directory)?,
 	})
 }
 #[cfg(not(unix))]
 fn registry_epoch(_dir: &Path) -> Result<RegistryEpoch> {
 	bail!("positive reuse caching requires a Unix registry identity")
+}
+
+fn registry_has_content_watch(epoch: &RegistryEpoch) -> bool {
+	#[cfg(target_os = "linux")]
+	{
+		matches!(
+			epoch.content,
+			Some(super::namespace_version::Version::Watch(_, _))
+		)
+	}
+	#[cfg(not(target_os = "linux"))]
+	{
+		let _ = epoch;
+		false
+	}
 }
 
 #[cfg(unix)]
@@ -344,24 +472,43 @@ struct ReuseHitCache {
 	epoch: Option<RegistryEpoch>,
 	// Preserve known host/key bindings across ordinary directory updates.
 	// These are refusal evidence, not a negative cache or effect authority.
-	known: HashMap<(String, String), String>,
+	known: HashMap<(String, String), KnownReuseBinding>,
 	hits: HashMap<(String, String), String>,
 }
 
-fn all_records_in(dir: &Path) -> Result<Vec<JobRecord>> {
+#[derive(Clone)]
+struct KnownReuseBinding {
+	id: String,
+	// Invalidating a fast hit must not downgrade an originally strict receipt
+	// to the compatibility reader after a content/permission change.
+	strict: bool,
+}
+
+fn scan_records_dir(dir: &Path) -> Result<Vec<JobRecord>> {
 	let mut records = Vec::new();
+	let mut bytes = Vec::new();
 	for entry in std::fs::read_dir(dir)? {
 		let entry = entry?;
-		if entry.path().extension().and_then(|s| s.to_str()) != Some("json") {
+		let path = entry.path();
+		if path.extension().and_then(|s| s.to_str()) != Some("json") {
 			continue;
 		}
-		let bytes = std::fs::read(entry.path())?;
-		let record = serde_json::from_slice::<JobRecord>(&bytes)
-			.context("corrupt job record; refusing to lose idempotency binding")?;
-		records.push(record);
+		// A corrupt/unreadable record might be the owner of an idempotency key.
+		// Skipping it would allow a second physical launch after a restart.
+		let expected_id = path
+			.file_stem()
+			.and_then(|stem| stem.to_str())
+			.ok_or_else(|| {
+				anyhow::anyhow!("invalid durable job record name: {}", path.display())
+			})?;
+		records.push(read_record_at_with_buffer(&path, expected_id, &mut bytes)?);
 	}
 	records.sort_by_key(|record| record.created_unix_ms);
 	Ok(records)
+}
+
+fn all_records_in(dir: &Path) -> Result<Vec<JobRecord>> {
+	scan_records_dir(dir)
 }
 
 fn all_records() -> Result<Vec<JobRecord>> {
@@ -405,9 +552,11 @@ fn read_verified_cached_record(dir: &Path, id: &str) -> Result<JobRecord> {
 	if !safe_file(&before) {
 		bail!("cached job record inode or permissions unsafe; no relaunch");
 	}
+	#[cfg(all(test, unix))]
+	registry_content_tests::after_cached_stat();
 	let mut file = OpenOptions::new()
 		.read(true)
-		.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+		.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK)
 		.open(&path)
 		.context("cached job record path changed; no relaunch")?;
 	let opened = file.metadata()?;
@@ -440,6 +589,7 @@ fn read_verified_cached_record(_dir: &Path, _id: &str) -> Result<JobRecord> {
 // Unlike the full inventory view, an exact-key lookup does not need a sorted
 // Vec of all job records. It must still parse EVERY existing JSON record so
 // malformed history and duplicate original bindings refuse a new effect.
+#[cfg(test)]
 fn scan_idempotent_binding_in(dir: &Path, host: &str, key: &str) -> Result<Option<JobRecord>> {
 	scan_idempotent_binding_in_with_retries(dir, host, key, |_| {})
 }
@@ -448,15 +598,29 @@ fn scan_idempotent_binding_in(dir: &Path, host: &str, key: &str) -> Result<Optio
 // host scans. Retry only that same-directory epoch change, before any job ID,
 // durable intent or remote effect is allocated. Never retry invalid history or
 // a different registry root; sustained churn still fails within a fixed budget.
+#[cfg(test)]
 fn scan_idempotent_binding_in_with_retries(
 	dir: &Path,
 	host: &str,
 	key: &str,
+	after_scan: impl FnMut(usize),
+) -> Result<Option<JobRecord>> {
+	scan_idempotent_binding_with_probe(dir, host, key, None, &registry_epoch, after_scan)
+}
+
+fn scan_idempotent_binding_with_probe(
+	dir: &Path,
+	host: &str,
+	key: &str,
+	strict_id: Option<&str>,
+	epoch_probe: &impl Fn(&Path) -> Result<RegistryEpoch>,
 	mut after_scan: impl FnMut(usize),
 ) -> Result<Option<JobRecord>> {
-	let root = registry_epoch(dir)?;
+	let root = epoch_probe(dir)?;
 	for attempt in 0..MAX_IDEMPOTENCY_SCAN_ATTEMPTS {
-		match scan_idempotent_binding_once(dir, host, key, &root, || after_scan(attempt)) {
+		match scan_idempotent_binding_once(dir, host, key, &root, strict_id, epoch_probe, || {
+			after_scan(attempt)
+		}) {
 			Err(error)
 				if error.downcast_ref::<RegistryScanChanged>().is_some()
 					&& attempt + 1 < MAX_IDEMPOTENCY_SCAN_ATTEMPTS => {}
@@ -475,7 +639,74 @@ fn scan_idempotent_binding_in_with_observer(
 	key: &str,
 	after_scan: impl FnOnce(),
 ) -> Result<Option<JobRecord>> {
-	scan_idempotent_binding_once(dir, host, key, &registry_epoch(dir)?, after_scan)
+	scan_idempotent_binding_once(
+		dir,
+		host,
+		key,
+		&registry_epoch(dir)?,
+		None,
+		&registry_epoch,
+		after_scan,
+	)
+}
+
+fn select_idempotent_record(
+	records: impl IntoIterator<Item = JobRecord>,
+	host: &str,
+	key: &str,
+) -> Result<Option<JobRecord>> {
+	let mut selected = None;
+	for record in records {
+		if record.host == host && record.idempotency_key.as_deref() == Some(key) {
+			// Historical duplicate owners cannot be resolved by selecting the oldest
+			// record. The external effect may already have run from either record.
+			if selected.is_some() {
+				bail!("duplicate original idempotency binding; multiple durable owners for one key; reconcile before reuse");
+			}
+			selected = Some(record);
+		}
+	}
+	Ok(selected)
+}
+
+fn job_record_binding_digest(record: &JobRecord) -> Result<[u8; 32]> {
+	let mut digest = RequestHashWriter(Sha256::new());
+	serde_json::to_writer(&mut digest, record)?;
+	Ok(digest.0.finalize().into())
+}
+
+fn scan_registry_records(
+	dir: &Path,
+	host: &str,
+	key: &str,
+	fingerprint: bool,
+) -> Result<(Option<JobRecord>, Option<[u8; 32]>)> {
+	let mut found: Option<JobRecord> = None;
+	let mut bytes = Vec::new();
+	let mut digest = fingerprint.then(|| RequestHashWriter(Sha256::new()));
+	if let Some(digest) = &mut digest {
+		digest.write_all(b"hepta-job-registry-stream-v1\0")?;
+	}
+	for entry in std::fs::read_dir(dir)? {
+		let entry = entry?;
+		let path = entry.path();
+		if path.extension().and_then(|s| s.to_str()) != Some("json") {
+			continue;
+		}
+		let expected_id = path
+			.file_stem()
+			.and_then(|name| name.to_str())
+			.context("invalid durable job record name")?;
+		let record = read_record_at_with_buffer(&path, expected_id, &mut bytes)?;
+		if let Some(digest) = &mut digest {
+			digest.write_all(&(expected_id.len() as u64).to_le_bytes())?;
+			digest.write_all(expected_id.as_bytes())?;
+			serde_json::to_writer(digest, &record)?;
+		}
+		found =
+			select_idempotent_record(found.into_iter().chain(std::iter::once(record)), host, key)?;
+	}
+	Ok((found, digest.map(|digest| digest.0.finalize().into())))
 }
 
 fn scan_idempotent_binding_once(
@@ -483,32 +714,55 @@ fn scan_idempotent_binding_once(
 	host: &str,
 	key: &str,
 	root: &RegistryEpoch,
+	strict_id: Option<&str>,
+	epoch_probe: &impl Fn(&Path) -> Result<RegistryEpoch>,
 	after_scan: impl FnOnce(),
 ) -> Result<Option<JobRecord>> {
 	// Never infer an absent binding from a scan that overlaps a directory
 	// mutation. The original root identity is pinned across all retry attempts.
-	let before = registry_epoch(dir)?;
+	let before = epoch_probe(dir)?;
 	if !same_registry_root(root, &before) {
 		bail!("idempotency registry root identity changed; reconcile before execution");
 	}
-	let mut found: Option<JobRecord> = None;
-	for entry in std::fs::read_dir(dir)? {
-		let entry = entry?;
-		if entry.path().extension().and_then(|s| s.to_str()) != Some("json") {
-			continue;
-		}
-		let bytes = std::fs::read(entry.path())?;
-		let record: JobRecord = serde_json::from_slice(&bytes)
-			.context("corrupt job record; refusing to lose idempotency binding")?;
-		if record.host == host && record.idempotency_key.as_deref() == Some(key) {
-			if found.is_some() {
-				bail!("duplicate original idempotency binding; reconcile before execution");
-			}
-			found = Some(record);
-		}
-	}
+	let (mut found, fingerprint) =
+		scan_registry_records(dir, host, key, !registry_has_content_watch(&before))?;
 	after_scan();
-	let after = registry_epoch(dir)?;
+	if let Some(fingerprint) = fingerprint {
+		// Without a content watch no positive cache is authoritative. Two complete
+		// scans validate every receipt and compare decoded bindings, with memory
+		// bounded by the selected record and one input record. Directory order is
+		// intentionally retained: reordering conservatively retries, never sorts
+		// an unbounded pathname collection or uses a commutative digest.
+		drop(found);
+		let (verified, second) = scan_registry_records(dir, host, key, true)?;
+		if second != Some(fingerprint) {
+			return Err(RegistryScanChanged.into());
+		}
+		found = verified;
+	}
+	if let Some(id) = strict_id {
+		// The first strict read can precede a changed epoch and compatibility
+		// rescan. Validate the final original again inside this scan's fence.
+		let record = read_verified_cached_record(dir, id).map_err(|error| {
+			anyhow::anyhow!(
+				"previous idempotency binding could not be verified: {error}; no new launch"
+			)
+		})?;
+		if found.as_ref().map(|record| record.id.as_str()) != Some(id)
+			|| record.id != id
+			|| record.host != host
+			|| record.idempotency_key.as_deref() != Some(key)
+		{
+			bail!("previous idempotency binding missing or changed; no new launch");
+		}
+		if found.as_ref().map(job_record_binding_digest).transpose()?
+			!= Some(job_record_binding_digest(&record)?)
+		{
+			return Err(RegistryScanChanged.into());
+		}
+		found = Some(record);
+	}
+	let after = epoch_probe(dir)?;
 	if !same_registry_root(root, &after) {
 		bail!("idempotency registry root identity changed; reconcile before execution");
 	}
@@ -527,9 +781,20 @@ fn find_idempotent_in(
 	key: &str,
 	cache: &Mutex<ReuseHitCache>,
 ) -> Result<Option<JobRecord>> {
-	let epoch = registry_epoch(dir)?;
+	find_idempotent_in_with_probe(dir, host, key, cache, registry_epoch, || {})
+}
+
+fn find_idempotent_in_with_probe(
+	dir: &Path,
+	host: &str,
+	key: &str,
+	cache: &Mutex<ReuseHitCache>,
+	epoch_probe: impl Fn(&Path) -> Result<RegistryEpoch>,
+	after_strict_read: impl FnOnce(),
+) -> Result<Option<JobRecord>> {
+	let epoch = epoch_probe(dir)?;
 	let identity = (host.to_owned(), key.to_owned());
-	let (cached_id, known_id) = {
+	let (cached_id, known) = {
 		let mut guard = cache
 			.lock()
 			.map_err(|_| anyhow::anyhow!("reuse cache unavailable"))?;
@@ -547,59 +812,126 @@ fn find_idempotent_in(
 			guard.hits.clear();
 			guard.epoch = Some(epoch);
 		}
+		if !registry_has_content_watch(&epoch) {
+			guard.hits.clear();
+		}
 		guard.root = Some(dir.to_path_buf());
 		(
 			guard.hits.get(&identity).cloned(),
 			guard.known.get(&identity).cloned(),
 		)
 	};
-	if let Some(id) = cached_id {
-		if known_id.as_ref() != Some(&id) {
+	let strict_id = cached_id.as_deref().or_else(|| {
+		known
+			.as_ref()
+			.filter(|binding| binding.strict)
+			.map(|binding| binding.id.as_str())
+	});
+	if let Some(id) = strict_id {
+		if known.as_ref().map(|binding| binding.id.as_str()) != Some(id) {
 			bail!("cached idempotency binding lost original ownership; no new launch");
 		}
-		if !valid_name(&id) {
+		if !valid_name(id) {
 			bail!("cached job identity invalid; never allocate a replacement job");
 		}
-		let record = read_verified_cached_record(dir, &id)?;
+		let record = read_verified_cached_record(dir, id).map_err(|error| {
+			anyhow::anyhow!(
+				"previous idempotency binding could not be verified: {error}; no new launch"
+			)
+		})?;
 		if record.id != id || record.host != host || record.idempotency_key.as_deref() != Some(key)
 		{
 			bail!("cached job binding changed; never allocate a replacement job");
 		}
+		after_strict_read();
 		// A pending/unknown record can cause launch reconciliation; that path
 		// must continue scanning every original job before any new effect.
-		if record.launch_state == "launched" && registry_epoch(dir)? == epoch {
+		if cached_id.is_some() && record.launch_state == "launched" && epoch_probe(dir)? == epoch {
 			return Ok(Some(record));
 		}
 	}
 
-	let found = scan_idempotent_binding_in(dir, host, key)?;
-	if !same_registry_root(&epoch, &registry_epoch(dir)?) {
+	let found = scan_idempotent_binding_with_probe(
+		dir,
+		host,
+		key,
+		known
+			.as_ref()
+			.filter(|binding| binding.strict)
+			.map(|binding| binding.id.as_str()),
+		&epoch_probe,
+		|_| {},
+	)?;
+	if !same_registry_root(&epoch, &epoch_probe(dir)?) {
 		bail!("job registry root identity changed during lookup; no new launch");
 	}
-	if let Some(expected) = known_id {
-		if found.as_ref().map(|r| r.id.as_str()) != Some(expected.as_str()) {
+	if let Some(expected) = &known {
+		if found.as_ref().map(|r| r.id.as_str()) != Some(expected.id.as_str()) {
+			bail!("previous idempotency binding missing or changed; no new launch");
+		}
+	}
+	if found.is_none() {
+		// A cancelled predecessor can finish its read-only lookup after the next
+		// same-key caller started. Newly retained ownership still forbids absence.
+		let guard = cache
+			.lock()
+			.map_err(|_| anyhow::anyhow!("reuse cache unavailable"))?;
+		if guard.known.contains_key(&identity) {
 			bail!("previous idempotency binding missing or changed; no new launch");
 		}
 	}
 	if let Some(record) = &found {
-		let after = registry_epoch(dir)?;
+		// Compatibility scans may legitimately return old 0644 or 1–4 MiB
+		// receipts. Retain their ownership without falsely making them strict.
+		// Hash/read outside the cache mutex; only verified bytes can earn a hit.
+		let verify_strict = (registry_has_content_watch(&epoch)
+			&& record.launch_state == "launched")
+			|| known.as_ref().is_some_and(|binding| binding.strict);
+		let strict_verification = verify_strict.then(|| -> Result<()> {
+			let verified = read_verified_cached_record(dir, &record.id)?;
+			if job_record_binding_digest(&verified)? != job_record_binding_digest(record)? {
+				bail!("cached job binding changed during strict verification");
+			}
+			Ok(())
+		});
+		let strictly_verified = matches!(&strict_verification, Some(Ok(())));
+		let after = epoch_probe(dir)?;
 		let mut guard = cache
 			.lock()
 			.map_err(|_| anyhow::anyhow!("reuse cache unavailable"))?;
+		if let Some(latest) = guard.known.get(&identity) {
+			if latest.id != record.id {
+				bail!("previous idempotency binding missing or changed; no new launch");
+			}
+			if latest.strict && !strictly_verified {
+				if let Some(Err(error)) = strict_verification {
+					bail!("previous idempotency binding could not be verified: {error}; no new launch");
+				}
+				bail!("previous idempotency binding became strict during lookup; no new launch");
+			}
+		}
 		if guard.root.as_deref() == Some(dir) && guard.epoch == Some(epoch) {
 			if guard.known.len() < MAX_REUSE_HITS {
 				guard
 					.known
 					.entry(identity.clone())
-					.or_insert_with(|| record.id.clone());
+					.or_insert_with(|| KnownReuseBinding {
+						id: record.id.clone(),
+						strict: false,
+					});
 			}
 			if record.launch_state == "launched"
+				&& registry_has_content_watch(&epoch)
+				&& strictly_verified
 				&& after == epoch
 				&& guard.hits.len() < MAX_REUSE_HITS
 				// Epoch changes clear hits, while known can already be full.
 				// Never cache an identity whose refusal evidence was not retained.
-				&& guard.known.get(&identity) == Some(&record.id)
+				&& guard.known.get(&identity).map(|binding| &binding.id) == Some(&record.id)
 			{
+				if let Some(binding) = guard.known.get_mut(&identity) {
+					binding.strict = true;
+				}
 				guard
 					.hits
 					.entry(identity)
@@ -622,6 +954,38 @@ fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
 			REUSE_HITS.get_or_init(|| Mutex::new(ReuseHitCache::default())),
 		)
 	})
+}
+
+async fn run_registry_lookup(
+	slots: Arc<Semaphore>,
+	lookup: impl FnOnce() -> Result<Option<JobRecord>> + Send + 'static,
+) -> Result<Option<JobRecord>> {
+	let permit = slots
+		.acquire_owned()
+		.await
+		.map_err(|_| anyhow::anyhow!("job registry lookup capacity unavailable"))?;
+	let result = tokio::task::spawn_blocking(move || {
+		// A cancelled caller cannot release capacity while its original scan
+		// still holds the registry read lock or accesses historical receipts.
+		let _permit = permit;
+		lookup()
+	})
+	.await;
+	match result {
+		Ok(result) => result,
+		Err(_) => bail!("job registry lookup worker unavailable"),
+	}
+}
+
+async fn find_idempotent_async(host: &str, key: &str) -> Result<Option<JobRecord>> {
+	let host = host.to_owned();
+	let key = key.to_owned();
+	let slots = REGISTRY_LOOKUPS
+		.get_or_init(|| Arc::new(Semaphore::new(MAX_REGISTRY_LOOKUPS)))
+		.clone();
+	// Only the read-only lookup leaves the executor. The caller retains its
+	// original key lane and effect admission fence around later publication.
+	run_registry_lookup(slots, move || find_idempotent(&host, &key)).await
 }
 
 // Keep the alphabetical key order of the original serde_json::Value map.
@@ -684,11 +1048,47 @@ fn fingerprint(digest: &str) -> u64 {
 		.and_then(|prefix| u64::from_str_radix(prefix, 16).ok())
 		.unwrap_or(0)
 }
+fn verify_reuse_binding(
+	existing: &JobRecord,
+	key: &str,
+	legacy_fingerprint: u64,
+	full_digest: &str,
+) -> Result<()> {
+	// Old 64-bit-only records remain inspectable, but do not establish a
+	// collision-resistant authorization to restart a physical process.
+	if existing.request_digest.is_none() {
+		bail!("legacy idempotency record lacks full request binding; reconcile without replay");
+	}
+	if existing.request_fingerprint != legacy_fingerprint
+		|| existing.request_digest.as_deref() != Some(full_digest)
+	{
+		bail!("idempotency key `{key}` is already bound to a different request");
+	}
+	Ok(())
+}
+
+fn admit_observation_only_reuse(record: &JobRecord) -> Result<()> {
+	match record.launch_state.as_str() {
+		"launched" => Ok(()),
+		"pending" | "launch_failed" => bail!(
+			"durable launch outcome indeterminate: reconcile original remote effect without replay"
+		),
+		_ => bail!("unknown durable job launch state; no replay permitted"),
+	}
+}
+
 fn matches_request(record: &JobRecord, digest: &str) -> Result<bool> {
 	let expected = record.request_digest.as_ref().context(
 		"legacy idempotency binding lacks a full digest; inspect existing job_id instead of relaunching",
 	)?;
-	Ok(expected.as_str() == digest)
+	Ok(expected.as_str() == digest
+		&& verify_reuse_binding(
+			record,
+			record.idempotency_key.as_deref().unwrap_or(""),
+			fingerprint(digest),
+			digest,
+		)
+		.is_ok())
 }
 
 fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
@@ -804,9 +1204,8 @@ impl AuditBinding {
 			.context("audit path has no parent")?
 			.to_path_buf();
 		let state_path = audit_path.parent().unwrap_or(Path::new("/")).to_path_buf();
-		// Preserve ordinary open's existing symlink behavior. A file symlink can
-		// cause open(create) to publish a target in a different directory, which
-		// also requires its own parent barrier and named binding fence.
+		// The file was opened no-follow and owner-private. Keep the complete
+		// path and parent publication fences in addition to that inode check.
 		let target_path = std::fs::canonicalize(&path)?;
 		let target_parent = target_path.parent().context("audit target has no parent")?;
 		let audit_directory = open_audit_directory(&audit_path)?;
@@ -965,6 +1364,40 @@ fn append_audit_prepared_with(
 	append_audit_at_with(prepared, readiness, synchronize_file, synchronize_directory)
 }
 
+fn open_audit_append(path: &Path) -> Result<File> {
+	let mut options = OpenOptions::new();
+	options.create(true).append(true);
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::OpenOptionsExt;
+		options
+			.mode(0o600)
+			.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK);
+	}
+	let file = options.open(path)?;
+	let metadata = file.metadata()?;
+	if !metadata.is_file() {
+		bail!("audit sink is not a regular file: {}", path.display());
+	}
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::{MetadataExt, PermissionsExt};
+		if metadata.nlink() != 1 || metadata.uid() != unsafe { libc::geteuid() } {
+			bail!("audit sink must not be hard-linked: {}", path.display());
+		}
+		// The prior release created audit files using the caller's umask.
+		// Tighten a regular, independently opened file descriptor during upgrade
+		// rather than breaking every audit operation on legacy mode 0644.
+		if metadata.permissions().mode() & 0o077 != 0 {
+			file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+			if file.metadata()?.permissions().mode() & 0o077 != 0 {
+				bail!("audit sink must be owner-private: {}", path.display());
+			}
+		}
+	}
+	Ok(file)
+}
+
 #[cfg(unix)]
 fn append_audit_at_with(
 	prepared: PreparedAudit,
@@ -973,10 +1406,7 @@ fn append_audit_at_with(
 	mut synchronize_directory: impl FnMut(&std::fs::File) -> Result<()>,
 ) -> Result<()> {
 	let previous = readiness.take();
-	let file = OpenOptions::new()
-		.create(true)
-		.append(true)
-		.open(&prepared.path)?;
+	let file = open_audit_append(&prepared.path)?;
 	let warm = previous.as_ref().is_some_and(|previous| {
 		previous
 			.binding
@@ -1013,10 +1443,7 @@ fn append_audit_at_with(
 	// Keep the previous platform guarantee and path behavior. This candidate's
 	// directory publication proof applies only to the Unix implementation.
 	*readiness = None;
-	let mut file = OpenOptions::new()
-		.create(true)
-		.append(true)
-		.open(prepared.path)?;
+	let mut file = open_audit_append(&prepared.path)?;
 	file.write_all(&prepared.line)?;
 	synchronize_file(&file)
 }
@@ -1133,6 +1560,45 @@ def private_bound_job_directory(raw, expected):
     if (info.st_dev, info.st_ino) != (expected["device"], expected["inode"]):
         raise SystemExit("remote job directory identity changed; no workload submitted")
     return job
+
+def private_open_job_file(name):
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                     dir_fd=_hepta_directory_pins[-1])
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        raise SystemExit("unsafe remote job file " + name) from error
+    info = os.fstat(fd)
+    if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or
+            info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) & 0o022):
+        os.close(fd)
+        raise SystemExit("unsafe remote job file " + name + ": non-regular or linked inode")
+    return fd
+
+def private_read_json(name):
+    import json
+    fd = private_open_job_file(name)
+    if fd is None: return None
+    with os.fdopen(fd, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        if before.st_size > 4 * 1024 * 1024:
+            raise SystemExit("unsafe remote job file " + name + ": linked or oversized inode")
+        encoded = stream.read(4 * 1024 * 1024 + 1)
+        after = os.fstat(stream.fileno())
+        current = os.stat(name, dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
+    def stamp(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
+                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    if len(encoded) > 4 * 1024 * 1024 or stamp(before) != stamp(after) or stamp(after) != stamp(current):
+        raise SystemExit("unsafe remote job file " + name + ": changed while reading")
+    try:
+        value = json.loads(encoded)
+        if not isinstance(value, dict): raise ValueError("not an object")
+        return value
+    except (ValueError, UnicodeError) as error:
+        raise SystemExit("corrupt remote job file " + name) from error
+
 "#;
 
 fn private_remote_code(code: &str) -> Result<String> {
@@ -1143,8 +1609,34 @@ fn private_remote_code(code: &str) -> Result<String> {
 	))
 }
 
+const BOUND_OBSERVATION_CODE: &str = r#"
+import io, json
+_original_query = json.load(sys.stdin)
+_bound_job = private_job_directory(_original_query["job_dir"])
+_bound_request = private_read_json("request.json")
+_digest = _original_query.get("request_digest")
+if (not isinstance(_bound_request, dict) or not isinstance(_digest, str) or len(_digest) != 64 or
+        any(c not in "0123456789abcdef" for c in _digest) or
+        _bound_request.get("job_id") != _original_query.get("job_id") or
+        _bound_request.get("job_dir") != _original_query.get("job_dir") or
+        _bound_request.get("unit") != _original_query.get("unit") or
+        _bound_request.get("request_digest", _bound_request.get("request_fingerprint")) != _digest):
+    raise SystemExit("remote job request binding missing or mismatched")
+# Metadata is validated before a status can claim success or cancellation can
+# acknowledge a terminal receipt. The status owner interprets a torn private
+# started.json as unknown, and a confirmed terminal receipt takes precedence.
+# Cancellation still validates its owner record before sending any signal.
+for _name in ("launch.json", "exit.json"):
+    private_read_json(_name)
+sys.stdin = io.StringIO(json.dumps(_original_query))
+"#;
+
+fn bound_remote_code(code: &str) -> Result<String> {
+	private_remote_code(&format!("{BOUND_OBSERVATION_CODE}\n{code}"))
+}
+
 pub(super) fn observation_script(kind: super::ssh::ObservationScript) -> Result<String> {
-	private_remote_code(match kind {
+	bound_remote_code(match kind {
 		super::ssh::ObservationScript::Status => STATUS_CODE,
 		super::ssh::ObservationScript::Read => READ_CODE,
 	})
@@ -1169,13 +1661,7 @@ fcntl.flock(launch_lock.fileno(), fcntl.LOCK_EX)
 
 
 def read_json(name):
-    try:
-        value = json.loads((job / name).read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return None
-    if not isinstance(value, dict):
-        raise ValueError("remote metadata must be a JSON object")
-    return value
+    return private_read_json(name)
 
 def atomic(name, value):
     target = job / name
@@ -1203,12 +1689,16 @@ def stage_file(name, data, mode):
 stdin_text = req.pop("stdin", None)
 existing = read_json("request.json")
 if existing is not None:
-    if existing.get("job_id") != req.get("job_id") or existing.get("request_fingerprint") != req.get("request_fingerprint"):
+    if (existing.get("job_id") != req.get("job_id") or existing.get("request_fingerprint") != req.get("request_fingerprint") or
+            existing.get("job_dir") != req.get("job_dir") or existing.get("unit") != req.get("unit") or
+            existing.get("request_digest", existing.get("request_fingerprint")) != req.get("request_digest", req.get("request_fingerprint"))):
         raise SystemExit("remote job directory is bound to a different request")
     launch = read_json("launch.json")
     exit_data = read_json("exit.json")
     # An existing request never launches again. Owner tombstones need not be
     # parsed here; status owns their conservative interpretation.
+    if launch and launch.get("backend") == "launch_failed":
+        raise SystemExit("prior remote launch failed; reconcile original identity without replay")
     if launch or exit_data:
         print(json.dumps({"ok": True, "reused_remote": True, **(launch or {"backend": "completed"})}, sort_keys=True))
         raise SystemExit(0)
@@ -1238,7 +1728,7 @@ if launch_backend not in ("systemd", "detached"):
     raise SystemExit("invalid supervisor launch backend; no workload submitted")
 binding = json.loads(sys.argv[2])
 job = private_bound_job_directory(sys.argv[1], binding)
-req = json.loads((job / "request.json").read_text(encoding="utf-8"))
+req = private_read_json("request.json")
 if (req.get("job_id"), req.get("launch_nonce"), req.get("request_fingerprint")) != (binding["job_id"], binding["launch_nonce"], binding["request_fingerprint"]):
     raise SystemExit("remote launch identity changed; no workload submitted")
 
@@ -1878,13 +2368,7 @@ q = json.load(sys.stdin)
 job = private_job_directory(q["job_dir"])
 
 def read_json(name):
-    try:
-        value = json.loads((job / name).read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return None
-    if not isinstance(value, dict):
-        raise ValueError("remote metadata must be a JSON object")
-    return value
+    return private_read_json(name)
 
 def process_identity(pid):
     if sys.platform == "linux":
@@ -2120,7 +2604,7 @@ import json, pathlib, sys
 q = json.load(sys.stdin)
 job = private_job_directory(q["job_dir"])
 try:
-    request = json.loads((job / "request.json").read_text(encoding="utf-8"))
+    request = private_read_json("request.json")
 except Exception:
     raise SystemExit("remote job metadata missing")
 if request.get("job_id") != q["job_id"]:
@@ -2128,26 +2612,26 @@ if request.get("job_id") != q["job_id"]:
 limit = max(1, min(int(q.get("limit", 16384)), 16384))
 
 def read_part(name, offset):
-    path = job / name
-    try:
-        size = path.stat().st_size
-    except FileNotFoundError:
-        size = 0
+    fd = private_open_job_file(name)
     offset = max(0, int(offset or 0))
-    if offset > size: raise SystemExit("cursor exceeds log length; refusing silent rewind")
     data = b""
-    if size:
-        with path.open("rb") as f:
-            f.seek(offset)
-            data = f.read(min(limit, size - offset))
-    return {
-        "offset": offset,
-        "next_offset": offset + len(data),
-        "size": size,
-        "eof": offset + len(data) >= size,
-        "text": data.decode("utf-8", errors="replace"),
-        "bytes_hex": data.hex(),
-    }
+    size = 0
+    if fd is not None:
+        with os.fdopen(fd, "rb") as stream:
+            before = os.fstat(stream.fileno())
+            size = before.st_size
+            if offset > size: raise SystemExit("cursor exceeds log length; refusing silent rewind")
+            stream.seek(offset)
+            data = stream.read(min(limit, size - offset))
+            current = os.stat(name, dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
+            after = os.fstat(stream.fileno())
+            if (current.st_dev, current.st_ino) != (before.st_dev, before.st_ino) or after.st_nlink != 1 or after.st_size < size:
+                raise SystemExit("remote log identity changed while reading")
+    elif offset:
+        raise SystemExit("cursor exceeds log length; refusing silent rewind")
+    return {"offset": offset, "next_offset": offset + len(data), "size": size,
+            "eof": offset + len(data) >= size, "text": data.decode("utf-8", errors="replace"),
+            "bytes_hex": data.hex()}
 
 print(json.dumps({
     "job_id": q["job_id"],
@@ -2162,13 +2646,7 @@ q = json.load(sys.stdin)
 job = private_job_directory(q["job_dir"])
 
 def read_json(name):
-    try:
-        value = json.loads((job / name).read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return None
-    if not isinstance(value, dict):
-        raise ValueError("remote metadata must be a JSON object")
-    return value
+    return private_read_json(name)
 
 def atomic(name, value):
     target = job / name
@@ -2263,6 +2741,10 @@ finally:
 "#;
 
 fn validate_start(params: &ProcessStartParams) -> Result<()> {
+	match params.idempotency_key.as_deref() {
+		Some(key) if !key.trim().is_empty() && key.len() <= 256 => {}
+		_ => bail!("idempotency_key is mandatory and must contain 1..256 nonblank bytes"),
+	}
 	check_execution(
 		&params.host,
 		&params.executable,
@@ -2323,8 +2805,25 @@ fn validate_start(params: &ProcessStartParams) -> Result<()> {
 	Ok(())
 }
 
+fn verify_host_binding(
+	record: &JobRecord,
+	configured_target: &str,
+	configured_state_dir: &str,
+) -> Result<()> {
+	let expected_job_dir = format!(
+		"{}/jobs/{}",
+		configured_state_dir.trim_end_matches('/'),
+		record.id
+	);
+	if record.ssh_target != configured_target || record.remote_job_dir != expected_job_dir {
+		bail!("durable job host binding changed; remote operation requires independent reconciliation");
+	}
+	Ok(())
+}
+
 fn check_binding(record: &JobRecord) -> Result<()> {
 	let host = runtime_config()?.host(&record.host)?;
+	verify_host_binding(record, &host.ssh_target, &host.remote_state_dir)?;
 	if host.ssh_target != record.ssh_target || host.execution_mode != record.execution_mode {
 		bail!("host binding changed; refusing to operate an old job");
 	}
@@ -2350,12 +2849,13 @@ async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
+		"request_digest": record.request_digest,
 		"unit": record.unit,
 		"wait_seconds": wait_seconds.min(30),
 	});
 	run_python_json(
 		host,
-		&private_remote_code(STATUS_CODE)?,
+		&bound_remote_code(STATUS_CODE)?,
 		&request,
 		Duration::from_secs(wait_seconds.min(30) + 10),
 	)
@@ -2392,6 +2892,10 @@ async fn status_observation(record: &JobRecord, wait_seconds: u64) -> Result<Val
 			job_id: &record.id,
 			job_dir: &record.remote_job_dir,
 			unit: &record.unit,
+			request_digest: record
+				.request_digest
+				.as_deref()
+				.context("legacy job has no full observation binding")?,
 			wait_seconds,
 		},
 	)
@@ -2513,6 +3017,9 @@ fn attach_launch_record_warning(result: &mut Value, outcome: &LaunchOutcome) {
 }
 
 fn reconcile_retry_allowed(record: &JobRecord) -> bool {
+	if admit_observation_only_reuse(record).is_ok() {
+		return false;
+	}
 	// The administrator-pinned jobctl first checks the same job ID and full
 	// request digest. Operator helpers never relaunch an uncertain old record.
 	record.system_jobctl
@@ -2580,6 +3087,7 @@ async fn launch_record(
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
+		"request_digest": record.request_digest,
 		"unit": record.unit,
 		"request_fingerprint": record.request_digest.clone().unwrap_or_else(|| format!("{:016x}", record.request_fingerprint)),
 		"platform": host.platform,
@@ -2637,6 +3145,43 @@ fn validate_new_host_resource_limits(
 	Ok(())
 }
 
+/// Observe an original request when its start acknowledgement (and job ID) was lost.
+/// Absence is only a local-registry observation, never permission to replay an effect.
+pub async fn observe_request(params: ProcessStartParams) -> Result<Option<String>> {
+	// Revoking new execution must not prevent observing a previously admitted
+	// request. Preserve its original identity, digest and physical binding.
+	match params.idempotency_key.as_deref() {
+		Some(key) if !key.trim().is_empty() && key.len() <= 256 => {}
+		_ => bail!("request observation requires its original nonempty idempotency key"),
+	}
+	runtime_config()?.host(&params.host)?;
+	let lane = start_lock(&params.host, params.idempotency_key.as_deref())?;
+	let mut guard = Some(lane.lock().await);
+	let key = params
+		.idempotency_key
+		.as_deref()
+		.context("request observation requires its original idempotency key")?;
+	let Some(existing) = find_idempotent_async(&params.host, key).await? else {
+		return Ok(None);
+	};
+	let digest = request_digest(&params)?;
+	if !matches_request(&existing, &digest)? {
+		bail!("idempotency key `{key}` is already bound to a different request");
+	}
+	check_binding(&existing)?;
+	// Even pending isolated/jobctl records are observation-only here. In
+	// particular, do not use start_job's optional launch reconciliation path.
+	let status = read_reuse_status(&existing, false, &mut guard, status_record(&existing, 0)).await;
+	Ok(Some(serde_json::to_string_pretty(&json!({
+		"observation_only": true,
+		"reused": true,
+		"retried_launch": false,
+		"launch": null,
+		"job": existing,
+		"status": status,
+	}))?))
+}
+
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	validate_start(&params)?;
 	let _start_lane = start_lock(&params.host, params.idempotency_key.as_deref())?;
@@ -2655,7 +3200,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	let digest = request_digest(&params)?;
 	let request_fingerprint = fingerprint(&digest);
 	if let Some(key) = params.idempotency_key.as_deref() {
-		if let Some(mut existing) = find_idempotent(&params.host, key)? {
+		if let Some(mut existing) = find_idempotent_async(&params.host, key).await? {
 			if !matches_request(&existing, &digest)? {
 				bail!("idempotency key `{key}` is already bound to a different request");
 			}
@@ -2785,6 +3330,8 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
+		"request_digest": record.request_digest,
+		"unit": record.unit,
 		"stdout_offset": params.stdout_offset.unwrap_or(0),
 		"stderr_offset": params.stderr_offset.unwrap_or(0),
 		"limit": params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),
@@ -2802,6 +3349,11 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 			JobObservation::PythonRead {
 				job_id: &record.id,
 				job_dir: &record.remote_job_dir,
+				unit: &record.unit,
+				request_digest: record
+					.request_digest
+					.as_deref()
+					.context("legacy job has no full observation binding")?,
 				stdout_offset: params.stdout_offset.unwrap_or(0),
 				stderr_offset: params.stderr_offset.unwrap_or(0),
 				limit: params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),
@@ -2814,7 +3366,7 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 	} else {
 		run_python_json(
 			host,
-			&private_remote_code(READ_CODE)?,
+			&bound_remote_code(READ_CODE)?,
 			&request,
 			Duration::from_secs(15),
 		)
@@ -2859,6 +3411,7 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
+		"request_digest": record.request_digest,
 		"unit": record.unit,
 		"grace_seconds": params.grace_seconds.unwrap_or(10).min(30),
 	});
@@ -2868,7 +3421,7 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 	} else {
 		run_python_json(
 			host,
-			&private_remote_code(CANCEL_CODE)?,
+			&bound_remote_code(CANCEL_CODE)?,
 			&request,
 			Duration::from_secs(45),
 		)
@@ -3294,3 +3847,19 @@ mod terminal_publication_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "jobs_owner_metadata_tests.rs"]
 mod owner_metadata_tests;
+
+#[cfg(test)]
+#[path = "jobs_security_tests.rs"]
+mod security_tests;
+
+#[cfg(all(test, unix))]
+#[path = "jobs_registry_content_tests.rs"]
+mod registry_content_tests;
+
+#[cfg(test)]
+#[path = "jobs_registry_async_tests.rs"]
+mod registry_async_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_observe_request_tests.rs"]
+mod observe_request_tests;

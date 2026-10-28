@@ -7,6 +7,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::time::Duration;
 
 fn root() -> tempfile::TempDir {
+	// The audit owner requires 0700; do not inherit the test runner's umask.
 	tempfile::Builder::new()
 		.permissions(std::fs::Permissions::from_mode(0o700))
 		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())

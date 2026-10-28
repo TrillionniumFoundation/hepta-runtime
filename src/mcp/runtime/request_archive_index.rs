@@ -405,6 +405,8 @@ enum ParallelEvent {
 	AfterCachedBeforeClaim,
 	BeforePublish,
 	BeforeSnapshotFence,
+	SharedScanStarted,
+	SharedScanComplete,
 }
 #[cfg(test)]
 type ParallelHook = Arc<dyn Fn(ParallelEvent) + Send + Sync>;
@@ -544,7 +546,6 @@ fn stamp_at(directory: &File, filename: &str) -> Result<FileStamp> {
 	let filename = name(filename)?;
 	stamp_at_component(directory, &filename)
 }
-#[allow(clippy::unnecessary_cast)] // libc inode/device widths vary across Unix.
 fn stamp_at_component(directory: &File, filename: &std::ffi::CStr) -> Result<FileStamp> {
 	let mut raw = std::mem::MaybeUninit::<libc::stat>::uninit();
 	if unsafe {
@@ -558,7 +559,10 @@ fn stamp_at_component(directory: &File, filename: &std::ffi::CStr) -> Result<Fil
 	{
 		return Err(std::io::Error::last_os_error().into());
 	}
-	let raw = unsafe { raw.assume_init() };
+	stamp_from_stat(unsafe { raw.assume_init() })
+}
+#[allow(clippy::unnecessary_cast)] // libc inode/device widths vary across Unix.
+fn stamp_from_stat(raw: libc::stat) -> Result<FileStamp> {
 	if raw.st_mode & libc::S_IFMT != libc::S_IFREG
 		|| raw.st_mode & 0o7777 != 0o600
 		|| raw.st_uid != unsafe { libc::geteuid() }
@@ -2110,6 +2114,337 @@ pub(super) struct PageBatch {
 	pub(super) large: bool,
 }
 
+pub(super) struct SharedPageRequest {
+	pub(super) owner: String,
+	pub(super) after_id: Option<String>,
+	pub(super) limit: usize,
+}
+
+struct SharedSnapshot {
+	database: Arc<Database>,
+	version: super::super::namespace_version::Version,
+	generation: u64,
+	applied: u64,
+}
+
+impl SharedSnapshot {
+	fn capture(slot: &Slot, state: &State) -> Result<Option<Self>> {
+		#[cfg(not(target_os = "linux"))]
+		{
+			let _ = (slot, state);
+			Ok(None)
+		}
+		#[cfg(target_os = "linux")]
+		{
+			if state.failed
+				|| state.retired
+				|| state.busy
+				|| !state.large_archive
+				|| !state.pending.is_empty()
+				|| state.applied != state.generation
+			{
+				return Ok(None);
+			}
+			let (
+				Some(database),
+				Some(version @ super::super::namespace_version::Version::Watch(..)),
+			) = (&state.database, state.version)
+			else {
+				return Ok(None);
+			};
+			if content_version(&slot.archive)? != Some(version) {
+				return Ok(None);
+			}
+			Ok(Some(Self {
+				database: database.clone(),
+				version,
+				generation: state.generation,
+				applied: state.applied,
+			}))
+		}
+	}
+
+	fn check(&self, slot: &Slot, state: &State) -> Result<()> {
+		if state.failed
+			|| state.retired
+			|| state.busy
+			|| !state.large_archive
+			|| !state.pending.is_empty()
+			|| state.generation != self.generation
+			|| state.applied != self.applied
+			|| state.version != Some(self.version)
+			|| !state
+				.database
+				.as_ref()
+				.is_some_and(|database| Arc::ptr_eq(database, &self.database))
+			|| content_version(&slot.archive)? != Some(self.version)
+		{
+			bail!("archive shared snapshot changed");
+		}
+		Ok(())
+	}
+}
+
+fn shared_lock_failure(error: StoreLockFailure) -> anyhow::Error {
+	match error {
+		StoreLockFailure::Deadline => anyhow!("archive metadata query total deadline exceeded"),
+		StoreLockFailure::Unavailable => anyhow!("archive metadata unavailable"),
+	}
+}
+
+fn shared_missing(error: &anyhow::Error) -> bool {
+	error
+		.downcast_ref::<std::io::Error>()
+		.is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+}
+
+// None means only a recognized, still-unresolved publication that the original
+// exclusive reader can recover. Never unlink or decode a staging file here.
+fn shared_original(archive: &Archive, filename: &str, deadline: Instant) -> Result<Option<Entry>> {
+	if Instant::now() >= deadline {
+		bail!("archive metadata query total deadline exceeded");
+	}
+	let request_id = filename
+		.strip_suffix(".json")
+		.filter(|value| valid_id(value))
+		.ok_or_else(|| anyhow!("invalid request metadata filename"))?;
+	archive.fence_at(archive.root())?;
+	let directory = archive.directory_for_existing(filename)?;
+	let staging = format!(".{request_id}-{request_id}.tmp");
+	match open_at(directory, &staging, libc::O_RDONLY | libc::O_NONBLOCK, 0) {
+		Ok(_) => return Ok(None),
+		Err(error) if shared_missing(&error) => {}
+		Err(error) => return Err(error),
+	}
+	let original = open_at(directory, filename, libc::O_RDONLY | libc::O_NONBLOCK, 0)?;
+	if original.metadata()?.nlink() == 2 {
+		return Ok(None);
+	}
+	drop(original);
+	let entry = content::read_original(archive, directory, filename, deadline)?;
+	archive.fence_at(archive.root())?;
+	Ok(Some(entry))
+}
+
+fn shared_hot_fence(base: &File, hot: &File, expected: ArchiveStamp) -> Result<()> {
+	let named = open_existing_store_at(base)?
+		.ok_or_else(|| anyhow!("request hot directory changed during shared read"))?;
+	if identity(&named)? != identity(hot)?
+		|| archive_stamp(&named)? != expected
+		|| archive_stamp(hot)? != expected
+		|| !hot_snapshot_cached(hot)?
+	{
+		bail!("request hot snapshot changed during shared read");
+	}
+	Ok(())
+}
+
+pub(super) fn try_shared_pages(
+	root: &Path,
+	requests: &[SharedPageRequest],
+	deadline: Instant,
+) -> Result<Option<PageBatch>> {
+	try_shared_pages_with_gate(
+		root,
+		requests,
+		deadline,
+		STORE_LOCK.get_or_init(AuditStoreLock::default),
+	)
+}
+
+// Keep the same complete production body available to deterministic local-gate
+// tests. The production wrapper always supplies the original global store gate.
+fn try_shared_pages_with_gate(
+	root: &Path,
+	requests: &[SharedPageRequest],
+	deadline: Instant,
+	gate: &AuditStoreLock,
+) -> Result<Option<PageBatch>> {
+	if requests.is_empty() || requests.len() > MAX_METADATA_QUERIES {
+		bail!("archive page group exceeded its admitted bound");
+	}
+	if !cfg!(target_os = "linux") {
+		return Ok(None);
+	}
+	let mut trace = SteadyTrace::new("metadata_drain", Some(false));
+	trace.enter(SteadyPhase::StoreLockWait);
+	let guard = {
+		let _trace = metadata_trace::Stage::new("store_lock_wait");
+		gate.acquire_shared(deadline).map_err(shared_lock_failure)?
+	};
+	metadata_trace::mark("snapshot_lock_acquired", 0, 0);
+	let base = audit_root(root)?;
+	let Some(hot) = open_existing_store_at(&base)? else {
+		return Ok(None);
+	};
+	let hot_stamp = archive_stamp(&hot)?;
+	if !hot_snapshot_cached(&hot)? {
+		return Ok(None);
+	}
+	let legacy = match open_at(&base, ARCHIVE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0) {
+		Ok(directory) => directory,
+		Err(error) if shared_missing(&error) => return Ok(None),
+		Err(error) => return Err(error),
+	};
+	private_directory(&legacy)?;
+	let key = identity(&legacy)?;
+	let Some(registry) = INDEXES.get() else {
+		return Ok(None);
+	};
+	let slot = {
+		let registry = registry
+			.lock()
+			.map_err(|_| anyhow!("archive index unavailable"))?;
+		registry.iter().find(|slot| slot.identity == key).cloned()
+	};
+	let Some(slot) = slot else {
+		return Ok(None);
+	};
+	// A cached flat archive can need the original open/load_layout recovery.
+	// This pure classification precedes the first full layout fence; a real
+	// error from the probe or any subsequent fence never becomes a cache miss.
+	if slot.archive.needs_exclusive_open()? {
+		return Ok(None);
+	}
+	slot.archive.fence_at(&base)?;
+	let _metadata_read = slot.metadata_activity.enter();
+	trace.enter(SteadyPhase::State);
+	let snapshot = {
+		let state = slot
+			.state
+			.lock()
+			.map_err(|_| anyhow!("archive index unavailable"))?;
+		let Some(snapshot) = SharedSnapshot::capture(&slot, &state)? else {
+			return Ok(None);
+		};
+		snapshot
+	};
+	let mut queries = Vec::with_capacity(requests.len());
+	{
+		let _trace = metadata_trace::Stage::new("hot_snapshot_and_cursors");
+		for request in requests {
+			if Instant::now() >= deadline {
+				return Err(MetadataQueryDeadline.into());
+			}
+			let cursor = if let Some(identity) = &request.after_id {
+				let filename = format!("{identity}.json");
+				// Only absence at the initial lookup is a local missing cursor.
+				// All later original, namespace and policy failures are terminal
+				// for this observation and cannot be erased by another fallback.
+				match slot.archive.directory_for_existing(&filename) {
+					Ok(_) => {}
+					Err(error) if shared_missing(&error) => {
+						queries.push(Err(error));
+						continue;
+					}
+					Err(error) => return Err(error),
+				}
+				let Some(entry) = shared_original(&slot.archive, &filename, deadline)? else {
+					return Ok(None);
+				};
+				if entry.record.owner != request.owner {
+					queries.push(Err(anyhow!(
+						"request archive cursor unavailable to this scope"
+					)));
+					continue;
+				}
+				Some(entry.record)
+			} else {
+				None
+			};
+			queries.push(Ok(PageQuery {
+				owner: request.owner.clone(),
+				cursor,
+				limit: request.limit,
+			}));
+		}
+	}
+	trace.enter(SteadyPhase::SnapshotRead);
+	let observed = if queries.iter().all(Result::is_err) {
+		PageBatch {
+			values: queries
+				.into_iter()
+				.map(|query| query.and_then(|_| bail!("archive page refusal coverage changed")))
+				.collect(),
+			large: false,
+		}
+	} else {
+		#[cfg(test)]
+		parallel_event(&slot, ParallelEvent::SharedScanStarted);
+		let view = PendingView::default();
+		{
+			let _trace = metadata_trace::Stage::new("complete_original_verification");
+			content::verify_members(&snapshot.database, &slot.archive, &view, deadline)?;
+		}
+		#[cfg(test)]
+		parallel_event(&slot, ParallelEvent::SharedScanComplete);
+		let _trace = metadata_trace::Stage::new("page_or_usage_projection");
+		let transaction = snapshot.database.begin_read()?;
+		let rows = transaction.open_table(ROWS)?;
+		let order = transaction.open_table(ORDER)?;
+		let counts = transaction.open_table(COUNTS)?;
+		let large = rows.len()? > LARGE_ARCHIVE_ROWS;
+		let mut values = Vec::with_capacity(queries.len());
+		for query in queries {
+			let query = match query {
+				Ok(query) => query,
+				Err(error) => {
+					values.push(Err(error));
+					continue;
+				}
+			};
+			let (records, total) = page_from_view_with_reader(
+				&rows,
+				&order,
+				&counts,
+				&slot.archive,
+				&view,
+				&query.owner,
+				query.cursor.as_ref(),
+				query.limit,
+				deadline,
+				|archive, filename| {
+					shared_original(archive, filename, deadline)?
+						.map(|entry| entry.record)
+						.ok_or_else(|| {
+							anyhow!("archive staging appeared after shared verification")
+						})
+				},
+			)?;
+			// Only the initial local cursor refusals remain per-member. Once the
+			// complete observation starts, no later failure can expose a sibling
+			// success or return to the exclusive recovery path.
+			values.push(Ok(archive_page_output(
+				records,
+				total,
+				query.limit,
+				deadline,
+			)?));
+		}
+		PageBatch { values, large }
+	};
+	let _final_trace = metadata_trace::Stage::new("snapshot_final_fences");
+	#[cfg(test)]
+	parallel_event(&slot, ParallelEvent::BeforeSnapshotFence);
+	let state = slot
+		.state
+		.lock()
+		.map_err(|_| anyhow!("archive index unavailable"))?;
+	snapshot.check(&slot, &state)?;
+	let named_base = audit_root(root)?;
+	if identity(&named_base)? != identity(&base)? {
+		bail!("request audit root changed during shared read");
+	}
+	slot.archive.fence_at(&named_base)?;
+	shared_hot_fence(&named_base, &hot, hot_stamp)?;
+	// The final healthy/deadline observation and reservation release share one
+	// queue critical section. State stays held across that linearization point;
+	// no reader reservation escapes into Completion or permit publication.
+	guard.finish().map_err(shared_lock_failure)?;
+	trace.outcome = "shared";
+	Ok(Some(observed))
+}
+
 pub(super) fn pages(
 	root: &Path,
 	archive: &Archive,
@@ -2172,6 +2507,33 @@ fn page_from_view(
 	limit: usize,
 	deadline: Instant,
 ) -> Result<(Vec<Record>, u64)> {
+	page_from_view_with_reader(
+		rows,
+		order,
+		counts,
+		archive,
+		view,
+		owner,
+		cursor,
+		limit,
+		deadline,
+		Archive::read_record,
+	)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn page_from_view_with_reader(
+	rows: &impl ReadableTable<&'static [u8], &'static [u8]>,
+	order: &impl ReadableTable<&'static [u8], &'static [u8]>,
+	counts: &impl ReadableTable<&'static [u8], u64>,
+	archive: &Archive,
+	view: &PendingView,
+	owner: &str,
+	cursor: Option<&Record>,
+	limit: usize,
+	deadline: Instant,
+	read_record: impl Fn(&Archive, &str) -> Result<Record>,
+) -> Result<(Vec<Record>, u64)> {
 	let owner = id(owner)?;
 	let mut low = [0u8; 80];
 	low[..32].copy_from_slice(&owner);
@@ -2206,7 +2568,7 @@ fn page_from_view(
 				bail!("archive order projection changed");
 			}
 			let filename = format!("{}.json", entry.record.request_id);
-			let actual = archive.read_record(&filename)?;
+			let actual = read_record(archive, &filename)?;
 			if actual != entry.record || stamp(archive, &filename)? != entry.stamp {
 				bail!("archive page identity changed");
 			}
@@ -2263,7 +2625,7 @@ fn page_from_view(
 			bail!("archive metadata query total deadline exceeded");
 		}
 		let filename = format!("{}.json", entry.record.request_id);
-		let actual = archive.read_record(&filename)?;
+		let actual = read_record(archive, &filename)?;
 		if actual != entry.record || stamp(archive, &filename)? != entry.stamp {
 			bail!("archive page identity changed");
 		}

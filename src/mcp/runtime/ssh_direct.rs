@@ -226,12 +226,40 @@ impl Core {
 		if let Some(gate) = self.hooks.after_commit.lock().unwrap().take() {
 			gate.block();
 		}
+		#[cfg(target_os = "linux")]
+		{
+			let controller = unsafe { libc::getpid() };
+			// Drop/deadline cleanup cannot run after controller SIGKILL. Bind only
+			// this local transport child to its lifetime owner; remote durable jobs
+			// retain their independent supervisors. After fork, use syscalls only:
+			// no allocation, locks, environment lookup or Rust error construction.
+			unsafe {
+				request.command.pre_exec(move || {
+					if libc::prctl(
+						libc::PR_SET_PDEATHSIG,
+						libc::SIGKILL as libc::c_ulong,
+						0 as libc::c_ulong,
+						0 as libc::c_ulong,
+						0 as libc::c_ulong,
+					) != 0 || libc::getppid() != controller
+					{
+						libc::_exit(127);
+					}
+					Ok(())
+				});
+			}
+		}
 		let child = request
 			.command
 			.spawn()
 			.with_context(|| format!("failed to start ssh for {}", request.target))?;
 		#[cfg(all(test, unix))]
-		self.hooks.spawned.fetch_add(1, Ordering::AcqRel);
+		{
+			self.hooks.spawned.fetch_add(1, Ordering::AcqRel);
+			self.hooks
+				.last_spawned_pid
+				.store(u64::from(child.id().unwrap_or(0)), Ordering::Release);
+		}
 		let owned = Arc::new(OwnedChild {
 			id,
 			state: AsyncMutex::new(ChildState {

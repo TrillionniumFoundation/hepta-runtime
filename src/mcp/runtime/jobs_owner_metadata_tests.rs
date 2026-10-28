@@ -12,6 +12,7 @@ job=pathlib.Path(q['job'])
 os.umask(0o077)
 request={'job_id':'owner-metadata','job_dir':str(job),'unit':'unused-owner-metadata',
          'launch_nonce':'a'*32,'request_fingerprint':'original-owner-metadata',
+         'request_digest':'a'*64,
          'terminal_publication_protocol':1,'execution_mode':'operator',
          'executable':'/must-not-execute-owner-metadata','args':[],'env':{}}
 def raw(value):return (json.dumps(value,sort_keys=True)+'\n').encode()
@@ -124,7 +125,8 @@ def execute(source,payload,phase):
 
 before=snapshot()
 status_result=execute(q['status'],{'job_id':request['job_id'],'job_dir':str(job),
-                      'unit':request['unit'],'wait_seconds':0},'status')
+                      'unit':request['unit'],'request_digest':request['request_digest'],
+                      'wait_seconds':0},'status')
 after_status=snapshot()
 restart=execute(q['start'],request,'restart')
 after_restart=snapshot()
@@ -146,7 +148,7 @@ fn exercise(kind: &str, target: &str, terminal: bool, legacy: bool, systemd: boo
 		std::fs::set_permissions(directory, std::fs::Permissions::from_mode(0o700)).unwrap();
 	}
 	let payload = json!({"job":job,"kind":kind,"target":target,"terminal":terminal,
-		"legacy":legacy,"systemd":systemd,"status":private_remote_code(STATUS_CODE).unwrap(),
+		"legacy":legacy,"systemd":systemd,"status":bound_remote_code(STATUS_CODE).unwrap(),
 		"start":private_remote_code(START_CODE).unwrap()});
 	let mut child = Command::new("python3")
 		.args(["-I", "-S", "-c", FIXTURE])

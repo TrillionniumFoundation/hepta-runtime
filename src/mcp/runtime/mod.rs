@@ -11,6 +11,7 @@ pub mod config;
 pub mod documents;
 pub mod effect_owner_fence;
 pub mod effective_config;
+pub mod execution;
 pub mod health;
 pub mod inspect;
 pub mod jobs;
@@ -18,6 +19,7 @@ pub mod multi_read;
 #[cfg(unix)]
 mod namespace_version;
 pub mod operator;
+mod privileged_ledger;
 pub mod pty;
 pub mod request_async;
 pub mod request_audit;
@@ -49,4 +51,19 @@ pub async fn prepare_durable_stores() -> anyhow::Result<()> {
 	})
 	.await
 	.map_err(|_| anyhow::anyhow!("private runtime store preparation failed"))?
+}
+
+/// Stop request-scoped work when an embedding controller retires.
+///
+/// Freeze both asynchronous admission paths and the observation pool before
+/// draining their original owners. Shell children and interactive PTYs belong
+/// to this controller; durable host jobs remain queryable after it restarts.
+pub async fn shutdown_request_scoped() {
+	request_async::freeze_admission();
+	ssh::freeze_direct_transport();
+	ssh::freeze_observation_pool();
+	operation_async::freeze_admission();
+	tokio::join!(request_async::shutdown(), operation_async::shutdown());
+	crate::mcp::fs::shell::kill_all_shell_children();
+	pty::close_all_ptys().await;
 }

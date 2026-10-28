@@ -40,6 +40,7 @@ fn typed_python_observations_preserve_scripts_payload_and_deadlines() {
 			job_id: "original-123",
 			job_dir: "/private/jobs/original-123",
 			unit: "fixed-unit",
+			request_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			wait_seconds: wait,
 		})
 		.unwrap();
@@ -53,12 +54,14 @@ fn typed_python_observations_preserve_scripts_payload_and_deadlines() {
 		);
 		assert_eq!(
 			serde_json::from_slice::<Value>(&input).unwrap(),
-			json!({"job_id":"original-123","job_dir":"/private/jobs/original-123","unit":"fixed-unit","wait_seconds":wait.min(30)})
+			json!({"job_id":"original-123","job_dir":"/private/jobs/original-123","request_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","unit":"fixed-unit","wait_seconds":wait.min(30)})
 		);
 		assert_eq!(timeout, Duration::from_secs(wait.min(30) + 10));
 		assert!(!system);
 	}
 	let (command, input, timeout, system) = prepare_observation(JobObservation::PythonRead {
+		unit: "fixed-unit",
+		request_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		job_id: "original-123",
 		job_dir: "/private/jobs/original-123",
 		stdout_offset: 17,
@@ -76,7 +79,7 @@ fn typed_python_observations_preserve_scripts_payload_and_deadlines() {
 	);
 	assert_eq!(
 		serde_json::from_slice::<Value>(&input).unwrap(),
-		json!({"job_id":"original-123","job_dir":"/private/jobs/original-123","stdout_offset":17,"stderr_offset":29,"limit":16384})
+		json!({"job_id":"original-123","job_dir":"/private/jobs/original-123","request_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","unit":"fixed-unit","stdout_offset":17,"stderr_offset":29,"limit":16384})
 	);
 	assert_eq!(timeout, Duration::from_secs(15));
 	assert!(!system);
@@ -86,6 +89,8 @@ fn typed_python_observations_preserve_scripts_payload_and_deadlines() {
 fn observation_identity_data_never_becomes_remote_code() {
 	let injected = "job'; touch SHOULD_NEVER_BE_COMMAND; #";
 	let (command, input, _, _) = prepare_observation(JobObservation::PythonRead {
+		unit: "fixed-unit",
+		request_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		job_id: injected,
 		job_dir: injected,
 		stdout_offset: 0,
@@ -107,6 +112,8 @@ fn opt_in_observation_bound_checks_raw_encoded_and_script_bytes_before_dispatch(
 	let script_budget = "x".repeat(MAX_OBSERVATION_BYTES - 100);
 	for job_dir in [&raw, &escaped, &script_budget] {
 		let error = prepare_observation(JobObservation::PythonRead {
+			unit: "fixed-unit",
+			request_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			job_id: "original-123",
 			job_dir,
 			stdout_offset: 0,

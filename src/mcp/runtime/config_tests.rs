@@ -122,3 +122,106 @@ fn directory_move_does_not_relocate_configured_roots_or_ancestors() {
 	assert!(check_directory_move_against_roots(&ordinary, &roots).is_ok());
 	assert!(check_directory_move_against_roots(&b.join("missing"), &roots).is_err());
 }
+
+#[test]
+fn separate_controllers_cannot_claim_same_state_directory() {
+	let dir = tempfile::tempdir().unwrap();
+	let first = claim_controller_state_dir(dir.path()).unwrap();
+	assert!(claim_controller_state_dir(dir.path()).is_err());
+	drop(first);
+	let recovered = claim_controller_state_dir(dir.path()).unwrap();
+	drop(recovered);
+}
+
+#[test]
+fn controller_owner_is_fenced_across_processes() {
+	let dir = tempfile::tempdir().unwrap();
+	let probe = |expected: &str| {
+		let output = std::process::Command::new(std::env::current_exe().unwrap())
+			.arg("controller_owner_child_probe")
+			.env("HEPTA_OWNER_TEST_DIR", dir.path())
+			.env("HEPTA_OWNER_TEST_EXPECT", expected)
+			.output()
+			.unwrap();
+		assert!(
+			output.status.success(),
+			"stdout: {} stderr: {}",
+			String::from_utf8_lossy(&output.stdout),
+			String::from_utf8_lossy(&output.stderr)
+		);
+	};
+	let first = claim_controller_state_dir(dir.path()).unwrap();
+	probe("denied");
+	drop(first);
+	probe("acquired");
+}
+
+#[test]
+fn controller_owner_child_probe() {
+	let Some(directory) = std::env::var_os("HEPTA_OWNER_TEST_DIR") else {
+		return;
+	};
+	let expected = std::env::var("HEPTA_OWNER_TEST_EXPECT").unwrap();
+	let result = claim_controller_state_dir(Path::new(&directory));
+	assert_eq!(result.is_ok(), expected == "acquired");
+}
+
+#[cfg(unix)]
+#[test]
+fn permissive_owner_lock_is_rejected() {
+	use std::os::unix::fs::PermissionsExt;
+	let dir = tempfile::tempdir().unwrap();
+	let path = dir.path().join("controller.owner.lock");
+	std::fs::write(&path, b"").unwrap();
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+	assert!(claim_controller_state_dir(dir.path()).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn owner_lock_refuses_symlinked_lockfile() {
+	let dir = tempfile::tempdir().unwrap();
+	let target = dir.path().join("redirect");
+	std::fs::write(&target, b"do not change").unwrap();
+	std::os::unix::fs::symlink(&target, dir.path().join("controller.owner.lock")).unwrap();
+	assert!(claim_controller_state_dir(dir.path()).is_err());
+	assert_eq!(std::fs::read(&target).unwrap(), b"do not change");
+}
+
+#[cfg(unix)]
+#[test]
+fn a20_legacy_controller_lock_also_excludes_the_combined_owner() {
+	use std::os::fd::AsRawFd;
+	use std::os::unix::fs::OpenOptionsExt;
+	let dir = tempfile::tempdir().unwrap();
+	let legacy = std::fs::OpenOptions::new()
+		.read(true)
+		.write(true)
+		.create_new(true)
+		.mode(0o600)
+		.open(dir.path().join("controller.lock"))
+		.unwrap();
+	assert_eq!(
+		unsafe { libc::flock(legacy.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+		0
+	);
+	assert!(claim_controller_state_dir(dir.path()).is_err());
+	drop(legacy);
+	let owner = claim_controller_state_dir(dir.path()).unwrap();
+	drop(owner);
+}
+
+#[cfg(unix)]
+#[test]
+fn legacy_controller_lock_never_follows_symlink_or_hardlink() {
+	let dir = tempfile::tempdir().unwrap();
+	let target = dir.path().join("untouched");
+	std::fs::write(&target, b"not a lock").unwrap();
+	let path = dir.path().join("controller.lock");
+	std::os::unix::fs::symlink(&target, &path).unwrap();
+	assert!(claim_controller_state_dir(dir.path()).is_err());
+	std::fs::remove_file(&path).unwrap();
+	std::fs::hard_link(&target, &path).unwrap();
+	assert!(claim_controller_state_dir(dir.path()).is_err());
+	assert_eq!(std::fs::read(target).unwrap(), b"not a lock");
+}

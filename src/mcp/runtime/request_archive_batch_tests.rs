@@ -7,6 +7,77 @@ use std::os::unix::fs::PermissionsExt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 
+#[test]
+#[serial_test::serial]
+fn shared_preflight_leaves_a_missing_store_for_the_original_exclusive_path() {
+	let root = tempfile::Builder::new()
+		.permissions(std::fs::Permissions::from_mode(0o700))
+		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
+		.unwrap();
+	let request = owner(9);
+	let shared = [index::SharedPageRequest {
+		owner: request.owner.clone(),
+		after_id: None,
+		limit: 32,
+	}];
+	let attempt = index::try_shared_pages(root.path(), &shared, budget());
+	assert!(matches!(attempt, Ok(None)));
+	assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+	let observed = read_pages(root.path(), &[request], budget()).unwrap();
+	let value: Value =
+		serde_json::from_str(&observed.replies.into_iter().next().unwrap().unwrap()).unwrap();
+	assert_eq!(value["total"], 0);
+	assert_eq!(value["requests"].as_array().unwrap().len(), 0);
+	assert!(root.path().join(STORE_NAME).is_dir());
+	assert!(root.path().join(ARCHIVE_NAME).is_dir());
+}
+
+#[test]
+#[serial_test::serial]
+fn early_shared_attempt_preserves_expired_budget_and_original_cursor_recovery() {
+	let (root, owners, ids) = page_fixture();
+	let request_id = &ids[0][0];
+	let original = root
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!("{request_id}.json"));
+	let staging = root
+		.path()
+		.join(ARCHIVE_NAME)
+		.join(format!(".{request_id}-{request_id}.tmp"));
+	let bytes = std::fs::read(&original).unwrap();
+	{
+		let _guard = store_lock().unwrap();
+		std::fs::hard_link(&original, &staging).unwrap();
+	}
+	let requests = [Query {
+		owner: owners[0].owner.clone(),
+		params: RequestHistoryParams {
+			after_id: Some(request_id.clone()),
+			limit: Some(32),
+		},
+	}];
+	let expired = read_pages(
+		root.path(),
+		&requests,
+		Instant::now() - Duration::from_millis(1),
+	);
+	assert!(expired.is_err());
+	assert_eq!(std::fs::read(&staging).unwrap(), bytes);
+	assert_eq!(std::fs::read(&original).unwrap(), bytes);
+	// This is a separate explicit test invocation, not an automatic retry.
+	// No ready large slot exists yet; the original exclusive cursor recovery
+	// precedes the first ordinary index build and may remove its known alias.
+	let observed = read_pages(root.path(), &requests, budget()).unwrap();
+	let value: Value =
+		serde_json::from_str(&observed.replies.into_iter().next().unwrap().unwrap()).unwrap();
+	assert_eq!(value["total"], 4);
+	assert_eq!(value["requests"].as_array().unwrap().len(), 3);
+	assert_eq!(value["requests"][0]["request_id"], ids[0][1]);
+	assert!(!staging.exists());
+	assert_eq!(std::fs::read(original).unwrap(), bytes);
+}
+
 fn owner(index: usize) -> Query {
 	Query {
 		owner: format!("{index:064x}"),
@@ -50,7 +121,7 @@ fn replies(requests: &[Query]) -> ObservedPages {
 }
 
 // Membership tests use a future entry clock and call freeze directly. They do
-// not depend on scheduling four OS threads within 1 ms. The real fixed cutoff
+// not depend on scheduling four OS threads within 2 ms. The real fixed cutoff
 // and its elapsed collection path are checked separately below.
 struct FixedGroup<'a> {
 	coordinator: &'a Arc<Coordinator>,
@@ -233,8 +304,13 @@ fn freeze_excludes_late_callers_and_completed_results_are_not_reused() {
 	let coordinator = Arc::new(Coordinator::default());
 	let root = Path::new("/synthetic/no-late-join");
 	let mut first = FixedGroup::new(&coordinator, root, &owner(0));
+	let original = first.leader.as_ref().unwrap().group.clone();
+	// Freeze, not elapsed collection time, closes this group's membership.
+	assert!(Instant::now() < original.collect_until);
 	let a = first.freeze();
+	assert!(original.cleanup_state().frozen);
 	let mut second = FixedGroup::new(&coordinator, root, &owner(1));
+	assert!(Instant::now() < original.collect_until);
 	assert!(!Arc::ptr_eq(
 		&first.leader.as_ref().unwrap().group,
 		&second.leader.as_ref().unwrap().group
@@ -245,6 +321,10 @@ fn freeze_excludes_late_callers_and_completed_results_are_not_reused() {
 	second.finish(Ok(replies(&b.requests)));
 	assert_eq!(second.results().len(), 1);
 	let mut third = FixedGroup::new(&coordinator, root, &owner(0));
+	assert!(!Arc::ptr_eq(
+		&original,
+		&third.leader.as_ref().unwrap().group
+	));
 	let c = third.freeze();
 	third.finish(Ok(replies(&c.requests)));
 	assert_eq!(third.results().len(), 1);
@@ -294,7 +374,7 @@ fn different_root_keys_never_share_a_group() {
 }
 
 #[test]
-fn fixed_cutoff_is_one_millisecond_and_new_members_never_extend_it() {
+fn fixed_cutoff_is_two_milliseconds_without_rebasing_original_deadlines() {
 	let coordinator = Arc::new(Coordinator::default());
 	let entered = Instant::now() + Duration::from_secs(30);
 	let mut group = FixedGroup::at(
@@ -303,15 +383,20 @@ fn fixed_cutoff_is_one_millisecond_and_new_members_never_extend_it() {
 		&owner(0),
 		entered,
 	);
+	let original = group.leader.as_ref().unwrap().group.clone();
+	let first_deadline = original.cleanup_state().deadline();
+	group.add(&owner(1), first_deadline + Duration::from_secs(10));
+	assert_eq!(original.cleanup_state().deadline(), first_deadline);
+	assert_eq!(index::QUERY_BUDGET, Duration::from_secs(3));
+	assert_eq!(COLLECT_WINDOW, Duration::from_millis(2));
+	assert_eq!(original.collect_until, entered + Duration::from_millis(2));
 	let earlier = Instant::now() + Duration::from_secs(5);
-	group.add(&owner(1), earlier);
-	assert_eq!(COLLECT_WINDOW, Duration::from_millis(1));
-	assert_eq!(
-		group.completion.as_ref().unwrap().group.collect_until,
-		entered + Duration::from_millis(1)
-	);
+	group.add(&owner(2), earlier);
+	assert_eq!(original.cleanup_state().deadline(), earlier);
+	assert_eq!(original.collect_until, entered + COLLECT_WINDOW);
 	let frozen = group.freeze();
 	assert_eq!(frozen.deadline, earlier);
+	assert_eq!(frozen.requests, vec![owner(0), owner(1), owner(2)]);
 	group.finish(Ok(replies(&frozen.requests)));
 	assert!(group.results().into_iter().all(|result| result.is_ok()));
 }
@@ -331,6 +416,33 @@ fn real_collect_waits_only_for_the_original_fixed_cutoff() {
 	let frozen = group.freeze();
 	group.finish(Ok(replies(&frozen.requests)));
 	assert!(group.results().pop().unwrap().is_ok());
+}
+
+#[test]
+fn original_minimum_deadline_ends_collection_before_a_still_open_cutoff() {
+	let coordinator = Arc::new(Coordinator::default());
+	let mut group = FixedGroup::new(
+		&coordinator,
+		Path::new("/synthetic/collection-deadline"),
+		&owner(0),
+	);
+	let original = group.leader.as_ref().unwrap().group.clone();
+	let earlier = Instant::now() + Duration::from_secs(1);
+	group.add(&owner(1), earlier);
+	// Only the entry clock is synthetic. The admitted caller's real absolute
+	// deadline expires while the original collection cutoff is still future.
+	group.completion.as_ref().unwrap().collect().unwrap();
+	assert!(Instant::now() >= earlier);
+	assert!(Instant::now() < original.collect_until);
+	assert_eq!(original.cleanup_state().deadline(), earlier);
+	let error = group.completion.as_ref().unwrap().freeze().err().unwrap();
+	assert!(error.is::<MetadataQueryDeadline>());
+	assert!(original.cleanup_state().frozen);
+	assert!(coordinator.registry.lock().unwrap().collecting.is_empty());
+	group.finish(Err(error));
+	for result in group.results() {
+		assert!(result.unwrap_err().is::<MetadataQueryDeadline>());
+	}
 }
 
 #[test]
@@ -808,12 +920,19 @@ fn actual_execute_keeps_small_archives_out_of_collection_and_collects_known_larg
 		let coordinator = Arc::new(Coordinator::default());
 		coordinator.remember(root, large);
 		let calls = AtomicUsize::new(0);
+		let deadline = budget();
 		let value = coordinator
-			.execute(root, &[owner(0)], budget(), |_, requests, _| {
-				calls.fetch_add(1, Ordering::Relaxed);
-				assert!(coordinator.registry.lock().unwrap().collecting.is_empty());
-				Ok(replies(requests))
-			})
+			.execute(
+				root,
+				&[owner(0)],
+				deadline,
+				|_, requests, observed_deadline| {
+					calls.fetch_add(1, Ordering::Relaxed);
+					assert_eq!(observed_deadline, deadline);
+					assert!(coordinator.registry.lock().unwrap().collecting.is_empty());
+					Ok(replies(requests))
+				},
+			)
 			.unwrap();
 		assert_eq!(value, format!("private-{}", owner(0)));
 		assert_eq!(calls.load(Ordering::Relaxed), 1);

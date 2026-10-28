@@ -18,8 +18,7 @@ use clap::Parser;
 use tracing::Level;
 
 mod cli;
-pub mod mcp;
-pub mod utils;
+use hepta_runtime::mcp;
 
 use cli::{Cli, Commands};
 
@@ -168,16 +167,7 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 
 	// Kill request-scoped shell trees and interactive SSH PTYs. Durable runtime jobs
 	// are deliberately independent and remain queryable after this process restarts.
-	mcp::runtime::request_async::freeze_admission();
-	mcp::runtime::ssh::freeze_direct_transport();
-	mcp::runtime::ssh::freeze_observation_pool();
-	mcp::runtime::operation_async::freeze_admission();
-	tokio::join!(
-		mcp::runtime::request_async::shutdown(),
-		mcp::runtime::operation_async::shutdown()
-	);
-	mcp::fs::shell::kill_all_shell_children();
-	mcp::runtime::pty::close_all_ptys().await;
+	mcp::runtime::shutdown_request_scoped().await;
 
 	Ok(())
 }
@@ -301,16 +291,7 @@ async fn run_http_server(
 		.await;
 
 	// Same orphan cleanup as STDIO shutdown. Durable runtime jobs are unaffected.
-	mcp::runtime::request_async::freeze_admission();
-	mcp::runtime::ssh::freeze_direct_transport();
-	mcp::runtime::ssh::freeze_observation_pool();
-	mcp::runtime::operation_async::freeze_admission();
-	tokio::join!(
-		mcp::runtime::request_async::shutdown(),
-		mcp::runtime::operation_async::shutdown()
-	);
-	mcp::fs::shell::kill_all_shell_children();
-	mcp::runtime::pty::close_all_ptys().await;
+	mcp::runtime::shutdown_request_scoped().await;
 
 	Ok(())
 }

@@ -8,7 +8,18 @@ on:
       - 'feat/**'
       - 'codex/**'
       - 'fix/**'
+      - 'perf/**'
+      - 'experiment/**'
   pull_request:
+    branches:
+      - hepta-runtime-base
+      # Candidate branches are protected by exact HEAD and synthetic-merge gates.
+      # Stacked fix and integration PRs otherwise receive no CI event.
+      - 'fix/**'
+      - 'perf/**'
+      - 'experiment/**'
+      - 'dot/**'
+      - 'codex/**'
   workflow_dispatch:
 
 permissions:
@@ -19,22 +30,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  runtime-ci:
+  runtime-head-ci:
     name: Rust exact-head validation
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
-      - name: Checkout exact head
+      - name: Checkout exact source HEAD
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Install integration test tools
+      - name: Verify checked-out source identity
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes ripgrep python3-jsonschema
-          rg --version
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          printf 'SOURCE_HEAD_SHA=%s\n' "$EXPECTED_HEAD_SHA"
 
       - name: Install pinned Rust toolchain
         run: |
@@ -48,16 +60,27 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Check all targets
-        run: cargo check --locked --all-targets
+        run: cargo check --locked --all-targets --all-features
 
       - name: Clippy
-        run: cargo clippy --locked --all-targets -- -D warnings
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
-      - name: Test
+      - name: Install pinned nextest
         run: |
-          # Private fixtures must declare their own permissions under a normal umask.
+          cargo install --locked --version '=0.9.137' cargo-nextest
+          cargo nextest --version
+
+      - name: Install integration test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ripgrep python3-jsonschema
+          rg --version
+
+      - name: Test in isolated processes
+        run: |
           umask 022
-          cargo test --locked --all-targets
+          cargo nextest run --locked --all-targets --all-features \
+            --test-threads 1 --retries 0 --no-fail-fast
 
       - name: Descriptor-relative file safety
         run: /usr/bin/python3 tests/file_capabilities.py
@@ -80,5 +103,90 @@ jobs:
           /usr/bin/python3 -B deploy/maintenance_20261017/native_rollout_tests.py
           /usr/bin/python3 -B deploy/maintenance_20261017/recover_control_channel_tests.py
 
+      - name: X230 qualification evidence regressions
+        run: /usr/bin/python3 -B -m unittest discover -s tools/x230/20261028 -p '*_tests.py' -v
+
       - name: Release build
-        run: cargo build --locked --release
+        run: cargo build --locked --all-features --release --bins --examples
+
+  runtime-merge-ci:
+    name: Rust prospective-merge validation
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout GitHub prospective merge
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Verify checked-out merge identity
+        env:
+          EXPECTED_MERGE_SHA: ${{ github.sha }}
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MERGE_SHA"
+          test "$EXPECTED_MERGE_SHA" != "$EXPECTED_HEAD_SHA"
+          printf 'PROSPECTIVE_MERGE_SHA=%s SOURCE_HEAD_SHA=%s\n' "$EXPECTED_MERGE_SHA" "$EXPECTED_HEAD_SHA"
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup component add rustfmt clippy --toolchain 1.95.0
+          rustup default 1.95.0
+          rustc --version
+          cargo --version
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Check all targets
+        run: cargo check --locked --all-targets --all-features
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Install pinned nextest
+        run: |
+          cargo install --locked --version '=0.9.137' cargo-nextest
+          cargo nextest --version
+
+      - name: Install integration test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ripgrep python3-jsonschema
+          rg --version
+
+      - name: Test in isolated processes
+        run: |
+          umask 022
+          cargo nextest run --locked --all-targets --all-features \
+            --test-threads 1 --retries 0 --no-fail-fast
+
+      - name: Descriptor-relative file safety
+        run: /usr/bin/python3 tests/file_capabilities.py
+
+      - name: Control-plane regression
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B tests/runtime_registry_page_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v11_layered_read_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v11_process_start_concurrency_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v11_v4_session_binding_tests.py
+          /usr/bin/python3 -B tests/runtime_workflow_owner_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v10_single_v4_effect_tests.py
+          /usr/bin/python3 -B tests/chatgpt_v10_stream_custody_tests.py
+          /usr/bin/python3 -B tests/test_computer_http.py
+          /usr/bin/python3 -B tests/full_operator_facade_tests.py
+          /usr/bin/python3 -B tests/full_operator_cancel_tests.py
+          /usr/bin/python3 -B tests/chatgpt_request_identity_tests.py
+          /usr/bin/python3 -B tests/full_operator_session_recovery_tests.py
+          /usr/bin/python3 -B deploy/maintenance_20261017/native_rollout_tests.py
+          /usr/bin/python3 -B deploy/maintenance_20261017/recover_control_channel_tests.py
+
+      - name: X230 qualification evidence regressions
+        run: /usr/bin/python3 -B -m unittest discover -s tools/x230/20261028 -p '*_tests.py' -v
+
+      - name: Release build
+        run: cargo build --locked --all-features --release --bins --examples

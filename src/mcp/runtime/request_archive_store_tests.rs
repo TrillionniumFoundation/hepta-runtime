@@ -4,6 +4,330 @@
 use super::*;
 use std::os::unix::fs::PermissionsExt;
 
+#[test]
+fn stack_original_components_match_owned_bytes_and_refuse_invalid_bounds() {
+	for prefix in 0..=255u8 {
+		let filename = format!("{prefix:02x}{}.json", "a".repeat(62));
+		filename_id(&filename).unwrap();
+		let owned = name(&filename).unwrap();
+		let mut bytes = [0xa5; ORIGINAL_COMPONENT_BYTES];
+		let storage = bytes.as_ptr();
+		let component = stack_original_component(&filename, &mut bytes).unwrap();
+		assert_eq!(component.to_bytes_with_nul(), owned.as_bytes_with_nul());
+		assert_eq!(component.as_ptr().cast::<u8>(), storage);
+		assert_eq!(component.to_str().unwrap(), filename);
+	}
+	for length in [0, 1, 2, 68, 70, 71, 2048] {
+		let mut bytes = [0xa5; ORIGINAL_COMPONENT_BYTES];
+		let before = bytes;
+		let error = stack_original_component(&"a".repeat(length), &mut bytes)
+			.expect_err("a changed bound must not panic or truncate");
+		assert_eq!(error.to_string(), "invalid private metadata component");
+		assert_eq!(bytes, before);
+	}
+	for nul in [0, 1, 32, 64, 68] {
+		let mut filename = format!("{}.json", "a".repeat(64)).into_bytes();
+		filename[nul] = 0;
+		let filename = String::from_utf8(filename).unwrap();
+		let mut bytes = [0xa5; ORIGINAL_COMPONENT_BYTES];
+		assert_eq!(
+			stack_original_component(&filename, &mut bytes)
+				.expect_err("interior NUL accepted")
+				.to_string(),
+			name(&filename)
+				.expect_err("interior NUL accepted")
+				.to_string()
+		);
+	}
+}
+
+#[test]
+fn constant_and_all_shard_components_match_original_owned_spelling() {
+	assert_eq!(
+		LEGACY_COMPONENT.to_bytes_with_nul(),
+		name(ARCHIVE_NAME).unwrap().as_bytes_with_nul()
+	);
+	assert_eq!(LEGACY_COMPONENT.to_str().unwrap(), ARCHIVE_NAME);
+	for index in 0..=255u8 {
+		let prefix = format!("{index:02x}");
+		let bytes = shard_component_bytes(&prefix).unwrap();
+		let component = std::ffi::CStr::from_bytes_with_nul(&bytes).unwrap();
+		assert_eq!(
+			component.to_bytes_with_nul(),
+			name(&prefix).unwrap().as_bytes_with_nul()
+		);
+		assert_eq!(component.to_str().unwrap(), prefix);
+	}
+	for prefix in ["", "a", "000", "0000"] {
+		assert_eq!(
+			shard_component_bytes(prefix).unwrap_err().to_string(),
+			"invalid private metadata component"
+		);
+	}
+	for prefix in ["\0a", "a\0"] {
+		let bytes = shard_component_bytes(prefix).unwrap();
+		assert!(std::ffi::CStr::from_bytes_with_nul(&bytes).is_err());
+		assert!(name(prefix).is_err());
+	}
+}
+
+// Frozen from the actual pre-A60 store helper. Keep an independent policy
+// oracle: the generic production wrapper now calls the component helper too.
+fn frozen_named_directory(directory: &File, filename: &str, held: &File) -> Result<()> {
+	let named = named_stat(directory, filename)?
+		.ok_or_else(|| anyhow!("request archive directory disappeared"))?;
+	let pinned = private_directory_metadata(held)?;
+	if named.st_mode & libc::S_IFMT != libc::S_IFDIR
+		|| named.st_uid != unsafe { libc::geteuid() }
+		|| named.st_mode & 0o7777 != 0o700
+		|| (named.st_dev as u64, named.st_ino as u64) != (pinned.dev(), pinned.ino())
+	{
+		bail!("request archive directory binding changed");
+	}
+	Ok(())
+}
+
+#[test]
+fn buffered_directory_fences_match_frozen_policy_after_real_path_mutations() {
+	for component in [ARCHIVE_NAME, "00", "a5", "ff"] {
+		for mutation in 0..6 {
+			let root = tempfile::tempdir().unwrap();
+			std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+			let parent = File::open(root.path()).unwrap();
+			let path = root.path().join(component);
+			let retained = root.path().join("retained-directory");
+			std::fs::create_dir(&path).unwrap();
+			std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+			let held = File::open(&path).unwrap();
+			match mutation {
+				0 => {}
+				1 => {
+					std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+						.unwrap();
+				}
+				2 => {
+					std::fs::rename(&path, &retained).unwrap();
+					std::fs::create_dir(&path).unwrap();
+					std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))
+						.unwrap();
+				}
+				3 => {
+					// Missing named path wins before even an unsafe held policy.
+					std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+						.unwrap();
+					std::fs::rename(&path, &retained).unwrap();
+				}
+				4 => {
+					std::fs::rename(&path, &retained).unwrap();
+					std::os::unix::fs::symlink(&retained, &path).unwrap();
+				}
+				5 => {
+					std::fs::rename(&path, &retained).unwrap();
+					std::fs::write(&path, b"not a directory").unwrap();
+					std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+						.unwrap();
+				}
+				_ => unreachable!(),
+			}
+			let original = frozen_named_directory(&parent, component, &held);
+			let current = if component == ARCHIVE_NAME {
+				named_directory_component(&parent, LEGACY_COMPONENT, &held)
+			} else {
+				named_shard_directory(&parent, component, &held)
+			};
+			let generic = named_directory(&parent, component, &held);
+			assert_eq!(original.is_ok(), mutation == 0);
+			match (original, current, generic) {
+				(Ok(()), Ok(()), Ok(())) => {}
+				(Err(original), Err(current), Err(generic)) => {
+					assert_eq!(current.to_string(), original.to_string());
+					assert_eq!(generic.to_string(), original.to_string());
+				}
+				_ => {
+					panic!("directory fence behavior changed for {component}, mutation={mutation}")
+				}
+			}
+		}
+	}
+}
+
+#[test]
+fn stack_duplicate_probe_preserves_staging_short_circuit_and_wrong_shard_order() {
+	let _guard = store_lock().unwrap();
+	let (root, archive) = fixture();
+	archive.initialize_shards().unwrap();
+	let value = record(0xa5, 0x60);
+	let filename = filename(&value);
+	save_archive_with_sync(&archive, &value, false, true).unwrap();
+	let original = root.path().join(SHARD_ROOT).join("a5").join(&filename);
+	let duplicate = root.path().join(ARCHIVE_NAME).join(&filename);
+	std::fs::copy(&original, &duplicate).unwrap();
+	let mut visited = 0;
+	let error = archive
+		.walk(|_, _, _| {
+			visited += 1;
+			Ok(())
+		})
+		.unwrap_err();
+	assert_eq!(
+		error.to_string(),
+		"duplicate request archive identity across namespaces"
+	);
+	assert_eq!(visited, 1, "duplicate shard must be refused before visit");
+	let mut joined = 0;
+	archive
+		.walk_for_complete_identity_join(|_, _, _| {
+			joined += 1;
+			Ok(())
+		})
+		.unwrap();
+	assert_eq!(
+		joined, 2,
+		"cold exact join must still observe both physical members"
+	);
+	std::fs::remove_file(&duplicate).unwrap();
+	let staging = format!(".{}-{}.tmp", value.request_id, "b".repeat(64));
+	assert!(staging.len() >= ORIGINAL_COMPONENT_BYTES);
+	let staging_path = original.parent().unwrap().join(&staging);
+	std::fs::write(&staging_path, b"").unwrap();
+	std::fs::set_permissions(&staging_path, std::fs::Permissions::from_mode(0o600)).unwrap();
+	let mut names = Vec::new();
+	archive
+		.walk(|_, member, _| {
+			names.push(member.to_owned());
+			Ok(())
+		})
+		.unwrap();
+	names.sort();
+	let mut expected = vec![filename.clone(), staging];
+	expected.sort();
+	assert_eq!(names, expected);
+	std::fs::remove_file(staging_path).unwrap();
+	std::fs::copy(&original, &duplicate).unwrap();
+	std::fs::rename(
+		&original,
+		root.path().join(SHARD_ROOT).join("b6").join(&filename),
+	)
+	.unwrap();
+	let error = archive.walk(|_, _, _| Ok(())).unwrap_err();
+	assert_eq!(
+		error.to_string(),
+		"request archive identity is in the wrong shard"
+	);
+}
+
+#[test]
+fn flat_shared_probe_preserves_durable_controls_until_the_original_cached_open() {
+	let _guard = store_lock().unwrap();
+	for cut in [InitStep::Intent, InitStep::Anchor, InitStep::IntentRemoved] {
+		let (root, archive) = fixture();
+		let value = record(0x56, 41);
+		save_archive_with_sync(&archive, &value, false, true).unwrap();
+		assert!(!archive.needs_exclusive_open().unwrap());
+		assert!(archive
+			.initialize_with(&mut |step| {
+				if step == cut {
+					bail!("injected shared-preflight initialization boundary");
+				}
+				Ok(())
+			})
+			.is_err());
+		assert!(archive.0.layout.get().is_none());
+		let control = if cut == InitStep::Intent {
+			SHARD_INTENT
+		} else {
+			SHARD_ANCHOR
+		};
+		let prefix = if cut == InitStep::Intent {
+			".archive-v12-init-"
+		} else {
+			".archive-v12-anchor-"
+		};
+		let alias = root.path().join(format!("{prefix}{}.tmp", "d".repeat(64)));
+		std::fs::hard_link(root.path().join(control), &alias).unwrap();
+		let original = root.path().join(ARCHIVE_NAME).join(filename(&value));
+		let capture = || {
+			let controls: Vec<_> = [SHARD_INTENT, SHARD_ANCHOR]
+				.into_iter()
+				.filter_map(|name| {
+					let path = root.path().join(name);
+					path.exists().then(|| {
+						(
+							name,
+							std::fs::read(&path).unwrap(),
+							file_stamp(&std::fs::metadata(path).unwrap()),
+						)
+					})
+				})
+				.collect();
+			(
+				controls,
+				std::fs::read(&alias).unwrap(),
+				file_stamp(&std::fs::metadata(&alias).unwrap()),
+				std::fs::read(&original).unwrap(),
+				file_stamp(&std::fs::metadata(&original).unwrap()),
+				file_stamp(&archive.root().metadata().unwrap()),
+			)
+		};
+		let before = capture();
+		assert!(archive.needs_exclusive_open().unwrap());
+		assert!(archive.needs_exclusive_open().unwrap());
+		assert_eq!(capture(), before);
+		// Keep the live Inner: the original cached open must still recover all
+		// three durable boundaries and its recognized nlink=2 metadata alias.
+		let reopened = open_archive(root.path()).unwrap();
+		assert!(Arc::ptr_eq(&archive.0, &reopened.0));
+		assert!(archive.0.layout.get().is_some());
+		assert!(!archive.needs_exclusive_open().unwrap());
+		assert!(!alias.exists());
+		assert!(!root.path().join(SHARD_INTENT).exists());
+		assert_eq!(std::fs::read(original).unwrap(), before.3);
+		assert!(archive.read_record(&filename(&value)).unwrap() == value);
+	}
+}
+
+#[test]
+fn flat_shared_probe_retains_the_original_directory_size_boundary() {
+	let _guard = store_lock().unwrap();
+	let (root, archive) = fixture();
+	let surrogate = root.path().join("size-boundary-only");
+	let file = std::fs::OpenOptions::new()
+		.read(true)
+		.write(true)
+		.create_new(true)
+		.open(&surrogate)
+		.unwrap();
+	std::fs::set_permissions(&surrogate, std::fs::Permissions::from_mode(0o600)).unwrap();
+	let probe = Archive(Arc::new(Inner {
+		root: archive.0.root.clone(),
+		legacy: Arc::new(file),
+		legacy_anchor: PinnedAnchor::open(archive.root()).unwrap(),
+		root_identity: archive.0.root_identity,
+		legacy_identity: archive.0.legacy_identity,
+		layout: OnceLock::new(),
+	}));
+	// A sparse regular file models only metadata.len at the old limit. It is
+	// deliberately not a directory and must never pass the real archive fence.
+	for length in [
+		FLAT_DIRECTORY_LIMIT - 1,
+		FLAT_DIRECTORY_LIMIT,
+		FLAT_DIRECTORY_LIMIT + 1,
+	] {
+		probe.legacy().set_len(length).unwrap();
+		let before = file_stamp(&probe.legacy().metadata().unwrap());
+		assert_eq!(
+			probe.needs_exclusive_open().unwrap(),
+			length >= FLAT_DIRECTORY_LIMIT
+		);
+		assert_eq!(file_stamp(&probe.legacy().metadata().unwrap()), before);
+		assert!(probe.fence_at(archive.root()).is_err());
+		assert!(probe.0.layout.get().is_none());
+	}
+	assert!(!root.path().join(SHARD_ANCHOR).exists());
+	assert!(!root.path().join(SHARD_ROOT).exists());
+	assert!(!root.path().join(SHARD_INTENT).exists());
+}
+
 fn fixture() -> (tempfile::TempDir, Archive) {
 	let root = tempfile::tempdir().unwrap();
 	std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700)).unwrap();

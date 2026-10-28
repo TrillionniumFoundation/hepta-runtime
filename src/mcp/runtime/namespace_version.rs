@@ -28,8 +28,8 @@ pub(super) fn version(directory: &File) -> Result<Version> {
 	fingerprint(directory)
 }
 
-/// Archive snapshots also depend on child bytes and permissions. Keep these
-/// watches separate so hot admission caches retain their namespace-only policy.
+/// Archive and job-registry snapshots also depend on child bytes and permissions.
+/// Keep these separate from callers that need only directory membership changes.
 pub(super) fn content_version(directory: &File) -> Result<Option<Version>> {
 	#[cfg(target_os = "linux")]
 	{
@@ -202,6 +202,13 @@ fn fingerprint(directory: &File) -> Result<Version> {
 
 #[cfg(target_os = "linux")]
 const MAX_WATCHES: usize = 128;
+// A continuously busy directory must not monopolize the shared content lock.
+// Interrupted reads consume the same attempt budget; exhausting either bound
+// is an incomplete observation, never authority to reuse the previous token.
+#[cfg(target_os = "linux")]
+const MAX_DRAIN_READS: usize = 64;
+#[cfg(target_os = "linux")]
+const MAX_DRAIN_EVENTS: usize = 16_384;
 #[cfg(target_os = "linux")]
 struct Watch {
 	// Holding the inode prevents reuse of its identity while it is cached.
@@ -261,17 +268,30 @@ impl Watcher {
 	}
 	fn drain(&mut self) -> Result<()> {
 		use std::io::Read;
+		self.drain_with_reader(|mut events, buffer| events.read(buffer))
+	}
+	fn drain_with_reader(
+		&mut self,
+		mut read: impl FnMut(&File, &mut [u8]) -> std::io::Result<usize>,
+	) -> Result<()> {
 		let mut buffer = [0u8; 16 * 1024];
-		loop {
-			let count = match (&self.events).read(&mut buffer) {
+		let mut processed = 0;
+		for _ in 0..MAX_DRAIN_READS {
+			let count = match read(&self.events, &mut buffer) {
 				Ok(0) => anyhow::bail!("namespace event stream closed"),
 				Ok(count) => count,
-				Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
+				Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => return Ok(()),
 				Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
 				Err(error) => return Err(error.into()),
 			};
+			if count > buffer.len() {
+				anyhow::bail!("invalid namespace event read length");
+			}
 			let mut offset = 0;
 			while offset < count {
+				if processed == MAX_DRAIN_EVENTS {
+					anyhow::bail!("namespace event drain budget exhausted");
+				}
 				let size = std::mem::size_of::<libc::inotify_event>();
 				if count - offset < size {
 					anyhow::bail!("truncated namespace event");
@@ -289,9 +309,10 @@ impl Watcher {
 					anyhow::bail!("truncated namespace event name");
 				}
 				self.changed(event.wd, event.mask)?;
+				processed += 1;
 			}
 		}
-		Ok(())
+		anyhow::bail!("namespace event drain budget exhausted")
 	}
 	fn version(&mut self, directory: &File) -> Result<Version> {
 		self.version_with_pin(directory, None)
@@ -301,8 +322,19 @@ impl Watcher {
 		directory: &File,
 		shared_pin: Option<&std::sync::Arc<File>>,
 	) -> Result<Version> {
+		use std::io::Read;
+		self.version_with_reader(directory, shared_pin, |mut events, buffer| {
+			events.read(buffer)
+		})
+	}
+	fn version_with_reader(
+		&mut self,
+		directory: &File,
+		shared_pin: Option<&std::sync::Arc<File>>,
+		read: impl FnMut(&File, &mut [u8]) -> std::io::Result<usize>,
+	) -> Result<Version> {
 		use std::os::unix::fs::MetadataExt;
-		if let Err(error) = self.drain() {
+		if let Err(error) = self.drain_with_reader(read) {
 			self.changed(-1, libc::IN_Q_OVERFLOW)?;
 			return Err(error);
 		}
@@ -389,3 +421,7 @@ mod tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "namespace_content_watch_tests.rs"]
 mod content_watch_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "namespace_drain_budget_tests.rs"]
+mod drain_budget_tests;

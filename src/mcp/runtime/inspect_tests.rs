@@ -122,8 +122,10 @@ fn pinned_action_completion_audit_failure_preserves_real_exit_and_output_without
 
 #[test]
 fn pinned_action_intent_unknown_ack_and_wire_limits_fail_closed_without_raw_diagnostics() {
-	let params: PrivilegedActionParams =
-		serde_json::from_value(json!({"host":"main","action":"owned-fixture","args":[]})).unwrap();
+	let params: PrivilegedActionParams = serde_json::from_value(
+		json!({"host":"main","action":"owned-fixture","idempotency_key":"owned-fixture-key","args":[]}),
+	)
+	.unwrap();
 	assert!(
 		require_privileged_intent(Err(anyhow::anyhow!("SECRET_PATH")))
 			.unwrap_err()

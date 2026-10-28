@@ -124,16 +124,28 @@ enum DurableState {
 	Failed,
 }
 
-#[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-struct Record {
-	request_id: String,
-	owner: String,
-	tool_name: String,
-	state: DurableState,
-	accepted_unix_ms: u128,
-	elapsed_ms: Option<u64>,
+mod record_schema {
+	use super::DurableState;
+	use serde::{Deserialize, Serialize};
+
+	// Serde derives its default Visitor diagnostic from the Rust identifier,
+	// not serde(rename). Keep the original name for both string specializations.
+	#[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
+	#[serde(deny_unknown_fields)]
+	pub(super) struct Record<S> {
+		pub(super) request_id: S,
+		pub(super) owner: S,
+		pub(super) tool_name: S,
+		pub(super) state: DurableState,
+		pub(super) accepted_unix_ms: u128,
+		pub(super) elapsed_ms: Option<u64>,
+	}
 }
+// Owned publications, projections and legacy rows keep their original type.
+// Complete original verification borrows only the three string fields from its
+// current bounded input; both forms share this exact serde field contract.
+type RecordFields<S> = record_schema::Record<S>;
+type Record = record_schema::Record<String>;
 
 /// The private owner and state-directory handle are deliberately not printable.
 pub struct RequestTicket {
@@ -335,14 +347,23 @@ fn new_id() -> Result<String> {
 	Ok(text)
 }
 
-// Every audit writer and metadata reader reserves a FIFO turn before taking
-// the original mutex. A timed reader can cancel its turn without leaving a
-// blocked thread behind; later writers cannot repeatedly bypass that reader.
+// Writers and recovery paths retain the original mutex and FIFO reservation.
+// At most two prepared, read-only archive cohorts may share a turn. Readers
+// never pass a queued writer and retain custody until their actual work ends.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AuditStoreAccess {
+	Exclusive,
+	#[cfg(unix)]
+	Shared,
+}
+
 #[derive(Default)]
 struct AuditStoreQueue {
 	next_ticket: u64,
 	active: bool,
-	waiting: VecDeque<u64>,
+	readers: usize,
+	reader_poisoned: bool,
+	waiting: VecDeque<(u64, AuditStoreAccess)>,
 }
 
 #[derive(Default)]
@@ -364,15 +385,24 @@ struct AuditStoreGuard<'a> {
 	inner: Option<std::sync::MutexGuard<'a, ()>>,
 }
 
+#[cfg(unix)]
+#[must_use = "finish the read guard while the final snapshot state remains locked"]
+struct AuditSharedGuard<'a> {
+	lock: &'a AuditStoreLock,
+	deadline: Instant,
+	active: bool,
+	// A panic must publish poison on the same thread that owns this operation.
+	_not_send: std::marker::PhantomData<std::sync::MutexGuard<'a, ()>>,
+}
+
 impl AuditStoreLock {
 	fn cancel(&self, queue: &mut AuditStoreQueue, ticket: u64) {
-		queue.waiting.retain(|queued| *queued != ticket);
+		queue.waiting.retain(|queued| queued.0 != ticket);
 		self.changed.notify_all();
 	}
 
 	fn release(&self) {
-		// Cleanup must still release a reservation during unwinding. Recovering
-		// this bookkeeping guard never clears either mutex's poisoned state.
+		// Cleanup releases custody during unwinding without clearing poison.
 		let mut queue = self.queue.lock().unwrap_or_else(|error| error.into_inner());
 		queue.active = false;
 		self.changed.notify_all();
@@ -392,15 +422,27 @@ impl AuditStoreLock {
 		if deadline.is_some_and(|limit| Instant::now() >= limit) {
 			return Err(StoreLockFailure::Deadline);
 		}
+		if queue.reader_poisoned {
+			return Err(StoreLockFailure::Unavailable);
+		}
 		let ticket = queue.next_ticket;
 		queue.next_ticket = ticket.checked_add(1).ok_or(StoreLockFailure::Unavailable)?;
-		queue.waiting.push_back(ticket);
+		queue
+			.waiting
+			.push_back((ticket, AuditStoreAccess::Exclusive));
 		loop {
 			if deadline.is_some_and(|limit| Instant::now() >= limit) {
 				self.cancel(&mut queue, ticket);
 				return Err(StoreLockFailure::Deadline);
 			}
-			if !queue.active && queue.waiting.front() == Some(&ticket) {
+			if queue.reader_poisoned {
+				self.cancel(&mut queue, ticket);
+				return Err(StoreLockFailure::Unavailable);
+			}
+			if !queue.active
+				&& queue.readers == 0
+				&& queue.waiting.front() == Some(&(ticket, AuditStoreAccess::Exclusive))
+			{
 				queue.waiting.pop_front();
 				queue.active = true;
 				break;
@@ -429,8 +471,8 @@ impl AuditStoreLock {
 		if deadline.is_some_and(|limit| Instant::now() >= limit) {
 			return Err(StoreLockFailure::Deadline);
 		}
-		// All callers use this gate, and the previous owner releases inner
-		// before its turn. No second, unbounded mutex wait belongs here.
+		// The former owner drops inner before releasing its FIFO reservation.
+		// No second, unbounded wait is introduced after admission.
 		match self.inner.try_lock() {
 			Ok(inner) => guard.inner = Some(inner),
 			Err(std::sync::TryLockError::Poisoned(error)) => {
@@ -446,12 +488,131 @@ impl AuditStoreLock {
 		}
 		Ok(guard)
 	}
+
+	#[cfg(unix)]
+	fn acquire_shared(
+		&self,
+		deadline: Instant,
+	) -> std::result::Result<AuditSharedGuard<'_>, StoreLockFailure> {
+		if Instant::now() >= deadline {
+			return Err(StoreLockFailure::Deadline);
+		}
+		let mut queue = self
+			.queue
+			.lock()
+			.map_err(|_| StoreLockFailure::Unavailable)?;
+		if Instant::now() >= deadline {
+			return Err(StoreLockFailure::Deadline);
+		}
+		if queue.reader_poisoned || self.inner.is_poisoned() {
+			return Err(StoreLockFailure::Unavailable);
+		}
+		let ticket = queue.next_ticket;
+		queue.next_ticket = ticket.checked_add(1).ok_or(StoreLockFailure::Unavailable)?;
+		queue.waiting.push_back((ticket, AuditStoreAccess::Shared));
+		loop {
+			if Instant::now() >= deadline {
+				self.cancel(&mut queue, ticket);
+				return Err(StoreLockFailure::Deadline);
+			}
+			if queue.reader_poisoned || self.inner.is_poisoned() {
+				self.cancel(&mut queue, ticket);
+				return Err(StoreLockFailure::Unavailable);
+			}
+			if !queue.active
+				&& queue.readers < 2
+				&& queue.waiting.front() == Some(&(ticket, AuditStoreAccess::Shared))
+			{
+				queue.waiting.pop_front();
+				queue.readers += 1;
+				// Let the next adjacent reader observe its own admission condition.
+				self.changed.notify_all();
+				break;
+			}
+			queue = match self
+				.changed
+				.wait_timeout(queue, deadline.saturating_duration_since(Instant::now()))
+			{
+				Ok((queue, _)) => queue,
+				Err(error) => {
+					let (mut queue, _) = error.into_inner();
+					self.cancel(&mut queue, ticket);
+					return Err(StoreLockFailure::Unavailable);
+				}
+			};
+		}
+		drop(queue);
+		let guard = AuditSharedGuard {
+			lock: self,
+			deadline,
+			active: true,
+			_not_send: std::marker::PhantomData,
+		};
+		if Instant::now() >= deadline {
+			return Err(StoreLockFailure::Deadline);
+		}
+		Ok(guard)
+	}
+}
+
+#[cfg(unix)]
+impl AuditSharedGuard<'_> {
+	fn finish(mut self) -> std::result::Result<(), StoreLockFailure> {
+		let mut queue = match self.lock.queue.lock() {
+			Ok(queue) => queue,
+			Err(error) => {
+				drop(error.into_inner());
+				return Err(StoreLockFailure::Unavailable);
+			}
+		};
+		// This critical section is the success boundary. A peer that already
+		// finished is not retroactively revoked by later poison publication.
+		let mut result = if queue.reader_poisoned || self.lock.inner.is_poisoned() {
+			Err(StoreLockFailure::Unavailable)
+		} else if Instant::now() >= self.deadline {
+			Err(StoreLockFailure::Deadline)
+		} else {
+			Ok(())
+		};
+		match queue.readers.checked_sub(1) {
+			Some(readers) => queue.readers = readers,
+			None => {
+				queue.reader_poisoned = true;
+				result = Err(StoreLockFailure::Unavailable);
+			}
+		}
+		self.active = false;
+		self.lock.changed.notify_all();
+		result
+	}
+}
+
+#[cfg(unix)]
+impl Drop for AuditSharedGuard<'_> {
+	fn drop(&mut self) {
+		if !self.active {
+			return;
+		}
+		let mut queue = self
+			.lock
+			.queue
+			.lock()
+			.unwrap_or_else(|error| error.into_inner());
+		if std::thread::panicking() {
+			queue.reader_poisoned = true;
+		}
+		match queue.readers.checked_sub(1) {
+			Some(readers) => queue.readers = readers,
+			None => queue.reader_poisoned = true,
+		}
+		self.active = false;
+		self.lock.changed.notify_all();
+	}
 }
 
 impl Drop for AuditStoreGuard<'_> {
 	fn drop(&mut self) {
-		// Keep standard Mutex poisoning for a panic inside the protected work,
-		// and release that mutex before another caller receives the FIFO turn.
+		// Keep standard mutex poison and release inner before the FIFO turn.
 		drop(self.inner.take());
 		self.lock.release();
 	}
@@ -551,6 +712,25 @@ fn private_directory_metadata(directory: &File) -> Result<std::fs::Metadata> {
 #[cfg(unix)]
 fn open_store(root: &Path) -> Result<File> {
 	open_named_store(root, STORE_NAME)
+}
+
+/// A shared preflight never creates a missing hot store or repairs its namespace.
+#[cfg(unix)]
+fn open_existing_store_at(base: &File) -> Result<Option<File>> {
+	match open_at(base, STORE_NAME, libc::O_RDONLY | libc::O_DIRECTORY, 0) {
+		Ok(directory) => {
+			private_directory(&directory)?;
+			Ok(Some(directory))
+		}
+		Err(error)
+			if error
+				.downcast_ref::<std::io::Error>()
+				.is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) =>
+		{
+			Ok(None)
+		}
+		Err(error) => Err(error),
+	}
 }
 
 #[cfg(unix)]
@@ -1318,6 +1498,21 @@ fn seed_missing_archive_record(archive: &Archive, record: &Record) -> Result<()>
 		return Ok(());
 	}
 	save_archive_with_sync(archive, record, false, true)
+}
+
+/// A hit is usable only under shared store custody with the same full hot stamp.
+/// A miss leaves seeding, recovery and cache publication to the exclusive path.
+/// Shared readers need only this binding, not a copy of the cached records.
+#[cfg(unix)]
+fn hot_snapshot_cached(directory: &File) -> Result<bool> {
+	let stamp = archive_stamp(directory)?;
+	let Some(cache) = HOT_CACHE.get() else {
+		return Ok(false);
+	};
+	let cache = cache
+		.lock()
+		.map_err(|_| anyhow!("request hot cache unavailable"))?;
+	Ok(cache.iter().any(|entry| entry.stamp == stamp))
 }
 
 /// Callers hold STORE_LOCK. Cold/external namespace changes are validated once;

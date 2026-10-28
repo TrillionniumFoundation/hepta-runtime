@@ -1,0 +1,196 @@
+{
+  "schema": "hepta-x230-independent-numeric-review/v2",
+  "archive_sha256": "4161b7bfc82ef8403e4306442562da8889a6412f6f024e4f41ced9705c89f3f2",
+  "analyzer_sha256": "c4854276d7c21fec01efd4433301ae345d5d5b12b059f58e2cc7ee85198e22dd",
+  "native_reuse_identities": null,
+  "registry_identities": {
+    "baseline": {
+      "label": "R2",
+      "library_test_sha256": "8a7a043f2296f41aaea91c95ce58b9cef1e08dbc86a03fecbaadd215a830a18d"
+    },
+    "candidate": {
+      "label": "R3",
+      "library_test_sha256": "2d932d972ac7dae751bfeffdcdd925893e5267ecec460ba391fc8625c94257d3"
+    }
+  },
+  "comparison_design": "within each original experiment only; separate sessions are not paired contrasts",
+  "quantiles": "median p50; nearest rank p95/p99; raw pooled call rows",
+  "sections": {
+    "registry": {
+      "passed": true,
+      "identities": {
+        "baseline": {
+          "label": "R2",
+          "library_test_sha256": "8a7a043f2296f41aaea91c95ce58b9cef1e08dbc86a03fecbaadd215a830a18d"
+        },
+        "candidate": {
+          "label": "R3",
+          "library_test_sha256": "2d932d972ac7dae751bfeffdcdd925893e5267ecec460ba391fc8625c94257d3"
+        }
+      },
+      "source_report": "/home/qian/hepta-runtime-optimization-20261028/registry-r3-vs-r2-abba-r01/summary.json",
+      "process_samples": 16,
+      "metrics": {
+        "cold_lookup_ms": {
+          "samples": {
+            "baseline": [
+              151.659,
+              151.23,
+              148.79,
+              162.373,
+              150.104,
+              150.516,
+              151.531,
+              154.302
+            ],
+            "candidate": [
+              129.761,
+              119.748,
+              118.423,
+              219.189,
+              121.336,
+              121.208,
+              120.343,
+              119.523
+            ]
+          },
+          "medians": {
+            "baseline": 151.38049999999998,
+            "candidate": 120.7755
+          },
+          "median_change_percent": -20.217267085258662,
+          "paired_block_ratios": [
+            0.8237638210697649,
+            1.0850004659937074,
+            0.8068125873195395,
+            0.7843038521022911
+          ]
+        },
+        "hot_reuse_ms": {
+          "samples": {
+            "baseline": [
+              0.04,
+              0.044,
+              0.045,
+              0.045,
+              0.04,
+              0.039,
+              0.048,
+              0.04
+            ],
+            "candidate": [
+              0.133,
+              0.04,
+              0.057,
+              0.041,
+              0.04,
+              0.039,
+              0.044,
+              0.039
+            ]
+          },
+          "medians": {
+            "baseline": 0.041999999999999996,
+            "candidate": 0.0405
+          },
+          "median_change_percent": -3.5714285714285587,
+          "paired_block_ratios": [
+            2.0595238095238098,
+            1.088888888888889,
+            1.0,
+            0.9431818181818181
+          ]
+        },
+        "legacy_sorted_median_ms": {
+          "samples": {
+            "baseline": [
+              142.933,
+              137.846,
+              138.683,
+              144.112,
+              138.987,
+              141.104,
+              140.235,
+              140.371
+            ],
+            "candidate": [
+              112.114,
+              110.233,
+              107.799,
+              112.468,
+              111.558,
+              110.164,
+              110.325,
+              111.21
+            ]
+          },
+          "medians": {
+            "baseline": 140.303,
+            "candidate": 110.7675
+          },
+          "median_change_percent": -21.051224849076643,
+          "paired_block_ratios": [
+            0.7918932683712101,
+            0.7788928375678495,
+            0.7916070134349193,
+            0.7894877515092336
+          ]
+        },
+        "streamed_median_ms": {
+          "samples": {
+            "baseline": [
+              131.523,
+              130.803,
+              129.478,
+              132.661,
+              129.864,
+              132.031,
+              130.773,
+              135.954
+            ],
+            "candidate": [
+              104.598,
+              102.779,
+              102.563,
+              103.696,
+              103.611,
+              104.099,
+              104.783,
+              103.795
+            ]
+          },
+          "medians": {
+            "baseline": 131.163,
+            "candidate": 103.74549999999999
+          },
+          "median_change_percent": -20.90337976411032,
+          "paired_block_ratios": [
+            0.7905316285842806,
+            0.7868306509142097,
+            0.79310410660761,
+            0.7819905746324894
+          ]
+        }
+      },
+      "scope": "synchronous isolated fixture lookup; not async/native throughput",
+      "notes": [
+        "empty in-process cache, not cold operating-system page cache",
+        "libtest emits one cold, one hot and two six-run medians per process; internal raw timings are unavailable",
+        "No discarded or retried sample; eight process samples per binary"
+      ]
+    }
+  },
+  "consumed_originals": {
+    "/home/qian/hepta-runtime-optimization-20261028/registry-r3-vs-r2-abba-r01/summary.json": {
+      "archive_name": "registry/summary.json",
+      "sha256": "157e622b6535ee2e4d816ede1394bee0968c02b4d957d73f6e0751a2dfa5f3ee",
+      "bytes": 5204
+    },
+    "/home/qian/hepta-runtime-optimization-20261028/registry-r3-vs-r2-abba-r01/samples.jsonl": {
+      "archive_name": "registry/samples.jsonl",
+      "sha256": "3d3f37fc0aa9bd7d263fb7318976b39e53160b4efd06357db0ca136621a2f070",
+      "bytes": 13764
+    }
+  },
+  "complete": true
+}

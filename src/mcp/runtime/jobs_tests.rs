@@ -1231,7 +1231,12 @@ fn positive_reuse_cache_never_negative_caches_or_allocates_new_identity() {
 		.unwrap()
 		.unwrap();
 	assert_eq!(first.id, existing.id);
-	assert_eq!(cache.lock().unwrap().hits.len(), 1);
+	assert_eq!(
+		cache.lock().unwrap().hits.len(),
+		usize::from(registry_has_content_watch(
+			&registry_epoch(root.path()).unwrap()
+		))
+	);
 	let reused = find_idempotent_in(root.path(), "main", "fixed-key", &cache)
 		.unwrap()
 		.unwrap();
@@ -1239,7 +1244,12 @@ fn positive_reuse_cache_never_negative_caches_or_allocates_new_identity() {
 	assert!(find_idempotent_in(root.path(), "main", "new-key", &cache)
 		.unwrap()
 		.is_none());
-	assert_eq!(cache.lock().unwrap().hits.len(), 1);
+	assert_eq!(
+		cache.lock().unwrap().hits.len(),
+		usize::from(registry_has_content_watch(
+			&registry_epoch(root.path()).unwrap()
+		))
+	);
 }
 
 #[cfg(unix)]
@@ -1257,7 +1267,10 @@ fn positive_reuse_corrupted_or_rebound_identity_fails_closed() {
 	let error = find_idempotent_in(root.path(), "main", "fixed-key", &cache)
 		.unwrap_err()
 		.to_string();
-	assert!(error.contains("binding changed"));
+	assert!(
+		error.contains("binding") && error.contains("changed"),
+		"{error}"
+	);
 	std::fs::remove_file(root.path().join("same-job-id.json")).unwrap();
 	assert!(find_idempotent_in(root.path(), "main", "fixed-key", &cache).is_err());
 }
@@ -1469,6 +1482,7 @@ fn positive_reuse_microbenchmark_6000_synthetic_records() {
 		(streamed_ms[2] + streamed_ms[3]) / 2.0);
 }
 
+#[cfg(unix)]
 #[test]
 fn cached_hit_rejects_permissions_widened_without_directory_mutation() {
 	use std::os::unix::fs::PermissionsExt;
@@ -1477,7 +1491,21 @@ fn cached_hit_rejects_permissions_widened_without_directory_mutation() {
 	let job = outcome_fixture(ExecutionMode::Operator, false, "launched");
 	fixture_write(root.path(), &job);
 	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
-	assert_eq!(cache.lock().unwrap().hits.len(), 1);
+	assert_eq!(
+		cache.lock().unwrap().hits.len(),
+		usize::from(registry_has_content_watch(
+			&registry_epoch(root.path()).unwrap()
+		))
+	);
+	// Preserve previously verified strict history even when a watch is unavailable.
+	read_verified_cached_record(root.path(), "same-job-id").unwrap();
+	cache
+		.lock()
+		.unwrap()
+		.known
+		.get_mut(&("main".into(), "fixed-key".into()))
+		.unwrap()
+		.strict = true;
 	let path = root.path().join("same-job-id.json");
 	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
 	let error = find_idempotent_in(root.path(), "main", "fixed-key", &cache)
@@ -1790,12 +1818,20 @@ fn saturated_reuse_cache_never_admits_untracked_hits_or_evicts_known_bindings() 
 	let original = outcome_fixture(ExecutionMode::Operator, false, "launched");
 	fixture_write(root.path(), &original);
 	let mut full = ReuseHitCache::default();
-	full.known
-		.insert(("main".into(), "fixed-key".into()), original.id.clone());
+	full.known.insert(
+		("main".into(), "fixed-key".into()),
+		KnownReuseBinding {
+			id: original.id.clone(),
+			strict: false,
+		},
+	);
 	for i in 1..MAX_REUSE_HITS {
 		full.known.insert(
 			("main".into(), format!("old-key-{i}")),
-			format!("old-id-{i}"),
+			KnownReuseBinding {
+				id: format!("old-id-{i}"),
+				strict: false,
+			},
 		);
 	}
 	let cache = Mutex::new(full);
@@ -1821,17 +1857,21 @@ fn saturated_reuse_cache_never_admits_untracked_hits_or_evicts_known_bindings() 
 		assert!(!guard
 			.hits
 			.contains_key(&("main".into(), "newer-key".into())));
-		assert!(guard
-			.hits
-			.iter()
-			.all(|(identity, id)| guard.known.get(identity) == Some(id)));
+		assert!(guard.hits.iter().all(|(identity, id)| guard
+			.known
+			.get(identity)
+			.map(|binding| &binding.id)
+			== Some(id)));
 	}
 	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
-	assert!(cache
-		.lock()
-		.unwrap()
-		.hits
-		.contains_key(&("main".into(), "fixed-key".into())));
+	assert_eq!(
+		cache
+			.lock()
+			.unwrap()
+			.hits
+			.contains_key(&("main".into(), "fixed-key".into())),
+		registry_has_content_watch(&registry_epoch(root.path()).unwrap())
+	);
 	std::fs::remove_file(root.path().join("same-job-id.json")).unwrap();
 	assert!(find_idempotent_in(root.path(), "main", "fixed-key", &cache)
 		.unwrap_err()
@@ -1848,10 +1888,20 @@ fn cached_hit_without_known_ownership_refuses_reuse() {
 	let cache = Mutex::new(ReuseHitCache::default());
 	find_idempotent_in(root.path(), "main", "fixed-key", &cache).unwrap();
 	cache.lock().unwrap().known.clear();
-	assert!(find_idempotent_in(root.path(), "main", "fixed-key", &cache)
+	let watched = registry_has_content_watch(&registry_epoch(root.path()).unwrap());
+	if !watched {
+		// With no positive hit, full history still has to be verified.
+		std::fs::write(root.path().join("damaged.json"), b"not-json").unwrap();
+	}
+	let error = find_idempotent_in(root.path(), "main", "fixed-key", &cache)
 		.unwrap_err()
-		.to_string()
-		.contains("lost original ownership"));
+		.to_string();
+	let expected = if watched {
+		"lost original ownership"
+	} else {
+		"corrupt job record"
+	};
+	assert!(error.contains(expected), "{error}");
 }
 
 #[cfg(unix)]
@@ -2050,7 +2100,12 @@ fn registry_gate_cached_lookup_waits_for_actual_outcome_replacement() {
 	})
 	.unwrap()
 	.unwrap();
-	assert_eq!(cache.lock().unwrap().hits.len(), 1);
+	assert_eq!(
+		cache.lock().unwrap().hits.len(),
+		usize::from(registry_has_content_watch(
+			&registry_epoch(root.path()).unwrap()
+		))
+	);
 	let (writer_inside_tx, writer_inside_rx) = channel();
 	let (release_tx, release_rx) = channel();
 	let writer_gate = gate.clone();
@@ -2162,7 +2217,12 @@ fn registry_gate_poison_refuses_cached_lookup_and_record_publication() {
 	})
 	.unwrap()
 	.unwrap();
-	assert_eq!(cache.lock().unwrap().hits.len(), 1);
+	assert_eq!(
+		cache.lock().unwrap().hits.len(),
+		usize::from(registry_has_content_watch(
+			&registry_epoch(root.path()).unwrap()
+		))
+	);
 	let poisoned = gate.clone();
 	assert!(std::thread::spawn(move || {
 		let _write = poisoned.write().unwrap();
@@ -2696,11 +2756,12 @@ fn audit_publication_file_parent_replacement_and_same_inode_relink_republish() {
 			2 => {
 				let retained = root.path().join("retained-hardlink");
 				std::fs::hard_link(&path, &retained).unwrap();
-				// Establish a proof after creating the outside hard link: only the
-				// audit directory changes during the following unlink/relink ABA.
-				publication_append(&path, 10, &mut ready);
+				// Preserve the original proof across a same-inode unlink/relink
+				// ABA, but never append while an outside hard link exists. The
+				// adopted strict sink policy requires one link before publication.
 				std::fs::remove_file(&path).unwrap();
 				std::fs::hard_link(&retained, &path).unwrap();
+				std::fs::remove_file(&retained).unwrap();
 				assert_eq!(
 					audit_inode(&std::fs::metadata(&path).unwrap()),
 					original_inode
@@ -2766,44 +2827,31 @@ fn audit_publication_rejects_binding_changes_during_file_or_directory_barriers()
 
 #[cfg(unix)]
 #[test]
-fn audit_publication_keeps_directory_and_dangling_file_symlink_open_semantics() {
+fn audit_publication_denies_dangling_file_symlink_without_publishing_target() {
 	use std::os::unix::fs::symlink;
 	let root = tempfile::tempdir().unwrap();
-	let state = root.path().join("physical-state");
-	let audit = root.path().join("physical-audit");
-	let target = root.path().join("physical-target");
-	for directory in [&state, &audit, &target] {
-		std::fs::create_dir(directory).unwrap();
-	}
-	symlink(&state, root.path().join("state-alias")).unwrap();
-	symlink(&audit, state.join("audit")).unwrap();
-	symlink(target.join("actual-events"), audit.join("events.jsonl")).unwrap();
-	let path = root.path().join("state-alias/audit/events.jsonl");
+	let state = root.path().join("state");
+	let audit = state.join("audit");
+	std::fs::create_dir_all(&audit).unwrap();
+	let target = root.path().join("untouched-target");
+	let path = audit.join("events.jsonl");
+	symlink(&target, &path).unwrap();
 	let mut ready = None;
-	let operations = publication_append(&path, 0, &mut ready);
-	let identities = [&target, &audit, &state]
-		.map(|directory| audit_inode(&std::fs::metadata(directory).unwrap()));
-	assert_eq!(
-		operations
-			.iter()
-			.filter(|(directory, _)| *directory)
-			.map(|(_, identity)| *identity)
-			.collect::<Vec<_>>(),
-		identities
+	let result = append_audit_at_with(
+		publication_fixture(&path, 0),
+		&mut ready,
+		|file| {
+			file.sync_data()?;
+			Ok(())
+		},
+		|directory| {
+			directory.sync_all()?;
+			Ok(())
+		},
 	);
-	let expected = publication_expected_warm_operations(&ready);
-	assert_eq!(publication_append(&path, 1, &mut ready).len(), expected);
-	assert_eq!(
-		std::fs::read_to_string(target.join("actual-events"))
-			.unwrap()
-			.lines()
-			.count(),
-		2
-	);
-	// Changing an alias to a new target requires publication again.
-	std::fs::remove_file(audit.join("events.jsonl")).unwrap();
-	symlink(target.join("second-events"), audit.join("events.jsonl")).unwrap();
-	assert_eq!(publication_append(&path, 2, &mut ready).len(), 4);
+	assert!(result.is_err());
+	assert!(ready.is_none());
+	assert!(!target.exists());
 }
 
 #[cfg(unix)]
@@ -3074,4 +3122,31 @@ fn audit_publication_invalid_previous_proof_cannot_hide_cold_parent_failure() {
 	assert!(ready.is_none());
 	assert_eq!(publication_append(&path, 2, &mut ready).len(), 3);
 	ready.as_ref().unwrap().binding.validate().unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn audit_publication_hardlink_denial_clears_warm_readiness() {
+	let root = tempfile::tempdir().unwrap();
+	let audit = root.path().join("audit");
+	std::fs::create_dir(&audit).unwrap();
+	let path = audit.join("events.jsonl");
+	let mut ready = None;
+	publication_append(&path, 0, &mut ready);
+	let original = std::fs::read(&path).unwrap();
+	let alias = root.path().join("outside-alias");
+	std::fs::hard_link(&path, &alias).unwrap();
+	let error = append_audit_at_with(
+		publication_fixture(&path, 1),
+		&mut ready,
+		|_| panic!("hard-linked sink must be refused before its file barrier"),
+		|_| panic!("hard-linked sink must be refused before parent barriers"),
+	)
+	.unwrap_err();
+	assert!(error.to_string().contains("hard-linked"));
+	assert!(ready.is_none());
+	assert_eq!(std::fs::read(&path).unwrap(), original);
+	assert_eq!(std::fs::read(&alias).unwrap(), original);
+	std::fs::remove_file(&alias).unwrap();
+	assert_eq!(publication_append(&path, 2, &mut ready).len(), 3);
 }

@@ -2,7 +2,9 @@
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! Complete bounded Record observations; no cleanup, digest rebase or content lease.
+use super::super::archive_store::{stack_original_component, ORIGINAL_COMPONENT_BYTES};
 use super::*;
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread::{Scope, ScopedJoinHandle};
@@ -168,11 +170,142 @@ fn descriptor_matches(file: &File, expected: FileStamp) -> Result<()> {
 	Ok(())
 }
 
+// The transparent field borrows unescaped JSON and owns decoded escapes. A
+// plain Cow Deserialize would own every string. The outer RecordFields schema
+// is shared with the original owned Record, including sequence and error rules.
+#[derive(Deserialize)]
+#[serde(transparent)]
+struct BorrowedText<'input>(#[serde(borrow)] Cow<'input, str>);
+
+impl AsRef<str> for BorrowedText<'_> {
+	fn as_ref(&self) -> &str {
+		self.0.as_ref()
+	}
+}
+
+fn record_fields<S: AsRef<str>>(record: &RecordFields<S>) -> RecordFields<&str> {
+	RecordFields {
+		request_id: record.request_id.as_ref(),
+		owner: record.owner.as_ref(),
+		tool_name: record.tool_name.as_ref(),
+		state: record.state,
+		accepted_unix_ms: record.accepted_unix_ms,
+		elapsed_ms: record.elapsed_ms,
+	}
+}
+
+#[derive(Clone, Copy)]
+struct OriginalName<'name> {
+	filename: &'name str,
+	raw_id: &'name str,
+	identity: Id,
+}
+
+impl<'name> OriginalName<'name> {
+	fn parse(filename: &'name str, refusal: &'static str) -> Result<Self> {
+		let raw_id = filename
+			.strip_suffix(".json")
+			.ok_or_else(|| anyhow!(refusal))?;
+		// id() enforces the same 64-character lowercase hex domain as valid_id,
+		// so this one pass also supplies the current member's exact binary key.
+		let identity = id(raw_id).map_err(|_| anyhow!(refusal))?;
+		Ok(Self {
+			filename,
+			raw_id,
+			identity,
+		})
+	}
+	fn member(filename: &'name str) -> Result<Self> {
+		if staging(filename)? {
+			bail!("archive content validation found unresolved staging");
+		}
+		Self::parse(filename, "archive namespace changed")
+	}
+}
+
+enum OriginalInput<'name> {
+	Unparsed(&'name str),
+	Verified(OriginalName<'name>),
+}
+
+enum RecordObservation<'input> {
+	Owned(Record),
+	Borrowed {
+		record: RecordFields<BorrowedText<'input>>,
+		identity: Id,
+		owner: Id,
+	},
+}
+
+impl RecordObservation<'_> {
+	fn fields(&self) -> RecordFields<&str> {
+		match self {
+			Self::Owned(record) => record_fields(record),
+			Self::Borrowed { record, .. } => record_fields(record),
+		}
+	}
+	fn identities(&self) -> Result<(Id, Id)> {
+		match self {
+			Self::Owned(record) => Ok((id(&record.request_id)?, id(&record.owner)?)),
+			Self::Borrowed {
+				identity, owner, ..
+			} => Ok((*identity, *owner)),
+		}
+	}
+	fn into_owned(self) -> Record {
+		match self {
+			Self::Owned(record) => record,
+			Self::Borrowed { record, .. } => Record {
+				request_id: record.request_id.0.into_owned(),
+				owner: record.owner.0.into_owned(),
+				tool_name: record.tool_name.0.into_owned(),
+				state: record.state,
+				accepted_unix_ms: record.accepted_unix_ms,
+				elapsed_ms: record.elapsed_ms,
+			},
+		}
+	}
+}
+
+fn parse_observation<'input, const BORROWED: bool>(
+	bytes: &'input [u8],
+	name: &OriginalName<'_>,
+) -> Result<RecordObservation<'input>> {
+	if BORROWED {
+		let record: RecordFields<BorrowedText<'input>> = serde_json::from_slice(bytes)?;
+		// This is the actual decoded JSON, not an expected ROW. Equality with
+		// the current canonical filename proves its identity domain; only then
+		// may its already decoded filename Id stand for this same observation.
+		if record.request_id.as_ref() != name.raw_id || !valid_tool(record.tool_name.as_ref()) {
+			bail!("request audit metadata identity refused");
+		}
+		let owner = id(record.owner.as_ref())
+			.map_err(|_| anyhow!("request audit metadata identity refused"))?;
+		Ok(RecordObservation::Borrowed {
+			record,
+			identity: name.identity,
+			owner,
+		})
+	} else {
+		// Selected-page/cursor callers still deserialize the original String
+		// fields and receive an owned Record that outlives this read buffer.
+		let record: Record = serde_json::from_slice(bytes)?;
+		if !valid_id(&record.request_id)
+			|| !valid_id(&record.owner)
+			|| !valid_tool(&record.tool_name)
+			|| record.request_id != name.raw_id
+		{
+			bail!("request audit metadata identity refused");
+		}
+		Ok(RecordObservation::Owned(record))
+	}
+}
+
 // Deliberately do not call Archive::read_record: that recovery reader may unlink
 // staging names. A complete validation walk refuses every staging member instead.
 // Reading all bytes here establishes a Record observation, not a historical raw
 // SHA comparison or an atomic snapshot against arbitrary concurrent writers.
-fn read_original(
+pub(super) fn read_original(
 	archive: &Archive,
 	directory: &File,
 	filename: &str,
@@ -188,21 +321,58 @@ fn read_original_with_trace(
 	deadline: Instant,
 	trace: &mut impl ContentTrace,
 ) -> Result<Entry> {
+	observe_original_with_trace::<false, _>(
+		archive,
+		directory,
+		OriginalInput::Unparsed(filename),
+		deadline,
+		trace,
+		|record, stamp| {
+			Ok(Entry {
+				record: record.into_owned(),
+				stamp,
+			})
+		},
+	)
+}
+
+fn observe_original_with_trace<const BORROWED: bool, T>(
+	archive: &Archive,
+	directory: &File,
+	input: OriginalInput<'_>,
+	deadline: Instant,
+	trace: &mut impl ContentTrace,
+	finish: impl for<'input> FnOnce(RecordObservation<'input>, FileStamp) -> Result<T>,
+) -> Result<T> {
 	trace.enter(ContentPhase::Name);
 	live(deadline)?;
-	let raw_id = filename
-		.strip_suffix(".json")
-		.filter(|value| valid_id(value))
-		.ok_or_else(|| anyhow!("invalid request metadata filename"))?;
-	// Reuse only the owned name representation. Every pre/post namespace,
-	// member and descriptor observation below remains independently fresh.
-	let component = name(filename)?;
+	let member = match input {
+		OriginalInput::Unparsed(filename) => {
+			OriginalName::parse(filename, "invalid request metadata filename")?
+		}
+		OriginalInput::Verified(member) => member,
+	};
+	let filename = member.filename;
+	// Each side uses its fresh namespace observation's selected named stat as
+	// the full stamp. Keep both namespace fences and both descriptor
+	// checks around the original read; no observation from a prior side or
+	// request is reused. The named stamps cover the wider namespace interval.
+	let mut component_bytes = [0u8; ORIGINAL_COMPONENT_BYTES];
+	let owned_component = if BORROWED {
+		None
+	} else {
+		Some(name(filename)?)
+	};
+	let component = match &owned_component {
+		Some(component) => component.as_c_str(),
+		None => stack_original_component(filename, &mut component_bytes)?,
+	};
 	trace.enter(ContentPhase::NamespaceBefore);
-	archive.fence_record_component(&component, directory)?;
+	let named_before = archive.fence_record_stat_component(component, directory)?;
 	trace.enter(ContentPhase::StampBefore);
-	let before = stamp_at_component(directory, &component)?;
+	let before = stamp_from_stat(named_before)?;
 	trace.enter(ContentPhase::Open);
-	let mut file = open_at_component(directory, &component, libc::O_RDONLY | libc::O_NONBLOCK, 0)?;
+	let mut file = open_at_component(directory, component, libc::O_RDONLY | libc::O_NONBLOCK, 0)?;
 	trace.enter(ContentPhase::DescriptorBefore);
 	descriptor_matches(&file, before)?;
 	trace.enter(ContentPhase::Read);
@@ -229,39 +399,24 @@ fn read_original_with_trace(
 		bail!("archive content length changed");
 	}
 	trace.enter(ContentPhase::Parse);
-	let record: Record = serde_json::from_slice(&bytes[..length])?;
-	if !valid_id(&record.request_id)
-		|| !valid_id(&record.owner)
-		|| !valid_tool(&record.tool_name)
-		|| record.request_id != raw_id
-	{
-		bail!("request audit metadata identity refused");
-	}
+	let record = parse_observation::<BORROWED>(&bytes[..length], &member)?;
 	trace.enter(ContentPhase::DescriptorAfter);
 	descriptor_matches(&file, before)?;
+	trace.enter(ContentPhase::NamespaceAfter);
+	let named_after = archive.fence_record_stat_component(component, directory)?;
 	trace.enter(ContentPhase::StampAfter);
-	if stamp_at_component(directory, &component)? != before {
+	if stamp_from_stat(named_after)? != before {
 		bail!("archive content member changed");
 	}
-	trace.enter(ContentPhase::NamespaceAfter);
-	archive.fence_record_component(&component, directory)?;
 	live(deadline)?;
 	trace.enter(ContentPhase::Compare);
-	Ok(Entry {
-		record,
-		stamp: before,
-	})
+	// No borrowed field escapes the input buffer. Only after every original
+	// post-fence succeeds may the closure compare or return its owned result.
+	finish(record, before)
 }
 
 fn original_name(filename: &str) -> Result<Id> {
-	if staging(filename)? {
-		bail!("archive content validation found unresolved staging");
-	}
-	let raw_id = filename
-		.strip_suffix(".json")
-		.filter(|value| valid_id(value))
-		.ok_or_else(|| anyhow!("archive namespace changed"))?;
-	id(raw_id)
+	Ok(OriginalName::member(filename)?.identity)
 }
 
 // Borrow only the expected compact ROW within its original read transaction.
@@ -295,30 +450,44 @@ impl<'a> ExpectedRow<'a> {
 			Self::Legacy(entry) => order_key(&entry.record),
 		}
 	}
-	fn matches(&self, actual: &Entry) -> Result<bool> {
+	fn matches_observation(
+		&self,
+		actual: &RecordObservation<'_>,
+		stamp: FileStamp,
+	) -> Result<bool> {
 		match self {
 			Self::Compact(value) => {
 				// Exhaustive matching makes any future Record field a compile-time
-				// obligation. id() retains the canonical lowercase identity domain;
-				// decoded JSON escapes remain valid, uppercase aliases do not.
-				let Record {
-					request_id,
-					owner,
+				// obligation. Borrowed observations carry only identities already
+				// proved from this actual JSON and its canonical current filename.
+				let (identity, owner) = actual.identities()?;
+				let RecordFields {
+					request_id: _,
+					owner: _,
 					tool_name,
 					state,
 					accepted_unix_ms,
 					elapsed_ms,
-				} = &actual.record;
-				Ok(id(request_id)? == value.identity
-					&& id(owner)? == value.owner
-					&& tool_name.as_str() == value.tool
-					&& *state == value.state
-					&& *accepted_unix_ms == value.accepted
-					&& *elapsed_ms == value.elapsed
-					&& actual.stamp == value.stamp)
+				} = actual.fields();
+				Ok(identity == value.identity
+					&& owner == value.owner
+					&& tool_name == value.tool
+					&& state == value.state
+					&& accepted_unix_ms == value.accepted
+					&& elapsed_ms == value.elapsed
+					&& stamp == value.stamp)
 			}
-			Self::Legacy(entry) => Ok(actual.record == entry.record && actual.stamp == entry.stamp),
+			Self::Legacy(entry) => {
+				Ok(actual.fields() == record_fields(&entry.record) && stamp == entry.stamp)
+			}
 		}
+	}
+	#[cfg(test)]
+	fn matches(&self, actual: &Entry) -> Result<bool> {
+		self.matches_observation(
+			&RecordObservation::Owned(actual.record.clone()),
+			actual.stamp,
+		)
 	}
 }
 
@@ -433,7 +602,8 @@ fn verify_members_serial(
 			live(deadline)?;
 			trace.attempt();
 			trace.enter(ContentPhase::Row);
-			let key = original_name(filename)?;
+			let member = OriginalName::member(filename)?;
+			let key = member.identity;
 			// Keep this access guard alive through the full comparison below. No
 			// borrowed ROW escapes this member or the immutable ROWS/ORDER view.
 			let raw = rows.get(key.as_slice())?;
@@ -463,14 +633,22 @@ fn verify_members_serial(
 			} else if base.is_none() {
 				bail!("archive namespace changed");
 			}
-			let actual = read_original_with_trace(archive, directory, filename, deadline, trace)?;
-			let matches = match pending {
-				Some(entry) => actual.record == entry.record && actual.stamp == entry.stamp,
-				None => base
-					.as_ref()
-					.ok_or_else(|| anyhow!("archive namespace changed"))?
-					.matches(&actual)?,
-			};
+			let matches = observe_original_with_trace::<true, _>(
+				archive,
+				directory,
+				OriginalInput::Verified(member),
+				deadline,
+				trace,
+				|actual, stamp| match pending {
+					Some(entry) => {
+						Ok(actual.fields() == record_fields(&entry.record) && stamp == entry.stamp)
+					}
+					None => base
+						.as_ref()
+						.ok_or_else(|| anyhow!("archive namespace changed"))?
+						.matches_observation(&actual, stamp),
+				},
+			)?;
 			if !matches {
 				bail!("archive full record content changed");
 			}

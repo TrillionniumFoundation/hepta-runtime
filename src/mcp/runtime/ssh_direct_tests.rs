@@ -12,6 +12,7 @@ use tokio::task::JoinHandle;
 #[derive(Default)]
 pub(super) struct Hooks {
 	pub spawned: AtomicU64,
+	pub last_spawned_pid: AtomicU64,
 	pub after_commit: Mutex<Option<Arc<Gate>>>,
 	pub panic_after_registration: AtomicBool,
 	pub child: Mutex<Option<ChildHooks>>,
@@ -797,4 +798,239 @@ async fn freeze_refuses_uncommitted_work_and_joins_all_original_children() {
 	owner.finish().await;
 	assert!(!fixture.ready(2).exists());
 	assert_eq!(owner.0.core.hooks.spawned.load(Ordering::Acquire), 2);
+}
+
+// The independent driver owns both wait receipts. Its subreaper setting is
+// process-local; neither the main test process nor concurrent tests acquire it.
+#[cfg(target_os = "linux")]
+const PARENT_DEATH_DRIVER: &str = r#"
+import ctypes, json, os, pathlib, signal, subprocess, sys, tempfile, time
+
+libc = ctypes.CDLL(None, use_errno=True)
+if libc.prctl(36, 1, 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER
+    raise OSError(ctypes.get_errno(), 'fixture subreaper setup failed')
+if not hasattr(os, 'pidfd_open') or not hasattr(signal, 'pidfd_send_signal'):
+    raise RuntimeError('fixture requires atomic original-process signalling')
+
+def birth(pid):
+    fields = pathlib.Path('/proc/%d/stat' % pid).read_text().rsplit(') ', 1)[1].split()
+    return fields[0], int(fields[1]), int(fields[19])
+
+def wait_owned(pid, seconds):
+    until = time.monotonic() + seconds
+    while True:
+        waited, status = os.waitpid(pid, os.WNOHANG)
+        if waited == pid:
+            return status
+        if waited != 0 or time.monotonic() >= until:
+            raise TimeoutError('original child did not exit within fixture deadline')
+        time.sleep(.005)
+
+with tempfile.TemporaryDirectory(prefix='hepta-direct-parent-death-') as raw:
+    root = pathlib.Path(raw)
+    nonce = os.urandom(16).hex()
+    env = dict(os.environ, HEPTA_DIRECT_PDEATH_ROOT=raw,
+               HEPTA_DIRECT_PDEATH_NONCE=nonce,
+               HEPTA_DIRECT_PDEATH_PARENT=str(os.getpid()))
+    controller = None
+    controller_fd = child_fd = None
+    child_pid = None
+    controller_reaped = child_reaped = False
+    report = None
+    try:
+        original_started = time.monotonic()
+        controller = subprocess.Popen(
+            [sys.argv[1], '--exact',
+             'mcp::runtime::ssh::direct::tests::linux_parent_death_helper',
+             '--nocapture', '--test-threads=1'],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, env=env, start_new_session=True)
+        controller_fd = os.pidfd_open(controller.pid, 0)
+        ready = root / 'controller-ready.json'
+        until = time.monotonic() + 10
+        while not ready.exists():
+            if os.waitid(os.P_PID, controller.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT):
+                raise RuntimeError('controller exited before original child readiness')
+            if time.monotonic() >= until:
+                raise TimeoutError('controller did not publish fixture readiness')
+            time.sleep(.005)
+        value = json.loads(ready.read_text())
+        assert value['nonce'] == nonce
+        assert value['controller_pid'] == controller.pid
+        assert value['driver_pid'] == os.getpid()
+        child_pid = value['child_pid']
+        assert type(child_pid) is int and child_pid > 1 and child_pid != controller.pid
+        child_fd = os.pidfd_open(child_pid, 0)
+        state, parent, ticks = birth(child_pid)
+        assert state != 'Z' and parent == controller.pid and ticks == value['child_birth']
+        assert os.waitid(os.P_PID, controller.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) is None
+        assert time.monotonic() - original_started < 10
+        started = time.monotonic()
+        # Only the controller is signalled during the proof. The quiet child
+        # ignores stdin EOF and has a 30-second backstop, never a 3-second exit.
+        signal.pidfd_send_signal(controller_fd, signal.SIGKILL, None, 0)
+        controller_status = wait_owned(controller.pid, 3)
+        controller_reaped = True
+        controller.returncode = os.waitstatus_to_exitcode(controller_status)
+        assert os.WIFSIGNALED(controller_status) and os.WTERMSIG(controller_status) == signal.SIGKILL
+        child_status = wait_owned(child_pid, max(0, 3 - (time.monotonic() - started)))
+        child_reaped = True
+        elapsed = time.monotonic() - started
+        assert os.WIFSIGNALED(child_status) and os.WTERMSIG(child_status) == signal.SIGKILL
+        assert elapsed < 3
+        assert time.monotonic() - original_started < 15
+        report = {'controller_status': controller_status, 'child_status': child_status,
+                  'child_reaped': True, 'elapsed_seconds': elapsed,
+                  'proof_child_signal_submitted': False}
+    finally:
+        if controller is not None and not controller_reaped:
+            # The original unreaped group leader pins this PGID. This failure
+            # cleanup precedes its wait; it can never count as PDEATH evidence.
+            try:
+                os.killpg(controller.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            controller_status = wait_owned(controller.pid, 3)
+            controller_reaped = True
+            controller.returncode = os.waitstatus_to_exitcode(controller_status)
+        if child_fd is not None and not child_reaped:
+            try:
+                signal.pidfd_send_signal(child_fd, signal.SIGKILL, None, 0)
+            except ProcessLookupError:
+                pass
+            wait_owned(child_pid, 3)
+            child_reaped = True
+        # A pre-readiness failure may leave one adopted fixture child whose
+        # group was killed above. Reap only actual children, without PID guesses.
+        if controller is not None:
+            until = time.monotonic() + 3
+            while True:
+                try:
+                    waited, status = os.waitpid(-1, os.WNOHANG)
+                except ChildProcessError:
+                    break
+                if waited == 0:
+                    if time.monotonic() >= until:
+                        raise TimeoutError('fixture cleanup did not reap its adopted child')
+                    time.sleep(.005)
+            out, err = controller.communicate(timeout=3)
+            if report is None:
+                sys.stderr.buffer.write(out + err)
+        for fd in (child_fd, controller_fd):
+            if fd is not None:
+                os.close(fd)
+    print(json.dumps(report, sort_keys=True))
+"#;
+
+#[cfg(target_os = "linux")]
+#[test]
+fn controller_sigkill_terminates_the_original_direct_transport_child() {
+	let output = std::process::Command::new("python3")
+		.args(["-I", "-S", "-c", PARENT_DEATH_DRIVER])
+		.arg(std::env::current_exe().unwrap())
+		.output()
+		.unwrap();
+	assert!(
+		output.status.success(),
+		"driver stdout: {}\ndriver stderr: {}",
+		String::from_utf8_lossy(&output.stdout),
+		String::from_utf8_lossy(&output.stderr)
+	);
+	let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+	assert_eq!(report["child_reaped"], true);
+	assert_eq!(report["proof_child_signal_submitted"], false);
+	assert_eq!(report["child_status"], libc::SIGKILL);
+	assert_eq!(report["controller_status"], libc::SIGKILL);
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn linux_parent_death_helper() {
+	let Ok(root) = std::env::var("HEPTA_DIRECT_PDEATH_ROOT") else {
+		return;
+	};
+	let root = PathBuf::from(root);
+	let nonce = std::env::var("HEPTA_DIRECT_PDEATH_NONCE").unwrap();
+	let parent: u32 = std::env::var("HEPTA_DIRECT_PDEATH_PARENT")
+		.unwrap()
+		.parse()
+		.unwrap();
+	// A qualification timeout can kill the driver process group. This helper
+	// has a private session, so bind it to the driver before spawning its child.
+	assert_eq!(
+		unsafe {
+			libc::prctl(
+				libc::PR_SET_PDEATHSIG,
+				libc::SIGKILL as libc::c_ulong,
+				0 as libc::c_ulong,
+				0 as libc::c_ulong,
+				0 as libc::c_ulong,
+			)
+		},
+		0
+	);
+	assert_eq!(unsafe { libc::getppid() } as u32, parent);
+	let owner = Owner::new();
+	let mut command = Command::new("python3");
+	command
+		.args([
+			"-I",
+			"-S",
+			"-c",
+			r#"
+import json, os, pathlib, sys, time
+root = pathlib.Path(sys.argv[1])
+fields = pathlib.Path('/proc/self/stat').read_text().rsplit(') ', 1)[1].split()
+value = {'child_pid': os.getpid(), 'child_birth': int(fields[19])}
+temporary = root / 'child-ready.tmp'
+temporary.write_text(json.dumps(value))
+os.replace(temporary, root / 'child-ready.json')
+time.sleep(30)
+"#,
+		])
+		.arg(&root);
+	pipes(&mut command);
+	let proxy = owner.0.clone();
+	let capture = tokio::spawn(async move {
+		proxy
+			.capture(
+				"parent-death-fixture",
+				command,
+				b"",
+				Instant::now() + Duration::from_secs(60),
+			)
+			.await
+	});
+	until(|| root.join("child-ready.json").exists()).await;
+	let child: serde_json::Value = serde_json::from_slice(
+		&tokio::fs::read(root.join("child-ready.json"))
+			.await
+			.unwrap(),
+	)
+	.unwrap();
+	assert_eq!(owner.0.core.children.lock().unwrap().len(), 1);
+	assert_eq!(
+		owner.0.core.hooks.last_spawned_pid.load(Ordering::Acquire),
+		child["child_pid"].as_u64().unwrap()
+	);
+	assert_eq!(owner.0.core.hooks.spawned.load(Ordering::Acquire), 1);
+	let ready = serde_json::json!({
+		"nonce": nonce, "controller_pid": std::process::id(), "driver_pid": parent,
+		"child_pid": child["child_pid"], "child_birth": child["child_birth"]
+	});
+	tokio::fs::write(
+		root.join("controller-ready.tmp"),
+		serde_json::to_vec(&ready).unwrap(),
+	)
+	.await
+	.unwrap();
+	tokio::fs::rename(
+		root.join("controller-ready.tmp"),
+		root.join("controller-ready.json"),
+	)
+	.await
+	.unwrap();
+	let result = capture.await;
+	owner.finish().await;
+	panic!("controller helper reached its backstop without SIGKILL: {result:?}");
 }
