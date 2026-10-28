@@ -7,7 +7,10 @@ use std::os::unix::fs::PermissionsExt;
 use std::time::Duration;
 
 fn root() -> tempfile::TempDir {
-	tempfile::tempdir().unwrap()
+	let root = tempfile::tempdir().unwrap();
+	// The audit owner requires 0700; do not inherit the test runner's umask.
+	std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+	root
 }
 fn begin(root: &Path, owner: char, tool: &str, target: Option<String>) -> Work {
 	Work::Begin(Begin {

@@ -1081,6 +1081,13 @@ async fn runtime_metadata_observers_do_not_admit_themselves_over_real_mcp() {
 		.unwrap();
 	let state = root.path().join("state");
 	tokio::fs::create_dir(&state).await.unwrap();
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		tokio::fs::set_permissions(&state, std::fs::Permissions::from_mode(0o700))
+			.await
+			.unwrap();
+	}
 	let config_path = root.path().join("runtime.json");
 	tokio::fs::write(&config_path, serde_json::to_vec(&json!({"state_dir":state,"hosts":{"fixture":{"ssh_target":"never-connect.invalid","platform":"linux","remote_state_dir":"/never-launch","allow_execute":false,"allow_pty":false,"allow_write":false}}})).unwrap()).await.unwrap();
 	let config = crate::mcp::runtime::RuntimeConfig::load(&config_path).unwrap();

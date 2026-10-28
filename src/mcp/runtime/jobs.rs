@@ -20,6 +20,7 @@ use tokio::sync::{Mutex as AsyncMutex, Semaphore};
 use super::config::{check_environment, check_execution, runtime_config, valid_name};
 use super::config::{ExecutionMode, Platform};
 use super::ssh::{run_jobctl, run_python_json};
+use super::ssh::{run_jobctl_with_entry, run_python_json_with_entry};
 
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 const START_LANE_COUNT: usize = 64;
@@ -776,7 +777,7 @@ impl Write for RequestHashWriter {
 		Ok(())
 	}
 }
-fn request_digest(params: &ProcessStartParams) -> Result<String> {
+pub(crate) fn request_digest(params: &ProcessStartParams) -> Result<String> {
 	let mut writer = RequestHashWriter(Sha256::new());
 	serde_json::to_writer(&mut writer, &request_binding(params))?;
 	let digest = writer.0.finalize();
@@ -2514,6 +2515,18 @@ async fn launch_record(
 	record: &mut JobRecord,
 	params: &ProcessStartParams,
 ) -> Result<LaunchOutcome> {
+	launch_record_with_entry(record, params, || Ok(())).await
+}
+
+async fn launch_record_with_entry<F, G>(
+	record: &mut JobRecord,
+	params: &ProcessStartParams,
+	enter: F,
+) -> Result<LaunchOutcome>
+where
+	F: FnOnce() -> Result<G> + Send,
+	G: Send,
+{
 	let config = runtime_config()?;
 	let host = config.host(&record.host)?;
 	let request = json!({
@@ -2537,7 +2550,7 @@ async fn launch_record(
 		"allow_detached_fallback": host.allow_detached_fallback,
 	});
 	let launch_result = if record.system_jobctl {
-		run_jobctl(
+		run_jobctl_with_entry(
 			host,
 			&json!({
 				"op":"start", "job_id":record.id, "executable":params.executable,
@@ -2545,14 +2558,16 @@ async fn launch_record(
 				"timeout_seconds":params.timeout_seconds, "nice":params.nice,
 				"cpu_quota_percent":params.cpu_quota_percent, "memory_max_bytes":params.memory_max_bytes
 			}),
+			enter,
 		)
 		.await
 	} else {
-		run_python_json(
+		run_python_json_with_entry(
 			host,
 			&private_remote_code(START_CODE)?,
 			&request,
 			Duration::from_secs(20),
+			enter,
 		)
 		.await
 	};
@@ -2577,7 +2592,69 @@ fn validate_new_host_resource_limits(
 	Ok(())
 }
 
+/// Observe an original request when its start acknowledgement (and job ID) was lost.
+/// Absence is only a local-registry observation, never permission to replay an effect.
+pub async fn observe_request(params: ProcessStartParams) -> Result<Option<String>> {
+	// Revoking new execution must not prevent observing a previously admitted
+	// request. Preserve its original identity, digest and physical binding.
+	match params.idempotency_key.as_deref() {
+		Some(key) if !key.trim().is_empty() && key.len() <= 256 => {}
+		_ => bail!("request observation requires its original nonempty idempotency key"),
+	}
+	runtime_config()?.host(&params.host)?;
+	let lane = start_lock(&params.host, params.idempotency_key.as_deref())?;
+	let mut guard = Some(lane.lock().await);
+	let key = params
+		.idempotency_key
+		.as_deref()
+		.context("request observation requires its original idempotency key")?;
+	let Some(existing) = find_idempotent(&params.host, key)? else {
+		return Ok(None);
+	};
+	let digest = request_digest(&params)?;
+	if !matches_request(&existing, &digest)? {
+		bail!("idempotency key `{key}` is already bound to a different request");
+	}
+	check_binding(&existing)?;
+	// Even pending isolated/jobctl records are observation-only here. In
+	// particular, do not use start_job's optional launch reconciliation path.
+	let status = read_reuse_status(&existing, false, &mut guard, status_record(&existing, 0)).await;
+	Ok(Some(serde_json::to_string_pretty(&json!({
+		"observation_only": true,
+		"reused": true,
+		"retried_launch": false,
+		"launch": null,
+		"job": existing,
+		"status": status,
+	}))?))
+}
+
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
+	start_job_with_policy(params, true, |_| Ok(())).await
+}
+
+/// Checked native entry never relaunches an existing uncertain binding. Only
+/// a new job can consume this one-shot callback at the actual SSH spawn.
+pub(crate) async fn start_job_with_entry<F, G>(
+	params: ProcessStartParams,
+	enter: F,
+) -> Result<String>
+where
+	F: FnOnce(&ProcessStartParams) -> Result<G> + Send,
+	G: Send,
+{
+	start_job_with_policy(params, false, enter).await
+}
+
+async fn start_job_with_policy<F, G>(
+	params: ProcessStartParams,
+	allow_reconcile_launch: bool,
+	enter: F,
+) -> Result<String>
+where
+	F: FnOnce(&ProcessStartParams) -> Result<G> + Send,
+	G: Send,
+{
 	validate_start(&params)?;
 	let _start_lane = start_lock(&params.host, params.idempotency_key.as_deref())?;
 	let mut start_guard = Some(_start_lane.lock().await);
@@ -2600,7 +2677,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 				bail!("idempotency key `{key}` is already bound to a different request");
 			}
 			check_binding(&existing)?;
-			let retry = reconcile_retry_allowed(&existing);
+			let retry = allow_reconcile_launch && reconcile_retry_allowed(&existing);
 			let launch = if retry {
 				operation_intent("process_start_reconcile_intent", &params.host, &existing.id)?;
 				Some(launch_record(&mut existing, &params).await?)
@@ -2667,7 +2744,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	save_record(&record).map_err(|_| {
 		anyhow::anyhow!("Durable job identity could not be saved; no remote launch submitted")
 	})?;
-	let launch = launch_record(&mut record, &params).await?;
+	let launch = launch_record_with_entry(&mut record, &params, || enter(&params)).await?;
 	let mut result = json!({"reused": false, "job": record, "launch": launch.value});
 	attach_launch_record_warning(&mut result, &launch);
 	let completion = audit(
@@ -3242,3 +3319,7 @@ mod terminal_publication_tests;
 #[cfg(test)]
 #[path = "jobs_security_tests.rs"]
 mod security_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_observe_request_tests.rs"]
+mod observe_request_tests;
