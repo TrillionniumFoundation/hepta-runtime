@@ -27,6 +27,20 @@ For trusted-account shell, external-PID signalling and temporary sudo, see [Oper
 
 Follow the exact source/binary qualification receipts under `docs/qualification/`. Source implementation, a parallel installed service, and a completed Desktop Commander cutover are different states. Preserve DC for existing sessions and rescue; cloud/ChatGPT registration is the final, separately authorized step.
 
+## Native library builds
+
+The default `remote-fs` feature includes the existing SSH/SFTP filesystem backend.
+The `hepta-runtime` CLI requires this feature, so its default build and host-key
+verification remain unchanged. A trusted native process consumer can depend on
+the library with `default-features = false` to omit `russh` and `russh-sftp`.
+
+Without `remote-fs`, local filesystem access and the existing native durable job
+owner, original-request reconciliation, policy checks, and system-SSH process
+transport remain available. All remote filesystem APIs reject `ssh://` and
+`sftp://` operations, including the runtime's descriptor-relative file helper;
+they do not interpret those URLs as local paths. The `native` API still requires
+the embedding host to validate final-use authorization independently.
+
 The following Octofs material is retained upstream reference, not the authoritative Hepta runtime policy and installation contract.
 
 ---

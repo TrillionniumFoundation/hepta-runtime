@@ -6656,6 +6656,7 @@ mod tests {
 	//   OCTOFS_TEST_SSH_KEY=/path/to/key \
 	//   cargo test -- --ignored remote_
 
+	#[cfg(feature = "remote-fs")]
 	fn remote_test_prefix() -> Option<String> {
 		let host = std::env::var("OCTOFS_TEST_SSH_HOST").ok()?;
 		let user = std::env::var("OCTOFS_TEST_SSH_USER")
@@ -6667,6 +6668,7 @@ mod tests {
 	}
 
 	/// Initialize the SFTP pool once for all remote tests.
+	#[cfg(feature = "remote-fs")]
 	fn ensure_sftp_pool() {
 		use std::sync::Once;
 		static INIT: Once = Once::new();
@@ -6681,6 +6683,7 @@ mod tests {
 	}
 
 	/// Create a fresh remote test directory and return its ssh:// prefix.
+	#[cfg(feature = "remote-fs")]
 	async fn setup_remote_dir() -> String {
 		ensure_sftp_pool();
 		let prefix = remote_test_prefix().expect("OCTOFS_TEST_SSH_HOST not set");
@@ -6692,12 +6695,14 @@ mod tests {
 	}
 
 	/// Clean up the remote test directory.
+	#[cfg(feature = "remote-fs")]
 	async fn cleanup_remote_dir(prefix: &str) {
 		// Best-effort: remove files we created. SFTP rmdir is not exposed,
 		// so we rely on /tmp being cleaned by the host OS.
 		let _ = prefix;
 	}
 
+	#[cfg(feature = "remote-fs")]
 	#[tokio::test]
 	#[ignore = "Requires OCTOFS_TEST_SSH_HOST env var"]
 	async fn remote_view_create_and_read() {
@@ -6733,6 +6738,7 @@ mod tests {
 		cleanup_remote_dir(&dir).await;
 	}
 
+	#[cfg(feature = "remote-fs")]
 	#[tokio::test]
 	#[ignore = "Requires OCTOFS_TEST_SSH_HOST env var"]
 	async fn remote_str_replace() {
@@ -6772,6 +6778,7 @@ mod tests {
 		cleanup_remote_dir(&dir).await;
 	}
 
+	#[cfg(feature = "remote-fs")]
 	#[tokio::test]
 	#[ignore = "Requires OCTOFS_TEST_SSH_HOST env var"]
 	async fn remote_batch_edit() {
@@ -6826,6 +6833,7 @@ mod tests {
 		cleanup_remote_dir(&dir).await;
 	}
 
+	#[cfg(feature = "remote-fs")]
 	#[tokio::test]
 	#[ignore = "Requires OCTOFS_TEST_SSH_HOST env var"]
 	async fn remote_directory_listing() {
@@ -6863,6 +6871,7 @@ mod tests {
 		cleanup_remote_dir(&dir).await;
 	}
 
+	#[cfg(feature = "remote-fs")]
 	#[tokio::test]
 	#[ignore = "Requires OCTOFS_TEST_SSH_HOST env var"]
 	async fn remote_extract_lines() {
@@ -6911,6 +6920,7 @@ mod tests {
 		cleanup_remote_dir(&dir).await;
 	}
 
+	#[cfg(feature = "remote-fs")]
 	#[tokio::test]
 	#[ignore = "Requires OCTOFS_TEST_SSH_HOST env var"]
 	async fn remote_undo_edit() {
@@ -6961,6 +6971,7 @@ mod tests {
 		cleanup_remote_dir(&dir).await;
 	}
 
+	#[cfg(feature = "remote-fs")]
 	#[tokio::test]
 	#[ignore = "Requires OCTOFS_TEST_SSH_HOST env var"]
 	async fn remote_workdir_set() {

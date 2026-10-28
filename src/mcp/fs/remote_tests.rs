@@ -12,23 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Remote URL parsing and feature-enabled SSH connection behavior.
+
+#[cfg(feature = "remote-fs")]
 use super::sftp::{
 	apply_ssh_host_config, encode_file_bytes, parse_jump_target, parse_ssh_host_config,
 	ConnectionSlots, SshHostConfig,
 };
 use super::*;
+#[cfg(feature = "remote-fs")]
 use std::future::Future;
+#[cfg(feature = "remote-fs")]
 use std::pin::Pin;
+#[cfg(feature = "remote-fs")]
 use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(feature = "remote-fs")]
 use std::sync::Arc;
+#[cfg(feature = "remote-fs")]
 use std::task::{Context, Waker};
 
+#[cfg(feature = "remote-fs")]
 fn assert_pending<F: Future>(future: Pin<&mut F>) {
 	assert!(future
 		.poll(&mut Context::from_waker(Waker::noop()))
 		.is_pending());
 }
 
+#[cfg(feature = "remote-fs")]
 #[tokio::test]
 async fn connection_slots_share_one_setup_and_leave_other_hosts_available() {
 	let pool = ConnectionSlots::new();
@@ -71,6 +81,7 @@ async fn connection_slots_share_one_setup_and_leave_other_hosts_available() {
 	assert_eq!(pool.slot_count(), 2);
 }
 
+#[cfg(feature = "remote-fs")]
 #[tokio::test]
 async fn connection_slots_retry_after_failure_without_caching_errors() {
 	let pool = ConnectionSlots::<usize>::new();
@@ -108,14 +119,17 @@ async fn connection_slots_retry_after_failure_without_caching_errors() {
 	assert_eq!(pool.slot_count(), 1);
 }
 
+#[cfg(feature = "remote-fs")]
 struct CountDrop(Arc<AtomicUsize>);
 
+#[cfg(feature = "remote-fs")]
 impl Drop for CountDrop {
 	fn drop(&mut self) {
 		self.0.fetch_add(1, Ordering::Relaxed);
 	}
 }
 
+#[cfg(feature = "remote-fs")]
 #[tokio::test]
 async fn connection_slots_cancel_setup_and_allow_the_same_waiter_to_connect() {
 	let pool = ConnectionSlots::<usize>::new();
@@ -146,6 +160,7 @@ async fn connection_slots_cancel_setup_and_allow_the_same_waiter_to_connect() {
 	assert_eq!(pool.slot_count(), 1);
 }
 
+#[cfg(feature = "remote-fs")]
 #[tokio::test]
 async fn connection_slots_remove_empty_slots_after_every_caller_is_cancelled() {
 	let pool = ConnectionSlots::<usize>::new();
@@ -174,6 +189,7 @@ async fn connection_slots_remove_empty_slots_after_every_caller_is_cancelled() {
 	}
 }
 
+#[cfg(feature = "remote-fs")]
 #[tokio::test]
 async fn connection_slots_replace_dead_sessions_and_remove_failed_replacements() {
 	let pool = ConnectionSlots::new();
@@ -198,6 +214,7 @@ async fn connection_slots_replace_dead_sessions_and_remove_failed_replacements()
 	);
 }
 
+#[cfg(feature = "remote-fs")]
 #[test]
 fn file_hex_encoding_preserves_empty_zero_high_and_all_byte_values() {
 	assert_eq!(encode_file_bytes(&[]), "");
@@ -226,6 +243,7 @@ fn file_hex_encoding_preserves_empty_zero_high_and_all_byte_values() {
 		.all(|chunk| chunk == encoded.as_bytes()));
 }
 
+#[cfg(feature = "remote-fs")]
 #[test]
 #[ignore = "manual old/new file hex encoding microbenchmark; no remote access"]
 fn benchmark_file_hex_encoding() {
@@ -256,6 +274,7 @@ fn benchmark_file_hex_encoding() {
 	}
 }
 
+#[cfg(feature = "remote-fs")]
 #[test]
 fn parses_connection_and_authentication_options() {
 	let home = std::path::Path::new("/home/me");
@@ -286,6 +305,7 @@ Host dev
 	assert_eq!(config.identity_files, vec![expected_identity]);
 }
 
+#[cfg(feature = "remote-fs")]
 #[test]
 fn explicit_url_user_and_port_override_ssh_config() {
 	let config = SshHostConfig {
@@ -301,6 +321,7 @@ fn explicit_url_user_and_port_override_ssh_config() {
 	assert_eq!(target.port, 2222);
 }
 
+#[cfg(feature = "remote-fs")]
 #[test]
 fn parses_proxy_jump_forms() {
 	assert_eq!(
