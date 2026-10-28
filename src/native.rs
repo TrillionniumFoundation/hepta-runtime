@@ -31,6 +31,23 @@ pub async fn execute_or_observe(params: ProcessStartParams) -> Result<String> {
 	jobs::start_job(params).await
 }
 
+/// Native product entry with the host's non-cloneable effect capability.
+/// The callback is delayed past owner waits and durable intent publication to
+/// the synchronous local SSH spawn. An existing job is observation-only and
+/// does not consume this callback or retry its launch. Unknown results retain
+/// the same host/key/job and must use `observe_request` on subsequent calls.
+pub async fn execute_or_observe_with_entry<F, G>(
+	params: ProcessStartParams,
+	enter: F,
+) -> Result<String>
+where
+	F: FnOnce(&ProcessStartParams) -> Result<G> + Send,
+	G: Send,
+{
+	require_key(&params)?;
+	jobs::start_job_with_entry(params, enter).await
+}
+
 /// Resolve and observe the original request without submitting or relaunching it.
 /// A missing local binding is not evidence that an external effect did not occur.
 pub async fn observe_request(params: ProcessStartParams) -> Result<Option<String>> {
@@ -56,3 +73,13 @@ pub async fn cancel(params: ProcessCancelParams) -> Result<String> {
 #[cfg(test)]
 #[path = "native_tests.rs"]
 mod tests;
+
+#[cfg(all(test, unix))]
+#[path = "native_entry_tests.rs"]
+mod entry_tests;
+
+#[path = "native_observation.rs"]
+mod observation;
+pub use observation::{
+	cancel_request, observe_terminal_output, NativeJobOutcome, NativeTerminalOutput,
+};

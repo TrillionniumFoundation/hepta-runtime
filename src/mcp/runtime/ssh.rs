@@ -304,16 +304,48 @@ pub async fn run_capture(
 	stdin_data: &[u8],
 	timeout: Duration,
 ) -> Result<std::process::Output> {
+	run_capture_with_entry(host, remote_command, stdin_data, timeout, || Ok(())).await
+}
+
+/// Consume the embedding owner's actual capability immediately before the
+/// synchronous local SSH spawn. The guard covers the bounded transport wait;
+/// it does not promise retroactive revocation of a remote workload.
+pub(crate) async fn run_capture_with_entry<F, G>(
+	host: &HostConfig,
+	remote_command: &str,
+	stdin_data: &[u8],
+	timeout: Duration,
+	enter: F,
+) -> Result<std::process::Output>
+where
+	F: FnOnce() -> Result<G> + Send,
+	G: Send,
+{
 	let mut command = ssh_base(host);
+	command.arg(remote_command);
+	capture_prepared(command, &host.ssh_target, stdin_data, timeout, enter).await
+}
+
+async fn capture_prepared<F, G>(
+	mut command: Command,
+	target: &str,
+	stdin_data: &[u8],
+	timeout: Duration,
+	enter: F,
+) -> Result<std::process::Output>
+where
+	F: FnOnce() -> Result<G> + Send,
+	G: Send,
+{
 	command
-		.arg(remote_command)
 		.stdin(Stdio::piped())
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
 		.kill_on_drop(true);
+	let entry_guard = enter()?;
 	let mut child = command
 		.spawn()
-		.with_context(|| format!("failed to start ssh for {}", host.ssh_target))?;
+		.with_context(|| format!("failed to start ssh for {target}"))?;
 	let mut stdin = child
 		.stdin
 		.take()
@@ -352,12 +384,13 @@ pub async fn run_capture(
 				Ok(Err(error)) => Err(error),
 				_ => Err(anyhow!(
 					"ssh to {} timed out after {}s",
-					host.ssh_target,
+					target,
 					timeout.as_secs()
 				)),
 			};
 		}
 	};
+	drop(entry_guard);
 	Ok(output)
 }
 
@@ -372,6 +405,25 @@ where
 	O: DeserializeOwned,
 {
 	run_python_json_with_interpreter(host, "python3", code, input, timeout).await
+}
+
+pub(crate) async fn run_python_json_with_entry<I, O, F, G>(
+	host: &HostConfig,
+	code: &str,
+	input: &I,
+	timeout: Duration,
+	enter: F,
+) -> Result<O>
+where
+	I: Serialize + ?Sized,
+	O: DeserializeOwned,
+	F: FnOnce() -> Result<G> + Send,
+	G: Send,
+{
+	let remote_command = python_json_command("python3", code)?;
+	let payload = serde_json::to_vec(input)?;
+	let output = run_capture_with_entry(host, &remote_command, &payload, timeout, enter).await?;
+	decode_python_output(host, output)
 }
 
 pub(crate) fn validate_python_interpreter(interpreter: &str) -> Result<()> {
@@ -413,6 +465,13 @@ where
 	let remote_command = python_json_command(interpreter, code)?;
 	let payload = serde_json::to_vec(input)?;
 	let output = run_capture(host, &remote_command, &payload, timeout).await?;
+	decode_python_output(host, output)
+}
+
+fn decode_python_output<O: DeserializeOwned>(
+	host: &HostConfig,
+	output: std::process::Output,
+) -> Result<O> {
 	if !output.status.success() {
 		let stderr = String::from_utf8_lossy(&output.stderr);
 		let stdout = String::from_utf8_lossy(&output.stdout);
@@ -479,13 +538,26 @@ pub fn build_exec_command(
 /// Fixed no-argument capability; the administrator policy, not the caller, owns
 /// systemd properties, DynamicUser selection and protected paths.
 pub async fn run_jobctl(host: &HostConfig, input: &serde_json::Value) -> Result<serde_json::Value> {
+	run_jobctl_with_entry(host, input, || Ok(())).await
+}
+
+pub(crate) async fn run_jobctl_with_entry<F, G>(
+	host: &HostConfig,
+	input: &serde_json::Value,
+	enter: F,
+) -> Result<serde_json::Value>
+where
+	F: FnOnce() -> Result<G> + Send,
+	G: Send,
+{
 	let mut data = serde_json::to_vec(input)?;
 	data.push(b'\n');
-	let output = run_capture(
+	let output = run_capture_with_entry(
 		host,
 		"sudo -n /usr/local/libexec/hepta-runtime-jobctl",
 		&data,
 		Duration::from_secs(20),
+		enter,
 	)
 	.await?;
 	if !output.status.success() {
@@ -500,6 +572,10 @@ pub async fn run_jobctl(host: &HostConfig, input: &serde_json::Value) -> Result<
 #[cfg(test)]
 #[path = "ssh_tests.rs"]
 mod tests;
+
+#[cfg(all(test, unix))]
+#[path = "ssh_entry_tests.rs"]
+mod entry_tests;
 
 #[cfg(test)]
 #[path = "ssh_observation_transport_tests.rs"]
