@@ -58,8 +58,14 @@ jobs:
       - name: Check all targets
         run: cargo check --locked --all-targets
 
+      - name: Check all targets without remote filesystem
+        run: cargo check --locked --all-targets --no-default-features
+
       - name: Clippy
         run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Clippy without remote filesystem
+        run: cargo clippy --locked --all-targets --no-default-features -- -D warnings
 
       - name: Install pinned nextest
         run: |
@@ -76,6 +82,12 @@ jobs:
         run: |
           umask 022
           cargo nextest run --locked --all-targets --all-features \
+            --test-threads 1 --retries 0 --no-fail-fast
+
+      - name: Test without remote filesystem in isolated processes
+        run: |
+          umask 022
+          cargo nextest run --locked --all-targets --no-default-features \
             --test-threads 1 --retries 0 --no-fail-fast
 
       - name: Release build
@@ -116,8 +128,14 @@ jobs:
       - name: Check all targets
         run: cargo check --locked --all-targets
 
+      - name: Check all targets without remote filesystem
+        run: cargo check --locked --all-targets --no-default-features
+
       - name: Clippy
         run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Clippy without remote filesystem
+        run: cargo clippy --locked --all-targets --no-default-features -- -D warnings
 
       - name: Install pinned nextest
         run: |
@@ -134,6 +152,12 @@ jobs:
         run: |
           umask 022
           cargo nextest run --locked --all-targets --all-features \
+            --test-threads 1 --retries 0 --no-fail-fast
+
+      - name: Test without remote filesystem in isolated processes
+        run: |
+          umask 022
+          cargo nextest run --locked --all-targets --no-default-features \
             --test-threads 1 --retries 0 --no-fail-fast
 
       - name: Descriptor-relative file safety

@@ -1,7 +1,16 @@
 # Remote filesystem (SSH/SFTP)
 
-Remote is a native capability of every file tool — always compiled in, no
-feature flag. Implementation: `src/mcp/fs/remote.rs`.
+Remote filesystem support is enabled by the default `remote-fs` Cargo feature.
+The `hepta-runtime` CLI requires that feature and retains the existing SSH/SFTP
+backend. Implementation: `src/mcp/fs/remote.rs`.
+
+A native process library consumer can use `default-features = false` to omit
+`russh` and `russh-sftp`. In that build, all remote filesystem APIs return an
+explicit unsupported-feature error, including the runtime's descriptor-relative
+file helper. Remote URLs remain remote paths and never fall back to local I/O.
+Local filesystem operations and the native durable job owner's system-SSH
+process transport, policy checks and original-request reconciliation remain
+available.
 
 ## Model
 
