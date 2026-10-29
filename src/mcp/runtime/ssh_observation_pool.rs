@@ -554,6 +554,7 @@ impl OwnedChild {
 }
 
 type Ready = Option<std::result::Result<Arc<Master>, String>>;
+#[derive(Clone)]
 struct Entry {
 	ready: watch::Receiver<Ready>,
 	permits: Arc<Semaphore>,
@@ -570,6 +571,9 @@ struct Master {
 	last_use: Mutex<Instant>,
 	active: AtomicUsize,
 	accepting: AtomicBool,
+	// Maintenance and renewal retain one original cleanup result. They never
+	// repeat a failed reap or unlink merely because a different waiter arrived.
+	retirement: AsyncMutex<Option<std::result::Result<(), String>>>,
 }
 struct ActiveMaster(Arc<Master>);
 impl Drop for ActiveMaster {
@@ -1141,6 +1145,7 @@ impl Core {
 				last_use: Mutex::new(Instant::now()),
 				active: AtomicUsize::new(0),
 				accepting: AtomicBool::new(true),
+				retirement: AsyncMutex::new(None),
 			})),
 			Err(error) => {
 				self.stop_child(&owned, Duration::ZERO).await?;
@@ -1288,10 +1293,7 @@ impl Core {
 					_ = tokio::time::sleep(Duration::from_millis(20)) => {},
 				}
 			}
-			self.stop_child(&old.owned, Duration::from_millis(200))
-				.await?;
-			self.release(&old.owned).await?;
-			self.unlink_socket(&old)?;
+			self.retire_master(&old).await?;
 			let mut entries = timeout_at(deadline, self.masters.lock())
 				.await
 				.context("observation renewal cleanup ledger deadline")?;
@@ -1482,6 +1484,34 @@ impl Core {
 			_admission: request.admission.clone(),
 		})
 	}
+	async fn retire_master(&self, master: &Master) -> Result<()> {
+		// Only this exact master's lifetime owns the receipt. A concurrent
+		// maintenance pass and renewal join the same original cleanup, while
+		// another host never waits for its child or socket custody.
+		let mut receipt = master.retirement.lock().await;
+		if let Some(result) = receipt.as_ref() {
+			return result
+				.clone()
+				.map_err(|error| anyhow!("observation original retirement failed: {error}"));
+		}
+		let result = async {
+			self.stop_child(&master.owned, Duration::from_millis(200))
+				.await?;
+			self.release(&master.owned).await?;
+			self.unlink_socket(master)
+		}
+		.await;
+		if result.is_err() {
+			self.stop.cancel();
+		}
+		*receipt = Some(
+			result
+				.as_ref()
+				.map(|_| ())
+				.map_err(|error| format!("{error:#}")),
+		);
+		result
+	}
 	async fn maintain(&self) -> Result<()> {
 		{
 			let mut tasks = self
@@ -1492,10 +1522,19 @@ impl Core {
 				result.context("observation supervisor panicked")??;
 			}
 		}
-		let mut entries = self.masters.lock().await;
-		let mut expired = Vec::new();
-		for (host, entry) in entries.iter() {
-			match entry.ready.borrow().as_ref() {
+		// The table has at most MAX_MASTERS entries. Preserve generation and
+		// watch identity in this bounded snapshot, then release the table before
+		// waiting on any original Child. A slow host must not stop other hosts.
+		let snapshot: Vec<_> = self
+			.masters
+			.lock()
+			.await
+			.iter()
+			.map(|(host, entry)| (host.clone(), entry.clone()))
+			.collect();
+		for (host, observed) in snapshot {
+			let ready = { observed.ready.borrow().clone() };
+			match ready {
 				Some(Ok(master)) => {
 					let inactive = master.active.load(Ordering::Acquire) == 0;
 					let idle = master
@@ -1503,40 +1542,74 @@ impl Core {
 						.lock()
 						.map_err(|_| anyhow!("observation master clock unavailable"))?
 						.elapsed() >= IDLE;
-					if master.created.elapsed() >= AGE
-						|| (inactive && idle)
-						|| master.owned.terminal().await?
-					{
-						master.accepting.store(false, Ordering::Release);
-						self.stop_child(&master.owned, Duration::from_millis(200))
-							.await?;
-						self.release(&master.owned).await?;
-						self.unlink_socket(master)?;
-						// Retired masters can still have unreaped slaves or stale
-						// waiters charged to this semaphore. Never replace it early.
-						if master.active.load(Ordering::Acquire) == 0
-							&& entry.permits.available_permits() == HOST_SESSIONS
+					let timed_out = master.created.elapsed() >= AGE || (inactive && idle);
+					let terminal = !timed_out && master.owned.terminal().await?;
+					if timed_out || terminal {
 						{
-							expired.push(host.clone());
+							let entries = self.masters.lock().await;
+							if !entries.get(&host).is_some_and(|entry| {
+								entry.generation == observed.generation
+									&& entry.ready.same_channel(&observed.ready)
+							}) {
+								continue;
+							}
+							// A request may have acquired this same generation while
+							// the snapshot waited. Only original terminal proof is
+							// permanent; refresh active/idle immediately before the
+							// no-await transition that closes new leases.
+							let idle_now = master.active.load(Ordering::Acquire) == 0
+								&& master
+									.last_use
+									.lock()
+									.map_err(|_| anyhow!("observation master clock unavailable"))?
+									.elapsed() >= IDLE;
+							if !terminal && master.created.elapsed() < AGE && !idle_now {
+								continue;
+							}
+							master.accepting.store(false, Ordering::Release);
+						}
+						self.retire_master(&master).await?;
+						let mut entries = self.masters.lock().await;
+						// Renewal may install a later generation during cleanup. It
+						// retains the original semaphore and must never be removed by
+						// this stale snapshot, even when all its permits are free.
+						if entries.get(&host).is_some_and(|entry| {
+							entry.generation == observed.generation
+								&& entry.ready.same_channel(&observed.ready)
+								&& master.active.load(Ordering::Acquire) == 0
+								&& entry.permits.available_permits() == HOST_SESSIONS
+						}) {
+							entries.remove(&host);
 						}
 					}
 				}
 				Some(Err(_)) => {
+					let mut entries = self.masters.lock().await;
+					let Some(entry) = entries.get(&host).filter(|entry| {
+						entry.generation == observed.generation
+							&& entry.ready.same_channel(&observed.ready)
+					}) else {
+						continue;
+					};
 					if entry.draining.is_some() {
 						bail!("observation renewal cleanup unresolved; reconciliation required");
 					}
 					if entry.permits.available_permits() == HOST_SESSIONS {
-						expired.push(host.clone());
+						entries.remove(&host);
 					}
 				}
-				None if Instant::now() > entry.ready_deadline => {
-					bail!("observation master initialization did not finish")
+				None if Instant::now() > observed.ready_deadline => {
+					let entries = self.masters.lock().await;
+					if entries.get(&host).is_some_and(|entry| {
+						entry.generation == observed.generation
+							&& entry.ready.same_channel(&observed.ready)
+							&& entry.ready.borrow().is_none()
+					}) {
+						bail!("observation master initialization did not finish");
+					}
 				}
 				None => {}
 			}
-		}
-		for host in expired {
-			entries.remove(&host);
 		}
 		Ok(())
 	}
@@ -1588,7 +1661,7 @@ impl Core {
 	// Production always supplies execute above; no caller chooses this function.
 	async fn run_with_dispatch<F, Work>(
 		self: Arc<Self>,
-		mut receiver: mpsc::Receiver<Request>,
+		receiver: mpsc::Receiver<Request>,
 		global: Arc<Semaphore>,
 		dispatch: F,
 	) -> Result<()>
@@ -1596,9 +1669,29 @@ impl Core {
 		F: Fn(Arc<Self>, Request, OwnedSemaphorePermit) -> Work,
 		Work: std::future::Future<Output = ()> + Send + 'static,
 	{
+		self.run_with_maintenance(receiver, global, dispatch, |core| async move {
+			core.maintain().await
+		})
+		.await
+	}
+	async fn run_with_maintenance<F, Work, M, Maintenance>(
+		self: Arc<Self>,
+		mut receiver: mpsc::Receiver<Request>,
+		global: Arc<Semaphore>,
+		dispatch: F,
+		maintain: M,
+	) -> Result<()>
+	where
+		F: Fn(Arc<Self>, Request, OwnedSemaphorePermit) -> Work,
+		Work: std::future::Future<Output = ()> + Send + 'static,
+		M: Fn(Arc<Self>) -> Maintenance,
+		Maintenance: std::future::Future<Output = Result<()>> + Send + 'static,
+	{
 		let mut work = JoinSet::new();
+		let mut maintenance = JoinSet::new();
 		let mut pending = VecDeque::with_capacity(MAX_ADMITTED);
 		let mut tick = tokio::time::interval(Duration::from_millis(100));
+		tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 		let outcome = loop {
 			if let Err(error) = Self::reap_completed_requests(&mut work) {
 				break Err(error);
@@ -1611,7 +1704,31 @@ impl Core {
 				.unwrap_or_else(Instant::now);
 			tokio::select! {
 				_ = self.stop.cancelled() => break Ok(()),
-				_ = tick.tick() => { if let Err(error) = self.maintain().await { break Err(error); } },
+				_ = tick.tick(), if maintenance.is_empty() => {
+					// One bounded owner task may wait for an original master's reap.
+					// It cannot stall another host's request admission, and its guard
+					// freezes admission if the task unwinds before publishing a result.
+					let core = self.clone();
+					let guard = StopUnlessCompleted {
+						stop: self.stop.clone(), completed: false,
+					};
+					let task = maintain(core.clone());
+					maintenance.spawn(async move {
+						let result = task.await;
+						if result.is_err() {
+							core.stop.cancel();
+						}
+						guard.complete();
+						result
+					});
+				},
+				Some(result) = maintenance.join_next(), if !maintenance.is_empty() => {
+					match result {
+						Ok(Ok(())) => {},
+						Ok(Err(error)) => break Err(error),
+						Err(error) => break Err(anyhow!("observation maintenance supervisor failed: {error}")),
+					}
+				},
 				_ = tokio::time::sleep_until(next_deadline), if !pending.is_empty() => {},
 				Some(result) = work.join_next(), if !work.is_empty() => {
 					if let Err(error) = result { break Err(anyhow!("observation request supervisor failed: {error}")); }
@@ -1670,10 +1787,27 @@ impl Core {
 				.reply
 				.send(Err(anyhow!("observation pool stopped before admission")));
 		}
-		while let Some(result) = work.join_next().await {
-			result.context("observation request supervisor failed during shutdown")?;
+		// Joining every original task remains mandatory after the first error.
+		// Dropping either JoinSet here would abort its cleanup while a caller
+		// could mistake the completed actor for a completed lifetime owner.
+		let mut cleanup = Ok(());
+		while let Some(result) = maintenance.join_next().await {
+			let result = result
+				.context("observation maintenance supervisor failed during shutdown")
+				.and_then(|result| result);
+			if cleanup.is_ok() {
+				cleanup = result;
+			}
 		}
-		outcome
+		while let Some(result) = work.join_next().await {
+			if let Err(error) = result {
+				if cleanup.is_ok() {
+					cleanup =
+						Err(error).context("observation request supervisor failed during shutdown");
+				}
+			}
+		}
+		outcome.and(cleanup)
 	}
 	fn discard_pending(pending: &mut VecDeque<Request>, hosts: &BTreeMap<String, String>) {
 		// One bounded pass, retaining order and the existing allocation. Neither

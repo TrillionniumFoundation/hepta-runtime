@@ -1,0 +1,145 @@
+{
+  "active_budget_seconds": 3600,
+  "agent": {
+    "identity": [
+      49,
+      375,
+      49661,
+      1000,
+      1000,
+      1,
+      0,
+      1792922563033912286,
+      1792922563033912286
+    ],
+    "path": "/run/user/1000/keyring/ssh"
+  },
+  "automatic_retries": 0,
+  "child": {
+    "actual_waitpid": 2315975,
+    "argv": [
+      "/usr/bin/ssh",
+      "-A",
+      "-T",
+      "-oBatchMode=yes",
+      "-oStrictHostKeyChecking=yes",
+      "-oControlMaster=no",
+      "-oControlPath=none",
+      "-oControlPersist=no",
+      "-oForwardX11=no",
+      "-oConnectTimeout=8",
+      "-oConnectionAttempts=1",
+      "-oServerAliveInterval=10",
+      "-oServerAliveCountMax=3",
+      "-oLocalCommand=none",
+      "-oPermitLocalCommand=no",
+      "-oIdentityAgent=/run/user/1000/keyring/ssh",
+      "x230-ts",
+      "/usr/bin/python3 -I -S -c 'import hashlib,os,stat,sys\np,expected=sys.argv[1:3]\nfd=os.open(p,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC)\ntry:\n m=os.fstat(fd)\n assert stat.S_ISREG(m.st_mode) and m.st_uid==os.geteuid() and m.st_nlink==1 and not m.st_mode&0o022 and m.st_size<=1048576\n chunks=[]\n while True:\n  b=os.read(fd,65536)\n  if not b:break\n  chunks.append(b)\n raw=b'\"'\"''\"'\"'.join(chunks)\n n=os.fstat(fd)\n assert (m.st_dev,m.st_ino,m.st_size,m.st_mtime_ns,m.st_ctime_ns)==(n.st_dev,n.st_ino,n.st_size,n.st_mtime_ns,n.st_ctime_ns)\n assert len(raw)==m.st_size and hashlib.sha256(raw).hexdigest()==expected\nfinally:os.close(fd)\nsys.argv=[p]+sys.argv[3:]\nexec(compile(raw,p,'\"'\"'exec'\"'\"'),{'\"'\"'__name__'\"'\"':'\"'\"'__main__'\"'\"','\"'\"'__file__'\"'\"':p})\n' /home/qian/hepta-runtime-optimization-20261028/source-r4e/tools/x230/20261028/forwarded_validation_lease.py 61d80c44029971e634d3645fb1b7a4e3e211affffafb16909a57174c604ce85d remote --self-sha256 61d80c44029971e634d3645fb1b7a4e3e211affffafb16909a57174c604ce85d --nonce b67406794c2aac7ce917e056ea6064ad --runner /home/qian/hepta-runtime-optimization-20261028/source-r4e/tools/x230/20261028/run_extended_file_soak.py --runner-sha256 30c3ed04a24d718a9cf777fbf5c01b7f77aba2af3fd0b58276b6f4bc0fe82a14 --report-kind extended-soak --out /home/qian/hepta-runtime-optimization-20261028/extended-lease-r4-r01 -- --qualification /home/qian/hepta-runtime-optimization-20261028/qualification-r4e/report.json --qualification-sha256 3d5d618eae594f2aa1b7e5902230d4600e32b1b163c2e759914c61bddda7997b --test-audit /home/qian/hepta-runtime-optimization-20261028/qualification-r4e/isolated-tests.audit.json --test-audit-sha256 69123251e571b140683e90dceb49c0746e07b91ca86ff7bd00d3f67c974eaf16 --out /home/qian/hepta-runtime-optimization-20261028/extended-r4-r01 --socket-parent /home/qian/hx28-r4e --soak-seconds 360"
+    ],
+    "custody_retained_until_reap": true,
+    "launched": true,
+    "original_child_reaped": true,
+    "parent_death_signal": "SIGTERM",
+    "parent_pid": 2315968,
+    "pid": 2315975,
+    "pidfd_opened": true,
+    "raw_wait_status": 0,
+    "returncode": 0,
+    "signals": []
+  },
+  "cleanup_scope": "owned unreaped direct child; native runner owns its stage helper cleanup; no broad PID or process-group scan",
+  "elapsed_seconds": 383.9412457430153,
+  "finished_utc": "2026-10-29T04:32:05Z",
+  "heartbeat_seconds": 10,
+  "heartbeats_jsonl": {
+    "bytes": 2053,
+    "identity": [
+      2050,
+      50128036,
+      33152,
+      1000,
+      1000,
+      1,
+      2053,
+      1793248322936489772,
+      1793248322936489772
+    ],
+    "path": "/home/qian-qi/hepta-runtime-optimization-20261028-r4/extended-lease-r4-r01/heartbeats.jsonl",
+    "sha256": "95c04f78f6456d1d62afa06563d03c7f06a0c6abf98d224bb30d95c4591970ba"
+  },
+  "heartbeats_sent": 39,
+  "launch_attempts": 1,
+  "nonce": "b67406794c2aac7ce917e056ea6064ad",
+  "passed": true,
+  "phase": "complete",
+  "production_services_changed": false,
+  "remote_active_budget_seconds": 3300,
+  "remote_completion": {
+    "error": null,
+    "event": "lease_completed",
+    "nonce": "b67406794c2aac7ce917e056ea6064ad",
+    "original_child_reaped": true,
+    "out": "/home/qian/hepta-runtime-optimization-20261028/extended-lease-r4-r01",
+    "passed": true,
+    "report_kind": "extended-soak",
+    "report_sha256": "a1edac8cf763bc447670b19c8ce3de4f3da38e70e6c0e2445e408cc011283419",
+    "runner_sha256": "30c3ed04a24d718a9cf777fbf5c01b7f77aba2af3fd0b58276b6f4bc0fe82a14"
+  },
+  "remote_out": "/home/qian/hepta-runtime-optimization-20261028/extended-lease-r4-r01",
+  "report_kind": "extended-soak",
+  "role": "main",
+  "runner_sha256": "30c3ed04a24d718a9cf777fbf5c01b7f77aba2af3fd0b58276b6f4bc0fe82a14",
+  "schema": "hepta-forwarded-validation-main-lease/v1",
+  "ssh_eof_cleanup_grace_seconds": 150,
+  "ssh_stderr": {
+    "bytes": 0,
+    "identity": [
+      2050,
+      50128037,
+      33152,
+      1000,
+      1000,
+      1,
+      0,
+      1793247941850974658,
+      1793247941850974658
+    ],
+    "path": "/home/qian-qi/hepta-runtime-optimization-20261028-r4/extended-lease-r4-r01/ssh.stderr",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "ssh_stdout": {
+    "bytes": 686,
+    "identity": [
+      2050,
+      50128034,
+      33152,
+      1000,
+      1000,
+      1,
+      686,
+      1793248325616415690,
+      1793248325616415690
+    ],
+    "path": "/home/qian-qi/hepta-runtime-optimization-20261028-r4/extended-lease-r4-r01/ssh.stdout",
+    "sha256": "d142fb73cea194ebede1de192e998ca6cc7477f93f82c8fb351c98362bf3c5f2"
+  },
+  "started_utc": "2026-10-29T04:25:41Z",
+  "stop_signals": [],
+  "wrapper": {
+    "bytes": 26398,
+    "identity": [
+      2050,
+      50132683,
+      33152,
+      1000,
+      1000,
+      1,
+      26398,
+      1793233573411982937,
+      1793233573411982937
+    ],
+    "path": "/home/qian-qi/hepta-runtime-optimization-20261028-r4/forwarded_validation_lease_r4.py",
+    "sha256": "61d80c44029971e634d3645fb1b7a4e3e211affffafb16909a57174c604ce85d"
+  }
+}

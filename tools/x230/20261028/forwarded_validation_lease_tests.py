@@ -85,18 +85,24 @@ class RemoteLeaseTests(unittest.TestCase):
         self.agent.close()
         self.temp.cleanup()
 
-    def launch(self, script):
+    def launch(self, script, report_kind=None):
         self.runner.write_text(script)
         self.runner.chmod(0o600)
         argv = [sys.executable, "-B", str(self.wrapper), "remote",
                 "--self-sha256", hashlib.sha256(self.wrapper.read_bytes()).hexdigest(),
                 "--nonce", self.nonce, "--runner", str(self.runner),
                 "--runner-sha256", hashlib.sha256(self.runner.read_bytes()).hexdigest(),
-                "--out", str(self.out), "--", "--qualification", str(self.root / "qualification.json"),
+                "--out", str(self.out), *([] if report_kind is None else ["--report-kind", report_kind]),
+                "--", "--qualification", str(self.root / "qualification.json"),
                 "--qualification-sha256", "b" * 64, "--test-audit", str(self.root / "audit.json"),
                 "--test-audit-sha256", "c" * 64, "--out", str(self.output), "--socket-parent", str(self.root / "sockets")]
         self.child = subprocess.Popen(argv, env=self.env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return self.child
+
+    def launch_report(self, schema, report_kind=None, **overrides):
+        value = {"schema": schema, "passed": True, "complete": True, **overrides}
+        script = "import pathlib,sys\np=pathlib.Path(sys.argv[sys.argv.index('--out')+1]);p.mkdir()\n"
+        return self.launch(script + "(p/'report.json').write_text(" + repr(json.dumps(value)) + ")\n", report_kind)
 
     def heartbeat(self):
         self.child.stdin.write((json.dumps({"nonce": self.nonce, "sequence": 0}) + "\n").encode())
@@ -122,8 +128,7 @@ class RemoteLeaseTests(unittest.TestCase):
         self.assertFalse((self.out / "admission.json").exists())
 
     def test_success_requires_real_original_completion_report_and_reap(self):
-        script = "import json,pathlib,sys\np=pathlib.Path(sys.argv[sys.argv.index('--out')+1]);p.mkdir()\n(p/'report.json').write_text(json.dumps({'schema':'hepta-x230-composed-native-validation/v1','passed':True,'complete':True}))\n"
-        child = self.launch(script)
+        child = self.launch_report("hepta-x230-composed-native-validation/v1")
         self.heartbeat()
         self.assertEqual(child.wait(timeout=5), 0)
         value = self.report()
@@ -132,6 +137,51 @@ class RemoteLeaseTests(unittest.TestCase):
         self.assertTrue(value["child"]["original_child_reaped"])
         self.assertEqual(value["child"]["pid"], value["child"]["actual_waitpid"])
         self.assertTrue((self.out / "admission.json").exists())
+        self.assertEqual(value["report_kind"], "native")
+        self.assertEqual([json.loads(line)["report_kind"] for line in child.stdout], ["native", "native"])
+
+    def test_explicit_extended_soak_requires_its_report_and_original_reap(self):
+        child = self.launch_report("hepta-x230-extended-file-soak/v1", "extended-soak")
+        self.heartbeat()
+        self.assertEqual(child.wait(timeout=5), 0)
+        value = self.report()
+        self.assertTrue(value["passed"])
+        self.assertEqual(value["report_kind"], "extended-soak")
+        self.assertEqual(value["launch_attempts"], 1)
+        self.assertTrue(value["child"]["original_child_reaped"])
+        self.assertEqual(value["child"]["pid"], value["child"]["actual_waitpid"])
+        self.assertEqual([json.loads(line)["report_kind"] for line in child.stdout], ["extended-soak", "extended-soak"])
+
+    def test_default_native_refuses_extended_schema_after_zero_exit(self):
+        child = self.launch_report("hepta-x230-extended-file-soak/v1")
+        self.heartbeat()
+        self.assertNotEqual(child.wait(timeout=5), 0)
+        value = self.report()
+        self.assertFalse(value["passed"])
+        self.assertEqual(value["report_kind"], "native")
+        self.assertEqual(value["child"]["returncode"], 0)
+        self.assertTrue(value["child"]["original_child_reaped"])
+
+    def test_extended_refuses_native_schema_after_zero_exit(self):
+        child = self.launch_report("hepta-x230-composed-native-validation/v1", "extended-soak")
+        self.heartbeat()
+        self.assertNotEqual(child.wait(timeout=5), 0)
+        value = self.report()
+        self.assertFalse(value["passed"])
+        self.assertEqual(value["report_kind"], "extended-soak")
+        self.assertEqual(value["child"]["returncode"], 0)
+        self.assertTrue(value["child"]["original_child_reaped"])
+
+    def test_extended_refuses_incomplete_report(self):
+        child = self.launch_report("hepta-x230-extended-file-soak/v1", "extended-soak", complete=False)
+        self.heartbeat()
+        self.assertNotEqual(child.wait(timeout=5), 0)
+        self.assertFalse(self.report()["passed"])
+
+    def test_report_kind_cannot_be_an_arbitrary_schema(self):
+        child = self.launch("raise AssertionError('must not execute')\n", "hepta-x230-composed-native-validation/v1")
+        self.assertNotEqual(child.wait(timeout=5), 0)
+        self.assertFalse(self.out.exists())
 
     def test_zero_exit_without_native_report_is_not_a_pass(self):
         child = self.launch("pass\n")

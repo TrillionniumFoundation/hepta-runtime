@@ -17,6 +17,9 @@ mod socket_publication;
 #[path = "ssh_file_observation_pool_tests.rs"]
 mod file_observations;
 
+#[path = "ssh_observation_maintenance_tests.rs"]
+mod maintenance;
+
 // Direct lifecycle fixtures own a private admission; actor capacity fixtures
 // below instead share the actual sixteen-permit admission pool.
 fn test_admission() -> Arc<OwnedSemaphorePermit> {
@@ -815,6 +818,7 @@ async fn retired_generation(
 		last_use: Mutex::new(Instant::now()),
 		active: AtomicUsize::new(0),
 		accepting: AtomicBool::new(true),
+		retirement: AsyncMutex::new(None),
 	});
 	let generation = core.sequence.fetch_add(1, Ordering::Relaxed);
 	let (send, receive) = watch::channel(Some(Ok(master.clone())));

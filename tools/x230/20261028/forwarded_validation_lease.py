@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Hold one forwarded-agent validation lease over one existing trusted SSH route.
 
-main creates one SSH client to x230-ts; remote creates one source-pinned native
+main creates one SSH client to x230-ts; remote creates one source-pinned validation
 runner. A nonce and strictly consecutive heartbeat sequence bind the lease to
 that stream. EOF, HUP, TERM, missing heartbeats or the active deadline revoke it.
 The wrapper never reconnects, retries a launch, signals an enumerated PID, or
@@ -34,6 +34,10 @@ RUNNER_TERM_GRACE = 90
 SSH_EOF_GRACE = 150
 FORCED_REAP_GRACE = 10
 STOP_SIGNALS = []
+REPORT_SCHEMAS = {
+    "native": "hepta-x230-composed-native-validation/v1",
+    "extended-soak": "hepta-x230-extended-file-soak/v1",
+}
 
 
 def parent_death_signal(parent_pid):
@@ -275,7 +279,8 @@ def prepare(args, role):
     args.out = direct(args.out, exists=False)
     args.out.mkdir(mode=0o700)
     row = {"schema": "hepta-forwarded-validation-" + role + "-lease/v1", "passed": False,
-           "started_utc": utc(), "role": role, "launch_attempts": 0, "automatic_retries": 0,
+           "started_utc": utc(), "role": role, "report_kind": args.report_kind,
+           "launch_attempts": 0, "automatic_retries": 0,
            "production_services_changed": False, "phase": "preflight", "child": {},
            "cleanup_scope": "owned unreaped direct child; native runner owns its stage helper cleanup; no broad PID or process-group scan"}
     save(args.out / "report.json", row)
@@ -319,7 +324,8 @@ def remote(args):
             report["admitted_utc"] = utc()
             save(args.out / "admission.json", report)
             save(path, report)
-            emit({"event": "lease_admitted", "nonce": args.nonce, "out": str(args.out), "runner_sha256": args.runner_sha256})
+            emit({"event": "lease_admitted", "nonce": args.nonce, "out": str(args.out),
+                  "runner_sha256": args.runner_sha256, "report_kind": args.report_kind})
             with (args.out / "runner.stdout").open("xb") as stdout, (args.out / "runner.stderr").open("xb") as stderr:
                 receive(0)
                 need(not STOP_SIGNALS and time.monotonic() - lease.last_received < HEARTBEAT_TIMEOUT, "lease expired before launch")
@@ -342,9 +348,9 @@ def remote(args):
                 need(report["child"]["returncode"] == 0, "native runner failed")
                 native_receipt, raw = file_receipt(output / "report.json", 64 * 1024 * 1024, contents=True)
                 value = json.loads(raw)
-                need(value.get("schema") == "hepta-x230-composed-native-validation/v1"
+                need(value.get("schema") == REPORT_SCHEMAS[args.report_kind]
                      and value.get("passed") is True and value.get("complete") is True
-                     and not value.get("error"), "native validation report is not complete and successful")
+                     and not value.get("error"), args.report_kind + " validation report is not complete and successful")
                 report["native_report"] = native_receipt
                 need(file_receipt(args.runner, 1048576)["sha256"] == args.runner_sha256
                      and file_receipt(Path(__file__).absolute(), 1048576)["sha256"] == args.self_sha256,
@@ -378,7 +384,8 @@ def remote(args):
         report["phase"] = "complete" if report["passed"] else "failed"
         save(path, report)
         emit({"event": "lease_completed", "nonce": args.nonce, "out": str(args.out), "passed": report["passed"],
-              "runner_sha256": args.runner_sha256, "report_sha256": file_receipt(path)["sha256"],
+              "runner_sha256": args.runner_sha256, "report_kind": args.report_kind,
+              "report_sha256": file_receipt(path)["sha256"],
               "error": report.get("error"), "original_child_reaped": report["child"].get("original_child_reaped", False)})
     return 0 if report["passed"] else 1
 
@@ -398,7 +405,7 @@ def main_side(args):
         agent = agent_identity()
         remote_args = ["remote", "--self-sha256", wrapper["sha256"], "--nonce", nonce,
                        "--runner", str(args.runner), "--runner-sha256", args.runner_sha256,
-                       "--out", str(args.remote_out), "--", *args.runner_args]
+                       "--report-kind", args.report_kind, "--out", str(args.remote_out), "--", *args.runner_args]
         remote_command = shlex.join(["/usr/bin/python3", "-I", "-S", "-c", BOOTSTRAP,
                                      str(args.remote_script), wrapper["sha256"], *remote_args])
         argv = ["/usr/bin/ssh", "-A", "-T", "-oBatchMode=yes", "-oStrictHostKeyChecking=yes",
@@ -446,7 +453,8 @@ def main_side(args):
         need(len(messages) == 2 and messages[0].get("event") == "lease_admitted", "missing/ambiguous remote admission")
         completion = messages[-1]
         need(all(item.get("nonce") == nonce and item.get("out") == str(args.remote_out)
-                 and item.get("runner_sha256") == args.runner_sha256 for item in messages)
+                 and item.get("runner_sha256") == args.runner_sha256
+                 and item.get("report_kind") == args.report_kind for item in messages)
              and completion.get("event") == "lease_completed" and completion.get("passed") is True
              and completion.get("original_child_reaped") is True
              and re.fullmatch(r"[0-9a-f]{64}", completion.get("report_sha256", "")) is not None,
@@ -493,6 +501,7 @@ def main():
     for command in (main_parser, remote_parser):
         command.add_argument("--runner", type=Path, required=True)
         command.add_argument("--runner-sha256", required=True)
+        command.add_argument("--report-kind", choices=tuple(REPORT_SCHEMAS), default="native")
         command.add_argument("--out", type=Path, required=True)
         command.add_argument("runner_args", nargs=argparse.REMAINDER)
     main_parser.add_argument("--remote-script", type=Path, required=True)

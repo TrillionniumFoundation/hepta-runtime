@@ -7,13 +7,13 @@ use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fs::{File, OpenOptions};
 use std::future::Future;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, RwLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock, TryLockError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex as AsyncMutex, Semaphore};
 
@@ -31,6 +31,11 @@ static OBSERVATION_AUDITS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 static REUSE_HITS: OnceLock<Mutex<ReuseHitCache>> = OnceLock::new();
 const MAX_REGISTRY_LOOKUPS: usize = 4;
 static REGISTRY_LOOKUPS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+const MAX_COLD_DEMAND_BYTES: usize = 1024;
+const MAX_COLD_HINT_BYTES: usize = 16 * 1024;
+const MAX_COLD_COHORT_IDENTITIES: usize = 8;
+const MAX_RECENT_COLD_KEY_BYTES: usize = 2 * 1024;
+const MAX_COLD_TARGET_KEY_BYTES: usize = 3 * MAX_COLD_DEMAND_BYTES;
 // Coordinate only this owner process's local metadata reads/publications.
 // Guards remain inside synchronous functions, never across remote awaits.
 static REGISTRY_ACCESS: RwLock<()> = RwLock::new(());
@@ -474,6 +479,52 @@ struct ReuseHitCache {
 	// These are refusal evidence, not a negative cache or effect authority.
 	known: HashMap<(String, String), KnownReuseBinding>,
 	hits: HashMap<(String, String), String>,
+	// Scheduling predictions only: no result, record ID, digest or generation.
+	// Unlike hints, these bounded keys may outlive the last admitted demand.
+	recent_cold: VecDeque<(String, String)>,
+	cold: Arc<RegistryColdScans>,
+}
+
+impl ReuseHitCache {
+	fn remember_cold_identity(&mut self, identity: &(String, String)) {
+		let incoming = identity.0.len().saturating_add(identity.1.len());
+		if incoming > MAX_COLD_DEMAND_BYTES {
+			return;
+		}
+		self.recent_cold.retain(|previous| previous != identity);
+		let mut bytes: usize = self
+			.recent_cold
+			.iter()
+			.map(|(host, key)| host.len() + key.len())
+			.sum();
+		while self.recent_cold.len() >= MAX_COLD_COHORT_IDENTITIES
+			|| bytes.saturating_add(incoming) > MAX_RECENT_COLD_KEY_BYTES
+		{
+			let Some(oldest) = self.recent_cold.pop_front() else {
+				break;
+			};
+			bytes -= oldest.0.len() + oldest.1.len();
+		}
+		self.recent_cold.push_back(identity.clone());
+	}
+
+	fn recent_strict_candidates(&self, dir: &Path) -> Vec<(String, String)> {
+		if self.root.as_deref() != Some(dir) {
+			return Vec::new();
+		}
+		// At most eight known lookups, independent of the full ownership map.
+		self.recent_cold
+			.iter()
+			.rev()
+			.take(MAX_COLD_COHORT_IDENTITIES)
+			.filter(|identity| {
+				self.known
+					.get(*identity)
+					.is_some_and(|binding| binding.strict)
+			})
+			.cloned()
+			.collect()
+	}
 }
 
 #[derive(Clone)]
@@ -482,6 +533,264 @@ struct KnownReuseBinding {
 	// Invalidating a fast hit must not downgrade an originally strict receipt
 	// to the compatibility reader after a content/permission change.
 	strict: bool,
+}
+
+#[derive(Default)]
+struct RegistryColdScans {
+	gate: Mutex<()>,
+	state: Mutex<RegistryColdState>,
+}
+
+#[derive(Default)]
+struct RegistryColdState {
+	demands: HashMap<(String, String), usize>,
+	hints: HashMap<(String, String), RegistryColdHint>,
+	active: Option<Vec<(String, String)>>,
+}
+
+struct RegistryColdLeader<'a> {
+	scans: &'a RegistryColdScans,
+	_gate: MutexGuard<'a, ()>,
+}
+
+impl Drop for RegistryColdLeader<'_> {
+	fn drop(&mut self) {
+		// Clear membership before the original gate unlocks, including on panic.
+		// A later leader must never inherit authority to queue unscanned keys.
+		self.scans
+			.state
+			.lock()
+			.unwrap_or_else(|error| error.into_inner())
+			.active = None;
+	}
+}
+
+#[derive(Clone)]
+struct RegistryColdHint {
+	epoch: RegistryEpoch,
+	id: String,
+	digest: [u8; 32],
+}
+
+// Only admitted workers register demand. No complete receipt, absent result,
+// error or speculative ownership survives the last worker for its key.
+struct RegistryColdDemand {
+	scans: Arc<RegistryColdScans>,
+	identity: (String, String),
+}
+
+impl RegistryColdDemand {
+	fn register(scans: Arc<RegistryColdScans>, host: &str, key: &str) -> Result<Option<Self>> {
+		if host.len().saturating_add(key.len()) > MAX_COLD_DEMAND_BYTES {
+			return Ok(None);
+		}
+		let identity = (host.to_owned(), key.to_owned());
+		{
+			let mut state = scans
+				.state
+				.lock()
+				.map_err(|_| anyhow::anyhow!("job registry cold demand unavailable"))?;
+			if state.demands.values().sum::<usize>() >= MAX_REGISTRY_LOOKUPS {
+				return Ok(None);
+			}
+			*state.demands.entry(identity.clone()).or_default() += 1;
+		}
+		Ok(Some(Self { scans, identity }))
+	}
+
+	fn targets(&self, state: &RegistryColdState) -> Vec<RegistryColdTarget> {
+		state
+			.demands
+			.keys()
+			.filter(|identity| *identity != &self.identity)
+			.map(|identity| RegistryColdTarget {
+				identity: identity.clone(),
+				seen: false,
+				candidate: None,
+			})
+			.collect()
+	}
+
+	#[cfg(all(test, unix))]
+	fn cohort(&self) -> Result<Vec<RegistryColdTarget>> {
+		let state = self
+			.scans
+			.state
+			.lock()
+			.map_err(|_| anyhow::anyhow!("job registry cold demand unavailable"))?;
+		Ok(self.targets(&state))
+	}
+
+	fn start_cohort<'a>(
+		&'a self,
+		gate: MutexGuard<'a, ()>,
+		recent: Vec<(String, String)>,
+	) -> Result<(RegistryColdLeader<'a>, Vec<RegistryColdTarget>)> {
+		let leader = RegistryColdLeader {
+			scans: &self.scans,
+			_gate: gate,
+		};
+		let mut state = self
+			.scans
+			.state
+			.lock()
+			.map_err(|_| anyhow::anyhow!("job registry cold demand unavailable"))?;
+		// All actual other demands fit: at most three distinct keys, each at
+		// most 1 KiB. Predictions never displace them or reject the lookup.
+		let mut cohort = self.targets(&state);
+		let mut bytes: usize = cohort
+			.iter()
+			.map(|target| target.identity.0.len() + target.identity.1.len())
+			.sum();
+		for identity in recent {
+			if cohort.len() >= MAX_COLD_COHORT_IDENTITIES - 1 {
+				break;
+			}
+			let incoming = identity.0.len().saturating_add(identity.1.len());
+			if identity == self.identity
+				|| cohort.iter().any(|target| target.identity == identity)
+				|| incoming > MAX_COLD_DEMAND_BYTES
+				|| bytes.saturating_add(incoming) > MAX_COLD_TARGET_KEY_BYTES
+			{
+				continue;
+			}
+			bytes += incoming;
+			cohort.push(RegistryColdTarget {
+				identity,
+				seen: false,
+				candidate: None,
+			});
+		}
+		// The consumed prediction iterator (including unused keys) is dropped
+		// before cloning this separate, at-most-3-KiB active-membership payload.
+		// Membership and the actual scan targets are one frozen snapshot. Late
+		// keys cannot wait for a scan that may already have passed their owner.
+		state.active = Some(
+			cohort
+				.iter()
+				.map(|target| target.identity.clone())
+				.collect(),
+		);
+		Ok((leader, cohort))
+	}
+
+	fn read_hint(
+		&self,
+		dir: &Path,
+		epoch_probe: &impl Fn(&Path) -> Result<RegistryEpoch>,
+	) -> Result<Option<JobRecord>> {
+		let hint = self
+			.scans
+			.state
+			.lock()
+			.map_err(|_| anyhow::anyhow!("job registry cold demand unavailable"))?
+			.hints
+			.get(&self.identity)
+			.cloned();
+		let Some(hint) = hint else { return Ok(None) };
+		if !registry_has_content_watch(&hint.epoch) || epoch_probe(dir)? != hint.epoch {
+			return Ok(None);
+		}
+		// A hint is not strict ownership. Legacy receipts that cannot pass this
+		// reader must retain their complete compatibility scan, not a new error.
+		let Ok(record) = read_verified_cached_record(dir, &hint.id) else {
+			return Ok(None);
+		};
+		if record.id != hint.id
+			|| record.host != self.identity.0
+			|| record.idempotency_key.as_deref() != Some(self.identity.1.as_str())
+			|| record.launch_state != "launched"
+			|| job_record_binding_digest(&record)? != hint.digest
+			|| epoch_probe(dir)? != hint.epoch
+		{
+			return Ok(None);
+		}
+		Ok(Some(record))
+	}
+
+	fn publish(&self, cohort: Vec<RegistryColdTarget>, epoch: RegistryEpoch) -> Result<()> {
+		if !registry_has_content_watch(&epoch) {
+			return Ok(());
+		}
+		let mut state = self
+			.scans
+			.state
+			.lock()
+			.map_err(|_| anyhow::anyhow!("job registry cold demand unavailable"))?;
+		// Close admission atomically with publication. A predicted key that
+		// registers after this point must not wait for an already finished scan.
+		state.active = None;
+		let mut retained = state
+			.hints
+			.iter()
+			.map(|((host, key), hint)| host.len() + key.len() + hint.id.len() + hint.digest.len())
+			.sum::<usize>();
+		for target in cohort {
+			let Some((id, digest)) = target.candidate else {
+				continue;
+			};
+			let bytes = target.identity.0.len() + target.identity.1.len() + id.len() + digest.len();
+			if !state.demands.contains_key(&target.identity)
+				|| retained.saturating_add(bytes) > MAX_COLD_HINT_BYTES
+			{
+				continue;
+			}
+			retained += bytes;
+			state
+				.hints
+				.insert(target.identity, RegistryColdHint { epoch, id, digest });
+		}
+		Ok(())
+	}
+}
+
+impl Drop for RegistryColdDemand {
+	fn drop(&mut self) {
+		// Cleanup is required even after a worker panic poisoned the registry.
+		let mut state = self
+			.scans
+			.state
+			.lock()
+			.unwrap_or_else(|error| error.into_inner());
+		if let Some(count) = state.demands.get_mut(&self.identity) {
+			*count -= 1;
+			if *count == 0 {
+				state.demands.remove(&self.identity);
+				state.hints.remove(&self.identity);
+			}
+		}
+	}
+}
+
+struct RegistryColdTarget {
+	identity: (String, String),
+	seen: bool,
+	candidate: Option<(String, [u8; 32])>,
+}
+
+impl RegistryColdTarget {
+	fn observe(&mut self, record: &JobRecord) -> Result<()> {
+		if record.host == self.identity.0
+			&& record.idempotency_key.as_deref() == Some(self.identity.1.as_str())
+		{
+			if self.seen {
+				// A duplicate affects that target only. Keep the tombstone so a
+				// third record cannot resurrect it as an apparently unique hint.
+				self.candidate = None;
+			} else if record.launch_state == "launched" && valid_name(&record.id) {
+				// The strict hint reader already requires this at-most-128-byte ID.
+				// Other IDs still count as seen and retain their full scan path.
+				self.candidate = Some((record.id.clone(), job_record_binding_digest(record)?));
+			}
+			self.seen = true;
+		}
+		Ok(())
+	}
+}
+
+struct RegistryScanObserver<'a, F> {
+	cohort: &'a mut [RegistryColdTarget],
+	after_scan: F,
 }
 
 fn scan_records_dir(dir: &Path) -> Result<Vec<JobRecord>> {
@@ -608,19 +917,51 @@ fn scan_idempotent_binding_in_with_retries(
 	scan_idempotent_binding_with_probe(dir, host, key, None, &registry_epoch, after_scan)
 }
 
+#[cfg(test)]
 fn scan_idempotent_binding_with_probe(
 	dir: &Path,
 	host: &str,
 	key: &str,
 	strict_id: Option<&str>,
 	epoch_probe: &impl Fn(&Path) -> Result<RegistryEpoch>,
-	mut after_scan: impl FnMut(usize),
+	after_scan: impl FnMut(usize),
 ) -> Result<Option<JobRecord>> {
+	scan_idempotent_binding_cohort(
+		dir,
+		host,
+		key,
+		strict_id,
+		epoch_probe,
+		RegistryScanObserver {
+			cohort: &mut [],
+			after_scan,
+		},
+	)
+	.map(|(found, _)| found)
+}
+
+fn scan_idempotent_binding_cohort(
+	dir: &Path,
+	host: &str,
+	key: &str,
+	strict_id: Option<&str>,
+	epoch_probe: &impl Fn(&Path) -> Result<RegistryEpoch>,
+	mut observer: RegistryScanObserver<'_, impl FnMut(usize)>,
+) -> Result<(Option<JobRecord>, RegistryEpoch)> {
 	let root = epoch_probe(dir)?;
 	for attempt in 0..MAX_IDEMPOTENCY_SCAN_ATTEMPTS {
-		match scan_idempotent_binding_once(dir, host, key, &root, strict_id, epoch_probe, || {
-			after_scan(attempt)
-		}) {
+		match scan_idempotent_binding_once(
+			dir,
+			host,
+			key,
+			&root,
+			strict_id,
+			epoch_probe,
+			RegistryScanObserver {
+				cohort: &mut *observer.cohort,
+				after_scan: || (observer.after_scan)(attempt),
+			},
+		) {
 			Err(error)
 				if error.downcast_ref::<RegistryScanChanged>().is_some()
 					&& attempt + 1 < MAX_IDEMPOTENCY_SCAN_ATTEMPTS => {}
@@ -646,8 +987,12 @@ fn scan_idempotent_binding_in_with_observer(
 		&registry_epoch(dir)?,
 		None,
 		&registry_epoch,
-		after_scan,
+		RegistryScanObserver {
+			cohort: &mut [],
+			after_scan,
+		},
 	)
+	.map(|(found, _)| found)
 }
 
 fn select_idempotent_record(
@@ -681,6 +1026,18 @@ fn scan_registry_records(
 	key: &str,
 	fingerprint: bool,
 ) -> Result<(Option<JobRecord>, Option<[u8; 32]>)> {
+	scan_registry_records_observed(dir, host, key, fingerprint, &mut [])
+}
+
+fn scan_registry_records_observed(
+	dir: &Path,
+	host: &str,
+	key: &str,
+	fingerprint: bool,
+	cohort: &mut [RegistryColdTarget],
+) -> Result<(Option<JobRecord>, Option<[u8; 32]>)> {
+	#[cfg(all(test, unix))]
+	registry_coalescing_tests::scan_started();
 	let mut found: Option<JobRecord> = None;
 	let mut bytes = Vec::new();
 	let mut digest = fingerprint.then(|| RequestHashWriter(Sha256::new()));
@@ -698,6 +1055,9 @@ fn scan_registry_records(
 			.and_then(|name| name.to_str())
 			.context("invalid durable job record name")?;
 		let record = read_record_at_with_buffer(&path, expected_id, &mut bytes)?;
+		for target in &mut *cohort {
+			target.observe(&record)?;
+		}
 		if let Some(digest) = &mut digest {
 			digest.write_all(&(expected_id.len() as u64).to_le_bytes())?;
 			digest.write_all(expected_id.as_bytes())?;
@@ -716,16 +1076,30 @@ fn scan_idempotent_binding_once(
 	root: &RegistryEpoch,
 	strict_id: Option<&str>,
 	epoch_probe: &impl Fn(&Path) -> Result<RegistryEpoch>,
-	after_scan: impl FnOnce(),
-) -> Result<Option<JobRecord>> {
+	observer: RegistryScanObserver<'_, impl FnOnce()>,
+) -> Result<(Option<JobRecord>, RegistryEpoch)> {
 	// Never infer an absent binding from a scan that overlaps a directory
 	// mutation. The original root identity is pinned across all retry attempts.
 	let before = epoch_probe(dir)?;
 	if !same_registry_root(root, &before) {
 		bail!("idempotency registry root identity changed; reconcile before execution");
 	}
-	let (mut found, fingerprint) =
-		scan_registry_records(dir, host, key, !registry_has_content_watch(&before))?;
+	let RegistryScanObserver { cohort, after_scan } = observer;
+	// A retry observes a different complete generation. No hint from an earlier
+	// failed attempt may acquire the final successful attempt's epoch.
+	for target in &mut *cohort {
+		target.seen = false;
+		target.candidate = None;
+	}
+	let (mut found, fingerprint) = scan_registry_records_observed(
+		dir,
+		host,
+		key,
+		!registry_has_content_watch(&before),
+		cohort,
+	)?;
+	#[cfg(all(test, unix))]
+	registry_coalescing_tests::scan_finished();
 	after_scan();
 	if let Some(fingerprint) = fingerprint {
 		// Without a content watch no positive cache is authoritative. Two complete
@@ -769,7 +1143,7 @@ fn scan_idempotent_binding_once(
 	if after != before {
 		return Err(RegistryScanChanged.into());
 	}
-	Ok(found)
+	Ok((found, after))
 }
 
 // Only cache a VERIFIED EXISTING, already launched identity. Unknown keys,
@@ -821,6 +1195,25 @@ fn find_idempotent_in_with_probe(
 			guard.known.get(&identity).cloned(),
 		)
 	};
+	// Only refreshes of known strict ownership share a complete generation.
+	// Register before this worker's strict read so other admitted refreshes can
+	// join during that required I/O; there is no batching delay or extra queue.
+	// Hot hits, first observations and new keys retain their independent paths.
+	let demand = if cached_id.is_none()
+		&& registry_has_content_watch(&epoch)
+		&& known.as_ref().is_some_and(|binding| binding.strict)
+	{
+		let scans = cache
+			.lock()
+			.map_err(|_| anyhow::anyhow!("reuse cache unavailable"))?
+			.cold
+			.clone();
+		RegistryColdDemand::register(scans, host, key)?
+	} else {
+		None
+	};
+	#[cfg(all(test, unix))]
+	registry_coalescing_tests::after_registration();
 	let strict_id = cached_id.as_deref().or_else(|| {
 		known
 			.as_ref()
@@ -851,17 +1244,86 @@ fn find_idempotent_in_with_probe(
 		}
 	}
 
-	let found = scan_idempotent_binding_with_probe(
-		dir,
-		host,
-		key,
-		known
-			.as_ref()
-			.filter(|binding| binding.strict)
-			.map(|binding| binding.id.as_str()),
-		&epoch_probe,
-		|_| {},
-	)?;
+	// Only members of an already frozen scan wait for its hints. An admitted
+	// late key retains the original parallel full scan instead of queuing for
+	// work that never covered it. The original worker still owns its permit.
+	let mut cold_leader = None;
+	let mut shared = None;
+	let mut cohort = Vec::new();
+	if let Some(demand) = &demand {
+		if demand.scans.gate.is_poisoned() {
+			bail!("job registry cold scan unavailable");
+		}
+		shared = demand.read_hint(dir, &epoch_probe)?;
+		if demand.scans.gate.is_poisoned() {
+			bail!("job registry cold scan unavailable");
+		}
+		if shared.is_none() {
+			match demand.scans.gate.try_lock() {
+				Ok(gate) => {
+					// A completed leader may have published after our first read.
+					shared = demand.read_hint(dir, &epoch_probe)?;
+					if shared.is_none() {
+						let recent = {
+							let guard = cache
+								.lock()
+								.map_err(|_| anyhow::anyhow!("reuse cache unavailable"))?;
+							guard.recent_strict_candidates(dir)
+						};
+						let (leader, targets) = demand.start_cohort(gate, recent)?;
+						cold_leader = Some(leader);
+						cohort = targets;
+					}
+				}
+				Err(TryLockError::WouldBlock) => {
+					let included = {
+						let state =
+							demand.scans.state.lock().map_err(|_| {
+								anyhow::anyhow!("job registry cold demand unavailable")
+							})?;
+						state
+							.active
+							.as_ref()
+							.is_some_and(|targets| targets.contains(&demand.identity))
+					};
+					if included {
+						#[cfg(all(test, unix))]
+						registry_coalescing_tests::cohort_wait_started();
+						let gate =
+							demand.scans.gate.lock().map_err(|_| {
+								anyhow::anyhow!("job registry cold scan unavailable")
+							})?;
+						shared = demand.read_hint(dir, &epoch_probe)?;
+						// Missing/changed hints must not turn a follower into another
+						// serial full scan. Fall back only after releasing the gate.
+						drop(gate);
+					}
+				}
+				Err(TryLockError::Poisoned(_)) => {
+					bail!("job registry cold scan unavailable");
+				}
+			}
+		}
+	}
+	let (found, scanned_epoch) = if let Some(record) = shared {
+		(Some(record), None)
+	} else {
+		let (found, scanned_epoch) = scan_idempotent_binding_cohort(
+			dir,
+			host,
+			key,
+			known
+				.as_ref()
+				.filter(|binding| binding.strict)
+				.map(|binding| binding.id.as_str()),
+			&epoch_probe,
+			RegistryScanObserver {
+				cohort: &mut cohort,
+				after_scan: |_| {},
+			},
+		)?;
+		(found, Some(scanned_epoch))
+	};
 	if !same_registry_root(&epoch, &epoch_probe(dir)?) {
 		bail!("job registry root identity changed during lookup; no new launch");
 	}
@@ -932,12 +1394,20 @@ fn find_idempotent_in_with_probe(
 				if let Some(binding) = guard.known.get_mut(&identity) {
 					binding.strict = true;
 				}
+				// Update only inside the complete original positive-hit gate.
+				// Warm fast returns never mutate this prediction queue.
+				guard.remember_cold_identity(&identity);
 				guard
 					.hits
 					.entry(identity)
 					.or_insert_with(|| record.id.clone());
 			}
 		}
+	}
+	if let (Some(_), Some(demand), Some(scanned_epoch)) = (&cold_leader, &demand, scanned_epoch) {
+		// Publish only after all original refusal checks succeed. Each waiter
+		// verifies the complete digest and this exact epoch before using a hint.
+		demand.publish(cohort, scanned_epoch)?;
 	}
 	Ok(found)
 }
@@ -3860,6 +4330,14 @@ mod registry_content_tests;
 #[path = "jobs_registry_async_tests.rs"]
 mod registry_async_tests;
 
+#[cfg(all(test, unix))]
+#[path = "jobs_registry_coalescing_tests.rs"]
+mod registry_coalescing_tests;
+
 #[cfg(all(test, target_os = "linux"))]
 #[path = "jobs_observe_request_tests.rs"]
 mod observe_request_tests;
+
+#[cfg(all(test, unix))]
+#[path = "jobs_registry_concurrency_bench.rs"]
+mod registry_concurrency_bench;
