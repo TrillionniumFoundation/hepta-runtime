@@ -1425,3 +1425,7 @@ fn predicted_duplicates_and_corruption_retain_original_refusals() {
 		assert!(state.active.is_none());
 	}
 }
+
+#[cfg(target_os = "linux")]
+#[path = "jobs_cohort_tail_probe.rs"]
+mod tail_probe;

@@ -104,7 +104,10 @@ jobs:
           /usr/bin/python3 -B deploy/maintenance_20261017/recover_control_channel_tests.py
 
       - name: X230 qualification evidence regressions
-        run: /usr/bin/python3 -B -m unittest discover -s tools/x230/20261028 -p '*_tests.py' -v
+        run: |
+          /usr/bin/python3 -B -m unittest discover -s tools/x230/20261028 -p '*_tests.py' -v
+          /usr/bin/python3 -B -m unittest discover -s tools/x230/20261029 -p '*_tests.py' -v
+          /usr/bin/python3 -B -m unittest discover -s tools/x230/20261030 -p '*_tests.py' -v
 
       - name: Release build
         run: cargo build --locked --all-features --release --bins --examples
@@ -186,7 +189,10 @@ jobs:
           /usr/bin/python3 -B deploy/maintenance_20261017/recover_control_channel_tests.py
 
       - name: X230 qualification evidence regressions
-        run: /usr/bin/python3 -B -m unittest discover -s tools/x230/20261028 -p '*_tests.py' -v
+        run: |
+          /usr/bin/python3 -B -m unittest discover -s tools/x230/20261028 -p '*_tests.py' -v
+          /usr/bin/python3 -B -m unittest discover -s tools/x230/20261029 -p '*_tests.py' -v
+          /usr/bin/python3 -B -m unittest discover -s tools/x230/20261030 -p '*_tests.py' -v
 
       - name: Release build
         run: cargo build --locked --all-features --release --bins --examples

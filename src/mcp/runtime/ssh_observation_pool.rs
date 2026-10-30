@@ -24,7 +24,9 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tokio::process::{Child, ChildStderr, Command};
-use tokio::sync::{mpsc, oneshot, watch, Mutex as AsyncMutex, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{
+	mpsc, oneshot, watch, Mutex as AsyncMutex, Notify, OwnedSemaphorePermit, Semaphore,
+};
 use tokio::task::JoinSet;
 use tokio::time::{timeout, timeout_at, Instant};
 use tokio_util::sync::CancellationToken;
@@ -178,6 +180,7 @@ pub(super) async fn start(path: &Path) -> Result<PoolGuard> {
 				children: AsyncMutex::new(BTreeMap::new()),
 				masters: AsyncMutex::new(BTreeMap::new()),
 				background: Mutex::new(JoinSet::new()),
+				maintenance_changed: Notify::new(),
 				sequence: AtomicU64::new(1),
 				owner_tid: unsafe { libc::syscall(libc::SYS_gettid) },
 			});
@@ -594,6 +597,7 @@ struct Core {
 	children: AsyncMutex<BTreeMap<u64, Arc<OwnedChild>>>,
 	masters: AsyncMutex<BTreeMap<String, Entry>>,
 	background: Mutex<JoinSet<Result<()>>>,
+	maintenance_changed: Notify,
 	sequence: AtomicU64,
 	owner_tid: libc::c_long,
 }
@@ -1085,6 +1089,9 @@ impl Core {
 			bail!("observation supervisor bound exceeded");
 		}
 		tasks.spawn(work);
+		// The actor may have no master or supervisor left to poll. Retain the
+		// wakeup even when its previous maintenance result is still in flight.
+		self.maintenance_changed.notify_one();
 		Ok(())
 	}
 	async fn start_master(
@@ -1613,6 +1620,16 @@ impl Core {
 		}
 		Ok(())
 	}
+	async fn maintenance_needed(&self) -> Result<bool> {
+		if !self.masters.lock().await.is_empty() {
+			return Ok(true);
+		}
+		Ok(!self
+			.background
+			.lock()
+			.map_err(|_| anyhow!("observation supervisor unavailable"))?
+			.is_empty())
+	}
 	fn unlink_socket(&self, master: &Master) -> Result<()> {
 		self.root.verify(&self.profile)?;
 		match profile::socket_stamp(&master.socket) {
@@ -1690,8 +1707,12 @@ impl Core {
 		let mut work = JoinSet::new();
 		let mut maintenance = JoinSet::new();
 		let mut pending = VecDeque::with_capacity(MAX_ADMITTED);
-		let mut tick = tokio::time::interval(Duration::from_millis(100));
-		tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+		let new_tick = || {
+			let mut tick = tokio::time::interval(Duration::from_millis(100));
+			tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+			tick
+		};
+		let mut tick = Some(new_tick());
 		let outcome = loop {
 			if let Err(error) = Self::reap_completed_requests(&mut work) {
 				break Err(error);
@@ -1704,7 +1725,9 @@ impl Core {
 				.unwrap_or_else(Instant::now);
 			tokio::select! {
 				_ = self.stop.cancelled() => break Ok(()),
-				_ = tick.tick(), if maintenance.is_empty() => {
+				_ = async {
+					if let Some(tick) = tick.as_mut() { tick.tick().await; }
+				}, if tick.is_some() && maintenance.is_empty() => {
 					// One bounded owner task may wait for an original master's reap.
 					// It cannot stall another host's request admission, and its guard
 					// freezes admission if the task unwinds before publishing a result.
@@ -1714,7 +1737,10 @@ impl Core {
 					};
 					let task = maintain(core.clone());
 					maintenance.spawn(async move {
-						let result = task.await;
+						let result = match task.await {
+							Ok(()) => core.maintenance_needed().await,
+							Err(error) => Err(error),
+						};
 						if result.is_err() {
 							core.stop.cancel();
 						}
@@ -1724,10 +1750,20 @@ impl Core {
 				},
 				Some(result) = maintenance.join_next(), if !maintenance.is_empty() => {
 					match result {
-						Ok(Ok(())) => {},
+						Ok(Ok(true)) => {},
+						Ok(Ok(false)) if pending.is_empty() => {
+							// Drop the timer as well as disabling its select branch:
+							// an empty pool has no child or queued cancellation to
+							// observe. Retained state keeps the original cadence.
+							tick = None;
+						},
+						Ok(Ok(false)) => {},
 						Ok(Err(error)) => break Err(error),
 						Err(error) => break Err(anyhow!("observation maintenance supervisor failed: {error}")),
 					}
+				},
+				_ = self.maintenance_changed.notified(), if maintenance.is_empty() => {
+					if tick.is_none() { tick = Some(new_tick()); }
 				},
 				_ = tokio::time::sleep_until(next_deadline), if !pending.is_empty() => {},
 				Some(result) = work.join_next(), if !work.is_empty() => {
@@ -1772,6 +1808,9 @@ impl Core {
 						break Err(anyhow!("observation pending bound exceeded"));
 					}
 					pending.push_back(request);
+					// A capacity waiter can cancel before it starts any background
+					// work. Preserve the original bounded cancellation sweep.
+					if tick.is_none() { tick = Some(new_tick()); }
 				}
 			}
 		};
@@ -1794,7 +1833,7 @@ impl Core {
 		while let Some(result) = maintenance.join_next().await {
 			let result = result
 				.context("observation maintenance supervisor failed during shutdown")
-				.and_then(|result| result);
+				.and_then(|result| result.map(|_| ()));
 			if cleanup.is_ok() {
 				cleanup = result;
 			}

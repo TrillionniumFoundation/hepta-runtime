@@ -767,6 +767,7 @@ async fn core(path: &Path) -> Arc<Core> {
 		children: AsyncMutex::new(BTreeMap::new()),
 		masters: AsyncMutex::new(BTreeMap::new()),
 		background: Mutex::new(JoinSet::new()),
+		maintenance_changed: Notify::new(),
 		sequence: AtomicU64::new(1),
 		owner_tid: unsafe { libc::syscall(libc::SYS_gettid) },
 	});
