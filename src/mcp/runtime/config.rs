@@ -11,7 +11,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 
 static RUNTIME_CONFIG: OnceLock<RuntimeConfig> = OnceLock::new();
-static STATE_LOCK: OnceLock<std::fs::File> = OnceLock::new();
+static CONTROLLER_OWNER: OnceLock<ControllerLocks> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -136,6 +136,9 @@ impl RuntimeConfig {
 	}
 
 	pub fn validate(&self) -> Result<()> {
+		if !self.state_dir.is_absolute() {
+			bail!("controller state directory must be absolute");
+		}
 		if self.hosts.is_empty() {
 			bail!("runtime config must declare at least one host");
 		}
@@ -255,29 +258,95 @@ impl RuntimeConfig {
 	}
 }
 
-pub fn init_runtime(config: RuntimeConfig) -> Result<()> {
+struct ControllerLocks {
+	_owner: std::fs::File,
+	_legacy: std::fs::File,
+}
+
+fn claim_controller_state_dir(state_dir: &Path) -> Result<ControllerLocks> {
+	let open = |name: &str, legacy: bool| -> Result<std::fs::File> {
+		let path = state_dir.join(name);
+		let mut options = std::fs::OpenOptions::new();
+		options.read(true).write(true).create(true).truncate(false);
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::OpenOptionsExt;
+			options
+				.mode(0o600)
+				.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK);
+		}
+		let owner = options
+			.open(&path)
+			.with_context(|| format!("cannot open controller lock {}", path.display()))?;
+		let metadata = owner.metadata()?;
+		if !metadata.is_file() {
+			bail!("controller owner lock must be a regular file");
+		}
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::{MetadataExt, PermissionsExt};
+			if metadata.nlink() != 1 || metadata.uid() != unsafe { libc::geteuid() } {
+				bail!("controller owner lock has foreign ownership or hard links");
+			}
+			if metadata.permissions().mode() & 0o077 != 0 {
+				if !legacy {
+					bail!("controller owner lock must not be group/world accessible");
+				}
+				owner.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+			}
+		}
+		#[cfg(not(unix))]
+		let _ = legacy;
+		owner.try_lock().map_err(|error| {
+			anyhow!(
+				"controller state directory {} is already owned or cannot be locked: {error}",
+				state_dir.display()
+			)
+		})?;
+		Ok(owner)
+	};
+	// Fixed ordering plus nonblocking acquisition prevents deadlock. Holding
+	// both FDs excludes an old controller that recognizes only one filename.
+	let owner = open("controller.owner.lock", false)?;
+	let legacy = open("controller.lock", true)?;
+	Ok(ControllerLocks {
+		_owner: owner,
+		_legacy: legacy,
+	})
+}
+
+pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
 	config.validate()?;
-	std::fs::create_dir_all(config.state_dir.join("jobs"))?;
-	std::fs::create_dir_all(config.state_dir.join("audit"))?;
-	let lock = std::fs::OpenOptions::new()
-		.read(true)
-		.write(true)
-		.create(true)
-		.truncate(false)
-		.open(config.state_dir.join("controller.lock"))?;
+	std::fs::create_dir_all(&config.state_dir)?;
+	config.state_dir = std::fs::canonicalize(&config.state_dir)?;
 	#[cfg(unix)]
 	{
-		use std::os::fd::AsRawFd;
-		if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-			bail!("another controller already owns this state directory");
+		use std::os::unix::fs::PermissionsExt;
+		if std::fs::metadata(&config.state_dir)?.permissions().mode() & 0o022 != 0 {
+			bail!("controller state directory must not be group/world writable");
 		}
 	}
-	STATE_LOCK
-		.set(lock)
-		.map_err(|_| anyhow!("controller lock already initialized"))?;
+	let owner = claim_controller_state_dir(&config.state_dir)?;
+	// State files and the audit trail must not become readable by other
+	// local users under a permissive process umask. Never chmod a symlink.
+	for name in ["jobs", "audit"] {
+		let dir = config.state_dir.join(name);
+		std::fs::create_dir_all(&dir)?;
+		if !std::fs::symlink_metadata(&dir)?.file_type().is_dir() {
+			bail!("controller state subdirectory {name} must not be a symlink");
+		}
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
+		}
+	}
 	RUNTIME_CONFIG
 		.set(config)
-		.map_err(|_| anyhow!("runtime config was already initialized"))
+		.map_err(|_| anyhow!("runtime config was already initialized"))?;
+	CONTROLLER_OWNER
+		.set(owner)
+		.map_err(|_| anyhow!("controller owner lock was already initialized"))
 }
 
 pub fn runtime_config() -> Result<&'static RuntimeConfig> {

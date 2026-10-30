@@ -1080,11 +1080,14 @@ async fn runtime_metadata_observers_do_not_admit_themselves_over_real_mcp() {
 		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
 		.unwrap();
 	let state = root.path().join("state");
-	tokio::fs::DirBuilder::new()
-		.mode(0o700)
-		.create(&state)
-		.await
-		.unwrap();
+	tokio::fs::create_dir(&state).await.unwrap();
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		tokio::fs::set_permissions(&state, std::fs::Permissions::from_mode(0o700))
+			.await
+			.unwrap();
+	}
 	let config_path = root.path().join("runtime.json");
 	tokio::fs::write(&config_path, serde_json::to_vec(&json!({"state_dir":state,"hosts":{"fixture":{"ssh_target":"never-connect.invalid","platform":"linux","remote_state_dir":"/never-launch","allow_execute":false,"allow_pty":false,"allow_write":false}}})).unwrap()).await.unwrap();
 	let config = crate::mcp::runtime::RuntimeConfig::load(&config_path).unwrap();
@@ -1131,4 +1134,13 @@ async fn runtime_metadata_observers_do_not_admit_themselves_over_real_mcp() {
 		2,
 		"unknown routes must retain their ordinary audit admission"
 	);
+}
+
+#[test]
+fn execution_shadow_tool_requires_runtime_mode_discovery() {
+	assert!(super::RUNTIME_TOOL_NAMES.contains(&"execution_shadow_admit"));
+	assert!(super::OctofsServer::tool_router()
+		.list_all()
+		.iter()
+		.any(|tool| tool.name.as_ref() == "execution_shadow_admit"));
 }

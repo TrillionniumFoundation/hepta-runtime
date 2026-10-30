@@ -115,11 +115,14 @@ pub(super) enum JobObservation<'a> {
 		job_id: &'a str,
 		job_dir: &'a str,
 		unit: &'a str,
+		request_digest: &'a str,
 		wait_seconds: u64,
 	},
 	PythonRead {
 		job_id: &'a str,
 		job_dir: &'a str,
+		unit: &'a str,
+		request_digest: &'a str,
 		stdout_offset: u64,
 		stderr_offset: u64,
 		limit: u64,
@@ -235,11 +238,16 @@ fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Du
 			job_id,
 			job_dir,
 			unit,
+			request_digest,
 			..
-		} => &[job_id, job_dir, unit],
+		} => &[job_id, job_dir, unit, request_digest],
 		JobObservation::PythonRead {
-			job_id, job_dir, ..
-		} => &[job_id, job_dir],
+			job_id,
+			job_dir,
+			unit,
+			request_digest,
+			..
+		} => &[job_id, job_dir, unit, request_digest],
 		JobObservation::SystemStatus { job_id } | JobObservation::SystemRead { job_id, .. } => {
 			&[job_id]
 		}
@@ -257,22 +265,25 @@ fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Du
 			job_id,
 			job_dir,
 			unit,
+			request_digest,
 			wait_seconds,
 		} => (
 			Some(ObservationScript::Status),
-			json!({"job_id":job_id,"job_dir":job_dir,"unit":unit,"wait_seconds":wait_seconds.min(30)}),
+			json!({"job_id":job_id,"job_dir":job_dir,"request_digest":request_digest,"unit":unit,"wait_seconds":wait_seconds.min(30)}),
 			Duration::from_secs(wait_seconds.min(30) + 10),
 			false,
 		),
 		JobObservation::PythonRead {
 			job_id,
 			job_dir,
+			unit,
+			request_digest,
 			stdout_offset,
 			stderr_offset,
 			limit,
 		} => (
 			Some(ObservationScript::Read),
-			json!({"job_id":job_id,"job_dir":job_dir,"stdout_offset":stdout_offset,"stderr_offset":stderr_offset,"limit":limit}),
+			json!({"job_id":job_id,"job_dir":job_dir,"request_digest":request_digest,"unit":unit,"stdout_offset":stdout_offset,"stderr_offset":stderr_offset,"limit":limit}),
 			Duration::from_secs(15),
 			false,
 		),

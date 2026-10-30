@@ -10,8 +10,9 @@ use std::time::Duration;
 use tokio::sync::{Notify, OwnedSemaphorePermit};
 
 // Large snapshots amortize one complete observation across already admitted calls.
-// The fixed 1 ms is included in every member's original deadline, including C1.
-const COLLECT_WINDOW: Duration = Duration::from_millis(1);
+// The fixed 2 ms is included in every member's original deadline, including C1.
+// Small snapshots bypass collection; freeze still closes membership permanently.
+const COLLECT_WINDOW: Duration = Duration::from_millis(2);
 const MAX_HINTS: usize = MAX_METADATA_QUERIES;
 static COORDINATOR: OnceLock<Arc<Coordinator>> = OnceLock::new();
 
@@ -803,6 +804,22 @@ impl Coordinator {
 
 fn read_pages(root: &Path, requests: &[Query], deadline: Instant) -> Result<ObservedPages> {
 	let _trace = metadata_trace::Stage::new("read_pages");
+	let shared_requests: Vec<_> = requests
+		.iter()
+		.map(|request| index::SharedPageRequest {
+			owner: request.owner.clone(),
+			after_id: request.params.after_id.clone(),
+			limit: request.params.limit.unwrap_or(32) as usize,
+		})
+		.collect();
+	if let Some(observed) = index::try_shared_pages(root, &shared_requests, deadline)? {
+		return Ok(ObservedPages {
+			replies: observed.values,
+			large: observed.large,
+		});
+	}
+	// Only an early, pure preflight miss reaches the original exclusive path.
+	// This is the same cohort and absolute deadline, never a second dispatch.
 	let (archive, queries) = {
 		let _trace = metadata_trace::Stage::new("hot_snapshot_and_cursors");
 		let _guard = index::query_lock(deadline)?;

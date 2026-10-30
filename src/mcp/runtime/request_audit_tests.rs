@@ -30,6 +30,26 @@ fn root() -> tempfile::TempDir {
 }
 
 #[test]
+fn wide_state_root_is_refused_without_repair_or_partial_audit_creation() {
+	let temporary = root();
+	std::fs::set_permissions(temporary.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+	let error = prepare_at(temporary.path()).unwrap_err();
+	assert!(error
+		.to_string()
+		.contains("private request audit directory refused"));
+	assert_eq!(
+		std::fs::metadata(temporary.path())
+			.unwrap()
+			.permissions()
+			.mode() & 0o7777,
+		0o755
+	);
+	assert_eq!(std::fs::read_dir(temporary.path()).unwrap().count(), 0);
+	std::fs::set_permissions(temporary.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+	prepare_at(temporary.path()).unwrap();
+}
+
+#[test]
 fn reused_component_open_keeps_flags_and_reobserves_the_named_inode() {
 	use std::os::fd::AsRawFd;
 	let temporary = root();
@@ -1045,4 +1065,303 @@ fn archive_root_or_anchor_removal_and_replacement_refuse_without_recreating_hist
 			assert!(!archive.exists());
 		}
 	}
+}
+
+fn wait_for_shared_gate_queue(lock: &AuditStoreLock, expected: usize) {
+	let until = Instant::now() + std::time::Duration::from_secs(5);
+	loop {
+		if lock.queue.lock().unwrap().waiting.len() == expected {
+			return;
+		}
+		assert!(Instant::now() < until, "store gate waiter did not arrive");
+		std::thread::yield_now();
+	}
+}
+
+fn assert_shared_gate_idle(lock: &AuditStoreLock) {
+	let queue = lock.queue.lock().unwrap_or_else(|error| error.into_inner());
+	assert!(!queue.active);
+	assert_eq!(queue.readers, 0);
+	assert!(queue.waiting.is_empty());
+}
+
+#[test]
+fn shared_gate_allows_two_readers_without_bypassing_a_queued_writer() {
+	use std::sync::mpsc;
+	use std::time::Duration;
+	let lock = Arc::new(AuditStoreLock::default());
+	let first = lock
+		.acquire_shared(Instant::now() + Duration::from_secs(5))
+		.unwrap();
+	let second = lock
+		.acquire_shared(Instant::now() + Duration::from_secs(5))
+		.unwrap();
+	assert_eq!(lock.queue.lock().unwrap().readers, 2);
+	let (events_tx, events_rx) = mpsc::channel();
+	let (release_tx, release_rx) = mpsc::channel();
+	let writer_lock = lock.clone();
+	let writer_events = events_tx.clone();
+	let writer = std::thread::spawn(move || {
+		let guard = writer_lock
+			.acquire(Some(Instant::now() + Duration::from_secs(5)))
+			.unwrap();
+		writer_events.send("writer").unwrap();
+		release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+		drop(guard);
+	});
+	wait_for_shared_gate_queue(&lock, 1);
+	let later_lock = lock.clone();
+	let later = std::thread::spawn(move || {
+		let guard = later_lock
+			.acquire_shared(Instant::now() + Duration::from_secs(5))
+			.unwrap();
+		events_tx.send("reader").unwrap();
+		guard.finish().unwrap();
+	});
+	wait_for_shared_gate_queue(&lock, 2);
+	first.finish().unwrap();
+	assert_eq!(lock.queue.lock().unwrap().readers, 1);
+	assert!(matches!(
+		events_rx.try_recv(),
+		Err(mpsc::TryRecvError::Empty)
+	));
+	second.finish().unwrap();
+	assert_eq!(
+		events_rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+		"writer"
+	);
+	wait_for_shared_gate_queue(&lock, 1);
+	assert!(matches!(
+		events_rx.try_recv(),
+		Err(mpsc::TryRecvError::Empty)
+	));
+	release_tx.send(()).unwrap();
+	assert_eq!(
+		events_rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+		"reader"
+	);
+	writer.join().unwrap();
+	later.join().unwrap();
+	assert_shared_gate_idle(&lock);
+}
+
+#[test]
+fn shared_gate_cap_and_cancelled_head_or_middle_preserve_fifo() {
+	use std::sync::mpsc;
+	use std::time::Duration;
+	// A third reader cannot consume a reservation until one real owner releases.
+	let lock = Arc::new(AuditStoreLock::default());
+	let first = lock
+		.acquire_shared(Instant::now() + Duration::from_secs(5))
+		.unwrap();
+	let second = lock
+		.acquire_shared(Instant::now() + Duration::from_secs(5))
+		.unwrap();
+	let other = lock.clone();
+	let (tx, rx) = mpsc::channel();
+	let third = std::thread::spawn(move || {
+		let guard = other
+			.acquire_shared(Instant::now() + Duration::from_secs(5))
+			.unwrap();
+		tx.send(()).unwrap();
+		guard.finish().unwrap();
+	});
+	wait_for_shared_gate_queue(&lock, 1);
+	assert_eq!(lock.queue.lock().unwrap().readers, 2);
+	first.finish().unwrap();
+	rx.recv_timeout(Duration::from_secs(5)).unwrap();
+	third.join().unwrap();
+	second.finish().unwrap();
+	assert_shared_gate_idle(&lock);
+	for cancelled_position in [0, 1] {
+		let lock = Arc::new(AuditStoreLock::default());
+		let held = lock.acquire(None).unwrap();
+		let (order_tx, order_rx) = mpsc::channel();
+		let (cancel_tx, cancel_rx) = mpsc::channel();
+		let mut threads = Vec::new();
+		for position in 0..3 {
+			let other = lock.clone();
+			let order = order_tx.clone();
+			let cancelled = cancel_tx.clone();
+			threads.push(std::thread::spawn(move || {
+				if position == cancelled_position {
+					let result = other.acquire_shared(Instant::now() + Duration::from_secs(2));
+					cancelled
+						.send(matches!(result, Err(StoreLockFailure::Deadline)))
+						.unwrap();
+				} else {
+					let guard = other
+						.acquire(Some(Instant::now() + Duration::from_secs(5)))
+						.unwrap();
+					order.send(position).unwrap();
+					drop(guard);
+				}
+			}));
+			wait_for_shared_gate_queue(&lock, position + 1);
+		}
+		assert!(cancel_rx.recv_timeout(Duration::from_secs(5)).unwrap());
+		wait_for_shared_gate_queue(&lock, 2);
+		drop(held);
+		let order = [
+			order_rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+			order_rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+		];
+		let expected: Vec<_> = (0..3)
+			.filter(|position| *position != cancelled_position)
+			.collect();
+		assert_eq!(order.as_slice(), expected.as_slice());
+		for thread in threads {
+			thread.join().unwrap();
+		}
+		assert_shared_gate_idle(&lock);
+	}
+}
+
+#[test]
+fn expired_shared_owner_keeps_custody_until_finish_then_releases_writer() {
+	use std::sync::mpsc;
+	use std::time::Duration;
+	let lock = Arc::new(AuditStoreLock::default());
+	let limit = Instant::now() + Duration::from_secs(2);
+	let held = lock.acquire_shared(limit).unwrap();
+	let other = lock.clone();
+	let (tx, rx) = mpsc::channel();
+	let writer = std::thread::spawn(move || {
+		let guard = other
+			.acquire(Some(Instant::now() + Duration::from_secs(5)))
+			.unwrap();
+		tx.send(()).unwrap();
+		drop(guard);
+	});
+	wait_for_shared_gate_queue(&lock, 1);
+	while Instant::now() < limit {
+		std::thread::sleep(Duration::from_millis(1));
+	}
+	assert_eq!(lock.queue.lock().unwrap().readers, 1);
+	assert!(matches!(rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
+	assert_eq!(held.finish(), Err(StoreLockFailure::Deadline));
+	rx.recv_timeout(Duration::from_secs(5)).unwrap();
+	writer.join().unwrap();
+	assert_shared_gate_idle(&lock);
+}
+
+#[test]
+fn shared_panic_refuses_active_peers_without_revoking_finished_reads() {
+	use std::time::Duration;
+	let lock = Arc::new(AuditStoreLock::default());
+	let completed = lock
+		.acquire_shared(Instant::now() + Duration::from_secs(5))
+		.unwrap()
+		.finish();
+	let peer = lock
+		.acquire_shared(Instant::now() + Duration::from_secs(5))
+		.unwrap();
+	let other = lock.clone();
+	let panicked = std::thread::spawn(move || {
+		std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+			let _guard = other
+				.acquire_shared(Instant::now() + Duration::from_secs(5))
+				.unwrap();
+			panic!("shared owner fault injection");
+		}))
+		.is_err()
+	})
+	.join()
+	.unwrap();
+	assert!(panicked);
+	assert_eq!(completed, Ok(()));
+	assert_eq!(peer.finish(), Err(StoreLockFailure::Unavailable));
+	assert!(matches!(
+		lock.acquire_shared(Instant::now() + Duration::from_secs(5)),
+		Err(StoreLockFailure::Unavailable)
+	));
+	assert!(matches!(
+		lock.acquire(None),
+		Err(StoreLockFailure::Unavailable)
+	));
+	assert!(lock.queue.lock().unwrap().reader_poisoned);
+	assert_shared_gate_idle(&lock);
+}
+
+#[test]
+fn shared_admission_and_finish_preserve_writer_and_queue_poison() {
+	use std::time::Duration;
+	for poison_queue in [false, true] {
+		let lock = Arc::new(AuditStoreLock::default());
+		let peer = lock
+			.acquire_shared(Instant::now() + Duration::from_secs(5))
+			.unwrap();
+		let other = lock.clone();
+		assert!(std::thread::spawn(move || {
+			std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+				if poison_queue {
+					let _queue = other.queue.lock().unwrap();
+					panic!("queue fault injection");
+				} else {
+					let _inner = other.inner.lock().unwrap();
+					panic!("original writer mutex fault injection");
+				}
+			}))
+			.is_err()
+		})
+		.join()
+		.unwrap());
+		assert_eq!(peer.finish(), Err(StoreLockFailure::Unavailable));
+		assert!(matches!(
+			lock.acquire_shared(Instant::now() + Duration::from_secs(5)),
+			Err(StoreLockFailure::Unavailable)
+		));
+		assert!(matches!(
+			lock.acquire(None),
+			Err(StoreLockFailure::Unavailable)
+		));
+		assert_eq!(lock.queue.is_poisoned(), poison_queue);
+		assert_eq!(lock.inner.is_poisoned(), !poison_queue);
+		assert_shared_gate_idle(&lock);
+	}
+}
+
+#[test]
+fn shared_hot_preflight_never_creates_recovers_or_hides_unsafe_storage() {
+	let temporary = root();
+	let base = audit_root(temporary.path()).unwrap();
+	assert!(open_existing_store_at(&base).unwrap().is_none());
+	assert_eq!(std::fs::read_dir(temporary.path()).unwrap().count(), 0);
+	let checked = {
+		let guard = store_lock().unwrap();
+		let result = (|| -> Result<(bool, bool, bool)> {
+			let hot = open_store(temporary.path())?;
+			let miss = !hot_snapshot_cached(&hot)?;
+			cache_hot(&hot, &[])?;
+			let hit = hot_snapshot_cached(&hot)?;
+			std::fs::write(
+				temporary.path().join(STORE_NAME).join("unexpected"),
+				b"PRESERVE_STAGING",
+			)?;
+			let changed = !hot_snapshot_cached(&hot)?;
+			Ok((miss, hit, changed))
+		})();
+		drop(guard);
+		result
+	}
+	.unwrap();
+	assert_eq!(checked, (true, true, true));
+	assert!(!temporary.path().join(ARCHIVE_NAME).exists());
+	assert!(!temporary.path().join(ARCHIVE_ANCHOR).exists());
+	let hot_path = temporary.path().join(STORE_NAME);
+	assert_eq!(
+		std::fs::read(hot_path.join("unexpected")).unwrap(),
+		b"PRESERVE_STAGING"
+	);
+	std::fs::set_permissions(&hot_path, std::fs::Permissions::from_mode(0o755)).unwrap();
+	assert!(open_existing_store_at(&base).is_err());
+	std::fs::set_permissions(&hot_path, std::fs::Permissions::from_mode(0o700)).unwrap();
+	let moved = temporary.path().join("preserved-hot");
+	std::fs::rename(&hot_path, &moved).unwrap();
+	symlink(&moved, &hot_path).unwrap();
+	assert!(open_existing_store_at(&base).is_err());
+	assert_eq!(
+		std::fs::read(moved.join("unexpected")).unwrap(),
+		b"PRESERVE_STAGING"
+	);
 }

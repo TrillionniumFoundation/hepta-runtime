@@ -172,6 +172,7 @@ async fn notify_peer_resource_updated(peer: &Peer<RoleServer>, uri: &str) {
 /// interactive sessions, on pre-2026-07-28 connections; other clients ignore it.
 const CLAUDE_CHANNEL_CAPABILITY: &str = "claude/channel";
 const RUNTIME_TOOL_NAMES: &[&str] = &[
+	"execution_shadow_admit",
 	"effective_config",
 	"usage_stats",
 	"request_archive",
@@ -1303,6 +1304,23 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "Execution Shadow Admission",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Validate and hash a canonical execution_intent v1 against an allowlisted host. Shadow only: never starts a process, grants FinalUse or acknowledges an effect."
+	)]
+	async fn execution_shadow_admit(
+		&self,
+		Parameters(params): Parameters<runtime::execution::ShadowExecutionIntentParams>,
+	) -> Result<String, String> {
+		runtime::execution::admit_shadow_intent(params).map_err(|error| error.to_string())
+	}
+
+	#[tool(
 		title = "Host List",
 		annotations(
 			read_only_hint = true,
@@ -1471,7 +1489,7 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = true
 		),
-		description = "Start an explicit executable and argv on one configured host. No shell syntax is parsed. Jobs have durable metadata and logs, survive MCP reconnects, support idempotency keys, and may be resource-limited."
+		description = "Start an explicit executable and argv on one configured host. No shell syntax is parsed. Jobs have durable metadata and logs, survive MCP reconnects, require a stable idempotency_key, and may be resource-limited."
 	)]
 	async fn process_start(
 		&self,
@@ -2225,7 +2243,7 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = true
 		),
-		description = "Run one exact, administrator-configured sudo action on a configured host. Arbitrary sudo commands, executable paths, services, and PIDs are never accepted from tool input."
+		description = "Run one exact, administrator-configured sudo action on a configured host. Requires a stable idempotency_key. A lost response is indeterminate and is never automatically replayed. Arbitrary sudo commands and executable paths are rejected."
 	)]
 	async fn privileged_action(
 		&self,

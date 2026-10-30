@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use super::config::{check_protected_input, runtime_config, valid_name, Platform};
 use super::jobs::audit;
+use super::privileged_ledger::{self, Admission};
 use super::ssh::run_python_json;
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, schemars::JsonSchema)]
@@ -38,6 +39,8 @@ pub struct PrivilegedActionParams {
 	pub host: String,
 	/// Exact symbolic action name from the host policy.
 	pub action: String,
+	/// Stable operation identity; unknown acknowledgements are never replayed.
+	pub idempotency_key: String,
 	#[serde(default)]
 	pub args: Vec<String>,
 }
@@ -393,6 +396,30 @@ pub async fn privileged_action(params: PrivilegedActionParams) -> Result<String>
 		"args": params.args,
 		"timeout_seconds": action.timeout_seconds.min(300),
 	});
+	let effect_binding =
+		json!({"configured_ssh_target": host.ssh_target, "execution_request": &request});
+	let permit = match privileged_ledger::admit(
+		&runtime_config()?.state_dir,
+		&params.host,
+		&params.action,
+		&params.idempotency_key,
+		&effect_binding,
+	)
+	.await?
+	{
+		Admission::Observed(observed) => {
+			let completion = audit(
+				"privileged_action_reused",
+				&params.host,
+				&params.action,
+				&json!({"reused":true}),
+			);
+			return Ok(serde_json::to_string_pretty(
+				&retain_privileged_after_audit(observed, completion),
+			)?);
+		}
+		Admission::Entered(permit) => permit,
+	};
 	require_privileged_intent(audit(
 		"privileged_action_requested",
 		&params.host,
@@ -406,7 +433,23 @@ pub async fn privileged_action(params: PrivilegedActionParams) -> Result<String>
 		Duration::from_secs(action.timeout_seconds.min(300) + 10),
 	)
 	.await;
-	let output = retain_privileged_outcome(&params, remote);
+	let mut output = retain_privileged_outcome(&params, remote);
+	// An unknown effect leaves the original durable entered record intact.
+	// Even a known result must not be hidden by a later publication failure.
+	if output["outcome"] != "unknown" {
+		match permit.complete(output.clone()) {
+			Ok(retained) => {
+				output = retained;
+				output["ledger_recorded"] = json!(true);
+			}
+			Err(_) => {
+				output["ledger_recorded"] = json!(false);
+				output["ledger_warning"] = json!("Original result retained; durable completion unavailable. Reconcile original key without replay.");
+			}
+		}
+	} else {
+		output["ledger_recorded"] = json!(false);
+	}
 	let completion = audit(
 		"privileged_action",
 		&params.host,
@@ -519,3 +562,7 @@ fn retain_privileged_outcome(params: &PrivilegedActionParams, remote: Result<Val
 #[cfg(test)]
 #[path = "inspect_tests.rs"]
 mod tests;
+
+#[cfg(all(test, unix))]
+#[path = "inspect_security_tests.rs"]
+mod security_tests;

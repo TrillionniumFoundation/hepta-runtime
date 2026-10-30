@@ -45,7 +45,7 @@ fn runtime() -> tokio::runtime::Runtime {
 }
 
 // As in the existing blocking suite, direct membership tests inject a future
-// entry clock instead of relying on OS scheduling inside the production 1 ms.
+// entry clock instead of relying on OS scheduling inside the production 2 ms.
 // Work::run tests fill all eight slots before start, so collection ends at the
 // unchanged admission bound. Public execute_owned tests use its real clock.
 struct Fixture {

@@ -14,6 +14,41 @@ const SHARDS: usize = 256;
 const FLAT_DIRECTORY_LIMIT: u64 = 64 * 1024 * 1024;
 const MAX_ANCHOR_BYTES: usize = 64 * 1024;
 
+// Derive the NUL-terminated component from the same spelling used by all
+// generic callers. The checked const conversion also rejects interior NULs.
+const LEGACY_COMPONENT_BYTES: [u8; ARCHIVE_NAME.len() + 1] = {
+	let mut bytes = [0u8; ARCHIVE_NAME.len() + 1];
+	let mut index = 0;
+	while index < ARCHIVE_NAME.len() {
+		bytes[index] = ARCHIVE_NAME.as_bytes()[index];
+		index += 1;
+	}
+	bytes
+};
+const LEGACY_COMPONENT: &std::ffi::CStr =
+	match std::ffi::CStr::from_bytes_with_nul(&LEGACY_COMPONENT_BYTES) {
+		Ok(component) => component,
+		Err(_) => panic!("invalid private metadata component"),
+	};
+
+pub(super) const ORIGINAL_COMPONENT_BYTES: usize = 64 + 5 + 1;
+
+pub(super) fn stack_original_component<'buffer>(
+	filename: &str,
+	buffer: &'buffer mut [u8; ORIGINAL_COMPONENT_BYTES],
+) -> Result<&'buffer std::ffi::CStr> {
+	// The caller retains its original canonical filename validation. This
+	// checked bound prevents a changed internal caller from panicking or
+	// truncating a name; the conversion itself never replaces domain checks.
+	if filename.len() != buffer.len() - 1 {
+		bail!("invalid private metadata component");
+	}
+	buffer[..filename.len()].copy_from_slice(filename.as_bytes());
+	buffer[filename.len()] = 0;
+	std::ffi::CStr::from_bytes_with_nul(buffer)
+		.map_err(|_| anyhow!("invalid private metadata component"))
+}
+
 type Identity = [u64; 2];
 type RegistryKey = [u64; 4];
 static STORES: OnceLock<Mutex<HashMap<RegistryKey, Weak<Inner>>>> = OnceLock::new();
@@ -283,7 +318,16 @@ fn named_stat_with_component(
 }
 
 fn named_directory(directory: &File, filename: &str, held: &File) -> Result<()> {
-	let named = named_stat(directory, filename)?
+	let component = name(filename)?;
+	named_directory_component(directory, &component, held)
+}
+
+fn named_directory_component(
+	directory: &File,
+	component: &std::ffi::CStr,
+	held: &File,
+) -> Result<()> {
+	let named = named_stat_with_component(directory, component)?
 		.ok_or_else(|| anyhow!("request archive directory disappeared"))?;
 	let pinned = private_directory_metadata(held)?;
 	if named.st_mode & libc::S_IFMT != libc::S_IFDIR
@@ -294,6 +338,23 @@ fn named_directory(directory: &File, filename: &str, held: &File) -> Result<()> 
 		bail!("request archive directory binding changed");
 	}
 	Ok(())
+}
+
+fn shard_component_bytes(prefix: &str) -> Result<[u8; 3]> {
+	let pair: [u8; 2] = prefix
+		.as_bytes()
+		.try_into()
+		.map_err(|_| anyhow!("invalid private metadata component"))?;
+	Ok([pair[0], pair[1], 0])
+}
+
+fn named_shard_directory(directory: &File, prefix: &str, held: &File) -> Result<()> {
+	// Both callers retain their original full filename validation. This only
+	// changes storage for that same two-byte prefix, never its namespace probe.
+	let bytes = shard_component_bytes(prefix)?;
+	let component = std::ffi::CStr::from_bytes_with_nul(&bytes)
+		.map_err(|_| anyhow!("invalid private metadata component"))?;
+	named_directory_component(directory, component, held)
 }
 
 fn filename_id(filename: &str) -> Result<&str> {
@@ -621,6 +682,22 @@ impl Archive {
 	}
 	pub(super) fn try_clone(&self) -> Result<Self> {
 		Ok(self.clone())
+	}
+
+	// A shared reader must never perform the recovery/initialization done by
+	// open(). Inspect only presence and the original size boundary; leave all
+	// control parsing, alias recovery and shard creation to that exclusive path.
+	pub(super) fn needs_exclusive_open(&self) -> Result<bool> {
+		if self.0.layout.get().is_some() {
+			return Ok(false);
+		}
+		if named_stat(self.root(), SHARD_ANCHOR)?.is_some()
+			|| named_stat(self.root(), SHARD_ROOT)?.is_some()
+			|| named_stat(self.root(), SHARD_INTENT)?.is_some()
+		{
+			return Ok(true);
+		}
+		Ok(self.legacy().metadata()?.len() >= FLAT_DIRECTORY_LIMIT)
 	}
 
 	fn load_layout(&self) -> Result<()> {
@@ -953,7 +1030,7 @@ impl Archive {
 		};
 		let index = shard_index(id);
 		let shard = &layout.shards[index];
-		named_directory(&layout.root, &id[..2], shard)?;
+		named_shard_directory(&layout.root, &id[..2], shard)?;
 		Ok(Some(shard))
 	}
 
@@ -970,17 +1047,30 @@ impl Archive {
 		id: &str,
 		component: &std::ffi::CStr,
 	) -> Result<Option<&File>> {
-		let legacy = named_stat_with_component(self.legacy(), component)?.is_some();
+		Ok(self
+			.existing_member_component(id, component)?
+			.map(|(directory, _)| directory))
+	}
+
+	// Preserve the exact fresh legacy/shard probes, including both physical
+	// copies of a duplicate. The selected stat may also establish a content
+	// reader's full named-member stamp; it never comes from a prior observation.
+	fn existing_member_component(
+		&self,
+		id: &str,
+		component: &std::ffi::CStr,
+	) -> Result<Option<(&File, libc::stat)>> {
+		let legacy = named_stat_with_component(self.legacy(), component)?;
 		let shard = self.shard_for(id)?;
 		let sharded = match shard {
-			Some(directory) => named_stat_with_component(directory, component)?.is_some(),
-			None => false,
+			Some(directory) => named_stat_with_component(directory, component)?,
+			None => None,
 		};
 		match (legacy, sharded) {
-			(true, true) => bail!("duplicate request archive identity across namespaces"),
-			(true, false) => Ok(Some(self.legacy())),
-			(false, true) => Ok(shard),
-			(false, false) => Ok(None),
+			(Some(_), Some(_)) => bail!("duplicate request archive identity across namespaces"),
+			(Some(metadata), None) => Ok(Some((self.legacy(), metadata))),
+			(None, Some(metadata)) => Ok(shard.map(|directory| (directory, metadata))),
+			(None, None) => Ok(None),
 		}
 	}
 
@@ -1020,13 +1110,27 @@ impl Archive {
 		let id = filename_id(filename)?;
 		let component = name(filename)?;
 		self.fence_record_named(id, &component, directory)
+			.map(|_| ())
 	}
 
+	#[cfg(test)]
 	pub(super) fn fence_record_component(
 		&self,
 		component: &std::ffi::CStr,
 		directory: &File,
 	) -> Result<()> {
+		self.fence_record_stat_component(component, directory)
+			.map(|_| ())
+	}
+
+	/// One fresh namespace observation also returns its selected named inode.
+	/// The caller must validate the full private-file policy and bind the read
+	/// descriptor to this stamp; success here alone does not certify its contents.
+	pub(super) fn fence_record_stat_component(
+		&self,
+		component: &std::ffi::CStr,
+		directory: &File,
+	) -> Result<libc::stat> {
 		let filename = component
 			.to_str()
 			.map_err(|_| anyhow!("invalid request archive filename"))?;
@@ -1039,15 +1143,16 @@ impl Archive {
 		id: &str,
 		component: &std::ffi::CStr,
 		directory: &File,
-	) -> Result<()> {
-		let existing = self
-			.existing_directory_component(id, component)?
+	) -> Result<libc::stat> {
+		let (existing, metadata) = self
+			.existing_member_component(id, component)?
 			.ok_or_else(|| std::io::Error::from(std::io::ErrorKind::NotFound))?;
 		if existing.as_raw_fd() != directory.as_raw_fd() {
 			bail!("request archive record changed physical namespace");
 		}
 		if directory.as_raw_fd() == self.legacy().as_raw_fd() {
-			return named_directory(self.root(), ARCHIVE_NAME, directory);
+			named_directory_component(self.root(), LEGACY_COMPONENT, directory)?;
+			return Ok(metadata);
 		}
 		let layout = self
 			.0
@@ -1061,7 +1166,8 @@ impl Archive {
 		if layout.shards[shard_index(prefix)].as_raw_fd() != directory.as_raw_fd() {
 			bail!("foreign request archive target directory");
 		}
-		named_directory(&layout.root, prefix, directory)
+		named_shard_directory(&layout.root, prefix, directory)?;
+		Ok(metadata)
 	}
 
 	pub(super) fn read_record(&self, filename: &str) -> Result<Record> {
@@ -1136,10 +1242,11 @@ impl Archive {
 					if shard_index(id) != index {
 						bail!("request archive identity is in the wrong shard");
 					}
-					if check_legacy_duplicates
-						&& !filename.starts_with('.')
-						&& named_stat(self.legacy(), filename)?.is_some()
-					{
+					if check_legacy_duplicates && !filename.starts_with('.') && {
+						let mut bytes = [0u8; ORIGINAL_COMPONENT_BYTES];
+						let component = stack_original_component(filename, &mut bytes)?;
+						named_stat_with_component(self.legacy(), component)?.is_some()
+					} {
 						bail!("duplicate request archive identity across namespaces");
 					}
 					visit(state, shard, filename, inode)
