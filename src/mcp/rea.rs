@@ -277,7 +277,8 @@ fn parse_safetensors(data: &[u8], header_bytes: u64) -> Result<HeaderInfo> {
 		.ok_or_else(|| anyhow!("header offset overflow"))?;
 	let document = slice_at(data, 8, size)?;
 	let parsed: Value =
-		serde_json::from_slice(document).context("invalid safetensors JSON header")?;
+		super::rea_evidence::parse_unique_json(document)
+			.context("invalid safetensors JSON header")?;
 	let entries = parsed
 		.as_object()
 		.ok_or_else(|| anyhow!("safetensors header is not an object"))?;
@@ -358,7 +359,6 @@ fn parse_safetensors(data: &[u8], header_bytes: u64) -> Result<HeaderInfo> {
 		bail!("safetensors has unindexed trailing tensor data");
 	}
 	let mut limitations = vec![
-		"Duplicate JSON keys are not detected by this preview parser",
 		"Tensor byte contents and full model semantics are not validated",
 	];
 	if unknown_types > 0 {

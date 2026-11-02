@@ -30,7 +30,7 @@ opens beneath controller_workspace_roots and caps input at 32 MiB.
 It returns SHA-256, bounded header observations and a versioned, deterministic
 hepta_rea_preview_v1_ identity. It does not use Node.js, REA MCP or Python.
 Supported preview header families: ELF, PE, Mach-O, WASM, GGUF, safetensors,
-ZIP. Safetensors additionally validates bounded tensor shape products, file ranges, gaps, overlaps and known dtype storage lengths, but not duplicate JSON keys. This is a deliberately partial implementation: no full format parsing,
+ZIP. Safetensors additionally validates bounded tensor shape products, file ranges, gaps, overlaps and known dtype storage lengths, and rejects duplicate JSON members (including nested tensor declarations). This is a deliberately partial implementation: no full format parsing,
 decompilation, symbol extraction, code validation or signature verification.
 The native preview identifier is NOT an REA ev_ identifier. Fail-closed
 and symlink-escape tests are included. File-descriptor admission rejects symlink traversal and parent components,

@@ -98,6 +98,13 @@ impl<'de> Deserialize<'de> for UniqueJson {
 	}
 }
 
+
+pub(super) fn parse_unique_json(data: &[u8]) -> Result<Value> {
+	let record: UniqueJson = serde_json::from_slice(data)
+		.context("JSON object contains duplicates or invalid fields")?;
+	Ok(record.0)
+}
+
 fn canonical(value: &Value, out: &mut String, depth: usize) -> Result<()> {
 	if depth > 128 {
 		bail!("REA subset canonicalization depth exceeded");
