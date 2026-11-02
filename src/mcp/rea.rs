@@ -296,7 +296,7 @@ fn parse(data: &[u8]) -> Result<HeaderInfo> {
 		let length = read_u64(data, 0, true)?;
 		if length > 0 && length <= MAX_TENSOR_HEADER {
 			let end = 8usize + usize::try_from(length)?;
-			if data.first().is_some() && data.get(8) == Some(&b'{') {
+			if data.get(8) == Some(&b'{') {
 				let header = slice_at(data, 8, end - 8)?;
 				let parsed: Value =
 					serde_json::from_slice(header).context("invalid safetensors JSON header")?;
