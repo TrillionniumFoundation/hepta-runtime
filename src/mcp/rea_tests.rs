@@ -273,3 +273,63 @@ async fn symlink_outside_workspace_is_refused() {
 	let roots = vec![workspace.path().to_path_buf()];
 	assert!(inspect_with_roots(&link, &roots).await.is_err());
 }
+
+#[test]
+fn malformed_header_fuzz_does_not_panic() {
+	// Repeatable deterministic adversarial mutations of every native preview
+	// family. Successful unknowns must never imply complete format coverage.
+	let seeds: &[&[u8]] = &[
+		b"\x7fELF",
+		b"MZ",
+		b"\0asm",
+		b"GGUF",
+		b"PK\x03\x04",
+		b"\xca\xfe\xba\xbe",
+		b"\xfe\xed\xfa\xcf",
+		b"\x20\0\0\0\0\0\0\0{",
+	];
+	let mut state = 0x9e37_79b9_7f4a_7c15_u64;
+	for seed in seeds {
+		for round in 0..192 {
+			let mut data = seed.to_vec();
+			for _ in 0..(round % 3) {
+				data.extend_from_slice(seed);
+			}
+			for _ in 0..((round % 17) + 1) {
+				state ^= state << 13;
+				state ^= state >> 7;
+				state ^= state << 17;
+				let pos = (state as usize) % (data.len() + 1);
+				if pos == data.len() {
+					data.push(state as u8);
+				} else {
+					data[pos] ^= (state >> 8) as u8;
+				}
+			}
+			let parsed = std::panic::catch_unwind(|| inspect_bytes(&data, "/controlled/fuzz"));
+			assert!(parsed.is_ok(), "parser panic on seed {seed:?} iteration {round}");
+			if let Ok(Ok(report)) = parsed {
+				assert_eq!(report["coverage"]["status"], "partial");
+				assert_eq!(report["rea_evidence_compatible"], false);
+			}
+		}
+	}
+}
+
+#[test]
+fn safetensors_extreme_header_lengths_never_allocate_or_bypass_budgets() {
+	let mut huge = u64::MAX.to_le_bytes().to_vec();
+	huge.push(b'{');
+	let report = inspect_bytes(&huge, "/controlled/overflow");
+	// A truncated or unsupported candidate must never report verified tensors.
+	if let Ok(report) = report {
+		assert_ne!(report["normalized_result"]["format"], "safetensors");
+		assert_eq!(report["coverage"]["status"], "partial");
+	}
+	let mut over_budget = (8_u64 * 1024 * 1024 + 1).to_le_bytes().to_vec();
+	over_budget.push(b'{');
+	let report = inspect_bytes(&over_budget, "/controlled/over-budget");
+	if let Ok(report) = report {
+		assert_ne!(report["normalized_result"]["format"], "safetensors");
+	}
+}

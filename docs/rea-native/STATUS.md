@@ -150,3 +150,11 @@ The reference oracle now captures an actual invalid-relative-path MCP
 `tools/call` negative result (or protocol error, with delivery type preserved).
 This freezes one validation failure surface only; it does NOT close arbitrary
 typed error or cancellation contracts, all 229 tools, or security review.
+
+## Deterministic parser adversarial regressions
+
+A fixed-seed mutation matrix probes eight binary/model signatures over
+1,536 mutated specimens and asserts no panic, no accidental REA parity claim
+and no complete-coverage promotion. Extreme safetensors header lengths are
+negative probes. This is a bounded regression, **not** continuous libFuzzer
+coverage nor independent unknown-generator qualification.
