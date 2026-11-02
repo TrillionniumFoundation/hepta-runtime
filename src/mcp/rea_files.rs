@@ -21,6 +21,30 @@ use anyhow::{anyhow, bail, Context, Result};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
 
+/// Compare two snapshots of the *same open descriptor*, not path lookups.
+/// This detects ordinary concurrent truncation, append, in-place writes and
+/// metadata substitution. A malicious same-UID writer with enough control to
+/// restore metadata or race both snapshots remains outside this guarantee.
+#[cfg(unix)]
+fn ensure_unchanged(before: &std::fs::Metadata, after: &std::fs::Metadata) -> Result<()> {
+	use std::os::unix::fs::MetadataExt;
+	if before.dev() != after.dev()
+		|| before.ino() != after.ino()
+		|| before.len() != after.len()
+		|| before.mode() != after.mode()
+		|| before.uid() != after.uid()
+		|| before.gid() != after.gid()
+		|| before.nlink() != after.nlink()
+		|| before.mtime() != after.mtime()
+		|| before.mtime_nsec() != after.mtime_nsec()
+		|| before.ctime() != after.ctime()
+		|| before.ctime_nsec() != after.ctime_nsec()
+	{
+		bail!("REA inspection denied: admitted artifact changed during read");
+	}
+	Ok(())
+}
+
 #[cfg(unix)]
 fn open_beneath_root(path: &Path, roots: &[PathBuf]) -> Result<std::fs::File> {
 	use std::ffi::CString;
@@ -107,8 +131,9 @@ fn open_beneath_root(_path: &Path, _roots: &[PathBuf]) -> Result<std::fs::File> 
 }
 
 /// Read one chosen fd, limiting bytes even when the underlying file grows.
-/// Race-resistance applies to path traversal, not to a hostile writer mutating
-/// the *contents* of an already opened inode. The returned hash binds bytes read.
+/// A same-descriptor metadata snapshot also rejects ordinary concurrent writes.
+/// A privileged writer restoring metadata or racing the snapshots remains an
+/// explicit open limitation; the returned hash binds only the captured bytes.
 pub async fn read_bounded(path: &Path, roots: &[PathBuf], max_bytes: u64) -> Result<Vec<u8>> {
 	if !path.is_absolute() {
 		bail!("REA native inspection requires an absolute local path");
@@ -118,25 +143,28 @@ pub async fn read_bounded(path: &Path, roots: &[PathBuf], max_bytes: u64) -> Res
 	}
 	let chosen = path.to_path_buf();
 	let configured = roots.to_vec();
-	let file = tokio::task::spawn_blocking(move || {
+	let (file, before) = tokio::task::spawn_blocking(move || {
 		let file = open_beneath_root(&chosen, &configured)?;
 		let metadata = file.metadata()?;
 		if metadata.len() > max_bytes {
 			bail!("REA inspection file exceeds {max_bytes} byte limit");
 		}
-		Ok::<_, anyhow::Error>(file)
+		Ok::<_, anyhow::Error>((file, metadata))
 	})
 	.await
 	.context("REA bounded open task failed")??;
 
+	let mut file = tokio::fs::File::from_std(file);
 	let mut data = Vec::new();
-	tokio::fs::File::from_std(file)
+	(&mut file)
 		.take(max_bytes + 1)
 		.read_to_end(&mut data)
 		.await?;
 	if data.len() as u64 > max_bytes {
 		bail!("REA inspection file exceeds {max_bytes} byte limit");
 	}
+	#[cfg(unix)]
+	ensure_unchanged(&before, &file.metadata().await?)?;
 	Ok(data)
 }
 
