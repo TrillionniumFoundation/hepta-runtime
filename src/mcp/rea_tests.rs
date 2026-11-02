@@ -78,6 +78,37 @@ fn gguf_header_is_bounded_observation() {
 }
 
 #[test]
+fn elf32_big_endian_is_not_read_as_little_endian() {
+	let mut bytes = vec![0; 52];
+	bytes[..4].copy_from_slice(b"\x7fELF");
+	bytes[4] = 1;
+	bytes[5] = 2;
+	bytes[6] = 1;
+	bytes[16..18].copy_from_slice(&2_u16.to_be_bytes());
+	bytes[18..20].copy_from_slice(&40_u16.to_be_bytes());
+	bytes[20..24].copy_from_slice(&1_u32.to_be_bytes());
+	bytes[24..28].copy_from_slice(&0x1234_u32.to_be_bytes());
+	let report = inspect_bytes(&bytes, "/controlled/arm-big-endian").expect("big endian ELF");
+	assert_eq!(report["normalized_result"]["format"], "elf");
+	assert_eq!(report["normalized_result"]["architecture"], "arm");
+	assert_eq!(report["normalized_result"]["word_size_bits"], 32);
+	assert_eq!(report["normalized_result"]["byte_order"], "big");
+	assert_eq!(report["normalized_result"]["header_facts"]["entry_point"], "0x1234");
+}
+
+#[test]
+fn macho_fat_and_zip_do_not_claim_full_slice_or_apk_identity() {
+	let fat = inspect_bytes(&[0xca, 0xfe, 0xba, 0xbe, 0, 0, 0, 2], "/controlled/universal")
+		.expect("fat MachO");
+	assert_eq!(fat["normalized_result"]["format"], "macho-fat");
+	assert_eq!(fat["normalized_result"]["header_facts"]["declared_slices"], 2);
+	assert_eq!(fat["normalized_result"]["architecture"], Value::Null);
+	let zip = inspect_bytes(b"PK\x03\x04truncated", "/controlled/app.apk").expect("zip signature");
+	assert_eq!(zip["normalized_result"]["format"], "zip");
+	assert_eq!(zip["coverage"]["status"], "partial");
+}
+
+#[test]
 fn safetensors_header_is_detected_without_validating_payload() {
 	let header = br#"{"weight":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}}"#;
 	let mut bytes = (header.len() as u64).to_le_bytes().to_vec();
@@ -113,6 +144,10 @@ fn safetensors_rejects_overlaps_gaps_trailing_data_and_shape_mismatch() {
 		(
 			r#"{"a":{"dtype":"F32","shape":[1],"data_offsets":[0,9]}}"#,
 			4,
+		),
+		(
+			r#"{"a":{"dtype":"F32","shape":[1],"data_offsets":[0,4]},"b":{"dtype":"F32","shape":[1],"data_offsets":[2,6]}}"#,
+			6,
 		),
 	] {
 		let mut bytes = (header.len() as u64).to_le_bytes().to_vec();

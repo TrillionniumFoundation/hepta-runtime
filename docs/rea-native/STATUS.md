@@ -79,3 +79,10 @@ CI must run fmt, check --locked, clippy -D warnings, tests and release build
 on the exact integration commit. Tests must cover format markers, truncation,
 unknown-state preservation, deterministic non-REA IDs, workspace allow/deny
 and symlink escapes. CI success is not real-provider or production parity.
+
+## Third-party attribution
+
+This source experiment draws on the upstream MIT-licensed REA analysis
+contracts and safetensors dtype table. The exact upstream MIT notice is
+retained as REA-MIT-LICENSE.txt; proprietary external engines are not
+embedded or relicensed by this contribution.
