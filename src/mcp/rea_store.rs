@@ -178,6 +178,19 @@ fn validate_root(root: &Path) -> Result<()> {
 	Ok(())
 }
 
+/// Retained records are private single-link files. A hard-linked inode can
+/// be modified outside the store and defeats file-ownership/quota assumptions.
+fn reject_external_hardlinks(metadata: &std::fs::Metadata) -> Result<()> {
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::MetadataExt;
+		if metadata.nlink() != 1 {
+			bail!("REA preview store refuses externally hard-linked files");
+		}
+	}
+	Ok(())
+}
+
 fn filename(root: &Path, id: &str) -> Result<PathBuf> {
 	id_suffix(id)?;
 	Ok(root.join(format!("{id}.json")))
@@ -315,6 +328,7 @@ fn enforce_quota(
 		if !metadata.is_file() || metadata.file_type().is_symlink() {
 			bail!("REA preview store contains an unsafe non-file or symbolic link");
 		}
+		reject_external_hardlinks(&metadata)?;
 		occupied = occupied
 			.checked_add(metadata.len())
 			.ok_or_else(|| anyhow!("REA preview stored-byte accounting overflow"))?;
@@ -358,6 +372,7 @@ fn publish_budgeted(root: &Path, id: &str, encoded: &[u8]) -> Result<bool> {
 		match std::fs::symlink_metadata(path) {
 			Ok(metadata) => {
 				if metadata.is_file() && !metadata.file_type().is_symlink() {
+					reject_external_hardlinks(&metadata)?;
 					return Ok(true);
 				}
 				bail!("REA preview store identity resolves to unsafe file type");
@@ -411,6 +426,17 @@ pub async fn read_record(id: &str, state_dir: &Path) -> Result<Value> {
 	tokio::task::spawn_blocking(move || validate_root(&root_clone))
 		.await
 		.context("REA preview directory validation task failed")??;
+	let check = path.clone();
+	tokio::task::spawn_blocking(move || {
+		let metadata = std::fs::symlink_metadata(&check)
+			.context("REA preview record unavailable")?;
+		if !metadata.is_file() || metadata.file_type().is_symlink() {
+			bail!("REA preview record is not a regular file");
+		}
+		reject_external_hardlinks(&metadata)
+	})
+	.await
+	.context("REA preview hardlink validation task failed")??;
 	let bytes = rea_files::read_bounded(&path, &[root], MAX_ENVELOPE_BYTES).await?;
 	verify_envelope(&bytes, id)
 }

@@ -274,3 +274,21 @@ async fn total_byte_quota_is_enforced_without_replacing_prior_data() {
 	std::fs::remove_file(&orphan).expect("remove orphan");
 	assert!(retain_record(&another, state.path()).await.is_ok());
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn external_hardlinks_cannot_reuse_or_read_retained_previews() {
+	let state = tempfile::tempdir().expect("state");
+	let record = sample("/controlled/admitted.wasm");
+	let id = record["native_evidence_id"].as_str().expect("id");
+	retain_record(&record, state.path()).await.expect("initial record");
+	let root = state.path().join("rea-preview-v1");
+	let filename = root.join(format!("{id}.json"));
+	let external = state.path().join("external-link.json");
+	std::fs::hard_link(&filename, &external).expect("create external hardlink");
+	assert!(read_record(id, state.path()).await.is_err());
+	assert!(retain_record(&record, state.path()).await.is_err());
+	assert!(enforce_quota(&root, 1, MAX_STORED_RECORDS, MAX_STORED_BYTES).is_err());
+	std::fs::remove_file(&external).expect("remove hardlink");
+	assert_eq!(read_record(id, state.path()).await.expect("recovered"), record);
+}
