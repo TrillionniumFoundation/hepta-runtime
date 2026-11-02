@@ -216,7 +216,11 @@ async fn repeated_concurrent_first_publications_never_expose_a_wide_permission_w
 				.expect("created store root")
 				.permissions()
 				.mode();
-			assert_eq!(mode & 0o077, 0, "private mode must be atomic on round {round}");
+			assert_eq!(
+				mode & 0o077,
+				0,
+				"private mode must be atomic on round {round}"
+			);
 		}
 	}
 }
