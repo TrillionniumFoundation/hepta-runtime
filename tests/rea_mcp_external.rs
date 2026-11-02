@@ -51,7 +51,11 @@ impl RunningMcp {
 				}
 			}
 		});
-		Self { child, stdin, replies }
+		Self {
+			child,
+			stdin,
+			replies,
+		}
 	}
 
 	fn send(&mut self, message: &Value) {
@@ -67,32 +71,45 @@ impl RunningMcp {
 			"params": params
 		}));
 		for _ in 0..64 {
-			let line = self.replies.recv_timeout(Duration::from_secs(15))
+			let line = self
+				.replies
+				.recv_timeout(Duration::from_secs(15))
 				.unwrap_or_else(|error| panic!("MCP reply timeout/closed for {method}: {error}"));
 			let message: Value = serde_json::from_str(&line).expect("valid MCP JSON");
 			if message["id"] != id {
 				continue;
 			}
-			assert!(message.get("error").is_none(), "MCP {method} protocol error: {message}");
+			assert!(
+				message.get("error").is_none(),
+				"MCP {method} protocol error: {message}"
+			);
 			return message["result"].clone();
 		}
 		panic!("MCP {method} produced too many unrelated notifications");
 	}
 
 	fn initialize(&mut self) {
-		self.request(1, "initialize", json!({
-			"protocolVersion":"2026-07-28",
-			"capabilities":{},
-			"clientInfo":{"name":"hepta-rea-worker-e2e","version":"0.1.0"}
-		}));
+		self.request(
+			1,
+			"initialize",
+			json!({
+				"protocolVersion":"2026-07-28",
+				"capabilities":{},
+				"clientInfo":{"name":"hepta-rea-worker-e2e","version":"0.1.0"}
+			}),
+		);
 		self.send(&json!({"jsonrpc":"2.0","method":"notifications/initialized","params":{}}));
 	}
 
 	fn call(&mut self, id: i64, name: &str, path: &std::path::Path) -> Value {
-		self.request(id, "tools/call", json!({
-			"name": name,
-			"arguments": {"path": path.to_string_lossy()}
-		}))
+		self.request(
+			id,
+			"tools/call",
+			json!({
+				"name": name,
+				"arguments": {"path": path.to_string_lossy()}
+			}),
+		)
 	}
 }
 
@@ -137,14 +154,18 @@ fn external_mcp_policy_worker_and_controller_restart() {
 			}
 		}
 	});
-	std::fs::write(&config_file, serde_json::to_vec(&policy).expect("policy bytes"))
-		.expect("write policy");
+	std::fs::write(
+		&config_file,
+		serde_json::to_vec(&policy).expect("policy bytes"),
+	)
+	.expect("write policy");
 
 	for iteration in 0..2 {
 		let mut mcp = RunningMcp::start(&config_file);
 		mcp.initialize();
 		let discovered = mcp.request(2, "tools/list", json!({}));
-		let names: Vec<_> = discovered["tools"].as_array()
+		let names: Vec<_> = discovered["tools"]
+			.as_array()
 			.expect("tool listing")
 			.iter()
 			.filter_map(|tool| tool["name"].as_str())
