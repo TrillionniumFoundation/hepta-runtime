@@ -17,7 +17,10 @@
 
 use anyhow::Result;
 
-#[cfg(all(target_os = "linux", any(target_arch = "x86_64", target_arch = "aarch64")))]
+#[cfg(all(
+	target_os = "linux",
+	any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 pub fn tighten_after_read() -> Result<()> {
 	use anyhow::{bail, Context};
 	const LOAD_W_ABS: u16 = 0x20;
@@ -33,23 +36,49 @@ pub fn tighten_after_read() -> Result<()> {
 	const ARCH: u32 = 0xc000_00b7;
 
 	fn stmt(code: u16, k: u32) -> libc::sock_filter {
-		libc::sock_filter { code, jt: 0, jf: 0, k }
+		libc::sock_filter {
+			code,
+			jt: 0,
+			jf: 0,
+			k,
+		}
 	}
 	fn jump(code: u16, k: u32, jt: u8, jf: u8) -> libc::sock_filter {
 		libc::sock_filter { code, jt, jf, k }
 	}
 	let mut refused: Vec<libc::c_long> = vec![
-		libc::SYS_openat, libc::SYS_openat2,
-		libc::SYS_socket, libc::SYS_socketpair, libc::SYS_connect, libc::SYS_bind,
-		libc::SYS_listen, libc::SYS_accept, libc::SYS_accept4,
-		libc::SYS_sendto, libc::SYS_recvfrom, libc::SYS_sendmsg, libc::SYS_recvmsg,
-		libc::SYS_execve, libc::SYS_execveat, libc::SYS_clone, libc::SYS_clone3,
-		libc::SYS_ptrace, libc::SYS_io_uring_setup, libc::SYS_io_uring_enter,
-		libc::SYS_io_uring_register, libc::SYS_pidfd_getfd,
-		libc::SYS_process_vm_readv, libc::SYS_process_vm_writev,
+		libc::SYS_openat,
+		libc::SYS_openat2,
+		libc::SYS_socket,
+		libc::SYS_socketpair,
+		libc::SYS_connect,
+		libc::SYS_bind,
+		libc::SYS_listen,
+		libc::SYS_accept,
+		libc::SYS_accept4,
+		libc::SYS_sendto,
+		libc::SYS_recvfrom,
+		libc::SYS_sendmsg,
+		libc::SYS_recvmsg,
+		libc::SYS_execve,
+		libc::SYS_execveat,
+		libc::SYS_clone,
+		libc::SYS_clone3,
+		libc::SYS_ptrace,
+		libc::SYS_io_uring_setup,
+		libc::SYS_io_uring_enter,
+		libc::SYS_io_uring_register,
+		libc::SYS_pidfd_getfd,
+		libc::SYS_process_vm_readv,
+		libc::SYS_process_vm_writev,
 	];
 	#[cfg(target_arch = "x86_64")]
-	refused.extend([libc::SYS_open, libc::SYS_creat, libc::SYS_fork, libc::SYS_vfork]);
+	refused.extend([
+		libc::SYS_open,
+		libc::SYS_creat,
+		libc::SYS_fork,
+		libc::SYS_vfork,
+	]);
 	refused.sort_unstable();
 	refused.dedup();
 
@@ -91,7 +120,10 @@ pub fn tighten_after_read() -> Result<()> {
 	Ok(())
 }
 
-#[cfg(all(target_os = "linux", not(any(target_arch = "x86_64", target_arch = "aarch64"))))]
+#[cfg(all(
+	target_os = "linux",
+	not(any(target_arch = "x86_64", target_arch = "aarch64"))
+))]
 pub fn tighten_after_read() -> Result<()> {
 	anyhow::bail!("Linux REA worker architecture has no qualified seccomp filter");
 }
@@ -104,8 +136,7 @@ pub fn tighten_after_read() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 pub fn verify_file_network_denial() -> Result<()> {
-	let file = std::fs::File::open("/etc/passwd")
-		.expect_err("REA seccomp must refuse file opens");
+	let file = std::fs::File::open("/etc/passwd").expect_err("REA seccomp must refuse file opens");
 	if file.raw_os_error() != Some(libc::EPERM) {
 		anyhow::bail!("REA file probe did not receive EPERM");
 	}
