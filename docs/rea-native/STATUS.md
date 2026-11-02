@@ -233,3 +233,17 @@ verified reusable content and private directory permissions established by
 the directory creation syscall itself. Qualification depends on an exact-head
 full CI pass; this exercises a single trusted Linux runner, not adversarial
 cross-UID state-directory ownership or real distributed storage.
+
+## Local Preview Store resource budget (partial P5)
+
+The trusted local store now serializes cooperating Unix controller writers via
+an exclusive directory `flock` before counting stored bytes and records.
+A default budget of 2,048 published previews or 256 MiB of all store-file
+sizes (including abandoned temporary files) rejects new unique identifiers
+when exceeded, while allowing authenticated reuse of an existing ID.
+Corrupt/non-regular entries fail closed; sparse abandoned-file and small-count
+fixtures exercise the quota boundary. This is **not** a full quota system:
+same-UID malicious writers can bypass the cooperative flock, inode/directory
+usage, remote hosts, audit log growth and per-client fairness are not accounted.
+Production adoption remains NO-GO until host-level storage responsibility and
+multi-tenant policy are qualified.

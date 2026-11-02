@@ -44,6 +44,8 @@ const RECORD_VERSION: &str = "hepta.rea.preview.v1";
 const ID_PREFIX: &str = "hepta_rea_preview_v1_";
 const MAX_RECORD_BYTES: usize = 512 * 1024;
 const MAX_ENVELOPE_BYTES: u64 = 1024 * 1024;
+const MAX_STORED_RECORDS: usize = 2048;
+const MAX_STORED_BYTES: u64 = 256 * 1024 * 1024;
 static STAGING_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
@@ -294,6 +296,85 @@ fn publish_exclusive(root: &Path, id: &str, encoded: &[u8]) -> Result<bool> {
 	}
 }
 
+/// Count both published records and abandoned temporary bytes. The upper bound
+/// is local protection against unbounded *cooperating* MCP retention calls;
+/// an external process with the same UID can bypass this policy. Requires the
+/// caller to hold the cross-process store directory flock.
+fn enforce_quota(
+	root: &Path,
+	candidate_bytes: u64,
+	max_records: usize,
+	max_total_bytes: u64,
+) -> Result<()> {
+	let mut records = 0usize;
+	let mut occupied = 0u64;
+	for entry in std::fs::read_dir(root).context("cannot enumerate REA preview store")? {
+		let entry = entry?;
+		let metadata = std::fs::symlink_metadata(entry.path())
+			.context("cannot inspect REA preview store member")?;
+		if !metadata.is_file() || metadata.file_type().is_symlink() {
+			bail!("REA preview store contains an unsafe non-file or symbolic link");
+		}
+		occupied = occupied
+			.checked_add(metadata.len())
+			.ok_or_else(|| anyhow!("REA preview stored-byte accounting overflow"))?;
+		if entry.path().extension().is_some_and(|ext| ext == "json") {
+			records += 1;
+		}
+		if occupied > max_total_bytes {
+			bail!("REA preview store exceeds total durable byte budget");
+		}
+	}
+	if records >= max_records {
+		bail!("REA preview store exceeds retained record count budget");
+	}
+	if occupied
+		.checked_add(candidate_bytes)
+		.is_none_or(|size| size > max_total_bytes)
+	{
+		bail!("REA preview store exceeds total durable byte budget");
+	}
+	Ok(())
+}
+
+/// Serialize all cooperating writers, including concurrent controller
+/// processes sharing one trusted local store, before quota accounting and
+/// immutable publication. A preexisting identity can be reused at capacity.
+fn publish_budgeted(root: &Path, id: &str, encoded: &[u8]) -> Result<bool> {
+	#[cfg(not(unix))]
+	{
+		let _ = (root, id, encoded);
+		bail!("REA preview durable quota locking requires Unix flock");
+	}
+	#[cfg(unix)]
+	{
+		use std::os::fd::AsRawFd;
+		let dir = std::fs::File::open(root).context("cannot lock REA preview store")?;
+		if unsafe { libc::flock(dir.as_raw_fd(), libc::LOCK_EX) } != 0 {
+			return Err(std::io::Error::last_os_error())
+				.context("cannot acquire exclusive REA preview store quota lock");
+		}
+		let path = filename(root, id)?;
+		match std::fs::symlink_metadata(path) {
+			Ok(metadata) => {
+				if metadata.is_file() && !metadata.file_type().is_symlink() {
+					return Ok(true);
+				}
+				bail!("REA preview store identity resolves to unsafe file type");
+			}
+			Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+			Err(error) => return Err(error).context("cannot inspect existing preview identity"),
+		}
+		enforce_quota(
+			root,
+			encoded.len() as u64,
+			MAX_STORED_RECORDS,
+			MAX_STORED_BYTES,
+		)?;
+		publish_exclusive(root, id, encoded)
+	}
+}
+
 /// Publish a worker-created partial preview by content identity, or return a
 /// verified prior record. Never overwrite an existing ID on conflict.
 pub async fn retain_record(record: &Value, state_dir: &Path) -> Result<Value> {
@@ -303,7 +384,7 @@ pub async fn retain_record(record: &Value, state_dir: &Path) -> Result<Value> {
 	let target_id = id.clone();
 	let reused = tokio::task::spawn_blocking(move || {
 		let root = prepare_root(&target_state)?;
-		publish_exclusive(&root, &target_id, &bytes)
+		publish_budgeted(&root, &target_id, &bytes)
 	})
 	.await
 	.context("REA preview durable publish task failed")??;
