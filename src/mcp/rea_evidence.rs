@@ -236,9 +236,83 @@ fn subject(v: &Value) -> Result<Value> {
 	if path.contains('\0') {
 		bail!("local_path contains NUL");
 	}
-	nonempty(field(s, "format")?, "subject.format")?;
-	if !field(s, "architecture")?.is_null() {
-		nonempty(field(s, "architecture")?, "subject.architecture")?;
+	// Exact format and architecture declaration in the frozen upstream
+	// evidenceSubject.ts / binaryTargetTypes.ts (not an inference from a
+	// format-header preview). Unknown formats are not silently accepted.
+	let format = nonempty(field(s, "format")?, "subject.format")?;
+	if !matches!(
+		format,
+		"hopper"
+			| "analysis-database"
+			| "mach-o"
+			| "elf"
+			| "pe"
+			| "dos-mz"
+			| "dos-com"
+			| "raw-binary"
+			| "gamecube-dol"
+			| "zip"
+			| "ipa"
+			| "apk"
+			| "msix"
+			| "appx"
+			| "hap"
+			| "hsp"
+			| "app-pack"
+			| "asar"
+			| "ines"
+			| "godot-pck"
+			| "unityfs"
+			| "uimage"
+			| "dmg"
+			| "pkg"
+			| "plist"
+			| "javascript"
+			| "source-map"
+			| "directory"
+			| "file"
+			| "unknown"
+			| "mach-o-universal"
+			| "javascript-bundle"
+			| "entitlements"
+			| "pyinstaller"
+			| "node-sea"
+			| "dotnet-bundle"
+			| "bun-standalone"
+			| "intel-hex"
+			| "srec"
+			| "esp-image"
+			| "uf2"
+			| "dfuse"
+			| "esp-flash-image"
+			| "fit"
+	) {
+		bail!("unsupported REA evidence subject format");
+	}
+	let declared_arch = field(s, "architecture")?;
+	if format == "gamecube-dol" {
+		if declared_arch.as_str() != Some("powerpc") {
+			bail!("gamecube-dol Evidence subject must use powerpc");
+		}
+	} else if !declared_arch.is_null() {
+		let architecture = nonempty(declared_arch, "subject.architecture")?;
+		if !matches!(
+			architecture,
+			"x86"
+				| "x86_64"
+				| "arm"
+				| "arm64"
+				| "arm64_32"
+				| "mips"
+				| "6502"
+				| "riscv"
+				| "powerpc"
+				| "m68k"
+				| "hexagon"
+		) || (format != "raw-binary" && matches!(architecture, "6502" | "m68k"))
+		{
+			bail!("unsupported REA evidence subject architecture for format");
+		}
 	}
 	let digest = obj(field(s, "digest")?, "subject.digest")?;
 	exact_fields(digest, &["sha256"], &[])?;
@@ -260,6 +334,11 @@ fn profile(v: &Value, owner: &Value) -> Result<()> {
 	let p = obj(v, "analysis_profile")?;
 	exact_fields(p, &["provider", "parameters", "digest"], &[])?;
 	provider(field(p, "provider")?)?;
+	// REA analysisProfile.ts uses committedProviderSchema, whose version is
+	// non-null and non-empty even though ordinary Evidence providers may
+	// legitimately report an unknown/null version.
+	let profile_provider = obj(field(p, "provider")?, "profile provider")?;
+	nonempty(field(profile_provider, "version")?, "profile.provider.version")?;
 	if field(p, "provider")? != owner {
 		bail!("analysis_profile provider does not match Evidence provider");
 	}
