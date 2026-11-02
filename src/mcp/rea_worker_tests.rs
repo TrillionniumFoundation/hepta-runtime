@@ -156,3 +156,29 @@ fn controller_owns_display_path_worker_never_receives_it_in_argv() {
 	let mut missing = serde_json::json!({"record_format":"hepta.rea.preview.v1"});
 	assert!(rebind_worker_path(&mut missing, original).is_err());
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn child_sends_large_stdout_before_consuming_large_stdin_without_deadlock() {
+	// Both pipe directions exceed ordinary pipe buffers, but the output stays
+	// below the explicit 256 KiB cap; a write-then-read strategy deadlocks.
+	let mut child = Command::new("sh");
+	child
+		.arg("-c")
+		.arg("dd if=/dev/zero bs=1024 count=200 2>/dev/null; cat >/dev/null")
+		.stdin(Stdio::piped())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.kill_on_drop(true);
+	let mut child = child.spawn().expect("launch duplex child");
+	let (stdout, stderr, status) = tokio::time::timeout(
+		Duration::from_secs(5),
+		collect_child_output(&mut child, vec![7u8; 512 * 1024]),
+	)
+	.await
+	.expect("full-duplex capture must not stall")
+	.expect("full-duplex child success");
+	assert!(status.success());
+	assert_eq!(stdout.len(), 200 * 1024);
+	assert!(stderr.is_empty());
+}

@@ -279,3 +279,7 @@ its original path only after receiving a report with the expected placeholder,
 then verifies digest, byte count and native semantic ID. Worker process
 command-line inspection no longer discloses arbitrary caller-selected paths.
 This does not hide input bytes from the worker or establish tenant isolation.
+
+The full-duplex regression also launches an actual process that writes 200 KiB
+of stdout **before** consuming 512 KiB of stdin. This passes only when the
+controller polls both pipes simultaneously, avoiding writer/reader deadlock.
