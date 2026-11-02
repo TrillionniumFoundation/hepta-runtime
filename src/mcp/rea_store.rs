@@ -428,8 +428,8 @@ pub async fn read_record(id: &str, state_dir: &Path) -> Result<Value> {
 		.context("REA preview directory validation task failed")??;
 	let check = path.clone();
 	tokio::task::spawn_blocking(move || {
-		let metadata = std::fs::symlink_metadata(&check)
-			.context("REA preview record unavailable")?;
+		let metadata =
+			std::fs::symlink_metadata(&check).context("REA preview record unavailable")?;
 		if !metadata.is_file() || metadata.file_type().is_symlink() {
 			bail!("REA preview record is not a regular file");
 		}
