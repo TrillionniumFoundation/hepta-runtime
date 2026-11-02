@@ -53,4 +53,14 @@ pub enum Commands {
 		#[arg(long, value_name = "FILE")]
 		auth_token_file: Option<PathBuf>,
 	},
+	/// Internal, stdin-only REA analysis worker. Does not open any artifact path.
+	#[command(hide = true)]
+	ReaWorker {
+		/// Display-only path; bytes are provided on stdin, not read by this worker.
+		#[arg(long)]
+		selected_path: String,
+		/// Internal test proving syscall denials after worker input admission.
+		#[arg(long, hide = true)]
+		sandbox_probe: bool,
+	},
 }

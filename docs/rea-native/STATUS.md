@@ -158,3 +158,43 @@ A fixed-seed mutation matrix probes eight binary/model signatures over
 and no complete-coverage promotion. Extreme safetensors header lengths are
 negative probes. This is a bounded regression, **not** continuous libFuzzer
 coverage nor independent unknown-generator qualification.
+
+## Isolated Rust artifact parser (experimental)
+
+The production `rea_inspect_artifact` handler reads admitted bytes using the
+workspace-confined descriptor API and passes them over stdin to the same
+shipped Rust binary in hidden `rea-worker` mode. The worker opens no artifact
+paths, receives no controller runtime environment, has a 32 MiB read limit,
+256 KiB response limit and 20-second controller deadline. On Unix it installs
+CPU, address-space, file-descriptor, core-dump and output-size rlimits before
+parsing. The Rust process boundary contains `panic = abort` failures.
+
+Worker UID and network namespace remain inherited. Linux post-read syscall
+denials are not a complete filesystem or credential sandbox; macOS has
+resource limits only. Third-party provider execution remains unqualified. Worker
+process startup and failure are exercised through a real compiled binary in
+`tests/rea_worker.rs`; unit-only MCP smoke bypasses the process boundary under
+`cfg(test)` and does not qualify the shipped MCP-to-worker E2E path.
+
+### Linux post-read syscall restrictions
+
+Linux x86_64/AArch64 workers now install no_new_privs plus a
+process-thread-synchronized seccomp-BPF denylist *after* bounded stdin
+receipt and *before* parsing. The filter returns EPERM for file opens,
+socket creation/network sends, exec/fork/clone, ptrace, io_uring and
+related operations. An actual compiled-binary test probes denied file
+and network syscalls. If seccomp is unsupported or a Linux architecture
+is not qualified, the worker refuses parsing. This is defense in depth
+only: it does not establish a complete filesystem/namespace/credential
+sandbox or third-party provider isolation. macOS remains rlimit-only.
+
+### Full external MCP-to-worker smoke (in CI)
+
+The separate `tests/rea_mcp_external.rs` integration executable launches
+the shipped `hepta-runtime mcp --runtime-config` as a real child process,
+uses newline-delimited MCP JSON-RPC, verifies that policy-gated REA tools
+appear while `shell` is hidden, and exercises allowed WASM, denied
+out-of-root files and malformed ELF. It then cold-restarts the controller
+and repeats the workflow. The production handler thereby exercises the
+isolated Rust worker, unlike the in-process unit MCP smoke. This remains
+local-host E2E, not remote multi-host recovery or full REA parity.

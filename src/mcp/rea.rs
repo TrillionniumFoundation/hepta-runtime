@@ -24,7 +24,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(test)]
+use std::path::PathBuf;
 
 use super::runtime::runtime_config;
 
@@ -462,7 +464,7 @@ fn parse(data: &[u8]) -> Result<HeaderInfo> {
 
 /// Deterministic native preview with an explicitly NON-REA evidence identity.
 /// The selected path is returned but is not hashed into the preview identifier.
-fn inspect_bytes(data: &[u8], selected_path: &str) -> Result<Value> {
+pub(crate) fn inspect_bytes(data: &[u8], selected_path: &str) -> Result<Value> {
 	let header = parse(data)?;
 	let file_digest = sha256_hex(data);
 	let normalized = json!({
@@ -494,6 +496,7 @@ fn inspect_bytes(data: &[u8], selected_path: &str) -> Result<Value> {
 }
 
 /// Read a root-confined snapshot by descriptor, then inspect the exact captured bytes.
+#[cfg(test)]
 async fn inspect_with_roots(path: &Path, roots: &[PathBuf]) -> Result<Value> {
 	let data = super::rea_files::read_bounded(path, roots, MAX_FILE_BYTES).await?;
 	inspect_bytes(&data, &path.to_string_lossy())
@@ -501,7 +504,12 @@ async fn inspect_with_roots(path: &Path, roots: &[PathBuf]) -> Result<Value> {
 
 pub async fn inspect_artifact(params: InspectArtifactParams) -> Result<String> {
 	let roots = &runtime_config()?.controller_workspace_roots;
-	let report = inspect_with_roots(Path::new(&params.path), roots).await?;
+	let data =
+		super::rea_files::read_bounded(Path::new(&params.path), roots, MAX_FILE_BYTES).await?;
+	#[cfg(test)]
+	let report = inspect_bytes(&data, &params.path)?;
+	#[cfg(not(test))]
+	let report = super::rea_worker::inspect_isolated(data, &params.path).await?;
 	Ok(serde_json::to_string(&report)?)
 }
 
