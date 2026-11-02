@@ -283,3 +283,9 @@ This does not hide input bytes from the worker or establish tenant isolation.
 The full-duplex regression also launches an actual process that writes 200 KiB
 of stdout **before** consuming 512 KiB of stdin. This passes only when the
 controller polls both pipes simultaneously, avoiding writer/reader deadlock.
+
+The same capture path now uses an explicit deadline wrapper that kills and
+reaps the process on timeout, rather than depending solely on asynchronous
+kill-on-drop. A real sleeping subprocess regression checks the deadline and
+reaping behavior. This qualifies the LOCAL child deadline path only, not
+remote provider cancellation or multi-host orphan recovery.

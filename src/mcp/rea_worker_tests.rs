@@ -182,3 +182,26 @@ async fn child_sends_large_stdout_before_consuming_large_stdin_without_deadlock(
 	assert_eq!(stdout.len(), 200 * 1024);
 	assert!(stderr.is_empty());
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn deadline_expiration_explicitly_kills_and_reaps_worker() {
+	let mut child = Command::new("sh");
+	child
+		.arg("-c")
+		.arg("exec sleep 30")
+		.stdin(Stdio::piped())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.kill_on_drop(true);
+	let mut child = child.spawn().expect("launch idle test child");
+	let error = collect_with_deadline(
+		&mut child,
+		Vec::new(),
+		Duration::from_millis(50),
+	)
+	.await
+	.expect_err("idle worker must time out");
+	assert!(error.to_string().contains("wall-clock deadline"));
+	assert!(child.try_wait().expect("poll child after kill").is_some());
+}

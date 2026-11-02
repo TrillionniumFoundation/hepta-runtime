@@ -168,6 +168,22 @@ async fn collect_child_output(
 	}
 }
 
+/// Explicitly reap an expired parser, rather than depending on kill-on-drop
+/// alone. The latter signals the process but may leave its reaping asynchronous.
+async fn collect_with_deadline(
+	child: &mut tokio::process::Child,
+	input: Vec<u8>,
+	deadline: Duration,
+) -> Result<(Vec<u8>, Vec<u8>, std::process::ExitStatus)> {
+	match tokio::time::timeout(deadline, collect_child_output(child, input)).await {
+		Ok(result) => result,
+		Err(_) => {
+			let _ = child.kill().await;
+			bail!("Rust REA worker exceeded {} ms wall-clock deadline", deadline.as_millis());
+		}
+	}
+}
+
 /// The worker receives a placeholder in argv; only the controller that
 /// admitted the bytes rebinds the genuine selected path. The native semantic
 /// ID deliberately excludes this display-only path.
@@ -278,24 +294,20 @@ pub async fn inspect_isolated(input: Vec<u8>, selected_path: &str) -> Result<Val
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
 		.kill_on_drop(true);
-	let run = async move {
-		let mut child = command
-			.spawn()
-			.context("failed to spawn bounded Rust REA worker")?;
-		let (stdout, stderr, status) = collect_child_output(&mut child, input).await?;
-		if !status.success() {
-			let diagnostic = String::from_utf8_lossy(&stderr);
-			bail!("Rust REA worker failed ({}): {}", status, diagnostic.trim());
-		}
-		let mut record: Value =
-			serde_json::from_slice(&stdout).context("Rust REA worker output is not JSON")?;
-		rebind_worker_path(&mut record, &selected_path)?;
-		verify_worker_report(&record, &input_digest, input_size, &selected_path)?;
-		Ok::<_, anyhow::Error>(record)
-	};
-	tokio::time::timeout(WORKER_DEADLINE, run)
-		.await
-		.context("Rust REA worker exceeded 20-second wall-clock deadline")?
+	let mut child = command
+		.spawn()
+		.context("failed to spawn bounded Rust REA worker")?;
+	let (stdout, stderr, status) =
+		collect_with_deadline(&mut child, input, WORKER_DEADLINE).await?;
+	if !status.success() {
+		let diagnostic = String::from_utf8_lossy(&stderr);
+		bail!("Rust REA worker failed ({}): {}", status, diagnostic.trim());
+	}
+	let mut record: Value =
+		serde_json::from_slice(&stdout).context("Rust REA worker output is not JSON")?;
+	rebind_worker_path(&mut record, &selected_path)?;
+	verify_worker_report(&record, &input_digest, input_size, &selected_path)?;
+	Ok(record)
 }
 
 #[cfg(test)]
