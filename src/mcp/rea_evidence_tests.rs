@@ -151,11 +151,17 @@ fn real_npm_reference_evidence_matches_native_subset_identity() {
 #[test]
 fn upstream_subject_format_architecture_discriminant_is_strict() {
 	let base = reference_record()["subject"].clone();
-	assert!(subject(&base).is_ok(), "record fixture is a valid ELF subject");
+	assert!(
+		subject(&base).is_ok(),
+		"record fixture is a valid ELF subject"
+	);
 
 	let mut bad = base.clone();
 	bad["format"] = json!("nonsense-file-format");
-	assert!(subject(&bad).is_err(), "unknown formats must not become valid Evidence");
+	assert!(
+		subject(&bad).is_err(),
+		"unknown formats must not become valid Evidence"
+	);
 
 	let mut bad = base.clone();
 	bad["architecture"] = json!("not-a-real-isa");
@@ -163,12 +169,18 @@ fn upstream_subject_format_architecture_discriminant_is_strict() {
 
 	let mut bad = base.clone();
 	bad["architecture"] = json!("6502");
-	assert!(subject(&bad).is_err(), "detected ELF cannot claim raw-only CPU");
+	assert!(
+		subject(&bad).is_err(),
+		"detected ELF cannot claim raw-only CPU"
+	);
 
 	let mut raw = base.clone();
 	raw["format"] = json!("raw-binary");
 	raw["architecture"] = json!("6502");
-	assert!(subject(&raw).is_ok(), "explicit raw-binary can use raw-only CPU");
+	assert!(
+		subject(&raw).is_ok(),
+		"explicit raw-binary can use raw-only CPU"
+	);
 
 	let mut dol = base.clone();
 	dol["format"] = json!("gamecube-dol");
@@ -191,5 +203,8 @@ fn committed_profile_refuses_unknown_version_even_with_matching_evidence_provide
 	});
 	let error = profile(&profile_record, &profile_record["provider"])
 		.expect_err("noncommitted profile provider rejected");
-	assert!(error.to_string().contains("profile.provider.version"), "{error}");
+	assert!(
+		error.to_string().contains("profile.provider.version"),
+		"{error}"
+	);
 }
