@@ -38,7 +38,7 @@ const child = spawn(process.execPath, [join(packageRoot, "scripts", "rea.mjs"), 
   env: {
     ...process.env,
     REA_MCP_INPUT_SCHEMA_PROFILE: "compact",
-    REA_MCP_OUTPUT_SCHEMA_PROFILE: "compact",
+    REA_MCP_OUTPUT_SCHEMA_PROFILE: "full",
   },
   stdio: ["pipe", "pipe", "pipe"],
 });
@@ -132,17 +132,17 @@ try {
     packageVersion: manifest.version,
     mcpServerName: initialized.serverInfo?.name ?? null,
     negotiatedProtocol: initialized.protocolVersion ?? null,
-    schemaProfile: { input: "compact", output: "compact" },
+    schemaProfile: { input: "compact", output: "full" },
     toolCount: tools.length,
     catalogSha256: createHash("sha256").update(JSON.stringify(tools)).digest("hex"),
     toolNamesSha256: createHash("sha256").update(JSON.stringify(toolNames)).digest("hex"),
     limitations: [
-      "MCP contract snapshot is for compact input/output schema profiles only",
+      "MCP contract snapshot uses compact input and full output schemas",
       "The npm tarball has not been proven byte-equivalent to the Git source commit",
       "This does not exercise Ghidra/IDA/Hopper, browser or device providers",
     ],
   };
-  await writeFile(join(output, "REA_6_8_0_MCP_CATALOG.compact.json"), JSON.stringify(tools, null, 2) + "\n");
+  await writeFile(join(output, "REA_6_8_0_MCP_CATALOG.full-output.json"), JSON.stringify(tools, null, 2) + "\n");
   await writeFile(join(output, "REA_6_8_0_REFERENCE_MANIFEST.json"), JSON.stringify(manifestResult, null, 2) + "\n");
   result = manifestResult;
 } finally {
