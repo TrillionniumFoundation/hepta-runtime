@@ -45,6 +45,21 @@ fn ensure_unchanged(before: &std::fs::Metadata, after: &std::fs::Metadata) -> Re
 	Ok(())
 }
 
+/// A retained local preview must be read from a private, single-linked file.
+/// This is checked against the opened fd, not a mutable pathname before open.
+#[cfg(unix)]
+fn require_private_inode(meta: &std::fs::Metadata) -> Result<()> {
+	use std::os::unix::fs::MetadataExt;
+	if !meta.is_file()
+		|| meta.nlink() != 1
+		|| meta.uid() != unsafe { libc::geteuid() }
+		|| meta.mode() & 0o777 != 0o600
+	{
+		bail!("REA private preview inode must be owned, single-linked and mode 0600");
+	}
+	Ok(())
+}
+
 #[cfg(unix)]
 fn open_beneath_root(path: &Path, roots: &[PathBuf]) -> Result<std::fs::File> {
 	use std::ffi::CString;
@@ -135,6 +150,27 @@ fn open_beneath_root(_path: &Path, _roots: &[PathBuf]) -> Result<std::fs::File> 
 /// A privileged writer restoring metadata or racing the snapshots remains an
 /// explicit open limitation; the returned hash binds only the captured bytes.
 pub async fn read_bounded(path: &Path, roots: &[PathBuf], max_bytes: u64) -> Result<Vec<u8>> {
+	read_bounded_impl(path, roots, max_bytes, false).await
+}
+
+/// Read an exclusively owned private local preview from a single descriptor.
+/// A pre-open path check is insufficient: an attacker could swap in a
+/// hard-linked replacement before open. This does not prevent same-UID
+/// in-place tampering or provide cryptographic authentication.
+pub(super) async fn read_private_bounded(
+	path: &Path,
+	roots: &[PathBuf],
+	max_bytes: u64,
+) -> Result<Vec<u8>> {
+	read_bounded_impl(path, roots, max_bytes, true).await
+}
+
+async fn read_bounded_impl(
+	path: &Path,
+	roots: &[PathBuf],
+	max_bytes: u64,
+	private: bool,
+) -> Result<Vec<u8>> {
 	if !path.is_absolute() {
 		bail!("REA native inspection requires an absolute local path");
 	}
@@ -148,6 +184,14 @@ pub async fn read_bounded(path: &Path, roots: &[PathBuf], max_bytes: u64) -> Res
 		let metadata = file.metadata()?;
 		if metadata.len() > max_bytes {
 			bail!("REA inspection file exceeds {max_bytes} byte limit");
+		}
+		#[cfg(unix)]
+		if private {
+			require_private_inode(&metadata)?;
+		}
+		#[cfg(not(unix))]
+		if private {
+			bail!("REA private preview reads require Unix fd ownership validation");
 		}
 		Ok::<_, anyhow::Error>((file, metadata))
 	})
@@ -164,7 +208,13 @@ pub async fn read_bounded(path: &Path, roots: &[PathBuf], max_bytes: u64) -> Res
 		bail!("REA inspection file exceeds {max_bytes} byte limit");
 	}
 	#[cfg(unix)]
-	ensure_unchanged(&before, &file.metadata().await?)?;
+	{
+		let after = file.metadata().await?;
+		ensure_unchanged(&before, &after)?;
+		if private {
+			require_private_inode(&after)?;
+		}
+	}
 	Ok(data)
 }
 
