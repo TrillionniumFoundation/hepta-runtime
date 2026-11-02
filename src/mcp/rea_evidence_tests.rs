@@ -147,3 +147,49 @@ fn real_npm_reference_evidence_matches_native_subset_identity() {
 		"display path excluded from semantic hash"
 	);
 }
+
+#[test]
+fn upstream_subject_format_architecture_discriminant_is_strict() {
+	let base = reference_record()["subject"].clone();
+	assert!(subject(&base).is_ok(), "record fixture is a valid ELF subject");
+
+	let mut bad = base.clone();
+	bad["format"] = json!("nonsense-file-format");
+	assert!(subject(&bad).is_err(), "unknown formats must not become valid Evidence");
+
+	let mut bad = base.clone();
+	bad["architecture"] = json!("not-a-real-isa");
+	assert!(subject(&bad).is_err(), "unregistered CPU family must fail");
+
+	let mut bad = base.clone();
+	bad["architecture"] = json!("6502");
+	assert!(subject(&bad).is_err(), "detected ELF cannot claim raw-only CPU");
+
+	let mut raw = base.clone();
+	raw["format"] = json!("raw-binary");
+	raw["architecture"] = json!("6502");
+	assert!(subject(&raw).is_ok(), "explicit raw-binary can use raw-only CPU");
+
+	let mut dol = base.clone();
+	dol["format"] = json!("gamecube-dol");
+	dol["architecture"] = Value::Null;
+	assert!(subject(&dol).is_err(), "DOL requires powerpc");
+	dol["architecture"] = json!("powerpc");
+	assert!(subject(&dol).is_ok());
+}
+
+#[test]
+fn committed_profile_refuses_unknown_version_even_with_matching_evidence_provider() {
+	let owner = json!({"id":"provider","name":"provider","version":null});
+	// Ordinary Evidence accepts an unknown provider version, but an analysis
+	// profile commits to a concrete, non-null version.
+	assert!(provider(&owner).is_ok());
+	let profile_record = json!({
+		"provider": owner,
+		"parameters": {},
+		"digest": "0000000000000000000000000000000000000000000000000000000000000000"
+	});
+	let error = profile(&profile_record, &profile_record["provider"])
+		.expect_err("noncommitted profile provider rejected");
+	assert!(error.to_string().contains("profile.provider.version"), "{error}");
+}
