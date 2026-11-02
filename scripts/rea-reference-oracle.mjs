@@ -122,6 +122,31 @@ try {
     cursor = response.nextCursor ?? response.next_cursor ?? undefined;
     if (++pages > 32) throw new Error("catalog exceeded 32 pages");
   } while (cursor);
+  // Preserve a genuine negative tools/call envelope. A relative path is
+  // invalid for the public inspect_rust_binary MCP contract. Do not
+  // reinterpret or collapse tool-vs-JSON-RPC error delivery.
+  let invalidPathResponse;
+  try {
+    const negative = await request("tools/call", {
+      name: "inspect_rust_binary",
+      arguments: { path: "rea-oracle-relative-path.must-be-refused" },
+    });
+    if (negative?.isError !== true) {
+      throw new Error("REA MCP accepted a relative input path unexpectedly");
+    }
+    invalidPathResponse = { delivery: "tool-result", raw: negative };
+  } catch (error) {
+    if (String(error).includes("accepted a relative input")) throw error;
+    invalidPathResponse = { delivery: "json-rpc-error", diagnostic: String(error) };
+  }
+  const negativeJson = JSON.stringify(invalidPathResponse);
+  if (negativeJson.length > 65536) {
+    throw new Error("REA MCP validation response exceeded bounded fixture size");
+  }
+  await writeFile(
+    join(output, "REA_6_8_0_INVALID_PATH_MCP_NEGATIVE.json"),
+    JSON.stringify(invalidPathResponse, null, 2) + "\n",
+  );
   const toolNames = tools.map((tool) => tool.name);
   if (tools.length < 50 || toolNames.some((name) => typeof name !== "string")) {
     throw new Error("suspicious REA MCP tool catalog");

@@ -145,3 +145,8 @@ advertised only in policy mode, invokes real read-only WASM inspection,
 rejects a file outside workspace roots and refuses malformed REA Evidence.
 This is a local mocked-host policy test; it does NOT prove remote Ghidra,
 actual host identities, cold recovery or the production security gate.
+
+The reference oracle now captures an actual invalid-relative-path MCP
+`tools/call` negative result (or protocol error, with delivery type preserved).
+This freezes one validation failure surface only; it does NOT close arbitrary
+typed error or cancellation contracts, all 229 tools, or security review.
