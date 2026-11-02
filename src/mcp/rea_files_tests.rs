@@ -108,3 +108,39 @@ async fn changed_open_inode_metadata_fails_closed_even_when_size_is_constant() {
 	let mode_changed = handle.metadata().expect("stat changed permissions");
 	assert!(ensure_unchanged(&after, &mode_changed).is_err());
 }
+
+#[tokio::test]
+#[cfg(unix)]
+async fn private_read_policy_is_bound_to_the_open_fd_not_an_earlier_path_stat() {
+	use std::os::unix::fs::PermissionsExt;
+	let state = tempfile::tempdir().expect("state");
+	let path = state.path().join("private.json");
+	let roots = vec![state.path().to_path_buf()];
+	std::fs::write(&path, b"sealed record").expect("create fixture");
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+		.expect("private mode");
+	assert_eq!(
+		read_private_bounded(&path, &roots, 256)
+			.await
+			.expect("read private inode"),
+		b"sealed record"
+	);
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644))
+		.expect("loosen permissions");
+	assert!(read_private_bounded(&path, &roots, 256).await.is_err());
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+		.expect("restore permissions");
+	let external = state.path().join("outside-link.json");
+	std::fs::hard_link(&path, &external).expect("external hardlink");
+	assert!(
+		read_private_bounded(&path, &roots, 256).await.is_err(),
+		"private policy must reject nlink > 1 on the actual opened inode"
+	);
+	assert_eq!(
+		read_bounded(&path, &roots, 256).await.expect("ordinary workspace read"),
+		b"sealed record",
+		"private policy must not silently restrict non-store workspace reads"
+	);
+	std::fs::remove_file(external).expect("unlink external");
+	assert!(read_private_bounded(&path, &roots, 256).await.is_ok());
+}
