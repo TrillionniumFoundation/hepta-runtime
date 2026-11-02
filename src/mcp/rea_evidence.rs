@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! REA 6.8.0 canonical Evidence ID verification for a deliberately limited
-//! JSON-safe-integer profile. This is not full upstream Zod schema validation.
+//! REA 6.8.0 semantic Evidence ID verification with bounded JSON and
+//! ECMAScript-style finite-number rendering. Full upstream Zod validation and
+//! exhaustive IEEE-754 equivalence remain unqualified.
 //! Source: morluto/rea 93b8b82d src/domain/evidence.ts and canonicalDigest.ts.
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -104,6 +105,91 @@ pub(super) fn parse_unique_json(data: &[u8]) -> Result<Value> {
 	Ok(record.0)
 }
 
+/// Render the shortest finite IEEE-754 value using ECMAScript JSON number
+/// notation: fixed for 1e-6 <= |x| < 1e21, otherwise lowercase exponent with
+/// explicit '+' for positive exponents, and normalize -0 to 0. Rust's float
+/// Display supplies the shortest round-trippable decimal digits. Independent
+/// npm REA Evidence vectors exercise boundary, fractional, and extreme cases.
+/// Full algorithmic equivalence for every f64 remains an adoption gate.
+fn canonical_js_number(source: &Number) -> Result<String> {
+	let number = source
+		.as_f64()
+		.ok_or_else(|| anyhow!("REA JSON number is not representable as f64"))?;
+	if !number.is_finite() {
+		bail!("REA JSON number is not finite");
+	}
+	if number == 0.0 {
+		return Ok("0".to_string());
+	}
+	let negative = number.is_sign_negative();
+	let shortest = number.abs().to_string();
+	let (mantissa, exponent) = if let Some(offset) = shortest.find(['e', 'E']) {
+		(
+			&shortest[..offset],
+			shortest[offset + 1..]
+				.parse::<i32>()
+				.context("invalid Rust shortest-float exponent")?,
+		)
+	} else {
+		(shortest.as_str(), 0)
+	};
+	let decimal = mantissa.find('.').unwrap_or(mantissa.len());
+	let mut digits = Vec::with_capacity(mantissa.len());
+	for ch in mantissa.bytes() {
+		if ch.is_ascii_digit() {
+			digits.push(ch);
+		} else if ch != b'.' {
+			bail!("invalid Rust shortest-float decimal");
+		}
+	}
+	let leading = digits.iter().take_while(|&&ch| ch == b'0').count();
+	let decimal_pos = decimal as i32 + exponent - leading as i32;
+	let mut digits = digits[leading..].to_vec();
+	while digits.last() == Some(&b'0') {
+		digits.pop();
+	}
+	if digits.is_empty() {
+		bail!("nonzero REA number has no decimal digits");
+	}
+	let exponent10 = decimal_pos - 1;
+	let digits = String::from_utf8(digits).context("non-ASCII digits")?;
+	let magnitude = if !(-6..21).contains(&exponent10) {
+		let (first, remainder) = digits.split_at(1);
+		let mantissa = if remainder.is_empty() {
+			first.to_string()
+		} else {
+			format!("{first}.{remainder}")
+		};
+		if exponent10 >= 0 {
+			format!("{mantissa}e+{exponent10}")
+		} else {
+			format!("{mantissa}e{exponent10}")
+		}
+	} else if decimal_pos <= 0 {
+		format!("0.{}{digits}", "0".repeat((-decimal_pos) as usize))
+	} else if decimal_pos as usize >= digits.len() {
+		format!("{digits}{}", "0".repeat(decimal_pos as usize - digits.len()))
+	} else {
+		let (whole, fractional) = digits.split_at(decimal_pos as usize);
+		format!("{whole}.{fractional}")
+	};
+	if negative {
+		Ok(format!("-{magnitude}"))
+	} else {
+		Ok(magnitude)
+	}
+}
+
+/// JSON schema z.int() accepts only finite JavaScript safe integers.
+fn json_safe_unsigned(v: &Value) -> bool {
+	v.as_f64().is_some_and(|number| {
+		number.is_finite()
+			&& number >= 0.0
+			&& number <= MAX_EXACT_JS_INT as f64
+			&& number.fract() == 0.0
+	})
+}
+
 fn canonical(value: &Value, out: &mut String, depth: usize) -> Result<()> {
 	if depth > 128 {
 		bail!("REA subset canonicalization depth exceeded");
@@ -113,21 +199,7 @@ fn canonical(value: &Value, out: &mut String, depth: usize) -> Result<()> {
 		Value::Bool(true) => out.push_str("true"),
 		Value::Bool(false) => out.push_str("false"),
 		Value::String(s) => out.push_str(&serde_json::to_string(s)?),
-		Value::Number(n) => {
-			if let Some(i) = n.as_i64() {
-				if i < -(MAX_EXACT_JS_INT as i64) {
-					bail!("REA numeric member exceeds exact JavaScript integer range");
-				}
-				write!(out, "{i}")?;
-			} else if let Some(u) = n.as_u64() {
-				if u > MAX_EXACT_JS_INT {
-					bail!("REA numeric member exceeds exact JavaScript integer range");
-				}
-				write!(out, "{u}")?;
-			} else {
-				bail!("fractional or exponent JSON number is not qualified by subset verifier");
-			}
-		}
+		Value::Number(n) => out.push_str(&canonical_js_number(n)?),
 		Value::Array(values) => {
 			out.push('[');
 			for (i, member) in values.iter().enumerate() {
@@ -467,14 +539,14 @@ fn verify_record(record: &Value) -> Result<Value> {
 			}
 			"file-offset" => {
 				exact_fields(item, &["kind", "offset"], &[])?;
-				if field(item, "offset")?.as_u64().is_none() {
+				if !json_safe_unsigned(field(item, "offset")?) {
 					bail!("bad file-offset");
 				}
 			}
 			"file-offset-range" => {
 				exact_fields(item, &["kind", "start", "end"], &[])?;
-				if field(item, "start")?.as_u64().is_none()
-					|| field(item, "end")?.as_u64().is_none()
+				if !json_safe_unsigned(field(item, "start")?)
+					|| !json_safe_unsigned(field(item, "end")?)
 				{
 					bail!("bad file range");
 				}
@@ -535,11 +607,11 @@ fn verify_record(record: &Value) -> Result<Value> {
 		"status":"subset_digest_verified",
 		"evidence_id":expected,
 		"rea_full_schema_qualified":false,
-		"numeric_profile":"safe_integer_only",
+		"numeric_profile":"finite_ieee754_reference_vectors",
 		"upstream_source":"morluto/rea@93b8b82db70279e40f484114cff9dc1958dc14ee",
 		"limitations":[
-			"Digest matches REA canonical semantic projection for safe-integer JSON subset only",
-			"Full upstream Zod schema and fractional-number canonicalization are not qualified",
+			"Digest uses finite IEEE-754 canonical numeric projection; accepted upstream vector families are exercised in independent npm differential CI",
+			"Full upstream Zod, all 2^64 float bit patterns and complete typed Evidence variants remain unqualified",
 			"A matching hash does not prove provider truth or artifact authenticity"
 		]
 	}))
