@@ -88,7 +88,9 @@ async fn changed_open_inode_metadata_fails_closed_even_when_size_is_constant() {
 	let before = handle.metadata().expect("stat admitted inode");
 	std::thread::sleep(std::time::Duration::from_millis(30));
 	handle.seek(SeekFrom::Start(0)).expect("seek");
-	handle.write_all(b"CHANGED!!").expect("same-size in-place edit");
+	handle
+		.write_all(b"CHANGED!!")
+		.expect("same-size in-place edit");
 	handle.sync_all().expect("commit change");
 	let after = handle.metadata().expect("stat changed same inode");
 	assert_eq!(before.len(), after.len());
