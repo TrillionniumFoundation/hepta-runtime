@@ -136,3 +136,12 @@ The full-input/off-output catalog hash is
 `1f37341b9b409b5f98ee3f69f7b81fff2306e5677bb863c2fa0fc92cb76d2eaf`;
 compact-input/full-output hash remains `6d635f60ca666ef15ada8cae73b16e77c4d1ec3a8397aaa877b87b06605a845a`.
 The shared 229-name digest is `d3da3dcd88936744d1c08f5d985625e6ee7ecc376581530e876c093f3b20f48c`.
+
+## Synthetic policy-enabled MCP acceptance
+
+CI adds an isolated test-process MCP client/server transport that enables a
+synthetic non-privileged runtime config, proves the native REA tools are
+advertised only in policy mode, invokes real read-only WASM inspection,
+rejects a file outside workspace roots and refuses malformed REA Evidence.
+This is a local mocked-host policy test; it does NOT prove remote Ghidra,
+actual host identities, cold recovery or the production security gate.

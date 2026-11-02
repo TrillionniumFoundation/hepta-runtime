@@ -588,6 +588,68 @@ async fn call_runtime_tool_text(
 	(result.is_error == Some(true), text)
 }
 
+/// A real in-process MCP client must discover and invoke the gated Rust REA
+/// tools with policy, not just call their parser functions. Run separately
+/// because runtime initialization is process-global and other tests assume
+/// upstream compatibility mode before --runtime-config is installed.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "run as a single filtered CI test with an ephemeral synthetic runtime policy"]
+#[serial_test::serial]
+async fn rea_runtime_mcp_smoke() {
+	let root = tempfile::tempdir().expect("test root");
+	let workspace = root.path().join("workspace");
+	tokio::fs::create_dir_all(&workspace).await.expect("create workspace");
+	let sample = workspace.join("sample.wasm");
+	tokio::fs::write(&sample, b"\0asm\x01\0\0\0")
+		.await
+		.expect("write sample");
+	let outside = root.path().join("outside.wasm");
+	tokio::fs::write(&outside, b"\0asm\x01\0\0\0")
+		.await
+		.expect("write outside");
+	let config: crate::mcp::runtime::RuntimeConfig = serde_json::from_value(json!({
+		"state_dir": root.path().join("state"),
+		"controller_workspace_roots": [workspace],
+		"hosts": {
+			"ci-disabled": {
+				"ssh_target": "never-connect-ci",
+				"remote_state_dir": root.path().join("host-state"),
+				"allow_execute": false,
+				"allow_pty": false,
+				"allow_write": false
+			}
+		}
+	})).expect("synthetic policy");
+	crate::mcp::runtime::init_runtime(config).expect("single-test runtime");
+	let (client, _server_task, _) = connect().await;
+	let tools = client.list_tools(None).await.expect("list policy-gated tools");
+	assert!(tools.tools.iter().any(|t| t.name == "rea_inspect_artifact"));
+	assert!(tools.tools.iter().any(|t| t.name == "rea_verify_evidence"));
+	assert!(!tools.tools.iter().any(|t| t.name == "shell"));
+
+	let (failed, response) = call_runtime_tool_text(
+		&client, "rea_inspect_artifact", json!({"path": sample}),
+	).await;
+	assert!(!failed, "REA MCP positive: {response}");
+	let report: serde_json::Value = serde_json::from_str(&response).expect("REA report");
+	assert_eq!(report["normalized_result"]["format"], "wasm");
+	assert_eq!(report["coverage"]["status"], "partial");
+	assert_eq!(report["rea_evidence_compatible"], false);
+
+	let (failed, result) = call_runtime_tool_text(
+		&client, "rea_inspect_artifact", json!({"path": outside}),
+	).await;
+	assert!(failed, "REA MCP outside root must fail: {result}");
+
+	let invalid_evidence = root.path().join("workspace").join("invalid-evidence.json");
+	tokio::fs::write(&invalid_evidence, br#"{"evidence_id":"wrong"}"#)
+		.await.expect("invalid evidence");
+	let (failed, result) = call_runtime_tool_text(
+		&client, "rea_verify_evidence", json!({"path": invalid_evidence}),
+	).await;
+	assert!(failed, "REA MCP invalid Evidence must fail: {result}");
+}
+
 /// Destructive remote integration test. It is ignored by default and must run
 /// under the dedicated controller identity with a reviewed runtime config.
 #[tokio::test(flavor = "multi_thread")]

@@ -47,5 +47,8 @@ jobs:
       - name: Test
         run: cargo test --locked --all-targets
 
+      - name: Policy-gated native REA MCP integration (isolated test process)
+        run: cargo test --locked --all-targets rea_runtime_mcp_smoke -- --ignored
+
       - name: Release build
         run: cargo build --locked --release
