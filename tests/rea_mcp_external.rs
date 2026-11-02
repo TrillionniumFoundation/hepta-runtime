@@ -210,6 +210,11 @@ fn external_mcp_policy_worker_and_controller_restart() {
 		let id = retained_id
 			.as_deref()
 			.expect("retained ID from first controller");
+		let unavailable = workspace.join("temporarily-unavailable.wasm");
+		if iteration == 1 {
+			std::fs::rename(&good, &unavailable).expect("remove source before cold replay");
+			assert!(!good.exists(), "source must be absent during cold replay");
+		}
 		let restored = mcp.request(
 			7,
 			"tools/call",
@@ -220,6 +225,9 @@ fn external_mcp_policy_worker_and_controller_restart() {
 		assert_eq!(replay["native_evidence_id"], id);
 		assert_eq!(replay["record"]["normalized_result"]["format"], "wasm");
 		assert_eq!(replay["record"]["rea_evidence_compatible"], false);
+		if iteration == 1 {
+			std::fs::rename(&unavailable, &good).expect("restore source after offline replay");
+		}
 		let denied_lookup = mcp.request(
 			8,
 			"tools/call",

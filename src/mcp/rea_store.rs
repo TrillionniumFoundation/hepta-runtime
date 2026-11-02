@@ -33,6 +33,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::rea;
 use super::rea_files;
@@ -198,7 +199,18 @@ fn make_envelope(record: &Value) -> Result<Vec<u8>> {
 }
 
 fn verify_envelope(data: &[u8], requested_id: &str) -> Result<Value> {
-	let parsed: Value = serde_json::from_slice(data).context("corrupt native preview envelope")?;
+	let parsed: Value =
+		super::rea_evidence::parse_unique_json(data).context("corrupt native preview envelope")?;
+	let map = parsed
+		.as_object()
+		.ok_or_else(|| anyhow!("native preview envelope must be an object"))?;
+	if map.len() != 3
+		|| !map.contains_key("store_format")
+		|| !map.contains_key("record_sha256")
+		|| !map.contains_key("record")
+	{
+		bail!("unexpected native preview durable envelope members");
+	}
 	if parsed["store_format"] != STORE_SCHEMA {
 		bail!("unsupported native preview store version");
 	}
@@ -242,7 +254,16 @@ impl Drop for StagingFile {
 fn publish_exclusive(root: &Path, id: &str, encoded: &[u8]) -> Result<bool> {
 	let dest = filename(root, id)?;
 	let sequence = STAGING_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-	let tmp = root.join(format!(".{:x}-{:x}.tmp", std::process::id(), sequence));
+	let nanos = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.context("system clock predates epoch")?
+		.as_nanos();
+	let tmp = root.join(format!(
+		".{:x}-{:x}-{:x}.tmp",
+		std::process::id(),
+		nanos,
+		sequence
+	));
 	let mut opts = OpenOptions::new();
 	opts.write(true).create_new(true);
 	#[cfg(unix)]

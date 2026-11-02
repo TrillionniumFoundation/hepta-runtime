@@ -172,3 +172,19 @@ async fn symlinked_or_world_readable_store_directory_is_refused() {
 		.await
 		.is_err());
 }
+
+#[test]
+fn durable_envelope_rejects_duplicate_json_and_unknown_members() {
+	let record = sample("/controlled/original");
+	let id = record["native_evidence_id"].as_str().expect("id");
+	let envelope = make_envelope(&record).expect("sealed envelope");
+	assert!(verify_envelope(&envelope, id).is_ok());
+	let original = "\"store_format\":\"hepta.rea.preview-store.v1\"";
+	let text = String::from_utf8(envelope).expect("utf-8 JSON");
+	assert!(text.contains(original));
+	let duplicate = text.replacen(original, &format!("{original},{original}"), 1);
+	assert!(verify_envelope(duplicate.as_bytes(), id).is_err());
+	let mut unexpected: Value = serde_json::from_str(&text).expect("object");
+	unexpected["extra"] = json!(true);
+	assert!(verify_envelope(&serde_json::to_vec(&unexpected).expect("json"), id).is_err());
+}

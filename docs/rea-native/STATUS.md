@@ -215,3 +215,11 @@ source artifact. **Not REA original Evidence, not a tamper-proof signed log.**
 Trusted state directory ownership, total disk quotas, hostile inode mutation,
 full remote signed worker, policy reconciliation and production OS isolation
 remain OPEN. Do not promote P5 based only on local-state durability.
+
+The retained-record readback now uses the shared duplicate-key-rejecting
+JSON parser and refuses unknown envelope fields. Atomic staging filenames
+include a high-resolution timestamp, PID and per-process sequence. The real
+shipped MCP controller restart test temporarily removes the original artifact
+before restoring retained Evidence, proving the read path does not reopen the
+source. All validations are local host only; original REA Evidence semantics,
+cross-host replay and tamper-resistant signing remain unqualified.
