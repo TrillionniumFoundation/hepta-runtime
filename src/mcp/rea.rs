@@ -258,8 +258,8 @@ fn safetensors_bits(dtype: &str) -> Option<u64> {
 	match dtype {
 		"F4" => Some(4),
 		"F6_E2M3" | "F6_E3M2" => Some(6),
-		"BOOL" | "I8" | "U8" | "F8_E5M2" | "F8_E4M3" | "F8_E8M0"
-		| "F8_E4M3FNUZ" | "F8_E5M2FNUZ" => Some(8),
+		"BOOL" | "I8" | "U8" | "F8_E5M2" | "F8_E4M3" | "F8_E8M0" | "F8_E4M3FNUZ"
+		| "F8_E5M2FNUZ" => Some(8),
 		"I16" | "U16" | "F16" | "BF16" => Some(16),
 		"I32" | "U32" | "F32" => Some(32),
 		"I64" | "U64" | "F64" | "C64" => Some(64),
@@ -271,7 +271,9 @@ fn safetensors_bits(dtype: &str) -> Option<u64> {
 /// JSON duplicate-key detection and full model semantics remain unverified.
 fn parse_safetensors(data: &[u8], header_bytes: u64) -> Result<HeaderInfo> {
 	let size = usize::try_from(header_bytes)?;
-	let data_offset = 8usize.checked_add(size).ok_or_else(|| anyhow!("header offset overflow"))?;
+	let data_offset = 8usize
+		.checked_add(size)
+		.ok_or_else(|| anyhow!("header offset overflow"))?;
 	let document = slice_at(data, 8, size)?;
 	let parsed: Value =
 		serde_json::from_slice(document).context("invalid safetensors JSON header")?;
@@ -285,35 +287,55 @@ fn parse_safetensors(data: &[u8], header_bytes: u64) -> Result<HeaderInfo> {
 	for (name, descriptor) in entries {
 		if name == "__metadata__" {
 			if !descriptor.is_null() {
-				let metadata = descriptor.as_object().ok_or_else(|| anyhow!("safetensors metadata is not an object"))?;
+				let metadata = descriptor
+					.as_object()
+					.ok_or_else(|| anyhow!("safetensors metadata is not an object"))?;
 				if metadata.values().any(|value| !value.is_string()) {
 					bail!("safetensors metadata values must be strings");
 				}
 			}
 			continue;
 		}
-		let item = descriptor.as_object().ok_or_else(|| anyhow!("tensor {name} declaration is not an object"))?;
-		let dtype = item.get("dtype").and_then(Value::as_str)
+		let item = descriptor
+			.as_object()
+			.ok_or_else(|| anyhow!("tensor {name} declaration is not an object"))?;
+		let dtype = item
+			.get("dtype")
+			.and_then(Value::as_str)
 			.ok_or_else(|| anyhow!("tensor {name} has no string dtype"))?;
-		let shape = item.get("shape").and_then(Value::as_array)
+		let shape = item
+			.get("shape")
+			.and_then(Value::as_array)
 			.ok_or_else(|| anyhow!("tensor {name} has no shape array"))?;
-		let offsets = item.get("data_offsets").and_then(Value::as_array)
+		let offsets = item
+			.get("data_offsets")
+			.and_then(Value::as_array)
 			.ok_or_else(|| anyhow!("tensor {name} has no data_offsets array"))?;
 		if offsets.len() != 2 {
 			bail!("tensor {name} must have exactly two data offsets");
 		}
-		let start = offsets[0].as_u64().ok_or_else(|| anyhow!("tensor {name} has invalid start offset"))?;
-		let end = offsets[1].as_u64().ok_or_else(|| anyhow!("tensor {name} has invalid end offset"))?;
+		let start = offsets[0]
+			.as_u64()
+			.ok_or_else(|| anyhow!("tensor {name} has invalid start offset"))?;
+		let end = offsets[1]
+			.as_u64()
+			.ok_or_else(|| anyhow!("tensor {name} has invalid end offset"))?;
 		if start > end || end > payload_bytes {
 			bail!("tensor {name} range exceeds the file data buffer");
 		}
 		let mut count = 1u64;
 		for dimension in shape {
-			let size = dimension.as_u64().ok_or_else(|| anyhow!("tensor {name} has invalid shape dimension"))?;
-			count = count.checked_mul(size).ok_or_else(|| anyhow!("tensor {name} shape product overflows"))?;
+			let size = dimension
+				.as_u64()
+				.ok_or_else(|| anyhow!("tensor {name} has invalid shape dimension"))?;
+			count = count
+				.checked_mul(size)
+				.ok_or_else(|| anyhow!("tensor {name} shape product overflows"))?;
 		}
 		if let Some(bits) = safetensors_bits(dtype) {
-			let expected = count.checked_mul(bits).ok_or_else(|| anyhow!("tensor {name} storage overflows"))?;
+			let expected = count
+				.checked_mul(bits)
+				.ok_or_else(|| anyhow!("tensor {name} storage overflows"))?;
 			if expected % 8 != 0 || expected / 8 != end - start {
 				bail!("tensor {name} size does not match dtype and shape");
 			}
