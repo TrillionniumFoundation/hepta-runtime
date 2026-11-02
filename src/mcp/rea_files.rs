@@ -40,8 +40,9 @@ fn open_beneath_root(path: &Path, roots: &[PathBuf]) -> Result<std::fs::File> {
 		let components = relative
 			.components()
 			.map(|component| match component {
-				Component::Normal(segment) => CString::new(segment.as_bytes())
-					.context("REA inspection path contains NUL"),
+				Component::Normal(segment) => {
+					CString::new(segment.as_bytes()).context("REA inspection path contains NUL")
+				}
 				_ => bail!("REA inspection denied: parent or non-normal path component"),
 			})
 			.collect::<Result<Vec<_>>>()?;
@@ -64,7 +65,8 @@ fn open_beneath_root(path: &Path, roots: &[PathBuf]) -> Result<std::fs::File> {
 				.with_context(|| format!("cannot open configured workspace {}", root.display()));
 		}
 		let mut parent = unsafe { OwnedFd::from_raw_fd(root_fd) };
-		let (final_name, directories) = components.split_last()
+		let (final_name, directories) = components
+			.split_last()
 			.ok_or_else(|| anyhow!("REA inspection requires a file component"))?;
 		for name in directories {
 			let fd = unsafe {

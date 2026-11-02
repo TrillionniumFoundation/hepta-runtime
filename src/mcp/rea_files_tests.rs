@@ -30,10 +30,15 @@ async fn reads_nested_regular_file_but_not_unsafe_paths() {
 		b"approved"
 	);
 	assert!(read_bounded(&file, &roots, 3).await.is_err());
-	assert!(read_bounded(&work.path().join("sub/../sub/evidence.json"), &roots, 128)
-		.await.is_err());
+	assert!(
+		read_bounded(&work.path().join("sub/../sub/evidence.json"), &roots, 128)
+			.await
+			.is_err()
+	);
 	assert!(read_bounded(work.path(), &roots, 128).await.is_err());
-	assert!(read_bounded(Path::new("sub/evidence.json"), &roots, 128).await.is_err());
+	assert!(read_bounded(Path::new("sub/evidence.json"), &roots, 128)
+		.await
+		.is_err());
 }
 
 #[tokio::test]
@@ -44,9 +49,10 @@ async fn disallows_symlink_to_inside_or_outside_even_if_contents_are_valid() {
 	let inside = work.path().join("safe");
 	let external = outside.path().join("secret");
 	tokio::fs::write(&inside, b"inside").await.expect("inside");
-	tokio::fs::write(&external, b"outside").await.expect("outside");
-	std::os::unix::fs::symlink(&inside, work.path().join("inside-link"))
-		.expect("inside symlink");
+	tokio::fs::write(&external, b"outside")
+		.await
+		.expect("outside");
+	std::os::unix::fs::symlink(&inside, work.path().join("inside-link")).expect("inside symlink");
 	std::os::unix::fs::symlink(&external, work.path().join("outside-link"))
 		.expect("outside symlink");
 	std::os::unix::fs::symlink(outside.path(), work.path().join("directory-link"))
@@ -58,6 +64,10 @@ async fn disallows_symlink_to_inside_or_outside_even_if_contents_are_valid() {
 		work.path().join("directory-link/secret"),
 		external,
 	] {
-		assert!(read_bounded(&path, &roots, 128).await.is_err(), "{}", path.display());
+		assert!(
+			read_bounded(&path, &roots, 128).await.is_err(),
+			"{}",
+			path.display()
+		);
 	}
 }
