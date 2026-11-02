@@ -41,6 +41,13 @@ jobs:
           node --version
           node "$GITHUB_WORKSPACE/scripts/rea-reference-oracle.mjs" "$RUNNER_TEMP/rea-npm" "$RUNNER_TEMP/rea-evidence" "$RUNNER_TEMP/rea-pack"
 
+      - name: Independently capture full-input MCP schemas
+        env:
+          REA_ORACLE_INPUT_PROFILE: full
+          REA_ORACLE_OUTPUT_PROFILE: off
+        run: |
+          node "$GITHUB_WORKSPACE/scripts/rea-reference-oracle.mjs" "$RUNNER_TEMP/rea-npm" "$RUNNER_TEMP/rea-evidence/full-input" "$RUNNER_TEMP/rea-pack"
+
       - name: Install Rust 1.95 for genuine REA Evidence differential
         run: |
           rustup toolchain install 1.95.0 --profile minimal

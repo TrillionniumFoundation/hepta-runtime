@@ -16,6 +16,11 @@ if (!prefix || !output || !archiveDirectory) {
   throw new Error("expected: prefix output-directory npm-pack-directory");
 }
 await mkdir(output, { recursive: true });
+const inputProfile = process.env.REA_ORACLE_INPUT_PROFILE ?? "compact";
+const outputProfile = process.env.REA_ORACLE_OUTPUT_PROFILE ?? "full";
+if (!["compact", "full"].includes(inputProfile) || !["full", "off"].includes(outputProfile)) {
+  throw new Error("invalid pinned REA oracle schema profile");
+}
 
 const packageRoot = join(prefix, "node_modules", "rea-agents");
 const manifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
@@ -37,8 +42,8 @@ const child = spawn(process.execPath, [join(packageRoot, "scripts", "rea.mjs"), 
   cwd: packageRoot,
   env: {
     ...process.env,
-    REA_MCP_INPUT_SCHEMA_PROFILE: "compact",
-    REA_MCP_OUTPUT_SCHEMA_PROFILE: "full",
+    REA_MCP_INPUT_SCHEMA_PROFILE: inputProfile,
+    REA_MCP_OUTPUT_SCHEMA_PROFILE: outputProfile,
   },
   stdio: ["pipe", "pipe", "pipe"],
 });
@@ -141,26 +146,26 @@ try {
     packageVersion: manifest.version,
     mcpServerName: initialized.serverInfo?.name ?? null,
     negotiatedProtocol: initialized.protocolVersion ?? null,
-    schemaProfile: { input: "compact", output: "full" },
+    schemaProfile: { input: inputProfile, output: outputProfile },
     toolCount: tools.length,
     catalogSha256: createHash("sha256").update(JSON.stringify(tools)).digest("hex"),
     toolNamesSha256: createHash("sha256").update(JSON.stringify(toolNames)).digest("hex"),
     limitations: [
-      "MCP contract snapshot uses compact input and full output schemas",
+      "MCP schema catalog is scoped to the recorded input/output profile",
       "The npm tarball has not been proven byte-equivalent to the Git source commit",
       "This does not exercise Ghidra/IDA/Hopper, browser or device providers",
     ],
   };
   for (const [key, expectedKey] of [
     ["toolCount", "toolCount"],
-    ["catalogSha256", "catalogSha256"],
+    ...(inputProfile === "compact" && outputProfile === "full" ? [["catalogSha256", "catalogSha256"]] : []),
     ["toolNamesSha256", "toolNamesSha256"],
   ]) {
     if (manifestResult[key] !== pinned[expectedKey]) {
       throw new Error("REA published MCP catalog drift: " + key);
     }
   }
-  await writeFile(join(output, "REA_6_8_0_MCP_CATALOG.full-output.json"), JSON.stringify(tools, null, 2) + "\n");
+  await writeFile(join(output, "REA_6_8_0_MCP_CATALOG." + inputProfile + "-input." + outputProfile + "-output.json"), JSON.stringify(tools, null, 2) + "\n");
   await writeFile(join(output, "REA_6_8_0_REFERENCE_MANIFEST.json"), JSON.stringify(manifestResult, null, 2) + "\n");
   result = manifestResult;
 } finally {

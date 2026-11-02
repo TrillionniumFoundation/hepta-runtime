@@ -119,3 +119,9 @@ MCP catalog drift, captures a true inspect_elf_notes Evidence record for
 /usr/bin/true and runs an ignored-by-default Rust differential test against
 the exact native subset implementation. That authentic record's hash is
 host-image-specific; never use it as a universal constant across hosts.
+
+The npm oracle also attempts a second real MCP session using full input
+schemas and disabled output schemas, to retain both full input contracts and
+full output contracts without exceeding a single MCP catalog frame. Success
+is qualified only by that run's generated artifacts; it is not a declaration
+that a simultaneous full/full catalog frame fits the client transport.
