@@ -139,9 +139,8 @@ fn controller_authenticates_worker_preview_against_captured_bytes_and_path() {
 fn controller_owns_display_path_worker_never_receives_it_in_argv() {
 	let captured = b"\0asm\x01\0\0\0";
 	let original = "/private/workspaces/reverse/secret-case.wasm";
-	let mut preview =
-		crate::mcp::rea::inspect_bytes(captured, REDACTED_WORKER_PATH)
-			.expect("sandboxed worker preview");
+	let mut preview = crate::mcp::rea::inspect_bytes(captured, REDACTED_WORKER_PATH)
+		.expect("sandboxed worker preview");
 	let original_id = preview["native_evidence_id"].clone();
 	rebind_worker_path(&mut preview, original).expect("controller rebound path");
 	assert_eq!(preview["subject"]["local_path"], original);
