@@ -673,7 +673,6 @@ impl OctofsServer {
 			.map_err(|error| error.to_string())
 	}
 
-
 	#[tool(
 		title = "Retain Native REA Preview (Experimental)",
 		annotations(

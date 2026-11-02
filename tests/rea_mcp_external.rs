@@ -207,7 +207,9 @@ fn external_mcp_policy_worker_and_controller_restart() {
 					.to_string(),
 			);
 		}
-		let id = retained_id.as_deref().expect("retained ID from first controller");
+		let id = retained_id
+			.as_deref()
+			.expect("retained ID from first controller");
 		let restored = mcp.request(
 			7,
 			"tools/call",
@@ -223,7 +225,10 @@ fn external_mcp_policy_worker_and_controller_restart() {
 			"tools/call",
 			json!({"name":"rea_read_preview","arguments":{"native_evidence_id":"../escape"}}),
 		);
-		assert_eq!(denied_lookup["isError"], true, "path-like identifiers must fail");
+		assert_eq!(
+			denied_lookup["isError"], true,
+			"path-like identifiers must fail"
+		);
 		if iteration == 1 {
 			let reused = mcp.call(9, "rea_retain_preview", &good);
 			assert_ne!(reused["isError"], true, "idempotent retain: {reused}");

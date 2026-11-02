@@ -24,7 +24,10 @@ fn sample(path: &str) -> Value {
 async fn native_preview_store_restores_after_new_reader() {
 	let dir = tempfile::tempdir().expect("private state");
 	let record = sample("/controlled/model.wasm");
-	let id = record["native_evidence_id"].as_str().expect("id").to_string();
+	let id = record["native_evidence_id"]
+		.as_str()
+		.expect("id")
+		.to_string();
 	let receipt = retain_record(&record, dir.path()).await.expect("persist");
 	assert_eq!(receipt["native_evidence_id"], id);
 	assert_eq!(receipt["reused"], false);
@@ -43,11 +46,17 @@ async fn native_preview_store_restores_after_new_reader() {
 		let store = dir.path().join("rea-preview-v1");
 		let entry = store.join(format!("{id}.json"));
 		assert_eq!(
-			std::fs::metadata(store).expect("store").permissions().mode() & 0o777,
+			std::fs::metadata(store)
+				.expect("store")
+				.permissions()
+				.mode() & 0o777,
 			0o700
 		);
 		assert_eq!(
-			std::fs::metadata(entry).expect("record").permissions().mode() & 0o777,
+			std::fs::metadata(entry)
+				.expect("record")
+				.permissions()
+				.mode() & 0o777,
 			0o600
 		);
 	}
@@ -59,15 +68,15 @@ async fn same_digest_from_two_selected_paths_never_overwrites_first_capture() {
 	let a = sample("/controlled/origin_a");
 	let b = sample("/controlled/origin_b");
 	assert_eq!(a["native_evidence_id"], b["native_evidence_id"]);
-	let (first, second) = tokio::join!(
-		retain_record(&a, dir.path()),
-		retain_record(&b, dir.path())
-	);
+	let (first, second) =
+		tokio::join!(retain_record(&a, dir.path()), retain_record(&b, dir.path()));
 	let first = first.expect("first");
 	let second = second.expect("second");
 	assert_ne!(first["reused"], second["reused"]);
 	let id = a["native_evidence_id"].as_str().expect("id");
-	let saved = read_record(id, dir.path()).await.expect("verified saved record");
+	let saved = read_record(id, dir.path())
+		.await
+		.expect("verified saved record");
 	assert!(
 		saved["subject"]["local_path"] == "/controlled/origin_a"
 			|| saved["subject"]["local_path"] == "/controlled/origin_b"
@@ -75,14 +84,20 @@ async fn same_digest_from_two_selected_paths_never_overwrites_first_capture() {
 	let contents = std::fs::read_dir(dir.path().join("rea-preview-v1"))
 		.expect("store entries")
 		.count();
-	assert_eq!(contents, 1, "staging files must be removed after link publication");
+	assert_eq!(
+		contents, 1,
+		"staging files must be removed after link publication"
+	);
 }
 
 #[tokio::test]
 async fn corrupt_store_never_returns_data_or_overwrites_it_on_retry() {
 	let dir = tempfile::tempdir().expect("state");
 	let record = sample("/controlled/original");
-	let id = record["native_evidence_id"].as_str().expect("id").to_string();
+	let id = record["native_evidence_id"]
+		.as_str()
+		.expect("id")
+		.to_string();
 	retain_record(&record, dir.path()).await.expect("retain");
 	let name = dir.path().join("rea-preview-v1").join(format!("{id}.json"));
 	tokio::fs::write(&name, b"{\"store_format\":\"tampered\"}")
@@ -103,7 +118,10 @@ async fn changed_uncommitted_metadata_cannot_reuse_existing_record() {
 	b["limitations"] = json!(["a producer with different declared coverage"]);
 	assert!(retain_record(&b, dir.path()).await.is_err());
 	let id = a["native_evidence_id"].as_str().expect("id");
-	assert_eq!(read_record(id, dir.path()).await.expect("still original"), a);
+	assert_eq!(
+		read_record(id, dir.path()).await.expect("still original"),
+		a
+	);
 }
 
 #[test]
@@ -144,10 +162,13 @@ async fn symlinked_or_world_readable_store_directory_is_refused() {
 	let other = tempfile::tempdir().expect("other");
 	let link = state.path().join("rea-preview-v1");
 	std::os::unix::fs::symlink(other.path(), &link).expect("symlink");
-	assert!(retain_record(&sample("/selected"), state.path()).await.is_err());
+	assert!(retain_record(&sample("/selected"), state.path())
+		.await
+		.is_err());
 	std::fs::remove_file(&link).expect("remove symlink");
 	std::fs::create_dir(&link).expect("open dir");
-	std::fs::set_permissions(&link, std::fs::Permissions::from_mode(0o755))
-		.expect("loose policy");
-	assert!(retain_record(&sample("/selected"), state.path()).await.is_err());
+	std::fs::set_permissions(&link, std::fs::Permissions::from_mode(0o755)).expect("loose policy");
+	assert!(retain_record(&sample("/selected"), state.path())
+		.await
+		.is_err());
 }

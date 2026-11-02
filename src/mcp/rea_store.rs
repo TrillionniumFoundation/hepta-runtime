@@ -28,8 +28,8 @@ use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::fs::OpenOptions;
 use std::fmt::Write as _;
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -71,7 +71,9 @@ fn id_suffix(id: &str) -> Result<&str> {
 		.strip_prefix(ID_PREFIX)
 		.ok_or_else(|| anyhow!("invalid native preview ID prefix"))?;
 	if suffix.len() != 64
-		|| !suffix.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+		|| !suffix
+			.bytes()
+			.all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 	{
 		bail!("native preview ID must contain exactly 64 lowercase hex digits");
 	}
@@ -97,7 +99,9 @@ fn report_identity(record: &Value) -> Result<String> {
 		.as_str()
 		.ok_or_else(|| anyhow!("missing captured source digest"))?;
 	if digest.len() != 64
-		|| !digest.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+		|| !digest
+			.bytes()
+			.all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 	{
 		bail!("invalid captured source digest");
 	}
@@ -246,15 +250,21 @@ fn publish_exclusive(root: &Path, id: &str, encoded: &[u8]) -> Result<bool> {
 		use std::os::unix::fs::OpenOptionsExt;
 		opts.mode(0o600);
 	}
-	let mut file = opts.open(&tmp).context("cannot reserve REA durable staging file")?;
+	let mut file = opts
+		.open(&tmp)
+		.context("cannot reserve REA durable staging file")?;
 	let cleanup = StagingFile(tmp);
-	file.write_all(encoded).context("cannot stage REA preview")?;
-	file.sync_all().context("cannot sync REA preview staging file")?;
+	file.write_all(encoded)
+		.context("cannot stage REA preview")?;
+	file.sync_all()
+		.context("cannot sync REA preview staging file")?;
 	drop(file);
 	match std::fs::hard_link(&cleanup.0, &dest) {
 		Ok(()) => {
 			let directory = std::fs::File::open(root)?;
-			directory.sync_all().context("cannot sync REA preview directory")?;
+			directory
+				.sync_all()
+				.context("cannot sync REA preview directory")?;
 			Ok(false)
 		}
 		Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(true),
