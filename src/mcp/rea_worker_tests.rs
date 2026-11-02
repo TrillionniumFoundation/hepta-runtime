@@ -106,11 +106,11 @@ async fn real_child_endless_stdout_is_killed_and_reaped_at_limit() {
 
 #[test]
 fn controller_authenticates_worker_preview_against_captured_bytes_and_path() {
-	let captured = b"\\0asm\\x01\\0\\0\\0";
+	let captured = b"\0asm\x01\0\0\0";
 	let selected = "/admitted/original.wasm";
 	let identity: [u8; 32] = Sha256::digest(captured).into();
-	let report = crate::mcp::rea::inspect_bytes(captured, selected)
-		.expect("native preview reference");
+	let report =
+		crate::mcp::rea::inspect_bytes(captured, selected).expect("native preview reference");
 	verify_worker_report(&report, &identity, captured.len(), selected)
 		.expect("valid report binds exact admitted bytes");
 

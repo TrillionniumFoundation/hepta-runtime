@@ -175,8 +175,11 @@ fn verify_worker_report(
 	source_len: usize,
 	selected_path: &str,
 ) -> Result<()> {
-	super::rea_store::report_identity(record).context("untrusted worker preview identity invalid")?;
-	let map = record.as_object().ok_or_else(|| anyhow!("REA worker preview must be object"))?;
+	super::rea_store::report_identity(record)
+		.context("untrusted worker preview identity invalid")?;
+	let map = record
+		.as_object()
+		.ok_or_else(|| anyhow!("REA worker preview must be object"))?;
 	const FIELDS: &[&str] = &[
 		"record_format",
 		"native_evidence_id",
@@ -194,14 +197,25 @@ fn verify_worker_report(
 	}
 	for (key, keys) in [
 		("subject", &["local_path", "sha256", "size_bytes"][..]),
-		("upstream_reference", &["repository", "version", "source_commit"][..]),
+		(
+			"upstream_reference",
+			&["repository", "version", "source_commit"][..],
+		),
 		("coverage", &["scope", "status"][..]),
 		(
 			"normalized_result",
-			&["format", "architecture", "word_size_bits", "byte_order", "header_facts"][..],
+			&[
+				"format",
+				"architecture",
+				"word_size_bits",
+				"byte_order",
+				"header_facts",
+			][..],
 		),
 	] {
-		let nested = record[key].as_object().ok_or_else(|| anyhow!("REA worker invalid {key}"))?;
+		let nested = record[key]
+			.as_object()
+			.ok_or_else(|| anyhow!("REA worker invalid {key}"))?;
 		if nested.len() != keys.len() || keys.iter().any(|field| !nested.contains_key(*field)) {
 			bail!("REA worker preview has unexpected {key} members");
 		}
