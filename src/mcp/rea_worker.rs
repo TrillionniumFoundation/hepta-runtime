@@ -34,6 +34,9 @@ const INPUT_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_STDOUT_BYTES: usize = 256 * 1024;
 const MAX_STDERR_BYTES: usize = 64 * 1024;
 const WORKER_DEADLINE: Duration = Duration::from_secs(20);
+// The caller-selected source path is display-only metadata and must not be
+// exposed in procfs/ps by placing it in the child process argv.
+const REDACTED_WORKER_PATH: &str = "/__hepta_rea_controller_source__";
 
 #[cfg(unix)]
 fn apply_limits() -> Result<()> {
@@ -165,6 +168,24 @@ async fn collect_child_output(
 	}
 }
 
+/// The worker receives a placeholder in argv; only the controller that
+/// admitted the bytes rebinds the genuine selected path. The native semantic
+/// ID deliberately excludes this display-only path.
+fn rebind_worker_path(record: &mut Value, selected_path: &str) -> Result<()> {
+	let subject = record
+		.get_mut("subject")
+		.and_then(Value::as_object_mut)
+		.ok_or_else(|| anyhow!("REA worker report omitted subject"))?;
+	if subject.get("local_path").and_then(Value::as_str) != Some(REDACTED_WORKER_PATH) {
+		bail!("REA worker returned an unexpected source path");
+	}
+	subject.insert(
+		"local_path".to_string(),
+		Value::String(selected_path.to_string()),
+	);
+	Ok(())
+}
+
 /// Verify that the *controller-admitted* bytes, not just a worker-supplied
 /// assertion, back the source identity and semantic commitment. This detects
 /// transport corruption and forged/mismatched records, but it cannot prove
@@ -250,7 +271,7 @@ pub async fn inspect_isolated(input: Vec<u8>, selected_path: &str) -> Result<Val
 	let mut command = Command::new(binary);
 	command
 		.arg("rea-worker")
-		.arg(format!("--selected-path={selected_path}"))
+		.arg(format!("--selected-path={REDACTED_WORKER_PATH}"))
 		.env_clear()
 		.current_dir("/")
 		.stdin(Stdio::piped())
@@ -266,8 +287,9 @@ pub async fn inspect_isolated(input: Vec<u8>, selected_path: &str) -> Result<Val
 			let diagnostic = String::from_utf8_lossy(&stderr);
 			bail!("Rust REA worker failed ({}): {}", status, diagnostic.trim());
 		}
-		let record: Value =
+		let mut record: Value =
 			serde_json::from_slice(&stdout).context("Rust REA worker output is not JSON")?;
+		rebind_worker_path(&mut record, &selected_path)?;
 		verify_worker_report(&record, &input_digest, input_size, &selected_path)?;
 		Ok::<_, anyhow::Error>(record)
 	};

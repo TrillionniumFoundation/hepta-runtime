@@ -134,3 +134,26 @@ fn controller_authenticates_worker_preview_against_captured_bytes_and_path() {
 	assert!(verify_worker_report(&report, &alternate, captured.len(), selected).is_err());
 	assert!(verify_worker_report(&report, &identity, captured.len() + 1, selected).is_err());
 }
+
+#[test]
+fn controller_owns_display_path_worker_never_receives_it_in_argv() {
+	let captured = b"\0asm\x01\0\0\0";
+	let original = "/private/workspaces/reverse/secret-case.wasm";
+	let mut preview =
+		crate::mcp::rea::inspect_bytes(captured, REDACTED_WORKER_PATH)
+			.expect("sandboxed worker preview");
+	let original_id = preview["native_evidence_id"].clone();
+	rebind_worker_path(&mut preview, original).expect("controller rebound path");
+	assert_eq!(preview["subject"]["local_path"], original);
+	assert_eq!(preview["native_evidence_id"], original_id);
+	let sha: [u8; 32] = Sha256::digest(captured).into();
+	verify_worker_report(&preview, &sha, captured.len(), original)
+		.expect("controller-bound preview");
+
+	let mut forged = preview.clone();
+	forged["subject"]["local_path"] = serde_json::json!("/another/location");
+	assert!(rebind_worker_path(&mut forged, original).is_err());
+
+	let mut missing = serde_json::json!({"record_format":"hepta.rea.preview.v1"});
+	assert!(rebind_worker_path(&mut missing, original).is_err());
+}

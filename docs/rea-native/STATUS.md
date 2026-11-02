@@ -270,3 +270,12 @@ extra fields, and wrong input sizes are rejected in dedicated Rust tests.
 This is not a cryptographic proof of a remote worker's identity: the local
 controller and untrusted parser worker share a trust domain with no signed
 host attestation; it also cannot independently prove parser classification.
+
+## Controller-only selected-path disclosure (local worker)
+
+The spawned parser now receives a fixed nonsecret selected-path placeholder
+in its process arguments. The controller that admitted the bytes rebinds
+its original path only after receiving a report with the expected placeholder,
+then verifies digest, byte count and native semantic ID. Worker process
+command-line inspection no longer discloses arbitrary caller-selected paths.
+This does not hide input bytes from the worker or establish tenant isolation.
