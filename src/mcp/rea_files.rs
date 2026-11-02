@@ -28,7 +28,6 @@ fn open_beneath_root(path: &Path, roots: &[PathBuf]) -> Result<std::fs::File> {
 	use std::os::unix::ffi::OsStrExt;
 	use std::path::Component;
 
-	let mut matched = false;
 	for root in roots {
 		if !root.is_absolute() {
 			bail!("REA inspection denied: configured workspace root must be absolute");
@@ -36,7 +35,6 @@ fn open_beneath_root(path: &Path, roots: &[PathBuf]) -> Result<std::fs::File> {
 		let Ok(relative) = path.strip_prefix(root) else {
 			continue;
 		};
-		matched = true;
 		let components = relative
 			.components()
 			.map(|component| match component {
@@ -100,10 +98,7 @@ fn open_beneath_root(path: &Path, roots: &[PathBuf]) -> Result<std::fs::File> {
 		}
 		return Ok(file);
 	}
-	if !matched {
-		bail!("REA inspection denied: path is outside controller workspace roots");
-	}
-	bail!("REA inspection denied: no allowed file");
+	bail!("REA inspection denied: path is outside controller workspace roots");
 }
 
 #[cfg(not(unix))]
