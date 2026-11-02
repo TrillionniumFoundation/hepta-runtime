@@ -89,7 +89,7 @@ fn refuses_digest_tamper_and_legacy_null_coverage_omission() {
 }
 
 #[test]
-fn refuses_unsafe_numbers_and_invalid_profile() {
+fn refuses_tampered_numeric_identity_and_invalid_profile() {
 	let mut evidence = reference_record();
 	evidence["parameters"] = json!({"fraction":0.25});
 	assert!(verify_record(&evidence).is_err());
@@ -207,4 +207,62 @@ fn committed_profile_refuses_unknown_version_even_with_matching_evidence_provide
 		error.to_string().contains("profile.provider.version"),
 		"{error}"
 	);
+}
+
+#[test]
+fn finite_number_renderer_matches_ecmascript_boundary_examples() {
+	let cases = [
+		("-0", "0"),
+		("0.0", "0"),
+		("0.25", "0.25"),
+		("-1.5", "-1.5"),
+		("1e-7", "1e-7"),
+		("1e-6", "0.000001"),
+		("0.0000123", "0.0000123"),
+		("1e20", "100000000000000000000"),
+		("1e21", "1e+21"),
+		("-1e22", "-1e+22"),
+		("5e-324", "5e-324"),
+		("1.7976931348623157e308", "1.7976931348623157e+308"),
+		("9007199254740991", "9007199254740991"),
+	];
+	for (input, expected) in cases {
+		let number: Number = serde_json::from_str(input).expect("parse JSON number");
+		assert_eq!(canonical_js_number(&number).expect("render"), expected, "{input}");
+	}
+}
+
+#[test]
+fn file_offset_location_obeys_js_safe_integer_rules() {
+	for value in [json!(0), json!(1.0), json!(9_007_199_254_740_991_u64)] {
+		assert!(json_safe_unsigned(&value), "{value}");
+	}
+	for value in [
+		json!(-1),
+		json!(-0.25),
+		json!(3.5),
+		json!(9_007_199_254_740_993_u64),
+	] {
+		assert!(!json_safe_unsigned(&value), "{value}");
+	}
+}
+
+#[test]
+#[ignore = "requires real published rea-agents@6.8.0 numeric Evidence output from P0 npm CI"]
+fn real_npm_fractional_reference_evidence_matches_native() {
+	let path = std::env::var("REA_REAL_FLOAT_EVIDENCE_JSON")
+		.expect("actual npm finite-number Evidence corpus path");
+	let bytes = std::fs::read(path).expect("read published npm corpus");
+	let root: UniqueJson = serde_json::from_slice(&bytes).expect("unique-key JSON corpus");
+	let cases = root.0["cases"].as_array().expect("cases array");
+	assert!(cases.len() >= 400, "must exercise extensive fixed and bit-pattern samples");
+	for (index, record) in cases.iter().enumerate() {
+		let checked = verify_record(record)
+			.unwrap_or_else(|error| panic!("npm Evidence case {index}: {error}"));
+		assert_eq!(checked["evidence_id"], record["evidence_id"], "case {index}");
+		assert_eq!(checked["rea_full_schema_qualified"], false);
+	}
+	let mut tampered = cases[4].clone();
+	tampered["normalized_result"]["number"] = json!(0.75);
+	assert!(verify_record(&tampered).is_err(), "fractional numeric tamper rejected");
 }
