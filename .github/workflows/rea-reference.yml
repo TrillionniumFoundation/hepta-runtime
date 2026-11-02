@@ -10,6 +10,8 @@ on:
       - 'scripts/rea-reference-oracle.mjs'
       - 'scripts/rea-source-package-diff.mjs'
       - 'scripts/rea-number-reference.mjs'
+      - 'src/mcp/rea_evidence.rs'
+      - 'src/mcp/rea_evidence_tests.rs'
 
 permissions:
   contents: read
@@ -78,7 +80,10 @@ jobs:
       - name: Independently verify actual npm finite-number Evidence using Rust
         env:
           REA_REAL_FLOAT_EVIDENCE_JSON: ${{ runner.temp }}/rea-evidence/REA_6_8_0_FINITE_NUMBER_EVIDENCE.json
-        run: cargo test --locked --all-targets real_npm_fractional_reference_evidence_matches_native -- --ignored
+        run: |
+          set -euo pipefail
+          cargo test --locked --all-targets real_npm_fractional_reference_evidence_matches_native -- --ignored 2>&1 | tee "$RUNNER_TEMP/rea-evidence/fractional-rust-differential.log"
+          grep -Eq 'real_npm_fractional_reference_evidence_matches_native[[:space:]]+\.\.\.[[:space:]]+ok' "$RUNNER_TEMP/rea-evidence/fractional-rust-differential.log"
 
       - name: Retain original reference outputs, including failures
         if: always()
