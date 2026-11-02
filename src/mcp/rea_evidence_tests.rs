@@ -228,7 +228,11 @@ fn finite_number_renderer_matches_ecmascript_boundary_examples() {
 	];
 	for (input, expected) in cases {
 		let number: Number = serde_json::from_str(input).expect("parse JSON number");
-		assert_eq!(canonical_js_number(&number).expect("render"), expected, "{input}");
+		assert_eq!(
+			canonical_js_number(&number).expect("render"),
+			expected,
+			"{input}"
+		);
 	}
 }
 
@@ -255,14 +259,23 @@ fn real_npm_fractional_reference_evidence_matches_native() {
 	let bytes = std::fs::read(path).expect("read published npm corpus");
 	let root: UniqueJson = serde_json::from_slice(&bytes).expect("unique-key JSON corpus");
 	let cases = root.0["cases"].as_array().expect("cases array");
-	assert!(cases.len() >= 400, "must exercise extensive fixed and bit-pattern samples");
+	assert!(
+		cases.len() >= 400,
+		"must exercise extensive fixed and bit-pattern samples"
+	);
 	for (index, record) in cases.iter().enumerate() {
 		let checked = verify_record(record)
 			.unwrap_or_else(|error| panic!("npm Evidence case {index}: {error}"));
-		assert_eq!(checked["evidence_id"], record["evidence_id"], "case {index}");
+		assert_eq!(
+			checked["evidence_id"], record["evidence_id"],
+			"case {index}"
+		);
 		assert_eq!(checked["rea_full_schema_qualified"], false);
 	}
 	let mut tampered = cases[4].clone();
 	tampered["normalized_result"]["number"] = json!(0.75);
-	assert!(verify_record(&tampered).is_err(), "fractional numeric tamper rejected");
+	assert!(
+		verify_record(&tampered).is_err(),
+		"fractional numeric tamper rejected"
+	);
 }
