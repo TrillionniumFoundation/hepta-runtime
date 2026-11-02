@@ -185,6 +185,10 @@ fn external_mcp_policy_worker_and_controller_restart() {
 		assert_ne!(output["isError"], true, "real binary positive: {output}");
 		let report = read_call_text(&output);
 		assert_eq!(report["normalized_result"]["format"], "wasm");
+		assert_eq!(
+			report["subject"]["local_path"].as_str(),
+			Some(good.to_str().expect("controlled fixture path is UTF-8"))
+		);
 		assert_eq!(report["coverage"]["status"], "partial");
 		assert_eq!(report["rea_evidence_compatible"], false);
 
@@ -224,6 +228,10 @@ fn external_mcp_policy_worker_and_controller_restart() {
 		let replay = read_call_text(&restored);
 		assert_eq!(replay["native_evidence_id"], id);
 		assert_eq!(replay["record"]["normalized_result"]["format"], "wasm");
+		assert_eq!(
+			replay["record"]["subject"]["local_path"].as_str(),
+			Some(good.to_str().expect("controlled fixture path is UTF-8"))
+		);
 		assert_eq!(replay["record"]["rea_evidence_compatible"], false);
 		if iteration == 1 {
 			std::fs::rename(&unavailable, &good).expect("restore source after offline replay");
