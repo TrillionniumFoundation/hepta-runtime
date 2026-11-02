@@ -25,7 +25,6 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
-use tokio::io::AsyncReadExt;
 
 use super::runtime::runtime_config;
 
@@ -497,45 +496,9 @@ fn inspect_bytes(data: &[u8], selected_path: &str) -> Result<Value> {
 	}))
 }
 
-/// Enforce the configured controller workspace roots before reading bytes.
-/// This check rejects ordinary symlink escapes. It is NOT a defense against
-/// hostile concurrent rename attacks; adversarial inputs require OS isolation.
+/// Read a root-confined snapshot by descriptor, then inspect the exact captured bytes.
 async fn inspect_with_roots(path: &Path, roots: &[PathBuf]) -> Result<Value> {
-	if !path.is_absolute() {
-		bail!("REA native inspection requires an absolute local path");
-	}
-	if roots.is_empty() {
-		bail!("REA inspection denied: no controller workspace roots configured");
-	}
-	let canonical_path = tokio::fs::canonicalize(path)
-		.await
-		.with_context(|| format!("cannot resolve inspection path {}", path.display()))?;
-	let mut inside = false;
-	for root in roots {
-		let canonical_root = tokio::fs::canonicalize(root)
-			.await
-			.with_context(|| format!("invalid configured workspace {}", root.display()))?;
-		if canonical_path.starts_with(canonical_root) {
-			inside = true;
-			break;
-		}
-	}
-	if !inside {
-		bail!("REA inspection denied: path is outside controller workspace roots");
-	}
-	let metadata = tokio::fs::metadata(&canonical_path).await?;
-	if !metadata.is_file() {
-		bail!("REA inspection requires a regular file");
-	}
-	if metadata.len() > MAX_FILE_BYTES {
-		bail!("REA inspection file exceeds 32 MiB preview limit");
-	}
-	let file = tokio::fs::File::open(&canonical_path).await?;
-	let mut data = Vec::new();
-	file.take(MAX_FILE_BYTES + 1).read_to_end(&mut data).await?;
-	if data.len() as u64 > MAX_FILE_BYTES {
-		bail!("REA inspection file exceeds 32 MiB preview limit");
-	}
+	let data = super::rea_files::read_bounded(path, roots, MAX_FILE_BYTES).await?;
 	inspect_bytes(&data, &path.to_string_lossy())
 }
 

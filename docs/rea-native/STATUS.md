@@ -22,18 +22,18 @@ locked REA installation. Source inventory is not conformance acceptance.
 ## P1: NATIVE FOUNDATION — PARTIAL
 
 The built-in read-only rea_inspect_artifact MCP tool runs on the controller
-with --runtime-config, accepts only absolute regular-file paths contained
-within canonicalized controller_workspace_roots and caps input at 32 MiB.
+with --runtime-config, accepts only absolute regular-file paths traversed by descriptor-relative
+opens beneath controller_workspace_roots and caps input at 32 MiB.
 It returns SHA-256, bounded header observations and a versioned, deterministic
 hepta_rea_preview_v1_ identity. It does not use Node.js, REA MCP or Python.
 Supported preview header families: ELF, PE, Mach-O, WASM, GGUF, safetensors,
 ZIP. Safetensors additionally validates bounded tensor shape products, file ranges, gaps, overlaps and known dtype storage lengths, but not duplicate JSON keys. This is a deliberately partial implementation: no full format parsing,
 decompilation, symbol extraction, code validation or signature verification.
 The native preview identifier is NOT an REA ev_ identifier. Fail-closed
-and symlink-escape tests are included. Concurrent malicious filesystem
-replacement is NOT prevented by the current canonicalize-then-open check.
-A hostile-artifact deployment must use an isolated worker with race-resistant
-file-descriptor admission and independent resource quotas.
+and symlink-escape tests are included. File-descriptor admission rejects symlink traversal and parent components,
+including ordinary rename/symlink swaps between validation and open. Hostile
+mutation of an already opened file's *contents*, compromised policy roots, and
+untrusted parser process crashes still require isolated worker/quotas.
 
 ## P2: FORMAT PARITY AND APPLICATIONS — OPEN
 
