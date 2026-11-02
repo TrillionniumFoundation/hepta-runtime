@@ -1,0 +1,51 @@
+name: REA 6.8.0 upstream MCP reference
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feature/rea-native-foundation-*'
+    paths:
+      - '.github/workflows/rea-reference.yml'
+      - 'scripts/rea-reference-oracle.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rea-reference-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  npm-reference:
+    name: P0 upstream npm package and MCP catalog
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js for REA 6.8.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24.22.1'
+
+      - name: Install pinned published REA and record its tarball
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/rea-npm" "$RUNNER_TEMP/rea-pack" "$RUNNER_TEMP/rea-evidence"
+          npm pack rea-agents@6.8.0 --json --pack-destination "$RUNNER_TEMP/rea-pack" > "$RUNNER_TEMP/rea-evidence/npm-pack-metadata.json"
+          npm install --prefix "$RUNNER_TEMP/rea-npm" --no-audit --no-fund --ignore-scripts --save-exact rea-agents@6.8.0
+          node --version
+          node "$GITHUB_WORKSPACE/scripts/rea-reference-oracle.mjs" "$RUNNER_TEMP/rea-npm" "$RUNNER_TEMP/rea-evidence" "$RUNNER_TEMP/rea-pack"
+
+      - name: Retain original reference outputs, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-6-8-0-reference-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/rea-evidence/
+          if-no-files-found: warn
+          retention-days: 30

@@ -101,3 +101,14 @@ This source experiment draws on the upstream MIT-licensed REA analysis
 contracts and safetensors dtype table. The exact upstream MIT notice is
 retained in LICENSES/REA-MIT.txt (included in source packages); proprietary external engines are not
 embedded or relicensed by this contribution.
+
+## P0 published-release oracle (development CI)
+
+The separately triggered rea-reference.yml job uses Node.js only in GitHub CI,
+installs exact rea-agents@6.8.0 from npm, records the downloaded tarball SHA-256,
+starts the actual REA MCP over stdio and saves its compact-profile tools/list
+catalog and negotiated protocol as a build artifact. Only an actual completed
+run, with its artifact and package digest, qualifies this catalog capture.
+This does not add a Node dependency to the shipped Rust binary and cannot
+establish complete full-schema, upstream source/tarball equivalence or real
+provider/dynamic-E2E qualification. See Issue #79.
