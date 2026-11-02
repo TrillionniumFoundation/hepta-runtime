@@ -124,16 +124,28 @@ async fn collect_child_output(
 	child: &mut tokio::process::Child,
 	input: Vec<u8>,
 ) -> Result<(Vec<u8>, Vec<u8>, std::process::ExitStatus)> {
-	let mut stdin = child.stdin.take().ok_or_else(|| anyhow!("REA worker stdin unavailable"))?;
-	let stdout = child.stdout.take().ok_or_else(|| anyhow!("REA worker stdout unavailable"))?;
-	let stderr = child.stderr.take().ok_or_else(|| anyhow!("REA worker stderr unavailable"))?;
+	let mut stdin = child
+		.stdin
+		.take()
+		.ok_or_else(|| anyhow!("REA worker stdin unavailable"))?;
+	let stdout = child
+		.stdout
+		.take()
+		.ok_or_else(|| anyhow!("REA worker stdout unavailable"))?;
+	let stderr = child
+		.stderr
+		.take()
+		.ok_or_else(|| anyhow!("REA worker stderr unavailable"))?;
 	let result = tokio::try_join!(
 		async move {
 			stdin
 				.write_all(&input)
 				.await
 				.context("failed to supply REA worker bytes")?;
-			stdin.shutdown().await.context("failed to close REA worker stdin")?;
+			stdin
+				.shutdown()
+				.await
+				.context("failed to close REA worker stdin")?;
 			Ok::<(), anyhow::Error>(())
 		},
 		read_capped(stdout, MAX_STDOUT_BYTES, "stdout"),
@@ -176,11 +188,7 @@ pub async fn inspect_isolated(input: Vec<u8>, selected_path: &str) -> Result<Val
 		let (stdout, stderr, status) = collect_child_output(&mut child, input).await?;
 		if !status.success() {
 			let diagnostic = String::from_utf8_lossy(&stderr);
-			bail!(
-				"Rust REA worker failed ({}): {}",
-				status,
-				diagnostic.trim()
-			);
+			bail!("Rust REA worker failed ({}): {}", status, diagnostic.trim());
 		}
 		let record: Value =
 			serde_json::from_slice(&stdout).context("Rust REA worker output is not JSON")?;
@@ -190,7 +198,8 @@ pub async fn inspect_isolated(input: Vec<u8>, selected_path: &str) -> Result<Val
 			bail!("Rust REA worker returned an unexpected evidence contract");
 		}
 		Ok::<_, anyhow::Error>(record)
-	};	tokio::time::timeout(WORKER_DEADLINE, run)
+	};
+	tokio::time::timeout(WORKER_DEADLINE, run)
 		.await
 		.context("Rust REA worker exceeded 20-second wall-clock deadline")?
 }

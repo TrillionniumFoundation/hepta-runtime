@@ -34,7 +34,7 @@ async fn real_child_stdout_and_stderr_are_collected_without_wait_with_output() {
 	let mut child = Command::new("sh");
 	child
 		.arg("-c")
-		.arg("printf 'ok\\n'; printf 'warning\\n' >&2")
+		.arg("printf ok; printf warning >&2")
 		.stdin(Stdio::piped())
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
@@ -44,8 +44,8 @@ async fn real_child_stdout_and_stderr_are_collected_without_wait_with_output() {
 		.await
 		.expect("capture child");
 	assert!(status.success());
-	assert_eq!(stdout, b"ok\\n");
-	assert_eq!(stderr, b"warning\\n");
+	assert_eq!(stdout, b"ok");
+	assert_eq!(stderr, b"warning");
 }
 
 #[cfg(unix)]
@@ -68,7 +68,9 @@ async fn real_child_endless_stderr_is_killed_and_reaped_at_limit() {
 	.expect("bounded capture must finish before deadline");
 	let error = result.expect_err("noisy stderr must fail");
 	assert!(
-		error.to_string().contains("stderr exceeds 65536 byte limit"),
+		error
+			.to_string()
+			.contains("stderr exceeds 65536 byte limit"),
 		"{error}"
 	);
 	assert!(child.try_wait().expect("poll reaped child").is_some());
@@ -94,7 +96,9 @@ async fn real_child_endless_stdout_is_killed_and_reaped_at_limit() {
 	.expect("bounded capture must finish before deadline");
 	let error = result.expect_err("noisy stdout must fail");
 	assert!(
-		error.to_string().contains("stdout exceeds 262144 byte limit"),
+		error
+			.to_string()
+			.contains("stdout exceeds 262144 byte limit"),
 		"{error}"
 	);
 	assert!(child.try_wait().expect("poll reaped child").is_some());
