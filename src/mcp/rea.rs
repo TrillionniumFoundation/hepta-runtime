@@ -494,6 +494,7 @@ pub(crate) fn inspect_bytes(data: &[u8], selected_path: &str) -> Result<Value> {
 }
 
 /// Read a root-confined snapshot by descriptor, then inspect the exact captured bytes.
+#[cfg(test)]
 async fn inspect_with_roots(path: &Path, roots: &[PathBuf]) -> Result<Value> {
 	let data = super::rea_files::read_bounded(path, roots, MAX_FILE_BYTES).await?;
 	inspect_bytes(&data, &path.to_string_lossy())
