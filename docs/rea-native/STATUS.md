@@ -174,3 +174,14 @@ and network syscalls. If seccomp is unsupported or a Linux architecture
 is not qualified, the worker refuses parsing. This is defense in depth
 only: it does not establish a complete filesystem/namespace/credential
 sandbox or third-party provider isolation. macOS remains rlimit-only.
+
+### Full external MCP-to-worker smoke (in CI)
+
+The separate `tests/rea_mcp_external.rs` integration executable launches
+the shipped `hepta-runtime mcp --runtime-config` as a real child process,
+uses newline-delimited MCP JSON-RPC, verifies that policy-gated REA tools
+appear while `shell` is hidden, and exercises allowed WASM, denied
+out-of-root files and malformed ELF. It then cold-restarts the controller
+and repeats the workflow. The production handler thereby exercises the
+isolated Rust worker, unlike the in-process unit MCP smoke. This remains
+local-host E2E, not remote multi-host recovery or full REA parity.
