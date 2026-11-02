@@ -19,6 +19,7 @@ use std::sync::OnceLock;
 
 pub mod fs;
 pub mod request_ctx;
+pub mod rea;
 pub mod runtime;
 pub mod server;
 
