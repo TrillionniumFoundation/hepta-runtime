@@ -5,7 +5,7 @@
 // catalog of the exact pinned upstream release. Never runs in the Rust runtime.
 
 import { createHash } from "node:crypto";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -149,4 +149,38 @@ try {
   child.stdin.end();
   child.kill("SIGTERM");
 }
-console.log(JSON.stringify(result));
+// Produce an authentic REA 6.8.0 Evidence record from a real Linux artifact.
+// This is separate from MCP tools/list and does not require Ghidra or Hopper.
+const cli = join(packageRoot, "scripts", "rea.mjs");
+const native = spawnSync(process.execPath, [cli, "inspect-elf-notes", "/usr/bin/true", "--json"], {
+  cwd: packageRoot,
+  env: process.env,
+  encoding: "utf8",
+  timeout: 120000,
+  maxBuffer: 32 * 1024 * 1024,
+});
+if (native.error || native.status !== 0) {
+  throw new Error("REA CLI fixture failed: " + String(native.error ?? native.stderr));
+}
+let payload;
+try {
+  payload = JSON.parse(native.stdout);
+} catch (error) {
+  throw new Error("REA CLI fixture is not JSON: " + String(error) + ", start=" + native.stdout.slice(0, 400));
+}
+function locateEvidence(value, remaining = 5) {
+  if (remaining <= 0 || value === null || typeof value !== "object") return undefined;
+  if (typeof value.evidence_id === "string" && value.normalized_result !== undefined && value.provider !== undefined) return value;
+  for (const name of ["result", "evidence", "data", "output", "observation"]) {
+    const candidate = locateEvidence(value[name], remaining - 1);
+    if (candidate) return candidate;
+  }
+  return undefined;
+}
+const reference = locateEvidence(payload);
+if (!reference) {
+  throw new Error("REA CLI fixture did not include canonical Evidence: " + Object.keys(payload).join(","));
+}
+await writeFile(join(output, "REA_6_8_0_ELF_NOTES_EVIDENCE.json"), JSON.stringify(reference, null, 2) + "\n");
+console.log(JSON.stringify({ ...result, actualEvidenceId: reference.evidence_id, fixtureOperation: reference.operation }));
+
