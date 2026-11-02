@@ -198,3 +198,20 @@ out-of-root files and malformed ELF. It then cold-restarts the controller
 and repeats the workflow. The production handler thereby exercises the
 isolated Rust worker, unlike the in-process unit MCP smoke. This remains
 local-host E2E, not remote multi-host recovery or full REA parity.
+
+## Native preview durable evidence (experimental local P5 increment)
+
+The policy-gated `rea_retain_preview` MCP tool re-inspects an admitted artifact
+through the real sandboxed Rust worker, then atomically publishes an immutable
+by-protocol, content-addressed `hepta.rea.preview.v1` record under the private
+controller `state_dir/rea-preview-v1`. `rea_read_preview` looks up only a
+validated native ID and checks both complete-record SHA-256 and native identity.
+An exclusive hard-link publication refuses overwrite, verifies existing entries
+and permits idempotent replay with a distinct original display path. Dedicated
+Rust unit tests verify simultaneous writers, damaged-record rejection, symlinked
+store refusal and file mode constraints; the shipped MCP process E2E checks a
+fresh controller can restore the same immutable record without rereading the
+source artifact. **Not REA original Evidence, not a tamper-proof signed log.**
+Trusted state directory ownership, total disk quotas, hostile inode mutation,
+full remote signed worker, policy reconciliation and production OS isolation
+remain OPEN. Do not promote P5 based only on local-state durability.

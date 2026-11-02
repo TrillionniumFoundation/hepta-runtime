@@ -164,6 +164,7 @@ fn external_mcp_policy_worker_and_controller_restart() {
 	)
 	.expect("write policy");
 
+	let mut retained_id: Option<String> = None;
 	for iteration in 0..2 {
 		let mut mcp = RunningMcp::start(&config_file);
 		mcp.initialize();
@@ -176,6 +177,8 @@ fn external_mcp_policy_worker_and_controller_restart() {
 			.collect();
 		assert!(names.contains(&"rea_inspect_artifact"));
 		assert!(names.contains(&"rea_verify_evidence"));
+		assert!(names.contains(&"rea_retain_preview"));
+		assert!(names.contains(&"rea_read_preview"));
 		assert!(!names.contains(&"shell"), "unrestricted shell excluded");
 
 		let output = mcp.call(3, "rea_inspect_artifact", &good);
@@ -189,6 +192,43 @@ fn external_mcp_policy_worker_and_controller_restart() {
 		assert_eq!(denied["isError"], true, "out-of-root must be denied");
 		let invalid = mcp.call(5, "rea_inspect_artifact", &malformed);
 		assert_eq!(invalid["isError"], true, "malformed input must be denied");
+
+		if iteration == 0 {
+			let retained = mcp.call(6, "rea_retain_preview", &good);
+			assert_ne!(retained["isError"], true, "retain in worker: {retained}");
+			let receipt = read_call_text(&retained);
+			assert_eq!(receipt["status"], "retained");
+			assert_eq!(receipt["reused"], false);
+			assert_eq!(receipt["rea_evidence_compatible"], false);
+			retained_id = Some(
+				receipt["native_evidence_id"]
+					.as_str()
+					.expect("durable native ID")
+					.to_string(),
+			);
+		}
+		let id = retained_id.as_deref().expect("retained ID from first controller");
+		let restored = mcp.request(
+			7,
+			"tools/call",
+			json!({"name":"rea_read_preview","arguments":{"native_evidence_id":id}}),
+		);
+		assert_ne!(restored["isError"], true, "cold persisted read: {restored}");
+		let replay = read_call_text(&restored);
+		assert_eq!(replay["native_evidence_id"], id);
+		assert_eq!(replay["record"]["normalized_result"]["format"], "wasm");
+		assert_eq!(replay["record"]["rea_evidence_compatible"], false);
+		let denied_lookup = mcp.request(
+			8,
+			"tools/call",
+			json!({"name":"rea_read_preview","arguments":{"native_evidence_id":"../escape"}}),
+		);
+		assert_eq!(denied_lookup["isError"], true, "path-like identifiers must fail");
+		if iteration == 1 {
+			let reused = mcp.call(9, "rea_retain_preview", &good);
+			assert_ne!(reused["isError"], true, "idempotent retain: {reused}");
+			assert_eq!(read_call_text(&reused)["reused"], true);
+		}
 		// Each new controller must independently re-read its reviewed policy
 		// rather than restoring an unowned REA provider session.
 		assert!(iteration < 2);
