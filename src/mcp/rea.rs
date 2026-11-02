@@ -253,7 +253,7 @@ fn parse_macho(data: &[u8]) -> Result<HeaderInfo> {
 }
 
 // The dtype table below follows REA 6.8.0's MIT-licensed mapping.
-// See docs/rea-native/REA-MIT-LICENSE.txt for its copyright/license notice.
+// See LICENSES/REA-MIT.txt for its copyright/license notice.
 /// Subset of REA 6.8.0's known safetensors bit-width table.
 /// Unknown dtypes are retained as unknown, not rejected as absent.
 fn safetensors_bits(dtype: &str) -> Option<u64> {

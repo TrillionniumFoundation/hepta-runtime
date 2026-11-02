@@ -84,5 +84,5 @@ and symlink escapes. CI success is not real-provider or production parity.
 
 This source experiment draws on the upstream MIT-licensed REA analysis
 contracts and safetensors dtype table. The exact upstream MIT notice is
-retained as REA-MIT-LICENSE.txt; proprietary external engines are not
+retained in LICENSES/REA-MIT.txt (included in source packages); proprietary external engines are not
 embedded or relicensed by this contribution.

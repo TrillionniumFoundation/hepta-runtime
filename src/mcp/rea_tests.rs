@@ -93,15 +93,24 @@ fn elf32_big_endian_is_not_read_as_little_endian() {
 	assert_eq!(report["normalized_result"]["architecture"], "arm");
 	assert_eq!(report["normalized_result"]["word_size_bits"], 32);
 	assert_eq!(report["normalized_result"]["byte_order"], "big");
-	assert_eq!(report["normalized_result"]["header_facts"]["entry_point"], "0x1234");
+	assert_eq!(
+		report["normalized_result"]["header_facts"]["entry_point"],
+		"0x1234"
+	);
 }
 
 #[test]
 fn macho_fat_and_zip_do_not_claim_full_slice_or_apk_identity() {
-	let fat = inspect_bytes(&[0xca, 0xfe, 0xba, 0xbe, 0, 0, 0, 2], "/controlled/universal")
-		.expect("fat MachO");
+	let fat = inspect_bytes(
+		&[0xca, 0xfe, 0xba, 0xbe, 0, 0, 0, 2],
+		"/controlled/universal",
+	)
+	.expect("fat MachO");
 	assert_eq!(fat["normalized_result"]["format"], "macho-fat");
-	assert_eq!(fat["normalized_result"]["header_facts"]["declared_slices"], 2);
+	assert_eq!(
+		fat["normalized_result"]["header_facts"]["declared_slices"],
+		2
+	);
 	assert_eq!(fat["normalized_result"]["architecture"], Value::Null);
 	let zip = inspect_bytes(b"PK\x03\x04truncated", "/controlled/app.apk").expect("zip signature");
 	assert_eq!(zip["normalized_result"]["format"], "zip");
