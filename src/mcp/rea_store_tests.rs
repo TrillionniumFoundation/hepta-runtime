@@ -243,8 +243,13 @@ fn store_quota_counts_existing_records_and_abandoned_staging_bytes() {
 async fn total_byte_quota_is_enforced_without_replacing_prior_data() {
 	let state = tempfile::tempdir().expect("state");
 	let report = sample("/controlled/valid.wasm");
-	let id = report["native_evidence_id"].as_str().expect("id").to_string();
-	retain_record(&report, state.path()).await.expect("initial retain");
+	let id = report["native_evidence_id"]
+		.as_str()
+		.expect("id")
+		.to_string();
+	retain_record(&report, state.path())
+		.await
+		.expect("initial retain");
 	let root = state.path().join("rea-preview-v1");
 	let orphan = root.join(".uncommitted-large.tmp");
 	let file = std::fs::OpenOptions::new()
@@ -252,13 +257,19 @@ async fn total_byte_quota_is_enforced_without_replacing_prior_data() {
 		.write(true)
 		.open(&orphan)
 		.expect("sparse test staging file");
-	file.set_len(MAX_STORED_BYTES + 1).expect("sparse file length");
+	file.set_len(MAX_STORED_BYTES + 1)
+		.expect("sparse file length");
 	let another = rea::inspect_bytes(b"\0asm\x01\0\0\0additional", "/controlled/another")
 		.expect("different source digest");
 	assert_ne!(another["native_evidence_id"], id);
 	assert!(retain_record(&another, state.path()).await.is_err());
-	assert_eq!(read_record(&id, state.path()).await.expect("old content"), report);
-	let reused = retain_record(&report, state.path()).await.expect("reuse at capacity");
+	assert_eq!(
+		read_record(&id, state.path()).await.expect("old content"),
+		report
+	);
+	let reused = retain_record(&report, state.path())
+		.await
+		.expect("reuse at capacity");
 	assert_eq!(reused["reused"], true);
 	std::fs::remove_file(&orphan).expect("remove orphan");
 	assert!(retain_record(&another, state.path()).await.is_ok());
