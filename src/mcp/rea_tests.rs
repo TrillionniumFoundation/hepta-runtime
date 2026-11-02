@@ -92,6 +92,34 @@ fn safetensors_header_is_detected_without_validating_payload() {
 }
 
 #[test]
+fn safetensors_rejects_overlaps_gaps_trailing_data_and_shape_mismatch() {
+	for (header, payload_size) in [
+		(r#"{"a":{"dtype":"F32","shape":[1],"data_offsets":[0,5]}}"#, 5),
+		(r#"{"a":{"dtype":"F32","shape":[1],"data_offsets":[1,5]}}"#, 5),
+		(r#"{"a":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}}"#, 8),
+		(r#"{"a":{"dtype":"F32","shape":[2],"data_offsets":[0,4]}}"#, 4),
+		(r#"{"a":{"dtype":"F32","shape":[1],"data_offsets":[0,9]}}"#, 4),
+	] {
+		let mut bytes = (header.len() as u64).to_le_bytes().to_vec();
+		bytes.extend(header.as_bytes());
+		bytes.extend(vec![0u8; payload_size]);
+		assert!(inspect_bytes(&bytes, "/controlled/rejected.safetensors").is_err(), "{header}");
+	}
+}
+
+#[test]
+fn safetensors_reports_unknown_type_as_unknown_not_validated() {
+	let header = r#"{"a":{"dtype":"VENDOR_UNKNOWN","shape":[1],"data_offsets":[0,3]}}"#;
+	let mut bytes = (header.len() as u64).to_le_bytes().to_vec();
+	bytes.extend(header.as_bytes());
+	bytes.extend([0u8; 3]);
+	let report = inspect_bytes(&bytes, "/controlled/unknown-dtype.safetensors").expect("unknown dtype is admitted");
+	assert_eq!(report["normalized_result"]["header_facts"]["unknown_dtype_tensors"], 1);
+	assert_eq!(report["normalized_result"]["header_facts"]["validated_storage_lengths"], 0);
+	assert_eq!(report["coverage"]["status"], "partial");
+}
+
+#[test]
 fn unknown_is_not_relabelled_as_an_absent_feature() {
 	let report = inspect_bytes(b"not a known binary", "/controlled/unknown").expect("unknown");
 	assert_eq!(report["normalized_result"]["format"], "unknown");
