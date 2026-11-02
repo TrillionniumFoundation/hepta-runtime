@@ -52,3 +52,23 @@ jobs:
 
       - name: Release build
         run: cargo build --locked --release
+
+      - name: Release binary REA parser and Linux syscall-denial smoke
+        run: |
+          set -euo pipefail
+          binary="./target/release/hepta-runtime"
+          test -x "$binary"
+          printf '\x00asm\x01\x00\x00\x00' | "$binary" rea-worker --selected-path=/controlled/release.wasm > "$RUNNER_TEMP/rea-release-good.json" 2> "$RUNNER_TEMP/rea-release-good.err"
+          test ! -s "$RUNNER_TEMP/rea-release-good.err"
+          python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["record_format"]=="hepta.rea.preview.v1" and r["normalized_result"]["format"]=="wasm" and r["rea_evidence_compatible"] is False and r["coverage"]["status"]=="partial"' "$RUNNER_TEMP/rea-release-good.json"
+
+          printf '\x00asm\x01\x00\x00\x00' | "$binary" rea-worker --selected-path=/controlled/release.wasm --sandbox-probe > "$RUNNER_TEMP/rea-release-sandbox.json" 2> "$RUNNER_TEMP/rea-release-sandbox.err"
+          test ! -s "$RUNNER_TEMP/rea-release-sandbox.err"
+          python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["status"]=="file_and_network_syscalls_denied"' "$RUNNER_TEMP/rea-release-sandbox.json"
+
+          if printf '\x7fELF\x02\x01\x01' | "$binary" rea-worker --selected-path=/controlled/invalid.elf > "$RUNNER_TEMP/rea-release-bad.out" 2> "$RUNNER_TEMP/rea-release-bad.err"; then
+            echo "ERROR: release worker accepted truncated ELF" >&2
+            exit 1
+          fi
+          test ! -s "$RUNNER_TEMP/rea-release-bad.out"
+          test -s "$RUNNER_TEMP/rea-release-bad.err"
