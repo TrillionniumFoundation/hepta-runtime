@@ -117,8 +117,7 @@ async fn private_read_policy_is_bound_to_the_open_fd_not_an_earlier_path_stat() 
 	let path = state.path().join("private.json");
 	let roots = vec![state.path().to_path_buf()];
 	std::fs::write(&path, b"sealed record").expect("create fixture");
-	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
-		.expect("private mode");
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).expect("private mode");
 	assert_eq!(
 		read_private_bounded(&path, &roots, 256)
 			.await
@@ -137,7 +136,9 @@ async fn private_read_policy_is_bound_to_the_open_fd_not_an_earlier_path_stat() 
 		"private policy must reject nlink > 1 on the actual opened inode"
 	);
 	assert_eq!(
-		read_bounded(&path, &roots, 256).await.expect("ordinary workspace read"),
+		read_bounded(&path, &roots, 256)
+			.await
+			.expect("ordinary workspace read"),
 		b"sealed record",
 		"private policy must not silently restrict non-store workspace reads"
 	);
