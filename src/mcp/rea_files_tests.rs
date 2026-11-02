@@ -71,3 +71,38 @@ async fn disallows_symlink_to_inside_or_outside_even_if_contents_are_valid() {
 		);
 	}
 }
+
+#[tokio::test]
+#[cfg(unix)]
+async fn changed_open_inode_metadata_fails_closed_even_when_size_is_constant() {
+	use std::io::{Seek, SeekFrom, Write};
+	use std::os::unix::fs::MetadataExt;
+	let workspace = tempfile::tempdir().expect("workspace");
+	let path = workspace.path().join("mutable.elf");
+	std::fs::write(&path, b"unchanged bytes").expect("initial content");
+	let mut handle = std::fs::OpenOptions::new()
+		.read(true)
+		.write(true)
+		.open(&path)
+		.expect("open original inode");
+	let before = handle.metadata().expect("stat admitted inode");
+	std::thread::sleep(std::time::Duration::from_millis(30));
+	handle.seek(SeekFrom::Start(0)).expect("seek");
+	handle.write_all(b"CHANGED!!").expect("same-size in-place edit");
+	handle.sync_all().expect("commit change");
+	let after = handle.metadata().expect("stat changed same inode");
+	assert_eq!(before.len(), after.len());
+	assert_eq!(before.ino(), after.ino());
+	assert!(
+		ensure_unchanged(&before, &after).is_err(),
+		"same-size concurrent write must be detected via mtime/ctime"
+	);
+	assert!(ensure_unchanged(&after, &after).is_ok());
+
+	let mut changed_mode = after.permissions();
+	use std::os::unix::fs::PermissionsExt;
+	changed_mode.set_mode(0o400);
+	std::fs::set_permissions(&path, changed_mode).expect("chmod");
+	let mode_changed = handle.metadata().expect("stat changed permissions");
+	assert!(ensure_unchanged(&after, &mode_changed).is_err());
+}
