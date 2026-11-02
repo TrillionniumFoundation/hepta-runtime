@@ -52,6 +52,13 @@ child.stderr.setEncoding("utf8");
 child.stderr.on("data", (chunk) => {
   stderr = (stderr + chunk).slice(-65536);
 });
+class RpcFailure extends Error {
+  constructor(envelope) {
+    super("REA MCP JSON-RPC error: " + JSON.stringify(envelope.error));
+    this.name = "RpcFailure";
+    this.envelope = envelope;
+  }
+}
 let failed = null;
 const pending = new Map();
 const resolvePendingError = (cause) => {
@@ -78,7 +85,7 @@ reader.on("line", (line) => {
   if (msg.id === undefined || !pending.has(msg.id)) return;
   const slot = pending.get(msg.id);
   pending.delete(msg.id);
-  if (msg.error) slot.reject(new Error(JSON.stringify(msg.error)));
+  if (msg.error) slot.reject(new RpcFailure(msg));
   else slot.resolve(msg.result);
 });
 
@@ -98,8 +105,26 @@ function request(method, params) {
     child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
   });
 }
-function notify(method) {
-  child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method, params: {} }) + "\n");
+function notify(method, params = {}) {
+  child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n");
+}
+
+// Do not turn an upstream JSON-RPC error into a string or confuse it with a
+// tool-result rejection. Transport failure, timeout and unexpected success
+// must abort reference capture instead of being accepted as a golden error.
+async function captureRejection(method, params, description) {
+  try {
+    const returned = await request(method, params);
+    if (returned?.isError !== true) {
+      throw new Error("REA MCP unexpectedly accepted " + description);
+    }
+    return { delivery: "tool-result", raw: returned };
+  } catch (error) {
+    if (error instanceof RpcFailure) {
+      return { delivery: "json-rpc-error", raw: error.envelope };
+    }
+    throw error;
+  }
 }
 
 let result;
@@ -122,34 +147,66 @@ try {
     cursor = response.nextCursor ?? response.next_cursor ?? undefined;
     if (++pages > 32) throw new Error("catalog exceeded 32 pages");
   } while (cursor);
-  // Preserve a genuine negative tools/call envelope. A relative path is
-  // invalid for the public inspect_rust_binary MCP contract. Do not
-  // reinterpret or collapse tool-vs-JSON-RPC error delivery.
-  let invalidPathResponse;
-  try {
-    const negative = await request("tools/call", {
-      name: "inspect_rust_binary",
-      arguments: { path: "rea-oracle-relative-path.must-be-refused" },
-    });
-    if (negative?.isError !== true) {
-      throw new Error("REA MCP accepted a relative input path unexpectedly");
-    }
-    invalidPathResponse = { delivery: "tool-result", raw: negative };
-  } catch (error) {
-    const diagnostic = String(error);
-    if (diagnostic.includes("accepted a relative input")) throw error;
-    if (!/(-32602|invalid|absolute|validation|path.*relative)/i.test(diagnostic)) {
-      throw error;
-    }
-    invalidPathResponse = { delivery: "json-rpc-error", diagnostic };
+  // Preserve actual upstream typed errors and transport vs tool-result
+  // delivery without regex-based reinterpretation or invented error codes.
+  const invalidPathResponse = await captureRejection("tools/call", {
+    name: "inspect_rust_binary",
+    arguments: { path: "rea-oracle-relative-path.must-be-refused" },
+  }, "a relative path");
+  const missingPathResponse = await captureRejection("tools/call", {
+    name: "inspect_rust_binary",
+    arguments: {},
+  }, "an omitted required path");
+  const missingToolResponse = await captureRejection("tools/call", {
+    name: "hepta_rea_oracle_not_an_upstream_tool",
+    arguments: {},
+  }, "an unknown tool name");
+  const unknownMethodResponse = await captureRejection(
+    "hepta_rea_oracle/nonexistent_method", {}, "an unknown MCP method",
+  );
+  // Test that the session survives refused calls and an irrelevant
+  // cancellation notification. No in-flight cancellation is proven here.
+  const firstPage = tools.slice(0, 1).map((tool) => tool.name);
+  const afterErrors = await request("tools/list", {});
+  if (JSON.stringify(afterErrors?.tools?.slice(0, 1).map((t) => t.name)) !== JSON.stringify(firstPage)) {
+    throw new Error("REA MCP catalog/session changed after rejected calls");
   }
-  const negativeJson = JSON.stringify(invalidPathResponse);
-  if (negativeJson.length > 65536) {
-    throw new Error("REA MCP validation response exceeded bounded fixture size");
+  notify("notifications/cancelled", {
+    requestId: 999999999,
+    reason: "oracle probe: no outstanding request",
+  });
+  const afterCancellationNotification = await request("tools/list", {});
+  if (JSON.stringify(afterCancellationNotification?.tools?.slice(0, 1).map((t) => t.name)) !== JSON.stringify(firstPage)) {
+    throw new Error("REA MCP session lost after irrelevant cancellation notification");
+  }
+  const protocolTrace = {
+    fixture: "rea-agents@6.8.0 MCP initial session / error envelopes",
+    schemaProfile: { input: inputProfile, output: outputProfile },
+    initializedResponse: initialized,
+    initializedNotificationSent: true,
+    rejections: {
+      relativePath: invalidPathResponse,
+      missingPath: missingPathResponse,
+      unknownTool: missingToolResponse,
+      unknownMethod: unknownMethodResponse,
+    },
+    sessionContinuation: {
+      listAfterRejections: true,
+      irrelevantCancellationNotificationSent: true,
+      listAfterIrrelevantCancellation: true,
+      actualInFlightCancellationQualified: false,
+    },
+  };
+  if (JSON.stringify(protocolTrace).length > 256 * 1024 || JSON.stringify(invalidPathResponse).length > 65536) {
+    throw new Error("REA MCP protocol/error oracle exceeded fixture byte budget");
   }
   await writeFile(
     join(output, "REA_6_8_0_INVALID_PATH_MCP_NEGATIVE.json"),
     JSON.stringify(invalidPathResponse, null, 2) + "\n",
+  );
+  await writeFile(
+    join(output, "REA_6_8_0_PROTOCOL_AND_ERRORS.json"),
+    JSON.stringify(protocolTrace, null, 2) + "\n",
   );
   const toolNames = tools.map((tool) => tool.name);
   if (tools.length < 50 || toolNames.some((name) => typeof name !== "string")) {
