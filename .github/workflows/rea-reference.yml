@@ -8,6 +8,7 @@ on:
     paths:
       - '.github/workflows/rea-reference.yml'
       - 'scripts/rea-reference-oracle.mjs'
+      - 'scripts/rea-source-package-diff.mjs'
 
 permissions:
   contents: read
@@ -40,6 +41,17 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/rea-npm" --no-audit --no-fund --ignore-scripts --save-exact rea-agents@6.8.0
           node --version
           node "$GITHUB_WORKSPACE/scripts/rea-reference-oracle.mjs" "$RUNNER_TEMP/rea-npm" "$RUNNER_TEMP/rea-evidence" "$RUNNER_TEMP/rea-pack"
+
+      - name: Independently compare pinned Git source and published npm files
+        run: |
+          set -euo pipefail
+          git init -q "$RUNNER_TEMP/rea-git"
+          git -C "$RUNNER_TEMP/rea-git" remote add origin https://github.com/morluto/rea.git
+          git -C "$RUNNER_TEMP/rea-git" fetch -q --depth=1 --filter=blob:none origin 93b8b82db70279e40f484114cff9dc1958dc14ee
+          git -C "$RUNNER_TEMP/rea-git" update-ref refs/heads/rea-oracle "$(git -C "$RUNNER_TEMP/rea-git" rev-parse FETCH_HEAD)"
+          git -C "$RUNNER_TEMP/rea-git" symbolic-ref HEAD refs/heads/rea-oracle
+          test "$(git -C "$RUNNER_TEMP/rea-git" rev-parse HEAD)" = 93b8b82db70279e40f484114cff9dc1958dc14ee
+          node "$GITHUB_WORKSPACE/scripts/rea-source-package-diff.mjs" "$RUNNER_TEMP/rea-git" "$RUNNER_TEMP/rea-npm" "$RUNNER_TEMP/rea-evidence"
 
       - name: Independently capture full-input MCP schemas
         env:
