@@ -59,5 +59,8 @@ pub enum Commands {
 		/// Display-only path; bytes are provided on stdin, not read by this worker.
 		#[arg(long)]
 		selected_path: String,
+		/// Internal test proving syscall denials after worker input admission.
+		#[arg(long, hide = true)]
+		sandbox_probe: bool,
 	},
 }

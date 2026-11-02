@@ -16,9 +16,9 @@
 //! configured workspace descriptor, then sends those bytes over stdin to this
 //! process. The child never receives the path to open or runtime credentials.
 //!
-//! This is bounded process isolation, NOT a full syscall sandbox. The current
-//! profile lacks network namespace/credential isolation and does not safely
-//! permit arbitrary third-party provider code.
+//! Linux adds a process-thread-synchronized syscall denylist after stdin has
+//! been read. This is NOT a complete sandbox: UID, namespaces and other
+//! information-flow paths remain outside the current boundary.
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;
@@ -65,7 +65,7 @@ fn apply_limits() -> Result<()> {
 
 /// The only worker entrypoint. It never performs filesystem or remote reads.
 /// stdout is emitted only for a completed, successful analysis.
-pub fn serve_once(selected_path: &str) -> Result<()> {
+pub fn serve_once(selected_path: &str, sandbox_probe: bool) -> Result<()> {
 	apply_limits()?;
 	let mut input = Vec::new();
 	std::io::stdin()
@@ -75,6 +75,14 @@ pub fn serve_once(selected_path: &str) -> Result<()> {
 		.context("cannot read Rust REA worker input")?;
 	if input.len() as u64 > INPUT_BYTES {
 		bail!("REA worker input exceeds 32 MiB");
+	}
+	super::rea_seccomp::tighten_after_read()?;
+	if sandbox_probe {
+		super::rea_seccomp::verify_file_network_denial()?;
+		let mut stdout = std::io::stdout().lock();
+		stdout.write_all(b"{\"status\":\"file_and_network_syscalls_denied\"}\n")?;
+		stdout.flush()?;
+		return Ok(());
 	}
 	let report = super::rea::inspect_bytes(&input, selected_path)?;
 	let encoded = serde_json::to_vec(&report)?;

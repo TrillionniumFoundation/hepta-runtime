@@ -18,11 +18,16 @@
 use std::io::Write;
 use std::process::{Command, Output, Stdio};
 
-fn invoke_worker(bytes: &[u8]) -> Output {
+fn invoke_worker_args(bytes: &[u8], sandbox_probe: bool) -> Output {
 	let exe = env!("CARGO_BIN_EXE_hepta-runtime");
-	let mut process = Command::new(exe)
+	let mut command = Command::new(exe);
+	command
 		.arg("rea-worker")
-		.arg("--selected-path=/controlled/worker.wasm")
+		.arg("--selected-path=/controlled/worker.wasm");
+	if sandbox_probe {
+		command.arg("--sandbox-probe");
+	}
+	let mut process = command
 		.env_clear()
 		.stdin(Stdio::piped())
 		.stdout(Stdio::piped())
@@ -33,6 +38,10 @@ fn invoke_worker(bytes: &[u8]) -> Output {
 	stdin.write_all(bytes).expect("supply raw bytes");
 	drop(stdin);
 	process.wait_with_output().expect("worker completes")
+}
+
+fn invoke_worker(bytes: &[u8]) -> Output {
+	invoke_worker_args(bytes, false)
 }
 
 #[test]
@@ -74,4 +83,14 @@ fn real_worker_refuses_more_than_32_mib_without_allocating_unboundedly() {
 	let outcome = invoke_worker(&input);
 	assert!(!outcome.status.success());
 	assert!(outcome.stdout.is_empty());
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn real_worker_seccomp_denies_file_and_network_after_stdin() {
+	let outcome = invoke_worker_args(b"\0asm\x01\0\0\0", true);
+	assert!(outcome.status.success(), "{:?}", outcome.stderr);
+	let proof: serde_json::Value =
+		serde_json::from_slice(&outcome.stdout).expect("seccomp probe JSON");
+	assert_eq!(proof["status"], "file_and_network_syscalls_denied");
 }

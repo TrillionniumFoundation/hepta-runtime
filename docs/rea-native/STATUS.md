@@ -162,3 +162,15 @@ network before a strong seccomp/namespace/landlock policy is added. Worker
 process startup and failure are exercised through a real compiled binary in
 `tests/rea_worker.rs`; unit-only MCP smoke bypasses the process boundary under
 `cfg(test)` and does not qualify the shipped MCP-to-worker E2E path.
+
+### Linux post-read syscall restrictions
+
+Linux x86_64/AArch64 workers now install no_new_privs plus a
+process-thread-synchronized seccomp-BPF denylist *after* bounded stdin
+receipt and *before* parsing. The filter returns EPERM for file opens,
+socket creation/network sends, exec/fork/clone, ptrace, io_uring and
+related operations. An actual compiled-binary test probes denied file
+and network syscalls. If seccomp is unsupported or a Linux architecture
+is not qualified, the worker refuses parsing. This is defense in depth
+only: it does not establish a complete filesystem/namespace/credential
+sandbox or third-party provider isolation. macOS remains rlimit-only.

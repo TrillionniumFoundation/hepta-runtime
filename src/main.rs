@@ -72,8 +72,8 @@ async fn main() -> Result<()> {
 				}
 			}
 		}
-		Commands::ReaWorker { selected_path } => {
-			mcp::rea_worker::serve_once(&selected_path)?;
+		Commands::ReaWorker { selected_path, sandbox_probe } => {
+			mcp::rea_worker::serve_once(&selected_path, sandbox_probe)?;
 		}
 	}
 
