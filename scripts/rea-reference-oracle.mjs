@@ -159,6 +159,7 @@ try {
   for (const [key, expectedKey] of [
     ["toolCount", "toolCount"],
     ...(inputProfile === "compact" && outputProfile === "full" ? [["catalogSha256", "catalogSha256"]] : []),
+    ...(inputProfile === "full" && outputProfile === "off" ? [["catalogSha256", "fullInputCatalogSha256"]] : []),
     ["toolNamesSha256", "toolNamesSha256"],
   ]) {
     if (manifestResult[key] !== pinned[expectedKey]) {

@@ -8,9 +8,13 @@ been captured. Runtime baseline: ba574f2a6a1b74e85191c58d7bec011720736bb9.
 Sources: https://github.com/morluto/rea/blob/93b8b82db70279e40f484114cff9dc1958dc14ee/src/domain/evidence.ts
 and https://github.com/morluto/rea/blob/93b8b82db70279e40f484114cff9dc1958dc14ee/src/contracts/toolFamilyIds.ts
 
-## P0: SOURCE INVENTORY ONLY — OPEN
+## P0: AUTHENTIC PUBLISHED MCP SCHEMAS — PARTIAL / OPEN
 
-UPSTREAM.json freezes 18 families, the source commit and key Evidence fields.
+UPSTREAM.json freezes 18 source family IDs and key Evidence fields.
+PUBLISHED_6_8_0_ORACLE.json independently pins real npm 6.8.0 metadata:
+229 distinct tool names, compact-input/full-output and full-input/off-output
+MCP schemas captured in actual separate stdio sessions. The two runs have the
+same tool-name identity and distinct profile-specific catalog digests.
 REA's canonical Evidence id is ev_<digest>; it depends on the upstream
 canonicalization and full record, including explicit relationship_coverage
 and analysis_profile. The Rust-native preview remains a NON-REA Evidence record. A separate
@@ -110,7 +114,7 @@ starts the actual REA MCP over stdio and saves its compact-profile tools/list
 catalog and negotiated protocol as a build artifact. Only an actual completed
 run, with its artifact and package digest, qualifies this catalog capture.
 This does not add a Node dependency to the shipped Rust binary and cannot
-establish complete full-schema, upstream source/tarball equivalence or real
+establish full tool-behavior parity, upstream source/tarball equivalence or real
 provider/dynamic-E2E qualification. See Issue #79.
 
 P0 published-reference fingerprint is pinned separately in
@@ -125,3 +129,10 @@ schemas and disabled output schemas, to retain both full input contracts and
 full output contracts without exceeding a single MCP catalog frame. Success
 is qualified only by that run's generated artifacts; it is not a declaration
 that a simultaneous full/full catalog frame fits the client transport.
+
+The two-profile published npm reference **passed** in CI run 41435221835.
+Its complete input and output schemas are retained in artifact 13135513725.
+The full-input/off-output catalog hash is
+`1f37341b9b409b5f98ee3f69f7b81fff2306e5677bb863c2fa0fc92cb76d2eaf`;
+compact-input/full-output hash remains `6d635f60ca666ef15ada8cae73b16e77c4d1ec3a8397aaa877b87b06605a845a`.
+The shared 229-name digest is `d3da3dcd88936744d1c08f5d985625e6ee7ecc376581530e876c093f3b20f48c`.
