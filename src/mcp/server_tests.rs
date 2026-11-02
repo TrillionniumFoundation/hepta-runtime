@@ -528,6 +528,7 @@ async fn served_tool_schemas_carry_no_generator_noise() {
 		.tools
 		.iter()
 		.any(|tool| tool.name == "rea_inspect_artifact"));
+	assert!(!tools.tools.iter().any(|tool| tool.name == "rea_verify_evidence"));
 	for tool in &tools.tools {
 		let schema = serde_json::to_string(tool.input_schema.as_ref()).expect("schema json");
 		assert!(
@@ -614,6 +615,7 @@ async fn runtime_remote_execution_recovery_and_policy_e2e() {
 		"service_status",
 		"network_inspect",
 		"rea_inspect_artifact",
+		"rea_verify_evidence",
 	] {
 		assert!(
 			tools.tools.iter().any(|tool| tool.name == name),

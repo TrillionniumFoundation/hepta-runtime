@@ -13,8 +13,11 @@ and https://github.com/morluto/rea/blob/93b8b82db70279e40f484114cff9dc1958dc14ee
 UPSTREAM.json freezes 18 families, the source commit and key Evidence fields.
 REA's canonical Evidence id is ev_<digest>; it depends on the upstream
 canonicalization and full record, including explicit relationship_coverage
-and analysis_profile. This implementation does NOT produce or accept REA
-Evidence and never labels a native preview as REA-equivalent. The full
+and analysis_profile. The Rust-native preview remains a NON-REA Evidence record. A separate
+policy-gated verifier checks source-derived REA ev_ semantic ID commitments
+for JSON with exact safe integers. It rejects duplicate keys, tampering and
+an omitted null relationship_coverage but cannot establish full Zod or
+floating-number parity. The full
 generated tool catalog, schemas, golden records, original unknown ledger,
 errors and authentic differential fixtures still need collection from a
 locked REA installation. Source inventory is not conformance acceptance.
@@ -34,6 +37,18 @@ and symlink-escape tests are included. File-descriptor admission rejects symlink
 including ordinary rename/symlink swaps between validation and open. Hostile
 mutation of an already opened file's *contents*, compromised policy roots, and
 untrusted parser process crashes still require isolated worker/quotas.
+
+### P1 Evidence digest subset (still OPEN for full parity)
+
+The Rust MCP tool rea_verify_evidence reads at most 8 MiB under the same
+confined descriptor-relative file policy. It checks a source-derived REA
+semantic projection (excluded display path, included null relationship
+coverage) with UTF-16 key sorting and SHA-256. Node.js source-semantics
+reference hashes cover ASCII and supplementary-plane key ordering.
+Only exactly representable signed/unsigned safe integers are admitted;
+fractional and exponent numbers fail closed. Complete upstream Zod
+validation, authentic upstream generated Evidence E2E and production
+semantics are still unqualified. Successful output says subset only.
 
 ## P2: FORMAT PARITY AND APPLICATIONS — OPEN
 

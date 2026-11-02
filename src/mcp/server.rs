@@ -34,6 +34,7 @@ use tracing::{debug, warn};
 
 use super::fs;
 use super::rea;
+use super::rea_evidence;
 use super::request_ctx;
 use super::runtime;
 use super::McpToolCall;
@@ -189,6 +190,7 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"network_inspect",
 	"privileged_action",
 	"rea_inspect_artifact",
+	"rea_verify_evidence",
 ];
 const CLAUDE_CHANNEL_NOTIFICATION: &str = "notifications/claude/channel";
 
@@ -645,6 +647,25 @@ impl OctofsServer {
 		Parameters(params): Parameters<rea::InspectArtifactParams>,
 	) -> Result<String, String> {
 		rea::inspect_artifact(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "REA Evidence Digest Check (Limited)",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Verify a workspace-local REA Evidence JSON record semantic SHA-256 commitment only for exact JavaScript safe-integer JSON values. Rejects duplicate JSON keys and mismatched hashes. Does not establish full REA Zod schema or provider parity."
+	)]
+	async fn rea_verify_evidence(
+		&self,
+		Parameters(params): Parameters<rea_evidence::VerifyEvidenceParams>,
+	) -> Result<String, String> {
+		rea_evidence::verify_evidence(params)
 			.await
 			.map_err(|error| error.to_string())
 	}
