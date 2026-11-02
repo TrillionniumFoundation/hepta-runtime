@@ -168,7 +168,10 @@ fn canonical_js_number(source: &Number) -> Result<String> {
 	} else if decimal_pos <= 0 {
 		format!("0.{}{digits}", "0".repeat((-decimal_pos) as usize))
 	} else if decimal_pos as usize >= digits.len() {
-		format!("{digits}{}", "0".repeat(decimal_pos as usize - digits.len()))
+		format!(
+			"{digits}{}",
+			"0".repeat(decimal_pos as usize - digits.len())
+		)
 	} else {
 		let (whole, fractional) = digits.split_at(decimal_pos as usize);
 		format!("{whole}.{fractional}")
