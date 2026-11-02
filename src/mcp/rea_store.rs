@@ -426,18 +426,10 @@ pub async fn read_record(id: &str, state_dir: &Path) -> Result<Value> {
 	tokio::task::spawn_blocking(move || validate_root(&root_clone))
 		.await
 		.context("REA preview directory validation task failed")??;
-	let check = path.clone();
-	tokio::task::spawn_blocking(move || {
-		let metadata =
-			std::fs::symlink_metadata(&check).context("REA preview record unavailable")?;
-		if !metadata.is_file() || metadata.file_type().is_symlink() {
-			bail!("REA preview record is not a regular file");
-		}
-		reject_external_hardlinks(&metadata)
-	})
-	.await
-	.context("REA preview hardlink validation task failed")??;
-	let bytes = rea_files::read_bounded(&path, &[root], MAX_ENVELOPE_BYTES).await?;
+	// All file-mode, ownership and nlink policy checks must be performed on
+	// the descriptor actually read, both before and after ingestion. Checking
+	// symlink_metadata(path) here would leave a swap-to-hardlink race.
+	let bytes = rea_files::read_private_bounded(&path, &[root], MAX_ENVELOPE_BYTES).await?;
 	verify_envelope(&bytes, id)
 }
 
