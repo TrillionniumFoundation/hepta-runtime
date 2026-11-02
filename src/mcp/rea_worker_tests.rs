@@ -195,13 +195,9 @@ async fn deadline_expiration_explicitly_kills_and_reaps_worker() {
 		.stderr(Stdio::piped())
 		.kill_on_drop(true);
 	let mut child = child.spawn().expect("launch idle test child");
-	let error = collect_with_deadline(
-		&mut child,
-		Vec::new(),
-		Duration::from_millis(50),
-	)
-	.await
-	.expect_err("idle worker must time out");
+	let error = collect_with_deadline(&mut child, Vec::new(), Duration::from_millis(50))
+		.await
+		.expect_err("idle worker must time out");
 	assert!(error.to_string().contains("wall-clock deadline"));
 	assert!(child.try_wait().expect("poll child after kill").is_some());
 }

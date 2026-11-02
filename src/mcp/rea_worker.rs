@@ -179,7 +179,10 @@ async fn collect_with_deadline(
 		Ok(result) => result,
 		Err(_) => {
 			let _ = child.kill().await;
-			bail!("Rust REA worker exceeded {} ms wall-clock deadline", deadline.as_millis());
+			bail!(
+				"Rust REA worker exceeded {} ms wall-clock deadline",
+				deadline.as_millis()
+			);
 		}
 	}
 }
