@@ -125,3 +125,19 @@ fn unknown_relation_preserved_not_silently_complete() {
 	coverage(field(record, "relationship_coverage").expect("coverage")).expect("unknown is valid");
 	assert!(verify_record(&evidence).is_err());
 }
+
+#[test]
+#[ignore = "requires real rea-agents@6.8.0 CLI Evidence from the P0 npm oracle"]
+fn real_npm_reference_evidence_matches_native_subset_identity() {
+	let path = std::env::var("REA_REAL_EVIDENCE_JSON").expect("real REA fixture path");
+	let data = std::fs::read(path).expect("read upstream Evidence fixture");
+	let record: UniqueJson = serde_json::from_slice(&data).expect("parse authentic Evidence");
+	let outcome = verify_record(&record.0).expect("native canonical SHA matches upstream REA");
+	assert_eq!(outcome["evidence_id"], record.0["evidence_id"]);
+	let mut tampered = record.0.clone();
+	tampered["normalized_result"]["machine"] = json!(999);
+	assert!(verify_record(&tampered).is_err(), "actual Evidence tampering rejected");
+	let mut changed_path = record.0.clone();
+	changed_path["subject"]["local_path"] = json!("/some/other/location");
+	assert!(verify_record(&changed_path).is_ok(), "display path excluded from semantic hash");
+}

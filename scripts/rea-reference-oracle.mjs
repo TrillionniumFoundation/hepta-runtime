@@ -124,6 +124,15 @@ try {
   if (new Set(toolNames).size !== tools.length) {
     throw new Error("duplicate REA tool names");
   }
+  const pinned = JSON.parse(await readFile(
+    join(process.env.GITHUB_WORKSPACE ?? ".", "docs", "rea-native", "PUBLISHED_6_8_0_ORACLE.json"),
+    "utf8",
+  ));
+  for (const [key, observed] of [
+    ["tarballSha256", archiveHash.copy().digest("hex")],
+  ]) {
+    if (pinned[key] !== observed) throw new Error("REA published release drift: " + key);
+  }
   const manifestResult = {
     source: "npm registry rea-agents@6.8.0",
     sourceGitCommitEqualToNpmArchive: "unverified",
@@ -142,6 +151,15 @@ try {
       "This does not exercise Ghidra/IDA/Hopper, browser or device providers",
     ],
   };
+  for (const [key, expectedKey] of [
+    ["toolCount", "toolCount"],
+    ["catalogSha256", "catalogSha256"],
+    ["toolNamesSha256", "toolNamesSha256"],
+  ]) {
+    if (manifestResult[key] !== pinned[expectedKey]) {
+      throw new Error("REA published MCP catalog drift: " + key);
+    }
+  }
   await writeFile(join(output, "REA_6_8_0_MCP_CATALOG.full-output.json"), JSON.stringify(tools, null, 2) + "\n");
   await writeFile(join(output, "REA_6_8_0_REFERENCE_MANIFEST.json"), JSON.stringify(manifestResult, null, 2) + "\n");
   result = manifestResult;

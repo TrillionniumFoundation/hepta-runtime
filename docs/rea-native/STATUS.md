@@ -112,3 +112,10 @@ run, with its artifact and package digest, qualifies this catalog capture.
 This does not add a Node dependency to the shipped Rust binary and cannot
 establish complete full-schema, upstream source/tarball equivalence or real
 provider/dynamic-E2E qualification. See Issue #79.
+
+P0 published-reference fingerprint is pinned separately in
+PUBLISHED_6_8_0_ORACLE.json. The reference workflow fails on npm archive or
+MCP catalog drift, captures a true inspect_elf_notes Evidence record for
+/usr/bin/true and runs an ignored-by-default Rust differential test against
+the exact native subset implementation. That authentic record's hash is
+host-image-specific; never use it as a universal constant across hosts.
