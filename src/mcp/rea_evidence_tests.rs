@@ -136,8 +136,14 @@ fn real_npm_reference_evidence_matches_native_subset_identity() {
 	assert_eq!(outcome["evidence_id"], record.0["evidence_id"]);
 	let mut tampered = record.0.clone();
 	tampered["normalized_result"]["machine"] = json!(999);
-	assert!(verify_record(&tampered).is_err(), "actual Evidence tampering rejected");
+	assert!(
+		verify_record(&tampered).is_err(),
+		"actual Evidence tampering rejected"
+	);
 	let mut changed_path = record.0.clone();
 	changed_path["subject"]["local_path"] = json!("/some/other/location");
-	assert!(verify_record(&changed_path).is_ok(), "display path excluded from semantic hash");
+	assert!(
+		verify_record(&changed_path).is_ok(),
+		"display path excluded from semantic hash"
+	);
 }
