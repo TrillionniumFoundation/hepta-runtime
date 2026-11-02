@@ -145,3 +145,20 @@ advertised only in policy mode, invokes real read-only WASM inspection,
 rejects a file outside workspace roots and refuses malformed REA Evidence.
 This is a local mocked-host policy test; it does NOT prove remote Ghidra,
 actual host identities, cold recovery or the production security gate.
+
+## Isolated Rust artifact parser (experimental)
+
+The production `rea_inspect_artifact` handler reads admitted bytes using the
+workspace-confined descriptor API and passes them over stdin to the same
+shipped Rust binary in hidden `rea-worker` mode. The worker opens no artifact
+paths, receives no controller runtime environment, has a 32 MiB read limit,
+256 KiB response limit and 20-second controller deadline. On Unix it installs
+CPU, address-space, file-descriptor, core-dump and output-size rlimits before
+parsing. The Rust process boundary contains `panic = abort` failures.
+
+This does NOT yet provide a complete OS sandbox: worker UID and kernel network
+namespace are inherited. A hostile parser could still access host files or
+network before a strong seccomp/namespace/landlock policy is added. Worker
+process startup and failure are exercised through a real compiled binary in
+`tests/rea_worker.rs`; unit-only MCP smoke bypasses the process boundary under
+`cfg(test)` and does not qualify the shipped MCP-to-worker E2E path.

@@ -72,6 +72,9 @@ async fn main() -> Result<()> {
 				}
 			}
 		}
+		Commands::ReaWorker { selected_path } => {
+			mcp::rea_worker::serve_once(&selected_path)?;
+		}
 	}
 
 	Ok(())
