@@ -223,3 +223,13 @@ shipped MCP controller restart test temporarily removes the original artifact
 before restoring retained Evidence, proving the read path does not reopen the
 source. All validations are local host only; original REA Evidence semantics,
 cross-host replay and tamper-resistant signing remain unqualified.
+
+## Concurrent first-publication stress regression
+
+A permanent local Rust regression repeats 24 fresh-store creations with four
+simultaneous same-ID writers each (96 concurrent publication attempts in
+separate rounds). It requires exactly one atomic new hard-link per round,
+verified reusable content and private directory permissions established by
+the directory creation syscall itself. Qualification depends on an exact-head
+full CI pass; this exercises a single trusted Linux runner, not adversarial
+cross-UID state-directory ownership or real distributed storage.

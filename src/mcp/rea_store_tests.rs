@@ -188,3 +188,35 @@ fn durable_envelope_rejects_duplicate_json_and_unknown_members() {
 	unexpected["extra"] = json!(true);
 	assert!(verify_envelope(&serde_json::to_vec(&unexpected).expect("json"), id).is_err());
 }
+
+#[tokio::test]
+async fn repeated_concurrent_first_publications_never_expose_a_wide_permission_window() {
+	for round in 0..24 {
+		let state = tempfile::tempdir().expect("isolated new state");
+		let report = sample("/controlled/admitted.wasm");
+		let (a, b, c, d) = tokio::join!(
+			retain_record(&report, state.path()),
+			retain_record(&report, state.path()),
+			retain_record(&report, state.path()),
+			retain_record(&report, state.path())
+		);
+		let mut published = 0;
+		for result in [a, b, c, d] {
+			let receipt = result.unwrap_or_else(|error| panic!("round {round}: {error}"));
+			assert_eq!(receipt["status"], "retained");
+			if receipt["reused"] == false {
+				published += 1;
+			}
+		}
+		assert_eq!(published, 1, "only one exclusive hard link can publish");
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			let mode = std::fs::metadata(state.path().join("rea-preview-v1"))
+				.expect("created store root")
+				.permissions()
+				.mode();
+			assert_eq!(mode & 0o077, 0, "private mode must be atomic on round {round}");
+		}
+	}
+}
