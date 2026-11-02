@@ -276,9 +276,8 @@ fn parse_safetensors(data: &[u8], header_bytes: u64) -> Result<HeaderInfo> {
 		.checked_add(size)
 		.ok_or_else(|| anyhow!("header offset overflow"))?;
 	let document = slice_at(data, 8, size)?;
-	let parsed: Value =
-		super::rea_evidence::parse_unique_json(document)
-			.context("invalid safetensors JSON header")?;
+	let parsed: Value = super::rea_evidence::parse_unique_json(document)
+		.context("invalid safetensors JSON header")?;
 	let entries = parsed
 		.as_object()
 		.ok_or_else(|| anyhow!("safetensors header is not an object"))?;
@@ -358,9 +357,7 @@ fn parse_safetensors(data: &[u8], header_bytes: u64) -> Result<HeaderInfo> {
 	if cursor != payload_bytes {
 		bail!("safetensors has unindexed trailing tensor data");
 	}
-	let mut limitations = vec![
-		"Tensor byte contents and full model semantics are not validated",
-	];
+	let mut limitations = vec!["Tensor byte contents and full model semantics are not validated"];
 	if unknown_types > 0 {
 		limitations.push("Unknown tensor types prevent storage-length verification");
 	}

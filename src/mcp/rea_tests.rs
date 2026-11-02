@@ -176,10 +176,13 @@ fn safetensors_rejects_duplicate_metadata_and_duplicate_tensor_names() {
 		r#"{"__metadata__":{"owner":"a","owner":"b"},"a":{"dtype":"F32","shape":[1],"data_offsets":[0,4]}}"#,
 		r#"{"a":{"dtype":"F32","dtype":"I32","shape":[1],"data_offsets":[0,4]}}"#,
 	] {
-		let mut data=(header.len() as u64).to_le_bytes().to_vec();
+		let mut data = (header.len() as u64).to_le_bytes().to_vec();
 		data.extend(header.as_bytes());
-		data.extend([0_u8;4]);
-		assert!(inspect_bytes(&data,"/controlled/duplicate.safetensors").is_err(),"{header}");
+		data.extend([0_u8; 4]);
+		assert!(
+			inspect_bytes(&data, "/controlled/duplicate.safetensors").is_err(),
+			"{header}"
+		);
 	}
 }
 

@@ -98,7 +98,6 @@ impl<'de> Deserialize<'de> for UniqueJson {
 	}
 }
 
-
 pub(super) fn parse_unique_json(data: &[u8]) -> Result<Value> {
 	let record: UniqueJson = serde_json::from_slice(data)
 		.context("JSON object contains duplicates or invalid fields")?;
