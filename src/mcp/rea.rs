@@ -501,7 +501,8 @@ async fn inspect_with_roots(path: &Path, roots: &[PathBuf]) -> Result<Value> {
 
 pub async fn inspect_artifact(params: InspectArtifactParams) -> Result<String> {
 	let roots = &runtime_config()?.controller_workspace_roots;
-	let data = super::rea_files::read_bounded(Path::new(&params.path), roots, MAX_FILE_BYTES).await?;
+	let data =
+		super::rea_files::read_bounded(Path::new(&params.path), roots, MAX_FILE_BYTES).await?;
 	#[cfg(test)]
 	let report = inspect_bytes(&data, &params.path)?;
 	#[cfg(not(test))]

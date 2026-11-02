@@ -39,11 +39,17 @@ fn invoke_worker(bytes: &[u8]) -> Output {
 fn real_worker_handles_wasm_and_reports_non_rea_evidence() {
 	let outcome = invoke_worker(b"\0asm\x01\0\0\0");
 	assert!(outcome.status.success(), "{:?}", outcome.stderr);
-	assert!(outcome.stderr.is_empty(), "successful worker must not emit stderr");
+	assert!(
+		outcome.stderr.is_empty(),
+		"successful worker must not emit stderr"
+	);
 	let report: serde_json::Value =
 		serde_json::from_slice(&outcome.stdout).expect("worker response JSON");
 	assert_eq!(report["normalized_result"]["format"], "wasm");
-	assert_eq!(report["normalized_result"]["header_facts"]["binary_version"], 1);
+	assert_eq!(
+		report["normalized_result"]["header_facts"]["binary_version"],
+		1
+	);
 	assert_eq!(report["rea_evidence_compatible"], false);
 	assert_eq!(report["coverage"]["status"], "partial");
 }
@@ -51,8 +57,14 @@ fn real_worker_handles_wasm_and_reports_non_rea_evidence() {
 #[test]
 fn real_worker_rejects_truncated_elf_without_partial_stdout() {
 	let outcome = invoke_worker(b"\x7fELF\x02\x01\x01");
-	assert!(!outcome.status.success(), "invalid artifact must fail closed");
-	assert!(outcome.stdout.is_empty(), "no partial record on parse failure");
+	assert!(
+		!outcome.status.success(),
+		"invalid artifact must fail closed"
+	);
+	assert!(
+		outcome.stdout.is_empty(),
+		"no partial record on parse failure"
+	);
 	assert!(!outcome.stderr.is_empty(), "failure should be diagnosable");
 }
 

@@ -598,7 +598,9 @@ async fn call_runtime_tool_text(
 async fn rea_runtime_mcp_smoke() {
 	let root = tempfile::tempdir().expect("test root");
 	let workspace = root.path().join("workspace");
-	tokio::fs::create_dir_all(&workspace).await.expect("create workspace");
+	tokio::fs::create_dir_all(&workspace)
+		.await
+		.expect("create workspace");
 	let sample = workspace.join("sample.wasm");
 	tokio::fs::write(&sample, b"\0asm\x01\0\0\0")
 		.await
@@ -619,34 +621,40 @@ async fn rea_runtime_mcp_smoke() {
 				"allow_write": false
 			}
 		}
-	})).expect("synthetic policy");
+	}))
+	.expect("synthetic policy");
 	crate::mcp::runtime::init_runtime(config).expect("single-test runtime");
 	let (client, _server_task, _) = connect().await;
-	let tools = client.list_tools(None).await.expect("list policy-gated tools");
+	let tools = client
+		.list_tools(None)
+		.await
+		.expect("list policy-gated tools");
 	assert!(tools.tools.iter().any(|t| t.name == "rea_inspect_artifact"));
 	assert!(tools.tools.iter().any(|t| t.name == "rea_verify_evidence"));
 	assert!(!tools.tools.iter().any(|t| t.name == "shell"));
 
-	let (failed, response) = call_runtime_tool_text(
-		&client, "rea_inspect_artifact", json!({"path": sample}),
-	).await;
+	let (failed, response) =
+		call_runtime_tool_text(&client, "rea_inspect_artifact", json!({"path": sample})).await;
 	assert!(!failed, "REA MCP positive: {response}");
 	let report: serde_json::Value = serde_json::from_str(&response).expect("REA report");
 	assert_eq!(report["normalized_result"]["format"], "wasm");
 	assert_eq!(report["coverage"]["status"], "partial");
 	assert_eq!(report["rea_evidence_compatible"], false);
 
-	let (failed, result) = call_runtime_tool_text(
-		&client, "rea_inspect_artifact", json!({"path": outside}),
-	).await;
+	let (failed, result) =
+		call_runtime_tool_text(&client, "rea_inspect_artifact", json!({"path": outside})).await;
 	assert!(failed, "REA MCP outside root must fail: {result}");
 
 	let invalid_evidence = root.path().join("workspace").join("invalid-evidence.json");
 	tokio::fs::write(&invalid_evidence, br#"{"evidence_id":"wrong"}"#)
-		.await.expect("invalid evidence");
+		.await
+		.expect("invalid evidence");
 	let (failed, result) = call_runtime_tool_text(
-		&client, "rea_verify_evidence", json!({"path": invalid_evidence}),
-	).await;
+		&client,
+		"rea_verify_evidence",
+		json!({"path": invalid_evidence}),
+	)
+	.await;
 	assert!(failed, "REA MCP invalid Evidence must fail: {result}");
 }
 

@@ -107,25 +107,40 @@ pub async fn inspect_isolated(input: Vec<u8>, selected_path: &str) -> Result<Val
 		.stderr(Stdio::piped())
 		.kill_on_drop(true);
 	let run = async move {
-		let mut child = command.spawn().context("failed to spawn bounded Rust REA worker")?;
-		let mut stdin = child.stdin.take().ok_or_else(|| anyhow!("REA worker stdin unavailable"))?;
+		let mut child = command
+			.spawn()
+			.context("failed to spawn bounded Rust REA worker")?;
+		let mut stdin = child
+			.stdin
+			.take()
+			.ok_or_else(|| anyhow!("REA worker stdin unavailable"))?;
 		stdin
 			.write_all(&input)
 			.await
 			.context("failed to supply REA worker bytes")?;
-		stdin.shutdown().await.context("failed to close REA worker stdin")?;
+		stdin
+			.shutdown()
+			.await
+			.context("failed to close REA worker stdin")?;
 		drop(stdin);
-		let output = child.wait_with_output().await.context("failed to wait for REA worker")?;
+		let output = child
+			.wait_with_output()
+			.await
+			.context("failed to wait for REA worker")?;
 		if !output.status.success() {
 			let diagnostic_len = output.stderr.len().min(MAX_STDERR_BYTES);
 			let diagnostic = String::from_utf8_lossy(&output.stderr[..diagnostic_len]);
-			bail!("Rust REA worker failed ({}): {}", output.status, diagnostic.trim());
+			bail!(
+				"Rust REA worker failed ({}): {}",
+				output.status,
+				diagnostic.trim()
+			);
 		}
 		if output.stdout.len() > MAX_STDOUT_BYTES {
 			bail!("REA worker exceeded bounded response size");
 		}
-		let record: Value = serde_json::from_slice(&output.stdout)
-			.context("Rust REA worker output is not JSON")?;
+		let record: Value =
+			serde_json::from_slice(&output.stdout).context("Rust REA worker output is not JSON")?;
 		if record["record_format"] != "hepta.rea.preview.v1"
 			|| record["rea_evidence_compatible"] != false
 		{
