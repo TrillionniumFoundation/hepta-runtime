@@ -144,15 +144,16 @@ fn store_dir(state_dir: &Path) -> Result<PathBuf> {
 fn prepare_root(state_dir: &Path) -> Result<PathBuf> {
 	let root = store_dir(state_dir)?;
 	std::fs::create_dir_all(state_dir).context("cannot create controller state directory")?;
-	match std::fs::create_dir(&root) {
-		Ok(()) => {
-			#[cfg(unix)]
-			{
-				use std::os::unix::fs::PermissionsExt;
-				std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o700))
-					.context("cannot protect REA preview store")?;
-			}
-		}
+	// Establish private permissions in the create syscall itself. A separate
+	// chmod exposes a transient 0755 directory to simultaneous readers.
+	let mut builder = std::fs::DirBuilder::new();
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::DirBuilderExt;
+		builder.mode(0o700);
+	}
+	match builder.create(&root) {
+		Ok(()) => {}
 		Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
 		Err(error) => return Err(error).context("cannot create REA preview store"),
 	}
