@@ -247,3 +247,15 @@ same-UID malicious writers can bypass the cooperative flock, inode/directory
 usage, remote hosts, audit log growth and per-client fairness are not accounted.
 Production adoption remains NO-GO until host-level storage responsibility and
 multi-tenant policy are qualified.
+
+## Worker output memory admission: real hostile subprocess regressions
+
+The parser controller now streams stdout and stderr through independently capped
+async readers **while the worker is still running**. It does not call
+`wait_with_output`, which buffers unconstrained child output before a post-hoc
+size check. The stdout cap is 256 KiB, stderr cap 64 KiB, and each reader
+retains at most one byte over its cap before refusal. On I/O failure or excess
+output the child is killed and reaped. Stdin, stdout, stderr, and process wait
+are polled concurrently to avoid a child which writes before consuming input
+stalling the controller. Real adversarial subprocess tests flood each stream.
+These limits do not qualify a complete network/UID/mount namespace sandbox.

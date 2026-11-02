@@ -25,7 +25,7 @@ use serde_json::Value;
 use std::io::{Read, Write};
 use std::process::Stdio;
 use std::time::Duration;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 
 const INPUT_BYTES: u64 = 32 * 1024 * 1024;
@@ -96,6 +96,61 @@ pub fn serve_once(selected_path: &str, sandbox_probe: bool) -> Result<()> {
 	Ok(())
 }
 
+/// Consume a potentially hostile child output stream with a hard byte ceiling.
+///
+/// `wait_with_output` is intentionally avoided: it buffers unbounded stdout
+/// and stderr before its caller can enforce a post-hoc size check.
+async fn read_capped<R: AsyncRead + Unpin>(
+	reader: R,
+	max_bytes: usize,
+	stream: &str,
+) -> Result<Vec<u8>> {
+	let mut bytes = Vec::new();
+	reader
+		.take(max_bytes as u64 + 1)
+		.read_to_end(&mut bytes)
+		.await
+		.with_context(|| format!("cannot read REA worker {stream}"))?;
+	if bytes.len() > max_bytes {
+		bail!("REA worker {stream} exceeds {max_bytes} byte limit");
+	}
+	Ok(bytes)
+}
+
+/// Capture stdin/stdout/stderr concurrently so a child which writes before
+/// consuming its input cannot deadlock the controller. An over-limit output
+/// kills and reaps the child immediately rather than waiting for a timeout.
+async fn collect_child_output(
+	child: &mut tokio::process::Child,
+	input: Vec<u8>,
+) -> Result<(Vec<u8>, Vec<u8>, std::process::ExitStatus)> {
+	let mut stdin = child.stdin.take().ok_or_else(|| anyhow!("REA worker stdin unavailable"))?;
+	let stdout = child.stdout.take().ok_or_else(|| anyhow!("REA worker stdout unavailable"))?;
+	let stderr = child.stderr.take().ok_or_else(|| anyhow!("REA worker stderr unavailable"))?;
+	let result = tokio::try_join!(
+		async move {
+			stdin
+				.write_all(&input)
+				.await
+				.context("failed to supply REA worker bytes")?;
+			stdin.shutdown().await.context("failed to close REA worker stdin")?;
+			Ok::<(), anyhow::Error>(())
+		},
+		read_capped(stdout, MAX_STDOUT_BYTES, "stdout"),
+		read_capped(stderr, MAX_STDERR_BYTES, "stderr"),
+		async { child.wait().await.context("failed to wait for REA worker") }
+	);
+	match result {
+		Ok(((), stdout, stderr, status)) => Ok((stdout, stderr, status)),
+		Err(error) => {
+			// The reader exceeded its cap, an IO error occurred, or stdin broke.
+			// Do not leave an unbounded or unexpectedly hung parser alive.
+			let _ = child.kill().await;
+			Err(error)
+		}
+	}
+}
+
 /// Run the shipped worker as a child of the current binary. This boundary
 /// contains parser aborts (the production profile uses panic = abort) and
 /// applies a deadline as well as independent worker rlimits.
@@ -118,45 +173,28 @@ pub async fn inspect_isolated(input: Vec<u8>, selected_path: &str) -> Result<Val
 		let mut child = command
 			.spawn()
 			.context("failed to spawn bounded Rust REA worker")?;
-		let mut stdin = child
-			.stdin
-			.take()
-			.ok_or_else(|| anyhow!("REA worker stdin unavailable"))?;
-		stdin
-			.write_all(&input)
-			.await
-			.context("failed to supply REA worker bytes")?;
-		stdin
-			.shutdown()
-			.await
-			.context("failed to close REA worker stdin")?;
-		drop(stdin);
-		let output = child
-			.wait_with_output()
-			.await
-			.context("failed to wait for REA worker")?;
-		if !output.status.success() {
-			let diagnostic_len = output.stderr.len().min(MAX_STDERR_BYTES);
-			let diagnostic = String::from_utf8_lossy(&output.stderr[..diagnostic_len]);
+		let (stdout, stderr, status) = collect_child_output(&mut child, input).await?;
+		if !status.success() {
+			let diagnostic = String::from_utf8_lossy(&stderr);
 			bail!(
 				"Rust REA worker failed ({}): {}",
-				output.status,
+				status,
 				diagnostic.trim()
 			);
 		}
-		if output.stdout.len() > MAX_STDOUT_BYTES {
-			bail!("REA worker exceeded bounded response size");
-		}
 		let record: Value =
-			serde_json::from_slice(&output.stdout).context("Rust REA worker output is not JSON")?;
+			serde_json::from_slice(&stdout).context("Rust REA worker output is not JSON")?;
 		if record["record_format"] != "hepta.rea.preview.v1"
 			|| record["rea_evidence_compatible"] != false
 		{
 			bail!("Rust REA worker returned an unexpected evidence contract");
 		}
 		Ok::<_, anyhow::Error>(record)
-	};
-	tokio::time::timeout(WORKER_DEADLINE, run)
+	};	tokio::time::timeout(WORKER_DEADLINE, run)
 		.await
 		.context("Rust REA worker exceeded 20-second wall-clock deadline")?
 }
+
+#[cfg(test)]
+#[path = "rea_worker_tests.rs"]
+mod rea_worker_tests;
