@@ -279,3 +279,20 @@ fn real_npm_fractional_reference_evidence_matches_native() {
 		"fractional numeric tamper rejected"
 	);
 }
+
+#[test]
+fn parsed_extreme_exponent_preserves_exact_javascript_ieee754_bits() {
+	// A reference npm Evidence profile exposed a 1-ULP parsing mismatch at
+	// 0x7feffffffffffffe when serde_json float_roundtrip was disabled.
+	let source = "1.7976931348623155e308";
+	let decoded: Number = serde_json::from_str(source).expect("finite JSON number");
+	assert_eq!(
+		decoded.as_f64().expect("f64").to_bits(),
+		0x7feffffffffffffe_u64,
+		"JSON parsing may not silently round to f64::MAX"
+	);
+	assert_eq!(
+		canonical_js_number(&decoded).expect("JCS render"),
+		"1.7976931348623155e+308"
+	);
+}
