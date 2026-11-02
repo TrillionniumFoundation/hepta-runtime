@@ -22,6 +22,8 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::fmt::Write as _;
 use std::io::{Read, Write};
 use std::process::Stdio;
 use std::time::Duration;
@@ -163,6 +165,63 @@ async fn collect_child_output(
 	}
 }
 
+/// Verify that the *controller-admitted* bytes, not just a worker-supplied
+/// assertion, back the source identity and semantic commitment. This detects
+/// transport corruption and forged/mismatched records, but it cannot prove
+/// the parser's semantic classification without an independent oracle.
+fn verify_worker_report(
+	record: &Value,
+	source_digest: &[u8; 32],
+	source_len: usize,
+	selected_path: &str,
+) -> Result<()> {
+	super::rea_store::report_identity(record).context("untrusted worker preview identity invalid")?;
+	let map = record.as_object().ok_or_else(|| anyhow!("REA worker preview must be object"))?;
+	const FIELDS: &[&str] = &[
+		"record_format",
+		"native_evidence_id",
+		"rea_evidence_compatible",
+		"upstream_reference",
+		"subject",
+		"operation",
+		"analysis_profile",
+		"normalized_result",
+		"coverage",
+		"limitations",
+	];
+	if map.len() != FIELDS.len() || FIELDS.iter().any(|field| !map.contains_key(*field)) {
+		bail!("REA worker returned unexpected preview members");
+	}
+	for (key, keys) in [
+		("subject", &["local_path", "sha256", "size_bytes"][..]),
+		("upstream_reference", &["repository", "version", "source_commit"][..]),
+		("coverage", &["scope", "status"][..]),
+		(
+			"normalized_result",
+			&["format", "architecture", "word_size_bits", "byte_order", "header_facts"][..],
+		),
+	] {
+		let nested = record[key].as_object().ok_or_else(|| anyhow!("REA worker invalid {key}"))?;
+		if nested.len() != keys.len() || keys.iter().any(|field| !nested.contains_key(*field)) {
+			bail!("REA worker preview has unexpected {key} members");
+		}
+	}
+	if record["upstream_reference"]["repository"] != "morluto/rea" {
+		bail!("REA worker source repository mismatch");
+	}
+	let mut actual = String::with_capacity(64);
+	for byte in source_digest {
+		write!(&mut actual, "{byte:02x}")?;
+	}
+	if record["subject"]["sha256"].as_str() != Some(actual.as_str())
+		|| record["subject"]["size_bytes"].as_u64() != Some(source_len as u64)
+		|| record["subject"]["local_path"].as_str() != Some(selected_path)
+	{
+		bail!("REA worker preview is not bound to controller-admitted input bytes and path");
+	}
+	Ok(())
+}
+
 /// Run the shipped worker as a child of the current binary. This boundary
 /// contains parser aborts (the production profile uses panic = abort) and
 /// applies a deadline as well as independent worker rlimits.
@@ -170,6 +229,9 @@ pub async fn inspect_isolated(input: Vec<u8>, selected_path: &str) -> Result<Val
 	if input.len() as u64 > INPUT_BYTES {
 		bail!("REA inspection file exceeds 32 MiB worker limit");
 	}
+	let input_size = input.len();
+	let input_digest: [u8; 32] = Sha256::digest(&input).into();
+	let selected_path = selected_path.to_owned();
 	let binary = std::env::current_exe().context("cannot locate Rust REA worker binary")?;
 	let mut command = Command::new(binary);
 	command
@@ -192,11 +254,7 @@ pub async fn inspect_isolated(input: Vec<u8>, selected_path: &str) -> Result<Val
 		}
 		let record: Value =
 			serde_json::from_slice(&stdout).context("Rust REA worker output is not JSON")?;
-		if record["record_format"] != "hepta.rea.preview.v1"
-			|| record["rea_evidence_compatible"] != false
-		{
-			bail!("Rust REA worker returned an unexpected evidence contract");
-		}
+		verify_worker_report(&record, &input_digest, input_size, &selected_path)?;
 		Ok::<_, anyhow::Error>(record)
 	};
 	tokio::time::timeout(WORKER_DEADLINE, run)

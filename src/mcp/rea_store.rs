@@ -83,7 +83,7 @@ fn id_suffix(id: &str) -> Result<&str> {
 	Ok(suffix)
 }
 
-fn report_identity(record: &Value) -> Result<String> {
+pub(super) fn report_identity(record: &Value) -> Result<String> {
 	if record["record_format"] != RECORD_VERSION
 		|| record["rea_evidence_compatible"] != false
 		|| record["operation"] != "rea_inspect_artifact"

@@ -103,3 +103,34 @@ async fn real_child_endless_stdout_is_killed_and_reaped_at_limit() {
 	);
 	assert!(child.try_wait().expect("poll reaped child").is_some());
 }
+
+#[test]
+fn controller_authenticates_worker_preview_against_captured_bytes_and_path() {
+	let captured = b"\\0asm\\x01\\0\\0\\0";
+	let selected = "/admitted/original.wasm";
+	let identity: [u8; 32] = Sha256::digest(captured).into();
+	let report = crate::mcp::rea::inspect_bytes(captured, selected)
+		.expect("native preview reference");
+	verify_worker_report(&report, &identity, captured.len(), selected)
+		.expect("valid report binds exact admitted bytes");
+
+	let mut substituted = report.clone();
+	substituted["subject"]["local_path"] = serde_json::json!("/different/path");
+	assert!(verify_worker_report(&substituted, &identity, captured.len(), selected).is_err());
+
+	let mut forged_digest = report.clone();
+	forged_digest["subject"]["sha256"] = serde_json::json!("0".repeat(64));
+	assert!(verify_worker_report(&forged_digest, &identity, captured.len(), selected).is_err());
+
+	let mut modified = report.clone();
+	modified["normalized_result"]["header_facts"]["binary_version"] = serde_json::json!(999);
+	assert!(verify_worker_report(&modified, &identity, captured.len(), selected).is_err());
+
+	let mut injected = report.clone();
+	injected["unexpected"] = serde_json::json!("untrusted");
+	assert!(verify_worker_report(&injected, &identity, captured.len(), selected).is_err());
+
+	let alternate: [u8; 32] = Sha256::digest(b"other bytes").into();
+	assert!(verify_worker_report(&report, &alternate, captured.len(), selected).is_err());
+	assert!(verify_worker_report(&report, &identity, captured.len() + 1, selected).is_err());
+}

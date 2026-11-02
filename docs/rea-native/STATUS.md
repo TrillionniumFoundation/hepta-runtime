@@ -259,3 +259,14 @@ output the child is killed and reaped. Stdin, stdout, stderr, and process wait
 are polled concurrently to avoid a child which writes before consuming input
 stalling the controller. Real adversarial subprocess tests flood each stream.
 These limits do not qualify a complete network/UID/mount namespace sandbox.
+
+## Controller-to-worker record authenticity checks (limited)
+
+The controller now computes SHA-256 of admitted input before sending it to
+an isolated worker, then validates the worker's native semantic commitment,
+source-byte count, selected display path and exact v1 envelope shape before
+accepting output. Tampered normalized facts, substituted paths and hashes,
+extra fields, and wrong input sizes are rejected in dedicated Rust tests.
+This is not a cryptographic proof of a remote worker's identity: the local
+controller and untrusted parser worker share a trust domain with no signed
+host attestation; it also cannot independently prove parser classification.
