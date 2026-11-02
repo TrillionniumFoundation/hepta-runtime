@@ -245,33 +245,24 @@ fn subject(v: &Value) -> Result<Value> {
 		"hopper"
 			| "analysis-database"
 			| "mach-o"
-			| "elf"
-			| "pe"
+			| "elf" | "pe"
 			| "dos-mz"
 			| "dos-com"
 			| "raw-binary"
 			| "gamecube-dol"
-			| "zip"
-			| "ipa"
-			| "apk"
-			| "msix"
-			| "appx"
-			| "hap"
-			| "hsp"
-			| "app-pack"
-			| "asar"
-			| "ines"
+			| "zip" | "ipa"
+			| "apk" | "msix"
+			| "appx" | "hap"
+			| "hsp" | "app-pack"
+			| "asar" | "ines"
 			| "godot-pck"
 			| "unityfs"
 			| "uimage"
-			| "dmg"
-			| "pkg"
-			| "plist"
-			| "javascript"
+			| "dmg" | "pkg"
+			| "plist" | "javascript"
 			| "source-map"
 			| "directory"
-			| "file"
-			| "unknown"
+			| "file" | "unknown"
 			| "mach-o-universal"
 			| "javascript-bundle"
 			| "entitlements"
@@ -280,10 +271,8 @@ fn subject(v: &Value) -> Result<Value> {
 			| "dotnet-bundle"
 			| "bun-standalone"
 			| "intel-hex"
-			| "srec"
-			| "esp-image"
-			| "uf2"
-			| "dfuse"
+			| "srec" | "esp-image"
+			| "uf2" | "dfuse"
 			| "esp-flash-image"
 			| "fit"
 	) {
@@ -299,16 +288,11 @@ fn subject(v: &Value) -> Result<Value> {
 		if !matches!(
 			architecture,
 			"x86"
-				| "x86_64"
-				| "arm"
-				| "arm64"
-				| "arm64_32"
-				| "mips"
-				| "6502"
-				| "riscv"
-				| "powerpc"
-				| "m68k"
-				| "hexagon"
+				| "x86_64" | "arm"
+				| "arm64" | "arm64_32"
+				| "mips" | "6502"
+				| "riscv" | "powerpc"
+				| "m68k" | "hexagon"
 		) || (format != "raw-binary" && matches!(architecture, "6502" | "m68k"))
 		{
 			bail!("unsupported REA evidence subject architecture for format");
@@ -338,7 +322,10 @@ fn profile(v: &Value, owner: &Value) -> Result<()> {
 	// non-null and non-empty even though ordinary Evidence providers may
 	// legitimately report an unknown/null version.
 	let profile_provider = obj(field(p, "provider")?, "profile provider")?;
-	nonempty(field(profile_provider, "version")?, "profile.provider.version")?;
+	nonempty(
+		field(profile_provider, "version")?,
+		"profile.provider.version",
+	)?;
 	if field(p, "provider")? != owner {
 		bail!("analysis_profile provider does not match Evidence provider");
 	}
