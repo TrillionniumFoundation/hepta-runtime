@@ -136,8 +136,12 @@ try {
     }
     invalidPathResponse = { delivery: "tool-result", raw: negative };
   } catch (error) {
-    if (String(error).includes("accepted a relative input")) throw error;
-    invalidPathResponse = { delivery: "json-rpc-error", diagnostic: String(error) };
+    const diagnostic = String(error);
+    if (diagnostic.includes("accepted a relative input")) throw error;
+    if (!/(-32602|invalid|absolute|validation|path.*relative)/i.test(diagnostic)) {
+      throw error;
+    }
+    invalidPathResponse = { delivery: "json-rpc-error", diagnostic };
   }
   const negativeJson = JSON.stringify(invalidPathResponse);
   if (negativeJson.length > 65536) {
