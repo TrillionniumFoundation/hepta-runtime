@@ -307,7 +307,10 @@ fn malformed_header_fuzz_does_not_panic() {
 				}
 			}
 			let parsed = std::panic::catch_unwind(|| inspect_bytes(&data, "/controlled/fuzz"));
-			assert!(parsed.is_ok(), "parser panic on seed {seed:?} iteration {round}");
+			assert!(
+				parsed.is_ok(),
+				"parser panic on seed {seed:?} iteration {round}"
+			);
 			if let Ok(Ok(report)) = parsed {
 				assert_eq!(report["coverage"]["status"], "partial");
 				assert_eq!(report["rea_evidence_compatible"], false);
