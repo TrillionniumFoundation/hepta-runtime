@@ -286,6 +286,16 @@ fn real_npm_fractional_reference_evidence_matches_native() {
 		cases.len() >= 400,
 		"must exercise extensive fixed and bit-pattern samples"
 	);
+	assert!(
+		cases.iter().any(|record| record["provider"]["version"] == ""),
+		"the genuine npm oracle must include empty ordinary provider version"
+	);
+	assert!(
+		cases
+			.iter()
+			.any(|record| record["provider"]["version"].is_null()),
+		"the genuine npm oracle must include null ordinary provider version"
+	);
 	for (index, record) in cases.iter().enumerate() {
 		let checked = verify_record(record)
 			.unwrap_or_else(|error| panic!("npm Evidence case {index}: {error}"));
