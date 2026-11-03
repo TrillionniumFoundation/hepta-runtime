@@ -82,6 +82,12 @@ impl ClientFailure {
 
 type ClientResult<T> = std::result::Result<T, ClientFailure>;
 
+#[derive(Debug)]
+struct ClientResponse {
+	frame: Vec<u8>,
+	succeeded: bool,
+}
+
 fn digest_hex(bytes: &[u8]) -> String {
 	let mut result = String::with_capacity(bytes.len() * 2);
 	for byte in bytes {
@@ -198,7 +204,7 @@ async fn hash_file(path: &Path, maximum: u64) -> Result<(String, u64)> {
 	if !before.is_file() || before.len() > maximum {
 		bail!("identity input is not a regular file within its byte budget");
 	}
-	let mut hasher = Sha256::new();
+	let mut hasher = ring::digest::Context::new(&ring::digest::SHA256);
 	let mut chunk = vec![0u8; before.len().clamp(1, 1024 * 1024) as usize];
 	let mut consumed = 0u64;
 	loop {
@@ -220,7 +226,7 @@ async fn hash_file(path: &Path, maximum: u64) -> Result<(String, u64)> {
 	{
 		bail!("identity input changed while hashing");
 	}
-	Ok((digest_hex(&hasher.finalize()), consumed))
+	Ok((digest_hex(hasher.finish().as_ref()), consumed))
 }
 
 fn same_identity(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
@@ -405,7 +411,7 @@ async fn exchange(
 	args: &WeightClientArgs,
 	request: &[u8],
 	request_id: &str,
-) -> ClientResult<Vec<u8>> {
+) -> ClientResult<ClientResponse> {
 	let mut stream = connect(args).await?;
 	let exchange = async {
 		stream
@@ -419,9 +425,9 @@ async fn exchange(
 		let frame = read_frame(&mut stream, MAX_RESPONSE_BYTES)
 			.await
 			.map_err(|error| ClientFailure::new("PROTOCOL_ERROR", error, true))?;
-		response_ok(&frame, request_id)
+		let succeeded = response_ok(&frame, request_id)
 			.map_err(|error| ClientFailure::new("PROTOCOL_ERROR", error, true))?;
-		Ok(frame)
+		Ok(ClientResponse { frame, succeeded })
 	};
 	tokio::time::timeout(Duration::from_millis(args.timeout_ms), exchange)
 		.await
@@ -439,7 +445,7 @@ async fn exchange(
 	_args: &WeightClientArgs,
 	_request: &[u8],
 	_request_id: &str,
-) -> ClientResult<Vec<u8>> {
+) -> ClientResult<ClientResponse> {
 	Err(ClientFailure::new(
 		"TRANSPORT_UNAVAILABLE",
 		"native weight clients require a qualified Unix host",
@@ -478,13 +484,7 @@ pub async fn run_cli(args: WeightClientArgs) -> Result<i32> {
 	}
 	.await;
 	let (frame, exit_code) = match result {
-		Ok(frame) => {
-			let id = request_id
-				.as_deref()
-				.ok_or_else(|| anyhow!("validated request lost its identity"))?;
-			let success = response_ok(&frame, id)?;
-			(frame, if success { 0 } else { 1 })
-		}
+		Ok(response) => (response.frame, if response.succeeded { 0 } else { 1 }),
 		Err(error) => (error.frame(request_id.as_deref())?, 1),
 	};
 	let mut stdout = tokio::io::stdout();

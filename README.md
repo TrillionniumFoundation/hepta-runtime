@@ -10,6 +10,7 @@ Linear forward operator. Each report states its coverage and identity scope.
 Native artifact operations work without a resident Python model or Node REA process.
 
 - [Static providers and original-job lifecycle](docs/rea-native/STATIC_PROVIDERS.md)
+- [Local browser capture through the native job owner](docs/rea-native/LOCAL_BROWSER_CAPTURE.md)
 - [Exact native weight artifacts and restoration](docs/weight-runtime/NATIVE_ARTIFACTS.md)
 - [Native F32 Linear calculation and independent comparison](docs/weight-runtime/NATIVE_LINEAR.md)
 

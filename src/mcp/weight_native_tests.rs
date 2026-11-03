@@ -120,6 +120,24 @@ async fn package_pin_matches_python_ascii_sorted_string_dictionary() {
 	);
 }
 
+#[tokio::test]
+async fn file_identity_hash_matches_sha256_for_empty_and_multichunk_bytes() {
+	let temp = tempfile::tempdir().unwrap();
+	let path = temp.path().join("identity.bin");
+	let mut inputs = vec![Vec::new(), b"abc".to_vec()];
+	inputs.push(
+		(0usize..2 * 1024 * 1024 + 65)
+			.map(|index| (index * 131 + 17) as u8)
+			.collect(),
+	);
+	for input in inputs {
+		tokio::fs::write(&path, &input).await.unwrap();
+		let (actual, consumed) = hash_file(&path, input.len() as u64).await.unwrap();
+		assert_eq!(actual, digest_hex(&Sha256::digest(&input)));
+		assert_eq!(consumed, input.len() as u64);
+	}
+}
+
 #[cfg(unix)]
 async fn socket() -> (
 	tempfile::TempDir,
@@ -155,7 +173,38 @@ async fn socket_exchange_preserves_request_and_response_bytes() {
 		stream.shutdown().await.unwrap();
 	});
 	let result = exchange(&args, &frame, "probe-1").await.unwrap();
-	assert_eq!(result, response);
+	assert_eq!(result.frame, response);
+	assert!(result.succeeded);
+	task.await.unwrap();
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn bounded_large_worker_error_preserves_bytes_and_failure_status() {
+	let (_temp, args, server) = socket().await;
+	let frame = request(&args.session_id);
+	let mut response = serde_json::to_vec(&serde_json::json!({
+		"id": "probe-1",
+		"ok": false,
+		"error": {
+			"code": "EXPECTED_WORKER_ERROR",
+			"message": "x".repeat(MAX_RESPONSE_BYTES - 256),
+			"details": {}
+		}
+	}))
+	.unwrap();
+	response.push(b'\n');
+	assert!(response.len() <= MAX_RESPONSE_BYTES);
+	let expected = response.clone();
+	let task = tokio::spawn(async move {
+		let (mut stream, _) = server.accept().await.unwrap();
+		read_frame(&mut stream, MAX_REQUEST_BYTES).await.unwrap();
+		stream.write_all(&response).await.unwrap();
+		stream.shutdown().await.unwrap();
+	});
+	let result = exchange(&args, &frame, "probe-1").await.unwrap();
+	assert!(!result.succeeded);
+	assert!(result.frame == expected, "large worker error frame changed");
 	task.await.unwrap();
 }
 
@@ -188,6 +237,7 @@ async fn socket_timeout_does_not_reconnect_or_resend_after_a_possible_effect() {
 async fn socket_protocol_failures_are_unknown_and_preserve_the_original_id() {
 	for response in [
 		b"{\"id\":\"wrong\",\"ok\":true,\"result\":{}}\n".to_vec(),
+		b"{\"id\":\"probe-1\",\"ok\":true,\"result\":{\"value\":1,\"value\":2}}\n".to_vec(),
 		b"{\"id\":\"probe-1\",\"ok\":true,\"result\":{}}\n{}\n".to_vec(),
 		vec![b'x'; MAX_RESPONSE_BYTES + 1],
 	] {

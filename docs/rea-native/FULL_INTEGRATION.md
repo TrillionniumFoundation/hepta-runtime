@@ -33,7 +33,7 @@ and paired pre-fix MCP evidence are recorded in the
 | Application packages | Checked ZIP plus fixed manifest decoding | APK binary XML and JAR main attributes, stored/deflate and CRC; no signature or installability verdict |
 | Mature engines | Optional JADX and Ghidra providers | JADX class/source observations and Ghidra ELF import inventory, under the original job owner; no verified reconstructed-source claim |
 | JS/Electron | package.json declarations | Entrypoints, dependencies and scripts; no script execution, Node resolution or IPC reconstruction |
-| Browser evidence | Saved HAR inspection, comparison and selected body replay | Offline observations; no live request or complete browser-state replay |
+| Browser evidence | Existing durable process owner → private Chromium helper → saved HAR inspection, comparison and selected body replay | Bounded same-host owned HTTP-resource capture; saved-representation replay; no application-script execution or complete browser-state replay |
 | Weights | Existing native transport, patch/restore and F32 Linear | General model execution remains with its selected backend |
 
 Details: [models](MODEL_SESSIONS.md), [ELF and Java](ELF_AND_JAVA.md),
@@ -128,8 +128,18 @@ installation preparation rather than weakening file-set or identity checks.
 HAR comparison preserves repeated request occurrences. Replay reads the
 selected saved body representation; missing, empty and base64-encoded bodies
 retain distinct meanings. package.json reports JSON locations and literal
-declarations without evaluating conditional exports or npm scripts. Existing
-browser execution remains with Hepta's existing browser/task capabilities.
+declarations without evaluating conditional exports or npm scripts.
+
+The [bounded local capture helper](LOCAL_BROWSER_CAPTURE.md) runs through the
+existing durable process owner and reuses the private Chromium lifecycle from
+the PDF helper. It admits a content-pinned resource manifest and uses a fixed,
+owned loopback harness; supplied HTML/JavaScript is fetched as data. It does not
+attach to a user's browser, run an application's scripts, or establish a new
+REA execution service. The actual qualification covers capture, repeated-resource
+comparison, retained HAR reads after controller restart, same-key reuse,
+representation replay and cancellation cleanup. Missing response bodies stay
+missing. Replay observed no connections or HTTP requests at two known,
+positive-controlled origins; that is not a process-wide network-isolation claim.
 
 ## Workload-driven replacement and qualification
 
@@ -144,21 +154,33 @@ not shipped runtime implementations. These changes do not establish complete
 REA tool parity, a zero-Python runtime, full browser replay or production
 cutover.
 
-The completed development and release comparisons each retain 210 measurements
-and the same five semantic checks. The current decision is to keep the native
-client opt-in: the release cohort did not establish a general latency or memory
-advantage. Its cold helper CPU cost was higher, full MCP medians were mixed,
-and the per-client lifetime RSS measurement did not distinguish the paths.
-Both transports used the same Python/PyTorch backend. Exact sample counts,
-resource definitions, host-pressure observations and original failure records
-are retained in the [development report](../weight-runtime/BENCHMARK_CLIENTS_DEV_20261103.md)
-and [release report](../weight-runtime/BENCHMARK_CLIENTS_RELEASE_20261103.md).
+The earlier development and release comparisons each retain 210 measurements
+and their original mixed results in the
+[development report](../weight-runtime/BENCHMARK_CLIENTS_DEV_20261103.md) and
+[release report](../weight-runtime/BENCHMARK_CLIENTS_RELEASE_20261103.md).
+The [client closure comparison](../weight-runtime/BENCHMARK_CLIENTS_CLOSURE_20261103.md)
+adds 240 fixed ABBA identity/large-frame measurements and 300 real-worker/MCP
+measurements after the full-byte hashing and duplicate-response-parse changes.
+The principal native-client paths used about 40% less median client CPU than
+the pinned earlier native release. On the three measured real-worker cold-helper
+operations, mean client CPU was 16–18% lower than the Python compatibility client.
+
+Native transport remains opt-in: complete MCP latency was mixed, and the
+lifetime-RSS measurements do not establish a memory advantage. Both transports
+use the same Python/PyTorch backend. Both native revisions already used a
+current-thread WeightClient runtime; the gain is not attributed to removing
+a host-sized Tokio pool. Full input hashing, exact response bytes, error
+semantics and no-resend behavior remain part of the contract.
 
 ## Source-bound qualification
 
 The [qualification index](QUALIFICATION_20261103.md) binds the complete functional
 gates, actual operator engines, storage environments and workload measurements.
 The complete on-host test matrix uses explicitly recorded tmpfs fixture storage.
-An ext4 audit-statistics query-budget failure and its single traced reproduction
-remain separate, visible limitations; no production deadline or lock was relaxed.
-GitHub validates the publication commit and prospective merge independently.
+The original ext4 audit-statistics query-budget failure and its diagnostic
+remain preserved. The [blocker closure report](BLOCKER_CLOSURE_20261103.md)
+records the later warm-admission fix and its separate physical-ext4 qualification
+with the unchanged three-second budget. It also binds the client and real-browser
+results to their actual source and executable identities. GitHub validates the
+publication commit and prospective merge independently; earlier green CI does
+not stand in for either new gate.

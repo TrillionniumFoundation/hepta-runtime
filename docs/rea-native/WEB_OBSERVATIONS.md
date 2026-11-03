@@ -110,3 +110,7 @@ cargo test --locked --all-features --test rea_web_external
 Test definitions are not execution receipts. Record the actual exit status and
 output before claiming qualification. No full upstream REA behavior parity,
 live-browser qualification or production service adoption is implied.
+
+## Native-owned local capture producer
+
+The optional [local browser capture adapter](LOCAL_BROWSER_CAPTURE.md) produces saved HAR from SHA-bound local resources through the existing native job owner and the shared private Chromium lifecycle. Its generated page makes fixed local fetches; supplied JavaScript and HTML remain response data. A live qualification receipt is required before claiming that producer qualified. These saved-file inspection and replay tools keep the contract above, including zero network replay and no browser-state restoration.

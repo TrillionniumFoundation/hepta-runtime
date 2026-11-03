@@ -496,12 +496,12 @@ impl Coordinator {
 }
 
 fn read_usage(root: &Path, owners: &[String], deadline: Instant) -> Result<ObservedUsage> {
+	let admission = index::query_admission(deadline)?;
 	let archive = {
-		let _guard = index::query_lock(deadline)?;
 		let hot = open_store(root)?;
 		hot_snapshot(root, &hot)?.1
 	};
-	let observed = index::usage(root, &archive, owners, deadline)?;
+	let observed = index::usage(root, &archive, owners, deadline, admission)?;
 	let replies = observed
 		.values
 		.into_iter()

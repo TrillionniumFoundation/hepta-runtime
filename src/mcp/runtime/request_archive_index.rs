@@ -147,6 +147,44 @@ impl Drop for SteadyTrace {
 			self.phase_us[SteadyPhase::Other as usize]);
 	}
 }
+// A warm metadata observation keeps one FIFO turn from opening hot state through
+// its final original-content fence. The trace travels with that actual guard,
+// including its first acquisition: a reused turn must not report zero total wait.
+// Fields drop in declaration order, so diagnostics run only after custody leaves.
+pub(super) struct SnapshotAdmission {
+	guard: Option<AuditStoreGuard<'static>>,
+	trace: SteadyTrace,
+}
+impl SnapshotAdmission {
+	fn new() -> Self {
+		Self {
+			guard: None,
+			trace: SteadyTrace::new("metadata_snapshot", Some(false)),
+		}
+	}
+	fn acquire(&mut self, deadline: Instant) -> Result<()> {
+		if Instant::now() >= deadline {
+			bail!("archive metadata query total deadline exceeded");
+		}
+		if self.guard.is_none() {
+			self.trace.enter(SteadyPhase::StoreLockWait);
+			self.guard = Some(query_lock(deadline)?);
+		}
+		self.trace.enter(SteadyPhase::Other);
+		Ok(())
+	}
+	fn release(&mut self) {
+		self.trace.enter(SteadyPhase::Other);
+		drop(self.guard.take());
+	}
+}
+
+pub(super) fn query_admission(deadline: Instant) -> Result<SnapshotAdmission> {
+	let mut admission = SnapshotAdmission::new();
+	admission.acquire(deadline)?;
+	Ok(admission)
+}
+
 // Obsolete experimental private tables are never read or maintained. The whole
 // cache seal still covers their pages until a normal cache rebuild replaces them.
 type Id = [u8; 32];
@@ -405,6 +443,7 @@ enum ParallelEvent {
 	AfterCachedBeforeClaim,
 	BeforePublish,
 	BeforeSnapshotFence,
+	SnapshotPrepared,
 	SharedScanStarted,
 	SharedScanComplete,
 }
@@ -1565,7 +1604,7 @@ fn worker(slot: &Arc<Slot>) -> Result<()> {
 }
 // The registry owns one reference; an actual background worker owns one
 // more. Without a worker, a second reference is a live caller, not idle cache
-// ownership. In particular, do not retire ready() between slot_at and spawn.
+// ownership. A live caller cannot be retired between slot lookup and worker spawn.
 fn can_retire(slot: &Arc<Slot>) -> bool {
 	slot.state.lock().is_ok_and(|state| {
 		let internal_owners = 1 + usize::from(state.worker);
@@ -1637,23 +1676,32 @@ fn try_slot_at(root: &Path, archive: &Archive) -> Result<Arc<Slot>> {
 // roots wait only within their original query deadline. Release every store,
 // registry and state guard before waiting so current readers/workers can leave
 // and authoritative writers can continue; no failed request is redispatched.
-fn slot_at_until(root: &Path, archive: &Archive, deadline: Instant) -> Result<Arc<Slot>> {
+fn slot_with_admission(
+	root: &Path,
+	archive: &Archive,
+	deadline: Instant,
+	admission: &mut SnapshotAdmission,
+) -> Result<Arc<Slot>> {
 	loop {
-		let result = {
-			let _guard = query_lock(deadline)?;
-			try_slot_at(root, archive)
-		};
-		match result {
+		admission.acquire(deadline)?;
+		match try_slot_at(root, archive) {
+			Ok(slot) => return Ok(slot),
 			Err(error) if error.is::<IndexCapacityBusy>() => {
+				admission.release();
 				let remaining = deadline.saturating_duration_since(Instant::now());
 				if remaining.is_zero() {
 					bail!("archive metadata query total deadline exceeded");
 				}
 				std::thread::sleep(remaining.min(Duration::from_millis(1)));
 			}
-			result => return result,
+			Err(error) => return Err(error),
 		}
 	}
+}
+
+#[cfg(test)]
+fn slot_at_until(root: &Path, archive: &Archive, deadline: Instant) -> Result<Arc<Slot>> {
+	slot_with_admission(root, archive, deadline, &mut SnapshotAdmission::new())
 }
 
 #[cfg(test)]
@@ -1687,13 +1735,19 @@ fn large_preparation_hint(root: &File) -> bool {
 		&& raw.st_size > CACHE_BYTES as _
 }
 
-fn ready(root: &Path, archive: &Archive, deadline: Instant) -> Result<Arc<Slot>> {
+fn ready_with_admission(
+	root: &Path,
+	archive: &Archive,
+	deadline: Instant,
+	admission: &mut SnapshotAdmission,
+) -> Result<Arc<Slot>> {
 	let _trace = metadata_trace::Stage::new("index_ready");
-	let slot = slot_at_until(root, archive, deadline)?;
+	let slot = slot_with_admission(root, archive, deadline, admission)?;
 	let mut started = false;
 	loop {
+		admission.acquire(deadline)?;
 		{
-			let _guard = query_lock(deadline)?;
+			admission.trace.enter(SteadyPhase::State);
 			let mut state = slot
 				.state
 				.lock()
@@ -1705,6 +1759,8 @@ fn ready(root: &Path, archive: &Archive, deadline: Instant) -> Result<Arc<Slot>>
 			if state.database.is_some() && !state.failed {
 				state.requested =
 					state.applied != state.generation || !state.pending.is_empty() || state.busy;
+				#[cfg(test)]
+				parallel_event(&slot, ParallelEvent::SnapshotPrepared);
 				return Ok(slot.clone());
 			}
 			if state.failed && started {
@@ -1742,11 +1798,16 @@ fn ready(root: &Path, archive: &Archive, deadline: Instant) -> Result<Arc<Slot>>
 				bail!("archive index preparing; repeat only this metadata query");
 			}
 		}
+		admission.release();
 		if Instant::now() >= deadline {
 			bail!("archive index preparing or validation unavailable; repeat only this metadata query");
 		}
 		std::thread::sleep(Duration::from_millis(2));
 	}
+}
+#[cfg(test)]
+fn ready(root: &Path, archive: &Archive, deadline: Instant) -> Result<Arc<Slot>> {
+	ready_with_admission(root, archive, deadline, &mut SnapshotAdmission::new())
 }
 pub(super) fn query_lock(deadline: Instant) -> Result<AuditStoreGuard<'static>> {
 	let _trace = metadata_trace::Stage::new("store_lock_wait");
@@ -1907,7 +1968,14 @@ fn read_snapshot<T>(
 	deadline: Instant,
 	read: impl FnOnce(&Database, &PendingView) -> Result<T>,
 ) -> Result<T> {
-	read_snapshot_with_mode(root, archive, deadline, SnapshotReadMode::Serial, read)
+	read_snapshot_with_mode(
+		root,
+		archive,
+		deadline,
+		SnapshotReadMode::Serial,
+		SnapshotAdmission::new(),
+		read,
+	)
 }
 
 #[derive(Clone, Copy)]
@@ -1923,26 +1991,25 @@ fn read_snapshot_with_mode<T>(
 	archive: &Archive,
 	deadline: Instant,
 	mode: SnapshotReadMode,
+	mut admission: SnapshotAdmission,
 	read: impl FnOnce(&Database, &PendingView) -> Result<T>,
 ) -> Result<T> {
 	loop {
-		let slot = ready(root, archive, deadline)?;
-		// Signal before waiting for the read fence. Drop covers every retry,
-		// successful read and error, without taking state or maintenance locks.
+		admission.trace.outcome = "error_or_unwind";
+		let slot = ready_with_admission(root, archive, deadline, &mut admission)?;
+		// Mark foreground validation without taking a maintenance lock. Finished
+		// activity postpones idle sealing beyond the actual store-guard release.
 		let _metadata_read = slot.metadata_activity.enter();
-		// Declare before STORE_LOCK and state; Drop logs only after both guards.
-		let mut trace = SteadyTrace::new("metadata_drain", Some(false));
-		trace.enter(SteadyPhase::StoreLockWait);
-		let _guard = query_lock(deadline)?;
+		admission.acquire(deadline)?;
 		metadata_trace::mark("snapshot_lock_acquired", 0, 0);
-		if !drain_for_query(&slot, deadline, &mut trace)? {
-			trace.enter(SteadyPhase::Other);
-			trace.outcome = "preparing";
-			drop(_guard);
+		if !drain_for_query(&slot, deadline, &mut admission.trace)? {
+			admission.trace.enter(SteadyPhase::Other);
+			admission.trace.outcome = "preparing";
+			admission.release();
 			std::thread::sleep(Duration::from_millis(1));
 			continue;
 		}
-		trace.enter(SteadyPhase::State);
+		admission.trace.enter(SteadyPhase::State);
 		let state = slot
 			.state
 			.lock()
@@ -1954,15 +2021,21 @@ fn read_snapshot_with_mode<T>(
 			query_database(&state, archive)
 		};
 		let Ok(database) = candidate else {
-			trace.outcome = "preparing";
+			admission.trace.outcome = "preparing";
+			drop(state);
+			admission.release();
 			continue;
 		};
-		trace.enter(SteadyPhase::SnapshotRead);
+		admission.trace.enter(SteadyPhase::SnapshotRead);
 		let view = if readonly_pending {
 			PendingView::new(&database, &state.pending, deadline)?
 		} else {
 			PendingView::default()
 		};
+		let guard = admission
+			.guard
+			.as_ref()
+			.ok_or_else(|| anyhow!("archive snapshot admission unavailable"))?;
 		let content_trace = metadata_trace::Stage::new("complete_original_verification");
 		// Watches remain invalidation fences; neither Some nor None certifies
 		// original bytes. Check every effective record within this same budget.
@@ -1972,10 +2045,10 @@ fn read_snapshot_with_mode<T>(
 				content::verify_members(&database, archive, &view, deadline)?;
 			}
 			SnapshotReadMode::Usage => {
-				content::verify_usage_members(&database, archive, &view, deadline, &_guard)?;
+				content::verify_usage_members(&database, archive, &view, deadline, guard)?;
 			}
 			SnapshotReadMode::Pages => {
-				content::verify_page_members(&database, archive, &view, deadline, &_guard)?;
+				content::verify_page_members(&database, archive, &view, deadline, guard)?;
 			}
 		}
 		drop(content_trace);
@@ -1998,7 +2071,7 @@ fn read_snapshot_with_mode<T>(
 		if Instant::now() >= deadline {
 			bail!("archive metadata query total deadline exceeded");
 		}
-		trace.outcome = if readonly_pending && !state.pending.is_empty() {
+		admission.trace.outcome = if readonly_pending && !state.pending.is_empty() {
 			"readonly_pending"
 		} else {
 			"ok"
@@ -2463,6 +2536,7 @@ pub(super) fn pages(
 		archive,
 		deadline,
 		SnapshotReadMode::Pages,
+		SnapshotAdmission::new(),
 		|database, view| {
 			let transaction = database.begin_read()?;
 			let rows = transaction.open_table(ROWS)?;
@@ -2644,6 +2718,7 @@ pub(super) fn usage(
 	archive: &Archive,
 	owners: &[String],
 	deadline: Instant,
+	admission: SnapshotAdmission,
 ) -> Result<UsageBatch> {
 	if owners.is_empty() || owners.len() > MAX_METADATA_QUERIES {
 		bail!("usage query group exceeded its admitted bound");
@@ -2653,6 +2728,7 @@ pub(super) fn usage(
 		archive,
 		deadline,
 		SnapshotReadMode::Usage,
+		admission,
 		|database, view| usage_from_view(database, view, owners, deadline),
 	)
 }

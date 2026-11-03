@@ -1,5 +1,13 @@
 # Native weight client: release qualification, 2026-11-03
 
+> Historical pre-closure cohort. The later
+> [client closure report](BENCHMARK_CLIENTS_CLOSURE_20261103.md) preserves this
+> dataset and adds fixed-binary identity/large-response comparisons plus a
+> 20-sample-per-operation complete-MCP cohort for the reviewed candidate.
+> Its native baseline and candidate already use Tokio `current_thread`; the
+> later report does not attribute improvement to removing a Tokio worker pool.
+> This historical cohort is not pooled with the later measurements.
+
 ## Result and decision
 
 The release build and all 210 measured requests passed, with five selected

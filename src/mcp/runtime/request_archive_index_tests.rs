@@ -3021,3 +3021,127 @@ fn large_pending_view_remains_exact_while_continuous_publications_progress() {
 	fixture.flush_worker();
 	assert_eq!(fixture.stats(&fixture.owner), stats);
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn warm_usage_keeps_its_admitted_store_turn() {
+	if std::env::var_os("HEPTA_TEST_WARM_USAGE_STORE_TURN").is_none() {
+		// Inspect the real process-global queue without unrelated tests adding
+		// tickets. The child runs the same production reader and original gate.
+		let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+			.args([
+				"mcp::runtime::request_audit::index::tests::warm_usage_keeps_its_admitted_store_turn",
+				"--exact",
+			])
+			.env("HEPTA_TEST_WARM_USAGE_STORE_TURN", "1")
+			.stdout(std::process::Stdio::null())
+			.stderr(std::process::Stdio::inherit())
+			.spawn()
+			.unwrap();
+		let deadline = Instant::now() + Duration::from_secs(30);
+		let status = loop {
+			if let Some(status) = child.try_wait().unwrap() {
+				break status;
+			}
+			if Instant::now() >= deadline {
+				child.kill().unwrap();
+				child.wait().unwrap();
+				panic!("warm usage store-turn fixture did not exit");
+			}
+			std::thread::sleep(Duration::from_millis(5));
+		};
+		assert!(status.success());
+		return;
+	}
+
+	let fixture = PausedLargeView::new();
+	let cache = fixture.cache_bytes();
+	let gate = STORE_LOCK.get_or_init(AuditStoreLock::default);
+	let first_ticket = gate.queue.lock().unwrap().next_ticket;
+	let (prepared_send, prepared_receive) = std::sync::mpsc::channel();
+	let (continue_send, continue_receive) = std::sync::mpsc::channel();
+	let continue_receive = Mutex::new(continue_receive);
+	let paused = AtomicBool::new(false);
+	*fixture.slot.parallel_hook.lock().unwrap() = Some(Arc::new(move |event| {
+		if event == ParallelEvent::SnapshotPrepared && !paused.swap(true, Ordering::AcqRel) {
+			prepared_send.send(()).unwrap();
+			continue_receive
+				.lock()
+				.unwrap()
+				.recv_timeout(Duration::from_secs(10))
+				.unwrap();
+		}
+	}));
+	let (done_send, done_receive) = std::sync::mpsc::channel();
+	let root = fixture.root.path().to_owned();
+	let owner = fixture.owner.clone();
+	let reader = std::thread::spawn(move || {
+		done_send.send(usage_stats_at(&root, &owner)).unwrap();
+	});
+	let prepared = prepared_receive.recv_timeout(QUERY_BUDGET);
+	let (acquired_send, acquired_receive) = std::sync::mpsc::channel();
+	let (release_send, release_receive) = std::sync::mpsc::channel();
+	let writer = std::thread::spawn(move || -> Result<()> {
+		let _guard = store_lock()?;
+		acquired_send.send(())?;
+		release_receive.recv_timeout(Duration::from_secs(10))?;
+		Ok(())
+	});
+	let queued_deadline = Instant::now() + QUERY_BUDGET;
+	let queued = loop {
+		if gate.queue.lock().unwrap().waiting.len() == 1 {
+			break true;
+		}
+		if Instant::now() >= queued_deadline {
+			break false;
+		}
+		std::thread::sleep(Duration::from_millis(1));
+	};
+	let continued = continue_send.send(());
+	// If ready drops custody, the queued writer takes the next FIFO turn and
+	// holds it past the reader's unchanged deadline. A successful response
+	// must finish original verification and final fences in its admitted turn.
+	let observed = done_receive.recv_timeout(QUERY_BUDGET + Duration::from_secs(1));
+	let acquired = acquired_receive.recv_timeout(Duration::from_secs(1));
+	let released = release_send.send(());
+	let reader_joined = reader.join();
+	let writer_joined = writer.join();
+	*fixture.slot.parallel_hook.lock().unwrap() = None;
+	// Release and join both real owners before asserting ordinary failures.
+	prepared.unwrap();
+	assert!(queued, "the writer did not join the reader's FIFO queue");
+	continued.unwrap();
+	acquired.unwrap();
+	released.unwrap();
+	reader_joined.unwrap();
+	writer_joined.unwrap().unwrap();
+	let stats: Value = serde_json::from_str(&observed.unwrap().unwrap()).unwrap();
+	assert_eq!(stats["total_requests"], 1);
+	assert_eq!(stats["completed"], 1);
+	assert_eq!(stats["active"], 0);
+	assert_eq!(stats["tool_counts"], json!({"host_list": 1}));
+	// Hot state, slot lookup, readiness and snapshot share exactly one turn;
+	// the queued writer owns the only other ticket in this isolated process.
+	assert_eq!(gate.queue.lock().unwrap().next_ticket, first_ticket + 2);
+	assert_eq!(fixture.cache_bytes(), cache);
+	assert_audit_store_idle(gate);
+
+	// Handing off a held turn cannot renew the original absolute deadline.
+	let deadline = Instant::now() + Duration::from_millis(25);
+	let admission = query_admission(deadline).unwrap();
+	std::thread::sleep(deadline.saturating_duration_since(Instant::now()));
+	let error = usage(
+		fixture.root.path(),
+		&fixture.slot.archive,
+		std::slice::from_ref(&fixture.owner),
+		deadline,
+		admission,
+	)
+	.err()
+	.unwrap();
+	assert!(error.to_string().contains("total deadline exceeded"));
+	assert_eq!(fixture.cache_bytes(), cache);
+	assert_audit_store_idle(gate);
+	drop(query_lock(Instant::now() + QUERY_BUDGET).unwrap());
+	assert_audit_store_idle(gate);
+}

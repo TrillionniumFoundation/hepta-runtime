@@ -1812,7 +1812,7 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Admit one fixed GNU readelf/objdump operation through the existing durable job owner. Requires exact profile and artifact SHA-256 identities. Preserve the complete request and idempotency key after uncertainty. Reads owned build artifacts without running them; output, time and snapshot sizes are bounded."
+		description = "Admit one fixed GNU readelf/objdump operation, JADX classes/sources operation, or Ghidra ELF import-only inventory through the existing durable job owner. Requires exact profile and artifact SHA-256 identities. Preserve the complete request and idempotency key after uncertainty. Reads owned build artifacts without running them; Ghidra auto-analysis and decompilation are disabled. Output, time and snapshot sizes are bounded."
 	)]
 	async fn rea_static_start(
 		&self,

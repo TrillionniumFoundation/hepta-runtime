@@ -1,4 +1,6 @@
-# Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
 """Fresh private Chrome only; inspect actual PDF geometry/text/rendered pixels."""
 import asyncio
 import io
@@ -137,9 +139,18 @@ class ChromiumPDF(unittest.IsolatedAsyncioTestCase):
         self.assertIn(b'1 0 0 RG', reader.pages[0].get_contents().get_data())
 
     async def test_private_chrome_launch_uses_only_new_profile_and_disposes_it(self):
-        profiles = []
+        profiles, probes = [], []
         original = subprocess.Popen
         def launch(command, *args, **kwargs):
+            self.assertTrue(kwargs.get('start_new_session'))
+            if command == ['/bin/true']:
+                # The fixed finite custody probe is distinct from the browser.
+                # It must be owned, quiet, and reaped before this call succeeds.
+                for stream in ('stdin', 'stdout', 'stderr'):
+                    self.assertEqual(kwargs[stream], subprocess.DEVNULL)
+                probe = original(command, *args, **kwargs)
+                probes.append(probe)
+                return probe
             self.assertEqual(command[0], '/usr/bin/google-chrome')
             self.assertIn('--remote-debugging-port=0', command)
             self.assertIn('--remote-debugging-address=127.0.0.1', command)
@@ -152,6 +163,8 @@ class ChromiumPDF(unittest.IsolatedAsyncioTestCase):
             result = await asyncio.to_thread(render_markdown, '# PRIVATE-PROFILE', {},
                 {'workspace': str(self.root), 'allowed_directories': [str(self.root)]})
         self.assertTrue(result.startswith(b'%PDF'))
+        self.assertEqual(len(probes), 1)
+        self.assertEqual(probes[0].returncode, 0)
         self.assertEqual(len(profiles), 1)
         self.assertFalse(profiles[0].parent.exists())
 

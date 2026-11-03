@@ -2,7 +2,12 @@
 
 Implementation scope is described in [FULL_INTEGRATION.md](FULL_INTEGRATION.md). This index keeps each result attached to its source, executable, workload and environment. The integration starts from #84 at `f9756508462ebc72e814a12f5dbba1b067edabe4` and includes the #83 publication correction.
 
-## Completed functional gates
+## Historical functional gates before blocker closure
+
+These complete-matrix receipts predate the closure changes. The later
+[blocker closure report](BLOCKER_CLOSURE_20261103.md) and its linked records
+qualify the audit, native-client and bounded-browser changes separately.
+The PR checks must validate the final publication commit and prospective merge.
 
 The [final complete matrix](../qualification/rea-full-tmpfs-20261103-r2/README.md) passed formatting, strict all-target Clippy in both feature configurations, **1,844/1,844 all-feature tests** and **1,820/1,820 no-default tests**. Nextest used one thread, zero retries, no fail-fast and explicit child umask 0022. The suites respectively skipped 39 and 27 ignored tests; doctests and ignored opt-in cases are outside those totals.
 
@@ -28,7 +33,8 @@ This qualifies functional behavior under that storage input. It is not a disk-la
 | macOS preview publication | [Real helper probe](../qualification/rea-macos-atomic-publish-20261103/README.md) | Create-only publication helper on the stated actual Mac/filesystem |
 | Weight transport, release | [Release comparison](../weight-runtime/BENCHMARK_CLIENTS_RELEASE_20261103.md) | 210 measurements and five semantic checks on its exact older release binary |
 | Weight transport, development | [Development comparison](../weight-runtime/BENCHMARK_CLIENTS_DEV_20261103.md) | 210 measurements and five semantic checks on its exact older development binary |
-| Ext4 audit-statistics budget | [Original focused failure](../qualification/rea-final-focused-20261103-r1/README.md) and [single diagnostic](../qualification/rea-audit-budget-diagnostic-20261103-r1/README.md) | Failed query retained; traced reproduction locates final store-lock acquisition |
+| Ext4 audit-statistics budget, original | [Original focused failure](../qualification/rea-final-focused-20261103-r1/README.md) and [single diagnostic](../qualification/rea-audit-budget-diagnostic-20261103-r1/README.md) | Failed query retained; traced reproduction locates final store-lock acquisition |
+| Later blocker closure | [Closure report](BLOCKER_CLOSURE_20261103.md) | Separate source-bound ext4, native-client and actual browser qualification; does not relabel the earlier receipts |
 
 ## Engine and performance interpretation
 
@@ -36,11 +42,15 @@ The final actual Java runs use pinned all-feature runtime SHA-256 `290fa949b7744
 
 Observed 0022 process conditions cover the wrapper, harness, local MCP controllers and direct native workers, not the unmeasured remote SSH/systemd owner's umask. Ghidra imports with automatic analysis and decompilation disabled. Installed Java/Ghidra paths are checked but are not sealed executable closures. Scratch limits are sampled rather than hard filesystem quotas.
 
-The development/release weight cohorts retain their exact historical source/binary bindings. In the release workload native cold-helper CPU was higher, full-MCP medians were mixed, and client lifetime RSS did not distinguish the transports. Native transport remains opt-in. Both transports used the same Python/PyTorch backend. These are workload-specific measurements, not a general Rust speedup claim.
+The development/release weight cohorts retain their exact historical source/binary bindings. In the release workload native cold-helper CPU was higher, full-MCP medians were mixed, and client lifetime RSS did not distinguish the transports. These are historical workload-specific measurements. The [later client comparison](../weight-runtime/BENCHMARK_CLIENTS_CLOSURE_20261103.md) records the measured hashing/parsing improvement and its real-worker CPU benefit. Native transport remains opt-in because complete MCP latency is mixed and no memory advantage is established. Both transports use the same Python/PyTorch backend.
 
 The Python receipt predates later Rust/test corrections and is not relabeled as a final-whole-tree or GitHub run. The macOS receipt qualifies the actual preview helper, not complete macOS MCP/model-store operation, every filesystem, or physical power-loss durability.
 
-## Ext4 query-budget boundary
+## Original ext4 query-budget boundary
+
+The later admission fix and its unchanged-budget ext4 result are recorded in
+[the closure report](BLOCKER_CLOSURE_20261103.md). The original outcome below
+remains part of the evidence history.
 
 On the same development host's ext4 temporary storage, the corrected existing concurrency test completed all 64 durable writes but one audit-statistics observation exhausted the unchanged three-second query budget. The separate one-attempt diagnostic, with tracing and error-construction backtrace, reproduced the refusal at final store-lock acquisition before pending/content validation.
 

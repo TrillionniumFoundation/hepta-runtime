@@ -1,4 +1,6 @@
-# Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Muvon Un Limited
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
 """Local Chrome PDF renderer with an ephemeral profile and direct CDP only.
 
 No running browser is discovered or attached. Markdown stays on this machine;
@@ -7,6 +9,7 @@ Puppeteer PDFOptions are translated explicitly; unsupported options refuse.
 """
 from __future__ import annotations
 import base64
+from contextlib import contextmanager, nullcontext
 import html
 from html.parser import HTMLParser
 import json
@@ -123,10 +126,137 @@ def _resource_path(value, request, base=None):
     return path
 
 
+class ChromeProtocolError(ValueError):
+    """The owned browser returned a structured error for one CDP command."""
+
+
+class ChromeOwnershipUnconfirmed(RuntimeError):
+    """The original child custody or group termination cannot be confirmed."""
+
+
+def _live_group_members(group, deadline):
+    members, count = [], 0
+    try:
+        with os.scandir('/proc') as entries:
+            for entry in entries:
+                if not entry.name.isdigit(): continue
+                count += 1
+                if count > 100000 or time.monotonic() >= deadline:
+                    raise ChromeOwnershipUnconfirmed('Private Chrome group observation exceeded its budget')
+                try:
+                    with open('/proc/' + entry.name + '/stat', 'rb') as source:
+                        data = source.read(16385)
+                except (FileNotFoundError, ProcessLookupError):
+                    continue
+                if len(data) > 16384:
+                    raise ChromeOwnershipUnconfirmed('Private Chrome group observation is unconfirmed')
+                fields = data.rsplit(b')', 1)[1].split()
+                if int(fields[2]) == group and fields[0] not in (b'Z', b'X'):
+                    members.append(int(entry.name))
+    except (OSError, ValueError, IndexError) as error:
+        raise ChromeOwnershipUnconfirmed('Cannot inspect private Chrome group membership; cleanup is unconfirmed') from error
+    return members
+
+
+class _OwnedChromeProcess:
+    """Exclusive reaper for one private session leader, held through group cleanup."""
+    def __init__(self, process):
+        self.process, self.reaped, self.ownership_lost = process, False, False
+
+    def observe_exit(self):
+        if self.ownership_lost or self.process.returncode is not None:
+            self.ownership_lost = True
+            raise ChromeOwnershipUnconfirmed('Private Chrome leader was reaped outside its owner; group cleanup is unconfirmed')
+        try:
+            status = os.waitid(os.P_PID, self.process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+        except ChildProcessError as error:
+            self.ownership_lost = True
+            raise ChromeOwnershipUnconfirmed('Private Chrome child ownership was lost; refusing a numeric group signal') from error
+        except OSError as error:
+            raise ChromeOwnershipUnconfirmed('Private Chrome child observation failed; cleanup is unconfirmed') from error
+        if status is None: return None
+        if status.si_pid != self.process.pid or status.si_code not in (os.CLD_EXITED, os.CLD_KILLED, os.CLD_DUMPED):
+            raise ChromeOwnershipUnconfirmed('Private Chrome child exit witness is unconfirmed')
+        # Never assign Popen.returncode here: WNOWAIT has not reaped this child.
+        return status.si_status if status.si_code == os.CLD_EXITED else -status.si_status
+
+    def wait_exit(self, timeout):
+        deadline = time.monotonic() + timeout
+        while True:
+            status = self.observe_exit()
+            if status is not None: return status
+            if time.monotonic() >= deadline:
+                raise ChromeOwnershipUnconfirmed('Private Chrome leader exit exceeded its observation budget')
+            time.sleep(.01)
+
+    def cleanup(self):
+        if self.reaped: return
+        deadline = time.monotonic() + 10
+        # Even an exited leader stays waitable, reserving the original PID/PGID.
+        # A foreign reaper means refusal; never send a remembered numeric PGID.
+        self.observe_exit()
+        while True:
+            try: os.killpg(self.process.pid, signal.SIGKILL)
+            except ProcessLookupError: pass
+            except OSError as error:
+                raise ChromeOwnershipUnconfirmed('Private Chrome group signal failed; cleanup is unconfirmed') from error
+            expected = self.observe_exit()
+            living = _live_group_members(self.process.pid, deadline)
+            if expected is not None and not living:
+                # Reconfirm custody after scanning, before the one final reap.
+                expected = self.observe_exit()
+                break
+            if time.monotonic() >= deadline:
+                raise ChromeOwnershipUnconfirmed('Private Chrome group termination is unconfirmed')
+            time.sleep(.01)
+        try:
+            actual = self.process.wait(timeout=1)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise ChromeOwnershipUnconfirmed('Private Chrome final child reap is unconfirmed') from error
+        self.reaped = True
+        if actual != expected:
+            raise ChromeOwnershipUnconfirmed('Private Chrome reap differs from its retained exit witness')
+
+
+def _check_reaping_configuration(cleanup_guard):
+    if not all(hasattr(os, name) for name in ('waitid', 'P_PID', 'WEXITED', 'WNOHANG', 'WNOWAIT')):
+        raise ChromeOwnershipUnconfirmed('Private Chrome requires non-reaping waitid child observation')
+    if signal.getsignal(signal.SIGCHLD) != signal.SIG_DFL:
+        raise ChromeOwnershipUnconfirmed('Private Chrome requires exclusive reaping with default SIGCHLD handling')
+    # Hidden processes cannot support a complete private-group observation.
+    try:
+        with open('/proc/self/mountinfo', 'r') as source:
+            for line in source:
+                parts = line.split()
+                if len(parts) > 5 and parts[4] == '/proc':
+                    for option in ','.join(parts[5:]).split(','):
+                        if option.startswith('hidepid=') and option.split('=', 1)[1] not in ('0', 'off'):
+                            raise ChromeOwnershipUnconfirmed('Private Chrome requires visible proc group membership')
+    except OSError as error:
+        raise ChromeOwnershipUnconfirmed('Private Chrome proc visibility is unconfirmed') from error
+    # SIG_DFL alone does not expose SA_NOCLDWAIT set by non-Python code. Confirm
+    # real WNOWAIT custody with a finite owned child before starting Chrome.
+    owned = None
+    with cleanup_guard() as cancellation:
+        try:
+            probe = subprocess.Popen(['/bin/true'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.DEVNULL, start_new_session=True)
+            owned = _OwnedChromeProcess(probe)
+            with cancellation.interruptible() if cancellation is not None else nullcontext():
+                owned.wait_exit(2)
+        finally:
+            if owned is not None: owned.cleanup()
+
+
 class _CDP:
-    def __init__(self, connection, timeout, resource_check):
+    def __init__(self, connection, timeout, resource_check, *, event_sink=None,
+                 max_messages=None, max_message_bytes=None, max_received_bytes=None):
         self.connection, self.timeout, self.resource_check = connection, timeout, resource_check
         self.serial, self.responses, self.session = 0, {}, None
+        self.event_sink = event_sink
+        self.max_messages, self.max_message_bytes = max_messages, max_message_bytes
+        self.max_received_bytes = max_received_bytes
+        self.received_messages = self.received_bytes = 0
 
     def send(self, method, parameters=None):
         self.serial += 1
@@ -142,7 +272,18 @@ class _CDP:
                 remaining = self.timeout - time.monotonic()
                 if remaining <= 0: raise TimeoutError('Private Chrome PDF rendering timed out')
                 self.connection.settimeout(remaining)
-            response = json.loads(self.connection.recv())
+            raw = self.connection.recv()
+            size = len(raw.encode('utf-8')) if isinstance(raw, str) else len(raw)
+            self.received_messages += 1
+            self.received_bytes += size
+            if (self.max_message_bytes is not None and size > self.max_message_bytes
+                    or self.max_messages is not None and self.received_messages > self.max_messages
+                    or self.max_received_bytes is not None and self.received_bytes > self.max_received_bytes):
+                raise ValueError('Private Chrome CDP observation exceeds its message budget')
+            response = json.loads(raw)
+            if not isinstance(response, dict): raise ValueError('Private Chrome CDP message must be an object')
+            if self.event_sink is not None and 'method' in response:
+                self.event_sink(response)
             if response.get('method') == 'Fetch.requestPaused':
                 value = response['params']
                 try:
@@ -153,13 +294,68 @@ class _CDP:
             elif 'id' in response:
                 self.responses[response['id']] = response
         result = self.responses.pop(identity)
-        if 'error' in result: raise ValueError('Chrome PDF request refused: ' + result['error'].get('message', 'protocol error'))
+        if 'error' in result: raise ChromeProtocolError('Chrome PDF request refused: ' + result['error'].get('message', 'protocol error'))
         return result.get('result', {})
+
+
+@contextmanager
+def private_chrome(private, *, resource_check, launch_timeout_ms=30000, timeout_ms=30000,
+                   event_sink=None, message_limits=None, cleanup_guard=None):
+    """Own one new private Chrome group; never discover or attach to another browser.
+
+    PDF and bounded local-resource observation share this Linux lifecycle. This
+    function is the exclusive reaper of its child; callers and background code
+    must not reap arbitrary children or change SIGCHLD handling during the call.
+    The caller owns the enclosing temporary directory. No executable, profile,
+    debug address, extension or extra launch flags come from a capture request.
+    Original-group cleanup excludes descendants that create another session.
+    """
+    import websocket
+    cleanup_guard = cleanup_guard or nullcontext
+    _check_reaping_configuration(cleanup_guard)
+    private = Path(private)
+    chrome = Path('/usr/bin/google-chrome')
+    if not chrome.is_file(): raise ValueError('Independent system Google Chrome is unavailable')
+    profile = private / 'profile'; profile.mkdir(mode=0o700)
+    flags = [str(chrome), '--headless=new', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
+        '--user-data-dir=' + str(profile), '--no-first-run', '--no-default-browser-check', '--disable-background-networking',
+        '--disable-component-update', '--disable-sync', '--disable-default-apps', '--metrics-recording-only',
+        '--disable-extensions', '--disable-dev-shm-usage', '--password-store=basic', '--use-mock-keychain',
+        '--allow-file-access-from-files', 'about:blank']
+    with (private / 'chrome.log').open('wb') as log:
+        owned, connection = None, None
+        # Protect setup and final cleanup before the child exists. Browser work
+        # temporarily permits cancellation; its outer finally always owns cleanup.
+        with cleanup_guard() as cancellation:
+            try:
+                process = subprocess.Popen(flags, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                owned = _OwnedChromeProcess(process)
+                with cancellation.interruptible() if cancellation is not None else nullcontext():
+                    launch_deadline = time.monotonic() + launch_timeout_ms / 1000 if launch_timeout_ms else None
+                    while not (profile / 'DevToolsActivePort').is_file():
+                        if owned.observe_exit() is not None:
+                            raise ValueError('Private Chrome exited before startup: ' + (private / 'chrome.log').read_text(errors='replace')[-1500:])
+                        if launch_deadline is not None and time.monotonic() >= launch_deadline:
+                            raise TimeoutError('Private Chrome launch timed out')
+                        time.sleep(.02)
+                    port, path = (profile / 'DevToolsActivePort').read_text().splitlines()[:2]
+                    connection = websocket.create_connection('ws://127.0.0.1:' + port + path, timeout=30, suppress_origin=True,
+                                                              http_proxy_host=None, http_no_proxy=['127.0.0.1'])
+                    cdp = _CDP(connection, time.monotonic() + timeout_ms / 1000 if timeout_ms else None,
+                               resource_check, event_sink=event_sink, **(message_limits or {}))
+                    yield cdp, process, profile
+                    cdp.session = None
+                    cdp.call('Browser.close')
+                    owned.wait_exit(10)
+            finally:
+                try:
+                    if connection is not None: connection.close(timeout=1)
+                finally:
+                    if owned is not None: owned.cleanup()
 
 
 def render_markdown(markdown, options, request):
     import markdown as md
-    import websocket
     top, pdf, parameters = parse_options(options)
     base = _resource_path(top.get('basedir', request['workspace']), request)
     if not base.is_dir(): raise ValueError('PDF basedir must be a directory')
@@ -216,66 +412,38 @@ def render_markdown(markdown, options, request):
         url = urllib.parse.urljoin(base.as_uri() + '/', value)
         if urllib.parse.urlsplit(url).scheme == 'file': _resource_path(urllib.parse.unquote(urllib.parse.urlsplit(url).path), request)
     extra_path = _resource_path(pdf['path'], request) if pdf.get('path') else None
-    chrome = Path('/usr/bin/google-chrome')
-    if not chrome.is_file(): raise ValueError('Independent system Google Chrome is unavailable')
     with tempfile.TemporaryDirectory(prefix='hepta-private-pdf-') as directory:
         private = Path(directory)
-        profile = private / 'profile'; profile.mkdir(mode=0o700)
         input_path = private / 'document.html'; input_path.write_text(document, encoding='utf-8'); input_path.chmod(0o600)
-        flags = [str(chrome), '--headless=new', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0',
-            '--user-data-dir=' + str(profile), '--no-first-run', '--no-default-browser-check', '--disable-background-networking',
-            '--disable-component-update', '--disable-sync', '--disable-default-apps', '--metrics-recording-only',
-            '--disable-extensions', '--disable-dev-shm-usage', '--password-store=basic', '--use-mock-keychain',
-            '--allow-file-access-from-files', 'about:blank']
-        with (private / 'chrome.log').open('wb') as log:
-            process = subprocess.Popen(flags, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-            connection = None
-            try:
-                launch_ms = top.get('launch_options', {}).get('timeout', 30000)
-                launch_deadline = time.monotonic() + launch_ms / 1000 if launch_ms else None
-                while not (profile / 'DevToolsActivePort').is_file():
-                    if process.poll() is not None:
-                        raise ValueError('Private Chrome exited before PDF rendering: ' + (private / 'chrome.log').read_text(errors='replace')[-1500:])
-                    if launch_deadline is not None and time.monotonic() >= launch_deadline: raise TimeoutError('Private Chrome launch timed out')
-                    time.sleep(.02)
-                port, path = (profile / 'DevToolsActivePort').read_text().splitlines()[:2]
-                connection = websocket.create_connection('ws://127.0.0.1:' + port + path, timeout=30, suppress_origin=True,
-                                                         http_proxy_host=None, http_no_proxy=['127.0.0.1'])
-                timeout = pdf.get('timeout', 30000)
-                cdp = _CDP(connection, time.monotonic() + timeout / 1000 if timeout else None, resource_check)
-                target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
-                cdp.session = cdp.call('Target.attachToTarget', {'targetId': target, 'flatten': True})['sessionId']
-                cdp.call('Page.enable')
-                cdp.call('Fetch.enable', {'patterns': [{'urlPattern': '*', 'requestStage': 'Request'}]})
-                # Document scripts are never needed to print Markdown and must
-                # not send its source to an unrelated network endpoint.
-                cdp.call('Emulation.setScriptExecutionDisabled', {'value': True})
-                cdp.call('Emulation.setEmulatedMedia', {'media': media or ''})
-                if pdf.get('omitBackground'):
-                    cdp.call('Emulation.setDefaultBackgroundColorOverride', {'color': {'r': 0, 'g': 0, 'b': 0, 'a': 0}})
-                navigation = cdp.call('Page.navigate', {'url': input_path.as_uri()})
-                if navigation.get('errorText'): raise ValueError('Private document navigation failed: ' + navigation['errorText'])
-                while True:
-                    state = cdp.call('Runtime.evaluate', {'expression': '({url:document.URL,state:document.readyState})', 'returnByValue': True})
-                    value = state.get('result', {}).get('value', {})
-                    if value.get('url') == input_path.as_uri() and value.get('state') == 'complete': break
-                    time.sleep(.01)
-                expression = "Promise.all([...document.images].map(i=>i.complete?Promise.resolve():new Promise(r=>{i.onload=r;i.onerror=r})))"
-                if pdf.get('waitForFonts', True): expression += '.then(()=>document.fonts.ready)'
-                ready = cdp.call('Runtime.evaluate', {'expression': expression, 'awaitPromise': True, 'returnByValue': False})
-                if ready.get('exceptionDetails'): raise ValueError('Chrome document assets could not become ready')
-                if denied: raise ValueError('PDF resource path is outside allowed directories; output was not modified')
-                encoded = cdp.call('Page.printToPDF', parameters)
-                if denied: raise ValueError('PDF resource path is outside allowed directories; output was not modified')
-                result = base64.b64decode(encoded['data'], validate=True)
-                if not result.startswith(b'%PDF'): raise ValueError('Private Chrome returned an invalid PDF')
-                cdp.session = None
-                cdp.call('Browser.close')
-                process.wait(timeout=10)
-            finally:
-                if connection is not None: connection.close()
-                if process.poll() is None:
-                    os.killpg(process.pid, signal.SIGKILL); process.wait()
+        with private_chrome(private, resource_check=resource_check,
+                            launch_timeout_ms=top.get('launch_options', {}).get('timeout', 30000),
+                            timeout_ms=pdf.get('timeout', 30000)) as (cdp, _process, _profile):
+            target = cdp.call('Target.createTarget', {'url': 'about:blank'})['targetId']
+            cdp.session = cdp.call('Target.attachToTarget', {'targetId': target, 'flatten': True})['sessionId']
+            cdp.call('Page.enable')
+            cdp.call('Fetch.enable', {'patterns': [{'urlPattern': '*', 'requestStage': 'Request'}]})
+            # Document scripts are never needed to print Markdown and must
+            # not send its source to an unrelated network endpoint.
+            cdp.call('Emulation.setScriptExecutionDisabled', {'value': True})
+            cdp.call('Emulation.setEmulatedMedia', {'media': media or ''})
+            if pdf.get('omitBackground'):
+                cdp.call('Emulation.setDefaultBackgroundColorOverride', {'color': {'r': 0, 'g': 0, 'b': 0, 'a': 0}})
+            navigation = cdp.call('Page.navigate', {'url': input_path.as_uri()})
+            if navigation.get('errorText'): raise ValueError('Private document navigation failed: ' + navigation['errorText'])
+            while True:
+                state = cdp.call('Runtime.evaluate', {'expression': '({url:document.URL,state:document.readyState})', 'returnByValue': True})
+                value = state.get('result', {}).get('value', {})
+                if value.get('url') == input_path.as_uri() and value.get('state') == 'complete': break
+                time.sleep(.01)
+            expression = "Promise.all([...document.images].map(i=>i.complete?Promise.resolve():new Promise(r=>{i.onload=r;i.onerror=r})))"
+            if pdf.get('waitForFonts', True): expression += '.then(()=>document.fonts.ready)'
+            ready = cdp.call('Runtime.evaluate', {'expression': expression, 'awaitPromise': True, 'returnByValue': False})
+            if ready.get('exceptionDetails'): raise ValueError('Chrome document assets could not become ready')
+            if denied: raise ValueError('PDF resource path is outside allowed directories; output was not modified')
+            encoded = cdp.call('Page.printToPDF', parameters)
+            if denied: raise ValueError('PDF resource path is outside allowed directories; output was not modified')
+            result = base64.b64decode(encoded['data'], validate=True)
+            if not result.startswith(b'%PDF'): raise ValueError('Private Chrome returned an invalid PDF')
         if extra_path is not None:
             descriptor, staging = tempfile.mkstemp(prefix='.hepta-pdf-', dir=extra_path.parent)
             try:
