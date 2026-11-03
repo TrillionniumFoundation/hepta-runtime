@@ -27,6 +27,8 @@ pub mod rea_worker;
 pub mod request_ctx;
 pub mod runtime;
 pub mod server;
+pub mod weight;
+pub mod weight_config;
 
 // Session working directory is now stored per-server-instance (see server.rs).
 // This module only provides helper functions for the session root directory.
