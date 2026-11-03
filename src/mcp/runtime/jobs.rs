@@ -25,6 +25,9 @@ use super::ssh::{run_jobctl, run_python_json};
 mod record_projection;
 use record_projection::BorrowedJobString;
 
+#[path = "jobs_persistence.rs"]
+mod persistence;
+
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 const START_LANE_COUNT: usize = 64;
 type StartLanes = [Arc<AsyncMutex<()>>; START_LANE_COUNT];
@@ -320,12 +323,9 @@ fn save_record_with_registry_gate(
 
 fn save_record_at(path: &Path, record: &JobRecord) -> Result<()> {
 	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
-	let bytes = serde_json::to_vec_pretty(record)?;
 	// The durable identity must remain readable by the bounded recovery path.
-	// Reject an oversized request before creating a receipt or remote effect.
-	if bytes.len() as u64 > MAX_JOB_RECORD_BYTES {
-		bail!("durable job record exceeds {} bytes", MAX_JOB_RECORD_BYTES);
-	}
+	// Reject an oversized encoding before creating a receipt or remote effect.
+	let bytes = persistence::encode_record(record)?;
 	#[cfg(unix)]
 	let mut file = {
 		use std::os::unix::fs::OpenOptionsExt;
@@ -3891,9 +3891,8 @@ fn cancel_publication_slots() -> Arc<Semaphore> {
 }
 
 async fn run_cancel_intent<O: Send + 'static>(
-	prepared: PreparedAudit,
 	slots: Arc<Semaphore>,
-	ownership: O,
+	prepare: impl FnOnce() -> Result<(PreparedAudit, O)> + Send + 'static,
 	append: impl FnOnce(PreparedAudit) -> Result<()> + Send + 'static,
 ) -> Result<(OwnedSemaphorePermit, O)> {
 	let permit = slots
@@ -3901,9 +3900,11 @@ async fn run_cancel_intent<O: Send + 'static>(
 		.await
 		.map_err(|_| operation_intent_unavailable())?;
 	let result = tokio::task::spawn_blocking(move || {
-		// The same reservation follows this already-owned cancellation from
-		// durable intent through the remote response and completion audit.
-		// Cancelling a waiter never admits another worker before this one ends.
+		// Receipt validation is part of the same bounded physical preparation as
+		// the durable intent. Slow reads cannot block the executor or borrow an
+		// observation slot needed by unrelated callers. The reservation follows
+		// the verified binding through the remote response and completion audit.
+		let (prepared, ownership) = prepare()?;
 		require_operation_intent(append(prepared))?;
 		Ok((permit, ownership))
 	})
@@ -4475,9 +4476,25 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 		host: params.host.clone(),
 		job_id: params.job_id.clone(),
 	};
-	// Cancellation continues an existing identity even when new effects are
-	// fenced off. Carry that verified binding, without acquiring a new owner.
-	let record = Arc::new(check_ref(&reference)?);
+	let (publication_permit, record) = run_cancel_intent(
+		cancel_publication_slots(),
+		move || {
+			// Cancellation continues an existing identity even when new effects
+			// are fenced off. Verify the full original receipt before intent,
+			// without acquiring a new owner or introducing a receipt cache.
+			let record = Arc::new(check_ref(&reference)?);
+			let intent = prepare_audit(
+				"process_cancel_intent",
+				&reference.host,
+				&reference.job_id,
+				&json!({"phase":"intent","remote_operation_submitted":false}),
+			)
+			.map_err(|_| operation_intent_unavailable())?;
+			Ok((intent, record))
+		},
+		append_audit,
+	)
+	.await?;
 	let host = runtime_config()?.host(&record.host)?;
 	let request = json!({
 		"job_id": record.id,
@@ -4486,15 +4503,6 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 		"unit": record.unit,
 		"grace_seconds": params.grace_seconds.unwrap_or(10).min(30),
 	});
-	let intent = prepare_audit(
-		"process_cancel_intent",
-		&params.host,
-		&params.job_id,
-		&json!({"phase":"intent","remote_operation_submitted":false}),
-	)
-	.map_err(|_| operation_intent_unavailable())?;
-	let (publication_permit, record) =
-		run_cancel_intent(intent, cancel_publication_slots(), record, append_audit).await?;
 	let remote = if record.system_jobctl {
 		run_jobctl(host, &json!({"op":"cancel","job_id":record.id})).await
 	} else {
@@ -5127,6 +5135,10 @@ mod pending_admission_tests;
 #[cfg(test)]
 #[path = "jobs_cancel_io_tests.rs"]
 mod cancel_io_tests;
+
+#[cfg(test)]
+#[path = "jobs_cancel_read_tests.rs"]
+mod cancel_read_tests;
 
 #[cfg(all(test, unix))]
 #[path = "jobs_registry_coalescing_tests.rs"]
