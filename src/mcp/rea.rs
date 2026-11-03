@@ -30,6 +30,9 @@ use std::path::PathBuf;
 
 use super::runtime::runtime_config;
 
+#[path = "rea_zip.rs"]
+mod zip;
+
 pub const REA_VERSION: &str = "6.8.0";
 pub const REA_SOURCE_COMMIT: &str = "93b8b82db70279e40f484114cff9dc1958dc14ee";
 const MAX_FILE_BYTES: u64 = 32 * 1024 * 1024;
@@ -426,17 +429,7 @@ fn parse(data: &[u8]) -> Result<HeaderInfo> {
 		}
 	}
 	if data.starts_with(b"PK\x03\x04") || data.starts_with(b"PK\x05\x06") {
-		return Ok(HeaderInfo {
-			format: "zip",
-			architecture: None,
-			bits: None,
-			byte_order: None,
-			facts: json!({}),
-			limitations: vec![
-				"ZIP central directory and content signatures are not validated",
-				"APK identity and Android manifest contents are unknown",
-			],
-		});
+		return zip::parse_zip(data);
 	}
 	if data.len() >= 4
 		&& matches!(
