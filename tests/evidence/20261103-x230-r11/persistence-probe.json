@@ -1,0 +1,1335 @@
+{
+  "schema": "hepta-x230-r11-rejected-persistence-probe-evidence-v1",
+  "decision": {
+    "candidate": "two-pass count + 16 KiB BufWriter pretty JSON",
+    "disposition": "rejected_for_this_round",
+    "reason": "Lower transient allocation but higher CPU in all eight synthetic groups; serialization holds the registry write lock. Do not claim production throughput.",
+    "active_runtime_changed": false,
+    "further_measurement_planned": false
+  },
+  "successful_job": {
+    "host": "x230",
+    "job_id": "1a1a0fa780c-96a-6bf1",
+    "idempotency_key": "x230-runtime-r11-persistence-probe-20261103-performance-review-v2",
+    "state": "succeeded",
+    "exit_code": 0,
+    "timed_out": false,
+    "output_complete": true,
+    "stdout_bytes": 5523,
+    "stderr_bytes": 0,
+    "log_truncated": false
+  },
+  "execution": {
+    "attempt": 2,
+    "prior_failed_job": "1a1a0f6cbe9-96a-6bca",
+    "prior_failure": "setup FileNotFoundError for wrong Cargo.lock path; no compile or benchmark",
+    "work": "/home/qian/hepta-runtime-optimization-20261103-r11/persistence-probe",
+    "limits": {
+      "timeout_seconds": 120,
+      "nice": 15,
+      "cpu_quota_percent": 50,
+      "memory_max_bytes": 536870912
+    },
+    "source_sha256": "5a8b14e2d6086b0a47f5d349b9b804de225d21e52d5339504bc1dd56211d0d34",
+    "started_unix": 1793702134.084291,
+    "lock": "/home/qian/hepta-runtime-optimization-20261103-r10/source-r10e/Cargo.lock",
+    "lock_sha256": "15b9fb468eb34a210238657d132cbf19e961552d1313de488e1f14936bfa4e5f",
+    "serde_json_version": "1.0.151",
+    "rlib": "/home/qian/hepta-runtime-optimization-20261103-r10/target/debug/deps/libserde_json-7c0b68a9d08b39d5.rlib",
+    "rustc": "/home/qian/.cargo/bin/rustc",
+    "rustc_version": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "compile_command": [
+      "/home/qian/.cargo/bin/rustc",
+      "--edition=2021",
+      "-C",
+      "opt-level=2",
+      "-C",
+      "debuginfo=0",
+      "-C",
+      "codegen-units=1",
+      "--extern",
+      "serde_json=/home/qian/hepta-runtime-optimization-20261103-r10/target/debug/deps/libserde_json-7c0b68a9d08b39d5.rlib",
+      "-L",
+      "dependency=/home/qian/hepta-runtime-optimization-20261103-r10/target/debug/deps",
+      "/home/qian/hepta-runtime-optimization-20261103-r11/persistence-probe/probe.rs",
+      "-o",
+      "/home/qian/hepta-runtime-optimization-20261103-r11/persistence-probe/probe-v2"
+    ],
+    "compile_wall_seconds": 7.393466399051249,
+    "compile_returncode": 0,
+    "run_wall_seconds": 1.8833543988876045,
+    "run_returncode": 0,
+    "completed": true,
+    "final_stage": "summary",
+    "finished_unix": 1793702143.4678493
+  },
+  "failed_setup": {
+    "job_id": "1a1a0f6cbe9-96a-6bca",
+    "idempotency_key": "x230-runtime-r11-persistence-probe-20261103-performance-review-v1",
+    "phase": "setup before compilation",
+    "cause": "Incorrect Cargo.lock path omitted source-r10e. Corrected only after explicit authorization; same probe source and measurement design.",
+    "metadata": {
+      "source_sha256": "5a8b14e2d6086b0a47f5d349b9b804de225d21e52d5339504bc1dd56211d0d34",
+      "work": "/home/qian/hepta-runtime-optimization-20261103-r11/persistence-probe",
+      "cpu_quota_percent": 50,
+      "nice": 15,
+      "memory_max_bytes": 536870912
+    },
+    "stdout": "",
+    "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 19, in <module>\n  File \"/usr/lib/python3.12/pathlib.py\", line 1029, in read_text\n    with self.open(mode='r', encoding=encoding, errors=errors) as f:\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/pathlib.py\", line 1015, in open\n    return io.open(self, mode, buffering, encoding, errors, newline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: '/home/qian/hepta-runtime-optimization-20261103-r10/Cargo.lock'\n"
+  },
+  "assertion_accounting": {
+    "dedicated_contract_scenarios": {
+      "byte_equality": 10,
+      "oversize_without_temp": 4,
+      "write_or_flush_without_drop_retry": 8,
+      "total": 22
+    },
+    "additional_durable_byte_comparisons": 8,
+    "explicit_rust_assert_macro_executions": {
+      "total": 2790,
+      "method": "Derived from the completed source loops, not from an assertion-counter instrument. Counts explicit assert!/assert_eq! in probe only; excludes expect/unwrap checks and dependency assertions.",
+      "breakdown": {
+        "fixture_bounds_and_exact_encoded_length": 52,
+        "byte_equality_in_dedicated_verification": 10,
+        "oversize_error_and_no_files": 8,
+        "fault_error_kind_failure_and_no_drop_retry": 24,
+        "pure_warmup_bytes": 16,
+        "allocation_sample_final_live_zero": 16,
+        "timed_serialization_bytes": 2512,
+        "clock_gettime_success": 144,
+        "durable_file_byte_equality": 8
+      }
+    },
+    "pure_timing_blocks": 64,
+    "separate_allocation_samples": 16,
+    "durable_timing_samples": 8
+  },
+  "measurement_scope": {
+    "fixture": "serde_json::Value with fixed JobRecord-like fields; sorted Value map, not the production JobRecord type",
+    "allocator": "Global System wrapper present; tracking enabled only for separate one-call allocation samples. Timing disables tracking, retaining the wrapper's switch-read cost. Logical requested live peak only; excludes fixture, report, allocator metadata, and internal realloc overlap.",
+    "cpu": "Linux CLOCK_PROCESS_CPUTIME_ID; CPU and wall recorded separately",
+    "wall": "Instant, includes CPUQuota throttling and concurrent R11 compilation. Small diagnostic sample; not production TPS.",
+    "library": "Reuses cached serde_json 1.0.151 rlib. Probe rustc uses opt-level=2; this does not rebuild the dependency or production runtime.",
+    "ab_modes": {
+      "A": "to_vec_pretty + length check + write_all",
+      "B": "to_writer_pretty count + length check + to_writer_pretty BufWriter(min(size,16KiB)) + flush + into_parts"
+    },
+    "ab_order": "Two ABBA cycles per pure case; one ABBA per durable size",
+    "limits": "No large benchmark, package build, production directory, or active source mutation"
+  },
+  "raw_results": {
+    "allocation_rows": [
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 4,
+          "bytes": 1024,
+          "peak_live_requested_bytes": 1660,
+          "requested_bytes_total": 3033
+        },
+        "escaped": false,
+        "mode": "vec",
+        "size": 1024
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 1024,
+          "peak_live_requested_bytes": 1024,
+          "requested_bytes_total": 1024
+        },
+        "escaped": false,
+        "mode": "count_stream_16k",
+        "size": 1024
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 4,
+          "bytes": 1024,
+          "peak_live_requested_bytes": 1024,
+          "requested_bytes_total": 1920
+        },
+        "escaped": true,
+        "mode": "vec",
+        "size": 1024
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 1024,
+          "peak_live_requested_bytes": 1024,
+          "requested_bytes_total": 1024
+        },
+        "escaped": true,
+        "mode": "count_stream_16k",
+        "size": 1024
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 3,
+          "bytes": 65536,
+          "peak_live_requested_bytes": 129854,
+          "requested_bytes_total": 194909
+        },
+        "escaped": false,
+        "mode": "vec",
+        "size": 65536
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 65536,
+          "peak_live_requested_bytes": 16384,
+          "requested_bytes_total": 16384
+        },
+        "escaped": false,
+        "mode": "count_stream_16k",
+        "size": 65536
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 10,
+          "bytes": 65536,
+          "peak_live_requested_bytes": 65536,
+          "requested_bytes_total": 130944
+        },
+        "escaped": true,
+        "mode": "vec",
+        "size": 65536
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 65536,
+          "peak_live_requested_bytes": 16384,
+          "requested_bytes_total": 16384
+        },
+        "escaped": true,
+        "mode": "count_stream_16k",
+        "size": 65536
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 3,
+          "bytes": 786432,
+          "peak_live_requested_bytes": 1571646,
+          "requested_bytes_total": 2357597
+        },
+        "escaped": false,
+        "mode": "vec",
+        "size": 786432
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 786432,
+          "peak_live_requested_bytes": 16384,
+          "requested_bytes_total": 16384
+        },
+        "escaped": false,
+        "mode": "count_stream_16k",
+        "size": 786432
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 14,
+          "bytes": 786432,
+          "peak_live_requested_bytes": 1048576,
+          "requested_bytes_total": 2097024
+        },
+        "escaped": true,
+        "mode": "vec",
+        "size": 786432
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 786432,
+          "peak_live_requested_bytes": 16384,
+          "requested_bytes_total": 16384
+        },
+        "escaped": true,
+        "mode": "count_stream_16k",
+        "size": 786432
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 3,
+          "bytes": 4194272,
+          "peak_live_requested_bytes": 8387326,
+          "requested_bytes_total": 12581117
+        },
+        "escaped": false,
+        "mode": "vec",
+        "size": 4194272
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 4194272,
+          "peak_live_requested_bytes": 16384,
+          "requested_bytes_total": 16384
+        },
+        "escaped": false,
+        "mode": "count_stream_16k",
+        "size": 4194272
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 16,
+          "bytes": 4194272,
+          "peak_live_requested_bytes": 4194304,
+          "requested_bytes_total": 8388480
+        },
+        "escaped": true,
+        "mode": "vec",
+        "size": 4194272
+      },
+      {
+        "allocation": {
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 4194272,
+          "peak_live_requested_bytes": 16384,
+          "requested_bytes_total": 16384
+        },
+        "escaped": true,
+        "mode": "count_stream_16k",
+        "size": 4194272
+      }
+    ],
+    "durable_rows": [
+      {
+        "barriers": "write/flush, file.sync_all, rename, directory.sync_all",
+        "cpu_seconds": 0.00024966799999992517,
+        "mode": "vec",
+        "position": 0,
+        "size": 1024,
+        "wall_seconds": 0.003817394
+      },
+      {
+        "barriers": "write/flush, file.sync_all, rename, directory.sync_all",
+        "cpu_seconds": 0.00033452599999994614,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 1024,
+        "wall_seconds": 0.006323832
+      },
+      {
+        "barriers": "write/flush, file.sync_all, rename, directory.sync_all",
+        "cpu_seconds": 0.0002525439999999657,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 1024,
+        "wall_seconds": 0.000804577
+      },
+      {
+        "barriers": "write/flush, file.sync_all, rename, directory.sync_all",
+        "cpu_seconds": 0.00021431800000004664,
+        "mode": "vec",
+        "position": 3,
+        "size": 1024,
+        "wall_seconds": 0.000741647
+      },
+      {
+        "barriers": "write/flush, file.sync_all, rename, directory.sync_all",
+        "cpu_seconds": 0.014467078000000022,
+        "mode": "vec",
+        "position": 0,
+        "size": 4194272,
+        "wall_seconds": 0.025366602
+      },
+      {
+        "barriers": "write/flush, file.sync_all, rename, directory.sync_all",
+        "cpu_seconds": 0.01746400700000006,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 4194272,
+        "wall_seconds": 0.032929521
+      },
+      {
+        "barriers": "write/flush, file.sync_all, rename, directory.sync_all",
+        "cpu_seconds": 0.01740067600000006,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 4194272,
+        "wall_seconds": 0.049185371
+      },
+      {
+        "barriers": "write/flush, file.sync_all, rename, directory.sync_all",
+        "cpu_seconds": 0.012718255999999983,
+        "mode": "vec",
+        "position": 3,
+        "size": 4194272,
+        "wall_seconds": 0.027461576
+      }
+    ],
+    "measurement_notes": {
+      "allocation": "separate single-call sample after fixture construction; requested bytes in alloc/realloc/dealloc; excludes fixture and report; logical live peak, not RSS or allocator internal transient realloc peak",
+      "fixture": "serde_json::Value with fixed JobRecord-like fields; sorted Value map, not production JobRecord struct",
+      "limitations": "cached library build; CPU quota and other build load affect wall; synthetic sink adds one noinline black_box write; no production throughput or recovery qualification",
+      "timing": "single thread; two ABBA cycles per pure case; allocator sampling disabled during timing; one ABBA durable cycle per size"
+    },
+    "pure_rows": [
+      {
+        "cpu_seconds": 0.00041625900000000216,
+        "cpu_seconds_per_call": 0.000003252023437500017,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 128,
+        "mode": "vec",
+        "position": 0,
+        "size": 1024,
+        "wall_seconds": 0.001556415
+      },
+      {
+        "cpu_seconds": 0.0005762150000000188,
+        "cpu_seconds_per_call": 0.000004501679687500147,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 128,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 1024,
+        "wall_seconds": 0.000573201
+      },
+      {
+        "cpu_seconds": 0.000542103000000016,
+        "cpu_seconds_per_call": 0.000004235179687500125,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 128,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 1024,
+        "wall_seconds": 0.000539293
+      },
+      {
+        "cpu_seconds": 0.0004206570000000187,
+        "cpu_seconds_per_call": 0.000003286382812500146,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 128,
+        "mode": "vec",
+        "position": 3,
+        "size": 1024,
+        "wall_seconds": 0.002419538
+      },
+      {
+        "cpu_seconds": 0.0003591029999999995,
+        "cpu_seconds_per_call": 0.000002805492187499996,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 128,
+        "mode": "vec",
+        "position": 0,
+        "size": 1024,
+        "wall_seconds": 0.000356419
+      },
+      {
+        "cpu_seconds": 0.0005623029999999862,
+        "cpu_seconds_per_call": 0.0000043929921874998924,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 128,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 1024,
+        "wall_seconds": 0.000559666
+      },
+      {
+        "cpu_seconds": 0.0005685400000000063,
+        "cpu_seconds_per_call": 0.000004441718750000049,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 128,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 1024,
+        "wall_seconds": 0.000565721
+      },
+      {
+        "cpu_seconds": 0.0003998709999999961,
+        "cpu_seconds_per_call": 0.0000031239921874999695,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 128,
+        "mode": "vec",
+        "position": 3,
+        "size": 1024,
+        "wall_seconds": 0.002709938
+      },
+      {
+        "cpu_seconds": 0.0003991539999999849,
+        "cpu_seconds_per_call": 0.000003118390624999882,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 128,
+        "mode": "vec",
+        "position": 0,
+        "size": 1024,
+        "wall_seconds": 0.000396478
+      },
+      {
+        "cpu_seconds": 0.0007595970000000007,
+        "cpu_seconds_per_call": 0.000005934351562500006,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 128,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 1024,
+        "wall_seconds": 0.00075606
+      },
+      {
+        "cpu_seconds": 0.0007728959999999951,
+        "cpu_seconds_per_call": 0.000006038249999999962,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 128,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 1024,
+        "wall_seconds": 0.0007697
+      },
+      {
+        "cpu_seconds": 0.0004314209999999874,
+        "cpu_seconds_per_call": 0.0000033704765624999015,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 128,
+        "mode": "vec",
+        "position": 3,
+        "size": 1024,
+        "wall_seconds": 0.000428834
+      },
+      {
+        "cpu_seconds": 0.00043204399999999255,
+        "cpu_seconds_per_call": 0.0000033753437499999418,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 128,
+        "mode": "vec",
+        "position": 0,
+        "size": 1024,
+        "wall_seconds": 0.000429653
+      },
+      {
+        "cpu_seconds": 0.0007813170000000036,
+        "cpu_seconds_per_call": 0.000006104039062500028,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 128,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 1024,
+        "wall_seconds": 0.003022989
+      },
+      {
+        "cpu_seconds": 0.0007660889999999976,
+        "cpu_seconds_per_call": 0.000005985070312499981,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 128,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 1024,
+        "wall_seconds": 0.000763874
+      },
+      {
+        "cpu_seconds": 0.0004415939999999896,
+        "cpu_seconds_per_call": 0.000003449953124999919,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 128,
+        "mode": "vec",
+        "position": 3,
+        "size": 1024,
+        "wall_seconds": 0.000439609
+      },
+      {
+        "cpu_seconds": 0.002014708000000004,
+        "cpu_seconds_per_call": 0.00008394616666666684,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 24,
+        "mode": "vec",
+        "position": 0,
+        "size": 65536,
+        "wall_seconds": 0.00500961
+      },
+      {
+        "cpu_seconds": 0.003990821999999977,
+        "cpu_seconds_per_call": 0.00016628424999999905,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 24,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 65536,
+        "wall_seconds": 0.006831924
+      },
+      {
+        "cpu_seconds": 0.0039864199999999905,
+        "cpu_seconds_per_call": 0.00016610083333333295,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 24,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 65536,
+        "wall_seconds": 0.007189481
+      },
+      {
+        "cpu_seconds": 0.0021601500000000273,
+        "cpu_seconds_per_call": 0.00009000625000000113,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 24,
+        "mode": "vec",
+        "position": 3,
+        "size": 65536,
+        "wall_seconds": 0.005083639
+      },
+      {
+        "cpu_seconds": 0.002051384000000045,
+        "cpu_seconds_per_call": 0.0000854743333333352,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 24,
+        "mode": "vec",
+        "position": 0,
+        "size": 65536,
+        "wall_seconds": 0.002047434
+      },
+      {
+        "cpu_seconds": 0.004215089000000005,
+        "cpu_seconds_per_call": 0.00017562870833333355,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 24,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 65536,
+        "wall_seconds": 0.014238387
+      },
+      {
+        "cpu_seconds": 0.003920827999999987,
+        "cpu_seconds_per_call": 0.0001633678333333328,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 24,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 65536,
+        "wall_seconds": 0.004508179
+      },
+      {
+        "cpu_seconds": 0.0020493360000000127,
+        "cpu_seconds_per_call": 0.00008538900000000053,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 24,
+        "mode": "vec",
+        "position": 3,
+        "size": 65536,
+        "wall_seconds": 0.004088565
+      },
+      {
+        "cpu_seconds": 0.003665558000000013,
+        "cpu_seconds_per_call": 0.0001527315833333339,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 24,
+        "mode": "vec",
+        "position": 0,
+        "size": 65536,
+        "wall_seconds": 0.006649297
+      },
+      {
+        "cpu_seconds": 0.010272257000000007,
+        "cpu_seconds_per_call": 0.0004280107083333336,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 24,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 65536,
+        "wall_seconds": 0.013312837
+      },
+      {
+        "cpu_seconds": 0.010293514000000004,
+        "cpu_seconds_per_call": 0.00042889641666666683,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 24,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 65536,
+        "wall_seconds": 0.016317786
+      },
+      {
+        "cpu_seconds": 0.0036049989999999976,
+        "cpu_seconds_per_call": 0.00015020829166666658,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 24,
+        "mode": "vec",
+        "position": 3,
+        "size": 65536,
+        "wall_seconds": 0.003601856
+      },
+      {
+        "cpu_seconds": 0.003295437000000012,
+        "cpu_seconds_per_call": 0.0001373098750000005,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 24,
+        "mode": "vec",
+        "position": 0,
+        "size": 65536,
+        "wall_seconds": 0.006283235
+      },
+      {
+        "cpu_seconds": 0.010770822000000013,
+        "cpu_seconds_per_call": 0.00044878425000000055,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 24,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 65536,
+        "wall_seconds": 0.013917687
+      },
+      {
+        "cpu_seconds": 0.010610732000000012,
+        "cpu_seconds_per_call": 0.0004421138333333338,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 24,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 65536,
+        "wall_seconds": 0.013633045
+      },
+      {
+        "cpu_seconds": 0.003496698999999992,
+        "cpu_seconds_per_call": 0.00014569579166666632,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 24,
+        "mode": "vec",
+        "position": 3,
+        "size": 65536,
+        "wall_seconds": 0.006545439
+      },
+      {
+        "cpu_seconds": 0.004822598000000011,
+        "cpu_seconds_per_call": 0.0012056495000000028,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 4,
+        "mode": "vec",
+        "position": 0,
+        "size": 786432,
+        "wall_seconds": 0.007155185
+      },
+      {
+        "cpu_seconds": 0.008028963,
+        "cpu_seconds_per_call": 0.00200724075,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 4,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 786432,
+        "wall_seconds": 0.011014305
+      },
+      {
+        "cpu_seconds": 0.008002354000000045,
+        "cpu_seconds_per_call": 0.002000588500000011,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 4,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 786432,
+        "wall_seconds": 0.011002562
+      },
+      {
+        "cpu_seconds": 0.0048217120000000335,
+        "cpu_seconds_per_call": 0.0012054280000000084,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 4,
+        "mode": "vec",
+        "position": 3,
+        "size": 786432,
+        "wall_seconds": 0.007440556
+      },
+      {
+        "cpu_seconds": 0.0050400629999999835,
+        "cpu_seconds_per_call": 0.0012600157499999959,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 4,
+        "mode": "vec",
+        "position": 0,
+        "size": 786432,
+        "wall_seconds": 0.034079258
+      },
+      {
+        "cpu_seconds": 0.00814954499999998,
+        "cpu_seconds_per_call": 0.002037386249999995,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 4,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 786432,
+        "wall_seconds": 0.011165231
+      },
+      {
+        "cpu_seconds": 0.008572398000000037,
+        "cpu_seconds_per_call": 0.002143099500000009,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 4,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 786432,
+        "wall_seconds": 0.011611789
+      },
+      {
+        "cpu_seconds": 0.005179521999999992,
+        "cpu_seconds_per_call": 0.001294880499999998,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 4,
+        "mode": "vec",
+        "position": 3,
+        "size": 786432,
+        "wall_seconds": 0.008175872
+      },
+      {
+        "cpu_seconds": 0.006749443000000022,
+        "cpu_seconds_per_call": 0.0016873607500000054,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 4,
+        "mode": "vec",
+        "position": 0,
+        "size": 786432,
+        "wall_seconds": 0.010468671
+      },
+      {
+        "cpu_seconds": 0.021243681000000014,
+        "cpu_seconds_per_call": 0.0053109202500000036,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 4,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 786432,
+        "wall_seconds": 0.061476176
+      },
+      {
+        "cpu_seconds": 0.020618620999999948,
+        "cpu_seconds_per_call": 0.005154655249999987,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 4,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 786432,
+        "wall_seconds": 0.029691502
+      },
+      {
+        "cpu_seconds": 0.006959099999999996,
+        "cpu_seconds_per_call": 0.001739774999999999,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 4,
+        "mode": "vec",
+        "position": 3,
+        "size": 786432,
+        "wall_seconds": 0.009973268
+      },
+      {
+        "cpu_seconds": 0.007050793,
+        "cpu_seconds_per_call": 0.00176269825,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 4,
+        "mode": "vec",
+        "position": 0,
+        "size": 786432,
+        "wall_seconds": 0.036039399
+      },
+      {
+        "cpu_seconds": 0.020746058999999983,
+        "cpu_seconds_per_call": 0.005186514749999996,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 4,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 786432,
+        "wall_seconds": 0.020763159
+      },
+      {
+        "cpu_seconds": 0.021084618,
+        "cpu_seconds_per_call": 0.0052711545,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 4,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 786432,
+        "wall_seconds": 0.021108218
+      },
+      {
+        "cpu_seconds": 0.005907729000000028,
+        "cpu_seconds_per_call": 0.001476932250000007,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 4,
+        "mode": "vec",
+        "position": 3,
+        "size": 786432,
+        "wall_seconds": 0.055925144
+      },
+      {
+        "cpu_seconds": 0.005557017999999969,
+        "cpu_seconds_per_call": 0.005557017999999969,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 1,
+        "mode": "vec",
+        "position": 0,
+        "size": 4194272,
+        "wall_seconds": 0.005550423
+      },
+      {
+        "cpu_seconds": 0.010919608000000025,
+        "cpu_seconds_per_call": 0.010919608000000025,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 1,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 4194272,
+        "wall_seconds": 0.06394034
+      },
+      {
+        "cpu_seconds": 0.010954929000000058,
+        "cpu_seconds_per_call": 0.010954929000000058,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 1,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 4194272,
+        "wall_seconds": 0.016805679
+      },
+      {
+        "cpu_seconds": 0.004898724000000021,
+        "cpu_seconds_per_call": 0.004898724000000021,
+        "cycle": 0,
+        "escaped": false,
+        "iterations": 1,
+        "mode": "vec",
+        "position": 3,
+        "size": 4194272,
+        "wall_seconds": 0.004894885
+      },
+      {
+        "cpu_seconds": 0.005809890999999956,
+        "cpu_seconds_per_call": 0.005809890999999956,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 1,
+        "mode": "vec",
+        "position": 0,
+        "size": 4194272,
+        "wall_seconds": 0.005805053
+      },
+      {
+        "cpu_seconds": 0.010259809000000009,
+        "cpu_seconds_per_call": 0.010259809000000009,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 1,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 4194272,
+        "wall_seconds": 0.010300633
+      },
+      {
+        "cpu_seconds": 0.010313565000000025,
+        "cpu_seconds_per_call": 0.010313565000000025,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 1,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 4194272,
+        "wall_seconds": 0.010355698
+      },
+      {
+        "cpu_seconds": 0.005462481999999991,
+        "cpu_seconds_per_call": 0.005462481999999991,
+        "cycle": 1,
+        "escaped": false,
+        "iterations": 1,
+        "mode": "vec",
+        "position": 3,
+        "size": 4194272,
+        "wall_seconds": 0.008451401
+      },
+      {
+        "cpu_seconds": 0.009087159000000011,
+        "cpu_seconds_per_call": 0.009087159000000011,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 1,
+        "mode": "vec",
+        "position": 0,
+        "size": 4194272,
+        "wall_seconds": 0.009154875
+      },
+      {
+        "cpu_seconds": 0.028503543999999992,
+        "cpu_seconds_per_call": 0.028503543999999992,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 1,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 4194272,
+        "wall_seconds": 0.080258807
+      },
+      {
+        "cpu_seconds": 0.028396984999999986,
+        "cpu_seconds_per_call": 0.028396984999999986,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 1,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 4194272,
+        "wall_seconds": 0.065503597
+      },
+      {
+        "cpu_seconds": 0.009213796999999913,
+        "cpu_seconds_per_call": 0.009213796999999913,
+        "cycle": 0,
+        "escaped": true,
+        "iterations": 1,
+        "mode": "vec",
+        "position": 3,
+        "size": 4194272,
+        "wall_seconds": 0.013336013
+      },
+      {
+        "cpu_seconds": 0.009570887999999944,
+        "cpu_seconds_per_call": 0.009570887999999944,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 1,
+        "mode": "vec",
+        "position": 0,
+        "size": 4194272,
+        "wall_seconds": 0.014641958
+      },
+      {
+        "cpu_seconds": 0.02645523999999999,
+        "cpu_seconds_per_call": 0.02645523999999999,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 1,
+        "mode": "count_stream_16k",
+        "position": 1,
+        "size": 4194272,
+        "wall_seconds": 0.067436005
+      },
+      {
+        "cpu_seconds": 0.026764310999999985,
+        "cpu_seconds_per_call": 0.026764310999999985,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 1,
+        "mode": "count_stream_16k",
+        "position": 2,
+        "size": 4194272,
+        "wall_seconds": 0.031721349
+      },
+      {
+        "cpu_seconds": 0.009071328999999961,
+        "cpu_seconds_per_call": 0.009071328999999961,
+        "cycle": 1,
+        "escaped": true,
+        "iterations": 1,
+        "mode": "vec",
+        "position": 3,
+        "size": 4194272,
+        "wall_seconds": 0.009171929
+      }
+    ],
+    "schema": "isolated-synthetic-receipt-writer-probe-v1",
+    "verification": {
+      "byte_equal_cases": 10,
+      "oversize_without_temp_cases": 4,
+      "passed": true,
+      "write_or_flush_failure_without_drop_retry_cases": 8
+    }
+  },
+  "derived_summary": {
+    "verification": {
+      "byte_equal_cases": 10,
+      "oversize_without_temp_cases": 4,
+      "passed": true,
+      "write_or_flush_failure_without_drop_retry_cases": 8
+    },
+    "pure_medians": [
+      {
+        "size": 1024,
+        "escaped": false,
+        "vec": {
+          "cpu_us": 3.1880078124999933,
+          "wall_us": 15.53106640625,
+          "allocation_or_reallocation_calls": 4,
+          "bytes": 1024,
+          "peak_live_requested_bytes": 1660,
+          "requested_bytes_total": 3033
+        },
+        "count_stream_16k": {
+          "cpu_us": 4.417355468749971,
+          "wall_us": 4.39604296875,
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 1024,
+          "peak_live_requested_bytes": 1024,
+          "requested_bytes_total": 1024
+        },
+        "cpu_change_percent": 38.561626211509804
+      },
+      {
+        "size": 1024,
+        "escaped": true,
+        "vec": {
+          "cpu_us": 3.3729101562499215,
+          "wall_us": 3.35346484375,
+          "allocation_or_reallocation_calls": 4,
+          "bytes": 1024,
+          "peak_live_requested_bytes": 1024,
+          "requested_bytes_total": 1920
+        },
+        "count_stream_16k": {
+          "cpu_us": 6.011660156249971,
+          "wall_us": 5.9905234375,
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 1024,
+          "peak_live_requested_bytes": 1024,
+          "requested_bytes_total": 1024
+        },
+        "cpu_change_percent": 78.23362846207182
+      },
+      {
+        "size": 65536,
+        "escaped": false,
+        "vec": {
+          "cpu_us": 85.43166666666788,
+          "wall_us": 189.5453125,
+          "allocation_or_reallocation_calls": 3,
+          "bytes": 65536,
+          "peak_live_requested_bytes": 129854,
+          "requested_bytes_total": 194909
+        },
+        "count_stream_16k": {
+          "cpu_us": 166.19254166666602,
+          "wall_us": 292.11260416666664,
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 65536,
+          "peak_live_requested_bytes": 16384,
+          "requested_bytes_total": 16384
+        },
+        "cpu_change_percent": 94.53271620593104
+      },
+      {
+        "size": 65536,
+        "escaped": true,
+        "vec": {
+          "cpu_us": 147.95204166666645,
+          "wall_us": 267.2640416666667,
+          "allocation_or_reallocation_calls": 10,
+          "bytes": 65536,
+          "peak_live_requested_bytes": 65536,
+          "requested_bytes_total": 130944
+        },
+        "count_stream_16k": {
+          "cpu_us": 435.50512500000036,
+          "wall_us": 573.9735833333333,
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 65536,
+          "peak_live_requested_bytes": 16384,
+          "requested_bytes_total": 16384
+        },
+        "cpu_change_percent": 194.3556034063973
+      },
+      {
+        "size": 786432,
+        "escaped": false,
+        "vec": {
+          "cpu_us": 1232.8326249999993,
+          "wall_us": 1952.0535000000002,
+          "allocation_or_reallocation_calls": 3,
+          "bytes": 786432,
+          "peak_live_requested_bytes": 1571646,
+          "requested_bytes_total": 2357597
+        },
+        "count_stream_16k": {
+          "cpu_us": 2022.3134999999975,
+          "wall_us": 2772.442,
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 786432,
+          "peak_live_requested_bytes": 16384,
+          "requested_bytes_total": 16384
+        },
+        "cpu_change_percent": 64.03796095191743
+      },
+      {
+        "size": 786432,
+        "escaped": true,
+        "vec": {
+          "cpu_us": 1713.5678750000022,
+          "wall_us": 5813.50875,
+          "allocation_or_reallocation_calls": 14,
+          "bytes": 786432,
+          "peak_live_requested_bytes": 1048576,
+          "requested_bytes_total": 2097024
+        },
+        "count_stream_16k": {
+          "cpu_us": 5228.834624999998,
+          "wall_us": 6349.965000000001,
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 786432,
+          "peak_live_requested_bytes": 16384,
+          "requested_bytes_total": 16384
+        },
+        "cpu_change_percent": 205.14312863153967
+      },
+      {
+        "size": 4194272,
+        "escaped": false,
+        "vec": {
+          "cpu_us": 5509.74999999998,
+          "wall_us": 5677.738,
+          "allocation_or_reallocation_calls": 3,
+          "bytes": 4194272,
+          "peak_live_requested_bytes": 8387326,
+          "requested_bytes_total": 12581117
+        },
+        "count_stream_16k": {
+          "cpu_us": 10616.586500000025,
+          "wall_us": 13580.6885,
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 4194272,
+          "peak_live_requested_bytes": 16384,
+          "requested_bytes_total": 16384
+        },
+        "cpu_change_percent": 92.68726348745521
+      },
+      {
+        "size": 4194272,
+        "escaped": true,
+        "vec": {
+          "cpu_us": 9150.477999999963,
+          "wall_us": 11253.971000000001,
+          "allocation_or_reallocation_calls": 16,
+          "bytes": 4194272,
+          "peak_live_requested_bytes": 4194304,
+          "requested_bytes_total": 8388480
+        },
+        "count_stream_16k": {
+          "cpu_us": 27580.647999999986,
+          "wall_us": 66469.80099999999,
+          "allocation_or_reallocation_calls": 1,
+          "bytes": 4194272,
+          "peak_live_requested_bytes": 16384,
+          "requested_bytes_total": 16384
+        },
+        "cpu_change_percent": 201.41210109461056
+      }
+    ],
+    "durable_medians": [
+      {
+        "size": 1024,
+        "vec": {
+          "wall_ms": 2.2795205,
+          "cpu_ms": 0.2319929999999859,
+          "samples": 2
+        },
+        "count_stream_16k": {
+          "wall_ms": 3.5642044999999998,
+          "cpu_ms": 0.2935349999999559,
+          "samples": 2
+        }
+      },
+      {
+        "size": 4194272,
+        "vec": {
+          "wall_ms": 26.414089,
+          "cpu_ms": 13.592667000000002,
+          "samples": 2
+        },
+        "count_stream_16k": {
+          "wall_ms": 41.057446,
+          "cpu_ms": 17.43234150000006,
+          "samples": 2
+        }
+      }
+    ],
+    "notes": {
+      "allocation": "separate single-call sample after fixture construction; requested bytes in alloc/realloc/dealloc; excludes fixture and report; logical live peak, not RSS or allocator internal transient realloc peak",
+      "fixture": "serde_json::Value with fixed JobRecord-like fields; sorted Value map, not production JobRecord struct",
+      "limitations": "cached library build; CPU quota and other build load affect wall; synthetic sink adds one noinline black_box write; no production throughput or recovery qualification",
+      "timing": "single thread; two ABBA cycles per pure case; allocator sampling disabled during timing; one ABBA durable cycle per size"
+    }
+  },
+  "actual_logs": {
+    "stdout": "PREFLIGHT {\"source_sha256\": \"5a8b14e2d6086b0a47f5d349b9b804de225d21e52d5339504bc1dd56211d0d34\", \"serde_json_version\": \"1.0.151\", \"rlib\": \"/home/qian/hepta-runtime-optimization-20261103-r10/target/debug/deps/libserde_json-7c0b68a9d08b39d5.rlib\", \"rustc_version\": \"rustc 1.95.0 (59807616e 2026-04-14)\"}\nCOMPILE {\"returncode\": 0, \"wall_seconds\": 7.393466399051249}\nVERIFIED {\"byte_equal_cases\":10,\"oversize_without_temp_cases\":4,\"passed\":true,\"write_or_flush_failure_without_drop_retry_cases\":8}\nPURE_CASE size=1024 escaped=false\nPURE_CASE size=1024 escaped=true\nPURE_CASE size=65536 escaped=false\nPURE_CASE size=65536 escaped=true\nPURE_CASE size=786432 escaped=false\nPURE_CASE size=786432 escaped=true\nPURE_CASE size=4194272 escaped=false\nPURE_CASE size=4194272 escaped=true\nCOMPLETE results.json\nRUN {\"returncode\": 0, \"wall_seconds\": 1.8833543988876045}\nSUMMARY {\"verification\":{\"byte_equal_cases\":10,\"oversize_without_temp_cases\":4,\"passed\":true,\"write_or_flush_failure_without_drop_retry_cases\":8},\"pure_medians\":[{\"size\":1024,\"escaped\":false,\"vec\":{\"cpu_us\":3.1880078124999933,\"wall_us\":15.53106640625,\"allocation_or_reallocation_calls\":4,\"bytes\":1024,\"peak_live_requested_bytes\":1660,\"requested_bytes_total\":3033},\"count_stream_16k\":{\"cpu_us\":4.417355468749971,\"wall_us\":4.39604296875,\"allocation_or_reallocation_calls\":1,\"bytes\":1024,\"peak_live_requested_bytes\":1024,\"requested_bytes_total\":1024},\"cpu_change_percent\":38.561626211509804},{\"size\":1024,\"escaped\":true,\"vec\":{\"cpu_us\":3.3729101562499215,\"wall_us\":3.35346484375,\"allocation_or_reallocation_calls\":4,\"bytes\":1024,\"peak_live_requested_bytes\":1024,\"requested_bytes_total\":1920},\"count_stream_16k\":{\"cpu_us\":6.011660156249971,\"wall_us\":5.9905234375,\"allocation_or_reallocation_calls\":1,\"bytes\":1024,\"peak_live_requested_bytes\":1024,\"requested_bytes_total\":1024},\"cpu_change_percent\":78.23362846207182},{\"size\":65536,\"escaped\":false,\"vec\":{\"cpu_us\":85.43166666666788,\"wall_us\":189.5453125,\"allocation_or_reallocation_calls\":3,\"bytes\":65536,\"peak_live_requested_bytes\":129854,\"requested_bytes_total\":194909},\"count_stream_16k\":{\"cpu_us\":166.19254166666602,\"wall_us\":292.11260416666664,\"allocation_or_reallocation_calls\":1,\"bytes\":65536,\"peak_live_requested_bytes\":16384,\"requested_bytes_total\":16384},\"cpu_change_percent\":94.53271620593104},{\"size\":65536,\"escaped\":true,\"vec\":{\"cpu_us\":147.95204166666645,\"wall_us\":267.2640416666667,\"allocation_or_reallocation_calls\":10,\"bytes\":65536,\"peak_live_requested_bytes\":65536,\"requested_bytes_total\":130944},\"count_stream_16k\":{\"cpu_us\":435.50512500000036,\"wall_us\":573.9735833333333,\"allocation_or_reallocation_calls\":1,\"bytes\":65536,\"peak_live_requested_bytes\":16384,\"requested_bytes_total\":16384},\"cpu_change_percent\":194.3556034063973},{\"size\":786432,\"escaped\":false,\"vec\":{\"cpu_us\":1232.8326249999993,\"wall_us\":1952.0535000000002,\"allocation_or_reallocation_calls\":3,\"bytes\":786432,\"peak_live_requested_bytes\":1571646,\"requested_bytes_total\":2357597},\"count_stream_16k\":{\"cpu_us\":2022.3134999999975,\"wall_us\":2772.442,\"allocation_or_reallocation_calls\":1,\"bytes\":786432,\"peak_live_requested_bytes\":16384,\"requested_bytes_total\":16384},\"cpu_change_percent\":64.03796095191743},{\"size\":786432,\"escaped\":true,\"vec\":{\"cpu_us\":1713.5678750000022,\"wall_us\":5813.50875,\"allocation_or_reallocation_calls\":14,\"bytes\":786432,\"peak_live_requested_bytes\":1048576,\"requested_bytes_total\":2097024},\"count_stream_16k\":{\"cpu_us\":5228.834624999998,\"wall_us\":6349.965000000001,\"allocation_or_reallocation_calls\":1,\"bytes\":786432,\"peak_live_requested_bytes\":16384,\"requested_bytes_total\":16384},\"cpu_change_percent\":205.14312863153967},{\"size\":4194272,\"escaped\":false,\"vec\":{\"cpu_us\":5509.74999999998,\"wall_us\":5677.738,\"allocation_or_reallocation_calls\":3,\"bytes\":4194272,\"peak_live_requested_bytes\":8387326,\"requested_bytes_total\":12581117},\"count_stream_16k\":{\"cpu_us\":10616.586500000025,\"wall_us\":13580.6885,\"allocation_or_reallocation_calls\":1,\"bytes\":4194272,\"peak_live_requested_bytes\":16384,\"requested_bytes_total\":16384},\"cpu_change_percent\":92.68726348745521},{\"size\":4194272,\"escaped\":true,\"vec\":{\"cpu_us\":9150.477999999963,\"wall_us\":11253.971000000001,\"allocation_or_reallocation_calls\":16,\"bytes\":4194272,\"peak_live_requested_bytes\":4194304,\"requested_bytes_total\":8388480},\"count_stream_16k\":{\"cpu_us\":27580.647999999986,\"wall_us\":66469.80099999999,\"allocation_or_reallocation_calls\":1,\"bytes\":4194272,\"peak_live_requested_bytes\":16384,\"requested_bytes_total\":16384},\"cpu_change_percent\":201.41210109461056}],\"durable_medians\":[{\"size\":1024,\"vec\":{\"wall_ms\":2.2795205,\"cpu_ms\":0.2319929999999859,\"samples\":2},\"count_stream_16k\":{\"wall_ms\":3.5642044999999998,\"cpu_ms\":0.2935349999999559,\"samples\":2}},{\"size\":4194272,\"vec\":{\"wall_ms\":26.414089,\"cpu_ms\":13.592667000000002,\"samples\":2},\"count_stream_16k\":{\"wall_ms\":41.057446,\"cpu_ms\":17.43234150000006,\"samples\":2}}],\"notes\":{\"allocation\":\"separate single-call sample after fixture construction; requested bytes in alloc/realloc/dealloc; excludes fixture and report; logical live peak, not RSS or allocator internal transient realloc peak\",\"fixture\":\"serde_json::Value with fixed JobRecord-like fields; sorted Value map, not production JobRecord struct\",\"limitations\":\"cached library build; CPU quota and other build load affect wall; synthetic sink adds one noinline black_box write; no production throughput or recovery qualification\",\"timing\":\"single thread; two ABBA cycles per pure case; allocator sampling disabled during timing; one ABBA durable cycle per size\"}}\n",
+    "stderr": "",
+    "compile_stderr": ""
+  },
+  "remote_artifacts": [
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r11/persistence-probe/results.json",
+      "size": 24969,
+      "sha256": "ee3d5e16614cf99250d4eb5efb627176906eaeb545eaede019514a06919cc535",
+      "version": "2053:3473754:24969:1793702143462725085:1793702143462725085"
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r11/persistence-probe/metadata-v2.json",
+      "size": 1734,
+      "sha256": "3ba07a5909cffcd17701fb0d0e5f03d5f9d82fa382e20ce7d7c16c8d37c06a78",
+      "version": "2053:3473758:1734:1793702143467725096:1793702143467725096"
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r11/persistence-probe/metadata.json",
+      "size": 245,
+      "sha256": "b1b7f9136aea7f756c9162834ae1eb6a212e0caf104533eb9038849d9275c038",
+      "version": "2053:3472888:245:1793701891913161605:1793701891913161605"
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r11/persistence-probe/compile-v2.stderr",
+      "size": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "version": "2053:3473739:0:1793702141580720905:1793702141580720905"
+    }
+  ],
+  "archive_files": {
+    "source": "tools/x230/20261103/experiments/persistence_probe.rs",
+    "exact_correction_launcher": "tools/x230/20261103/experiments/launch_persistence_probe_v2.py",
+    "report": "tools/x230/20261103/experiments/persistence-probe.md",
+    "evidence": "tests/evidence/20261103-x230-r11/persistence-probe.json"
+  }
+}

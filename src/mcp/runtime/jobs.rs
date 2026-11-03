@@ -41,6 +41,8 @@ static CANCEL_PUBLICATIONS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<Option<AuditReadiness>>> = OnceLock::new();
 const MAX_OBSERVATION_AUDITS: usize = 8;
 static OBSERVATION_AUDITS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+const MAX_OBSERVATION_RECORD_READS: usize = 4;
+static OBSERVATION_RECORD_READS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 static REUSE_HITS: OnceLock<Mutex<ReuseHitCache>> = OnceLock::new();
 const MAX_REGISTRY_LOOKUPS: usize = 4;
 static REGISTRY_LOOKUPS: OnceLock<Arc<Semaphore>> = OnceLock::new();
@@ -155,9 +157,9 @@ pub struct ProcessListPageParams {
 	pub limit: Option<u16>,
 }
 
-// Owned inventory/recovery keeps its concrete schema and derived decoder.
-// Borrowed lookups use the same field list, including every validation/default,
-// without retaining unrelated receipts' command strings.
+// Recovery keeps its concrete schema and derived decoder. Borrowed lookups and
+// inventories use the same field list, including every validation/default,
+// without allocating private command strings that their projection discards.
 macro_rules! job_record_schema {
 	($name:ident $(<$parameter:ident>)?, $text:ident $(, $attribute:meta)?) => {
 		#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -2042,6 +2044,39 @@ fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
 		);
 	}
 	Ok(record)
+}
+
+fn observation_record_read_slots() -> Arc<Semaphore> {
+	OBSERVATION_RECORD_READS
+		.get_or_init(|| Arc::new(Semaphore::new(MAX_OBSERVATION_RECORD_READS)))
+		.clone()
+}
+
+async fn run_observation_record_read(
+	slots: Arc<Semaphore>,
+	read: impl FnOnce() -> Result<JobRecord> + Send + 'static,
+) -> Result<JobRecord> {
+	// Separate from registry scans, inventories and durable writers so a slow
+	// historical receipt does not occupy their physical work capacity.
+	let permit = slots
+		.acquire_owned()
+		.await
+		.map_err(|_| anyhow::anyhow!("job observation record capacity unavailable"))?;
+	tokio::task::spawn_blocking(move || {
+		// Cancelling an observer does not stop a submitted filesystem read. Its
+		// slot covers the blocking-pool queue and remains held until actual exit.
+		let _permit = permit;
+		read()
+	})
+	.await
+	.map_err(|_| anyhow::anyhow!("job observation record worker unavailable"))?
+}
+
+async fn check_ref_async(params: &ProcessRefParams) -> Result<JobRecord> {
+	let params = params.clone();
+	// The complete original decoder and host binding checks run once, before
+	// any remote observation. No cached receipt or new effect is introduced.
+	run_observation_record_read(observation_record_read_slots(), move || check_ref(&params)).await
 }
 
 struct PreparedAudit {
@@ -4320,7 +4355,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 }
 
 pub async fn status_job(params: ProcessRefParams) -> Result<String> {
-	let record = check_ref(&params)?;
+	let record = check_ref_async(&params).await?;
 	let status = status_observation(&record, 0).await?;
 	let completion = observation_completion_audit(
 		"process_status",
@@ -4339,7 +4374,7 @@ pub async fn wait_job(params: ProcessWaitParams) -> Result<String> {
 		host: params.host.clone(),
 		job_id: params.job_id.clone(),
 	};
-	let record = check_ref(&reference)?;
+	let record = check_ref_async(&reference).await?;
 	let wait = params.timeout_seconds.unwrap_or(10).min(30);
 	let status = status_observation(&record, wait).await?;
 	let completion = observation_completion_audit(
@@ -4359,7 +4394,7 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 		host: params.host.clone(),
 		job_id: params.job_id.clone(),
 	};
-	let record = check_ref(&reference)?;
+	let record = check_ref_async(&reference).await?;
 	let host = runtime_config()?.host(&record.host)?;
 	let request = json!({
 		"job_id": record.id,
@@ -4568,15 +4603,20 @@ fn list_job_rows_in(dir: &Path, host: Option<&str>) -> Result<Vec<InventoryRow>>
 		// Keep the complete compatibility read before filtering. A corrupt or
 		// unsafe neighbor must still refuse the inventory, even after an earlier
 		// row would exceed the wire budget. Only public fields survive this step.
-		let record = read_record_at_with_buffer(&path, expected_id, &mut bytes)?;
-		if host.is_none_or(|host| record.host == host) {
-			rows.push(InventoryRow {
-				id: record.id,
-				host: record.host,
-				created_unix_ms: record.created_unix_ms,
-				execution_mode: record.execution_mode,
-				launch_state: record.launch_state,
-			});
+		let row = with_record_read_buffer(&mut bytes, |bytes| {
+			let record = read_borrowed_record_at_into(&path, expected_id, bytes)?;
+			Ok(host
+				.is_none_or(|host| record.host == host)
+				.then_some(InventoryRow {
+					id: record.id,
+					host: record.host,
+					created_unix_ms: record.created_unix_ms,
+					execution_mode: record.execution_mode,
+					launch_state: record.launch_state,
+				}))
+		})?;
+		if let Some(row) = row {
+			rows.push(row);
 		}
 	}
 	// Stable sorting preserves encounter order for tied timestamps, as with
@@ -4631,14 +4671,14 @@ impl Default for InventoryLimits {
 
 #[cfg(all(test, unix))]
 fn inventory_records_at(root: &Path, limits: InventoryLimits) -> Result<Vec<JobRecord>> {
-	inventory_projected_at(root, limits, |record| record)
+	inventory_projected_at(root, limits, |record| record.into_owned())
 }
 
 #[cfg(unix)]
 fn inventory_projected_at<T>(
 	root: &Path,
 	limits: InventoryLimits,
-	mut project: impl FnMut(JobRecord) -> T,
+	mut project: impl for<'bytes> FnMut(JobRecordData<BorrowedJobString<'bytes>>) -> T,
 ) -> Result<Vec<T>> {
 	use std::fs::{File, Metadata};
 	use std::io::Read;
@@ -4776,8 +4816,8 @@ fn inventory_projected_at<T>(
 	let mut records = Vec::with_capacity(names.len());
 	let mut stamps = Vec::with_capacity(names.len());
 	let mut bytes = 0u64;
-	// Reuse only the raw input buffer within this scan. Every receipt is still
-	// read and validated in full before projection; no record survives in a cache.
+	// Validate the complete schema before projection. Private strings may borrow
+	// this scan-local buffer; the projection cannot retain those borrowed bytes.
 	let mut raw = Vec::new();
 	for name in &names {
 		deadline()?;
@@ -4805,7 +4845,11 @@ fn inventory_projected_at<T>(
 			bail!("durable inventory total source byte bound exceeded");
 		}
 		raw.clear();
-		raw.reserve_exact(before.len() as usize);
+		let capacity = usize::try_from(before.len())?
+			.checked_add(1)
+			.context("durable inventory read capacity overflow")?;
+		raw.try_reserve_exact(capacity)
+			.context("cannot allocate bounded durable inventory read buffer")?;
 		Read::by_ref(&mut file)
 			.take(before.len() + 1)
 			.read_to_end(&mut raw)?;
@@ -4813,7 +4857,7 @@ fn inventory_projected_at<T>(
 		if raw.len() as u64 != before.len() || stamp(&before) != stamp(&file.metadata()?) {
 			bail!("durable inventory metadata changed during observation");
 		}
-		let record: JobRecord =
+		let record: JobRecordData<BorrowedJobString<'_>> =
 			serde_json::from_slice(&raw).context("corrupt durable inventory metadata")?;
 		if record.id != id || !valid_name(&record.host) {
 			bail!("durable inventory record identity mismatch");
@@ -4848,7 +4892,7 @@ fn inventory_projected_at<T>(
 fn inventory_projected_at<T>(
 	_root: &Path,
 	_limits: InventoryLimits,
-	_project: impl FnMut(JobRecord) -> T,
+	_project: impl for<'bytes> FnMut(JobRecordData<BorrowedJobString<'bytes>>) -> T,
 ) -> Result<Vec<T>> {
 	bail!("bounded durable inventory requires Unix descriptor support")
 }
@@ -5023,6 +5067,18 @@ mod inventory_streaming_tests;
 #[cfg(test)]
 #[path = "jobs_inventory_async_tests.rs"]
 mod inventory_async_tests;
+
+#[cfg(test)]
+#[path = "jobs_observation_read_tests.rs"]
+mod observation_read_tests;
+
+#[cfg(all(test, unix))]
+#[path = "jobs_inventory_borrowed_tests.rs"]
+mod inventory_borrowed_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_inventory_read_bench.rs"]
+mod inventory_read_bench;
 
 #[cfg(test)]
 #[path = "jobs_inventory_digest_tests.rs"]

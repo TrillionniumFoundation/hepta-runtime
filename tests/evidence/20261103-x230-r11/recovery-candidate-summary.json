@@ -1,0 +1,1535 @@
+{
+  "schema": "hepta-x230-recovery-evidence-summary/v1",
+  "label": "candidate",
+  "provenance": {
+    "original_filename": "r11-candidate-recovery-original.json",
+    "original_bytes": 322559,
+    "original_sha256": "1ed9d64397ec321ee00ccc0b4e7c31074c536f0aefb0cc8596425eda7a027a93",
+    "original_schema": "hepta-six-running-controller-recovery/v2",
+    "archive_filename": "recovery-candidate.json.gz",
+    "archive_bytes": 41792,
+    "archive_sha256": "93e7e940b0189f8c1a4e02405ff6ab97f249332826e8b399b2919e835e94286c",
+    "lossless_decompression_verified": true,
+    "source_commit": null,
+    "source_commit_note": "The original report does not record a Git commit; no commit binding is inferred."
+  },
+  "time": {
+    "started_unix": 1793704284.7593915,
+    "finished_unix": 1793704299.3755133,
+    "started_utc": "2026-11-03T11:11:24.759392+00:00",
+    "finished_utc": "2026-11-03T11:11:39.375513+00:00",
+    "started_america_new_york": "2026-11-03T06:11:24.759392-05:00",
+    "finished_america_new_york": "2026-11-03T06:11:39.375513-05:00",
+    "elapsed_seconds": 14.616121768951416
+  },
+  "reported_passed": true,
+  "reported_phase": "completed",
+  "scope": "six new private operator jobs; same original jobs across owned-controller SIGKILL",
+  "not_covered": [
+    "target reboot",
+    "physical power loss",
+    "WAN partition",
+    "production owner transfer",
+    "transactional exactly-once external effects"
+  ],
+  "boundaries": {
+    "transport": "Optional interruption target: rog. Only the proved private SSH master of this test controller may be interrupted; observed signal/isolation results are retained separately. This is not a WAN partition.",
+    "controller_restart": "Only this test controller was SIGKILLed. The same six remote original jobs remained running, then completed after explicit gate release.",
+    "durability": "Original controller receipts, remote requests/nonces, persisted output, exit records and exact exit witness hashes are compared. This is not a host reboot or physical power-loss proof.",
+    "performance": "This is a bounded fault-recovery canary, not an A/B throughput or long-duration stability benchmark."
+  },
+  "environment_and_artifacts": {
+    "controller_hostname": "qian-ThinkPad-X230",
+    "candidate_sha256": "660d64674fe3422006c0c2a82bc31f3f36edf19baf6613df7cdce51e8f3f8e4c",
+    "first_startup": {
+      "birth_ticks": 240634755,
+      "pid": 1936394,
+      "ready_ms": 229.98238820582628,
+      "server_info": {
+        "name": "rmcp",
+        "version": "3.4.1"
+      },
+      "stdio_protocol": "2025-03-26"
+    },
+    "restart_startup": {
+      "birth_ticks": 240635416,
+      "pid": 1936696,
+      "ready_ms": 161.55037889257073,
+      "server_info": {
+        "name": "rmcp",
+        "version": "3.4.1"
+      },
+      "stdio_protocol": "2025-03-26"
+    },
+    "runtime_config": "/home/qian/hepta-runtime-optimization-20261023/r11-candidate-recovery-20261103-01/runtime.json",
+    "profile": {
+      "current_agent_bound": true,
+      "historical_agent_not_reused": true,
+      "new_profile_sha256": "5620bd2aa25ff40363ac0aa1f162b78a2a03e5191866d7cdbc4415843355876a",
+      "template_sha256": "b373ccd5f3fbbc15afa80edd6b2e39d607fefc615f938671115adfb1ec52174a"
+    },
+    "script_sha256": "6fc6856fd22dd1c6bb1171e6b19cd14a4609a48c145e68829e868e43e42ac6d0",
+    "benchmark_helper_sha256": "fe33910ee709e227001338de3ca9a32cd01309efa3f406fcb2a2f2b54d2742cb",
+    "interruption_helper_sha256": "cfde8ad0095b8ef23e3b201ff30672f4de085cf38c02c296bcc85cc250eeae28",
+    "remote_helper_sha256": "621255b47f6ffff0f5532bf64b88946e2538c7271c69a2bbd4cb4bfe9224d6a7",
+    "workload_sha256": "db46bd156b5017a45435fa9d4f60afa7dfa22250fa23676c5c060b79f49dd638",
+    "ssh_wrapper_sha256": "672d38b26ba1fc2b96d68e4eecd6fdf48d0f080659aa2da8216bea49df072729",
+    "target_timeout_seconds": 240,
+    "release_gate_timeout_seconds": 210,
+    "stdin_bytes": 4096,
+    "stdin_sha256": "929b11f47a02202e710632002203f7ea8dd3c1bc51ef818e59b6a3cd1dc2d5dc"
+  },
+  "host_identity_checks": {
+    "ai395": {
+      "reported_hostname": "ai395",
+      "executable": "/usr/bin/python3",
+      "ssh_target": "hepta-native-test-v7-ai395",
+      "source_job_id": "1a16a4035ad-b1270-1",
+      "source_record_sha256": "a8982325aea4833461e2b6a76ca83f846b80b99a227298e97a0b279e2d9dfdb8",
+      "idempotency_key": "six-running-5a2559ad1f9484dd58fecb8c-ai395",
+      "request_sha256": "da221787d475aabaeb445204b9c44cd2e536b27b4fba9ecd06964cff00cc8a39",
+      "job_id_observations": {
+        "report": "1a1a11b5959-1d8c0a-4",
+        "launch": "1a1a11b5959-1d8c0a-4",
+        "before_crash_status": "1a1a11b5959-1d8c0a-4",
+        "recovered_status": "1a1a11b5959-1d8c0a-4",
+        "same_key_lookup": "1a1a11b5959-1d8c0a-4",
+        "terminal_status": "1a1a11b5959-1d8c0a-4",
+        "retained_controller_receipt": "1a1a11b5959-1d8c0a-4",
+        "before_crash_remote_request": "1a1a11b5959-1d8c0a-4",
+        "after_crash_remote_request": "1a1a11b5959-1d8c0a-4",
+        "terminal_remote_request": "1a1a11b5959-1d8c0a-4",
+        "exit.json": "1a1a11b5959-1d8c0a-4",
+        "exit.witness.json": "1a1a11b5959-1d8c0a-4"
+      },
+      "all_observed_job_ids_match": true,
+      "launch_nonce_observations": {
+        "before_crash": "b639d91b0d770cdbf9e35cbd3299d85a",
+        "after_crash": "b639d91b0d770cdbf9e35cbd3299d85a",
+        "terminal_status": "b639d91b0d770cdbf9e35cbd3299d85a",
+        "before_crash_remote_request": "b639d91b0d770cdbf9e35cbd3299d85a",
+        "after_crash_remote_request": "b639d91b0d770cdbf9e35cbd3299d85a",
+        "terminal_remote_request": "b639d91b0d770cdbf9e35cbd3299d85a",
+        "exit.json": "b639d91b0d770cdbf9e35cbd3299d85a",
+        "exit.witness.json": "b639d91b0d770cdbf9e35cbd3299d85a"
+      },
+      "all_observed_launch_nonces_match": true,
+      "remote_request_artifacts": {
+        "before_crash": {
+          "bytes": 3039,
+          "sha256": "fb9e2d8e9395c8568578f5b2003500c2e94c1b98f2f8591e6e5cee30e3b933d7"
+        },
+        "after_crash": {
+          "bytes": 3039,
+          "sha256": "fb9e2d8e9395c8568578f5b2003500c2e94c1b98f2f8591e6e5cee30e3b933d7"
+        },
+        "terminal": {
+          "bytes": 3039,
+          "sha256": "fb9e2d8e9395c8568578f5b2003500c2e94c1b98f2f8591e6e5cee30e3b933d7"
+        }
+      },
+      "remote_request_bytes_unchanged": true,
+      "controller_receipt_sha256_at_launch": "b235059c10890f93dcbd49c985084b082b6576514cae1726645c366f2bcf1371",
+      "controller_receipt_sha256_after_shutdown": "b235059c10890f93dcbd49c985084b082b6576514cae1726645c366f2bcf1371",
+      "controller_receipt_bytes_unchanged": true,
+      "same_key_reused": true,
+      "same_key_retried_launch": false,
+      "same_key_launch_result": null,
+      "execution_count_reported": 1,
+      "original_identity_preserved_reported": true,
+      "terminal_publication_confirmed_reported": true,
+      "terminal_status": {
+        "at_unix_ms": 1793704296470,
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "cancelled": false,
+        "exit_code": 0,
+        "job_id": "1a1a11b5959-1d8c0a-4",
+        "launch_nonce": "b639d91b0d770cdbf9e35cbd3299d85a",
+        "log_bytes": {
+          "stderr": {
+            "seen": 26,
+            "stored": 26
+          },
+          "stdout": {
+            "seen": 87,
+            "stored": 87
+          }
+        },
+        "log_errors": {
+          "stderr": null,
+          "stdout": null
+        },
+        "log_synced": {
+          "stderr": true,
+          "stdout": true
+        },
+        "log_truncated": {
+          "stderr": false,
+          "stdout": false
+        },
+        "output_complete": true,
+        "output_durable": true,
+        "state": "succeeded",
+        "terminal_publication_confirmed": true,
+        "terminal_publication_protocol": 1,
+        "timed_out": false
+      },
+      "outputs": {
+        "stderr": {
+          "bytes": 26,
+          "sha256": "4a7d15d40a11ad316df546e5053f8a358ce90f06d1ef498cde03a539627d2abb"
+        },
+        "stdout": {
+          "bytes": 87,
+          "sha256": "5e7d2b0f2bd812daba2d6267457896d86c938201efcecfd5620ec087b7a864f2"
+        }
+      },
+      "exit_artifact": {
+        "bytes": 497,
+        "sha256": "0192e2af8eb762ff64b9c3918cc1d1a782348c467f8241a92ebf2aa8b728c025"
+      },
+      "exit_witness_artifact": {
+        "bytes": 206,
+        "sha256": "0b52f2b6f58b50c0d804fa2059b4edd16adf35bba1e49c78554ff234fe100580"
+      },
+      "witness_matches_exact_exit_bytes": true,
+      "execution_marker_artifacts": {
+        "before_crash": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        },
+        "after_crash": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        },
+        "terminal": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        }
+      }
+    },
+    "mac": {
+      "reported_hostname": "MacBook-Pro.local",
+      "executable": "/usr/bin/python3",
+      "ssh_target": "hepta-native-test-v7-mac",
+      "source_job_id": "1a16a403e55-b1270-2",
+      "source_record_sha256": "bbb8a86161837ff0f197b345c25bc66224e3404473dea2ac46d1f44f3af43609",
+      "idempotency_key": "six-running-5a2559ad1f9484dd58fecb8c-mac",
+      "request_sha256": "1d22a6769bea7febbc27c663235665279623c651ce06da1172db6e65eaffdfc9",
+      "job_id_observations": {
+        "report": "1a1a11b5954-1d8c0a-1",
+        "launch": "1a1a11b5954-1d8c0a-1",
+        "before_crash_status": "1a1a11b5954-1d8c0a-1",
+        "recovered_status": "1a1a11b5954-1d8c0a-1",
+        "same_key_lookup": "1a1a11b5954-1d8c0a-1",
+        "terminal_status": "1a1a11b5954-1d8c0a-1",
+        "retained_controller_receipt": "1a1a11b5954-1d8c0a-1",
+        "before_crash_remote_request": "1a1a11b5954-1d8c0a-1",
+        "after_crash_remote_request": "1a1a11b5954-1d8c0a-1",
+        "terminal_remote_request": "1a1a11b5954-1d8c0a-1",
+        "exit.json": "1a1a11b5954-1d8c0a-1",
+        "exit.witness.json": "1a1a11b5954-1d8c0a-1"
+      },
+      "all_observed_job_ids_match": true,
+      "launch_nonce_observations": {
+        "before_crash": "4504e97f71f1de6df840ae48df620041",
+        "after_crash": "4504e97f71f1de6df840ae48df620041",
+        "terminal_status": "4504e97f71f1de6df840ae48df620041",
+        "before_crash_remote_request": "4504e97f71f1de6df840ae48df620041",
+        "after_crash_remote_request": "4504e97f71f1de6df840ae48df620041",
+        "terminal_remote_request": "4504e97f71f1de6df840ae48df620041",
+        "exit.json": "4504e97f71f1de6df840ae48df620041",
+        "exit.witness.json": "4504e97f71f1de6df840ae48df620041"
+      },
+      "all_observed_launch_nonces_match": true,
+      "remote_request_artifacts": {
+        "before_crash": {
+          "bytes": 3048,
+          "sha256": "6af7a0e7e2a611290adf49fd4ecbde126b659b7adaf90c67f9e063e0cc2ef03e"
+        },
+        "after_crash": {
+          "bytes": 3048,
+          "sha256": "6af7a0e7e2a611290adf49fd4ecbde126b659b7adaf90c67f9e063e0cc2ef03e"
+        },
+        "terminal": {
+          "bytes": 3048,
+          "sha256": "6af7a0e7e2a611290adf49fd4ecbde126b659b7adaf90c67f9e063e0cc2ef03e"
+        }
+      },
+      "remote_request_bytes_unchanged": true,
+      "controller_receipt_sha256_at_launch": "a575238f0103480c75b95acc248b6eac5f5e5b02123c95e11e9cc00679bc20ed",
+      "controller_receipt_sha256_after_shutdown": "a575238f0103480c75b95acc248b6eac5f5e5b02123c95e11e9cc00679bc20ed",
+      "controller_receipt_bytes_unchanged": true,
+      "same_key_reused": true,
+      "same_key_retried_launch": false,
+      "same_key_launch_result": null,
+      "execution_count_reported": 1,
+      "original_identity_preserved_reported": true,
+      "terminal_publication_confirmed_reported": true,
+      "terminal_status": {
+        "at_unix_ms": 1793704295353,
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "cancelled": false,
+        "exit_code": 0,
+        "job_id": "1a1a11b5954-1d8c0a-1",
+        "launch_nonce": "4504e97f71f1de6df840ae48df620041",
+        "log_bytes": {
+          "stderr": {
+            "seen": 24,
+            "stored": 24
+          },
+          "stdout": {
+            "seen": 83,
+            "stored": 83
+          }
+        },
+        "log_errors": {
+          "stderr": null,
+          "stdout": null
+        },
+        "log_synced": {
+          "stderr": true,
+          "stdout": true
+        },
+        "log_truncated": {
+          "stderr": false,
+          "stdout": false
+        },
+        "output_complete": true,
+        "output_durable": true,
+        "state": "succeeded",
+        "terminal_publication_confirmed": true,
+        "terminal_publication_protocol": 1,
+        "timed_out": false
+      },
+      "outputs": {
+        "stderr": {
+          "bytes": 24,
+          "sha256": "03eafb7653ab84c62a64e29f766a5aa11723ef0aa8b720d686206cc6b1227189"
+        },
+        "stdout": {
+          "bytes": 83,
+          "sha256": "2802f0525742b8767bd30efde55be806af02cbb794abf058b07e1dafdf76617e"
+        }
+      },
+      "exit_artifact": {
+        "bytes": 497,
+        "sha256": "495736086d3d73aa5da21345c1155132c8f908f15f2cea6ea3cf7249324a13bf"
+      },
+      "exit_witness_artifact": {
+        "bytes": 206,
+        "sha256": "9e8bab8ed8c51908b49ae539852b4890aa7f941bea85ecc4d626b4768b5ca5a6"
+      },
+      "witness_matches_exact_exit_bytes": true,
+      "execution_marker_artifacts": {
+        "before_crash": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        },
+        "after_crash": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        },
+        "terminal": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        }
+      }
+    },
+    "main": {
+      "reported_hostname": "qian-qi",
+      "executable": "/usr/bin/python3",
+      "ssh_target": "hepta-native-test-v7-main",
+      "source_job_id": "1a16a4046ac-b1270-3",
+      "source_record_sha256": "4badc323518a6db1567162a2d7ef5d1209aa88375aba201ec6f3aab34bec61a8",
+      "idempotency_key": "six-running-5a2559ad1f9484dd58fecb8c-main",
+      "request_sha256": "538fb8b2cd14ca196e83abe5fff4a3c372d0065d472691f01280f9bb2389ad8e",
+      "job_id_observations": {
+        "report": "1a1a11b5959-1d8c0a-5",
+        "launch": "1a1a11b5959-1d8c0a-5",
+        "before_crash_status": "1a1a11b5959-1d8c0a-5",
+        "recovered_status": "1a1a11b5959-1d8c0a-5",
+        "same_key_lookup": "1a1a11b5959-1d8c0a-5",
+        "terminal_status": "1a1a11b5959-1d8c0a-5",
+        "retained_controller_receipt": "1a1a11b5959-1d8c0a-5",
+        "before_crash_remote_request": "1a1a11b5959-1d8c0a-5",
+        "after_crash_remote_request": "1a1a11b5959-1d8c0a-5",
+        "terminal_remote_request": "1a1a11b5959-1d8c0a-5",
+        "exit.json": "1a1a11b5959-1d8c0a-5",
+        "exit.witness.json": "1a1a11b5959-1d8c0a-5"
+      },
+      "all_observed_job_ids_match": true,
+      "launch_nonce_observations": {
+        "before_crash": "9cf2878862a1008e7baf6fb2d471fba5",
+        "after_crash": "9cf2878862a1008e7baf6fb2d471fba5",
+        "terminal_status": "9cf2878862a1008e7baf6fb2d471fba5",
+        "before_crash_remote_request": "9cf2878862a1008e7baf6fb2d471fba5",
+        "after_crash_remote_request": "9cf2878862a1008e7baf6fb2d471fba5",
+        "terminal_remote_request": "9cf2878862a1008e7baf6fb2d471fba5",
+        "exit.json": "9cf2878862a1008e7baf6fb2d471fba5",
+        "exit.witness.json": "9cf2878862a1008e7baf6fb2d471fba5"
+      },
+      "all_observed_launch_nonces_match": true,
+      "remote_request_artifacts": {
+        "before_crash": {
+          "bytes": 3053,
+          "sha256": "86c89b804bd85a12fdc15762308d35a762d7a799d8756494a1b9c4a2291853dc"
+        },
+        "after_crash": {
+          "bytes": 3053,
+          "sha256": "86c89b804bd85a12fdc15762308d35a762d7a799d8756494a1b9c4a2291853dc"
+        },
+        "terminal": {
+          "bytes": 3053,
+          "sha256": "86c89b804bd85a12fdc15762308d35a762d7a799d8756494a1b9c4a2291853dc"
+        }
+      },
+      "remote_request_bytes_unchanged": true,
+      "controller_receipt_sha256_at_launch": "47f841a5b4ab5884ef1164648618945e1733ee80fda28db31481cac7879eb31e",
+      "controller_receipt_sha256_after_shutdown": "47f841a5b4ab5884ef1164648618945e1733ee80fda28db31481cac7879eb31e",
+      "controller_receipt_bytes_unchanged": true,
+      "same_key_reused": true,
+      "same_key_retried_launch": false,
+      "same_key_launch_result": null,
+      "execution_count_reported": 1,
+      "original_identity_preserved_reported": true,
+      "terminal_publication_confirmed_reported": true,
+      "terminal_status": {
+        "at_unix_ms": 1793704296885,
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "cancelled": false,
+        "exit_code": 0,
+        "job_id": "1a1a11b5959-1d8c0a-5",
+        "launch_nonce": "9cf2878862a1008e7baf6fb2d471fba5",
+        "log_bytes": {
+          "stderr": {
+            "seen": 25,
+            "stored": 25
+          },
+          "stdout": {
+            "seen": 85,
+            "stored": 85
+          }
+        },
+        "log_errors": {
+          "stderr": null,
+          "stdout": null
+        },
+        "log_synced": {
+          "stderr": true,
+          "stdout": true
+        },
+        "log_truncated": {
+          "stderr": false,
+          "stdout": false
+        },
+        "output_complete": true,
+        "output_durable": true,
+        "state": "succeeded",
+        "terminal_publication_confirmed": true,
+        "terminal_publication_protocol": 1,
+        "timed_out": false
+      },
+      "outputs": {
+        "stderr": {
+          "bytes": 25,
+          "sha256": "ec3adb6fc2f166a6038ff6af7785e3bb561dcc5d15ea31df672f401e236b584d"
+        },
+        "stdout": {
+          "bytes": 85,
+          "sha256": "3fe274c53c4e77d1231a5eb95a4d51776424000a9b40cab55f998799b7bf7264"
+        }
+      },
+      "exit_artifact": {
+        "bytes": 497,
+        "sha256": "5f9373ee7dcdd2fbae01ae4f35faabb7cd1860511e027ac3714241fcf7af0a6f"
+      },
+      "exit_witness_artifact": {
+        "bytes": 206,
+        "sha256": "48fdf788a392c869e652868d894d7be2e706a22827c9d8a260324bfbd81a4ba6"
+      },
+      "witness_matches_exact_exit_bytes": true,
+      "execution_marker_artifacts": {
+        "before_crash": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        },
+        "after_crash": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        },
+        "terminal": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        }
+      }
+    },
+    "pocket4": {
+      "reported_hostname": "alex-G1628-04",
+      "executable": "/usr/bin/python3",
+      "ssh_target": "hepta-native-test-v7-pocket4",
+      "source_job_id": "1a16a40534e-b1270-4",
+      "source_record_sha256": "79e18b1a42d84f8024b692dfd98a9f06fa1d6886bf5dc230248cfbde674f011c",
+      "idempotency_key": "six-running-5a2559ad1f9484dd58fecb8c-pocket4",
+      "request_sha256": "9237bf7b6ad4923816cf06cccc51fd1b5b5c23c0542345c77990c0636ec7c6d9",
+      "job_id_observations": {
+        "report": "1a1a11b595a-1d8c0a-6",
+        "launch": "1a1a11b595a-1d8c0a-6",
+        "before_crash_status": "1a1a11b595a-1d8c0a-6",
+        "recovered_status": "1a1a11b595a-1d8c0a-6",
+        "same_key_lookup": "1a1a11b595a-1d8c0a-6",
+        "terminal_status": "1a1a11b595a-1d8c0a-6",
+        "retained_controller_receipt": "1a1a11b595a-1d8c0a-6",
+        "before_crash_remote_request": "1a1a11b595a-1d8c0a-6",
+        "after_crash_remote_request": "1a1a11b595a-1d8c0a-6",
+        "terminal_remote_request": "1a1a11b595a-1d8c0a-6",
+        "exit.json": "1a1a11b595a-1d8c0a-6",
+        "exit.witness.json": "1a1a11b595a-1d8c0a-6"
+      },
+      "all_observed_job_ids_match": true,
+      "launch_nonce_observations": {
+        "before_crash": "96fa6610a62f9b0154d92e82cf87951d",
+        "after_crash": "96fa6610a62f9b0154d92e82cf87951d",
+        "terminal_status": "96fa6610a62f9b0154d92e82cf87951d",
+        "before_crash_remote_request": "96fa6610a62f9b0154d92e82cf87951d",
+        "after_crash_remote_request": "96fa6610a62f9b0154d92e82cf87951d",
+        "terminal_remote_request": "96fa6610a62f9b0154d92e82cf87951d",
+        "exit.json": "96fa6610a62f9b0154d92e82cf87951d",
+        "exit.witness.json": "96fa6610a62f9b0154d92e82cf87951d"
+      },
+      "all_observed_launch_nonces_match": true,
+      "remote_request_artifacts": {
+        "before_crash": {
+          "bytes": 3067,
+          "sha256": "e2f88eb1920e09271eff538a78a56ea43651fbc24f70ba6555194538def33056"
+        },
+        "after_crash": {
+          "bytes": 3067,
+          "sha256": "e2f88eb1920e09271eff538a78a56ea43651fbc24f70ba6555194538def33056"
+        },
+        "terminal": {
+          "bytes": 3067,
+          "sha256": "e2f88eb1920e09271eff538a78a56ea43651fbc24f70ba6555194538def33056"
+        }
+      },
+      "remote_request_bytes_unchanged": true,
+      "controller_receipt_sha256_at_launch": "3033e56726fb73ce77b1c25c9de77e0bc28361707f86a937c2860b790839d5be",
+      "controller_receipt_sha256_after_shutdown": "3033e56726fb73ce77b1c25c9de77e0bc28361707f86a937c2860b790839d5be",
+      "controller_receipt_bytes_unchanged": true,
+      "same_key_reused": true,
+      "same_key_retried_launch": false,
+      "same_key_launch_result": null,
+      "execution_count_reported": 1,
+      "original_identity_preserved_reported": true,
+      "terminal_publication_confirmed_reported": true,
+      "terminal_status": {
+        "at_unix_ms": 1793704296616,
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "cancelled": false,
+        "exit_code": 0,
+        "job_id": "1a1a11b595a-1d8c0a-6",
+        "launch_nonce": "96fa6610a62f9b0154d92e82cf87951d",
+        "log_bytes": {
+          "stderr": {
+            "seen": 28,
+            "stored": 28
+          },
+          "stdout": {
+            "seen": 91,
+            "stored": 91
+          }
+        },
+        "log_errors": {
+          "stderr": null,
+          "stdout": null
+        },
+        "log_synced": {
+          "stderr": true,
+          "stdout": true
+        },
+        "log_truncated": {
+          "stderr": false,
+          "stdout": false
+        },
+        "output_complete": true,
+        "output_durable": true,
+        "state": "succeeded",
+        "terminal_publication_confirmed": true,
+        "terminal_publication_protocol": 1,
+        "timed_out": false
+      },
+      "outputs": {
+        "stderr": {
+          "bytes": 28,
+          "sha256": "fae656e40fdd539191a00194cad8f284c8963939ac8735b1227bce347381a1ae"
+        },
+        "stdout": {
+          "bytes": 91,
+          "sha256": "cb16c2c4ca5dfa62bd75a318b00eb0ff7b228043e31e455e0abc386039982251"
+        }
+      },
+      "exit_artifact": {
+        "bytes": 497,
+        "sha256": "4a98c271d1e53aeae5edd7c395a7bc7bb98a675bb16b058149b6b0fc1d0268d3"
+      },
+      "exit_witness_artifact": {
+        "bytes": 206,
+        "sha256": "0f673fb8dad61a9657698801cb34ea2cde22527a4e5f37b1c2cf535c11df14e0"
+      },
+      "witness_matches_exact_exit_bytes": true,
+      "execution_marker_artifacts": {
+        "before_crash": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        },
+        "after_crash": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        },
+        "terminal": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        }
+      }
+    },
+    "rog": {
+      "reported_hostname": "qian-qi-ROG-Flow-Z13-GZ302EA-GZ302EA",
+      "executable": "/usr/bin/python3",
+      "ssh_target": "hepta-native-test-v7-rog",
+      "source_job_id": "1a16a405d21-b1270-5",
+      "source_record_sha256": "9c89c598f35f6bc94572852fcc03feed6e8c798ee34db5095bd3b48813562dc6",
+      "idempotency_key": "six-running-5a2559ad1f9484dd58fecb8c-rog",
+      "request_sha256": "9f982ef5d3068b2baf429347cc804e042886ecd2724f2145dc369889346cb672",
+      "job_id_observations": {
+        "report": "1a1a11b5959-1d8c0a-2",
+        "launch": "1a1a11b5959-1d8c0a-2",
+        "before_crash_status": "1a1a11b5959-1d8c0a-2",
+        "recovered_status": "1a1a11b5959-1d8c0a-2",
+        "same_key_lookup": "1a1a11b5959-1d8c0a-2",
+        "terminal_status": "1a1a11b5959-1d8c0a-2",
+        "retained_controller_receipt": "1a1a11b5959-1d8c0a-2",
+        "before_crash_remote_request": "1a1a11b5959-1d8c0a-2",
+        "after_crash_remote_request": "1a1a11b5959-1d8c0a-2",
+        "terminal_remote_request": "1a1a11b5959-1d8c0a-2",
+        "exit.json": "1a1a11b5959-1d8c0a-2",
+        "exit.witness.json": "1a1a11b5959-1d8c0a-2"
+      },
+      "all_observed_job_ids_match": true,
+      "launch_nonce_observations": {
+        "before_crash": "7c4fd6860c1cd8ed72625214307b9c01",
+        "after_crash": "7c4fd6860c1cd8ed72625214307b9c01",
+        "terminal_status": "7c4fd6860c1cd8ed72625214307b9c01",
+        "before_crash_remote_request": "7c4fd6860c1cd8ed72625214307b9c01",
+        "after_crash_remote_request": "7c4fd6860c1cd8ed72625214307b9c01",
+        "terminal_remote_request": "7c4fd6860c1cd8ed72625214307b9c01",
+        "exit.json": "7c4fd6860c1cd8ed72625214307b9c01",
+        "exit.witness.json": "7c4fd6860c1cd8ed72625214307b9c01"
+      },
+      "all_observed_launch_nonces_match": true,
+      "remote_request_artifacts": {
+        "before_crash": {
+          "bytes": 3046,
+          "sha256": "b360d7bd649ae9bf5e154242cc94639d6d28623137b37081464e250e5da95761"
+        },
+        "after_crash": {
+          "bytes": 3046,
+          "sha256": "b360d7bd649ae9bf5e154242cc94639d6d28623137b37081464e250e5da95761"
+        },
+        "terminal": {
+          "bytes": 3046,
+          "sha256": "b360d7bd649ae9bf5e154242cc94639d6d28623137b37081464e250e5da95761"
+        }
+      },
+      "remote_request_bytes_unchanged": true,
+      "controller_receipt_sha256_at_launch": "5fe275f7e17d3c0865fcd5d359d32ddbbcc9845164f29aa3657e64e4d03e8348",
+      "controller_receipt_sha256_after_shutdown": "5fe275f7e17d3c0865fcd5d359d32ddbbcc9845164f29aa3657e64e4d03e8348",
+      "controller_receipt_bytes_unchanged": true,
+      "same_key_reused": true,
+      "same_key_retried_launch": false,
+      "same_key_launch_result": null,
+      "execution_count_reported": 1,
+      "original_identity_preserved_reported": true,
+      "terminal_publication_confirmed_reported": true,
+      "terminal_status": {
+        "at_unix_ms": 1793704296582,
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "cancelled": false,
+        "exit_code": 0,
+        "job_id": "1a1a11b5959-1d8c0a-2",
+        "launch_nonce": "7c4fd6860c1cd8ed72625214307b9c01",
+        "log_bytes": {
+          "stderr": {
+            "seen": 24,
+            "stored": 24
+          },
+          "stdout": {
+            "seen": 83,
+            "stored": 83
+          }
+        },
+        "log_errors": {
+          "stderr": null,
+          "stdout": null
+        },
+        "log_synced": {
+          "stderr": true,
+          "stdout": true
+        },
+        "log_truncated": {
+          "stderr": false,
+          "stdout": false
+        },
+        "output_complete": true,
+        "output_durable": true,
+        "state": "succeeded",
+        "terminal_publication_confirmed": true,
+        "terminal_publication_protocol": 1,
+        "timed_out": false
+      },
+      "outputs": {
+        "stderr": {
+          "bytes": 24,
+          "sha256": "aa626f2b90447359a7399824f2597bfac63ad955470868d92b7b02b44985e56a"
+        },
+        "stdout": {
+          "bytes": 83,
+          "sha256": "9c9a95f8acd108c74b812bc76a815d0c1dafb5e3ea11837ae8df935d21e1e01b"
+        }
+      },
+      "exit_artifact": {
+        "bytes": 497,
+        "sha256": "63599916b679010bac18b8cbe8b7f60515ca73965c728f650b90001a5c5a6e6f"
+      },
+      "exit_witness_artifact": {
+        "bytes": 206,
+        "sha256": "4e5ebf014bf5e498ee7f31206744629dbb864b4f0b6f120fe3af5007c7f68a7f"
+      },
+      "witness_matches_exact_exit_bytes": true,
+      "execution_marker_artifacts": {
+        "before_crash": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        },
+        "after_crash": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        },
+        "terminal": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        }
+      }
+    },
+    "x230": {
+      "reported_hostname": "qian-ThinkPad-X230",
+      "executable": "/usr/bin/python3",
+      "ssh_target": "hepta-native-test-v7-x230",
+      "source_job_id": "1a16a40671b-b1270-6",
+      "source_record_sha256": "5b737330fa5a75a458138e1848a044d2a77c062175d8eb9694a510ff20b53cde",
+      "idempotency_key": "six-running-5a2559ad1f9484dd58fecb8c-x230",
+      "request_sha256": "2e0cf3e972f06fabf3e50f9cb68281c725edba9c95104fb8b729d181ad173dfa",
+      "job_id_observations": {
+        "report": "1a1a11b5959-1d8c0a-3",
+        "launch": "1a1a11b5959-1d8c0a-3",
+        "before_crash_status": "1a1a11b5959-1d8c0a-3",
+        "recovered_status": "1a1a11b5959-1d8c0a-3",
+        "same_key_lookup": "1a1a11b5959-1d8c0a-3",
+        "terminal_status": "1a1a11b5959-1d8c0a-3",
+        "retained_controller_receipt": "1a1a11b5959-1d8c0a-3",
+        "before_crash_remote_request": "1a1a11b5959-1d8c0a-3",
+        "after_crash_remote_request": "1a1a11b5959-1d8c0a-3",
+        "terminal_remote_request": "1a1a11b5959-1d8c0a-3",
+        "exit.json": "1a1a11b5959-1d8c0a-3",
+        "exit.witness.json": "1a1a11b5959-1d8c0a-3"
+      },
+      "all_observed_job_ids_match": true,
+      "launch_nonce_observations": {
+        "before_crash": "245661dc2309d974060e4f7b36c65966",
+        "after_crash": "245661dc2309d974060e4f7b36c65966",
+        "terminal_status": "245661dc2309d974060e4f7b36c65966",
+        "before_crash_remote_request": "245661dc2309d974060e4f7b36c65966",
+        "after_crash_remote_request": "245661dc2309d974060e4f7b36c65966",
+        "terminal_remote_request": "245661dc2309d974060e4f7b36c65966",
+        "exit.json": "245661dc2309d974060e4f7b36c65966",
+        "exit.witness.json": "245661dc2309d974060e4f7b36c65966"
+      },
+      "all_observed_launch_nonces_match": true,
+      "remote_request_artifacts": {
+        "before_crash": {
+          "bytes": 3034,
+          "sha256": "c35192f30759adcfd3dea2fba8de6fbe7680d0aed21a92069cada67455c53bb7"
+        },
+        "after_crash": {
+          "bytes": 3034,
+          "sha256": "c35192f30759adcfd3dea2fba8de6fbe7680d0aed21a92069cada67455c53bb7"
+        },
+        "terminal": {
+          "bytes": 3034,
+          "sha256": "c35192f30759adcfd3dea2fba8de6fbe7680d0aed21a92069cada67455c53bb7"
+        }
+      },
+      "remote_request_bytes_unchanged": true,
+      "controller_receipt_sha256_at_launch": "75ce2814c70cd78b505755080a2429e866402ed705ed2505676c9e100307695c",
+      "controller_receipt_sha256_after_shutdown": "75ce2814c70cd78b505755080a2429e866402ed705ed2505676c9e100307695c",
+      "controller_receipt_bytes_unchanged": true,
+      "same_key_reused": true,
+      "same_key_retried_launch": false,
+      "same_key_launch_result": null,
+      "execution_count_reported": 1,
+      "original_identity_preserved_reported": true,
+      "terminal_publication_confirmed_reported": true,
+      "terminal_status": {
+        "at_unix_ms": 1793704296699,
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "cancelled": false,
+        "exit_code": 0,
+        "job_id": "1a1a11b5959-1d8c0a-3",
+        "launch_nonce": "245661dc2309d974060e4f7b36c65966",
+        "log_bytes": {
+          "stderr": {
+            "seen": 25,
+            "stored": 25
+          },
+          "stdout": {
+            "seen": 85,
+            "stored": 85
+          }
+        },
+        "log_errors": {
+          "stderr": null,
+          "stdout": null
+        },
+        "log_synced": {
+          "stderr": true,
+          "stdout": true
+        },
+        "log_truncated": {
+          "stderr": false,
+          "stdout": false
+        },
+        "output_complete": true,
+        "output_durable": true,
+        "state": "succeeded",
+        "terminal_publication_confirmed": true,
+        "terminal_publication_protocol": 1,
+        "timed_out": false
+      },
+      "outputs": {
+        "stderr": {
+          "bytes": 25,
+          "sha256": "e04bf3db8f70dcdee7896ec9fd1fc2175ce29affac44e857ee04cd650374b05d"
+        },
+        "stdout": {
+          "bytes": 85,
+          "sha256": "223bc38763f2c7ad599b3512d86cefd7703d43eaa3a2957944b480815fbc6752"
+        }
+      },
+      "exit_artifact": {
+        "bytes": 497,
+        "sha256": "fa3fc2a28c676681f82bea8c8943f09ff528b9f6fa9f248fb597827f876ee532"
+      },
+      "exit_witness_artifact": {
+        "bytes": 206,
+        "sha256": "eb26346fb47b45254bc50691bcc679ff75ed3193cfb343b509a3f150f30148ad"
+      },
+      "witness_matches_exact_exit_bytes": true,
+      "execution_marker_artifacts": {
+        "before_crash": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        },
+        "after_crash": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        },
+        "terminal": {
+          "bytes": 9,
+          "sha256": "0b1d3ce47d17a1d83a5d8f1f9686226c606c99f9c545dc561452cdbb641e47a8"
+        }
+      }
+    }
+  },
+  "transport_interruption": {
+    "attempted": true,
+    "automatic_write_retries": 0,
+    "original_host_reconnected_without_new_job": true,
+    "original_master": {
+      "argv_sha256": "40d79a139be74a9e0ee51b0e1dc08783a493a311927b709009884b2a33282c55",
+      "birth_ticks": 240634974,
+      "control_path": "/home/qian/h11c01/hp-o-1936394-c229eb2e07f43b624988134f9bf33fe9/m-21",
+      "control_socket": [
+        2053,
+        354,
+        1000,
+        49536,
+        1,
+        0,
+        1793704289098211204,
+        1793704289098211204
+      ],
+      "executable": [
+        2053,
+        658803
+      ],
+      "peer": [
+        1936529,
+        1000,
+        1000
+      ],
+      "pid": 1936529,
+      "ppid": 1936394,
+      "private_directories": [
+        [
+          "/home/qian/h11c01",
+          2053,
+          331,
+          1000,
+          16832
+        ],
+        [
+          "/home/qian/h11c01/hp-o-1936394-c229eb2e07f43b624988134f9bf33fe9",
+          2053,
+          334,
+          1000,
+          16832
+        ]
+      ],
+      "process_group": 1936394,
+      "session": 1936394,
+      "uids": [
+        1000,
+        1000,
+        1000,
+        1000
+      ]
+    },
+    "passed": true,
+    "replacement_master": {
+      "argv_sha256": "9f586f2630805e5b4b77e4b8b4dd0fa75957a2639381b23f795187e3bac518a2",
+      "birth_ticks": 240635202,
+      "control_path": "/home/qian/h11c01/hp-o-1936394-c229eb2e07f43b624988134f9bf33fe9/m-55",
+      "control_socket": [
+        2053,
+        354,
+        1000,
+        49536,
+        1,
+        0,
+        1793704291119216280,
+        1793704291119216280
+      ],
+      "executable": [
+        2053,
+        658803
+      ],
+      "peer": [
+        1936676,
+        1000,
+        1000
+      ],
+      "pid": 1936676,
+      "ppid": 1936394,
+      "private_directories": [
+        [
+          "/home/qian/h11c01",
+          2053,
+          331,
+          1000,
+          16832
+        ],
+        [
+          "/home/qian/h11c01/hp-o-1936394-c229eb2e07f43b624988134f9bf33fe9",
+          2053,
+          334,
+          1000,
+          16832
+        ]
+      ],
+      "process_group": 1936394,
+      "session": 1936394,
+      "uids": [
+        1000,
+        1000,
+        1000,
+        1000
+      ]
+    },
+    "requested_host": "rog",
+    "signal_attempted": true,
+    "signal_receipt": {
+      "controller_pid": 1936394,
+      "master_birth_ticks": 240634974,
+      "master_pid": 1936529,
+      "network_or_service_changes": false,
+      "pidfd_terminal_observed": true,
+      "signal": "SIGKILL",
+      "signal_sent": true,
+      "socket_removed_by_harness": false
+    },
+    "transport_interruption_observed": true,
+    "unaffected_hosts_progressed": true,
+    "observation_rounds": [
+      {
+        "name": "all_hosts_after_interruption",
+        "rows": [
+          {
+            "elapsed_ms": 618.0592239834368,
+            "host": "ai395",
+            "okay": true,
+            "stdout_sha256": "5fe80518db4944ce88b6f0e1e8011c5ef4c287e5ad7ca20ce1ca3daedac56219",
+            "state": "running",
+            "job_id": "1a1a11b5959-1d8c0a-4",
+            "audit_recorded": true
+          },
+          {
+            "elapsed_ms": 682.5324120000005,
+            "host": "pocket4",
+            "okay": true,
+            "stdout_sha256": "948f640aa02d8f1994a9d707e552e05268ad97895bbbff1ae8b412a45262f945",
+            "state": "running",
+            "job_id": "1a1a11b595a-1d8c0a-6",
+            "audit_recorded": true
+          },
+          {
+            "elapsed_ms": 697.4862329661846,
+            "host": "mac",
+            "okay": true,
+            "stdout_sha256": "4eca8830f2949e55b05e33ddb841b577f9e54f21f7d44f65b628a520508a051d",
+            "state": "running",
+            "job_id": "1a1a11b5954-1d8c0a-1",
+            "audit_recorded": true
+          },
+          {
+            "elapsed_ms": 711.1935010179877,
+            "host": "x230",
+            "okay": true,
+            "stdout_sha256": "dab7003c41308e0572c81ae7179a305b6f89540892025ab188de06b480598ade",
+            "state": "running",
+            "job_id": "1a1a11b5959-1d8c0a-3",
+            "audit_recorded": true
+          },
+          {
+            "elapsed_ms": 721.7977242544293,
+            "host": "main",
+            "okay": true,
+            "stdout_sha256": "b185b482edf13e65c3dde67ed2f6a825f7b7e1220b2324e987588ca7a20cb001",
+            "state": "running",
+            "job_id": "1a1a11b5959-1d8c0a-5",
+            "audit_recorded": true
+          },
+          {
+            "elapsed_ms": 879.462132230401,
+            "host": "rog",
+            "okay": true,
+            "stdout_sha256": "2d8f6d9880fc47be4e41366d635fc332e2861d84dc5541e4bddecea7d9d18ee0",
+            "state": "running",
+            "job_id": "1a1a11b5959-1d8c0a-2",
+            "audit_recorded": true
+          }
+        ]
+      },
+      {
+        "name": "later_original_read",
+        "rows": [
+          {
+            "elapsed_ms": 285.4886930435896,
+            "host": "rog",
+            "okay": true,
+            "stdout_sha256": "2d8f6d9880fc47be4e41366d635fc332e2861d84dc5541e4bddecea7d9d18ee0",
+            "state": "running",
+            "job_id": "1a1a11b5959-1d8c0a-2",
+            "audit_recorded": true
+          }
+        ]
+      }
+    ]
+  },
+  "controller_restart_original_jobs_preserved": true,
+  "controller_crash_receipt": {
+    "exit_code": -9,
+    "observed_descendant_survivors": [],
+    "reader_error": null,
+    "resources": {
+      "errors": [],
+      "peaks": {
+        "controller_fd": 78,
+        "controller_hwm_kib": 17240,
+        "controller_rss_kib": 17240,
+        "descendants": 11,
+        "tree_fd": 143,
+        "tree_rss_kib": 103208
+      },
+      "sample_interval_seconds": 0.1,
+      "sampled_peaks_and_tree_cpu_are_lower_bounds": true,
+      "sampled_process_generations": 34,
+      "sampled_tree_cpu_seconds": 5.3,
+      "samples": 62
+    },
+    "shutdown_method": "already_exited",
+    "unmatched_responses": 0
+  },
+  "restarted_controller_shutdown": {
+    "exit_code": 0,
+    "observed_descendant_survivors": [],
+    "reader_error": null,
+    "resources": {
+      "errors": [
+        "PermissionError: [Errno 13] Permission denied: '/proc/1937021/fd'"
+      ],
+      "peaks": {
+        "controller_fd": 85,
+        "controller_hwm_kib": 17164,
+        "controller_rss_kib": 17164,
+        "descendants": 12,
+        "tree_fd": 150,
+        "tree_rss_kib": 112240
+      },
+      "sample_interval_seconds": 0.1,
+      "sampled_peaks_and_tree_cpu_are_lower_bounds": true,
+      "sampled_process_generations": 29,
+      "sampled_tree_cpu_seconds": 4.55,
+      "samples": 56
+    },
+    "shutdown_method": "stdin_eof",
+    "unmatched_responses": 0
+  },
+  "native_calls": {
+    "calls": 58,
+    "okay": 58,
+    "not_okay": 0,
+    "automatic_retries": 0,
+    "by_kind": {
+      "process_start": 12,
+      "process_status": 27,
+      "process_read": 19
+    },
+    "failures": []
+  },
+  "independent_ssh_calls": {
+    "calls": 31,
+    "okay": 31,
+    "not_okay": 0,
+    "automatic_retries": 0,
+    "by_kind": {
+      "prepare": 6,
+      "inspect": 19,
+      "release": 6
+    },
+    "failures": []
+  },
+  "effect_counts": {
+    "new_start_call_count": 6,
+    "same_key_lookup_call_count": 6,
+    "automatic_rpc_retries": 0,
+    "remote_cleanup_operations": 0,
+    "production_service_mutations": 0
+  },
+  "all_original_report_boolean_fields": {
+    "binary_unchanged": true,
+    "controller_records_unchanged_after_shutdown": true,
+    "controller_restart_original_jobs_preserved": true,
+    "current_agent_unchanged": true,
+    "distinct_reported_hostnames": true,
+    "hosts.ai395.before_crash_running.status.audit_recorded": true,
+    "hosts.ai395.launch.job.system_jobctl": false,
+    "hosts.ai395.launch.launch.ok": true,
+    "hosts.ai395.recover_same_original.first_status.audit_recorded": true,
+    "hosts.ai395.recover_same_original.same_key_reuse.audit_recorded": true,
+    "hosts.ai395.recover_same_original.same_key_reuse.job.system_jobctl": false,
+    "hosts.ai395.recover_same_original.same_key_reuse.retried_launch": false,
+    "hosts.ai395.recover_same_original.same_key_reuse.reused": true,
+    "hosts.ai395.release_attempted": true,
+    "hosts.ai395.terminal.original_identity_preserved": true,
+    "hosts.ai395.terminal.status.audit_recorded": true,
+    "hosts.ai395.terminal.status.automatic_retry": false,
+    "hosts.ai395.terminal.status.cancelled": false,
+    "hosts.ai395.terminal.status.log_synced.stderr": true,
+    "hosts.ai395.terminal.status.log_synced.stdout": true,
+    "hosts.ai395.terminal.status.log_truncated.stderr": false,
+    "hosts.ai395.terminal.status.log_truncated.stdout": false,
+    "hosts.ai395.terminal.status.output_complete": true,
+    "hosts.ai395.terminal.status.output_durable": true,
+    "hosts.ai395.terminal.status.terminal_publication_confirmed": true,
+    "hosts.ai395.terminal.status.timed_out": false,
+    "hosts.ai395.terminal.terminal_publication_confirmed": true,
+    "hosts.mac.before_crash_running.status.audit_recorded": true,
+    "hosts.mac.launch.job.system_jobctl": false,
+    "hosts.mac.launch.launch.ok": true,
+    "hosts.mac.recover_same_original.first_status.audit_recorded": true,
+    "hosts.mac.recover_same_original.same_key_reuse.audit_recorded": true,
+    "hosts.mac.recover_same_original.same_key_reuse.job.system_jobctl": false,
+    "hosts.mac.recover_same_original.same_key_reuse.retried_launch": false,
+    "hosts.mac.recover_same_original.same_key_reuse.reused": true,
+    "hosts.mac.release_attempted": true,
+    "hosts.mac.terminal.original_identity_preserved": true,
+    "hosts.mac.terminal.status.audit_recorded": true,
+    "hosts.mac.terminal.status.automatic_retry": false,
+    "hosts.mac.terminal.status.cancelled": false,
+    "hosts.mac.terminal.status.log_synced.stderr": true,
+    "hosts.mac.terminal.status.log_synced.stdout": true,
+    "hosts.mac.terminal.status.log_truncated.stderr": false,
+    "hosts.mac.terminal.status.log_truncated.stdout": false,
+    "hosts.mac.terminal.status.output_complete": true,
+    "hosts.mac.terminal.status.output_durable": true,
+    "hosts.mac.terminal.status.terminal_publication_confirmed": true,
+    "hosts.mac.terminal.status.timed_out": false,
+    "hosts.mac.terminal.terminal_publication_confirmed": true,
+    "hosts.main.before_crash_running.status.audit_recorded": true,
+    "hosts.main.launch.job.system_jobctl": false,
+    "hosts.main.launch.launch.ok": true,
+    "hosts.main.recover_same_original.first_status.audit_recorded": true,
+    "hosts.main.recover_same_original.same_key_reuse.audit_recorded": true,
+    "hosts.main.recover_same_original.same_key_reuse.job.system_jobctl": false,
+    "hosts.main.recover_same_original.same_key_reuse.retried_launch": false,
+    "hosts.main.recover_same_original.same_key_reuse.reused": true,
+    "hosts.main.release_attempted": true,
+    "hosts.main.terminal.original_identity_preserved": true,
+    "hosts.main.terminal.status.audit_recorded": true,
+    "hosts.main.terminal.status.automatic_retry": false,
+    "hosts.main.terminal.status.cancelled": false,
+    "hosts.main.terminal.status.log_synced.stderr": true,
+    "hosts.main.terminal.status.log_synced.stdout": true,
+    "hosts.main.terminal.status.log_truncated.stderr": false,
+    "hosts.main.terminal.status.log_truncated.stdout": false,
+    "hosts.main.terminal.status.output_complete": true,
+    "hosts.main.terminal.status.output_durable": true,
+    "hosts.main.terminal.status.terminal_publication_confirmed": true,
+    "hosts.main.terminal.status.timed_out": false,
+    "hosts.main.terminal.terminal_publication_confirmed": true,
+    "hosts.pocket4.before_crash_running.status.audit_recorded": true,
+    "hosts.pocket4.launch.job.system_jobctl": false,
+    "hosts.pocket4.launch.launch.ok": true,
+    "hosts.pocket4.recover_same_original.first_status.audit_recorded": true,
+    "hosts.pocket4.recover_same_original.same_key_reuse.audit_recorded": true,
+    "hosts.pocket4.recover_same_original.same_key_reuse.job.system_jobctl": false,
+    "hosts.pocket4.recover_same_original.same_key_reuse.retried_launch": false,
+    "hosts.pocket4.recover_same_original.same_key_reuse.reused": true,
+    "hosts.pocket4.release_attempted": true,
+    "hosts.pocket4.terminal.original_identity_preserved": true,
+    "hosts.pocket4.terminal.status.audit_recorded": true,
+    "hosts.pocket4.terminal.status.automatic_retry": false,
+    "hosts.pocket4.terminal.status.cancelled": false,
+    "hosts.pocket4.terminal.status.log_synced.stderr": true,
+    "hosts.pocket4.terminal.status.log_synced.stdout": true,
+    "hosts.pocket4.terminal.status.log_truncated.stderr": false,
+    "hosts.pocket4.terminal.status.log_truncated.stdout": false,
+    "hosts.pocket4.terminal.status.output_complete": true,
+    "hosts.pocket4.terminal.status.output_durable": true,
+    "hosts.pocket4.terminal.status.terminal_publication_confirmed": true,
+    "hosts.pocket4.terminal.status.timed_out": false,
+    "hosts.pocket4.terminal.terminal_publication_confirmed": true,
+    "hosts.rog.before_crash_running.status.audit_recorded": true,
+    "hosts.rog.launch.job.system_jobctl": false,
+    "hosts.rog.launch.launch.ok": true,
+    "hosts.rog.recover_same_original.first_status.audit_recorded": true,
+    "hosts.rog.recover_same_original.same_key_reuse.audit_recorded": true,
+    "hosts.rog.recover_same_original.same_key_reuse.job.system_jobctl": false,
+    "hosts.rog.recover_same_original.same_key_reuse.retried_launch": false,
+    "hosts.rog.recover_same_original.same_key_reuse.reused": true,
+    "hosts.rog.release_attempted": true,
+    "hosts.rog.terminal.original_identity_preserved": true,
+    "hosts.rog.terminal.status.audit_recorded": true,
+    "hosts.rog.terminal.status.automatic_retry": false,
+    "hosts.rog.terminal.status.cancelled": false,
+    "hosts.rog.terminal.status.log_synced.stderr": true,
+    "hosts.rog.terminal.status.log_synced.stdout": true,
+    "hosts.rog.terminal.status.log_truncated.stderr": false,
+    "hosts.rog.terminal.status.log_truncated.stdout": false,
+    "hosts.rog.terminal.status.output_complete": true,
+    "hosts.rog.terminal.status.output_durable": true,
+    "hosts.rog.terminal.status.terminal_publication_confirmed": true,
+    "hosts.rog.terminal.status.timed_out": false,
+    "hosts.rog.terminal.terminal_publication_confirmed": true,
+    "hosts.x230.before_crash_running.status.audit_recorded": true,
+    "hosts.x230.launch.job.system_jobctl": false,
+    "hosts.x230.launch.launch.ok": true,
+    "hosts.x230.recover_same_original.first_status.audit_recorded": true,
+    "hosts.x230.recover_same_original.same_key_reuse.audit_recorded": true,
+    "hosts.x230.recover_same_original.same_key_reuse.job.system_jobctl": false,
+    "hosts.x230.recover_same_original.same_key_reuse.retried_launch": false,
+    "hosts.x230.recover_same_original.same_key_reuse.reused": true,
+    "hosts.x230.release_attempted": true,
+    "hosts.x230.terminal.original_identity_preserved": true,
+    "hosts.x230.terminal.status.audit_recorded": true,
+    "hosts.x230.terminal.status.automatic_retry": false,
+    "hosts.x230.terminal.status.cancelled": false,
+    "hosts.x230.terminal.status.log_synced.stderr": true,
+    "hosts.x230.terminal.status.log_synced.stdout": true,
+    "hosts.x230.terminal.status.log_truncated.stderr": false,
+    "hosts.x230.terminal.status.log_truncated.stdout": false,
+    "hosts.x230.terminal.status.output_complete": true,
+    "hosts.x230.terminal.status.output_durable": true,
+    "hosts.x230.terminal.status.terminal_publication_confirmed": true,
+    "hosts.x230.terminal.status.timed_out": false,
+    "hosts.x230.terminal.terminal_publication_confirmed": true,
+    "intentional_crash.resources.sampled_peaks_and_tree_cpu_are_lower_bounds": true,
+    "native_calls[0].automatic_retry": false,
+    "native_calls[0].okay": true,
+    "native_calls[1].automatic_retry": false,
+    "native_calls[1].okay": true,
+    "native_calls[2].automatic_retry": false,
+    "native_calls[2].okay": true,
+    "native_calls[3].automatic_retry": false,
+    "native_calls[3].okay": true,
+    "native_calls[4].automatic_retry": false,
+    "native_calls[4].okay": true,
+    "native_calls[5].automatic_retry": false,
+    "native_calls[5].okay": true,
+    "native_calls[6].automatic_retry": false,
+    "native_calls[6].okay": true,
+    "native_calls[7].automatic_retry": false,
+    "native_calls[7].okay": true,
+    "native_calls[8].automatic_retry": false,
+    "native_calls[8].okay": true,
+    "native_calls[9].automatic_retry": false,
+    "native_calls[9].okay": true,
+    "native_calls[10].automatic_retry": false,
+    "native_calls[10].okay": true,
+    "native_calls[11].automatic_retry": false,
+    "native_calls[11].okay": true,
+    "native_calls[12].automatic_retry": false,
+    "native_calls[12].okay": true,
+    "native_calls[13].automatic_retry": false,
+    "native_calls[13].okay": true,
+    "native_calls[14].automatic_retry": false,
+    "native_calls[14].okay": true,
+    "native_calls[15].automatic_retry": false,
+    "native_calls[15].okay": true,
+    "native_calls[16].automatic_retry": false,
+    "native_calls[16].okay": true,
+    "native_calls[17].automatic_retry": false,
+    "native_calls[17].okay": true,
+    "native_calls[18].automatic_retry": false,
+    "native_calls[18].okay": true,
+    "native_calls[19].automatic_retry": false,
+    "native_calls[19].okay": true,
+    "native_calls[20].automatic_retry": false,
+    "native_calls[20].okay": true,
+    "native_calls[21].automatic_retry": false,
+    "native_calls[21].okay": true,
+    "native_calls[22].automatic_retry": false,
+    "native_calls[22].okay": true,
+    "native_calls[23].automatic_retry": false,
+    "native_calls[23].okay": true,
+    "native_calls[24].automatic_retry": false,
+    "native_calls[24].okay": true,
+    "native_calls[25].automatic_retry": false,
+    "native_calls[25].okay": true,
+    "native_calls[26].automatic_retry": false,
+    "native_calls[26].okay": true,
+    "native_calls[27].automatic_retry": false,
+    "native_calls[27].okay": true,
+    "native_calls[28].automatic_retry": false,
+    "native_calls[28].okay": true,
+    "native_calls[29].automatic_retry": false,
+    "native_calls[29].okay": true,
+    "native_calls[30].automatic_retry": false,
+    "native_calls[30].okay": true,
+    "native_calls[31].automatic_retry": false,
+    "native_calls[31].okay": true,
+    "native_calls[32].automatic_retry": false,
+    "native_calls[32].okay": true,
+    "native_calls[33].automatic_retry": false,
+    "native_calls[33].okay": true,
+    "native_calls[34].automatic_retry": false,
+    "native_calls[34].okay": true,
+    "native_calls[35].automatic_retry": false,
+    "native_calls[35].okay": true,
+    "native_calls[36].automatic_retry": false,
+    "native_calls[36].okay": true,
+    "native_calls[37].automatic_retry": false,
+    "native_calls[37].okay": true,
+    "native_calls[38].automatic_retry": false,
+    "native_calls[38].okay": true,
+    "native_calls[39].automatic_retry": false,
+    "native_calls[39].okay": true,
+    "native_calls[40].automatic_retry": false,
+    "native_calls[40].okay": true,
+    "native_calls[41].automatic_retry": false,
+    "native_calls[41].okay": true,
+    "native_calls[42].automatic_retry": false,
+    "native_calls[42].okay": true,
+    "native_calls[43].automatic_retry": false,
+    "native_calls[43].okay": true,
+    "native_calls[44].automatic_retry": false,
+    "native_calls[44].okay": true,
+    "native_calls[45].automatic_retry": false,
+    "native_calls[45].okay": true,
+    "native_calls[46].automatic_retry": false,
+    "native_calls[46].okay": true,
+    "native_calls[47].automatic_retry": false,
+    "native_calls[47].okay": true,
+    "native_calls[48].automatic_retry": false,
+    "native_calls[48].okay": true,
+    "native_calls[49].automatic_retry": false,
+    "native_calls[49].okay": true,
+    "native_calls[50].automatic_retry": false,
+    "native_calls[50].okay": true,
+    "native_calls[51].automatic_retry": false,
+    "native_calls[51].okay": true,
+    "native_calls[52].automatic_retry": false,
+    "native_calls[52].okay": true,
+    "native_calls[53].automatic_retry": false,
+    "native_calls[53].okay": true,
+    "native_calls[54].automatic_retry": false,
+    "native_calls[54].okay": true,
+    "native_calls[55].automatic_retry": false,
+    "native_calls[55].okay": true,
+    "native_calls[56].automatic_retry": false,
+    "native_calls[56].okay": true,
+    "native_calls[57].automatic_retry": false,
+    "native_calls[57].okay": true,
+    "passed": true,
+    "profile.current_agent_bound": true,
+    "profile.historical_agent_not_reused": true,
+    "retained_controller_records[0].original_bytes_unchanged": true,
+    "retained_controller_records[1].original_bytes_unchanged": true,
+    "retained_controller_records[2].original_bytes_unchanged": true,
+    "retained_controller_records[3].original_bytes_unchanged": true,
+    "retained_controller_records[4].original_bytes_unchanged": true,
+    "retained_controller_records[5].original_bytes_unchanged": true,
+    "shutdown.resources.sampled_peaks_and_tree_cpu_are_lower_bounds": true,
+    "source_originals_unchanged": true,
+    "ssh_calls[0].automatic_retry": false,
+    "ssh_calls[0].mutation_attempted": true,
+    "ssh_calls[0].okay": true,
+    "ssh_calls[1].automatic_retry": false,
+    "ssh_calls[1].mutation_attempted": true,
+    "ssh_calls[1].okay": true,
+    "ssh_calls[2].automatic_retry": false,
+    "ssh_calls[2].mutation_attempted": true,
+    "ssh_calls[2].okay": true,
+    "ssh_calls[3].automatic_retry": false,
+    "ssh_calls[3].mutation_attempted": true,
+    "ssh_calls[3].okay": true,
+    "ssh_calls[4].automatic_retry": false,
+    "ssh_calls[4].mutation_attempted": true,
+    "ssh_calls[4].okay": true,
+    "ssh_calls[5].automatic_retry": false,
+    "ssh_calls[5].mutation_attempted": true,
+    "ssh_calls[5].okay": true,
+    "ssh_calls[6].automatic_retry": false,
+    "ssh_calls[6].mutation_attempted": false,
+    "ssh_calls[6].okay": true,
+    "ssh_calls[7].automatic_retry": false,
+    "ssh_calls[7].mutation_attempted": false,
+    "ssh_calls[7].okay": true,
+    "ssh_calls[8].automatic_retry": false,
+    "ssh_calls[8].mutation_attempted": false,
+    "ssh_calls[8].okay": true,
+    "ssh_calls[9].automatic_retry": false,
+    "ssh_calls[9].mutation_attempted": false,
+    "ssh_calls[9].okay": true,
+    "ssh_calls[10].automatic_retry": false,
+    "ssh_calls[10].mutation_attempted": false,
+    "ssh_calls[10].okay": true,
+    "ssh_calls[11].automatic_retry": false,
+    "ssh_calls[11].mutation_attempted": false,
+    "ssh_calls[11].okay": true,
+    "ssh_calls[12].automatic_retry": false,
+    "ssh_calls[12].mutation_attempted": false,
+    "ssh_calls[12].okay": true,
+    "ssh_calls[13].automatic_retry": false,
+    "ssh_calls[13].mutation_attempted": false,
+    "ssh_calls[13].okay": true,
+    "ssh_calls[14].automatic_retry": false,
+    "ssh_calls[14].mutation_attempted": false,
+    "ssh_calls[14].okay": true,
+    "ssh_calls[15].automatic_retry": false,
+    "ssh_calls[15].mutation_attempted": false,
+    "ssh_calls[15].okay": true,
+    "ssh_calls[16].automatic_retry": false,
+    "ssh_calls[16].mutation_attempted": false,
+    "ssh_calls[16].okay": true,
+    "ssh_calls[17].automatic_retry": false,
+    "ssh_calls[17].mutation_attempted": false,
+    "ssh_calls[17].okay": true,
+    "ssh_calls[18].automatic_retry": false,
+    "ssh_calls[18].mutation_attempted": false,
+    "ssh_calls[18].okay": true,
+    "ssh_calls[19].automatic_retry": false,
+    "ssh_calls[19].mutation_attempted": true,
+    "ssh_calls[19].okay": true,
+    "ssh_calls[20].automatic_retry": false,
+    "ssh_calls[20].mutation_attempted": true,
+    "ssh_calls[20].okay": true,
+    "ssh_calls[21].automatic_retry": false,
+    "ssh_calls[21].mutation_attempted": true,
+    "ssh_calls[21].okay": true,
+    "ssh_calls[22].automatic_retry": false,
+    "ssh_calls[22].mutation_attempted": true,
+    "ssh_calls[22].okay": true,
+    "ssh_calls[23].automatic_retry": false,
+    "ssh_calls[23].mutation_attempted": true,
+    "ssh_calls[23].okay": true,
+    "ssh_calls[24].automatic_retry": false,
+    "ssh_calls[24].mutation_attempted": true,
+    "ssh_calls[24].okay": true,
+    "ssh_calls[25].automatic_retry": false,
+    "ssh_calls[25].mutation_attempted": false,
+    "ssh_calls[25].okay": true,
+    "ssh_calls[26].automatic_retry": false,
+    "ssh_calls[26].mutation_attempted": false,
+    "ssh_calls[26].okay": true,
+    "ssh_calls[27].automatic_retry": false,
+    "ssh_calls[27].mutation_attempted": false,
+    "ssh_calls[27].okay": true,
+    "ssh_calls[28].automatic_retry": false,
+    "ssh_calls[28].mutation_attempted": false,
+    "ssh_calls[28].okay": true,
+    "ssh_calls[29].automatic_retry": false,
+    "ssh_calls[29].mutation_attempted": false,
+    "ssh_calls[29].okay": true,
+    "ssh_calls[30].automatic_retry": false,
+    "ssh_calls[30].mutation_attempted": false,
+    "ssh_calls[30].okay": true,
+    "transport_interruption.attempted": true,
+    "transport_interruption.observation_rounds[0].rows[0].okay": true,
+    "transport_interruption.observation_rounds[0].rows[0].status.audit_recorded": true,
+    "transport_interruption.observation_rounds[0].rows[1].okay": true,
+    "transport_interruption.observation_rounds[0].rows[1].status.audit_recorded": true,
+    "transport_interruption.observation_rounds[0].rows[2].okay": true,
+    "transport_interruption.observation_rounds[0].rows[2].status.audit_recorded": true,
+    "transport_interruption.observation_rounds[0].rows[3].okay": true,
+    "transport_interruption.observation_rounds[0].rows[3].status.audit_recorded": true,
+    "transport_interruption.observation_rounds[0].rows[4].okay": true,
+    "transport_interruption.observation_rounds[0].rows[4].status.audit_recorded": true,
+    "transport_interruption.observation_rounds[0].rows[5].okay": true,
+    "transport_interruption.observation_rounds[0].rows[5].status.audit_recorded": true,
+    "transport_interruption.observation_rounds[1].rows[0].okay": true,
+    "transport_interruption.observation_rounds[1].rows[0].status.audit_recorded": true,
+    "transport_interruption.original_host_reconnected_without_new_job": true,
+    "transport_interruption.passed": true,
+    "transport_interruption.signal_attempted": true,
+    "transport_interruption.signal_receipt.network_or_service_changes": false,
+    "transport_interruption.signal_receipt.pidfd_terminal_observed": true,
+    "transport_interruption.signal_receipt.signal_sent": true,
+    "transport_interruption.signal_receipt.socket_removed_by_harness": false,
+    "transport_interruption.transport_interruption_observed": true,
+    "transport_interruption.unaffected_hosts_progressed": true
+  },
+  "all_nonempty_report_error_warning_fields": {
+    "shutdown.resources.errors": [
+      "PermissionError: [Errno 13] Permission denied: '/proc/1937021/fd'"
+    ]
+  },
+  "resource_measurement_limitations": [
+    "Original sampled peaks and process-tree CPU are explicitly lower bounds.",
+    "Resource sampler errors by controller phase: {\"intentional_crash\": [], \"shutdown\": [\"PermissionError: [Errno 13] Permission denied: '/proc/1937021/fd'\"]}. Any errors remain visible and prevent treating those samples as complete process-tree measurements."
+  ],
+  "content_review": {
+    "private_key_or_known_token_pattern_hits": [],
+    "nonempty_structured_credential_fields": [],
+    "embedded_base64_artifacts_checked": 93,
+    "embedded_hash_and_length_checks": "all matched",
+    "scan_scope": "Original UTF-8 report plus every embedded base64 artifact; structured credential-key review also covers decoded JSON request/exit records.",
+    "original_bytes_modified_or_redacted": false,
+    "qualification": "No detected private-key blocks, known token patterns, or nonempty structured credential fields. This is a bounded content review, not a universal secret-detection guarantee."
+  }
+}

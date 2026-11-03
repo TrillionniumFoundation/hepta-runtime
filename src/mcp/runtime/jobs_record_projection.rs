@@ -1,7 +1,7 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! Borrow validated command text until a registry scan selects its original.
+//! Borrow fully validated command text until a lookup or inventory selects its fields.
 use serde::de::{Deserializer, Visitor};
 use serde::Deserialize;
 use std::borrow::Cow;
