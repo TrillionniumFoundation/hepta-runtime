@@ -72,3 +72,55 @@ jobs:
           fi
           test ! -s "$RUNNER_TEMP/rea-release-bad.out"
           test -s "$RUNNER_TEMP/rea-release-bad.err"
+
+      - name: Independent Python ZIP writer to shipped Rust worker static checks
+        run: |
+          set -euo pipefail
+          binary="./target/release/hepta-runtime"
+          mkdir -p "$RUNNER_TEMP/rea-zip-evidence"
+          python3 - <<'PY'
+          import os, zipfile
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"]) / "rea-zip-evidence"
+          good = root / "apk-like-structural-only.zip"
+          with zipfile.ZipFile(good, "w", compression=zipfile.ZIP_STORED) as archive:
+              archive.writestr("AndroidManifest.xml", b"not a real Android manifest")
+              archive.writestr("classes.dex", b"not actual dex code")
+              archive.writestr("resources.arsc", b"not actual resources")
+              archive.writestr("META-INF/CERT.RSA", b"not a real certificate")
+          (root / "truncated.zip").write_bytes(good.read_bytes()[:-1])
+          with zipfile.ZipFile(root / "duplicate.zip", "w") as archive:
+              archive.writestr("duplicate.txt", b"first")
+              archive.writestr("duplicate.txt", b"second")
+          PY
+          cat "$RUNNER_TEMP/rea-zip-evidence/apk-like-structural-only.zip" | "$binary" rea-worker --selected-path=/controlled/apk-like.zip > "$RUNNER_TEMP/rea-zip-evidence/observed.json"
+          python3 - "$RUNNER_TEMP/rea-zip-evidence/observed.json" <<'PY'
+          import json, sys
+          record = json.load(open(sys.argv[1]))
+          result = record["normalized_result"]
+          facts = result["header_facts"]
+          assert record["rea_evidence_compatible"] is False
+          assert record["coverage"]["status"] == "partial"
+          assert result["format"] == "zip"
+          assert facts["declared_entries"] == facts["checked_central_and_local_entries"] == 4
+          assert facts["apk_structure_hint_only"] is True
+          assert facts["legacy_signature_entry_count"] == 1
+          assert "signature" in " ".join(record["limitations"]).lower()
+          PY
+          for invalid in truncated duplicate; do
+            if cat "$RUNNER_TEMP/rea-zip-evidence/$invalid.zip" | "$binary" rea-worker --selected-path=/controlled/bad.zip > "$RUNNER_TEMP/rea-zip-evidence/$invalid.out" 2> "$RUNNER_TEMP/rea-zip-evidence/$invalid.err"; then
+              echo "ERROR: REA preview accepted invalid $invalid archive" >&2
+              exit 1
+            fi
+            test ! -s "$RUNNER_TEMP/rea-zip-evidence/$invalid.out"
+            test -s "$RUNNER_TEMP/rea-zip-evidence/$invalid.err"
+          done
+
+      - name: Retain independent static ZIP fixtures and result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-zip-preview-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/rea-zip-evidence/
+          if-no-files-found: warn
+          retention-days: 14
