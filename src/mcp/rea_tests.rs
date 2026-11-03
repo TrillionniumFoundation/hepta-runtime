@@ -100,7 +100,7 @@ fn elf32_big_endian_is_not_read_as_little_endian() {
 }
 
 #[test]
-fn macho_fat_and_zip_do_not_claim_full_slice_or_apk_identity() {
+fn macho_fat_and_truncated_zip_cannot_claim_apk_identity() {
 	let fat = inspect_bytes(
 		&[0xca, 0xfe, 0xba, 0xbe, 0, 0, 0, 2],
 		"/controlled/universal",
@@ -112,9 +112,12 @@ fn macho_fat_and_zip_do_not_claim_full_slice_or_apk_identity() {
 		2
 	);
 	assert_eq!(fat["normalized_result"]["architecture"], Value::Null);
-	let zip = inspect_bytes(b"PK\x03\x04truncated", "/controlled/app.apk").expect("zip signature");
-	assert_eq!(zip["normalized_result"]["format"], "zip");
-	assert_eq!(zip["coverage"]["status"], "partial");
+	let truncated = inspect_bytes(b"PK\x03\x04truncated", "/controlled/app.apk")
+		.expect_err("ZIP magic without central directory must fail closed");
+	assert!(
+		truncated.to_string().contains("truncated ZIP"),
+		"{truncated}"
+	);
 }
 
 #[test]
