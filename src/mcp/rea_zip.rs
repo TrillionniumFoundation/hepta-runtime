@@ -364,6 +364,90 @@ mod tests {
 		output
 	}
 
+	/// Build real APK Signing Block framing around intentionally fake signer
+	/// values. A positive result is ONLY structural, never signature validity.
+	fn wrap_with_apk_block(zip: &[u8], pairs: &[(u32, &[u8])]) -> Vec<u8> {
+		let eocd = zip.len() - 22;
+		let central = read_u32(zip, eocd + 16, true).expect("central offset") as usize;
+		let mut payload = Vec::new();
+		for (id, body) in pairs {
+			payload.extend_from_slice(&(4u64 + body.len() as u64).to_le_bytes());
+			payload.extend_from_slice(&id.to_le_bytes());
+			payload.extend_from_slice(body);
+		}
+		let total_size = (payload.len() as u64) + 24;
+		let mut block = Vec::new();
+		block.extend_from_slice(&total_size.to_le_bytes());
+		block.extend_from_slice(&payload);
+		block.extend_from_slice(&total_size.to_le_bytes());
+		block.extend_from_slice(APK_SIG_MAGIC);
+		let mut output = zip[..central].to_vec();
+		output.extend_from_slice(&block);
+		output.extend_from_slice(&zip[central..]);
+		let new_eocd = eocd + block.len();
+		output[new_eocd + 16..new_eocd + 20]
+			.copy_from_slice(&(central as u32 + block.len() as u32).to_le_bytes());
+		output
+	}
+
+	#[test]
+	fn signing_block_ids_are_observed_but_not_authenticated() {
+		let zip = classic_zip(&[
+			("AndroidManifest.xml", "not a real manifest"),
+			("classes.dex", "not a real DEX"),
+		]);
+		let signed = wrap_with_apk_block(
+			&zip,
+			&[
+				(0x7109_871a, b"fake-v2" as &[u8]),
+				(0xf053_68c0, b"fake-v3" as &[u8]),
+			],
+		);
+		let info = parse_zip(&signed).expect("bounded APK Signing Block framing");
+		assert_eq!(info.facts["apk_signing_block_structure_present"], true);
+		assert_eq!(info.facts["apk_signing_block_id_pairs"], 2);
+		assert_eq!(info.facts["apk_v2_scheme_id_present"], true);
+		assert_eq!(info.facts["apk_v3_scheme_id_present"], true);
+		assert_eq!(info.facts["apk_v31_scheme_id_present"], false);
+		assert!(info.limitations.iter().any(|x| x.contains("NOT cryptographic")));
+		let bare = parse_zip(&zip).expect("unsigned ZIP");
+		assert_eq!(bare.facts["apk_signing_block_structure_present"], false);
+	}
+
+	#[test]
+	fn forged_apk_signing_block_lengths_and_duplicates_are_refused() {
+		let zip = classic_zip(&[("AndroidManifest.xml", "untrusted")]);
+		let signed = wrap_with_apk_block(&zip, &[(0x7109_871a, b"fake")]);
+		let central = read_u32(&signed, signed.len() - 22 + 16, true)
+			.expect("central offset") as usize;
+		let mut wrong_footer = signed.clone();
+		wrong_footer[central - 24..central - 16].copy_from_slice(&25u64.to_le_bytes());
+		assert!(parse_zip(&wrong_footer).is_err(), "footer/header mismatch");
+		let mut oversized_pair = signed.clone();
+		let start = central - 8 - read_u64(&signed, central - 24, true).expect("size") as usize;
+		oversized_pair[start + 8..start + 16].copy_from_slice(&u64::MAX.to_le_bytes());
+		assert!(parse_zip(&oversized_pair).is_err(), "out-of-bounds pair");
+		let duplicated = wrap_with_apk_block(
+			&zip,
+			&[(0x7109_871a, b"first"), (0x7109_871a, b"second")],
+		);
+		assert!(parse_zip(&duplicated).is_err(), "ambiguous duplicate ID");
+	}
+
+	#[test]
+	fn local_central_crc_and_size_disagreements_are_rejected() {
+		let original = classic_zip(&[("data.bin", "a payload")]);
+		for offset in [14usize, 18, 22] {
+			let mut modified = original.clone();
+			modified[offset] ^= 0x1;
+			assert!(
+				parse_zip(&modified).is_err(),
+				"mismatched local header offset {offset} must fail"
+			);
+		}
+		assert!(parse_zip(&original).is_ok());
+	}
+
 	#[test]
 	fn classic_zip_reports_apk_hints_without_claiming_signature_validity() {
 		let bytes = classic_zip(&[
