@@ -10,7 +10,7 @@ use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 
-static RUNTIME_CONFIG: OnceLock<RuntimeConfig> = OnceLock::new();
+static RUNTIME_CONFIG: OnceLock<InstalledRuntimeConfig> = OnceLock::new();
 static CONTROLLER_OWNER: OnceLock<ControllerLocks> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -110,6 +110,41 @@ pub struct RuntimeConfig {
 	pub controller_workspace_roots: Vec<PathBuf>,
 	#[serde(default)]
 	pub hosts: BTreeMap<String, HostConfig>,
+}
+
+// The installed value has no mutable accessor or interior-mutable policy fields.
+// Keep its derived digest beside that exact value; neither can be replaced by a
+// later installation. Laziness preserves startup without observation pooling,
+// including configurations whose normalized paths cannot be JSON serialized.
+struct InstalledRuntimeConfig {
+	config: RuntimeConfig,
+	#[cfg(any(target_os = "linux", test))]
+	policy_digest: OnceLock<std::result::Result<[u8; 32], serde_json::Error>>,
+}
+
+impl InstalledRuntimeConfig {
+	fn new(config: RuntimeConfig) -> Self {
+		Self {
+			config,
+			#[cfg(any(target_os = "linux", test))]
+			policy_digest: OnceLock::new(),
+		}
+	}
+
+	#[cfg(any(target_os = "linux", test))]
+	fn policy_digest(&self) -> Result<[u8; 32]> {
+		self.policy_digest
+			.get_or_init(|| {
+				let bytes = serde_json::to_vec(&self.config)?;
+				let mut digest = [0; 32];
+				digest
+					.copy_from_slice(ring::digest::digest(&ring::digest::SHA256, &bytes).as_ref());
+				Ok(digest)
+			})
+			.as_ref()
+			.copied()
+			.map_err(|error| anyhow!("{error}"))
+	}
 }
 
 fn default_state_dir() -> PathBuf {
@@ -342,7 +377,7 @@ pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
 		}
 	}
 	RUNTIME_CONFIG
-		.set(config)
+		.set(InstalledRuntimeConfig::new(config))
 		.map_err(|_| anyhow!("runtime config was already initialized"))?;
 	CONTROLLER_OWNER
 		.set(owner)
@@ -352,11 +387,20 @@ pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
 pub fn runtime_config() -> Result<&'static RuntimeConfig> {
 	RUNTIME_CONFIG
 		.get()
+		.map(|installed| &installed.config)
 		.ok_or_else(|| anyhow!("runtime tools are disabled; start with --runtime-config <file>"))
 }
 
 pub fn maybe_runtime_config() -> Option<&'static RuntimeConfig> {
-	RUNTIME_CONFIG.get()
+	RUNTIME_CONFIG.get().map(|installed| &installed.config)
+}
+
+#[cfg(any(target_os = "linux", test))]
+pub(super) fn runtime_policy_digest() -> Result<[u8; 32]> {
+	RUNTIME_CONFIG
+		.get()
+		.ok_or_else(|| anyhow!("runtime tools are disabled; start with --runtime-config <file>"))?
+		.policy_digest()
 }
 
 pub fn valid_name(value: &str) -> bool {
