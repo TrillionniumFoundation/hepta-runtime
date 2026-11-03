@@ -287,7 +287,9 @@ fn real_npm_fractional_reference_evidence_matches_native() {
 		"must exercise extensive fixed and bit-pattern samples"
 	);
 	assert!(
-		cases.iter().any(|record| record["provider"]["version"] == ""),
+		cases
+			.iter()
+			.any(|record| record["provider"]["version"] == ""),
 		"the genuine npm oracle must include empty ordinary provider version"
 	);
 	assert!(
