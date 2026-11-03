@@ -62,7 +62,7 @@ jobs:
           "$aapt2" compile --dir "$evidence/res" -o "$evidence/compiled"
           find "$evidence/compiled" -type f -name '*.flat' -print | tee "$evidence/aapt2-compiled-files.txt"
           test -s "$evidence/aapt2-compiled-files.txt"
-          "$aapt2" link -o "$evidence/unsigned.apk" -I "$platform" \
+          "$aapt2" link --auto-add-overlay -o "$evidence/unsigned.apk" -I "$platform" \
               --manifest "$evidence/AndroidManifest.xml" \
               -R "$evidence/compiled/values_strings.arsc.flat"
           python3 - "$evidence/unsigned.apk" <<'PY'
