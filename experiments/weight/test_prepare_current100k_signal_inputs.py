@@ -250,6 +250,74 @@ class PreparationTests(unittest.TestCase):
             self.run_prepare()
         self.assertEqual(raised.exception.code, "OMS_CAPTURE")
 
+    def test_keyboard_interrupt_keeps_earlier_accounting_checkpoint_and_partial_progress(self):
+        source = ACCOUNTING_FIXTURE.replace(
+            "    if instrument != 'EUR.USD':",
+            "    if now_ms == 499:\n        raise KeyboardInterrupt('fixture second replay interruption')\n"
+            "    if instrument != 'EUR.USD':")
+        self.request["accounting_module"] = self.write("interrupted-accounting.py", source.encode())
+        with self.assertRaisesRegex(KeyboardInterrupt, "fixture second replay interruption"):
+            self.run_prepare()
+        out = self.root / "prepared-0"
+        failure = json.loads((out / "failure.json").read_text())
+        self.assertEqual(failure["status"], "interrupted")
+        self.assertTrue(failure["retained_progress_is_lower_bound"])
+        self.assertFalse(failure["ready"])
+        self.assertFalse(failure["automatic_replay_allowed"])
+        self.assertEqual(failure["progress"]["layer_rows_checked"], 6)
+        first, interrupted = failure["progress"]["accounting_replays"]
+        self.assertEqual(first["as_of_ms"], 299)
+        self.assertEqual(first["status"], "REPLAY_COMPLETED")
+        self.assertEqual(first["verified_rows"], 1)
+        self.assertEqual(interrupted["as_of_ms"], 499)
+        self.assertEqual(interrupted["status"], "REPLAY_INTERRUPTED")
+        self.assertEqual(interrupted["error_type"], "KeyboardInterrupt")
+        self.assertEqual(interrupted["verified_rows"], 0)
+        self.assertTrue(interrupted["partial_work_unknown"])
+        self.assertGreater(failure["wall_seconds"], 0.)
+        self.assertGreaterEqual(failure["process_cpu_seconds"], 0.)
+        self.assertFalse((out / "ready.json").exists())
+        with self.assertRaises(FileExistsError):
+            P.prepare(self.request, out)
+
+    def test_initial_publication_interrupt_retains_failure_and_original_exception(self):
+        interruption = KeyboardInterrupt("fixture request publication interruption")
+        publish = P.atomic_create
+        def interrupt_request(path, value):
+            if path.name == "request.json":
+                raise interruption
+            return publish(path, value)
+        with patch.object(P, "atomic_create", interrupt_request):
+            with self.assertRaises(KeyboardInterrupt) as raised:
+                self.run_prepare()
+        self.assertIs(raised.exception, interruption)
+        out = self.root / "prepared-0"
+        failure = json.loads((out / "failure.json").read_text())
+        self.assertEqual(failure["status"], "interrupted")
+        self.assertEqual(failure["progress"]["layer_rows_checked"], 0)
+        self.assertEqual(failure["progress"]["accounting_replays"], [])
+        self.assertFalse((out / "ready.json").exists())
+
+    def test_interruption_is_not_replaced_when_failure_receipt_cannot_be_written(self):
+        interruption = KeyboardInterrupt("fixture original interruption")
+        publish = P.atomic_create
+        def fail_publication(path, value):
+            if path.name == "request.json":
+                raise interruption
+            if path.name == "failure.json":
+                raise OSError("fixture full destination")
+            return publish(path, value)
+        with patch.object(P, "atomic_create", fail_publication):
+            with self.assertRaises(KeyboardInterrupt) as raised:
+                self.run_prepare()
+        self.assertIs(raised.exception, interruption)
+        if hasattr(interruption, "__notes__"):
+            self.assertTrue(any("fixture full destination" in note for note in interruption.__notes__))
+        out = self.root / "prepared-0"
+        self.assertFalse((out / "failure.json").exists())
+        self.assertFalse((out / "ready.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
+

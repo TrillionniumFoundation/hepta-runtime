@@ -301,9 +301,36 @@ The example contributes 8.5 seconds, not 10 seconds. A failed or interrupted
 inner attempt remains visible in the operation and status inventory even when
 the outer timer already includes its consumption. If a parent CPU measurement
 is unknown and only a child CPU measurement exists, the child contributes known
-subscope consumption; the parent remains unknown, the metric is incomplete, and
-the value is labelled a lower bound over the declared scopes. A parent's known
-wall time does not fill its unknown CPU time. Peak RSS remains a maximum.
+subscope consumption; the parent remains unknown and the metric is incomplete.
+A parent's known wall time does not fill its unknown CPU time. Peak RSS remains
+a maximum.
+
+Containment alone does **not** establish disjoint sibling measurements. Two
+parallel child scopes can each record eight wall seconds inside an eight-second
+parent. With the parent timer missing, their submitted operation sum is sixteen
+seconds, but that sum is not a lower bound for the parent's elapsed time. CPU
+seconds measure CPU consumption rather than elapsed time and can legitimately
+exceed wall seconds. Nevertheless, the current receipt contract does not prove
+that sibling CPU counters, GPU counters or work counts cover disjoint work;
+they also cannot be assumed additive for an unknown parent.
+
+The existing per-metric `value` preserves the sum of the outermost measured
+operations (or the maximum for peak RSS). If an unknown root contributes multiple
+selected sibling scopes, `selected_sibling_scopes_may_overlap` is true and the
+sum is not labelled `known_subscope_lower_bound_only`. A separate
+`conservative_root_scope_lower_bound` retains one component per declared root:
+its measured inclusive value when present, otherwise its largest measured
+descendant value, otherwise null. Those components are summed across declared
+roots, or maximized for peak RSS. The largest descendant is conservative without
+assuming siblings are disjoint. Entirely unmeasured values remain null; no
+missing measurement is fabricated as zero.
+
+This bound concerns the sum of declared root metric quantities, not complete
+experiment consumption or end-to-end elapsed time. The root components and their
+supporting operation IDs make the distinction inspectable. When the root's own
+measurement later becomes available it suppresses its descendants as before;
+each metric is handled independently. A sole measured descendant, and the
+peak-RSS maximum even with siblings, can still be a conservative subscope bound.
 
 Per-stage summaries retain their measured operations for inspection and may
 overlap. Do not add stage summaries together. The per-metric selected/suppressed
@@ -335,3 +362,4 @@ and missing values. Negative-evidence tests cover original bytes, request and
 command identity, source-binding claims, clocks, duplicate proofs, unchanged
 frozen limits, no positive inference, legacy/unsupported schemas and preservation
 of observed diagnostics. They perform no model forward or market evaluation.
+

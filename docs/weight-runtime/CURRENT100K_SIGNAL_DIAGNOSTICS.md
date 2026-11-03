@@ -182,3 +182,38 @@ that family. Any prospective extension needs a separate freeze and the original
 request/command, timing, completeness, overlap, multiplicity and adoption rules.
 Closed-form label fitting removes gradient steps; it does not remove data fitting
 or demonstrate that learning is unnecessary.
+
+## Catchable interruption receipts: follow-up on November 3
+
+The protected diagnostic and input-preparation attempt scopes now retain
+catchable in-process interruptions, including actual `KeyboardInterrupt` and
+`SystemExit`. The failure receipt has `status=interrupted`; the original
+exception is re-raised after retention. Ordinary exceptions remain failed
+attempts. Failure-receipt publication errors are attached to the original
+exception where supported and do not replace it.
+
+SGD and shared optimizer initialization retain wall/CPU meters through their
+`finally` paths. Confirmed backward/optimizer completions remain lower bounds
+after a failure or interruption. A call can change parameters before Python
+records its return: an in-progress step is explicitly marked
+`incomplete_step_effects_unknown`, never promoted to a completed step.
+
+Input preparation records its initial request publication inside the protected
+attempt. Each accounting replay is added to retained progress before execution.
+A second-replay interruption keeps the earlier completed proof, marks the
+interrupted replay with zero verified-row credit, and does not publish readiness.
+
+These protections do not cover SIGKILL, power loss, unhandled operating-system
+termination, pre-attempt CLI validation or later CLI integrity-publication
+failures. Costs or effects that were not durably observed remain unknown.
+
+The final Pocket4 verification used the existing real PyTorch/safetensors
+environment with an isolated test directory and exact base dependency bytes:
+**20 signal tests and 11 input-preparation tests passed, with zero skips**.
+The five new regressions use actual `KeyboardInterrupt`, including interruption
+after an optimizer update has already changed parameters, initialization,
+second accounting replay, initial request publication and failure-retention
+failure. No encoder was loaded and no live study was changed.
+
+Final verification receipt SHA-256:
+`475c5774ae162fc817cf08eb8cf293ae62e31a5272ca03fac18efe04696d474e`.

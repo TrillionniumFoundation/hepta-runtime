@@ -325,6 +325,78 @@ class SignalDiagnosticsTests(unittest.TestCase):
             self.assertEqual(failure["completed_candidates"], [])
             self.assertFalse((root / "report.json").exists())
 
+    def test_keyboard_interrupt_retains_partial_optimizer_counts_and_reraises_same_exception(self):
+        generator = torch.Generator().manual_seed(7)
+        f = torch.nn.functional.normalize(torch.randn(6, 768, generator=generator), dim=1)
+        representations = {"masked_mean": f, "action": f.clone(), "grouped": f.clone(),
+                           "structured": torch.randn(6, 8, generator=generator)}
+        labels = torch.tensor([10., 20., -3., 40., -10., 60.])
+        head = {"value.weight": torch.zeros(1, 768), "value.bias": torch.tensor([.05])}
+        lineage = {k + "_sha256": "a" * 64 for k in ("features", "labels", "head", "rows")}
+        interruption = KeyboardInterrupt("fixture interruption after optimizer side effect")
+        calls = []
+        original = torch.optim.SGD.step
+        def interrupt_after_update(optimizer, *args, **kwargs):
+            calls.append(1)
+            result = original(optimizer, *args, **kwargs)
+            if len(calls) == 3:
+                raise interruption
+            return result
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "interrupted"
+            with patch.object(torch.optim.SGD, "step", interrupt_after_update):
+                with self.assertRaises(KeyboardInterrupt) as raised:
+                    compare(representations, labels, head, self.rows, self.plan, root, lineage)
+            self.assertIs(raised.exception, interruption)
+            failure = json.loads((root / "failure.json").read_text())
+            self.assertEqual(failure["status"], "interrupted")
+            self.assertFalse(failure["completed"])
+            self.assertFalse(failure["automatic_replay_allowed"])
+            self.assertTrue(failure["retained_progress_is_lower_bound"])
+            self.assertTrue(failure["incomplete_sgd_step_effects_unknown"])
+            self.assertEqual(len(failure["completed_candidates"]), 5)
+            attempt, = failure["sgd_attempts"]
+            self.assertEqual(attempt["status"], "INTERRUPTED")
+            self.assertEqual(attempt["backward_calls_started"], 3)
+            self.assertEqual(attempt["backward_calls_completed"], 3)
+            self.assertEqual(attempt["optimizer_calls_started"], 3)
+            # The third update actually happened, but interruption preceded its
+            # return/count. Retain only the two confirmed completions.
+            self.assertEqual(attempt["optimizer_calls_completed"], 2)
+            self.assertEqual(attempt["completed_steps"], 2)
+            self.assertTrue(attempt["step_in_progress"])
+            self.assertTrue(attempt["completed_counts_are_lower_bounds"])
+            self.assertTrue(attempt["incomplete_step_effects_unknown"])
+            self.assertGreater(failure["wall_seconds"], attempt["wall_seconds"])
+            self.assertGreaterEqual(failure["process_cpu_seconds"], attempt["process_cpu_seconds"])
+            self.assertFalse((root / "report.json").exists())
+            with self.assertRaises(FileExistsError):
+                compare(representations, labels, head, self.rows, self.plan, root, lineage)
+
+    def test_keyboard_interrupt_during_shared_initialization_is_retained(self):
+        generator = torch.Generator().manual_seed(7)
+        f = torch.nn.functional.normalize(torch.randn(6, 768, generator=generator), dim=1)
+        representations = {"masked_mean": f, "action": f.clone(), "grouped": f.clone(),
+                           "structured": torch.randn(6, 8, generator=generator)}
+        head = {"value.weight": torch.zeros(1, 768), "value.bias": torch.zeros(1)}
+        lineage = {k + "_sha256": "a" * 64 for k in ("features", "labels", "head", "rows")}
+        interruption = KeyboardInterrupt("fixture optimizer startup interruption")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "interrupted-startup"
+            with patch.object(torch.optim, "SGD", side_effect=interruption):
+                with self.assertRaises(KeyboardInterrupt) as raised:
+                    compare(representations, torch.zeros(6), head, self.rows, self.plan, root, lineage)
+            self.assertIs(raised.exception, interruption)
+            failure = json.loads((root / "failure.json").read_text())
+            self.assertEqual(failure["status"], "interrupted")
+            self.assertEqual(failure["shared_optimizer_initialization"]["status"], "INTERRUPTED")
+            self.assertGreater(failure["shared_optimizer_initialization"]["wall_seconds"], 0.)
+            self.assertEqual(failure["sgd_attempts"], [])
+            self.assertEqual(failure["completed_candidates"], [])
+            self.assertFalse(failure["incomplete_sgd_step_effects_unknown"])
+            self.assertFalse((root / "report.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
+

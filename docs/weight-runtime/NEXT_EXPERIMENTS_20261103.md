@@ -14,26 +14,32 @@ The actual development comparison found no RMSE improvement over the parent in
 either time fold. Ridge and same-objective short SGD had nearly identical RMSE;
 the existing directed edit mostly shifted the common mean. These findings favor
 simpler readout solving and stronger prospective controls, not new internal
-encoder patches. The new future family has two observed original commands at
-the retained final readback and remains pending.
+encoder patches. The latest future-family assessment has six original commands: five observed
+and one pending. It remains an unfinished prospective comparison.
 
 ## P0: independent future evidence has started
 
-The retained strict readback at **2026-11-03 12:07:46.088 EST** has **two original
-commands and two OBSERVED results** for the new eleven-head family. Its input window
-ends **November 17 at 10:49:25.673 EST**; its settlement deadline is **November 18
-at 10:49:25.673 EST**. Both services were active. The new head's compute and
-durability times are its own, later than the shared source feature publication.
+The latest retained strict assessment at **2026-11-03 12:55:59.023 EST** has
+**six original commands: five OBSERVED, one PENDING and zero CENSORED**.
+The independent ledger check verifies all six pre-opening bindings, fresh clocks
+and eleven-head membership. The permanent unresolved lower bound is zero, while
+comparison eligibility and formal success remain unknown.
 
-The original source remains irreversibly ineligible under its zero-missing rule.
-Its later **11:27:37.798 EST** snapshot has ten original commands and six observed
-results; the three permanent missed pre-opening predictions remain. A settlement
-cannot supply a missing earlier prediction.
+The bounded inspection at 12:56:44 EST found all four services running and all
+eight immutable files unchanged. It retains all 26 requests, including ten
+expired nontrade requests waiting for successful original shared features.
+Those request-level expirations are neither hidden nor relabelled as missing
+predictions for the six opened trades.
 
-The first observed commands verify an initial operational route. Fixed-window
-coverage, signs, time blocks, both halves, multiplicity, same-producer adoption
-restrictions and the live source-end guarded handoff remain open requirements.
-See [the complete operational readback](FUTURE_WINDOW_READBACK_20261103.md).
+The source assessment at 12:56:36.958 EST has fifteen commands: ten observed,
+two pending and three censored. The previously verified irreversible
+ineligibility is preserved.
+
+The source's fixed input end is **November 17, 06:30:53.494 EST**. The new
+family's input window ends **November 17, 10:49:25.673 EST**, and its settlement
+deadline is **November 18, 10:49:25.673 EST**. Full-window coverage, time blocks,
+both halves, statistical comparison, source-end handoff and same-producer
+adoption restrictions remain open. See [the operational readback](FUTURE_WINDOW_READBACK_20261103.md).
 
 ## P1A: an actual, label-free mechanism control screen
 
@@ -251,7 +257,8 @@ source evaluator without replacing its decision or changing its score.
 Cost input v2 binds receipts to operation identities, parent scopes and inclusive
 metrics. Per metric, aggregation chooses the outermost measured scope and
 suppresses included descendants. Failures remain operations. Unknown parent
-measurements expose only measured subscope lower bounds. Invalid cycles,
+measurements retain operation sums separately from conservative per-root lower
+bounds; sibling scopes are not assumed disjoint. Invalid cycles,
 inconsistent ancestry and ambiguous scope claims are rejected.
 
 Actual mechanism measurements:
@@ -276,8 +283,9 @@ See [the handoff/accounting contract](../../experiments/weight/evaluation/CURREN
 
 ## Verification and retained boundaries
 
-Latest-version Pocket4 suites used actual PyTorch and safetensors with zero
-skips:
+The earlier executed workbench suites used actual Pocket4 PyTorch and
+safetensors with zero skips. Their original 227-test record is retained here;
+the focused follow-up below supersedes only its changed suites:
 
 | Suite | Tests passed |
 | --- | ---: |
@@ -327,3 +335,65 @@ handle overlap, and fix the primary loss, multiplicity rule and any practical
 noninferiority margin before new outcomes. “No statistically significant
 difference” alone does not establish equivalence. Equally poor arms do not
 establish a useful no-training solution.
+
+## Follow-up: complete-cost reliability and interruption evidence
+
+Two additional correctness gaps were found and fixed after the numerical runs.
+
+**Overlapping cost scopes.** With an unmeasured parent and two parallel
+eight-second children, the old operation sum was sixteen seconds and was
+incorrectly labelled a lower bound. The sum remains available for inspection,
+but the new conservative bound for that declared root is eight seconds.
+Per-root measurements or largest known descendants are exposed separately;
+unknown values stay null. Across roots, the bound describes declared metric
+quantities, not end-to-end elapsed time. CPU/GPU/work counters are also not
+assumed disjoint without a matching attribution contract. Failed operations,
+metric-specific ancestor suppression and peak-RSS maxima remain intact.
+
+**Catchable interruptions.** Actual KeyboardInterrupt/SystemExit now retain
+failure/interruption receipts and wall/CPU meters inside the protected attempt
+scope, then re-raise the original exception. An optimizer update may have taken
+effect before its completed counter was recorded; such work is explicitly
+unknown and confirmed counts are lower bounds. Input preparation keeps completed
+earlier replay evidence if a later replay is interrupted. A failure to write the
+failure receipt does not replace the original exception. SIGKILL, power loss and
+work outside these protected scopes still require external observation.
+
+| Final focused verification | Host | Passed | Skipped |
+| --- | --- | ---: | ---: |
+| Original outcomes, overlap and cost-scope suite | main | 42 | 0 |
+| Signal/pooling/constraints and interruption suite | Pocket4 | 20 | 0 |
+| Original-accounting preparation and interruption suite | Pocket4 | 11 | 0 |
+| Distinct tests in these three suites | | 73 | 0 |
+
+These are eight newly added tests plus 65 existing tests. They are not added to
+the earlier 227 as another independent 73-test batch. The final Pocket4 run
+verified unchanged source hashes and exact baseline bytes for its six imported
+worker dependencies. It used synthetic fixtures, no encoder and no live-study
+mutation. The existing ROCm build emitted a libnuma import warning; both CPU
+test invocations completed successfully. No GPU qualification is claimed.
+
+| Verification receipt | SHA-256 |
+| --- | --- |
+| main cost/handoff suite | `0cc6bdb0bbbd5787f4e927b7c7e2bd493049918c0d3c84a8f22255a7460dcb72` |
+| Final Pocket4 signal/preparation suites | `475c5774ae162fc817cf08eb8cf293ae62e31a5272ca03fac18efe04696d474e` |
+
+Retained non-numerical attempts include an unavailable remote Git object,
+a sixty-second Git-fetch timeout, and a failed source-extraction staging attempt
+that ran no tests. Direct source staging subsequently succeeded. A first
+successful Pocket4 run used six temporary dependency copies with one extra
+trailing newline each; those were restored to the exact baseline bytes and the
+final 31 tests were rerun in a new directory. Both receipts remain separate.
+The temporary chat execution environment later became unavailable; the retained
+test payloads were recovered, gzip CRC-checked and SHA-256 matched to the
+verified source before publication. No failed attempt is presented as a free or
+successful numerical experiment.
+
+Complete historical Astra usage, feature/model preparation, transport and the
+entire failure inventory are still unmeasured. End-to-end cost and speedup
+remain null. The active frozen family is unchanged; these corrections do not
+supply future outcomes or demonstrate that training can be abandoned.
+
+See the [public follow-up evidence summary](evidence/NEXT_EXPERIMENTS_FOLLOWUP_20261103.json),
+[scope contract](../../experiments/weight/evaluation/CURRENT100K_HANDOFF.md)
+and [interruption contract](CURRENT100K_SIGNAL_DIAGNOSTICS.md).

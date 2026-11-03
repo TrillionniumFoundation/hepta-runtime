@@ -202,10 +202,11 @@ def short_sgd(x, y, center, radius, plan, penalty_center=None, meter=None):
     meter = {} if meter is None else meter
     meter.update(status="INITIALIZING", backward_calls_started=0, backward_calls_completed=0,
                  optimizer_calls_started=0, optimizer_calls_completed=0, completed_steps=0,
-                 step_in_progress=False, budget_seconds=plan["sgd_budget_seconds"])
-    penalty = (center if penalty_center is None else penalty_center).detach()
-    center, x, y = center.detach(), x.detach(), y.detach()
+                 step_in_progress=False, budget_seconds=plan["sgd_budget_seconds"],
+                 completed_counts_are_lower_bounds=False, incomplete_step_effects_unknown=False)
     try:
+        penalty = (center if penalty_center is None else penalty_center).detach()
+        center, x, y = center.detach(), x.detach(), y.detach()
         with torch.enable_grad():
             theta = center.detach().float().clone().requires_grad_(True)
             design = torch.cat((x.float(), torch.ones((len(x), 1))), 1)
@@ -237,8 +238,12 @@ def short_sgd(x, y, center, radius, plan, penalty_center=None, meter=None):
             result = theta.detach().clone()
         meter["status"] = "COMPLETED"
         return result, steps, time.monotonic() - started, learning_rate
-    except Exception:
-        meter["status"] = "FAILED"
+    except BaseException as exc:
+        # A call may have changed parameters before an interrupt reaches Python
+        # and before its completed counter is recorded. Never guess that effect.
+        meter.update(status="FAILED" if isinstance(exc, Exception) else "INTERRUPTED",
+                     completed_counts_are_lower_bounds=True,
+                     incomplete_step_effects_unknown=meter["step_in_progress"])
         raise
     finally:
         meter.update(wall_seconds=time.monotonic() - started,
@@ -253,8 +258,8 @@ def _initialize_optimizer_runtime(meter):
     try:
         torch.optim.SGD([torch.zeros(1, dtype=torch.float32, requires_grad=True)], lr=1.)
         meter["status"] = "COMPLETED"
-    except Exception:
-        meter["status"] = "FAILED"
+    except BaseException as exc:
+        meter["status"] = "FAILED" if isinstance(exc, Exception) else "INTERRUPTED"
         raise
     finally:
         meter.update(wall_seconds=time.monotonic() - started,
@@ -434,19 +439,23 @@ def compare(representations, labels_usd, parent_state, rows, plan, output_root, 
             "automatic_replay_allowed": False}) + b"\n")
         store = ArtifactStore(root / "artifacts")
         return execute()
-    except Exception as exc:
+    except BaseException as exc:
         error = exc.as_dict() if isinstance(exc, WeightError) else {
             "code": "SIGNAL_DIAGNOSTIC_FAILED", "message": str(exc)[:2048],
             "exception_type": type(exc).__name__}
         failure = {"schema": "hepta.weight.current100k.signal-failure.v1",
                    "plan_sha256": digest(plan), "input_lineage": lineage,
                    "error": error, "completed": False, "automatic_replay_allowed": False,
+                   "status": "failed" if isinstance(exc, Exception) else "interrupted",
+                   "retained_progress_is_lower_bound": True,
+                   "incomplete_sgd_step_effects_unknown": any(
+                       item.get("step_in_progress", False) for item in progress["sgd_attempts"]),
                    **progress, "wall_seconds": time.monotonic() - start,
                    "process_cpu_seconds": time.process_time() - cpu_start,
                    "cost_scope": "Complete diagnostic after validation, including startup and failed attempt; nested times are included"}
         try:
             atomic_create(root / "failure.json", canonical(failure) + b"\n")
-        except Exception as retention_error:
+        except BaseException as retention_error:
             # Full disks and other retention failures must not hide the actual
             # numerical or optimizer failure that ended the experiment.
             if hasattr(exc, "add_note"):
@@ -490,3 +499,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

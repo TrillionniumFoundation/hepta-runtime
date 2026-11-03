@@ -628,7 +628,14 @@ def _cost_scopes(unique, inclusive):
 
 
 def _inclusive_cost_totals(unique, parents, ancestors):
-    """Keep the outermost measured scope per metric, retaining unknown roots."""
+    """Keep operation sums separate from conservative unknown-root bounds.
+
+    Ancestry establishes containment, not disjoint sibling measurements. Parallel
+    wall timers can overlap; CPU/GPU counters or work counts can also cover shared
+    work unless a separate attribution contract proves otherwise. The largest
+    known descendant is a lower bound for an unmeasured inclusive root. Adding
+    its siblings is only a sum of submitted measurements.
+    """
     roots = sorted(k for k, parent in parents.items() if parent is None)
     answer = {"operation_count": len(unique),
               "status_counts": dict(Counter(x["status"] for x in unique.values()))}
@@ -647,6 +654,24 @@ def _inclusive_cost_totals(unique, parents, ancestors):
             aggregate = max(values) if key == "peak_rss_bytes" else (
                 sum(values) if key in COUNTS else math.fsum(values))
         unknown_roots = [k for k in roots if unique[k]["metrics"][key] is None]
+        selected_by_root = defaultdict(list)
+        for identity in selected:
+            root = ancestors[identity][-1] if ancestors[identity] else identity
+            selected_by_root[root].append(identity)
+        root_bounds = {}
+        for root in roots:
+            candidates = selected_by_root[root]
+            value = max((unique[k]["metrics"][key] for k in candidates), default=None)
+            root_bounds[root] = {
+                "value": value,
+                "basis": ("measured_inclusive_root" if unique[root]["metrics"][key] is not None else
+                          "largest_measured_descendant" if candidates else "unmeasured"),
+                "supporting_operation_ids": sorted(
+                    k for k in candidates if unique[k]["metrics"][key] == value)}
+        bounds = [item["value"] for item in root_bounds.values() if item["value"] is not None]
+        lower_bound = (max(bounds) if key == "peak_rss_bytes" else
+                       sum(bounds) if key in COUNTS else math.fsum(bounds)) if bounds else None
+        ambiguous_siblings = any(len(selected_by_root[root]) > 1 for root in unknown_roots)
         missing = sum(record["metrics"][key] is None for record in unique.values())
         answer[key] = {
             "value": aggregate,
@@ -656,7 +681,15 @@ def _inclusive_cost_totals(unique, parents, ancestors):
             "known_operation_count": len(unique) - missing, "missing_operation_count": missing,
             "complete": bool(roots) and not unknown_roots,
             "scope": "DECLARED_OPERATIONS_ONLY; NOT_END_TO_END_OR_COMPLETE_EXPERIMENT",
-            "known_subscope_lower_bound_only": bool(values) and bool(unknown_roots)}
+            "selected_sibling_scopes_may_overlap": ambiguous_siblings,
+            "known_subscope_lower_bound_only": bool(values) and bool(unknown_roots) and
+                (key == "peak_rss_bytes" or not ambiguous_siblings),
+            "conservative_root_scope_lower_bound": {
+                "value": lower_bound,
+                "aggregation": ("maximum_of_root_scope_lower_bounds" if key == "peak_rss_bytes"
+                                else "sum_of_root_scope_lower_bounds"),
+                "root_components": root_bounds,
+                "scope": "DECLARED_ROOT_METRICS_ONLY; NOT_END_TO_END_ELAPSED_OR_COMPLETE_EXPERIMENT"}}
     return answer
 
 
@@ -829,3 +862,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

@@ -607,6 +607,85 @@ class CostTests(unittest.TestCase):
         self.assertTrue(wall["known_subscope_lower_bound_only"])
         self.assertFalse(wall["complete"])
         self.assertEqual(cpu["selected_operation_ids"], ["inner"])
+        self.assertFalse(wall["selected_sibling_scopes_may_overlap"])
+        self.assertEqual(wall["conservative_root_scope_lower_bound"]["value"], 2.)
+
+    def test_overlapping_siblings_are_not_an_unknown_parent_lower_bound(self):
+        outer = inclusive_record("run", stage="other")
+        outer["metrics"] = dict.fromkeys(H.METRICS)
+        first = inclusive_record("parallel-a", parent="run")
+        second = inclusive_record("parallel-b", parent="run", status="failed")
+        for item in (first, second):
+            item["metrics"].update(wall_seconds=8., cpu_seconds=6., forward_examples=10)
+        result = H.summarize_costs([outer, first, second], inclusive=True)
+        for key, summed, bound in (("wall_seconds", 16., 8.), ("cpu_seconds", 12., 6.),
+                                   ("forward_examples", 20, 10)):
+            with self.subTest(metric=key):
+                total = result["totals"][key]
+                self.assertEqual(total["value"], summed)
+                self.assertFalse(total["complete"])
+                self.assertFalse(total["known_subscope_lower_bound_only"])
+                self.assertTrue(total["selected_sibling_scopes_may_overlap"])
+                conservative = total["conservative_root_scope_lower_bound"]
+                self.assertEqual(conservative["value"], bound)
+                self.assertEqual(conservative["root_components"]["run"]["basis"],
+                                 "largest_measured_descendant")
+                self.assertEqual(conservative["root_components"]["run"]["supporting_operation_ids"],
+                                 ["parallel-a", "parallel-b"])
+        self.assertEqual(result["totals"]["status_counts"], {"completed": 2, "failed": 1})
+        self.assertIsNone(result["end_to_end_wall_seconds"])
+        # Parallel wall timers may be fully overlapping. The same valid graph
+        # can later provide an inclusive 8-second root, so 16 was not its bound.
+        # A known CPU root has its own counter value, independent of wall time.
+        outer["metrics"].update(wall_seconds=8., cpu_seconds=12., forward_examples=20)
+        complete = H.summarize_costs([outer, first, second], inclusive=True)
+        for key, value in (("wall_seconds", 8.), ("cpu_seconds", 12.), ("forward_examples", 20)):
+            total = complete["totals"][key]
+            self.assertEqual(total["value"], value)
+            self.assertTrue(total["complete"])
+            self.assertFalse(total["known_subscope_lower_bound_only"])
+            self.assertEqual(total["conservative_root_scope_lower_bound"]["value"], value)
+
+    def test_root_bounds_are_metric_specific_and_preserve_unmeasured_roots(self):
+        known = inclusive_record("known", stage="other")
+        known["metrics"].update(wall_seconds=10., cpu_seconds=None)
+        partial = inclusive_record("partial", stage="other")
+        partial["metrics"] = dict.fromkeys(H.METRICS)
+        partial["metrics"]["cpu_seconds"] = 20.
+        first = inclusive_record("first", parent="partial")
+        second = inclusive_record("second", parent="partial")
+        first["metrics"].update(wall_seconds=8., cpu_seconds=6.)
+        second["metrics"].update(wall_seconds=7., cpu_seconds=5.)
+        result = H.summarize_costs([known, partial, first, second], inclusive=True)
+        wall = result["totals"]["wall_seconds"]
+        self.assertEqual(wall["value"], 25.)
+        self.assertEqual(wall["conservative_root_scope_lower_bound"]["value"], 18.)
+        self.assertFalse(wall["known_subscope_lower_bound_only"])
+        cpu = result["totals"]["cpu_seconds"]
+        self.assertEqual(cpu["value"], 20.)
+        self.assertEqual(cpu["selected_operation_ids"], ["partial"])
+        self.assertEqual(cpu["conservative_root_scope_lower_bound"]["value"], 20.)
+        self.assertIsNone(cpu["conservative_root_scope_lower_bound"]["root_components"]["known"]["value"])
+        self.assertEqual(cpu["conservative_root_scope_lower_bound"]["root_components"]["known"]["basis"],
+                         "unmeasured")
+        self.assertFalse(cpu["complete"])
+        self.assertIsNone(result["totals"]["gpu_seconds"]["conservative_root_scope_lower_bound"]["value"])
+
+    def test_peak_memory_bound_uses_maximum_even_for_unknown_sibling_overlap(self):
+        outer = inclusive_record("run", stage="other")
+        outer["metrics"] = dict.fromkeys(H.METRICS)
+        first = inclusive_record("first", parent="run")
+        second = inclusive_record("second", parent="run")
+        first["metrics"]["peak_rss_bytes"] = 100
+        second["metrics"]["peak_rss_bytes"] = 200
+        peak = H.summarize_costs([outer, first, second], inclusive=True)["totals"]["peak_rss_bytes"]
+        self.assertEqual(peak["value"], 200)
+        self.assertTrue(peak["known_subscope_lower_bound_only"])
+        self.assertTrue(peak["selected_sibling_scopes_may_overlap"])
+        conservative = peak["conservative_root_scope_lower_bound"]
+        self.assertEqual(conservative["value"], 200)
+        self.assertEqual(conservative["aggregation"], "maximum_of_root_scope_lower_bounds")
+        self.assertEqual(conservative["root_components"]["run"]["supporting_operation_ids"], ["second"])
 
     def test_parent_graph_cycles_unknown_parents_and_invalid_inclusive_values_fail(self):
         for kind in ("cycle", "unknown", "self", "smaller_parent", "wrong_identity"):
@@ -664,3 +743,4 @@ class CostTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

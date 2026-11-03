@@ -1,16 +1,17 @@
 # Current100k future-window readback: 2026-11-03
 
-The independently registered eleven-head family is running on Pocket4. A natural
-eligible request has now produced its first shared-feature publication with fresh
-head and durability timestamps. The latest retained new-family strict readback,
-as of **12:07:46.088 EST**, records **two original opening commands and two
-observed results**. The earlier **11:26:51.575 EST** readback recorded its first
-command and observed result. The source-study readback at **11:27:37.798 EST** records ten
-commands and six observed results, retaining its three previously proven
-permanent misses. This closes the earlier
-uncertainty about service activation and first live cross-plan publication, and
-the new trade population is no longer empty. Two observed results do not
-establish future predictive benefit, completed coverage, or final eligibility.
+The independently registered eleven-head family is running on Pocket4. The
+latest retained strict assessment at **12:55:59.023 EST** records **six original
+commands: five OBSERVED, one PENDING and zero CENSORED**. A later bounded ledger
+capture verifies all six commands' pre-opening publications, fresh head clocks
+and eleven-head membership. The permanent unresolved lower bound is zero;
+comparison eligibility remains `UNKNOWN`, not a positive result.
+
+The source assessment at **12:56:36.958 EST** records fifteen original commands:
+ten OBSERVED, two PENDING and three CENSORED. Its earlier independently verified
+permanent pre-opening misses remain. Earlier snapshots and first-publication
+evidence are retained below; none establishes completed future coverage or
+predictive benefit.
 
 ## Fixed registration and service state
 
@@ -228,3 +229,66 @@ time. The audit changes no accounting owner or live training rule.
 - [Shared-feature contract and deployment](https://github.com/TrillionniumFoundation/heptatrader/blob/2be59f99272fd8c24f5cd2033817c87ce3de924a/docs/technical/current100k-shared-features-20261103.md)
 - [Strict original-source review](https://github.com/TrillionniumFoundation/heptatrader/blob/2be59f99272fd8c24f5cd2033817c87ce3de924a/docs/technical/current100k-weight-strict-review-20261103.md)
 - [Earlier engineering closure and preserved limits](BLOCKER_CLOSURE_20261103.md)
+
+## Bounded follow-up readback at 12:56 EST
+
+The aggregate inspection ran from **17:56:44.809 to 17:56:44.850 UTC** on
+November 3 (**12:56:44 EST**). Every live status has its own as-of time. This is
+not an atomic snapshot across services.
+
+| Observation | Result |
+| --- | --- |
+| New strict assessment as of | 17:55:59.023 UTC / 12:55:59.023 EST |
+| New original commands | 6: 5 OBSERVED, 1 PENDING, 0 CENSORED |
+| Strict replay | Complete; no source issues; replay not skipped |
+| Permanent unresolved lower bound | 0; formal success remains null |
+| Original-command bindings | 6/6 PREOPEN_BOUND_RESEARCH, each before its own command |
+| Durable-publication lead before command | 2,367–8,708 ms |
+| New head computation after source feature computation | 85–375 ms |
+| Research requests / terminals | 26 / 26 |
+| Request terminals | 16 sealed awaiting original command; 10 expired without backdating |
+| Nontrade requests / collector incidents | 20 / 0 |
+| Research-service broker orders / selected candidates | 0 / 0 |
+
+The strict `prediction_coverage` field is **5/6** because it counts OBSERVED
+outcomes. It does not mean that only five commands had pre-opening predictions;
+the independently inspected ledger verifies all six bindings. The sixth outcome
+remains pending. The observed population occupies one time block and the first
+half only (`[5, 0])); the original sample, block and half requirements stay open.
+
+The ten expired nontrade requests remain in the request denominator. A separate
+bounded inspection found ten wait receipts, all with
+`WAIT_ORIGINAL_SUCCESSFUL_SHARED_FEATURES`. This remains a source-availability
+diagnostic and is not reclassified as ten missing predictions for opened trades.
+The wait inspector's job creation time is 17:58:24.406 UTC, explicitly not a
+per-file observation timestamp.
+
+Both new workbench services and both original-study services were enabled,
+active and running, each with zero systemd restarts. The new supervisor had no
+child exits. The source supervisor retained a normal predictor exit with code
+zero and showed its replacement running; systemd restart counts and child
+histories are different observations. No service was restarted by this audit.
+
+All eight plan, registration, activation and predictor-configuration hashes
+matched before and after inspection. The four declared source pins matched.
+The source's deployed legacy assessment does not expose the newer eligibility
+field. The earlier `IRRECOVERABLY_INELIGIBLE` determination and its failure
+proofs are preserved; this readback is not a new negative-proof recomputation.
+
+| Retained evidence | SHA-256 |
+| --- | --- |
+| Aggregate readback | `a7561a23bc95d281676b00e9ea2b1b205ae19d4a6e4d11e631a341052b9afca6` |
+| Expired-request wait-reason aggregate | `3e746d295118214b1b9ad3b4ccae84e43a5842af8a0190face1e2079ae9be11c` |
+| New strict assessment | `07ccfc390ef9a73ae5a85221abb5d7db25da3b274066ca40f98751acb0ba61b1` |
+| New evaluator status | `449c4e859c9b142aa2c9eaf512736a3f30a5c39a1688184c56e018539cf32e5f` |
+| New supervisor | `b31fe254ccaf6f3f418a2da38393a03ecb1ad8b6177ac62fb634ad36fbd94e0a` |
+| Source strict assessment | `0e3296a39e10051f9f63da41f6b33049120abe73e8661df55e12aeb685a438b4` |
+
+The actual source-end guarded handoff remains future work. The source input
+window ends **November 17, 06:30:53.494 EST**. The new family's input end remains
+**November 17, 10:49:25.673 EST**, followed by its settlement deadline on
+**November 18, 10:49:25.673 EST**. These fixed dates were not rescheduled.
+Six valid bindings and passing hook tests do not establish the later handoff.
+
+The [public follow-up evidence summary](evidence/NEXT_EXPERIMENTS_FOLLOWUP_20261103.json)
+retains these aggregate facts without private requests, labels or weights.

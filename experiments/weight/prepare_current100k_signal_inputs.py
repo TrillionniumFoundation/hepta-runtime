@@ -168,16 +168,20 @@ def reward_matches(row, ledger, as_of_ms):
     return None
 
 
-def label_proofs(rows, events, period, accounting, checkpoints, capture_ms):
+def label_proofs(rows, events, period, accounting, checkpoints, capture_ms, *, retained_attempts=None):
     """Keep the source event-cutoff semantics, including malformed future clocks."""
-    proofs = []
+    proofs = [] if retained_attempts is None else retained_attempts
     for as_of in checkpoints:
-        # Match resident_rewards.current(event_cutoff_ms=...). Malformed records
-        # and timestamps beyond the observed capture are not silently filtered.
-        retained = [e for e in events if not (type(e.get("ts_ms")) is int and as_of < e["ts_ms"] <= capture_ms)]
         attempt = {"as_of_ms": as_of, "basis": "ORIGINAL_OMS_EVENT_TS_MS",
-                   "retained_events": len(retained), "excluded_events": len(events) - len(retained)}
+                   "status": "REPLAY_STARTED"}
+        # Publish progress into the caller's retained list before starting work;
+        # an interrupted later replay must not erase earlier completed evidence.
+        proofs.append(attempt)
         try:
+            # Match resident_rewards.current(event_cutoff_ms=...). Malformed records
+            # and timestamps beyond the observed capture are not silently filtered.
+            retained = [e for e in events if not (type(e.get("ts_ms")) is int and as_of < e["ts_ms"] <= capture_ms)]
+            attempt.update(retained_events=len(retained), excluded_events=len(events) - len(retained))
             ledger = accounting.replay(retained, period, "EUR.USD", as_of)
             reasons = [reward_matches(row, ledger, as_of) for row in rows]
             attempt.update(status="REPLAY_COMPLETED", row_reasons=reasons,
@@ -185,7 +189,11 @@ def label_proofs(rows, events, period, accounting, checkpoints, capture_ms):
         except Exception as exc:
             attempt.update(status="REPLAY_FAILED", error_type=type(exc).__name__, error=str(exc)[:1000],
                            row_reasons=["ORIGINAL_ACCOUNTING_REPLAY_FAILED"] * len(rows), verified_rows=0)
-        proofs.append(attempt)
+        except BaseException as exc:
+            attempt.update(status="REPLAY_INTERRUPTED", error_type=type(exc).__name__, error=str(exc)[:1000],
+                           row_reasons=["ORIGINAL_ACCOUNTING_REPLAY_INTERRUPTED"] * len(rows),
+                           verified_rows=0, partial_work_unknown=True)
+            raise
     return proofs
 
 
@@ -198,7 +206,6 @@ def prepare(request, output_root, *, request_pin=None):
     root = Path(output_root)
     root.mkdir(parents=True, exist_ok=False, mode=0o700)
     started, cpu_started = time.monotonic(), time.process_time()
-    atomic_create(root / "request.json", canonical(request) + b"\n")
     pins, progress = [], {"layer_rows_checked": 0, "accounting_replays": []}
 
     def read(pin, maximum=64 * 1024 * 1024):
@@ -207,6 +214,7 @@ def prepare(request, output_root, *, request_pin=None):
         return raw
 
     try:
+        atomic_create(root / "request.json", canonical(request) + b"\n")
         if request_pin is not None:
             need(loads(read(request_pin, 4 * 1024 * 1024)) == request,
                  "INPUT_CHANGED", "Pinned request differs from admitted request")
@@ -286,8 +294,8 @@ def prepare(request, output_root, *, request_pin=None):
         events = [loads(line) for line in oms.splitlines()]
         need(all(isinstance(event, dict) for event in events), "OMS_CAPTURE", "Original OMS object records required")
         checkpoints = [value - 1 for value in boundaries] + [cutoff]
-        proofs = label_proofs(rows, events, period, accounting, checkpoints, request["oms_captured_at_ms"])
-        progress["accounting_replays"] = proofs
+        proofs = label_proofs(rows, events, period, accounting, checkpoints, request["oms_captured_at_ms"],
+                             retained_attempts=progress["accounting_replays"])
         atomic_create(root / "label-availability.json", canonical({"label_time_basis": TIME_BASIS,
             "accounting_module_sha256": request["accounting_module"]["sha256"],
             "oms_capture_sha256": request["oms_capture"]["sha256"], "checkpoints": proofs}) + b"\n")
@@ -329,12 +337,19 @@ def prepare(request, output_root, *, request_pin=None):
                   "prospective_evidence": False, "trade_authority": False}
         atomic_create(root / "ready.json", canonical(result) + b"\n")
         return result
-    except Exception as exc:
+    except BaseException as exc:
         error = exc.as_dict() if isinstance(exc, WeightError) else {"code": type(exc).__name__, "message": str(exc)[:1000]}
-        atomic_create(root / "failure.json", canonical({"error": error, "progress": progress,
+        failure = {"error": error, "progress": progress,
+            "status": "failed" if isinstance(exc, Exception) else "interrupted",
+            "retained_progress_is_lower_bound": True,
             "request_sha256": digest(request), "wall_seconds": time.monotonic() - started,
             "process_cpu_seconds": time.process_time() - cpu_started,
-            "automatic_replay_allowed": False, "ready": False}) + b"\n")
+            "automatic_replay_allowed": False, "ready": False}
+        try:
+            atomic_create(root / "failure.json", canonical(failure) + b"\n")
+        except BaseException as retention_error:
+            if hasattr(exc, "add_note"):
+                exc.add_note("Failure receipt could not be retained: " + str(retention_error)[:512])
         raise
 
 
@@ -357,3 +372,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
