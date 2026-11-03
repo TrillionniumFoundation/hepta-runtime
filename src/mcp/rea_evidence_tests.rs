@@ -340,12 +340,15 @@ fn real_npm_rejected_schema_matrix_is_independently_rejected_by_rust() {
 	let bytes = std::fs::read(path).expect("read authentic npm schema-negatives");
 	let parsed: UniqueJson = serde_json::from_slice(&bytes).expect("unique-key negative JSON");
 	let cases = parsed.0["cases"].as_array().expect("schema-negative cases");
-	assert_eq!(cases.len(), 20, "all upstream Zod-negative variants required");
+	assert_eq!(
+		cases.len(),
+		20,
+		"all upstream Zod-negative variants required"
+	);
 	for test in cases {
 		let label = test["label"].as_str().expect("negative label");
 		assert_eq!(
-			test["authenticatedHashButRejectedSchema"],
-			true,
+			test["authenticatedHashButRejectedSchema"], true,
 			"upstream negative {label} must have a recomputed hash"
 		);
 		let record = &test["record"];
