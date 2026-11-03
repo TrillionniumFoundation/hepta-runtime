@@ -1,0 +1,109 @@
+name: REA P3 pinned real Ghidra headless reference
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feature/rea-native-foundation-*'
+    paths:
+      - '.github/workflows/rea-ghidra-real.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rea-ghidra-reference-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-ghidra-reference:
+    name: Real Ghidra 12.2 headless Linux source observation, not REA parity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact development head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install required Java 25 for frozen Ghidra release
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Download pinned official Ghidra 12.2 and verify exact SHA-256
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/rea-real-ghidra"
+          mkdir -p "$evidence/scripts" "$evidence/projects" "$RUNNER_TEMP/ghidra-distribution"
+          java -version 2> "$evidence/java-version.txt"
+          release="https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.2_build/ghidra_12.2_PUBLIC_20261016.zip"
+          curl --fail --location --retry 3 --retry-delay 3 \
+            --output "$RUNNER_TEMP/ghidra-release.zip" "$release"
+          echo "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67  $RUNNER_TEMP/ghidra-release.zip" \
+            | sha256sum --check | tee "$evidence/release-checksum.txt"
+          unzip -q "$RUNNER_TEMP/ghidra-release.zip" -d "$RUNNER_TEMP/ghidra-distribution"
+          find "$RUNNER_TEMP/ghidra-distribution" -type f -name analyzeHeadless \
+            | tee "$evidence/analyzer-path.txt"
+          test "$(wc -l < "$evidence/analyzer-path.txt")" -eq 1
+          sha256sum /usr/bin/true | tee "$evidence/subject-sha256.txt"
+          file /usr/bin/true | tee "$evidence/subject-file-type.txt"
+
+      - name: Real Ghidra headless ELF analysis and independent Java observation
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/rea-real-ghidra"
+          analyze="$(cat "$evidence/analyzer-path.txt")"
+          chmod +x "$analyze"
+          cat > "$evidence/scripts/ReaCIInspect.java" <<'JAVA'
+          // Only a Ghidra reference probe. No Rust Adapter or REA tool parity.
+          import ghidra.app.script.GhidraScript;
+          import java.nio.file.Files;
+          import java.nio.file.Path;
+          public class ReaCIInspect extends GhidraScript {
+              @Override
+              public void run() throws Exception {
+                  if (currentProgram == null) {
+                      throw new IllegalStateException("No analyzed program");
+                  }
+                  int functions = currentProgram.getFunctionManager().getFunctionCount();
+                  String format = currentProgram.getExecutableFormat();
+                  if (functions < 1 || format == null || !format.contains("ELF")) {
+                      throw new IllegalStateException("Missing real ELF analysis facts");
+                  }
+                  Path output = Path.of(getScriptArgs()[0]);
+                  String observation =
+                      "provider=Ghidra_12.2_build\n" +
+                      "format=" + format + "\n" +
+                      "functions=" + functions + "\n" +
+                      "name=" + currentProgram.getName() + "\n";
+                  Files.writeString(output, observation);
+                  println("REA_P3_GHIDRA_REFERENCE_COMPLETED " + functions);
+              }
+          }
+          JAVA
+          timeout --signal=TERM --kill-after=5s 180s \
+            "$analyze" "$evidence/projects" REA-Ghidra-CI \
+            -import /usr/bin/true \
+            -analysisTimeoutPerFile 90 \
+            -scriptPath "$evidence/scripts" \
+            -postScript ReaCIInspect.java "$evidence/analysis-observation.txt" \
+            -deleteProject > "$evidence/analysis-headless.log" 2>&1
+          cat "$evidence/analysis-observation.txt"
+          test -s "$evidence/analysis-observation.txt"
+          grep -q '^provider=Ghidra_12.2_build$' "$evidence/analysis-observation.txt"
+          grep -q '^functions=[1-9][0-9]*$' "$evidence/analysis-observation.txt"
+          grep -q 'REA_P3_GHIDRA_REFERENCE_COMPLETED' "$evidence/analysis-headless.log"
+          # Headless deleted its temporary project; no claim of real provider
+          # session cancellation, reconnect or secure multi-host sandboxing.
+          find "$evidence/projects" -maxdepth 2 -print > "$evidence/remaining-project-paths.txt"
+
+      - name: Preserve exact source, provider, observation and failure logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-ghidra-reference-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/rea-real-ghidra/
+          if-no-files-found: warn
+          retention-days: 14
