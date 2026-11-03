@@ -129,8 +129,14 @@ class Session:
         self._active()
         import torch
         from .hooks import install_hooks
+        need(not (self.provider.task_kind == "regression" and "softmax_output" in params),
+             "TASK_SEMANTICS", "Regression values cannot be converted to class probabilities")
+        need(type(params.get("bypass_feature_cache", False)) is bool,
+             "INVALID_ARGUMENT", "bypass_feature_cache must be boolean")
+        prepare_started = time.monotonic()
         inputs = params["inputs"]
         args, kwargs, meta = self.provider.prepare_inputs(inputs)
+        prepare_seconds = time.monotonic() - prepare_started
         examples = integer(meta["examples"], "examples", 1, self.limits["max_forward_examples"])
         need(self.forward_examples + examples <= self.limits["max_forward_examples"], "FORWARD_BUDGET", "Forward example budget exhausted")
         interventions = params.get("interventions", [])
@@ -144,6 +150,8 @@ class Session:
         with ExitStack() as stack:
             stack.enter_context(torch.inference_mode())
             stack.enter_context(self.provider.temporary_patch(replacements))
+            stack.enter_context(self.provider.probe_context(replacements, params.get("captures", []), interventions,
+                                                           params.get("bypass_feature_cache", False)))
             install_hooks(self.provider, self.store, params.get("captures", []), interventions,
                           captured, stack, self.limits["max_capture_elements"])
             model_started = time.monotonic()
@@ -161,6 +169,10 @@ class Session:
                 "input": meta}) if captured else None
         need(all(p.grad is None for p in self.provider.module.parameters()), "GRADIENT_STATE", "Unexpected gradient storage")
         record = {"input": meta, "input_spec": inputs, "patch_id": params.get("patch_id"), "outputs": output_ref,
+                  "task_kind": self.provider.task_kind,
+                  "computation": dict(self.provider.last_probe_metrics),
+                  "input_prepare_seconds": prepare_seconds,
+                  "bypass_feature_cache": params.get("bypass_feature_cache", False),
                   "activations": capture_ref, "captures": params.get("captures", []), "interventions": interventions,
                   "forward_seconds": time.monotonic() - started, "forward_examples": examples,
                   "model_forward_seconds": model_seconds,
@@ -169,6 +181,8 @@ class Session:
                   "mode": "DEVELOPMENT_OBSERVATION", "is_prospective_evaluation": False}
         evidence = self._evidence("intervention" if intervention else "probe", record)
         return {"evidence": evidence, "input": meta, "outputs": output_ref, "activations": capture_ref,
+                "task_kind": self.provider.task_kind, "computation": record["computation"],
+                "input_prepare_seconds": prepare_seconds,
                 "forward_seconds": record["forward_seconds"], "model_forward_seconds": model_seconds,
                 "total_forward_examples": self.forward_examples}
 
