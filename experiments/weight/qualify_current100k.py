@@ -9,7 +9,7 @@ Source files are read-only; a new output directory retains immutable receipts.
 import argparse
 import hashlib
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import resource
 import sys
 import time
@@ -21,6 +21,7 @@ from weight_runtime.artifacts import atomic_create, file_sha256
 from weight_runtime.current100k import CONTRACT, FEATURE_WIDTH, SCALE_USD, validate_rows
 from weight_runtime.errors import WeightError, canonical, checksum, digest, integer, loads, need
 from weight_runtime.patches import tensor_sha256
+from weight_runtime.providers import source_tree_identity
 from weight_runtime.session import Session
 
 
@@ -44,6 +45,28 @@ def pinned_bytes(path, expected, maximum):
     need(hashlib.sha256(content).hexdigest() == expected,
          "IDENTITY_MISMATCH", "Pinned input SHA256 differs", path=str(source))
     return source, content
+
+
+def base_manifest_pins(base_root, content):
+    """Retain the installed manifest's exact file bindings for one final audit."""
+    manifest = loads(content)
+    need(isinstance(manifest, dict) and manifest.get("schema") == "heptatrader.laya-base.v1"
+         and isinstance(manifest.get("files"), dict) and 1 <= len(manifest["files"]) <= 4096,
+         "INVALID_MODEL", "Expected the pinned Laya base manifest file inventory")
+    pins = {}
+    for name, binding in manifest["files"].items():
+        need(isinstance(name, str) and bool(name) and "\\" not in name,
+             "INVALID_MODEL", "Base manifest contains an invalid relative path")
+        relative = PurePosixPath(name)
+        need(not relative.is_absolute() and name == relative.as_posix() and ".." not in relative.parts,
+             "INVALID_MODEL", "Base manifest paths must remain within the admitted base")
+        need(isinstance(binding, dict) and {"sha256", "size"} <= set(binding),
+             "INVALID_MODEL", "Base file bindings need SHA256 and size")
+        path = base_root / name
+        need(path.resolve(strict=True).is_relative_to(base_root) and path.is_file(),
+             "INVALID_PATH", "Pinned base file escaped its admitted root")
+        pins[name] = {"sha256": checksum(binding["sha256"]), "size": integer(binding["size"], "base_file_size")}
+    return pins
 
 
 def reference_features(content, indices, row_count):
@@ -203,26 +226,42 @@ def run(model_config, model_config_sha256, input_rows, input_rows_sha256,
     rows_path, row_bytes = pinned_bytes(input_rows, input_rows_sha256, MAX_JSON_BYTES)
     reference_source, reference_bytes = pinned_bytes(reference_path, reference_sha256, MAX_FEATURE_BYTES)
     config, rows = loads(config_bytes), validate_rows(loads(row_bytes))
-    need(isinstance(config, dict) and all(key in config for key in ("source_dir", "base_dir", "head_path", "head_sha256")),
+    need(isinstance(config, dict) and all(key in config for key in (
+        "source_dir", "source_tree_sha256", "base_dir", "base_manifest_sha256", "head_path", "head_sha256")),
          "INVALID_MODEL", "Expected a Current100k model configuration")
     # Three logical passes must fit the existing worker's hard 160-example cap.
     need(3 * len(rows) <= 160, "EXPERIMENT_BUDGET", "Qualification supports at most 53 frozen rows")
     reference, reference_info = reference_features(reference_bytes, reference_indices, len(rows))
     del reference_bytes
     head_path = Path(config["head_path"]).resolve(strict=True)
+    source_root = Path(config["source_dir"]).resolve(strict=True)
+    base_root = Path(config["base_dir"]).resolve(strict=True)
+    manifest_path = base_root / "base-manifest.json"
+    _, manifest_content = pinned_bytes(manifest_path, config["base_manifest_sha256"], MAX_JSON_BYTES)
+    base_pins = base_manifest_pins(base_root, manifest_content)
+    source_tree_pin = {"path": str(source_root), "sha256": checksum(config["source_tree_sha256"])}
     source_pins = {str(config_path): model_config_sha256, str(rows_path): input_rows_sha256,
-                   str(reference_source): reference_sha256, str(head_path): checksum(config["head_sha256"])}
+                   str(reference_source): reference_sha256, str(head_path): checksum(config["head_sha256"]),
+                   str(manifest_path): checksum(config["base_manifest_sha256"])}
+    base_sizes = {}
+    for name, binding in base_pins.items():
+        path = str(base_root / name)
+        need(path not in source_pins or source_pins[path] == binding["sha256"],
+             "IDENTITY_MISMATCH", "Conflicting input and base file bindings")
+        source_pins[path] = binding["sha256"]
+        base_sizes[path] = binding["size"]
     need(file_sha256(head_path) == config["head_sha256"], "IDENTITY_MISMATCH", "Original head hash differs before load")
     root = Path(output_dir).absolute()
     need(not root.exists() and not root.is_symlink(), "OUTPUT_EXISTS", "Use a new qualification directory; no automatic replay")
     root.mkdir(parents=True, mode=0o700, exist_ok=False)
-    roots = sorted({str(Path(config["source_dir"]).resolve(strict=True)),
-                    str(Path(config["base_dir"]).resolve(strict=True)), str(head_path.parent)})
+    roots = sorted({str(source_root), str(base_root), str(head_path.parent)})
     open_spec = {"provider": "current100k_value", "model": config, "input_roots": roots,
                  "output_root": str(root / "artifacts"), "cpu_threads": cpu_threads,
                  "limits": {"max_forward_examples": 3 * len(rows), "max_patch_candidates": 1}}
     declared = {"schema": SCHEMA, "script_sha256": file_sha256(__file__),
-                "source_pins": source_pins, "reference": reference_info, "rows": len(rows),
+                "source_pins": source_pins, "source_tree_pin": source_tree_pin,
+                "base_root": str(base_root), "base_file_pins": base_pins,
+                "reference": reference_info, "rows": len(rows),
                 "input_rows_digest": digest(rows), "cpu_threads_requested": cpu_threads,
                 "feature_atol": FEATURE_ATOL, "feature_rtol": FEATURE_RTOL,
                 "head_delta_scaled": HEAD_DELTA_SCALED,
@@ -254,17 +293,41 @@ def run(model_config, model_config_sha256, input_rows, input_rows_sha256,
                 failure = {"code": "CLOSE_FAILED", "message": str(exc)[:2048], "prior_failure": failure}
             timings["close"] = {"wall_seconds": time.monotonic() - wall,
                                 "cpu_seconds": time.process_time() - cpu}
-    final_hashes = {}
+    integrity_wall, integrity_cpu = time.monotonic(), time.process_time()
+    final_hashes, final_base_sizes = {}, {}
     for path, expected in source_pins.items():
         try:
+            if path in base_sizes:
+                need(Path(path).resolve(strict=True).is_relative_to(base_root),
+                     "INVALID_PATH", "Base file left its pinned root after execution")
+                final_base_sizes[path] = Path(path).stat().st_size
+                if final_base_sizes[path] != base_sizes[path]:
+                    final_hashes[path] = None
+                    continue
             final_hashes[path] = file_sha256(path)
-        except OSError:
+        except (OSError, WeightError):
             final_hashes[path] = None
-    sources_unchanged = final_hashes == source_pins
+            if path in base_sizes:
+                final_base_sizes[path] = None
+    # The loader verifies the source tree and manifest during admission. Check
+    # them again once, after close, so a later change cannot receive a PASS.
+    try:
+        final_source_tree = source_tree_identity(source_root)
+    except (OSError, WeightError):
+        final_source_tree = None
+    source_tree_unchanged = final_source_tree == source_tree_pin["sha256"]
+    base_files_unchanged = final_base_sizes == base_sizes and all(
+        final_hashes[path] == source_pins[path] for path in base_sizes)
+    sources_unchanged = final_hashes == source_pins and source_tree_unchanged and base_files_unchanged
+    timings["source_integrity"] = {"wall_seconds": time.monotonic() - integrity_wall,
+                                   "cpu_seconds": time.process_time() - integrity_cpu}
     passed = failure is None and details is not None and details["passed"] and sources_unchanged and closed["closed"]
     receipt = {**declared, "status": "PASS_ENGINEERING_PARITY" if passed else "FAIL_ENGINEERING_PARITY",
                "passed": bool(passed), "opened": opened, "checks": details, "failure": failure,
                "source_hashes_after": final_hashes, "source_files_unchanged": sources_unchanged,
+               "source_tree_sha256_after": final_source_tree, "source_tree_unchanged": source_tree_unchanged,
+               "base_file_sizes_after": final_base_sizes, "base_files_unchanged": base_files_unchanged,
+               "source_integrity_scope": "Declared files, complete Python source tree and every pinned base-manifest file; one final audit after close",
                "session_open_calls": 1, "close": closed, "observations": observations,
                "timings": timings, "total_wall_seconds": time.monotonic() - started,
                "total_cpu_seconds": time.process_time() - cpu_started,

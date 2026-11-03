@@ -24,6 +24,8 @@ OUTCOME_SCHEMA = "hepta.weight.current100k-ordered-outcomes.v1"
 HANDOFF_SCHEMA = "hepta.weight.current100k-handoff.v1"
 SOURCE_PLAN_SCHEMA = "heptatrader.current100k-weight-shadow-plan.v1"
 SOURCE_REPORT_SCHEMA = "heptatrader.current100k-weight-shadow-assessment.v1"
+ELIGIBILITY_SCHEMA = "heptatrader.current100k-comparison-eligibility.v1"
+FAILURE_PROOF_SCHEMA = "heptatrader.current100k-permanent-preopen-failure.v1"
 TIME_KEYS = ("registered_at_ms", "input_start_ms", "input_end_ms", "outcome_end_ms")
 METRICS = ("wall_seconds", "cpu_seconds", "gpu_seconds", "forward_examples",
            "generated_tokens", "editor_tokens", "optimizer_steps", "peak_rss_bytes")
@@ -172,6 +174,102 @@ def _metrics(errors):
     for name, value in result.items():
         finite(value, name)
     return result
+
+
+def _comparison_eligibility(plan, assessment, rows):
+    """Verify negative evidence separately from the original schedule/statistics.
+
+    The source verifies the full private input and original ledger binding.
+    Here original negative-terminal and command-reference bytes, identities,
+    clocks and the exact frozen unresolved limit are independently checked.
+    """
+    value = assessment.get("comparison_eligibility")
+    if not isinstance(value, dict) or value.get("schema") != ELIGIBILITY_SCHEMA:
+        return {"status": "UNKNOWN", "formal_success_possible_under_frozen_rule": None,
+                "permanent_unresolved_count_lower_bound": None,
+                "reason": "SOURCE_ELIGIBILITY_NOT_EXPORTED" if value is None else
+                          "UNSUPPORTED_SOURCE_ELIGIBILITY_SCHEMA",
+                "source_state": assessment["state"], "is_final_protocol_report": False,
+                "diagnostic_metrics_preserved": True}
+    require(value.get("eligibility_digest") == source_digest({
+        k: v for k, v in value.items() if k != "eligibility_digest"}), "ELIGIBILITY_DIGEST")
+    require(value.get("plan_id") == plan["plan_id"] and value.get("as_of_ms") == assessment["as_of_ms"]
+            and value.get("outcome_set_digest") == assessment["outcome_set_digest"], "ELIGIBILITY_SOURCE_IDENTITY")
+    require(value.get("source_state") == assessment["state"] and
+            value.get("original_outcome_end_ms") == plan["outcome_end_ms"] and
+            all(value.get(k) is False for k in ("is_final_protocol_report", "original_window_modified", "trade_authority"))
+            and value.get("diagnostic_metrics_preserved") is True, "ELIGIBILITY_CHANGED_PROTOCOL")
+    maximum = integer(plan["rule"].get("maximum_unresolved_at_final"), "maximum_unresolved_at_final")
+    require(integer(value.get("maximum_unresolved_at_final"), "eligibility_unresolved_limit") == maximum,
+            "ELIGIBILITY_RULE_CHANGED")
+    proofs = value.get("failure_proofs")
+    require(isinstance(proofs, list) and len(proofs) <= MAX_ROWS, "ELIGIBILITY_PROOF_LIST")
+    require(assessment["current_replay_complete"] or not proofs, "FAILURE_PROOF_WITHOUT_CURRENT_SOURCE")
+    by_id = {row["command_id"]: row for row in rows}
+    seen = set()
+    terminal_keys = {"schema", "plan_id", "request_id", "request_sha256", "producer_manifest_sha256",
+                     "status", "observed_at_ms", "broker_orders_sent", "old_trial_modified"}
+    for proof in proofs:
+        require(isinstance(proof, dict) and proof.get("schema") == FAILURE_PROOF_SCHEMA,
+                "UNSUPPORTED_PERMANENT_FAILURE_PROOF")
+        require(proof.get("proof_digest") == source_digest({k: v for k, v in proof.items() if k != "proof_digest"}),
+                "PERMANENT_FAILURE_PROOF_DIGEST")
+        command = proof.get("command_id")
+        require(isinstance(command, str) and command in by_id and command not in seen, "FAILURE_COMMAND_POPULATION")
+        seen.add(command)
+        row = by_id[command]
+        request_id = proof.get("request_id")
+        request_sha = checked_hash(proof.get("request_sha256"), "failure_request_sha256")
+        require(row.get("status") == "CENSORED" and isinstance(request_id, str) and request_id
+                and row.get("request_id") == request_id and proof.get("plan_id") == plan["plan_id"],
+                "FAILURE_REQUEST_OR_STATUS")
+        producer = checked_hash(proof.get("producer_manifest_sha256"), "failure_producer")
+        require(producer == plan["producer_registration"]["sha256"], "FAILURE_PRODUCER_CHANGED")
+        terminal = proof.get("terminal_record")
+        require(isinstance(terminal, dict) and set(terminal) == terminal_keys and
+                terminal.get("schema") == "heptatrader.preopen-request-terminal.v1" and
+                terminal.get("status") == "NO_PREDICTION_BEFORE_ORIGINAL_COMMAND" and
+                terminal.get("old_trial_modified") is False and
+                integer(terminal.get("broker_orders_sent"), "failure_broker_orders") == 0,
+                "ORIGINAL_NEGATIVE_TERMINAL_REQUIRED")
+        require(all(terminal.get(k) == expected for k, expected in (
+            ("plan_id", plan["plan_id"]), ("request_id", request_id), ("request_sha256", request_sha),
+            ("producer_manifest_sha256", producer))), "FAILURE_TERMINAL_IDENTITY")
+        require(file_digest(terminal) == checked_hash(proof.get("terminal_sha256"), "negative_terminal_sha256"),
+                "ORIGINAL_NEGATIVE_TERMINAL_BYTES_CHANGED")
+        original = {"command_id": command, "request_id": request_id, "request_sha256": request_sha}
+        require(proof.get("original_command_record") == original and file_digest(original) ==
+                checked_hash(proof.get("original_command_sha256"), "original_command_sha256"),
+                "FAILURE_ORIGINAL_COMMAND_BINDING")
+        for key in ("binding_sha256", "source_binding_digest", "input_record_sha256", "protocol_sha256"):
+            checked_hash(proof.get(key), "failure_" + key)
+        require(proof.get("binding_status") == "MISSING_OR_LATE_NO_CREDIT" and
+                proof.get("before_original_command") is False and proof.get("binding_verified_by_source") is True,
+                "FAILURE_BINDING_NOT_VERIFIED")
+        started = integer(proof.get("request_started_at_ms"), "failure_request_clock", 1)
+        prepared = integer(proof.get("command_prepared_at_ms"), "failure_prepared_clock", 1)
+        terminal_at = integer(terminal.get("observed_at_ms"), "failure_terminal_clock", 1)
+        bound = integer(proof.get("binding_observed_at_ms"), "failure_binding_clock", 1)
+        verified = integer(proof.get("verified_at_ms"), "failure_verified_clock", 1)
+        require(plan["input_start_ms"] <= started < plan["input_end_ms"] and
+                started <= prepared <= terminal_at <= bound <= verified <= assessment["as_of_ms"] and
+                row.get("opened_at_ms") == prepared, "FAILURE_ORIGINAL_CLOCK_ORDER")
+    count = integer(value.get("permanent_unresolved_count_lower_bound"), "permanent_unresolved_count")
+    require(count == len(proofs), "FAILURE_COUNT_CHANGED")
+    blocked = count > maximum
+    require(value.get("status") == ("IRRECOVERABLY_INELIGIBLE" if blocked else "UNKNOWN") and
+            value.get("formal_success_possible_under_frozen_rule") is (False if blocked else None),
+            "ELIGIBILITY_UNSUPPORTED_CONCLUSION")
+    require(not blocked or assessment["state"] != "FINAL_RESEARCH_COMPARISON",
+            "PERMANENT_FAILURE_WITH_FINAL_COMPARISON")
+    expected_reason = ("IMMUTABLE_MISSED_PREOPEN_EXCEEDS_FROZEN_UNRESOLVED_LIMIT" if blocked else
+                       "NO_VERIFIED_IRREVERSIBLE_BLOCKER" if assessment["current_replay_complete"] else
+                       "CURRENT_SOURCE_UNAVAILABLE")
+    require(value.get("reason") == expected_reason and isinstance(value.get("evidence_errors"), list),
+            "ELIGIBILITY_REASON_OR_ERRORS")
+    return dict(value, negative_terminal_bytes_verified=bool(proofs),
+                original_command_reference_bytes_verified=bool(proofs),
+                full_private_binding_verified_by="original_strict_source_evaluator" if proofs else None)
 
 
 def import_assessment(plan_snapshot, provenance, assessment, outcomes, *,
@@ -324,6 +422,7 @@ def import_assessment(plan_snapshot, provenance, assessment, outcomes, *,
                 "UNKNOWN_SOURCE_TOTALS_FABRICATED")
         _same_number(assessment.get("prediction_coverage"), 0., "withdrawn_coverage")
     references = sorted(set(heads) | {"BENCHMARK_ZERO", "BENCHMARK_TRAIN_MEAN"})
+    eligibility = _comparison_eligibility(plan, assessment, rows)
     training_mean = finite(plan.get("training_mean_usd"), "training_mean_usd")
     errors = {name: [] for name in references}
     for row in observed:
@@ -373,6 +472,8 @@ def import_assessment(plan_snapshot, provenance, assessment, outcomes, *,
               "outcome_set_digest": outcomes["outcome_set_digest"], "arm_metrics": summaries,
               "paired_comparisons": comparisons, "source_rule": rule,
               "source_reasons": assessment.get("reasons", []), "source_issues": assessment.get("source_issues", []),
+              "comparison_eligibility": eligibility,
+              "formal_success_possible_under_frozen_rule": eligibility["formal_success_possible_under_frozen_rule"],
               "costs": costs, "model_forwards_performed": 0, "original_window_modified": False,
               "original_records_modified": False, "production_eligibility": False,
               "activation_authorized": False, "trade_authority": False,
@@ -381,6 +482,8 @@ def import_assessment(plan_snapshot, provenance, assessment, outcomes, *,
                   "Hash consistency does not authenticate the observer or prove outcome separation.",
                   "USD error arithmetic is recomputed; the original statistical decision is preserved, not reissued.",
                   "Pending, censored or unavailable-source results do not become a new efficacy claim.",
+                  "PENDING describes the original schedule; verified permanent pre-open failures can already make the frozen family ineligible.",
+                  "Missing or unsupported negative evidence means unknown recoverability, never assumed eligibility.",
                   "Cost receipt sums are not end-to-end elapsed time or an equal-hardware speed comparison.",
               ]}
     result["handoff_digest"] = source_digest(result)
@@ -522,8 +625,10 @@ def main(argv=None):
         require(not args.out.resolve().is_relative_to(args.review_root.resolve()), "OUTPUT_INSIDE_SOURCE_REVIEW")
         result = load_review(args.review_root, args.expected_plan_id, cost_manifest=args.cost_manifest)
         publish_once(args.out, result)
-        print(json.dumps({k: result[k] for k in ("schema", "plan_id", "source_state", "original_command_count",
-                                               "current_replay_complete", "handoff_digest")}, sort_keys=True))
+        summary = {k: result[k] for k in ("schema", "plan_id", "source_state", "original_command_count",
+                                        "current_replay_complete", "handoff_digest", "formal_success_possible_under_frozen_rule")}
+        summary["comparison_eligibility_status"] = result["comparison_eligibility"]["status"]
+        print(json.dumps(summary, sort_keys=True))
         return 0
     except (HandoffError, OSError, KeyError, TypeError, OverflowError, json.JSONDecodeError) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, sort_keys=True))

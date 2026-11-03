@@ -13,7 +13,8 @@ from safetensors.torch import save_file
 
 from weight_runtime.artifacts import file_sha256
 from weight_runtime.errors import WeightError, canonical, digest
-from weight_runtime.mechanism import ExperimentPlan, norm_match, required_limits, run_experiment
+from weight_runtime.mechanism import (ExperimentPlan, _realized_selected_delta, norm_match,
+                                      post_storage_orthogonality, required_limits, run_experiment)
 from weight_runtime.patches import tensor_sha256
 from weight_runtime.session import Session
 
@@ -77,6 +78,7 @@ class MechanismTests(unittest.TestCase):
         self.assertEqual(self.output(full, 0)[0, 0].item(), 1.)
         self.assertEqual(self.output(full, 2)[0, 0].item(), 2.)
         self.assertTrue(random["random_control"]["post_storage_norm_match"]["passed"])
+        self.assertTrue(random["random_control"]["post_storage_orthogonality"]["passed"])
         self.assertEqual(result["cost"]["forward_examples"], 18)
         self.assertEqual(result["cost"]["patch_candidates"], 4)
         self.assertGreater(result["cost"]["model_forward_seconds"], 0)
@@ -99,6 +101,17 @@ class MechanismTests(unittest.TestCase):
         self.assertEqual(error.exception.code, "EXPERIMENT_BUDGET")
         self.assertEqual(calls, [])
         self.assertEqual(self.session.forward_examples, 0)
+
+    def test_distinct_nearby_doses_keep_unique_candidate_names(self):
+        self.plan["doses"] = [0, .5, .50000000000001, 1]
+        self.plan["budgets"].update(max_forward_examples=21, max_patch_candidates=5)
+        self.session.limits.update(max_forward_examples=21, max_patch_candidates=5)
+        result = self.run_plan()
+        names = [candidate["name"] for candidate in result["candidates"]]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertTrue({"dose-0", "dose-0.5", "dose-1", "random-0"} <= set(names))
+        self.assertEqual([float(c["name"][5:]) for c in result["candidates"] if c["role"] == "dose"],
+                         self.plan["doses"])
 
     def test_structured_hypothesis_is_retained_without_claiming_verification(self):
         hypothesis = {"statement": "The first output contains an unwanted x1 contribution.",
@@ -183,6 +196,31 @@ class MechanismTests(unittest.TestCase):
         self.assertFalse(match["passed"])
         self.assertIsNone(match["effective"]["relative_error"])
         self.assertEqual(full["patch"]["measurements"][0]["final_dtype"], "torch.bfloat16")
+        self.assertFalse(random["random_control"]["post_storage_orthogonality"]["passed"])
+
+    def test_storage_rounding_can_match_norms_but_destroy_orthogonality(self):
+        self.open(torch.full((2, 2), 1024., dtype=torch.bfloat16))
+        self.plan["target"].update(rows=[0], columns=[0, 1], delta=[[4.1, 4.1]])
+        self.plan["random_norm_rtol"] = .25
+        result = self.run_plan()
+        random = result["candidates"][-1]["random_control"]
+        self.assertTrue(random["post_storage_norm_match"]["passed"])
+        directional = random["post_storage_orthogonality"]
+        self.assertTrue(directional["verified"])
+        self.assertFalse(directional["passed"])
+        self.assertGreater(directional["absolute_cosine"], directional["max_abs_cosine"])
+        self.assertEqual(directional["max_abs_cosine"], .02)
+
+    def test_reparameterization_error_cannot_claim_realized_direction(self):
+        parent, delta = torch.ones(1, 2, dtype=torch.float64), torch.tensor([[.1, -.1]], dtype=torch.float64)
+        patch = {"measurements": [{"realization_max_abs_error": 1e-8,
+                                    "final_dtype": "torch.float32", "delta_l2": float(delta.norm())}]}
+        actual = _realized_selected_delta(parent, delta, patch)
+        self.assertIsNone(actual)
+        evidence = post_storage_orthogonality(actual, delta)
+        self.assertFalse(evidence["verified"])
+        self.assertFalse(evidence["passed"])
+        self.assertEqual(evidence["status"], "NOT_VERIFIED")
 
     def test_zero_dose_preserves_signed_zero_bytes(self):
         self.open(torch.tensor([[1., -0.], [0., 1.]]))

@@ -26,6 +26,9 @@ decoded from the same bytes whose complete SHA-256 was checked. Only finite FP32
 `value.weight` of shape `[1,768]` and `value.bias` of shape `[1]` are accepted.
 The model identity binds the source, loader, base, head and task contract. The
 backend identity separately records CPU, PyTorch, worker package and thread settings.
+The session publishes its live provider only after identity checks and the
+immutable admission receipt succeed. A failed admission closes the loaded graph
+and cannot subsequently be used for probes or patches.
 
 Encoder parameters are inspectable. Editing them requires explicit existing
 names in `allowed_patch_targets`; an empty list permits no parameter edits.
@@ -118,6 +121,15 @@ modules and safetensors. It checks serial execution, padding-aware pooling,
 normalization, USD scaling, immutable row/tensor identities, retained inputs,
 temporary head edits/restoration, input-label refusal, maximum context, malformed
 attention masks, wrong head hashes/shapes/dtypes and default edit scope.
+
+`experiments/weight/qualify_current100k.py` fixes its numerical tolerances before
+opening the disposable session. After closing it, one final integrity audit
+rehashes the complete Python source tree, the base manifest, every file and size
+bound by that manifest, and the original config, inputs, reference and head.
+`source_tree_unchanged`, `base_files_unchanged` and `source_files_unchanged` must
+all hold for `PASS_ENGINEERING_PARITY`. The cost is reported separately as
+`timings.source_integrity`; no file-tree audit is added to individual forwards or
+cache lookups. An in-memory numerical pass cannot hide a later source-file change.
 
 These deterministic fixtures establish the adapter contract. They do not prove
 parity with an installed tokenizer/full Laya checkpoint, GPU bitwise equality,

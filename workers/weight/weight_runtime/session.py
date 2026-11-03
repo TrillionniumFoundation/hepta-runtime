@@ -1,6 +1,7 @@
 """Stateful no-gradient experiments, retained evidence and bounded typed operations."""
 from contextlib import ExitStack
 import math
+import os
 import time
 
 from .artifacts import ArtifactStore, PathPolicy, atomic_create
@@ -38,18 +39,39 @@ class Session:
         torch.set_grad_enabled(False)
         from .providers import load_provider
         started = time.monotonic()
-        self.provider = load_provider(params.get("provider", "torch_sequential"), params["model"], self.policy, self.store)
-        need(math.isfinite(self.provider.global_squared_norm), "NONFINITE", "Non-finite base norm")
-        if params.get("expected_model_id") is not None:
-            need(params["expected_model_id"] == self.provider.model_id, "IDENTITY_MISMATCH", "Model identity differs")
-        self.open_spec_id = digest(params)
-        state = {"schema": "hepta.weight.session.v1", "session_id": self.session_id,
-                 "open_spec_id": self.open_spec_id, "model_id": self.provider.model_id,
-                 "backend_id": self.provider.backend_id, "limits": self.limits,
-                 "construction_kind": "DirectWeightEdit", "training_allowed": False,
-                 "production_activation_allowed": False}
-        atomic_create(self.policy.output / "session.json", canonical(state) + b"\n")
-        return {**state, "model": self.provider.describe(), "load_seconds": time.monotonic() - started,
+        provider = None
+        try:
+            provider = load_provider(params.get("provider", "torch_sequential"), params["model"], self.policy, self.store)
+            need(math.isfinite(provider.global_squared_norm), "NONFINITE", "Non-finite base norm")
+            if params.get("expected_model_id") is not None:
+                need(params["expected_model_id"] == provider.model_id, "IDENTITY_MISMATCH", "Model identity differs")
+            self.open_spec_id = digest(params)
+            state = {"schema": "hepta.weight.session.v1", "session_id": self.session_id,
+                     "open_spec_id": self.open_spec_id, "model_id": provider.model_id,
+                     "backend_id": provider.backend_id, "limits": self.limits,
+                     "construction_kind": "DirectWeightEdit", "training_allowed": False,
+                     "production_activation_allowed": False}
+            description = provider.describe()
+            atomic_create(self.policy.output / "session.json", canonical(state) + b"\n")
+        except BaseException:
+            # A rejected identity or failed admission receipt must never leave a
+            # live graph available through probe/patch after open reports failure.
+            self.closed = True
+            if provider is not None:
+                try:
+                    provider.close()
+                except Exception as cleanup_error:
+                    # Preserve the admission failure, including during recovery,
+                    # while retaining the secondary cleanup error in worker logs.
+                    try:
+                        os.write(2, canonical({"event": "failed_open_cleanup_error",
+                                               "exception_type": type(cleanup_error).__name__,
+                                               "message": str(cleanup_error)[:2048]}) + b"\n")
+                    except OSError:
+                        pass
+            raise
+        self.provider = provider
+        return {**state, "model": description, "load_seconds": time.monotonic() - started,
                 "output_root": str(self.policy.output),
                 "supported_ops": ["inspect", "probe", "intervene", "analyze", "patch", "seal", "query", "close"]}
 

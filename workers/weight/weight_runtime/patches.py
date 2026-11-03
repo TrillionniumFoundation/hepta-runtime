@@ -70,7 +70,7 @@ def edit_tensor(original, spec, store, max_elements=16777216, max_abs_alpha=8.0)
     precision = spec.get("compute_dtype", "float64")
     need(precision in ("float32", "float64"), "UNSUPPORTED_DTYPE", "compute_dtype must be float32 or float64")
     dtype = torch.float64 if precision == "float64" else torch.float32
-    work = original.detach().cpu().to(dtype=dtype).clone()
+    work = original.detach().cpu().to(dtype=dtype).contiguous().clone()
     if operation in ("scale", "zero", "add"):
         flat = work.reshape(-1)
         selected = indices(spec.get("indices"), flat.numel(), "indices")
@@ -123,13 +123,27 @@ def edit_tensor(original, spec, store, max_elements=16777216, max_abs_alpha=8.0)
             need(bool(torch.allclose(gram, torch.eye(len(basis), dtype=dtype), atol=1e-5, rtol=1e-5)),
                  "INVALID_ARGUMENT", "Input projection basis must be orthonormal")
             work -= alpha * (work @ basis.T) @ basis
-    need(bool(torch.isfinite(work).all()), "NONFINITE", "Patch computation produced non-finite values")
-    result = work.to(dtype=original.dtype)
+    # A lower compute precision may round the whole work buffer. Only copy the
+    # explicitly edited support back, preserving every unselected parent byte.
+    if operation in ("scale", "zero", "add", "replace_sparse"):
+        result = original.detach().cpu().contiguous().clone()
+        edited = work.reshape(-1)[selected]
+        stored = edited.to(dtype=original.dtype)
+        result.reshape(-1)[selected] = stored
+    elif operation == "writer_projection":
+        result = original.detach().cpu().contiguous().clone()
+        edited = work.index_select(1, columns)
+        stored = edited.to(dtype=original.dtype)
+        result[:, columns] = stored
+    else:
+        edited = work
+        result = stored = work.to(dtype=original.dtype)
+    need(bool(torch.isfinite(edited).all()), "NONFINITE", "Patch computation produced non-finite values")
     need(result.shape == original.shape and bool(torch.isfinite(result).all()),
          "NONFINITE", "Final dtype cast overflowed or changed shape")
     return result.contiguous(), {"compute_dtype": precision,
                                  "final_dtype": str(original.dtype),
-                                 "cast_max_abs_error": float((result.to(dtype) - work).abs().max())}
+                                 "cast_max_abs_error": float((stored.to(dtype) - edited).abs().max())}
 
 
 def patch_metrics(before, after, global_squared_norm):

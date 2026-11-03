@@ -19,6 +19,7 @@ from safetensors.torch import save_file
 from weight_runtime.artifacts import ArtifactStore, file_sha256
 from weight_runtime.current100k import Current100kProvider
 from weight_runtime.errors import WeightError, canonical, digest, loads
+from weight_runtime.providers import source_tree_identity
 from weight_runtime.session import Session
 from test_current100k_provider import EncoderFixture, TokenFixture, head, row
 
@@ -43,7 +44,19 @@ class QualificationTests(unittest.TestCase):
         self.rows_path = self.root / "rows.json"
         self.rows_path.write_bytes(canonical(self.rows))
         self.config_path = self.root / "model.json"
-        self.config = {"source_dir": str(self.root), "base_dir": str(self.root),
+        self.source_root, self.base_root = self.root / "source", self.root / "base"
+        self.source_root.mkdir()
+        self.base_root.mkdir()
+        self.source_path = self.source_root / "model.py"
+        self.source_path.write_text("# Synthetic qualification loader identity fixture.\n")
+        self.base_model_path = self.base_root / "model.safetensors"
+        self.base_model_path.write_bytes(b"synthetic-base-file-identity-fixture")
+        self.manifest_path = self.base_root / "base-manifest.json"
+        self.manifest_path.write_bytes(canonical({"schema": "heptatrader.laya-base.v1", "files": {
+            "model.safetensors": {"sha256": file_sha256(self.base_model_path),
+                                  "size": self.base_model_path.stat().st_size}}}))
+        self.config = {"source_dir": str(self.source_root), "source_tree_sha256": source_tree_identity(self.source_root),
+                       "base_dir": str(self.base_root), "base_manifest_sha256": file_sha256(self.manifest_path),
                        "head_path": str(self.head_path), "head_sha256": file_sha256(self.head_path)}
         self.config_path.write_bytes(canonical(self.config))
         self.reference = torch.zeros((4, 768), dtype=torch.float32)
@@ -54,6 +67,9 @@ class QualificationTests(unittest.TestCase):
         self.open_calls = 0
         self.sessions = []
         self.change_head_on_close = False
+        self.change_source_on_close = False
+        self.change_manifest_on_close = False
+        self.change_base_on_close = False
 
     def session_factory(self, identity):
         owner = self
@@ -75,6 +91,13 @@ class QualificationTests(unittest.TestCase):
                 result = super().close(params)
                 if owner.change_head_on_close:
                     owner.head_path.write_bytes(b"simulated external source change")
+                if owner.change_source_on_close:
+                    owner.source_path.write_text("# Simulated post-admission source change.\n")
+                if owner.change_manifest_on_close:
+                    owner.manifest_path.write_bytes(canonical({"fixture": "changed"}))
+                if owner.change_base_on_close:
+                    content = owner.base_model_path.read_bytes()
+                    owner.base_model_path.write_bytes(b"X" + content[1:])
                 return result
 
         session = FixtureSession(identity)
@@ -101,12 +124,15 @@ class QualificationTests(unittest.TestCase):
         self.assertEqual(result["checks"]["restoration"]["computation"]["feature_cache_bypass_reason"], "explicit_recomputation")
         self.assertTrue(result["checks"]["encoded_input_identity_preserved"])
         self.assertTrue(result["source_files_unchanged"])
+        self.assertTrue(result["source_tree_unchanged"])
+        self.assertTrue(result["base_files_unchanged"])
+        self.assertEqual(result["source_tree_sha256_after"], self.config["source_tree_sha256"])
         self.assertEqual(file_sha256(self.head_path), original_head)
         self.assertTrue(result["close"]["closed"])
         self.assertFalse(result["quality_improvement_claim"])
         self.assertFalse(result["production_eligible"])
         self.assertFalse(result["labels_read"])
-        self.assertEqual(set(result["timings"]), {"load", "parent", "head_patch", "patched", "restored_uncached", "close"})
+        self.assertEqual(set(result["timings"]), {"load", "parent", "head_patch", "patched", "restored_uncached", "close", "source_integrity"})
         saved = loads((self.root / "run" / "qualification.json").read_bytes())
         self.assertEqual(saved, result)
         self.assertEqual(saved["receipt_sha256"], digest({k: v for k, v in saved.items() if k != "receipt_sha256"}))
@@ -166,6 +192,38 @@ class QualificationTests(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertEqual(result["status"], "FAIL_ENGINEERING_PARITY")
         self.assertNotEqual(result["source_hashes_after"][str(self.head_path)], self.config["head_sha256"])
+
+    def test_source_tree_change_after_admission_invalidates_numerical_pass(self):
+        self.change_source_on_close = True
+        result = self.run_qualification()
+        self.assertTrue(result["checks"]["passed"])
+        self.assertFalse(result["source_tree_unchanged"])
+        self.assertFalse(result["source_files_unchanged"])
+        self.assertFalse(result["passed"])
+
+    def test_base_manifest_change_after_admission_invalidates_numerical_pass(self):
+        self.change_manifest_on_close = True
+        result = self.run_qualification()
+        self.assertTrue(result["checks"]["passed"])
+        self.assertTrue(result["source_tree_unchanged"])
+        self.assertFalse(result["source_files_unchanged"])
+        self.assertFalse(result["passed"])
+        self.assertNotEqual(result["source_hashes_after"][str(self.manifest_path)], self.config["base_manifest_sha256"])
+
+    def test_base_checkpoint_change_without_size_change_invalidates_numerical_pass(self):
+        self.change_base_on_close = True
+        result = self.run_qualification()
+        self.assertTrue(result["checks"]["passed"])
+        self.assertTrue(result["source_tree_unchanged"])
+        self.assertFalse(result["base_files_unchanged"])
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["source_hashes_after"][str(self.manifest_path)], self.config["base_manifest_sha256"])
+
+    def test_base_manifest_file_path_cannot_escape_the_pinned_root(self):
+        manifest = {"schema": "heptatrader.laya-base.v1", "files": {
+            "../value-head.safetensors": {"sha256": file_sha256(self.head_path), "size": self.head_path.stat().st_size}}}
+        with self.assertRaises(WeightError):
+            self.module.base_manifest_pins(self.base_root, canonical(manifest))
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ def sha(text):
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def fixture(*, final=False, incomplete=False):
+def fixture(*, final=False, incomplete=False, maximum_unresolved=0):
     day = 86400000
     start = 1_800_000_000_000
     plan = {"schema": H.SOURCE_PLAN_SCHEMA, "registered_at_ms": start-1000,
@@ -23,10 +23,12 @@ def fixture(*, final=False, incomplete=False):
             "outcome_end_ms": start+15*day, "claim_scope": "PROSPECTIVE_VALUE_RESEARCH_ONLY",
             "trade_authority": False, "automatic_selection": False, "actor_update": False,
             "rule": {"window_ms": 14*day, "closure_grace_ms": day,
+                     "maximum_unresolved_at_final": maximum_unresolved,
                      "target_scale_usd": 100., "max_abs_prediction_usd": 15.,
                      "sequential_test": "MIXTURE_HOEFFDING_HUBER_LOSS_DIFFERENCE"},
             "heads": {"parent": {"sha256": sha("parent")}, "edit": {"sha256": sha("edit")}},
             "parent_arm": "parent", "training_mean_usd": .5,
+            "producer_registration": {"sha256": sha("original-producer")},
             "numeric_profile": "TORCH_CPU_FP32_SHARED_LINEAR_USD100_CLIP15",
             "description": "原计划，保持中文来源摘要"}
     plan["plan_id"] = H.source_digest(plan)
@@ -60,6 +62,7 @@ def fixture(*, final=False, incomplete=False):
         rows.append(row)
     if incomplete:
         rows += [{"command_id": "missing", "request_id": "request-missing", "status": "CENSORED",
+                  "opened_at_ms": start+20,
                   "reason": "NO_DURABLE_PREDICTION_FOR_ORIGINAL_REQUEST"},
                  {"command_id": "open", "request_id": "request-open", "status": "PENDING",
                   "reason": "AWAITING_SETTLED_EXACT_OUTCOME"}]
@@ -104,6 +107,54 @@ def evaluate(args):
                                provenance_sha256=H.file_digest(args[1]) if args[1] else None)
 
 
+def refresh_eligibility(args):
+    value = args[2]["comparison_eligibility"]
+    for proof in value["failure_proofs"]:
+        proof["proof_digest"] = H.source_digest({k: v for k, v in proof.items() if k != "proof_digest"})
+    value["eligibility_digest"] = H.source_digest({k: v for k, v in value.items() if k != "eligibility_digest"})
+
+
+def negative_eligibility(args, *, with_proof=True):
+    """Original-writer receipt shape, separately bound to the captured row set."""
+    plan, report = args[0]["plan"], args[2]
+    start = plan["input_start_ms"]
+    terminal = {"schema": "heptatrader.preopen-request-terminal.v1", "plan_id": plan["plan_id"],
+                "request_id": "request-missing", "request_sha256": sha("original-request"),
+                "producer_manifest_sha256": plan["producer_registration"]["sha256"],
+                "status": "NO_PREDICTION_BEFORE_ORIGINAL_COMMAND", "observed_at_ms": start+21,
+                "broker_orders_sent": 0, "old_trial_modified": False}
+    original = {"command_id": "missing", "request_id": terminal["request_id"],
+                "request_sha256": terminal["request_sha256"]}
+    proof = {"schema": H.FAILURE_PROOF_SCHEMA, "plan_id": plan["plan_id"], **original,
+             "producer_manifest_sha256": terminal["producer_manifest_sha256"],
+             "request_started_at_ms": start+10, "command_prepared_at_ms": start+20,
+             "binding_observed_at_ms": start+22, "verified_at_ms": report["as_of_ms"],
+             "terminal_record": terminal, "terminal_sha256": H.file_digest(terminal),
+             "original_command_record": original, "original_command_sha256": H.file_digest(original),
+             "binding_sha256": sha("private-ledger-binding"), "source_binding_digest": sha("binding-value"),
+             "input_record_sha256": sha("private-input-record"), "protocol_sha256": sha("original-protocol"),
+             "binding_status": "MISSING_OR_LATE_NO_CREDIT", "before_original_command": False,
+             "binding_verified_by_source": True}
+    maximum = plan["rule"]["maximum_unresolved_at_final"]
+    blocked = with_proof and maximum == 0
+    report["comparison_eligibility"] = {
+        "schema": H.ELIGIBILITY_SCHEMA, "plan_id": plan["plan_id"], "as_of_ms": report["as_of_ms"],
+        "outcome_set_digest": report["outcome_set_digest"],
+        "status": "IRRECOVERABLY_INELIGIBLE" if blocked else "UNKNOWN",
+        "formal_success_possible_under_frozen_rule": False if blocked else None,
+        "permanent_unresolved_count_lower_bound": int(with_proof),
+        "maximum_unresolved_at_final": maximum,
+        "reason": ("IMMUTABLE_MISSED_PREOPEN_EXCEEDS_FROZEN_UNRESOLVED_LIMIT" if blocked else
+                   "NO_VERIFIED_IRREVERSIBLE_BLOCKER" if report["current_replay_complete"] else
+                   "CURRENT_SOURCE_UNAVAILABLE"),
+        "failure_proofs": [proof] if with_proof else [], "evidence_errors": [],
+        "source_state": report["state"], "original_outcome_end_ms": plan["outcome_end_ms"],
+        "is_final_protocol_report": False, "original_window_modified": False,
+        "diagnostic_metrics_preserved": True, "trade_authority": False}
+    refresh_eligibility(args)
+    return report["comparison_eligibility"]
+
+
 class HandoffTests(unittest.TestCase):
     def test_known_usd_arithmetic_and_original_identity(self):
         args = fixture()
@@ -115,6 +166,8 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(result["original_window"]["input_end_ms"], args[0]["plan"]["input_end_ms"])
         self.assertFalse(result["activation_authorized"])
         self.assertEqual(result["model_forwards_performed"], 0)
+        self.assertEqual(result["comparison_eligibility"]["status"], "UNKNOWN")
+        self.assertIsNone(result["formal_success_possible_under_frozen_rule"])
 
     def test_source_unicode_canonicalization_is_preserved(self):
         plan = fixture()[0]["plan"]
@@ -128,6 +181,100 @@ class HandoffTests(unittest.TestCase):
         result = evaluate(fixture(incomplete=True))
         self.assertEqual(result["original_command_count"], 4)
         self.assertEqual(result["status_counts"], {"OBSERVED": 2, "PENDING": 1, "CENSORED": 1})
+        self.assertIsNone(result["formal_success_possible_under_frozen_rule"])
+
+    def test_verified_negative_receipt_blocks_family_preserving_schedule_and_diagnostics(self):
+        args = fixture(incomplete=True)
+        before = evaluate(args)
+        negative_eligibility(args)
+        after = evaluate(args)
+        self.assertEqual(after["source_state"], "PENDING")
+        self.assertFalse(after["formal_success_possible_under_frozen_rule"])
+        self.assertEqual(after["comparison_eligibility"]["status"], "IRRECOVERABLY_INELIGIBLE")
+        self.assertTrue(after["comparison_eligibility"]["negative_terminal_bytes_verified"])
+        self.assertEqual(after["comparison_eligibility"]["permanent_unresolved_count_lower_bound"], 1)
+        for key in ("original_window", "head_digests", "outcome_set_digest", "source_rule", "source_reasons",
+                    "original_command_count", "status_counts", "arm_metrics", "paired_comparisons"):
+            self.assertEqual(before[key], after[key], key)
+
+    def test_censored_or_bounded_negative_evidence_never_implies_positive_eligibility(self):
+        for with_proof, maximum in ((False, 0), (True, 1)):
+            args = fixture(incomplete=True, maximum_unresolved=maximum)
+            negative_eligibility(args, with_proof=with_proof)
+            result = evaluate(args)
+            with self.subTest(with_proof=with_proof, maximum=maximum):
+                self.assertEqual(result["comparison_eligibility"]["status"], "UNKNOWN")
+                self.assertIsNone(result["formal_success_possible_under_frozen_rule"])
+                self.assertEqual(result["comparison_eligibility"]["negative_terminal_bytes_verified"], with_proof)
+
+    def test_unsupported_source_eligibility_is_unknown(self):
+        args = fixture(incomplete=True)
+        value = negative_eligibility(args)
+        value["schema"] = "future-unsupported-schema"
+        result = evaluate(args)
+        self.assertEqual(result["comparison_eligibility"]["status"], "UNKNOWN")
+        self.assertIsNone(result["formal_success_possible_under_frozen_rule"])
+
+    def test_negative_terminal_bytes_request_and_original_command_are_verified(self):
+        for mutation in ("terminal_bytes", "request_identity", "original_command", "unsupported_terminal"):
+            args = fixture(incomplete=True)
+            proof = negative_eligibility(args)["failure_proofs"][0]
+            if mutation == "terminal_bytes":
+                proof["terminal_sha256"] = sha("different-original-bytes")
+            elif mutation == "request_identity":
+                proof["request_sha256"] = sha("another-request")
+            elif mutation == "original_command":
+                proof["original_command_record"]["command_id"] = "another-command"
+                proof["original_command_sha256"] = H.file_digest(proof["original_command_record"])
+            else:
+                proof["terminal_record"]["status"] = "REQUEST_EXPIRED"
+                proof["terminal_sha256"] = H.file_digest(proof["terminal_record"])
+            refresh_eligibility(args)
+            with self.subTest(mutation=mutation), self.assertRaises(H.HandoffError):
+                evaluate(args)
+
+    def test_negative_proof_requires_population_clock_and_source_binding(self):
+        for mutation in ("outside_population", "observed_row", "duplicate", "clock", "binding", "producer"):
+            args = fixture(incomplete=True)
+            value = negative_eligibility(args)
+            proof = value["failure_proofs"][0]
+            if mutation == "outside_population":
+                proof["command_id"] = "absent"
+            elif mutation == "observed_row":
+                proof["command_id"], proof["request_id"] = "command-0", "request-0"
+            elif mutation == "duplicate":
+                value["failure_proofs"].append(copy.deepcopy(proof))
+                value["permanent_unresolved_count_lower_bound"] = 2
+            elif mutation == "clock":
+                proof["command_prepared_at_ms"] = proof["request_started_at_ms"]-1
+            elif mutation == "binding":
+                proof["binding_verified_by_source"] = False
+            else:
+                proof["producer_manifest_sha256"] = sha("different-producer")
+            refresh_eligibility(args)
+            with self.subTest(mutation=mutation), self.assertRaises(H.HandoffError):
+                evaluate(args)
+
+    def test_eligibility_cannot_change_protocol_or_claim_unsupported_conclusion(self):
+        mutations = {"count": ("permanent_unresolved_count_lower_bound", True),
+                     "limit": ("maximum_unresolved_at_final", False),
+                     "deadline": ("original_outcome_end_ms", 1),
+                     "final": ("is_final_protocol_report", True),
+                     "success": ("formal_success_possible_under_frozen_rule", True),
+                     "false_without_proof": ("failure_proofs", [])}
+        for mutation, (key, changed) in mutations.items():
+            args = fixture(incomplete=True)
+            negative_eligibility(args)[key] = changed
+            refresh_eligibility(args)
+            with self.subTest(mutation=mutation), self.assertRaises(H.HandoffError):
+                evaluate(args)
+
+    def test_irrecoverable_failure_cannot_coexist_with_final_success(self):
+        args = fixture(final=True, incomplete=True)
+        args[2]["state"] = "FINAL_RESEARCH_COMPARISON"
+        negative_eligibility(args)
+        with self.assertRaisesRegex(H.HandoffError, "PERMANENT_FAILURE_WITH_FINAL_COMPARISON"):
+            evaluate(args)
 
     def test_censored_diagnostic_values_do_not_score(self):
         args = fixture(incomplete=True)
@@ -155,6 +302,10 @@ class HandoffTests(unittest.TestCase):
         result = evaluate(args)
         self.assertEqual(result["retained_unenumerated_command_count"], 2)
         self.assertIsNone(result["arm_metrics"]["edit"]["mae_usd"])
+        negative_eligibility(args, with_proof=False)
+        result = evaluate(args)
+        self.assertIsNone(result["formal_success_possible_under_frozen_rule"])
+        self.assertEqual(result["comparison_eligibility"]["reason"], "CURRENT_SOURCE_UNAVAILABLE")
         report["arm_metrics"]["edit"]["mae_usd"] = 1.5
         with self.assertRaisesRegex(H.HandoffError, "SOURCE_METRIC_NOT_NULL"):
             evaluate(args)

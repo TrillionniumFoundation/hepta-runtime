@@ -39,6 +39,57 @@ current observed credit is withdrawn. A pending or incomplete report cannot
 become an accepted comparison by importing it. A censored row may retain old
 diagnostic values; those values never enter scoring.
 
+## Schedule state and irreversible comparison ineligibility
+
+`source_state=PENDING` describes the original schedule. It does not assert that
+the frozen comparison can still succeed. A missed original pre-command prediction
+cannot be supplied by a later training run, inference retry, fill or fee receipt.
+The original unresolved-command limit can therefore make formal success
+impossible before the unchanged outcome deadline.
+
+New source reviews can include `comparison_eligibility` using schema
+`heptatrader.current100k-comparison-eligibility.v1`. This is separate derived
+metadata. It never changes the original state, deadlines, candidates, row list,
+outcome digest, statistical rule, observed error metrics or source comparisons.
+The handoff exposes the metadata and a top-level
+`formal_success_possible_under_frozen_rule` field:
+
+| Evidence | Status | Formal success possible |
+| --- | --- | --- |
+| Verified permanent missing predictions exceed the original `maximum_unresolved_at_final` | `IRRECOVERABLY_INELIGIBLE` | `false` |
+| No supported permanent proof, a count within the frozen limit, or unavailable current source | `UNKNOWN` | `null` |
+| Old report without the field, or an unsupported metadata schema | `UNKNOWN` | `null` |
+
+No path infers `true`. `CENSORED` alone is not an irreversible-failure proof:
+settlement, current source availability and other evidence may still change.
+Known-schema metadata with inconsistent hashes or bindings is rejected instead
+of converted into a conclusion.
+
+The currently supported proof is the original request ledger's immutable
+`NO_PREDICTION_BEFORE_ORIGINAL_COMMAND` terminal. The source reads its original
+private bytes and verifies the fixed activation/configuration/plan/registration,
+protocol, request digest, exact original-command reference, full current command
+binding and original clocks. It exports only the safe terminal/reference records,
+their raw SHA-256 values, the other receipt hashes and a proof digest; input text
+and private ledger content stay in the source.
+
+The importer independently checks those two original safe records' canonical
+bytes including their newline, request/command/producer/plan identity, command
+membership in the captured CENSORED population, time ordering, unique proofs and
+the unchanged unresolved limit. Full private input and ledger verification
+remain the original strict evaluator's responsibility. Hash consistency is not
+observer authentication. A negative conclusion requires that trusted source
+review and its existing provenance binding.
+
+Observed rows still supply descriptive MAE/RMSE and paired gains even when the
+family is irrecoverably ineligible. They do not repair the missing original
+prediction or authorize selection. Source loss changes the current metadata to
+`UNKNOWN`, withdraws current observed credit under the existing rule and keeps
+the prior completed assessment in the source's immutable history. An old blocked
+assessment remains historical negative evidence; current unknown is never
+reported as recovered eligibility. Finalization still happens only at the
+original fixed deadline.
+
 ## Ordered source export
 
 The original evaluator stores individual outcomes and a digest of its ordered
@@ -54,7 +105,7 @@ modify either argument. Publish the pointer in the assessment **after** the
 snapshot succeeds. A crash before the assessment is published leaves an
 unreferenced snapshot, not a new credited report.
 
-### Minimal heptatrader insertion points
+### Heptatrader source integration
 
 Apply the export hook only to a **new independent strict-review release and
 output directory**. Preserve the existing registered plan, predictor, candidates,
@@ -82,13 +133,14 @@ same snapshot pointer on restart. Do not retrofit an old final terminal receipt
 or rewrite its outcome dates. Use an explicit export pack if its ordered original
 rows were separately captured; otherwise retain the missing-export diagnosis.
 
-The exporter has no HeptaTrader imports. Expose this file through a pinned import
-path or package it under an explicitly pinned local helper module; add its actual
-SHA to `PreopenEvidence.provenance()['review_implementation_sha256']`. Do not use
-an unpinned ambient module from PYTHONPATH. The module name of that installed
-helper determines the import line; no source path is silently chosen by this
-adapter. The actual original evaluator stays the owner of row computation and
-publication.
+Heptatrader contains its own `laya_cell/current100k_outcome_export.py` helper and
+both hooks. Its actual SHA is part of
+`PreopenEvidence.provenance()['review_implementation_sha256']`; it does not import
+runtime source files. The runtime `write_outcome_snapshot` helper preserves the
+same wire format for isolated export packs and tests. The source evaluator owns
+row computation and publication. Eligibility proofs are collected from
+`PreopenEvidence.permanent_prediction_failure` before publishing the same
+assessment; the source-loss hook emits explicit unknown metadata.
 
 The source uses `json.dumps(sort_keys=True, separators=(',', ':'),
 ensure_ascii=True, allow_nan=False)`. This is deliberately different from the
@@ -181,4 +233,7 @@ The new synthetic regressions cover independently known USD errors, changed
 original identities/dates, ordered snapshots, incomplete/censored and source-loss
 denominators, late/failed terminals, raw-versus-capped predictions, atomic replay,
 unchanged source bytes, nonfinite/duplicate input, and actual-cost deduplication
-and missing values. They perform no model forward or market evaluation.
+and missing values. Negative-evidence tests cover original bytes, request and
+command identity, source-binding claims, clocks, duplicate proofs, unchanged
+frozen limits, no positive inference, legacy/unsupported schemas and preservation
+of observed diagnostics. They perform no model forward or market evaluation.

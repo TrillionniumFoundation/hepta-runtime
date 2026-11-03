@@ -31,6 +31,9 @@ examples: one parent pass, all C conditions, and a repeated parent pass. The
 candidate count includes the zero-dose patch. `required_limits(plan)` exposes
 these counts before opening a disposable worker. Actual worker counters and batch
 sizes must agree with the plan.
+Candidate dose names use round-trip numeric precision, so distinct admitted
+doses remain distinct even when their short decimal displays look identical.
+The established names `dose-0`, `dose-0.5` and `dose-1` remain unchanged.
 
 The runner checks the actual `model_input_id` for each case across every condition.
 The input specification is copied to immutable canonical bytes, so changing the
@@ -51,6 +54,22 @@ passes norm matching only if **both** realized effective and storage delta norms
 are within the predeclared relative tolerance. A zero realized reference norm is
 not a valid norm-matched control. A mismatch remains a completed, explicitly
 failed control; the runner does not tune a replacement against observed results.
+
+New runs also retain `post_storage_orthogonality`. The runner's fixed threshold
+is absolute cosine at most `0.02`. When the compiler reports exact realization,
+the pinned parent block, prescribed float64 addition and actual final dtype
+determine the selected realized delta; its norm must also agree with the worker's
+full effective-delta measurement. This permits a directional check without
+additional forwards or full-matrix downloads. If reparameterization has a
+nonzero realization error, direction is `NOT_VERIFIED`. A zero realized delta or
+excessive cosine fails. The check concerns effective-delta directions, not the
+geometry of physical factor edits. Existing receipts without this field do not
+acquire a new passing result retroactively.
+
+Selected-coordinate edits preserve every unselected parent byte, including when
+the compute dtype is less precise than the stored parameter. The worker uses a
+contiguous work buffer so edits to noncontiguous parameter views affect the
+declared logical coordinates.
 
 Zero dose uses multiplication by one to preserve signed-zero bits. It must leave
 stored parameter bytes and all output artifact bytes identical. After all probes,

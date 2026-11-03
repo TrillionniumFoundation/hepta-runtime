@@ -15,6 +15,7 @@ from .errors import WeightError, canonical, checksum, digest, identifier, intege
 
 PLAN_SCHEMA = "hepta.weight.mechanism-plan.v1"
 RESULT_SCHEMA = "hepta.weight.mechanism-experiment.v1"
+RANDOM_ORTHOGONALITY_MAX_ABS_COSINE = 0.02
 
 
 @dataclass(frozen=True)
@@ -342,6 +343,47 @@ def norm_match(reference, control, tolerance):
             "zero_realized_reference_is_a_valid_control": False}
 
 
+def _realized_selected_delta(parent, change, patch):
+    """Recover selected deltas only when the compiler attests exact equality."""
+    import torch
+    measurement, = patch["measurements"]
+    # Reparameterized targets can introduce another rounding step. Its scalar
+    # error bound cannot prove a direction, so that case remains unverified.
+    if measurement["realization_max_abs_error"] != 0:
+        return None
+    types = {"torch.float16": torch.float16, "torch.bfloat16": torch.bfloat16,
+             "torch.float32": torch.float32, "torch.float64": torch.float64}
+    dtype = types.get(measurement["final_dtype"])
+    if dtype is None:
+        return None
+    realized = (parent + change).to(dtype=dtype).double() - parent
+    # The selected support must account for the full effective change that the
+    # worker measured, not merely a convenient subset of a larger change.
+    if not math.isclose(float(realized.norm()), measurement["delta_l2"], rel_tol=1e-12, abs_tol=0.):
+        return None
+    return realized
+
+
+def post_storage_orthogonality(reference, control):
+    from .patches import tensor_sha256
+    result = {"max_abs_cosine": RANDOM_ORTHOGONALITY_MAX_ABS_COSINE,
+              "tolerance_basis": "Fixed runner policy before the first model forward",
+              "basis": "Pinned parent block, exact worker compilation, actual final dtype and worker-verified serialized bytes",
+              "scope": "Selected effective delta; physical factor directions are not asserted",
+              "verified": reference is not None and control is not None,
+              "absolute_cosine": None, "passed": False}
+    if not result["verified"]:
+        return {**result, "status": "NOT_VERIFIED", "reason": "Exact post-storage selected deltas are not established"}
+    result.update(reference_selected_delta_sha256=tensor_sha256(reference),
+                  control_selected_delta_sha256=tensor_sha256(control))
+    reference_norm, control_norm = float(reference.norm()), float(control.norm())
+    if reference_norm == 0 or control_norm == 0:
+        return {**result, "status": "FAILED", "reason": "A zero realized delta has no direction"}
+    cosine = abs(float((reference.reshape(-1) / reference_norm) @ (control.reshape(-1) / control_norm)))
+    passed = cosine <= RANDOM_ORTHOGONALITY_MAX_ABS_COSINE
+    return {**result, "status": "VERIFIED" if passed else "FAILED", "absolute_cosine": cosine, "passed": passed}
+
+
 def _comparison(parent, child, plan):
     import torch
     results = {}
@@ -401,7 +443,9 @@ def run_experiment(call: Callable[[str, dict], dict], opened: dict, plan: dict |
     delta, random_deltas, random_basis = _deltas(parent_block, target, plan.random_controls, plan.random_seed)
     flat_indices = [r * entry["shape"][1] + c for r in rows for c in columns]
     # All candidate payloads are determined before a single model output is seen.
-    conditions = [("dose-" + format(d, ".12g"), "dose", d, delta * d) for d in plan.doses]
+    # Round-trip precision keeps distinct admitted floats distinct in candidate
+    # identities while preserving the existing dose-0/dose-0.5/dose-1 names.
+    conditions = [("dose-" + format(d, ".17g"), "dose", d, delta * d) for d in plan.doses]
     conditions.extend(("random-" + str(i), "random_control", 1.0, d) for i, d in enumerate(random_deltas))
     need(all(bool(torch.isfinite(d).all()) for _, _, _, d in conditions), "NONFINITE", "Non-finite candidate delta")
     condition_manifest = [{"name": n, "role": role, "dose": d,
@@ -449,7 +493,7 @@ def run_experiment(call: Callable[[str, dict], dict], opened: dict, plan: dict |
         return retained, arrays
 
     parent_records, parent_outputs = observe()
-    candidates, full_dose = [], None
+    candidates, full_dose, full_delta = [], None, None
     for name, role, dose, change in conditions:
         operation = {"tensor": target["tensor"], "expected_tensor_sha256": target["expected_tensor_sha256"],
                      "indices": flat_indices, "compute_dtype": "float64"}
@@ -479,11 +523,14 @@ def run_experiment(call: Callable[[str, dict], dict], opened: dict, plan: dict |
             evidence["zero_dose_exact_noop"] = True
         if role == "dose" and dose == 1:
             full_dose = patch
+            full_delta = _realized_selected_delta(parent_block, change, patch)
         if role == "random_control":
             need(full_dose is not None, "INVALID_PLAN", "Full-dose reference missing")
             evidence["random_control"] = {"seed": plan.random_seed + int(name.split("-")[-1]),
                                            "construction": random_basis,
-                                           "post_storage_norm_match": norm_match(full_dose, patch, plan.random_norm_rtol)}
+                                           "post_storage_norm_match": norm_match(full_dose, patch, plan.random_norm_rtol),
+                                           "post_storage_orthogonality": post_storage_orthogonality(
+                                               full_delta, _realized_selected_delta(parent_block, change, patch))}
         candidates.append(evidence)
     restored_records, restored_outputs = observe(force_uncached=True)
     output_restore = all(a["outputs"]["sha256"] == b["outputs"]["sha256"]
@@ -504,6 +551,9 @@ def run_experiment(call: Callable[[str, dict], dict], opened: dict, plan: dict |
             "hypothesis_status": "declared_for_testing" if "hypothesis" in specification else "not_provided",
             "hypothesis_evidence_verified_by_runner": False,
             "condition_manifest": condition_manifest, "condition_manifest_sha256": condition_hash,
+            "random_control_policy": {"norm_relative_tolerance": plan.random_norm_rtol,
+                                      "orthogonality_max_abs_cosine": RANDOM_ORTHOGONALITY_MAX_ABS_COSINE,
+                                      "fixed_before_model_forward": True},
             "planned_forward_examples": plan.forward_examples, "planned_patch_candidates": plan.candidate_count,
             "worker_artifact_limits": {name: opened["limits"][name] for name in ("max_artifact_bytes", "max_artifacts_bytes")},
             "parent_before": parent_records, "candidates": candidates, "parent_after": restored_records,
@@ -517,4 +567,5 @@ def run_experiment(call: Callable[[str, dict], dict], opened: dict, plan: dict |
             "limitations": ["A mechanism screen is not an independent efficacy evaluation",
                             "Output variation and a successful edit do not establish predictive information",
                             "Post-storage norm mismatch invalidates that control; no adaptive retries were made",
+                            "Missing or failed post-storage orthogonality does not establish an orthogonal realized control",
                             "Parent restoration covers touched stored parameters, selected effective target and these fixed outputs"]}
