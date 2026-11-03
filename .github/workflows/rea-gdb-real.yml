@@ -1,0 +1,120 @@
+name: REA P4 real GDB controlled debugger reference
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feature/rea-native-foundation-*'
+    paths:
+      - '.github/workflows/rea-gdb-real.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rea-real-gdb-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-gdb-reference:
+    name: Actual Linux GDB breakpoint, frame, restart, and inferior exit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact development head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run actual GDB against an independently built benign C executable
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/rea-real-gdb"
+          mkdir -p "$evidence"
+          gcc --version | head -n 1 > "$evidence/gcc-version.txt"
+          gdb --version | head -n 1 > "$evidence/gdb-version.txt"
+          cat > "$evidence/fixture.c" <<'C'
+          #include <stdio.h>
+          __attribute__((noinline)) int inspect_target(int value) {
+              volatile int doubled = value * 2;
+              return doubled;
+          }
+          int main(void) {
+              int result = inspect_target(21);
+              printf("REA_GDB_RESULT=%d\n", result);
+              return result == 42 ? 0 : 1;
+          }
+          C
+          gcc -g -O0 -fno-omit-frame-pointer -no-pie \
+            -o "$evidence/debug-target" "$evidence/fixture.c"
+          sha256sum "$evidence/debug-target" > "$evidence/target-sha256.txt"
+          file "$evidence/debug-target" > "$evidence/target-file-type.txt"
+          test "$("$evidence/debug-target")" = 'REA_GDB_RESULT=42'
+          cat > "$evidence/gdb-commands.txt" <<'GDB'
+          set confirm off
+          set pagination off
+          set print pretty on
+          break inspect_target
+          run
+          backtrace
+          print value
+          continue
+          quit
+          GDB
+          timeout --signal=TERM --kill-after=5s 50s \
+            gdb --nx --quiet --batch \
+            -x "$evidence/gdb-commands.txt" \
+            --args "$evidence/debug-target" \
+            > "$evidence/gdb-original.log" 2>&1
+          cat "$evidence/gdb-original.log"
+          grep -Eq 'Breakpoint 1, inspect_target \(value=21\)' "$evidence/gdb-original.log"
+          grep -Eq '^#0[[:space:]]+inspect_target' "$evidence/gdb-original.log"
+          grep -Eq '^\$1 = 21$' "$evidence/gdb-original.log"
+          grep -F 'REA_GDB_RESULT=42' "$evidence/gdb-original.log"
+          grep -Eq 'exited normally' "$evidence/gdb-original.log"
+          # New GDB process and inferior process: independently exercises
+          # repeatability, not session restoration or debugger cancellation.
+          timeout --signal=TERM --kill-after=5s 50s \
+            gdb --nx --quiet --batch \
+            -x "$evidence/gdb-commands.txt" \
+            --args "$evidence/debug-target" \
+            > "$evidence/gdb-reconnected-new-process.log" 2>&1
+          grep -Eq 'Breakpoint 1, inspect_target \(value=21\)' "$evidence/gdb-reconnected-new-process.log"
+          grep -Eq 'exited normally' "$evidence/gdb-reconnected-new-process.log"
+          python3 - "$evidence" <<'PY'
+          import hashlib, json, sys
+          from pathlib import Path
+          root = Path(sys.argv[1])
+          digest = hashlib.sha256((root / "debug-target").read_bytes()).hexdigest()
+          first = (root / "gdb-original.log").read_text()
+          second = (root / "gdb-reconnected-new-process.log").read_text()
+          result = {
+              "provider": "real-linux-gdb",
+              "platform": "ubuntu-24.04",
+              "subject_sha256": digest,
+              "breakpoint_and_backtrace_observed": True,
+              "argument_at_breakpoint": 21,
+              "inferior_normal_exit_observed_twice": True,
+              "independent_new_debugger_process_repeat_passed": True,
+              "rust_adapter_qualified": False,
+              "real_remote_reconnection_qualified": False,
+              "real_cancellation_qualified": False,
+              "limitations": [
+                  "Only a local benign debug target, no attach to arbitrary live processes",
+                  "Not a HeptaRuntime GDB adapter, remote process session or Frida coverage",
+              ],
+          }
+          if first == second:
+              result["logs_identical"] = True
+          (root / "gdb-reference-manifest.json").write_text(
+              json.dumps(result, sort_keys=True, indent=2) + "\n")
+          PY
+
+      - name: Preserve original execution logs even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-real-gdb-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/rea-real-gdb/
+          if-no-files-found: warn
+          retention-days: 14
