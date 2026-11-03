@@ -2,8 +2,10 @@
 
 Controlling source: upstream Git commit 93b8b82db70279e40f484114cff9dc1958dc14ee,
 whose package.json reports version 6.8.0. This is NOT a claim that the npm
-registry tarball has the same content or that the complete REA catalog has
-been captured. Runtime baseline: ba574f2a6a1b74e85191c58d7bec011720736bb9.
+registry tarball has the same source-to-build identity. The published npm MCP
+catalog (229 names, separate full-input/full-output schema profiles) has been
+captured and fingerprinted, but this is NOT 229-tool behavioral parity.
+Runtime baseline: ba574f2a6a1b74e85191c58d7bec011720736bb9.
 
 Sources: https://github.com/morluto/rea/blob/93b8b82db70279e40f484114cff9dc1958dc14ee/src/domain/evidence.ts
 and https://github.com/morluto/rea/blob/93b8b82db70279e40f484114cff9dc1958dc14ee/src/contracts/toolFamilyIds.ts
@@ -17,14 +19,16 @@ MCP schemas captured in actual separate stdio sessions. The two runs have the
 same tool-name identity and distinct profile-specific catalog digests.
 REA's canonical Evidence id is ev_<digest>; it depends on the upstream
 canonicalization and full record, including explicit relationship_coverage
-and analysis_profile. The Rust-native preview remains a NON-REA Evidence record. A separate
-policy-gated verifier checks source-derived REA ev_ semantic ID commitments
-for JSON with exact safe integers. It rejects duplicate keys, tampering and
-an omitted null relationship_coverage but cannot establish full Zod or
-floating-number parity. The full
-generated tool catalog, schemas, golden records, original unknown ledger,
-errors and authentic differential fixtures still need collection from a
-locked REA installation. Source inventory is not conformance acceptance.
+and analysis_profile. The Rust-native preview remains a NON-REA Evidence record.
+The policy-gated verifier checks source-derived REA ev_ semantic IDs and a
+bounded IEEE-754 corpus with UTF-16 keys and independent published npm records.
+418 upstream-created and authenticated cases, including empty/null ordinary
+provider versions, passed the real npm->Rust differential in CI 41555825978.
+20 upstream-rejected, rehashed invalid Evidence records and live MCP
+cancellation probes are separately tracked; do not treat a cancellation
+notification as proof that an active provider stopped. The published schema
+catalog is captured; full 229-tool behavior, all typed errors/cancellations,
+complete Golden corpus, and original unknown ledger remain OPEN.
 
 ## P1: NATIVE FOUNDATION — PARTIAL
 
@@ -39,8 +43,10 @@ decompilation, symbol extraction, code validation or signature verification.
 The native preview identifier is NOT an REA ev_ identifier. Fail-closed
 and symlink-escape tests are included. File-descriptor admission rejects symlink traversal and parent components,
 including ordinary rename/symlink swaps between validation and open. Hostile
-mutation of an already opened file's *contents*, compromised policy roots, and
-untrusted parser process crashes still require isolated worker/quotas.
+mutation of an already opened file's *contents*, compromised policy roots,
+and hostile same-UID ownership remain OPEN. The bounded local Rust parser
+worker and Linux seccomp defense-in-depth exist, but do not qualify complete
+namespace/UID/host isolation or remote authenticated execution.
 
 ### P1 Evidence digest subset (still OPEN for full parity)
 
@@ -49,10 +55,15 @@ confined descriptor-relative file policy. It checks a source-derived REA
 semantic projection (excluded display path, included null relationship
 coverage) with UTF-16 key sorting and SHA-256. Node.js source-semantics
 reference hashes cover ASCII and supplementary-plane key ordering.
-Only exactly representable signed/unsigned safe integers are admitted;
-fractional and exponent numbers fail closed. Complete upstream Zod
-validation, authentic upstream generated Evidence E2E and production
-semantics are still unqualified. Successful output says subset only.
+The verifier now uses finite IEEE-754 ECMAScript-style canonical rendering
+and explicitly enabled correctly rounded serde_json float_roundtrip parsing.
+A real npm corpus caught an earlier one-ULP mismatch; the source fix and
+418-case upstream-generated independent differential passed CI 41555825978.
+Ordinary Evidence provider version may be null or an empty string, while a
+committed analysis-profile provider requires a nonempty version. Complete
+upstream Zod schema equality, every f64 bit pattern, deep JSON nesting,
+and provider truth/authority are still unqualified. Successful output
+reports non-full-schema qualification.
 
 ## P2: FORMAT PARITY AND APPLICATIONS — OPEN
 
@@ -60,7 +71,13 @@ To close: real independent per-format differential fixtures (including
 malformed and oversized cases), full provenance and unknown semantics,
 Rust AST-based JS/Electron, APK manifests/signatures, model tensor-offset
 validation, firmware extractors, retained Evidence and versioned projections.
-The preview does not qualify any of these larger features.
+A new native classic single-volume ZIP reader checks central-directory versus
+local-header identity, bounded names, non-overlapping member payload spans,
+failed/truncated inputs and APK-like entry *hints*. It does NOT decompress,
+validate CRC, parse Android manifests, prove APK identity or authenticate APK
+v1/v2/v3/v4 signatures. Independently generated Python ZIP fixtures are tested
+against the shipped Rust worker in exact-head CI. This is only a P2 static
+index subgate, not complete application or REA parity.
 
 ## P3: REAL PROVIDER ADAPTERS — OPEN
 
