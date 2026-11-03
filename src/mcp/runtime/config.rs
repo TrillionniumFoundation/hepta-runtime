@@ -1,3 +1,8 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+//! Configured host capabilities and policy-owned runtime integrations.
+
 use anyhow::{anyhow, bail, Context, Result};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -87,6 +92,9 @@ pub struct RuntimeConfig {
 	pub controller_workspace_roots: Vec<PathBuf>,
 	#[serde(default)]
 	pub hosts: BTreeMap<String, HostConfig>,
+	/// Named administrator-owned model workers; absent disables all weight tools.
+	#[serde(default)]
+	pub weight_workers: BTreeMap<String, crate::mcp::weight_config::WeightWorkerProfile>,
 }
 
 fn default_state_dir() -> PathBuf {
@@ -179,6 +187,7 @@ impl RuntimeConfig {
 				}
 			}
 		}
+		crate::mcp::weight_config::validate_profiles(self)?;
 		Ok(())
 	}
 
