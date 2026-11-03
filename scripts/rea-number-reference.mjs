@@ -91,6 +91,29 @@ const cases = samples.map((value, index) => {
   }
   return evidence;
 });
+// This is a real upstream-schema edge: ordinary providerSchema.version is
+// z.string().nullable() (empty string is valid), while committed profile
+// versions require a nonempty string. The previous Rust verifier incorrectly
+// rejected the valid empty-string ordinary Evidence provider.
+for (const version of ["", null]) {
+  const variantProvider = { ...provider, version };
+  const evidence = createEvidence(undefined, variantProvider, {
+    operation: "hepta_provider_version_nullable_or_empty",
+    parameters: { source: "published-reasoned-schema-differential", variant: version },
+    result: { providerVersion: version, unknown: true },
+    relationshipCoverage: { status: "unknown", reason: "provider version not committed" },
+    authority: "controlled-replay",
+  });
+  const parsed = parseEvidence(evidence);
+  if (parsed.evidence_id !== evidence.evidence_id) {
+    throw new Error("published REA provider-version fixture failed authentication");
+  }
+  if (parsed.provider.version !== version || parsed.analysis_profile !== null) {
+    throw new Error("published REA provider-version schema drift");
+  }
+  cases.push(evidence);
+}
+
 const encoded = JSON.stringify({ cases });
 const checksum = createHash("sha256").update(encoded).digest("hex");
 await mkdir(output, { recursive: true });
