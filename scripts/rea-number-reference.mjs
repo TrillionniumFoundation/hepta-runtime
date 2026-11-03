@@ -114,6 +114,98 @@ for (const version of ["", null]) {
   cases.push(evidence);
 }
 
+// Independently classify invalid *upstream* Evidence schemas while keeping
+// semantic IDs recomputed for each malformed record. Rust cannot pass this
+// gate simply by rejecting stale IDs: upstream's Zod must reject first, and
+// the Rust verifier must reject each hash-consistent invalid record.
+const canonicalModule = await import(pathToFileURL(join(root, "dist/domain/canonicalDigest.js")).href);
+const { digestCanonicalValue } = canonicalModule;
+const { evidenceSemanticContent } = evidenceModule;
+if (typeof digestCanonicalValue !== "function" || typeof evidenceSemanticContent !== "function") {
+  throw new Error("published npm canonical Evidence projection unavailable");
+}
+const invalidSchemaCases = [];
+function mustRejectUpstream(label, mutate, reference = cases[cases.length - 1]) {
+  const record = structuredClone(reference);
+  mutate(record);
+  const { evidence_id: _prior, ...withoutId } = record;
+  record.evidence_id = "ev_" + digestCanonicalValue(evidenceSemanticContent(withoutId));
+  let rejected = false;
+  try {
+    parseEvidence(record);
+  } catch {
+    rejected = true;
+  }
+  if (!rejected) {
+    throw new Error("published REA unexpectedly accepted invalid schema case: " + label);
+  }
+  invalidSchemaCases.push({ label, record, authenticatedHashButRejectedSchema: true });
+}
+mustRejectUpstream("provider-version-number", (r) => { r.provider.version = 7; });
+mustRejectUpstream("provider-version-boolean", (r) => { r.provider.version = false; });
+mustRejectUpstream("unknown-evidence-authority", (r) => { r.authority = "not-authoritative"; });
+mustRejectUpstream("unknown-evidence-confidence", (r) => { r.confidence = "maybe"; });
+mustRejectUpstream("nonobject-parameters", (r) => { r.parameters = [1, 2]; });
+mustRejectUpstream("empty-coverage-reason", (r) => {
+  r.relationship_coverage = { status: "unknown", reason: "" };
+});
+mustRejectUpstream("partial-coverage-empty-limitations", (r) => {
+  r.relationship_coverage = { status: "partial", limitations: [] };
+});
+mustRejectUpstream("empty-coverage-diagnostics", (r) => {
+  r.relationship_coverage = { status: "complete", diagnostics: [] };
+});
+mustRejectUpstream("unknown-coverage-direction", (r) => {
+  r.relationship_coverage = { status: "partial", limitations: ["partial"], limited_directions: ["unknown"] };
+});
+mustRejectUpstream("file-offset-negative", (r) => {
+  r.locations = [{ kind: "file-offset", offset: -1 }];
+});
+mustRejectUpstream("file-offset-fractional", (r) => {
+  r.locations = [{ kind: "file-offset", offset: 3.5 }];
+});
+mustRejectUpstream("file-offset-unsafe-integer", (r) => {
+  r.locations = [{ kind: "file-offset", offset: 9007199254740992 }];
+});
+mustRejectUpstream("invalid-environment-isolation", (r) => {
+  r.environment = { id: "env", platform: "linux", architecture: "x86_64", isolation: "root" };
+});
+mustRejectUpstream("invalid-evidence-link", (r) => {
+  r.evidence_links = ["ev_incomplete"];
+});
+mustRejectUpstream("unexpected-root-field", (r) => { r.injected = "not allowed"; });
+mustRejectUpstream("subject-unknown-format", (r) => {
+  r.subject = {
+    name: "demo", local_path: "/controlled/sample", digest: { sha256: "a".repeat(64) },
+    format: "illegal-format", architecture: "x86_64",
+  };
+});
+mustRejectUpstream("subject-raw-only-cpu-on-elf", (r) => {
+  r.subject = {
+    name: "demo", local_path: "/controlled/sample", digest: { sha256: "a".repeat(64) },
+    format: "elf", architecture: "6502",
+  };
+});
+mustRejectUpstream("subject-gamecube-dol-missing-powerpc", (r) => {
+  r.subject = {
+    name: "demo", local_path: "/controlled/sample", digest: { sha256: "a".repeat(64) },
+    format: "gamecube-dol", architecture: null,
+  };
+});
+mustRejectUpstream("profile-empty-committed-provider-version", (r) => {
+  r.provider = { id: provider.id, name: provider.name, version: "" };
+  r.analysis_profile = {
+    provider: r.provider,
+    parameters: {},
+    digest: digestCanonicalValue({ provider: r.provider, parameters: {} }),
+  };
+});
+mustRejectUpstream("profile-provider-mismatch", (r) => {
+  r.analysis_profile = createAnalysisProfile(provider, { issue: "provider mismatch" });
+});
+await writeFile(join(output, "REA_6_8_0_INVALID_EVIDENCE_SCHEMA.json"),
+  JSON.stringify({ cases: invalidSchemaCases }, null, 2) + "\n");
+
 const encoded = JSON.stringify({ cases });
 const checksum = createHash("sha256").update(encoded).digest("hex");
 await mkdir(output, { recursive: true });
