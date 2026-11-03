@@ -32,7 +32,9 @@ METRICS = ("wall_seconds", "cpu_seconds", "gpu_seconds", "forward_examples",
 COUNTS = {"forward_examples", "generated_tokens", "editor_tokens", "optimizer_steps",
           "peak_rss_bytes"}
 STAGES = {"model_load", "feature_extraction", "discovery", "candidate_construction",
-          "confirmation", "cleanup", "other"}
+          "confirmation", "cleanup", "astra_inference", "other"}
+REQUIRED_COST_STAGES = STAGES - {"other"}
+DAY_MS = 86_400_000
 
 
 class HandoffError(ValueError):
@@ -272,6 +274,81 @@ def _comparison_eligibility(plan, assessment, rows):
                 full_private_binding_verified_by="original_strict_source_evaluator" if proofs else None)
 
 
+def audit_comparison_design(plan, assessment, observed, comparison_count):
+    """Recheck source block/family metadata without issuing a statistical decision.
+
+    The source joins whole UTC-day intervals, including transitive overlap. Exact
+    trade-time clustering would split its frozen dependence blocks differently.
+    Missing legacy metadata stays explicitly unverified.
+    """
+    intervals = sorted((r["opened_at_ms"] // DAY_MS, r["closed_at_ms"] // DAY_MS,
+                        r["command_id"]) for r in observed)
+    block_sizes, end = [], -1
+    for first, last, _ in intervals:
+        if first > end:
+            block_sizes.append(0)
+        block_sizes[-1] += 1
+        end = max(end, last)
+    midpoint = (plan["input_start_ms"] + plan["input_end_ms"]) // 2
+    halves = [sum(r["opened_at_ms"] < midpoint for r in observed),
+              sum(r["opened_at_ms"] >= midpoint for r in observed)]
+    expected = {"time_blocks": len(block_sizes), "half_counts": halves,
+                "distinct_utc_days": len({r["opened_at_ms"] // DAY_MS for r in observed}),
+                "multiple_comparison_count": comparison_count}
+    checks = {}
+    for name, value in expected.items():
+        if name in assessment:
+            actual = assessment[name]
+            if isinstance(value, list):
+                require(isinstance(actual, list) and len(actual) == 2 and
+                        all(type(v) is int for v in actual), "SOURCE_DESIGN_FIELD:" + name)
+            else:
+                integer(actual, name)
+            require(actual == value, "SOURCE_DESIGN_MISMATCH:" + name)
+            checks[name] = "verified"
+        else:
+            checks[name] = "unavailable"
+    family_alpha = plan["rule"].get("family_alpha")
+    pair_alpha, mixture_checks = None, 0
+    def same_alpha(actual, expected, name):
+        actual = finite(actual, name)
+        require(0 < actual < 1 and math.isclose(actual, expected, rel_tol=1e-12, abs_tol=0.),
+                "SOURCE_ALPHA_MISMATCH:" + name)
+    if family_alpha is not None:
+        family_alpha = finite(family_alpha, "family_alpha")
+        require(0 < family_alpha < 1, "SOURCE_FAMILY_ALPHA")
+        pair_alpha = family_alpha / comparison_count
+        for name, value in (("family_alpha", family_alpha), ("pair_alpha", pair_alpha)):
+            if name in assessment:
+                same_alpha(assessment[name], value, name)
+                checks[name] = "verified"
+            else:
+                checks[name] = "unavailable"
+        for name, comparison in assessment["paired_comparisons"].items():
+            evidence = comparison.get("huber_mixture_evidence")
+            if evidence is not None:
+                require(isinstance(evidence, dict), "SOURCE_MIXTURE_EVIDENCE")
+                same_alpha(evidence.get("pair_alpha"), pair_alpha, name + ":pair_alpha")
+                _same_number(evidence.get("required_log_e"), math.log(2 / pair_alpha),
+                             name + ":required_log_e")
+                require(evidence.get("method") == plan["rule"].get("sequential_test"),
+                        "SOURCE_STATISTICAL_METHOD_CHANGED")
+                mixture_checks += 1
+    else:
+        checks.update(family_alpha="unavailable", pair_alpha="unavailable")
+    return {"schema": "hepta.weight.current100k-comparison-design.v1", **expected,
+            "observed_rows": len(observed), "observed_block_sizes": block_sizes,
+            "block_rule": "TRANSITIVELY_CONNECTED_CLOSED_UTC_DAY_INTERVALS",
+            "family_alpha": family_alpha, "pair_alpha": pair_alpha,
+            "mixture_threshold_records_checked": mixture_checks,
+            "mixture_threshold_records_unverified": comparison_count - mixture_checks,
+            "source_field_checks": checks,
+            "alpha_scope": "THIS_FROZEN_RESEARCH_FAMILY_ONLY",
+            "unobserved_rows_enter_error_metrics": False,
+            "statistical_decision_recomputed": False,
+            "independence_or_generalization_proven": False}
+
+
 def import_assessment(plan_snapshot, provenance, assessment, outcomes, *,
                       expected_plan_id, provenance_sha256=None, costs=None):
     """Verify a captured source review and recompute descriptive USD comparisons.
@@ -458,6 +535,7 @@ def import_assessment(plan_snapshot, provenance, assessment, outcomes, *,
                     "INCOMPLETE_SOURCE_COMPARATIVE_CREDIT")
             comparisons[key] = {**gains, "source_comparative_conditions_met": accepted,
                                 "statistical_rule_recomputed": False}
+    design = audit_comparison_design(plan, assessment, observed, len(expected_pairs))
     result = {"schema": HANDOFF_SCHEMA, "claim_scope": "imported_research_comparison",
               "plan_id": expected_plan_id, "source_state": state, "as_of_ms": as_of,
               "original_window": {k: plan[k] for k in TIME_KEYS},
@@ -471,6 +549,7 @@ def import_assessment(plan_snapshot, provenance, assessment, outcomes, *,
               "retained_unenumerated_command_count": total-len(rows), "status_counts": declared,
               "outcome_set_digest": outcomes["outcome_set_digest"], "arm_metrics": summaries,
               "paired_comparisons": comparisons, "source_rule": rule,
+              "comparison_design": design,
               "source_reasons": assessment.get("reasons", []), "source_issues": assessment.get("source_issues", []),
               "comparison_eligibility": eligibility,
               "formal_success_possible_under_frozen_rule": eligibility["formal_success_possible_under_frozen_rule"],
@@ -498,8 +577,96 @@ def _at(value, keys):
     return value
 
 
-def summarize_costs(records):
-    """Summarize captured operations once, preserving unknown measurements."""
+def _cost_scopes(unique, inclusive):
+    """Validate receipt-bound nesting; a metadata path is not a separate cost."""
+    parents, ancestors = {}, {}
+    for identity, record in unique.items():
+        scope = record.get("accounting")
+        if not inclusive:
+            require(scope is None, "COST_SCOPE_REQUIRES_V2")
+            continue
+        require(isinstance(scope, dict) and set(scope) == {
+                    "schema", "operation_id", "parent_operation_id", "metric_scope"} and
+                scope["schema"] == "hepta.weight.inclusive-cost-scope.v1" and
+                scope["operation_id"] == identity and scope["metric_scope"] == "inclusive",
+                "COST_INCLUSIVE_SCOPE")
+        parent = scope["parent_operation_id"]
+        require(parent is None or (isinstance(parent, str) and parent in unique),
+                "COST_UNKNOWN_PARENT")
+        parents[identity] = parent
+    for identity in parents:
+        chain, seen, parent = [], {identity}, parents[identity]
+        while parent is not None:
+            require(parent not in seen, "COST_SCOPE_CYCLE")
+            require(len(chain) < 64, "COST_SCOPE_DEPTH_LIMIT")
+            chain.append(parent)
+            seen.add(parent)
+            parent = parents[parent]
+        ancestors[identity] = chain
+    paths = defaultdict(dict)
+    for identity, record in unique.items():
+        paths[record["source_sha256"]][tuple(record.get("source_record_path", []))] = identity
+    for records_by_path in paths.values():
+        for path, identity in records_by_path.items():
+            for size in range(len(path)):
+                containing = records_by_path.get(path[:size])
+                if containing is not None:
+                    require(inclusive and containing in ancestors[identity],
+                            "COST_OVERLAPPING_RECEIPT_PATHS_REQUIRE_SCOPE")
+    if inclusive:
+        for identity, chain in ancestors.items():
+            for parent in chain:
+                for key in METRICS:
+                    child_value = unique[identity]["metrics"][key]
+                    parent_value = unique[parent]["metrics"][key]
+                    if child_value is not None and parent_value is not None:
+                        require(child_value <= parent_value or
+                                (key not in COUNTS and math.isclose(
+                                    child_value, parent_value, rel_tol=1e-9, abs_tol=1e-9)),
+                                "COST_CHILD_EXCEEDS_INCLUSIVE_PARENT:" + key)
+    return parents, ancestors
+
+
+def _inclusive_cost_totals(unique, parents, ancestors):
+    """Keep the outermost measured scope per metric, retaining unknown roots."""
+    roots = sorted(k for k, parent in parents.items() if parent is None)
+    answer = {"operation_count": len(unique),
+              "status_counts": dict(Counter(x["status"] for x in unique.values()))}
+    for key in METRICS:
+        selected, suppressed = [], []
+        for identity, record in unique.items():
+            if record["metrics"][key] is None:
+                continue
+            if any(unique[parent]["metrics"][key] is not None for parent in ancestors[identity]):
+                suppressed.append(identity)
+            else:
+                selected.append(identity)
+        values = [unique[k]["metrics"][key] for k in selected]
+        aggregate = None
+        if values:
+            aggregate = max(values) if key == "peak_rss_bytes" else (
+                sum(values) if key in COUNTS else math.fsum(values))
+        unknown_roots = [k for k in roots if unique[k]["metrics"][key] is None]
+        missing = sum(record["metrics"][key] is None for record in unique.values())
+        answer[key] = {
+            "value": aggregate,
+            "aggregation": "maximum" if key == "peak_rss_bytes" else "outermost_measured_inclusive_scopes",
+            "selected_operation_ids": sorted(selected), "suppressed_operation_ids": sorted(suppressed),
+            "unknown_root_operation_ids": unknown_roots,
+            "known_operation_count": len(unique) - missing, "missing_operation_count": missing,
+            "complete": bool(roots) and not unknown_roots,
+            "scope": "DECLARED_OPERATIONS_ONLY; NOT_END_TO_END_OR_COMPLETE_EXPERIMENT",
+            "known_subscope_lower_bound_only": bool(values) and bool(unknown_roots)}
+    return answer
+
+
+def summarize_costs(records, *, inclusive=False):
+    """Summarize captured operations once, preserving unknown measurements.
+
+    V1 keeps reported-operation sums, without asserting non-overlapping scopes.
+    V2 uses explicit inclusive ancestry read from the same pinned receipts.
+    Neither schema proves that the caller supplied every experiment operation.
+    """
     require(isinstance(records, list) and len(records) <= MAX_ROWS, "COST_RECORD_LIMIT")
     unique, receipts = {}, {}
     for record in records:
@@ -527,6 +694,7 @@ def summarize_costs(records):
         require(receipt not in receipts, "COST_RECEIPT_COUNTED_TWICE")
         receipts[receipt] = identity
         unique[identity] = record
+    parents, ancestors = _cost_scopes(unique, inclusive)
     stages = defaultdict(list)
     for record in unique.values():
         stages[record["stage"]].append(record)
@@ -541,15 +709,30 @@ def summarize_costs(records):
             answer[key] = {"known_operation_count": len(known), "missing_operation_count": len(items)-len(known),
                            "aggregation": "maximum" if key == "peak_rss_bytes" else "sum_of_operations",
                            "value": aggregate,
+                           "scope": "SUBMITTED_OPERATIONS_ONLY; MAY_INCLUDE_NESTED_SCOPES",
                            "complete": bool(items) and len(known) == len(items)}
         return answer
-    result = {"schema": "hepta.weight.measured-cost-summary.v1", "unique_operations": len(unique),
+    present_stages = set(stages)
+    coverage = {"required_stages": sorted(REQUIRED_COST_STAGES),
+                "present_stages": sorted(present_stages),
+                "missing_stages": sorted(REQUIRED_COST_STAGES - present_stages),
+                "all_required_stages_represented": REQUIRED_COST_STAGES <= present_stages,
+                "complete_experiment_inventory_verified": False,
+                "failed_attempt_inventory_verified": False}
+    result = {"schema": "hepta.weight.measured-cost-summary.v2" if inclusive else
+                        "hepta.weight.measured-cost-summary.v1", "unique_operations": len(unique),
               "duplicate_input_records": len(records)-len(unique),
               "operations": [unique[k] for k in sorted(unique)],
               "stages": {k: group_summary(v) for k, v in sorted(stages.items())},
               "shared_operations": [k for k, v in unique.items() if len(v["arm_ids"]) != 1],
               "operation_arm_mapping": {k: v["arm_ids"] for k, v in unique.items()},
-              "totals": group_summary(list(unique.values())), "end_to_end_wall_seconds": None,
+              "totals": (_inclusive_cost_totals(unique, parents, ancestors) if inclusive else
+                         group_summary(list(unique.values()))),
+              "coverage": coverage,
+              "accounting_mode": "RECEIPT_BOUND_INCLUSIVE_SCOPES" if inclusive else
+                                 "LEGACY_REPORTED_OPERATION_SUMS_SCOPE_UNKNOWN",
+              "stage_summaries_may_overlap": True,
+              "end_to_end_wall_seconds": None,
               "speedup_claim": None, "measurements_authenticated": False}
     result["cost_digest"] = source_digest(result)
     return result
@@ -558,7 +741,9 @@ def summarize_costs(records):
 def load_costs(manifest_path):
     """Metric values come from hash-checked receipt fields, never manifest numbers."""
     manifest, _ = read_json_bytes(manifest_path)
-    require(manifest.get("schema") == "hepta.weight.cost-inputs.v1", "COST_INPUT_SCHEMA")
+    require(manifest.get("schema") in ("hepta.weight.cost-inputs.v1", "hepta.weight.cost-inputs.v2"),
+            "COST_INPUT_SCHEMA")
+    inclusive = manifest["schema"] == "hepta.weight.cost-inputs.v2"
     specifications = manifest.get("records")
     require(isinstance(specifications, list) and len(specifications) <= MAX_ROWS, "COST_RECORD_LIMIT")
     records = []
@@ -574,10 +759,17 @@ def load_costs(manifest_path):
         require(isinstance(selectors, dict) and set(selectors) <= set(METRICS), "COST_METRIC_KEYS")
         metrics = {key: _at(record, selectors[key]) if key in selectors else None for key in METRICS}
         status = _at(record, spec["status_path"]) if "status_path" in spec else "unknown"
-        records.append({"operation_id": spec["operation_id"], "stage": spec["stage"],
-                        "arm_ids": spec["arm_ids"], "source_sha256": expected,
-                        "source_record_path": record_path, "status": status, "metrics": metrics})
-    return summarize_costs(records)
+        normalized = {"operation_id": spec["operation_id"], "stage": spec["stage"],
+                      "arm_ids": spec["arm_ids"], "source_sha256": expected,
+                      "source_record_path": record_path, "status": status, "metrics": metrics}
+        if inclusive:
+            require("accounting_path" in spec, "COST_ACCOUNTING_RECEIPT_REQUIRED")
+            normalized["accounting"] = _at(record, spec["accounting_path"])
+        else:
+            require("accounting_path" not in spec and "accounting" not in spec,
+                    "COST_SCOPE_REQUIRES_V2")
+        records.append(normalized)
+    return summarize_costs(records, inclusive=inclusive)
 
 
 def load_review(review_root, expected_plan_id, *, cost_manifest=None):

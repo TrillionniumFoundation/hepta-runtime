@@ -24,6 +24,7 @@ def fixture(*, final=False, incomplete=False, maximum_unresolved=0):
             "trade_authority": False, "automatic_selection": False, "actor_update": False,
             "rule": {"window_ms": 14*day, "closure_grace_ms": day,
                      "maximum_unresolved_at_final": maximum_unresolved,
+                     "family_alpha": .05,
                      "target_scale_usd": 100., "max_abs_prediction_usd": 15.,
                      "sequential_test": "MIXTURE_HOEFFDING_HUBER_LOSS_DIFFERENCE"},
             "heads": {"parent": {"sha256": sha("parent")}, "edit": {"sha256": sha("edit")}},
@@ -86,6 +87,9 @@ def fixture(*, final=False, incomplete=False, maximum_unresolved=0):
               "original_command_count_complete": True, "original_command_count": len(rows),
               "observed_trades": 2, "status_counts": {"OBSERVED": 2},
               "prediction_coverage": 2/len(rows), "arm_metrics": metrics, "paired_comparisons": pairs,
+              "distinct_utc_days": 1, "time_blocks": 1, "half_counts": [2, 0],
+              "family_alpha": .05, "pair_alpha": .05 / len(pairs),
+              "multiple_comparison_count": len(pairs),
               "review_provenance_sha256": H.file_digest(provenance),
               "outcome_set_digest": H.source_digest(rows)}
     if incomplete:
@@ -291,6 +295,7 @@ class HandoffTests(unittest.TestCase):
                       original_command_count_complete=False, current_credit_withdrawn=True,
                       original_command_count=3, observed_trades=0, status_counts={"CENSORED": 3},
                       prediction_coverage=0., retained_known_command_count=1,
+                      distinct_utc_days=0, time_blocks=0, half_counts=[0, 0],
                       retained_unenumerated_command_count=2,
                       current_source_totals={"observed_trades": None, "original_command_count": None,
                                              "prediction_coverage": None})
@@ -423,11 +428,89 @@ class HandoffTests(unittest.TestCase):
             evaluate(args)
 
 
+class ComparisonDesignTests(unittest.TestCase):
+    def test_original_family_and_block_metadata_are_recomputed(self):
+        result = evaluate(fixture(incomplete=True))
+        design = result["comparison_design"]
+        self.assertEqual(design["observed_rows"], 2)
+        self.assertEqual(design["observed_block_sizes"], [2])
+        self.assertEqual(design["multiple_comparison_count"], 6)
+        self.assertEqual(design["mixture_threshold_records_unverified"], 6)
+        self.assertAlmostEqual(design["pair_alpha"], .05 / 6)
+        self.assertTrue(all(v == "verified" for v in design["source_field_checks"].values()))
+        self.assertFalse(design["statistical_decision_recomputed"])
+        self.assertEqual(result["original_command_count"], 4)
+
+    def test_transitive_day_overlap_and_touching_day_stay_together(self):
+        day = H.DAY_MS
+        plan = {"input_start_ms": day, "input_end_ms": 20 * day,
+                "rule": {"family_alpha": .05}}
+        # First/third trades do not overlap directly. The middle interval joins
+        # them, and a same-day close/open cannot become a new bootstrap block.
+        observed = [{"command_id": str(i), "opened_at_ms": start * day + 100,
+                     "closed_at_ms": end * day + 200}
+                    for i, (start, end) in enumerate(((1, 2), (2, 4), (4, 5), (7, 7)))]
+        report = {"paired_comparisons": {}, "time_blocks": 2, "half_counts": [4, 0],
+                  "distinct_utc_days": 4, "multiple_comparison_count": 132,
+                  "family_alpha": .05, "pair_alpha": .05 / 132}
+        audit = H.audit_comparison_design(plan, report, observed, 132)
+        self.assertEqual(audit["observed_block_sizes"], [3, 1])
+        self.assertAlmostEqual(audit["pair_alpha"], .05 / 132)
+        self.assertFalse(audit["independence_or_generalization_proven"])
+
+    def test_tampered_dependence_or_smaller_selected_family_is_rejected(self):
+        for key, changed in (("time_blocks", 2), ("half_counts", [1, 1]),
+                             ("distinct_utc_days", 2), ("multiple_comparison_count", 1),
+                             ("pair_alpha", .05), ("family_alpha", .1), ("time_blocks", True)):
+            args = fixture()
+            args[2][key] = changed
+            with self.subTest(key=key), self.assertRaises(H.HandoffError):
+                evaluate(args)
+
+    def test_missing_legacy_metadata_is_unverified_not_invented(self):
+        args = fixture()
+        for key in ("time_blocks", "distinct_utc_days", "half_counts", "family_alpha",
+                    "pair_alpha", "multiple_comparison_count"):
+            del args[2][key]
+        design = evaluate(args)["comparison_design"]
+        self.assertTrue(all(v == "unavailable" for v in design["source_field_checks"].values()))
+        self.assertEqual(design["time_blocks"], 1)
+
+    def test_pair_threshold_must_keep_original_family_alpha(self):
+        for wrong in (False, True):
+            args = fixture()
+            alpha = .05 / len(args[2]["paired_comparisons"])
+            evidence = {"pair_alpha": alpha, "required_log_e": math.log(2 / alpha),
+                        "method": args[0]["plan"]["rule"]["sequential_test"]}
+            args[2]["paired_comparisons"]["edit vs parent"]["huber_mixture_evidence"] = evidence
+            if wrong:
+                evidence["required_log_e"] = math.log(2 / .05)
+                with self.assertRaisesRegex(H.HandoffError, "SOURCE_METRIC_MISMATCH"):
+                    evaluate(args)
+            else:
+                design = evaluate(args)["comparison_design"]
+                self.assertFalse(design["statistical_decision_recomputed"])
+                self.assertEqual(design["mixture_threshold_records_checked"], 1)
+
+    def test_small_alpha_cannot_be_replaced_by_zero_with_absolute_tolerance(self):
+        plan = {"input_start_ms": 1, "input_end_ms": 2, "rule": {"family_alpha": 1e-12}}
+        with self.assertRaisesRegex(H.HandoffError, "SOURCE_ALPHA_MISMATCH"):
+            H.audit_comparison_design(plan, {"paired_comparisons": {}, "pair_alpha": 0.}, [], 132)
+
+
 def cost_record(identity, *, status="completed", stage="candidate_construction"):
     metrics = dict.fromkeys(H.METRICS)
     metrics.update(wall_seconds=1.25, cpu_seconds=.75, forward_examples=4, peak_rss_bytes=100)
     return {"operation_id": identity, "stage": stage, "arm_ids": ["edit"], "status": status,
             "source_sha256": sha(identity), "source_record_path": [], "metrics": metrics}
+
+
+def inclusive_record(identity, *, parent=None, **kwargs):
+    record = cost_record(identity, **kwargs)
+    record["accounting"] = {"schema": "hepta.weight.inclusive-cost-scope.v1",
+                            "operation_id": identity, "parent_operation_id": parent,
+                            "metric_scope": "inclusive"}
+    return record
 
 
 class CostTests(unittest.TestCase):
@@ -481,6 +564,102 @@ class CostTests(unittest.TestCase):
             (root/"receipt.json").write_text('{"wall":0}')
             with self.assertRaisesRegex(H.HandoffError, "COST_SOURCE_CHANGED"):
                 H.load_costs(root/"costs.json")
+
+    def test_stage_presence_never_claims_complete_experiment_cost(self):
+        only_head = H.summarize_costs([cost_record("head")])
+        self.assertIn("astra_inference", only_head["coverage"]["missing_stages"])
+        self.assertIn("feature_extraction", only_head["coverage"]["missing_stages"])
+        self.assertFalse(only_head["coverage"]["all_required_stages_represented"])
+        records = [cost_record(name, stage=name) for name in H.REQUIRED_COST_STAGES]
+        all_stages = H.summarize_costs(records)
+        self.assertTrue(all_stages["coverage"]["all_required_stages_represented"])
+        self.assertFalse(all_stages["coverage"]["complete_experiment_inventory_verified"])
+        self.assertFalse(all_stages["coverage"]["failed_attempt_inventory_verified"])
+        self.assertIsNone(all_stages["speedup_claim"])
+
+    def test_nested_experiment_load_and_failed_attempt_are_not_added_twice(self):
+        outer = inclusive_record("run", stage="other")
+        outer["metrics"].update(wall_seconds=10., cpu_seconds=6., forward_examples=20,
+                                 peak_rss_bytes=500)
+        load = inclusive_record("load", parent="run", stage="model_load")
+        failed = inclusive_record("failed", parent="run", status="failed")
+        result = H.summarize_costs([outer, load, failed, copy.deepcopy(failed)], inclusive=True)
+        self.assertEqual(result["totals"]["wall_seconds"]["value"], 10.)
+        self.assertEqual(result["totals"]["forward_examples"]["value"], 20)
+        self.assertEqual(result["totals"]["wall_seconds"]["selected_operation_ids"], ["run"])
+        self.assertEqual(result["totals"]["wall_seconds"]["suppressed_operation_ids"], ["failed", "load"])
+        self.assertEqual(result["totals"]["status_counts"], {"completed": 2, "failed": 1})
+        self.assertEqual(result["unique_operations"], 3)
+        self.assertEqual(result["duplicate_input_records"], 1)
+        self.assertIsNone(result["end_to_end_wall_seconds"])
+
+    def test_unknown_outer_metric_retains_only_known_subscope_lower_bound(self):
+        outer = inclusive_record("run", stage="other")
+        outer["metrics"] = dict.fromkeys(H.METRICS)
+        child = inclusive_record("load", parent="run", stage="model_load")
+        child["metrics"].update(cpu_seconds=None, wall_seconds=2.)
+        grandchild = inclusive_record("inner", parent="load")
+        result = H.summarize_costs([outer, child, grandchild], inclusive=True)
+        wall, cpu = result["totals"]["wall_seconds"], result["totals"]["cpu_seconds"]
+        self.assertEqual(wall["value"], 2.)
+        self.assertEqual(cpu["value"], .75)
+        self.assertEqual(wall["unknown_root_operation_ids"], ["run"])
+        self.assertTrue(wall["known_subscope_lower_bound_only"])
+        self.assertFalse(wall["complete"])
+        self.assertEqual(cpu["selected_operation_ids"], ["inner"])
+
+    def test_parent_graph_cycles_unknown_parents_and_invalid_inclusive_values_fail(self):
+        for kind in ("cycle", "unknown", "self", "smaller_parent", "wrong_identity"):
+            outer = inclusive_record("run")
+            child = inclusive_record("child", parent="run")
+            if kind == "cycle":
+                outer["accounting"]["parent_operation_id"] = "child"
+            elif kind == "unknown":
+                child["accounting"]["parent_operation_id"] = "missing"
+            elif kind == "self":
+                child["accounting"]["parent_operation_id"] = "child"
+            elif kind == "smaller_parent":
+                child["metrics"]["wall_seconds"] = 2.
+            else:
+                child["accounting"]["operation_id"] = "different"
+            with self.subTest(kind=kind), self.assertRaises(H.HandoffError):
+                H.summarize_costs([outer, child], inclusive=True)
+
+    def test_same_receipt_ancestor_and_child_paths_require_real_scope_ancestry(self):
+        outer, child = cost_record("run"), cost_record("load")
+        child.update(source_sha256=outer["source_sha256"], source_record_path=["load"])
+        with self.assertRaisesRegex(H.HandoffError, "COST_OVERLAPPING_RECEIPT_PATHS_REQUIRE_SCOPE"):
+            H.summarize_costs([outer, child])
+        outer, child = inclusive_record("run"), inclusive_record("load", parent="run")
+        child.update(source_sha256=outer["source_sha256"], source_record_path=["load"])
+        result = H.summarize_costs([outer, child], inclusive=True)
+        self.assertEqual(result["totals"]["wall_seconds"]["value"], 1.25)
+        child["accounting"]["parent_operation_id"] = None
+        with self.assertRaisesRegex(H.HandoffError, "COST_OVERLAPPING_RECEIPT_PATHS_REQUIRE_SCOPE"):
+            H.summarize_costs([outer, child], inclusive=True)
+
+    def test_v2_loader_reads_scope_from_pinned_receipt_not_manifest(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            outer, inner = inclusive_record("run"), inclusive_record("load", parent="run")
+            receipt = {"wall": 3., "accounting": outer["accounting"],
+                       "load": {"wall": 1., "accounting": inner["accounting"]}}
+            H.publish_once(root/"receipt.json", receipt)
+            records = [{"operation_id": identity, "stage": stage, "arm_ids": [],
+                        "source_path": str(root/"receipt.json"), "source_sha256": H.file_digest(receipt),
+                        "source_record_path": path, "metric_paths": {"wall_seconds": ["wall"]},
+                        "accounting_path": ["accounting"]}
+                       for identity, stage, path in (("run", "other", []), ("load", "model_load", ["load"]))]
+            manifest = {"schema": "hepta.weight.cost-inputs.v2", "records": records}
+            H.publish_once(root/"costs.json", manifest)
+            result = H.load_costs(root/"costs.json")
+            self.assertEqual(result["totals"]["wall_seconds"]["value"], 3.)
+            self.assertEqual(result["accounting_mode"], "RECEIPT_BOUND_INCLUSIVE_SCOPES")
+            del records[0]["accounting_path"]
+            records[0]["accounting"] = outer["accounting"]
+            H.publish_once(root/"bad-manifest.json", manifest)
+            with self.assertRaisesRegex(H.HandoffError, "COST_ACCOUNTING_RECEIPT_REQUIRED"):
+                H.load_costs(root/"bad-manifest.json")
 
 
 if __name__ == "__main__":

@@ -26,6 +26,11 @@ importer does not replace that rule with the Brier evaluator's interval gate.
 - Independently recomputed MAE, RMSE and paired error gains for all original arms
   and both benchmarks. Source statistical decisions are retained as source
   decisions; `statistical_rule_recomputed` stays false.
+- Independently reconstructed UTC-day dependence blocks, distinct opening days,
+  time-half counts and the complete directed comparison count. Present source
+  metadata must match; missing legacy fields remain explicitly unverified.
+  When the plan records `family_alpha`, its division across the full family and
+  each present mixture threshold are checked without recomputing the test result.
 
 The original strict evaluator owns the full original input/attempt/terminal/
 publication/command and current ledger replay. This adapter checks that the
@@ -38,6 +43,31 @@ bound and any unenumerated retained count. All error metrics stay null when
 current observed credit is withdrawn. A pending or incomplete report cannot
 become an accepted comparison by importing it. A censored row may retain old
 diagnostic values; those values never enter scoring.
+
+### Overlap and the fixed comparison family
+
+`comparison_design` mirrors the source's **whole UTC-day interval** grouping.
+Episodes spanning a common day belong to one block; a chain of such overlaps
+also belongs to one block. Two nonoverlapping clock-time episodes on the same
+UTC day are not split into separate source blocks. This preserves the declared
+source dependence rule, including its conservative day resolution. The block
+sizes refer only to currently observed rows. Pending and censored commands stay
+in the original denominator and do not become usable outcomes.
+
+With eleven heads and two benchmarks, the frozen source evaluates
+`11 * (13 - 1) = 132` directed comparisons. The importer verifies the whole set;
+choosing the best observed head cannot reduce that comparison count or enlarge
+its pair alpha. It checks source `time_blocks`, `distinct_utc_days`, `half_counts`,
+`multiple_comparison_count`, `family_alpha` and `pair_alpha` when present.
+Available Huber-mixture records must keep the plan's method, pair alpha and
+`log(2 / pair_alpha)` threshold. Their observed log-e values and final decisions
+remain source-owned rather than being silently reissued by this adapter.
+
+The source's block-bootstrap interval remains exploratory; it is not the source
+acceptance test. Recomputed groups do not prove exchangeability, independence,
+generalization or error control across later experiment families. A new set of
+heads or a new selection rule needs its own prospective freeze; this audit does
+not amend an already registered window.
 
 ## Schedule state and irreversible comparison ineligibility
 
@@ -214,14 +244,82 @@ GPU seconds, forward examples, generated/editor tokens, optimizer steps and peak
 RSS bytes. Units must already match; this module does not guess unit conversions.
 Omit unknown metrics. They remain null and have explicit missing-operation counts.
 
-Stages distinguish model load, shared feature extraction, discovery, candidate
-construction, confirmation and cleanup. `arm_ids=[]` or multiple arm IDs marks
+Stages distinguish Astra inference, model load, shared feature extraction,
+discovery, candidate construction, confirmation and cleanup. `arm_ids=[]` or multiple arm IDs marks
 shared work. A shared encoder is counted once, not once per candidate. Identical
 duplicate operations deduplicate; conflicting identities or a receipt relabeled
 as a second operation are rejected. Failed attempts remain included. RSS uses a
 maximum, not a sum. Wall values are labelled sums of measured operations; they do
 not imply end-to-end elapsed time when operations overlap or use different hosts.
 No speedup or equal-hardware claim is inferred from budgets or partial receipts.
+
+### Nested timing receipts and complete-cost gaps
+
+The version-one manifest remains readable. Its legacy `sum_of_operations` values
+describe the submitted measurements and do not establish disjoint scopes. The
+summary now explicitly reports `LEGACY_REPORTED_OPERATION_SUMS_SCOPE_UNKNOWN`.
+An ancestor and child `source_record_path` from the same receipt are rejected
+without an explicit containment contract; changing the path cannot make an
+experiment total and its inner SGD timer independent work.
+
+For new experiments, use `hepta.weight.cost-inputs.v2`. Each operation's actual
+hashed receipt must contain an accounting object such as:
+
+```json
+{
+  "accounting": {
+    "schema": "hepta.weight.inclusive-cost-scope.v1",
+    "operation_id": "baseline-run-1",
+    "parent_operation_id": null,
+    "metric_scope": "inclusive"
+  },
+  "wall_seconds": 8.5,
+  "head_fit": {
+    "accounting": {
+      "schema": "hepta.weight.inclusive-cost-scope.v1",
+      "operation_id": "head-fit-1",
+      "parent_operation_id": "baseline-run-1",
+      "metric_scope": "inclusive"
+    },
+    "wall_seconds": 1.5
+  }
+}
+```
+
+These numbers illustrate the wire format and are not experimental measurements.
+The manifest selects the outer record with `source_record_path: []`, the inner
+record with `source_record_path: ["head_fit"]`, and each accounting object with
+`accounting_path: ["accounting"]`. Both select their own
+`metric_paths: {"wall_seconds": ["wall_seconds"]}`. The receipt's operation ID
+must match the manifest ID. Inclusion metadata cannot be supplied as replacement
+values in the manifest. Unknown parents, cycles, excessive nesting, inconsistent
+same-receipt ancestry and a known child quantity exceeding its inclusive parent
+are refused. Scope hashes establish consistency, not observer authentication.
+
+For each metric the summary selects its **outermost measured inclusive scopes**.
+The example contributes 8.5 seconds, not 10 seconds. A failed or interrupted
+inner attempt remains visible in the operation and status inventory even when
+the outer timer already includes its consumption. If a parent CPU measurement
+is unknown and only a child CPU measurement exists, the child contributes known
+subscope consumption; the parent remains unknown, the metric is incomplete, and
+the value is labelled a lower bound over the declared scopes. A parent's known
+wall time does not fill its unknown CPU time. Peak RSS remains a maximum.
+
+Per-stage summaries retain their measured operations for inspection and may
+overlap. Do not add stage summaries together. The per-metric selected/suppressed
+operation IDs make the whole-manifest accounting inspectable. Root wall values
+can still overlap in real time or run on different hosts, so the result does not
+invent end-to-end elapsed time.
+
+`coverage` lists the required stages and those missing from the submitted
+receipts: `astra_inference`, `model_load`, `feature_extraction`, `discovery`,
+`candidate_construction`, `confirmation` and `cleanup`. An explicitly measured
+zero is different from a missing stage. Having one receipt for each stage still
+does not prove that every failed attempt or every Astra call was supplied:
+`complete_experiment_inventory_verified` and
+`failed_attempt_inventory_verified` remain false. Missing tokens, hardware time
+or historical feature costs stay unknown. Neither cost schema issues a speedup
+claim.
 
 ## Validation
 
