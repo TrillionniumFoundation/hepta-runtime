@@ -447,6 +447,44 @@ async fn run_capture_until(
 	direct::capture(&host.ssh_target, command, stdin_data, deadline).await
 }
 
+/// Consume the embedding owner's capability in the independent SSH owner,
+/// immediately before its physical spawn. The owned guard follows the original
+/// transport child through caller cancellation, timeout and actual reaping.
+async fn run_capture_until_with_entry<F, G>(
+	host: &HostConfig,
+	remote_command: &str,
+	stdin_data: &[u8],
+	deadline: tokio::time::Instant,
+	enter: F,
+) -> Result<std::process::Output>
+where
+	F: FnOnce() -> Result<G> + Send + 'static,
+	G: Send + 'static,
+{
+	let mut command = ssh_base(host);
+	command.arg(remote_command);
+	capture_prepared(command, &host.ssh_target, stdin_data, deadline, enter).await
+}
+
+async fn capture_prepared<F, G>(
+	mut command: Command,
+	target: &str,
+	stdin_data: &[u8],
+	deadline: tokio::time::Instant,
+	enter: F,
+) -> Result<std::process::Output>
+where
+	F: FnOnce() -> Result<G> + Send + 'static,
+	G: Send + 'static,
+{
+	command
+		.stdin(Stdio::piped())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.kill_on_drop(true);
+	direct::capture_with_entry(target, command, stdin_data, deadline, enter).await
+}
+
 pub async fn run_python_json<I, O>(
 	host: &HostConfig,
 	code: &str,
@@ -458,6 +496,30 @@ where
 	O: DeserializeOwned,
 {
 	run_python_json_with_interpreter(host, "python3", code, input, timeout).await
+}
+
+pub(crate) async fn run_python_json_with_entry<I, O, F, G>(
+	host: &HostConfig,
+	code: &str,
+	input: &I,
+	timeout: Duration,
+	enter: F,
+) -> Result<O>
+where
+	I: Serialize + ?Sized,
+	O: DeserializeOwned,
+	F: FnOnce() -> Result<G> + Send + 'static,
+	G: Send + 'static,
+{
+	// Preserve the original deadline across encoding, queueing and transport.
+	let deadline = tokio::time::Instant::now()
+		.checked_add(timeout)
+		.context("SSH deadline exceeds the monotonic clock range")?;
+	let remote_command = python_json_command("python3", code)?;
+	let payload = serde_json::to_vec(input)?;
+	let output =
+		run_capture_until_with_entry(host, &remote_command, &payload, deadline, enter).await?;
+	decode_python_json(host, output)
 }
 
 pub(crate) fn validate_python_interpreter(interpreter: &str) -> Result<()> {
@@ -502,6 +564,13 @@ where
 	let remote_command = python_json_command(interpreter, code)?;
 	let payload = serde_json::to_vec(input)?;
 	let output = run_capture_until(host, &remote_command, &payload, deadline).await?;
+	decode_python_json(host, output)
+}
+
+fn decode_python_json<O: DeserializeOwned>(
+	host: &HostConfig,
+	output: std::process::Output,
+) -> Result<O> {
 	if !output.status.success() {
 		let stderr = String::from_utf8_lossy(&output.stderr);
 		let stdout = String::from_utf8_lossy(&output.stdout);
@@ -578,6 +647,33 @@ pub async fn run_jobctl(host: &HostConfig, input: &serde_json::Value) -> Result<
 		deadline,
 	)
 	.await?;
+	decode_jobctl(output)
+}
+
+pub(crate) async fn run_jobctl_with_entry<F, G>(
+	host: &HostConfig,
+	input: &serde_json::Value,
+	enter: F,
+) -> Result<serde_json::Value>
+where
+	F: FnOnce() -> Result<G> + Send + 'static,
+	G: Send + 'static,
+{
+	let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+	let mut data = serde_json::to_vec(input)?;
+	data.push(b'\n');
+	let output = run_capture_until_with_entry(
+		host,
+		"sudo -n /usr/local/libexec/hepta-runtime-jobctl",
+		&data,
+		deadline,
+		enter,
+	)
+	.await?;
+	decode_jobctl(output)
+}
+
+fn decode_jobctl(output: std::process::Output) -> Result<serde_json::Value> {
 	if !output.status.success() {
 		bail!(
 			"job capability failed: {}",
@@ -598,3 +694,7 @@ mod observation_tests;
 #[cfg(test)]
 #[path = "ssh_file_observation_tests.rs"]
 mod file_observation_tests;
+
+#[cfg(all(test, unix))]
+#[path = "ssh_entry_tests.rs"]
+mod entry_tests;

@@ -71,6 +71,10 @@ struct Leases {
 	_global: OwnedSemaphorePermit,
 }
 
+// Only the independent owner may consume this capability. The caller's task
+// can disappear while the request is queued or while its child is being reaped.
+type Entry = Box<dyn FnOnce() -> Result<Box<dyn Send>> + Send>;
+
 struct Request {
 	target: String,
 	command: Command,
@@ -79,6 +83,7 @@ struct Request {
 	cancel: Arc<Cancellation>,
 	reply: oneshot::Sender<Result<Output>>,
 	leases: Option<Leases>,
+	entry: Option<Entry>,
 }
 
 struct ChildState {
@@ -86,6 +91,9 @@ struct ChildState {
 	reaped: bool,
 	wait_failed: bool,
 	cleanup_deadline: Option<Instant>,
+	// The state mutex makes this owned Send guard safe to share through the
+	// child registry without requiring the host capability itself to be Sync.
+	_entry_guard: Option<Box<dyn Send>>,
 }
 
 struct OwnedChild {
@@ -249,6 +257,10 @@ impl Core {
 				});
 			}
 		}
+		// This is the final synchronous entry, after all queues and preparation
+		// and immediately before physical spawn. Never run it in the caller or
+		// drop its guard on a caller timeout while this original child survives.
+		let entry_guard = request.entry.take().map(|enter| enter()).transpose()?;
 		let child = request
 			.command
 			.spawn()
@@ -267,6 +279,7 @@ impl Core {
 				reaped: false,
 				wait_failed: false,
 				cleanup_deadline: None,
+				_entry_guard: entry_guard,
 			}),
 			#[cfg(all(test, unix))]
 			hooks: child_hooks,
@@ -319,6 +332,11 @@ impl Core {
 
 	async fn capture(&self, request: &mut Request, leases: Leases) -> Result<Output> {
 		let owned = self.spawn(request, leases)?;
+		// Borrow only transport fields across I/O. The owned one-shot callback
+		// is Send but intentionally need not be Sync.
+		let input = &request.input;
+		let deadline = request.deadline;
+		let cancel = request.cancel.clone();
 		let outcome = async {
 			let (stdin, stdout, stderr) = {
 				let mut state = owned.state.lock().await;
@@ -329,7 +347,7 @@ impl Core {
 			let stderr = stderr.context("missing SSH stderr")?;
 			let io = async {
 				let input = async {
-					stdin.write_all(&request.input).await?;
+					stdin.write_all(input).await?;
 					stdin.shutdown().await?;
 					drop(stdin);
 					Ok::<(), anyhow::Error>(())
@@ -341,11 +359,11 @@ impl Core {
 			};
 			let output = tokio::select! {
 				biased;
-				_ = request.cancel.token.cancelled() => Err(anyhow!("direct SSH caller cancelled; no automatic retry")),
+				_ = cancel.token.cancelled() => Err(anyhow!("direct SSH caller cancelled; no automatic retry")),
 				_ = self.stop.cancelled() => Err(anyhow!("direct SSH stopped; no automatic retry")),
-				value = timeout_at(request.deadline, io) => value.context("direct SSH original deadline expired; no automatic retry")?,
+				value = timeout_at(deadline, io) => value.context("direct SSH original deadline expired; no automatic retry")?,
 			}?;
-			self.active(request.deadline, &request.cancel.token)?;
+			self.active(deadline, &cancel.token)?;
 			Ok::<_, anyhow::Error>(output)
 		}.await;
 		// Every pipe future/borrow is gone before cleanup, including early errors.
@@ -555,6 +573,36 @@ impl Proxy {
 		input: &[u8],
 		deadline: Instant,
 	) -> Result<Output> {
+		self.capture_owned(target, command, input, deadline, None)
+			.await
+	}
+
+	async fn capture_with_entry<F, G>(
+		&self,
+		target: &str,
+		command: Command,
+		input: &[u8],
+		deadline: Instant,
+		enter: F,
+	) -> Result<Output>
+	where
+		F: FnOnce() -> Result<G> + Send + 'static,
+		G: Send + 'static,
+	{
+		// Boxing transfers ownership only; entry is deferred to Core::spawn.
+		let entry: Entry = Box::new(move || enter().map(|guard| Box::new(guard) as Box<dyn Send>));
+		self.capture_owned(target, command, input, deadline, Some(entry))
+			.await
+	}
+
+	async fn capture_owned(
+		&self,
+		target: &str,
+		command: Command,
+		input: &[u8],
+		deadline: Instant,
+		entry: Option<Entry>,
+	) -> Result<Output> {
 		let leases = self.acquire(target, deadline).await?;
 		let cancel = Cancellation::new();
 		let _cancel_on_drop = CancelOnDrop(cancel.clone());
@@ -568,6 +616,7 @@ impl Proxy {
 			cancel: cancel.clone(),
 			reply,
 			leases: Some(leases),
+			entry,
 		};
 		self.core.active(deadline, &cancel.token)?;
 		self.sender
@@ -688,6 +737,22 @@ pub(super) async fn capture(
 	deadline: Instant,
 ) -> Result<Output> {
 	shared()?.capture(target, command, input, deadline).await
+}
+
+pub(super) async fn capture_with_entry<F, G>(
+	target: &str,
+	command: Command,
+	input: &[u8],
+	deadline: Instant,
+	enter: F,
+) -> Result<Output>
+where
+	F: FnOnce() -> Result<G> + Send + 'static,
+	G: Send + 'static,
+{
+	shared()?
+		.capture_with_entry(target, command, input, deadline, enter)
+		.await
 }
 
 #[cfg(all(test, unix))]

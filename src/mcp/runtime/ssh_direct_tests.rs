@@ -9,6 +9,9 @@ use std::process::Stdio;
 use std::sync::Condvar;
 use tokio::task::JoinHandle;
 
+#[path = "ssh_direct_entry_tests.rs"]
+mod entry_tests;
+
 #[derive(Default)]
 pub(super) struct Hooks {
 	pub spawned: AtomicU64,
@@ -419,6 +422,7 @@ async fn queued_request(
 			cancel: cancel.clone(),
 			reply,
 			leases: Some(leases),
+			entry: None,
 		},
 		cancel,
 		receive,

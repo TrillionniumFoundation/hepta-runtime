@@ -45,26 +45,38 @@ def source_snapshot(root):
             'binary_source_match': 'must be established by the separate build log'}
 
 def main():
-    parser=argparse.ArgumentParser(); parser.add_argument('--driver',required=True); parser.add_argument('--ssh-target',default='localhost'); parser.add_argument('--evidence-root',default='/home/qian-qi/workspace/hepta-runtime-native-integration-evidence-20261024'); parser.add_argument('--source-root',default=str(pathlib.Path(__file__).resolve().parents[1])); a=parser.parse_args()
+    parser=argparse.ArgumentParser(); parser.add_argument('--checked-entry',action='store_true',help='exercise owned final-entry fixture without claiming Hepta issuer qualification'); parser.add_argument('--driver',required=True); parser.add_argument('--ssh-target',default='localhost'); parser.add_argument('--evidence-root',default='/home/qian-qi/workspace/hepta-runtime-native-integration-evidence-20261024'); parser.add_argument('--source-root',default=str(pathlib.Path(__file__).resolve().parents[1])); a=parser.parse_args()
     binary=pathlib.Path(a.driver).resolve()
     if not binary.is_file(): raise RuntimeError('compiled driver missing')
-    evidence=pathlib.Path(a.evidence_root); evidence.mkdir(parents=True,exist_ok=True,mode=0o700)
+    evidence=pathlib.Path(a.evidence_root).resolve(); evidence.mkdir(parents=True,exist_ok=True,mode=0o700)
     root=pathlib.Path(tempfile.mkdtemp(prefix='native-process-',dir=evidence)); os.chmod(root,0o700)
-    for name in ['state','target','work','requests']:
+    for name in ['state','target','work','requests','authority']:
         (root/name).mkdir(mode=0o700)
     config={'state_dir':str(root/'state'),'controller_workspace_roots':[str(root/'work')],'hosts':{'native-local-test':{'ssh_target':a.ssh_target,'platform':'linux','execution_mode':'operator','remote_state_dir':str(root/'target'),'allow_execute':True,'allow_pty':False,'allow_write':False,'allow_job_network':True,'allow_detached_fallback':False}}}
     config_path=root/'config.json'; config_path.write_text(json.dumps(config)); config_path.chmod(0o600)
+    # The fixture has its own mandatory authority; never inherit or disable the
+    # production controller's owner fence to make a qualification test pass.
+    authority=root/'authority'
+    owner={'schema':'hepta-effect-owner-fence-v1','owner':'v4','epoch':1,'phase':'admitting','state_root':str(root/'state'),'predecessor_state_root':None}
+    for name,body in [('.owner.lock',''),('.owner.json',json.dumps(owner))]:
+        item=authority/name;item.write_text(body);item.chmod(0o600)
+    driver_env=os.environ.copy()
+    driver_env.update({'HEPTA_EFFECT_OWNER_FENCE_DIR':str(authority),'HEPTA_EFFECT_OWNER_SELF':'v4','HEPTA_EFFECT_OWNER_FENCE_REQUIRED':'1'})
     script=root/'work'/'worker.py'; script.write_text(WORKER); script.chmod(0o600)
-    report={'schema':'hepta-native-process-library-canary/v1','root':str(root),'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'services_changed':False,'real_localhost_ssh':True,'shadow_intent_execution':False,'hepta_finaluse_qualification':False,'events':[],'passed':False,'scope':'owned temporary-directory jobs; native process boundary; not production owner transfer or host reboot'}
+    report={'schema':'hepta-native-process-library-canary/v1','root':str(root),'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'services_changed':False,'real_localhost_ssh':True,'shadow_intent_execution':False,'hepta_finaluse_qualification':False,'checked_native_entry':a.checked_entry,'systemd_scope':'user','entry_fixture_only':a.checked_entry,'owner_fence_required':True,'owner_fence_scope':'private temporary fixture directory','events':[],'passed':False,'scope':'owned temporary-directory jobs; native process boundary; not production owner transfer or host reboot'}
     counter=0; jobs=[]; held=None
+    entry_marker='HEPTA_NATIVE_CHECKED_FIXTURE_ENTRY'
+    def driver_action(action):
+        return {'start':'start-checked','start-hold':'start-checked-hold'}.get(action,action) if a.checked_entry else action
     def request_file(value):
         nonlocal counter
         counter+=1; path=root/'requests'/f'{counter:03d}.json'; path.write_text(json.dumps(value)); path.chmod(0o600); return path
     def invoke(action,value,expect_success=True):
         path=request_file(value); started=time.monotonic()
-        p=subprocess.run([str(binary),str(config_path),action,str(path)],capture_output=True,text=True,timeout=30)
-        row={'action':action,'seconds':time.monotonic()-started,'exit':p.returncode,'stdout':p.stdout,'stderr':p.stderr}
+        p=subprocess.run([str(binary),str(config_path),driver_action(action),str(path)],capture_output=True,text=True,timeout=30,env=driver_env)
+        row={'action':action,'driver_action':driver_action(action),'seconds':time.monotonic()-started,'exit':p.returncode,'stdout':p.stdout,'stderr':p.stderr}
         report['events'].append(row)
+        if a.checked_entry: row['entry_calls']=p.stderr.count(entry_marker)
         if expect_success and p.returncode: raise RuntimeError(action+' failed: '+p.stderr[-1500:])
         if not expect_success:
             if p.returncode==0: raise RuntimeError('changed binding unexpectedly accepted')
@@ -82,11 +94,15 @@ def main():
         return {'host':'native-local-test','executable':'/usr/bin/python3','args':[str(script),str(root/'work'),kind],'cwd':str(root/'work'),'stdin':'native exact stdin\n','timeout_seconds':45,'idempotency_key':'native-library-'+root.name+'-'+kind,'nice':10}
     try:
         report['source_snapshot']=source_snapshot(pathlib.Path(a.source_root).resolve())
-        check=subprocess.run(['/usr/bin/ssh','-o','BatchMode=yes','-o','ConnectTimeout=5',a.ssh_target,'true'],capture_output=True,text=True,timeout=10)
+        check=subprocess.run(['/usr/bin/ssh','-T','-o','BatchMode=yes','-o','ConnectTimeout=5','-o','StrictHostKeyChecking=yes','-o','ForwardAgent=no',a.ssh_target,'true'],capture_output=True,text=True,timeout=10)
         report['ssh_preflight']={'exit':check.returncode,'stderr':check.stderr}
         if check.returncode:raise RuntimeError('existing SSH authority unavailable; no test process submitted')
+        manager_command="uid=$(id -u); export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$uid}; export DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$uid/bus}; command -v python3 >/dev/null && command -v systemd-run >/dev/null && systemctl --user show-environment >/dev/null"
+        manager=subprocess.run(['/usr/bin/ssh','-T','-o','BatchMode=yes','-o','ConnectTimeout=5','-o','StrictHostKeyChecking=yes','-o','ForwardAgent=no',a.ssh_target,manager_command],capture_output=True,text=True,timeout=10)
+        report['systemd_user_preflight']={'exit':manager.returncode,'stderr':manager.stderr}
+        if manager.returncode:raise RuntimeError('existing systemd user manager unavailable; no test process submitted')
         params=start_params('resume'); path=request_file(params)
-        held=subprocess.Popen([str(binary),str(config_path),'start-hold',str(path)],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        held=subprocess.Popen([str(binary),str(config_path),driver_action('start-hold'),str(path)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=driver_env)
         selector=selectors.DefaultSelector();selector.register(held.stdout,selectors.EVENT_READ)
         body=b'';deadline=time.monotonic()+30;first=None
         while time.monotonic()<deadline:
@@ -103,6 +119,7 @@ def main():
         job=first.get('job',{});jid=job.get('id')
         if not jid:raise RuntimeError('native start missing original job id')
         ref={'host':'native-local-test','job_id':jid};jobs.append(ref)
+        if first.get('launch',{}).get('backend')!='systemd':raise RuntimeError('start did not use the required real systemd user backend')
         report['events'].append({'action':'start-hold','response':first,'controller_pid':held.pid})
         marker=root/'work'/'resume.marker';deadline=time.monotonic()+8
         while not marker.exists() and time.monotonic()<deadline:time.sleep(.05)
@@ -110,14 +127,18 @@ def main():
         marker_before=marker.stat();report['original_job_id']=jid
         held.send_signal(signal.SIGKILL);out,err=held.communicate(timeout=5)
         report['owned_controller_sigkill']={'exit':held.returncode,'stderr':err.decode(errors='replace')};held=None
+        if report['owned_controller_sigkill']['exit']!=-signal.SIGKILL:raise RuntimeError('owned controller did not terminate by the requested SIGKILL')
+        if a.checked_entry and err.count(entry_marker.encode())!=1:raise RuntimeError('first original launch did not consume exactly one checked entry')
         running=wait_state(ref,{'running'});report['running_after_controller_death']=running
         again=invoke('start',params)
         if again.get('job',{}).get('id')!=jid or not again.get('reused') or again.get('retried_launch') is not False:
             raise RuntimeError('same-key restart did not preserve original execution')
         report['same_key_reuse']=again
+        if a.checked_entry and report['events'][-1].get('entry_calls')!=0:raise RuntimeError('same-key restart consumed a replacement entry')
         changed=dict(params);changed['args']=params['args']+['different-payload']
         refused=invoke('start',changed,False)
         if 'different request' not in refused['stderr']:raise RuntimeError('changed binding failed for unrelated reason')
+        if a.checked_entry and refused.get('entry_calls')!=0:raise RuntimeError('changed binding consumed checked entry')
         (root/'work'/'resume.release').write_text('release original\n')
         finished=wait_state(ref,{'succeeded','failed'})
         if finished.get('state')!='succeeded':raise RuntimeError('original workload did not complete successfully')
@@ -132,6 +153,8 @@ def main():
         report['completed_original']=finished;report['output_sha256']={'stdout':hashlib.sha256(stdout.encode()).hexdigest(),'stderr':hashlib.sha256(stderr.encode()).hexdigest()};report['execution_count']=len(attempts);report['worker_attempt_pids']=attempts
         cancel_params=start_params('cancel');start=invoke('start',cancel_params)
         cancel_ref={'host':'native-local-test','job_id':start['job']['id']};jobs.append(cancel_ref)
+        if start.get('launch',{}).get('backend')!='systemd':raise RuntimeError('cancel fixture did not use systemd user backend')
+        if a.checked_entry and report['events'][-1].get('entry_calls')!=1:raise RuntimeError('cancel fixture did not consume exactly one checked entry')
         wait_state(cancel_ref,{'running'})
         cancel_marker=root/'work'/'cancel.marker';deadline=time.monotonic()+8
         while not cancel_marker.exists() and time.monotonic()<deadline:time.sleep(.05)

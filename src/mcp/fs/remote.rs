@@ -15,8 +15,8 @@
 //! Remote filesystem support — SSH/SFTP path abstraction.
 //!
 //! Paths prefixed with `ssh://` or `sftp://` are parsed into [`PathSource::Remote`];
-//! all other paths are [`PathSource::Local`]. Remote is a native capability —
-//! always compiled in, exactly like local file access.
+//! all other paths are [`PathSource::Local`]. The default `remote-fs` feature
+//! enables remote I/O; a native library build without it rejects remote I/O.
 
 use anyhow::{anyhow, bail, Result};
 use std::path::{Path, PathBuf};
@@ -265,7 +265,18 @@ pub fn resolve_path_source(path_str: &str, workdir: &Path) -> PathSource {
 
 // ── SFTP connection pool ──────────────────────────────────────────────
 
+/// Remote file metadata mirroring fields we need from std::fs::Metadata.
+#[derive(Debug, Clone)]
+pub struct RemoteMetadata {
+	pub size: u64,
+	pub is_dir: bool,
+	pub is_file: bool,
+	pub modified: Option<SystemTime>,
+}
+
+#[cfg(feature = "remote-fs")]
 mod sftp {
+	use super::RemoteMetadata;
 	use std::collections::HashMap;
 	use std::future::Future;
 	use std::sync::atomic::{AtomicBool, Ordering};
@@ -1121,7 +1132,7 @@ mod sftp {
 	static SFTP_POOL: std::sync::OnceLock<SftpPool> = std::sync::OnceLock::new();
 
 	/// Initialize the global SFTP pool with the given SSH config.
-	/// Called once at startup when the `remote` feature is enabled.
+	/// Called once at startup when the `remote-fs` feature is enabled.
 	pub fn init_sftp_pool(config: SshConfig) {
 		let _ = SFTP_POOL.set(SftpPool::new(config));
 	}
@@ -1153,15 +1164,6 @@ mod sftp {
 		sftp_pool()
 			.get_or_connect(host, port, user, user_explicit, port_explicit)
 			.await
-	}
-
-	/// Remote file metadata mirroring fields we need from std::fs::Metadata.
-	#[derive(Debug, Clone)]
-	pub struct RemoteMetadata {
-		pub size: u64,
-		pub is_dir: bool,
-		pub is_file: bool,
-		pub modified: Option<std::time::SystemTime>,
 	}
 
 	/// Preserve the helper's lowercase hex wire format with one allocation,
@@ -1403,10 +1405,16 @@ mod sftp {
 	}
 }
 
+#[cfg(not(feature = "remote-fs"))]
+#[path = "remote_unavailable.rs"]
+mod sftp;
+
+#[cfg(feature = "remote-fs")]
+pub use sftp::{init_sftp_pool, sftp_pool, SftpPool, SshConfig};
+
 pub use sftp::{
-	init_sftp_pool, remote_canonicalize, remote_create_dir_all, remote_exists, remote_list_dir,
-	remote_metadata, remote_read, remote_read_to_string, remote_remove_file, remote_write,
-	sftp_pool, RemoteMetadata, SftpPool, SshConfig,
+	remote_canonicalize, remote_create_dir_all, remote_exists, remote_list_dir, remote_metadata,
+	remote_read, remote_read_to_string, remote_remove_file, remote_write,
 };
 
 // ── Unified I/O dispatch layer ─────────────────────────────────────────
@@ -1448,10 +1456,13 @@ pub async fn io_write(source: &PathSource, content: &[u8]) -> Result<()> {
 		PathSource::Local(p) => tokio::fs::write(p, content)
 			.await
 			.map_err(|e| anyhow!("Failed to write '{}': {}", source.display(), e)),
+		#[cfg(feature = "remote-fs")]
 		PathSource::Remote { host, path, .. } => {
 			crate::mcp::runtime::config::check_remote_write(host, path)?;
 			sftp::remote_write(source, content).await
 		}
+		#[cfg(not(feature = "remote-fs"))]
+		PathSource::Remote { .. } => sftp::remote_write(source, content).await,
 	}
 }
 
@@ -1511,10 +1522,13 @@ pub async fn io_create_dir_all(source: &PathSource) -> Result<()> {
 		PathSource::Local(p) => tokio::fs::create_dir_all(p)
 			.await
 			.map_err(|e| anyhow!("Failed to create dirs for '{}': {}", source.display(), e)),
+		#[cfg(feature = "remote-fs")]
 		PathSource::Remote { host, path, .. } => {
 			crate::mcp::runtime::config::check_remote_write(host, path)?;
 			sftp::remote_create_dir_all(source).await
 		}
+		#[cfg(not(feature = "remote-fs"))]
+		PathSource::Remote { .. } => sftp::remote_create_dir_all(source).await,
 	}
 }
 
@@ -1524,10 +1538,13 @@ pub async fn io_remove_file(source: &PathSource) -> Result<()> {
 		PathSource::Local(p) => tokio::fs::remove_file(p)
 			.await
 			.map_err(|e| anyhow!("Failed to remove '{}': {}", source.display(), e)),
+		#[cfg(feature = "remote-fs")]
 		PathSource::Remote { host, path, .. } => {
 			crate::mcp::runtime::config::check_remote_write(host, path)?;
 			sftp::remote_remove_file(source).await
 		}
+		#[cfg(not(feature = "remote-fs"))]
+		PathSource::Remote { .. } => sftp::remote_remove_file(source).await,
 	}
 }
 
@@ -1570,3 +1587,7 @@ pub async fn io_list_dir(source: &PathSource) -> Result<Vec<(String, IoMetadata)
 #[cfg(test)]
 #[path = "remote_tests.rs"]
 mod remote_tests;
+
+#[cfg(all(test, not(feature = "remote-fs")))]
+#[path = "remote_unavailable_tests.rs"]
+mod remote_unavailable_tests;

@@ -20,6 +20,7 @@ use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard, OwnedSemaphorePermit, Se
 use super::config::{check_environment, check_execution, runtime_config, valid_name};
 use super::config::{ExecutionMode, Platform};
 use super::ssh::{run_jobctl, run_python_json};
+use super::ssh::{run_jobctl_with_entry, run_python_json_with_entry};
 
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 const START_LANE_COUNT: usize = 64;
@@ -1708,7 +1709,7 @@ impl Write for RequestHashWriter {
 		Ok(())
 	}
 }
-fn request_digest(params: &ProcessStartParams) -> Result<String> {
+pub(crate) fn request_digest(params: &ProcessStartParams) -> Result<String> {
 	let mut writer = RequestHashWriter(Sha256::new());
 	serde_json::to_writer(&mut writer, &request_binding(params))?;
 	let digest = writer.0.finalize();
@@ -3823,6 +3824,20 @@ async fn launch_record(
 	guard: &Option<OwnedStartGuard>,
 	owner: &Arc<super::effect_owner_fence::AdmissionPermit>,
 ) -> Result<LaunchOutcome> {
+	launch_record_with_entry(record, params, guard, owner, || Ok(())).await
+}
+
+async fn launch_record_with_entry<F, G>(
+	record: &mut JobRecord,
+	params: &ProcessStartParams,
+	guard: &Option<OwnedStartGuard>,
+	owner: &Arc<super::effect_owner_fence::AdmissionPermit>,
+	enter: F,
+) -> Result<LaunchOutcome>
+where
+	F: FnOnce() -> Result<G> + Send + 'static,
+	G: Send + 'static,
+{
 	let config = runtime_config()?;
 	let host = config.host(&record.host)?;
 	// These eight permits bound remote launches through outcome publication,
@@ -3853,7 +3868,7 @@ async fn launch_record(
 		"allow_detached_fallback": host.allow_detached_fallback,
 	});
 	let launch_result = if record.system_jobctl {
-		run_jobctl(
+		run_jobctl_with_entry(
 			host,
 			&json!({
 				"op":"start", "job_id":record.id, "executable":params.executable,
@@ -3861,14 +3876,16 @@ async fn launch_record(
 				"timeout_seconds":params.timeout_seconds, "nice":params.nice,
 				"cpu_quota_percent":params.cpu_quota_percent, "memory_max_bytes":params.memory_max_bytes
 			}),
+			enter,
 		)
 		.await
 	} else {
-		run_python_json(
+		run_python_json_with_entry(
 			host,
 			&private_remote_code(START_CODE)?,
 			&request,
 			Duration::from_secs(20),
+			enter,
 		)
 		.await
 	};
@@ -3938,6 +3955,31 @@ pub async fn observe_request(params: ProcessStartParams) -> Result<Option<String
 }
 
 pub async fn start_job(params: ProcessStartParams) -> Result<String> {
+	start_job_with_policy(params, true, |_| Ok(())).await
+}
+
+/// Checked native entry never relaunches an existing uncertain binding. Only
+/// a new job can consume this one-shot callback at the actual SSH spawn.
+pub(crate) async fn start_job_with_entry<F, G>(
+	params: ProcessStartParams,
+	enter: F,
+) -> Result<String>
+where
+	F: FnOnce(&ProcessStartParams) -> Result<G> + Send + 'static,
+	G: Send + 'static,
+{
+	start_job_with_policy(params, false, enter).await
+}
+
+async fn start_job_with_policy<F, G>(
+	params: ProcessStartParams,
+	allow_reconcile_launch: bool,
+	enter: F,
+) -> Result<String>
+where
+	F: FnOnce(&ProcessStartParams) -> Result<G> + Send + 'static,
+	G: Send + 'static,
+{
 	validate_start(&params)?;
 	let lane = start_lock(&params.host, params.idempotency_key.as_deref())?;
 	let mut start_guard = Some(Arc::new(lane.lock_owned().await));
@@ -3968,7 +4010,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 				bail!("idempotency key `{key}` is already bound to a different request");
 			}
 			check_binding(&existing)?;
-			let retry = reconcile_retry_allowed(&existing);
+			let retry = allow_reconcile_launch && reconcile_retry_allowed(&existing);
 			let launch = if retry {
 				require_operation_intent(
 					start_audit(
@@ -4045,7 +4087,19 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	// Persist identity before remote launch. Later calls reconcile this same
 	// host, job ID and request binding; never invent a second remote job.
 	publish_pending_record(&record, &start_guard, &owner_admission).await?;
-	let launch = launch_record(&mut record, &params, &start_guard, &owner_admission).await?;
+	// The independent SSH owner can outlive this request future. Carry the
+	// exact binding into its final entry; do not consume the grant while queued.
+	// Share the owned binding rather than copying up to 1 MiB of admitted stdin.
+	let params = Arc::new(params);
+	let entry_params = params.clone();
+	let launch = launch_record_with_entry(
+		&mut record,
+		&params,
+		&start_guard,
+		&owner_admission,
+		move || enter(&entry_params),
+	)
+	.await?;
 	let mut result = json!({"reused": false, "job": record, "launch": launch.value});
 	attach_launch_record_warning(&mut result, &launch);
 	let completion = start_audit(
