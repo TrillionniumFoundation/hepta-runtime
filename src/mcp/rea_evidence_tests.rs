@@ -349,8 +349,10 @@ fn real_npm_rejected_schema_matrix_is_independently_rejected_by_rust() {
 			"upstream negative {label} must have a recomputed hash"
 		);
 		let record = &test["record"];
-		let error = verify_record(record)
-			.unwrap_err_or_else(|_| panic!("Rust accepted upstream-invalid Evidence {label}"));
+		let error = match verify_record(record) {
+			Ok(_) => panic!("Rust accepted upstream-invalid Evidence {label}"),
+			Err(error) => error,
+		};
 		assert!(
 			!error.to_string().contains("semantic digest mismatch"),
 			"Rust must reject upstream invalid schema before ID mismatch: {label}: {error}"
