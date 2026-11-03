@@ -18,9 +18,17 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 pub mod fs;
+pub mod rea;
+pub mod rea_evidence;
+pub mod rea_files;
+pub mod rea_seccomp;
+pub mod rea_store;
+pub mod rea_worker;
 pub mod request_ctx;
 pub mod runtime;
 pub mod server;
+pub mod weight;
+pub mod weight_config;
 
 // Session working directory is now stored per-server-instance (see server.rs).
 // This module only provides helper functions for the session root directory.

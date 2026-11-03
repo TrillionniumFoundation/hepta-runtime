@@ -1,0 +1,182 @@
+name: REA P4 real Chrome CDP observation reference
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feature/rea-native-foundation-*'
+    paths:
+      - '.github/workflows/rea-browser-real.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rea-browser-reference-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actual-chrome-cdp-reference:
+    name: Real Chrome CDP navigation, DOM observation and cleanup only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source identity
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Pin development-only Node 24 for native WebSocket CDP oracle
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24.22.1'
+
+      - name: Real browser and loopback-only test HTTP server
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/rea-real-cdp"
+          profile="$RUNNER_TEMP/rea-cdp-chrome-profile"
+          mkdir -p "$evidence/html" "$profile"
+          node --version | tee "$evidence/node-version.txt"
+          google-chrome --version | tee "$evidence/chrome-version.txt"
+          cat > "$evidence/html/fixture.html" <<'HTML'
+          <!doctype html>
+          <html lang="en">
+          <head><meta charset="utf-8"><title>REA CDP reference</title></head>
+          <body><main id="rea-probe">REA-CDP-REAL</main></body>
+          </html>
+          HTML
+          port="$(python3 - <<'PY'
+          import socket
+          with socket.socket() as sock:
+              sock.bind(("127.0.0.1", 0))
+              print(sock.getsockname()[1])
+          PY
+          )"
+          python3 -m http.server "$port" --bind 127.0.0.1 \
+            --directory "$evidence/html" > "$evidence/http-server.log" 2>&1 &
+          http_pid=$!
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-background-networking \
+            --no-first-run --no-default-browser-check --disable-extensions \
+            --remote-debugging-address=127.0.0.1 --remote-debugging-port=0 \
+            --remote-allow-origins='*' --user-data-dir="$profile" \
+            about:blank > "$evidence/chrome.log" 2>&1 &
+          chrome_pid=$!
+          cleanup() {
+            kill "$chrome_pid" "$http_pid" 2>/dev/null || true
+            wait "$chrome_pid" 2>/dev/null || true
+            wait "$http_pid" 2>/dev/null || true
+            rm -rf "$profile"
+          }
+          trap cleanup EXIT
+          for i in $(seq 1 100); do
+            test -s "$profile/DevToolsActivePort" && break
+            if ! kill -0 "$chrome_pid" 2>/dev/null; then
+              echo "Chrome exited before publishing CDP endpoint" >&2
+              exit 1
+            fi
+            sleep 0.2
+          done
+          test -s "$profile/DevToolsActivePort"
+          cdp_port="$(head -n 1 "$profile/DevToolsActivePort")"
+          printf 'browser_cdp_port=%s\nfixture_http_port=%s\n' "$cdp_port" "$port" \
+            > "$evidence/loopback-ports.txt"
+          curl --fail --silent "http://127.0.0.1:$port/fixture.html" \
+            > "$evidence/fetched-local-fixture.html"
+          cat > "$evidence/cdp-test.mjs" <<'JS'
+          // CI-only Chrome CDP transport reference. This is not a production
+          // HeptaRuntime adapter, sandbox or general browser authority.
+          import { readFile, writeFile } from "node:fs/promises";
+          const [cdpPort, originPort, out] = process.argv.slice(2);
+          const targets = await fetch(`http://127.0.0.1:${cdpPort}/json/list`)
+            .then((response) => {
+              if (!response.ok) throw new Error("CDP target-list error");
+              return response.json();
+            });
+          const page = targets.find((target) => target.type === "page");
+          if (!page?.webSocketDebuggerUrl) throw new Error("no real Chrome page target");
+          const websocket = new WebSocket(page.webSocketDebuggerUrl);
+          await new Promise((resolve, reject) => {
+            websocket.addEventListener("open", resolve, { once: true });
+            websocket.addEventListener("error", reject, { once: true });
+          });
+          const pending = new Map();
+          let serial = 0;
+          websocket.addEventListener("message", (event) => {
+            const message = JSON.parse(event.data);
+            if (!pending.has(message.id)) return;
+            const { resolve, reject } = pending.get(message.id);
+            pending.delete(message.id);
+            if (message.error) reject(new Error(JSON.stringify(message.error)));
+            else resolve(message.result);
+          });
+          function request(method, params = {}) {
+            return new Promise((resolve, reject) => {
+              const id = ++serial;
+              const timer = setTimeout(() => {
+                pending.delete(id);
+                reject(new Error(`CDP timed out: ${method}`));
+              }, 10000);
+              pending.set(id, {
+                resolve: (result) => { clearTimeout(timer); resolve(result); },
+                reject: (error) => { clearTimeout(timer); reject(error); },
+              });
+              websocket.send(JSON.stringify({ id, method, params }));
+            });
+          }
+          const browser = await request("Browser.getVersion");
+          await request("Page.enable");
+          await request("Runtime.enable");
+          const url = `http://127.0.0.1:${originPort}/fixture.html`;
+          const navigation = await request("Page.navigate", { url });
+          if (navigation.errorText) throw new Error("Page.navigate refused: " + navigation.errorText);
+          let observed;
+          for (let retry = 0; retry < 60; retry++) {
+            const evaluated = await request("Runtime.evaluate", {
+              expression: "({title:document.title,text:document.querySelector('#rea-probe')?.textContent ?? null,url:location.href})",
+              returnByValue: true,
+            });
+            const value = evaluated.result?.value;
+            if (value?.text === "REA-CDP-REAL" && value.url === url) {
+              observed = value;
+              break;
+            }
+            await new Promise((done) => setTimeout(done, 100));
+          }
+          if (!observed || observed.title !== "REA CDP reference") {
+            throw new Error("real Chrome navigation/DOM evidence mismatch");
+          }
+          await writeFile(out, JSON.stringify({
+            provider: "real-google-chrome-cdp",
+            browser: browser.product,
+            protocolVersion: browser.protocolVersion,
+            navigationFrameIdPresent: typeof navigation.frameId === "string",
+            observation: observed,
+            scope: "single temporary loopback-only page and fresh browser profile",
+            productionAdapterQualified: false,
+          }, null, 2) + "\n");
+          websocket.close();
+          JS
+          node "$evidence/cdp-test.mjs" "$cdp_port" "$port" \
+            "$evidence/real-cdp-observation.json"
+          python3 - "$evidence/real-cdp-observation.json" <<'PY'
+          import json, sys
+          observation = json.load(open(sys.argv[1]))
+          assert observation["provider"] == "real-google-chrome-cdp"
+          assert observation["observation"]["text"] == "REA-CDP-REAL"
+          assert observation["observation"]["title"] == "REA CDP reference"
+          assert observation["navigationFrameIdPresent"] is True
+          assert observation["productionAdapterQualified"] is False
+          PY
+          # The trap tears down the temporary browser and server and removes
+          # the ephemeral profile. No claim of remote/CDP credential isolation.
+
+      - name: Preserve CDP events, source identity and failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-real-cdp-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/rea-real-cdp/
+          if-no-files-found: warn
+          retention-days: 14

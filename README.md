@@ -1,5 +1,24 @@
 # Hepta Runtime
 
+## Weight-space research workbench
+
+The optional `hepta-weight` domain runs a resident CPU model under the existing
+process owner. It supports internal probes, temporary causal interventions,
+bounded numerical analysis and exact typed weight patches. Candidate artifacts
+retain base/backend identity, realized dtype changes and costs.
+
+- [Enable profiles and use the six MCP tools](docs/weight-runtime/RUST_OWNER.md)
+- [Compose probes, SVD and writer-column edits](docs/weight-runtime/ANALYSIS.md)
+- [Python worker protocol and model adapters](workers/weight/PROTOCOL.md)
+- [Implementation qualification and closed defects](docs/weight-runtime/QUALIFICATION.md)
+- [Separate frozen paired evaluation](experiments/weight/evaluation/README.md)
+- [Public MIT Qwen reconstruction and measured mechanism replay](experiments/weight/mit_replay/README.md)
+
+Profiles default to disabled. The research worker does not train, replace an
+active checkpoint, grant production eligibility, or place an order. Confirmation
+outcomes and production selection remain with their existing independent owners.
+
+
 **Current capabilities:** [CHECKPOINT_LIFECYCLE.md](docs/CHECKPOINT_LIFECYCLE.md) describes the native, pinned Linux checkpoint API with bounded thread groups and separate stopped-restore/resume actions. [PROTECTED_AND_COMPLEX_PARITY.md](docs/PROTECTED_AND_COMPLEX_PARITY.md) covers native protected PDFs, explicit certificate anchors, complex workbooks and inode-preserving patches. Earlier failed/withdrawn experiments remain historical evidence, not the status of the current implementation; exact installation is established by its dated receipt.
 Policy-enforced, multi-host MCP runtime for durable process execution, interactive PTYs, read-only hardware/service/network inspection, and exact administrator-approved privileged actions.
 

@@ -110,6 +110,9 @@ pub struct RuntimeConfig {
 	pub controller_workspace_roots: Vec<PathBuf>,
 	#[serde(default)]
 	pub hosts: BTreeMap<String, HostConfig>,
+	/// Named administrator-owned model workers; absent disables all weight tools.
+	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	pub weight_workers: BTreeMap<String, crate::mcp::weight_config::WeightWorkerProfile>,
 }
 
 // The installed value has no mutable accessor or interior-mutable policy fields.
@@ -276,6 +279,7 @@ impl RuntimeConfig {
 				}
 			}
 		}
+		crate::mcp::weight_config::validate_profiles(self)?;
 		Ok(())
 	}
 

@@ -70,6 +70,16 @@ pub enum Commands {
 		#[arg(long, requires_all = ["runtime_config", "runtime_observation_pool_profile"])]
 		runtime_file_observation_pool: bool,
 	},
+	/// Internal, stdin-only REA analysis worker. Does not open any artifact path.
+	#[command(hide = true)]
+	ReaWorker {
+		/// Display-only path; bytes are provided on stdin, not read by this worker.
+		#[arg(long)]
+		selected_path: String,
+		/// Internal test proving syscall denials after worker input admission.
+		#[arg(long, hide = true)]
+		sandbox_probe: bool,
+	},
 }
 
 #[cfg(test)]

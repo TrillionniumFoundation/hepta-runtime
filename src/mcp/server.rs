@@ -34,6 +34,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use super::fs;
+use super::{rea, rea_evidence, rea_store, weight};
 use super::request_ctx;
 use super::runtime;
 use super::McpToolCall;
@@ -233,6 +234,16 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"service_status",
 	"network_inspect",
 	"privileged_action",
+	"rea_inspect_artifact",
+	"rea_verify_evidence",
+	"rea_retain_preview",
+	"rea_read_preview",
+	"weight_profiles",
+	"weight_open",
+	"weight_call",
+	"weight_status",
+	"weight_read",
+	"weight_close",
 ];
 const CLAUDE_CHANNEL_NOTIFICATION: &str = "notifications/claude/channel";
 
@@ -1482,6 +1493,194 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "REA Native Artifact Header",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read a local file header and SHA-256 in a configured controller workspace. Experimental Rust-only preview for ELF, PE, Mach-O, WASM, GGUF, safetensors and ZIP. Returns partial coverage with a NON-REA evidence identity; does not decompile, verify signatures, inspect remote hosts or establish REA 6.8.0 parity."
+	)]
+	async fn rea_inspect_artifact(
+		&self,
+		Parameters(params): Parameters<rea::InspectArtifactParams>,
+	) -> Result<String, String> {
+		rea::inspect_artifact(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "REA Evidence Digest Check (Limited)",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Verify a workspace-local REA Evidence JSON record semantic SHA-256 commitment for finite IEEE-754 JSON numbers and UTF-16 key ordering. Rejects duplicate JSON keys and mismatched hashes. Does not establish full REA Zod schema or provider parity."
+	)]
+	async fn rea_verify_evidence(
+		&self,
+		Parameters(params): Parameters<rea_evidence::VerifyEvidenceParams>,
+	) -> Result<String, String> {
+		rea_evidence::verify_evidence(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Retain Native REA Preview (Experimental)",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Inspect a workspace-confined local artifact with the isolated Rust worker and persist its explicitly NON-REA preview under the controller state directory. Uses exclusive atomic publication, full-record readback and stable native ID. Writes private controller state only; does not modify the source file or claim REA 6.8.0 parity."
+	)]
+	async fn rea_retain_preview(
+		&self,
+		Parameters(params): Parameters<rea_store::RetainPreviewParams>,
+	) -> Result<String, String> {
+		rea_store::retain_preview(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Retained Native REA Preview",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read an exact previously retained Hepta REA native preview ID across controller restarts. Verifies the durable record SHA-256 and versioned native preview semantic identity, rejects damaged/unknown records, and does not re-open the original artifact. Does not authenticate records against a malicious controller state owner."
+	)]
+	async fn rea_read_preview(
+		&self,
+		Parameters(params): Parameters<rea_store::ReadPreviewParams>,
+	) -> Result<String, String> {
+		rea_store::read_preview(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Weight Worker Profiles",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "List enabled administrator-owned model experiment profiles and resource ceilings. Profiles bind host, model read roots, worker code and isolated output storage. No profile grants production model promotion."
+	)]
+	async fn weight_profiles(
+		&self,
+		Parameters(_params): Parameters<runtime::inspect::HostListParams>,
+	) -> Result<String, String> {
+		weight::profiles().map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Open Weight Experiment Worker",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Start or recover an isolated resident model worker through the existing durable process owner. Select a configured profile and preserve the same idempotency key and parameters after timeouts. Returns an admitted original job, not completed inference. Read the open result with weight_read without request_id; use weight_status for lifecycle. Source models are read-only and candidate outputs remain isolated."
+	)]
+	async fn weight_open(
+		&self,
+		Parameters(params): Parameters<weight::WeightOpenParams>,
+	) -> Result<String, String> {
+		weight::open(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Call Weight Experiment Worker",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Submit a typed inspect/probe/intervene/analyze/patch/seal/query request to an existing resident worker. The bounded client is an original durable job and uses the worker Unix socket. Reuse the same request_id after uncertainty; changed payloads conflict. Results and large-array artifact references arrive through weight_read with that request_id. No arbitrary code, executable choice or production activation."
+	)]
+	async fn weight_call(
+		&self,
+		Parameters(params): Parameters<weight::WeightCallParams>,
+	) -> Result<String, String> {
+		weight::call(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Weight Job Status",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Observe the original resident-worker or request job through its stored owner binding. Optional wait is bounded to 30 seconds and cannot restart a job. Process success and model quality are distinct; inspect the JSON worker result as well."
+	)]
+	async fn weight_status(
+		&self,
+		Parameters(params): Parameters<weight::WeightStatusParams>,
+	) -> Result<String, String> {
+		weight::status(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Weight Job Result",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read bounded original stdout/stderr using independent byte cursors. Omit request_id for the worker open response; supply it for a call. The worker emits JSON responses with artifact references, not full tensors. Continue with next_offset when needed. Reading never reruns inference or reopens source weights."
+	)]
+	async fn weight_read(
+		&self,
+		Parameters(params): Parameters<weight::WeightReadParams>,
+	) -> Result<String, String> {
+		weight::read(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Close Weight Experiment Worker",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Close a stored session to new calls and request cancellation of only its original resident worker through the existing process owner. Inspect weight_status for terminal confirmation. Candidate artifacts and all prior records remain available; this identity cannot be reused to relaunch."
+	)]
+	async fn weight_close(
+		&self,
+		Parameters(params): Parameters<weight::WeightCloseParams>,
+	) -> Result<String, String> {
+		weight::close(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
 		title = "Process Start",
 		annotations(
 			read_only_hint = false,
@@ -2606,6 +2805,10 @@ impl ServerHandler for OctofsServer {
 			.list_all()
 			.into_iter()
 			.filter(|tool| {
+				if tool.name.starts_with("weight_")
+					&& runtime::config::maybe_runtime_config().is_none_or(|c| c.weight_workers.is_empty()) {
+					return false;
+				}
 				if runtime_enabled {
 					tool.name.as_ref() != "shell"
 				} else {
