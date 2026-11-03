@@ -1,0 +1,1057 @@
+{
+  "schema": "hepta-x230-r14-report-data/v1",
+  "generated_utc": "2026-11-03T21:29:58.294863+00:00",
+  "success": true,
+  "candidate_sha256": "51480b3cf630a95419d3afeb571eec17c90cffa5944101920d05333673de031d",
+  "source_audits": {
+    "qualification": {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r14/qualification-audit-summary.json",
+      "sha256": "667e9e966b43ce1e14c228b0ab7ab9b8fc017c26c95a41adba4e97cea1487ff3",
+      "bytes": 3830
+    },
+    "performance": {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r14/independent-performance-audit.json",
+      "sha256": "03e030f4329b0037069ba63687e1a1ebcaf42ccba472b026d8d5b5ddffe0dba7",
+      "bytes": 35396
+    },
+    "recovery": {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r14/independent-recovery-audit.json",
+      "sha256": "128d0408c8674b21c5c53cd11f46bdeafdcdbd803bebc9a70a3e66be54fa982e",
+      "bytes": 79674
+    }
+  },
+  "qualification": {
+    "source_input_count": 219,
+    "source_tested_after_current_equal": true,
+    "source_matches_frozen_implementation": true,
+    "jobs_rs_sha256": "694a4e4dcbc2be499879abd837f0b5e399f9cad95caab34716907de15cbbe82f",
+    "tests": {
+      "passed": 1637,
+      "failed": 0,
+      "ignored": 33,
+      "selected": 1670,
+      "retries": 0,
+      "raw_status_counts": {
+        "passed": 1637,
+        "ignored": 33
+      },
+      "unique_test_identities": 1670,
+      "executed_binary_bindings_matched": true,
+      "prior_identity_delta_matches_frozen_plan": true,
+      "required_pool_tests_passed": [
+        "mcp::runtime::jobs::cancel_io_tests::cancelled_intent_writers_retain_two_physical_preparation_slots",
+        "mcp::runtime::jobs::cancel_read_tests::cancelled_receipt_preparations_keep_two_physical_slots_and_release_unsubmitted_waiters",
+        "mcp::runtime::jobs::cancel_read_tests::two_preparation_slots_preserve_eight_publication_continuations"
+      ]
+    },
+    "release_binaries": {
+      "hepta-runtime": {
+        "path": "/home/qian/hepta-runtime-optimization-20261103-r14/qualification-01/hepta-runtime",
+        "sha256": "51480b3cf630a95419d3afeb571eec17c90cffa5944101920d05333673de031d",
+        "size": 14369016
+      },
+      "hepta-runtime-jobctl": {
+        "path": "/home/qian/hepta-runtime-optimization-20261103-r14/qualification-01/hepta-runtime-jobctl",
+        "sha256": "84572095b80a56ff893ea41b01e170444dc2483a49091277d0b4ada4fbc1c1b0",
+        "size": 724904
+      },
+      "native_process_driver": {
+        "path": "/home/qian/hepta-runtime-optimization-20261103-r14/qualification-01/native_process_driver",
+        "sha256": "551aa5ba0f990908d0143c34f513a0f1937f14198335c5e4a611a112b82f944e",
+        "size": 2895560
+      }
+    },
+    "retained_libtest": {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r14/qualification-01/test-binaries/hepta_runtime-1b8b761b89392e3b",
+      "sha256": "fe880a56037ace61fa44a33156e3465792a77a2096adc81af1d7704f5aed445f",
+      "size": 539667664
+    },
+    "qualification_stages": [
+      {
+        "name": "format",
+        "returncode": 0,
+        "seconds": 2.4200381548143923
+      },
+      {
+        "name": "fmt-check",
+        "returncode": 0,
+        "seconds": 2.521125033032149
+      },
+      {
+        "name": "harness-tests",
+        "returncode": 0,
+        "seconds": 6.184520321898162
+      },
+      {
+        "name": "clippy",
+        "returncode": 0,
+        "seconds": 49.73827301710844
+      },
+      {
+        "name": "test-build",
+        "returncode": 0,
+        "seconds": 703.8218077090569
+      },
+      {
+        "name": "isolated-tests",
+        "returncode": 0,
+        "seconds": 249.89332888601348
+      },
+      {
+        "name": "audit-isolated-tests",
+        "returncode": 0,
+        "seconds": 5.425741171929985
+      },
+      {
+        "name": "release",
+        "returncode": 0,
+        "seconds": 329.00639352714643
+      }
+    ]
+  },
+  "method": {
+    "cpu_and_rate": "sum of measured numerators divided by sum of measured call counts or wall durations; no median-rate substitution",
+    "p95": "nearest-rank ceil(0.95*N) of pooled raw per-call latencies",
+    "rss": "two fresh process samples per arm/case, both samples retained, arithmetic median",
+    "all_raw_floats_finite": true,
+    "existing_analysis_summaries_used_for_metrics": false
+  },
+  "projection_repeated": false,
+  "cancel_r13_r14": {
+    "baseline_sha256": "91baf096139002075ead3c2b9043ffe12269c155650c41bd4258efd3ac5ef364",
+    "candidate_sha256": "51480b3cf630a95419d3afeb571eec17c90cffa5944101920d05333673de031d",
+    "report_sha256": "b5b32a618f2f5f4854d341e58198ebe2515c223441fb8c25cdf0c2e8943ef4cf",
+    "counts": {
+      "child_processes": 16,
+      "measured_calls": 3456,
+      "warmup_calls_excluded": 288,
+      "all_reply_hashes_and_semantics_verified": 3744,
+      "automatic_retries": 0
+    },
+    "scope": "Expected wrong-host refusals plus host_list; CPU denominator is mixed RPCs. VmHWM is sampled after measurement, since exec, including warmup; not per-request allocation.",
+    "cells": [
+      {
+        "workers": 1,
+        "receipt_bytes": 1024,
+        "receipt_sha256": "43e9ab8114f4eb37887b4edd921b70e2f0b6ec1888c79cae62b9595bd5f6a1b2",
+        "A": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 0.76,
+          "wall_seconds": 0.8045188533142209,
+          "cpu_ms_per_mixed_rpc": 1.7592592592592593,
+          "mixed_rpc_per_second": 536.9669066428625,
+          "host_list_p95_ms": 18.71177088469267,
+          "cancel_p95_ms": 17.56227994337678,
+          "vmhwm_kib_samples": [
+            14328,
+            14300
+          ],
+          "vmhwm_kib_median": 14314.0,
+          "vmrss_after_kib_samples": [
+            14328,
+            14300
+          ],
+          "vmrss_after_kib_median": 14314.0
+        },
+        "B": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 0.76,
+          "wall_seconds": 0.8002477139234543,
+          "cpu_ms_per_mixed_rpc": 1.7592592592592593,
+          "mixed_rpc_per_second": 539.8328448599879,
+          "host_list_p95_ms": 18.681769259274006,
+          "cancel_p95_ms": 17.828670796006918,
+          "vmhwm_kib_samples": [
+            14196,
+            14304
+          ],
+          "vmhwm_kib_median": 14250.0,
+          "vmrss_after_kib_samples": [
+            14196,
+            14304
+          ],
+          "vmrss_after_kib_median": 14250.0
+        },
+        "change_percent": {
+          "cpu_ms_per_mixed_rpc": 0.0,
+          "mixed_rpc_per_second": 0.5337271592849913,
+          "host_list_p95_ms": -0.1603355748824753,
+          "cancel_p95_ms": 1.5168352485498415,
+          "vmhwm_kib_median": -0.4471147128685238,
+          "vmrss_after_kib_median": -0.4471147128685238
+        }
+      },
+      {
+        "workers": 1,
+        "receipt_bytes": 4194272,
+        "receipt_sha256": "5a78edf8acebb537a08c7dff17eb2878c49aa704b08c6e6f838888cc0d16015e",
+        "A": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 15.7,
+          "wall_seconds": 4.727246624883264,
+          "cpu_ms_per_mixed_rpc": 36.342592592592595,
+          "mixed_rpc_per_second": 91.38511998211388,
+          "host_list_p95_ms": 42.20215883105993,
+          "cancel_p95_ms": 105.83916213363409,
+          "vmhwm_kib_samples": [
+            126688,
+            123924
+          ],
+          "vmhwm_kib_median": 125306.0,
+          "vmrss_after_kib_samples": [
+            122792,
+            112288
+          ],
+          "vmrss_after_kib_median": 117540.0
+        },
+        "B": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 10.86,
+          "wall_seconds": 5.517940967809409,
+          "cpu_ms_per_mixed_rpc": 25.13888888888889,
+          "mixed_rpc_per_second": 78.29007278624468,
+          "host_list_p95_ms": 17.723459284752607,
+          "cancel_p95_ms": 118.64445405080914,
+          "vmhwm_kib_samples": [
+            107736,
+            101736
+          ],
+          "vmhwm_kib_median": 104736.0,
+          "vmrss_after_kib_samples": [
+            107736,
+            101736
+          ],
+          "vmrss_after_kib_median": 104736.0
+        },
+        "change_percent": {
+          "cpu_ms_per_mixed_rpc": -30.828025477707012,
+          "mixed_rpc_per_second": -14.329517976703643,
+          "host_list_p95_ms": -58.00342973992956,
+          "cancel_p95_ms": 12.09882207968247,
+          "vmhwm_kib_median": -16.415814087114743,
+          "vmrss_after_kib_median": -10.893312914752428
+        }
+      },
+      {
+        "workers": 2,
+        "receipt_bytes": 1024,
+        "receipt_sha256": "43e9ab8114f4eb37887b4edd921b70e2f0b6ec1888c79cae62b9595bd5f6a1b2",
+        "A": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 0.81,
+          "wall_seconds": 0.8109068959020078,
+          "cpu_ms_per_mixed_rpc": 1.875,
+          "mixed_rpc_per_second": 532.7368680463213,
+          "host_list_p95_ms": 18.7059729360044,
+          "cancel_p95_ms": 17.132740933448076,
+          "vmhwm_kib_samples": [
+            15752,
+            15448
+          ],
+          "vmhwm_kib_median": 15600.0,
+          "vmrss_after_kib_samples": [
+            15752,
+            15448
+          ],
+          "vmrss_after_kib_median": 15600.0
+        },
+        "B": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 0.8200000000000001,
+          "wall_seconds": 0.8315694713965058,
+          "cpu_ms_per_mixed_rpc": 1.8981481481481484,
+          "mixed_rpc_per_second": 519.4995906650057,
+          "host_list_p95_ms": 19.31236032396555,
+          "cancel_p95_ms": 17.874930053949356,
+          "vmhwm_kib_samples": [
+            15472,
+            15508
+          ],
+          "vmhwm_kib_median": 15490.0,
+          "vmrss_after_kib_samples": [
+            15472,
+            15508
+          ],
+          "vmrss_after_kib_median": 15490.0
+        },
+        "change_percent": {
+          "cpu_ms_per_mixed_rpc": 1.2345679012345734,
+          "mixed_rpc_per_second": -2.484768405434379,
+          "host_list_p95_ms": 3.241677885644756,
+          "cancel_p95_ms": 4.331992898184267,
+          "vmhwm_kib_median": -0.7051282051282026,
+          "vmrss_after_kib_median": -0.7051282051282026
+        }
+      },
+      {
+        "workers": 2,
+        "receipt_bytes": 4194272,
+        "receipt_sha256": "5a78edf8acebb537a08c7dff17eb2878c49aa704b08c6e6f838888cc0d16015e",
+        "A": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 15.600000000000001,
+          "wall_seconds": 4.615146217867732,
+          "cpu_ms_per_mixed_rpc": 36.111111111111114,
+          "mixed_rpc_per_second": 93.60483495138115,
+          "host_list_p95_ms": 46.25706886872649,
+          "cancel_p95_ms": 97.22119895741343,
+          "vmhwm_kib_samples": [
+            135160,
+            139600
+          ],
+          "vmhwm_kib_median": 137380.0,
+          "vmrss_after_kib_samples": [
+            134828,
+            122484
+          ],
+          "vmrss_after_kib_median": 128656.0
+        },
+        "B": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 11.21,
+          "wall_seconds": 5.72984223254025,
+          "cpu_ms_per_mixed_rpc": 25.949074074074073,
+          "mixed_rpc_per_second": 75.39474604494974,
+          "host_list_p95_ms": 19.799463916569948,
+          "cancel_p95_ms": 128.62180173397064,
+          "vmhwm_kib_samples": [
+            93424,
+            108880
+          ],
+          "vmhwm_kib_median": 101152.0,
+          "vmrss_after_kib_samples": [
+            93424,
+            108880
+          ],
+          "vmrss_after_kib_median": 101152.0
+        },
+        "change_percent": {
+          "cpu_ms_per_mixed_rpc": -28.141025641025653,
+          "mixed_rpc_per_second": -19.45421827397038,
+          "host_list_p95_ms": -57.19689033310975,
+          "cancel_p95_ms": 32.298102793724915,
+          "vmhwm_kib_median": -26.370650749745227,
+          "vmrss_after_kib_median": -21.377938067404557
+        }
+      }
+    ]
+  },
+  "cancel_r11_r14": {
+    "baseline_sha256": "660d64674fe3422006c0c2a82bc31f3f36edf19baf6613df7cdce51e8f3f8e4c",
+    "candidate_sha256": "51480b3cf630a95419d3afeb571eec17c90cffa5944101920d05333673de031d",
+    "report_sha256": "a652cb69327d78376caeef6821f97bc2c389645244c6f6845e1ea88eadfbd26a",
+    "counts": {
+      "child_processes": 16,
+      "measured_calls": 3456,
+      "warmup_calls_excluded": 288,
+      "all_reply_hashes_and_semantics_verified": 3744,
+      "automatic_retries": 0
+    },
+    "scope": "Expected wrong-host refusals plus host_list; CPU denominator is mixed RPCs. VmHWM is sampled after measurement, since exec, including warmup; not per-request allocation.",
+    "cells": [
+      {
+        "workers": 1,
+        "receipt_bytes": 1024,
+        "receipt_sha256": "43e9ab8114f4eb37887b4edd921b70e2f0b6ec1888c79cae62b9595bd5f6a1b2",
+        "A": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 0.74,
+          "wall_seconds": 0.8227531602606177,
+          "cpu_ms_per_mixed_rpc": 1.712962962962963,
+          "mixed_rpc_per_second": 525.0663514475696,
+          "host_list_p95_ms": 18.78156093880534,
+          "cancel_p95_ms": 17.898709047585726,
+          "vmhwm_kib_samples": [
+            13744,
+            13928
+          ],
+          "vmhwm_kib_median": 13836.0,
+          "vmrss_after_kib_samples": [
+            13744,
+            13928
+          ],
+          "vmrss_after_kib_median": 13836.0
+        },
+        "B": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 0.77,
+          "wall_seconds": 0.8327553877606988,
+          "cpu_ms_per_mixed_rpc": 1.7824074074074074,
+          "mixed_rpc_per_second": 518.759777900278,
+          "host_list_p95_ms": 20.980719942599535,
+          "cancel_p95_ms": 21.36111119762063,
+          "vmhwm_kib_samples": [
+            14276,
+            14208
+          ],
+          "vmhwm_kib_median": 14242.0,
+          "vmrss_after_kib_samples": [
+            14276,
+            14208
+          ],
+          "vmrss_after_kib_median": 14242.0
+        },
+        "change_percent": {
+          "cpu_ms_per_mixed_rpc": 4.054054054054057,
+          "mixed_rpc_per_second": -1.2011003047338376,
+          "host_list_p95_ms": 11.709138611852122,
+          "cancel_p95_ms": 19.34442389576656,
+          "vmhwm_kib_median": 2.9343740965597,
+          "vmrss_after_kib_median": 2.9343740965597
+        }
+      },
+      {
+        "workers": 1,
+        "receipt_bytes": 4194272,
+        "receipt_sha256": "5a78edf8acebb537a08c7dff17eb2878c49aa704b08c6e6f838888cc0d16015e",
+        "A": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 10.129999999999999,
+          "wall_seconds": 9.679572746157646,
+          "cpu_ms_per_mixed_rpc": 23.44907407407407,
+          "mixed_rpc_per_second": 44.63006904633105,
+          "host_list_p95_ms": 211.73482295125723,
+          "cancel_p95_ms": 208.18604808300734,
+          "vmhwm_kib_samples": [
+            22104,
+            21948
+          ],
+          "vmhwm_kib_median": 22026.0,
+          "vmrss_after_kib_samples": [
+            14200,
+            14072
+          ],
+          "vmrss_after_kib_median": 14136.0
+        },
+        "B": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 10.84,
+          "wall_seconds": 5.471923758741468,
+          "cpu_ms_per_mixed_rpc": 25.09259259259259,
+          "mixed_rpc_per_second": 78.94846840836817,
+          "host_list_p95_ms": 16.468582209199667,
+          "cancel_p95_ms": 117.62328073382378,
+          "vmhwm_kib_samples": [
+            92552,
+            96296
+          ],
+          "vmhwm_kib_median": 94424.0,
+          "vmrss_after_kib_samples": [
+            92552,
+            96296
+          ],
+          "vmrss_after_kib_median": 94424.0
+        },
+        "change_percent": {
+          "cpu_ms_per_mixed_rpc": 7.008884501480761,
+          "mixed_rpc_per_second": 76.89524147141861,
+          "host_list_p95_ms": -92.22207193901646,
+          "cancel_p95_ms": -43.50088211150184,
+          "vmhwm_kib_median": 328.69336238990286,
+          "vmrss_after_kib_median": 567.9683078664402
+        }
+      },
+      {
+        "workers": 2,
+        "receipt_bytes": 1024,
+        "receipt_sha256": "43e9ab8114f4eb37887b4edd921b70e2f0b6ec1888c79cae62b9595bd5f6a1b2",
+        "A": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 0.78,
+          "wall_seconds": 0.8026012149639428,
+          "cpu_ms_per_mixed_rpc": 1.8055555555555556,
+          "mixed_rpc_per_second": 538.2498704782148,
+          "host_list_p95_ms": 17.510194797068834,
+          "cancel_p95_ms": 16.562833916395903,
+          "vmhwm_kib_samples": [
+            15264,
+            15460
+          ],
+          "vmhwm_kib_median": 15362.0,
+          "vmrss_after_kib_samples": [
+            15264,
+            15460
+          ],
+          "vmrss_after_kib_median": 15362.0
+        },
+        "B": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 0.8,
+          "wall_seconds": 0.7925082226283848,
+          "cpu_ms_per_mixed_rpc": 1.8518518518518519,
+          "mixed_rpc_per_second": 545.1047543295575,
+          "host_list_p95_ms": 17.73811411112547,
+          "cancel_p95_ms": 16.389393247663975,
+          "vmhwm_kib_samples": [
+            15312,
+            15608
+          ],
+          "vmhwm_kib_median": 15460.0,
+          "vmrss_after_kib_samples": [
+            15312,
+            15608
+          ],
+          "vmrss_after_kib_median": 15460.0
+        },
+        "change_percent": {
+          "cpu_ms_per_mixed_rpc": 2.564102564102555,
+          "mixed_rpc_per_second": 1.2735504878528703,
+          "host_list_p95_ms": 1.3016377984258032,
+          "cancel_p95_ms": -1.0471678313469956,
+          "vmhwm_kib_median": 0.6379377685197252,
+          "vmrss_after_kib_median": 0.6379377685197252
+        }
+      },
+      {
+        "workers": 2,
+        "receipt_bytes": 4194272,
+        "receipt_sha256": "5a78edf8acebb537a08c7dff17eb2878c49aa704b08c6e6f838888cc0d16015e",
+        "A": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 10.79,
+          "wall_seconds": 5.593313726130873,
+          "cpu_ms_per_mixed_rpc": 24.97685185185185,
+          "mixed_rpc_per_second": 77.23507408171655,
+          "host_list_p95_ms": 134.94060467928648,
+          "cancel_p95_ms": 131.62510469555855,
+          "vmhwm_kib_samples": [
+            33944,
+            33908
+          ],
+          "vmhwm_kib_median": 33926.0,
+          "vmrss_after_kib_samples": [
+            15584,
+            15480
+          ],
+          "vmrss_after_kib_median": 15532.0
+        },
+        "B": {
+          "mixed_calls": 432,
+          "cancel_calls": 384,
+          "host_list_calls": 48,
+          "cpu_seconds": 11.2,
+          "wall_seconds": 5.717819671146572,
+          "cpu_ms_per_mixed_rpc": 25.925925925925927,
+          "mixed_rpc_per_second": 75.55327464767225,
+          "host_list_p95_ms": 26.891678106039762,
+          "cancel_p95_ms": 124.55123430117965,
+          "vmhwm_kib_samples": [
+            97300,
+            96272
+          ],
+          "vmhwm_kib_median": 96786.0,
+          "vmrss_after_kib_samples": [
+            97300,
+            96272
+          ],
+          "vmrss_after_kib_median": 96786.0
+        },
+        "change_percent": {
+          "cpu_ms_per_mixed_rpc": 3.7998146431881485,
+          "mixed_rpc_per_second": -2.1775073747775653,
+          "host_list_p95_ms": -80.07147057777513,
+          "cancel_p95_ms": -5.37425623382436,
+          "vmhwm_kib_median": 185.28562164711434,
+          "vmrss_after_kib_median": 523.1393252639712
+        }
+      }
+    ]
+  },
+  "native_r11_r14": {
+    "baseline_sha256": "660d64674fe3422006c0c2a82bc31f3f36edf19baf6613df7cdce51e8f3f8e4c",
+    "candidate_sha256": "51480b3cf630a95419d3afeb571eec17c90cffa5944101920d05333673de031d",
+    "report_sha256": "a7ede87ad841c752a9863e38eb1e136cecd8e2064dfa185a493740744fbf9af5",
+    "counts": {
+      "measured_calls": 1152,
+      "warmup_calls_excluded": 288,
+      "verification_calls_excluded": 72,
+      "total_native_calls": 1512,
+      "automatic_retries": 0
+    },
+    "cells": [
+      {
+        "concurrency": 1,
+        "A": {
+          "calls": 192,
+          "cpu_seconds": 24.92,
+          "wall_seconds": 44.602221748791635,
+          "cpu_ms_per_call": 129.79166666666666,
+          "calls_per_second": 4.30471829590421,
+          "p95_ms": 290.4175375588238,
+          "p99_ms": 302.5246956385672,
+          "per_process_wall_seconds": [
+            22.137519636191428,
+            22.464702112600207
+          ],
+          "per_process_cpu_seconds": [
+            12.380000000000003,
+            12.54
+          ]
+        },
+        "B": {
+          "calls": 192,
+          "cpu_seconds": 24.66,
+          "wall_seconds": 45.04372985102236,
+          "cpu_ms_per_call": 128.4375,
+          "calls_per_second": 4.262524454236379,
+          "p95_ms": 295.64552288502455,
+          "p99_ms": 334.00020003318787,
+          "per_process_wall_seconds": [
+            22.257211009971797,
+            22.786518841050565
+          ],
+          "per_process_cpu_seconds": [
+            12.120000000000001,
+            12.54
+          ]
+        },
+        "change_percent": {
+          "cpu_ms_per_call": -1.0433386837881198,
+          "calls_per_second": -0.9801766054697847,
+          "p95_ms": 1.8001617154893124,
+          "p99_ms": 10.404276030484837
+        }
+      },
+      {
+        "concurrency": 4,
+        "A": {
+          "calls": 192,
+          "cpu_seconds": 13.870000000000005,
+          "wall_seconds": 10.562245903536677,
+          "cpu_ms_per_call": 72.23958333333336,
+          "calls_per_second": 18.177952090256717,
+          "p95_ms": 291.8243487365544,
+          "p99_ms": 308.8488052599132,
+          "per_process_wall_seconds": [
+            5.115016097668558,
+            5.447229805868119
+          ],
+          "per_process_cpu_seconds": [
+            6.790000000000003,
+            7.080000000000002
+          ]
+        },
+        "B": {
+          "calls": 192,
+          "cpu_seconds": 13.989999999999998,
+          "wall_seconds": 10.680795290973037,
+          "cpu_ms_per_call": 72.86458333333333,
+          "calls_per_second": 17.976189484903845,
+          "p95_ms": 283.2626588642597,
+          "p99_ms": 344.2123429849744,
+          "per_process_wall_seconds": [
+            5.358473802916706,
+            5.322321488056332
+          ],
+          "per_process_cpu_seconds": [
+            7.009999999999998,
+            6.98
+          ]
+        },
+        "change_percent": {
+          "cpu_ms_per_call": 0.8651766402306693,
+          "calls_per_second": -1.1099303395183613,
+          "p95_ms": -2.9338504169930557,
+          "p99_ms": 11.450113169549358
+        }
+      },
+      {
+        "concurrency": 8,
+        "A": {
+          "calls": 192,
+          "cpu_seconds": 13.71,
+          "wall_seconds": 8.194004903081805,
+          "cpu_ms_per_call": 71.40625,
+          "calls_per_second": 23.43176532977029,
+          "p95_ms": 408.48603192716837,
+          "p99_ms": 438.28072072938085,
+          "per_process_wall_seconds": [
+            4.081777666229755,
+            4.11222723685205
+          ],
+          "per_process_cpu_seconds": [
+            6.849999999999998,
+            6.860000000000003
+          ]
+        },
+        "B": {
+          "calls": 192,
+          "cpu_seconds": 13.970000000000006,
+          "wall_seconds": 8.486599822062999,
+          "cpu_ms_per_call": 72.7604166666667,
+          "calls_per_second": 22.62390168331596,
+          "p95_ms": 439.9937456473708,
+          "p99_ms": 459.91879887878895,
+          "per_process_wall_seconds": [
+            4.23739744303748,
+            4.249202379025519
+          ],
+          "per_process_cpu_seconds": [
+            7.0000000000000036,
+            6.970000000000002
+          ]
+        },
+        "change_percent": {
+          "cpu_ms_per_call": 1.896425966447901,
+          "calls_per_second": -3.44772847920225,
+          "p95_ms": 7.713290359416791,
+          "p99_ms": 4.937036270588924
+        }
+      }
+    ],
+    "whole_controller_memory": {
+      "A": {
+        "samples": [
+          {
+            "round": 0,
+            "controller_vmhwm_kib": 17224,
+            "sampled_controller_rss_peak_kib": 17224,
+            "metric_samples": {
+              "controller_fd": 404,
+              "controller_hwm_kib": 404,
+              "controller_rss_kib": 404,
+              "process_cpu": 2936,
+              "tree_fd": 404,
+              "tree_fd_process_observations": 2935,
+              "tree_rss_kib": 404,
+              "tree_rss_kib_process_observations": 2936
+            },
+            "errors": {
+              "fd:PermissionError": 3
+            }
+          },
+          {
+            "round": 3,
+            "controller_vmhwm_kib": 17196,
+            "sampled_controller_rss_peak_kib": 17196,
+            "metric_samples": {
+              "controller_fd": 407,
+              "controller_hwm_kib": 407,
+              "controller_rss_kib": 407,
+              "process_cpu": 2956,
+              "tree_fd": 407,
+              "tree_fd_process_observations": 2955,
+              "tree_rss_kib": 407,
+              "tree_rss_kib_process_observations": 2956
+            },
+            "errors": {
+              "fd:PermissionError": 1
+            }
+          }
+        ],
+        "controller_vmhwm_kib_median": 17210.0,
+        "sampled_rss_peak_kib_median": 17210.0
+      },
+      "B": {
+        "samples": [
+          {
+            "round": 1,
+            "controller_vmhwm_kib": 17252,
+            "sampled_controller_rss_peak_kib": 17252,
+            "metric_samples": {
+              "controller_fd": 405,
+              "controller_hwm_kib": 405,
+              "controller_rss_kib": 405,
+              "process_cpu": 2950,
+              "tree_fd": 405,
+              "tree_fd_process_observations": 2950,
+              "tree_rss_kib": 405,
+              "tree_rss_kib_process_observations": 2950
+            },
+            "errors": {
+              "fd:PermissionError": 1
+            }
+          },
+          {
+            "round": 2,
+            "controller_vmhwm_kib": 17124,
+            "sampled_controller_rss_peak_kib": 17124,
+            "metric_samples": {
+              "controller_fd": 408,
+              "controller_hwm_kib": 408,
+              "controller_rss_kib": 408,
+              "process_cpu": 2964,
+              "tree_fd": 408,
+              "tree_fd_process_observations": 2961,
+              "tree_rss_kib": 408,
+              "tree_rss_kib_process_observations": 2962
+            },
+            "errors": {
+              "fd:PermissionError": 4
+            }
+          }
+        ],
+        "controller_vmhwm_kib_median": 17188.0,
+        "sampled_rss_peak_kib_median": 17188.0
+      }
+    },
+    "resource_metric_errors_preserved": [
+      {
+        "round": 0,
+        "phase": "shutdown",
+        "error_counts": {
+          "fd:PermissionError": 3
+        }
+      },
+      {
+        "round": 1,
+        "phase": "shutdown",
+        "error_counts": {
+          "fd:PermissionError": 1
+        }
+      },
+      {
+        "round": 1,
+        "phase": "restart_shutdown",
+        "error_counts": {
+          "fd:PermissionError": 1
+        }
+      },
+      {
+        "round": 2,
+        "phase": "shutdown",
+        "error_counts": {
+          "fd:PermissionError": 4
+        }
+      },
+      {
+        "round": 2,
+        "phase": "restart_shutdown",
+        "error_counts": {
+          "fd:PermissionError": 1
+        }
+      },
+      {
+        "round": 3,
+        "phase": "shutdown",
+        "error_counts": {
+          "fd:PermissionError": 1
+        }
+      },
+      {
+        "round": 3,
+        "phase": "restart_shutdown",
+        "error_counts": {
+          "fd:PermissionError": 1
+        }
+      }
+    ],
+    "native_response_proof_scope": "Rows carry reply/DTO hashes and successful validation flags, not JSON-RPC bodies. This audit validates their format, identity/matrix, complete-output bindings, and recomputes metrics; it does not claim independently recomputed native transport-envelope hashes.",
+    "memory_scope": "Main controller across initial checks, all C levels and warmup; sampled kernel VmHWM and sampled VmRSS peaks are not per-C or per-call allocations. FD permission errors remain visible and do not invalidate separately available CPU/RSS."
+  },
+  "recovery": {
+    "raw_report_sha256": "14c1330ef769100465b9b57f31966a47a720adec4496f9a150b41f99071c3905",
+    "counts": {
+      "hosts": 6,
+      "native_replies": 90,
+      "ssh_probes": 36,
+      "ssh_stdout_and_stderr_files": 72,
+      "embedded_artifacts_rehashed": 150,
+      "embedded_artifact_bytes_rehashed": 224885,
+      "new_starts": 6,
+      "same_key_lookups": 12,
+      "cancel_calls": 12,
+      "extra_read_only_terminal_polls": 0,
+      "automatic_rpc_retries": 0
+    },
+    "successful_cancel_concurrency": {
+      "observed_peak_overlap": 6,
+      "start_spread_ms": 2.329587936401367,
+      "latencies_ms": {
+        "ai395": 603.4232173115015,
+        "rog": 670.8021308295429,
+        "pocket4": 720.0499577447772,
+        "mac": 728.2648752443492,
+        "x230": 765.2786988765001,
+        "main": 952.527245040983
+      },
+      "supports": "live six-host successful-cancel overlap; not a successful-cancel C8 throughput measurement"
+    },
+    "faults": {
+      "controller_sigkill_confirmed": true,
+      "three_controller_generations": [
+        {
+          "pid": 2343185,
+          "birth_ticks": 244273583
+        },
+        {
+          "pid": 2343524,
+          "birth_ticks": 244274046
+        },
+        {
+          "pid": 2343924,
+          "birth_ticks": 244274562
+        }
+      ],
+      "owned_rog_ssh_master_sigkill_confirmed": true,
+      "master_generation_replaced": true,
+      "network_and_services_unchanged": true
+    },
+    "hosts": {
+      "ai395": {
+        "job_id": "1a1a3469746-23c111-1",
+        "execution_marker_count": 1,
+        "same_key_reused_after_crash": true,
+        "same_key_reused_after_cancel": true,
+        "cancel_acknowledgement": "stop_requested",
+        "cancel_after_terminal_acknowledgement": {
+          "audit_recorded": true,
+          "automatic_retry": false,
+          "job_id": "1a1a3469746-23c111-1",
+          "reconcile_via": "process_status",
+          "result": "already_exited",
+          "termination_confirmed": false
+        },
+        "signal_identity": "pidfd"
+      },
+      "mac": {
+        "job_id": "1a1a346974d-23c111-5",
+        "execution_marker_count": 1,
+        "same_key_reused_after_crash": true,
+        "same_key_reused_after_cancel": true,
+        "cancel_acknowledgement": "term_sent",
+        "cancel_after_terminal_acknowledgement": {
+          "audit_recorded": true,
+          "automatic_retry": false,
+          "job_id": "1a1a346974d-23c111-5",
+          "reconcile_via": "process_status",
+          "result": "already_exited",
+          "termination_confirmed": false
+        },
+        "signal_identity": "account-and-PID-start best effort"
+      },
+      "main": {
+        "job_id": "1a1a346974d-23c111-6",
+        "execution_marker_count": 1,
+        "same_key_reused_after_crash": true,
+        "same_key_reused_after_cancel": true,
+        "cancel_acknowledgement": "stop_requested",
+        "cancel_after_terminal_acknowledgement": {
+          "audit_recorded": true,
+          "automatic_retry": false,
+          "job_id": "1a1a346974d-23c111-6",
+          "reconcile_via": "process_status",
+          "result": "already_exited",
+          "termination_confirmed": false
+        },
+        "signal_identity": "pidfd"
+      },
+      "pocket4": {
+        "job_id": "1a1a346974d-23c111-2",
+        "execution_marker_count": 1,
+        "same_key_reused_after_crash": true,
+        "same_key_reused_after_cancel": true,
+        "cancel_acknowledgement": "stop_requested",
+        "cancel_after_terminal_acknowledgement": {
+          "audit_recorded": true,
+          "automatic_retry": false,
+          "job_id": "1a1a346974d-23c111-2",
+          "reconcile_via": "process_status",
+          "result": "already_exited",
+          "termination_confirmed": false
+        },
+        "signal_identity": "pidfd"
+      },
+      "rog": {
+        "job_id": "1a1a346974d-23c111-4",
+        "execution_marker_count": 1,
+        "same_key_reused_after_crash": true,
+        "same_key_reused_after_cancel": true,
+        "cancel_acknowledgement": "stop_requested",
+        "cancel_after_terminal_acknowledgement": {
+          "audit_recorded": true,
+          "automatic_retry": false,
+          "job_id": "1a1a346974d-23c111-4",
+          "reconcile_via": "process_status",
+          "result": "already_exited",
+          "termination_confirmed": false
+        },
+        "signal_identity": "pidfd"
+      },
+      "x230": {
+        "job_id": "1a1a346974d-23c111-3",
+        "execution_marker_count": 1,
+        "same_key_reused_after_crash": true,
+        "same_key_reused_after_cancel": true,
+        "cancel_acknowledgement": "stop_requested",
+        "cancel_after_terminal_acknowledgement": {
+          "audit_recorded": true,
+          "automatic_retry": false,
+          "job_id": "1a1a346974d-23c111-3",
+          "reconcile_via": "process_status",
+          "result": "already_exited",
+          "termination_confirmed": false
+        },
+        "signal_identity": "pidfd"
+      }
+    },
+    "limitations": [
+      "Fixture execution markers prove one execution for these six same-key recovery scenarios, not universal distributed exactly-once execution.",
+      "No host reboot, power loss, WAN partition, ownership transfer, or external-effect deduplication experiment is claimed.",
+      "Mac signal identity is account/PID-start best effort; Linux evidence uses pidfd.",
+      "Native response files and embedded remote files are independently hashed; argument hashes are checked for shape but full request bodies were not retained in this report."
+    ]
+  },
+  "audit_execution": {
+    "path": "/home/qian/hepta-runtime-optimization-20261103-r14/independent-audit-tools/attempt-01/execution.json",
+    "sha256": "8ad6f03ef5b79eee0cd525e5cf7edfc1412417f0bb432335c941cc72d8b3c97c",
+    "success": true,
+    "finished_utc": "2026-11-03T21:18:23.017832+00:00",
+    "stages": [
+      {
+        "name": "qualification",
+        "returncode": 0,
+        "result": {
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/qualification-audit-summary.json",
+          "sha256": "667e9e966b43ce1e14c228b0ab7ab9b8fc017c26c95a41adba4e97cea1487ff3"
+        }
+      },
+      {
+        "name": "performance",
+        "returncode": 0,
+        "result": {
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/independent-performance-audit.json",
+          "sha256": "03e030f4329b0037069ba63687e1a1ebcaf42ccba472b026d8d5b5ddffe0dba7"
+        }
+      },
+      {
+        "name": "recovery",
+        "returncode": 0,
+        "result": {
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/independent-recovery-audit.json",
+          "sha256": "128d0408c8674b21c5c53cd11f46bdeafdcdbd803bebc9a70a3e66be54fa982e"
+        }
+      }
+    ]
+  }
+}

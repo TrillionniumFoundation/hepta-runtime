@@ -44,7 +44,9 @@ static START_IO_WORKERS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 const MAX_START_OUTCOME_PUBLICATIONS: usize = 8;
 static START_OUTCOME_PUBLICATIONS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 const MAX_CANCEL_PUBLICATIONS: usize = 8;
+const MAX_CANCEL_PREPARATIONS: usize = 2;
 static CANCEL_PUBLICATIONS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+static CANCEL_PREPARATIONS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<Option<AuditReadiness>>> = OnceLock::new();
 const MAX_OBSERVATION_AUDITS: usize = 8;
 static OBSERVATION_AUDITS: OnceLock<Arc<Semaphore>> = OnceLock::new();
@@ -3926,20 +3928,31 @@ fn cancel_publication_slots() -> Arc<Semaphore> {
 		.clone()
 }
 
+fn cancel_preparation_slots() -> Arc<Semaphore> {
+	CANCEL_PREPARATIONS
+		.get_or_init(|| Arc::new(Semaphore::new(MAX_CANCEL_PREPARATIONS)))
+		.clone()
+}
+
 async fn run_cancel_intent<O: Send + 'static>(
-	slots: Arc<Semaphore>,
+	publication_slots: Arc<Semaphore>,
+	preparation_slots: Arc<Semaphore>,
 	prepare: impl FnOnce() -> Result<(PreparedAudit, O)> + Send + 'static,
 	append: impl FnOnce(PreparedAudit) -> Result<()> + Send + 'static,
 ) -> Result<(OwnedSemaphorePermit, O)> {
-	let permit = slots
+	let permit = publication_slots
+		.acquire_owned()
+		.await
+		.map_err(|_| operation_intent_unavailable())?;
+	let preparation_permit = preparation_slots
 		.acquire_owned()
 		.await
 		.map_err(|_| operation_intent_unavailable())?;
 	let result = tokio::task::spawn_blocking(move || {
-		// Receipt validation is part of the same bounded physical preparation as
-		// the durable intent. Slow reads cannot block the executor or borrow an
-		// observation slot needed by unrelated callers. The reservation follows
-		// the verified binding through the remote response and completion audit.
+		// Keep queued and running receipt/intent work within its own physical
+		// budget even if the caller disappears. Only the original publication
+		// reservation follows the binding through the remote response and audit.
+		let _preparation_permit = preparation_permit;
 		let (prepared, ownership) = prepare()?;
 		require_operation_intent(append(prepared))?;
 		Ok((permit, ownership))
@@ -4514,6 +4527,7 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 	};
 	let (publication_permit, record) = run_cancel_intent(
 		cancel_publication_slots(),
+		cancel_preparation_slots(),
 		move || {
 			// Cancellation continues an existing identity even when new effects
 			// are fenced off. Verify the full original receipt before intent,

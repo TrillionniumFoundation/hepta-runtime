@@ -1,0 +1,249 @@
+{
+  "candidate_adoption_claimed": false,
+  "credential_scan": "Original bytes, bounded decompressed gzip, and parsed JSON string fields; no redaction.",
+  "determinism": "Sorted paths; mtime=0; uid/gid=0; empty owner/gzip filename; mode 0644/0755.",
+  "diagnostic_scope": "Both frozen diagnostic runs and independently recomputed summary; separate from formal throughput evidence.",
+  "execution": "Explicit --package only; default/--show-policy read no files or gates.",
+  "gate_mode": "One attempt. Missing, incomplete, changed or failed inputs stop nonzero.",
+  "gates": [
+    {
+      "finished_utc_required": true,
+      "label": "qualification",
+      "path": "qualification-01/report.json",
+      "required_true": "qualified",
+      "stage_order": [
+        "format",
+        "fmt-check",
+        "harness-tests",
+        "clippy",
+        "test-build",
+        "isolated-tests",
+        "audit-isolated-tests",
+        "release"
+      ]
+    },
+    {
+      "finished_utc_required": true,
+      "label": "local",
+      "path": "local-campaigns-01/report.json",
+      "required_true": "success",
+      "stage_order": [
+        "cancel_r13_r14-campaign",
+        "cancel_r13_r14-analysis",
+        "cancel_r11_r14-campaign",
+        "cancel_r11_r14-analysis"
+      ]
+    },
+    {
+      "finished_utc_required": true,
+      "label": "remote",
+      "path": "remote-campaigns-01/report.json",
+      "required_true": "success",
+      "stage_order": [
+        "native-observation",
+        "analyze-native",
+        "six-host-cancel-recovery",
+        "verify-recovery"
+      ]
+    },
+    {
+      "finished_utc_required": false,
+      "label": "qualification_audit",
+      "path": "qualification-audit-summary.json",
+      "required_true": "success",
+      "stage_order": null
+    },
+    {
+      "finished_utc_required": false,
+      "label": "performance_audit",
+      "path": "independent-performance-audit.json",
+      "required_true": "success",
+      "stage_order": null
+    },
+    {
+      "finished_utc_required": false,
+      "label": "recovery_audit",
+      "path": "independent-recovery-audit.json",
+      "required_true": "success",
+      "stage_order": null
+    },
+    {
+      "finished_utc_required": true,
+      "label": "diagnostic_01",
+      "path": "thread-arena-diagnostic-01/report.json",
+      "required_true": "success",
+      "stage_order": null
+    },
+    {
+      "finished_utc_required": true,
+      "label": "diagnostic_02",
+      "path": "thread-arena-diagnostic-02/report.json",
+      "required_true": "success",
+      "stage_order": null
+    },
+    {
+      "finished_utc_required": false,
+      "label": "diagnostic_summary",
+      "path": "diagnostic-summary.json",
+      "required_true": "success",
+      "stage_order": null
+    }
+  ],
+  "limits": {
+    "decompressed_file_bytes": 134217728,
+    "decompressed_total_bytes": 4294967296,
+    "file_count": 300000,
+    "raw_file_bytes": 134217728,
+    "raw_total_bytes": 4294967296
+  },
+  "output": "Strictly new R14/evidence-package-* direct child; default evidence-package-01.",
+  "pinned_input_sha256": {
+    "diagnostic-summary.json": "053996e41ebb0b29d9e76f92ed381bb7af0c9db5a22298ae2d92cb6803586020",
+    "diagnostic-tools/probe_cancel_arenas_1_4.py": "179ad5088edcaa9db66dcf3e6d2c09e0a10b94c4103809196df9f1d4e3e5da5d",
+    "diagnostic-tools/probe_cancel_threads.py": "67e26e38b16ae9c829fe66b75e766217ea83951529e4e1462ecd451154c82e1c",
+    "diagnostic-tools/summarize_arena_diagnostics.py": "deac0afa61c84cfb9c5e111d77adde6a0e103efbb77997f8d397fa8609d7b7ad",
+    "implementation-ready.json": "efdc0a817aa4a9b80106a31b899678a4b7863523dd47e145f99b5d6ee2aa6442",
+    "independent-performance-audit.json": "03e030f4329b0037069ba63687e1a1ebcaf42ccba472b026d8d5b5ddffe0dba7",
+    "independent-recovery-audit.json": "128d0408c8674b21c5c53cd11f46bdeafdcdbd803bebc9a70a3e66be54fa982e",
+    "local-campaigns-01/report.json": "3371dbffb2240eb33fc5a0792a87f0c4e5382d46caf6e46a6c7ddf1b46dbcdd5",
+    "publication-r14/tests/evidence/20261103-x230-r14/compile-input-manifest.json": "6d80a964576e8ad4c21cbd3cd21950bc22cc694184901440f7f519df8f9dad45",
+    "qualification-01/report.json": "d6a46164b30c6677cf49ec7eea156748a8445589c71034795d016a62795610cd",
+    "qualification-01/source-map.json": "d24d2cc040c3f3d9849112e55a076834d06d12a65ec647987c5e419c3621354c",
+    "qualification-audit-summary.json": "667e9e966b43ce1e14c228b0ab7ab9b8fc017c26c95a41adba4e97cea1487ff3",
+    "remote-campaigns-01/report.json": "de3feacde5b7cee903a51207483e59e2678fa6388d3c6c95ea31c2bb358527e4",
+    "report-data.json": "ffa94324ddc72f4a7fe1976621d22e9fe052990b9697eded9917667e52b4c0fd",
+    "thread-arena-diagnostic-01/report.json": "1395c0e75c4c53e10386d7865e3e2f45c7f44bab184d7dffeb9e461dfb600937",
+    "thread-arena-diagnostic-02/report.json": "20a37ece2406a3aaeb0819bb4ecd2c0d4cdb2fcdafc785a4687077ebbe184889"
+  },
+  "preserved": [
+    "Original compressed test logs",
+    "All selected raw replies/state/fixtures",
+    "Negative results",
+    "Text bin/ssh guards",
+    "Safe arbitrary durable binary data",
+    "Public known_hosts, profile.json and ssh_config",
+    "Original GitHub proof including qualification_claimed=false"
+  ],
+  "private_filename_rule": "Private-key/credential/token files and .env are excluded with reasons.",
+  "prune_compiled_names": [
+    "hepta-runtime",
+    "hepta-runtime-jobctl",
+    "native_process_driver",
+    "hepta-effect-ownerctl"
+  ],
+  "prune_compiled_suffixes": [
+    ".pyc",
+    ".pyo",
+    ".o",
+    ".obj",
+    ".a",
+    ".so",
+    ".dylib",
+    ".dll",
+    ".exe",
+    ".class",
+    ".wasm"
+  ],
+  "prune_names": [
+    ".git",
+    "__pycache__",
+    "source",
+    "target",
+    "test-binaries",
+    "tmp",
+    "temp",
+    "temporary",
+    "unpack",
+    "unpacked",
+    "extract",
+    "extracted",
+    "node_modules"
+  ],
+  "prune_nested_package_suffixes": [
+    ".zip",
+    ".tar",
+    ".tar.gz",
+    ".tar.bz2",
+    ".tar.xz",
+    ".tgz",
+    ".tbz2",
+    ".txz",
+    ".7z",
+    ".rar",
+    ".whl",
+    ".deb",
+    ".rpm"
+  ],
+  "rejected": [
+    "Unsafe relative names",
+    "Selected symlinks/hardlinks/special files",
+    "ELF/PE/Mach-O content",
+    "Suspected credentials",
+    "Concurrent changes"
+  ],
+  "report_data_sha256": "ffa94324ddc72f4a7fe1976621d22e9fe052990b9697eded9917667e52b4c0fd",
+  "reviewed_from_draft_sha256": "71866c55744f06e31414d51bdd07f2e83c14f4eecb7f9139cbd3f352d0151d9c",
+  "roots": {
+    "r12": "/home/qian/hepta-runtime-optimization-20261103-r12",
+    "r14": "/home/qian/hepta-runtime-optimization-20261103-r14"
+  },
+  "schema": 1,
+  "scope": {
+    "r12": {
+      "required_globs": [],
+      "required_trees": [
+        "r14-candidate-cancel-recovery-01"
+      ]
+    },
+    "r14": {
+      "required_files": [
+        "build-preflight-01.json",
+        "implementation-ready.json",
+        "baseline-binding.json",
+        "source-diff.patch",
+        "format-01.json",
+        "qualification-launch-01.py",
+        "implementation-design-and-frontier.md",
+        "preparation-call-sites.txt",
+        "github-compiler-tree-verification-01.json",
+        "publication-r14-manifest.json",
+        "publication-r14/preupload-complete.json",
+        "publication-r14/tests/evidence/20261103-x230-r14/compile-input-manifest.json",
+        "qualification-audit-summary.json",
+        "independent-performance-audit.json",
+        "independent-recovery-audit.json",
+        "report-data.json",
+        "diagnostic-summary.json"
+      ],
+      "required_trees": [
+        "qualification-01",
+        "local-campaigns-01",
+        "remote-campaigns-01",
+        "cancel-r13-r14-01",
+        "cancel-r11-r14-01",
+        "native-r11-r14-01",
+        "measurement-tools",
+        "independent-audit-tools",
+        "archive-tools",
+        "publication-r14/receipts",
+        "diagnostic-tools",
+        "thread-arena-diagnostic-01",
+        "thread-arena-diagnostic-02"
+      ],
+      "root_globs": [
+        "format-01.stdout*",
+        "format-01.stderr*",
+        "runner-validation-*.json",
+        "run-state-*.json"
+      ]
+    }
+  },
+  "source_binding": {
+    "complete_source_file_count_attested_by_pinned_ready": 219,
+    "equality": "qualification.source_tested == qualification.source_after == ready.source_after",
+    "implementation_ready_sha256": "efdc0a817aa4a9b80106a31b899678a4b7863523dd47e145f99b5d6ee2aa6442",
+    "read_scope": "Compare existing reports only; never rehash source tree or compiled binaries."
+  },
+  "source_trees_included": false,
+  "verification": "Readback without extraction; then recheck selected set, identities, and all gate hashes."
+}
