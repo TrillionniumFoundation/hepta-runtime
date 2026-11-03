@@ -22,6 +22,10 @@ use super::config::{ExecutionMode, Platform};
 use super::ssh::{run_jobctl, run_python_json};
 use super::ssh::{run_jobctl_with_entry, run_python_json_with_entry};
 
+#[path = "jobs_record_projection.rs"]
+mod record_projection;
+use record_projection::BorrowedJobString;
+
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 const START_LANE_COUNT: usize = 64;
 type StartLanes = [Arc<AsyncMutex<()>>; START_LANE_COUNT];
@@ -150,30 +154,78 @@ pub struct ProcessListPageParams {
 	pub limit: Option<u16>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-struct JobRecord {
-	#[serde(default)]
-	execution_mode: ExecutionMode,
-	#[serde(default)]
-	system_jobctl: bool,
-	id: String,
-	host: String,
-	ssh_target: String,
-	unit: String,
-	remote_job_dir: String,
-	executable: String,
-	args: Vec<String>,
-	cwd: Option<String>,
-	env_keys: Vec<String>,
-	created_unix_ms: u128,
-	idempotency_key: Option<String>,
-	request_fingerprint: u64,
-	#[serde(default)]
-	request_digest: Option<String>,
-	#[serde(default = "default_launch_state")]
-	launch_state: String,
-	#[serde(default)]
-	launch_error: Option<String>,
+// Owned inventory/recovery keeps its concrete schema and derived decoder.
+// Borrowed lookups use the same field list, including every validation/default,
+// without retaining unrelated receipts' command strings.
+macro_rules! job_record_schema {
+	($name:ident $(<$parameter:ident>)?, $text:ident $(, $attribute:meta)?) => {
+		#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+		$(#[$attribute])?
+		struct $name $(<$parameter>)? {
+			#[serde(default)]
+			execution_mode: ExecutionMode,
+			#[serde(default)]
+			system_jobctl: bool,
+			id: String,
+			host: String,
+			ssh_target: $text,
+			unit: $text,
+			remote_job_dir: $text,
+			executable: $text,
+			args: Vec<$text>,
+			cwd: Option<$text>,
+			env_keys: Vec<$text>,
+			created_unix_ms: u128,
+			idempotency_key: Option<String>,
+			request_fingerprint: u64,
+			#[serde(default)]
+			request_digest: Option<$text>,
+			#[serde(default = "default_launch_state")]
+			launch_state: String,
+			#[serde(default)]
+			launch_error: Option<$text>,
+		}
+
+	};
+}
+
+job_record_schema!(JobRecord, String);
+job_record_schema!(
+	JobRecordData<Text>,
+	Text,
+	serde(bound(deserialize = "Text: Deserialize<'de>"))
+);
+
+impl JobRecordData<BorrowedJobString<'_>> {
+	fn into_owned(self) -> JobRecord {
+		JobRecord {
+			execution_mode: self.execution_mode,
+			system_jobctl: self.system_jobctl,
+			id: self.id,
+			host: self.host,
+			ssh_target: self.ssh_target.into_owned(),
+			unit: self.unit.into_owned(),
+			remote_job_dir: self.remote_job_dir.into_owned(),
+			executable: self.executable.into_owned(),
+			args: self
+				.args
+				.into_iter()
+				.map(BorrowedJobString::into_owned)
+				.collect(),
+			cwd: self.cwd.map(BorrowedJobString::into_owned),
+			env_keys: self
+				.env_keys
+				.into_iter()
+				.map(BorrowedJobString::into_owned)
+				.collect(),
+			created_unix_ms: self.created_unix_ms,
+			idempotency_key: self.idempotency_key,
+			request_fingerprint: self.request_fingerprint,
+			request_digest: self.request_digest.map(BorrowedJobString::into_owned),
+			launch_state: self.launch_state,
+			launch_error: self.launch_error.map(BorrowedJobString::into_owned),
+		}
+	}
 }
 
 fn default_launch_state() -> String {
@@ -298,101 +350,133 @@ fn read_record_at(path: &Path, expected_id: &str) -> Result<JobRecord> {
 	read_record_at_with_buffer(path, expected_id, &mut Vec::new())
 }
 
+// Owned reads keep the original direct call boundary; borrowed selection can
+// use a closure while both paths share the same buffer lifetime and cap.
+macro_rules! job_record_read_buffer {
+	($bytes:ident, $read:expr) => {{
+		// A scan owns this scratch buffer; returned records own their decoded data.
+		// Clear even an early failure so later reads cannot observe earlier bytes.
+		$bytes.clear();
+		let result = $read;
+		$bytes.clear();
+		// A concurrent growth/read error can make read_to_end overallocate. Do not
+		// retain that capacity across receipts, even though the scan will refuse it.
+		if $bytes.capacity() > (MAX_JOB_RECORD_BYTES + 1) as usize {
+			*$bytes = Vec::new();
+		}
+		result
+	}};
+}
+
 fn read_record_at_with_buffer(
 	path: &Path,
 	expected_id: &str,
 	bytes: &mut Vec<u8>,
 ) -> Result<JobRecord> {
-	// A scan owns this scratch buffer; returned records own their decoded data.
-	// Clear even an early failure so later reads cannot observe earlier bytes.
-	bytes.clear();
-	let result = read_record_at_into(path, expected_id, bytes);
-	bytes.clear();
-	// A concurrent growth/read error can make read_to_end overallocate. Do not
-	// retain that capacity across receipts, even though the scan will refuse it.
-	if bytes.capacity() > (MAX_JOB_RECORD_BYTES + 1) as usize {
-		*bytes = Vec::new();
-	}
-	result
+	job_record_read_buffer!(bytes, read_record_at_into(path, expected_id, bytes))
 }
 
-fn read_record_at_into(path: &Path, expected_id: &str, bytes: &mut Vec<u8>) -> Result<JobRecord> {
-	// A symlink or a mismatched identity is not a usable effect-owner receipt.
-	let metadata = std::fs::symlink_metadata(path)
-		.with_context(|| format!("cannot stat durable job record {}", path.display()))?;
-	if !metadata.file_type().is_file() {
-		bail!("unsafe durable job record type: {}", path.display());
-	}
-	let mut options = OpenOptions::new();
-	options.read(true);
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::OpenOptionsExt;
-		options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK);
-	}
-	// Recheck the opened file, not only the pathname inspected above:
-	// a concurrent symlink swap must never redirect a credentialed read.
-	let file = options
-		.open(path)
-		.with_context(|| format!("cannot open durable job record {}", path.display()))?;
-	let opened = file.metadata()?;
-	if !opened.is_file() || opened.len() > MAX_JOB_RECORD_BYTES {
-		bail!(
-			"invalid or oversized durable job record: {}",
-			path.display()
-		);
-	}
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::MetadataExt;
-		if opened.nlink() != 1
-			|| opened.uid() != unsafe { libc::geteuid() }
-			|| metadata.dev() != opened.dev()
-			|| metadata.ino() != opened.ino()
-		{
-			bail!("unsafe durable job receipt ownership or inode");
-		}
-	}
-	// The descriptor length is already bounded. One spare byte lets the same
-	// buffer observe EOF without growing for every unchanged regular receipt.
-	bytes
-		.try_reserve_exact(opened.len() as usize + 1)
-		.context("cannot allocate bounded durable job read buffer")?;
-	let mut bounded = (&file).take(MAX_JOB_RECORD_BYTES + 1);
-	bounded.read_to_end(bytes)?;
-	if bytes.len() as u64 > MAX_JOB_RECORD_BYTES {
-		bail!("oversized durable job record: {}", path.display());
-	}
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::MetadataExt;
-		let after = file.metadata()?;
-		let current = std::fs::symlink_metadata(path)?;
-		let stamp = |m: &std::fs::Metadata| {
-			(
-				m.dev(),
-				m.ino(),
-				m.mode(),
-				m.uid(),
-				m.nlink(),
-				m.len(),
-				m.mtime(),
-				m.mtime_nsec(),
-				m.ctime(),
-				m.ctime_nsec(),
-			)
-		};
-		if stamp(&opened) != stamp(&after) || stamp(&after) != stamp(&current) {
-			bail!("durable job receipt changed during read");
-		}
-	}
-	let record: JobRecord = serde_json::from_slice(bytes)
-		.with_context(|| format!("corrupt job record; durable job receipt {}", path.display()))?;
-	if record.id != expected_id {
-		bail!("durable job filename/identity mismatch: {}", path.display());
-	}
-	Ok(record)
+fn with_record_read_buffer<T>(
+	bytes: &mut Vec<u8>,
+	read: impl FnOnce(&mut Vec<u8>) -> Result<T>,
+) -> Result<T> {
+	job_record_read_buffer!(bytes, read(bytes))
 }
+
+// Both decoders expand the same descriptor checks. The owned function keeps
+// its concrete signature and direct serde call instead of a generic read path.
+macro_rules! job_record_reader {
+	($name:ident $(<$input_lifetime:lifetime>)?, $record:ty) => {
+		fn $name $(<$input_lifetime>)? (
+			path: &Path,
+			expected_id: &str,
+			bytes: & $($input_lifetime)? mut Vec<u8>,
+		) -> Result<$record> {
+			// A symlink or a mismatched identity is not a usable effect-owner receipt.
+			let metadata = std::fs::symlink_metadata(path)
+				.with_context(|| format!("cannot stat durable job record {}", path.display()))?;
+			if !metadata.file_type().is_file() {
+				bail!("unsafe durable job record type: {}", path.display());
+			}
+			let mut options = OpenOptions::new();
+			options.read(true);
+			#[cfg(unix)]
+			{
+				use std::os::unix::fs::OpenOptionsExt;
+				options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK);
+			}
+			// Recheck the opened file, not only the pathname inspected above:
+			// a concurrent symlink swap must never redirect a credentialed read.
+			let file = options
+				.open(path)
+				.with_context(|| format!("cannot open durable job record {}", path.display()))?;
+			let opened = file.metadata()?;
+			if !opened.is_file() || opened.len() > MAX_JOB_RECORD_BYTES {
+				bail!(
+					"invalid or oversized durable job record: {}",
+					path.display()
+				);
+			}
+			#[cfg(unix)]
+			{
+				use std::os::unix::fs::MetadataExt;
+				if opened.nlink() != 1
+					|| opened.uid() != unsafe { libc::geteuid() }
+					|| metadata.dev() != opened.dev()
+					|| metadata.ino() != opened.ino()
+				{
+					bail!("unsafe durable job receipt ownership or inode");
+				}
+			}
+			// The descriptor length is already bounded. One spare byte lets the same
+			// buffer observe EOF without growing for every unchanged regular receipt.
+			bytes
+				.try_reserve_exact(opened.len() as usize + 1)
+				.context("cannot allocate bounded durable job read buffer")?;
+			let mut bounded = (&file).take(MAX_JOB_RECORD_BYTES + 1);
+			bounded.read_to_end(bytes)?;
+			if bytes.len() as u64 > MAX_JOB_RECORD_BYTES {
+				bail!("oversized durable job record: {}", path.display());
+			}
+			#[cfg(unix)]
+			{
+				use std::os::unix::fs::MetadataExt;
+				let after = file.metadata()?;
+				let current = std::fs::symlink_metadata(path)?;
+				let stamp = |m: &std::fs::Metadata| {
+					(
+						m.dev(),
+						m.ino(),
+						m.mode(),
+						m.uid(),
+						m.nlink(),
+						m.len(),
+						m.mtime(),
+						m.mtime_nsec(),
+						m.ctime(),
+						m.ctime_nsec(),
+					)
+				};
+				if stamp(&opened) != stamp(&after) || stamp(&after) != stamp(&current) {
+					bail!("durable job receipt changed during read");
+				}
+			}
+			let record: $record = serde_json::from_slice(bytes)
+				.with_context(|| format!("corrupt job record; durable job receipt {}", path.display()))?;
+			if record.id != expected_id {
+				bail!("durable job filename/identity mismatch: {}", path.display());
+			}
+			Ok(record)
+
+		}
+	};
+}
+
+job_record_reader!(read_record_at_into, JobRecord);
+job_record_reader!(
+	read_borrowed_record_at_into<'bytes>,
+	JobRecordData<BorrowedJobString<'bytes>>
+);
 
 fn load_record(id: &str) -> Result<JobRecord> {
 	read_record_at(&record_path(id)?, id)
@@ -1064,7 +1148,27 @@ fn scan_registry_records_observed(
 			.file_stem()
 			.and_then(|name| name.to_str())
 			.context("invalid durable job record name")?;
-		let record = read_record_at_with_buffer(&path, expected_id, &mut bytes)?;
+		let record = with_record_read_buffer(&mut bytes, |bytes| {
+			if fingerprint {
+				// The no-watch fallback fingerprints every decoded field. Preserve
+				// its owned decode and canonical serialization without projection.
+				return read_record_at_into(&path, expected_id, bytes).map(Some);
+			}
+			let projection = read_borrowed_record_at_into(&path, expected_id, bytes)?;
+			let selected = (projection.host == host
+				&& projection.idempotency_key.as_deref() == Some(key))
+				|| cohort.iter().any(|target| {
+					projection.host == target.identity.0
+						&& projection.idempotency_key.as_deref() == Some(target.identity.1.as_str())
+				});
+			if !selected {
+				return Ok(None);
+			}
+			// Keep only selected originals, borrowing from the descriptor-validated
+			// bytes until now. This neither rereads the file nor reparses the JSON.
+			Ok(Some(projection.into_owned()))
+		})?;
+		let Some(record) = record else { continue };
 		for target in &mut *cohort {
 			target.observe(&record)?;
 		}
@@ -1651,11 +1755,29 @@ fn persist_pending_with(
 	})
 }
 
+async fn publish_pending_with(
+	record: JobRecord,
+	prepared: PreparedAudit,
+	slots: Arc<Semaphore>,
+	ownership: impl Send + 'static,
+	append: impl FnOnce(PreparedAudit) -> Result<()> + Send + 'static,
+	persist: impl FnOnce(&JobRecord) -> Result<()> + Send + 'static,
+) -> Result<JobRecord> {
+	// Transfer the original payload to its physical publisher. Returning it
+	// after both barriers avoids a second receipt copy while preserving custody
+	// if the awaiting caller is cancelled before or after worker submission.
+	run_start_io(slots, ownership, move || {
+		persist_pending_with(prepared, &record, append, persist)?;
+		Ok(record)
+	})
+	.await
+}
+
 async fn publish_pending_record(
-	record: &JobRecord,
+	record: JobRecord,
 	guard: &Option<OwnedStartGuard>,
 	owner: &Arc<super::effect_owner_fence::AdmissionPermit>,
-) -> Result<()> {
+) -> Result<JobRecord> {
 	let prepared = prepare_audit(
 		"process_start_intent",
 		&record.host,
@@ -1663,10 +1785,15 @@ async fn publish_pending_record(
 		&json!({"phase":"intent","remote_operation_submitted":false}),
 	)
 	.map_err(|_| operation_intent_unavailable())?;
-	let record = record.clone();
-	start_io(guard, owner, move || {
-		persist_pending_with(prepared, &record, append_audit, save_record)
-	})
+	// Freeze the same original intent before waiting for physical writer capacity.
+	publish_pending_with(
+		record,
+		prepared,
+		start_io_slots(),
+		(guard.clone(), owner.clone()),
+		append_audit,
+		save_record,
+	)
 	.await
 }
 
@@ -4064,7 +4191,7 @@ where
 	let id = next_job_id();
 	let unit = format!("hepta-runtime-job-{id}");
 	let remote_job_dir = format!("{}/jobs/{id}", host.remote_state_dir.trim_end_matches('/'));
-	let mut record = JobRecord {
+	let record = JobRecord {
 		system_jobctl: host.platform == Platform::Linux
 			&& host.execution_mode == ExecutionMode::Isolated,
 		execution_mode: host.execution_mode,
@@ -4086,7 +4213,7 @@ where
 	};
 	// Persist identity before remote launch. Later calls reconcile this same
 	// host, job ID and request binding; never invent a second remote job.
-	publish_pending_record(&record, &start_guard, &owner_admission).await?;
+	let mut record = publish_pending_record(record, &start_guard, &owner_admission).await?;
 	// The independent SSH owner can outlive this request future. Carry the
 	// exact binding into its final entry; do not consume the grant while queued.
 	// Share the owned binding rather than copying up to 1 MiB of admitted stdin.
@@ -4629,12 +4756,7 @@ fn page_job_rows(
 	{
 		bail!("invalid durable job inventory page");
 	}
-	let binding =
-		serde_json::to_vec(&json!({"namespace":namespace,"host":params.host,"rows":rows}))?;
-	let fingerprint = Sha256::digest(&binding)
-		.iter()
-		.map(|byte| format!("{byte:02x}"))
-		.collect::<String>();
+	let fingerprint = inventory_snapshot_digest(rows, params.host.as_deref(), namespace)?;
 	let start = match params.cursor.as_deref() {
 		None => 0,
 		Some(cursor) => {
@@ -4677,6 +4799,53 @@ fn page_job_rows(
 		}
 		end -= 1;
 	}
+}
+
+fn inventory_snapshot_digest(
+	rows: &[Value],
+	host: Option<&str>,
+	namespace: &str,
+) -> Result<String> {
+	// Match the existing JSON object's sorted keys exactly so retained cursors
+	// remain valid. Borrow rows and hash bounded chunks instead of cloning the
+	// complete Value tree and then allocating another complete snapshot buffer.
+	#[derive(Serialize)]
+	struct Binding<'a> {
+		host: Option<&'a str>,
+		namespace: &'a str,
+		rows: &'a [Value],
+	}
+	struct DigestWriter(Sha256);
+	impl Write for DigestWriter {
+		fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+			self.0.update(bytes);
+			Ok(bytes.len())
+		}
+		fn flush(&mut self) -> std::io::Result<()> {
+			Ok(())
+		}
+	}
+	let mut digest = DigestWriter(Sha256::new());
+	{
+		// The serializer emits many tiny writes. A fixed 8 KiB buffer batches
+		// digest updates while keeping auxiliary memory independent of row count.
+		let mut writer = std::io::BufWriter::with_capacity(8 * 1024, &mut digest);
+		serde_json::to_writer(
+			&mut writer,
+			&Binding {
+				host,
+				namespace,
+				rows,
+			},
+		)?;
+		writer.flush()?;
+	}
+	Ok(digest
+		.0
+		.finalize()
+		.iter()
+		.map(|byte| format!("{byte:02x}"))
+		.collect())
 }
 
 fn job_inventory_rows_response(records: &[InventoryRow]) -> Result<String> {
@@ -4733,8 +4902,16 @@ fn job_inventory_response(records: &[JobRecord]) -> Result<String> {
 mod tests;
 
 #[cfg(test)]
+#[path = "jobs_registry_decode_tests.rs"]
+mod registry_decode_tests;
+
+#[cfg(test)]
 #[path = "jobs_inventory_streaming_tests.rs"]
 mod inventory_streaming_tests;
+
+#[cfg(test)]
+#[path = "jobs_inventory_digest_tests.rs"]
+mod inventory_digest_tests;
 
 #[cfg(test)]
 #[path = "jobs_pagination_tests.rs"]
@@ -4771,6 +4948,10 @@ mod registry_async_tests;
 #[cfg(test)]
 #[path = "jobs_start_io_tests.rs"]
 mod start_io_tests;
+
+#[cfg(test)]
+#[path = "jobs_pending_admission_tests.rs"]
+mod pending_admission_tests;
 
 #[cfg(test)]
 #[path = "jobs_cancel_io_tests.rs"]

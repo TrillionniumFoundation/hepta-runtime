@@ -4,11 +4,9 @@ use super::*;
 use serde_json::{json, Value};
 
 #[test]
-fn file_observation_wire_preserves_the_original_helper_and_data_protocol() {
+fn file_observation_wire_uses_fixed_read_helpers_and_preserves_the_data_protocol() {
 	let source = concat!(
 		include_str!("file_metadata.py"),
-		"\n",
-		include_str!("inode_patch.py"),
 		"\n",
 		include_str!("binary_file.py")
 	);
