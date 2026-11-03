@@ -212,13 +212,50 @@ establishes the available provenance and the explicit eligibility failure. It
 does not establish candidate efficacy, profit or adoption. New candidate heads
 cannot inherit this old window or its seal times.
 
-## Deployment and future evidence: separate pending stage
+## Deployment and future evidence
 
-The deployment command has been issued. Activation read-back and the new future
-window remain **pending in this record**. The shared-feature collector and its
-new window have their own deployment and resource-admission evidence. Actual
-activation, successful original pre-open publications, settlement coverage and
-future comparative results must be appended using their own receipts.
+At preparation, registration and activation were pending. A later read-only
+audit at **2026-11-03 15:49:30.179 UTC** verified the new enabled research service
+as active/running, its registration and activation, and supervisor state
+`COLLECTING_FIXED_INPUT_WINDOW`. The unchanged supervisor performed the original
+source-recovery and resource checks and registered the family; the deployment
+script did not call the registrar directly.
+
+| New research-family event | UTC |
+| --- | --- |
+| Registration | 2026-11-03 15:44:25.673 |
+| Input start | 2026-11-03 15:49:25.673 |
+| Input end | 2026-11-17 15:49:25.673 |
+| Outcome end | 2026-11-18 15:49:25.673 |
+
+The new plan is
+`3a365ad12cab17e3864d26501dcef0e1bb8ffdb72c2b30503cdc402ffdc219cc`,
+with eleven heads and `baseline_parent` as parent. The original nine-head plan,
+failed denominator and deadlines remain separate and unchanged.
+
+| New immutable artifact | SHA-256 |
+| --- | --- |
+| Plan | `66d6c95296c9bc9adb2b764d6c8366d48d528e586f5d6070c854d5926ed5402c` |
+| Registration | `283ed5bdb603fd326c70c3c954c4d503dce6fdaa3917c020cca1bf1ed1071700` |
+| Activation | `b1250a33ad76235456934e46769c9b18bd1f51f9f8442339949029d050f09f66` |
+| Predictor configuration | `385bd3dd8dc7a968b29e5057b62aa50600f66df43df23173b5320b6ea9d3ad3a` |
+| Deployment result | `57cd4d33a78cc1300e2862ef046144d08c7a1bad1af53a78385727dc41658ad5` |
+
+The independently enabled strict-review service was then started and read back
+active/running at 15:53:14.991 UTC. It evaluates the new plan in a separate review
+directory and uses the same qualified release; its unit bytes have SHA-256
+`23e47b3ebfd976f1014b262f9b7767e19ab630061062a12a3e43394d06658e55`.
+Neither new service grants trade, actor-update or automatic-selection authority.
+The source producer is unchanged; the preparation explicitly retains the formal
+adoption limitation associated with the same producer scope.
+
+Read-only observations at 15:55:13.845 and 15:56:04.794 UTC found eleven CPU heads
+ready, zero encoder loads and zero guard acquisitions in this phase. The new
+family had zero request inputs, terminals and publications. Its strict review
+was PENDING with a complete current replay, zero commands/observed outcomes and
+UNKNOWN/null eligibility. No actual cross-plan publication or pre-open binding
+is claimed from those observations. The later live guarded handoff and future
+comparative results also require their own evidence.
 
 The new family's shared-head arithmetic is verified. Cross-plan feature sharing
 requires the actual pinned collector interface and its original publication and

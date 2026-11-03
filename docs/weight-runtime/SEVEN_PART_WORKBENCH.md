@@ -1,5 +1,10 @@
 # Seven-part weight workbench
 
+The later [blocker closure record](BLOCKER_CLOSURE_20261103.md) contains the
+214-test qualification, complete eleven-head bundle, strict original-window
+ineligibility and separately registered live research family. Earlier execution
+snapshots below remain historical evidence.
+
 This extension connects task-specific model observation, mechanism diagnosis,
 controlled edits, independent assessment and cost comparison through the existing
 resident weight worker. It adds Python providers and experiment clients. Rust
