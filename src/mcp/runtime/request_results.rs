@@ -19,6 +19,7 @@ use std::{
 	path::{Path, PathBuf},
 	sync::{Arc, Mutex, OnceLock},
 };
+use tokio::sync::Semaphore;
 
 use super::{
 	config::runtime_config,
@@ -30,6 +31,7 @@ const MAX_GLOBAL: usize = 512;
 const MAX_RESULT_BYTES: usize = 64 * 1024;
 const MAX_RECORD_BYTES: usize = 96 * 1024;
 const MAX_PAGE_BYTES: usize = 64 * 1024;
+const MAX_RESULT_READ_WORKERS: usize = 4;
 const STORE_NAME: &str = "request-results";
 const ARCHIVE_STORE_NAME: &str = "request-results-v2";
 const ARCHIVE_NAME: &str = "archive";
@@ -42,6 +44,7 @@ static RECORD_LOCKS: OnceLock<[Mutex<()>; 256]> = OnceLock::new();
 type AnchorCache = VecDeque<(AnchorStamp, Arc<CachedAnchor>)>;
 static ANCHOR_CACHE: OnceLock<Mutex<AnchorCache>> = OnceLock::new();
 static POLICY_BINDING: OnceLock<String> = OnceLock::new();
+static RESULT_READ_SLOTS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -1435,15 +1438,42 @@ fn result_state(record: Option<&Record>, tool: &str) -> &'static str {
 		None => "not_retained_policy",
 	}
 }
+
+fn result_read_slots() -> Arc<Semaphore> {
+	RESULT_READ_SLOTS
+		.get_or_init(|| Arc::new(Semaphore::new(MAX_RESULT_READ_WORKERS)))
+		.clone()
+}
+
+async fn run_result_read(
+	slots: Arc<Semaphore>,
+	read: impl FnOnce() -> Result<Option<Record>> + Send + 'static,
+) -> Result<Option<Record>> {
+	let permit = slots
+		.acquire_owned()
+		.await
+		.map_err(|_| anyhow!("request result unavailable to this scope or current policy"))?;
+	tokio::task::spawn_blocking(move || {
+		// A dropped caller cannot stop an already submitted blocking lookup.
+		// Keep capacity with that closure while queued and throughout actual I/O,
+		// including waiting for a record lock held by durable completion.
+		let _permit = permit;
+		read()
+	})
+	.await
+	.map_err(|_| anyhow!("request result unavailable to this scope or current policy"))?
+}
+
 pub async fn request_status(owner: &str, params: RequestStatusParams) -> Result<String> {
 	let observation = request_audit::observation(owner, &params.request_id).await?;
 	let identity = observation.identity;
 	let tool = identity.tool_name.clone();
 	let root = runtime_config()?.state_dir.clone();
 	let binding = policy_binding()?;
-	let record = tokio::task::spawn_blocking(move || lookup_at(&root, &identity, &binding))
-		.await
-		.map_err(|_| anyhow!("request result unavailable to this scope or current policy"))??;
+	let record = run_result_read(result_read_slots(), move || {
+		lookup_at(&root, &identity, &binding)
+	})
+	.await?;
 	page(
 		json!({"request_id":params.request_id,"tool_name":tool,"dispatch_state":observation.state,
 		"elapsed_ms":observation.elapsed_ms,"result_state":result_state(record.as_ref(),&tool),
@@ -1462,10 +1492,11 @@ pub async fn request_result(owner: &str, params: RequestResultParams) -> Result<
 	let identity = observation.identity;
 	let root = runtime_config()?.state_dir.clone();
 	let binding = policy_binding()?;
-	let record = tokio::task::spawn_blocking(move || lookup_at(&root, &identity, &binding))
-		.await
-		.map_err(|_| anyhow!("request result unavailable to this scope or current policy"))??
-		.ok_or_else(|| anyhow!("original result was not retained; never replay automatically"))?;
+	let record = run_result_read(result_read_slots(), move || {
+		lookup_at(&root, &identity, &binding)
+	})
+	.await?
+	.ok_or_else(|| anyhow!("original result was not retained; never replay automatically"))?;
 	if record.state != ResultState::Stored {
 		bail!("original result unavailable in retained state; never replay automatically");
 	}
@@ -1504,3 +1535,7 @@ mod growth_tests;
 #[cfg(test)]
 #[path = "request_results_policy_tests.rs"]
 mod policy_tests;
+
+#[cfg(all(test, unix))]
+#[path = "request_results_read_workers_tests.rs"]
+mod read_workers_tests;

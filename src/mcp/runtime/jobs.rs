@@ -4484,6 +4484,9 @@ fn inventory_projected_at<T>(
 	let mut records = Vec::with_capacity(names.len());
 	let mut stamps = Vec::with_capacity(names.len());
 	let mut bytes = 0u64;
+	// Reuse only the raw input buffer within this scan. Every receipt is still
+	// read and validated in full before projection; no record survives in a cache.
+	let mut raw = Vec::new();
 	for name in &names {
 		deadline()?;
 		let id = name
@@ -4509,7 +4512,8 @@ fn inventory_projected_at<T>(
 		if bytes > limits.bytes {
 			bail!("durable inventory total source byte bound exceeded");
 		}
-		let mut raw = Vec::with_capacity(before.len() as usize);
+		raw.clear();
+		raw.reserve_exact(before.len() as usize);
 		Read::by_ref(&mut file)
 			.take(before.len() + 1)
 			.read_to_end(&mut raw)?;
@@ -4525,6 +4529,7 @@ fn inventory_projected_at<T>(
 		stamps.push(stamp(&before));
 		records.push(project(record));
 	}
+	drop(raw);
 	if entries(&base, limits.records, &deadline)? != names {
 		bail!("durable inventory membership changed");
 	}

@@ -4,6 +4,143 @@
 //! Regression tests for config.
 use super::*;
 
+fn digest_fixture() -> RuntimeConfig {
+	serde_json::from_value(serde_json::json!({
+		"state_dir":"/synthetic/state",
+		"controller_workspace_roots":["/synthetic/workspace"],
+		"hosts":{"fixture":{
+			"ssh_target":"synthetic-alias",
+			"remote_state_dir":"/synthetic/remote",
+			"allowed_read_path_prefixes":["/synthetic/read", "/synthetic/中文'\""],
+			"privileged_actions":{"inspect":{
+				"executable":"/usr/bin/true", "fixed_args":["a b"], "allow_extra_args":true,
+				"extra_arg_patterns":["[a-z]+"], "timeout_seconds":17
+			}}
+		}}
+	}))
+	.unwrap()
+}
+
+#[test]
+fn installed_policy_digest_matches_full_json_and_never_reuses_another_config() {
+	use sha2::Digest;
+	let original = digest_fixture();
+	let installed = InstalledRuntimeConfig::new(original.clone());
+	assert!(installed.policy_digest.get().is_none());
+	let expected: [u8; 32] = sha2::Sha256::digest(serde_json::to_vec(&original).unwrap()).into();
+	assert_eq!(installed.policy_digest().unwrap(), expected);
+	let mut variants = Vec::new();
+	let mut changed = original.clone();
+	changed.state_dir = "/synthetic/other-state".into();
+	variants.push(changed);
+	let mut changed = original.clone();
+	changed
+		.controller_workspace_roots
+		.push("/other-root".into());
+	variants.push(changed);
+	let mut changed = original.clone();
+	changed.hosts.get_mut("fixture").unwrap().ssh_target = "other-alias".into();
+	variants.push(changed);
+	let mut changed = original.clone();
+	changed.hosts.get_mut("fixture").unwrap().execution_mode = ExecutionMode::Operator;
+	variants.push(changed);
+	let mut changed = original.clone();
+	changed
+		.hosts
+		.get_mut("fixture")
+		.unwrap()
+		.allowed_read_path_prefixes
+		.push("/another-read-root".into());
+	variants.push(changed);
+	let mut changed = original;
+	changed
+		.hosts
+		.get_mut("fixture")
+		.unwrap()
+		.privileged_actions
+		.get_mut("inspect")
+		.unwrap()
+		.timeout_seconds += 1;
+	variants.push(changed);
+	for value in variants {
+		let reference: [u8; 32] = sha2::Sha256::digest(serde_json::to_vec(&value).unwrap()).into();
+		assert_ne!(reference, expected);
+		let other = InstalledRuntimeConfig::new(value);
+		assert_eq!(other.policy_digest().unwrap(), reference);
+		assert_eq!(other.policy_digest().unwrap(), reference);
+		assert_eq!(installed.policy_digest().unwrap(), expected);
+	}
+}
+
+#[cfg(unix)]
+#[test]
+fn installed_policy_serialization_failure_stays_deferred_to_digest_requests() {
+	use std::os::unix::ffi::OsStringExt;
+	let mut config = digest_fixture();
+	config.state_dir = PathBuf::from(OsString::from_vec(b"/synthetic/non-utf8-\xff".to_vec()));
+	let expected = serde_json::to_vec(&config).unwrap_err().to_string();
+	let installed = InstalledRuntimeConfig::new(config.clone());
+	assert_eq!(installed.config.state_dir, config.state_dir);
+	assert!(installed.policy_digest.get().is_none());
+	for _ in 0..2 {
+		assert_eq!(installed.policy_digest().unwrap_err().to_string(), expected);
+	}
+	assert!(installed.policy_digest.get().unwrap().is_err());
+}
+
+#[test]
+fn installed_policy_digest_binds_normalized_config_and_rejects_reinstallation() {
+	let qualified = concat!(module_path!(), "::installed_policy_digest_child_probe");
+	let test_name = qualified.split_once("::").unwrap().1;
+	let output = std::process::Command::new(std::env::current_exe().unwrap())
+		.arg("--exact")
+		.arg(test_name)
+		.arg("--nocapture")
+		.env("HEPTA_POLICY_DIGEST_CHILD", "1")
+		.output()
+		.unwrap();
+	assert!(
+		output.status.success(),
+		"stdout: {} stderr: {}",
+		String::from_utf8_lossy(&output.stdout),
+		String::from_utf8_lossy(&output.stderr)
+	);
+	assert!(
+		String::from_utf8_lossy(&output.stdout).contains("installed-policy-digest-child-verified")
+	);
+}
+
+#[test]
+fn installed_policy_digest_child_probe() {
+	use sha2::Digest;
+	if std::env::var_os("HEPTA_POLICY_DIGEST_CHILD").is_none() {
+		return;
+	}
+	assert!(runtime_config().is_err());
+	assert!(runtime_policy_digest().is_err());
+	assert!(maybe_runtime_config().is_none());
+	let root = tempfile::tempdir().unwrap();
+	let mut config = digest_fixture();
+	config.state_dir = root.path().join("normalization/../state");
+	let unnormalized: [u8; 32] = sha2::Sha256::digest(serde_json::to_vec(&config).unwrap()).into();
+	init_runtime(config).unwrap();
+	let actual = runtime_config().unwrap();
+	assert_eq!(
+		actual.state_dir,
+		std::fs::canonicalize(root.path().join("state")).unwrap()
+	);
+	assert!(std::ptr::eq(actual, maybe_runtime_config().unwrap()));
+	let expected: [u8; 32] = sha2::Sha256::digest(serde_json::to_vec(actual).unwrap()).into();
+	assert_ne!(expected, unnormalized);
+	assert_eq!(runtime_policy_digest().unwrap(), expected);
+	let mut rejected = digest_fixture();
+	rejected.state_dir = root.path().join("rejected-second-state");
+	assert!(init_runtime(rejected).is_err());
+	assert!(std::ptr::eq(actual, runtime_config().unwrap()));
+	assert_eq!(runtime_policy_digest().unwrap(), expected);
+	println!("installed-policy-digest-child-verified");
+}
+
 #[test]
 fn names_are_strict() {
 	assert!(valid_name("rog-1.example"));

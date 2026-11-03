@@ -766,7 +766,7 @@ impl Profile {
 			parent_stamp: private_directory(&spec.socket_parent)?,
 			socket_parent: spec.socket_parent,
 			hosts,
-			policy: digest(&serde_json::to_vec(runtime)?),
+			policy: crate::mcp::runtime::config::runtime_policy_digest()?,
 		})
 	}
 	pub(super) fn verify_files(&self) -> Result<()> {
@@ -809,9 +809,7 @@ impl Profile {
 	}
 	fn verify_policy(&self) -> Result<()> {
 		if !private_directory(&self.socket_parent)?.same_directory(&self.parent_stamp)
-			|| digest(&serde_json::to_vec(
-				crate::mcp::runtime::config::runtime_config()?,
-			)?) != self.policy
+			|| crate::mcp::runtime::config::runtime_policy_digest()? != self.policy
 			|| std::env::var_os("SSH_AUTH_SOCK").as_deref() != Some(self.agent.as_os_str())
 		{
 			bail!("observation policy or credential profile changed");

@@ -8,6 +8,7 @@ use serde::Serialize;
 use std::path::{Component, Path};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
@@ -108,6 +109,31 @@ pub(super) enum ObservationScript {
 	Read,
 }
 
+fn file_observation_command() -> Result<&'static str> {
+	static COMMAND: OnceLock<Result<String>> = OnceLock::new();
+	COMMAND
+		.get_or_init(|| python_json_command("python3", super::binary::observation_source()))
+		.as_ref()
+		.map(String::as_str)
+		.map_err(|error| anyhow!("{error:#}"))
+}
+
+fn job_observation_command(script: ObservationScript) -> Result<&'static str> {
+	static STATUS: OnceLock<Result<String>> = OnceLock::new();
+	static READ: OnceLock<Result<String>> = OnceLock::new();
+	let command = match &script {
+		ObservationScript::Status => &STATUS,
+		ObservationScript::Read => &READ,
+	};
+	// Both builders consume only fixed python3 and compiled source constants.
+	// Hosts, environments and request fields remain outside these caches.
+	command
+		.get_or_init(|| python_json_command("python3", &super::jobs::observation_script(script)?))
+		.as_ref()
+		.map(String::as_str)
+		.map_err(|error| anyhow!("{error:#}"))
+}
+
 /// Only these existing process observations can enter the new transport.
 /// There is no raw command, executable, address or caller-selected `op`.
 pub(super) enum JobObservation<'a> {
@@ -187,7 +213,7 @@ fn prepare_file_observation(value: FileObservation<'_>) -> Result<(String, Vec<u
 			json!({"op":"read","root":root,"path":path,"offset":offset,"limit":limit,"expected_version":expected_version})
 		}
 	};
-	let command = python_json_command("python3", super::binary::observation_source())?;
+	let command = file_observation_command()?.to_owned();
 	let bytes = serde_json::to_vec(&input)?;
 	validate_observation_bytes(&command, &bytes)?;
 	Ok((command, bytes))
@@ -306,7 +332,7 @@ fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Du
 		),
 	};
 	let command = match script {
-		Some(script) => python_json_command("python3", &super::jobs::observation_script(script)?)?,
+		Some(script) => job_observation_command(script)?.to_owned(),
 		None => "sudo -n /usr/local/libexec/hepta-runtime-jobctl".to_owned(),
 	};
 	let mut bytes = serde_json::to_vec(&input)?;
@@ -598,3 +624,7 @@ mod observation_tests;
 #[cfg(test)]
 #[path = "ssh_file_observation_tests.rs"]
 mod file_observation_tests;
+
+#[cfg(test)]
+#[path = "ssh_preparation_bench.rs"]
+mod preparation_bench;
