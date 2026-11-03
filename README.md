@@ -1,5 +1,23 @@
 # Hepta Runtime
 
+## Native artifact and weight integration
+
+The [unified REA/runtime integration](docs/rea-native/UNIFIED_RUNTIME.md) combines
+the native runtime owner and R9/R10 concurrency work with large GGUF/safetensors
+directories, bounded tensor reads, ZIP application-container indexes, pinned
+GNU static analyzers, immutable native weight patches and a scoped Rust F32
+Linear forward operator. Each report states its coverage and identity scope.
+Native artifact operations work without a resident Python model or Node REA process.
+
+- [Static providers and original-job lifecycle](docs/rea-native/STATIC_PROVIDERS.md)
+- [Exact native weight artifacts and restoration](docs/weight-runtime/NATIVE_ARTIFACTS.md)
+- [Native F32 Linear calculation and independent comparison](docs/weight-runtime/NATIVE_LINEAR.md)
+
+Use the CI's isolated runner for the full runtime suite:
+`cargo nextest run --locked --all-targets --all-features --test-threads 1 --retries 0 --no-fail-fast`.
+Some historical tests intentionally modify process-global state and require
+separate processes.
+
 ## Weight-space research workbench
 
 The optional `hepta-weight` domain runs a resident CPU model under the existing

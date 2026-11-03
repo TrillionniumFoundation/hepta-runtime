@@ -15,6 +15,8 @@
 //! Exercise the *shipped* MCP binary and its child worker end to end, with
 //! a synthetic deny-by-default runtime policy. No remote SSH is contacted.
 
+#![cfg(feature = "remote-fs")]
+
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -254,4 +256,90 @@ fn external_mcp_policy_worker_and_controller_restart() {
 		// rather than restoring an unowned REA provider session.
 		assert!(iteration < 2);
 	}
+}
+
+#[test]
+#[cfg(unix)]
+fn model_pages_ranges_and_archive_roles_use_the_shipped_mcp_workers() {
+	let root = tempfile::tempdir().unwrap();
+	let workspace = root.path().join("workspace");
+	std::fs::create_dir(&workspace).unwrap();
+	let model = workspace.join("two.safetensors");
+	let header = serde_json::to_vec(&json!({
+		"a":{"dtype":"F32","shape":[1,2],"data_offsets":[0,8]},
+		"b":{"dtype":"F32","shape":[1,2],"data_offsets":[8,16]}
+	}))
+	.unwrap();
+	let mut bytes = (header.len() as u64).to_le_bytes().to_vec();
+	bytes.extend(&header);
+	for value in [1_f32, 2., 3., 4.] {
+		bytes.extend(value.to_le_bytes());
+	}
+	std::fs::write(&model, &bytes).unwrap();
+	let archive = workspace.join("app-container.apk");
+	std::fs::write(&archive, include_bytes!("fixtures/rea_artifact_sample.apk")).unwrap();
+	let config = root.path().join("policy.json");
+	std::fs::write(&config, serde_json::to_vec(&json!({
+		"state_dir":root.path().join("state"),"controller_workspace_roots":[workspace],
+		"hosts":{"denied":{"ssh_target":"never-connect-ci","remote_state_dir":root.path().join("remote"),"allow_execute":false}}
+	})).unwrap()).unwrap();
+	let mut mcp = RunningMcp::start(&config);
+	mcp.initialize();
+	let first = mcp.request(
+		20,
+		"tools/call",
+		json!({"name":"rea_inspect_model","arguments":{"path":model,"limit":1,"hash":"full"}}),
+	);
+	assert_ne!(first["isError"], true, "{first}");
+	let first = read_call_text(&first);
+	assert_eq!(first["result"]["rows"][0]["name"], "a");
+	assert_eq!(first["result"]["next_offset"], 1);
+	assert_eq!(first["source"]["identity_scope"], "full_file");
+	let page = json!({"path":model,"offset":1,"limit":1,"expected_version":first["source"]["observed_version"],"expected_header_sha256":first["source"]["header_sha256"]});
+	drop(mcp);
+	let mut mcp = RunningMcp::start(&config);
+	mcp.initialize();
+	let next = mcp.request(
+		21,
+		"tools/call",
+		json!({"name":"rea_inspect_model","arguments":page}),
+	);
+	assert_ne!(next["isError"], true, "{next}");
+	assert_eq!(read_call_text(&next)["result"]["rows"][0]["name"], "b");
+	let mut read = json!({"path":model,"tensor_name":"a","offset":0,"length":8,"expected_version":first["source"]["observed_version"],"expected_header_sha256":first["source"]["header_sha256"],"expected_full_sha256":first["source"]["full_sha256"]});
+	let selected = mcp.request(
+		22,
+		"tools/call",
+		json!({"name":"rea_read_model","arguments":read}),
+	);
+	assert_ne!(selected["isError"], true, "{selected}");
+	assert_eq!(
+		read_call_text(&selected)["result"]["bytes_hex"],
+		"0000803f00000040"
+	);
+	read["length"] = json!(9);
+	assert_eq!(
+		mcp.request(
+			23,
+			"tools/call",
+			json!({"name":"rea_read_model","arguments":read})
+		)["isError"],
+		true
+	);
+	let app = mcp.request(24,"tools/call",json!({"name":"rea_inspect_archive","arguments":{"path":archive,"filter":"manifest","hash":"full"}}));
+	assert_ne!(app["isError"], true, "{app}");
+	let app = read_call_text(&app);
+	assert_eq!(app["record_format"], "hepta.rea-archive-index.v1");
+	assert_eq!(app["result"]["total"], 1);
+	assert_eq!(app["rea_evidence_compatible"], false);
+	bytes.push(0);
+	std::fs::write(&model, &bytes).unwrap();
+	assert_eq!(
+		mcp.request(
+			25,
+			"tools/call",
+			json!({"name":"rea_inspect_model","arguments":page})
+		)["isError"],
+		true
+	);
 }

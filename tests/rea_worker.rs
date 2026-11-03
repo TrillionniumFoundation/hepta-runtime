@@ -15,6 +15,8 @@
 //! Exercised shipped Rust binary (not the test harness): real worker framing,
 //! process isolation setup, limit rejection and error-only stderr.
 
+#![cfg(feature = "remote-fs")]
+
 use std::io::Write;
 use std::process::{Command, Output, Stdio};
 

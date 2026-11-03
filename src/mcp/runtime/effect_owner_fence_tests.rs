@@ -118,6 +118,14 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		"pty_write",
 		"pty_close",
 		"privileged_action",
+		"rea_retain_preview",
+		"rea_static_start",
+		"rea_static_cancel",
+		"weight_artifact_patch",
+		"weight_artifact_restore",
+		"weight_open",
+		"weight_call",
+		"weight_close",
 		"workdir",
 	]
 	.into_iter()
@@ -131,6 +139,8 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		"pty_close",
 		"stream_handoff_write",
 		"stream_handoff_close",
+		"rea_static_cancel",
+		"weight_close",
 		"workdir",
 	]
 	.into_iter()
@@ -162,7 +172,7 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		actual, expected,
 		"MCP mutation contract expanded without owner audit"
 	);
-	assert_eq!(actual.difference(&retained).count(), 29);
+	assert_eq!(actual.difference(&retained).count(), 35);
 	let jobs = include_str!("jobs.rs");
 	let pty = include_str!("pty.rs");
 	assert!(jobs

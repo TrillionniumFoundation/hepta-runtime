@@ -19,6 +19,10 @@ pub struct WeightWorkerProfile {
 	/// Whole package identity in addition to the mandatory entry-point identity.
 	#[serde(default)]
 	pub worker_package_sha256: Option<String>,
+	/// Explicit installation on the worker host; never infer the controller path.
+	/// Omission preserves the historical profile serialization and Python client.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub native_client: Option<WeightNativeClientProfile>,
 	pub session_root: String,
 	pub input_roots: Vec<String>,
 	pub allowed_providers: Vec<String>,
@@ -34,6 +38,20 @@ pub struct WeightWorkerProfile {
 	pub max_active_sessions: usize,
 	#[serde(default = "default_calls")]
 	pub max_requests_per_session: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct WeightNativeClientProfile {
+	pub executable: String,
+	pub sha256: String,
+}
+
+pub(super) fn valid_sha256(digest: &str) -> bool {
+	digest.len() == 64
+		&& digest
+			.bytes()
+			.all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 fn default_memory() -> u64 {
@@ -94,24 +112,28 @@ pub fn validate_profiles(config: &RuntimeConfig) -> Result<()> {
 				bail!("weight profile {name} paths must be absolute and normalized");
 			}
 		}
-		if profile.worker_sha256.len() != 64
-			|| !profile
-				.worker_sha256
-				.bytes()
-				.all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-		{
+		if !valid_sha256(&profile.worker_sha256) {
 			bail!("weight profile {name} requires a lowercase SHA-256 worker pin");
 		}
 		if profile
 			.worker_package_sha256
 			.as_ref()
-			.is_some_and(|digest| {
-				digest.len() != 64
-					|| !digest
-						.bytes()
-						.all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-			}) {
+			.is_some_and(|digest| !valid_sha256(digest))
+		{
 			bail!("weight profile {name} has an invalid package SHA-256 pin");
+		}
+		if let Some(client) = &profile.native_client {
+			if !absolute_normal_path(&client.executable) || !valid_sha256(&client.sha256) {
+				bail!("weight profile {name} native client needs an absolute executable and SHA-256 pin");
+			}
+			if !inside(&client.executable, &host.allowed_read_path_prefixes)
+				|| host
+					.protected_path_prefixes
+					.iter()
+					.any(|root| Path::new(&client.executable).starts_with(root))
+			{
+				bail!("weight profile {name} native client exceeds its host path policy");
+			}
 		}
 		if !inside(&profile.session_root, &host.allowed_write_path_prefixes)
 			|| (!host.allowed_cwd_prefixes.is_empty()

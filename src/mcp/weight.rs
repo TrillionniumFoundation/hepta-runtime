@@ -317,28 +317,67 @@ fn client_start(
 	timeout: u64,
 ) -> Result<ProcessStartParams> {
 	let p = &intent.profile;
+	let (executable, args) = if let Some(client) = &p.native_client {
+		(
+			client.executable.clone(),
+			with_package_pin(
+				p,
+				vec![
+					"weight-client".into(),
+					"--socket".into(),
+					intent.socket_path.clone(),
+					"--session-id".into(),
+					intent.session_id.clone(),
+					"--timeout-ms".into(),
+					timeout.to_string(),
+					"--connect-timeout-ms".into(),
+					"30000".into(),
+					"--worker-path".into(),
+					p.worker_path.clone(),
+					"--expected-worker-sha256".into(),
+					p.worker_sha256.clone(),
+					"--expected-client-sha256".into(),
+					client.sha256.clone(),
+				],
+			),
+		)
+	} else {
+		(
+			p.python_executable.clone(),
+			with_package_pin(
+				p,
+				vec![
+					p.worker_path.clone(),
+					"--client".into(),
+					"--socket".into(),
+					intent.socket_path.clone(),
+					"--timeout-ms".into(),
+					timeout.to_string(),
+					"--connect-timeout-ms".into(),
+					"30000".into(),
+					"--expected-worker-sha256".into(),
+					p.worker_sha256.clone(),
+				],
+			),
+		)
+	};
+	let mut env = thread_env(1, &p.worker_sha256);
+	if p.native_client.is_some() {
+		// A transport helper does not need one Tokio worker for every host CPU.
+		env.insert("TOKIO_WORKER_THREADS".into(), "1".into());
+	}
 	Ok(ProcessStartParams {
 		host: p.host.clone(),
-		executable: p.python_executable.clone(),
-		args: with_package_pin(
-			p,
-			vec![
-				p.worker_path.clone(),
-				"--client".into(),
-				"--socket".into(),
-				intent.socket_path.clone(),
-				"--timeout-ms".into(),
-				timeout.to_string(),
-				"--connect-timeout-ms".into(),
-				"30000".into(),
-				"--expected-worker-sha256".into(),
-				p.worker_sha256.clone(),
-			],
-		),
+		executable,
+		args,
 		cwd: Some(p.session_root.clone()),
-		env: thread_env(1, &p.worker_sha256),
+		env,
 		stdin: Some(bounded_request(request)?),
-		timeout_seconds: Some(timeout.div_ceil(1000) + 40),
+		// Native admission bounds stdin (5s), code pins (30s), connection (30s)
+		// and the exchange separately. Python compatibility keeps its old job spec.
+		timeout_seconds: Some(
+			timeout.div_ceil(1000) + if p.native_client.is_some() { 75 } else { 40 },
+		),
 		idempotency_key: Some(format!(
 			"weight-call-{}-{}",
 			intent.session_id,
@@ -709,7 +748,7 @@ pub async fn open(input: WeightOpenParams) -> Result<String> {
 }
 
 pub fn profiles() -> Result<String> {
-	let values: Vec<Value> = runtime_config()?.weight_workers.iter().map(|(name, p)| json!({"profile":name,"host":p.host,"providers":p.allowed_providers,"worker_sha256":p.worker_sha256,"worker_package_sha256":p.worker_package_sha256,"max_memory_bytes":p.max_memory_bytes,"max_cpu_threads":p.max_cpu_threads,"max_lifetime_seconds":p.max_lifetime_seconds,"max_request_ms":p.max_request_ms,"max_active_sessions":p.max_active_sessions,"max_requests_per_session":p.max_requests_per_session})).collect();
+	let values: Vec<Value> = runtime_config()?.weight_workers.iter().map(|(name, p)| json!({"profile":name,"host":p.host,"providers":p.allowed_providers,"worker_sha256":p.worker_sha256,"worker_package_sha256":p.worker_package_sha256,"client_transport":if p.native_client.is_some(){"native_rust"}else{"python_compat"},"native_client_sha256":p.native_client.as_ref().map(|c|&c.sha256),"max_memory_bytes":p.max_memory_bytes,"max_cpu_threads":p.max_cpu_threads,"max_lifetime_seconds":p.max_lifetime_seconds,"max_request_ms":p.max_request_ms,"max_active_sessions":p.max_active_sessions,"max_requests_per_session":p.max_requests_per_session})).collect();
 	Ok(serde_json::to_string(
 		&json!({"profiles":values,"authority":"isolated_experiment_only"}),
 	)?)

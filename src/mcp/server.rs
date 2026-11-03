@@ -34,10 +34,13 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use super::fs;
-use super::{rea, rea_evidence, rea_store, weight};
 use super::request_ctx;
 use super::runtime;
 use super::McpToolCall;
+use super::{
+	rea, rea_artifact_zip, rea_evidence, rea_model, rea_provider, rea_store, weight,
+	weight_artifact, weight_forward, weight_tensor,
+};
 
 /// Per-session working directory state.
 /// Each server instance has its own workdir, isolated from other sessions.
@@ -235,10 +238,21 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"network_inspect",
 	"privileged_action",
 	"rea_inspect_artifact",
+	"rea_inspect_model",
+	"rea_read_model",
+	"rea_inspect_archive",
+	"rea_static_profiles",
+	"rea_static_start",
+	"rea_static_status",
+	"rea_static_read",
+	"rea_static_cancel",
 	"rea_verify_evidence",
 	"rea_retain_preview",
 	"rea_read_preview",
 	"weight_profiles",
+	"weight_artifact_patch",
+	"weight_artifact_restore",
+	"weight_linear_forward",
 	"weight_open",
 	"weight_call",
 	"weight_status",
@@ -246,6 +260,14 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"weight_close",
 ];
 const CLAUDE_CHANNEL_NOTIFICATION: &str = "notifications/claude/channel";
+const WEIGHT_WORKER_TOOL_NAMES: &[&str] = &[
+	"weight_profiles",
+	"weight_open",
+	"weight_call",
+	"weight_status",
+	"weight_read",
+	"weight_close",
+];
 
 /// Push a finished job to Claude Code as a channel message carrying what
 /// `resources/read` returns for it: the exit code and the output tail.
@@ -1512,6 +1534,159 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "Inspect Native Model Artifact",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Inspect GGUF or safetensors using a bounded native parser and a read-only descriptor inside configured controller roots. Returns paginated tensor/metadata directories, explicit layout coverage, a header commitment and an observation token. Optional full SHA-256 streams the file with a 64 KiB buffer. Later pages require both identities. Does not load or execute a model, and header identity does not verify all payload bytes."
+	)]
+	async fn rea_inspect_model(
+		&self,
+		Parameters(params): Parameters<rea_model::InspectModelArtifactParams>,
+	) -> Result<String, String> {
+		rea_model::inspect_model_artifact(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Native Model Byte Range",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read at most 64 KiB from an explicitly selected model file range or an exact known tensor range. Requires the inspection observation token and header SHA-256; an optional complete-file commitment is streamed and checked. Returns exact hexadecimal bytes and range digest. Tensor-relative reads require a known byte extent. Never interprets bytes as inference results."
+	)]
+	async fn rea_read_model(
+		&self,
+		Parameters(params): Parameters<rea_model::ReadModelArtifactParams>,
+	) -> Result<String, String> {
+		rea_model::read_model_artifact(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Inspect Native Archive Directory",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read a bounded, paginated classic ZIP central directory through an isolated native descriptor parser. Indexes ZIP/JAR/APK entry names, manifest/DEX/native-library roles and validated local-header/data extents, with optional streamed full SHA-256 and pinned page identity. Does not decompress, verify content CRC or application signatures, or establish that an APK/JAR is runnable. Unsupported ZIP64 and multipart archives are explicitly refused."
+	)]
+	async fn rea_inspect_archive(
+		&self,
+		Parameters(params): Parameters<rea_artifact_zip::InspectArchiveParams>,
+	) -> Result<String, String> {
+		rea_artifact_zip::inspect_archive(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Static Analysis Profiles",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "List configured static analyzers and their exact profile commitments. Profiles bind the host, runtime, backend executable SHA-256 and version, admitted artifact roots, fixed operations and resource budgets."
+	)]
+	async fn rea_static_profiles(
+		&self,
+		Parameters(_params): Parameters<runtime::inspect::HostListParams>,
+	) -> Result<String, String> {
+		rea_provider::profiles().map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Start Pinned Static Analysis",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Admit one fixed GNU readelf/objdump operation through the existing durable job owner. Requires exact profile and artifact SHA-256 identities. Preserve the complete request and idempotency key after uncertainty. Reads owned build artifacts without running them; output, time and snapshot sizes are bounded."
+	)]
+	async fn rea_static_start(
+		&self,
+		Parameters(params): Parameters<rea_provider::ReaStaticRequest>,
+	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+		rea_provider::start(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Observe Original Static Analysis",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Observe the original static analysis request through the native runtime facade. Requires its unchanged full request and pinned profile. This operation cannot create or relaunch a job."
+	)]
+	async fn rea_static_status(
+		&self,
+		Parameters(params): Parameters<rea_provider::ReaStaticRequest>,
+	) -> Result<String, String> {
+		rea_provider::status(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Verified Static Analysis Result",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read and validate the bounded terminal output of the original static analysis job, including pinned backend and input identities and complete output commitments. Incomplete, failed or changed results do not become successful analysis. Reading does not execute the provider."
+	)]
+	async fn rea_static_read(
+		&self,
+		Parameters(params): Parameters<rea_provider::ReaStaticRequest>,
+	) -> Result<String, String> {
+		rea_provider::read(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Cancel Original Static Analysis",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Request cancellation of the original static analysis job and its process group through the existing runtime owner. Requires the unchanged original request. Observe terminal status separately; cancellation never launches replacement work."
+	)]
+	async fn rea_static_cancel(
+		&self,
+		Parameters(params): Parameters<rea_provider::ReaStaticRequest>,
+	) -> Result<String, String> {
+		rea_provider::cancel(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
 		title = "REA Evidence Digest Check (Limited)",
 		annotations(
 			read_only_hint = true,
@@ -1544,6 +1719,9 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<rea_store::RetainPreviewParams>,
 	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
 		rea_store::retain_preview(params)
 			.await
 			.map_err(|error| error.to_string())
@@ -1564,6 +1742,69 @@ impl OctofsServer {
 		Parameters(params): Parameters<rea_store::ReadPreviewParams>,
 	) -> Result<String, String> {
 		rea_store::read_preview(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Create Native Weight Patch Artifact",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Create a separate native safetensors artifact by applying 1 to 1024 exact F32/F16/BF16 element-byte replacements to one tensor. Requires the complete source SHA-256 and exact prior bytes. Streams at most 2 GiB with bounded buffers; source remains unchanged. Publishes the verified candidate and reverse-patch manifest together in private runtime storage. Exact no-ops preserve every source byte. Identical requests verify and reuse their artifact. No Python, inference, training or production activation."
+	)]
+	async fn weight_artifact_patch(
+		&self,
+		Parameters(params): Parameters<weight_tensor::PatchTensorParams>,
+	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+		weight_artifact::patch(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Restore Native Weight Artifact",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read a verified private native weight artifact by exact ID and apply its recorded reverse patch into a new artifact. The restored full SHA-256 must match the original parent commitment. Revalidates stored model and manifest identities and never overwrites the source or candidate. Requires no resident model worker."
+	)]
+	async fn weight_artifact_restore(
+		&self,
+		Parameters(params): Parameters<weight_artifact::RestoreParams>,
+	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+		weight_artifact::restore(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Native F32 Linear Forward",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Evaluate a bounded F32 Linear matrix from a complete-SHA-pinned safetensors file or a verified private artifact ID. Computes inputs times weight transpose with optional explicit bias in Rust, using finite F32 sequential accumulation. Pins the source descriptor and streams its complete identity while capturing only the selected tensor. At most 64 rows, 4096 dimensions, 1,048,576 weights and 16,777,216 multiply-add pairs. This is a single-layer CPU operation; it does not load an arbitrary model graph or train weights."
+	)]
+	async fn weight_linear_forward(
+		&self,
+		Parameters(params): Parameters<weight_forward::ForwardLinearParams>,
+	) -> Result<String, String> {
+		weight_forward::forward(params)
 			.await
 			.map_err(|error| error.to_string())
 	}
@@ -1599,6 +1840,9 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<weight::WeightOpenParams>,
 	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
 		weight::open(params)
 			.await
 			.map_err(|error| error.to_string())
@@ -1618,6 +1862,9 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<weight::WeightCallParams>,
 	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
 		weight::call(params)
 			.await
 			.map_err(|error| error.to_string())
@@ -2805,8 +3052,16 @@ impl ServerHandler for OctofsServer {
 			.list_all()
 			.into_iter()
 			.filter(|tool| {
-				if tool.name.starts_with("weight_")
-					&& runtime::config::maybe_runtime_config().is_none_or(|c| c.weight_workers.is_empty()) {
+				if tool.name.starts_with("rea_static_")
+					&& runtime::config::maybe_runtime_config()
+						.is_none_or(|c| c.rea_static_profiles.is_empty())
+				{
+					return false;
+				}
+				if WEIGHT_WORKER_TOOL_NAMES.contains(&tool.name.as_ref())
+					&& runtime::config::maybe_runtime_config()
+						.is_none_or(|c| c.weight_workers.is_empty())
+				{
 					return false;
 				}
 				if runtime_enabled {

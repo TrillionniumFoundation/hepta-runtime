@@ -22,10 +22,20 @@ use hepta_runtime::mcp;
 
 use cli::{Cli, Commands};
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
 	let cli = Cli::parse();
+	// Parser/client helpers run one bounded task. Creating a host-sized thread
+	// pool before a parser's address-space limit would consume its budget on
+	// large machines before any artifact is inspected.
+	let mut builder = if matches!(&cli.command, Commands::Mcp { .. }) {
+		tokio::runtime::Builder::new_multi_thread()
+	} else {
+		tokio::runtime::Builder::new_current_thread()
+	};
+	builder.enable_all().build()?.block_on(run(cli))
+}
 
+async fn run(cli: Cli) -> Result<()> {
 	match cli.command {
 		Commands::Mcp {
 			path,
@@ -127,6 +137,21 @@ async fn main() -> Result<()> {
 			sandbox_probe,
 		} => {
 			mcp::rea_worker::serve_once(&selected_path, sandbox_probe)?;
+		}
+		Commands::ReaModelWorker { request } => {
+			mcp::rea_model::serve_once(&request)?;
+		}
+		Commands::WeightClient(args) => {
+			let code = mcp::weight_native::run_cli(args).await?;
+			if code != 0 {
+				std::process::exit(code);
+			}
+		}
+		Commands::ReaStaticWorker => {
+			mcp::rea_static::serve_once().await?;
+		}
+		Commands::ReaArchiveWorker { request } => {
+			mcp::rea_artifact_zip::serve_once(&request)?;
 		}
 	}
 

@@ -5,9 +5,11 @@
 //! The opt-in test requires an existing authorized localhost SSH identity and
 //! an explicitly supplied isolated Python environment; it installs nothing.
 
+#![cfg(feature = "remote-fs")]
+
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{self, Receiver};
@@ -155,7 +157,24 @@ fn fixture(path: &Path) -> String {
 	sha(&bytes)
 }
 
-fn test_config(root: &Path, python: &Path, worker: &Path) -> Value {
+fn binary_sha(path: &Path) -> String {
+	let mut stream = std::fs::File::open(path).unwrap();
+	let mut hash = Sha256::new();
+	let mut buffer = [0u8; 64 * 1024];
+	loop {
+		let length = stream.read(&mut buffer).unwrap();
+		if length == 0 {
+			break;
+		}
+		hash.update(&buffer[..length]);
+	}
+	hash.finalize()
+		.iter()
+		.map(|byte| format!("{byte:02x}"))
+		.collect()
+}
+
+fn test_config(root: &Path, python: &Path, worker: &Path, native: bool) -> Value {
 	let identity = Command::new(python)
 		.arg(worker)
 		.arg("--print-identity")
@@ -168,16 +187,36 @@ fn test_config(root: &Path, python: &Path, worker: &Path) -> Value {
 	);
 	let identity: Value = serde_json::from_slice(&identity.stdout).unwrap();
 	let worker_parent = worker.parent().unwrap();
-	json!({
+	let mut config = json!({
 		"state_dir":root.join("controller-state"),"controller_workspace_roots":[root],
 		"hosts":{"local":{"ssh_target":"localhost","remote_state_dir":root.join("jobs"),"allow_execute":true,"allow_write":true,"allow_job_network":false,"allow_detached_fallback":false,"allowed_cwd_prefixes":[root],"allowed_read_path_prefixes":[root,worker_parent],"allowed_write_path_prefixes":[root]}},
 		"weight_workers":{"cpu":{"host":"local","python_executable":python,"worker_path":worker,"worker_sha256":sha(&std::fs::read(worker).unwrap()),"worker_package_sha256":identity["package_sha256"],"session_root":root.join("sessions"),"input_roots":[root],"allowed_providers":["torch_sequential"],"max_lifetime_seconds":300,"max_request_ms":120000,"max_active_sessions":1,"max_requests_per_session":16}}
-	})
+	});
+	if native {
+		let binary = std::fs::canonicalize(env!("CARGO_BIN_EXE_hepta-runtime")).unwrap();
+		config["hosts"]["local"]["allowed_read_path_prefixes"]
+			.as_array_mut()
+			.unwrap()
+			.push(json!(binary));
+		config["weight_workers"]["cpu"]["native_client"] =
+			json!({"executable":binary,"sha256":binary_sha(&binary)});
+	}
+	config
 }
 
 #[test]
 #[ignore = "requires explicit CPU Python, source worker and authorized localhost SSH"]
 fn real_resident_worker_reuses_jobs_across_mcp_restart_and_rejects_rebinding() {
+	qualify_resident_worker(false);
+}
+
+#[test]
+#[ignore = "requires explicit CPU Python, source worker, native binary and authorized localhost SSH"]
+fn native_client_preserves_real_forward_and_original_jobs_across_mcp_restart() {
+	qualify_resident_worker(true);
+}
+
+fn qualify_resident_worker(native: bool) {
 	assert_eq!(
 		std::env::var("HEPTA_WEIGHT_REAL_SSH").as_deref(),
 		Ok("1"),
@@ -196,7 +235,7 @@ fn real_resident_worker_reuses_jobs_across_mcp_restart_and_rejects_rebinding() {
 	let config_path = root.join("config.json");
 	std::fs::write(
 		&config_path,
-		serde_json::to_vec(&test_config(root, &python, &worker)).unwrap(),
+		serde_json::to_vec(&test_config(root, &python, &worker, native)).unwrap(),
 	)
 	.unwrap();
 	let mut server = Mcp::start(&config_path);
@@ -218,6 +257,15 @@ fn real_resident_worker_reuses_jobs_across_mcp_restart_and_rejects_rebinding() {
 		assert!(names.contains(&tool));
 	}
 	assert!(!names.contains(&"shell"));
+	let profiles = server.call("weight_profiles", json!({}));
+	assert_eq!(
+		profiles["profiles"][0]["client_transport"],
+		if native {
+			"native_rust"
+		} else {
+			"python_compat"
+		}
+	);
 	let open = json!({"profile":"cpu","idempotency_key":"fixture-001","params":{"provider":"torch_sequential","idle_timeout_s":240,"model":{"architecture":{"layers":[{"type":"Linear","in_features":2,"out_features":2,"bias":false}]},"weights_path":weights,"weights_sha256":weight_sha}}});
 	let admitted = server.call("weight_open", open.clone());
 	let session = admitted["session_id"].as_str().unwrap().to_owned();
@@ -298,6 +346,7 @@ fn real_resident_worker_reuses_jobs_across_mcp_restart_and_rejects_rebinding() {
 		"WEIGHT_MCP_QUALIFICATION {}",
 		json!({
 			"schema":"hepta.weight.mcp-qualification.v1",
+			"client_transport":if native { "native_rust" } else { "python_compat" },
 			"session_id":session,
 			"resident_job_id":admitted["job_id"],
 			"recovered_job_id":recovered["job_id"],

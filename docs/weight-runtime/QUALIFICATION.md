@@ -4,6 +4,16 @@ Qualification date: **2026-11-03**. This document records the isolated research
 runtime's engineering checks. It does not report model-performance improvements,
 private evaluation results, or production approval.
 
+## Native client amendment
+
+The native socket client changes Rust transport/configuration sources and adds a
+second real MCP qualification path. The v4/v5 results below describe the earlier
+Python-client delivery; they must not be reused as a test result for these changed
+Rust sources. Current gates must additionally exercise `weight_native_tests` and
+both ignored tests in `weight_mcp_external`, which distinguish `native_rust` from
+`python_compat` in their printed receipts. No resident worker source or model
+computation was changed by the transport migration.
+
 ## Qualified package and default state
 
 The final Python worker package is bound to:

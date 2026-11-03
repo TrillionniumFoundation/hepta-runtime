@@ -48,6 +48,58 @@ Callers cannot replace interpreter, host, worker, input roots or output root.
 The Python environment is provisioned before startup, and model loading is offline.
 The existing host network/fallback policy is preserved without relaxation.
 
+### Optional native Rust client
+
+To use Rust for each socket exchange, add the following object to an admitted
+worker profile, with the executable and digest of the installed binary **on that
+profile's worker host**:
+
+```json
+{
+  "native_client": {
+    "executable": "/opt/hepta-runtime/bin/hepta-runtime",
+    "sha256": "REPLACE_WITH_64_LOWERCASE_HEX_DIGITS"
+  }
+}
+```
+
+The executable must be inside the host's configured read paths and outside its
+protected paths. There is no fallback to the controller's executable path. The
+binary must contain the hidden `weight-client` subcommand. A missing installation,
+wrong pin or unsupported invocation fails its original durable job; it does not
+silently invoke Python or select another host.
+
+Omitting `native_client` retains the existing Python client and historical profile
+serialization, including previously recorded profile digests. Enabling or changing
+it changes the profile digest and requires a new experiment admission; existing
+session status/read/close still refer to the original jobs. The resident model
+worker remains the same pinned Python/PyTorch process in both modes.
+
+The Rust client verifies its running executable identity (`/proc/self/exe` on
+Linux), the worker entry hash and the configured package hash before connecting.
+Package identity uses the existing Python canonical string dictionary, computed
+in Rust with streaming file hashes. Package source is bounded to 32 MiB and 256
+files, including the entry. The executable hash is streamed with a 2 GiB byte cap;
+no executable or model is loaded into one whole-file buffer.
+
+One request and one response pass through as exact bytes, including numerical
+spelling. Validation rejects duplicate JSON members, wrong session/request IDs,
+incomplete or multiple JSONL frames and invalid result/error envelopes. Requests
+retain the admission bound (64 KiB plus the newline); responses are at most 1 MiB
+including the newline. Native peers require a private, same-UID Unix socket.
+
+Only connection establishment may wait/retry before any request bytes are sent.
+After a possible send, timeouts become `REQUEST_TIMEOUT_UNKNOWN`; transport or
+protocol failure records an unknown operation state. The client never reconnects
+or resends that operation. Inspect the original job and its retained worker
+operation before any new experiment. These are transport receipts, not evidence
+that a model computation was rolled back.
+
+Native jobs use one Tokio worker thread. The original job owner retains process,
+resource, cancellation and log ownership; the native client has no second job
+registry. Its owner deadline includes bounded stdin admission, code verification
+and socket connection, as well as the exchange timeout.
+
 ## Tool workflow
 
 | Tool | Result and ownership |
@@ -101,7 +153,8 @@ status/read/close use the recorded original binding.
 
 The existing owner enforces resident CPU/memory/deadline budgets. The worker adds
 request, idle, lifetime, forward-example, patch and artifact limits. Each call
-launches a standard-library-only client under the same owner, then exchanges one
+launches the configured Rust client or compatible standard-library-only Python
+client under the same owner, then exchanges one
 request with the resident mode-0600, same-UID Unix socket. A client does not reload
 the model. Hard timeouts retain unresolved operation records rather than replaying
 computation.
@@ -121,10 +174,12 @@ HEPTA_WEIGHT_TEST_WORKER=/absolute/checkout/workers/weight/worker.py \
 cargo test --locked --all-features --test weight_mcp_external -- --ignored --nocapture
 ```
 
-It requires an existing authorized localhost SSH identity. It checks discovery,
+It requires an existing authorized localhost SSH identity. Both the Python
+compatibility test and the native client test must be explicitly executed; each
+prints its `client_transport` in the qualification receipt. They check discovery,
 open, controller restart/original job reuse, same-ID reuse, changed-content
 rejection, real probe/query, active-session admission, close/terminal observation
 and unchanged source weights. Ordinary `cargo test --all-features` ignores this
-external test; that is not an owned-host success receipt. Registering production
+external tests; that is not an owned-host success receipt. Registering production
 selection or trading behavior requires a separate reviewed owner integration and
 independent evaluation; these tools do not grant one.

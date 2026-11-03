@@ -22,6 +22,27 @@ fn digest_fixture() -> RuntimeConfig {
 }
 
 #[test]
+fn disabled_analysis_extensions_preserve_the_existing_runtime_policy_identity() {
+	#[derive(serde::Serialize)]
+	struct BeforeAnalysisExtensions<'a> {
+		state_dir: &'a PathBuf,
+		controller_workspace_roots: &'a Vec<PathBuf>,
+		hosts: &'a BTreeMap<String, HostConfig>,
+	}
+	let config = digest_fixture();
+	let original = BeforeAnalysisExtensions {
+		state_dir: &config.state_dir,
+		controller_workspace_roots: &config.controller_workspace_roots,
+		hosts: &config.hosts,
+	};
+	assert_eq!(
+		serde_json::to_vec(&config).unwrap(),
+		serde_json::to_vec(&original).unwrap(),
+		"disabled analysis must not revoke existing native job observations"
+	);
+}
+
+#[test]
 fn installed_policy_digest_matches_full_json_and_never_reuses_another_config() {
 	use sha2::Digest;
 	let original = digest_fixture();

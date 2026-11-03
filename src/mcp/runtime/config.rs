@@ -113,6 +113,9 @@ pub struct RuntimeConfig {
 	/// Named administrator-owned model workers; absent disables all weight tools.
 	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
 	pub weight_workers: BTreeMap<String, crate::mcp::weight_config::WeightWorkerProfile>,
+	/// Fixed read-only static analyzers, pinned by executable, version and SHA-256.
+	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	pub rea_static_profiles: BTreeMap<String, crate::mcp::rea_provider::ReaStaticProfile>,
 }
 
 // The installed value has no mutable accessor or interior-mutable policy fields.
@@ -280,6 +283,7 @@ impl RuntimeConfig {
 			}
 		}
 		crate::mcp::weight_config::validate_profiles(self)?;
+		crate::mcp::rea_provider::validate_profiles(self)?;
 		Ok(())
 	}
 

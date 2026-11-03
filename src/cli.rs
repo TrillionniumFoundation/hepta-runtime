@@ -80,6 +80,24 @@ pub enum Commands {
 		#[arg(long, hide = true)]
 		sandbox_probe: bool,
 	},
+	/// Internal model parser. Reads one admitted read-only regular-file descriptor.
+	#[command(hide = true)]
+	ReaModelWorker {
+		#[arg(long)]
+		request: String,
+	},
+	/// Internal pinned native transport for an existing weight worker job.
+	#[command(hide = true)]
+	WeightClient(hepta_runtime::mcp::weight_native::WeightClientArgs),
+	/// Internal pinned static-provider worker. Reads one structured request on stdin.
+	#[command(hide = true)]
+	ReaStaticWorker,
+	/// Internal ZIP directory parser over one admitted read-only descriptor.
+	#[command(hide = true)]
+	ReaArchiveWorker {
+		#[arg(long)]
+		request: String,
+	},
 }
 
 #[cfg(test)]

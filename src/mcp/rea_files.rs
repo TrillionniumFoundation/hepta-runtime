@@ -15,7 +15,8 @@
 //! Restricted local artifact access. File descriptors are opened relative to
 //! a configured workspace root, not by resolving a path and then reopening it.
 //! Symlink traversal (including symlinks inside the workspace) is denied.
-//! This is only file admission: there is no isolated parser process yet.
+//! Parser workers receive admitted descriptors or captured bytes; they never
+//! reopen the caller's source pathname.
 
 use anyhow::{anyhow, bail, Context, Result};
 use std::path::{Path, PathBuf};
@@ -26,7 +27,10 @@ use tokio::io::AsyncReadExt;
 /// metadata substitution. A malicious same-UID writer with enough control to
 /// restore metadata or race both snapshots remains outside this guarantee.
 #[cfg(unix)]
-fn ensure_unchanged(before: &std::fs::Metadata, after: &std::fs::Metadata) -> Result<()> {
+pub(super) fn ensure_unchanged(
+	before: &std::fs::Metadata,
+	after: &std::fs::Metadata,
+) -> Result<()> {
 	use std::os::unix::fs::MetadataExt;
 	if before.dev() != after.dev()
 		|| before.ino() != after.ino()
@@ -43,6 +47,31 @@ fn ensure_unchanged(before: &std::fs::Metadata, after: &std::fs::Metadata) -> Re
 		bail!("REA inspection denied: admitted artifact changed during read");
 	}
 	Ok(())
+}
+
+/// Admit an arbitrary-size regular artifact without reading its payload. The
+/// caller keeps this descriptor through parsing, hashing and final identity
+/// checks. The blocking section only performs descriptor-relative admission.
+pub(super) async fn open_confined(
+	path: &Path,
+	roots: &[PathBuf],
+) -> Result<(tokio::fs::File, std::fs::Metadata)> {
+	if !path.is_absolute() {
+		bail!("REA native inspection requires an absolute local path");
+	}
+	if roots.is_empty() {
+		bail!("REA inspection denied: no controller workspace roots configured");
+	}
+	let chosen = path.to_path_buf();
+	let configured = roots.to_vec();
+	let (file, metadata) = tokio::task::spawn_blocking(move || {
+		let file = open_beneath_root(&chosen, &configured)?;
+		let metadata = file.metadata().context("cannot stat admitted artifact")?;
+		Ok::<_, anyhow::Error>((file, metadata))
+	})
+	.await
+	.context("REA descriptor admission task failed")??;
+	Ok((tokio::fs::File::from_std(file), metadata))
 }
 
 /// A retained local preview must be read from a private, single-linked file.

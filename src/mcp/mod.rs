@@ -19,16 +19,24 @@ use std::sync::OnceLock;
 
 pub mod fs;
 pub mod rea;
+pub mod rea_artifact_zip;
 pub mod rea_evidence;
 pub mod rea_files;
+pub mod rea_model;
+pub mod rea_provider;
 pub mod rea_seccomp;
+pub mod rea_static;
 pub mod rea_store;
 pub mod rea_worker;
 pub mod request_ctx;
 pub mod runtime;
 pub mod server;
 pub mod weight;
+pub mod weight_artifact;
 pub mod weight_config;
+pub mod weight_forward;
+pub mod weight_native;
+pub mod weight_tensor;
 
 // Session working directory is now stored per-server-instance (see server.rs).
 // This module only provides helper functions for the session root directory.

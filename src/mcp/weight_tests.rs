@@ -129,6 +129,70 @@ fn both_worker_and_client_use_the_original_process_contract() {
 }
 
 #[test]
+fn omitted_native_client_keeps_old_profile_bytes_and_process_spec() {
+	let original = config();
+	let profile = &original.weight_workers["cpu"];
+	let encoded = serde_json::to_value(profile).unwrap();
+	assert!(encoded.get("native_client").is_none());
+	let mut historic = encoded.clone();
+	historic.as_object_mut().unwrap().remove("native_client");
+	let decoded: WeightWorkerProfile = serde_json::from_value(historic.clone()).unwrap();
+	assert_eq!(serde_json::to_value(&decoded).unwrap(), historic);
+	assert_eq!(digest(&decoded).unwrap(), digest(profile).unwrap());
+	let intent = prepare_intent(&original, open_params()).unwrap();
+	let client = client_start(&intent, &json!({"id":"inspect-1"}), "inspect-1", 5000).unwrap();
+	assert_eq!(client.executable, "/usr/bin/python3");
+	assert_eq!(client.timeout_seconds, Some(45));
+	assert!(!client.env.contains_key("TOKIO_WORKER_THREADS"));
+}
+
+#[test]
+fn native_client_requires_an_explicit_remote_installation_and_keeps_job_identity() {
+	let mut policy = config();
+	policy.weight_workers.get_mut("cpu").unwrap().native_client =
+		Some(super::super::weight_config::WeightNativeClientProfile {
+			executable: "/tmp/weight/bin/hepta-runtime".into(),
+			sha256: "f".repeat(64),
+		});
+	policy.validate().unwrap();
+	let native = prepare_intent(&policy, open_params()).unwrap();
+	let legacy = prepare_intent(&config(), open_params()).unwrap();
+	assert_eq!(native.session_id, legacy.session_id);
+	assert_ne!(
+		native.profile_digest, legacy.profile_digest,
+		"new effects require a new admitted profile"
+	);
+	let request = json!({"id":"probe-1","op":"probe","session_id":native.session_id,"params":{}});
+	let client = client_start(&native, &request, "probe-1", 5000).unwrap();
+	let old_client = client_start(&legacy, &request, "probe-1", 5000).unwrap();
+	assert_eq!(client.executable, "/tmp/weight/bin/hepta-runtime");
+	assert_eq!(client.args[0], "weight-client");
+	assert_eq!(client.idempotency_key, old_client.idempotency_key);
+	assert_eq!(client.stdin, old_client.stdin);
+	assert_eq!(client.host, old_client.host);
+	assert_eq!(client.env["TOKIO_WORKER_THREADS"], "1");
+	assert_eq!(client.timeout_seconds, Some(80));
+	assert!(client.args.contains(&"--expected-client-sha256".into()));
+	assert!(!client.args.contains(&"--client".into()));
+	assert_eq!(
+		worker_start(&native).unwrap().executable,
+		"/usr/bin/python3",
+		"the resident compute backend is unchanged"
+	);
+	for path in ["relative/bin", "/etc/outside", "/tmp/weight/../escape"] {
+		policy
+			.weight_workers
+			.get_mut("cpu")
+			.unwrap()
+			.native_client
+			.as_mut()
+			.unwrap()
+			.executable = path.into();
+		assert!(policy.validate().is_err(), "{path}");
+	}
+}
+
+#[test]
 fn bounded_requests_and_closed_operation_schema_reject_arbitrary_code() {
 	assert!(bounded_request(&json!({"blob":"x".repeat(MAX_REQUEST_BYTES)})).is_err());
 	assert!(serde_json::from_value::<WeightCallParams>(
