@@ -34,17 +34,11 @@ pub(super) fn parse_zip(data: &[u8]) -> Result<HeaderInfo> {
 		.find(|&offset| {
 			data[offset..].starts_with(b"PK\x05\x06")
 				&& offset
-					+ 22
-					+ usize::from(u16::from_le_bytes([
-						data[offset + 20],
-						data[offset + 21],
-					]))
+					+ 22 + usize::from(u16::from_le_bytes([data[offset + 20], data[offset + 21]]))
 					== data.len()
 		})
 		.ok_or_else(|| anyhow!("ZIP terminator missing or appended data unsupported"))?;
-	if read_u16(data, eocd + 4, true)? != 0
-		|| read_u16(data, eocd + 6, true)? != 0
-	{
+	if read_u16(data, eocd + 4, true)? != 0 || read_u16(data, eocd + 6, true)? != 0 {
 		bail!("multi-volume ZIP is not supported by native preview");
 	}
 	let count = usize::from(read_u16(data, eocd + 10, true)?);
@@ -157,9 +151,7 @@ pub(super) fn parse_zip(data: &[u8]) -> Result<HeaderInfo> {
 			dex_count += 1;
 		}
 		if name.starts_with(b"META-INF/")
-			&& (name.ends_with(b".RSA")
-				|| name.ends_with(b".DSA")
-				|| name.ends_with(b".EC"))
+			&& (name.ends_with(b".RSA") || name.ends_with(b".DSA") || name.ends_with(b".EC"))
 		{
 			legacy_signature_count += 1;
 		}
@@ -295,6 +287,9 @@ mod tests {
 		bad_offset[central + 42..central + 46].copy_from_slice(&u32::MAX.to_le_bytes());
 		assert!(parse_zip(&bad_offset).is_err());
 		let empty = classic_zip(&[]);
-		assert_eq!(parse_zip(&empty).expect("empty ZIP").facts["declared_entries"], 0);
+		assert_eq!(
+			parse_zip(&empty).expect("empty ZIP").facts["declared_entries"],
+			0
+		);
 	}
 }
