@@ -331,3 +331,29 @@ fn parsed_extreme_exponent_preserves_exact_javascript_ieee754_bits() {
 		"1.7976931348623155e+308"
 	);
 }
+
+#[test]
+#[ignore = "requires hash-consistent schema-negative records from real published REA npm"]
+fn real_npm_rejected_schema_matrix_is_independently_rejected_by_rust() {
+	let path = std::env::var("REA_REAL_INVALID_EVIDENCE_JSON")
+		.expect("published REA schema-negative fixture path");
+	let bytes = std::fs::read(path).expect("read authentic npm schema-negatives");
+	let parsed: UniqueJson = serde_json::from_slice(&bytes).expect("unique-key negative JSON");
+	let cases = parsed.0["cases"].as_array().expect("schema-negative cases");
+	assert_eq!(cases.len(), 20, "all upstream Zod-negative variants required");
+	for test in cases {
+		let label = test["label"].as_str().expect("negative label");
+		assert_eq!(
+			test["authenticatedHashButRejectedSchema"],
+			true,
+			"upstream negative {label} must have a recomputed hash"
+		);
+		let record = &test["record"];
+		let error = verify_record(record)
+			.unwrap_err_or_else(|_| panic!("Rust accepted upstream-invalid Evidence {label}"));
+		assert!(
+			!error.to_string().contains("semantic digest mismatch"),
+			"Rust must reject upstream invalid schema before ID mismatch: {label}: {error}"
+		);
+	}
+}
