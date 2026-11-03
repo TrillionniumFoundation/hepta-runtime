@@ -358,15 +358,36 @@ fn claim_controller_state_dir(state_dir: &Path) -> Result<ControllerLocks> {
 	})
 }
 
+// Admission auditing requires an owner-private root (mode 0700), even on a
+// default umask 0022 host. Create the root privately rather than booting an
+// apparently healthy controller whose first audited tool call is refused.
+// Existing roots retain their original permissions and fail closed below.
+fn create_controller_state_dir(path: &Path) -> Result<()> {
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::DirBuilderExt;
+		std::fs::DirBuilder::new()
+			.recursive(true)
+			.mode(0o700)
+			.create(path)?;
+	}
+	#[cfg(not(unix))]
+	std::fs::create_dir_all(path)?;
+	Ok(())
+}
+
 pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
 	config.validate()?;
-	std::fs::create_dir_all(&config.state_dir)?;
+	create_controller_state_dir(&config.state_dir)?;
 	config.state_dir = std::fs::canonicalize(&config.state_dir)?;
 	#[cfg(unix)]
 	{
 		use std::os::unix::fs::PermissionsExt;
-		if std::fs::metadata(&config.state_dir)?.permissions().mode() & 0o022 != 0 {
-			bail!("controller state directory must not be group/world writable");
+		// Request auditing refuses any readable/searchable owner-foreign root;
+		// reject an older 0755 state dir at startup rather than after an MCP
+		// dispatch attempt. The operator must explicitly repair old permissions.
+		if std::fs::metadata(&config.state_dir)?.permissions().mode() & 0o077 != 0 {
+			bail!("controller state directory must be owner-private (mode 0700)");
 		}
 	}
 	let owner = claim_controller_state_dir(&config.state_dir)?;

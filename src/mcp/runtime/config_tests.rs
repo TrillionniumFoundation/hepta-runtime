@@ -383,3 +383,31 @@ fn legacy_controller_lock_never_follows_symlink_or_hardlink() {
 	assert!(claim_controller_state_dir(dir.path()).is_err());
 	assert_eq!(std::fs::read(target).unwrap(), b"not a lock");
 }
+
+// A default umask (often 0022 on GitHub runners) must never make the
+// controller's request-audit root world-readable and unauditable. This
+// explicitly covers the namespace used by the shipped MCP worker tests.
+#[cfg(unix)]
+#[test]
+fn newly_created_request_audit_root_is_owner_private() {
+	use std::os::unix::fs::PermissionsExt;
+	let root = tempfile::tempdir().unwrap();
+	let state = root.path().join("nested").join("state");
+	create_controller_state_dir(&state).unwrap();
+	assert_eq!(
+		std::fs::metadata(&state).unwrap().permissions().mode() & 0o777,
+		0o700
+	);
+	assert_eq!(
+		std::fs::metadata(state.parent().unwrap()).unwrap().permissions().mode() & 0o777,
+		0o700
+	);
+	// Pre-existing 0755 directories are not silently chmod'ed by this helper:
+	// runtime preflight rejects them rather than dispatching without auditing.
+	std::fs::set_permissions(&state, std::fs::Permissions::from_mode(0o755)).unwrap();
+	create_controller_state_dir(&state).unwrap();
+	assert_eq!(
+		std::fs::metadata(&state).unwrap().permissions().mode() & 0o777,
+		0o755
+	);
+}
