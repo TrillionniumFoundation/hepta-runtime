@@ -1,0 +1,104 @@
+name: REA 6.8.0 upstream MCP reference
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feature/rea-native-foundation-*'
+    paths:
+      - '.github/workflows/rea-reference.yml'
+      - 'scripts/rea-reference-oracle.mjs'
+      - 'scripts/rea-source-package-diff.mjs'
+      - 'scripts/rea-number-reference.mjs'
+      - 'src/mcp/rea_evidence.rs'
+      - 'src/mcp/rea_evidence_tests.rs'
+      - 'docs/rea-native/STATUS.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rea-reference-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  npm-reference:
+    name: P0 upstream npm package and MCP catalog
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js for REA 6.8.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24.22.1'
+
+      - name: Install pinned published REA and record its tarball
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/rea-npm" "$RUNNER_TEMP/rea-pack" "$RUNNER_TEMP/rea-evidence"
+          npm pack rea-agents@6.8.0 --json --pack-destination "$RUNNER_TEMP/rea-pack" > "$RUNNER_TEMP/rea-evidence/npm-pack-metadata.json"
+          npm install --prefix "$RUNNER_TEMP/rea-npm" --no-audit --no-fund --ignore-scripts --save-exact rea-agents@6.8.0
+          node --version
+          node "$GITHUB_WORKSPACE/scripts/rea-reference-oracle.mjs" "$RUNNER_TEMP/rea-npm" "$RUNNER_TEMP/rea-evidence" "$RUNNER_TEMP/rea-pack"
+
+      - name: Independently compare pinned Git source and published npm files
+        run: |
+          set -euo pipefail
+          git init -q "$RUNNER_TEMP/rea-git"
+          git -C "$RUNNER_TEMP/rea-git" remote add origin https://github.com/morluto/rea.git
+          git -C "$RUNNER_TEMP/rea-git" fetch -q --depth=1 --filter=blob:none origin 93b8b82db70279e40f484114cff9dc1958dc14ee
+          git -C "$RUNNER_TEMP/rea-git" update-ref refs/heads/rea-oracle "$(git -C "$RUNNER_TEMP/rea-git" rev-parse FETCH_HEAD)"
+          git -C "$RUNNER_TEMP/rea-git" symbolic-ref HEAD refs/heads/rea-oracle
+          test "$(git -C "$RUNNER_TEMP/rea-git" rev-parse HEAD)" = 93b8b82db70279e40f484114cff9dc1958dc14ee
+          node "$GITHUB_WORKSPACE/scripts/rea-source-package-diff.mjs" "$RUNNER_TEMP/rea-git" "$RUNNER_TEMP/rea-npm" "$RUNNER_TEMP/rea-evidence"
+
+      - name: Independently capture full-input MCP schemas
+        env:
+          REA_ORACLE_INPUT_PROFILE: full
+          REA_ORACLE_OUTPUT_PROFILE: off
+        run: |
+          node "$GITHUB_WORKSPACE/scripts/rea-reference-oracle.mjs" "$RUNNER_TEMP/rea-npm" "$RUNNER_TEMP/rea-evidence/full-input" "$RUNNER_TEMP/rea-pack"
+
+      - name: Capture actual npm Evidence floating-number and profile corpus
+        run: |
+          node "$GITHUB_WORKSPACE/scripts/rea-number-reference.mjs" "$RUNNER_TEMP/rea-npm" "$RUNNER_TEMP/rea-evidence"
+
+      - name: Install Rust 1.95 for genuine REA Evidence differential
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+
+      - name: Validate real npm-generated Evidence using native Rust
+        env:
+          REA_REAL_EVIDENCE_JSON: ${{ runner.temp }}/rea-evidence/REA_6_8_0_ELF_NOTES_EVIDENCE.json
+        run: cargo test --locked --all-targets real_npm_reference_evidence_matches_native_subset_identity -- --ignored
+
+      - name: Independently verify actual npm finite-number Evidence using Rust
+        env:
+          REA_REAL_FLOAT_EVIDENCE_JSON: ${{ runner.temp }}/rea-evidence/REA_6_8_0_FINITE_NUMBER_EVIDENCE.json
+        run: |
+          set -euo pipefail
+          cargo test --locked --all-targets real_npm_fractional_reference_evidence_matches_native -- --ignored 2>&1 | tee "$RUNNER_TEMP/rea-evidence/fractional-rust-differential.log"
+          grep -Eq 'real_npm_fractional_reference_evidence_matches_native[[:space:]]+\.\.\.[[:space:]]+ok' "$RUNNER_TEMP/rea-evidence/fractional-rust-differential.log"
+
+      - name: Independently reject authentic hash-consistent upstream Zod negatives
+        env:
+          REA_REAL_INVALID_EVIDENCE_JSON: ${{ runner.temp }}/rea-evidence/REA_6_8_0_INVALID_EVIDENCE_SCHEMA.json
+        run: |
+          set -euo pipefail
+          cargo test --locked --all-targets real_npm_rejected_schema_matrix_is_independently_rejected_by_rust -- --ignored 2>&1 | tee "$RUNNER_TEMP/rea-evidence/schema-negative-rust-differential.log"
+          grep -Eq 'real_npm_rejected_schema_matrix_is_independently_rejected_by_rust[[:space:]]+\.\.\.[[:space:]]+ok' "$RUNNER_TEMP/rea-evidence/schema-negative-rust-differential.log"
+
+      - name: Retain original reference outputs, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-6-8-0-reference-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/rea-evidence/
+          if-no-files-found: warn
+          retention-days: 30

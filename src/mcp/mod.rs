@@ -18,6 +18,12 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 pub mod fs;
+pub mod rea;
+pub mod rea_evidence;
+pub mod rea_files;
+pub mod rea_seccomp;
+pub mod rea_store;
+pub mod rea_worker;
 pub mod request_ctx;
 pub mod runtime;
 pub mod server;

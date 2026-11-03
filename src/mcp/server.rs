@@ -33,6 +33,9 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use super::fs;
+use super::rea;
+use super::rea_evidence;
+use super::rea_store;
 use super::request_ctx;
 use super::runtime;
 use super::McpToolCall;
@@ -187,6 +190,10 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"service_status",
 	"network_inspect",
 	"privileged_action",
+	"rea_inspect_artifact",
+	"rea_verify_evidence",
+	"rea_retain_preview",
+	"rea_read_preview",
 ];
 const CLAUDE_CHANNEL_NOTIFICATION: &str = "notifications/claude/channel";
 
@@ -626,6 +633,82 @@ impl OctofsServer {
 		Parameters(_params): Parameters<runtime::inspect::HostListParams>,
 	) -> Result<String, String> {
 		runtime::inspect::host_list().map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "REA Native Artifact Header",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read a local file header and SHA-256 in a configured controller workspace. Experimental Rust-only preview for ELF, PE, Mach-O, WASM, GGUF, safetensors and ZIP. Returns partial coverage with a NON-REA evidence identity; does not decompile, verify signatures, inspect remote hosts or establish REA 6.8.0 parity."
+	)]
+	async fn rea_inspect_artifact(
+		&self,
+		Parameters(params): Parameters<rea::InspectArtifactParams>,
+	) -> Result<String, String> {
+		rea::inspect_artifact(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "REA Evidence Digest Check (Limited)",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Verify a workspace-local REA Evidence JSON record semantic SHA-256 commitment only for exact JavaScript safe-integer JSON values. Rejects duplicate JSON keys and mismatched hashes. Does not establish full REA Zod schema or provider parity."
+	)]
+	async fn rea_verify_evidence(
+		&self,
+		Parameters(params): Parameters<rea_evidence::VerifyEvidenceParams>,
+	) -> Result<String, String> {
+		rea_evidence::verify_evidence(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Retain Native REA Preview (Experimental)",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Inspect a workspace-confined local artifact with the isolated Rust worker and persist its explicitly NON-REA preview under the controller state directory. Uses exclusive atomic publication, full-record readback and stable native ID. Writes private controller state only; does not modify the source file or claim REA 6.8.0 parity."
+	)]
+	async fn rea_retain_preview(
+		&self,
+		Parameters(params): Parameters<rea_store::RetainPreviewParams>,
+	) -> Result<String, String> {
+		rea_store::retain_preview(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Retained Native REA Preview",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read an exact previously retained Hepta REA native preview ID across controller restarts. Verifies the durable record SHA-256 and versioned native preview semantic identity, rejects damaged/unknown records, and does not re-open the original artifact. Does not authenticate records against a malicious controller state owner."
+	)]
+	async fn rea_read_preview(
+		&self,
+		Parameters(params): Parameters<rea_store::ReadPreviewParams>,
+	) -> Result<String, String> {
+		rea_store::read_preview(params)
+			.await
+			.map_err(|error| error.to_string())
 	}
 
 	#[tool(

@@ -1,0 +1,161 @@
+name: REA P2 real Android APK signing reference
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feature/rea-native-foundation-*'
+    paths:
+      - '.github/workflows/rea-real-apk.yml'
+      - 'src/mcp/rea_zip.rs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rea-real-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actual-apk-signature-reference:
+    name: P2 independently verified AAPT2 APK and apksigner signatures
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact development candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Pin Rust toolchain and compile the shipped native parser
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+          cargo build --locked --release
+
+      - name: Compile a real binary Android manifest and resources with AAPT2
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/rea-real-apk"
+          mkdir -p "$evidence/res/values" "$evidence/compiled" "$RUNNER_TEMP/rea-keystore"
+          aapt2="$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          platform="$ANDROID_HOME/platforms/android-35/android.jar"
+          test -x "$aapt2"
+          test -x "$apksigner"
+          test -f "$platform"
+          "$aapt2" version | tee "$evidence/aapt2-version.txt"
+          "$apksigner" version | tee "$evidence/apksigner-version.txt"
+          cat > "$evidence/AndroidManifest.xml" <<'XML'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="org.trillionnium.rea.smoke"
+              android:versionCode="1" android:versionName="1">
+              <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="35" />
+              <application android:label="@string/app_name" android:hasCode="false" />
+          </manifest>
+          XML
+          cat > "$evidence/res/values/strings.xml" <<'XML'
+          <resources>
+              <string name="app_name">REA real APK signing reference</string>
+          </resources>
+          XML
+          "$aapt2" compile --dir "$evidence/res" -o "$evidence/compiled"
+          find "$evidence/compiled" -type f -name '*.flat' -print | tee "$evidence/aapt2-compiled-files.txt"
+          test -s "$evidence/aapt2-compiled-files.txt"
+          "$aapt2" link --auto-add-overlay -o "$evidence/unsigned.apk" -I "$platform" \
+              --manifest "$evidence/AndroidManifest.xml" \
+              -R "$evidence/compiled/values_strings.arsc.flat"
+          python3 - "$evidence/unsigned.apk" <<'PY'
+          import sys, zipfile
+          with zipfile.ZipFile(sys.argv[1]) as apk:
+              names = set(apk.namelist())
+              assert {"AndroidManifest.xml", "resources.arsc"} <= names
+              assert apk.testzip() is None
+          PY
+
+      - name: Create ephemeral CI signing key, sign and independently verify
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/rea-real-apk"
+          keystore="$RUNNER_TEMP/rea-keystore/test-only.p12"
+          apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          keytool -genkeypair -noprompt -storetype PKCS12 \
+              -keystore "$keystore" -storepass changeit -keypass changeit \
+              -alias rea-fixture -keyalg RSA -keysize 2048 -validity 30 \
+              -dname "CN=REA isolated CI fixture, O=TrillionniumFoundation"
+          "$apksigner" sign \
+              --ks "$keystore" --ks-pass pass:changeit --key-pass pass:changeit \
+              --min-sdk-version 24 --v1-signing-enabled true \
+              --v2-signing-enabled true --v3-signing-enabled true \
+              --v4-signing-enabled false \
+              --out "$evidence/real-signed.apk" "$evidence/unsigned.apk"
+          "$apksigner" verify --verbose --print-certs --min-sdk-version 24 \
+              "$evidence/real-signed.apk" | tee "$evidence/actual-cryptographic-verify.txt"
+          grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true' \
+              "$evidence/actual-cryptographic-verify.txt"
+
+      - name: Real signed APK versus shipped Rust structural preview, plus tamper
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/rea-real-apk"
+          binary="./target/release/hepta-runtime"
+          cat "$evidence/real-signed.apk" | "$binary" rea-worker \
+              --selected-path=/controlled/real-signed.apk > "$evidence/rust-signed-preview.json" \
+              2> "$evidence/rust-signed-stderr.txt"
+          test ! -s "$evidence/rust-signed-stderr.txt"
+          python3 - "$evidence/real-signed.apk" "$evidence/rust-signed-preview.json" \
+              "$evidence/tampered-signed.apk" <<'PY'
+          import json, struct, sys, zipfile
+          apk_path, record_path, tampered_path = sys.argv[1:]
+          record = json.load(open(record_path))
+          facts = record["normalized_result"]["header_facts"]
+          assert record["rea_evidence_compatible"] is False
+          assert record["coverage"]["status"] == "partial"
+          assert record["normalized_result"]["format"] == "zip"
+          assert facts["apk_signing_block_structure_present"] is True
+          assert facts["apk_v2_scheme_id_present"] is True
+          assert "NOT cryptographic" in " ".join(record["limitations"])
+          with zipfile.ZipFile(apk_path) as archive:
+              manifest = archive.getinfo("AndroidManifest.xml")
+              assert archive.testzip() is None
+          raw = bytearray(open(apk_path, "rb").read())
+          local = manifest.header_offset
+          assert raw[local:local+4] == b"PK\x03\x04"
+          name_len, extra_len = struct.unpack_from("<HH", raw, local + 26)
+          content_start = local + 30 + name_len + extra_len
+          assert content_start < len(raw)
+          raw[content_start] ^= 1  # invalidate cryptographic v2 integrity
+          with open(tampered_path, "wb") as output:
+              output.write(raw)
+          PY
+          apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          if "$apksigner" verify --verbose --min-sdk-version 24 \
+              "$evidence/tampered-signed.apk" \
+              > "$evidence/tampered-verify.out" 2> "$evidence/tampered-verify.err"; then
+            echo "ERROR: real apksigner accepted mutated signed APK" >&2
+            exit 1
+          fi
+          cat "$evidence/tampered-signed.apk" | "$binary" rea-worker \
+              --selected-path=/controlled/tampered-signed.apk \
+              > "$evidence/rust-tampered-preview.json" \
+              2> "$evidence/rust-tampered-stderr.txt"
+          test ! -s "$evidence/rust-tampered-stderr.txt"
+          python3 - "$evidence/rust-signed-preview.json" "$evidence/rust-tampered-preview.json" <<'PY'
+          import json, sys
+          clean, corrupt = map(lambda p: json.load(open(p)), sys.argv[1:])
+          assert clean["subject"]["sha256"] != corrupt["subject"]["sha256"]
+          facts = corrupt["normalized_result"]["header_facts"]
+          assert facts["apk_signing_block_structure_present"] is True
+          assert facts["apk_v2_scheme_id_present"] is True
+          assert corrupt["coverage"]["status"] == "partial"
+          assert corrupt["rea_evidence_compatible"] is False
+          PY
+
+      - name: Retain real signed APK and independent verifier evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-real-apk-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/rea-real-apk/
+          if-no-files-found: warn
+          retention-days: 14
