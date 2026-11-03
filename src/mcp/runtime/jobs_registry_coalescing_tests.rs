@@ -12,6 +12,11 @@ thread_local! {
 	static ON_SCAN: RefCell<Option<Box<dyn FnOnce()>>> = const { RefCell::new(None) };
 	static AFTER_SCAN: RefCell<Option<Box<dyn FnOnce()>>> = const { RefCell::new(None) };
 	static ON_COHORT_WAIT: RefCell<Option<Box<dyn FnOnce()>>> = const { RefCell::new(None) };
+	static AFTER_COHORT_HINT_VERIFIED: RefCell<Option<Box<dyn FnOnce()>>> = const { RefCell::new(None) };
+	static AFTER_COHORT_HINT_READ: RefCell<Option<Box<dyn FnOnce()>>> = const { RefCell::new(None) };
+	static BEFORE_COHORT_ADMISSION: RefCell<Option<Box<dyn FnOnce()>>> = const { RefCell::new(None) };
+	static AFTER_COHORT_GATE_ACQUIRED: RefCell<Option<Box<dyn FnOnce()>>> = const { RefCell::new(None) };
+	static BEFORE_COHORT_GATE_RELEASE: RefCell<Option<Box<dyn FnOnce()>>> = const { RefCell::new(None) };
 	static SCANS: Cell<usize> = const { Cell::new(0) };
 }
 
@@ -44,6 +49,41 @@ pub(super) fn scan_finished() {
 	}
 }
 
+pub(super) fn after_cohort_hint_verified() {
+	let hook = AFTER_COHORT_HINT_VERIFIED.with(|slot| slot.borrow_mut().take());
+	if let Some(hook) = hook {
+		hook();
+	}
+}
+
+pub(super) fn after_cohort_hint_read() {
+	let hook = AFTER_COHORT_HINT_READ.with(|slot| slot.borrow_mut().take());
+	if let Some(hook) = hook {
+		hook();
+	}
+}
+
+pub(super) fn before_cohort_admission() {
+	let hook = BEFORE_COHORT_ADMISSION.with(|slot| slot.borrow_mut().take());
+	if let Some(hook) = hook {
+		hook();
+	}
+}
+
+pub(super) fn after_cohort_gate_acquired() {
+	let hook = AFTER_COHORT_GATE_ACQUIRED.with(|slot| slot.borrow_mut().take());
+	if let Some(hook) = hook {
+		hook();
+	}
+}
+
+pub(super) fn before_cohort_gate_release() {
+	let hook = BEFORE_COHORT_GATE_RELEASE.with(|slot| slot.borrow_mut().take());
+	if let Some(hook) = hook {
+		hook();
+	}
+}
+
 struct Hooks;
 
 impl Hooks {
@@ -59,6 +99,11 @@ impl Drop for Hooks {
 		ON_SCAN.with(|slot| slot.borrow_mut().take());
 		AFTER_SCAN.with(|slot| slot.borrow_mut().take());
 		ON_COHORT_WAIT.with(|slot| slot.borrow_mut().take());
+		AFTER_COHORT_HINT_VERIFIED.with(|slot| slot.borrow_mut().take());
+		AFTER_COHORT_HINT_READ.with(|slot| slot.borrow_mut().take());
+		BEFORE_COHORT_ADMISSION.with(|slot| slot.borrow_mut().take());
+		AFTER_COHORT_GATE_ACQUIRED.with(|slot| slot.borrow_mut().take());
+		BEFORE_COHORT_GATE_RELEASE.with(|slot| slot.borrow_mut().take());
 	}
 }
 
@@ -929,9 +974,12 @@ fn cohort_member_without_a_hint_releases_gate_before_full_scan() {
 	let scans = cache.lock().unwrap().cold.clone();
 	let member = demand(&scans, "main", "waiter");
 	let leader = demand(&scans, "main", "leader");
-	let (active, targets) = leader
-		.start_cohort(scans.gate.lock().unwrap(), Vec::new())
-		.unwrap();
+	let RegistryColdAdmission::Leader(active, targets) = leader
+		.admit_cohort(Vec::new(), registry_epoch(root.path()).unwrap())
+		.unwrap()
+	else {
+		panic!("idle cohort gate was not admitted");
+	};
 	assert_eq!(targets.len(), 1);
 	let (waiting, observed_wait) = std::sync::mpsc::channel();
 	let worker_root = root.path().to_owned();
@@ -1352,7 +1400,7 @@ fn predicted_key_without_live_demand_is_not_published_and_closes_membership() {
 	)
 	.unwrap();
 	assert!(targets[0].candidate.is_some());
-	leader.publish(targets, epoch).unwrap();
+	active.publish(&leader, targets, epoch).unwrap();
 	{
 		let state = scans.state.lock().unwrap();
 		assert!(state.active.is_none());
@@ -1363,7 +1411,6 @@ fn predicted_key_without_live_demand_is_not_published_and_closes_membership() {
 		.read_hint(root.path(), &registry_epoch)
 		.unwrap()
 		.is_none());
-	drop(active);
 	drop(late);
 	drop(leader);
 	assert!(scans.state.lock().unwrap().demands.is_empty());
@@ -1429,3 +1476,7 @@ fn predicted_duplicates_and_corruption_retain_original_refusals() {
 #[cfg(target_os = "linux")]
 #[path = "jobs_cohort_tail_probe.rs"]
 mod tail_probe;
+
+#[cfg(target_os = "linux")]
+#[path = "jobs_cohort_admission_tests.rs"]
+mod admission_tests;

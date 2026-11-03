@@ -18,8 +18,17 @@ const SOURCE: &str = concat!(
 	include_str!("binary_file.py")
 );
 
+// The closed FileObservation enum supplies only info/read. Keep their original
+// metadata and descriptor helpers, but avoid parsing unused inode-patch code on
+// every remote observation. The general RPC source above retains every writer.
+const OBSERVATION_SOURCE: &str = concat!(
+	include_str!("file_metadata.py"),
+	"\n",
+	include_str!("binary_file.py")
+);
+
 pub(super) fn observation_source() -> &'static str {
-	SOURCE
+	OBSERVATION_SOURCE
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
@@ -270,3 +279,7 @@ pub async fn patch_inode(p: InodePatchParams) -> Result<String> {
 #[cfg(test)]
 #[path = "binary_tests.rs"]
 mod tests;
+
+#[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
+#[path = "binary_observation_source_tests.rs"]
+mod observation_source_tests;

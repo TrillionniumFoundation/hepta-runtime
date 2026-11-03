@@ -122,7 +122,7 @@ impl ReadOperation {
 			Self::ProcessStatus(p) => super::jobs::status_job(p).await,
 			Self::ProcessRead(p) => super::jobs::read_job(p).await,
 			Self::ProcessWait(p) => super::jobs::wait_job(p).await,
-			Self::ProcessList(p) => super::jobs::list_jobs(p),
+			Self::ProcessList(p) => super::jobs::list_jobs_async(p).await,
 			Self::HardwareSnapshot(p) => super::inspect::hardware_snapshot(p).await,
 			Self::ServiceStatus(p) => super::inspect::service_status(p).await,
 			Self::NetworkInspect(p) => super::inspect::network_inspect(p).await,
