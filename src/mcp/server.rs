@@ -38,6 +38,7 @@ use super::rea_evidence;
 use super::rea_store;
 use super::request_ctx;
 use super::runtime;
+use super::weight;
 use super::McpToolCall;
 
 /// Per-session working directory state.
@@ -194,6 +195,12 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"rea_verify_evidence",
 	"rea_retain_preview",
 	"rea_read_preview",
+	"weight_profiles",
+	"weight_open",
+	"weight_call",
+	"weight_status",
+	"weight_read",
+	"weight_close",
 ];
 const CLAUDE_CHANNEL_NOTIFICATION: &str = "notifications/claude/channel";
 
@@ -712,6 +719,118 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "Weight Worker Profiles",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "List enabled administrator-owned model experiment profiles and resource ceilings. Profiles bind host, model read roots, worker code and isolated output storage. No profile grants production model promotion."
+	)]
+	async fn weight_profiles(
+		&self,
+		Parameters(_params): Parameters<runtime::inspect::HostListParams>,
+	) -> Result<String, String> {
+		weight::profiles().map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Open Weight Experiment Worker",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Start or recover an isolated resident model worker through the existing durable process owner. Select a configured profile and preserve the same idempotency key and parameters after timeouts. Returns an admitted original job, not completed inference. Read the open result with weight_read without request_id; use weight_status for lifecycle. Source models are read-only and candidate outputs remain isolated."
+	)]
+	async fn weight_open(
+		&self,
+		Parameters(params): Parameters<weight::WeightOpenParams>,
+	) -> Result<String, String> {
+		weight::open(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Call Weight Experiment Worker",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Submit a typed inspect/probe/intervene/analyze/patch/seal/query request to an existing resident worker. The bounded client is an original durable job and uses the worker Unix socket. Reuse the same request_id after uncertainty; changed payloads conflict. Results and large-array artifact references arrive through weight_read with that request_id. No arbitrary code, executable choice or production activation."
+	)]
+	async fn weight_call(
+		&self,
+		Parameters(params): Parameters<weight::WeightCallParams>,
+	) -> Result<String, String> {
+		weight::call(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Weight Job Status",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Observe the original resident-worker or request job through its stored owner binding. Optional wait is bounded to 30 seconds and cannot restart a job. Process success and model quality are distinct; inspect the JSON worker result as well."
+	)]
+	async fn weight_status(
+		&self,
+		Parameters(params): Parameters<weight::WeightStatusParams>,
+	) -> Result<String, String> {
+		weight::status(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Weight Job Result",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read bounded original stdout/stderr using independent byte cursors. Omit request_id for the worker open response; supply it for a call. The worker emits JSON responses with artifact references, not full tensors. Continue with next_offset when needed. Reading never reruns inference or reopens source weights."
+	)]
+	async fn weight_read(
+		&self,
+		Parameters(params): Parameters<weight::WeightReadParams>,
+	) -> Result<String, String> {
+		weight::read(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Close Weight Experiment Worker",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Close a stored session to new calls and request cancellation of only its original resident worker through the existing process owner. Inspect weight_status for terminal confirmation. Candidate artifacts and all prior records remain available; this identity cannot be reused to relaunch."
+	)]
+	async fn weight_close(
+		&self,
+		Parameters(params): Parameters<weight::WeightCloseParams>,
+	) -> Result<String, String> {
+		weight::close(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
 		title = "Process Start",
 		annotations(
 			read_only_hint = false,
@@ -1188,6 +1307,12 @@ impl ServerHandler for OctofsServer {
 			.list_all()
 			.into_iter()
 			.filter(|tool| {
+				if tool.name.starts_with("weight_")
+					&& runtime::config::maybe_runtime_config()
+						.is_none_or(|config| config.weight_workers.is_empty())
+				{
+					return false;
+				}
 				if runtime_enabled {
 					tool.name.as_ref() != "shell"
 				} else {
