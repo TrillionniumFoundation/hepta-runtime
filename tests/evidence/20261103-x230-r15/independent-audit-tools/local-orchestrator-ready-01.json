@@ -1,0 +1,161 @@
+{
+  "configuration_output": "/home/qian/hepta-runtime-optimization-20261103-r15/configuration-qualification-01",
+  "failure_policy": "stop immediately; no stage/RPC retries; preserve all outputs",
+  "files": [
+    {
+      "bytes": 37274,
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/run_local_campaigns.py",
+      "sha256": "c7c25cdf0edc705f254101e89ef4786e54f744ed34097ff5fc9a6957d01f8508"
+    },
+    {
+      "bytes": 3125,
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/release_performance_gate.py",
+      "sha256": "bb291b626720cacd949214ce6be6df11b3b2ce7eae4d79d9aefa1bc875956d77"
+    }
+  ],
+  "formal_workloads_started": false,
+  "frozen_utc": "2026-11-03T22:13:58.905728+00:00",
+  "launch_template": "/usr/bin/python3 -B /home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/run_local_campaigns.py --expected-ready-sha256 <THIS_FILE_SHA256> --perf-wait-seconds 3600",
+  "local_output": "/home/qian/hepta-runtime-optimization-20261103-r15/local-campaigns-01",
+  "performance_gate": "/home/qian/hepta-runtime-optimization-20261103-r15/perf-ready-01.json",
+  "pins": {
+    "/home/qian/hepta-runtime-optimization-20261103-r15/baseline-binding.json": "d701ad5c2d101ed389614083b386324c092182dcf19cb4f4bf0777e232d3c37a",
+    "/home/qian/hepta-runtime-optimization-20261103-r15/configuration/configuration-ready.json": "fb4a2e8eab0bfafb0c272c4c3e259cd1d68dffbaa479796854a73a1100fcc947",
+    "/home/qian/hepta-runtime-optimization-20261103-r15/independent-audit-tools/tooling-install-01.json": "34f0d32bcdf5057ec1cf8148a51dd13773f1235841074e0f2b8914bdfb8e461d"
+  },
+  "qualification": "/home/qian/hepta-runtime-optimization-20261103-r14/qualification-01",
+  "review_diff": {
+    "path": "/home/qian/hepta-runtime-optimization-20261103-r15/independent-audit-tools/orchestrator-local-diff-01.patch",
+    "sha256": "1b5ec6f07581654a3696b824463e1f032e866b2c6c07bc3a23a6aec550471658"
+  },
+  "schema": "hepta-r15-local-orchestrator-ready/v1",
+  "single_bounded_perf_wait_seconds": 3600,
+  "source": "/home/qian/hepta-runtime-optimization-20261103-r14/source",
+  "stage_plan": [
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/run_isolated_tests.py",
+        "--artifacts",
+        "/home/qian/hepta-runtime-optimization-20261103-r14/qualification-01/retained-artifacts.jsonl",
+        "--source-manifest",
+        "/home/qian/hepta-runtime-optimization-20261103-r14/qualification-01/source-map.json",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/configuration-qualification-01/isolated-tests",
+        "--allocator-arena-max",
+        "1",
+        "--timeout",
+        "180"
+      ],
+      "name": "isolated-tests",
+      "timeout_seconds": 1800
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/audit_isolated_tests.py",
+        "--evidence",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/configuration-qualification-01/isolated-tests",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/configuration-qualification-01/isolated-audit.json",
+        "--expected-filter",
+        ""
+      ],
+      "name": "audit-isolated-tests",
+      "timeout_seconds": 300
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/run_cancel_responsiveness.py",
+        "--baseline",
+        "/home/qian/hepta-runtime-optimization-20261103-r14/qualification-01/hepta-runtime",
+        "--candidate",
+        "/home/qian/hepta-runtime-optimization-20261103-r14/qualification-01/hepta-runtime",
+        "--candidate-arena-max",
+        "1",
+        "--out",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/cancel-r14-r15-01",
+        "--workers",
+        "1",
+        "2",
+        "--receipt-bytes",
+        "1024",
+        "4194272",
+        "--payload",
+        "escaped",
+        "--concurrency",
+        "8",
+        "--waves",
+        "24"
+      ],
+      "name": "cancel-r14-r15",
+      "timeout_seconds": 1800
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/analyze_cancel_responsiveness.py",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/cancel-r14-r15-01/report.json",
+        "--summary",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/cancel-r14-r15-01/independent-summary.json",
+        "--markdown",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/cancel-r14-r15-01/independent-summary.md"
+      ],
+      "name": "analyze-cancel-r14-r15",
+      "timeout_seconds": 180
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/run_cancel_responsiveness.py",
+        "--baseline",
+        "/home/qian/hepta-runtime-optimization-20261103-r11/qualification-01/hepta-runtime",
+        "--candidate",
+        "/home/qian/hepta-runtime-optimization-20261103-r14/qualification-01/hepta-runtime",
+        "--candidate-arena-max",
+        "1",
+        "--out",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/cancel-r11-r15-01",
+        "--workers",
+        "1",
+        "2",
+        "--receipt-bytes",
+        "1024",
+        "4194272",
+        "--payload",
+        "escaped",
+        "--concurrency",
+        "8",
+        "--waves",
+        "24"
+      ],
+      "name": "cancel-r11-r15",
+      "timeout_seconds": 1800
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/analyze_cancel_responsiveness.py",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/cancel-r11-r15-01/report.json",
+        "--summary",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/cancel-r11-r15-01/independent-summary.json",
+        "--markdown",
+        "/home/qian/hepta-runtime-optimization-20261103-r15/cancel-r11-r15-01/independent-summary.md"
+      ],
+      "name": "analyze-cancel-r11-r15",
+      "timeout_seconds": 180
+    }
+  ],
+  "static_check": {
+    "path": "/home/qian/hepta-runtime-optimization-20261103-r15/independent-audit-tools/orchestrator-local-static-check-01.json",
+    "sha256": "41a7f1f1c2516fc3b0e97359087e5bf16d20c51357816fec38aabdb7f4bfbadc"
+  },
+  "success": true
+}

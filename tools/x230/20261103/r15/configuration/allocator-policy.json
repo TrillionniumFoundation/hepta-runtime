@@ -1,0 +1,58 @@
+{
+  "schema": "hepta-x230-glibc-execution-profile/v1",
+  "status": "candidate-awaiting-formal-validation",
+  "selected_arena_max": "1",
+  "target": {
+    "host": "x230",
+    "platform": "Linux",
+    "libc_family": "glibc",
+    "observed_glibc": "2.39",
+    "other_platform_recommendation": false
+  },
+  "rust_source_modified": false,
+  "new_compilation_required": false,
+  "default_action": {
+    "when": "MALLOC_ARENA_MAX is absent and no colon-delimited GLIBC_TUNABLES glibc.malloc.arena_max= entry is present",
+    "set": {
+      "MALLOC_ARENA_MAX": "1"
+    }
+  },
+  "caller_override": {
+    "MALLOC_ARENA_MAX": "Any present value, including empty or invalid, is preserved; no coercion or validation is performed.",
+    "GLIBC_TUNABLES": "An exact glibc.malloc.arena_max= entry suppresses injection, including an empty value. All tunables are passed through unchanged.",
+    "both_present": "Preserve both; GNU libc resolves precedence. No promise that MALLOC_ARENA_MAX is the effective control.",
+    "unrelated_tunables": "Preserve and still inject the selected MALLOC_ARENA_MAX default.",
+    "scope": "Environment of this exec only, naturally inherited by subprocesses that do not replace or remove it. No global or service configuration."
+  },
+  "launch": {
+    "argv": "absolute executable path followed by unchanged runtime arguments",
+    "stdout": "no wrapper output; owned by child protocol",
+    "stderr": "usage or platform/executable errors only",
+    "exec": "replace shell with executable, retain PID, normal exit/signal semantics",
+    "binary_hashing": "not performed per invocation; qualify and bind the artifact before launch",
+    "platform_check": "Linux and GNU libc; no assertion that other Linux/glibc hardware is qualified"
+  },
+  "formal_comparison": {
+    "wrapper_used": false,
+    "baseline": "driver constructs a clean allocator environment: no MALLOC_* or GLIBC_TUNABLES",
+    "candidate": "same qualified R14 executable; driver explicitly supplies MALLOC_ARENA_MAX=1",
+    "verification": "driver records post-exec /proc/PID/environ for each long-lived controller and restart, plus binary/configuration fingerprints",
+    "purpose": "separate allocator setting effect from caller environment; ordinary wrapper preserves explicit caller controls"
+  },
+  "diagnostic_bindings": [
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-01/report.json",
+      "sha256": "1395c0e75c4c53e10386d7865e3e2f45c7f44bab184d7dffeb9e461dfb600937"
+    },
+    {
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-02/report.json",
+      "sha256": "20a37ece2406a3aaeb0819bb4ecd2c0d4cdb2fcdafc785a4687077ebbe184889"
+    }
+  ],
+  "limitations": [
+    "Causal diagnostics are not throughput benchmarks; background archive/audit I/O overlapped.",
+    "One arena may increase allocator lock contention in other workloads; native C8 and recovery remain required formal gates.",
+    "This profile changes memory allocation policy for the process; it does not limit Tokio thread count.",
+    "Publication concurrency remains 8 and physical cancellation preparation remains 2 in the unchanged R14 source."
+  ]
+}

@@ -1,0 +1,780 @@
+--- /home/qian/hepta-runtime-optimization-20261103-r12/source/tools/x230/20261103/r12/run_cancel_responsiveness.py
++++ /home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/run_cancel_responsiveness.py
+@@ -19,6 +19,8 @@
+ import subprocess
+ import threading
+ import time
++
++import allocator_environment as allocator
+ 
+ MAX_MESSAGE = 1024 * 1024
+ MAX_RECEIPT = 4 * 1024 * 1024
+@@ -133,7 +135,7 @@
+ 
+ 
+ class Controller:
+-    def __init__(self, binary, config, guard, directory, workers):
++    def __init__(self, binary, config, guard, directory, workers, allocator_values=None):
+         self.pending = {}
+         self.lock = threading.Lock()
+         self.sequence = 0
+@@ -144,6 +146,8 @@
+                 "--runtime-prewarm", "--runtime-audit-group-commit"]
+         env = {"PATH": str(guard) + ":/usr/bin:/bin", "LANG": "C", "SHELL": "/bin/sh",
+                "TOKIO_WORKER_THREADS": str(workers), "RUST_LOG": "warn"}
++        allocator_values = allocator.checked(allocator_values or {})
++        env = allocator.child_environment(env, allocator_values)
+         started = time.monotonic()
+         self.child = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                       stderr=self.stderr, cwd=directory, env=env, start_new_session=True)
+@@ -159,6 +163,8 @@
+             self.startup = {"pid": self.child.pid, "birth_ticks": self.birth,
+                             "ready_ms": (time.monotonic() - started) * 1000,
+                             "server_info": reply["response"]["result"].get("serverInfo")}
++            self.startup["allocator_environment"] = allocator.observe(
++                self.child.pid, self.birth, allocator_values, env, "after-native-initialize")
+         except BaseException:
+             self.close()
+             raise
+@@ -265,6 +271,7 @@
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument("--baseline", type=Path, required=True)
+     parser.add_argument("--candidate", type=Path, required=True)
++    parser.add_argument("--candidate-arena-max", type=int, choices=allocator.ALLOWED_ARENA_MAX, required=True)
+     parser.add_argument("--out", type=Path, required=True)
+     parser.add_argument("--workers", type=int, nargs="+", default=[1, 2])
+     parser.add_argument("--receipt-bytes", type=int, nargs="+", default=[1024, MAX_RECEIPT - 32])
+@@ -287,6 +294,8 @@
+               "metric_scope": "host_list latency under expected wrong-host cancel refusals, not remote job throughput",
+               "order": "ABBA", "payload": args.payload, "concurrency": args.concurrency,
+               "waves": args.waves, "rounds": [], "okay": False}
++    allocator_arms = {"A": {}, "B": allocator.configured(args.candidate_arena_max)}
++    report["allocator_configuration"] = allocator.run_metadata(allocator_arms, report["binary_sha256"])
+     path = root / "report.json"
+     save(path, report)
+     try:
+@@ -301,7 +310,8 @@
+                     report["rounds"].append(row)
+                     controller = None
+                     try:
+-                        controller = Controller(binaries[arm], config, guard, directory, workers)
++                        controller = Controller(binaries[arm], config, guard, directory, workers,
++                                                allocator_values=allocator_arms[arm])
+                         row["startup"] = controller.startup
+                         # Validate the intended refusal before any timed work. All
+                         # warmups and measured replies remain in the raw report.
+@@ -344,6 +354,8 @@
+                                              for arm, binary in binaries.items())
+         need(report["binaries_unchanged"] and file_digest(__file__) == report["harness_sha256"],
+              "benchmark input changed")
++        need(allocator.source_sha256() == report["allocator_configuration"]["helper_sha256"],
++             "allocator helper changed during experiment")
+         report["okay"] = True
+     except BaseException as error:
+         report["error"] = {"type": type(error).__name__, "reason": str(error)[:1000]}
+--- /home/qian/hepta-runtime-optimization-20261103-r12/source/tools/x230/20261103/recovery/x230_observation_benchmark.py
++++ /home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/x230_observation_benchmark.py
+@@ -24,6 +24,8 @@
+ import sys
+ import threading
+ import time
++
++import allocator_environment as allocator
+ 
+ HOSTS = {"ai395", "mac", "main", "pocket4", "rog", "x230"}
+ TOOLS = {"process_status", "process_read"}
+@@ -282,7 +284,7 @@
+ 
+ 
+ class Controller:
+-    def __init__(self, binary, config, profile, directory, workers, path_prefix=None, file_pool=False):
++    def __init__(self, binary, config, profile, directory, workers, path_prefix=None, file_pool=False, allocator_values=None):
+         self.binary = Path(binary)
+         self.directory = directory
+         self.rows = []
+@@ -299,6 +301,8 @@
+             argv.append("--runtime-file-observation-pool")
+         env = {"PATH": (str(path_prefix) + ":" if path_prefix is not None else "") + "/usr/bin:/bin", "LANG": "C", "SHELL": "/bin/sh",
+                "SSH_AUTH_SOCK": os.environ["SSH_AUTH_SOCK"], "TOKIO_WORKER_THREADS": str(workers), "RUST_LOG": "warn"}
++        allocator_values = allocator.checked(allocator_values or {})
++        env = allocator.child_environment(env, allocator_values)
+         started = time.monotonic()
+         self.child = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                       stderr=self.stderr, cwd=directory, env=env, start_new_session=True)
+@@ -315,6 +319,8 @@
+                             "ready_ms": (time.monotonic() - started) * 1000,
+                             "server_info": reply["result"].get("serverInfo"),
+                             "stdio_protocol": reply["result"].get("protocolVersion")}
++            self.startup["allocator_environment"] = allocator.observe(
++                self.child.pid, self.birth, allocator_values, env, "after-native-initialize")
+         except BaseException:
+             self.close()
+             raise
+@@ -485,6 +491,7 @@
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument("--baseline", type=Path, required=True)
+     parser.add_argument("--candidate", type=Path, required=True)
++    parser.add_argument("--candidate-arena-max", type=int, choices=allocator.ALLOWED_ARENA_MAX, required=True)
+     parser.add_argument("--profile-template", type=Path, required=True)
+     parser.add_argument("--frozen-jobs", type=Path, required=True)
+     parser.add_argument("--out", type=Path, required=True)
+@@ -516,6 +523,8 @@
+         "scope": "operator Python backend; completed jobs; warm observations; normal controller restart",
+         "not_covered": ["new launches", "system jobctl", "target reboot", "physical power loss", "WAN partition"],
+         "rounds": [], "passed": False}
++    allocator_arms = {"A": {}, "B": allocator.configured(args.candidate_arena_max)}
++    report["allocator_configuration"] = allocator.run_metadata(allocator_arms, binary_hashes)
+     path = args.out / "report.json"
+     active = None
+     try:
+@@ -528,7 +537,8 @@
+             first.mkdir(mode=0o700)
+             row = {"index": number, "version": version, "cells": [], "passed": False}
+             report["rounds"].append(row)
+-            active = Controller(binaries[version], config, profile, first, args.workers)
++            active = Controller(binaries[version], config, profile, first, args.workers,
++                                allocator_values=allocator_arms[version])
+             row["startup"] = active.startup
+             row["initial_complete_outputs"] = [active.call("process_read", job, "preflight_complete_output") for job in jobs]
+             need(all(x["okay"] for x in row["initial_complete_outputs"]), "six-host output preflight failed")
+@@ -546,7 +556,8 @@
+                  "controller failed normal shutdown or retained observed children")
+             restart = directory / "restart"
+             restart.mkdir(mode=0o700)
+-            active = Controller(binaries[version], config, profile, restart, args.workers)
++            active = Controller(binaries[version], config, profile, restart, args.workers,
++                                allocator_values=allocator_arms[version])
+             row["restart_startup"] = active.startup
+             row["restart_checks"] = [active.call(tool, job, "restart_same_original")
+                                       for job in jobs for tool in ("process_status", "process_read")]
+@@ -566,6 +577,8 @@
+             row["passed"] = all(x["successes"] == x["calls"] for x in row["cells"])
+             save_report(path, report)
+         need(agent_identity(agent) == agent_before, "current SSH agent changed after experiment")
++        need(allocator.source_sha256() == report["allocator_configuration"]["helper_sha256"],
++             "allocator helper changed during experiment")
+         report["passed"] = all(row["passed"] for row in report["rounds"])
+     except BaseException as error:
+         report["error"] = {"type": type(error).__name__, "reason": str(error)[:1000]}
+--- /home/qian/hepta-runtime-optimization-20261103-r12/source/tools/x230/20261103/r12/run_native_observation.py
++++ /home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/run_native_observation.py
+@@ -17,7 +17,7 @@
+ import threading
+ 
+ sys.dont_write_bytecode = True
+-HELPER = Path(__file__).resolve().parent.parent / "recovery" / "x230_observation_benchmark.py"
++HELPER = Path(__file__).resolve().parent / "x230_observation_benchmark.py"
+ sys.path.insert(0, str(HELPER.parent))
+ import x230_observation_benchmark as bench
+ 
+--- /home/qian/hepta-runtime-optimization-20261103-r12/source/tools/x230/20261103/r12/run_six_host_cancel_recovery.py
++++ /home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/run_six_host_cancel_recovery.py
+@@ -23,6 +23,8 @@
+ import threading
+ import time
+ 
++import allocator_environment as allocator
++
+ sys.dont_write_bytecode = True
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
+ import run_native_observation as measurements
+@@ -30,7 +32,7 @@
+ import x230_six_running_recovery_canary as original
+ import owned_ssh_interruption as interruption
+ 
+-DEV_ROOT = Path("/home/qian/hepta-runtime-optimization-20261103-r12")
++DEV_ROOT = Path("/home/qian/hepta-runtime-optimization-20261103-r15")
+ HOSTS = original.HOSTS
+ REMOTE = original.REMOTE.replace(
+     '("exit.json", 1048576), ("exit.witness.json", 4096)]',
+@@ -42,12 +44,13 @@
+     for name in ("candidate", "profile-template", "frozen-jobs", "socket-parent", "out"):
+         parser.add_argument("--" + name, type=Path, required=True)
+     parser.add_argument("--workers", type=int, default=2)
++    parser.add_argument("--candidate-arena-max", type=int, choices=allocator.ALLOWED_ARENA_MAX, required=True)
+     parser.add_argument("--interrupt-host", choices=HOSTS)
+     args = parser.parse_args()
+     out = args.out.absolute()
+     bench.need(sys.platform == "linux" and out.parent == DEV_ROOT and out.resolve() == out
+                and not os.path.lexists(out) and 1 <= args.workers <= 8,
+-               "fresh direct R12 development output required")
++               "fresh direct R15 development output required")
+     bench.need(REMOTE != original.REMOTE, "independent cancel-request observation hook missing")
+     out.mkdir(mode=0o700)
+     report_path = out / "report.json"
+@@ -180,7 +183,8 @@
+     def controller(directory):
+         directory.mkdir(mode=0o700)
+         return bench.Controller(args.candidate, config, profile, directory, args.workers,
+-                                path_prefix=wrapper.parent)
++                                path_prefix=wrapper.parent,
++                                allocator_values=allocator.configured(args.candidate_arena_max))
+ 
+     def confirm_running(host):
+         deadline = time.monotonic() + 20
+@@ -286,6 +290,8 @@
+         bench.need(agent.startswith("/"), "held SSH agent required")
+         agent_before = bench.agent_identity(agent)
+         binary_before = bench.digest(bench.read_file(args.candidate, 128 * 1024 * 1024))
++        report["allocator_configuration"] = allocator.run_metadata(
++            {"candidate": allocator.configured(args.candidate_arena_max)}, {"candidate": binary_before})
+         report.update(candidate_sha256=binary_before, nonce=secrets.token_hex(12),
+                       helper_hashes={name: bench.digest(bench.read_file(Path(module.__file__), 262144))
+                                      for name, module in (("original", original), ("measurement", measurements),
+@@ -402,6 +408,8 @@
+             return result
+         parallel("cancel_after_terminal", already_cancelled)
+         report["shutdown"] = shutdown()
++        bench.need(allocator.source_sha256() == report["allocator_configuration"]["helper_sha256"],
++                   "allocator helper changed during experiment")
+         report["passed"] = True
+         checkpoint("completed")
+     except BaseException as error:
+--- /home/qian/hepta-runtime-optimization-20261103-r12/source/tools/x230/20261103/r12/analyze_cancel_responsiveness.py
++++ /home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/analyze_cancel_responsiveness.py
+@@ -15,6 +15,8 @@
+ import math
+ from pathlib import Path
+ import statistics
++
++import allocator_environment_audit as allocator_audit
+ 
+ 
+ def require(value, reason):
+@@ -70,6 +72,7 @@
+             and report.get("okay") is True and report.get("binaries_unchanged") is True,
+             "campaign did not complete successfully")
+     require(report["order"] == "ABBA" and report["automatic_retries"] == 0, "campaign order or retries differ")
++    allocator_proof = allocator_audit.validate_abba(report, "cancel")
+     width, waves = report["concurrency"] + 1, report["waves"]
+     groups = defaultdict(list)
+     seen_processes = set()
+@@ -147,6 +150,7 @@
+     require(results, "no complete measurement groups")
+     return {"schema": "hepta-x230-cancel-responsiveness-analysis/v1", "source_sha256": source_sha,
+             "binary_sha256": report["binary_sha256"], "harness_sha256": report["harness_sha256"],
++            "allocator_environment_verification": allocator_proof,
+             "rpc_responses_and_statistical_fields_validated": True,
+             "per_round_statistic_fields_checked": checked_fields,
+             "controller_generations": len(seen_processes), "counts": counts, "cases": results,
+--- /home/qian/hepta-runtime-optimization-20261103-r12/source/tools/x230/20261103/r12/analyze_native_observation.py
++++ /home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/analyze_native_observation.py
+@@ -9,6 +9,8 @@
+ import json
+ import math
+ from pathlib import Path
++
++import allocator_environment_audit as allocator_audit
+ 
+ HOSTS = {"ai395", "mac", "main", "pocket4", "rog", "x230"}
+ TOOLS = {"process_status", "process_read"}
+@@ -65,6 +67,7 @@
+          and report["binary_hashes_unchanged"] is True and report["effect_starts"] == 0
+          and report["remote_mutation_tool_calls"] == 0 and report["automatic_rpc_retries"] == 0,
+          "unexpected effects/order or changed original inputs")
++    allocator_proof = allocator_audit.validate_abba(report, "native")
+     identities = {r["host"]: r["job_id"] for r in report["six_originals"]}
+     need(len(report["six_originals"]) == 6 and set(identities) == HOSTS, "six-host original set differs")
+     rounds = report["rounds"]
+@@ -107,6 +110,7 @@
+     return {"schema": "hepta-native-observation-independent-analysis/v2", "verified": True,
+             "original_bytes": len(raw), "original_sha256": hashlib.sha256(raw).hexdigest(),
+             "binary_sha256": report["binary_sha256"], "r12_measurement": r12,
++            "allocator_environment_verification": allocator_proof,
+             "measured_calls": measured, "warmup_calls": warmup, "preflight_restart_calls": preflight,
+             "total_calls": measured + warmup + preflight, "failed_calls": 0,
+             "cases": cases, "resources": resources, "not_covered": report["not_covered"],
+@@ -114,6 +118,7 @@
+                             "Two processes per version do not establish statistical significance.",
+                             "CPU/call uses synchronous controller counters; sampled tree CPU is diagnostic.",
+                             "Warmup and restart checks are excluded from measured denominators.",
++                            "Native rows retain DTO/response hashes, not complete transport-envelope bodies; no independent envelope rehash is claimed.",
+                             "Sampled tree metrics are not complete or synchronized; all errors are retained."]}
+ 
+ 
+--- /home/qian/hepta-runtime-optimization-20261103-r12/source/tools/x230/20261103/r12/verify_cancel_recovery.py
++++ /home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/verify_cancel_recovery.py
+@@ -9,6 +9,8 @@
+ import hashlib
+ import json
+ from pathlib import Path
++
++import allocator_environment_audit as allocator_audit
+ 
+ HOSTS = {"ai395", "mac", "main", "pocket4", "rog", "x230"}
+ INPUT = ("0123456789abcdef" * 256).encode()
+@@ -57,6 +59,7 @@
+     calls = report["native_calls"]
+     need(all(r["okay"] is True and r["automatic_retry"] is False for r in calls), "native call failed/retried")
+     need(all(r["okay"] is True and r["automatic_retry"] is False for r in report["ssh_calls"]), "SSH call failed/retried")
++    allocator_proof = allocator_audit.validate_recovery(report)
+     counts = Counter((r["host"], r["tool"]) for r in calls)
+     need(all(counts[(host, "process_start")] == 3 and counts[(host, "process_cancel")] == 2
+              for host in HOSTS), "expected starts/replays/cancellations differ")
+@@ -140,6 +143,7 @@
+              "requested private transport interruption incomplete")
+     return {"schema": "hepta-six-host-cancel-recovery-independent-verification/v1", "verified": True,
+             "source_sha256": sha(raw), "source_bytes": len(raw), "candidate_sha256": report["candidate_sha256"],
++            "allocator_environment_verification": allocator_proof,
+             "hosts": results, "native_calls": len(calls), "independent_ssh_calls": len(report["ssh_calls"]),
+             "new_starts": 6, "same_key_lookups": 12, "cancellations": 12, "automatic_rpc_retries": 0,
+             "elapsed_seconds": report["finished_unix"] - report["started_unix"],
+--- /home/qian/hepta-runtime-optimization-20261103-r14/source/tools/x230/20261028/run_isolated_tests.py
++++ /home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/run_isolated_tests.py
+@@ -17,6 +17,7 @@
+ import time
+ 
+ from audit_isolated_tests import case_stdout_proof
++import allocator_environment as allocator
+ 
+ 
+ def digest(path):
+@@ -30,16 +31,30 @@
+         stream.flush()
+ 
+ 
+-def command(argv, output, name, timeout, capture=False):
++def command(argv, output, name, timeout, capture=False, allocator_values=None):
+     started = time.monotonic()
+     result = {"argv": argv, "started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+               "exit_code": None, "timed_out": False}
++    allocator_values = allocator.checked(allocator_values or {})
++    child_env = allocator.child_environment(os.environ, allocator_values)
++    result["allocator_environment"] = allocator_values
++    result["allocator_environment_sha256"] = allocator.digest(allocator_values)
+     interrupted = None
+     with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+         process = None
+         try:
+-            process = subprocess.Popen(argv, stdout=stdout, stderr=stderr, start_new_session=True)
++            process = subprocess.Popen(argv, stdout=stdout, stderr=stderr, env=child_env, start_new_session=True)
+             result["pid"] = process.pid
++            try:
++                result["allocator_observation"] = allocator.command_observation(process, allocator_values, child_env)
++            except BaseException:
++                if process.poll() is None:
++                    try:
++                        os.killpg(process.pid, signal.SIGKILL)
++                    except ProcessLookupError:
++                        pass
++                result["exit_code"] = process.wait(timeout=30)
++                raise
+             result["exit_code"] = process.wait(timeout=timeout)
+         except (subprocess.TimeoutExpired, KeyboardInterrupt) as error:
+             result["timed_out"] = isinstance(error, subprocess.TimeoutExpired)
+@@ -86,6 +101,8 @@
+ 
+ 
+ def run(args, output, summary):
++    selected_allocator = allocator.configured(args.allocator_arena_max)
++    summary["allocator_configuration"] = allocator.run_metadata({"candidate": selected_allocator}, {"candidate": None})
+     artifacts = Path(args.artifacts).resolve()
+     source = Path(args.source_manifest).resolve()
+     shutil.copyfile(artifacts, output / "cargo-artifacts.jsonl")
+@@ -120,7 +137,7 @@
+             listings = []
+             for ignored in (False, True):
+                 argv = [binary["path"], "--list", "--format", "terse"] + (["--ignored"] if ignored else [])
+-                result, text = command(argv, output, prefix + ("-ignored" if ignored else "-list"), args.timeout, True)
++                result, text = command(argv, output, prefix + ("-ignored" if ignored else "-list"), args.timeout, True, allocator_values=selected_allocator)
+                 if result["exit_code"] != 0 or result["timed_out"]:
+                     raise ValueError(f"libtest enumeration failed: {result}")
+                 listings.append(inventory(text))
+@@ -140,7 +157,7 @@
+                 row.update({"status": "ignored", "executed": False, "attempt": 0})
+             else:
+                 result, _ = command([binary["path"], name, "--exact", "--test-threads=1"],
+-                                    output, f"case-{selected:06d}", args.timeout)
++                                    output, f"case-{selected:06d}", args.timeout, allocator_values=selected_allocator)
+                 row.update(result, executed=True)
+                 proof = case_stdout_proof(output / result["stdout_gzip"], name, len(names), result["stdout_bytes"])
+                 row["stdout_proof"] = proof
+@@ -162,6 +179,7 @@
+     parser.add_argument("--source-manifest", required=True, help="source manifest whose path and SHA256 are recorded")
+     parser.add_argument("--output", required=True, help="new evidence directory; existing paths are refused")
+     parser.add_argument("--filter", default="", help="optional test-name substring")
++    parser.add_argument("--allocator-arena-max", type=int, choices=allocator.ALLOWED_ARENA_MAX, required=True)
+     parser.add_argument("--timeout", type=float, default=180, help="per-case/enumeration timeout in seconds")
+     args = parser.parse_args()
+     if not 0 < args.timeout < float("inf"):
+@@ -173,6 +191,14 @@
+     started = time.monotonic()
+     try:
+         run(args, output, summary)
++        allocator.need(allocator.source_sha256() == summary["allocator_configuration"]["helper_sha256"],
++                       "allocator helper changed during isolated qualification")
++        commands = [json.loads(line) for line in (output / "commands.jsonl").read_text().splitlines() if line]
++        summary["allocator_observation_counts"] = {status: sum(row["allocator_observation"]["status"] == status for row in commands)
++            for status in ("verified", "unavailable_process_exited")}
++        allocator.need(summary["allocator_observation_counts"]["verified"] > 0,
++                       "no retained test process had a live allocator environment observation")
++        summary["allocator_verification_scope"] = "Every command uses explicit recorded Popen(env); live /proc checks where child survived snapshot. Child-exit races are retained, never retried."
+     except (Exception, KeyboardInterrupt) as error:
+         summary["fatal_error"] = f"{type(error).__name__}: {error}"
+     summary["elapsed_seconds"] = time.monotonic() - started
+--- /home/qian/hepta-runtime-optimization-20261103-r14/source/tools/x230/20261028/audit_isolated_tests.py
++++ /home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/audit_isolated_tests.py
+@@ -11,6 +11,8 @@
+ from pathlib import Path
+ import re
+ import time
++
++import allocator_environment_audit as allocator_audit
+ 
+ 
+ SUMMARY = re.compile(
+@@ -196,7 +198,15 @@
+     binaries = summary.get("binaries", [])
+     if not artifacts or [item.get("path") for item in binaries] != list(artifacts):
+         raise ValueError("summary executable inventory differs from original Cargo artifacts")
++    allocator_meta = allocator_audit.isolated_configuration(summary)
+     commands = json_lines(evidence / "commands.jsonl")
++    allocator_counts = {"verified": 0, "unavailable_process_exited": 0}
++    for command in commands:
++        allocator_counts[allocator_audit.validate_isolated_command(command, allocator_meta)] += 1
++    if allocator_counts != summary.get("allocator_observation_counts") or allocator_counts["verified"] == 0:
++        raise ValueError("allocator observation counts/live proof differ")
++    report["allocator_environment_verification"] = {"configuration": allocator_meta, "command_counts": allocator_counts,
++        "scope": summary.get("allocator_verification_scope")}
+     rows = json_lines(evidence / "tests.jsonl")
+     report["input_sha256"].update({name: digest(evidence / name) for name in ("commands.jsonl", "tests.jsonl")})
+     by_stdout, used_commands, used_logs = {}, set(), set()
+@@ -274,7 +284,8 @@
+             raise ValueError("a runnable case was skipped or retried")
+         argv = [key[0], key[1], "--exact", "--test-threads=1"]
+         command = use_command(f"case-{number:06d}.stdout.log.gz", argv)
+-        for field in ("argv", "pid", "exit_code", "timed_out", "stdout_gzip", "stderr_gzip", "stdout_bytes", "stderr_bytes", "started_utc", "elapsed_seconds"):
++        for field in ("argv", "pid", "exit_code", "timed_out", "stdout_gzip", "stderr_gzip", "stdout_bytes", "stderr_bytes", "started_utc", "elapsed_seconds",
++                      "allocator_environment", "allocator_environment_sha256", "allocator_observation"):
+             if row.get(field) != command.get(field):
+                 raise ValueError(f"case record differs from its original command: {field}")
+         proof = case_stdout_proof(log_path(command, "stdout"), key[1], total, command["stdout_bytes"])
+--- /dev/null
++++ /home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/allocator_environment.py
+@@ -0,0 +1,93 @@
++#!/usr/bin/env python3
++# Copyright 2026 TrillionniumFoundation
++# SPDX-License-Identifier: Apache-2.0
++"""Explicit child-only glibc allocator configuration; never changes parent os.environ."""
++import hashlib,json,os,sys
++from pathlib import Path
++ALLOWED_ARENA_MAX=(1,2,4)
++RUN_SCHEMA="hepta-x230-child-allocator-run/v1"
++LIVE_SCHEMA="hepta-x230-child-allocator-observation/v1"
++def need(value,reason):
++    if not value: raise ValueError(reason)
++def encoded(value):
++    return (json.dumps(value,sort_keys=True,separators=(",",":"))+"\n").encode()
++def digest(value): return hashlib.sha256(encoded(value)).hexdigest()
++def source_sha256(): return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
++def allocator_key(key): return key.startswith("MALLOC_") or key=="GLIBC_TUNABLES"
++def allocator_values(environment):
++    return {key:value for key,value in environment.items() if allocator_key(key)}
++def configured(arena_max=None):
++    if arena_max is None: return {}
++    need(type(arena_max) is int and arena_max in ALLOWED_ARENA_MAX,"unsupported explicit arena maximum")
++    return {"MALLOC_ARENA_MAX":str(arena_max)}
++def checked(environment):
++    need(isinstance(environment,dict),"allocator configuration must be an object")
++    need(not environment or set(environment)=={"MALLOC_ARENA_MAX"},"only explicit MALLOC_ARENA_MAX is admitted")
++    need(not environment or environment["MALLOC_ARENA_MAX"] in {"1","2","4"},"allocator arena maximum differs")
++    return dict(environment)
++def child_environment(base,configuration):
++    """Retain all non-allocator inputs, including a held SSH_AUTH_SOCK."""
++    configuration=checked(configuration)
++    result={key:value for key,value in dict(base).items() if not allocator_key(key)}
++    result.update(configuration)
++    need(allocator_values(result)==configuration,"allocator keys survived clearing")
++    return result
++def platform_receipt():
++    need(sys.platform=="linux","allocator experiment requires the Linux controller")
++    libc=os.confstr("CS_GNU_LIBC_VERSION")
++    need(isinstance(libc,str) and libc.startswith("glibc "),"allocator experiment requires glibc")
++    return {"platform":"linux","libc":libc,"machine":os.uname().machine}
++def run_metadata(configurations,binary_sha256):
++    need(set(configurations)==set(binary_sha256),"allocator/binary variant keys differ")
++    variants={}
++    for label,configuration in configurations.items():
++        configuration=checked(configuration)
++        identity={"binary_sha256":binary_sha256[label],"allocator_environment":configuration}
++        variants[label]={"environment":configuration,"environment_sha256":digest(configuration),
++                         "binary_sha256":binary_sha256[label],"configuration_fingerprint":digest(identity)}
++    return {"schema":RUN_SCHEMA,**platform_receipt(),"helper_sha256":source_sha256(),"variants":variants,
++            "comparison_identity":"binary_sha256+allocator_environment",
++            "same_binary_sha256":set(variants)=={"A","B"} and binary_sha256["A"]==binary_sha256["B"],
++            "parent_environment_modified":False,"allocator_keys_cleared":["MALLOC_*","GLIBC_TUNABLES"],
++            "scope":"X230/glibc controller child; no service/global environment changes; remote workload environment not configured"}
++def process_identity(pid):
++    fields=Path(f"/proc/{pid}/stat").read_text().rsplit(") ",1)[1].split()
++    if fields[0] in {"Z","X"}: raise ProcessLookupError("child already exited")
++    return int(fields[19])
++def observe(pid,birth,configuration,child_env,phase):
++    configuration=checked(configuration)
++    need(process_identity(pid)==birth,"child PID generation changed before environment read")
++    with Path(f"/proc/{pid}/environ").open("rb") as stream: raw=stream.read(1024*1024+1)
++    need(len(raw)<=1024*1024,"child environment exceeds observation bound")
++    selected={}
++    agent_values=[]
++    for part in raw.split(b"\0"):
++        if not part: continue
++        key,separator,value=part.partition(b"=")
++        need(separator==b"=","invalid child environment entry")
++        if key.startswith(b"MALLOC_") or key==b"GLIBC_TUNABLES":
++            key=key.decode("ascii")
++            need(key not in selected,"duplicate child allocator key")
++            selected[key]=value.decode("utf-8")
++        elif key==b"SSH_AUTH_SOCK":
++            agent_values.append(value)
++    need(process_identity(pid)==birth,"child PID generation changed during environment read")
++    need(selected==configuration,"actual child allocator environment differs")
++    expected_agent=child_env.get("SSH_AUTH_SOCK")
++    expected_values=[] if expected_agent is None else [os.fsencode(expected_agent)]
++    need(agent_values==expected_values,"held SSH agent was removed or changed in child environment")
++    return {"schema":LIVE_SCHEMA,"status":"verified","pid":pid,"birth_ticks":birth,"phase":phase,
++            "requested":configuration,"observed":selected,"environment_sha256":digest(selected),
++            "ssh_auth_sock_present":expected_agent is not None,
++            "held_ssh_agent_preserved":expected_agent is not None,
++            "source":"same-PID/start-ticks /proc/PID/environ","full_environment_retained":False}
++def command_observation(process,configuration,child_env):
++    """Fast libtests may exit before /proc is readable; never rerun a test for a snapshot."""
++    try:
++        birth=process_identity(process.pid)
++        return observe(process.pid,birth,configuration,child_env,"after-direct-Popen")
++    except (FileNotFoundError,ProcessLookupError):
++        need(process.poll() is not None,"live child environment was unexpectedly unavailable")
++        return {"schema":LIVE_SCHEMA,"status":"unavailable_process_exited","pid":process.pid,
++                "phase":"after-direct-Popen","reason":"child exited before a complete live snapshot",
++                "binding":"explicit Popen(env=...) recorded separately; no automatic retry"}
+--- /dev/null
++++ /home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/allocator_environment_audit.py
+@@ -0,0 +1,85 @@
++#!/usr/bin/env python3
++# Copyright 2026 TrillionniumFoundation
++# SPDX-License-Identifier: Apache-2.0
++"""Independent validation of allocator evidence; does not import launcher construction code."""
++import hashlib,json,re
++from pathlib import Path
++RUN_SCHEMA="hepta-x230-child-allocator-run/v1"
++LIVE_SCHEMA="hepta-x230-child-allocator-observation/v1"
++def need(value,reason):
++    if not value: raise ValueError(reason)
++def digest(value):
++    return hashlib.sha256((json.dumps(value,sort_keys=True,separators=(",",":"))+"\n").encode()).hexdigest()
++def valid_environment(environment):
++    need(isinstance(environment,dict),"allocator environment missing")
++    need(environment=={} or set(environment)=={"MALLOC_ARENA_MAX"} and environment["MALLOC_ARENA_MAX"] in {"1","2","4"},
++         "unexpected allocator key/value; baseline GLIBC_TUNABLES must be absent")
++def validate_metadata(value,binaries,expected_labels):
++    need(value["schema"]==RUN_SCHEMA and value["platform"]=="linux" and value["libc"].startswith("glibc "),"allocator platform/schema differs")
++    need(value["parent_environment_modified"] is False and value["allocator_keys_cleared"]==["MALLOC_*","GLIBC_TUNABLES"],"allocator isolation policy differs")
++    need(value["comparison_identity"]=="binary_sha256+allocator_environment","configuration comparison identity differs")
++    need(set(value["variants"])==set(expected_labels)==set(binaries),"allocator variant set differs")
++    helper=Path(__file__).with_name("allocator_environment.py")
++    need(value["helper_sha256"]==hashlib.sha256(helper.read_bytes()).hexdigest(),"allocator launcher helper changed")
++    for label,variant in value["variants"].items():
++        env=variant["environment"];valid_environment(env)
++        need(variant["environment_sha256"]==digest(env),"allocator environment hash differs")
++        need(variant["binary_sha256"]==binaries[label],"allocator binary binding differs")
++        need(variant["configuration_fingerprint"]==digest({"binary_sha256":binaries[label],"allocator_environment":env}),"configuration fingerprint differs")
++    if set(expected_labels)=={"A","B"}:
++        need(value["variants"]["A"]["environment"]=={},"baseline allocator environment is not clean")
++        need(value["variants"]["B"]["environment"]!={},"candidate allocator configuration missing")
++        need(value["same_binary_sha256"] is (binaries["A"]==binaries["B"]),"same-binary label differs")
++        need(value["variants"]["A"]["configuration_fingerprint"]!=value["variants"]["B"]["configuration_fingerprint"],"A/B configuration identities collapsed")
++    else:
++        need(expected_labels=={"candidate"} and value["variants"]["candidate"]["environment"]!={},"selected allocator configuration missing")
++    return value
++def validate_observation(value,environment,pid,birth=None,agent_required=None):
++    need(value["schema"]==LIVE_SCHEMA and value["status"]=="verified","controller environment was not observed")
++    need(value["pid"]==pid and type(value["birth_ticks"]) is int and value["birth_ticks"]>0,"observed process identity differs")
++    if birth is not None: need(value["birth_ticks"]==birth,"observed PID generation differs")
++    need(value["requested"]==value["observed"]==environment,"observed allocator environment differs from configured arm")
++    valid_environment(value["observed"])
++    need(value["environment_sha256"]==digest(environment),"observed allocator hash differs")
++    need(value["full_environment_retained"] is False,"full process environment must not be retained")
++    need(value["source"]=="same-PID/start-ticks /proc/PID/environ","environment evidence source differs")
++    need(type(value["ssh_auth_sock_present"]) is bool and value["held_ssh_agent_preserved"] is value["ssh_auth_sock_present"],"SSH environment preservation differs")
++    if agent_required is not None:
++        need(value["ssh_auth_sock_present"] is agent_required,"held SSH agent presence differs")
++def validate_abba(report,kind):
++    need(kind in {"cancel","native"},"unknown allocator ABBA kind")
++    meta=validate_metadata(report["allocator_configuration"],report["binary_sha256"],{"A","B"})
++    count=0
++    for row in report["rounds"]:
++        arm=row["arm"] if kind=="cancel" else row["version"]
++        env=meta["variants"][arm]["environment"]
++        starts=("startup",) if kind=="cancel" else ("startup","restart_startup")
++        for key in starts:
++            startup=row[key]
++            validate_observation(startup["allocator_environment"],env,startup["pid"],startup["birth_ticks"],kind=="native")
++            need(startup["allocator_environment"]["phase"]=="after-native-initialize","environment was observed after timing began")
++            count+=1
++    return {"verified":True,"controllers_with_live_environment":count,"configuration":meta,
++            "same_binary_configuration_comparison":meta["same_binary_sha256"]}
++def validate_recovery(report):
++    meta=validate_metadata(report["allocator_configuration"],{"candidate":report["candidate_sha256"]},{"candidate"})
++    env=meta["variants"]["candidate"]["environment"]
++    for key in ("first_startup","after_crash_startup","after_cancel_startup"):
++        startup=report[key]
++        validate_observation(startup["allocator_environment"],env,startup["pid"],startup["birth_ticks"],True)
++        need(startup["allocator_environment"]["phase"]=="after-native-initialize","recovery environment observation phase differs")
++    return {"verified":True,"controllers_with_live_environment":3,"configuration":meta}
++def isolated_configuration(summary):
++    return validate_metadata(summary["allocator_configuration"],{"candidate":None},{"candidate"})
++def validate_isolated_command(command,meta):
++    environment=meta["variants"]["candidate"]["environment"]
++    need(command["allocator_environment"]==environment and command["allocator_environment_sha256"]==digest(environment),"libtest explicit child environment differs")
++    value=command["allocator_observation"]
++    if value.get("status")=="verified":
++        validate_observation(value,environment,command["pid"])
++        need(value["phase"]=="after-direct-Popen","isolated observation phase differs")
++        return "verified"
++    need(value["schema"]==LIVE_SCHEMA and value["status"]=="unavailable_process_exited" and value["pid"]==command["pid"]
++         and value["phase"]=="after-direct-Popen" and command["exit_code"]==0,
++         "unavailable libtest environment is not an observed child-exit race")
++    return "unavailable_process_exited"
+--- /dev/null
++++ /home/qian/hepta-runtime-optimization-20261103-r15/measurement-tools/allocator_environment_selftest.py
+@@ -0,0 +1,142 @@
++#!/usr/bin/env python3
++# Copyright 2026 TrillionniumFoundation
++# SPDX-License-Identifier: Apache-2.0
++"""Local Python-child environment tests and synthetic analyzer schema checks; no benchmark."""
++import argparse,copy,datetime,hashlib,json,os,socket,sys,tempfile
++from pathlib import Path
++from unittest import mock
++import allocator_environment as allocator
++import allocator_environment_audit as audit
++import run_cancel_responsiveness as cancel
++import run_native_observation as native
++import run_isolated_tests as isolated
++import analyze_cancel_responsiveness as analyze_cancel
++import analyze_native_observation as analyze_native
++import verify_cancel_recovery as verify_recovery
++def need(value,reason):
++    if not value: raise RuntimeError(reason)
++def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
++def synthetic_observation(startup,environment,agent):
++    return {"schema":audit.LIVE_SCHEMA,"status":"verified","pid":startup["pid"],"birth_ticks":startup["birth_ticks"],
++            "phase":"after-native-initialize","requested":environment,"observed":environment,
++            "environment_sha256":audit.digest(environment),"ssh_auth_sock_present":agent,
++            "held_ssh_agent_preserved":agent,"source":"same-PID/start-ticks /proc/PID/environ","full_environment_retained":False}
++def main():
++    parser=argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--output",type=Path,required=True)
++    args=parser.parse_args()
++    report={"schema":"hepta-r15-allocator-environment-selftest/v1","success":False,
++            "started_utc":datetime.datetime.now(datetime.timezone.utc).isoformat(),"cases":[],
++            "formal_benchmarks_run":0,"rust_tests_run":0,"compilation_started":False,
++            "remote_operations":0,"production_environment_changes":0,
++            "synthetic_fixture_scope":"Analyzer configuration-schema acceptance only; altered in-memory copies are not measurement evidence.",
++            "fixture_sha256":{}}
++    try:
++        original=dict(os.environ)
++        with tempfile.TemporaryDirectory(prefix="hepta-r15-allocator-env-selftest-") as temporary:
++            root=Path(temporary)
++            stub=root/"mcp_stub"
++            stub.write_text("#!/usr/bin/python3\nimport json,sys\nfor line in sys.stdin:\n message=json.loads(line)\n if 'id' in message:\n  result={'protocolVersion':'2025-03-26','serverInfo':{'name':'local-python-env-stub','version':'1'},'capabilities':{}}\n  print(json.dumps({'jsonrpc':'2.0','id':message['id'],'result':result}),flush=True)\n")
++            stub.chmod(0o700)
++            socket_path=root/"agent-fixture"
++            held=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
++            held.bind(str(socket_path))
++            try:
++                pollution={"MALLOC_ARENA_MAX":"99","MALLOC_TRIM_THRESHOLD_":"123","MALLOC_CHECK_":"3",
++                           "GLIBC_TUNABLES":"glibc.malloc.arena_max=99","SSH_AUTH_SOCK":str(socket_path)}
++                with mock.patch.dict(os.environ,pollution):
++                    dirty=dict(os.environ)
++                    for index,maximum in enumerate((None,1,2,4)):
++                        selected=allocator.configured(maximum)
++                        clean=allocator.child_environment(dirty,selected)
++                        need(allocator.allocator_values(clean)==selected,"parent allocator pollution survived")
++                        need(clean["SSH_AUTH_SOCK"]==str(socket_path) and dirty==dict(os.environ),"held agent or parent changed")
++                        directory=root/f"cancel-{index}"
++                        directory.mkdir()
++                        controller=cancel.Controller(stub,root/"unused-config",root,directory,1,allocator_values=selected)
++                        try:
++                            audit.validate_observation(controller.startup["allocator_environment"],selected,
++                                                       controller.child.pid,controller.birth,False)
++                            need(controller.startup["server_info"]["name"]=="local-python-env-stub","fake MCP response stream contaminated")
++                        finally:
++                            shutdown=controller.close()
++                        need(shutdown["exit_code"]==0 and shutdown["unmatched"]==0 and shutdown["reader_error"] is None,"cancel stub did not close cleanly")
++                        directory=root/f"native-{index}"
++                        directory.mkdir()
++                        controller=native.bench.Controller(stub,root/"unused-config",root/"unused-profile",directory,1,allocator_values=selected)
++                        try:
++                            audit.validate_observation(controller.startup["allocator_environment"],selected,
++                                                       controller.child.pid,controller.birth,True)
++                            need(controller.startup["server_info"]["name"]=="local-python-env-stub","native MCP response stream contaminated")
++                        finally:
++                            shutdown=controller.close()
++                        need(shutdown["exit_code"]==0 and shutdown["unmatched_responses"]==0 and shutdown["reader_error"] is None,"native stub did not close cleanly")
++                        output=root/f"isolated-{index}"
++                        output.mkdir()
++                        program="import json,os,time; print(json.dumps({k:v for k,v in os.environ.items() if k.startswith('MALLOC_') or k=='GLIBC_TUNABLES'}),flush=True); time.sleep(0.1)"
++                        result,text=isolated.command([sys.executable,"-c",program],output,"environment",10,True,allocator_values=selected)
++                        need(result["exit_code"]==0 and json.loads(text)==selected,"direct isolated child environment differs")
++                        audit.validate_observation(result["allocator_observation"],selected,result["pid"],agent_required=True)
++                        report["cases"].append({"case":"child-environment-"+("default" if maximum is None else str(maximum)),
++                                                "passed":True,"configuration":selected,"controller_paths_checked":["cancel","native"],
++                                                "isolated_direct_child_checked":True,"mcp_stdout_clean":True})
++                    need(dict(os.environ)==dirty,"environment constructor modified parent")
++            finally:
++                held.close()
++            need(dict(os.environ)==original,"temporary test pollution was not restored")
++        fixtures={
++          "cancel":Path("/home/qian/hepta-runtime-optimization-20261103-r14/cancel-r13-r14-01/report.json"),
++          "native":Path("/home/qian/hepta-runtime-optimization-20261103-r14/native-r11-r14-01/report.json"),
++          "recovery":Path("/home/qian/hepta-runtime-optimization-20261103-r12/r14-candidate-cancel-recovery-01/report.json")}
++        for kind,path in fixtures.items():
++            raw=path.read_bytes()
++            report["fixture_sha256"][str(path)]=hashlib.sha256(raw).hexdigest()
++            value=json.loads(raw)
++            selected=allocator.configured(1)
++            if kind in {"cancel","native"}:
++                candidate=value["binary_sha256"]["B"]
++                value["binary_sha256"]={"A":candidate,"B":candidate}
++                value["allocator_configuration"]=allocator.run_metadata({"A":{},"B":selected},value["binary_sha256"])
++                for row in value["rounds"]:
++                    arm=row["arm"] if kind=="cancel" else row["version"]
++                    env={} if arm=="A" else selected
++                    for key in (("startup",) if kind=="cancel" else ("startup","restart_startup")):
++                        row[key]["allocator_environment"]=synthetic_observation(row[key],env,kind=="native")
++                if kind=="cancel":
++                    result=analyze_cancel.analyze(value,"0"*64)
++                else:
++                    result=analyze_native.analyze(json.dumps(value).encode())
++                proof=result["allocator_environment_verification"]
++                need(proof["same_binary_configuration_comparison"] is True,"same binary/configuration comparison rejected")
++                bad=copy.deepcopy(value)
++                row=next(x for x in bad["rounds"] if x.get("arm",x.get("version"))=="B")
++                row["startup"]["allocator_environment"]["observed"]={}
++                rejected=False
++                try:
++                    if kind=="cancel": analyze_cancel.analyze(bad,"0"*64)
++                    else: analyze_native.analyze(json.dumps(bad).encode())
++                except ValueError:
++                    rejected=True
++                need(rejected,"analyzer accepted stripped candidate allocator environment")
++                report["cases"].append({"case":kind+"-same-binary-analyzer","passed":True,"same_binary_accepted":True,
++                                        "stripped_candidate_rejected":True,"fixture":"synthetic in-memory schema case only"})
++            else:
++                value["allocator_configuration"]=allocator.run_metadata({"candidate":selected},{"candidate":value["candidate_sha256"]})
++                for key in ("first_startup","after_crash_startup","after_cancel_startup"):
++                    value[key]["allocator_environment"]=synthetic_observation(value[key],selected,True)
++                result=verify_recovery.verify(json.dumps(value).encode())
++                need(result["allocator_environment_verification"]["controllers_with_live_environment"]==3,"recovery verifier missed restart environment")
++                report["cases"].append({"case":"recovery-three-controller-schema","passed":True,
++                                        "fixture":"synthetic in-memory schema case only"})
++        report["success"]=True
++    except BaseException as error:
++        report["error"]={"type":type(error).__name__,"reason":str(error)[:2000]}
++    report["finished_utc"]=datetime.datetime.now(datetime.timezone.utc).isoformat()
++    report["selftest_sha256"]=sha(__file__)
++    report["environment_helper_sha256"]=allocator.source_sha256()
++    with args.output.open("x") as stream: json.dump(report,stream,indent=2);stream.write("\n")
++    print(json.dumps({"success":report["success"],"report":str(args.output),"sha256":sha(args.output),
++                      "cases":report["cases"],"error":report.get("error")}),flush=True)
++    return 0 if report["success"] else 1
++if __name__=="__main__":
++    raise SystemExit(main())

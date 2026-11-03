@@ -1,0 +1,197 @@
+{
+  "cases": [
+    {
+      "argv_preserved": true,
+      "name": "default",
+      "observed": {
+        "MALLOC_ARENA_MAX": "1"
+      },
+      "passed": true,
+      "pid_preserved": true,
+      "stdout_only_child_json": true,
+      "supplied": {}
+    },
+    {
+      "argv_preserved": true,
+      "name": "explicit",
+      "observed": {
+        "MALLOC_ARENA_MAX": "4"
+      },
+      "passed": true,
+      "pid_preserved": true,
+      "stdout_only_child_json": true,
+      "supplied": {
+        "MALLOC_ARENA_MAX": "4"
+      }
+    },
+    {
+      "argv_preserved": true,
+      "name": "explicit-empty",
+      "observed": {
+        "MALLOC_ARENA_MAX": ""
+      },
+      "passed": true,
+      "pid_preserved": true,
+      "stdout_only_child_json": true,
+      "supplied": {
+        "MALLOC_ARENA_MAX": ""
+      }
+    },
+    {
+      "argv_preserved": true,
+      "name": "explicit-invalid",
+      "observed": {
+        "MALLOC_ARENA_MAX": "caller-value"
+      },
+      "passed": true,
+      "pid_preserved": true,
+      "stdout_only_child_json": true,
+      "supplied": {
+        "MALLOC_ARENA_MAX": "caller-value"
+      }
+    },
+    {
+      "argv_preserved": true,
+      "name": "tunables-empty",
+      "observed": {
+        "GLIBC_TUNABLES": "",
+        "MALLOC_ARENA_MAX": "1"
+      },
+      "passed": true,
+      "pid_preserved": true,
+      "stdout_only_child_json": true,
+      "supplied": {
+        "GLIBC_TUNABLES": ""
+      }
+    },
+    {
+      "argv_preserved": true,
+      "name": "unrelated-tunable",
+      "observed": {
+        "GLIBC_TUNABLES": "glibc.malloc.trim_threshold=131072",
+        "MALLOC_ARENA_MAX": "1"
+      },
+      "passed": true,
+      "pid_preserved": true,
+      "stdout_only_child_json": true,
+      "supplied": {
+        "GLIBC_TUNABLES": "glibc.malloc.trim_threshold=131072"
+      }
+    },
+    {
+      "argv_preserved": true,
+      "name": "tunable-arena",
+      "observed": {
+        "GLIBC_TUNABLES": "glibc.malloc.arena_max=2"
+      },
+      "passed": true,
+      "pid_preserved": true,
+      "stdout_only_child_json": true,
+      "supplied": {
+        "GLIBC_TUNABLES": "glibc.malloc.arena_max=2"
+      }
+    },
+    {
+      "argv_preserved": true,
+      "name": "tunable-empty-arena",
+      "observed": {
+        "GLIBC_TUNABLES": "glibc.malloc.arena_max="
+      },
+      "passed": true,
+      "pid_preserved": true,
+      "stdout_only_child_json": true,
+      "supplied": {
+        "GLIBC_TUNABLES": "glibc.malloc.arena_max="
+      }
+    },
+    {
+      "argv_preserved": true,
+      "name": "both-explicit",
+      "observed": {
+        "GLIBC_TUNABLES": "glibc.malloc.arena_max=1",
+        "MALLOC_ARENA_MAX": "4"
+      },
+      "passed": true,
+      "pid_preserved": true,
+      "stdout_only_child_json": true,
+      "supplied": {
+        "GLIBC_TUNABLES": "glibc.malloc.arena_max=1",
+        "MALLOC_ARENA_MAX": "4"
+      }
+    },
+    {
+      "argv_preserved": true,
+      "name": "tunable-middle",
+      "observed": {
+        "GLIBC_TUNABLES": "glibc.malloc.trim_threshold=131072:glibc.malloc.arena_max=4:glibc.malloc.top_pad=131072"
+      },
+      "passed": true,
+      "pid_preserved": true,
+      "stdout_only_child_json": true,
+      "supplied": {
+        "GLIBC_TUNABLES": "glibc.malloc.trim_threshold=131072:glibc.malloc.arena_max=4:glibc.malloc.top_pad=131072"
+      }
+    },
+    {
+      "argv_preserved": true,
+      "name": "tunable-last",
+      "observed": {
+        "GLIBC_TUNABLES": "glibc.malloc.top_pad=131072:glibc.malloc.arena_max=2"
+      },
+      "passed": true,
+      "pid_preserved": true,
+      "stdout_only_child_json": true,
+      "supplied": {
+        "GLIBC_TUNABLES": "glibc.malloc.top_pad=131072:glibc.malloc.arena_max=2"
+      }
+    },
+    {
+      "argv_preserved": true,
+      "name": "similar-key",
+      "observed": {
+        "GLIBC_TUNABLES": "glibc.malloc.arena_maximum=4",
+        "MALLOC_ARENA_MAX": "1"
+      },
+      "passed": true,
+      "pid_preserved": true,
+      "stdout_only_child_json": true,
+      "supplied": {
+        "GLIBC_TUNABLES": "glibc.malloc.arena_maximum=4"
+      }
+    },
+    {
+      "exit_code": 64,
+      "name": "missing-arguments",
+      "passed": true,
+      "stderr": "usage: hepta-runtime-x230-glibc.sh /absolute/hepta-runtime [arguments...]\n",
+      "stdout_empty": true
+    },
+    {
+      "exit_code": 64,
+      "name": "relative-executable",
+      "passed": true,
+      "stderr": "x230 glibc profile: executable path must be absolute\n",
+      "stdout_empty": true
+    },
+    {
+      "exit_code": 66,
+      "name": "missing-executable",
+      "passed": true,
+      "stderr": "x230 glibc profile: executable is missing or not executable\n",
+      "stdout_empty": true
+    }
+  ],
+  "finished_utc": "2026-11-03T22:02:11.005354+00:00",
+  "loader_precedence": {
+    "bytes": 8784,
+    "path": "/home/qian/hepta-runtime-optimization-20261103-r15/configuration/loader-precedence.json",
+    "sha256": "2b21e5d5b00a2590b96a0a456764e3f4691822a456754284b8544cbd1090d1b0"
+  },
+  "policy_sha256": "2f0ba167b73ea00b684d0f0f56f6e8d66832bd6bd72db848d89b6c8ca646a3ac",
+  "rust_runtime_launched": false,
+  "schema": "hepta-r15-wrapper-validation/v1",
+  "started_utc": "2026-11-03T22:02:10.571813+00:00",
+  "success": true,
+  "validator_sha256": "ff17facbeb34422ade9794d54051577e5ceb48b7ad42728b85094a6b076bc4ef",
+  "wrapper_sha256": "7814b30921098756eb97624ee93876b538b11ce5dc3093dc52bd0e6c9335b525"
+}
