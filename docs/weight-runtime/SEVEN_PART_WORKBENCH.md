@@ -99,7 +99,7 @@ cannot recover the original order by assumption.
 
 ## Qualification on 2026-11-03
 
-The code ran on the existing Pocket4 environment with Python 3.12,
+The code ran on the existing Pocket4 environment with Python 3.14.4,
 PyTorch 2.13.0+rocm7.14.0, safetensors 0.8.0 and NumPy 2.4.1. Model tensors and
 forwards used CPU FP32. GPU numerical parity is not claimed.
 
@@ -180,6 +180,15 @@ preserved. These new mechanism candidates and head baselines are development
 artifacts, not new members of that frozen family. The source evaluator keeps its
 timing, completeness, coverage, support, fee-stress and statistical requirements.
 Pending or incomplete future evidence cannot become an improvement/adoption claim.
+
+The companion exporter was executed once in a separately pinned research release.
+The complete current replay contained three original commands, all CENSORED, and
+zero observed trades. Its state remained PENDING. Export and independent runtime
+import succeeded while original plan/configuration/head hashes stayed unchanged.
+A second, cost-aware import attached 16 deduplicated operation records, including
+one explicitly unresolved cost-aggregation request with unknown consumption.
+Shared historical encoding was counted once. End-to-end wall time and Astra
+tokens remain unknown; no speedup is inferred from missing measurements.
 
 Generic code and tests belong in Git. Original prompts, labels, request/command
 IDs, weights and full host receipts remain in the private experiment directory.
