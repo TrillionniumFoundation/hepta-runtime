@@ -31,6 +31,11 @@ jobs:
           set -euo pipefail
           evidence="$RUNNER_TEMP/rea-real-gdb"
           mkdir -p "$evidence"
+          # Ubuntu 24.04 GitHub runners do not ship GDB preinstalled.
+          # The package and exact installed version become part of evidence.
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gdb
+          dpkg-query -W -f='${Package} ${Version} ${Architecture}\\n' gdb > "$evidence/gdb-apt-identity.txt"
           gcc --version | head -n 1 > "$evidence/gcc-version.txt"
           gdb --version | head -n 1 > "$evidence/gdb-version.txt"
           cat > "$evidence/fixture.c" <<'C'
