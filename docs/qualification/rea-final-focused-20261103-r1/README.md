@@ -22,6 +22,6 @@ The error identifies the total deadline, not its exact phase. Earlier lock waits
 
 ## Separate environments
 
-This run used the host's default ext4 temporary storage. Later tmpfs attempts use separately declared roots with identical source, budgets and assertions. Their functional results do not erase this ext4 failure or prove physical-disk latency/power-loss durability. Different storage and execution times are not a controlled causal performance experiment.
+This run used the host's default ext4 temporary storage. Later tmpfs attempts use separately declared roots. The production audit/archive code, query budgets and relevant concurrency assertions remain unchanged; the final tmpfs matrix additionally includes the separately documented no-default test-fixture state-path correction. Their functional results do not erase this ext4 failure or prove physical-disk latency/power-loss durability. Different storage and execution times are not a controlled causal performance experiment.
 
 Actual operator-engine and retained-session disk receipts remain separate. Committed-tree validation also requires #84's GitHub exact-head and prospective-merge checks. Any subsequent single traced/backtrace diagnostic invocation has its own instrumentation and actual outcome; it cannot retroactively qualify this run.
