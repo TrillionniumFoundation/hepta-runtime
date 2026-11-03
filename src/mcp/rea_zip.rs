@@ -21,7 +21,97 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::json;
 use std::collections::HashSet;
 
-use super::{read_u16, read_u32, slice_at, HeaderInfo};
+use super::{read_u16, read_u32, read_u64, slice_at, HeaderInfo};
+
+const APK_SIG_MAGIC: &[u8; 16] = b"APK Sig Block 42";
+
+#[derive(Default)]
+struct ApkSignatureStructure {
+    present: bool,
+    id_pairs: usize,
+    v2_id: bool,
+    v3_id: bool,
+    v31_id: bool,
+}
+
+/// Inspect only the APK Signing Block *container* directly before the ZIP
+/// central directory. This cannot authenticate signatures, signers, digests,
+/// ZIP member content or Android package identity; any attacker can forge
+/// these IDs and lengths. Never report a valid APK signature from this parser.
+fn apk_signing_block_structure(
+    data: &[u8],
+    central_start: usize,
+    last_local_end: usize,
+) -> Result<ApkSignatureStructure> {
+    if central_start < 24
+        || slice_at(data, central_start - APK_SIG_MAGIC.len(), APK_SIG_MAGIC.len())?
+            != APK_SIG_MAGIC
+    {
+        return Ok(ApkSignatureStructure::default());
+    }
+
+    let footer = central_start - 24;
+    let declared = usize::try_from(read_u64(data, footer, true)?)
+        .map_err(|_| anyhow!("APK signing block size exceeds host offsets"))?;
+    if declared < 24 {
+        bail!("APK signing block is smaller than its footer");
+    }
+    let total = declared
+        .checked_add(8)
+        .ok_or_else(|| anyhow!("APK signing block total size overflow"))?;
+    let start = central_start
+        .checked_sub(total)
+        .ok_or_else(|| anyhow!("APK signing block points before beginning of archive"))?;
+    if start < last_local_end {
+        bail!("APK signing block overlaps a ZIP local member");
+    }
+    if usize::try_from(read_u64(data, start, true)?)? != declared {
+        bail!("APK signing block header and footer sizes differ");
+    }
+
+    let mut cursor = start + 8;
+    let mut seen_ids = HashSet::new();
+    let mut info = ApkSignatureStructure {
+        present: true,
+        ..ApkSignatureStructure::default()
+    };
+    while cursor < footer {
+        if info.id_pairs >= 4096 {
+            bail!("APK signing block exceeds ID-value pair budget");
+        }
+        if footer - cursor < 12 {
+            bail!("APK signing block has a truncated ID-value header");
+        }
+        let entry_bytes = usize::try_from(read_u64(data, cursor, true)?)?;
+        if entry_bytes < 4 {
+            bail!("APK signing block ID-value entry is shorter than its ID");
+        }
+        let end = cursor
+            .checked_add(8)
+            .and_then(|n| n.checked_add(entry_bytes))
+            .ok_or_else(|| anyhow!("APK signing block pair length overflow"))?;
+        if end > footer {
+            bail!("APK signing block ID-value pair exceeds footer");
+        }
+        let id = read_u32(data, cursor + 8, true)?;
+        if !seen_ids.insert(id) {
+            bail!("duplicate APK signing block ID is ambiguous");
+        }
+        info.id_pairs += 1;
+        match id {
+            0x7109_871a => info.v2_id = true,
+            0xf053_68c0 => info.v3_id = true,
+            0x1b93_ad61 => info.v31_id = true,
+            _ => {}
+        }
+        cursor = end;
+    }
+    if cursor != footer || info.id_pairs == 0 {
+        bail!("APK signing block must contain bounded ID-value pairs");
+    }
+    Ok(info)
+}
+
 
 pub(super) fn parse_zip(data: &[u8]) -> Result<HeaderInfo> {
 	if data.len() < 22 {
@@ -73,6 +163,7 @@ pub(super) fn parse_zip(data: &[u8]) -> Result<HeaderInfo> {
 		slice_at(data, cursor, 46)?;
 		let flags = read_u16(data, cursor + 8, true)?;
 		let method = read_u16(data, cursor + 10, true)?;
+		let crc = read_u32(data, cursor + 16, true)?;
 		let compressed = usize::try_from(read_u32(data, cursor + 20, true)?)?;
 		let uncompressed = read_u32(data, cursor + 24, true)?;
 		let name_len = usize::from(read_u16(data, cursor + 28, true)?);
@@ -121,6 +212,22 @@ pub(super) fn parse_zip(data: &[u8]) -> Result<HeaderInfo> {
 		{
 			bail!("ZIP local/central flags or compression differ");
 		}
+		let local_crc = read_u32(data, local_offset + 14, true)?;
+		let local_compressed = read_u32(data, local_offset + 18, true)?;
+		let local_uncompressed = read_u32(data, local_offset + 22, true)?;
+		if flags & 0x8 == 0 {
+			if local_crc != crc
+				|| usize::try_from(local_compressed)? != compressed
+				|| local_uncompressed != uncompressed
+			{
+				bail!("ZIP local/central CRC or size declarations differ");
+			}
+		} else if (local_crc != 0 && local_crc != crc)
+			|| (local_compressed != 0 && usize::try_from(local_compressed)? != compressed)
+			|| (local_uncompressed != 0 && local_uncompressed != uncompressed)
+		{
+			bail!("ZIP data-descriptor mode has conflicting local declarations");
+		}
 		let local_name_len = usize::from(read_u16(data, local_offset + 26, true)?);
 		let local_extra_len = usize::from(read_u16(data, local_offset + 28, true)?);
 		if name != slice_at(data, local_offset + 30, local_name_len)? {
@@ -168,6 +275,7 @@ pub(super) fn parse_zip(data: &[u8]) -> Result<HeaderInfo> {
 		}
 		previous_end = end;
 	}
+	let signing = apk_signing_block_structure(data, start, previous_end)?;
 	Ok(HeaderInfo {
 		format: "zip",
 		architecture: None,
@@ -182,11 +290,17 @@ pub(super) fn parse_zip(data: &[u8]) -> Result<HeaderInfo> {
 			"android_dex_entries":dex_count,
 			"legacy_signature_entry_count":legacy_signature_count,
 			"apk_structure_hint_only":manifest && (resources || dex_count > 0),
+			"apk_signing_block_structure_present":signing.present,
+			"apk_signing_block_id_pairs":signing.id_pairs,
+			"apk_v2_scheme_id_present":signing.v2_id,
+			"apk_v3_scheme_id_present":signing.v3_id,
+			"apk_v31_scheme_id_present":signing.v31_id,
 		}),
 		limitations: vec![
 			"Classic ZIP structural preview only; ZIP64, multi-volume and appended data unsupported",
 			"ZIP compression, checksum, data descriptor and uncompressed contents not verified",
-			"APK signature, Android manifest/resource semantics and APK identity NOT verified",
+			"APK signing block identifiers are structural hints only, NOT cryptographic signature verification",
+			"APK v1/v2/v3/v3.1/v4 signatures, signer identity, Android manifest/resource semantics and APK identity NOT verified",
 		],
 	})
 }
