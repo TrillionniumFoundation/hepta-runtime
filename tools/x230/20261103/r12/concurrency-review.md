@@ -31,8 +31,10 @@ error before reading the receipt; formerly a bad receipt could fail first. With 
 permit available, receipt errors still precede intent preparation/append failures and
 retain their original message. The intent timestamp is now captured when the blocking
 preparation runs, rather than before capacity backpressure. Byte-identical audit
-timestamps are not claimed. A preparation panic is converted to the existing worker
-failure result before any remote operation.
+timestamps are not claimed. When using an unwinding test/build profile, a preparation panic is converted to the
+existing worker failure result before any remote operation. The release profile
+retains `panic = "abort"`, so a panic terminates the controller and is not caught
+as a worker failure result.
 
 Eight permits bound submitted cancellation preparation and retained continuation
 records, not all incoming request objects or the shared Tokio blocking pool. Compared

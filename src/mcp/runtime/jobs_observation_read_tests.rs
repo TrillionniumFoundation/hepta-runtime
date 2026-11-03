@@ -219,7 +219,7 @@ async fn observation_reader_preserves_real_receipt_and_validation_errors() {
 	.unwrap_err();
 	assert_eq!(format!("{error:#}"), expected);
 	assert_eq!(slots.available_permits(), 1);
-	let error = run_observation_record_read(slots.clone(), || {
+	let error = run_observation_record_read::<JobRecord>(slots.clone(), || {
 		panic!("test observation worker must not become a successful read")
 	})
 	.await

@@ -23,7 +23,11 @@ use super::ssh::{run_jobctl, run_python_json};
 
 #[path = "jobs_record_projection.rs"]
 mod record_projection;
-use record_projection::BorrowedJobString;
+use record_projection::{BorrowedJobString, ValidatedJobString};
+
+#[path = "jobs_operation_record.rs"]
+mod operation_record;
+use operation_record::{check_operation_ref, OperationRecord, OperationRecordRef};
 
 #[path = "jobs_persistence.rs"]
 mod persistence;
@@ -164,43 +168,58 @@ pub struct ProcessListPageParams {
 // inventories use the same field list, including every validation/default,
 // without allocating private command strings that their projection discards.
 macro_rules! job_record_schema {
-	($name:ident $(<$parameter:ident>)?, $text:ident $(, $attribute:meta)?) => {
+	($visibility:vis $name:ident $(<$parameter:ident>)?, $text:ident, $private_text:ident $(, $attribute:meta)?) => {
 		#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 		$(#[$attribute])?
-		struct $name $(<$parameter>)? {
+		$visibility struct $name $(<$parameter>)? {
 			#[serde(default)]
-			execution_mode: ExecutionMode,
+			$visibility execution_mode: ExecutionMode,
 			#[serde(default)]
-			system_jobctl: bool,
-			id: String,
-			host: String,
-			ssh_target: $text,
-			unit: $text,
-			remote_job_dir: $text,
-			executable: $text,
-			args: Vec<$text>,
-			cwd: Option<$text>,
-			env_keys: Vec<$text>,
-			created_unix_ms: u128,
-			idempotency_key: Option<String>,
-			request_fingerprint: u64,
+			$visibility system_jobctl: bool,
+			$visibility id: String,
+			$visibility host: String,
+			$visibility ssh_target: $text,
+			$visibility unit: $text,
+			$visibility remote_job_dir: $text,
+			$visibility executable: $private_text,
+			$visibility args: Vec<$private_text>,
+			$visibility cwd: Option<$private_text>,
+			$visibility env_keys: Vec<$private_text>,
+			$visibility created_unix_ms: u128,
+			$visibility idempotency_key: Option<String>,
+			$visibility request_fingerprint: u64,
 			#[serde(default)]
-			request_digest: Option<$text>,
+			$visibility request_digest: Option<$text>,
 			#[serde(default = "default_launch_state")]
-			launch_state: String,
+			$visibility launch_state: String,
 			#[serde(default)]
-			launch_error: Option<$text>,
+			$visibility launch_error: Option<$private_text>,
 		}
 
 	};
 }
 
-job_record_schema!(JobRecord, String);
+job_record_schema!(JobRecord, String, String);
 job_record_schema!(
 	JobRecordData<Text>,
 	Text,
+	Text,
 	serde(bound(deserialize = "Text: Deserialize<'de>"))
 );
+
+mod operation_record_schema {
+	use super::*;
+
+	// Serde uses the Rust struct name for both top-level and sequence diagnostics.
+	// Keep the owned receipt's name while sharing its complete schema.
+	job_record_schema!(
+		pub(super) JobRecord<Text>,
+		Text,
+		ValidatedJobString,
+		serde(bound(deserialize = "Text: Deserialize<'de>"))
+	);
+}
+type OperationRecordData<Text> = operation_record_schema::JobRecord<Text>;
 
 impl JobRecordData<BorrowedJobString<'_>> {
 	fn into_owned(self) -> JobRecord {
@@ -349,6 +368,7 @@ fn save_record_at(path: &Path, record: &JobRecord) -> Result<()> {
 	Ok(())
 }
 
+#[cfg(test)]
 fn read_record_at(path: &Path, expected_id: &str) -> Result<JobRecord> {
 	read_record_at_with_buffer(path, expected_id, &mut Vec::new())
 }
@@ -371,6 +391,7 @@ macro_rules! job_record_read_buffer {
 	}};
 }
 
+#[cfg(test)]
 fn read_record_at_with_buffer(
 	path: &Path,
 	expected_id: &str,
@@ -480,7 +501,12 @@ job_record_reader!(
 	read_borrowed_record_at_into<'bytes>,
 	JobRecordData<BorrowedJobString<'bytes>>
 );
+job_record_reader!(
+	read_operation_record_at_into<'bytes>,
+	OperationRecordData<BorrowedJobString<'bytes>>
+);
 
+#[cfg(test)]
 fn load_record(id: &str) -> Result<JobRecord> {
 	read_record_at(&record_path(id)?, id)
 		.with_context(|| format!("unknown or invalid durable job `{id}`"))
@@ -2032,6 +2058,7 @@ fn matches_request(record: &JobRecord, digest: &str) -> Result<bool> {
 		.is_ok())
 }
 
+#[cfg(test)]
 fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
 	let record = load_record(&params.job_id)?;
 	check_binding(&record)?;
@@ -2052,10 +2079,10 @@ fn observation_record_read_slots() -> Arc<Semaphore> {
 		.clone()
 }
 
-async fn run_observation_record_read(
+async fn run_observation_record_read<O: Send + 'static>(
 	slots: Arc<Semaphore>,
-	read: impl FnOnce() -> Result<JobRecord> + Send + 'static,
-) -> Result<JobRecord> {
+	read: impl FnOnce() -> Result<O> + Send + 'static,
+) -> Result<O> {
 	// Separate from registry scans, inventories and durable writers so a slow
 	// historical receipt does not occupy their physical work capacity.
 	let permit = slots
@@ -2072,11 +2099,14 @@ async fn run_observation_record_read(
 	.map_err(|_| anyhow::anyhow!("job observation record worker unavailable"))?
 }
 
-async fn check_ref_async(params: &ProcessRefParams) -> Result<JobRecord> {
+async fn check_ref_async(params: &ProcessRefParams) -> Result<OperationRecord> {
 	let params = params.clone();
 	// The complete original decoder and host binding checks run once, before
 	// any remote observation. No cached receipt or new effect is introduced.
-	run_observation_record_read(observation_record_read_slots(), move || check_ref(&params)).await
+	run_observation_record_read(observation_record_read_slots(), move || {
+		check_operation_ref(&params)
+	})
+	.await
 }
 
 struct PreparedAudit {
@@ -3779,11 +3809,12 @@ fn validate_start(params: &ProcessStartParams) -> Result<()> {
 	Ok(())
 }
 
-fn verify_host_binding(
-	record: &JobRecord,
+fn verify_host_binding<'a>(
+	record: impl Into<OperationRecordRef<'a>>,
 	configured_target: &str,
 	configured_state_dir: &str,
 ) -> Result<()> {
+	let record = record.into();
 	let expected_job_dir = format!(
 		"{}/jobs/{}",
 		configured_state_dir.trim_end_matches('/'),
@@ -3795,8 +3826,9 @@ fn verify_host_binding(
 	Ok(())
 }
 
-fn check_binding(record: &JobRecord) -> Result<()> {
-	let host = runtime_config()?.host(&record.host)?;
+fn check_binding<'a>(record: impl Into<OperationRecordRef<'a>>) -> Result<()> {
+	let record = record.into();
+	let host = runtime_config()?.host(record.host)?;
 	verify_host_binding(record, &host.ssh_target, &host.remote_state_dir)?;
 	if host.ssh_target != record.ssh_target || host.execution_mode != record.execution_mode {
 		bail!("host binding changed; refusing to operate an old job");
@@ -3804,9 +3836,13 @@ fn check_binding(record: &JobRecord) -> Result<()> {
 	Ok(())
 }
 
-async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
+async fn status_record<'a>(
+	record: impl Into<OperationRecordRef<'a>>,
+	wait_seconds: u64,
+) -> Result<Value> {
+	let record = record.into();
 	let config = runtime_config()?;
-	let host = config.host(&record.host)?;
+	let host = config.host(record.host)?;
 	check_binding(record)?;
 	if record.system_jobctl {
 		let deadline = tokio::time::Instant::now() + Duration::from_secs(wait_seconds.min(30));
@@ -3838,7 +3874,7 @@ async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 
 /// Public observation routes opt in explicitly. Start/reuse reconciliation
 /// continues to call the unchanged status_record above.
-async fn status_observation(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
+async fn status_observation(record: &OperationRecord, wait_seconds: u64) -> Result<Value> {
 	if !super::ssh::observation_pool_requested() {
 		return status_record(record, wait_seconds).await;
 	}
@@ -4482,7 +4518,7 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 			// Cancellation continues an existing identity even when new effects
 			// are fenced off. Verify the full original receipt before intent,
 			// without acquiring a new owner or introducing a receipt cache.
-			let record = Arc::new(check_ref(&reference)?);
+			let record = Arc::new(check_operation_ref(&reference)?);
 			let intent = prepare_audit(
 				"process_cancel_intent",
 				&reference.host,
@@ -5081,6 +5117,10 @@ mod inventory_async_tests;
 mod observation_read_tests;
 
 #[cfg(all(test, unix))]
+#[path = "jobs_operation_record_tests.rs"]
+mod operation_record_tests;
+
+#[cfg(all(test, unix))]
 #[path = "jobs_inventory_borrowed_tests.rs"]
 mod inventory_borrowed_tests;
 
@@ -5163,3 +5203,7 @@ mod record_comparison_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "jobs_record_read_bench.rs"]
 mod record_read_bench;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_operation_record_bench.rs"]
+mod operation_record_bench;

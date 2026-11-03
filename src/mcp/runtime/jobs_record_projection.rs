@@ -53,3 +53,41 @@ impl<'de> Deserialize<'de> for BorrowedJobString<'de> {
 		deserializer.deserialize_str(StringVisitor)
 	}
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct ValidatedJobString;
+
+impl<'de> Deserialize<'de> for ValidatedJobString {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		struct StringVisitor;
+		impl<'de> Visitor<'de> for StringVisitor {
+			type Value = ValidatedJobString;
+			fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+				formatter.write_str("a string")
+			}
+			fn visit_str<E: serde::de::Error>(self, _value: &str) -> Result<Self::Value, E> {
+				Ok(ValidatedJobString)
+			}
+			fn visit_borrowed_str<E: serde::de::Error>(
+				self,
+				_value: &'de str,
+			) -> Result<Self::Value, E> {
+				Ok(ValidatedJobString)
+			}
+			fn visit_string<E: serde::de::Error>(self, _value: String) -> Result<Self::Value, E> {
+				Ok(ValidatedJobString)
+			}
+		}
+		// serde_json still checks escapes and Unicode. Only the second, retained
+		// copy is avoided; IgnoredAny would incorrectly accept non-string fields.
+		deserializer.deserialize_str(StringVisitor)
+	}
+}
+
+impl serde::Serialize for ValidatedJobString {
+	fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
+		Err(serde::ser::Error::custom(
+			"validated discarded job text cannot be serialized",
+		))
+	}
+}
