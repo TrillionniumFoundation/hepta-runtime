@@ -90,20 +90,24 @@ reader.on("line", (line) => {
 });
 
 let serial = 0;
-function request(method, params) {
-  if (failed) return Promise.reject(failed);
+function requestWithHandle(method, params, timeoutMs = 90000) {
+  if (failed) return { id: null, promise: Promise.reject(failed) };
   const id = ++serial;
-  return new Promise((resolve, reject) => {
+  const promise = new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       pending.delete(id);
       reject(new Error("REA MCP timed out on " + method + "; stderr: " + stderr));
-    }, 90000);
+    }, timeoutMs);
     pending.set(id, {
       resolve: (result) => { clearTimeout(timeout); resolve(result); },
       reject: (error) => { clearTimeout(timeout); reject(error); },
     });
     child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
   });
+  return { id, promise };
+}
+function request(method, params) {
+  return requestWithHandle(method, params).promise;
 }
 function notify(method, params = {}) {
   child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n");
@@ -179,6 +183,53 @@ try {
   if (JSON.stringify(afterCancellationNotification?.tools?.slice(0, 1).map((t) => t.name)) !== JSON.stringify(firstPage)) {
     throw new Error("REA MCP session lost after irrelevant cancellation notification");
   }
+  // Unlike the earlier notification for an absent ID, this targets a
+  // genuinely outstanding client request. A fast response can win the race;
+  // record its actual result and NEVER claim cancellation enforcement from
+  // merely sending the notification. This test also checks recovery of the
+  // same MCP session, not provider task cleanup or remote cancellation.
+  const cancelProbe = requestWithHandle("tools/list", {}, 10000);
+  if (!Number.isInteger(cancelProbe.id)) {
+    throw new Error("cannot create an outstanding reference request");
+  }
+  notify("notifications/cancelled", {
+    requestId: cancelProbe.id,
+    reason: "rea-oracle live-request cancellation probe",
+  });
+  let outstandingCancellation;
+  try {
+    const response = await cancelProbe.promise;
+    if (!Array.isArray(response?.tools)) {
+      throw new Error("REA MCP cancellation probe returned invalid list");
+    }
+    outstandingCancellation = {
+      requestId: cancelProbe.id,
+      outcome: "tools-list-returned",
+      resultToolCount: response.tools.length,
+      cancellationEnforced: false,
+    };
+  } catch (error) {
+    if (error instanceof RpcFailure) {
+      outstandingCancellation = {
+        requestId: cancelProbe.id,
+        outcome: "json-rpc-error",
+        raw: error.envelope,
+        cancellationEnforced: "UNDETERMINED",
+      };
+    } else if (String(error).includes("REA MCP timed out on tools/list")) {
+      outstandingCancellation = {
+        requestId: cancelProbe.id,
+        outcome: "no-response-before-10s",
+        cancellationEnforced: "UNDETERMINED",
+      };
+    } else {
+      throw error;
+    }
+  }
+  const afterLiveCancellation = await request("tools/list", {});
+  if (JSON.stringify(afterLiveCancellation?.tools?.slice(0, 1).map((t) => t.name)) !== JSON.stringify(firstPage)) {
+    throw new Error("REA MCP session lost after canceling an outstanding request");
+  }
   const protocolTrace = {
     fixture: "rea-agents@6.8.0 MCP initial session / error envelopes",
     schemaProfile: { input: inputProfile, output: outputProfile },
@@ -194,7 +245,9 @@ try {
       listAfterRejections: true,
       irrelevantCancellationNotificationSent: true,
       listAfterIrrelevantCancellation: true,
-      actualInFlightCancellationQualified: false,
+      outstandingRequestProbe: outstandingCancellation,
+      listAfterOutstandingRequestCancellation: true,
+      actualProviderInFlightCancellationQualified: false,
     },
   };
   if (JSON.stringify(protocolTrace).length > 256 * 1024 || JSON.stringify(invalidPathResponse).length > 65536) {
