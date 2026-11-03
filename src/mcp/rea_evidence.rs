@@ -289,8 +289,11 @@ fn provider(v: &Value) -> Result<()> {
 	exact_fields(p, &["id", "name", "version"], &[])?;
 	nonempty(field(p, "id")?, "provider.id")?;
 	nonempty(field(p, "name")?, "provider.name")?;
-	if !field(p, "version")?.is_null() {
-		nonempty(field(p, "version")?, "provider.version")?;
+	// Source REA 6.8.0 evidence.ts providerSchema is z.string().nullable(),
+	// without min(1). The stricter nonempty version rule belongs ONLY to
+	// committed analysis profiles (analysisProfile.ts), not ordinary Evidence.
+	if !field(p, "version")?.is_null() && !field(p, "version")?.is_string() {
+		bail!("provider.version must be a string or null");
 	}
 	Ok(())
 }
