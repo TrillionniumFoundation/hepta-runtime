@@ -27,11 +27,11 @@ const APK_SIG_MAGIC: &[u8; 16] = b"APK Sig Block 42";
 
 #[derive(Default)]
 struct ApkSignatureStructure {
-    present: bool,
-    id_pairs: usize,
-    v2_id: bool,
-    v3_id: bool,
-    v31_id: bool,
+	present: bool,
+	id_pairs: usize,
+	v2_id: bool,
+	v3_id: bool,
+	v31_id: bool,
 }
 
 /// Inspect only the APK Signing Block *container* directly before the ZIP
@@ -39,79 +39,81 @@ struct ApkSignatureStructure {
 /// ZIP member content or Android package identity; any attacker can forge
 /// these IDs and lengths. Never report a valid APK signature from this parser.
 fn apk_signing_block_structure(
-    data: &[u8],
-    central_start: usize,
-    last_local_end: usize,
+	data: &[u8],
+	central_start: usize,
+	last_local_end: usize,
 ) -> Result<ApkSignatureStructure> {
-    if central_start < 24
-        || slice_at(data, central_start - APK_SIG_MAGIC.len(), APK_SIG_MAGIC.len())?
-            != APK_SIG_MAGIC
-    {
-        return Ok(ApkSignatureStructure::default());
-    }
+	if central_start < 24
+		|| slice_at(
+			data,
+			central_start - APK_SIG_MAGIC.len(),
+			APK_SIG_MAGIC.len(),
+		)? != APK_SIG_MAGIC
+	{
+		return Ok(ApkSignatureStructure::default());
+	}
 
-    let footer = central_start - 24;
-    let declared = usize::try_from(read_u64(data, footer, true)?)
-        .map_err(|_| anyhow!("APK signing block size exceeds host offsets"))?;
-    if declared < 24 {
-        bail!("APK signing block is smaller than its footer");
-    }
-    let total = declared
-        .checked_add(8)
-        .ok_or_else(|| anyhow!("APK signing block total size overflow"))?;
-    let start = central_start
-        .checked_sub(total)
-        .ok_or_else(|| anyhow!("APK signing block points before beginning of archive"))?;
-    if start < last_local_end {
-        bail!("APK signing block overlaps a ZIP local member");
-    }
-    if usize::try_from(read_u64(data, start, true)?)? != declared {
-        bail!("APK signing block header and footer sizes differ");
-    }
+	let footer = central_start - 24;
+	let declared = usize::try_from(read_u64(data, footer, true)?)
+		.map_err(|_| anyhow!("APK signing block size exceeds host offsets"))?;
+	if declared < 24 {
+		bail!("APK signing block is smaller than its footer");
+	}
+	let total = declared
+		.checked_add(8)
+		.ok_or_else(|| anyhow!("APK signing block total size overflow"))?;
+	let start = central_start
+		.checked_sub(total)
+		.ok_or_else(|| anyhow!("APK signing block points before beginning of archive"))?;
+	if start < last_local_end {
+		bail!("APK signing block overlaps a ZIP local member");
+	}
+	if usize::try_from(read_u64(data, start, true)?)? != declared {
+		bail!("APK signing block header and footer sizes differ");
+	}
 
-    let mut cursor = start + 8;
-    let mut seen_ids = HashSet::new();
-    let mut info = ApkSignatureStructure {
-        present: true,
-        ..ApkSignatureStructure::default()
-    };
-    while cursor < footer {
-        if info.id_pairs >= 4096 {
-            bail!("APK signing block exceeds ID-value pair budget");
-        }
-        if footer - cursor < 12 {
-            bail!("APK signing block has a truncated ID-value header");
-        }
-        let entry_bytes = usize::try_from(read_u64(data, cursor, true)?)?;
-        if entry_bytes < 4 {
-            bail!("APK signing block ID-value entry is shorter than its ID");
-        }
-        let end = cursor
-            .checked_add(8)
-            .and_then(|n| n.checked_add(entry_bytes))
-            .ok_or_else(|| anyhow!("APK signing block pair length overflow"))?;
-        if end > footer {
-            bail!("APK signing block ID-value pair exceeds footer");
-        }
-        let id = read_u32(data, cursor + 8, true)?;
-        if !seen_ids.insert(id) {
-            bail!("duplicate APK signing block ID is ambiguous");
-        }
-        info.id_pairs += 1;
-        match id {
-            0x7109_871a => info.v2_id = true,
-            0xf053_68c0 => info.v3_id = true,
-            0x1b93_ad61 => info.v31_id = true,
-            _ => {}
-        }
-        cursor = end;
-    }
-    if cursor != footer || info.id_pairs == 0 {
-        bail!("APK signing block must contain bounded ID-value pairs");
-    }
-    Ok(info)
+	let mut cursor = start + 8;
+	let mut seen_ids = HashSet::new();
+	let mut info = ApkSignatureStructure {
+		present: true,
+		..ApkSignatureStructure::default()
+	};
+	while cursor < footer {
+		if info.id_pairs >= 4096 {
+			bail!("APK signing block exceeds ID-value pair budget");
+		}
+		if footer - cursor < 12 {
+			bail!("APK signing block has a truncated ID-value header");
+		}
+		let entry_bytes = usize::try_from(read_u64(data, cursor, true)?)?;
+		if entry_bytes < 4 {
+			bail!("APK signing block ID-value entry is shorter than its ID");
+		}
+		let end = cursor
+			.checked_add(8)
+			.and_then(|n| n.checked_add(entry_bytes))
+			.ok_or_else(|| anyhow!("APK signing block pair length overflow"))?;
+		if end > footer {
+			bail!("APK signing block ID-value pair exceeds footer");
+		}
+		let id = read_u32(data, cursor + 8, true)?;
+		if !seen_ids.insert(id) {
+			bail!("duplicate APK signing block ID is ambiguous");
+		}
+		info.id_pairs += 1;
+		match id {
+			0x7109_871a => info.v2_id = true,
+			0xf053_68c0 => info.v3_id = true,
+			0x1b93_ad61 => info.v31_id = true,
+			_ => {}
+		}
+		cursor = end;
+	}
+	if cursor != footer || info.id_pairs == 0 {
+		bail!("APK signing block must contain bounded ID-value pairs");
+	}
+	Ok(info)
 }
-
 
 pub(super) fn parse_zip(data: &[u8]) -> Result<HeaderInfo> {
 	if data.len() < 22 {
@@ -409,7 +411,10 @@ mod tests {
 		assert_eq!(info.facts["apk_v2_scheme_id_present"], true);
 		assert_eq!(info.facts["apk_v3_scheme_id_present"], true);
 		assert_eq!(info.facts["apk_v31_scheme_id_present"], false);
-		assert!(info.limitations.iter().any(|x| x.contains("NOT cryptographic")));
+		assert!(info
+			.limitations
+			.iter()
+			.any(|x| x.contains("NOT cryptographic")));
 		let bare = parse_zip(&zip).expect("unsigned ZIP");
 		assert_eq!(bare.facts["apk_signing_block_structure_present"], false);
 	}
@@ -418,8 +423,8 @@ mod tests {
 	fn forged_apk_signing_block_lengths_and_duplicates_are_refused() {
 		let zip = classic_zip(&[("AndroidManifest.xml", "untrusted")]);
 		let signed = wrap_with_apk_block(&zip, &[(0x7109_871a, b"fake")]);
-		let central = read_u32(&signed, signed.len() - 22 + 16, true)
-			.expect("central offset") as usize;
+		let central =
+			read_u32(&signed, signed.len() - 22 + 16, true).expect("central offset") as usize;
 		let mut wrong_footer = signed.clone();
 		wrong_footer[central - 24..central - 16].copy_from_slice(&25u64.to_le_bytes());
 		assert!(parse_zip(&wrong_footer).is_err(), "footer/header mismatch");
@@ -427,10 +432,8 @@ mod tests {
 		let start = central - 8 - read_u64(&signed, central - 24, true).expect("size") as usize;
 		oversized_pair[start + 8..start + 16].copy_from_slice(&u64::MAX.to_le_bytes());
 		assert!(parse_zip(&oversized_pair).is_err(), "out-of-bounds pair");
-		let duplicated = wrap_with_apk_block(
-			&zip,
-			&[(0x7109_871a, b"first"), (0x7109_871a, b"second")],
-		);
+		let duplicated =
+			wrap_with_apk_block(&zip, &[(0x7109_871a, b"first"), (0x7109_871a, b"second")]);
 		assert!(parse_zip(&duplicated).is_err(), "ambiguous duplicate ID");
 	}
 
