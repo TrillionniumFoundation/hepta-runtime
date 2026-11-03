@@ -1,0 +1,7 @@
+# Original source containers and source companion documents
+
+This inactive archival directory preserves original UTF-8 bytes with their frozen candidate classifications. Markdown objects are historical source companion documentation, interface contracts or technical reproduction receipts; JSON objects are original source transport containers that include actual code, tests, workflow text and associated notes. They are not newly implemented production files. The manifest records each original identity, the current repository placement rationale, and exact already-preserved source peers where available. A current archival choice is not proof of a unique historical owner. A standalone document is not claimed to have originated in a separately matched package.
+
+Original source commands, transport parent/branch assertions, old test outcomes, model observations and scientific claims remain historical text. None were executed, applied, dispatched or newly qualified. JSON workflow text is inert under this archival path. Whole-container preservation does not independently count its child payloads as new frozen candidates. Source bytes alone do not establish original archive, dot or worktree-history completeness.
+
+Only the newly authored verify_projection.py is a byte verifier. It checks size, SHA-256 and Git object identity without importing preserved content, and refuses optimized Python. No original was deleted. DRAFT / SHADOW_ONLY / DENY_ALL / HOLD_NO_GO remain in force.
