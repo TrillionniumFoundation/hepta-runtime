@@ -208,7 +208,10 @@ async fn repeated_concurrent_first_publications_never_expose_a_wide_permission_w
 				published += 1;
 			}
 		}
-		assert_eq!(published, 1, "only one exclusive hard link can publish");
+		assert_eq!(
+			published, 1,
+			"only one atomic create-only operation can publish"
+		);
 		#[cfg(unix)]
 		{
 			use std::os::unix::fs::PermissionsExt;
@@ -295,5 +298,46 @@ async fn external_hardlinks_cannot_reuse_or_read_retained_previews() {
 	assert_eq!(
 		read_record(id, state.path()).await.expect("recovered"),
 		record
+	);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn atomic_create_only_publication_has_no_two_link_crash_window() {
+	use std::os::unix::fs::MetadataExt;
+
+	let root = tempfile::tempdir().expect("private staging root");
+	let first_stage = root.path().join(".first.tmp");
+	let destination = root.path().join("evidence.json");
+	std::fs::write(&first_stage, b"sealed-record").expect("first staging bytes");
+	assert!(
+		!install_staged_exclusive(&first_stage, &destination).expect("first create-only commit"),
+		"first publication must not be classified as reuse"
+	);
+	assert!(
+		!first_stage.exists(),
+		"rename consumes the staging name atomically"
+	);
+	assert_eq!(
+		std::fs::metadata(&destination)
+			.expect("published fd")
+			.nlink(),
+		1,
+		"cold readers must never observe a committed nlink=2 inode"
+	);
+
+	let second_stage = root.path().join(".second.tmp");
+	std::fs::write(&second_stage, b"untrusted-collision").expect("second staging bytes");
+	assert!(
+		install_staged_exclusive(&second_stage, &destination).expect("create-only collision"),
+		"an already published identity must not be overwritten"
+	);
+	assert_eq!(
+		std::fs::read(&destination).expect("existing published bytes"),
+		b"sealed-record"
+	);
+	assert_eq!(
+		std::fs::read(&second_stage).expect("uncommitted bytes remain staged"),
+		b"untrusted-collision"
 	);
 }

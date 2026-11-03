@@ -267,6 +267,50 @@ impl Drop for StagingFile {
 	}
 }
 
+/// Atomically install a fully fsynced staging inode under a new identity on
+/// Linux. Hard-link publication creates a crash window where both the staging
+/// and committed paths have nlink=2; cold reads then fail their nlink=1 gate.
+/// RENAME_NOREPLACE keeps the create-only contract without that extra link.
+/// Unsupported filesystems must fail closed, never silently overwrite.
+#[cfg(target_os = "linux")]
+fn install_staged_exclusive(staged: &Path, destination: &Path) -> Result<bool> {
+	use std::ffi::CString;
+	use std::os::unix::ffi::OsStrExt;
+
+	let from = CString::new(staged.as_os_str().as_bytes())
+		.context("REA preview staging path contains NUL")?;
+	let to = CString::new(destination.as_os_str().as_bytes())
+		.context("REA preview destination path contains NUL")?;
+	let status = unsafe {
+		libc::renameat2(
+			libc::AT_FDCWD,
+			from.as_ptr(),
+			libc::AT_FDCWD,
+			to.as_ptr(),
+			libc::RENAME_NOREPLACE,
+		)
+	};
+	if status == 0 {
+		return Ok(false);
+	}
+	let error = std::io::Error::last_os_error();
+	if error.kind() == std::io::ErrorKind::AlreadyExists {
+		return Ok(true);
+	}
+	Err(error).context("cannot atomically publish create-only REA preview")
+}
+
+/// Non-Linux Unix retains the previous limited link-based implementation;
+/// it is not qualified for power-loss recovery during the link/unlink window.
+#[cfg(not(target_os = "linux"))]
+fn install_staged_exclusive(staged: &Path, destination: &Path) -> Result<bool> {
+	match std::fs::hard_link(staged, destination) {
+		Ok(()) => Ok(false),
+		Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(true),
+		Err(error) => Err(error).context("cannot publish immutable REA preview"),
+	}
+}
+
 fn publish_exclusive(root: &Path, id: &str, encoded: &[u8]) -> Result<bool> {
 	let dest = filename(root, id)?;
 	let sequence = STAGING_SEQUENCE.fetch_add(1, Ordering::Relaxed);
@@ -296,17 +340,14 @@ fn publish_exclusive(root: &Path, id: &str, encoded: &[u8]) -> Result<bool> {
 	file.sync_all()
 		.context("cannot sync REA preview staging file")?;
 	drop(file);
-	match std::fs::hard_link(&cleanup.0, &dest) {
-		Ok(()) => {
-			let directory = std::fs::File::open(root)?;
-			directory
-				.sync_all()
-				.context("cannot sync REA preview directory")?;
-			Ok(false)
-		}
-		Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(true),
-		Err(error) => Err(error).context("cannot publish immutable REA preview"),
+	if install_staged_exclusive(&cleanup.0, &dest)? {
+		return Ok(true);
 	}
+	let directory = std::fs::File::open(root)?;
+	directory
+		.sync_all()
+		.context("cannot sync REA preview directory")?;
+	Ok(false)
 }
 
 /// Count both published records and abandoned temporary bytes. The upper bound
