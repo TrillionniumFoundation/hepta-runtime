@@ -210,6 +210,29 @@ fn committed_profile_refuses_unknown_version_even_with_matching_evidence_provide
 }
 
 #[test]
+fn ordinary_provider_version_matches_published_nullable_and_empty_string_schema() {
+	let null_version = json!({"id":"provider","name":"provider","version":null});
+	let empty_version = json!({"id":"provider","name":"provider","version":""});
+	assert!(provider(&null_version).is_ok());
+	assert!(provider(&empty_version).is_ok());
+
+	for wrong in [json!(123), json!(false), json!({}), json!([])] {
+		let invalid = json!({"id":"provider","name":"provider","version":wrong});
+		assert!(provider(&invalid).is_err());
+	}
+
+	let uncommitted = json!({
+		"provider":empty_version,
+		"parameters":{},
+		"digest":"0000000000000000000000000000000000000000000000000000000000000000"
+	});
+	assert!(
+		profile(&uncommitted, &uncommitted["provider"]).is_err(),
+		"a profile's version must remain nonempty even when ordinary Evidence permits empty"
+	);
+}
+
+#[test]
 fn finite_number_renderer_matches_ecmascript_boundary_examples() {
 	let cases = [
 		("-0", "0"),
