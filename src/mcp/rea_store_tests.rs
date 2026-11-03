@@ -208,7 +208,10 @@ async fn repeated_concurrent_first_publications_never_expose_a_wide_permission_w
 				published += 1;
 			}
 		}
-		assert_eq!(published, 1, "only one atomic create-only operation can publish");
+		assert_eq!(
+			published, 1,
+			"only one atomic create-only operation can publish"
+		);
 		#[cfg(unix)]
 		{
 			use std::os::unix::fs::PermissionsExt;
@@ -308,13 +311,17 @@ fn atomic_create_only_publication_has_no_two_link_crash_window() {
 	let destination = root.path().join("evidence.json");
 	std::fs::write(&first_stage, b"sealed-record").expect("first staging bytes");
 	assert!(
-		!install_staged_exclusive(&first_stage, &destination)
-			.expect("first create-only commit"),
+		!install_staged_exclusive(&first_stage, &destination).expect("first create-only commit"),
 		"first publication must not be classified as reuse"
 	);
-	assert!(!first_stage.exists(), "rename consumes the staging name atomically");
+	assert!(
+		!first_stage.exists(),
+		"rename consumes the staging name atomically"
+	);
 	assert_eq!(
-		std::fs::metadata(&destination).expect("published fd").nlink(),
+		std::fs::metadata(&destination)
+			.expect("published fd")
+			.nlink(),
 		1,
 		"cold readers must never observe a committed nlink=2 inode"
 	);
@@ -322,8 +329,7 @@ fn atomic_create_only_publication_has_no_two_link_crash_window() {
 	let second_stage = root.path().join(".second.tmp");
 	std::fs::write(&second_stage, b"untrusted-collision").expect("second staging bytes");
 	assert!(
-		install_staged_exclusive(&second_stage, &destination)
-			.expect("create-only collision"),
+		install_staged_exclusive(&second_stage, &destination).expect("create-only collision"),
 		"an already published identity must not be overwritten"
 	);
 	assert_eq!(
@@ -335,4 +341,3 @@ fn atomic_create_only_publication_has_no_two_link_crash_window() {
 		b"untrusted-collision"
 	);
 }
-
