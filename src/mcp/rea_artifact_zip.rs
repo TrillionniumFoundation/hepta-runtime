@@ -315,3 +315,17 @@ pub fn serve_once(request_json: &str) -> Result<()> {
 #[cfg(test)]
 #[path = "rea_artifact_zip_tests.rs"]
 mod rea_artifact_zip_tests;
+
+/// Reuse the checked ZIP directory on the already admitted application descriptor.
+pub(crate) fn inspect_application_directory(
+	file: &mut std::fs::File,
+) -> anyhow::Result<serde_json::Value> {
+	parser::inspect_file(
+		file,
+		&parser::Request {
+			filter: ArchiveFilter::Manifest,
+			offset: 0,
+			limit: 256,
+		},
+	)
+}

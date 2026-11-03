@@ -1,5 +1,10 @@
 # REA 6.8.0 native Rust integration — scoped P0-P5 register
 
+> This register preserves the original REA foundation qualification history.
+> Current #84 continuation routes and boundaries are documented in
+> [FULL_INTEGRATION.md](FULL_INTEGRATION.md) and [UNIFIED_RUNTIME.md](UNIFIED_RUNTIME.md).
+> Historical OPEN statements below are not a current inventory of every later route.
+
 Controlling source: upstream Git commit 93b8b82db70279e40f484114cff9dc1958dc14ee,
 whose package.json reports version 6.8.0. This is NOT a claim that the npm
 registry tarball has the same source-to-build identity. The published npm MCP

@@ -358,17 +358,40 @@ fn claim_controller_state_dir(state_dir: &Path) -> Result<ControllerLocks> {
 	})
 }
 
-pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
-	config.validate()?;
-	std::fs::create_dir_all(&config.state_dir)?;
-	config.state_dir = std::fs::canonicalize(&config.state_dir)?;
+#[cfg(unix)]
+fn validate_controller_state_root(metadata: &std::fs::Metadata, uid: u32) -> Result<()> {
+	use std::os::unix::fs::MetadataExt;
+	if !metadata.is_dir() || metadata.uid() != uid || metadata.mode() & 0o7777 != 0o700 {
+		bail!("controller state directory must be owned by the current user with mode 0700");
+	}
+	Ok(())
+}
+
+fn prepare_controller_state_dir(path: &Path) -> Result<PathBuf> {
+	let mut builder = std::fs::DirBuilder::new();
+	builder.recursive(true);
 	#[cfg(unix)]
 	{
-		use std::os::unix::fs::PermissionsExt;
-		if std::fs::metadata(&config.state_dir)?.permissions().mode() & 0o022 != 0 {
-			bail!("controller state directory must not be group/world writable");
-		}
+		use std::os::unix::fs::DirBuilderExt;
+		// Apply privacy in each mkdir, before any lock, audit file or observer
+		// can see the new directory. Existing directories are never repaired.
+		builder.mode(0o700);
 	}
+	builder.create(path).with_context(|| {
+		format!(
+			"cannot create controller state directory {}",
+			path.display()
+		)
+	})?;
+	let canonical = std::fs::canonicalize(path)?;
+	#[cfg(unix)]
+	validate_controller_state_root(&std::fs::metadata(&canonical)?, unsafe { libc::geteuid() })?;
+	Ok(canonical)
+}
+
+pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
+	config.validate()?;
+	config.state_dir = prepare_controller_state_dir(&config.state_dir)?;
 	let owner = claim_controller_state_dir(&config.state_dir)?;
 	// State files and the audit trail must not become readable by other
 	// local users under a permissive process umask. Never chmod a symlink.

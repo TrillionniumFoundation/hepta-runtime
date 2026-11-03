@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright 2026 Muvon Un Limited; Copyright 2026 TrillionniumFoundation.
+     SPDX-License-Identifier: Apache-2.0 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.hepta.fixture" android:versionCode="7" android:versionName="1.2">
+    <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="35" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission-sdk-23 android:name="android.permission.CAMERA" android:maxSdkVersion="34" />
+    <permission android:name="org.hepta.fixture.READ_FIXTURE" android:protectionLevel="normal" />
+    <application android:label="Owned fixture" android:allowBackup="false">
+        <activity android:name=".MainActivity" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <activity-alias android:name=".Alias" android:targetActivity=".MainActivity" android:exported="false" />
+        <service android:name=".FixtureService" android:exported="false" />
+        <receiver android:name=".FixtureReceiver" android:exported="false" />
+        <provider android:name=".FixtureProvider" android:authorities="org.hepta.fixture.provider" android:exported="false" />
+    </application>
+</manifest>

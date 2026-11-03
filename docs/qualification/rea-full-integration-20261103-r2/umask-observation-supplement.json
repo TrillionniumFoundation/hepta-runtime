@@ -1,0 +1,94 @@
+{
+  "created_at": "2026-11-03T13:04:59.323186+00:00",
+  "historical_qualification": {
+    "directory": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1/docs/qualification/rea-full-integration-20261103-r2",
+    "outer_job_id": "1a1a16da0b2-96a-6f13",
+    "outer_terminal": {
+      "exit_code": -15,
+      "output_complete": true,
+      "source": "parent independently confirmed authoritative job terminal before edit authorization",
+      "state": "cancelled"
+    },
+    "runner_source_record": {
+      "bytes": 32269,
+      "mode": "0o755",
+      "path": "scripts/rea_full_qualification.py",
+      "sha256": "3713c50ab8a2694cda38aba71cb06f335b046b636492ce0f34920fa73e3d23ce"
+    },
+    "source_before_sha256": "39741d23f54f717a099b2420a7e58467492c7aed4e23235917d73c371bc7657b",
+    "source_tree_sha256": "d7ccbdcb8dd7ccd6252efb990e83c2fdf67ca9d595e493f6e79dd947f5392e5f",
+    "summary_sha256_at_supplement": "89d4df4c4aeb7fdd983fdd3764385b07a24c14f7fa0229714febf4b58aad7607",
+    "summary_started_at": "2026-11-03T12:45:56.159989+00:00",
+    "summary_status_at_supplement": "failed"
+  },
+  "interpretation": {
+    "ci_explicit_test_umask": "0022",
+    "limitation": "The samples establish these observed live processes' masks, not every process throughout the run.",
+    "observed_umask": "0077",
+    "r2_is_requalified_under_0022": false,
+    "subsequent_runner_change": "A later source revision sets Popen umask=0o022 at the single stage-launch point and records child_launch_umask=0022; it does not change historical r2 evidence.",
+    "subsequent_runner_sha256": "2eca7f528d026e1deb6315148d3bd6ebc1188706edb6dad53f0f05e7a6eba1d0"
+  },
+  "observation": {
+    "host": "main",
+    "job_created_unix_ms": 1793710417909,
+    "job_id": "1a1a178e7f5-96a-6f53",
+    "method": "Read /proc/<pid>/status Umask for the qualification runner and its observed descendants; no umask mutation.",
+    "qualification_process_roots": [
+      3639587
+    ],
+    "sample_clock_precision": "Individual /proc samples had no separate timestamp; observation is bounded by the job creation and terminal receipt.",
+    "sampled_processes": [
+      {
+        "name": "python3",
+        "pid": 3639587,
+        "ppid": 3575282,
+        "umask": "0077"
+      },
+      {
+        "name": "cargo-nextest",
+        "pid": 3642593,
+        "ppid": 3639587,
+        "umask": "0077"
+      },
+      {
+        "name": "hepta_runtime-6",
+        "pid": 3670529,
+        "ppid": 3642593,
+        "umask": "0077"
+      }
+    ],
+    "stdout_utf8_bytes": 19786,
+    "stdout_utf8_sha256": "7c18892d2b9ba14e40a9779f0a3a5306f9fc094540b1df7c130592a22e74e8f7",
+    "terminal_receipt": {
+      "at_unix_ms": 1793710418831,
+      "audit_recorded": true,
+      "cancelled": false,
+      "exit_code": 0,
+      "job_id": "1a1a178e7f5-96a-6f53",
+      "log_bytes": {
+        "stderr": {
+          "seen": 0,
+          "stored": 0
+        },
+        "stdout": {
+          "seen": 19786,
+          "stored": 19786
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "state": "succeeded",
+      "timed_out": false
+    }
+  },
+  "purpose": "Supplemental read-only observation of the historical r2 launch environment; original results are unchanged.",
+  "schema": "hepta.rea.qualification.umask-observation-supplement.v1"
+}

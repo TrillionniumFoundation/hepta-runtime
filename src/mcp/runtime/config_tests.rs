@@ -383,3 +383,137 @@ fn legacy_controller_lock_never_follows_symlink_or_hardlink() {
 	assert!(claim_controller_state_dir(dir.path()).is_err());
 	assert_eq!(std::fs::read(target).unwrap(), b"not a lock");
 }
+
+#[cfg(unix)]
+#[test]
+fn missing_controller_state_is_private_under_permissive_umasks() {
+	use std::os::unix::process::CommandExt;
+	let qualified = concat!(module_path!(), "::controller_state_umask_child_probe");
+	let test_name = qualified.split_once("::").unwrap().1;
+	for mask in [0o000, 0o022, 0o077] {
+		let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+		command
+			.arg("--exact")
+			.arg(test_name)
+			.arg("--nocapture")
+			.env("HEPTA_STATE_UMASK_CHILD", format!("{mask:03o}"));
+		// Only the post-fork child changes umask. This one async-signal-safe
+		// syscall cannot race other tests running in the parent process.
+		unsafe {
+			command.pre_exec(move || {
+				libc::umask(mask);
+				Ok(())
+			});
+		}
+		let output = command.output().unwrap();
+		assert!(
+			output.status.success(),
+			"umask {mask:03o}: stdout {} stderr {}",
+			String::from_utf8_lossy(&output.stdout),
+			String::from_utf8_lossy(&output.stderr)
+		);
+		assert!(String::from_utf8_lossy(&output.stdout)
+			.contains("controller-state-umask-child-verified"));
+	}
+}
+
+#[cfg(unix)]
+#[test]
+fn controller_state_umask_child_probe() {
+	use std::os::unix::fs::MetadataExt;
+	let Some(value) = std::env::var_os("HEPTA_STATE_UMASK_CHILD") else {
+		return;
+	};
+	let mask = u32::from_str_radix(value.to_str().unwrap(), 8).unwrap();
+	assert!([0o000, 0o022, 0o077].contains(&mask));
+	let root = tempfile::tempdir().unwrap();
+	let probe = root.path().join("ordinary-mkdir");
+	std::fs::create_dir(&probe).unwrap();
+	assert_eq!(
+		std::fs::metadata(&probe).unwrap().mode() & 0o7777,
+		0o777 & !mask,
+		"child must actually run with the requested umask"
+	);
+	let state = root.path().join("missing-parent/nested/state");
+	let mut config = digest_fixture();
+	config.state_dir = state.clone();
+	init_runtime(config).unwrap();
+	assert_eq!(
+		runtime_config().unwrap().state_dir,
+		std::fs::canonicalize(&state).unwrap()
+	);
+	for relative in [
+		"missing-parent",
+		"missing-parent/nested",
+		"missing-parent/nested/state",
+		"missing-parent/nested/state/jobs",
+		"missing-parent/nested/state/audit",
+	] {
+		let metadata = std::fs::metadata(root.path().join(relative)).unwrap();
+		assert_eq!(metadata.mode() & 0o7777, 0o700, "{relative}");
+		assert_eq!(metadata.uid(), unsafe { libc::geteuid() }, "{relative}");
+	}
+	assert_eq!(
+		std::fs::metadata(&probe).unwrap().mode() & 0o7777,
+		0o777 & !mask,
+		"an unrelated existing directory is not normalized"
+	);
+	println!("controller-state-umask-child-verified");
+}
+
+#[cfg(unix)]
+#[test]
+fn existing_nonprivate_state_is_rejected_before_locks_without_repair() {
+	use std::os::unix::fs::{MetadataExt, PermissionsExt};
+	let root = tempfile::tempdir().unwrap();
+	for mode in [0o755, 0o750, 0o770, 0o1700] {
+		let state = root.path().join(format!("existing-{mode:04o}"));
+		std::fs::create_dir(&state).unwrap();
+		let sentinel = state.join("untouched");
+		std::fs::write(&sentinel, b"preserve existing state").unwrap();
+		std::fs::set_permissions(&state, std::fs::Permissions::from_mode(mode)).unwrap();
+		let before = std::fs::metadata(&state).unwrap();
+		let mut config = digest_fixture();
+		config.state_dir = state.clone();
+		let error = init_runtime(config).unwrap_err();
+		assert!(error.to_string().contains("mode 0700"), "{error:#}");
+		let after = std::fs::metadata(&state).unwrap();
+		assert_eq!(after.mode(), before.mode());
+		assert_eq!(after.uid(), before.uid());
+		assert_eq!((after.dev(), after.ino()), (before.dev(), before.ino()));
+		assert_eq!(
+			(after.ctime(), after.ctime_nsec()),
+			(before.ctime(), before.ctime_nsec()),
+			"existing root must not be chmod'ed even temporarily"
+		);
+		assert_eq!(
+			std::fs::read(&sentinel).unwrap(),
+			b"preserve existing state"
+		);
+		assert_eq!(std::fs::read_dir(&state).unwrap().count(), 1);
+	}
+}
+
+#[cfg(unix)]
+#[test]
+fn controller_state_identity_requires_the_actual_filesystem_owner() {
+	use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+	let root = tempfile::tempdir().unwrap();
+	let state = root.path().join("private-state");
+	std::fs::DirBuilder::new()
+		.mode(0o700)
+		.create(&state)
+		.unwrap();
+	let metadata = std::fs::metadata(&state).unwrap();
+	assert_eq!(metadata.mode() & 0o7777, 0o700);
+	assert!(validate_controller_state_root(&metadata, metadata.uid()).is_ok());
+	// Exercise foreign-owner rejection against real metadata without
+	// privileged chown or modifying an actual foreign directory.
+	assert!(validate_controller_state_root(&metadata, metadata.uid().wrapping_add(1)).is_err());
+	let after = std::fs::metadata(&state).unwrap();
+	assert_eq!(
+		(after.uid(), after.mode()),
+		(metadata.uid(), metadata.mode())
+	);
+	assert_eq!(std::fs::read_dir(&state).unwrap().count(), 0);
+}

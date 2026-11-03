@@ -103,3 +103,46 @@ fn real_model_worker_rejects_malformed_header_without_partial_stdout() {
 	assert!(!output.status.success());
 	assert!(output.stdout.is_empty());
 }
+
+#[test]
+fn real_worker_retains_a_complete_directory_larger_than_an_mcp_page() {
+	let mut file = tempfile::NamedTempFile::new().expect("fixture");
+	let mut tensors = serde_json::Map::new();
+	for number in 0..9000usize {
+		tensors.insert(
+			format!("tensor_{number:05}"),
+			json!({
+				"dtype":"F32","shape":[1],"data_offsets":[number * 4, (number + 1) * 4]
+			}),
+		);
+	}
+	let header = serde_json::to_vec(&tensors).expect("header");
+	file.write_all(&(header.len() as u64).to_le_bytes())
+		.expect("header size");
+	file.write_all(&header).expect("header");
+	file.as_file_mut()
+		.set_len(8 + header.len() as u64 + 9000 * 4)
+		.expect("payload");
+	file.flush().expect("flush");
+	let output = invoke(
+		File::open(file.path()).expect("readonly snapshot"),
+		json!({"operation":"directory"}),
+	);
+	assert!(
+		output.status.success(),
+		"{}",
+		String::from_utf8_lossy(&output.stderr)
+	);
+	assert!(
+		output.stdout.len() > 1024 * 1024,
+		"complete index must exceed the normal MCP response cap"
+	);
+	assert!(output.stdout.len() < 64 * 1024 * 1024);
+	let report: Value = serde_json::from_slice(&output.stdout).expect("directory");
+	assert_eq!(report["operation"], "index_model_artifact");
+	assert_eq!(
+		report["result"]["tensors"].as_array().expect("rows").len(),
+		9000
+	);
+	assert_eq!(report["result"]["tensors"][8999]["name"], "tensor_08999");
+}

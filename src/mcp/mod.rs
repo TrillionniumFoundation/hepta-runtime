@@ -19,14 +19,18 @@ use std::sync::OnceLock;
 
 pub mod fs;
 pub mod rea;
+pub mod rea_application;
 pub mod rea_artifact_zip;
+pub mod rea_binary;
 pub mod rea_evidence;
 pub mod rea_files;
+pub mod rea_javascript;
 pub mod rea_model;
 pub mod rea_provider;
 pub mod rea_seccomp;
 pub mod rea_static;
 pub mod rea_store;
+pub mod rea_web;
 pub mod rea_worker;
 pub mod request_ctx;
 pub mod runtime;

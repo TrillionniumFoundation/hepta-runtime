@@ -1,0 +1,93 @@
+{
+  "qualified": true,
+  "schema": "hepta.rea.aapt2-compatibility-qualification.v1",
+  "scope": "Focused real AAPT2 and strict ZIP regression after preserved r1 failure; no test retries.",
+  "source_after": "d7ccbdcb8dd7ccd6252efb990e83c2fdf67ca9d595e493f6e79dd947f5392e5f",
+  "source_before": "d7ccbdcb8dd7ccd6252efb990e83c2fdf67ca9d595e493f6e79dd947f5392e5f",
+  "source_unchanged": true,
+  "stages": [
+    {
+      "command": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "name": "fmt",
+      "seconds": 2.918045527068898,
+      "stderr": {
+        "file": "fmt.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "file": "fmt.stdout.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "command": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--jobs",
+        "4",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "name": "clippy",
+      "seconds": 33.664406255003996,
+      "stderr": {
+        "file": "clippy.stderr.log",
+        "sha256": "a2675a04de7f13c639e2cd8324cfd5e7d797e0dff560396a31f3927eac22cdc3"
+      },
+      "stdout": {
+        "file": "clippy.stdout.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "command": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "nextest",
+        "run",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--build-jobs",
+        "4",
+        "--test-threads",
+        "1",
+        "--retries",
+        "0",
+        "--no-fail-fast",
+        "--profile",
+        "default",
+        "--ignore-default-filter",
+        "--no-tests",
+        "fail",
+        "-E",
+        "test(rea_application) | test(rea_artifact_zip) | test(mcp::rea::zip) | binary(rea_application_external)"
+      ],
+      "exit_code": 0,
+      "name": "application-and-zip",
+      "seconds": 239.21174738300033,
+      "stderr": {
+        "file": "application-and-zip.stderr.log",
+        "sha256": "161c0bc1447d5b5614fdc899aaaa5d78931d5481df6dc1d87a44a21f797fc824"
+      },
+      "stdout": {
+        "file": "application-and-zip.stdout.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "status": "passed"
+}

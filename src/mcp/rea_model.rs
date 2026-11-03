@@ -30,12 +30,15 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
 #[path = "rea_model_parser.rs"]
 mod parser;
+#[path = "rea_model_session.rs"]
+pub mod session;
 #[path = "rea_model_worker.rs"]
 mod worker;
 
 pub(super) const MAX_HEADER_BYTES: u64 = 16 * 1024 * 1024;
 pub(super) const MAX_READ_BYTES: usize = 64 * 1024;
 pub(super) const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
+pub(super) const MAX_INDEX_RESPONSE_BYTES: usize = 64 * 1024 * 1024;
 const HASH_BUFFER_BYTES: usize = 64 * 1024;
 const HASH_DEADLINE: Duration = Duration::from_secs(300);
 
@@ -465,6 +468,50 @@ pub(super) async fn inspect_tensor_descriptor(
 	if observed_version(&after)? != version {
 		bail!("model changed during tensor descriptor inspection");
 	}
+	Ok(report)
+}
+
+/// Capture a complete directory once for an explicitly retained snapshot.
+/// The controller validates structure bytes on the same admitted descriptor;
+/// subsequent session operations use committed pages instead of this parser.
+pub(super) async fn inspect_snapshot_directory(file: &mut tokio::fs::File) -> Result<Value> {
+	let _slot = model_admission()
+		.acquire()
+		.await
+		.context("model parser admission closed")?;
+	let before = file.metadata().await?;
+	let version = observed_version(&before)?;
+	let worker_file = file.try_clone().await?.into_std().await;
+	let request = parser::WorkerRequest::Directory;
+	#[cfg(not(test))]
+	let report = worker::inspect_isolated(worker_file, &request).await?;
+	#[cfg(test)]
+	let report = tokio::task::spawn_blocking(move || {
+		let mut worker_file = worker_file;
+		parser::inspect_file(&mut worker_file, &request)
+	})
+	.await
+	.context("snapshot directory parser task failed")??;
+	if report["record_format"] != "hepta.rea-model-artifact.v1"
+		|| report["operation"] != "index_model_artifact"
+		|| report["rea_evidence_compatible"] != false
+		|| report["source"]["observed_version"].as_str() != Some(version.as_str())
+		|| report["source"]["size_bytes"].as_u64() != Some(before.len())
+		|| !report["result"]["tensors"].is_array()
+		|| !report["result"]["metadata"].is_array()
+	{
+		bail!("model index worker returned an unbound directory");
+	}
+	let header_length = report["source"]["header_bytes"]
+		.as_u64()
+		.filter(|length| *length <= MAX_HEADER_BYTES && *length <= before.len())
+		.ok_or_else(|| anyhow!("model index worker returned an invalid header extent"))?;
+	let header = hash_prefix(file, header_length).await?;
+	if report["source"]["header_sha256"].as_str() != Some(header.as_str()) {
+		bail!("snapshot directory does not match its admitted header bytes");
+	}
+	#[cfg(unix)]
+	super::rea_files::ensure_unchanged(&before, &file.metadata().await?)?;
 	Ok(report)
 }
 

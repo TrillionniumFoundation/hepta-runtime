@@ -1,11 +1,12 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! One-shot GNU static backend worker with immutable Linux memory snapshots.
+//! One-shot fixed static backend worker with immutable Linux input snapshots.
 //!
 //! It is a child of the ordinary jobs owner, and its backend remains in the
 //! same process group. Inputs are never executed. No persistent service, shell,
-//! arbitrary flags, output files or caller-selected backend is introduced.
+//! arbitrary flags, scripts or caller-selected backend is introduced. Java engine
+//! temporary files live in private monitored scratch with explicit cleanup.
 
 #[cfg(target_os = "linux")]
 use anyhow::Context;
@@ -17,6 +18,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[cfg(target_os = "linux")]
 use super::rea_provider::{validate_worker_request, WorkerRequest, MAX_WORKER_REQUEST};
+
+#[cfg(target_os = "linux")]
+#[path = "rea_engine.rs"]
+mod engine;
 
 #[cfg(target_os = "linux")]
 mod linux {
@@ -45,7 +50,7 @@ mod linux {
 		pub(super) size: u64,
 	}
 
-	fn unchanged(before: &std::fs::Metadata, after: &std::fs::Metadata) -> bool {
+	pub(super) fn unchanged(before: &std::fs::Metadata, after: &std::fs::Metadata) -> bool {
 		before.dev() == after.dev()
 			&& before.ino() == after.ino()
 			&& before.len() == after.len()
@@ -120,7 +125,7 @@ mod linux {
 		bail!("artifact is outside configured static roots")
 	}
 
-	fn memfile(name: &str) -> Result<std::fs::File> {
+	pub(super) fn memfile(name: &str) -> Result<std::fs::File> {
 		let name = CString::new(name)?;
 		let fd = unsafe {
 			libc::memfd_create(name.as_ptr(), libc::MFD_CLOEXEC | libc::MFD_ALLOW_SEALING)
@@ -202,7 +207,7 @@ mod linux {
 		})
 	}
 
-	async fn hash_runtime(expected: &str, deadline: Instant) -> Result<()> {
+	pub(super) async fn hash_runtime(expected: &str, deadline: Instant) -> Result<()> {
 		// /proc/self/exe names the running image, even if its deployment pathname
 		// was replaced. It is kernel-provided, not a caller-controlled file path.
 		let mut file = tokio::fs::File::open("/proc/self/exe").await?;
@@ -233,7 +238,7 @@ mod linux {
 		Ok(())
 	}
 
-	async fn read_capped(reader: impl AsyncRead + Unpin, max: usize) -> Result<Vec<u8>> {
+	pub(super) async fn read_capped(reader: impl AsyncRead + Unpin, max: usize) -> Result<Vec<u8>> {
 		let mut out = Vec::new();
 		reader.take(max as u64 + 1).read_to_end(&mut out).await?;
 		if out.len() > max {
@@ -311,6 +316,12 @@ mod linux {
 
 	pub(super) async fn analyze(input: WorkerRequest) -> Result<Value> {
 		validate_worker_request(&input)?;
+		if input.profile.provider == crate::mcp::rea_provider::StaticProvider::Jadx {
+			return super::engine::analyze(input).await;
+		}
+		if input.profile.provider == crate::mcp::rea_provider::StaticProvider::Ghidra {
+			return super::engine::analyze_ghidra(input).await;
+		}
 		let started = Instant::now();
 		let deadline = started + Duration::from_secs(input.profile.timeout_seconds);
 		hash_runtime(&input.profile.runtime_sha256, deadline).await?;

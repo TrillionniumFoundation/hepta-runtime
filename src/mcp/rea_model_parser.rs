@@ -36,6 +36,8 @@ const ARRAY_PREVIEW_ITEMS: usize = 8;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "operation", rename_all = "snake_case", deny_unknown_fields)]
 pub(super) enum WorkerRequest {
+	/// Complete bounded index for a retained snapshot; never returned directly over MCP.
+	Directory,
 	Inspect {
 		collection: Collection,
 		offset: usize,
@@ -46,6 +48,15 @@ pub(super) enum WorkerRequest {
 		offset: u64,
 		length: usize,
 	},
+}
+
+impl WorkerRequest {
+	pub(super) fn response_limit(&self) -> usize {
+		match self {
+			Self::Directory => super::MAX_INDEX_RESPONSE_BYTES,
+			_ => super::MAX_RESPONSE_BYTES,
+		}
+	}
 }
 
 #[derive(Debug, Serialize)]
@@ -579,6 +590,10 @@ pub(super) fn inspect_file(file: &mut File, request: &WorkerRequest) -> Result<V
 		.filter(|row| !row.storage_length_verified)
 		.count();
 	let (operation, result) = match request {
+		WorkerRequest::Directory => (
+			"index_model_artifact",
+			json!({"tensors": &directory.tensors, "metadata": &directory.metadata}),
+		),
 		WorkerRequest::Inspect {
 			collection,
 			offset,

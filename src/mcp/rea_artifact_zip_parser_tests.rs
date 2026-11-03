@@ -146,6 +146,68 @@ fn central_local_boundary_zip64_and_encoding_errors_are_explicit() {
 	assert!(member_name(&[255], 1 << 11).is_err());
 }
 
+#[test]
+fn android_align32_zero_padding_is_local_and_exact() {
+	for padding in [&[0][..], &[0, 0], &[0, 0, 0]] {
+		validate_local_extra(padding, 0, 0, 44).expect("minimal local align32 padding");
+		assert!(
+			extra_fields(padding).is_err(),
+			"central extras remain strict TLVs"
+		);
+	}
+	validate_local_extra(&[], 8, 0, 43).expect("empty extras are unchanged");
+	validate_local_extra(&[0x34, 0x12, 2, 0, 1, 2], 0, 0, 47)
+		.expect("complete ordinary local TLV remains valid without alignment");
+}
+
+#[test]
+fn local_alignment_does_not_hide_malformed_or_unsupported_extra_fields() {
+	for bytes in [
+		&[1][..],
+		&[0, 1],
+		&[0, 0, 1],
+		&[0, 0, 0, 0, 0],
+		&[2, 0, 0, 0, 0],
+		&[2, 0, 1, 0],
+		&[1, 0, 0, 0],
+		&[0x75, 0x70, 0, 0],
+	] {
+		assert!(
+			validate_local_extra(bytes, 0, 0, 44).is_err(),
+			"nonzero, mixed, truncated and unsupported extras stay refused: {bytes:?}"
+		);
+	}
+	for padding in [&[0][..], &[0, 0], &[0, 0, 0]] {
+		for payload_offset in [41, 42, 43] {
+			assert!(validate_local_extra(padding, 0, 0, payload_offset).is_err());
+		}
+		assert!(validate_local_extra(padding, 8, 0, 44).is_err());
+		for flags in [1, 0x40, 0x41] {
+			assert!(validate_local_extra(padding, 0, flags, 44).is_err());
+		}
+	}
+}
+
+#[test]
+fn actual_aapt2_local_alignment_preserves_the_declared_payload_extent() {
+	let bytes = include_bytes!("../../tests/fixtures/rea_application/owned-aapt2.apk");
+	let mut file = fixture(bytes);
+	let report = inspect_file(file.as_file_mut(), &all()).expect("unaltered aapt2 output");
+	assert_eq!(report["entry_count"], 2);
+	let resources = report["result"]["rows"]
+		.as_array()
+		.expect("directory rows")
+		.iter()
+		.find(|entry| entry["name"] == "resources.arsc")
+		.expect("aapt2 resource table");
+	assert_eq!(resources["local_header_offset"], 1131);
+	assert_eq!(resources["payload_offset"], 1176);
+	assert_eq!(resources["compressed_bytes"], 40);
+	assert_eq!(resources["compression_method"], 0);
+	assert_eq!(resources["central_extra_field_ids"], json!([]));
+	assert_eq!(resources["content_verified"], false);
+}
+
 fn single_stored(payload_size: u32, crc: u32, descriptor: bool) -> tempfile::NamedTempFile {
 	let name = b"weights.bin";
 	let flags: u16 = if descriptor { 8 } else { 0 };

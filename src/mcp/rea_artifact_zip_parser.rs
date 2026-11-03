@@ -133,6 +133,21 @@ fn extra_fields(bytes: &[u8]) -> Result<Vec<u16>> {
 	Ok(ids)
 }
 
+fn validate_local_extra(bytes: &[u8], method: u16, flags: u16, payload_offset: u64) -> Result<()> {
+	// AAPT2 maps kAlign to ZipWriter::kAlign32: the whole local extra region is
+	// 1-3 zero bytes placing stored data on a four-byte boundary, without a TLV.
+	// Central extras and every other local region keep the strict TLV grammar.
+	let android_align32_padding = method == 0
+		&& flags & 0x0041 == 0
+		&& (1..=3).contains(&bytes.len())
+		&& payload_offset.is_multiple_of(4)
+		&& bytes.iter().all(|byte| *byte == 0);
+	if android_align32_padding {
+		return Ok(());
+	}
+	extra_fields(bytes).map(|_| ())
+}
+
 fn member_name(bytes: &[u8], flags: u16) -> Result<(String, &'static str)> {
 	if bytes.is_empty()
 		|| bytes.contains(&0)
@@ -311,7 +326,12 @@ fn read_entry(reader: &mut Reader<'_>, layout: &Layout, cursor: u64) -> Result<(
 	if raw_name != &local_variable[..local_name_length] {
 		bail!("ZIP local and central member names disagree");
 	}
-	extra_fields(&local_variable[local_name_length..])?;
+	validate_local_extra(
+		&local_variable[local_name_length..],
+		method,
+		flags,
+		payload_offset,
+	)?;
 	let local_declarations = [
 		u32_at(&local_fixed, 14)?,
 		u32_at(&local_fixed, 18)?,

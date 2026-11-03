@@ -2919,6 +2919,9 @@ fn large_pending_view_remains_exact_while_continuous_publications_progress() {
 	let done = finished.clone();
 	let (started_send, started_receive) = std::sync::mpsc::channel();
 	let (continue_send, continue_receive) = std::sync::mpsc::channel();
+	// All 64 notifications fit even after an observer detects a stall, so
+	// reporting progress cannot itself prevent the finite writer from joining.
+	let (progress_send, progress_receive) = std::sync::mpsc::sync_channel::<(usize, Instant)>(64);
 	let root = fixture.root.path().to_owned();
 	let owner = fixture.owner.clone();
 	let writer = std::thread::spawn(move || {
@@ -2927,9 +2930,11 @@ fn large_pending_view_remains_exact_while_continuous_publications_progress() {
 			started_send.send(())?;
 			continue_receive.recv()?;
 			finish_sync(first, AuditCompletion::Completed)?;
-			for _ in 1..64 {
+			progress_send.send((1, Instant::now()))?;
+			for completed in 2..=64 {
 				let ticket = begin_at(&root, &owner, "host_list")?;
 				finish_sync(ticket, AuditCompletion::Completed)?;
+				progress_send.send((completed, Instant::now()))?;
 			}
 			Ok(())
 		})();
@@ -2943,24 +2948,56 @@ fn large_pending_view_remains_exact_while_continuous_publications_progress() {
 		None
 	};
 	// Release the writer even if the first query failed; assert only after join.
+	let progress_budget = Duration::from_secs(10);
+	let progress_started = Instant::now();
 	let continued = continue_send.send(());
-	let deadline = Instant::now() + Duration::from_secs(10);
+	let mut completions = Vec::with_capacity(64);
+	let mut stalled = false;
 	let mut last = 2;
 	let mut observations = Vec::new();
 	loop {
 		let result = usage_stats_at(fixture.root.path(), &fixture.owner);
 		observations.push(result);
-		if finished.load(Ordering::Acquire) || Instant::now() >= deadline {
+		completions.extend(progress_receive.try_iter());
+		if finished.load(Ordering::Acquire) {
+			break;
+		}
+		// Only a successful durable completion advances this watchdog. A
+		// query, admission or polling heartbeat does not prove writer progress.
+		let last_progress = completions
+			.last()
+			.map_or(progress_started, |(_, completed)| *completed);
+		if last_progress.elapsed() >= progress_budget {
+			stalled = true;
 			break;
 		}
 		std::thread::sleep(Duration::from_millis(1));
 	}
+	let observed_before_join = completions.len();
 	writer.join().unwrap().unwrap();
+	completions.extend(progress_receive.try_iter());
 	started.unwrap();
 	continued.unwrap();
 	let first: Value = serde_json::from_str(&first.unwrap().unwrap()).unwrap();
 	assert_eq!(first["active"], 1);
-	assert!(Instant::now() < deadline);
+	assert!(
+		!stalled,
+		"writer made no durable completion for {progress_budget:?}; observed {observed_before_join}/64 before join"
+	);
+	assert_eq!(completions.len(), 64);
+	let mut previous = progress_started;
+	for (index, (sequence, completed)) in completions.into_iter().enumerate() {
+		assert_eq!(sequence, index + 1);
+		assert!(completed >= previous);
+		// Inspect the actual event times as well: a slow observer must not
+		// conceal a stalled writer by draining several old notifications.
+		let gap = completed.duration_since(previous);
+		assert!(
+			gap < progress_budget,
+			"durable completion {sequence} stalled for {gap:?}"
+		);
+		previous = completed;
+	}
 	assert!(!observations.is_empty());
 	for result in observations {
 		let stats: Value = serde_json::from_str(&result.unwrap()).unwrap();

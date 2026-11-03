@@ -31,7 +31,8 @@ struct RunningMcp {
 
 impl RunningMcp {
 	fn start(config_path: &std::path::Path) -> Self {
-		let mut child = Command::new(env!("CARGO_BIN_EXE_hepta-runtime"))
+		let mut command = Command::new(env!("CARGO_BIN_EXE_hepta-runtime"));
+		command
 			.arg("mcp")
 			.arg("--runtime-config")
 			.arg(config_path)
@@ -39,9 +40,20 @@ impl RunningMcp {
 			.current_dir("/")
 			.stdin(Stdio::piped())
 			.stdout(Stdio::piped())
-			.stderr(Stdio::null())
-			.spawn()
-			.expect("start exact built MCP executable");
+			.stderr(Stdio::null());
+		#[cfg(unix)]
+		{
+			use std::os::unix::process::CommandExt;
+			// Pin the CI permission input in this child, even when its test
+			// runner inherits a private operator-service umask.
+			unsafe {
+				command.pre_exec(|| {
+					libc::umask(0o022);
+					Ok(())
+				});
+			}
+		}
+		let mut child = command.spawn().expect("start exact built MCP executable");
 		let stdin = child.stdin.take().expect("MCP stdin");
 		let stdout = child.stdout.take().expect("MCP stdout");
 		let (sender, replies) = mpsc::channel();

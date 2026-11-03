@@ -4,6 +4,11 @@ This source integration keeps one durable process owner while adding bounded
 Rust artifact operations and selected analysis backends. Exact test and
 deployment receipts determine its qualified state.
 
+The #84 continuation is described in [FULL_INTEGRATION.md](FULL_INTEGRATION.md),
+including model sessions, richer static formats, fixed application manifests,
+Java engines and offline web observations. Source-bound results and environment limits are indexed in
+[QUALIFICATION_20261103.md](QUALIFICATION_20261103.md).
+
 ## Baselines and compatibility
 
 | Input | Source identity |
@@ -36,7 +41,7 @@ or changing a profile deliberately changes its identity.
 | `rea_inspect_archive` | Isolated classic-ZIP directory/local-header index, entry-role filtering and pagination |
 | `rea_verify_evidence` | Existing REA semantic digest and selected schema checks, with explicit non-full-schema qualification |
 | `rea_retain_preview`, `rea_read_preview` | Existing immutable native preview storage and restart retrieval |
-| `rea_static_profiles/start/status/read/cancel` | Rust adapter over the existing jobs owner, with a pinned GNU readelf/objdump backend |
+| `rea_static_profiles/start/status/read/cancel` | Existing jobs owner with pinned GNU readelf/objdump or optional fixed JADX/Ghidra providers |
 | `weight_profiles/open/call/status/read/close` | Existing resident model worker; optional pinned native Rust socket client |
 | `weight_artifact_patch`, `weight_artifact_restore` | Rust immutable safetensors transformation and exact reverse patch |
 | `weight_linear_forward` | Rust CPU F32 Linear calculation from a pinned file or verified private artifact ID |
@@ -88,16 +93,24 @@ existing independent contracts.
 
 ## Provider ownership and recovery
 
-A static profile narrows a central host policy with pinned runtime/backend
+A GNU static profile narrows a central host policy with pinned runtime/backend
 executables, SHA-256 values, exact GNU version, roots, operations and budgets.
 Requests bind the complete profile, source hash and original idempotency key.
 The caller cannot supply shell text or additional backend options.
 
-Linux seals the admitted backend and artifact in memfd snapshots. The artifact
+For GNU providers, Linux seals the admitted backend and artifact in memfd snapshots. The artifact
 snapshot defaults to a 64 MiB cap; its memory contract differs from the large
 streaming readers. Each output stream is bounded. Selected header/build-id
 summaries cite original stdout lines, and the controller recomputes them while
 validating retained output. The analyzed artifact is never executed.
+
+Optional JADX and Ghidra providers use verified installed Java launcher/JRE
+paths instead of a sealed launcher snapshot. JADX seals its selected engine JAR;
+Ghidra verifies the complete admitted `Ghidra/` installation subtree and exposes
+only fixed import inventory. Their private scratch can remain after owner-level
+interruption; observe the original job terminal before reconciling that scratch.
+Exact engine pins, output limits and installation boundaries are documented in
+[ELF_AND_JAVA.md](ELF_AND_JAVA.md).
 
 Preview publication, static start, resident calls and native patch/restore take
 effect-owner admission. A frozen owner cannot create these effects. Status,
@@ -105,8 +118,9 @@ retained results and original-job cancellation remain available. The original
 job ID, request digest, host binding, output witness and process group remain
 with the existing runtime; no second supervisor or recovery ledger is added.
 
-`start` inherits the existing isolated jobctl reconciliation rules for the same
-job/digest. `status` and `read` never submit work. Preserve the complete request
+`start` inherits the configured host's existing owner/reconciliation rules for
+the same job/digest; isolated hosts use the existing jobctl path. `status` and
+`read` never submit work. Preserve the complete request
 after uncertainty and inspect its original identity. Cancellation requires
 subsequent terminal observation before termination is considered confirmed.
 
@@ -140,6 +154,7 @@ can round differently from BLAS/GPU kernels on general inputs. Details:
 | --- | --- |
 | Native artifact readers, Evidence digest, weight artifacts and Linear | Hepta Rust executable |
 | GNU static analysis | Hepta plus the configured pinned GNU executable |
+| Fixed JADX classes/sources and Ghidra import inventory | Hepta plus the admitted Java installation and engine files |
 | General model probes, interventions and existing model adapters | Python/PyTorch worker; native Rust transport available |
 | Existing remote process helpers | Existing Python/jobctl dependencies |
 | Upstream differential harness | Exact Node REA package, outside the shipped runtime |

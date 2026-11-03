@@ -1,3 +1,4 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +16,7 @@
 //! Durable, immutable-by-protocol native preview records.
 //!
 //! Records are NOT REA Evidence. This store requires a trusted controller
-//! state directory, supports an atomic exclusive publication via hard link,
+//! state directory, supports create-only atomic rename on Linux/macOS,
 //! checks full-record SHA-256 and the native preview semantic identifier,
 //! and rejects damaged/conflicting records across controller restarts.
 //!
@@ -267,7 +268,98 @@ impl Drop for StagingFile {
 	}
 }
 
-fn publish_exclusive(root: &Path, id: &str, encoded: &[u8]) -> Result<bool> {
+/// Atomically install a fully fsynced staging inode under a new identity on
+/// Linux. Hard-link publication creates a crash window where both the staging
+/// and committed paths have nlink=2; cold reads then fail their nlink=1 gate.
+/// RENAME_NOREPLACE keeps the create-only contract without that extra link.
+/// Unsupported filesystems must fail closed, never silently overwrite.
+#[cfg(target_os = "linux")]
+fn install_staged_exclusive(staged: &Path, destination: &Path) -> Result<bool> {
+	use std::ffi::CString;
+	use std::os::unix::ffi::OsStrExt;
+
+	let from = CString::new(staged.as_os_str().as_bytes())
+		.context("REA preview staging path contains NUL")?;
+	let to = CString::new(destination.as_os_str().as_bytes())
+		.context("REA preview destination path contains NUL")?;
+	let status = unsafe {
+		libc::renameat2(
+			libc::AT_FDCWD,
+			from.as_ptr(),
+			libc::AT_FDCWD,
+			to.as_ptr(),
+			libc::RENAME_NOREPLACE,
+		)
+	};
+	if status == 0 {
+		return Ok(false);
+	}
+	let error = std::io::Error::last_os_error();
+	if error.kind() == std::io::ErrorKind::AlreadyExists {
+		return Ok(true);
+	}
+	Err(error).context("cannot atomically publish create-only REA preview")
+}
+
+/// Darwin's RENAME_EXCL has the same create-only collision contract as the
+/// Linux path while atomically consuming the staging name. In particular,
+/// never fall back to a link/unlink pair or overwrite on unsupported volumes.
+#[cfg(target_os = "macos")]
+fn install_staged_exclusive(staged: &Path, destination: &Path) -> Result<bool> {
+	use std::ffi::CString;
+	use std::os::unix::ffi::OsStrExt;
+
+	let from = CString::new(staged.as_os_str().as_bytes())
+		.context("REA preview staging path contains NUL")?;
+	let to = CString::new(destination.as_os_str().as_bytes())
+		.context("REA preview destination path contains NUL")?;
+	let status = unsafe { libc::renamex_np(from.as_ptr(), to.as_ptr(), libc::RENAME_EXCL) };
+	if status == 0 {
+		return Ok(false);
+	}
+	let error = std::io::Error::last_os_error();
+	if error.kind() == std::io::ErrorKind::AlreadyExists {
+		return Ok(true);
+	}
+	Err(error).context("cannot atomically publish create-only REA preview on macOS")
+}
+
+/// Other platforms retain the previous limited link-based implementation;
+/// it is not qualified for power-loss recovery during the link/unlink window.
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn install_staged_exclusive(staged: &Path, destination: &Path) -> Result<bool> {
+	match std::fs::hard_link(staged, destination) {
+		Ok(()) => Ok(false),
+		Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(true),
+		Err(error) => Err(error).context("cannot publish immutable REA preview"),
+	}
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PublishPhase {
+	BeforeRename,
+	BeforeParentSync,
+	AfterParentSync,
+}
+
+fn sync_parent(
+	directory: &std::fs::File,
+	checkpoint: &impl Fn(PublishPhase) -> Result<()>,
+) -> Result<()> {
+	checkpoint(PublishPhase::BeforeParentSync)?;
+	directory
+		.sync_all()
+		.context("cannot sync REA preview directory")?;
+	checkpoint(PublishPhase::AfterParentSync)
+}
+
+fn publish_exclusive(
+	root: &Path,
+	directory: &std::fs::File,
+	id: &str,
+	encoded: &[u8],
+	checkpoint: &impl Fn(PublishPhase) -> Result<()>,
+) -> Result<bool> {
 	let dest = filename(root, id)?;
 	let sequence = STAGING_SEQUENCE.fetch_add(1, Ordering::Relaxed);
 	let nanos = SystemTime::now()
@@ -296,17 +388,12 @@ fn publish_exclusive(root: &Path, id: &str, encoded: &[u8]) -> Result<bool> {
 	file.sync_all()
 		.context("cannot sync REA preview staging file")?;
 	drop(file);
-	match std::fs::hard_link(&cleanup.0, &dest) {
-		Ok(()) => {
-			let directory = std::fs::File::open(root)?;
-			directory
-				.sync_all()
-				.context("cannot sync REA preview directory")?;
-			Ok(false)
-		}
-		Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(true),
-		Err(error) => Err(error).context("cannot publish immutable REA preview"),
-	}
+	checkpoint(PublishPhase::BeforeRename)?;
+	let reused = install_staged_exclusive(&cleanup.0, &dest)?;
+	// The descriptor is the same root inode carrying the store flock. Both
+	// the new and collision paths confirm parent durability before success.
+	sync_parent(directory, checkpoint)?;
+	Ok(reused)
 }
 
 /// Count both published records and abandoned temporary bytes. The upper bound
@@ -354,10 +441,15 @@ fn enforce_quota(
 /// Serialize all cooperating writers, including concurrent controller
 /// processes sharing one trusted local store, before quota accounting and
 /// immutable publication. A preexisting identity can be reused at capacity.
-fn publish_budgeted(root: &Path, id: &str, encoded: &[u8]) -> Result<bool> {
+fn publish_budgeted(
+	root: &Path,
+	id: &str,
+	encoded: &[u8],
+	checkpoint: &impl Fn(PublishPhase) -> Result<()>,
+) -> Result<bool> {
 	#[cfg(not(unix))]
 	{
-		let _ = (root, id, encoded);
+		let _ = (root, id, encoded, checkpoint);
 		bail!("REA preview durable quota locking requires Unix flock");
 	}
 	#[cfg(unix)]
@@ -373,6 +465,10 @@ fn publish_budgeted(root: &Path, id: &str, encoded: &[u8]) -> Result<bool> {
 			Ok(metadata) => {
 				if metadata.is_file() && !metadata.file_type().is_symlink() {
 					reject_external_hardlinks(&metadata)?;
+					// A prior waiter may have lost its response after rename,
+					// or its parent fsync may have failed. Reuse also confirms
+					// durability while the actual store flock remains held.
+					sync_parent(&dir, checkpoint)?;
 					return Ok(true);
 				}
 				bail!("REA preview store identity resolves to unsafe file type");
@@ -386,23 +482,39 @@ fn publish_budgeted(root: &Path, id: &str, encoded: &[u8]) -> Result<bool> {
 			MAX_STORED_RECORDS,
 			MAX_STORED_BYTES,
 		)?;
-		publish_exclusive(root, id, encoded)
+		publish_exclusive(root, &dir, id, encoded, checkpoint)
 	}
 }
 
 /// Publish a worker-created partial preview by content identity, or return a
-/// verified prior record. Never overwrite an existing ID on conflict.
-pub async fn retain_record(record: &Value, state_dir: &Path) -> Result<Value> {
+/// verified prior record. The blocking publisher owns effect admission until
+/// its actual rename and directory fsync complete, even after waiter cancellation.
+async fn retain_record_with_admission<G, C>(
+	record: &Value,
+	state_dir: &Path,
+	owner_admission: G,
+	checkpoint: C,
+) -> Result<Value>
+where
+	G: Send + 'static,
+	C: Fn(PublishPhase) -> Result<()> + Send + 'static,
+{
 	let id = report_identity(record)?;
 	let bytes = make_envelope(record)?;
 	let target_state = state_dir.to_path_buf();
 	let target_id = id.clone();
 	let reused = tokio::task::spawn_blocking(move || {
+		// This named binding owns the complete admission guard. A cancelled
+		// awaiting future cannot release it while publication is still active.
+		let _owner_admission = owner_admission;
 		let root = prepare_root(&target_state)?;
-		publish_budgeted(&root, &target_id, &bytes)
+		publish_budgeted(&root, &target_id, &bytes, &checkpoint)
 	})
 	.await
-	.context("REA preview durable publish task failed")??;
+	.context("REA preview durable publish task failed; commit outcome is unconfirmed")?
+	.context(
+		"REA preview commit did not confirm durability; retry the identical preview to reconcile",
+	)?;
 
 	// Every receipt follows a fresh readback, even the original writer.
 	// This detects a corrupted existing object instead of silently reusing it.
@@ -433,10 +545,15 @@ pub async fn read_record(id: &str, state_dir: &Path) -> Result<Value> {
 	verify_envelope(&bytes, id)
 }
 
-pub async fn retain_preview(params: RetainPreviewParams) -> Result<String> {
+pub async fn retain_preview(
+	params: RetainPreviewParams,
+	admission: std::sync::Arc<super::runtime::effect_owner_fence::AdmissionPermit>,
+) -> Result<String> {
 	let report = rea::inspect_artifact(rea::InspectArtifactParams { path: params.path }).await?;
 	let parsed: Value = serde_json::from_str(&report)?;
-	let receipt = retain_record(&parsed, &runtime_config()?.state_dir).await?;
+	let receipt =
+		retain_record_with_admission(&parsed, &runtime_config()?.state_dir, admission, |_| Ok(()))
+			.await?;
 	Ok(serde_json::to_string(&receipt)?)
 }
 

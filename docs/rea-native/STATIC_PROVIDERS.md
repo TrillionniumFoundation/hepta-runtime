@@ -1,9 +1,10 @@
 # Native static provider adapter
 
-This increment runs an admitted GNU readelf or GNU objdump through the existing
+This increment runs an admitted GNU readelf, GNU objdump, fixed JADX or import-only Ghidra provider through the existing
 Hepta Runtime durable process owner. It inspects owned build artifacts without
-executing them. It does not provide Ghidra/IDA/Hopper, arbitrary commands,
-disassembly, runtime instrumentation or complete REA 6.8.0 behavioral parity.
+executing them. The optional JADX profile and its precise boundary are described in
+[ELF_AND_JAVA.md](ELF_AND_JAVA.md). The Ghidra adapter is a fixed import-only inventory; full Ghidra/IDA/Hopper workflows, arbitrary commands,
+disassembly, runtime instrumentation and complete REA 6.8.0 behavioral parity remain outside this implementation.
 
 ## Configuration and admission
 
@@ -76,7 +77,12 @@ adapter rejects the old profile pin instead of submitting a job on a new host.
 Historical jobs remain accessible through the original stored owner job reference
 returned by `start`; changing deployment profiles does not rewrite that history.
 
-## Worker execution
+## GNU worker execution
+
+The execution details in this section apply to GNU readelf/objdump. Fixed Java
+providers use the installed-launcher checks and private scratch lifecycle
+specified in [ELF_AND_JAVA.md](ELF_AND_JAVA.md); their installed runtime is not a
+sealed executable snapshot, and owner-level cancellation can leave scratch.
 
 The ordinary owner starts the same runtime binary with the hidden
 `rea-static-worker` command and supplies one bounded JSON request on stdin.
@@ -122,8 +128,8 @@ backend/runtime pins, input snapshot identity and the exact operation. They rema
 `rea_evidence_compatible=false` and explicitly partial in scope. A successful
 process or parse does not establish full format correctness or decompiler parity.
 
-The Rust summary maps selected GNU readelf header labels and GNU build-id hex
-strings. Every fact points to its line in the retained stdout. It preserves
+For GNU providers, the Rust summary maps selected readelf header labels and GNU
+build-id hex strings. Every fact points to its line in the retained stdout. It preserves
 duplicate observations, bounds retained facts at 64, labels truncation and leaves
 unsupported operations unmapped. `rea_static_read` independently recomputes this
 mapping from the retained text before returning it. This is not independent ELF

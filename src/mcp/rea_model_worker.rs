@@ -19,7 +19,7 @@
 use anyhow::{bail, Context, Result};
 use std::io::Write;
 
-use super::{parser, MAX_RESPONSE_BYTES};
+use super::parser;
 
 #[cfg(unix)]
 fn apply_limits() -> Result<()> {
@@ -28,7 +28,10 @@ fn apply_limits() -> Result<()> {
 		(libc::RLIMIT_CPU, 25),
 		(libc::RLIMIT_NOFILE, 64),
 		(libc::RLIMIT_CORE, 0),
-		(libc::RLIMIT_FSIZE, MAX_RESPONSE_BYTES as libc::rlim_t),
+		(
+			libc::RLIMIT_FSIZE,
+			super::MAX_INDEX_RESPONSE_BYTES as libc::rlim_t,
+		),
 	] {
 		let limits = libc::rlimit {
 			rlim_cur: allowed,
@@ -86,8 +89,8 @@ pub(super) fn serve_once(request_json: &str) -> Result<()> {
 		super::super::rea_seccomp::tighten_after_read()?;
 		let result = parser::inspect_file(&mut file, &request)?;
 		let encoded = serde_json::to_vec(&result)?;
-		if encoded.len() > MAX_RESPONSE_BYTES {
-			bail!("model parser response exceeds 1 MiB; reduce page size");
+		if encoded.len() > request.response_limit() {
+			bail!("model parser response exceeds its bounded operation limit");
 		}
 		let mut stdout = std::io::stdout().lock();
 		stdout.write_all(&encoded)?;
@@ -147,7 +150,7 @@ pub(super) async fn inspect_isolated(
 		.ok_or_else(|| anyhow!("model worker stderr unavailable"))?;
 	let collected = tokio::time::timeout(Duration::from_secs(30), async {
 		tokio::try_join!(
-			read_capped(stdout, MAX_RESPONSE_BYTES + 1),
+			read_capped(stdout, request.response_limit() + 1),
 			read_capped(stderr, 64 * 1024),
 			async { child.wait().await.map_err(anyhow::Error::from) }
 		)

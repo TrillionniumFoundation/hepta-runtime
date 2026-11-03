@@ -1,3 +1,4 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -149,6 +150,10 @@ fn parse_elf(data: &[u8]) -> Result<HeaderInfo> {
 		read_u64(data, entry_offset, little)?
 	};
 	let declared_sections = read_u16(data, shnum_offset, little)?;
+	let structure = match super::rea_binary::inspect_elf_bytes(data) {
+		Ok(report) => report,
+		Err(error) => json!({"available":false,"coverage":"unknown","reason":error.to_string()}),
+	};
 	Ok(HeaderInfo {
 		format: "elf",
 		architecture: elf_machine(machine),
@@ -158,10 +163,11 @@ fn parse_elf(data: &[u8]) -> Result<HeaderInfo> {
 			"elf_type": read_u16(data, 16, little)?,
 			"machine_id": machine,
 			"entry_point": format!("0x{entry:x}"),
-			"declared_sections": declared_sections
+			"declared_sections": declared_sections,
+			"structure": structure
 		}),
 		limitations: vec![
-			"ELF section, segment, relocation and executable-byte semantics are not validated",
+			"ELF structural details have their own coverage; relocation and executable-byte semantics are not validated",
 			"A zero declared section count may indicate ELF extended numbering",
 		],
 	})

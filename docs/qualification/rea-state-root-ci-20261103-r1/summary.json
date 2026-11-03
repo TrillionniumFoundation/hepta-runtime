@@ -1,0 +1,176 @@
+{
+  "binary_after": {
+    "bytes": 391141088,
+    "exists": true,
+    "mode": "0o755",
+    "path": "/home/qian-qi/work/hepta-rea-full-20261103-r1-target/debug/hepta-runtime",
+    "sha256": "290fa949b7744c85018f9f26b32fbdd1884cce1c31ff202a9f076bc3d6a89c63"
+  },
+  "child_launch_umask": "0022",
+  "qualified": false,
+  "schema": "hepta.rea.state-root-ci-qualification.v1",
+  "scope": "Runtime first-use private state creation and real MCP regressions under CI launch umask0022; no retries.",
+  "source_after": "2116ad9fe2faf11a12ea48c045d07c774f6c6852553ddb279397b04d4c2dd232",
+  "source_before": "2116ad9fe2faf11a12ea48c045d07c774f6c6852553ddb279397b04d4c2dd232",
+  "source_unchanged": true,
+  "stages": [
+    {
+      "child_launch_umask": "0022",
+      "command": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "cwd": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1",
+      "duration_seconds": 2.920448,
+      "exit_code": 0,
+      "finished_at": "2026-11-03T13:16:21.024264+00:00",
+      "interrupted": false,
+      "kind": "gate",
+      "logs": {
+        "stderr": {
+          "bytes": 0,
+          "path": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1/docs/qualification/rea-state-root-ci-20261103-r1/01-fmt.stderr.log",
+          "sha256_at_stage_exit": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 0,
+          "path": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1/docs/qualification/rea-state-root-ci-20261103-r1/01-fmt.stdout.log",
+          "sha256_at_stage_exit": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "name": "fmt",
+      "started_at": "2026-11-03T13:16:18.103831+00:00",
+      "status": "passed",
+      "summary": {
+        "nextest_summary_lines": [],
+        "tail": []
+      }
+    },
+    {
+      "child_launch_umask": "0022",
+      "command": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--jobs",
+        "4",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "cwd": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1",
+      "duration_seconds": 35.256833,
+      "exit_code": 0,
+      "finished_at": "2026-11-03T13:16:56.287584+00:00",
+      "interrupted": false,
+      "kind": "gate",
+      "logs": {
+        "stderr": {
+          "bytes": 156,
+          "path": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1/docs/qualification/rea-state-root-ci-20261103-r1/02-clippy.stderr.log",
+          "sha256_at_stage_exit": "90993db2c84dc299408e19b34659315dda0a81ecfa27dddbd6ee1eed6b2b57ca"
+        },
+        "stdout": {
+          "bytes": 0,
+          "path": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1/docs/qualification/rea-state-root-ci-20261103-r1/02-clippy.stdout.log",
+          "sha256_at_stage_exit": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "name": "clippy",
+      "started_at": "2026-11-03T13:16:21.030763+00:00",
+      "status": "passed",
+      "summary": {
+        "nextest_summary_lines": [],
+        "tail": [
+          "    Checking hepta-runtime v0.1.0 (/home/qian-qi/hepta-runtime-rea-full-20261103-r1)",
+          "    Finished `dev` profile [optimized + debuginfo] target(s) in 35.12s"
+        ]
+      }
+    },
+    {
+      "child_launch_umask": "0022",
+      "command": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "nextest",
+        "run",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--build-jobs",
+        "4",
+        "--test-threads",
+        "1",
+        "--retries",
+        "0",
+        "--no-fail-fast",
+        "--profile",
+        "default",
+        "--ignore-default-filter",
+        "--no-tests",
+        "fail",
+        "-E",
+        "test(config::) | test(state_root) | binary(rea_mcp_external) | binary(rea_application_external) | binary(rea_web_external) | binary(rea_model_session_external)"
+      ],
+      "cwd": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1",
+      "duration_seconds": 202.436069,
+      "exit_code": 100,
+      "finished_at": "2026-11-03T13:20:18.729911+00:00",
+      "interrupted": false,
+      "kind": "gate",
+      "logs": {
+        "stderr": {
+          "bytes": 7431,
+          "path": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1/docs/qualification/rea-state-root-ci-20261103-r1/03-state-root-and-rea-mcp.stderr.log",
+          "sha256_at_stage_exit": "75e71cbcb24c0eccfbd4a5fdfd20f43dbb53d40de208c2ce73ae2599b71ba252"
+        },
+        "stdout": {
+          "bytes": 0,
+          "path": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1/docs/qualification/rea-state-root-ci-20261103-r1/03-state-root-and-rea-mcp.stdout.log",
+          "sha256_at_stage_exit": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "name": "state-root-and-rea-mcp",
+      "started_at": "2026-11-03T13:16:56.293852+00:00",
+      "status": "failed",
+      "summary": {
+        "nextest_summary_lines": [
+          "     Summary [  12.407s] 45 tests run: 44 passed, 1 failed, 1838 skipped"
+        ],
+        "tail": [
+          "        PASS [   0.041s] (26/45) hepta-runtime mcp::runtime::effect_owner_fence::tests::owner_controller_state_root_must_exist_and_remain_private",
+          "        PASS [   0.052s] (27/45) hepta-runtime mcp::runtime::effect_owner_fence::tests::wrong_owner_or_wrong_state_root_fail_before_effect",
+          "        PASS [   0.027s] (28/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_bounds_host_count_and_serialized_response",
+          "        PASS [   0.014s] (29/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_bounds_the_actual_mcp_wire_envelope",
+          "        PASS [   0.014s] (30/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_cache_does_not_retain_failed_validation_or_rendering",
+          "        PASS [   0.013s] (31/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_cache_reuses_exact_summary_and_returns_independent_strings",
+          "        PASS [   0.013s] (32/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_concurrent_first_readers_receive_identical_redacted_output",
+          "        PASS [   0.010s] (33/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_empty_roots_never_claim_file_access_or_policy_grants",
+          "        PASS [   0.012s] (34/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_has_no_hidden_policy_or_secret_hash_oracle",
+          "        PASS [   0.011s] (35/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_hides_retrieval_and_validation_failure_details",
+          "        PASS [   0.012s] (36/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_never_serializes_secret_fields_or_policy_digests",
+          "        PASS [   0.013s] (37/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_parameters_accept_only_empty_object",
+          "        PASS [   0.011s] (38/45) hepta-runtime mcp::runtime::effective_config::tests::effective_config_preserves_flags_counts_and_alias_order",
+          "        PASS [   0.013s] (39/45) hepta-runtime mcp::runtime::jobs::tests::cached_positive_cannot_escape_configured_state_root",
+          "        PASS [   0.074s] (40/45) hepta-runtime mcp::runtime::request_audit::tests::wide_state_root_is_refused_without_repair_or_partial_audit_creation",
+          "        PASS [   1.366s] (41/45) hepta-runtime::rea_application_external real_owned_packages_are_read_only_discoverable_and_hash_bound_across_restart",
+          "        PASS [   1.316s] (42/45) hepta-runtime::rea_mcp_external external_mcp_policy_worker_and_controller_restart",
+          "        PASS [   3.283s] (43/45) hepta-runtime::rea_mcp_external model_pages_ranges_and_archive_roles_use_the_shipped_mcp_workers",
+          "        PASS [   3.954s] (44/45) hepta-runtime::rea_model_session_external real_http_model_session_survives_restart_and_refuses_changed_authority",
+          "        PASS [   1.805s] (45/45) hepta-runtime::rea_web_external offline_capture_package_and_restart_keep_original_sources_and_never_execute_targets",
+          "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+          "     Summary [  12.407s] 45 tests run: 44 passed, 1 failed, 1838 skipped",
+          "        FAIL [   0.011s] ( 6/45) hepta-runtime mcp::runtime::config::tests::controller_state_identity_requires_the_actual_filesystem_owner",
+          "error: test run failed"
+        ]
+      }
+    }
+  ],
+  "status": "failed"
+}

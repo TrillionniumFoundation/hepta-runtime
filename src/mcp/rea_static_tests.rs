@@ -135,6 +135,8 @@ async fn real_gnu_readelf_inspects_own_test_binary_without_executing_it() {
 	tokio::fs::write(&artifact_path, &own).await.unwrap();
 	drop(own);
 	let profile = ReaStaticProfile {
+		java_engine: None,
+		ghidra_engine: None,
 		host: "owned".into(),
 		runtime_executable: std::env::current_exe()
 			.unwrap()

@@ -18,6 +18,10 @@ use std::path::{Component, Path};
 use super::runtime::config::{runtime_config, valid_name, Platform, RuntimeConfig};
 use super::runtime::jobs::ProcessStartParams;
 
+#[path = "rea_engine_profile.rs"]
+pub(crate) mod engine_profile;
+pub use engine_profile::GhidraEngineProfile;
+
 #[path = "rea_static_summary.rs"]
 pub(crate) mod summary;
 
@@ -29,6 +33,8 @@ pub(crate) const MAX_RESULT_BYTES: usize = 512 * 1024;
 pub enum StaticProvider {
 	GnuReadelf,
 	GnuObjdump,
+	Jadx,
+	Ghidra,
 }
 
 #[derive(
@@ -41,6 +47,22 @@ pub enum StaticOperation {
 	Symbols,
 	Notes,
 	Relocations,
+	Classes,
+	Sources,
+	Inventory,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct JavaEngineProfile {
+	pub java_home: String,
+	pub jar_path: String,
+	pub jar_sha256: String,
+	pub engine_version: String,
+	/// Distribution provenance, independently verified when the admin installs it.
+	pub release_archive_sha256: String,
+	/// Exact relative JRE files and their pins; system shared libraries remain outside this set.
+	pub runtime_files: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -65,6 +87,10 @@ pub struct ReaStaticProfile {
 	pub timeout_seconds: u64,
 	#[serde(default = "default_memory")]
 	pub memory_max_bytes: u64,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub java_engine: Option<JavaEngineProfile>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub ghidra_engine: Option<GhidraEngineProfile>,
 }
 
 fn default_artifact_bytes() -> u64 {
@@ -83,7 +109,7 @@ fn default_memory() -> u64 {
 #[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ReaStaticRequest {
-	/// Administrator-configured GNU readelf/objdump profile; never a command.
+	/// Administrator-configured static backend profile; never a command.
 	pub profile: String,
 	/// Exact profile identity returned by rea_static_profiles; prevents host/version rebinding.
 	pub profile_sha256: String,
@@ -135,7 +161,28 @@ fn inside(path: &str, roots: &[String]) -> bool {
 
 impl StaticProvider {
 	pub(crate) fn supports(self, operation: StaticOperation) -> bool {
-		self != Self::GnuObjdump || operation != StaticOperation::Notes
+		match self {
+			Self::GnuReadelf => matches!(
+				operation,
+				StaticOperation::Headers
+					| StaticOperation::Sections
+					| StaticOperation::Symbols
+					| StaticOperation::Notes
+					| StaticOperation::Relocations
+			),
+			Self::GnuObjdump => matches!(
+				operation,
+				StaticOperation::Headers
+					| StaticOperation::Sections
+					| StaticOperation::Symbols
+					| StaticOperation::Relocations
+			),
+			Self::Jadx => matches!(
+				operation,
+				StaticOperation::Classes | StaticOperation::Sources
+			),
+			Self::Ghidra => operation == StaticOperation::Inventory,
+		}
 	}
 
 	/// No caller-controlled flags, output paths, plugins, scripts or disassembly.
@@ -160,6 +207,7 @@ impl StaticProvider {
 			(Self::GnuObjdump, StaticOperation::Notes) => {
 				bail!("GNU objdump note inspection is unsupported")
 			}
+			_ => bail!("this operation requires its fixed engine bridge"),
 		};
 		let mut args = vec![flag.to_owned()];
 		if self == Self::GnuReadelf {
@@ -192,12 +240,58 @@ pub(crate) fn validate_profile(profile: &ReaStaticProfile) -> Result<()> {
 	let expected_prefix = match profile.provider {
 		StaticProvider::GnuReadelf => "GNU readelf ",
 		StaticProvider::GnuObjdump => "GNU objdump ",
+		StaticProvider::Jadx => "openjdk 21.",
+		StaticProvider::Ghidra => "openjdk 25.",
 	};
 	if !profile.backend_version.starts_with(expected_prefix)
 		|| profile.backend_version.len() > 512
 		|| profile.backend_version.contains(['\0', '\n', '\r'])
 	{
-		bail!("static profile requires the exact GNU backend version line");
+		bail!("static profile requires its exact admitted backend version line");
+	}
+	match (&profile.java_engine, profile.provider) {
+		(Some(engine), StaticProvider::Jadx) => {
+			if !absolute_normal_path(&engine.java_home)
+				|| !absolute_normal_path(&engine.jar_path)
+				|| profile.backend_executable != format!("{}/bin/java", engine.java_home)
+				|| !is_sha256(&engine.jar_sha256)
+				|| !is_sha256(&engine.release_archive_sha256)
+				|| engine.engine_version != "1.5.6"
+				|| engine.runtime_files.len() > 16
+				|| profile.max_artifact_bytes > 32 * 1024 * 1024
+				|| profile.memory_max_bytes < 768 * 1024 * 1024
+			{
+				bail!("JADX profile requires the pinned 1.5.6 jar, Java 21 installation and bounded resources");
+			}
+			for required in [
+				"release",
+				"lib/modules",
+				"lib/server/libjvm.so",
+				"lib/libjava.so",
+				"lib/libzip.so",
+				"lib/libnio.so",
+				"lib/libjli.so",
+			] {
+				if !engine.runtime_files.contains_key(required) {
+					bail!("JADX runtime manifest is missing {required}");
+				}
+			}
+			for (relative, digest) in &engine.runtime_files {
+				if relative.is_empty()
+					|| Path::new(relative).is_absolute()
+					|| !absolute_normal_path(&format!("{}/{relative}", engine.java_home))
+					|| !is_sha256(digest)
+				{
+					bail!("JADX runtime manifest has an invalid path or digest");
+				}
+			}
+		}
+		(None, StaticProvider::GnuReadelf | StaticProvider::GnuObjdump) => {}
+		(None, StaticProvider::Ghidra) => engine_profile::validate_ghidra(profile)?,
+		_ => bail!("Java engine settings must match an admitted Java provider"),
+	}
+	if profile.provider != StaticProvider::Ghidra && profile.ghidra_engine.is_some() {
+		bail!("Ghidra installation settings require the fixed Ghidra provider");
 	}
 	if profile.input_roots.is_empty()
 		|| profile.input_roots.len() > 16
@@ -245,6 +339,32 @@ pub fn validate_profiles(config: &RuntimeConfig) -> Result<()> {
 			&& !inside(&profile.working_directory, &host.allowed_cwd_prefixes)
 		{
 			bail!("static profile cwd exceeds its host policy");
+		}
+		if let Some(engine) = &profile.java_engine {
+			let runtime_paths: Vec<_> = engine
+				.runtime_files
+				.keys()
+				.map(|relative| format!("{}/{relative}", engine.java_home))
+				.collect();
+			for path in [&engine.java_home, &engine.jar_path]
+				.into_iter()
+				.chain(&runtime_paths)
+			{
+				if !inside(path, &host.allowed_read_path_prefixes)
+					|| inside(path, &host.protected_path_prefixes)
+				{
+					bail!("Java engine profile exceeds its host read policy");
+				}
+			}
+		}
+		if let Some(engine) = &profile.ghidra_engine {
+			for path in engine_profile::policy_paths(engine) {
+				if !inside(&path, &host.allowed_read_path_prefixes)
+					|| inside(&path, &host.protected_path_prefixes)
+				{
+					bail!("Ghidra engine profile exceeds its host read policy");
+				}
+			}
 		}
 		for path in [&profile.runtime_executable, &profile.backend_executable]
 			.into_iter()
@@ -354,7 +474,7 @@ pub fn profiles() -> Result<String> {
 		"runtime_sha256":p.runtime_sha256,"backend_sha256":p.backend_sha256,
 		"operations":p.allowed_operations,"max_artifact_bytes":p.max_artifact_bytes,
 		"max_output_bytes_per_stream":p.max_output_bytes,"timeout_seconds":p.timeout_seconds,
-		"memory_max_bytes":p.memory_max_bytes
+		"memory_max_bytes":p.memory_max_bytes,"java_engine":p.java_engine,"ghidra_engine":p.ghidra_engine
 	}))).collect::<Result<Vec<_>>>()?;
 	Ok(serde_json::to_string(
 		&json!({"profiles":profiles,"rea_full_parity":false}),
@@ -437,6 +557,66 @@ fn validate_report(report: &Value, input: &WorkerRequest, exit_code: i32) -> Res
 			!= json!({"scope":"selected_static_backend_operation","status":"partial"})
 	{
 		bail!("static report is not bound to its admitted request and complete backend outcome");
+	}
+	if input.profile.provider == StaticProvider::Jadx {
+		if report["java_engine"] != serde_json::to_value(&input.profile.java_engine)?
+			|| report["bridge_sha256"] != sha256(include_str!("rea_jadx_bridge.java").as_bytes())
+			|| report["backend"]["snapshot"] != "verified_installed_inode"
+			|| report["network_syscalls_denied"] != true
+			|| report["scratch"]["removed_after_operation"] != true
+		{
+			bail!("JADX report does not retain the admitted engine, bridge and cleanup identities");
+		}
+		if exit_code == 0 {
+			let observation: Value = serde_json::from_str(
+				report["stdout"]
+					.as_str()
+					.context("JADX observation source absent")?,
+			)?;
+			let engine = input
+				.profile
+				.java_engine
+				.as_ref()
+				.context("JADX engine profile absent")?;
+			if observation["schema"] != "hepta.rea.jadx-observation.v1"
+				|| observation["operation"] != serde_json::to_value(input.request.operation)?
+				|| observation["engine_version"] != engine.engine_version
+				|| observation["target_executed"] != false
+				|| observation["external_plugins_loaded"] != false
+				|| observation["source_semantics_validated"] != false
+			{
+				bail!("JADX observation does not match its admitted semantics");
+			}
+		}
+	}
+	if input.profile.provider == StaticProvider::Ghidra {
+		if report["ghidra_engine"] != serde_json::to_value(&input.profile.ghidra_engine)?
+			|| report["bridge_sha256"] != sha256(include_str!("rea_ghidra_bridge.java").as_bytes())
+			|| report["backend"]["snapshot"] != "verified_installed_inode"
+			|| report["installation_snapshot"] != "verified_installed_paths"
+			|| report["network_syscalls_denied"] != true
+			|| report["scratch"]["removed_after_operation"] != true
+		{
+			bail!("Ghidra report does not retain its admitted installation, bridge and cleanup identities");
+		}
+		if exit_code == 0 {
+			let observation: Value = serde_json::from_str(
+				report["stdout"]
+					.as_str()
+					.context("Ghidra observation source absent")?,
+			)?;
+			if observation["schema"] != "hepta.rea.ghidra-observation.v1"
+				|| observation["engine_version"] != "12.2"
+				|| observation["operation"] != "inventory"
+				|| observation["target_executed"] != false
+				|| observation["auto_analysis_performed"] != false
+				|| observation["decompilation_performed"] != false
+				|| observation["external_libraries_loaded"] != false
+				|| observation["project_saved"] != false
+			{
+				bail!("Ghidra observation does not match its fixed import-only semantics");
+			}
+		}
 	}
 	let size = report["subject"]["size_bytes"]
 		.as_u64()

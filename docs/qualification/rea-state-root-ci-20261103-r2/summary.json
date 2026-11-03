@@ -1,0 +1,176 @@
+{
+  "binary_after": {
+    "bytes": 391141088,
+    "exists": true,
+    "mode": "0o755",
+    "path": "/home/qian-qi/work/hepta-rea-full-20261103-r1-target/debug/hepta-runtime",
+    "sha256": "290fa949b7744c85018f9f26b32fbdd1884cce1c31ff202a9f076bc3d6a89c63"
+  },
+  "child_launch_umask": "0022",
+  "qualified": true,
+  "schema": "hepta.rea.state-root-ci-qualification.v1",
+  "scope": "Runtime first-use private state creation and real MCP regressions under CI launch umask0022; no retries.",
+  "source_after": "745b81bb4891ba354c90b94e569d9c86ef2813200da525d0f8eb90421dbdeb73",
+  "source_before": "745b81bb4891ba354c90b94e569d9c86ef2813200da525d0f8eb90421dbdeb73",
+  "source_unchanged": true,
+  "stages": [
+    {
+      "child_launch_umask": "0022",
+      "command": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "cwd": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1",
+      "duration_seconds": 2.869474,
+      "exit_code": 0,
+      "finished_at": "2026-11-03T13:27:00.959162+00:00",
+      "interrupted": false,
+      "kind": "gate",
+      "logs": {
+        "stderr": {
+          "bytes": 0,
+          "path": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1/docs/qualification/rea-state-root-ci-20261103-r2/01-fmt.stderr.log",
+          "sha256_at_stage_exit": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stdout": {
+          "bytes": 0,
+          "path": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1/docs/qualification/rea-state-root-ci-20261103-r2/01-fmt.stdout.log",
+          "sha256_at_stage_exit": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "name": "fmt",
+      "started_at": "2026-11-03T13:26:58.089700+00:00",
+      "status": "passed",
+      "summary": {
+        "nextest_summary_lines": [],
+        "tail": []
+      }
+    },
+    {
+      "child_launch_umask": "0022",
+      "command": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "clippy",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--jobs",
+        "4",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "cwd": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1",
+      "duration_seconds": 28.715474,
+      "exit_code": 0,
+      "finished_at": "2026-11-03T13:27:29.680883+00:00",
+      "interrupted": false,
+      "kind": "gate",
+      "logs": {
+        "stderr": {
+          "bytes": 156,
+          "path": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1/docs/qualification/rea-state-root-ci-20261103-r2/02-clippy.stderr.log",
+          "sha256_at_stage_exit": "8ddc12f4b773a90fcbc1d913487143d59c3dbc19418fb7cd25f4dac2a9f4c470"
+        },
+        "stdout": {
+          "bytes": 0,
+          "path": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1/docs/qualification/rea-state-root-ci-20261103-r2/02-clippy.stdout.log",
+          "sha256_at_stage_exit": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "name": "clippy",
+      "started_at": "2026-11-03T13:27:00.965413+00:00",
+      "status": "passed",
+      "summary": {
+        "nextest_summary_lines": [],
+        "tail": [
+          "    Checking hepta-runtime v0.1.0 (/home/qian-qi/hepta-runtime-rea-full-20261103-r1)",
+          "    Finished `dev` profile [optimized + debuginfo] target(s) in 28.52s"
+        ]
+      }
+    },
+    {
+      "child_launch_umask": "0022",
+      "command": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "nextest",
+        "run",
+        "--locked",
+        "--offline",
+        "--all-targets",
+        "--all-features",
+        "--build-jobs",
+        "4",
+        "--test-threads",
+        "1",
+        "--retries",
+        "0",
+        "--no-fail-fast",
+        "--profile",
+        "default",
+        "--ignore-default-filter",
+        "--no-tests",
+        "fail",
+        "-E",
+        "test(rea_) | test(config::) | test(state_root) | test(effect_owner_fence) | binary(/rea/)"
+      ],
+      "cwd": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1",
+      "duration_seconds": 76.732047,
+      "exit_code": 0,
+      "finished_at": "2026-11-03T13:28:46.419473+00:00",
+      "interrupted": false,
+      "kind": "gate",
+      "logs": {
+        "stderr": {
+          "bytes": 37644,
+          "path": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1/docs/qualification/rea-state-root-ci-20261103-r2/03-state-root-and-rea-mcp.stderr.log",
+          "sha256_at_stage_exit": "1405375b5a9a51f3816bb9457e406e7dff758095ac88d4fce7d3e0f709f18033"
+        },
+        "stdout": {
+          "bytes": 0,
+          "path": "/home/qian-qi/hepta-runtime-rea-full-20261103-r1/docs/qualification/rea-state-root-ci-20261103-r2/03-state-root-and-rea-mcp.stdout.log",
+          "sha256_at_stage_exit": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "name": "state-root-and-rea-mcp",
+      "started_at": "2026-11-03T13:27:29.687434+00:00",
+      "status": "passed",
+      "summary": {
+        "nextest_summary_lines": [
+          "     Summary [  28.005s] 256 tests run: 256 passed, 1627 skipped"
+        ],
+        "tail": [
+          "        PASS [   0.010s] (235/256) hepta-runtime mcp::runtime::effective_config::tests::effective_config_has_no_hidden_policy_or_secret_hash_oracle",
+          "        PASS [   0.010s] (236/256) hepta-runtime mcp::runtime::effective_config::tests::effective_config_hides_retrieval_and_validation_failure_details",
+          "        PASS [   0.010s] (237/256) hepta-runtime mcp::runtime::effective_config::tests::effective_config_never_serializes_secret_fields_or_policy_digests",
+          "        PASS [   0.010s] (238/256) hepta-runtime mcp::runtime::effective_config::tests::effective_config_parameters_accept_only_empty_object",
+          "        PASS [   0.009s] (239/256) hepta-runtime mcp::runtime::effective_config::tests::effective_config_preserves_flags_counts_and_alias_order",
+          "        PASS [   0.014s] (240/256) hepta-runtime mcp::runtime::jobs::tests::cached_positive_cannot_escape_configured_state_root",
+          "        PASS [   0.055s] (241/256) hepta-runtime mcp::runtime::request_audit::tests::wide_state_root_is_refused_without_repair_or_partial_audit_creation",
+          "        PASS [   1.474s] (242/256) hepta-runtime::rea_application_external real_owned_packages_are_read_only_discoverable_and_hash_bound_across_restart",
+          "        PASS [   0.013s] (243/256) hepta-runtime::rea_artifact_zip_worker real_archive_worker_indexes_inert_apk_roles_without_verification_claims",
+          "        PASS [   0.010s] (244/256) hepta-runtime::rea_artifact_zip_worker real_archive_worker_rejects_truncation_without_partial_stdout",
+          "        PASS [   1.344s] (245/256) hepta-runtime::rea_mcp_external external_mcp_policy_worker_and_controller_restart",
+          "        PASS [   0.712s] (246/256) hepta-runtime::rea_mcp_external model_pages_ranges_and_archive_roles_use_the_shipped_mcp_workers",
+          "        PASS [   3.975s] (247/256) hepta-runtime::rea_model_session_external real_http_model_session_survives_restart_and_refuses_changed_authority",
+          "        PASS [   0.016s] (248/256) hepta-runtime::rea_model_worker real_model_worker_handles_four_gib_without_loading_payload",
+          "        PASS [   0.011s] (249/256) hepta-runtime::rea_model_worker real_model_worker_refuses_write_capable_descriptor",
+          "        PASS [   0.012s] (250/256) hepta-runtime::rea_model_worker real_model_worker_rejects_malformed_header_without_partial_stdout",
+          "        PASS [   0.200s] (251/256) hepta-runtime::rea_model_worker real_worker_retains_a_complete_directory_larger_than_an_mcp_page",
+          "        PASS [   1.547s] (252/256) hepta-runtime::rea_web_external offline_capture_package_and_restart_keep_original_sources_and_never_execute_targets",
+          "        PASS [   0.012s] (253/256) hepta-runtime::rea_worker real_worker_handles_wasm_and_reports_non_rea_evidence",
+          "        PASS [   0.072s] (254/256) hepta-runtime::rea_worker real_worker_refuses_more_than_32_mib_without_allocating_unboundedly",
+          "        PASS [   0.013s] (255/256) hepta-runtime::rea_worker real_worker_rejects_truncated_elf_without_partial_stdout",
+          "        PASS [   0.011s] (256/256) hepta-runtime::rea_worker real_worker_seccomp_denies_file_and_network_after_stdin",
+          "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+          "     Summary [  28.005s] 256 tests run: 256 passed, 1627 skipped"
+        ]
+      }
+    }
+  ],
+  "status": "passed"
+}

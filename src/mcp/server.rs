@@ -38,8 +38,8 @@ use super::request_ctx;
 use super::runtime;
 use super::McpToolCall;
 use super::{
-	rea, rea_artifact_zip, rea_evidence, rea_model, rea_provider, rea_store, weight,
-	weight_artifact, weight_forward, weight_tensor,
+	rea, rea_artifact_zip, rea_evidence, rea_javascript, rea_model, rea_provider, rea_store,
+	rea_web, weight, weight_artifact, weight_forward, weight_tensor,
 };
 
 /// Per-session working directory state.
@@ -240,6 +240,15 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"rea_inspect_artifact",
 	"rea_inspect_model",
 	"rea_read_model",
+	"rea_inspect_web_capture",
+	"rea_compare_web_captures",
+	"rea_replay_web_entry",
+	"rea_inspect_javascript_package",
+	"rea_model_session_open",
+	"rea_model_session_query",
+	"rea_model_session_read",
+	"rea_model_session_list",
+	"rea_inspect_application",
 	"rea_inspect_archive",
 	"rea_static_profiles",
 	"rea_static_start",
@@ -1572,6 +1581,194 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Inspect bounded pages of saved HAR observations with source SHA-256; no network or browser execution."
+	)]
+	async fn rea_inspect_web_capture(
+		&self,
+		Parameters(params): Parameters<rea_web::InspectWebCaptureParams>,
+	) -> Result<String, String> {
+		rea_web::inspect_capture(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Compare SHA-pinned saved HAR captures by recorded request identity and occurrence; no live replay."
+	)]
+	async fn rea_compare_web_captures(
+		&self,
+		Parameters(params): Parameters<rea_web::CompareWebCapturesParams>,
+	) -> Result<String, String> {
+		rea_web::compare_captures(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read a bounded saved HAR response representation by source SHA and entry index; no network requests."
+	)]
+	async fn rea_replay_web_entry(
+		&self,
+		Parameters(params): Parameters<rea_web::ReplayWebEntryParams>,
+	) -> Result<String, String> {
+		rea_web::replay_entry(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read package.json declarations with source identity and JSON-pointer provenance; no script execution or AST claim."
+	)]
+	async fn rea_inspect_javascript_package(
+		&self,
+		Parameters(params): Parameters<rea_javascript::InspectJavascriptPackageParams>,
+	) -> Result<String, String> {
+		rea_javascript::inspect_package(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "List Retained Native Model Sessions",
+		description = "List bounded retained model snapshot sessions admitted for the current authenticated owner and unchanged runtime policy. Reads manifests without reparsing the original model or rehashing payload data. Index pages and chunks are verified on access.",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		)
+	)]
+	async fn rea_model_session_list(
+		&self,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		rea_model::session::list(scope.owner())
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Inspect Native Application Manifest",
+		description = "Read a fixed APK AndroidManifest.xml or JAR META-INF/MANIFEST.MF through the admitted file policy and existing checked ZIP directory. Verify bounded stored/deflate payload and CRC, then return paginated declarations. Does not execute, install, or authenticate the package.",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		)
+	)]
+	async fn rea_inspect_application(
+		&self,
+		Parameters(params): Parameters<crate::mcp::rea_application::InspectApplicationParams>,
+	) -> Result<String, String> {
+		crate::mcp::rea_application::inspect_application(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Owner-bound native immutable model snapshot open. Requires the same authenticated owner and current policy; query/read use retained snapshot data. Linux publication; bounded storage and reads."
+	)]
+	async fn rea_model_session_open(
+		&self,
+		Parameters(params): Parameters<rea_model::session::OpenModelSessionParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let owner_admission = std::sync::Arc::new(
+			runtime::effect_owner_fence::admit_new_effect()
+				.await
+				.map_err(|e| e.to_string())?,
+		);
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|e| e.to_string())?;
+		rea_model::session::open(params, scope.owner(), owner_admission)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Owner-bound native immutable model snapshot query. Requires the same authenticated owner and current policy; query/read use retained snapshot data. Linux publication; bounded storage and reads."
+	)]
+	async fn rea_model_session_query(
+		&self,
+		Parameters(params): Parameters<rea_model::session::QueryModelSessionParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|e| e.to_string())?;
+		rea_model::session::query(params, scope.owner())
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Owner-bound native immutable model snapshot read. Requires the same authenticated owner and current policy; query/read use retained snapshot data. Linux publication; bounded storage and reads."
+	)]
+	async fn rea_model_session_read(
+		&self,
+		Parameters(params): Parameters<rea_model::session::ReadModelSessionParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|e| e.to_string())?;
+		rea_model::session::read(params, scope.owner())
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
 		title = "Inspect Native Archive Directory",
 		annotations(
 			read_only_hint = true,
@@ -1719,10 +1916,12 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<rea_store::RetainPreviewParams>,
 	) -> Result<String, String> {
-		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
-			.await
-			.map_err(|error| error.to_string())?;
-		rea_store::retain_preview(params)
+		let owner_admission = std::sync::Arc::new(
+			runtime::effect_owner_fence::admit_new_effect()
+				.await
+				.map_err(|error| error.to_string())?,
+		);
+		rea_store::retain_preview(params, owner_admission)
 			.await
 			.map_err(|error| error.to_string())
 	}

@@ -1,0 +1,124 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+//! Isolated Darwin filesystem qualification of the extracted production helper.
+
+use anyhow::{bail, Context, Result};
+use std::io::Write;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Barrier};
+
+include!("publish_helper.rs");
+
+fn stage(path: &Path, bytes: &[u8]) -> Result<()> {
+	let mut file = std::fs::OpenOptions::new()
+		.write(true)
+		.create_new(true)
+		.mode(0o600)
+		.open(path)?;
+	file.write_all(bytes)?;
+	file.sync_all()?;
+	Ok(())
+}
+
+fn main() -> Result<()> {
+	let args: Vec<_> = std::env::args_os().collect();
+	if args.len() == 4 && args[1] == "--publish-and-exit" {
+		if install_staged_exclusive(Path::new(&args[2]), Path::new(&args[3]))? {
+			bail!("child unexpectedly found an existing destination");
+		}
+		// Exit before any staging-owner cleanup can run.
+		std::process::exit(0);
+	}
+	if args.len() != 2 {
+		bail!("supply one absent test-files directory");
+	}
+	let root = PathBuf::from(&args[1]);
+	std::fs::create_dir(&root)?;
+	println!("RENAME_EXCL={}", libc::RENAME_EXCL);
+
+	let first = root.join(".first.tmp");
+	let committed = root.join("committed.json");
+	stage(&first, b"sealed-record")?;
+	assert!(!install_staged_exclusive(&first, &committed)?);
+	std::fs::File::open(&root)?.sync_all()?;
+	assert!(!first.exists());
+	assert_eq!(std::fs::metadata(&committed)?.nlink(), 1);
+	assert_eq!(std::fs::metadata(&committed)?.mode() & 0o777, 0o600);
+	assert_eq!(std::fs::read(&committed)?, b"sealed-record");
+	println!("PASS create_only_source_consumed_single_link_private_mode_and_directory_fsync");
+
+	let collision = root.join(".collision.tmp");
+	stage(&collision, b"collision-candidate")?;
+	assert!(install_staged_exclusive(&collision, &committed)?);
+	assert_eq!(std::fs::read(&committed)?, b"sealed-record");
+	assert_eq!(std::fs::read(&collision)?, b"collision-candidate");
+	assert_eq!(std::fs::metadata(&collision)?.nlink(), 1);
+	println!("PASS existing_destination_preserves_committed_and_staged_bytes");
+
+	let symlink_destination = root.join("symlink.json");
+	std::os::unix::fs::symlink(&committed, &symlink_destination)?;
+	assert!(install_staged_exclusive(&collision, &symlink_destination)?);
+	assert!(std::fs::symlink_metadata(&symlink_destination)?.file_type().is_symlink());
+	assert_eq!(std::fs::read(&committed)?, b"sealed-record");
+	assert_eq!(std::fs::read(&collision)?, b"collision-candidate");
+	println!("PASS destination_symlink_not_followed_or_replaced");
+
+	let missing = root.join(".absent.tmp");
+	let absent_destination = root.join("absent.json");
+	assert!(install_staged_exclusive(&missing, &absent_destination).is_err());
+	assert!(!absent_destination.exists());
+	println!("PASS missing_source_fails_without_fallback");
+
+	for round in 0..8 {
+		let target = root.join(format!("winner-{round}.json"));
+		let barrier = Arc::new(Barrier::new(8));
+		let mut workers = Vec::new();
+		for index in 0..8 {
+			let source = root.join(format!(".race-{round}-{index}.tmp"));
+			let payload = format!("candidate-{round}-{index}");
+			stage(&source, payload.as_bytes())?;
+			let target = target.clone();
+			let ready = Arc::clone(&barrier);
+			workers.push(std::thread::spawn(move || -> Result<_> {
+				ready.wait();
+				let reused = install_staged_exclusive(&source, &target)?;
+				Ok((source, payload, reused))
+			}));
+		}
+		let mut results = Vec::new();
+		for worker in workers {
+			results.push(worker.join().map_err(|_| anyhow::anyhow!("publication thread panicked"))??);
+		}
+		let winners: Vec<_> = results.iter().filter(|(_, _, reused)| !reused).collect();
+		assert_eq!(winners.len(), 1);
+		assert_eq!(std::fs::read(&target)?, winners[0].1.as_bytes());
+		assert_eq!(std::fs::metadata(&target)?.nlink(), 1);
+		for (source, payload, reused) in results {
+			if reused {
+				assert_eq!(std::fs::read(&source)?, payload.as_bytes());
+				assert_eq!(std::fs::metadata(&source)?.nlink(), 1);
+			} else {
+				assert!(!source.exists());
+			}
+		}
+	}
+	println!("PASS 8_rounds_of_8_racing_publishers_exactly_one_winner");
+
+	let exiting_stage = root.join(".exiting.tmp");
+	let exiting_destination = root.join("exiting.json");
+	stage(&exiting_stage, b"survives-process-exit")?;
+	let status = std::process::Command::new(std::env::current_exe()?)
+		.arg("--publish-and-exit")
+		.arg(&exiting_stage)
+		.arg(&exiting_destination)
+		.status()?;
+	assert!(status.success());
+	assert!(!exiting_stage.exists());
+	assert_eq!(std::fs::metadata(&exiting_destination)?.nlink(), 1);
+	assert_eq!(std::fs::read(&exiting_destination)?, b"survives-process-exit");
+	println!("PASS immediate_process_exit_retains_single_link_committed_inode");
+	println!("SCOPE extracted_production_helper_only_no_full_mcp_or_power_loss_claim");
+	Ok(())
+}
