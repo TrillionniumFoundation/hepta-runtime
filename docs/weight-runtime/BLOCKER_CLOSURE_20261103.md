@@ -257,6 +257,15 @@ UNKNOWN/null eligibility. No actual cross-plan publication or pre-open binding
 is claimed from those observations. The later live guarded handoff and future
 comparative results also require their own evidence.
 
+A bounded source-readiness audit at **16:00:14.785 UTC** explained the empty
+new-family population: five original requests occurred after the new input
+start, but all five had a nonzero position; there were **zero eligible flat
+requests**. One read-only ingress capture found 201 source requests in total,
+latest at 15:59:07.364 UTC, with zero source issues, conflicts, retries or busy
+returns. The collector had zero incident files. This supports correct waiting
+for a naturally occurring eligible request; no request was generated and no
+forward was run by the audit.
+
 The new family's shared-head arithmetic is verified. Cross-plan feature sharing
 requires the actual pinned collector interface and its original publication and
 timing lineage. A later successful deployment does not rewrite the earlier
