@@ -246,6 +246,7 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"rea_replay_web_entry",
 	"rea_inspect_javascript_package",
 	"rea_inspect_javascript_graph",
+	"rea_inspect_source_map",
 	"rea_model_session_open",
 	"rea_model_session_query",
 	"rea_model_session_read",

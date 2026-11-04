@@ -520,23 +520,52 @@ fn generator_noise_is_stripped_but_parameters_named_like_it_survive() {
 	);
 }
 
+/// REA handlers depend on runtime roots/profiles and cannot be exposed without policy.
+#[test]
+fn every_rea_handler_is_runtime_only() {
+	let mut registered: Vec<_> = OctofsServer::tool_router()
+		.list_all()
+		.into_iter()
+		.filter(|tool| tool.name.starts_with("rea_"))
+		.map(|tool| tool.name.to_string())
+		.collect();
+	let mut runtime_only: Vec<_> = super::RUNTIME_TOOL_NAMES
+		.iter()
+		.filter(|name| name.starts_with("rea_"))
+		.map(|name| (*name).to_owned())
+		.collect();
+	registered.sort_unstable();
+	runtime_only.sort_unstable();
+	assert!(!registered.is_empty(), "native REA handlers are registered");
+	assert_eq!(
+		registered, runtime_only,
+		"every REA handler must be runtime-only, with no stale or duplicate entries",
+	);
+}
+
 /// The served tool list carries no generator noise and keeps every parameter.
 #[tokio::test(flavor = "multi_thread")]
 async fn served_tool_schemas_carry_no_generator_noise() {
 	let (client, _server_task, _unsolicited) = connect_legacy().await;
 	let tools = client.list_tools(None).await.expect("list tools");
-	assert_eq!(tools.tools.len(), 10);
-	for name in [
-		"directory_create",
-		"file_move",
-		"directory_move",
-		"text_file_write",
-	] {
-		assert!(
-			tools.tools.iter().any(|t| t.name == name),
-			"registered explicit {name}"
-		);
-	}
+	let mut names: Vec<_> = tools.tools.iter().map(|tool| tool.name.as_ref()).collect();
+	names.sort_unstable();
+	assert_eq!(
+		names,
+		[
+			"batch_edit",
+			"directory_create",
+			"directory_move",
+			"extract_lines",
+			"file_move",
+			"shell",
+			"text_editor",
+			"text_file_write",
+			"view",
+			"workdir",
+		],
+		"ordinary mode exposes only the established filesystem and shell tools",
+	);
 
 	assert!(!tools
 		.tools
