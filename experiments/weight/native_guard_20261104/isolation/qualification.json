@@ -1,0 +1,182 @@
+{
+  "all_selected_tests_passed": true,
+  "as_of_utc": "2026-11-04T04:02:15Z",
+  "frozen_test_binary": {
+    "bytes": 63370208,
+    "copy_sha256_equals_opened_source": true,
+    "copy_stable_source_inode_size_mtime_checked": true,
+    "scope": "R2_BEFORE_OWNER_INVENTORY_EXPECTATION_FIX; ONLY_UNMODIFIED_EXISTING_TESTS_RERUN",
+    "sha256": "29b2d1df15d0996f8744abb29eddc9af6ca3a93eb9dcbe06beedae845a5a6268"
+  },
+  "isolation": {
+    "cargo_or_build_invoked_by_diagnosis": false,
+    "executions": 5,
+    "harness_threads": 1,
+    "host_logical_cpus": 48,
+    "maximum_authorized_executions": 5,
+    "nofile_hard": 1048576,
+    "nofile_soft": 1024,
+    "one_exact_test_per_fresh_process": true,
+    "private_tmpdir": true,
+    "production_or_test_source_modified_by_diagnosis": false,
+    "resource_limit_raised": false
+  },
+  "original_full_run": {
+    "explicit_harness_worker_count_recorded": false,
+    "failed": 275,
+    "failure_error_counts": {
+      "archive_metadata_unavailable": 25,
+      "dispatch_refused_audit_unavailable": 9,
+      "other_retained_failures": 7,
+      "owner_inventory_expectation_omission": 1,
+      "private_audit_inode_refused": 2,
+      "request_audit_state_lock_unavailable": 228,
+      "timeout": 2,
+      "too_many_open_files_emfile": 1
+    },
+    "failure_module_counts": {
+      "mcp::runtime::effect_owner_fence": 1,
+      "mcp::runtime::jobs": 1,
+      "mcp::runtime::operation_async": 1,
+      "mcp::runtime::request_audit": 229,
+      "mcp::runtime::request_results": 33,
+      "mcp::server::server_tests": 10
+    },
+    "ignored": 36,
+    "log_sha256": "0bfb4fbe605039290564873323b2ece1e948c9aec2aa55d9bf657e4b71f5140d",
+    "passed": 1421,
+    "total": 1732
+  },
+  "potential_long_term_test_fix": "Serialize all tests touching the same global audit store/test hooks consistently, or move deliberate-poison scenarios into child processes or test-local injected locks. Do not clear production poison or weaken error checks to make tests pass.",
+  "private_operational_paths_or_hostnames_disclosed": false,
+  "required_next_gate": "Full newly compiled suite with --test-threads=1 at the existing 1024 soft descriptor limit, retaining the full result and resource context. Isolated passes do not replace that gate.",
+  "reviewed_source_sha256": {
+    "src/mcp/runtime/jobs_start_io_tests.rs": "c4b791cc832ac7abd5d24315204866149909e7aa737e0adb4ae1bec6a1dc54d8",
+    "src/mcp/runtime/operation_async_tests.rs": "671019d889592f7993679916f022058a19ca9b5e1859140552b80f107f51e65d",
+    "src/mcp/runtime/request_archive_batch_tests.rs": "79e64261dd32abfbf319fd3f0cfe2541ebd1137dc1bab741446bd72c2fb897d4",
+    "src/mcp/runtime/request_archive_index.rs": "782aefcfe1e83953742d670392122dde78c393880652e842dcb50ffeade6c183",
+    "src/mcp/runtime/request_audit.rs": "1a3041fe295117f018fa28283d5b4a504aa137365bf741e8ce71825bfa0f5c9c",
+    "src/mcp/runtime/request_audit_batch_tests.rs": "b723086623c4b3e4d46be5400c6800565152fcc60120f300126dae5929b86b26"
+  },
+  "schema": "hepta.runtime.bounded-test-isolation-qualification.v1",
+  "selected_test_results": [
+    {
+      "exit_code": 0,
+      "index": 1,
+      "loadavg_before": [
+        13.42041015625,
+        14.0048828125,
+        17.39453125
+      ],
+      "log_sha256": "4bba23ca5b9be8756d77f45201bea0d5a0ab6344420badc78ced83363d8924b5",
+      "nofile_limit": [
+        1024,
+        1048576
+      ],
+      "private_tmpdir": true,
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1731 filtered out; finished in 0.51s"
+      ],
+      "test": "mcp::runtime::operation_async::tests::graph_fifo_is_nonblocking_refusal_without_waiting_for_a_writer",
+      "test_threads": 1,
+      "timeout": false,
+      "wall_seconds": 0.5663878549821675
+    },
+    {
+      "exit_code": 0,
+      "index": 2,
+      "loadavg_before": [
+        13.42041015625,
+        14.0048828125,
+        17.39453125
+      ],
+      "log_sha256": "f6ec87f781491cb46aaf7ae6fbfd24df54ffb5c6673a597777fb902ff74d5695",
+      "nofile_limit": [
+        1024,
+        1048576
+      ],
+      "private_tmpdir": true,
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1731 filtered out; finished in 1.79s"
+      ],
+      "test": "mcp::runtime::request_audit::batch::tests::active_capacity_and_lookup_pins_survive_cohort_eviction",
+      "test_threads": 1,
+      "timeout": false,
+      "wall_seconds": 1.8197571149794385
+    },
+    {
+      "exit_code": 0,
+      "index": 3,
+      "loadavg_before": [
+        13.42041015625,
+        14.0048828125,
+        17.39453125
+      ],
+      "log_sha256": "7cdb13ad4c626681bdef1766080c6c2a223ab2a652b6a80ba5c4e250e0ecca79",
+      "nofile_limit": [
+        1024,
+        1048576
+      ],
+      "private_tmpdir": true,
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1731 filtered out; finished in 0.08s"
+      ],
+      "test": "mcp::runtime::request_audit::archive_batch::tests::shared_preflight_leaves_a_missing_store_for_the_original_exclusive_path",
+      "test_threads": 1,
+      "timeout": false,
+      "wall_seconds": 0.11526695801876485
+    },
+    {
+      "exit_code": 0,
+      "index": 4,
+      "loadavg_before": [
+        20.875,
+        15.85498046875,
+        17.63525390625
+      ],
+      "log_sha256": "d00903c1fb7c17943abbd954975504a9dbeab1afd805f28282fd63a7687e0840",
+      "nofile_limit": [
+        1024,
+        1048576
+      ],
+      "private_tmpdir": true,
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1731 filtered out; finished in 0.06s"
+      ],
+      "test": "mcp::runtime::jobs::start_io_tests::pending_publication_saves_frozen_intent_before_recoverable_identity",
+      "test_threads": 1,
+      "timeout": false,
+      "wall_seconds": 0.11501445190515369
+    },
+    {
+      "exit_code": 0,
+      "index": 5,
+      "loadavg_before": [
+        20.875,
+        15.85498046875,
+        17.63525390625
+      ],
+      "log_sha256": "7bd5af7ac5ef8f9e67741250048d6ba9d407b420bec302dfd64dc4090135555b",
+      "nofile_limit": [
+        1024,
+        1048576
+      ],
+      "private_tmpdir": true,
+      "result_lines": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1731 filtered out; finished in 0.13s"
+      ],
+      "test": "mcp::runtime::request_audit::batch::tests::one_unsafe_hot_leaf_does_not_rewrite_it_or_reject_other_completion",
+      "test_threads": 1,
+      "timeout": false,
+      "wall_seconds": 0.1651548920199275
+    }
+  ],
+  "source_mechanism": {
+    "all_other_original_failures_exonerated": false,
+    "exclusive_guard_preserves_std_mutex_poison": true,
+    "first_poisoning_panic_identified_from_original_log": false,
+    "metadata_and_dispatch_depend_on_shared_audit_state": true,
+    "process_global_once_lock": true,
+    "shared_guard_unwind_marks_reader_poisoned": true
+  }
+}

@@ -417,7 +417,7 @@ fn receipt(root: &Path, manifest: &Manifest, reused: bool) -> Value {
 	json!({"schema":"hepta.weight.native-artifact-receipt.v1","artifact_id":manifest.artifact_id,"kind":manifest.kind,"artifact_path":root.join(&manifest.artifact_id).join("model.safetensors"),"manifest_path":root.join(&manifest.artifact_id).join("manifest.json"),"source_sha256":manifest.source_sha256,"sha256":manifest.target_sha256,"byte_length":manifest.patch.source_size_bytes,"changed_bytes":manifest.changed_bytes,"exact_no_op":manifest.no_op,"reused":reused,"source_modified":false,"production_eligible":false,"behavior_evaluated":false})
 }
 
-async fn apply_with_roots(
+pub(super) async fn apply_with_roots(
 	params: PatchTensorParams,
 	roots: &[PathBuf],
 	state: &Path,
@@ -555,7 +555,7 @@ pub async fn patch(params: PatchTensorParams) -> Result<String> {
 	Ok(serde_json::to_string(&result)?)
 }
 
-async fn restore_with_state(id: &str, state: &Path) -> Result<Value> {
+pub(super) async fn restore_with_state(id: &str, state: &Path) -> Result<Value> {
 	let root = store_root(state).await?;
 	let saved = read_manifest(&root, id).await?;
 	if saved.kind != "patch" {

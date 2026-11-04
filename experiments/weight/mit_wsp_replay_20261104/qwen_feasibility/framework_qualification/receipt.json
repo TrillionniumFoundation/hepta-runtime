@@ -1,0 +1,232 @@
+{
+  "budget": {
+    "address_space_bytes": 12884901888,
+    "driver_alarm_seconds": 285,
+    "rss_limit_bytes": 12884901888,
+    "wall_seconds": 300
+  },
+  "checks": {
+    "actual_forward_calls": 2,
+    "all_export_files_unchanged": true,
+    "benchmark_items_used": 0,
+    "cpu_only": true,
+    "framework_model_instances": 2,
+    "generated_answers": 0,
+    "inspected_framework_sources_unchanged": true,
+    "meta_planning_instances": 1,
+    "new_packages_installed": 0,
+    "random_or_missing_learned_weights_used": false
+  },
+  "comparison": {
+    "different_float32_output_elements": 239770,
+    "interpretation": "Numerical difference only on one fixed short input; no accuracy or capability inference",
+    "maximum_absolute_logit_difference": 0.328125,
+    "mean_absolute_logit_difference": 0.08341730287485785,
+    "nonzero_difference_required_for_acceptance": false,
+    "root_mean_square_logit_difference": 0.09628460897030124
+  },
+  "contract": {
+    "automatic_from_pretrained_loader_tested": false,
+    "excluded_mtp_keys": [
+      "mtp.fc.weight",
+      "mtp.layers.0.input_layernorm.weight",
+      "mtp.layers.0.mlp.down_proj.weight",
+      "mtp.layers.0.mlp.gate_proj.weight",
+      "mtp.layers.0.mlp.up_proj.weight",
+      "mtp.layers.0.post_attention_layernorm.weight",
+      "mtp.layers.0.self_attn.k_norm.weight",
+      "mtp.layers.0.self_attn.k_proj.weight",
+      "mtp.layers.0.self_attn.o_proj.weight",
+      "mtp.layers.0.self_attn.q_norm.weight",
+      "mtp.layers.0.self_attn.q_proj.weight",
+      "mtp.layers.0.self_attn.v_proj.weight",
+      "mtp.norm.weight",
+      "mtp.pre_fc_norm_embedding.weight",
+      "mtp.pre_fc_norm_hidden.weight"
+    ],
+    "installed_unexpected_key_patterns": [
+      "^model.visual.*",
+      "^mtp.*"
+    ],
+    "main_language_source_keys": 320,
+    "mapping": "model.language_model.<suffix> -> model.<suffix>",
+    "meta_exact_key_shape_cover": true,
+    "nonpersistent_buffers": "Constructed deterministically on CPU by the inspected text class, not materialized from meta",
+    "strict_loader": "torch.nn.Module.load_state_dict(strict=True,assign=True)",
+    "target_state_keys_including_tied_alias": 321,
+    "tied_alias": {
+      "lm_head.weight": "model.embed_tokens.weight"
+    }
+  },
+  "driver_sha256": "d4ff765d249b6fee60e619ea90af3f2b00e54468c9601006ed962dc1e7c994f0",
+  "framework_source_sha256": {
+    "initialization.py": "a2392653161633d4f8aefb473e776113ec5df8844acdba892569407ca56c2d6a",
+    "modeling_rope_utils.py": "6a0727073e080e163d0287e15fc1acb90035e9a9df9cb19a13b632a40abfac24",
+    "modeling_utils.py": "553412f58334f65abba617f3b344828698dbf63615e109159fd03dafd3422d38",
+    "models/qwen3_5/configuration_qwen3_5.py": "e5316490555c2d3590682f1d84ca656bdf3d2aff7475b95b682c03afbb69e748",
+    "models/qwen3_5/modeling_qwen3_5.py": "b4b17fe08d8d54da34a0fce78639666279ae7fd0a9e4ec06fce6602774707ca3"
+  },
+  "input_sha256": {
+    "base/chat_template.jinja": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+    "base/config.json": "3f56b6210db3c52e0bafb50da005eb52b6d340ab4ad980091879b397743675fc",
+    "base/generation_config.json": "62153eb6c69f2e1f426beaa8002b7186437e949c7588167085df14e10e9c0a73",
+    "base/merges.txt": "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d",
+    "base/model.safetensors": "e9f6dd9e3636887f8bb04a467241c894af8828fd548c3d8f627a386ccf2a4765",
+    "base/tokenizer.json": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+    "base/tokenizer_config.json": "66e427c470fe580fe8c7b5725d857af23d8417e37fae62667ec698306a19987b",
+    "base/vocab.json": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003",
+    "p50c/chat_template.jinja": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+    "p50c/config.json": "3f56b6210db3c52e0bafb50da005eb52b6d340ab4ad980091879b397743675fc",
+    "p50c/generation_config.json": "62153eb6c69f2e1f426beaa8002b7186437e949c7588167085df14e10e9c0a73",
+    "p50c/merges.txt": "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d",
+    "p50c/model.safetensors": "6a211ed8a9b0b977c13889c3fd4f14dabeaee779ea001dd01f17c899877a0374",
+    "p50c/tokenizer.json": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+    "p50c/tokenizer_config.json": "66e427c470fe580fe8c7b5725d857af23d8417e37fae62667ec698306a19987b",
+    "p50c/vocab.json": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003",
+    "receipt.json": "87ae658c7bee2d89a16cb7a828347a36d474ff485c870fe629e1753cc2b92768",
+    "tensor_manifest.json": "84bdcf921a6f9ccc5e5d1a6d447baf8efda9314d8dc199f5176ffc13582ecf62"
+  },
+  "mapping_manifest_sha256": "df892a3746e7c1f96a896b27f3f858967d35fba7687560de412e6d032d9047e2",
+  "measurement": {
+    "cpu_seconds": 9.507730247,
+    "peak_rss_kib_linux": 2660096,
+    "wall_seconds": 9.427264991012635
+  },
+  "not_claimed": [
+    "original vLLM harness replay",
+    "MATH/GSM8K/IFEval efficacy",
+    "full-context generation compatibility",
+    "MTP speculative generation support",
+    "default from_pretrained conversion behavior",
+    "general circuit understanding"
+  ],
+  "protocol": {
+    "attention_implementation": "eager",
+    "batch": 1,
+    "cpu_threads": 4,
+    "forward_calls_per_variant": 1,
+    "input_ids": [
+      [
+        32,
+        11012,
+        6353,
+        12077,
+        2708,
+        3000,
+        13
+      ]
+    ],
+    "input_tokens": 7,
+    "logits_to_keep": 1,
+    "maximum_input_tokens": 32,
+    "sample_or_generate": false,
+    "text": "A quiet morning brings clear light.",
+    "use_cache": false
+  },
+  "runtime": {
+    "numpy": "2.5.2",
+    "python": "3.14.4",
+    "safetensors": "0.8.0",
+    "torch_distribution": "2.13.0+rocm10.0.0",
+    "transformers": "5.20.2"
+  },
+  "schema": "hepta.mit_qwen.strict_text_forward.v1",
+  "scope": "CPU text-class loading and one fixed nonbenchmark forward per variant; not generated efficacy",
+  "status": "passed_strict_cpu_load_and_finite_forward",
+  "variants": {
+    "base": {
+      "assign": true,
+      "buffers": {
+        "model.rotary_emb.inv_freq": {
+          "dtype": "torch.float32",
+          "sha256": "ec4437c15ead01576c3e6c7412c11daba363d17cee8bfce5c5d1c54e2e09d2d0",
+          "shape": [
+            32
+          ]
+        },
+        "model.rotary_emb.original_inv_freq": {
+          "dtype": "torch.float32",
+          "sha256": "ec4437c15ead01576c3e6c7412c11daba363d17cee8bfce5c5d1c54e2e09d2d0",
+          "shape": [
+            32
+          ]
+        }
+      },
+      "forward": {
+        "cpu_seconds": 0.537958486,
+        "wall_seconds": 0.42762617200787645
+      },
+      "learned_parameters_unchanged_by_forward": true,
+      "load_and_weight_verification": {
+        "cpu_seconds": 0.865312528,
+        "wall_seconds": 0.8664146329974756
+      },
+      "loaded_main_tensor_hashes_verified": 320,
+      "missing_keys": [],
+      "no_missing_weight_initialization": true,
+      "output": {
+        "dtype": "torch.bfloat16",
+        "finite": true,
+        "float32_array_sha256": "b45cc3c4e8babe1ee7afb96d81e41ccba07958bbd64d741f1daa524b4e4ec4e1",
+        "maximum": 16.875,
+        "mean": -2.451957805560105,
+        "minimum": -10.625,
+        "shape": [
+          1,
+          1,
+          248320
+        ]
+      },
+      "strict": true,
+      "tied_embedding_head_identity_verified": true,
+      "unexpected_keys": []
+    },
+    "p50c": {
+      "assign": true,
+      "buffers": {
+        "model.rotary_emb.inv_freq": {
+          "dtype": "torch.float32",
+          "sha256": "ec4437c15ead01576c3e6c7412c11daba363d17cee8bfce5c5d1c54e2e09d2d0",
+          "shape": [
+            32
+          ]
+        },
+        "model.rotary_emb.original_inv_freq": {
+          "dtype": "torch.float32",
+          "sha256": "ec4437c15ead01576c3e6c7412c11daba363d17cee8bfce5c5d1c54e2e09d2d0",
+          "shape": [
+            32
+          ]
+        }
+      },
+      "forward": {
+        "cpu_seconds": 0.3190044140000001,
+        "wall_seconds": 0.08136127899342682
+      },
+      "learned_parameters_unchanged_by_forward": true,
+      "load_and_weight_verification": {
+        "cpu_seconds": 0.8639729550000004,
+        "wall_seconds": 0.8643129950069124
+      },
+      "loaded_main_tensor_hashes_verified": 320,
+      "missing_keys": [],
+      "no_missing_weight_initialization": true,
+      "output": {
+        "dtype": "torch.bfloat16",
+        "finite": true,
+        "float32_array_sha256": "452857dab9f4a127d38e4ec7d6079d8c40b29c214e6678845ebba820b2686cfe",
+        "maximum": 16.75,
+        "mean": -2.371439378466649,
+        "minimum": -10.5,
+        "shape": [
+          1,
+          1,
+          248320
+        ]
+      },
+      "strict": true,
+      "tied_embedding_head_identity_verified": true,
+      "unexpected_keys": []
+    }
+  }
+}
