@@ -2590,7 +2590,16 @@ def private_read_json(name):
         before = os.fstat(stream.fileno())
         if before.st_size > 4 * 1024 * 1024:
             raise SystemExit("unsafe remote job file " + name + ": linked or oversized inode")
-        encoded = stream.read(4 * 1024 * 1024 + 1)
+        # Size the common allocation to the fresh snapshot, not the 4 MiB cap.
+        # A regular file may underreport its size; retain the original bounded
+        # read in that case before the unchanged metadata and JSON checks.
+        encoded = stream.read(max(0, before.st_size) + 1)
+        if encoded is not None and len(encoded) > before.st_size:
+            tail = stream.read(4 * 1024 * 1024 + 1 - len(encoded))
+            # BufferedReader preserves an available prefix when a later raw
+            # read would block. Keep that behavior without retrying the read.
+            if tail is not None:
+                encoded += tail
         after = os.fstat(stream.fileno())
         current = os.stat(name, dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
     def stamp(info):
@@ -3421,14 +3430,19 @@ def read_terminal_file(name, limit, missing_ok=False):
         if missing_ok:
             return None
         raise
-    with os.fdopen(fd, "rb") as stream:
-        before = os.fstat(stream.fileno())
-        if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid() or
-                before.st_nlink != 1 or stat.S_IMODE(before.st_mode) != 0o600 or before.st_size > limit):
-            raise ValueError("unsafe terminal publication file")
-        encoded = stream.read(limit + 1)
-        after = os.fstat(stream.fileno())
-        current = os.stat(name, dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
+    # Keep sole descriptor ownership even if fdopen rejects a substituted file.
+    try:
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            before = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid() or
+                    before.st_nlink != 1 or stat.S_IMODE(before.st_mode) != 0o600 or before.st_size > limit):
+                raise ValueError("unsafe terminal publication file")
+            # The checks below already require exactly this fresh snapshot size.
+            encoded = stream.read(max(0, before.st_size) + 1)
+            after = os.fstat(stream.fileno())
+            current = os.stat(name, dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
+    finally:
+        os.close(fd)
     def stamp(info):
         return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
                 info.st_size, info.st_mtime_ns, info.st_ctime_ns)
