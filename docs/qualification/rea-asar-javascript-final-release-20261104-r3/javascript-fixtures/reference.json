@@ -1,0 +1,1868 @@
+{
+  "schema": "hepta.javascript-babel-ast-differential.v1",
+  "status": "pass",
+  "oracle": {
+    "parser": "@babel/parser",
+    "parser_version": "8.0.6",
+    "traversal": "@babel/traverse",
+    "traversal_version": "8.0.6",
+    "node_version": "v22.23.4",
+    "extractor_sha256": "2287596907c24d362bae75a8103afcbf1499c070da6a7e9b09008264396bbcf9",
+    "npm_lock_sha256": "803d86e1adca224ebfe81cf43767d8e7abfdacf5f53f785fe2881e0be5847c7a"
+  },
+  "candidate": {
+    "executable_sha256": "786beaf13f80b98678ccde51b297cdf352c3878e55e263e9941a56f78e913219",
+    "parser": "oxc",
+    "version": "0.144.0",
+    "graph_sha256": "ec72e1f559eec8035d55467f70de41000feddee5d65dd523a9d53e446dcae385"
+  },
+  "sources": [
+    {
+      "id": "src/main.ts",
+      "syntax": "typescript",
+      "module_kind": "module",
+      "sha256": "b234b10d31dd5ca6e05f29c72e59f7376dbcf826a0a80af27aa784c63c4bfe84",
+      "byte_length": 671
+    },
+    {
+      "id": "src/preload.cjs",
+      "syntax": "javascript",
+      "module_kind": "commonjs",
+      "sha256": "ec12c2121240c0c303c47c03eb59ce99426c2a80cf0a48f8979309a315278b44",
+      "byte_length": 578
+    },
+    {
+      "id": "src/renderer.tsx",
+      "syntax": "tsx",
+      "module_kind": "module",
+      "sha256": "5681ef03a71a5b6fa8bd1a2ffbaef49a29b4ee03d325822a2f61f292104ead04",
+      "byte_length": 353
+    },
+    {
+      "id": "src/dynamic.ts",
+      "syntax": "typescript",
+      "module_kind": "module",
+      "sha256": "dd13687452aec4af7509e58704d03fafbc605bd9dccadca1cbb73dc13d99aa89",
+      "byte_length": 370
+    },
+    {
+      "id": "src/shadowing.cjs",
+      "syntax": "javascript",
+      "module_kind": "commonjs",
+      "sha256": "078d558eea51cddace73be0f349f9c139b9234cf2227da06922ae49fbfda56aa",
+      "byte_length": 439
+    },
+    {
+      "id": "src/util.js",
+      "syntax": "javascript",
+      "module_kind": "module",
+      "sha256": "92f9be1410544b52e185c7d7945b645c0a1efe31a89886e3e53de3e530b91cf7",
+      "byte_length": 92
+    },
+    {
+      "id": "src/types.ts",
+      "syntax": "typescript",
+      "module_kind": "module",
+      "sha256": "836c0cbb42aca6af5c5d75ed0df1c31a665aa5799d625309538eaa10f0d9ece8",
+      "byte_length": 84
+    },
+    {
+      "id": "src/barrel.ts",
+      "syntax": "typescript",
+      "module_kind": "module",
+      "sha256": "933a189fe15fd89dd2da2c8e545493a08ef90915eb4ae7b7f74341a1b9203a33",
+      "byte_length": 102
+    }
+  ],
+  "comparisons": {
+    "imports": {
+      "equal": true,
+      "expected_count": 17,
+      "actual_count": 17,
+      "missing": [],
+      "extra": []
+    },
+    "exports": {
+      "equal": true,
+      "expected_count": 16,
+      "actual_count": 16,
+      "missing": [],
+      "extra": []
+    },
+    "electron_calls": {
+      "equal": true,
+      "expected_count": 12,
+      "actual_count": 12,
+      "missing": [],
+      "extra": []
+    },
+    "ipc_edges": {
+      "equal": true,
+      "expected_count": 4,
+      "actual_count": 4,
+      "missing": [],
+      "extra": []
+    }
+  },
+  "expected": {
+    "imports": [
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "start": 0,
+          "end": 58,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_import",
+        "specifier": "electron",
+        "type_only": false,
+        "bindings": [
+          {
+            "kind": "named",
+            "imported_name": "ipcMain",
+            "local_name": "main",
+            "type_only": false,
+            "span": {
+              "start": 9,
+              "end": 24,
+              "unit": "utf8_bytes"
+            }
+          },
+          {
+            "kind": "named",
+            "imported_name": "BrowserWindow",
+            "local_name": "BrowserWindow",
+            "type_only": false,
+            "span": {
+              "start": 26,
+              "end": 39,
+              "unit": "utf8_bytes"
+            }
+          }
+        ]
+      },
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "start": 59,
+          "end": 98,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_import",
+        "specifier": "./types",
+        "type_only": true,
+        "bindings": [
+          {
+            "kind": "named",
+            "imported_name": "Payload",
+            "local_name": "Payload",
+            "type_only": true,
+            "span": {
+              "start": 73,
+              "end": 80,
+              "unit": "utf8_bytes"
+            }
+          }
+        ]
+      },
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "start": 99,
+          "end": 134,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_import",
+        "specifier": "./util.js",
+        "type_only": false,
+        "bindings": [
+          {
+            "kind": "named",
+            "imported_name": "answer",
+            "local_name": "answer",
+            "type_only": false,
+            "span": {
+              "start": 108,
+              "end": 114,
+              "unit": "utf8_bytes"
+            }
+          }
+        ]
+      },
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "start": 135,
+          "end": 184,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_reexport",
+        "specifier": "./util.js",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/preload.cjs",
+        "span": {
+          "start": 57,
+          "end": 76,
+          "unit": "utf8_bytes"
+        },
+        "kind": "commonjs_require",
+        "specifier": "electron",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/preload.cjs",
+        "span": {
+          "start": 492,
+          "end": 510,
+          "unit": "utf8_bytes"
+        },
+        "kind": "commonjs_require",
+        "specifier": "node:fs",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/renderer.tsx",
+        "span": {
+          "start": 0,
+          "end": 50,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_import",
+        "specifier": "electron",
+        "type_only": false,
+        "bindings": [
+          {
+            "kind": "named",
+            "imported_name": "ipcRenderer",
+            "local_name": "channel",
+            "type_only": false,
+            "span": {
+              "start": 9,
+              "end": 31,
+              "unit": "utf8_bytes"
+            }
+          }
+        ]
+      },
+      {
+        "source_id": "src/renderer.tsx",
+        "span": {
+          "start": 51,
+          "end": 90,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_import",
+        "specifier": "./types",
+        "type_only": true,
+        "bindings": [
+          {
+            "kind": "named",
+            "imported_name": "Payload",
+            "local_name": "Payload",
+            "type_only": true,
+            "span": {
+              "start": 60,
+              "end": 72,
+              "unit": "utf8_bytes"
+            }
+          }
+        ]
+      },
+      {
+        "source_id": "src/dynamic.ts",
+        "span": {
+          "start": 0,
+          "end": 37,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_import",
+        "specifier": "electron",
+        "type_only": false,
+        "bindings": [
+          {
+            "kind": "namespace",
+            "imported_name": "*",
+            "local_name": "electron",
+            "type_only": false,
+            "span": {
+              "start": 7,
+              "end": 20,
+              "unit": "utf8_bytes"
+            }
+          }
+        ]
+      },
+      {
+        "source_id": "src/dynamic.ts",
+        "span": {
+          "start": 202,
+          "end": 220,
+          "unit": "utf8_bytes"
+        },
+        "kind": "dynamic_import",
+        "specifier": null,
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/dynamic.ts",
+        "span": {
+          "start": 222,
+          "end": 241,
+          "unit": "utf8_bytes"
+        },
+        "kind": "dynamic_import",
+        "specifier": "./util.js",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/dynamic.ts",
+        "span": {
+          "start": 243,
+          "end": 262,
+          "unit": "utf8_bytes"
+        },
+        "kind": "commonjs_require",
+        "specifier": null,
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/shadowing.cjs",
+        "span": {
+          "start": 14,
+          "end": 33,
+          "unit": "utf8_bytes"
+        },
+        "kind": "commonjs_require",
+        "specifier": "electron",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/shadowing.cjs",
+        "span": {
+          "start": 126,
+          "end": 155,
+          "unit": "utf8_bytes"
+        },
+        "kind": "commonjs_require",
+        "specifier": "electron-lookalike",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/barrel.ts",
+        "span": {
+          "start": 0,
+          "end": 26,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_reexport_all",
+        "specifier": "./util.js",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/barrel.ts",
+        "span": {
+          "start": 27,
+          "end": 61,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_reexport_all",
+        "specifier": "./util.js",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/barrel.ts",
+        "span": {
+          "start": 62,
+          "end": 101,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_reexport",
+        "specifier": "./types",
+        "type_only": true,
+        "bindings": []
+      }
+    ],
+    "exports": [
+      {
+        "source_id": "src/main.ts",
+        "kind": "esm_indirect",
+        "exported_name": "reexported",
+        "local_name": null,
+        "imported_name": "answer",
+        "specifier": "./util.js",
+        "type_only": false
+      },
+      {
+        "source_id": "src/main.ts",
+        "kind": "esm_local",
+        "exported_name": "apiVersion",
+        "local_name": "apiVersion",
+        "imported_name": null,
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/main.ts",
+        "kind": "esm_local",
+        "exported_name": "default",
+        "imported_name": null,
+        "local_name": "start",
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/renderer.tsx",
+        "kind": "esm_local",
+        "exported_name": "View",
+        "local_name": "View",
+        "imported_name": null,
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/dynamic.ts",
+        "kind": "esm_local",
+        "exported_name": "receiver",
+        "local_name": "receiver",
+        "imported_name": null,
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/shadowing.cjs",
+        "kind": "commonjs_assignment",
+        "exported_name": "real",
+        "imported_name": null,
+        "local_name": null,
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/shadowing.cjs",
+        "kind": "commonjs_assignment",
+        "exported_name": "other",
+        "imported_name": null,
+        "local_name": null,
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/shadowing.cjs",
+        "kind": "commonjs_assignment",
+        "exported_name": null,
+        "imported_name": null,
+        "local_name": null,
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/util.js",
+        "kind": "esm_local",
+        "exported_name": "answer",
+        "local_name": "answer",
+        "imported_name": null,
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/util.js",
+        "kind": "esm_local",
+        "exported_name": "local",
+        "local_name": "local",
+        "imported_name": null,
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/util.js",
+        "kind": "esm_local",
+        "exported_name": "default",
+        "imported_name": null,
+        "local_name": "answer",
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/types.ts",
+        "kind": "esm_local",
+        "exported_name": "Payload",
+        "local_name": "Payload",
+        "imported_name": null,
+        "specifier": null,
+        "type_only": true
+      },
+      {
+        "source_id": "src/types.ts",
+        "kind": "esm_local",
+        "exported_name": "Name",
+        "local_name": "Name",
+        "imported_name": null,
+        "specifier": null,
+        "type_only": true
+      },
+      {
+        "source_id": "src/barrel.ts",
+        "kind": "esm_star",
+        "exported_name": null,
+        "local_name": null,
+        "imported_name": "* except default",
+        "specifier": "./util.js",
+        "type_only": false
+      },
+      {
+        "source_id": "src/barrel.ts",
+        "kind": "esm_indirect",
+        "exported_name": "util",
+        "local_name": null,
+        "imported_name": "*",
+        "specifier": "./util.js",
+        "type_only": false
+      },
+      {
+        "source_id": "src/barrel.ts",
+        "kind": "esm_indirect",
+        "exported_name": "Payload",
+        "local_name": null,
+        "imported_name": "Payload",
+        "specifier": "./types",
+        "type_only": true
+      }
+    ],
+    "electron_calls": [
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "start": 222,
+          "end": 313,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcMain",
+        "method": "handle",
+        "role": "invoke_handler",
+        "channel": "cfg:get",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "start": 315,
+          "end": 376,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcMain",
+        "method": "on",
+        "role": "message_handler",
+        "channel": "cfg:set",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "start": 393,
+          "end": 460,
+          "unit": "utf8_bytes"
+        },
+        "api": "BrowserWindow",
+        "method": "new",
+        "role": "window_constructor",
+        "channel": null,
+        "exposure_key": null,
+        "preload_declaration_present": true,
+        "literal_preload": "./preload.cjs"
+      },
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "start": 462,
+          "end": 519,
+          "unit": "utf8_bytes"
+        },
+        "api": "webContents",
+        "method": "send",
+        "role": "renderer_sender",
+        "channel": "cfg:changed",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/preload.cjs",
+        "span": {
+          "start": 78,
+          "end": 217,
+          "unit": "utf8_bytes"
+        },
+        "api": "contextBridge",
+        "method": "exposeInMainWorld",
+        "role": "bridge_exposure",
+        "channel": null,
+        "exposure_key": "config"
+      },
+      {
+        "source_id": "src/preload.cjs",
+        "span": {
+          "start": 131,
+          "end": 162,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcRenderer",
+        "method": "invoke",
+        "role": "invoke_sender",
+        "channel": "cfg:get",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/preload.cjs",
+        "span": {
+          "start": 182,
+          "end": 213,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcRenderer",
+        "method": "send",
+        "role": "message_sender",
+        "channel": "cfg:set",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/preload.cjs",
+        "span": {
+          "start": 219,
+          "end": 271,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcRenderer",
+        "method": "on",
+        "role": "renderer_handler",
+        "channel": "cfg:changed",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/renderer.tsx",
+        "span": {
+          "start": 175,
+          "end": 206,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcRenderer",
+        "method": "invoke",
+        "role": "invoke_sender",
+        "channel": "cfg:get",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/renderer.tsx",
+        "span": {
+          "start": 231,
+          "end": 269,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcRenderer",
+        "method": "send",
+        "role": "message_sender",
+        "channel": "unicode:π",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/dynamic.ts",
+        "span": {
+          "start": 144,
+          "end": 168,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcRenderer",
+        "method": "send",
+        "role": "message_sender",
+        "channel": null,
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/dynamic.ts",
+        "span": {
+          "start": 276,
+          "end": 347,
+          "unit": "utf8_bytes"
+        },
+        "api": "BrowserWindow",
+        "method": "new",
+        "role": "window_constructor",
+        "channel": null,
+        "exposure_key": null,
+        "preload_declaration_present": true,
+        "literal_preload": null
+      }
+    ],
+    "ipc_edges": [
+      {
+        "from": {
+          "source_id": "src/main.ts",
+          "span": {
+            "start": 462,
+            "end": 519,
+            "unit": "utf8_bytes"
+          }
+        },
+        "to": {
+          "source_id": "src/preload.cjs",
+          "span": {
+            "start": 219,
+            "end": 271,
+            "unit": "utf8_bytes"
+          }
+        },
+        "channel": "cfg:changed",
+        "sender_role": "renderer_sender",
+        "receiver_role": "renderer_handler"
+      },
+      {
+        "from": {
+          "source_id": "src/preload.cjs",
+          "span": {
+            "start": 131,
+            "end": 162,
+            "unit": "utf8_bytes"
+          }
+        },
+        "to": {
+          "source_id": "src/main.ts",
+          "span": {
+            "start": 222,
+            "end": 313,
+            "unit": "utf8_bytes"
+          }
+        },
+        "channel": "cfg:get",
+        "sender_role": "invoke_sender",
+        "receiver_role": "invoke_handler"
+      },
+      {
+        "from": {
+          "source_id": "src/preload.cjs",
+          "span": {
+            "start": 182,
+            "end": 213,
+            "unit": "utf8_bytes"
+          }
+        },
+        "to": {
+          "source_id": "src/main.ts",
+          "span": {
+            "start": 315,
+            "end": 376,
+            "unit": "utf8_bytes"
+          }
+        },
+        "channel": "cfg:set",
+        "sender_role": "message_sender",
+        "receiver_role": "message_handler"
+      },
+      {
+        "from": {
+          "source_id": "src/renderer.tsx",
+          "span": {
+            "start": 175,
+            "end": 206,
+            "unit": "utf8_bytes"
+          }
+        },
+        "to": {
+          "source_id": "src/main.ts",
+          "span": {
+            "start": 222,
+            "end": 313,
+            "unit": "utf8_bytes"
+          }
+        },
+        "channel": "cfg:get",
+        "sender_role": "invoke_sender",
+        "receiver_role": "invoke_handler"
+      }
+    ]
+  },
+  "actual": {
+    "imports": [
+      {
+        "source_id": "src/barrel.ts",
+        "span": {
+          "end": 26,
+          "start": 0,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_reexport_all",
+        "specifier": "./util.js",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/barrel.ts",
+        "span": {
+          "end": 61,
+          "start": 27,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_reexport_all",
+        "specifier": "./util.js",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/barrel.ts",
+        "span": {
+          "end": 101,
+          "start": 62,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_reexport",
+        "specifier": "./types",
+        "type_only": true,
+        "bindings": []
+      },
+      {
+        "source_id": "src/dynamic.ts",
+        "span": {
+          "end": 37,
+          "start": 0,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_import",
+        "specifier": "electron",
+        "type_only": false,
+        "bindings": [
+          {
+            "imported_name": "*",
+            "kind": "namespace",
+            "local_name": "electron",
+            "span": {
+              "end": 20,
+              "start": 7,
+              "unit": "utf8_bytes"
+            },
+            "type_only": false
+          }
+        ]
+      },
+      {
+        "source_id": "src/dynamic.ts",
+        "span": {
+          "end": 220,
+          "start": 202,
+          "unit": "utf8_bytes"
+        },
+        "kind": "dynamic_import",
+        "specifier": null,
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/dynamic.ts",
+        "span": {
+          "end": 241,
+          "start": 222,
+          "unit": "utf8_bytes"
+        },
+        "kind": "dynamic_import",
+        "specifier": "./util.js",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/dynamic.ts",
+        "span": {
+          "end": 262,
+          "start": 243,
+          "unit": "utf8_bytes"
+        },
+        "kind": "commonjs_require",
+        "specifier": null,
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "end": 58,
+          "start": 0,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_import",
+        "specifier": "electron",
+        "type_only": false,
+        "bindings": [
+          {
+            "imported_name": "ipcMain",
+            "kind": "named",
+            "local_name": "main",
+            "span": {
+              "end": 24,
+              "start": 9,
+              "unit": "utf8_bytes"
+            },
+            "type_only": false
+          },
+          {
+            "imported_name": "BrowserWindow",
+            "kind": "named",
+            "local_name": "BrowserWindow",
+            "span": {
+              "end": 39,
+              "start": 26,
+              "unit": "utf8_bytes"
+            },
+            "type_only": false
+          }
+        ]
+      },
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "end": 98,
+          "start": 59,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_import",
+        "specifier": "./types",
+        "type_only": true,
+        "bindings": [
+          {
+            "imported_name": "Payload",
+            "kind": "named",
+            "local_name": "Payload",
+            "span": {
+              "end": 80,
+              "start": 73,
+              "unit": "utf8_bytes"
+            },
+            "type_only": true
+          }
+        ]
+      },
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "end": 134,
+          "start": 99,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_import",
+        "specifier": "./util.js",
+        "type_only": false,
+        "bindings": [
+          {
+            "imported_name": "answer",
+            "kind": "named",
+            "local_name": "answer",
+            "span": {
+              "end": 114,
+              "start": 108,
+              "unit": "utf8_bytes"
+            },
+            "type_only": false
+          }
+        ]
+      },
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "end": 184,
+          "start": 135,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_reexport",
+        "specifier": "./util.js",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/preload.cjs",
+        "span": {
+          "end": 76,
+          "start": 57,
+          "unit": "utf8_bytes"
+        },
+        "kind": "commonjs_require",
+        "specifier": "electron",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/preload.cjs",
+        "span": {
+          "end": 510,
+          "start": 492,
+          "unit": "utf8_bytes"
+        },
+        "kind": "commonjs_require",
+        "specifier": "node:fs",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/renderer.tsx",
+        "span": {
+          "end": 50,
+          "start": 0,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_import",
+        "specifier": "electron",
+        "type_only": false,
+        "bindings": [
+          {
+            "imported_name": "ipcRenderer",
+            "kind": "named",
+            "local_name": "channel",
+            "span": {
+              "end": 31,
+              "start": 9,
+              "unit": "utf8_bytes"
+            },
+            "type_only": false
+          }
+        ]
+      },
+      {
+        "source_id": "src/renderer.tsx",
+        "span": {
+          "end": 90,
+          "start": 51,
+          "unit": "utf8_bytes"
+        },
+        "kind": "esm_import",
+        "specifier": "./types",
+        "type_only": true,
+        "bindings": [
+          {
+            "imported_name": "Payload",
+            "kind": "named",
+            "local_name": "Payload",
+            "span": {
+              "end": 72,
+              "start": 60,
+              "unit": "utf8_bytes"
+            },
+            "type_only": true
+          }
+        ]
+      },
+      {
+        "source_id": "src/shadowing.cjs",
+        "span": {
+          "end": 33,
+          "start": 14,
+          "unit": "utf8_bytes"
+        },
+        "kind": "commonjs_require",
+        "specifier": "electron",
+        "type_only": false,
+        "bindings": []
+      },
+      {
+        "source_id": "src/shadowing.cjs",
+        "span": {
+          "end": 155,
+          "start": 126,
+          "unit": "utf8_bytes"
+        },
+        "kind": "commonjs_require",
+        "specifier": "electron-lookalike",
+        "type_only": false,
+        "bindings": []
+      }
+    ],
+    "exports": [
+      {
+        "source_id": "src/barrel.ts",
+        "kind": "esm_star",
+        "exported_name": null,
+        "imported_name": "* except default",
+        "local_name": null,
+        "specifier": "./util.js",
+        "type_only": false
+      },
+      {
+        "source_id": "src/barrel.ts",
+        "kind": "esm_indirect",
+        "exported_name": "util",
+        "imported_name": "*",
+        "local_name": null,
+        "specifier": "./util.js",
+        "type_only": false
+      },
+      {
+        "source_id": "src/barrel.ts",
+        "kind": "esm_indirect",
+        "exported_name": "Payload",
+        "imported_name": "Payload",
+        "local_name": null,
+        "specifier": "./types",
+        "type_only": true
+      },
+      {
+        "source_id": "src/dynamic.ts",
+        "kind": "esm_local",
+        "exported_name": "receiver",
+        "imported_name": null,
+        "local_name": "receiver",
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/main.ts",
+        "kind": "esm_indirect",
+        "exported_name": "reexported",
+        "imported_name": "answer",
+        "local_name": null,
+        "specifier": "./util.js",
+        "type_only": false
+      },
+      {
+        "source_id": "src/main.ts",
+        "kind": "esm_local",
+        "exported_name": "apiVersion",
+        "imported_name": null,
+        "local_name": "apiVersion",
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/main.ts",
+        "kind": "esm_local",
+        "exported_name": "default",
+        "imported_name": null,
+        "local_name": "start",
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/renderer.tsx",
+        "kind": "esm_local",
+        "exported_name": "View",
+        "imported_name": null,
+        "local_name": "View",
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/shadowing.cjs",
+        "kind": "commonjs_assignment",
+        "exported_name": "real",
+        "imported_name": null,
+        "local_name": null,
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/shadowing.cjs",
+        "kind": "commonjs_assignment",
+        "exported_name": "other",
+        "imported_name": null,
+        "local_name": null,
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/shadowing.cjs",
+        "kind": "commonjs_assignment",
+        "exported_name": null,
+        "imported_name": null,
+        "local_name": null,
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/types.ts",
+        "kind": "esm_local",
+        "exported_name": "Payload",
+        "imported_name": null,
+        "local_name": "Payload",
+        "specifier": null,
+        "type_only": true
+      },
+      {
+        "source_id": "src/types.ts",
+        "kind": "esm_local",
+        "exported_name": "Name",
+        "imported_name": null,
+        "local_name": "Name",
+        "specifier": null,
+        "type_only": true
+      },
+      {
+        "source_id": "src/util.js",
+        "kind": "esm_local",
+        "exported_name": "answer",
+        "imported_name": null,
+        "local_name": "answer",
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/util.js",
+        "kind": "esm_local",
+        "exported_name": "local",
+        "imported_name": null,
+        "local_name": "local",
+        "specifier": null,
+        "type_only": false
+      },
+      {
+        "source_id": "src/util.js",
+        "kind": "esm_local",
+        "exported_name": "default",
+        "imported_name": null,
+        "local_name": "answer",
+        "specifier": null,
+        "type_only": false
+      }
+    ],
+    "electron_calls": [
+      {
+        "source_id": "src/dynamic.ts",
+        "span": {
+          "end": 168,
+          "start": 144,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcRenderer",
+        "method": "send",
+        "role": "message_sender",
+        "channel": null,
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/dynamic.ts",
+        "span": {
+          "end": 347,
+          "start": 276,
+          "unit": "utf8_bytes"
+        },
+        "api": "BrowserWindow",
+        "method": "new",
+        "role": "window_constructor",
+        "channel": null,
+        "exposure_key": null,
+        "preload_declaration_present": true,
+        "literal_preload": null
+      },
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "end": 313,
+          "start": 222,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcMain",
+        "method": "handle",
+        "role": "invoke_handler",
+        "channel": "cfg:get",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "end": 376,
+          "start": 315,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcMain",
+        "method": "on",
+        "role": "message_handler",
+        "channel": "cfg:set",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "end": 460,
+          "start": 393,
+          "unit": "utf8_bytes"
+        },
+        "api": "BrowserWindow",
+        "method": "new",
+        "role": "window_constructor",
+        "channel": null,
+        "exposure_key": null,
+        "preload_declaration_present": true,
+        "literal_preload": "./preload.cjs"
+      },
+      {
+        "source_id": "src/main.ts",
+        "span": {
+          "end": 519,
+          "start": 462,
+          "unit": "utf8_bytes"
+        },
+        "api": "webContents",
+        "method": "send",
+        "role": "renderer_sender",
+        "channel": "cfg:changed",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/preload.cjs",
+        "span": {
+          "end": 217,
+          "start": 78,
+          "unit": "utf8_bytes"
+        },
+        "api": "contextBridge",
+        "method": "exposeInMainWorld",
+        "role": "bridge_exposure",
+        "channel": null,
+        "exposure_key": "config"
+      },
+      {
+        "source_id": "src/preload.cjs",
+        "span": {
+          "end": 162,
+          "start": 131,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcRenderer",
+        "method": "invoke",
+        "role": "invoke_sender",
+        "channel": "cfg:get",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/preload.cjs",
+        "span": {
+          "end": 213,
+          "start": 182,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcRenderer",
+        "method": "send",
+        "role": "message_sender",
+        "channel": "cfg:set",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/preload.cjs",
+        "span": {
+          "end": 271,
+          "start": 219,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcRenderer",
+        "method": "on",
+        "role": "renderer_handler",
+        "channel": "cfg:changed",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/renderer.tsx",
+        "span": {
+          "end": 206,
+          "start": 175,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcRenderer",
+        "method": "invoke",
+        "role": "invoke_sender",
+        "channel": "cfg:get",
+        "exposure_key": null
+      },
+      {
+        "source_id": "src/renderer.tsx",
+        "span": {
+          "end": 269,
+          "start": 231,
+          "unit": "utf8_bytes"
+        },
+        "api": "ipcRenderer",
+        "method": "send",
+        "role": "message_sender",
+        "channel": "unicode:π",
+        "exposure_key": null
+      }
+    ],
+    "ipc_edges": [
+      {
+        "from": {
+          "source_id": "src/main.ts",
+          "span": {
+            "end": 519,
+            "start": 462,
+            "unit": "utf8_bytes"
+          }
+        },
+        "to": {
+          "source_id": "src/preload.cjs",
+          "span": {
+            "end": 271,
+            "start": 219,
+            "unit": "utf8_bytes"
+          }
+        },
+        "channel": "cfg:changed",
+        "sender_role": "renderer_sender",
+        "receiver_role": "renderer_handler"
+      },
+      {
+        "from": {
+          "source_id": "src/preload.cjs",
+          "span": {
+            "end": 162,
+            "start": 131,
+            "unit": "utf8_bytes"
+          }
+        },
+        "to": {
+          "source_id": "src/main.ts",
+          "span": {
+            "end": 313,
+            "start": 222,
+            "unit": "utf8_bytes"
+          }
+        },
+        "channel": "cfg:get",
+        "sender_role": "invoke_sender",
+        "receiver_role": "invoke_handler"
+      },
+      {
+        "from": {
+          "source_id": "src/preload.cjs",
+          "span": {
+            "end": 213,
+            "start": 182,
+            "unit": "utf8_bytes"
+          }
+        },
+        "to": {
+          "source_id": "src/main.ts",
+          "span": {
+            "end": 376,
+            "start": 315,
+            "unit": "utf8_bytes"
+          }
+        },
+        "channel": "cfg:set",
+        "sender_role": "message_sender",
+        "receiver_role": "message_handler"
+      },
+      {
+        "from": {
+          "source_id": "src/renderer.tsx",
+          "span": {
+            "end": 206,
+            "start": 175,
+            "unit": "utf8_bytes"
+          }
+        },
+        "to": {
+          "source_id": "src/main.ts",
+          "span": {
+            "end": 313,
+            "start": 222,
+            "unit": "utf8_bytes"
+          }
+        },
+        "channel": "cfg:get",
+        "sender_role": "invoke_sender",
+        "receiver_role": "invoke_handler"
+      }
+    ]
+  },
+  "reference_ast_nodes": [
+    {
+      "source_id": "src/util.js",
+      "span": {
+        "start": 69,
+        "end": 91,
+        "unit": "utf8_bytes"
+      },
+      "source_excerpt": "export default answer;",
+      "node": {
+        "type": "ExportDefaultDeclaration",
+        "start": 69,
+        "end": 91,
+        "loc": {
+          "start": {
+            "line": 3,
+            "column": 0,
+            "index": 69
+          },
+          "end": {
+            "line": 3,
+            "column": 22,
+            "index": 91
+          }
+        },
+        "declaration": {
+          "type": "Identifier",
+          "start": 84,
+          "end": 90,
+          "loc": {
+            "start": {
+              "line": 3,
+              "column": 15,
+              "index": 84
+            },
+            "end": {
+              "line": 3,
+              "column": 21,
+              "index": 90
+            },
+            "identifierName": "answer"
+          },
+          "name": "answer"
+        }
+      }
+    },
+    {
+      "source_id": "src/types.ts",
+      "span": {
+        "start": 0,
+        "end": 56,
+        "unit": "utf8_bytes"
+      },
+      "source_excerpt": "export interface Payload { key: string; value: number; }",
+      "node": {
+        "type": "ExportNamedDeclaration",
+        "start": 0,
+        "end": 56,
+        "loc": {
+          "start": {
+            "line": 1,
+            "column": 0,
+            "index": 0
+          },
+          "end": {
+            "line": 1,
+            "column": 56,
+            "index": 56
+          }
+        },
+        "exportKind": "type",
+        "specifiers": [],
+        "source": null,
+        "attributes": [],
+        "declaration": {
+          "type": "TSInterfaceDeclaration",
+          "start": 7,
+          "end": 56,
+          "loc": {
+            "start": {
+              "line": 1,
+              "column": 7,
+              "index": 7
+            },
+            "end": {
+              "line": 1,
+              "column": 56,
+              "index": 56
+            }
+          },
+          "id": {
+            "type": "Identifier",
+            "start": 17,
+            "end": 24,
+            "loc": {
+              "start": {
+                "line": 1,
+                "column": 17,
+                "index": 17
+              },
+              "end": {
+                "line": 1,
+                "column": 24,
+                "index": 24
+              },
+              "identifierName": "Payload"
+            },
+            "name": "Payload"
+          },
+          "body": {
+            "type": "TSInterfaceBody",
+            "start": 25,
+            "end": 56,
+            "loc": {
+              "start": {
+                "line": 1,
+                "column": 25,
+                "index": 25
+              },
+              "end": {
+                "line": 1,
+                "column": 56,
+                "index": 56
+              }
+            },
+            "body": [
+              {
+                "type": "TSPropertySignature",
+                "start": 27,
+                "end": 39,
+                "loc": {
+                  "start": {
+                    "line": 1,
+                    "column": 27,
+                    "index": 27
+                  },
+                  "end": {
+                    "line": 1,
+                    "column": 39,
+                    "index": 39
+                  }
+                },
+                "key": {
+                  "type": "Identifier",
+                  "start": 27,
+                  "end": 30,
+                  "loc": {
+                    "start": {
+                      "line": 1,
+                      "column": 27,
+                      "index": 27
+                    },
+                    "end": {
+                      "line": 1,
+                      "column": 30,
+                      "index": 30
+                    },
+                    "identifierName": "key"
+                  },
+                  "name": "key"
+                },
+                "computed": false,
+                "typeAnnotation": {
+                  "type": "TSTypeAnnotation",
+                  "start": 30,
+                  "end": 38,
+                  "loc": {
+                    "start": {
+                      "line": 1,
+                      "column": 30,
+                      "index": 30
+                    },
+                    "end": {
+                      "line": 1,
+                      "column": 38,
+                      "index": 38
+                    }
+                  },
+                  "typeAnnotation": {
+                    "type": "TSStringKeyword",
+                    "start": 32,
+                    "end": 38,
+                    "loc": {
+                      "start": {
+                        "line": 1,
+                        "column": 32,
+                        "index": 32
+                      },
+                      "end": {
+                        "line": 1,
+                        "column": 38,
+                        "index": 38
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "type": "TSPropertySignature",
+                "start": 40,
+                "end": 54,
+                "loc": {
+                  "start": {
+                    "line": 1,
+                    "column": 40,
+                    "index": 40
+                  },
+                  "end": {
+                    "line": 1,
+                    "column": 54,
+                    "index": 54
+                  }
+                },
+                "key": {
+                  "type": "Identifier",
+                  "start": 40,
+                  "end": 45,
+                  "loc": {
+                    "start": {
+                      "line": 1,
+                      "column": 40,
+                      "index": 40
+                    },
+                    "end": {
+                      "line": 1,
+                      "column": 45,
+                      "index": 45
+                    },
+                    "identifierName": "value"
+                  },
+                  "name": "value"
+                },
+                "computed": false,
+                "typeAnnotation": {
+                  "type": "TSTypeAnnotation",
+                  "start": 45,
+                  "end": 53,
+                  "loc": {
+                    "start": {
+                      "line": 1,
+                      "column": 45,
+                      "index": 45
+                    },
+                    "end": {
+                      "line": 1,
+                      "column": 53,
+                      "index": 53
+                    }
+                  },
+                  "typeAnnotation": {
+                    "type": "TSNumberKeyword",
+                    "start": 47,
+                    "end": 53,
+                    "loc": {
+                      "start": {
+                        "line": 1,
+                        "column": 47,
+                        "index": 47
+                      },
+                      "end": {
+                        "line": 1,
+                        "column": 53,
+                        "index": 53
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "source_id": "src/types.ts",
+      "span": {
+        "start": 57,
+        "end": 83,
+        "unit": "utf8_bytes"
+      },
+      "source_excerpt": "export type Name = string;",
+      "node": {
+        "type": "ExportNamedDeclaration",
+        "start": 57,
+        "end": 83,
+        "loc": {
+          "start": {
+            "line": 2,
+            "column": 0,
+            "index": 57
+          },
+          "end": {
+            "line": 2,
+            "column": 26,
+            "index": 83
+          }
+        },
+        "exportKind": "type",
+        "specifiers": [],
+        "source": null,
+        "attributes": [],
+        "declaration": {
+          "type": "TSTypeAliasDeclaration",
+          "start": 64,
+          "end": 83,
+          "loc": {
+            "start": {
+              "line": 2,
+              "column": 7,
+              "index": 64
+            },
+            "end": {
+              "line": 2,
+              "column": 26,
+              "index": 83
+            }
+          },
+          "id": {
+            "type": "Identifier",
+            "start": 69,
+            "end": 73,
+            "loc": {
+              "start": {
+                "line": 2,
+                "column": 12,
+                "index": 69
+              },
+              "end": {
+                "line": 2,
+                "column": 16,
+                "index": 73
+              },
+              "identifierName": "Name"
+            },
+            "name": "Name"
+          },
+          "typeAnnotation": {
+            "type": "TSStringKeyword",
+            "start": 76,
+            "end": 82,
+            "loc": {
+              "start": {
+                "line": 2,
+                "column": 19,
+                "index": 76
+              },
+              "end": {
+                "line": 2,
+                "column": 25,
+                "index": 82
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "manual_golden": {
+    "sha256": "d6ec76c812c7cd91305bb9815cf9ca79e8859f51df14cd506e152ced1afcd015",
+    "checks": {
+      "babel": {
+        "export_counts_match": true,
+        "corrected_export_observations_match": true,
+        "counts": {
+          "src/main.ts": 3,
+          "src/preload.cjs": 0,
+          "src/renderer.tsx": 1,
+          "src/dynamic.ts": 1,
+          "src/shadowing.cjs": 3,
+          "src/util.js": 3,
+          "src/types.ts": 2,
+          "src/barrel.ts": 3
+        }
+      },
+      "rust": {
+        "export_counts_match": true,
+        "corrected_export_observations_match": true,
+        "counts": {
+          "src/main.ts": 3,
+          "src/preload.cjs": 0,
+          "src/renderer.tsx": 1,
+          "src/dynamic.ts": 1,
+          "src/shadowing.cjs": 3,
+          "src/util.js": 3,
+          "src/types.ts": 2,
+          "src/barrel.ts": 3
+        }
+      }
+    }
+  },
+  "scope": "Owned finite fixtures; independent AST/scope comparison, not full REA 6.8.0 parity or runtime Electron qualification"
+}

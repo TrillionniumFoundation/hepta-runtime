@@ -1,0 +1,55 @@
+{
+  "root": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+  "evidence": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/lifecycle",
+  "env": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "TMPDIR": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/tmp",
+    "HEPTA_JS_AST_TEST_RUNTIME": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/frozen/hepta-runtime",
+    "HEPTA_JS_AST_FIXTURE_DIR": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript",
+    "HEPTA_ASAR_TEST_RUNTIME": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/frozen/hepta-runtime"
+  },
+  "commands": [
+    {
+      "name": "asar-external-mcp",
+      "argv": [
+        "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/deps/rea_asar_external-99d8883c6e199393",
+        "--test-threads=1"
+      ]
+    },
+    {
+      "name": "asar-real-producer-lifecycle",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/rea_asar_qualification.py",
+        "--runtime",
+        "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/frozen/hepta-runtime",
+        "--expected-runtime-sha256",
+        "aa580409a73bc2e0927ead93d32634239051a39fc951c3c2a92d5a1dece8347a",
+        "--asar-package",
+        "/home/qian-qi/work/hepta-rea-reference-20261103/install/node_modules/@electron/asar",
+        "--repository",
+        "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "--workspace",
+        "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/asar",
+        "--allow-owned-child-signals"
+      ]
+    },
+    {
+      "name": "javascript-cancellation",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/rea_javascript_cancellation_external.py",
+        "--runtime",
+        "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/frozen/hepta-runtime",
+        "--expected-runtime-sha256",
+        "aa580409a73bc2e0927ead93d32634239051a39fc951c3c2a92d5a1dece8347a",
+        "--workspace",
+        "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/js-cancellation",
+        "--allow-owned-child-signals",
+        "--allow-local-mcp"
+      ]
+    }
+  ]
+}
