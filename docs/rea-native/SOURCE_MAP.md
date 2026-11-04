@@ -101,8 +101,13 @@ credentials. It clears its environment and runs in `/`; Linux additionally
 binds its lifetime to the controller and tightens seccomp after input admission.
 The controller concurrently drains bounded stdout and stderr. Cancellation,
 output refusal and the wall-clock deadline kill and reap the owned child before
-the operation relinquishes ownership. The input-read permit stays held until
-that read has actually completed.
+the operation relinquishes ownership. Under the current cooperative MCP
+cancellation lifecycle, the input-read permit stays held until that read has
+actually completed. Arbitrary abort or drop by a direct Rust caller is outside
+this qualified path: an already started blocking filesystem operation can
+outlive the outer future and its permit. File admission and in-flight file I/O
+do not have the parser worker's hard wall-clock deadline. Callers should request
+cancellation through the token and await completion of the owned operation.
 
 ## Reproducible qualification
 

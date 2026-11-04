@@ -113,6 +113,9 @@ The frozen `inspect_apk_signature` contract is distinct from the general
 to `rea_inspect_apk_signature`; the general platform operation remains absent.
 Android apksigner, Java and Bouncy Castle are independent development oracles
 for this finite APK validation, not runtime dependencies of the native reader.
+APK parity is judged against the frozen static observations, Evidence, retained
+views and typed outcomes. Full Android installation and trust validation remain
+separately unclaimed capabilities.
 The earlier structural mapping check did not prove this semantic distinction;
 the corrected map preserves both upstream names and their original contracts.
 
