@@ -47,6 +47,23 @@ const samples = [
 const bits = new DataView(new ArrayBuffer(8));
 let state = 0x243f6a8885a308d3n;
 const mask = (1n << 64n) - 1n;
+// Independent 2026-11-04 bit-pattern differential exposed shortest-decimal
+// halfway ties missed by the historical 418-record corpus. Rust Display used
+// the upper decimal; ECMAScript chooses the even decimal significand. Keep
+// these in the real npm producer corpus as well as the small Rust regression.
+const halfwayBits = [
+  0x431548edc45ad881n, 0xc3131d83683658a5n, 0xc314a7f221ea6ee5n,
+  0x4310f1159b355b9dn, 0xc3000de31410933an, 0x43161a0e6838e059n,
+  0x431c51edfab4dc31n, 0xc2d0d487f5769dc8n, 0xc31c8d8d5c4241a9n,
+  0x42e76a82d3067b24n, 0x430024c84a510a02n, 0xc31dc0166e78dda5n,
+  0xc301b7eeb7a0ff62n, 0xc30beb217b58f1ban, 0x42ebb09c50bda664n,
+  0x43049b79d59c95ean, 0xc2e2f1fa060e6094n, 0xc2eadc9bc03b1c54n,
+  0x4315bcbf587d05adn, 0xc31c512513a696a9n,
+];
+for (const pattern of halfwayBits) {
+  bits.setBigUint64(0, pattern, false);
+  samples.push(bits.getFloat64(0, false));
+}
 for (let i = 0; i < 384; i++) {
   state = (state * 6364136223846793005n + 1442695040888963407n) & mask;
   bits.setBigUint64(0, state, false);

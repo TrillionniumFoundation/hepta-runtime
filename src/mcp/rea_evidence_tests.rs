@@ -1,3 +1,4 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -229,6 +230,83 @@ fn ordinary_provider_version_matches_published_nullable_and_empty_string_schema(
 	assert!(
 		profile(&uncommitted, &uncommitted["provider"]).is_err(),
 		"a profile's version must remain nonempty even when ordinary Evidence permits empty"
+	);
+}
+
+#[test]
+fn finite_number_renderer_matches_ecmascript_halfway_ties() {
+	// These finite f64 values have two equally short decimal representations.
+	// Rust's Display rounds the last digit upward; ECMAScript selects the even
+	// decimal significand. The expectations came from Node JSON.stringify,
+	// independently of the Rust renderer and its decimal parsing.
+	let cases = [
+		(0x4315_48ed_c45a_d881_u64, "1497790137415200.2"),
+		(0xc313_1d83_6836_58a5_u64, "-1345118695953961.2"),
+		(0xc314_a7f2_21ea_6ee5_u64, "-1453539481787321.2"),
+		(0x4310_f115_9b35_5b9d_u64, "1192168681985767.2"),
+		(0xc300_0de3_1410_933a_u64, "-564858571592295.2"),
+		(0x4316_1a0e_6838_e059_u64, "1555274667014166.2"),
+		(0x431c_51ed_fab4_dc31_u64, "1992845475788556.2"),
+		(0xc2d0_d487_f576_9dc8_u64, "-74020000488055.12"),
+		(0xc31c_8d8d_5c42_41a9_u64, "-2009234406412394.2"),
+		(0x42e7_6a82_d306_7b24_u64, "205969830720473.12"),
+		(0x4300_24c8_4a51_0a02_u64, "568005285781824.2"),
+		(0xc31d_c016_6e78_dda5_u64, "-2093494224959337.2"),
+		(0xc301_b7ee_b7a0_ff62_u64, "-623413814370284.2"),
+		(0xc30b_eb21_7b58_f1ba_u64, "-982294175882807.2"),
+		(0x42eb_b09c_50bd_a664_u64, "243562805849395.12"),
+		(0x4304_9b79_d59c_95ea_u64, "725055888921277.2"),
+		(0xc2e2_f1fa_060e_6094_u64, "-166643928953604.62"),
+		(0xc2ea_dc9b_c03b_1c54_u64, "-236278465550562.62"),
+		(0x4315_bcbf_587d_05ad_u64, "1529626130071915.2"),
+		(0xc31c_5125_13a6_96a9_u64, "-1992629758305706.2"),
+	];
+	for (bits, expected) in cases {
+		let value = Number::from_f64(f64::from_bits(bits)).expect("finite bit pattern");
+		assert_eq!(
+			canonical_js_number(&value).expect("render"),
+			expected,
+			"f64 bits {bits:016x}"
+		);
+	}
+}
+
+#[test]
+#[ignore = "requires an independent Node JSON.stringify bit-pattern corpus"]
+fn extensive_ecmascript_finite_number_corpus_matches_native_renderer() {
+	use std::io::BufRead;
+
+	let path =
+		std::env::var("REA_REAL_NUMBER_CASES_TSV").expect("Node-generated bit-pattern corpus path");
+	let input = std::io::BufReader::new(std::fs::File::open(path).expect("read number oracle"));
+	let mut count = 0_usize;
+	for line in input.lines() {
+		let line = line.expect("read number case");
+		let (bits, expected) = line.split_once('\t').expect("bits and ECMAScript number");
+		let bits = u64::from_str_radix(bits, 16).expect("f64 bits");
+		let value = f64::from_bits(bits);
+		let number = Number::from_f64(value).expect("oracle contains finite values only");
+		assert_eq!(
+			canonical_js_number(&number).expect("render actual f64"),
+			expected,
+			"original bits {bits:016x}, case {count}"
+		);
+		let parsed: Number = serde_json::from_str(expected).expect("parse independent JSON");
+		assert_eq!(
+			parsed.as_f64().expect("finite JSON").to_bits(),
+			if value == 0.0 { 0 } else { bits },
+			"round-trip bits {bits:016x}, case {count}"
+		);
+		assert_eq!(
+			canonical_js_number(&parsed).expect("render parsed JSON"),
+			expected,
+			"parsed bits {bits:016x}, case {count}"
+		);
+		count += 1;
+	}
+	assert!(
+		count >= 1_000_000,
+		"broad deterministic corpus required, got {count}"
 	);
 }
 

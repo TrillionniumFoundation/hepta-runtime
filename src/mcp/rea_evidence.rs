@@ -1,3 +1,4 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -107,10 +108,11 @@ pub(super) fn parse_unique_json(data: &[u8]) -> Result<Value> {
 
 /// Render the shortest finite IEEE-754 value using ECMAScript JSON number
 /// notation: fixed for 1e-6 <= |x| < 1e21, otherwise lowercase exponent with
-/// explicit '+' for positive exponents, and normalize -0 to 0. Rust's float
-/// Display supplies the shortest round-trippable decimal digits. Independent
-/// npm REA Evidence vectors exercise boundary, fractional, and extreme cases.
-/// Full algorithmic equivalence for every f64 remains an adoption gate.
+/// explicit '+' for positive exponents, and normalize -0 to 0. Use the pinned
+/// JSON formatter for shortest round-trippable digits: Rust's float Display
+/// breaks exact decimal ties differently from ECMAScript. The transformations
+/// below only choose decimal/exponent notation. Independent npm Evidence and
+/// Node bit-pattern fixtures verify the result; exhaustive f64 coverage is not claimed.
 fn canonical_js_number(source: &Number) -> Result<String> {
 	let number = source
 		.as_f64()
@@ -122,13 +124,13 @@ fn canonical_js_number(source: &Number) -> Result<String> {
 		return Ok("0".to_string());
 	}
 	let negative = number.is_sign_negative();
-	let shortest = number.abs().to_string();
+	let shortest = serde_json::to_string(&number.abs())?;
 	let (mantissa, exponent) = if let Some(offset) = shortest.find(['e', 'E']) {
 		(
 			&shortest[..offset],
 			shortest[offset + 1..]
 				.parse::<i32>()
-				.context("invalid Rust shortest-float exponent")?,
+				.context("invalid JSON shortest-float exponent")?,
 		)
 	} else {
 		(shortest.as_str(), 0)
@@ -139,7 +141,7 @@ fn canonical_js_number(source: &Number) -> Result<String> {
 		if ch.is_ascii_digit() {
 			digits.push(ch);
 		} else if ch != b'.' {
-			bail!("invalid Rust shortest-float decimal");
+			bail!("invalid JSON shortest-float decimal");
 		}
 	}
 	let leading = digits.iter().take_while(|&&ch| ch == b'0').count();
