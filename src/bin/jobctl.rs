@@ -156,7 +156,10 @@ fn json_file<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
 	if !metadata.is_file() || metadata.len() > INPUT_MAX {
 		bail!("not a bounded regular JSON file");
 	}
-	Ok(serde_json::from_reader(f.take(INPUT_MAX + 1))?)
+	Ok(serde_json::from_reader(std::io::BufReader::with_capacity(
+		8192,
+		f.take(INPUT_MAX + 1),
+	))?)
 }
 struct Lock(File);
 impl Lock {

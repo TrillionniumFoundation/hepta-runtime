@@ -1,0 +1,105 @@
+{
+  "schema": "hepta-github-blob-preparation-observations/v1",
+  "recorded_utc": "2026-11-04T10:46:23.754678+00:00",
+  "scope": "Connector failures during preparation of immutable Git blobs, before any branch update. This does not count runtime workload errors or qualification retries.",
+  "confirmed_path_count_at_recording": 134,
+  "branch_updated": false,
+  "content_addressed_recovery": "Known identical blobs may be referenced by their previously acknowledged SHA. Otherwise an unconfirmed create is repeated only with the same exact content. All final tree entries require actual staged SHA-256 and Git blob SHA-1.",
+  "first_original_response_not_retained": true,
+  "failures": [
+    {
+      "phase": "stable-evidence-blobs-01",
+      "kind": "connector-text-response-not-json",
+      "observed": "SyntaxError: Unexpected token 'o', \"tool call e\"... is not valid JSON",
+      "confirmedEntries": 68,
+      "branchUpdated": false,
+      "recovery": "Retry identical content-addressed blob request for unconfirmed path; no ref mutation.",
+      "originalResponseRetained": false,
+      "finalAcknowledgedBlob": null,
+      "transportOnly": true
+    },
+    {
+      "path": "tools/x230/20261104/r18/mac-agent-evidence/identity-discovery-03.stderr",
+      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "response": {
+        "content": [
+          {
+            "type": "text",
+            "text": "tool call error: tool call failed for `codex_apps/github.create_blob`\n\nCaused by:\n    Mcp error: -32603: Internal error"
+          }
+        ],
+        "isError": true
+      },
+      "branchUpdated": false,
+      "originalResponseRetained": true,
+      "finalAcknowledgedBlob": {
+        "path": "tools/x230/20261104/r18/mac-agent-evidence/identity-discovery-03.stderr",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "transportOnly": true
+    },
+    {
+      "phase": "stable-evidence-blobs-03",
+      "path": "tools/x230/20261104/r17/qualification-01.tar.gz",
+      "outcome": "creation-unconfirmed",
+      "response": {
+        "content": [
+          {
+            "type": "text",
+            "text": "ReadTimeout: "
+          }
+        ],
+        "structuredContent": {
+          "error": "ReadTimeout: ",
+          "error_code": "UNKNOWN"
+        },
+        "isError": true
+      },
+      "branchUpdated": false,
+      "reason": "Connector ReadTimeout; no conflicting content hash was returned.",
+      "originalResponseRetained": true,
+      "finalAcknowledgedBlob": {
+        "path": "tools/x230/20261104/r17/qualification-01.tar.gz",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "b0e164a1f089194a05e192cba881af4282d35bf2",
+        "sha256": "7597cb044ec8de63c8adc5cd3e4b8f8b20a4289f6396afb2f1e2ba42b27522cf",
+        "bytes": 1479701
+      },
+      "transportOnly": true
+    },
+    {
+      "path": "tools/x230/20261104/r18/qualification-monitor/completion-handoff.json",
+      "sha": "9aec1cd1bc9fb01bc4742d79975d8e78fcb81eba",
+      "response": {
+        "content": [
+          {
+            "type": "text",
+            "text": "ReadTimeout: "
+          }
+        ],
+        "structuredContent": {
+          "error": "ReadTimeout: ",
+          "error_code": "UNKNOWN"
+        },
+        "isError": true
+      },
+      "outcome": "creation-unconfirmed",
+      "branchUpdated": false,
+      "originalResponseRetained": true,
+      "finalAcknowledgedBlob": {
+        "path": "tools/x230/20261104/r18/qualification-monitor/completion-handoff.json",
+        "mode": "100644",
+        "type": "blob",
+        "sha": "9aec1cd1bc9fb01bc4742d79975d8e78fcb81eba",
+        "sha256": "88c8da3e6d1c9ca6f6376cd126f4d3f2674a6cf334cb6a8436a4df8e827bbc27",
+        "bytes": 3075
+      },
+      "transportOnly": true
+    }
+  ]
+}
