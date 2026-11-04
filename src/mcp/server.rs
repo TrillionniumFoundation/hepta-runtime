@@ -251,6 +251,7 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"rea_model_session_read",
 	"rea_model_session_list",
 	"rea_inspect_application",
+	"rea_inspect_apk_signature",
 	"rea_inspect_archive",
 	"rea_inspect_asar",
 	"rea_read_asar_member",
@@ -1734,6 +1735,26 @@ impl OctofsServer {
 		Parameters(params): Parameters<crate::mcp::rea_application::InspectApplicationParams>,
 	) -> Result<String, String> {
 		crate::mcp::rea_application::inspect_application(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Verify Native APK Signature Records",
+		description = "Inspect one APK through confined descriptor admission and a bounded Rust worker. Verify v2/v3 RSA-PSS, RSA PKCS1 SHA-256/SHA-512 and ECDSA SHA-256 P-256/P-384 signatures, exact certificate public-key binding and APK chunked content digests. Maximum 128 MiB archive, 16 MiB signing block and 32 signers per scheme. Report unsupported algorithms and v1/v3.1/rotation/source-stamp/v4 coverage explicitly. Mathematical self-consistency never establishes trusted signer identity or Android installability. Optional expected_sha256 binds exact complete captured bytes. No code execution, package installation or network requests.",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		)
+	)]
+	async fn rea_inspect_apk_signature(
+		&self,
+		Parameters(params): Parameters<crate::mcp::rea_apk_signature::InspectApkSignatureParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		crate::mcp::rea_apk_signature::inspect_apk_signature(params, context.ct.clone())
 			.await
 			.map_err(|error| error.to_string())
 	}

@@ -19,6 +19,7 @@ use std::sync::OnceLock;
 
 pub mod fs;
 pub mod rea;
+pub mod rea_apk_signature;
 pub mod rea_application;
 pub mod rea_artifact_zip;
 pub mod rea_asar;

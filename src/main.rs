@@ -156,6 +156,9 @@ async fn run(cli: Cli) -> Result<()> {
 		Commands::ReaSourceMapWorker => {
 			mcp::rea_source_map::serve_once()?;
 		}
+		Commands::ReaApkSignatureWorker => {
+			mcp::rea_apk_signature::serve_once()?;
+		}
 		Commands::ReaJavascriptWorker => {
 			mcp::rea_javascript_graph::serve_once()?;
 		}
