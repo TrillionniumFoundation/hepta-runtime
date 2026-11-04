@@ -243,13 +243,13 @@ Ghidra 12.2、JDK 25、JADX 目录、Chrome/Chromium 和 GNU 工具已有观察�
 
 报告采样时，[PR #84](https://github.com/TrillionniumFoundation/hepta-runtime/pull/84) 仍为 open/draft，远端 head 为 `310add6db47bcfbed3545432eb528a72f5eb6dcd`，base 为 `e1eb14ae8eff2fc2c3565a86a36b10dd44eac915`。此前普通 push 返回 GitHub 403 / account suspended。最终候选会按原凭据执行普通、非 force 的发布尝试；该次实际结果与最终提交身份由交付 metadata 记录。如果仍被拒绝，本地验收不能代替该最终 head 及 prospective merge 的远端 CI，也不会用其他身份绕过账号限制。
 
-交付采用显式恢复链：已发布的 310 基座对象、原 1d9 增量 bundle、本轮最终增量 bundle，以及从实际 Git tree 读取的完整跟踪源码清单。完整源码由可恢复的 Git 对象承载，避免在同一个包里再重复存放同内容的源码 tar。基座在 310 处明确为 shallow，不包含更早父历史；它提供恢复当前分支需要的完整基座 tree/blob 对象，而非虚构一份完整历史克隆。
+交付区分两种包。用户主机上的完整离线包包含已发布的 310 基座对象、原 1d9 增量 bundle、本轮最终增量 bundle 和完整源码清单；便携下载包包含全部未发布增量及清单、恢复脚本，明确要求调用者已有包含 310 及其正确 tree 的仓库。完整基座 pack 为 121,489,675 bytes，经当前连接实测传输需数小时，因此不把它重复放入便携增量下载。便携包不宣称能在缺少基座的空机器上独立恢复。完整源码由可恢复的 Git 对象承载，避免再重复存放同内容的源码 tar。基座在 310 处明确为 shallow，不包含更早父历史；它提供恢复当前分支需要的完整基座 tree/blob 对象，而非虚构一份完整历史克隆。
 
-最终恢复验证必须从新的空 bare 仓库开始，在不访问网络、不共享 alternates 或对象硬链接的条件下导入整条链，核对每个 bundle 的实际 prerequisite 与 advertised refs，再核对最终 commit/tree，并执行完整 `git fsck`。只有完成该检查后才将包交付为可离线恢复。恢复脚本拒绝覆盖已有目标目录。
+完整包的最终恢复验证从新的空 bare 仓库开始，在不访问网络、不共享 alternates 或对象硬链接的条件下导入整条链，核对每个 bundle 的实际 prerequisite 与 advertised refs，再核对最终 commit/tree，并执行完整 `git fsck`。便携包另从显式给定的既有基座创建新的独立 bare 仓库后导入增量，并核对同一最终源码清单。两条恢复流程分别保存真实结果，恢复脚本均拒绝覆盖已有目标目录。最终交付附录给出实际完成状态和文件身份。
 
 源码清单从 `git ls-tree` / `git cat-file` 的真实对象字节生成，逐文件核对路径、模式、类型、blob 和内容 SHA-256，恢复后再按清单验证。因此不依赖 `git archive` 的 export-ignore/export-subst 行为。最终 manifest 记录实际包内文件摘要、大小、最终 HEAD/tree 和恢复结果；可从恢复的 Git 仓库检出完整源码。
 
-恢复包不包含用户凭据、运行时 owner 数据库、完整 npm/Cargo 缓存、外部分析引擎安装或生产环境。它可恢复提交与源码，不承诺在完全无依赖缓存的新机器上离线完成编译，也不提供 310 以前的历史。需要完整历史时，应在有权限后从原仓库补齐该 shallow 边界。
+恢复包不包含用户凭据、运行时 owner 数据库、完整 npm/Cargo 缓存、外部分析引擎安装或生产环境。完整包可从空仓库恢复提交与源码；便携包依赖正确的既有 310 基座。两者均不承诺在完全无依赖缓存的新机器上离线完成编译。完整包不提供 310 以前的历史；便携恢复所用既有仓库原本具备的历史可由该仓库提供。需要完整历史时，应在有权限后从原仓库补齐该 shallow 边界。
 
 ## 9. 证据索引与复核入口
 
