@@ -160,6 +160,18 @@ qualification in the recorded profile, not ext4 latency, power-loss or
 cross-platform qualification. Full Rust matrices do not include doctests or
 automatically run all ignored external-provider tests.
 
+The [corrected full matrix archive](../../qualification/rea-corrected-rust-python-matrix-20261104-r3/README.md)
+retains the original failed r2, successful r3, exact path-budget proof and
+the subsequent serial Python matrix: 21 original commands, 441 tests, zero
+observed skips and zero source changes. Its Python selection adds deploy/tools;
+all 641 Rust records match the corresponding subset of the 1109-file Python
+inventory. The historical ext4 canary timeout cause remains unestablished.
+The [final mapping audit](../../qualification/rea-corrected-final-mapping-20261104-r3/README.md)
+preserves the incomplete-cache-path failure and the corrected authenticated
+cache/offline/strict results, 0/0/3. All 229 operations remain OPEN.
+The [Chinese integration report](../NATIVE_CONTINUATION_20261104.md) explains
+the native architecture, actual implementation and remaining complete contracts.
+
 ### Preserved earlier continuation release
 
 The earlier 18,437,832-byte release,
