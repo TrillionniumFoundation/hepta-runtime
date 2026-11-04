@@ -1421,16 +1421,7 @@
       "extra_gates": [
         "provider_qualification",
         "format_architecture_corpus"
-      ],
-      "implementation": "partial_operation",
-      "native_routes": [
-        "rea_inspect_apk_signature"
-      ],
-      "related_auxiliary_capabilities": [
-        "apk_signature_worker"
-      ],
-      "scope": "Bounded native APK v2/v3 supported signature records and chunked content digests, with 20 finite Android/REA projections and actual public-MCP lifecycle evidence. This subset uses native Rust cryptography and no external runtime verifier.",
-      "missing": "Exact upstream artifact/platform/provider selection, typed outcomes, Evidence and retained views; non-APK signatures; APK v1/JAR, v3.1/v3.2/v4, proof-of-rotation, source stamps, SDK/strongest-scheme/algorithm selection, unsupported cryptography and complete X.509/platform policy. Native verified records do not imply Android installability or trusted publisher identity."
+      ]
     },
     "inspect_plist": {
       "dependencies": [
@@ -1933,6 +1924,22 @@
         "format_architecture_corpus",
         "retention_and_pagination"
       ]
+    },
+    "inspect_apk_signature": {
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ],
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_apk_signature"
+      ],
+      "related_auxiliary_capabilities": [
+        "apk_signature_worker"
+      ],
+      "scope": "Bounded native APK v2/v3 supported signature records and chunked content digests, with 20 finite Android/REA projections and actual public-MCP lifecycle evidence. This subset uses native Rust cryptography and no external runtime verifier.",
+      "missing": "Exact upstream artifact/platform/provider selection, typed outcomes, Evidence and retained views; non-APK signatures; APK v1/JAR, v3.1/v3.2/v4, proof-of-rotation, source stamps, SDK/strongest-scheme/algorithm selection, unsupported cryptography and complete X.509/platform policy. Native verified records do not imply Android installability or trusted publisher identity."
     }
   },
   "behavior_gates": {
@@ -2191,7 +2198,7 @@
       ],
       "scope": "Internal stdin-only bounded native APK signature-record verifier over controller-captured bytes, with fixed worker budgets, cancellation/deadline kill and reap. Finite v2/v3 mathematics only; all complete-Android and REA-Evidence flags remain false.",
       "upstream_tools": [
-        "inspect_signature",
+        "inspect_apk_signature",
         "inspect_android_package"
       ]
     }

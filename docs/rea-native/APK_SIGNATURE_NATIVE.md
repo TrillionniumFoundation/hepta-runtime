@@ -37,6 +37,8 @@ v1/JAR signature markers are detected but JAR signatures and per-entry coverage 
 
 The controller uses `rea_files::open_confined` for existing configured controller workspace roots. It captures bytes through one descriptor, checks ordinary concurrent changes using before/after metadata, and optionally checks the caller's complete lowercase SHA-256 before invoking the worker. It never reopens the source path in the parser. The metadata checks do not defend against privileged races which restore metadata; source identity always refers to the complete captured sequence.
 
+Capture cancellation and its thirty-second checks are cooperative between regular-file reads. They do not interrupt a blocked filesystem read or establish a hard end-to-end capture deadline. The current MCP path forwards cancellation through the handler token and does not abort the handler on ordinary cancellation or transport EOF. Direct Rust callers that abort or drop this public async future during file I/O are outside the qualified lifecycle contract: an already running Tokio blocking read can outlive the caller and its outer permit. The six public-MCP lifecycle gates cover the worker stage after capture, not stalled-filesystem reads or runtime shutdown during stalled I/O.
+
 Production parsing runs in the stdin-only `rea-apk-signature-worker` with no source path, runtime credentials or inherited environment. The worker sets resource limits and, on Linux, parent-death binding and the existing post-read seccomp policy. The controller enforces cancellation and an independent wall deadline, then explicitly kills and reaps the child on failure. No APK is installed, executed, extracted, fetched or modified.
 
 | Budget | Bound |

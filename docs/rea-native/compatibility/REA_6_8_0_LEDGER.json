@@ -59,7 +59,7 @@
         "source_presence": "PRESENT",
         "scope": "Internal stdin-only bounded native APK signature-record verifier over controller-captured bytes, with fixed worker budgets, cancellation/deadline kill and reap. Finite v2/v3 mathematics only; all complete-Android and REA-Evidence flags remain false.",
         "upstream_tools": [
-          "inspect_signature",
+          "inspect_apk_signature",
           "inspect_android_package"
         ],
         "upstream_parity": "NOT_ESTABLISHED"
@@ -346,8 +346,8 @@
       },
       {
         "path": "docs/rea-native/APK_SIGNATURE_NATIVE.md",
-        "sha256": "342a1d93c338f5cf3b721469dff0b1e2a9baf3c8fa6089fb140fa02249c87b72",
-        "bytes": 13505
+        "sha256": "4028b4f301c6e47cd5e48a0969617ed246eac5ec30de16e30cb0775dd601d281",
+        "bytes": 14192
       },
       {
         "path": "docs/rea-native/ASAR.md",
@@ -950,7 +950,7 @@
         "bytes": 7890
       }
     ],
-    "source_manifest_sha256": "54b914d4bf9bb5be71e6be2b68bd0d24320a0aa0d4f07954f80eedbb05aa1257"
+    "source_manifest_sha256": "2883033e2cc6c53e05bc002c11dab80dcc6ddd21a2fb1a4107dfba355ab4a96d"
   },
   "environment_observations_sha256": "4ace5e8f041a05d205825fb2b2a41769fcfdc91f60810072eb7a6c17a12f3e9c",
   "dependency_assessments": {
@@ -1544,7 +1544,7 @@
       "hard_missing_dependency": "NOT_ESTABLISHED"
     }
   },
-  "mapping_sha256": "3ae1363a2a8c49aec46b8caeaec4e89ce310ec3203e9335d5856e1820260117e",
+  "mapping_sha256": "b16a23f9d4f1ee7081e0cebe5780f909f21b1ac1911992cbafefc0550712525c",
   "inputs_sha256": "d143681c5384d0cff75d72659cd36381eaff60ca5bf3fe45fb5290b3eccc6904",
   "summary": {
     "published_tools": 229,
@@ -7151,12 +7151,10 @@
         "idempotentHint": true,
         "openWorldHint": true
       },
-      "native_implementation": "partial_operation",
-      "native_routes": [
-        "rea_inspect_apk_signature"
-      ],
-      "native_scope": "Bounded native APK v2/v3 supported signature records and chunked content digests, with 20 finite Android/REA projections and actual public-MCP lifecycle evidence. This subset uses native Rust cryptography and no external runtime verifier.",
-      "remaining_behavior": "Exact upstream artifact/platform/provider selection, typed outcomes, Evidence and retained views; non-APK signatures; APK v1/JAR, v3.1/v3.2/v4, proof-of-rotation, source stamps, SDK/strongest-scheme/algorithm selection, unsupported cryptography and complete X.509/platform policy. Native verified records do not imply Android installability or trusted publisher identity.",
+      "native_implementation": "absent",
+      "native_routes": [],
+      "native_scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "remaining_behavior": "Exact native format operation or platform observation; header recognition is insufficient",
       "dependencies": [
         {
           "component": "native-platform-tools",
@@ -7167,9 +7165,7 @@
         }
       ],
       "related_runtime_routes": [],
-      "related_auxiliary_capabilities": [
-        "apk_signature_worker"
-      ],
+      "related_auxiliary_capabilities": [],
       "required_behavior_gates": [
         "contracts",
         "results",
@@ -7185,7 +7181,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Exact upstream artifact/platform/provider selection, typed outcomes, Evidence and retained views; non-APK signatures; APK v1/JAR, v3.1/v3.2/v4, proof-of-rotation, source stamps, SDK/strongest-scheme/algorithm selection, unsupported cryptography and complete X.509/platform policy. Native verified records do not imply Android installability or trusted publisher identity."
+          "next_step": "Exact native format operation or platform observation; header recognition is insufficient"
         },
         {
           "category": "behavioral_differential",
@@ -12470,13 +12466,17 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "native_implementation": "absent",
-      "native_routes": [],
-      "native_scope": "No upstream-compatible handler is registered in the pinned native runtime",
-      "remaining_behavior": "Complete selected static-format operation and unknown/truncation semantics",
+      "native_implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_apk_signature"
+      ],
+      "native_scope": "Bounded native APK v2/v3 supported signature records and chunked content digests, with 20 finite Android/REA projections and actual public-MCP lifecycle evidence. This subset uses native Rust cryptography and no external runtime verifier.",
+      "remaining_behavior": "Exact upstream artifact/platform/provider selection, typed outcomes, Evidence and retained views; non-APK signatures; APK v1/JAR, v3.1/v3.2/v4, proof-of-rotation, source stamps, SDK/strongest-scheme/algorithm selection, unsupported cryptography and complete X.509/platform policy. Native verified records do not imply Android installability or trusted publisher identity.",
       "dependencies": [],
       "related_runtime_routes": [],
-      "related_auxiliary_capabilities": [],
+      "related_auxiliary_capabilities": [
+        "apk_signature_worker"
+      ],
       "required_behavior_gates": [
         "contracts",
         "results",
@@ -12492,7 +12492,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Complete selected static-format operation and unknown/truncation semantics"
+          "next_step": "Exact upstream artifact/platform/provider selection, typed outcomes, Evidence and retained views; non-APK signatures; APK v1/JAR, v3.1/v3.2/v4, proof-of-rotation, source stamps, SDK/strongest-scheme/algorithm selection, unsupported cryptography and complete X.509/platform policy. Native verified records do not imply Android installability or trusted publisher identity."
         },
         {
           "category": "behavioral_differential",

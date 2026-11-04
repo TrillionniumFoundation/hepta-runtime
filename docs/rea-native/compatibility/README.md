@@ -108,6 +108,14 @@ halfway ties; it remains pinned historical input, alongside the new 438-case
 producer and wider finite-bit oracle. Neither corpus replaces complete
 operation-specific Evidence and typed-outcome qualification.
 
+The frozen `inspect_apk_signature` contract is distinct from the general
+`inspect_signature` native/platform operation. Only the dedicated APK row maps
+to `rea_inspect_apk_signature`; the general platform operation remains absent.
+Android apksigner, Java and Bouncy Castle are independent development oracles
+for this finite APK validation, not runtime dependencies of the native reader.
+The earlier structural mapping check did not prove this semantic distinction;
+the corrected map preserves both upstream names and their original contracts.
+
 ## Historical npm Evidence replay
 
 The recovered artifact includes 418 finite-number cases, corpus digest `9507bba36f7de741ad9a0100516cdaf0a85b496d11feb34e0b4fd8afe1d755fc`, and the original npm ELF-note Evidence record. These were replayed in native Rust at baseline `310add6db47bcfbed3545432eb528a72f5eb6dcd` using the existing ignored tests. Each filter actually executed one test; both passed. The test loops over the authenticated 418-case input. This exercises the Evidence semantic commitment and selected identity invariants, not all 229 operations.
