@@ -27,6 +27,11 @@ on:
 permissions:
   contents: read
 
+# Oxc qualification produced 8.4 GB of incremental state; retain normal
+# debug/test semantics while avoiding duplicate CI incremental caches.
+env:
+  CARGO_INCREMENTAL: '0'
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -93,6 +98,12 @@ jobs:
       - name: Descriptor-relative file safety
         run: /usr/bin/python3 tests/file_capabilities.py
 
+      - name: Frozen REA local mapping checks
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B tests/rea_compatibility_ledger_tests.py -v
+          /usr/bin/python3 -B scripts/rea_compatibility_ledger.py check-mapping
+
       - name: Control-plane regression
         run: |
           set -euo pipefail
@@ -127,6 +138,34 @@ jobs:
 
       - name: Release build
         run: cargo build --locked --all-features --release --bins --examples
+
+      - name: Release JavaScript MCP cancellation and recovery
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, subprocess, sys
+          from pathlib import Path
+          binary = Path("target/release/hepta-runtime").resolve(strict=True)
+          with binary.open("rb") as stream:
+              digest = hashlib.file_digest(stream, "sha256").hexdigest()
+          subprocess.run([
+              sys.executable, "-u", "tests/rea_javascript_cancellation_external.py",
+              "--runtime", str(binary), "--expected-runtime-sha256", digest,
+              "--workspace", str(Path(os.environ["RUNNER_TEMP"]) / "rea-javascript-cancellation"),
+              "--allow-owned-child-signals", "--allow-local-mcp",
+          ], check=True)
+          PY
+
+      - name: Retain JavaScript cancellation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-js-cancellation-${{ github.job }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/rea-javascript-cancellation/
+            !${{ runner.temp }}/rea-javascript-cancellation/hepta-runtime-qualified
+            !${{ runner.temp }}/rea-javascript-cancellation/state/**
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Release binary REA parser and Linux syscall-denial smoke
         run: |
@@ -305,6 +344,12 @@ jobs:
       - name: Descriptor-relative file safety
         run: /usr/bin/python3 tests/file_capabilities.py
 
+      - name: Frozen REA local mapping checks
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B tests/rea_compatibility_ledger_tests.py -v
+          /usr/bin/python3 -B scripts/rea_compatibility_ledger.py check-mapping
+
       - name: Control-plane regression
         run: |
           set -euo pipefail
@@ -333,3 +378,31 @@ jobs:
 
       - name: Release build
         run: cargo build --locked --all-features --release --bins --examples
+
+      - name: Release JavaScript MCP cancellation and recovery
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, subprocess, sys
+          from pathlib import Path
+          binary = Path("target/release/hepta-runtime").resolve(strict=True)
+          with binary.open("rb") as stream:
+              digest = hashlib.file_digest(stream, "sha256").hexdigest()
+          subprocess.run([
+              sys.executable, "-u", "tests/rea_javascript_cancellation_external.py",
+              "--runtime", str(binary), "--expected-runtime-sha256", digest,
+              "--workspace", str(Path(os.environ["RUNNER_TEMP"]) / "rea-javascript-cancellation"),
+              "--allow-owned-child-signals", "--allow-local-mcp",
+          ], check=True)
+          PY
+
+      - name: Retain JavaScript cancellation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-js-cancellation-${{ github.job }}-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/rea-javascript-cancellation/
+            !${{ runner.temp }}/rea-javascript-cancellation/hepta-runtime-qualified
+            !${{ runner.temp }}/rea-javascript-cancellation/state/**
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,7 +1,7 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! Fixed Ghidra ELF import inventory within the existing static worker.
+//! Fixed Ghidra ELF inventory and bounded function analysis on the existing static owner.
 //! Installed engine paths are hash-checked and re-admitted; they are not sealed.
 
 use anyhow::{bail, Context, Result};
@@ -22,9 +22,10 @@ use super::{pin, run_java, scratch, verify_runtime, JavaLaunch};
 use crate::mcp::rea_provider::engine_profile::{
 	validate_manifest, InstallationManifest, MAX_INSTALLATION_FILES, MAX_MANIFEST_BYTES,
 };
-use crate::mcp::rea_provider::{sha256, GhidraEngineProfile, WorkerRequest};
+use crate::mcp::rea_provider::{
+	ghidra_contract, sha256, GhidraEngineProfile, StaticOperation, WorkerRequest,
+};
 
-const BRIDGE: &str = include_str!("rea_ghidra_bridge.java");
 const MAX_INSTALLATION_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 
 #[derive(Clone)]
@@ -222,14 +223,19 @@ async fn verify_installation(installation: &Installation, deadline: Instant) -> 
 	Ok(())
 }
 
-async fn bridge_snapshot(deadline: Instant) -> Result<Snapshot> {
+async fn bridge_snapshot(
+	operation: StaticOperation,
+	revision: Option<u32>,
+	deadline: Instant,
+) -> Result<Snapshot> {
+	let bridge = ghidra_contract::bridge(operation, revision)?;
 	let mut source = tokio::fs::File::from_std(memfile("hepta-ghidra-bridge")?);
-	source.write_all(BRIDGE.as_bytes()).await?;
+	source.write_all(bridge.as_bytes()).await?;
 	source.flush().await?;
 	source.seek(std::io::SeekFrom::Start(0)).await?;
 	snapshot(
 		source,
-		&sha256(BRIDGE.as_bytes()),
+		&sha256(bridge.as_bytes()),
 		64 * 1024,
 		false,
 		deadline,
@@ -290,10 +296,10 @@ async fn analyze_inner(
 		.await
 		.context("captured ELF header is truncated")?;
 	if header != *b"\x7fELF" {
-		bail!("fixed Ghidra inventory accepts only captured ELF bytes");
+		bail!("fixed Ghidra operations accept only captured ELF bytes");
 	}
 	target.seek(std::io::SeekFrom::Start(0)).await?;
-	let bridge = bridge_snapshot(deadline).await?;
+	let bridge = bridge_snapshot(input.request.operation, engine.bridge_revision, deadline).await?;
 	let peak = Arc::new(AtomicU64::new(0));
 	verify_runtime(&java, &runtime).await?;
 	let (version_out, version_err, version_status) = run_java(
@@ -320,7 +326,7 @@ async fn analyze_inner(
 	{
 		bail!("Ghidra Java version differs from the admitted profile");
 	}
-	let arguments = vec![
+	let mut arguments = vec![
 		"-Xmx512m".into(),
 		"-XX:MaxMetaspaceSize=256m".into(),
 		"-XX:ReservedCodeCacheSize=64m".into(),
@@ -341,6 +347,16 @@ async fn analyze_inner(
 		format!("/proc/self/fd/{}", artifact.file.as_raw_fd()),
 		input.profile.max_output_bytes.to_string(),
 	];
+	if input.request.operation != StaticOperation::Inventory {
+		arguments.push(ghidra_contract::operation_name(input.request.operation)?.into());
+		arguments.push(
+			input
+				.request
+				.function_address
+				.clone()
+				.unwrap_or_else(|| "-".into()),
+		);
+	}
 	verify_runtime(&java, &runtime).await?;
 	verify_installation(&installation, deadline).await?;
 	let (stdout, stderr, status) = run_java(
@@ -363,17 +379,7 @@ async fn analyze_inner(
 	if status.success() {
 		let observation: Value = serde_json::from_str(stdout_text)
 			.context("Ghidra bridge omitted its JSON observation")?;
-		if observation["schema"] != "hepta.rea.ghidra-observation.v1"
-			|| observation["engine_version"] != "12.2"
-			|| observation["operation"] != "inventory"
-			|| observation["target_executed"] != false
-			|| observation["auto_analysis_performed"] != false
-			|| observation["decompilation_performed"] != false
-			|| observation["external_libraries_loaded"] != false
-			|| observation["project_saved"] != false
-		{
-			bail!("Ghidra observation does not match the fixed import-only contract");
-		}
+		ghidra_contract::validate_observation(&observation, input, artifact.size)?;
 	}
 	Ok(json!({
 		"schema":"hepta.rea.static-report.v1","request_sha256":sha256(&serde_json::to_vec(input)?),
@@ -389,7 +395,11 @@ async fn analyze_inner(
 		"coverage":{"scope":"selected_static_backend_operation","status":"partial"},
 		"scratch":{"monitored_peak_bytes":peak.load(Ordering::Relaxed),"monitored_limit_bytes":super::MAX_DISK_BYTES,"max_entries":super::MAX_DISK_ENTRIES,"single_file_limit_bytes":16*1024*1024,"poll_interval_ms":250},
 		"network_syscalls_denied":true,
-		"limitations":["Fixed ElfLoader inventory does not perform auto-analysis, decompilation, target execution or project persistence",
+		"limitations":[if input.request.operation == StaticOperation::Inventory {
+			"Fixed ElfLoader inventory does not perform auto-analysis, decompilation, target execution or project persistence"
+		} else {
+			"Fixed ELF function analysis is bounded to its declared analyzer profile; decompiled C and cross-references are engine observations, not source-equivalence proofs"
+		},
 			"Ghidra installation files are hash-checked against a sealed manifest and re-admitted before and after import, but are not sealed execution snapshots",
 			"Selected JRE path checks do not attest the complete system shared-library closure; privileged concurrent writers can race observations",
 			"Aggregate scratch bytes are sampled every 250 ms rather than enforced by a hard filesystem quota; interruption can leave logged private scratch"]

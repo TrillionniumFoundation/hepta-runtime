@@ -1,0 +1,11 @@
+import * as electron from "electron";
+const receiver = electron.ipcRenderer;
+declare const eventName: string;
+declare const sourcePath: string;
+receiver.send(eventName);
+receiver[eventName]("cfg:get");
+import(sourcePath);
+import("./util.js");
+require(sourcePath);
+const win = new electron.BrowserWindow({ webPreferences: { preload: sourcePath } });
+export { receiver };

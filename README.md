@@ -5,14 +5,25 @@
 The [unified REA/runtime integration](docs/rea-native/UNIFIED_RUNTIME.md) combines
 the native runtime owner and R9/R10 concurrency work with large GGUF/safetensors
 directories, bounded tensor reads, ZIP application-container indexes, pinned
-GNU static analyzers, immutable native weight patches and a scoped Rust F32
+GNU analyzers, JADX and versioned Ghidra providers, native JS/TS AST inspection, bounded
+Rust CDP browser capture, immutable native weight patches and a scoped Rust F32
 Linear forward operator. Each report states its coverage and identity scope.
 Native artifact operations work without a resident Python model or Node REA process.
+Operator-mode durable jobs retain the existing Python launcher and runner.
+Ghidra/JDK and Chrome remain explicit engine dependencies for their routes.
 
+- [Verified native analysis increment and evidence](docs/rea-native/NATIVE_ANALYSIS_INCREMENT_20261104.md)
 - [Static providers and original-job lifecycle](docs/rea-native/STATIC_PROVIDERS.md)
-- [Local browser capture through the native job owner](docs/rea-native/LOCAL_BROWSER_CAPTURE.md)
+- [Versioned Ghidra function analysis and decompilation](docs/rea-native/GHIDRA_ANALYSIS.md)
+- [Native JavaScript/TypeScript and Electron AST observations](docs/rea-native/JAVASCRIPT_AST.md)
+- [Local browser capture through the existing job owner](docs/rea-native/LOCAL_BROWSER_CAPTURE.md)
 - [Exact native weight artifacts and restoration](docs/weight-runtime/NATIVE_ARTIFACTS.md)
 - [Native F32 Linear calculation and independent comparison](docs/weight-runtime/NATIVE_LINEAR.md)
+
+The [frozen REA 6.8.0 compatibility ledger](docs/rea-native/compatibility/README.md)
+tracks all 229 upstream tools, their implementation scope and remaining behavior
+gates. CI checks its source bindings and mapping consistency; complete upstream
+behavioral parity remains OPEN.
 
 Use the CI's isolated runner for the full runtime suite:
 `cargo nextest run --locked --all-targets --all-features --test-threads 1 --retries 0 --no-fail-fast`.

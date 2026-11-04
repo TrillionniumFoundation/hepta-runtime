@@ -166,6 +166,7 @@ async fn real_gnu_readelf_inspects_own_test_binary_without_executing_it() {
 			operation: StaticOperation::Headers,
 			artifact_path: artifact_path.to_string_lossy().to_string(),
 			artifact_sha256: hash.clone(),
+			function_address: None,
 		},
 		protected_roots: vec![],
 	};

@@ -38,8 +38,8 @@ use super::request_ctx;
 use super::runtime;
 use super::McpToolCall;
 use super::{
-	rea, rea_artifact_zip, rea_evidence, rea_javascript, rea_model, rea_provider, rea_store,
-	rea_web, weight, weight_artifact, weight_forward, weight_tensor,
+	rea, rea_artifact_zip, rea_evidence, rea_javascript, rea_javascript_graph, rea_model,
+	rea_provider, rea_store, rea_web, weight, weight_artifact, weight_forward, weight_tensor,
 };
 
 /// Per-session working directory state.
@@ -244,6 +244,7 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"rea_compare_web_captures",
 	"rea_replay_web_entry",
 	"rea_inspect_javascript_package",
+	"rea_inspect_javascript_graph",
 	"rea_model_session_open",
 	"rea_model_session_query",
 	"rea_model_session_read",
@@ -1653,6 +1654,26 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "Inspect JavaScript and Electron AST Graph",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Parse 1..16 explicitly selected JS/TS/JSX/TSX sources with Rust Oxc AST and lexical binding checks in a bounded worker. Sources must be absolute workspace files with normalized logical IDs; no import, package script, preload path or URL is followed. Returns paged module imports/exports, Electron callsites and same-channel candidate edges, never runtime connectivity. First read package declarations if entry names are unknown, then explicitly select source files. Every continuation requires the returned graph_sha256. Grammar and CommonJS/module mode are explicit."
+	)]
+	async fn rea_inspect_javascript_graph(
+		&self,
+		Parameters(params): Parameters<rea_javascript_graph::InspectJavascriptGraphParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		rea_javascript_graph::inspect_graph(params, context.ct.clone())
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
 		title = "List Retained Native Model Sessions",
 		description = "List bounded retained model snapshot sessions admitted for the current authenticated owner and unchanged runtime policy. Reads manifests without reparsing the original model or rehashing payload data. Index pages and chunks are verified on access.",
 		annotations(
@@ -1812,7 +1833,7 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Admit one fixed GNU readelf/objdump operation, JADX classes/sources operation, or Ghidra ELF import-only inventory through the existing durable job owner. Requires exact profile and artifact SHA-256 identities. Preserve the complete request and idempotency key after uncertainty. Reads owned build artifacts without running them; Ghidra auto-analysis and decompilation are disabled. Output, time and snapshot sizes are bounded."
+		description = "Admit one fixed GNU readelf/objdump operation, JADX classes/sources operation, or versioned Ghidra ELF inventory/function analysis through the existing durable job owner. Ghidra revision 2 allows functions, function, decompile and xrefs; selected operations require one canonical function entry address. Requires exact profile and artifact SHA-256 identities. Preserve the complete request and idempotency key after uncertainty. Reads owned build artifacts without executing them. Analysis, decompilation, output and resource use are bounded; results are partial engine observations."
 	)]
 	async fn rea_static_start(
 		&self,

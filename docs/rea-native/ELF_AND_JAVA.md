@@ -114,7 +114,7 @@ unchanged fixture bytes. It writes the actual pins, reports and qualification
 outcome to its new private workspace. A successful API-only probe does not
 qualify that native lifecycle.
 
-## Qualified operator-mode lifecycle and fixed Ghidra import adapter
+## Qualified operator-mode lifecycle and versioned Ghidra adapter
 
 The first real JADX native-worker/MCP/SSH lifecycle qualification is retained in
 [the dated qualification record](../qualification/rea-jadx-operator-20261103-r1/README.md).
@@ -123,17 +123,33 @@ Its earlier isolated-mode attempt remains unqualified because the required
 system jobctl was not deployed. Successful operator lifecycle checks do not
 establish isolated-host deployment.
 
-A separate `ghidra` profile adds only operation `inventory`. Its fixed Java 25
-bridge uses Ghidra 12.2 `ProgramLoader` with `ElfLoader`, disables loading
-external libraries and linking project libraries, and does not invoke the
-auto-analysis manager, decompiler, target program or project save operation.
-It returns bounded language/compiler, memory-block and imported-symbol facts.
-This is an engine adapter and is not a Rust rewrite of Ghidra.
+A `ghidra` profile with no `ghidra_engine.bridge_revision` retains the original
+inventory bridge bytes and serialized profile identity. This legacy route
+admits only `inventory`. Its fixed Java 25 bridge uses Ghidra 12.2 `ProgramLoader`
+with `ElfLoader`, disables loading external libraries and linking project
+libraries, and does not invoke the auto-analysis manager, decompiler, target
+program or project save operation. It returns bounded language/compiler,
+memory-block and imported-symbol facts.
+
+An explicitly admitted `bridge_revision: 2` selects distinct bridge bytes and a
+new profile identity. It can allow `inventory`, `functions`, `function`, `xrefs`
+and `decompile`. Revision 2 inventory retains import-only semantics and repairs
+the named-byte-provider failure observed on a dynamically linked ELF. The four
+analysis operations use a fixed, partial analyzer profile; `decompile` invokes
+Ghidra's native decompiler for one canonical function entry. Target-library
+loading, project linking, target execution and project saving remain disabled.
+Ghidra 12.2 and JDK 25 are external engine dependencies. These observations do
+not establish full analyzer coverage, general source equivalence or REA parity.
+See [GHIDRA_ANALYSIS.md](GHIDRA_ANALYSIS.md) for migration, selectors, analysis
+budgets and qualification. This is an engine adapter, not a Rust rewrite of
+Ghidra.
 
 The optional `ghidra_engine` field preserves existing GNU/JADX serialized
 profiles when absent. It specifies `java_home`, `installation_root`,
 `manifest_path`, `manifest_sha256`, fixed `engine_version: "12.2"`,
 `release_archive_sha256`, and the same seven required relative JRE file pins.
+Its optional `bridge_revision` is omitted when absent; only explicit value `2`
+admits the new bridges. Legacy profiles are not silently upgraded.
 The separately pinned manifest has schema
 `hepta.rea.ghidra-installation.v1`, engine version, archive SHA, and a
 `files` map of relative paths to SHA-256 values. The complete actual
@@ -152,11 +168,16 @@ blocks and 128 imported symbols while scanning at most 4,096 symbols. Counts and
 scan-completeness fields distinguish omitted rows from unobserved symbols.
 The shared private scratch/child network boundary and its limitations apply.
 
-`tests/rea_ghidra_external.py` is the real-engine qualification harness. It
+`tests/rea_ghidra_external.py` retains the legacy inventory qualification. It
 creates and compiles only its own C object files, checks actual import facts,
 same-owner retry/restart, kernel flags on the fixed Java source child, and
-cancels an observed live Java child through the original owner job. A successful
-real-engine record is required before claiming that installation qualified.
+cancels an observed live Java child through the original owner job.
+`tests/rea_ghidra_analysis_external.py` qualifies the revision 2 dynamic-ELF
+inventory and all four analysis operations, with independent fixture facts,
+original-job replay/restart and cancellation of an observed native decompiler.
+A successful record for the exact runtime and installation is required before
+claiming that route qualified; the earlier records below describe their frozen
+inventory implementation.
 
 ### Ghidra installation must be read-only to the engine identity
 

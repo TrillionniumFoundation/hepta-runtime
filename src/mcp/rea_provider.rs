@@ -25,6 +25,9 @@ pub use engine_profile::GhidraEngineProfile;
 #[path = "rea_static_summary.rs"]
 pub(crate) mod summary;
 
+#[path = "rea_ghidra_contract.rs"]
+pub(crate) mod ghidra_contract;
+
 pub(crate) const MAX_WORKER_REQUEST: usize = 64 * 1024;
 pub(crate) const MAX_RESULT_BYTES: usize = 512 * 1024;
 
@@ -50,6 +53,10 @@ pub enum StaticOperation {
 	Classes,
 	Sources,
 	Inventory,
+	Functions,
+	Function,
+	Decompile,
+	Xrefs,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -120,6 +127,10 @@ pub struct ReaStaticRequest {
 	pub artifact_path: String,
 	/// Required identity of the bytes to inspect. A mismatch prevents backend use.
 	pub artifact_sha256: String,
+	/// Exact internal Ghidra function entry, in canonical lowercase 0x hexadecimal.
+	/// Required only for function/decompile/xrefs. Absent fields preserve old request identities.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub function_address: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -181,7 +192,14 @@ impl StaticProvider {
 				operation,
 				StaticOperation::Classes | StaticOperation::Sources
 			),
-			Self::Ghidra => operation == StaticOperation::Inventory,
+			Self::Ghidra => matches!(
+				operation,
+				StaticOperation::Inventory
+					| StaticOperation::Functions
+					| StaticOperation::Function
+					| StaticOperation::Decompile
+					| StaticOperation::Xrefs
+			),
 		}
 	}
 
@@ -399,6 +417,7 @@ pub(crate) fn validate_worker_request(input: &WorkerRequest) -> Result<()> {
 	if request.profile_sha256 != sha256(&serde_json::to_vec(&input.profile)?) {
 		bail!("static profile changed; retain and observe the original owner job instead of relaunching");
 	}
+	ghidra_contract::validate_selection(input.profile.provider, request)?;
 	if !absolute_normal_path(&request.artifact_path)
 		|| !inside(&request.artifact_path, &input.profile.input_roots)
 		|| inside(&request.artifact_path, &input.protected_roots)
@@ -591,8 +610,19 @@ fn validate_report(report: &Value, input: &WorkerRequest, exit_code: i32) -> Res
 	}
 	if input.profile.provider == StaticProvider::Ghidra {
 		if report["ghidra_engine"] != serde_json::to_value(&input.profile.ghidra_engine)?
-			|| report["bridge_sha256"] != sha256(include_str!("rea_ghidra_bridge.java").as_bytes())
-			|| report["backend"]["snapshot"] != "verified_installed_inode"
+			|| report["bridge_sha256"]
+				!= sha256(
+					ghidra_contract::bridge(
+						input.request.operation,
+						input
+							.profile
+							.ghidra_engine
+							.as_ref()
+							.context("Ghidra installation identity absent")?
+							.bridge_revision,
+					)?
+					.as_bytes(),
+				) || report["backend"]["snapshot"] != "verified_installed_inode"
 			|| report["installation_snapshot"] != "verified_installed_paths"
 			|| report["network_syscalls_denied"] != true
 			|| report["scratch"]["removed_after_operation"] != true
@@ -605,17 +635,13 @@ fn validate_report(report: &Value, input: &WorkerRequest, exit_code: i32) -> Res
 					.as_str()
 					.context("Ghidra observation source absent")?,
 			)?;
-			if observation["schema"] != "hepta.rea.ghidra-observation.v1"
-				|| observation["engine_version"] != "12.2"
-				|| observation["operation"] != "inventory"
-				|| observation["target_executed"] != false
-				|| observation["auto_analysis_performed"] != false
-				|| observation["decompilation_performed"] != false
-				|| observation["external_libraries_loaded"] != false
-				|| observation["project_saved"] != false
-			{
-				bail!("Ghidra observation does not match its fixed import-only semantics");
-			}
+			ghidra_contract::validate_observation(
+				&observation,
+				input,
+				report["subject"]["size_bytes"]
+					.as_u64()
+					.context("Ghidra captured size absent")?,
+			)?;
 		}
 	}
 	let size = report["subject"]["size_bytes"]

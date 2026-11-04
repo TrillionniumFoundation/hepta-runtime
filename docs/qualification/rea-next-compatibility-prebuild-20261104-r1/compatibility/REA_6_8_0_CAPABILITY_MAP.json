@@ -1,0 +1,1956 @@
+{
+  "schema": "hepta.rea.capability-map.v1",
+  "runtime_baseline": "310add6db47bcfbed3545432eb528a72f5eb6dcd",
+  "interfaces": {
+    "rea_inspect_artifact": {
+      "source_paths": [
+        "src/mcp/rea.rs",
+        "src/mcp/rea_static.rs",
+        "src/mcp/rea_binary_parser.rs",
+        "src/mcp/rea_worker.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_tests.rs",
+        "tests/rea_mcp_external.rs"
+      ],
+      "scope": "Bounded native header/selected ELF facts; NON-REA preview identity"
+    },
+    "rea_inspect_model": {
+      "source_paths": [
+        "src/mcp/rea_model.rs",
+        "src/mcp/rea_model_parser.rs",
+        "src/mcp/rea_model_worker.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_model_parser_tests.rs",
+        "tests/rea_model_worker.rs"
+      ],
+      "scope": "Bounded GGUF/safetensors declaration pages"
+    },
+    "rea_read_model": {
+      "source_paths": [
+        "src/mcp/rea_model.rs",
+        "src/mcp/rea_model_parser.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_model_tests.rs"
+      ],
+      "scope": "Selected pinned byte/tensor range, up to 64KiB"
+    },
+    "rea_model_session_open": {
+      "source_paths": [
+        "src/mcp/rea_model_session.rs",
+        "src/mcp/rea_model_session_store.rs",
+        "src/mcp/rea_model_session_index.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_model_session_tests.rs",
+        "tests/rea_model_session_http.py"
+      ],
+      "scope": "Immutable owner/policy-bound snapshot"
+    },
+    "rea_model_session_query": {
+      "source_paths": [
+        "src/mcp/rea_model_session.rs",
+        "src/mcp/rea_model_session_index.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_model_session_tests.rs"
+      ],
+      "scope": "Retained native directory/index query"
+    },
+    "rea_model_session_read": {
+      "source_paths": [
+        "src/mcp/rea_model_session.rs",
+        "src/mcp/rea_model_session_store.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_model_session_tests.rs"
+      ],
+      "scope": "Verified snapshot range read"
+    },
+    "rea_model_session_list": {
+      "source_paths": [
+        "src/mcp/rea_model_session.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_model_session_tests.rs"
+      ],
+      "scope": "Current owner's native model-session inventory"
+    },
+    "rea_inspect_archive": {
+      "source_paths": [
+        "src/mcp/rea_artifact_zip.rs",
+        "src/mcp/rea_artifact_zip_parser.rs",
+        "src/mcp/rea_artifact_zip_worker.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_artifact_zip_parser_tests.rs",
+        "tests/rea_artifact_zip_worker.rs"
+      ],
+      "scope": "Classic ZIP directory, not complete container extraction"
+    },
+    "rea_inspect_application": {
+      "source_paths": [
+        "src/mcp/rea_application.rs",
+        "src/mcp/rea_application_parser.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_application_tests.rs",
+        "tests/rea_application_external.rs"
+      ],
+      "scope": "APK binary XML/JAR manifest declaration inspection"
+    },
+    "rea_inspect_javascript_package": {
+      "source_paths": [
+        "src/mcp/rea_javascript.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_javascript_tests.rs"
+      ],
+      "scope": "package.json declarations; no AST reconstruction"
+    },
+    "rea_inspect_web_capture": {
+      "source_paths": [
+        "src/mcp/rea_web.rs",
+        "src/mcp/rea_web_parser.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_web_tests.rs",
+        "tests/rea_web_external.rs"
+      ],
+      "scope": "Saved HAR observations only"
+    },
+    "rea_compare_web_captures": {
+      "source_paths": [
+        "src/mcp/rea_web.rs",
+        "src/mcp/rea_web_parser.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_web_tests.rs"
+      ],
+      "scope": "Occurrence-preserving saved HAR comparison; different input/result contract from upstream"
+    },
+    "rea_replay_web_entry": {
+      "source_paths": [
+        "src/mcp/rea_web.rs",
+        "src/mcp/rea_web_parser.rs"
+      ],
+      "tests": [
+        "tests/rea_web_external.rs"
+      ],
+      "scope": "Retained response representation bytes; not network/browser-state replay"
+    },
+    "rea_static_profiles": {
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json"
+      ],
+      "tests": [
+        "src/mcp/rea_provider_tests.rs",
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "tests/rea_ghidra_analysis_external.py"
+      ],
+      "scope": "Fixed GNU/JADX/Ghidra operations under the existing durable process owner; selected Ghidra revision 2 adds bounded functions/function/xrefs/native-decompile with four fixed analyzers"
+    },
+    "rea_static_start": {
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_static.rs",
+        "src/mcp/rea_engine.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json"
+      ],
+      "tests": [
+        "tests/rea_static_external.rs",
+        "tests/rea_java_external.py",
+        "tests/rea_ghidra_external.py",
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py"
+      ],
+      "scope": "Fixed GNU/JADX/Ghidra operations under the existing durable process owner; selected Ghidra revision 2 adds bounded functions/function/xrefs/native-decompile with four fixed analyzers"
+    },
+    "rea_static_status": {
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json"
+      ],
+      "tests": [
+        "src/mcp/rea_provider_tests.rs",
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "tests/rea_ghidra_analysis_external.py"
+      ],
+      "scope": "Fixed GNU/JADX/Ghidra operations under the existing durable process owner; selected Ghidra revision 2 adds bounded functions/function/xrefs/native-decompile with four fixed analyzers"
+    },
+    "rea_static_read": {
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_static.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json"
+      ],
+      "tests": [
+        "tests/rea_static_external.rs",
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py"
+      ],
+      "scope": "Fixed GNU/JADX/Ghidra operations under the existing durable process owner; selected Ghidra revision 2 adds bounded functions/function/xrefs/native-decompile with four fixed analyzers"
+    },
+    "rea_static_cancel": {
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json"
+      ],
+      "tests": [
+        "tests/rea_static_external.rs",
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py"
+      ],
+      "scope": "Fixed GNU/JADX/Ghidra operations under the existing durable process owner; selected Ghidra revision 2 adds bounded functions/function/xrefs/native-decompile with four fixed analyzers"
+    },
+    "rea_verify_evidence": {
+      "source_paths": [
+        "src/mcp/rea_evidence.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_evidence_tests.rs"
+      ],
+      "scope": "Finite-number semantic digest and selected schema checks; not complete Zod/Evidence parity"
+    },
+    "rea_retain_preview": {
+      "source_paths": [
+        "src/mcp/rea_store.rs",
+        "src/mcp/rea_worker.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_store_tests.rs",
+        "tests/rea_mcp_external.rs"
+      ],
+      "scope": "Owner-admitted retained NON-REA preview"
+    },
+    "rea_read_preview": {
+      "source_paths": [
+        "src/mcp/rea_store.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_store_tests.rs",
+        "tests/rea_mcp_external.rs"
+      ],
+      "scope": "Verified native preview read/restart recovery"
+    },
+    "rea_inspect_javascript_graph": {
+      "source_paths": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "src/mcp/mod.rs",
+        "src/mcp/rea_javascript_graph.rs",
+        "src/mcp/rea_javascript_ast.rs",
+        "src/mcp/rea_javascript_graph_report.rs",
+        "src/mcp/rea_javascript_graph_worker.rs",
+        "src/mcp/rea_seccomp.rs",
+        "src/mcp/rea_worker.rs",
+        "src/mcp/rea_files.rs",
+        "docs/rea-native/JAVASCRIPT_AST.md",
+        "docs/qualification/rea-javascript-ast-20261104-r1/qualification-v6.json",
+        "docs/qualification/rea-javascript-ast-20261104-r1/reference-final-v6.json",
+        "docs/qualification/rea-javascript-ast-20261104-r1/worker-isolation.json",
+        "docs/qualification/rea-javascript-cancellation-20261104-r1/negative-v6/evidence/before-v6/qualification.json",
+        "docs/qualification/rea-javascript-cancellation-20261104-r1/negative-v6/handoff.json"
+      ],
+      "tests": [
+        "src/mcp/rea_javascript_graph_tests.rs",
+        "tests/rea_javascript_graph_external.rs",
+        "scripts/rea-javascript-ast-reference.mjs",
+        "tests/fixtures/rea_javascript/main.ts",
+        "tests/fixtures/rea_javascript/preload.cjs",
+        "tests/fixtures/rea_javascript/renderer.tsx",
+        "tests/fixtures/rea_javascript/dynamic.ts",
+        "tests/fixtures/rea_javascript/shadowing.cjs",
+        "tests/fixtures/rea_javascript/util.js",
+        "tests/fixtures/rea_javascript/types.ts",
+        "tests/fixtures/rea_javascript/barrel.ts",
+        "tests/fixtures/rea_javascript/manifest.json",
+        "tests/fixtures/rea_javascript/package.json",
+        "tests/fixtures/rea_javascript/manual-golden.json",
+        "tests/fixtures/rea_javascript/reference.json",
+        "tests/rea_javascript_cancellation_external.py"
+      ],
+      "scope": "Bounded Oxc 0.144.0 native AST/lexical-scope inspection of explicitly selected JS/TS/JSX/TSX text; import/export and Electron callsite/IPC candidates, source-bound collection paging; NON-REA preview identity. No complete application graph or observed runtime behavior."
+    }
+  },
+  "family_defaults": {
+    "direct": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Provider-backed selected-target operation, profile identities, coverage and all upstream argument/result/error semantics",
+      "dependencies": [
+        {
+          "component": "selected-native-engine",
+          "role": "analysis-engine",
+          "requirement": "Select a supported Ghidra/Hopper/IDA/Kuna profile; capabilities are provider-specific",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination"
+      ]
+    },
+    "enhanced": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Native function/relationship analysis and evidence-linked composed workflow",
+      "dependencies": [
+        {
+          "component": "selected-native-engine",
+          "role": "analysis-engine",
+          "requirement": "Select a supported Ghidra/Hopper/IDA/Kuna profile; capabilities are provider-specific",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination"
+      ]
+    },
+    "native": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Exact native format operation or platform observation; header recognition is insufficient",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus"
+      ]
+    },
+    "artifact": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Complete selected static-format operation and unknown/truncation semantics",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "managed": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "PE/CLI/CIL metadata and typed managed reconstruction/comparison contracts",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "firmware": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Firmware region/extraction semantics and independently checked original-byte provenance",
+      "dependencies": [
+        {
+          "component": "binwalk-unblob",
+          "role": "external-engine",
+          "requirement": "Caller-selected supported Linux firmware provider",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery",
+        "format_architecture_corpus"
+      ]
+    },
+    "android": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "JADX package/class/method/reference contracts, errors and evidence",
+      "dependencies": [
+        {
+          "component": "jadx-jdk",
+          "role": "external-engine",
+          "requirement": "Pinned JADX and Java installation; class/method/reference capabilities separately qualified",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "retention_and_pagination",
+        "format_architecture_corpus"
+      ]
+    },
+    "pcap": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Capture/protocol inspection through the exact selected producer",
+      "dependencies": [
+        {
+          "component": "tshark-capinfos",
+          "role": "external-engine",
+          "requirement": "Caller-selected Wireshark command profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "flutter": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Dart snapshot/build declarations with ABI/layout and unknown coverage",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "frida": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Device/session/script ownership, instrumentation observations and cleanup",
+      "dependencies": [
+        {
+          "component": "frida",
+          "role": "instrumentation-engine",
+          "requirement": "Pinned local/remote Frida device and session profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery",
+        "device_identity",
+        "cross_host_recovery"
+      ]
+    },
+    "apktool": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Decoded resources/manifests/locales, source identity and refusal contracts",
+      "dependencies": [
+        {
+          "component": "apktool-java",
+          "role": "external-engine",
+          "requirement": "Caller-selected Apktool launcher and Java",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "jeb": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Project/unit/decompilation operations, version/target binding and ownership",
+      "dependencies": [
+        {
+          "component": "jeb",
+          "role": "external-engine",
+          "requirement": "Caller-started licensed JEB MCP profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "adb": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Exact device command results, launch/transfer effects, receipts and recovery",
+      "dependencies": [
+        {
+          "component": "adb-device",
+          "role": "device-engine",
+          "requirement": "Pinned adb client and explicitly selected device/serial",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery",
+        "device_identity",
+        "cross_host_recovery"
+      ]
+    },
+    "browser": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "DOM/script/network/runtime observations and complete selected upstream browser contract",
+      "dependencies": [
+        {
+          "component": "chromium-cdp",
+          "role": "browser-engine",
+          "requirement": "Explicit endpoint/target or controlled browser instance, according to the upstream operation",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "browser_semantics",
+        "effects_and_recovery"
+      ]
+    },
+    "electron": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Exact static ASAR/AST/IPC graph or selected live Electron operation",
+      "dependencies": [
+        {
+          "component": "electron-cdp-or-static-parser",
+          "role": "mixed",
+          "requirement": "Only live operations require an Electron target; static ASAR/AST operations do not",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "js_graph_semantics",
+        "retention_and_pagination"
+      ]
+    },
+    "javascript-runtime": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Runtime target discovery/observation, identity and ownership",
+      "dependencies": [
+        {
+          "component": "v8-inspector",
+          "role": "runtime-engine",
+          "requirement": "Explicit loopback Node/Electron inspector target",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery",
+        "js_graph_semantics"
+      ]
+    },
+    "application": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Evidence-authenticated application graph/comparison/workflow semantics",
+      "dependencies": [],
+      "extra_gates": [
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "session": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "REA binary/Evidence/unknown state machine under the existing native runtime owner",
+      "dependencies": [],
+      "extra_gates": [
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ]
+    }
+  },
+  "overrides": {
+    "inspect_model_artifact": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_model",
+        "rea_read_model",
+        "rea_model_session_open",
+        "rea_model_session_list",
+        "rea_model_session_query",
+        "rea_model_session_read"
+      ],
+      "scope": "GGUF/safetensors directory, header/full hash, selected extents and immutable model snapshots",
+      "missing": "Upstream Evidence, exact supported type/layout/metadata semantics and default limits, all error/detail/view cases",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "inspect_artifact": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_artifact",
+        "rea_inspect_archive",
+        "rea_inspect_application"
+      ],
+      "scope": "Selected header/ELF facts and classic-ZIP/APK/JAR declarations",
+      "missing": "Full container graph, ASAR/other formats, extraction, integrity-policy and complete coverage contracts",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "inspect_elf_notes": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_artifact",
+        "rea_static_start",
+        "rea_static_read"
+      ],
+      "scope": "Selected bounded ELF notes/build-ID inventory",
+      "missing": "Exact PT_NOTE/SHT_NOTE coverage, owner/type/desc semantics and REA Evidence on an independent corpus",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "inspect_binary_layout": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_artifact",
+        "rea_static_start",
+        "rea_static_read"
+      ],
+      "scope": "ELF structures and selected GNU observations",
+      "missing": "Full pwntools-profile symbol/relocation/mitigation observations, exact format/architecture semantics and Evidence",
+      "dependencies": [
+        {
+          "component": "gnu-binutils",
+          "role": "optional-native-backend",
+          "requirement": "Fixed readelf/objdump profile only; no pwntools equivalence established",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "inspect_macho": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_artifact"
+      ],
+      "scope": "Limited Mach-O/header architecture recognition",
+      "missing": "Universal slices, selected-view mapping, native command/analysis details, source locations and exact upstream result",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "list_architectures": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_artifact"
+      ],
+      "scope": "Limited Mach-O/header architecture recognition",
+      "missing": "Universal slices, selected-view mapping, native command/analysis details, source locations and exact upstream result",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "inspect_gpu_code_objects": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_artifact"
+      ],
+      "scope": "Declared GPU metadata from selected ELF headers/notes",
+      "missing": "Complete ELF/PE/fatbin/CUBIN/PTX/HIP/CCOB layout and kernels plus exact upstream Evidence",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "inspect_native_exports": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_inspect_artifact",
+        "rea_static_start",
+        "rea_static_read"
+      ],
+      "scope": "ELF symbol inventory is a prerequisite",
+      "missing": "Full cross-format export visibility/occurrence semantics and upstream-normalized result"
+    },
+    "inspect_with_objdump": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Pinned fixed GNU objdump/readelf operations under the native durable owner",
+      "missing": "All caller-selected upstream operations/symbol selection, diagnostics, target/provenance and Evidence",
+      "dependencies": [
+        {
+          "component": "gnu-binutils",
+          "role": "external-engine",
+          "requirement": "Pinned native GNU tool profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus",
+        "effects_and_recovery"
+      ]
+    },
+    "inspect_android_package": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_application",
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "APK binary-XML declarations plus optional bounded JADX classes/sources",
+      "missing": "Exact package/class/reference inventories, APK signature/resource coverage, retained Evidence and all input/error variants",
+      "dependencies": [
+        {
+          "component": "jadx-jdk",
+          "role": "external-engine",
+          "requirement": "Optional native fixed JADX classes/sources operation",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "search_android_classes": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed JADX classes/sources output is available through an owned job",
+      "missing": "No corresponding selected class search/method/reference contract is exposed"
+    },
+    "inspect_android_class": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed JADX classes/sources output is available through an owned job",
+      "missing": "No corresponding selected class search/method/reference contract is exposed"
+    },
+    "inspect_android_method": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed JADX classes/sources output is available through an owned job",
+      "missing": "No corresponding selected class search/method/reference contract is exposed"
+    },
+    "trace_android_references": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed JADX classes/sources output is available through an owned job",
+      "missing": "No corresponding selected class search/method/reference contract is exposed"
+    },
+    "binary_overview": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed Ghidra/ELF inventories, selected function metadata/references/decompilation and GNU outputs are related inputs; no exact upstream composed/instruction handler is registered",
+      "missing": "The upstream operation-specific query, normalized representation, coverage and full Evidence contract remain absent or unqualified"
+    },
+    "list_procedures": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Ghidra revision 2 functions scans at most 4096 analyzed internal functions and returns at most 128 with explicit omissions/completeness; fixed ELF analysis profile",
+      "missing": "Upstream selected-target/paging/query/result/Evidence semantics and broader provider/architecture coverage remain unimplemented or unqualified",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_inventory_v2.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py"
+      ]
+    },
+    "list_segments": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed Ghidra/ELF inventories, selected function metadata/references/decompilation and GNU outputs are related inputs; no exact upstream composed/instruction handler is registered",
+      "missing": "The upstream operation-specific query, normalized representation, coverage and full Evidence contract remain absent or unqualified"
+    },
+    "procedure_info": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Ghidra revision 2 function returns bounded metadata for one exact canonical internal function entry",
+      "missing": "Upstream target/name/address selection, complete procedure properties, result schema and Evidence remain unqualified",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_inventory_v2.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py"
+      ]
+    },
+    "procedure_assembly": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed Ghidra/ELF inventories, selected function metadata/references/decompilation and GNU outputs are related inputs; no exact upstream composed/instruction handler is registered",
+      "missing": "The upstream operation-specific query, normalized representation, coverage and full Evidence contract remain absent or unqualified"
+    },
+    "read_function_instructions": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed Ghidra/ELF inventories, selected function metadata/references/decompilation and GNU outputs are related inputs; no exact upstream composed/instruction handler is registered",
+      "missing": "The upstream operation-specific query, normalized representation, coverage and full Evidence contract remain absent or unqualified"
+    },
+    "inspect_native_load_image": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed static-provider import/ELF inventories and GNU output are prerequisites",
+      "missing": "Deep analysis, active-target query/selection and exact upstream operation semantics remain absent"
+    },
+    "analyze_javascript_application": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_javascript_graph"
+      ],
+      "related_runtime_routes": [
+        "rea_inspect_javascript_package",
+        "rea_inspect_archive"
+      ],
+      "related_auxiliary_capabilities": [
+        "javascript_worker"
+      ],
+      "scope": "Native Oxc AST and lexical-scope analysis of 1..16 explicitly selected JS/TS/JSX/TSX sources (at most 1 MiB each / 4 MiB total); selected-source imports, exports, conservative local module candidates, Electron callsites and literal-channel IPC candidate pairs. No target code execution. Runtime resolution, IPC delivery and complete application graph are explicitly unproved.",
+      "missing": "Upstream ASAR/directory artifact inventory and integrity-policy contracts; whole-artifact identity with selected/unselected source coverage; supported bundled/source-map/route and richer semantic graph relations; exact upstream node/unknown/deadline/partial-Evidence behavior; retained summary/view contracts and operation-specific REA Evidence identity. The new tool's candidate graph is not an authenticated upstream Application Graph.",
+      "dependencies": [],
+      "extra_gates": [
+        "js_graph_semantics",
+        "retention_and_pagination",
+        "format_architecture_corpus"
+      ]
+    },
+    "inspect_electron_fuses": {
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus"
+      ]
+    },
+    "inspect_web_network_capture": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_web_capture"
+      ],
+      "scope": "Offline HAR parsing with source SHA-256 and selected saved observations",
+      "missing": "Full HAR producer fields/number semantics, SAZ/mitmproxy/qlog/protobuf, credential exclusions and retained REA Evidence",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "compare_web_captures": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_compare_web_captures"
+      ],
+      "scope": "Native comparison aligns saved HAR occurrences",
+      "missing": "Upstream compares passive DOM/network/WebMCP captures or scenario normalized results; native HAR input/output is a different contract",
+      "dependencies": [],
+      "extra_gates": [
+        "browser_semantics",
+        "bundle_auth_and_unknowns"
+      ]
+    },
+    "capture_browser_scenario": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_inspect_web_capture"
+      ],
+      "scope": "Existing process owner can run a bounded private Chromium resource-capture helper",
+      "missing": "Application scripts, DOM/actions/state, selected page contract and complete scenario artifacts remain unimplemented",
+      "related_runtime_routes": [
+        "process_start",
+        "process_status",
+        "process_read",
+        "process_cancel"
+      ],
+      "related_auxiliary_capabilities": [
+        "python_local_browser_capture",
+        "native_local_browser_capture"
+      ]
+    },
+    "export_environment_bundle": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_replay_web_entry"
+      ],
+      "scope": "Read retained response representation bytes",
+      "missing": "No agent environment construction, stateful API recreation, reward/task semantics or upstream bundle contract",
+      "extra_gates": [
+        "bundle_auth_and_unknowns",
+        "effects_and_recovery"
+      ]
+    },
+    "inspect_analysis_view": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_model_session_query",
+        "rea_model_session_read",
+        "rea_read_preview"
+      ],
+      "scope": "Paged native model records and preview retrieval",
+      "missing": "Generic authenticated upstream Evidence views, view-specific fields/selectors and retained parents; native AST collection pages re-read selected sources and bind a graph digest, so they do not implement retained upstream Application Graph Evidence views"
+    },
+    "get_evidence_bundle": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_verify_evidence",
+        "rea_retain_preview",
+        "rea_read_preview"
+      ],
+      "scope": "Selected Evidence digest verification and distinct native preview persistence",
+      "missing": "Full upstream bundle schemas, authenticated record graph, import/export semantics and canonical Evidence generation"
+    },
+    "export_evidence_bundle": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_verify_evidence",
+        "rea_retain_preview",
+        "rea_read_preview"
+      ],
+      "scope": "Selected Evidence digest verification and distinct native preview persistence",
+      "missing": "Full upstream bundle schemas, authenticated record graph, import/export semantics and canonical Evidence generation"
+    },
+    "import_evidence_bundle": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_verify_evidence",
+        "rea_retain_preview",
+        "rea_read_preview"
+      ],
+      "scope": "Selected Evidence digest verification and distinct native preview persistence",
+      "missing": "Full upstream bundle schemas, authenticated record graph, import/export semantics and canonical Evidence generation"
+    },
+    "open_binary": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Existing jobs own fixed static operations; model sessions have their separate bounded scope",
+      "missing": "No REA BinarySession target switching, analysis-profile catalog, shared document/navigation state or drain/reset contract"
+    },
+    "close_binary": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Existing jobs own fixed static operations; model sessions have their separate bounded scope",
+      "missing": "No REA BinarySession target switching, analysis-profile catalog, shared document/navigation state or drain/reset contract"
+    },
+    "binary_session": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Existing jobs own fixed static operations; model sessions have their separate bounded scope",
+      "missing": "No REA BinarySession target switching, analysis-profile catalog, shared document/navigation state or drain/reset contract"
+    },
+    "inspect_analysis_settings": {
+      "missing": "Native policy is configured separately; no equivalent editable runtime settings/bounds/discovery contract"
+    },
+    "update_analysis_settings": {
+      "missing": "Native policy is configured separately; no equivalent editable runtime settings/bounds/discovery contract"
+    },
+    "inspect_packet_capture": {
+      "dependencies": [
+        {
+          "component": "tshark",
+          "role": "external-engine",
+          "requirement": "Pinned TShark 4.x plus selected resource-limiting host profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "inspect_packet_fields": {
+      "dependencies": [
+        {
+          "component": "tshark",
+          "role": "external-engine",
+          "requirement": "Pinned TShark 4.x plus selected resource-limiting host profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "decode_signal_recording": {
+      "dependencies": [
+        {
+          "component": "sigrok-cli",
+          "role": "external-engine",
+          "requirement": "Pinned decoder/runtime profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "inspect_signal_decoders": {
+      "dependencies": [
+        {
+          "component": "sigrok-cli",
+          "role": "external-engine",
+          "requirement": "Pinned decoder/runtime profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "inspect_wasm_artifact": {
+      "dependencies": [
+        {
+          "component": "wabt",
+          "role": "external-engine",
+          "requirement": "Upstream WABT 1.0.42 validation/WAT profile; native equivalent requires independent proof",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus",
+        "bundle_auth_and_unknowns"
+      ]
+    },
+    "compare_wasm_interfaces": {
+      "dependencies": [
+        {
+          "component": "wabt",
+          "role": "external-engine",
+          "requirement": "Upstream WABT 1.0.42 validation/WAT profile; native equivalent requires independent proof",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus",
+        "bundle_auth_and_unknowns"
+      ]
+    },
+    "inspect_recorded_crash": {
+      "dependencies": [
+        {
+          "component": "pwntools-pyelftools-unicorn",
+          "role": "external-engine",
+          "requirement": "Pinned offline ELF/core profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        },
+        {
+          "component": "gdb-pwndbg",
+          "role": "optional-engine",
+          "requirement": "Only requested extended crash context",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "observe_native_ui": {
+      "dependencies": [
+        {
+          "component": "macos-accessibility-screencapture",
+          "role": "platform-interface",
+          "requirement": "PID/window binding and granted OS permissions",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery",
+        "device_identity"
+      ]
+    },
+    "capture_native_ui_scenario": {
+      "dependencies": [
+        {
+          "component": "macos-accessibility-screencapture",
+          "role": "platform-interface",
+          "requirement": "PID/window binding and granted OS permissions",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery",
+        "device_identity"
+      ]
+    },
+    "observe_native_calls": {
+      "dependencies": [
+        {
+          "component": "lldb",
+          "role": "external-engine",
+          "requirement": "Pinned controlled native-call trace profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery",
+        "native_semantics"
+      ]
+    },
+    "demangle_swift": {
+      "dependencies": [
+        {
+          "component": "native-platform-tools",
+          "role": "platform-interface",
+          "requirement": "Exact selected native tool/provider, if required by the frozen profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "inspect_signature": {
+      "dependencies": [
+        {
+          "component": "native-platform-tools",
+          "role": "platform-interface",
+          "requirement": "Exact selected native tool/provider, if required by the frozen profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "inspect_plist": {
+      "dependencies": [
+        {
+          "component": "native-platform-tools",
+          "role": "platform-interface",
+          "requirement": "Exact selected native tool/provider, if required by the frozen profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "list_cutter_sessions": {
+      "dependencies": [
+        {
+          "component": "cutter-bridge",
+          "role": "external-engine",
+          "requirement": "Caller-owned Cutter session/bridge",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "cutter_command": {
+      "dependencies": [
+        {
+          "component": "cutter-bridge",
+          "role": "external-engine",
+          "requirement": "Caller-owned Cutter session/bridge",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "execute_rizin_command": {
+      "dependencies": [
+        {
+          "component": "rizin",
+          "role": "external-engine",
+          "requirement": "Pinned command/debug session profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "start_rizin_debug_session": {
+      "dependencies": [
+        {
+          "component": "rizin",
+          "role": "external-engine",
+          "requirement": "Pinned command/debug session profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "rizin_debug_command": {
+      "dependencies": [
+        {
+          "component": "rizin",
+          "role": "external-engine",
+          "requirement": "Pinned command/debug session profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "rizin_debug_session_status": {
+      "dependencies": [
+        {
+          "component": "rizin",
+          "role": "external-engine",
+          "requirement": "Pinned command/debug session profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "close_rizin_debug_session": {
+      "dependencies": [
+        {
+          "component": "rizin",
+          "role": "external-engine",
+          "requirement": "Pinned command/debug session profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "start_gdb_session": {
+      "dependencies": [
+        {
+          "component": "gdb-mi3",
+          "role": "external-engine",
+          "requirement": "Pinned supported-host GDB session",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "gdb_console": {
+      "dependencies": [
+        {
+          "component": "gdb-mi3",
+          "role": "external-engine",
+          "requirement": "Pinned supported-host GDB session",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "gdb_session_status": {
+      "dependencies": [
+        {
+          "component": "gdb-mi3",
+          "role": "external-engine",
+          "requirement": "Pinned supported-host GDB session",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "close_gdb_session": {
+      "dependencies": [
+        {
+          "component": "gdb-mi3",
+          "role": "external-engine",
+          "requirement": "Pinned supported-host GDB session",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "recover_javascript_sources": {
+      "dependencies": [
+        {
+          "component": "wakaru",
+          "role": "external-engine",
+          "requirement": "Caller-supplied supported source-recovery profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "js_graph_semantics",
+        "effects_and_recovery"
+      ]
+    },
+    "capture_process_scenario": {
+      "dependencies": [
+        {
+          "component": "native-pty",
+          "role": "platform-interface",
+          "requirement": "Owned process group and transcript descriptors",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ],
+      "related_runtime_routes": [
+        "process_start",
+        "process_status",
+        "process_read",
+        "process_cancel"
+      ]
+    },
+    "procedure_pseudo_code": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Ghidra revision 2 native decompiler operates on one exact entry with a 15-second budget; bounds whole UTF-8 C to 1MiB and returns an at-most-8192-character preview plus whole/preview hashes, byte length and completeness",
+      "missing": "Full upstream pseudocode/error/Evidence contract, retained complete large decompilation and broad semantic equivalence are not established; the 141-input owned-function result is finite evidence only",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_inventory_v2.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py"
+      ]
+    },
+    "xrefs": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Ghidra revision 2 xrefs observes incoming references to the exact selected function entry and outgoing references from its body; each direction scans at most 4096 and returns at most 128 with omissions",
+      "missing": "Arbitrary-address/upstream query coverage, resolved native relationship semantics, exact normalized result/Evidence and additional providers remain unqualified",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_inventory_v2.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py"
+      ]
+    },
+    "procedure_references": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Same bounded Ghidra selected-entry/body reference operation as xrefs; raw typed references retain from/to addresses and scan limits",
+      "missing": "Upstream complete procedure relationship model, target selection, pagination, resolved/unknown distinctions and Evidence remain unqualified",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_inventory_v2.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py"
+      ]
+    },
+    "procedure_callers": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Selected-entry incoming typed references are available; the runtime does not construct the upstream resolved caller-procedure list",
+      "missing": "Resolve caller functions and preserve unresolved call targets, coverage and exact upstream contract",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_inventory_v2.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py"
+      ]
+    },
+    "procedure_callees": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Selected-body outgoing typed references are available; the runtime does not construct the upstream resolved callee-procedure list",
+      "missing": "Resolve callee functions and preserve unresolved indirect calls, coverage and exact upstream contract",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_inventory_v2.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py"
+      ]
+    },
+    "analyze_function": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Separate functions/function/xrefs/decompile operations provide bounded inputs to a future composed analysis",
+      "missing": "Implement upstream composed function analysis and authenticated cross-operation Evidence, defaults, unknowns and outcomes",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_inventory_v2.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py"
+      ]
+    },
+    "reconcile_javascript_runtime": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No static/runtime Evidence reconciliation operation is implemented; this upstream operation consumes supplied Evidence and does not itself attach a live target",
+      "missing": "Authenticate supplied static and passive/active runtime layers, preserve provider/authority and ambiguity, reconcile exact source digests and declared file/URL mappings, and emit the upstream reconciliation Evidence contract. The native AST graph is only potential source material.",
+      "dependencies": [],
+      "extra_gates": [
+        "js_graph_semantics",
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "trace_javascript_semantics": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No corresponding upstream operation is implemented; selected-source native AST observations are potential inputs only",
+      "missing": "Implement typed seed/direction queries over authenticated Application Graph Evidence, including data-flow, direct call/return and closure relations. Oxc lexical scope/import/export facts are not this traversal or upstream semantic-node identity.",
+      "related_runtime_routes": [
+        "rea_inspect_javascript_graph"
+      ],
+      "extra_gates": [
+        "js_graph_semantics",
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "trace_application_feature": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No corresponding upstream operation is implemented; selected-source native AST observations are potential inputs only",
+      "missing": "Implement typed literal seed traversal across authenticated static/native/passive-runtime/inferred/unknown authorities, preserving exact retained references and native-addon handoffs. Selected-source AST candidates are potential source material only.",
+      "related_runtime_routes": [
+        "rea_inspect_javascript_graph"
+      ],
+      "extra_gates": [
+        "js_graph_semantics",
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "compare_application_versions": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No corresponding upstream operation is implemented; selected-source native AST observations are potential inputs only",
+      "missing": "Implement authenticated two-graph matching by unique exact digest, module digest, source-map identity, structural fingerprint and semantic keys, preserving ambiguous/unknown matches and changed_from relations; an AST graph and stable digest do not implement comparison.",
+      "related_runtime_routes": [
+        "rea_inspect_javascript_graph"
+      ],
+      "extra_gates": [
+        "js_graph_semantics",
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "compare_source_to_bundle": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No corresponding upstream operation is implemented; selected-source native AST observations are potential inputs only",
+      "missing": "Implement committed HistoricalSourceGraph input authentication, selected matching signals/weights, split/merge/duplicate/unknown classifications and retained paged comparison views. No native historical-source/bundle comparison is implemented.",
+      "related_runtime_routes": [
+        "rea_inspect_javascript_graph"
+      ],
+      "extra_gates": [
+        "js_graph_semantics",
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "compare_javascript_export_shapes": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No corresponding upstream operation is implemented; selected-source native AST observations are potential inputs only",
+      "missing": "Implement exact module/export selectors, static return-property shapes, reciprocal unique literal-discriminant pairing, presence versus value/coverage distinctions and JSON Pointer changes. Native export-name observations do not recover or compare return shapes.",
+      "related_runtime_routes": [
+        "rea_inspect_javascript_graph"
+      ],
+      "extra_gates": [
+        "js_graph_semantics",
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "trace_web_module_imports": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No corresponding upstream operation is implemented; selected-source native AST observations are potential inputs only",
+      "missing": "Implement export_web_scripts manifest/source SHA and size authentication, exact URL/query/fragment identities and selected import-map context, native browser resolution outcomes and all captured candidates. The current selected-logical-ID exact/extension/index candidates do not implement Node, browser or import-map resolution; the frozen npm literal-import oracle uses caller-selected Chromium.",
+      "related_runtime_routes": [
+        "rea_inspect_javascript_graph"
+      ],
+      "extra_gates": [
+        "js_graph_semantics",
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    }
+  },
+  "behavior_gates": {
+    "contracts": {
+      "common": true,
+      "requirement": "Run exact npm input/default/null/omission/unknown-field cases against native operations; both full schema profiles stay bound"
+    },
+    "results": {
+      "common": true,
+      "requirement": "Same selected inputs yield independently verified normalized facts, provenance, partial/unknown/unsupported/observed-empty distinctions"
+    },
+    "evidence": {
+      "common": true,
+      "requirement": "Full operation Evidence schema, profile identity and semantic commitment; NON-REA previews cannot be relabeled"
+    },
+    "typed_outcomes": {
+      "common": true,
+      "requirement": "Successful, invalid, unsupported, provider-failed, cancelled, timeout and cleanup-incomplete outcomes preserve distinct envelopes"
+    },
+    "limits_and_cancellation": {
+      "common": true,
+      "requirement": "Pinned resource bounds and cancellation with actual stopped/drained owner; client abandonment is not completion"
+    },
+    "source_package_boundary": {
+      "common": true,
+      "requirement": "Use the frozen npm behavioral oracle; Git source declarations or equal version strings cannot substitute for it"
+    },
+    "retention_and_pagination": {
+      "common": false,
+      "requirement": "Stable record/target identity, deterministic paging, retained partials and cold restart under unchanged owner/policy"
+    },
+    "provider_qualification": {
+      "common": false,
+      "requirement": "Real selected provider versions/host/architecture run success, failure, restart, disconnect and cleanup; mocks do not qualify"
+    },
+    "native_semantics": {
+      "common": false,
+      "requirement": "Independent native fixture oracles for functions, addresses, instructions and references, preserving unresolved analysis"
+    },
+    "format_architecture_corpus": {
+      "common": false,
+      "requirement": "Independent tool-produced artifacts plus malformed, overflow, duplicate, alias, endianness and format-version cases"
+    },
+    "js_graph_semantics": {
+      "common": false,
+      "requirement": "AST-based modules/imports/exports/IPC/routes, exact UTF-16/source-map locations, dynamic unknowns and independent source fixtures"
+    },
+    "browser_semantics": {
+      "common": false,
+      "requirement": "Actual selected application DOM/scripts/actions/network/storage/artifacts with exact target identity; saved HAR alone is insufficient"
+    },
+    "effects_and_recovery": {
+      "common": false,
+      "requirement": "Exact original request/job custody, no resend after uncertainty, independently read receipts, observed terminal cleanup and restart recovery"
+    },
+    "device_identity": {
+      "common": false,
+      "requirement": "Prove serial/PID/process/target ownership and permissions before action, including device reconnect and wrong-target refusal"
+    },
+    "cross_host_recovery": {
+      "common": false,
+      "requirement": "Original admitted remote host/job survives controller restart and host reboot without unintended replay"
+    },
+    "bundle_auth_and_unknowns": {
+      "common": false,
+      "requirement": "Authenticate exact parent/child Evidence and schema, preserve unknowns/contradictions, prevent unsupported equality claims"
+    }
+  },
+  "auxiliary_capabilities": {
+    "artifact_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaWorker",
+      "entrypoint": "hepta-runtime rea-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_worker.rs"
+      ],
+      "tests": [],
+      "scope": "Internal admitted-byte artifact parser; no separate upstream tool count",
+      "upstream_tools": [
+        "inspect_artifact"
+      ]
+    },
+    "model_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaModelWorker",
+      "entrypoint": "hepta-runtime rea-model-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_model.rs"
+      ],
+      "tests": [],
+      "scope": "Internal descriptor-based model declaration parser; no model inference",
+      "upstream_tools": [
+        "inspect_model_artifact"
+      ]
+    },
+    "static_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaStaticWorker",
+      "entrypoint": "hepta-runtime rea-static-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_static.rs"
+      ],
+      "tests": [],
+      "scope": "Fixed selected provider worker under existing static job owner",
+      "upstream_tools": []
+    },
+    "archive_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaArchiveWorker",
+      "entrypoint": "hepta-runtime rea-archive-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_artifact_zip.rs"
+      ],
+      "tests": [],
+      "scope": "Internal ZIP directory parser; no archive extraction or target execution",
+      "upstream_tools": [
+        "inspect_artifact"
+      ]
+    },
+    "python_local_browser_capture": {
+      "kind": "python_cli",
+      "entrypoint": "python3 deploy/hepta_browser_capture.py",
+      "required": true,
+      "source_paths": [
+        "deploy/hepta_browser_capture.py"
+      ],
+      "tests": [
+        "tests/rea_browser_capture_tests.py",
+        "tests/rea_browser_external.py"
+      ],
+      "scope": "Existing fixed local-resource before/after HAR capture via original process_start job; user resources fetched as data; no arbitrary-page DOM or general state replay",
+      "upstream_tools": [
+        "capture_browser_scenario"
+      ]
+    },
+    "native_local_browser_capture": {
+      "kind": "rust_cli",
+      "variant": "ReaBrowserCapture",
+      "entrypoint": "hepta-runtime rea-browser-capture --manifest ABS --expected-sha256 HASH --output-directory NEW",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_browser.rs",
+        "src/mcp/rea_browser_input.rs",
+        "src/mcp/rea_browser_process.rs",
+        "src/mcp/rea_browser_fixture.rs",
+        "src/mcp/rea_browser_cdp.rs",
+        "src/mcp/rea_browser_capture.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_browser_tests.rs",
+        "tests/rea_browser_external.py"
+      ],
+      "scope": "Native Linux CLI for fixed owned local-resource before/after HAR via Chrome CDP pipe under the original durable process job; resources fetched as data; no Python/Node capture dependency, arbitrary input-page DOM, process-level network isolation, or general browser state replay",
+      "upstream_tools": [
+        "capture_browser_scenario"
+      ]
+    },
+    "javascript_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaJavascriptWorker",
+      "entrypoint": "hepta-runtime rea-javascript-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_javascript_graph.rs",
+        "src/mcp/rea_javascript_ast.rs",
+        "src/mcp/rea_javascript_graph_report.rs",
+        "src/mcp/rea_javascript_graph_worker.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_javascript_graph_tests.rs"
+      ],
+      "scope": "Internal native Rust AST worker for explicitly admitted JS/TS/JSX/TSX text; Oxc lexical-scope facts and conservative static candidates. Node/Babel is a development reference only. No target execution or proof of live process pairs. MCP cancellation token propagation and owned kill/reap are integrated in source; final release cancellation qualification is pending.",
+      "upstream_tools": [
+        "analyze_javascript_application"
+      ]
+    }
+  }
+}

@@ -1,7 +1,7 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! Bounded installation identity for the fixed Ghidra import-only provider.
+//! Bounded installation and explicit bridge identity for the fixed Ghidra provider.
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -18,6 +18,9 @@ pub(crate) const MAX_INSTALLATION_FILES: usize = 20_000;
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct GhidraEngineProfile {
+	/// Absent preserves the original import-only bridge; revision 2 admits the repaired importer and bounded analysis.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub bridge_revision: Option<u32>,
 	pub java_home: String,
 	pub installation_root: String,
 	pub manifest_path: String,
@@ -56,7 +59,13 @@ pub(crate) fn validate_ghidra(profile: &ReaStaticProfile) -> Result<()> {
 		.ghidra_engine
 		.as_ref()
 		.context("Ghidra profile requires its installation manifest")?;
-	if profile.java_engine.is_some()
+	if !matches!(engine.bridge_revision, None | Some(2))
+		|| (engine.bridge_revision.is_none()
+			&& profile
+				.allowed_operations
+				.iter()
+				.any(|operation| *operation != super::StaticOperation::Inventory))
+		|| profile.java_engine.is_some()
 		|| !absolute_normal_path(&engine.java_home)
 		|| !absolute_normal_path(&engine.installation_root)
 		|| engine.installation_root.contains(':')
@@ -70,7 +79,7 @@ pub(crate) fn validate_ghidra(profile: &ReaStaticProfile) -> Result<()> {
 		|| profile.memory_max_bytes < 1024 * 1024 * 1024
 		|| engine.runtime_files.len() > 16
 	{
-		bail!("Ghidra profile requires the fixed 12.2 distribution, Java 25 and bounded import resources");
+		bail!("Ghidra profile requires the fixed 12.2 distribution, Java 25 and bounded engine resources and an explicit revision 2 for analysis");
 	}
 	for name in [
 		"release",

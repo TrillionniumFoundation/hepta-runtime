@@ -163,16 +163,21 @@ def python_identity(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runtime', type=Path, required=True)
-    parser.add_argument('--capture-helper', type=Path, required=True)
-    parser.add_argument('--python', type=Path, required=True)
+    capture_mode = parser.add_mutually_exclusive_group(required=True)
+    capture_mode.add_argument('--capture-helper', type=Path)
+    capture_mode.add_argument('--native-capture', action='store_true')
+    parser.add_argument('--python', type=Path)
     parser.add_argument('--workspace', type=Path, required=True)
     parser.add_argument('--allow-owned-browser', action='store_true')
     parser.add_argument('--allow-local-ssh', action='store_true')
     args = parser.parse_args()
     assert args.allow_owned_browser and args.allow_local_ssh, 'Explicit real-browser and localhost SSH qualification flags are required'
     assert sys.platform == 'linux', 'This qualification is Linux/main/same-host only'
-    source_runtime, helper = (path.resolve(strict=True) for path in (args.runtime, args.capture_helper))
-    python, interpreter_pin = python_identity(args.python)
+    source_runtime = args.runtime.resolve(strict=True)
+    helper = args.capture_helper.resolve(strict=True) if args.capture_helper else None
+    if not args.native_capture and args.python is None:
+        parser.error('--python is required with --capture-helper')
+    python, interpreter_pin = python_identity(args.python) if args.python else (None, None)
     root = args.workspace.absolute(); root.mkdir(mode=0o700, parents=False, exist_ok=False)
     runtime = root / 'hepta-runtime-qualified'
     shutil.copyfile(source_runtime, runtime); runtime.chmod(0o500)
@@ -184,12 +189,15 @@ def main():
             allow_detached_fallback=False, allowed_cwd_prefixes=[], allowed_read_path_prefixes=[str(root)],
             allowed_write_path_prefixes=[str(root)])))
     private_write(root / 'config.json', config)
-    source_files = [helper, helper.parent / 'dc_compat/chromium_capture.py', helper.parent / 'dc_compat/chromium_pdf.py']
+    source_files = (sorted((Path(__file__).resolve().parents[1] / 'src/mcp').glob('rea_browser*.rs')) if args.native_capture
+                    else [helper, helper.parent / 'dc_compat/chromium_capture.py', helper.parent / 'dc_compat/chromium_pdf.py'])
+    assert source_files, 'Native capture qualification requires its source files'
     source_pins = {str(path): digest(path) for path in source_files}
     result = dict(schema='hepta.rea.local-browser-qualification.v1', workspace=str(root), qualified=False,
                   runtime_sha256=digest(runtime), helper_sources=source_pins, python=interpreter_pin,
                   host_scope='Linux main; controller and native worker on the same host',
-                  execution_mode='operator', process_level_network_isolation=False, checks=[])
+                  execution_mode='operator', process_level_network_isolation=False, checks=[],
+                  capture_implementation='native-rust' if args.native_capture else 'python-reference')
     result.update(capture_scope='fixed_owned_harness_http_resource_observation',
                   input_application_scripts_executed=False, input_page_dom_inspected=False,
                   complete_application_behavior_recording=False, general_browser_state_replay=False,
@@ -201,9 +209,11 @@ def main():
         assert {'process_start', 'process_status', 'process_read', 'process_cancel',
                 'rea_inspect_web_capture', 'rea_compare_web_captures', 'rea_replay_web_entry'} <= names
         def request(manifest, output, key):
-            return dict(host='local', executable=str(python), args=[str(helper), '--manifest', str(manifest),
+            executable = runtime if args.native_capture else python
+            prefix = ['rea-browser-capture'] if args.native_capture else [str(helper)]
+            return dict(host='local', executable=str(executable), args=prefix + ['--manifest', str(manifest),
                 '--expected-sha256', digest(manifest), '--output-directory', str(output)], cwd=str(root),
-                env=dict(PYTHONUNBUFFERED='1'), timeout_seconds=100, idempotency_key=key,
+                env={} if args.native_capture else dict(PYTHONUNBUFFERED='1'), timeout_seconds=100, idempotency_key=key,
                 nice=10, cpu_quota_percent=100, memory_max_bytes=1024 * 1024 * 1024)
         tamper_manifest, tamper_output = fixture(root, 'tamper-fixture')
         tamper_request = request(tamper_manifest, tamper_output, 'owned-browser-tamper')
@@ -258,6 +268,16 @@ def main():
         receipt_path = Path(final['receipt_path'])
         assert digest(receipt_path) == final['receipt_sha256']
         receipt = json.loads(receipt_path.read_text())
+        if args.native_capture:
+            assert receipt['implementation'] == 'native-rust'
+            assert receipt['native_worker_sha256'] == result['runtime_sha256']
+            assert receipt['cdp']['transport'] == 'native-cdp-pipe-asciiz'
+            publication = receipt['publication']
+            assert publication['har_files_fsynced'] is True and publication['har_directory_fsynced'] is True
+            assert publication['receipt_directory_fsync_confirmation'] == 'original_job_succeeded_with_complete_event'
+            assert 'directory_fsynced' not in publication, 'Receipt must not attest its own later directory sync'
+            assert final['receipt_directory_fsynced'] is True
+            result['checks'].append('receipt_durability_confirmed_by_original_success_and_post_sync_complete_event')
         assert receipt['loopback']['negative_probe_control_requests'] == 1
         assert receipt['loopback']['negative_probe_browser_requests'] == 0
         assert receipt['process_level_network_isolation'] is False
@@ -336,7 +356,7 @@ def main():
         result['checks'].append('original_job_cancel_confirmed_and_no_owned_browser_profile_or_relaunch')
         assert {str(path): digest(path) for path in source_files} == source_pins
         assert digest(runtime) == result['runtime_sha256']
-        assert python_identity(python)[1] == interpreter_pin
+        if python is not None: assert python_identity(python)[1] == interpreter_pin
         result['qualified'] = True
     except BaseException as error:
         result['failure'] = repr(error)

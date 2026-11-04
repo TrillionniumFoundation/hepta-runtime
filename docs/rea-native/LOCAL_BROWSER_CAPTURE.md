@@ -1,26 +1,35 @@
-# Local browser capture through the existing native owner
+# Local browser capture through the existing job owner
 
-`deploy/hepta_browser_capture.py` is a finite worker for an explicitly bounded
-workload: observe SHA-bound local resources through a new private Chrome, save
-two HAR 1.2 captures at the same loopback origin, and read those saved captures
-with the existing REA MCP tools. Launch it with `process_start`; the original
-native job owns admission, host binding, idempotency, output, cancellation and
-recovery. No new daemon or durable task registry is introduced.
+`hepta-runtime rea-browser-capture` is the native Rust worker for an explicitly
+bounded workload: observe SHA-bound local resources through a new private
+Chrome, save two HAR 1.2 captures at the same loopback origin, and read those
+saved captures with the existing REA MCP tools. Launch this subcommand with
+`process_start`; the original native job owns admission, host binding,
+idempotency, output, cancellation and recovery. No new daemon or durable task
+registry is introduced. The Rust capture worker itself requires no Python, Node
+or WebSocket package. In the qualified operator deployment, `process_start`
+still uses the existing Python 3 launcher and durable runner. The installed
+Chrome engine remains an external dependency.
 
-The worker imports the private Chrome lifecycle in
-`deploy/dc_compat/chromium_pdf.py`. PDF rendering uses that same lifecycle. It
-creates its own profile and loopback CDP connection, closes its browser, and
-cleans only its original process group on failure. It cannot discover or attach a
-user browser, accept a user profile, select arbitrary Chrome flags or replay
-arbitrary CDP commands. No Chrome installation or service change is performed.
+The Rust implementation is in `src/mcp/rea_browser*.rs`. It runs synchronously
+before Tokio initialization and uses Chrome's NUL-delimited CDP pipe on private
+inherited descriptors 3 and 4. It does not expose a DevTools TCP listener or
+attach to a user browser. Requests cannot select Chrome flags, a user profile,
+a remote debugging address, an executable or arbitrary CDP commands.
 
-The shared Linux lifecycle is its child's exclusive reaper. It requires default
-SIGCHLD handling, visible Linux proc group membership, and non-reaping
-`waitid(..., WNOWAIT)` support. A finite, owned `/bin/true` preflight confirms
-real child custody before Chrome starts, including configurations where
-automatic reaping is invisible to Python's handler query. Neither this module
-nor dc_compat installs a shared arbitrary-child reaper. Callers must preserve
-that exclusive-reaping contract for the lifetime of the call.
+`deploy/hepta_browser_capture.py` remains a separately qualified reference
+implementation. Its private-browser lifecycle is still used by Python PDF
+rendering. The Rust capture implementation does not modify that import chain.
+The historical qualification below identifies the Python implementation;
+native qualification must have `capture_implementation=native-rust` and bind
+both the Rust source manifest and executed runtime SHA-256.
+
+Both implementations exclusively reap their own child and require visible
+Linux proc group membership and non-reaping `waitid(..., WNOWAIT)` support.
+The Rust helper checks the actual `sigaction` disposition and rejects both
+non-default SIGCHLD and `SA_NOCLDWAIT`. The Python reference uses an additional
+finite `/bin/true` custody probe because its handler API does not expose that
+flag. Neither implementation installs a shared arbitrary-child reaper.
 
 An exited leader stays waitable until cleanup, reserving its original PID and
 process-group identity. Cleanup signals only that original group, checks within
@@ -51,20 +60,17 @@ The CLI takes an absolute manifest path, its required SHA-256, and a new output
 directory that must be a direct child of the manifest's directory:
 
 ```text
-python3 deploy/hepta_browser_capture.py \
+hepta-runtime rea-browser-capture \
   --manifest /owned/case/fixture.json \
   --expected-sha256 MANIFEST_SHA256 \
   --output-directory /owned/case/capture
 ```
 
-Run that executable/argv with an explicit native `process_start` host, cwd,
-idempotency key, timeout and memory budget. The worker is an optional checkout
-or packaged helper, not a newly installed MCP service. A helper bundle needs
-`hepta_browser_capture.py`, `dc_compat/__init__.py`,
-`dc_compat/chromium_capture.py`, and the existing `dc_compat/chromium_pdf.py`,
-plus the already installed Python websocket package and system Google Chrome.
-The PDF module keeps its existing path and dependencies; no new shared module
-has been introduced into its deployment import chain.
+Run the runtime executable and this argv with an explicit native `process_start`
+host, cwd, idempotency key, timeout and memory budget. This is a finite helper
+within the existing runtime binary, not a newly installed MCP service. The
+native capture requires Linux and independently installed system Google Chrome
+at `/usr/bin/google-chrome`. It never installs or changes the browser.
 
 A manifest has this form; both SHA values must be the actual file digests:
 
@@ -141,11 +147,13 @@ sandbox for executing arbitrary page code.
 | Decoded CDP body representation | 64 KiB each; 2 MiB total for both phases |
 | Final encoded HAR | 4 MiB per phase |
 | Final encoded receipt | 64 KiB |
-| CDP operation timeout | 1–60 seconds; native job timeout remains the outer bound |
+| Native CDP capture deadline | 1–60 seconds, one absolute deadline after Chrome launch across setup and both phases; cleanup is separate and the native job timeout remains the outer bound |
 
-The websocket library receives a message before its byte limit is checked.
-These are observation/serialization bounds, not a sealed Chrome heap limit.
-Use the existing native job's memory and timeout controls as the process owner.
+The native CDP pipe bounds received bytes before JSON parsing. The Python
+reference's WebSocket library receives a message before its byte limit is
+checked. These are observation/serialization bounds, not a sealed Chrome heap
+limit. Use the existing native job's memory and timeout controls as the process
+owner.
 
 Each entry distinguishes these states in its `_hepta` metadata:
 
@@ -153,8 +161,9 @@ Each entry distinguishes these states in its `_hepta` metadata:
 - `empty`: CDP returned an explicitly recorded zero-length body.
 - `base64`: CDP returned an encoded body; HAR preserves the exact base64 text and
   `encoding: "base64"`.
-- `missing`: no body representation was obtained; `content.text` is omitted,
-  with a bounded reason and actual network-completion status.
+- `missing`: no body representation was obtained; `content.text` and
+  `content.size` are omitted, with a bounded reason and actual
+  network-completion status. Unknown length is not recorded as an empty body.
 
 SHA-256 values bind the recorded text representation and its decoded
 representation where present. The receipt separately binds the original local
@@ -173,12 +182,21 @@ published with a create-only link, and parent-directory-synced. Existing files
 are never replaced. The final receipt is published last; success is printed
 only after all required syncs succeed.
 
+The receipt's `har_files_fsynced` and `har_directory_fsynced` fields describe
+completed HAR publication. The receipt cannot attest its own later directory
+sync: it identifies `original_job_succeeded_with_complete_event` as the
+confirmation source. Only the post-sync `complete` event carries
+`receipt_directory_fsynced=true`; qualification also requires the original
+durable job to have succeeded. A visible receipt alone is insufficient because
+a directory-sync error can occur after the receipt link becomes visible.
+
 An error after visible publication is an unconfirmed outcome. Partial output
-does not become a successful capture receipt. Preserve the original native
+or a visible receipt without original-job completion does not establish a
+successful capture. Preserve the original native
 request and idempotency key, observe its status and output, and do not use a
 fresh key to replay an uncertain capture. Cancellation handles SIGTERM through
-the shared private-browser cleanup and stops the call's own loopback servers.
-Abrupt SIGKILL cannot run Python cleanup; terminal-owner observation and
+the selected implementation's private-browser cleanup and stops the call's own loopback servers.
+Abrupt SIGKILL cannot run worker cleanup; terminal-owner observation and
 explicit reconciliation of that job's private scratch remain necessary.
 
 For this first qualification, the worker and controller run on the **same
@@ -187,7 +205,11 @@ automatic cross-host artifact transport or shared filesystem is asserted.
 
 ## Actual MCP qualification
 
-`tests/rea_browser_capture_tests.py` covers source identity and refusal,
+The Rust sibling tests in `src/mcp/rea_browser_tests.rs` cover manifest/source
+identity, duplicate fields, symlink and traversal refusals, immutable snapshots,
+request bounds, base64 validation and create-only publication.
+
+The retained reference suite `tests/rea_browser_capture_tests.py` covers source identity and refusal,
 request/message/body/final-encoding bounds, distinct empty/base64/missing body
 semantics, exact page denial, create-only publication, parent-fsync uncertainty,
 the shared lifecycle's cancellation/ownership-loss paths, an actual finite
@@ -201,8 +223,7 @@ scheduled browser window, run it with the candidate runtime and this helper:
 ```text
 python3 tests/rea_browser_external.py \
   --runtime /absolute/candidate/hepta-runtime \
-  --capture-helper /absolute/checkout/deploy/hepta_browser_capture.py \
-  --python /usr/bin/python3 \
+  --native-capture \
   --workspace /absolute/new-owned-qualification-directory \
   --allow-owned-browser --allow-local-ssh
 ```
@@ -221,6 +242,8 @@ terminal state, checks that the job's original private process group has no live
 members and its profile is removed, and
 proves reusing the cancelled key does not launch another browser.
 
+For a reference run, replace `--native-capture` with
+`--capture-helper /absolute/checkout/deploy/hepta_browser_capture.py --python /usr/bin/python3`.
 The selected Python keeps its absolute invocation path so a venv symlink retains
 its environment semantics. The driver separately records and rechecks its
 resolved target path and SHA-256. This pins the interpreter executable, not all
@@ -239,7 +262,7 @@ such a receipt. The existing offline HAR contract remains unchanged: response
 replay reads saved representation bytes and performs no browser execution or
 network replay.
 
-## Recorded qualification on 2026-11-03
+## Recorded Python-reference qualification on 2026-11-03
 
 The bounded workflow passed on Linux `main` in `operator` mode, with the
 controller and native worker on the same host. The complete candidate runtime

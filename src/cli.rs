@@ -92,6 +92,11 @@ pub enum Commands {
 	/// Internal pinned static-provider worker. Reads one structured request on stdin.
 	#[command(hide = true)]
 	ReaStaticWorker,
+	/// Internal bounded JS/TS AST parser over controller-admitted source bytes.
+	#[command(hide = true)]
+	ReaJavascriptWorker,
+	/// Fixed local-resource capture under an existing durable process job (Linux).
+	ReaBrowserCapture(hepta_runtime::mcp::rea_browser::BrowserCaptureArgs),
 	/// Internal ZIP directory parser over one admitted read-only descriptor.
 	#[command(hide = true)]
 	ReaArchiveWorker {

@@ -31,13 +31,14 @@ and paired pre-fix MCP evidence are recorded in the
 | Build artifacts | Bounded native ELF structures | ELF32/64, byte order, program/section tables, symbols, selected notes and build IDs |
 | GPU metadata | ELF machine, flags and bounded notes | Declarations only; no kernel execution, driver or hardware compatibility verdict |
 | Application packages | Checked ZIP plus fixed manifest decoding | APK binary XML and JAR main attributes, stored/deflate and CRC; no signature or installability verdict |
-| Mature engines | Optional JADX and Ghidra providers | JADX class/source observations and Ghidra ELF import inventory, under the original job owner; no verified reconstructed-source claim |
-| JS/Electron | package.json declarations | Entrypoints, dependencies and scripts; no script execution, Node resolution or IPC reconstruction |
-| Browser evidence | Existing durable process owner → private Chromium helper → saved HAR inspection, comparison and selected body replay | Bounded same-host owned HTTP-resource capture; saved-representation replay; no application-script execution or complete browser-state replay |
+| Mature engines | Optional JADX and Ghidra providers | JADX class/source observations; legacy Ghidra ELF inventory or explicit revision 2 inventory/function analysis/xrefs/decompilation, under the original job owner; partial coverage and no verified reconstructed-source claim |
+| JS/Electron | package.json declarations and bounded native Oxc AST analysis | Explicit JS/TS sources, imports/exports, lexical bindings, Electron callsites and IPC candidates; no source execution, whole-application resolution or runtime-delivery proof |
+| Browser evidence | Existing durable process owner → native Rust private Chrome capture → saved HAR inspection, comparison and selected body replay | Bounded same-host owned HTTP-resource capture; saved-representation replay; no application-script execution or complete browser-state replay |
 | Weights | Existing native transport, patch/restore and F32 Linear | General model execution remains with its selected backend |
 
 Details: [models](MODEL_SESSIONS.md), [ELF and Java](ELF_AND_JAVA.md),
-[applications](APPLICATION_MANIFESTS.md), [web](WEB_OBSERVATIONS.md),
+[bounded Ghidra analysis](GHIDRA_ANALYSIS.md),
+[applications](APPLICATION_MANIFESTS.md), [JavaScript AST](JAVASCRIPT_AST.md), [web](WEB_OBSERVATIONS.md),
 and [original convergence](UNIFIED_RUNTIME.md).
 
 ## Added MCP interfaces
@@ -115,12 +116,23 @@ usage is monitored, not a hard filesystem quota. Normal completion cleans it;
 after cancellation, observe the original job terminal before reconciling its
 own residual scratch. The inspected program is never executed.
 
-Ghidra uses a fixed ELF importer with automatic analysis disabled. It reports
-bounded imported memory-block and symbol observations; it does not invoke
-the decompiler or save a project. Its complete admitted `Ghidra/` file set is
-manifest-pinned and checked before and after execution. This is an installed
-engine, not a sealed memory image. The qualified 12.2 installation uses its
-required JDK 25 and is read-only to the actual non-privileged Java identity.
+Legacy Ghidra profiles omit `ghidra_engine.bridge_revision` and retain the
+original inventory bridge bytes and serialized identity. This route keeps
+automatic analysis disabled and returns bounded imported memory-block and symbol
+observations. Explicit revision `2` profiles can admit `inventory`, `functions`,
+`function`, `xrefs` and `decompile`; the analysis operations run a fixed, partial
+analyzer profile and the selected-function decompiler operation invokes Ghidra's
+native decompiler. Neither route executes the inspected program or saves a
+project. These bounded observations do not establish full Ghidra coverage, REA
+behavioral parity or general source equivalence. The versioned bridges and
+qualification boundary are documented in
+[GHIDRA_ANALYSIS.md](GHIDRA_ANALYSIS.md).
+
+The complete admitted `Ghidra/` file set is manifest-pinned and checked before
+and after execution. Ghidra and its JDK remain external engine dependencies,
+rather than a Rust rewrite or sealed memory image. The qualified 12.2
+installation uses its required JDK 25 and is read-only to the actual
+non-privileged Java identity.
 That uses the engine's supported precompiled-Sleigh path without generating
 lock files or recompiling processor definitions. The qualification binds this
 installation preparation rather than weakening file-set or identity checks.
@@ -128,12 +140,20 @@ installation preparation rather than weakening file-set or identity checks.
 HAR comparison preserves repeated request occurrences. Replay reads the
 selected saved body representation; missing, empty and base64-encoded bodies
 retain distinct meanings. package.json reports JSON locations and literal
-declarations without evaluating conditional exports or npm scripts.
+declarations without evaluating conditional exports or npm scripts. The native
+Oxc graph route accepts an explicit bounded source-file set and observes AST
+imports/exports, lexical bindings and Electron callsites. Static IPC channel
+matches are candidates. Collection pages recompute against the same full source
+hashes and an expected graph hash; they do not claim retained upstream Evidence
+views, complete Node/Chromium resolution or dynamic message delivery. See
+[JAVASCRIPT_AST.md](JAVASCRIPT_AST.md) for the exact selectors and limits.
 
-The [bounded local capture helper](LOCAL_BROWSER_CAPTURE.md) runs through the
-existing durable process owner and reuses the private Chromium lifecycle from
-the PDF helper. It admits a content-pinned resource manifest and uses a fixed,
-owned loopback harness; supplied HTML/JavaScript is fetched as data. It does not
+The [bounded local capture helper](LOCAL_BROWSER_CAPTURE.md) runs as a native
+Rust command through the existing durable process owner. It owns its fixed CDP
+transport, private Chrome process group and temporary profile. Python helpers
+remain for reference capture and PDF workflows. The native helper admits a
+content-pinned resource manifest and uses a fixed, owned loopback harness;
+supplied HTML/JavaScript is fetched as data. It does not
 attach to a user's browser, run an application's scripts, or establish a new
 REA execution service. The actual qualification covers capture, repeated-resource
 comparison, retained HAR reads after controller restart, same-key reuse,

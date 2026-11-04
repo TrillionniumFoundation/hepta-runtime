@@ -24,6 +24,9 @@ use cli::{Cli, Commands};
 
 fn main() -> Result<()> {
 	let cli = Cli::parse();
+	if let Commands::ReaBrowserCapture(args) = &cli.command {
+		return mcp::rea_browser::run_cli(args.clone());
+	}
 	// Parser/client helpers run one bounded task. Creating a host-sized thread
 	// pool before a parser's address-space limit would consume its budget on
 	// large machines before any artifact is inspected.
@@ -146,6 +149,12 @@ async fn run(cli: Cli) -> Result<()> {
 			if code != 0 {
 				std::process::exit(code);
 			}
+		}
+		Commands::ReaBrowserCapture(_) => {
+			anyhow::bail!("browser capture must run before Tokio initialization");
+		}
+		Commands::ReaJavascriptWorker => {
+			mcp::rea_javascript_graph::serve_once()?;
 		}
 		Commands::ReaStaticWorker => {
 			mcp::rea_static::serve_once().await?;

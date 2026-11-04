@@ -1,0 +1,89 @@
+{
+  "schema": "hepta.rea.browser-cdp-settle-review.v1",
+  "scope": "Static review plus extracted CDP implementation socket-pair unit tests; not a full runtime, cancellation or real Chrome qualification",
+  "source_patch_path": "/home/qian-qi/rea-ledger-inputs-20261104-r1/browser-settle-patch-r1/cdp-settle-r3.patch",
+  "source_patch_sha256": "72c1eea75c67aab355e1b9094b53dc9643b102ea14738ca5d89c69b232dfdfe6",
+  "review_findings": [
+    {
+      "id": "phase_event_drain",
+      "finding": "A resolved Runtime.evaluate promise is not a Network event barrier. Cloning rows before terminal events can retain stale missing-body state.",
+      "resolution": "Settle exact expected URL occurrences including repeated requests, entry and denied probe, require every loading terminal and request-gate acknowledgement, and keep the original absolute deadline."
+    },
+    {
+      "id": "late_gate_error",
+      "finding": "A late Fetch acknowledgement error could reach Browser.close's tolerated failure path.",
+      "resolution": "Share response identity/error handling with the explicit drain; require the phase and every gate to be settled before HAR, phase change and Browser.close."
+    },
+    {
+      "id": "missing_body_size",
+      "finding": "Initializing missing content.size to 0 incorrectly turns unknown size into an observed empty body.",
+      "resolution": "Omit text/size for missing bodies; use empty MIME fallback; write size only after retrieving an actual body, including 0 for an observed empty body."
+    },
+    {
+      "id": "directory_path_identity",
+      "finding": "Retained directory descriptors alone do not bind later published text paths or the Chrome profile path after ancestor/output renames.",
+      "resolution": "Root separately implemented repeated Directory.verify_location checks and rename regressions; those changes are outside this extracted CDP unit-test receipt."
+    }
+  ],
+  "test_job": {
+    "host": "desktop",
+    "job_id": "1a1a4f1122e-fc05-1635",
+    "state": "succeeded",
+    "exit_code": 0,
+    "output_complete": true,
+    "output_durable": true
+  },
+  "verification": {
+    "scope": "Extracted CDP transport with actual-root libc0.2.189; includes missing-versus-empty body semantics; cancellation stub is not lifecycle qualification",
+    "argv": [
+      "/home/qian-qi/.cargo/bin/cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "-j4",
+      "--",
+      "--test-threads=1"
+    ],
+    "returncode": 0,
+    "stdout": "\nrunning 3 tests\ntest tests::capture_settle_propagates_late_request_gate_error_before_browser_close ... ok\ntest tests::capture_settle_refuses_a_missing_repeated_occurrence ... ok\ntest tests::capture_settle_waits_for_late_terminals_and_repeated_url_occurrences ... ok\n\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+    "stderr": "   Compiling hepta-rea-cdp-settle-review v0.1.0 (/home/qian-qi/rea-ledger-inputs-20261104-r1/browser-settle-patch-r1)\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.57s\n     Running unittests src/lib.rs (/home/qian-qi/work/hepta-rea-next-ledger-20261104-target/debug/deps/hepta_rea_cdp_settle_review-df986802d8a0cccc)\n   Doc-tests hepta_rea_cdp_settle_review\n",
+    "git_apply_check_returncode": 0,
+    "git_apply_check_stderr": "",
+    "patch": "/home/qian-qi/rea-ledger-inputs-20261104-r1/browser-settle-patch-r1/cdp-settle-r3.patch",
+    "patch_sha256": "72c1eea75c67aab355e1b9094b53dc9643b102ea14738ca5d89c69b232dfdfe6",
+    "files_sha256": {
+      "rea_browser_cdp.rs": "c1c4f6a48256a6e43dd20d8aa58193c803609de206d64ffcd0fc89167d36910f",
+      "rea_browser_capture.rs": "d87c9a0150ebed2d9a3235320dbf81d33d7f7efce3ca347a81b97291a1d0e716",
+      "rea_browser_tests.rs": "71be49ad6e16e871dbb0d24ed7e7cc9961d80f71d9a5537314fcabf97dbde152"
+    }
+  },
+  "isolation_of_test": {
+    "implementation": "Exact patched rea_browser_cdp.rs imported by a minimal development crate",
+    "cancellation": "check_cancelled is a test stub returning Ok; cancellation/lifecycle behavior was not exercised",
+    "body_hash": "Real sha2 implementation",
+    "transport": "UnixStream socket pair, framed NUL-delimited CDP messages",
+    "engine": "No Chrome launched",
+    "library_versions": {
+      "libc": "0.2.189",
+      "serde_json": "1.0.151",
+      "sha2": "0.11.0",
+      "anyhow": "1.0.104"
+    }
+  },
+  "assertions": [
+    "Late loadingFinished after Runtime.evaluate is drained before taking HAR body snapshots",
+    "Repeated identical URLs require distinct request occurrences",
+    "Late Fetch.failRequest error fails qualification before Browser.close",
+    "Missing repeated occurrence cannot settle",
+    "Missing body has no text or size, while observed empty body has text=\"\" and size=0"
+  ],
+  "full_runtime_qualified": false,
+  "real_chrome_qualified": false,
+  "upstream_rea_parity": false,
+  "observed_integration": {
+    "source_path": "src/mcp/rea_browser_cdp.rs",
+    "source_sha256": "cd3ee09e83d523134e6ef256944c19b65205305a5c1b2bf77608d6b23073a37c",
+    "same_as_tested_except_clippy_multiple_check": true,
+    "reported_change": "Clippy replacement of len % 4 != 0 with !len.is_multiple_of(4); full runtime validation remains separate"
+  }
+}

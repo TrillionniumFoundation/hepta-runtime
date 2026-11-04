@@ -370,7 +370,11 @@ fn page_cursors_are_independent_and_evicted_rows_are_explicitly_rejected() {
 	let session = owner('5');
 	let mut oldest = None;
 	for index in 0..MAX_OWNER + 1 {
-		let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+		let ticket = begin_reserved_at(
+			temporary.path(),
+			ordered_identity(&session, "host_list", index),
+		)
+		.unwrap();
 		if index == 0 {
 			oldest = Some(ticket.request_id().to_owned());
 		}
@@ -402,14 +406,68 @@ fn page_cursors_are_independent_and_evicted_rows_are_explicitly_rejected() {
 }
 
 #[test]
+fn equal_millisecond_history_orders_random_ids_and_keeps_cursors_independent() {
+	let temporary = root();
+	let session = owner('9');
+	let unique: std::collections::BTreeSet<_> = (0..3).map(|_| new_id().unwrap()).collect();
+	assert_eq!(unique.len(), 3);
+	let ids: Vec<_> = unique.into_iter().collect();
+	let accepted_unix_ms = 1_700_000_000_123;
+	for id in ids.iter().rev() {
+		let ticket = begin_reserved_at(
+			temporary.path(),
+			RequestIdentity {
+				request_id: id.clone(),
+				owner: session.clone(),
+				tool_name: "host_list".into(),
+				accepted_unix_ms,
+			},
+		)
+		.unwrap();
+		finish_sync(ticket, AuditCompletion::Completed).unwrap();
+	}
+	let first = page(temporary.path(), &session, None, 1);
+	let after_first = first["next_after_id"].as_str().unwrap().to_owned();
+	let second = page(temporary.path(), &session, Some(after_first.clone()), 1);
+	let after_second = second["next_after_id"].as_str().unwrap().to_owned();
+	let third = page(temporary.path(), &session, Some(after_second), 1);
+	for (index, value) in [&first, &second, &third].into_iter().enumerate() {
+		assert_eq!(value["requests"].as_array().unwrap().len(), 1);
+		assert_eq!(value["requests"][0]["request_id"], ids[index]);
+		assert_eq!(
+			value["requests"][0]["accepted_unix_ms"],
+			json!(accepted_unix_ms)
+		);
+	}
+	assert_eq!(first["next_after_id"], ids[0]);
+	assert_eq!(second["next_after_id"], ids[1]);
+	assert!(third["next_after_id"].is_null());
+	assert_eq!(page(temporary.path(), &session, None, 1), first);
+	assert_eq!(
+		page(temporary.path(), &session, Some(after_first), 1),
+		second
+	);
+	let exhausted = page(temporary.path(), &session, Some(ids[2].clone()), 1);
+	assert_eq!(exhausted["requests"], json!([]));
+	assert!(exhausted["next_after_id"].is_null());
+}
+
+#[test]
 fn archived_dispatch_and_read_pin_survive_hot_eviction_without_new_dispatch() {
 	let temporary = root();
 	let session = owner('5');
-	let ticket = begin_at(temporary.path(), &session, "host_list").unwrap();
+	let ticket =
+		begin_reserved_at(temporary.path(), ordered_identity(&session, "host_list", 0)).unwrap();
 	let identity = ticket.identity();
 	finish_sync(ticket, AuditCompletion::Completed).unwrap();
-	for _ in 0..MAX_OWNER + 5 {
-		let ticket = begin_at(temporary.path(), &session, "view").unwrap();
+	for ordinal in 1..=MAX_OWNER + 5 {
+		// The view tool uses ordinary admission, not either closed reservation family.
+		// This fixture supplies its identity to their shared storage path.
+		let ticket = begin_reserved_record_at(
+			temporary.path(),
+			ordered_identity(&session, "view", ordinal),
+		)
+		.unwrap();
 		finish_sync(ticket, AuditCompletion::Completed).unwrap();
 	}
 	assert!(!temporary
@@ -685,6 +743,15 @@ fn reserved_identity(tool: &str) -> RequestIdentity {
 	}
 }
 
+// Retention sorts by (accepted_unix_ms, request_id), so these fixtures must
+// establish strict order without depending on filesystem latency or clock ticks.
+fn ordered_identity(session: &str, tool: &str, ordinal: usize) -> RequestIdentity {
+	let mut identity = reserved_identity(tool);
+	identity.owner = session.to_owned();
+	identity.accepted_unix_ms += ordinal as u128;
+	identity
+}
+
 #[test]
 fn v9_reserved_dto_family_stays_closed_when_v10_native_auditing_is_added() {
 	for tool in ["host_list", "host_health", "effective_config"] {
@@ -790,7 +857,11 @@ fn archive_preserves_evicted_history_and_lifetime_counts_without_cross_owner_lea
 	let other = owner('8');
 	let mut ids = Vec::new();
 	for number in 0..MAX_OWNER + 3 {
-		let ticket = begin_at(temporary.path(), &session, "file_info").unwrap();
+		let ticket = begin_operation_reserved_at(
+			temporary.path(),
+			ordered_identity(&session, "file_info", number),
+		)
+		.unwrap();
 		ids.push(ticket.request_id().to_owned());
 		finish_sync(
 			ticket,

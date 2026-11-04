@@ -1,0 +1,126 @@
+{
+  "schema": "hepta.rea.compatibility-validation.v1",
+  "baseline_commit": "310add6db47bcfbed3545432eb528a72f5eb6dcd",
+  "scope": "Inventory integrity and historical authentic npm Evidence digest replay only; no full upstream operation qualified",
+  "inventory_commands": [
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "tests/rea_compatibility_ledger_tests.py",
+        "-v"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "stdout": "",
+      "stderr": "test_authenticated_catalog_requires_both_independent_profiles (__main__.LedgerIntegrityTests.test_authenticated_catalog_requires_both_independent_profiles) ... ok\ntest_auxiliary_cli_is_separate_from_published_tool_count_and_detects_drift (__main__.LedgerIntegrityTests.test_auxiliary_cli_is_separate_from_published_tool_count_and_detects_drift) ... ok\ntest_catalog_compaction_preserves_string_and_number_tokens (__main__.LedgerIntegrityTests.test_catalog_compaction_preserves_string_and_number_tokens) ... ok\ntest_discovery_cannot_be_used_as_provider_qualification (__main__.LedgerIntegrityTests.test_discovery_cannot_be_used_as_provider_qualification) ... ok\ntest_duplicate_json_members_are_not_silently_overwritten (__main__.LedgerIntegrityTests.test_duplicate_json_members_are_not_silently_overwritten) ... ok\ntest_having_no_external_dependencies_does_not_close_code_or_differential_blockers (__main__.LedgerIntegrityTests.test_having_no_external_dependencies_does_not_close_code_or_differential_blockers) ... ok\ntest_malformed_catalog_is_not_hashed_as_valid (__main__.LedgerIntegrityTests.test_malformed_catalog_is_not_hashed_as_valid) ... ok\ntest_mapping_cannot_declare_a_passed_qualification (__main__.LedgerIntegrityTests.test_mapping_cannot_declare_a_passed_qualification) ... ok\ntest_mapping_cannot_invent_an_upstream_tool_or_native_handler (__main__.LedgerIntegrityTests.test_mapping_cannot_invent_an_upstream_tool_or_native_handler) ... ok\ntest_mapping_cannot_rename_partial_to_equivalent (__main__.LedgerIntegrityTests.test_mapping_cannot_rename_partial_to_equivalent) ... ok\ntest_nonfinite_constants_are_refused (__main__.LedgerIntegrityTests.test_nonfinite_constants_are_refused) ... ok\ntest_raw_pin_update_cannot_hide_wrong_catalog_semantic_digest (__main__.LedgerIntegrityTests.test_raw_pin_update_cannot_hide_wrong_catalog_semantic_digest) ... ok\ntest_reference_byte_tamper_is_refused_before_classification (__main__.LedgerIntegrityTests.test_reference_byte_tamper_is_refused_before_classification) ... ok\ntest_relative_paths_and_symlink_escapes_are_refused (__main__.LedgerIntegrityTests.test_relative_paths_and_symlink_escapes_are_refused) ... ok\ntest_restore_rejects_duplicate_zip_members_without_network (__main__.LedgerIntegrityTests.test_restore_rejects_duplicate_zip_members_without_network) ... ok\ntest_runtime_inventory_detects_added_and_deleted_native_handlers (__main__.LedgerIntegrityTests.test_runtime_inventory_detects_added_and_deleted_native_handlers) ... ok\ntest_unknown_mapping_gate_is_refused (__main__.LedgerIntegrityTests.test_unknown_mapping_gate_is_refused) ... ok\n\n----------------------------------------------------------------------\nRan 17 tests in 0.504s\n\nOK\n"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "scripts/rea_compatibility_ledger.py",
+        "generate",
+        "--cache",
+        "/home/qian-qi/rea-ledger-inputs-20261104-r1"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "stdout": "{\"by_family\": {\"adb\": {\"qualified_tools\": 0, \"upstream_tools\": 24}, \"android\": {\"qualified_tools\": 0, \"upstream_tools\": 5}, \"apktool\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"application\": {\"qualified_tools\": 0, \"upstream_tools\": 18}, \"artifact\": {\"qualified_tools\": 0, \"upstream_tools\": 23}, \"browser\": {\"qualified_tools\": 0, \"upstream_tools\": 12}, \"direct\": {\"qualified_tools\": 0, \"upstream_tools\": 41}, \"electron\": {\"qualified_tools\": 0, \"upstream_tools\": 6}, \"enhanced\": {\"qualified_tools\": 0, \"upstream_tools\": 15}, \"firmware\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"flutter\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"frida\": {\"qualified_tools\": 0, \"upstream_tools\": 9}, \"javascript-runtime\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"jeb\": {\"qualified_tools\": 0, \"upstream_tools\": 4}, \"managed\": {\"qualified_tools\": 0, \"upstream_tools\": 7}, \"native\": {\"qualified_tools\": 0, \"upstream_tools\": 32}, \"pcap\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"session\": {\"qualified_tools\": 0, \"upstream_tools\": 23}}, \"families\": 18, \"implementation_counts\": {\"absent\": 196, \"partial_operation\": 10, \"related_facility\": 23}, \"inventory_check\": \"PASS\", \"native_interfaces\": 21, \"open_tools\": 229, \"parity_gate\": \"OPEN\", \"published_tools\": 229, \"qualified_tools\": 0}\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "scripts/rea_compatibility_ledger.py",
+        "check",
+        "--cache",
+        "/home/qian-qi/rea-ledger-inputs-20261104-r1"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "stdout": "{\"by_family\": {\"adb\": {\"qualified_tools\": 0, \"upstream_tools\": 24}, \"android\": {\"qualified_tools\": 0, \"upstream_tools\": 5}, \"apktool\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"application\": {\"qualified_tools\": 0, \"upstream_tools\": 18}, \"artifact\": {\"qualified_tools\": 0, \"upstream_tools\": 23}, \"browser\": {\"qualified_tools\": 0, \"upstream_tools\": 12}, \"direct\": {\"qualified_tools\": 0, \"upstream_tools\": 41}, \"electron\": {\"qualified_tools\": 0, \"upstream_tools\": 6}, \"enhanced\": {\"qualified_tools\": 0, \"upstream_tools\": 15}, \"firmware\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"flutter\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"frida\": {\"qualified_tools\": 0, \"upstream_tools\": 9}, \"javascript-runtime\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"jeb\": {\"qualified_tools\": 0, \"upstream_tools\": 4}, \"managed\": {\"qualified_tools\": 0, \"upstream_tools\": 7}, \"native\": {\"qualified_tools\": 0, \"upstream_tools\": 32}, \"pcap\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"session\": {\"qualified_tools\": 0, \"upstream_tools\": 23}}, \"families\": 18, \"implementation_counts\": {\"absent\": 196, \"partial_operation\": 10, \"related_facility\": 23}, \"inventory_check\": \"PASS\", \"native_interfaces\": 21, \"open_tools\": 229, \"parity_gate\": \"OPEN\", \"published_tools\": 229, \"qualified_tools\": 0}\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "scripts/rea_compatibility_ledger.py",
+        "check",
+        "--cache",
+        "/home/qian-qi/rea-ledger-inputs-20261104-r1",
+        "--require-parity"
+      ],
+      "returncode": 3,
+      "expected_returncode": 3,
+      "stdout": "{\"by_family\": {\"adb\": {\"qualified_tools\": 0, \"upstream_tools\": 24}, \"android\": {\"qualified_tools\": 0, \"upstream_tools\": 5}, \"apktool\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"application\": {\"qualified_tools\": 0, \"upstream_tools\": 18}, \"artifact\": {\"qualified_tools\": 0, \"upstream_tools\": 23}, \"browser\": {\"qualified_tools\": 0, \"upstream_tools\": 12}, \"direct\": {\"qualified_tools\": 0, \"upstream_tools\": 41}, \"electron\": {\"qualified_tools\": 0, \"upstream_tools\": 6}, \"enhanced\": {\"qualified_tools\": 0, \"upstream_tools\": 15}, \"firmware\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"flutter\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"frida\": {\"qualified_tools\": 0, \"upstream_tools\": 9}, \"javascript-runtime\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"jeb\": {\"qualified_tools\": 0, \"upstream_tools\": 4}, \"managed\": {\"qualified_tools\": 0, \"upstream_tools\": 7}, \"native\": {\"qualified_tools\": 0, \"upstream_tools\": 32}, \"pcap\": {\"qualified_tools\": 0, \"upstream_tools\": 2}, \"session\": {\"qualified_tools\": 0, \"upstream_tools\": 23}}, \"families\": 18, \"implementation_counts\": {\"absent\": 196, \"partial_operation\": 10, \"related_facility\": 23}, \"inventory_check\": \"PASS\", \"native_interfaces\": 21, \"open_tools\": 229, \"parity_gate\": \"OPEN\", \"published_tools\": 229, \"qualified_tools\": 0}\n",
+      "stderr": ""
+    }
+  ],
+  "rust_digest_replay": {
+    "head": "310add6db47bcfbed3545432eb528a72f5eb6dcd",
+    "source_before": {
+      "Cargo.toml": "feeb2bf93a20a7e8e87adf45a4e63bbf8f8ffdf69443c7adbedcfe68c7f3a173",
+      "Cargo.lock": "9de9b8db91ac548d11b5df1f82c63313e6aae0d0152a7c361dc9d05e5c4a6ed4",
+      "src/mcp/rea_evidence.rs": "4882bde8afeeaad466fb5afbdd639264d1fb8613073f73c978e6ed4a4c950365",
+      "src/mcp/rea_evidence_tests.rs": "722a97212d011d231dd338d26ca2c703a81e206505f06ca16303890e6b4f0a98"
+    },
+    "source_after": {
+      "Cargo.toml": "feeb2bf93a20a7e8e87adf45a4e63bbf8f8ffdf69443c7adbedcfe68c7f3a173",
+      "Cargo.lock": "9de9b8db91ac548d11b5df1f82c63313e6aae0d0152a7c361dc9d05e5c4a6ed4",
+      "src/mcp/rea_evidence.rs": "4882bde8afeeaad466fb5afbdd639264d1fb8613073f73c978e6ed4a4c950365",
+      "src/mcp/rea_evidence_tests.rs": "722a97212d011d231dd338d26ca2c703a81e206505f06ca16303890e6b4f0a98"
+    },
+    "source_unchanged": true,
+    "results": [
+      {
+        "test_filter": "real_npm_fractional_reference_evidence_matches_native",
+        "args": [
+          "/home/qian-qi/.cargo/bin/cargo",
+          "test",
+          "--locked",
+          "--lib",
+          "-j4",
+          "real_npm_fractional_reference_evidence_matches_native",
+          "--",
+          "--ignored",
+          "--test-threads=1"
+        ],
+        "returncode": 0,
+        "elapsed_seconds": 575.3938968420262,
+        "stdout_sha256": "ec8dec3e6f27ee866f4973f71bb094c09ad78352b0a930b08f4b8018c13904da",
+        "stderr_sha256": "bb5c90cc33704ed2242bcbfc3052f1a7fab4ca7d689622c8403ecb7e450fa96d",
+        "stdout": "\nrunning 1 test\ntest mcp::rea_evidence::rea_evidence_tests::real_npm_fractional_reference_evidence_matches_native ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1809 filtered out; finished in 0.06s\n\n"
+      },
+      {
+        "test_filter": "real_npm_reference_evidence_matches_native_subset_identity",
+        "args": [
+          "/home/qian-qi/.cargo/bin/cargo",
+          "test",
+          "--locked",
+          "--lib",
+          "-j4",
+          "real_npm_reference_evidence_matches_native_subset_identity",
+          "--",
+          "--ignored",
+          "--test-threads=1"
+        ],
+        "returncode": 0,
+        "elapsed_seconds": 1.3677900760667399,
+        "stdout_sha256": "40f57ffd6d1d86fc560f3d12c68a7f422f9373f428896f2bd1d5187c2d14b974",
+        "stderr_sha256": "dfbc54887a443144e8071fa666c93562796b512b896dd40dc3f281e7b59db68b",
+        "stdout": "\nrunning 1 test\ntest mcp::rea_evidence::rea_evidence_tests::real_npm_reference_evidence_matches_native_subset_identity ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1809 filtered out; finished in 0.00s\n\n"
+      }
+    ],
+    "fixture_sha256": {
+      "REA_6_8_0_FINITE_NUMBER_EVIDENCE.json": "a9eff388828778a4270cae06aeba69aa3c71bebd91b85b0fb7b0604374965206",
+      "REA_6_8_0_ELF_NOTES_EVIDENCE.json": "5d555ee7942a0355db5901719ae6a40706b684a3c182f3a9b09085969f110622"
+    },
+    "scope": "Historical npm-generated records replayed in native Rust; no new npm runtime or 229-tool behavior qualification"
+  },
+  "finite_number_cases": 418,
+  "recovered_archive": {
+    "path": "/home/qian-qi/rea-ledger-inputs-20261104-r1/rea-6-8-0-reference-418.verified.zip",
+    "sha256": "a76fa4ef0c88c6e02e5d199d442bca9912ffe38c65fb0e2206bb899876751488"
+  },
+  "external_dependency_scope": "Exact raw bounded discovery observations are in ENVIRONMENT; license/global absence are not established",
+  "raw_logs_directory": "/home/qian-qi/rea-ledger-inputs-20261104-r1/rust-differential-r1"
+}

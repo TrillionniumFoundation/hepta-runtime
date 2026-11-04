@@ -34,6 +34,7 @@ fn request() -> ReaStaticRequest {
 		operation: StaticOperation::Headers,
 		artifact_path: "/work/build/object.o".into(),
 		artifact_sha256: "3".repeat(64),
+		function_address: None,
 	}
 }
 
@@ -374,6 +375,7 @@ fn ghidra_profile() -> ReaStaticProfile {
 	profile.allowed_operations = vec![StaticOperation::Inventory];
 	profile.max_artifact_bytes = 8 * 1024 * 1024;
 	profile.ghidra_engine = Some(GhidraEngineProfile {
+		bridge_revision: None,
 		java_home: "/opt/jdk25".into(),
 		installation_root: "/opt/ghidra/ghidra_12.2_PUBLIC".into(),
 		manifest_path: "/opt/ghidra/installation.json".into(),
@@ -511,4 +513,162 @@ fn ghidra_report_must_preserve_import_only_semantics_and_manifest_identity() {
 		seal_report(&mut bad);
 		assert!(validate_report(&bad, &worker, 0).is_err(), "case {case}");
 	}
+}
+
+#[test]
+fn ghidra_analysis_operations_require_explicit_profile_and_selected_identity() {
+	let mut input = worker();
+	input.profile = ghidra_profile();
+	input.request.operation = StaticOperation::Decompile;
+	input.request.function_address = Some("0x401000".into());
+	input.request.profile_sha256 = sha256(&serde_json::to_vec(&input.profile).unwrap());
+	assert!(validate_worker_request(&input).is_err());
+	input
+		.profile
+		.ghidra_engine
+		.as_mut()
+		.unwrap()
+		.bridge_revision = Some(2);
+	input
+		.profile
+		.allowed_operations
+		.push(StaticOperation::Decompile);
+	input.request.profile_sha256 = sha256(&serde_json::to_vec(&input.profile).unwrap());
+	validate_worker_request(&input).unwrap();
+	input.request.function_address = None;
+	assert!(validate_worker_request(&input).is_err());
+	input.request.operation = StaticOperation::Inventory;
+	validate_worker_request(&input).unwrap();
+	input.request.function_address = Some("0x401000".into());
+	assert!(validate_worker_request(&input).is_err());
+}
+
+fn analysis_observation(input: &WorkerRequest) -> Value {
+	let code = "int owned(int value) { return value * 7 + 11; }\n";
+	json!({"schema":"hepta.rea.ghidra-analysis.v1","engine_version":"12.2","bridge_revision":2,
+		"operation":input.request.operation,"analysis_profile":ghidra_contract::ANALYSIS_PROFILE,
+		"enabled_analyzers":ghidra_contract::ANALYZERS,
+		"analysis_completed":true,"auto_analysis_performed":true,"decompilation_performed":true,
+		"target_executed":false,"external_libraries_loaded":false,"project_saved":false,
+		"source_semantics_validated":false,"source_sha256":input.request.artifact_sha256,"source_bytes":64,
+		"function_address_requested":input.request.function_address,"coverage":"partial",
+		"function":{"entry_address":"0x401000","name":"owned","name_sha256":sha256(b"owned"),"external":false},
+		"c_code":code,"c_code_utf8_bytes":code.len(),"c_code_sha256":sha256(code.as_bytes()),
+		"c_code_preview_sha256":sha256(code.as_bytes()),"c_code_complete":true,
+		"decompilation_completed":true,"native_child_cleanup_confirmed":true,"observed_native_children":1})
+}
+
+fn rebind_observation(value: &mut Value, input: &WorkerRequest, observation: &Value) {
+	let text = serde_json::to_string(observation).unwrap();
+	value["stdout"] = json!(text);
+	value["stdout_bytes"] = json!(text.len());
+	value["stdout_sha256"] = json!(sha256(text.as_bytes()));
+	value["summary"] =
+		summary::selected_fields(input.profile.provider, input.request.operation, &text, true);
+	seal_report(value);
+}
+
+#[test]
+fn ghidra_decompilation_report_rejects_rehashed_wrong_address_partial_work_and_unconfirmed_children(
+) {
+	let mut input = worker();
+	input.profile = ghidra_profile();
+	input
+		.profile
+		.ghidra_engine
+		.as_mut()
+		.unwrap()
+		.bridge_revision = Some(2);
+	input
+		.profile
+		.allowed_operations
+		.push(StaticOperation::Decompile);
+	input.request.operation = StaticOperation::Decompile;
+	input.request.function_address = Some("0x401000".into());
+	input.request.profile_sha256 = sha256(&serde_json::to_vec(&input.profile).unwrap());
+	let observation = analysis_observation(&input);
+	let mut value = report(&input);
+	value["subject"]["size_bytes"] = json!(64);
+	value["ghidra_engine"] = serde_json::to_value(&input.profile.ghidra_engine).unwrap();
+	value["bridge_sha256"] = json!(sha256(
+		ghidra_contract::bridge(StaticOperation::Decompile, Some(2))
+			.unwrap()
+			.as_bytes()
+	));
+	value["backend"]["snapshot"] = json!("verified_installed_inode");
+	value["installation_snapshot"] = json!("verified_installed_paths");
+	value["network_syscalls_denied"] = json!(true);
+	value["scratch"] = json!({"removed_after_operation":true});
+	rebind_observation(&mut value, &input, &observation);
+	validate_report(&value, &input, 0).unwrap();
+	for case in 0..10 {
+		let mut changed = observation.clone();
+		match case {
+			0 => changed["function"]["entry_address"] = json!("0x401001"),
+			1 => changed["function_address_requested"] = json!("0x401001"),
+			2 => changed["analysis_completed"] = json!(false),
+			3 => changed["decompilation_completed"] = json!(false),
+			4 => changed["native_child_cleanup_confirmed"] = json!(false),
+			5 => changed["c_code"] = json!("invented"),
+			6 => changed["source_bytes"] = json!(65),
+			7 => changed["source_sha256"] = json!("0".repeat(64)),
+			8 => changed["source_semantics_validated"] = json!(true),
+			9 => changed["enabled_analyzers"] = json!(["Caller Script"]),
+			_ => unreachable!(),
+		}
+		let mut bad = value.clone();
+		rebind_observation(&mut bad, &input, &changed);
+		assert!(validate_report(&bad, &input, 0).is_err(), "case {case}");
+	}
+}
+
+#[test]
+fn ghidra_revision_two_is_explicit_and_never_rebinds_legacy_profiles() {
+	let legacy = ghidra_profile();
+	let original = serde_json::to_value(&legacy).unwrap();
+	assert!(original["ghidra_engine"].get("bridge_revision").is_none());
+	let mut upgraded = legacy.clone();
+	upgraded.ghidra_engine.as_mut().unwrap().bridge_revision = Some(2);
+	validate_profile(&upgraded).unwrap();
+	assert_ne!(
+		sha256(&serde_json::to_vec(&legacy).unwrap()),
+		sha256(&serde_json::to_vec(&upgraded).unwrap())
+	);
+	assert_ne!(
+		ghidra_contract::bridge(StaticOperation::Inventory, None).unwrap(),
+		ghidra_contract::bridge(StaticOperation::Inventory, Some(2)).unwrap()
+	);
+	let mut invalid = legacy;
+	invalid.allowed_operations.push(StaticOperation::Functions);
+	assert!(validate_profile(&invalid).is_err());
+	invalid.ghidra_engine.as_mut().unwrap().bridge_revision = Some(3);
+	assert!(validate_profile(&invalid).is_err());
+	assert!(ghidra_contract::bridge(StaticOperation::Functions, None).is_err());
+}
+
+#[test]
+fn ghidra_inventory_v2_binds_repaired_bridge_and_captured_source() {
+	let mut input = worker();
+	input.profile = ghidra_profile();
+	input
+		.profile
+		.ghidra_engine
+		.as_mut()
+		.unwrap()
+		.bridge_revision = Some(2);
+	input.request.operation = StaticOperation::Inventory;
+	let value = json!({"schema":"hepta.rea.ghidra-observation.v2","bridge_revision":2,"engine_version":"12.2","operation":"inventory","target_executed":false,"auto_analysis_performed":false,"decompilation_performed":false,"external_libraries_loaded":false,"project_saved":false,"source_sha256":input.request.artifact_sha256,"source_bytes":64});
+	ghidra_contract::validate_observation(&value, &input, 64).unwrap();
+	for field in ["schema", "bridge_revision", "source_sha256", "source_bytes"] {
+		let mut wrong = value.clone();
+		wrong[field] = json!("wrong");
+		assert!(ghidra_contract::validate_observation(&wrong, &input, 64).is_err());
+	}
+	input
+		.profile
+		.ghidra_engine
+		.as_mut()
+		.unwrap()
+		.bridge_revision = None;
+	assert!(ghidra_contract::validate_observation(&value, &input, 64).is_err());
 }

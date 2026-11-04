@@ -15,13 +15,38 @@ pub(crate) fn selected_fields(
 	stdout: &str,
 	backend_success: bool,
 ) -> Value {
+	if provider == StaticProvider::Ghidra && operation != StaticOperation::Inventory {
+		let expected = super::ghidra_contract::operation_name(operation).ok();
+		let observation = backend_success
+			.then(|| serde_json::from_str::<Value>(stdout).ok())
+			.flatten()
+			.filter(|value| {
+				expected.is_some_and(|name| value["operation"] == name)
+					&& value["schema"] == "hepta.rea.ghidra-analysis.v1"
+					&& value["analysis_completed"] == true
+			});
+		return json!({"schema":"hepta.rea.static-summary.v1","scope":"selected_ghidra_function_observations",
+			"mapping_supported":observation.is_some(),"operation":operation,
+			"analysis_profile":observation.as_ref().map(|value| &value["analysis_profile"]),
+			"language_id":observation.as_ref().map(|value| &value["language_id"]),
+			"function_address_requested":observation.as_ref().map(|value| &value["function_address_requested"]),
+			"function":observation.as_ref().map(|value| &value["function"]),
+			"returned_functions":observation.as_ref().map(|value| &value["returned_functions"]),
+			"function_scan_complete":observation.as_ref().map(|value| &value["function_scan_complete"]),
+			"c_code_sha256":observation.as_ref().map(|value| &value["c_code_sha256"]),
+			"c_code_complete":observation.as_ref().map(|value| &value["c_code_complete"]),
+			"rows_and_code_in_retained_stdout":true,"independent_binary_validation":false,"upstream_contract_equivalent":false,
+			"limitations":["Facts and C code are observations of the fixed restricted Ghidra analyzer/decompiler profile",
+				"Unreturned functions/references and truncated C remain explicitly unobserved; source equivalence is not established"]});
+	}
 	if provider == StaticProvider::Ghidra {
 		let observation = backend_success
 			.then(|| serde_json::from_str::<Value>(stdout).ok())
 			.flatten()
 			.filter(|value| {
 				operation == StaticOperation::Inventory
-					&& value["schema"] == "hepta.rea.ghidra-observation.v1"
+					&& (value["schema"] == "hepta.rea.ghidra-observation.v1"
+						|| value["schema"] == "hepta.rea.ghidra-observation.v2")
 					&& value["operation"] == "inventory"
 			});
 		return json!({"schema":"hepta.rea.static-summary.v1","scope":"selected_ghidra_import_observations",

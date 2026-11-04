@@ -1,0 +1,472 @@
+--- a/src/mcp/rea_browser_cdp.rs
++++ b/src/mcp/rea_browser_cdp.rs
+@@ -48,6 +48,15 @@
+ 	}
+ }
+ impl std::error::Error for ProtocolError {}
++
++#[derive(Debug)]
++struct CleanPipeClosed;
++impl std::fmt::Display for CleanPipeClosed {
++	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++		f.write_str("owned Chrome CDP pipe closed before response")
++	}
++}
++impl std::error::Error for CleanPipeClosed {}
+ 
+ pub(super) struct Cdp {
+ 	stream: UnixStream,
+@@ -113,6 +122,11 @@
+ 	}
+ 
+ 	pub fn send(&mut self, method: &str, params: Value) -> Result<u64> {
++		self.send_to(method, params, self.session.clone())
++	}
++
++	// Command routing is separate from the target session whose events are observed.
++	fn send_to(&mut self, method: &str, params: Value, session: Option<String>) -> Result<u64> {
+ 		check_cancelled()?;
+ 		let id = self.next_id;
+ 		self.next_id += 1;
+@@ -120,8 +134,8 @@
+ 			bail!("CDP command budget exceeded");
+ 		}
+ 		let mut command = json!({"id":id,"method":method,"params":params});
+-		if let Some(session) = &self.session {
+-			command["sessionId"] = json!(session);
++		if let Some(session) = session {
++			command["sessionId"] = Value::String(session);
+ 		}
+ 		let mut bytes = serde_json::to_vec(&command)?;
+ 		if bytes.len() > MAX_MESSAGE {
+@@ -170,7 +184,8 @@
+ 			self.wait_ready(libc::POLLIN)?;
+ 			let mut bytes = [0u8; 8192];
+ 			match self.stream.read(&mut bytes) {
+-				Ok(0) => bail!("owned Chrome CDP pipe closed before response"),
++				Ok(0) if self.buffer.is_empty() => return Err(CleanPipeClosed.into()),
++				Ok(0) => bail!("owned Chrome CDP pipe closed with an incomplete message"),
+ 				Ok(count) => {
+ 					self.received += count;
+ 					if self.received > MAX_RECEIVED {
+@@ -203,18 +218,58 @@
+ 		}
+ 	}
+ 
++	/// Drain through clean pipe closure on the original capture deadline. Chrome
++	/// may close without acknowledging Browser.close, but protocol, request-gate,
++	/// cancellation and budget errors must never become an unacknowledged success.
++	pub fn close_browser(&mut self) -> Result<bool> {
++		self.require_settled()?;
++		let id = self
++			.send_to("Browser.close", json!({}), None)
++			.context("sending browser-level close command")?;
++		let mut acknowledged = false;
++		loop {
++			check_cancelled()?;
++			if Instant::now() >= self.deadline {
++				bail!("fixed browser capture deadline exceeded while closing browser");
++			}
++			match self.next_message() {
++				Ok(message) => {
++					if self
++						.handle_message(&message, (!acknowledged).then_some(id))?
++						.is_some()
++					{
++						acknowledged = true;
++					}
++				}
++				Err(error) if error.downcast_ref::<CleanPipeClosed>().is_some() => {
++					check_cancelled()?;
++					if Instant::now() >= self.deadline {
++						bail!("fixed browser capture deadline exceeded while closing browser");
++					}
++					self.require_settled()?;
++					return Ok(acknowledged);
++				}
++				Err(error) => return Err(error).context("draining browser close observations"),
++			}
++		}
++	}
++
+ 	/// Share response identity/error checks between commands and the phase drain.
+ 	fn handle_message(&mut self, message: &Value, awaited: Option<u64>) -> Result<Option<Value>> {
+-		if let Some(reply_id) = message.get("id").and_then(Value::as_u64) {
++		if let Some(reply_id) = message.get("id") {
++			let reply_id = reply_id.as_u64().context("invalid CDP response identity")?;
+ 			let gate = self.ignored.remove(&reply_id);
+ 			if Some(reply_id) != awaited && !gate {
+ 				bail!("unexpected CDP command response identity");
+ 			}
+ 			if let Some(error) = message.get("error") {
++				if message.get("result").is_some() {
++					bail!("CDP response contains both result and error");
++				}
+ 				let description = error
+ 					.get("message")
+ 					.and_then(Value::as_str)
+-					.unwrap_or("protocol error")
++					.context("invalid CDP error response")?
+ 					.chars()
+ 					.take(512)
+ 					.collect::<String>();
+@@ -223,10 +278,12 @@
+ 				}
+ 				return Err(ProtocolError(description).into());
+ 			}
++			let result = message
++				.get("result")
++				.filter(|value| value.is_object())
++				.context("CDP response lacks an object result")?;
+ 			if Some(reply_id) == awaited {
+-				return Ok(Some(
+-					message.get("result").cloned().unwrap_or_else(|| json!({})),
+-				));
++				return Ok(Some(result.clone()));
+ 			}
+ 		} else {
+ 			self.event(message)?;
+@@ -290,13 +347,16 @@
+ 	}
+ 
+ 	fn event(&mut self, message: &Value) -> Result<()> {
+-		if message.get("sessionId").and_then(Value::as_str) != self.session.as_deref() {
+-			return Ok(());
+-		}
+ 		let Some(method) = message.get("method").and_then(Value::as_str) else {
+ 			bail!("CDP message lacks response ID or method");
+ 		};
+-		let params = message.get("params").context("CDP event lacks params")?;
++		let params = message
++			.get("params")
++			.filter(|value| value.is_object())
++			.context("CDP event lacks object params")?;
++		if message.get("sessionId").and_then(Value::as_str) != self.session.as_deref() {
++			return Ok(());
++		}
+ 		if method == "Fetch.requestPaused" {
+ 			self.phase_settled = false;
+ 			let url = params
+--- a/src/mcp/rea_browser_capture.rs
++++ b/src/mcp/rea_browser_capture.rs
+@@ -192,6 +192,12 @@
+ 				json!({"phase":"capture_phase_complete","capture_phase":phase,"automatic_retry":false}),
+ 			)?;
+ 		}
++		// Keep observing the original target session through pipe closure. The
++		// original child owner still confirms group termination below.
++		let close_acknowledged = cdp.close_browser()?;
++		cdp.require_settled()?;
++		let stats = cdp.stats();
++		let denied = cdp.denied.clone();
+ 		let probe_url = format!("{}{PROBE}", servers.probe_origin);
+ 		for phase in ["before", "after"] {
+ 			if !cdp
+@@ -202,25 +208,11 @@
+ 				bail!("missing phase-specific request gate denial witness");
+ 			}
+ 		}
+-		let mut loopback = servers.receipt()?;
+-		loopback["origin"] = json!(servers.origin);
+-		loopback["negative_probe_origin"] = json!(servers.probe_origin);
+-		loopback["negative_probe_control_requests"] =
+-			loopback["positive_control_requests_received"].clone();
+-		loopback["negative_probe_browser_requests"] =
+-			loopback["browser_probe_requests_received"].clone();
+-		let stats = cdp.stats();
+-		let denied = cdp.denied.clone();
+-		cdp.require_settled()?;
+-		cdp.session = None;
+-		// The original child owner always confirms group termination below, including
+-		// when Browser.close cannot acknowledge because Chrome closes the pipe first.
+-		let close_acknowledged = cdp.call("Browser.close", json!({})).is_ok();
+ 		let receipt = json!({
+ 			"schema":SCHEMA,"implementation":"native-rust","native_worker_sha256":native_sha256,"runtime_version":env!("CARGO_PKG_VERSION"),
+ 			"manifest_sha256":admitted.manifest_sha256,"sources":source_pins(&admitted),"requests":admitted.manifest.requests,
+ 			"browser_version":browser,"origin":servers.origin,"probe_origin":servers.probe_origin,"cdp":stats,
+-			"phase_coverage":coverage,"denied_urls":denied,"loopback":loopback,"browser_close_acknowledged":close_acknowledged,
++			"phase_coverage":coverage,"denied_urls":denied,"browser_close_acknowledged":close_acknowledged,
+ 			"request_owner":"existing-native-process-job","automatic_retry":false,
+ 			"process_level_network_isolation":false,"changed_session_descendants_covered":false,
+ 			"coverage":{
+@@ -251,6 +243,19 @@
+ 	remove_profile(&admitted.parent, &profile)?;
+ 	let mut captured = captured?;
+ 	check_cancelled()?;
++	// Snapshot and validate counters only after both the browser owner cleanup
++	// and every fixture thread have completed; late requests remain observable.
++	let servers = fixtures
++		.as_ref()
++		.context("owned fixtures missing after cleanup")?;
++	let mut loopback = servers.receipt()?;
++	loopback["origin"] = json!(servers.origin);
++	loopback["negative_probe_origin"] = json!(servers.probe_origin);
++	loopback["negative_probe_control_requests"] =
++		loopback["positive_control_requests_received"].clone();
++	loopback["negative_probe_browser_requests"] =
++		loopback["browser_probe_requests_received"].clone();
++	captured.receipt["loopback"] = loopback;
+ 	captured.receipt["private_chrome_closed"] = json!(true);
+ 	captured.receipt["private_profile_removed"] = json!(true);
+ 	captured.receipt["original_process_group_no_live_members"] = json!(true);
+--- a/src/mcp/rea_browser_tests.rs
++++ b/src/mcp/rea_browser_tests.rs
+@@ -396,3 +396,246 @@
+ 	assert!(client.settle_requests(&[url.into(), url.into()]).is_err());
+ 	assert!(client.require_settled().is_err());
+ }
++
++fn close_pair(timeout: std::time::Duration) -> (cdp::Cdp, std::os::unix::net::UnixStream) {
++	use std::collections::BTreeSet;
++	use std::os::unix::net::UnixStream;
++	use std::time::{Duration, Instant};
++	let (stream, mut peer) = UnixStream::pair().unwrap();
++	stream.set_nonblocking(true).unwrap();
++	peer.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
++	peer.set_write_timeout(Some(Duration::from_secs(2)))
++		.unwrap();
++	let url = "http://127.0.0.1:12345/settled";
++	settle_peer_send(&mut peer, settle_request("settled", url));
++	settle_peer_send(
++		&mut peer,
++		settle_event(
++			"Network.loadingFinished",
++			json!({"requestId":"settled","timestamp":2.0}),
++		),
++	);
++	let mut client = cdp::Cdp::new(
++		stream,
++		Instant::now() + timeout,
++		BTreeSet::from([url.into()]),
++	);
++	client.session = Some("fixture-session".into());
++	client.begin_phase("after").unwrap();
++	client.settle_requests(&[url.into()]).unwrap();
++	(client, peer)
++}
++
++#[test]
++fn capture_close_allows_only_clean_pipe_end_after_sent_browser_command() {
++	for acknowledge in [false, true] {
++		let (mut client, mut peer) = close_pair(std::time::Duration::from_secs(2));
++		let thread = std::thread::spawn(move || {
++			let command = settle_peer_read(&mut peer);
++			assert_eq!(command["method"], "Browser.close");
++			assert!(command.get("sessionId").is_none());
++			if acknowledge {
++				settle_peer_send(&mut peer, json!({"id":command["id"],"result":{}}));
++			}
++		});
++		assert_eq!(client.close_browser().unwrap(), acknowledge);
++		client.require_settled().unwrap();
++		assert_eq!(client.session.as_deref(), Some("fixture-session"));
++		assert_eq!(client.stats()["commands_sent"], 1);
++		assert_eq!(
++			client.stats()["messages_received"],
++			2 + usize::from(acknowledge)
++		);
++		thread.join().unwrap();
++	}
++}
++
++#[test]
++fn capture_close_observes_late_target_network_even_after_close_acknowledgement() {
++	let (mut client, mut peer) = close_pair(std::time::Duration::from_secs(2));
++	let thread = std::thread::spawn(move || {
++		let command = settle_peer_read(&mut peer);
++		assert!(command.get("sessionId").is_none());
++		settle_peer_send(&mut peer, json!({"id":command["id"],"result":{}}));
++		settle_peer_send(
++			&mut peer,
++			settle_request("late", "http://127.0.0.1:12345/late"),
++		);
++	});
++	let error = client.close_browser().unwrap_err();
++	assert!(format!("{error:#}").contains("unsettled"));
++	assert!(client.require_settled().is_err());
++	assert_eq!(client.stats()["messages_received"], 4);
++	thread.join().unwrap();
++}
++
++#[test]
++fn capture_close_records_late_target_denial_and_propagates_gate_error() {
++	let (mut client, mut peer) = close_pair(std::time::Duration::from_secs(2));
++	let thread = std::thread::spawn(move || {
++		let command = settle_peer_read(&mut peer);
++		assert!(command.get("sessionId").is_none());
++		settle_peer_send(&mut peer, json!({"id":command["id"],"result":{}}));
++		settle_peer_send(
++			&mut peer,
++			settle_event(
++				"Fetch.requestPaused",
++				json!({
++					"requestId":"late-gate","request":{"url":"http://127.0.0.1:23456/late","method":"GET"}
++				}),
++			),
++		);
++		let gate = settle_peer_read(&mut peer);
++		assert_eq!(gate["method"], "Fetch.failRequest");
++		assert_eq!(gate["sessionId"], "fixture-session");
++		settle_peer_send(
++			&mut peer,
++			json!({"id":gate["id"],"error":{"message":"late close gate failure"}}),
++		);
++	});
++	let error = client.close_browser().unwrap_err();
++	assert!(format!("{error:#}")
++		.contains("request gate acknowledgement failed: late close gate failure"));
++	assert_eq!(client.denied.len(), 1);
++	assert_eq!(client.denied[0]["phase"], "after");
++	assert_eq!(client.denied[0]["url"], "http://127.0.0.1:23456/late");
++	assert_eq!(client.stats()["commands_sent"], 2);
++	thread.join().unwrap();
++}
++
++#[test]
++fn capture_close_refuses_clean_eof_with_an_unconfirmed_late_gate() {
++	let (mut client, mut peer) = close_pair(std::time::Duration::from_secs(2));
++	let thread = std::thread::spawn(move || {
++		let command = settle_peer_read(&mut peer);
++		assert_eq!(command["method"], "Browser.close");
++		settle_peer_send(
++			&mut peer,
++			settle_event(
++				"Fetch.requestPaused",
++				json!({
++					"requestId":"late-gate","request":{"url":"http://127.0.0.1:23456/late","method":"GET"}
++				}),
++			),
++		);
++		let gate = settle_peer_read(&mut peer);
++		assert_eq!(gate["method"], "Fetch.failRequest");
++	});
++	assert!(
++		format!("{:#}", client.close_browser().unwrap_err()).contains("unconfirmed request gate")
++	);
++	assert_eq!(client.denied.len(), 1);
++	thread.join().unwrap();
++}
++
++#[test]
++fn capture_close_never_treats_protocol_framing_or_budget_errors_as_no_ack() {
++	use std::io::Write;
++	for kind in [
++		"protocol",
++		"json",
++		"envelope",
++		"identity",
++		"result",
++		"truncated",
++		"bytes",
++		"count",
++	] {
++		let (mut client, mut peer) = close_pair(std::time::Duration::from_secs(5));
++		let thread = std::thread::spawn(move || {
++			let command = settle_peer_read(&mut peer);
++			assert_eq!(command["method"], "Browser.close");
++			match kind {
++				"protocol" => settle_peer_send(
++					&mut peer,
++					json!({"id":command["id"],"error":{"message":"close refused"}}),
++				),
++				"json" => peer.write_all(b"{bad\0").unwrap(),
++				"envelope" => settle_peer_send(&mut peer, json!([])),
++				"identity" => settle_peer_send(&mut peer, json!({"id":"wrong-type","result":{}})),
++				"result" => settle_peer_send(&mut peer, json!({"id":command["id"]})),
++				"truncated" => peer.write_all(b"{\"method\":").unwrap(),
++				"bytes" => {
++					let mut bytes = vec![b'x'; 256 * 1024 + 1];
++					bytes.push(0);
++					peer.write_all(&bytes).unwrap();
++				}
++				"count" => {
++					let mut message =
++						serde_json::to_vec(&settle_event("Page.lifecycleEvent", json!({})))
++							.unwrap();
++					message.push(0);
++					peer.write_all(&message.repeat(2049)).unwrap();
++				}
++				_ => unreachable!(),
++			}
++		});
++		let error = format!("{:#}", client.close_browser().unwrap_err());
++		let expected = match kind {
++			"protocol" => "close refused",
++			"json" => "invalid CDP JSON",
++			"envelope" => "lacks response ID or method",
++			"identity" => "invalid CDP response identity",
++			"result" => "lacks an object result",
++			"truncated" => "incomplete message",
++			"bytes" => "byte budget exceeded",
++			"count" => "event/response count exceeded",
++			_ => unreachable!(),
++		};
++		assert!(error.contains(expected), "{kind}: {error}");
++		thread.join().unwrap();
++	}
++}
++
++#[test]
++fn capture_close_acknowledgement_does_not_extend_deadline_or_skip_eof_drain() {
++	use std::time::Duration;
++	let (mut client, mut peer) = close_pair(Duration::from_secs(1));
++	let (release, held_open) = std::sync::mpsc::channel();
++	let thread = std::thread::spawn(move || {
++		let command = settle_peer_read(&mut peer);
++		settle_peer_send(&mut peer, json!({"id":command["id"],"result":{}}));
++		held_open.recv_timeout(Duration::from_secs(3)).unwrap();
++	});
++	let error = client.close_browser().unwrap_err();
++	assert!(format!("{error:#}").contains("fixed browser capture deadline exceeded"));
++	release.send(()).unwrap();
++	thread.join().unwrap();
++}
++
++#[test]
++fn capture_fixture_receipt_requires_joined_threads_and_final_counters() {
++	let mut fixtures = super::fixture::Fixtures::start(Vec::new(), &[]).unwrap();
++	fixtures.control_probe().unwrap();
++	assert!(format!("{:#}", fixtures.receipt().unwrap_err()).contains("before fixture shutdown"));
++	fixtures.shutdown().unwrap();
++	let receipt = fixtures.receipt().unwrap();
++	assert_eq!(receipt["positive_control_requests_received"], 1);
++	assert_eq!(receipt["browser_probe_requests_received"], 0);
++}
++
++#[test]
++fn capture_fixture_final_receipt_refuses_a_late_probe_request() {
++	use std::io::{Read, Write};
++	let mut fixtures = super::fixture::Fixtures::start(Vec::new(), &[]).unwrap();
++	fixtures.control_probe().unwrap();
++	let address = fixtures.probe_origin.strip_prefix("http://").unwrap();
++	let mut peer = std::net::TcpStream::connect(address).unwrap();
++	peer.set_read_timeout(Some(std::time::Duration::from_secs(2)))
++		.unwrap();
++	peer.set_write_timeout(Some(std::time::Duration::from_secs(2)))
++		.unwrap();
++	write!(
++		peer,
++		"GET {} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\r\n",
++		input::PROBE,
++		address
++	)
++	.unwrap();
++	let mut response = Vec::new();
++	peer.read_to_end(&mut response).unwrap();
++	assert!(response.starts_with(b"HTTP/1.1 200 "));
++	fixtures.shutdown().unwrap();
++	assert!(format!("{:#}", fixtures.receipt().unwrap_err())
++		.contains("denial is not independently established"));
++}
+--- a/src/mcp/rea_browser_fixture.rs
++++ b/src/mcp/rea_browser_fixture.rs
+@@ -110,6 +110,9 @@
+ 	}
+ 
+ 	pub fn receipt(&self) -> Result<Value> {
++		if !self.threads.is_empty() {
++			bail!("owned loopback receipt requested before fixture shutdown");
++		}
+ 		if let Some(error) = self
+ 			.state
+ 			.error

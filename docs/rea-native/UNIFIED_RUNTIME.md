@@ -106,11 +106,20 @@ validating retained output. The analyzed artifact is never executed.
 
 Optional JADX and Ghidra providers use verified installed Java launcher/JRE
 paths instead of a sealed launcher snapshot. JADX seals its selected engine JAR;
-Ghidra verifies the complete admitted `Ghidra/` installation subtree and exposes
-only fixed import inventory. Their private scratch can remain after owner-level
-interruption; observe the original job terminal before reconciling that scratch.
-Exact engine pins, output limits and installation boundaries are documented in
-[ELF_AND_JAVA.md](ELF_AND_JAVA.md).
+Ghidra verifies the complete admitted `Ghidra/` installation subtree. Legacy
+Ghidra profiles omit `ghidra_engine.bridge_revision` and retain the original
+inventory bridge bytes and serialized identity, with automatic analysis
+disabled. Explicit revision `2` profiles can admit `inventory`, `functions`,
+`function`, `xrefs` and `decompile`. The analysis profile and returned observations
+are bounded and partial; decompiled text does not establish source equivalence
+or complete REA behavior. Ghidra 12.2 and JDK 25 remain installed dependencies,
+including Ghidra's own Java/native analysis engine.
+
+Their private scratch can remain after owner-level interruption; observe the
+original job terminal before reconciling that scratch. Exact engine pins, output
+limits and installation boundaries are documented in
+[ELF_AND_JAVA.md](ELF_AND_JAVA.md) and
+[GHIDRA_ANALYSIS.md](GHIDRA_ANALYSIS.md).
 
 Preview publication, static start, resident calls and native patch/restore take
 effect-owner admission. A frozen owner cannot create these effects. Status,
@@ -154,7 +163,8 @@ can round differently from BLAS/GPU kernels on general inputs. Details:
 | --- | --- |
 | Native artifact readers, Evidence digest, weight artifacts and Linear | Hepta Rust executable |
 | GNU static analysis | Hepta plus the configured pinned GNU executable |
-| Fixed JADX classes/sources and Ghidra import inventory | Hepta plus the admitted Java installation and engine files |
+| Fixed JADX classes/sources | Hepta plus the admitted Java installation and JADX engine files |
+| Ghidra legacy inventory or explicit revision 2 bounded function analysis | Hepta plus admitted Ghidra 12.2 and JDK 25, including the engine's native decompiler for `decompile` |
 | General model probes, interventions and existing model adapters | Python/PyTorch worker; native Rust transport available |
 | Existing remote process helpers | Existing Python/jobctl dependencies |
 | Upstream differential harness | Exact Node REA package, outside the shipped runtime |

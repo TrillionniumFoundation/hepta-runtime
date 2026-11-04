@@ -41,6 +41,15 @@ opt-level = 3           # Prioritize runtime throughput and bounded cold-validat
 overflow-checks = false # Disable overflow checks in release mode
 
 [dependencies]
+
+# Native JS/TS AST + lexical binding analysis; all Oxc crates share one MSRV-compatible revision.
+oxc_allocator = "=0.144.0"
+oxc_ast = "=0.144.0"
+oxc_ast_visit = "=0.144.0"
+oxc_parser = "=0.144.0"
+oxc_semantic = "=0.144.0"
+oxc_span = "=0.144.0"
+oxc_syntax = "=0.144.0"
 crc32fast = "=1.5.2"
 flate2 = "=1.1.10"
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "process", "fs", "sync", "signal", "io-std", "io-util", "net"] }

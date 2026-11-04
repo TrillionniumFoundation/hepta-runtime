@@ -1,10 +1,23 @@
 # Native static provider adapter
 
-This increment runs an admitted GNU readelf, GNU objdump, fixed JADX or import-only Ghidra provider through the existing
-Hepta Runtime durable process owner. It inspects owned build artifacts without
-executing them. The optional JADX profile and its precise boundary are described in
-[ELF_AND_JAVA.md](ELF_AND_JAVA.md). The Ghidra adapter is a fixed import-only inventory; full Ghidra/IDA/Hopper workflows, arbitrary commands,
-disassembly, runtime instrumentation and complete REA 6.8.0 behavioral parity remain outside this implementation.
+This increment runs an admitted GNU readelf, GNU objdump, fixed JADX or bounded
+Ghidra provider through the existing Hepta Runtime durable process owner. It
+inspects owned build artifacts without executing them. The optional JADX profile
+and its precise boundary are described in [ELF_AND_JAVA.md](ELF_AND_JAVA.md).
+
+Legacy Ghidra profiles omit `ghidra_engine.bridge_revision` and retain the
+original inventory bridge bytes and serialized identity, with automatic analysis
+disabled. An explicitly admitted revision `2` profile can allow `inventory`,
+`functions`, `function`, `xrefs` and `decompile`. The analysis operations use a
+fixed, partial analyzer profile and bounded selected-function observations.
+Ghidra 12.2 and JDK 25 remain installed engine dependencies; its Java/native
+decompiler is not rewritten in Rust. See [GHIDRA_ANALYSIS.md](GHIDRA_ANALYSIS.md)
+for versioned bridges, selectors, budgets and real-engine qualification.
+
+Full Ghidra/IDA/Hopper workflows, arbitrary commands, general disassembly,
+runtime instrumentation and complete REA 6.8.0 behavioral parity remain outside
+this implementation. Decompiled text is an engine observation, without a claim
+of general source equivalence.
 
 ## Configuration and admission
 
