@@ -1,0 +1,736 @@
+{
+  "full-rust-matrix-r1": {
+    "extraction": "Derived from preserved original summary.json; not a separately observed original plan file.",
+    "planned_gates": [
+      {
+        "child_launch_umask": "0022",
+        "command": [
+          "/home/qian-qi/.cargo/bin/cargo",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "name": "fmt-check"
+      },
+      {
+        "child_launch_umask": "0022",
+        "command": [
+          "/home/qian-qi/.cargo/bin/cargo",
+          "clippy",
+          "--locked",
+          "--offline",
+          "--all-targets",
+          "--all-features",
+          "--jobs",
+          "4",
+          "--target-dir",
+          "/home/qian-qi/work/hepta-rea-next-root-20261104-target",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "name": "clippy-all-features"
+      },
+      {
+        "child_launch_umask": "0022",
+        "command": [
+          "/home/qian-qi/.cargo/bin/cargo",
+          "clippy",
+          "--locked",
+          "--offline",
+          "--all-targets",
+          "--no-default-features",
+          "--jobs",
+          "4",
+          "--target-dir",
+          "/home/qian-qi/work/hepta-rea-next-root-20261104-target",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "name": "clippy-no-default-features"
+      },
+      {
+        "child_launch_umask": "0022",
+        "command": [
+          "/home/qian-qi/.cargo/bin/cargo",
+          "nextest",
+          "run",
+          "--locked",
+          "--offline",
+          "--all-targets",
+          "--all-features",
+          "--build-jobs",
+          "4",
+          "--target-dir",
+          "/home/qian-qi/work/hepta-rea-next-root-20261104-target",
+          "--test-threads",
+          "1",
+          "--retries",
+          "0",
+          "--no-fail-fast",
+          "--profile",
+          "default",
+          "--ignore-default-filter",
+          "--no-tests",
+          "fail"
+        ],
+        "name": "nextest-all-features"
+      },
+      {
+        "child_launch_umask": "0022",
+        "command": [
+          "/home/qian-qi/.cargo/bin/cargo",
+          "nextest",
+          "run",
+          "--locked",
+          "--offline",
+          "--all-targets",
+          "--no-default-features",
+          "--build-jobs",
+          "4",
+          "--target-dir",
+          "/home/qian-qi/work/hepta-rea-next-root-20261104-target",
+          "--test-threads",
+          "1",
+          "--retries",
+          "0",
+          "--no-fail-fast",
+          "--profile",
+          "default",
+          "--ignore-default-filter",
+          "--no-tests",
+          "fail"
+        ],
+        "name": "nextest-no-default-features"
+      }
+    ],
+    "planned_commands": null,
+    "original_plan_path": null,
+    "original_plan_sha256": null,
+    "stages": [
+      {
+        "name": "cargo-version",
+        "command": [
+          "/home/qian-qi/.cargo/bin/cargo",
+          "--version",
+          "--verbose"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "rustc-version",
+        "command": [
+          "/home/qian-qi/.cargo/bin/rustc",
+          "--version",
+          "--verbose"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "nextest-version",
+        "command": [
+          "/home/qian-qi/.cargo/bin/cargo",
+          "nextest",
+          "--version"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "fmt-check",
+        "command": [
+          "/home/qian-qi/.cargo/bin/cargo",
+          "fmt",
+          "--all",
+          "--",
+          "--check"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "clippy-all-features",
+        "command": [
+          "/home/qian-qi/.cargo/bin/cargo",
+          "clippy",
+          "--locked",
+          "--offline",
+          "--all-targets",
+          "--all-features",
+          "--jobs",
+          "4",
+          "--target-dir",
+          "/home/qian-qi/work/hepta-rea-next-root-20261104-target",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "clippy-no-default-features",
+        "command": [
+          "/home/qian-qi/.cargo/bin/cargo",
+          "clippy",
+          "--locked",
+          "--offline",
+          "--all-targets",
+          "--no-default-features",
+          "--jobs",
+          "4",
+          "--target-dir",
+          "/home/qian-qi/work/hepta-rea-next-root-20261104-target",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "nextest-all-features",
+        "command": [
+          "/home/qian-qi/.cargo/bin/cargo",
+          "nextest",
+          "run",
+          "--locked",
+          "--offline",
+          "--all-targets",
+          "--all-features",
+          "--build-jobs",
+          "4",
+          "--target-dir",
+          "/home/qian-qi/work/hepta-rea-next-root-20261104-target",
+          "--test-threads",
+          "1",
+          "--retries",
+          "0",
+          "--no-fail-fast",
+          "--profile",
+          "default",
+          "--ignore-default-filter",
+          "--no-tests",
+          "fail"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "nextest-no-default-features",
+        "command": [
+          "/home/qian-qi/.cargo/bin/cargo",
+          "nextest",
+          "run",
+          "--locked",
+          "--offline",
+          "--all-targets",
+          "--no-default-features",
+          "--build-jobs",
+          "4",
+          "--target-dir",
+          "/home/qian-qi/work/hepta-rea-next-root-20261104-target",
+          "--test-threads",
+          "1",
+          "--retries",
+          "0",
+          "--no-fail-fast",
+          "--profile",
+          "default",
+          "--ignore-default-filter",
+          "--no-tests",
+          "fail"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      }
+    ],
+    "summary_environment_overrides": {
+      "CARGO_BUILD_JOBS": "4",
+      "CARGO_HOME": "/home/qian-qi/.cargo",
+      "CARGO_NET_OFFLINE": "true",
+      "CARGO_TARGET_DIR": "/home/qian-qi/work/hepta-rea-next-root-20261104-target",
+      "CARGO_TERM_COLOR": "never",
+      "NEXTEST_RETRIES": "0",
+      "NEXTEST_TEST_THREADS": "1",
+      "RUSTC": "/home/qian-qi/.cargo/bin/rustc",
+      "RUSTUP_TOOLCHAIN": "1.95.0"
+    },
+    "inputs": {
+      "binary_relative_path": "debug/hepta-runtime",
+      "cargo_home": "/home/qian-qi/.cargo",
+      "child_launch_umask": "0022",
+      "jobs": 4,
+      "output_dir": "/home/qian-qi/work/hepta-rea-continuation-20261104-r2-evidence/full-rust-matrix-r1",
+      "repo": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+      "target_dir": "/home/qian-qi/work/hepta-rea-next-root-20261104-target",
+      "target_preexisting": true,
+      "toolchain": "1.95.0"
+    }
+  },
+  "python-matrix-r1": {
+    "extraction": "Derived from preserved original summary.json; not a separately observed original plan file.",
+    "planned_gates": null,
+    "planned_commands": [
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/file_capabilities.py"
+        ],
+        "name": "python-file_capabilities"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/runtime_registry_page_tests.py"
+        ],
+        "name": "python-runtime_registry_page_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/test_native_canary_resume.py"
+        ],
+        "name": "python-test_native_canary_resume"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/chatgpt_v11_layered_read_tests.py"
+        ],
+        "name": "python-chatgpt_v11_layered_read_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/chatgpt_v11_process_start_concurrency_tests.py"
+        ],
+        "name": "python-chatgpt_v11_process_start_concurrency_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/chatgpt_v11_v4_session_binding_tests.py"
+        ],
+        "name": "python-chatgpt_v11_v4_session_binding_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/runtime_workflow_owner_tests.py"
+        ],
+        "name": "python-runtime_workflow_owner_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/chatgpt_v10_single_v4_effect_tests.py"
+        ],
+        "name": "python-chatgpt_v10_single_v4_effect_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/chatgpt_v10_stream_custody_tests.py"
+        ],
+        "name": "python-chatgpt_v10_stream_custody_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/test_computer_http.py"
+        ],
+        "name": "python-test_computer_http"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/full_operator_facade_tests.py"
+        ],
+        "name": "python-full_operator_facade_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/full_operator_cancel_tests.py"
+        ],
+        "name": "python-full_operator_cancel_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/chatgpt_request_identity_tests.py"
+        ],
+        "name": "python-chatgpt_request_identity_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/full_operator_session_recovery_tests.py"
+        ],
+        "name": "python-full_operator_session_recovery_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/rea_browser_capture_tests.py"
+        ],
+        "name": "python-rea_browser_capture_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/rea_compatibility_ledger_tests.py"
+        ],
+        "name": "python-rea_compatibility_ledger_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "deploy/maintenance_20261017/native_rollout_tests.py"
+        ],
+        "name": "python-native_rollout_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "deploy/maintenance_20261017/recover_control_channel_tests.py"
+        ],
+        "name": "python-recover_control_channel_tests"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tools/x230/20261028",
+          "-p",
+          "*_tests.py",
+          "-v"
+        ],
+        "name": "python-x230-20261028"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tools/x230/20261029",
+          "-p",
+          "*_tests.py",
+          "-v"
+        ],
+        "name": "python-x230-20261029"
+      },
+      {
+        "argv": [
+          "/usr/bin/python3",
+          "-B",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tools/x230/20261030",
+          "-p",
+          "*_tests.py",
+          "-v"
+        ],
+        "name": "python-x230-20261030"
+      }
+    ],
+    "original_plan_path": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/docs/qualification/rea-next-ubuntu24-matrix-r3-20261104-r1/r3/plan.json",
+    "original_plan_sha256": "5e967f1d2136d447615de1274384e968ef5b523008c3da5feb3a12e739705bd8",
+    "stages": [
+      {
+        "name": "python-file_capabilities",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/file_capabilities.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-runtime_registry_page_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/runtime_registry_page_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-test_native_canary_resume",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/test_native_canary_resume.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-chatgpt_v11_layered_read_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/chatgpt_v11_layered_read_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-chatgpt_v11_process_start_concurrency_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/chatgpt_v11_process_start_concurrency_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-chatgpt_v11_v4_session_binding_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/chatgpt_v11_v4_session_binding_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-runtime_workflow_owner_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/runtime_workflow_owner_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-chatgpt_v10_single_v4_effect_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/chatgpt_v10_single_v4_effect_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-chatgpt_v10_stream_custody_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/chatgpt_v10_stream_custody_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-test_computer_http",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/test_computer_http.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-full_operator_facade_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/full_operator_facade_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-full_operator_cancel_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/full_operator_cancel_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-chatgpt_request_identity_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/chatgpt_request_identity_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-full_operator_session_recovery_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/full_operator_session_recovery_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-rea_browser_capture_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/rea_browser_capture_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-rea_compatibility_ledger_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "tests/rea_compatibility_ledger_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-native_rollout_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "deploy/maintenance_20261017/native_rollout_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-recover_control_channel_tests",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "deploy/maintenance_20261017/recover_control_channel_tests.py"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-x230-20261028",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tools/x230/20261028",
+          "-p",
+          "*_tests.py",
+          "-v"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-x230-20261029",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tools/x230/20261029",
+          "-p",
+          "*_tests.py",
+          "-v"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      },
+      {
+        "name": "python-x230-20261030",
+        "command": [
+          "/usr/bin/python3",
+          "-B",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tools/x230/20261030",
+          "-p",
+          "*_tests.py",
+          "-v"
+        ],
+        "cwd": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+        "environment_overrides": null,
+        "child_launch_umask": "0022"
+      }
+    ],
+    "summary_environment_overrides": null,
+    "inputs": null
+  }
+}

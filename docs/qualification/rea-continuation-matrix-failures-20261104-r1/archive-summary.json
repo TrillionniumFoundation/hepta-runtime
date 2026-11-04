@@ -1,0 +1,564 @@
+{
+  "schema": "hepta.rea.r1-failure-preservation.v1",
+  "created_at": "2026-11-04T15:14:50.584864+00:00",
+  "archive_only": true,
+  "qualified": false,
+  "failure_superseded": false,
+  "source_root_modified_by_archive": false,
+  "runtime_sha256": "0595fbf02e0f492bd151fec97eb90cb704a88810e9415b90582d348f3db99b6a",
+  "source_freeze_commit": "b857dc7d646dc938e29a51fa82a5856d9b96f842",
+  "matrices": {
+    "full-rust-matrix-r1": {
+      "original_summary_sha256": "10aafb74f88f171297128f3fe9c481fbc9ab73c49b1f0f7c7c7d745cc71a8333",
+      "started_at": "2026-11-04T13:36:58.327539+00:00",
+      "finished_at": "2026-11-04T14:59:20.243156+00:00",
+      "status": "failed",
+      "qualified": false,
+      "source_changed_recorded": false,
+      "source_inventory_changed_recorded": false,
+      "source_monitor_complete_from_events": true,
+      "source_events": {
+        "errors": [],
+        "event_count": 0,
+        "events_truncated": false,
+        "retained_events": []
+      },
+      "before_after_bytes_equal": true,
+      "before_after_file_sha256": "df8a9aa57376335a93aaa90cbf091e6e6836ef9ebd872311752a54bf0d42afc7",
+      "snapshot_top_keys": [
+        "file_count",
+        "files",
+        "schema",
+        "selection",
+        "total_bytes",
+        "tree_sha256"
+      ],
+      "snapshot_scalars": {
+        "file_count": 641,
+        "schema": "hepta.rea.source-snapshot.v1",
+        "total_bytes": 31262868,
+        "tree_sha256": "0ab735bb69893f88ea4f81c73d5d64d5220d234d3ead90cba88c55542eec9abb"
+      },
+      "invalid_reasons": [],
+      "stages": [
+        {
+          "name": "cargo-version",
+          "kind": "version",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 0.037734,
+          "started_at": "2026-11-04T13:37:00.374967+00:00",
+          "finished_at": "2026-11-04T13:37:00.412718+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [],
+          "failure_lines": []
+        },
+        {
+          "name": "rustc-version",
+          "kind": "version",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 0.037378,
+          "started_at": "2026-11-04T13:37:00.418000+00:00",
+          "finished_at": "2026-11-04T13:37:00.455371+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [],
+          "failure_lines": []
+        },
+        {
+          "name": "nextest-version",
+          "kind": "version",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 0.037439,
+          "started_at": "2026-11-04T13:37:00.460814+00:00",
+          "finished_at": "2026-11-04T13:37:00.498246+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [],
+          "failure_lines": []
+        },
+        {
+          "name": "fmt-check",
+          "kind": "gate",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 3.015866,
+          "started_at": "2026-11-04T13:37:00.509225+00:00",
+          "finished_at": "2026-11-04T13:37:03.525084+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [],
+          "failure_lines": []
+        },
+        {
+          "name": "clippy-all-features",
+          "kind": "gate",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 60.461548,
+          "started_at": "2026-11-04T13:37:03.531274+00:00",
+          "finished_at": "2026-11-04T13:38:03.992805+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [],
+          "failure_lines": []
+        },
+        {
+          "name": "clippy-no-default-features",
+          "kind": "gate",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 82.643697,
+          "started_at": "2026-11-04T13:38:03.999837+00:00",
+          "finished_at": "2026-11-04T13:39:26.643523+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [],
+          "failure_lines": []
+        },
+        {
+          "name": "nextest-all-features",
+          "kind": "gate",
+          "status": "failed",
+          "exit_code": 100,
+          "duration_seconds": 2350.139976,
+          "started_at": "2026-11-04T13:39:26.650639+00:00",
+          "finished_at": "2026-11-04T14:18:36.790603+00:00",
+          "nextest_summary_lines": [
+            "     Summary [1881.742s] 1932 tests run: 1930 passed (3 slow), 2 failed, 40 skipped"
+          ],
+          "unittest_summary_lines": [],
+          "failure_lines": [
+            "        FAIL [   0.654s] ( 913/1932) hepta-runtime mcp::runtime::jobs::start_io_tests::pending_publication_saves_frozen_intent_before_recoverable_identity",
+            "        FAIL [   0.024s] (1792/1932) hepta-runtime mcp::server::server_tests::served_tool_schemas_carry_no_generator_noise",
+            "        FAIL [   0.654s] ( 913/1932) hepta-runtime mcp::runtime::jobs::start_io_tests::pending_publication_saves_frozen_intent_before_recoverable_identity",
+            "        FAIL [   0.024s] (1792/1932) hepta-runtime mcp::server::server_tests::served_tool_schemas_carry_no_generator_noise"
+          ]
+        },
+        {
+          "name": "nextest-no-default-features",
+          "kind": "gate",
+          "status": "failed",
+          "exit_code": 100,
+          "duration_seconds": 2438.056286,
+          "started_at": "2026-11-04T14:18:38.279472+00:00",
+          "finished_at": "2026-11-04T14:59:16.335742+00:00",
+          "nextest_summary_lines": [
+            "     Summary [1966.993s] 1905 tests run: 1904 passed (2 slow), 1 failed, 28 skipped"
+          ],
+          "unittest_summary_lines": [],
+          "failure_lines": [
+            "        FAIL [   0.028s] (1785/1905) hepta-runtime mcp::server::server_tests::served_tool_schemas_carry_no_generator_noise",
+            "        FAIL [   0.028s] (1785/1905) hepta-runtime mcp::server::server_tests::served_tool_schemas_carry_no_generator_noise"
+          ]
+        }
+      ],
+      "snapshot_files_count": 641
+    },
+    "python-matrix-r1": {
+      "original_summary_sha256": "2ca5bb1b3968d93ad543115f7fe5ca90860602abbbd356f794e578827fe77476",
+      "started_at": "2026-11-04T13:45:29.825082+00:00",
+      "finished_at": "2026-11-04T13:48:29.004042+00:00",
+      "status": "failed",
+      "qualified": false,
+      "source_changed_recorded": false,
+      "source_inventory_changed_recorded": null,
+      "source_monitor_complete_from_events": true,
+      "source_events": {
+        "errors": [],
+        "event_count": 0,
+        "events_truncated": false,
+        "retained_events": []
+      },
+      "before_after_bytes_equal": true,
+      "before_after_file_sha256": "3b5fbe83f516b8b154023e31761ed37b171e9f2eef8f579ff2d8a571a3e2eab7",
+      "snapshot_top_keys": [
+        "file_count",
+        "files",
+        "schema",
+        "selection",
+        "total_bytes",
+        "tree_sha256"
+      ],
+      "snapshot_scalars": {
+        "file_count": 1109,
+        "schema": "hepta.rea.source-snapshot.v1",
+        "total_bytes": 78225597,
+        "tree_sha256": "754a7bbd01de1c6cd062d438ced414ca26796b03ea8f83289eb71a90d6b73568"
+      },
+      "invalid_reasons": null,
+      "stages": [
+        {
+          "name": "python-file_capabilities",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 1.371777,
+          "started_at": "2026-11-04T13:45:31.315621+00:00",
+          "finished_at": "2026-11-04T13:45:32.687388+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 9 tests in 1.238s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-runtime_registry_page_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 73.344886,
+          "started_at": "2026-11-04T13:45:32.694595+00:00",
+          "finished_at": "2026-11-04T13:46:46.039472+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 29 tests in 70.711s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-test_native_canary_resume",
+          "kind": "python",
+          "status": "failed",
+          "exit_code": 1,
+          "duration_seconds": 27.142351,
+          "started_at": "2026-11-04T13:46:47.262903+00:00",
+          "finished_at": "2026-11-04T13:47:14.405261+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 10 tests in 26.394s",
+            "FAILED (errors=1)"
+          ],
+          "failure_lines": [
+            "ERROR: test_existing_receipt_never_gets_replaced_or_repeated (__main__.CanaryResume.test_existing_receipt_never_gets_replaced_or_repeated)"
+          ]
+        },
+        {
+          "name": "python-chatgpt_v11_layered_read_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 0.889836,
+          "started_at": "2026-11-04T13:47:14.416309+00:00",
+          "finished_at": "2026-11-04T13:47:15.306134+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 23 tests in 0.583s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-chatgpt_v11_process_start_concurrency_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 0.57668,
+          "started_at": "2026-11-04T13:47:15.404264+00:00",
+          "finished_at": "2026-11-04T13:47:15.980953+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 15 tests in 0.299s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-chatgpt_v11_v4_session_binding_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 2.67446,
+          "started_at": "2026-11-04T13:47:16.027713+00:00",
+          "finished_at": "2026-11-04T13:47:18.702172+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 14 tests in 2.364s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-runtime_workflow_owner_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 0.323059,
+          "started_at": "2026-11-04T13:47:18.709510+00:00",
+          "finished_at": "2026-11-04T13:47:19.032559+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 15 tests in 0.156s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-chatgpt_v10_single_v4_effect_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 0.254327,
+          "started_at": "2026-11-04T13:47:19.039198+00:00",
+          "finished_at": "2026-11-04T13:47:19.293521+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 8 tests in 0.068s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-chatgpt_v10_stream_custody_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 0.24398,
+          "started_at": "2026-11-04T13:47:19.300153+00:00",
+          "finished_at": "2026-11-04T13:47:19.544119+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 18 tests in 0.063s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-test_computer_http",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 1.607206,
+          "started_at": "2026-11-04T13:47:19.551801+00:00",
+          "finished_at": "2026-11-04T13:47:21.159011+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 19 tests in 1.318s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-full_operator_facade_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 10.648541,
+          "started_at": "2026-11-04T13:47:21.165482+00:00",
+          "finished_at": "2026-11-04T13:47:31.814006+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 31 tests in 10.426s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-full_operator_cancel_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 17.261092,
+          "started_at": "2026-11-04T13:47:31.850858+00:00",
+          "finished_at": "2026-11-04T13:47:49.111944+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 26 tests in 16.956s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-chatgpt_request_identity_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 5.613318,
+          "started_at": "2026-11-04T13:47:49.120418+00:00",
+          "finished_at": "2026-11-04T13:47:54.733730+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 21 tests in 5.151s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-full_operator_session_recovery_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 9.140776,
+          "started_at": "2026-11-04T13:47:54.742778+00:00",
+          "finished_at": "2026-11-04T13:48:03.883563+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 17 tests in 8.925s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-rea_browser_capture_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 0.809379,
+          "started_at": "2026-11-04T13:48:03.892360+00:00",
+          "finished_at": "2026-11-04T13:48:04.701735+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 22 tests in 0.443s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-rea_compatibility_ledger_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 1.137726,
+          "started_at": "2026-11-04T13:48:04.738140+00:00",
+          "finished_at": "2026-11-04T13:48:05.875870+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 27 tests in 0.928s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-native_rollout_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 4.451921,
+          "started_at": "2026-11-04T13:48:05.932974+00:00",
+          "finished_at": "2026-11-04T13:48:10.384899+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 15 tests in 4.117s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-recover_control_channel_tests",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 0.396028,
+          "started_at": "2026-11-04T13:48:10.393954+00:00",
+          "finished_at": "2026-11-04T13:48:10.789979+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 24 tests in 0.102s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-x230-20261028",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 10.819566,
+          "started_at": "2026-11-04T13:48:10.975260+00:00",
+          "finished_at": "2026-11-04T13:48:21.794829+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 57 tests in 10.376s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-x230-20261029",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 0.151212,
+          "started_at": "2026-11-04T13:48:21.828868+00:00",
+          "finished_at": "2026-11-04T13:48:21.980081+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 6 tests in 0.017s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        },
+        {
+          "name": "python-x230-20261030",
+          "kind": "python",
+          "status": "passed",
+          "exit_code": 0,
+          "duration_seconds": 4.218349,
+          "started_at": "2026-11-04T13:48:21.994602+00:00",
+          "finished_at": "2026-11-04T13:48:26.212953+00:00",
+          "nextest_summary_lines": [],
+          "unittest_summary_lines": [
+            "Ran 35 tests in 4.016s",
+            "OK\n"
+          ],
+          "failure_lines": []
+        }
+      ],
+      "snapshot_files_count": 1109,
+      "total_tests_observed": 441,
+      "skipped_observed": 0,
+      "tmpdir": "/home/qian-qi/work/hepta-rea-continuation-20261104-r2-evidence/python-matrix-r1/tmp",
+      "source_commit": "618e8638c84cd9c95fb08b52ea9354e982ee0154",
+      "plan_sha256": "5e967f1d2136d447615de1274384e968ef5b523008c3da5feb3a12e739705bd8",
+      "baseline_assertion": {
+        "baseline": "1d9ea7e7e7a1625c611d5f6e037a1ed9d57379d4",
+        "git_diff_name_only": "",
+        "unchanged_paths": [
+          "tools/x230",
+          "deploy/maintenance_20261017"
+        ]
+      }
+    }
+  },
+  "python_r2_waiter": {
+    "job_id": "1a1a6e879fa-fc05-296e",
+    "state": "precondition_rejected",
+    "terminal_state": "failed",
+    "exit_code": 1,
+    "qualification": "not_run",
+    "python_r2_test_suites_executed": false,
+    "evidence_kind": "normalized_parent_report_of_official_sdk_status_and_process_read",
+    "not_original_sdk_bytes": true,
+    "observation": "python-r2-precondition/parent-observation.json"
+  },
+  "tmpfs-probe-process-read": {
+    "original_sdk_sha256": "00571130ebffa20412b3853bfbddf4897580af23b37258e56dccd53c8088d8ad",
+    "original_sdk_bytes": 7952,
+    "job_id": "1a1a70fbf06-fc05-2a08"
+  },
+  "rust-matrix-terminal-status": {
+    "original_sdk_sha256": "ba675913d903e45df6112dfbf3251f48ee03260e9f628ee46cd4da79cb6edde0",
+    "original_sdk_bytes": 907,
+    "job_id": "1a1a6c02669-fc05-2894",
+    "at_unix_ms": 1793804360296,
+    "audit_recorded": true,
+    "automatic_retry": false,
+    "cancelled": false,
+    "exit_code": 1,
+    "output_complete": true,
+    "output_durable": true,
+    "state": "failed",
+    "terminal_publication_confirmed": true,
+    "terminal_publication_protocol": 1,
+    "timed_out": false
+  },
+  "excluded": [
+    {
+      "source": "/home/qian-qi/work/hepta-rea-continuation-20261104-r2-evidence/python-matrix-r1/tmp",
+      "reason": "Private test scratch content is not a source artifact or test log; no recursive read or archive."
+    },
+    {
+      "kind": "binary/runtime config/state/token/owner database",
+      "reason": "Outside failure-preservation scope."
+    }
+  ]
+}
