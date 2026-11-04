@@ -39,7 +39,7 @@ use super::request_ctx;
 use super::runtime;
 use super::McpToolCall;
 use super::{
-	rea, rea_artifact_zip, rea_evidence, rea_javascript, rea_javascript_graph, rea_model,
+	rea, rea_artifact_zip, rea_asar, rea_evidence, rea_javascript, rea_javascript_graph, rea_model,
 	rea_provider, rea_store, rea_web, weight, weight_artifact, weight_forward, weight_tensor,
 };
 
@@ -252,6 +252,8 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"rea_model_session_list",
 	"rea_inspect_application",
 	"rea_inspect_archive",
+	"rea_inspect_asar",
+	"rea_read_asar_member",
 	"rea_static_profiles",
 	"rea_static_start",
 	"rea_static_status",
@@ -1662,7 +1664,7 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Parse 1..16 explicitly selected JS/TS/JSX/TSX sources with Rust Oxc AST and lexical binding checks in a bounded worker. Sources must be absolute workspace files with normalized logical IDs; no import, package script, preload path or URL is followed. Returns paged module imports/exports, Electron callsites and same-channel candidate edges, never runtime connectivity. First read package declarations if entry names are unknown, then explicitly select source files. Every continuation requires the returned graph_sha256. Grammar and CommonJS/module mode are explicit."
+		description = "Parse 1..16 explicitly selected JS/TS/JSX/TSX sources with Rust Oxc AST and lexical binding checks in a bounded worker. Sources must be absolute workspace files with normalized logical IDs, or explicitly selected packed ASAR members with pinned archive identities in source.asar. No import, package script, preload path, ASAR link/unpacked sidecar or URL is followed. Returns paged module imports/exports, Electron callsites and same-channel candidate edges, never runtime connectivity. First read package declarations if entry names are unknown, then explicitly select source files. Every continuation requires the returned graph_sha256. Grammar and CommonJS/module mode are explicit."
 	)]
 	async fn rea_inspect_javascript_graph(
 		&self,
@@ -1825,6 +1827,46 @@ impl OctofsServer {
 		Parameters(params): Parameters<rea_artifact_zip::InspectArchiveParams>,
 	) -> Result<String, String> {
 		rea_artifact_zip::inspect_archive(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Inspect ASAR Archive",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Inspect an absolute workspace ASAR through a bounded Rust worker. Validates both Pickles, the complete UTF-8 header, exact integer/offset declarations, paths and nonoverlapping packed extents before paging a sorted inventory. Returns header SHA-256 and descriptor observation; every continuation requires both. Links and unpacked sidecars are declarations only, never followed. Indexing does not verify member payload integrity or authenticate the publisher. Select a packed member with rea_read_asar_member, or explicitly provide its archive identities in a JavaScript graph source."
+	)]
+	async fn rea_inspect_asar(
+		&self,
+		Parameters(params): Parameters<rea_asar::InspectAsarParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		rea_asar::inspect_asar(params, context.ct.clone())
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Selected ASAR Member",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read at most 65536 exact bytes of one explicitly selected packed regular ASAR member. Requires header digest and descriptor observation from rea_inspect_asar. The entire selected member, bounded to 64 MiB, is hashed and any declared SHA256 and block hashes must agree before returning bytes_hex plus range/member digests. No extraction or code execution occurs. Links, directories, unpacked files, changed identities, overlapping ranges and malformed declarations are refused. Self-declared integrity is consistency, not publisher authentication."
+	)]
+	async fn rea_read_asar_member(
+		&self,
+		Parameters(params): Parameters<rea_asar::ReadAsarMemberParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		rea_asar::read_member(params, context.ct.clone())
 			.await
 			.map_err(|error| error.to_string())
 	}

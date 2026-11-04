@@ -269,6 +269,7 @@ async fn source_admission_rejects_outside_symlink_stale_hash_and_does_not_execut
 		sources: vec![JavascriptSource {
 			id: "owned.js".into(),
 			path: path.to_string_lossy().into_owned(),
+			asar: None,
 			syntax: JavascriptSyntax::Javascript,
 			module_kind: JavascriptModuleKind::Module,
 			expected_sha256: Some(sha256(bytes)),
@@ -315,6 +316,7 @@ async fn cancelled_request_is_rejected_before_runtime_or_source_admission() {
 		sources: vec![JavascriptSource {
 			id: "cancelled.js".into(),
 			path: "/must-not-open/cancelled.js".into(),
+			asar: None,
 			syntax: JavascriptSyntax::Javascript,
 			module_kind: JavascriptModuleKind::Module,
 			expected_sha256: None,

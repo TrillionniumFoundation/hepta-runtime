@@ -207,7 +207,7 @@ pub(super) fn report(request: &WorkerRequest) -> Result<Value> {
 		"coverage":"selected_ast_modules_and_lexical_electron_candidates",
 		"complete_application_graph":false,
 		"limitations":[
-			"Only explicitly selected files are admitted. Package declarations, imports, source maps, ASAR files, dependencies, preload paths and URLs are never followed or executed.",
+			"Only explicitly selected files or pinned packed ASAR members are admitted. Package declarations, imports, source maps, dependencies, preload paths and URLs are never followed or executed; unpacked ASAR sidecars and links are never followed.",
 			"Relative import links identify selected logical-path candidates, not Node, bundler or TypeScript module resolution. Type-only records are retained and are not runtime dependencies.",
 			"Electron receivers use lexical symbols from electron imports, unshadowed require calls and direct aliases. Reassigned bindings are excluded; property mutation, eval, factories, indirect calls and interprocedural dataflow are not resolved.",
 			"A matching literal channel and API role produces a candidate edge only. Branch reachability, process identity, window ownership, listener registration, sender validation, payload compatibility and runtime message delivery are unobserved.",

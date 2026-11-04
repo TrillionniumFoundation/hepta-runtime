@@ -21,6 +21,7 @@ pub mod fs;
 pub mod rea;
 pub mod rea_application;
 pub mod rea_artifact_zip;
+pub mod rea_asar;
 pub mod rea_binary;
 pub mod rea_browser;
 pub mod rea_evidence;

@@ -100,6 +100,12 @@ pub enum Commands {
 	ReaSourceMapWorker,
 	/// Fixed local-resource capture under an existing durable process job (Linux).
 	ReaBrowserCapture(hepta_runtime::mcp::rea_browser::BrowserCaptureArgs),
+	/// Internal bounded ASAR parser over one admitted read-only descriptor.
+	#[command(hide = true)]
+	ReaAsarWorker {
+		#[arg(long)]
+		request: String,
+	},
 	/// Internal ZIP directory parser over one admitted read-only descriptor.
 	#[command(hide = true)]
 	ReaArchiveWorker {

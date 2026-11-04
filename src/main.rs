@@ -165,6 +165,9 @@ async fn run(cli: Cli) -> Result<()> {
 		Commands::ReaArchiveWorker { request } => {
 			mcp::rea_artifact_zip::serve_once(&request)?;
 		}
+		Commands::ReaAsarWorker { request } => {
+			mcp::rea_asar::serve_once(&request)?;
+		}
 	}
 
 	Ok(())

@@ -65,8 +65,11 @@ pub enum JavascriptModuleKind {
 pub struct JavascriptSource {
 	/// Unique normalized relative POSIX logical path, e.g. src/main.ts. No traversal.
 	pub id: String,
-	/// Absolute source file inside configured controller workspace roots.
+	/// Absolute source file, or an ASAR archive when asar is explicitly supplied, inside configured roots.
 	pub path: String,
+	/// Explicit packed ASAR member and pinned archive identities. Missing preserves ordinary-file acquisition.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub asar: Option<super::rea_asar::AsarSource>,
 	/// Explicit grammar; no package.json, tsconfig or source map is opened implicitly.
 	#[serde(default)]
 	pub syntax: JavascriptSyntax,
@@ -192,8 +195,15 @@ fn validate(params: &InspectJavascriptGraphParams) -> Result<()> {
 	let mut paths = BTreeSet::new();
 	for source in &params.sources {
 		validate_id(&source.id)?;
-		if !ids.insert(&source.id) || !paths.insert(&source.path) {
-			bail!("JavaScript graph source IDs and selected paths must be unique");
+		if !ids.insert(&source.id)
+			|| !paths.insert((
+				&source.path,
+				source.asar.as_ref().map(|a| a.member.as_str()),
+			)) {
+			bail!("JavaScript graph source IDs and selected file/member paths must be unique");
+		}
+		if let Some(asar) = &source.asar {
+			asar.validate()?;
 		}
 		if source
 			.expected_sha256
@@ -280,16 +290,33 @@ async fn inspect_with_roots(
 		.context("JavaScript graph parser is busy; retry after another inspection finishes")?;
 	ensure_not_cancelled(cancellation)?;
 	let mut sources = Vec::with_capacity(params.sources.len());
+	let mut archive_sources = Vec::new();
 	let mut total = 0;
 	for source in params.sources {
 		ensure_not_cancelled(cancellation)?;
 		// Admission uses blocking file operations internally. Retain the slot and
 		// finish this read before honoring cancellation, rather than detach it.
-		let bytes =
-			super::rea_files::read_bounded(Path::new(&source.path), roots, MAX_SOURCE_BYTES as u64)
-				.await;
+		let bytes = if let Some(selection) = &source.asar {
+			let (bytes, provenance) = super::rea_asar::read_javascript_source(
+				&source.path,
+				selection,
+				roots,
+				cancellation,
+			)
+			.await?;
+			archive_sources.push(json!({"source_id": source.id.clone(), "provenance": provenance}));
+			bytes
+		} else {
+			let read = super::rea_files::read_bounded(
+				Path::new(&source.path),
+				roots,
+				MAX_SOURCE_BYTES as u64,
+			)
+			.await;
+			ensure_not_cancelled(cancellation)?;
+			read?
+		};
 		ensure_not_cancelled(cancellation)?;
-		let bytes = bytes?;
 		total += bytes.len();
 		if total > MAX_TOTAL_BYTES {
 			bail!("JavaScript selected source bytes exceed 4 MiB");
@@ -327,12 +354,16 @@ async fn inspect_with_roots(
 	}
 	ensure_not_cancelled(cancellation)?;
 	#[cfg(not(test))]
-	let result = worker::inspect_isolated(&request, cancellation).await?;
+	let mut result = worker::inspect_isolated(&request, cancellation).await?;
 	#[cfg(test)]
-	let result = graph::report(&request)?;
+	let mut result = graph::report(&request)?;
 	ensure_not_cancelled(cancellation)?;
 	if result["graph_sha256"] != expected_graph || result["sources"] != json!(identities) {
 		bail!("JavaScript worker report is not bound to the controller-admitted source set");
+	}
+	if !archive_sources.is_empty() {
+		archive_sources.sort_by(|a, b| a["source_id"].as_str().cmp(&b["source_id"].as_str()));
+		result["archive_sources"] = json!(archive_sources);
 	}
 	let output = serde_json::to_string(&result)?;
 	if output.len() > MAX_RESPONSE_BYTES {
