@@ -34,6 +34,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use super::fs;
+use super::rea_source_map;
 use super::request_ctx;
 use super::runtime;
 use super::McpToolCall;
@@ -1669,6 +1670,26 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 	) -> Result<String, String> {
 		rea_javascript_graph::inspect_graph(params, context.ct.clone())
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Inspect Source Map Declarations",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Decode one explicitly selected source-map JSON file (at most 8 MiB) with bounded Rust VLQ and embedded-section parsing. Page sources, names and mappings, or query one-based generated lines and zero-based columns. JavaScript/CSS columns count UTF-16 code units, not UTF-8 bytes. Source names and sourceRoot are declarations; no URL, original file or generated code is followed or executed. Every continuation requires analysis_sha256. Queries preserve coincident mappings and do not interpolate original positions."
+	)]
+	async fn rea_inspect_source_map(
+		&self,
+		Parameters(params): Parameters<rea_source_map::InspectSourceMapParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		rea_source_map::inspect(params, context.ct.clone())
 			.await
 			.map_err(|error| error.to_string())
 	}

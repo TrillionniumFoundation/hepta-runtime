@@ -30,6 +30,7 @@ pub mod rea_javascript_graph;
 pub mod rea_model;
 pub mod rea_provider;
 pub mod rea_seccomp;
+pub mod rea_source_map;
 pub mod rea_static;
 pub mod rea_store;
 pub mod rea_web;

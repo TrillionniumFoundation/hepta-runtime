@@ -20,9 +20,9 @@
     ]
   },
   "runtime": {
-    "baseline_commit": "310add6db47bcfbed3545432eb528a72f5eb6dcd",
+    "baseline_commit": "1d9ea7e7e7a1625c611d5f6e037a1ed9d57379d4",
     "discovery": "Rust source handler discovery, not live MCP tools/list",
-    "interface_count": 22,
+    "interface_count": 23,
     "interfaces": [
       "rea_compare_web_captures",
       "rea_inspect_application",
@@ -31,6 +31,7 @@
       "rea_inspect_javascript_graph",
       "rea_inspect_javascript_package",
       "rea_inspect_model",
+      "rea_inspect_source_map",
       "rea_inspect_web_capture",
       "rea_model_session_list",
       "rea_model_session_open",
@@ -111,6 +112,17 @@
         "scope": "Existing fixed local-resource before/after HAR capture via original process_start job; user resources fetched as data; no arbitrary-page DOM or general state replay",
         "upstream_tools": [
           "capture_browser_scenario"
+        ],
+        "upstream_parity": "NOT_ESTABLISHED"
+      },
+      {
+        "id": "source_map_worker",
+        "kind": "rust_cli",
+        "entrypoint": "hepta-runtime rea-source-map-worker",
+        "source_presence": "PRESENT",
+        "scope": "Internal admitted-byte native source-map decoder with fixed limits, real MCP cancellation/deadline kill and reap, and explicit non-REA declaration output.",
+        "upstream_tools": [
+          "trace_web_source_location"
         ],
         "upstream_parity": "NOT_ESTABLISHED"
       },
@@ -241,9 +253,34 @@
         "bytes": 9814
       },
       {
+        "path": "docs/qualification/rea-source-map-20261104-r2/README.md",
+        "sha256": "efc04f760f6cbb1c73a0d72e35f1645c5e7f0bc7196bff200ac3288a1f8f873f",
+        "bytes": 5358
+      },
+      {
+        "path": "docs/qualification/rea-source-map-20261104-r2/development-r3/mcp/qualification.json",
+        "sha256": "3c87494d19ef2a38bc32704175d38ed522b4922267479e62cd455eb0407d4e9a",
+        "bytes": 1400
+      },
+      {
+        "path": "docs/qualification/rea-source-map-20261104-r2/independent-r4/qualification.json",
+        "sha256": "52fa789771455f509cf6263be8d8d692897ef3db4a98adc23340349e630d95f0",
+        "bytes": 5534
+      },
+      {
+        "path": "docs/qualification/rea-source-map-20261104-r2/upstream-r3/qualification.json",
+        "sha256": "ad2f9fab1ff9242f598e187c244f8f2dd201334ef3fda6e40572b45663526096",
+        "bytes": 2966
+      },
+      {
         "path": "docs/rea-native/JAVASCRIPT_AST.md",
         "sha256": "c60819554d7e577821a81f1cbcd098054244c63f376db91e4f633a1bcb7f3dc8",
         "bytes": 8966
+      },
+      {
+        "path": "docs/rea-native/SOURCE_MAP.md",
+        "sha256": "9a46a2a75e157d2eea1c3790ac211a0ce61328d686be0dacd9950295439054a1",
+        "bytes": 8345
       },
       {
         "path": "scripts/rea-javascript-ast-reference.mjs",
@@ -251,19 +288,29 @@
         "bytes": 19455
       },
       {
+        "path": "scripts/rea-source-map-reference.mjs",
+        "sha256": "4d1b1d1d3258f0353f6e3e3cc255d5bfe4e314e162062892ae5b994780809021",
+        "bytes": 10225
+      },
+      {
+        "path": "scripts/rea-source-map-upstream-reference.mjs",
+        "sha256": "012605b99f8d3cbc1cacf318e3c571fc1bd154bbeeeb1ba3072507b0ee5ffd53",
+        "bytes": 5844
+      },
+      {
         "path": "src/cli.rs",
-        "sha256": "d30982b4275e1dfd58ecbdc3a325d8a94302451592543c80a937f4bb408f58bb",
-        "bytes": 4180
+        "sha256": "93584fbd8d7bf71a3a07dd954a540f38f3fcec45b5e330321f41869e26d3551e",
+        "bytes": 4298
       },
       {
         "path": "src/main.rs",
-        "sha256": "bcc201491458cb9505deae446669ae66243c692823301fd0324a9280c3d6ee5a",
-        "bytes": 11940
+        "sha256": "043d2d08760cda8910c92c511101f5967e27fe2fb75037f91577bc4c0045736b",
+        "bytes": 12019
       },
       {
         "path": "src/mcp/mod.rs",
-        "sha256": "eea1e03f38e53500c4d764f05e7afa51a4d097c186311acdfc1276f45ac9965f",
-        "bytes": 2498
+        "sha256": "be729a6ef3dee7cea1cf352c4fdc66482bf3125e81686e281dc4711efcbf793d",
+        "bytes": 2522
       },
       {
         "path": "src/mcp/rea.rs",
@@ -496,6 +543,26 @@
         "bytes": 4624
       },
       {
+        "path": "src/mcp/rea_source_map.rs",
+        "sha256": "9d3b122bdf57bbaed0c824524f7e9b7a105e9131469ff6004cdd18417112321b",
+        "bytes": 7502
+      },
+      {
+        "path": "src/mcp/rea_source_map_parser.rs",
+        "sha256": "5834f4452219ac2dec2bb72530a63991ed3c91a531e37d8dea0b6dc3f0993f33",
+        "bytes": 16577
+      },
+      {
+        "path": "src/mcp/rea_source_map_tests.rs",
+        "sha256": "ffed94df229227ed55fdf1c19340032c93dc8853e00e166721479c09a50c9bfe",
+        "bytes": 11428
+      },
+      {
+        "path": "src/mcp/rea_source_map_worker.rs",
+        "sha256": "75087faa8d5ccc6aa288243ec68b843b2ecd0204f645e631964dd2c149ddf3b8",
+        "bytes": 5766
+      },
+      {
         "path": "src/mcp/rea_static.rs",
         "sha256": "008b6f1ba87265b67247fb1c7070473fe49c82c29d79294a266bbe3d951ed71d",
         "bytes": 15283
@@ -537,8 +604,8 @@
       },
       {
         "path": "src/mcp/server.rs",
-        "sha256": "fa44c580935a71134259694c64cb6da15018f7230f196e7678c30422ff1485eb",
-        "bytes": 144065
+        "sha256": "9c658c67c6a955fc7a1173bede0098ae57517de4cecfe9d40db21d0c3b81edaa",
+        "bytes": 145105
       },
       {
         "path": "tests/fixtures/rea_javascript/barrel.ts",
@@ -671,6 +738,11 @@
         "bytes": 5039
       },
       {
+        "path": "tests/rea_source_map_mcp.py",
+        "sha256": "25f42b6b625d903fab273a00bc53d46be8fd3b93f40f156927cfc0a478ed4770",
+        "bytes": 12213
+      },
+      {
         "path": "tests/rea_static_external.rs",
         "sha256": "62e135e719934ff7f2a25da22d0233343f4c017c552a8e412dee7a5afc8f5b5a",
         "bytes": 17065
@@ -681,7 +753,7 @@
         "bytes": 7890
       }
     ],
-    "source_manifest_sha256": "41e6c8a8ea0f13b32019f75d12323a000a5a5c574c3071ff0f262d62020ed52c"
+    "source_manifest_sha256": "efc4f2917e1b5015e0f943a128587cf8be2a12f80699f7a4f9dd8e1981a84ec9"
   },
   "environment_observations_sha256": "4ace5e8f041a05d205825fb2b2a41769fcfdc91f60810072eb7a6c17a12f3e9c",
   "dependency_assessments": {
@@ -1275,15 +1347,15 @@
       "hard_missing_dependency": "NOT_ESTABLISHED"
     }
   },
-  "mapping_sha256": "d23420794d19dfbf2e27e3016ea3d39e42900fd2919c1f3c4bf5cc9dc60ce446",
+  "mapping_sha256": "5d184e737ad9078499bb087413600e9d96a01e719c04f2580fcd19c4391c9875",
   "inputs_sha256": "d143681c5384d0cff75d72659cd36381eaff60ca5bf3fe45fb5290b3eccc6904",
   "summary": {
     "published_tools": 229,
     "families": 18,
-    "native_interfaces": 22,
+    "native_interfaces": 23,
     "implementation_counts": {
-      "absent": 190,
-      "partial_operation": 16,
+      "absent": 189,
+      "partial_operation": 17,
       "related_facility": 23
     },
     "qualified_tools": 0,
@@ -12711,13 +12783,17 @@
         "idempotentHint": true,
         "openWorldHint": true
       },
-      "native_implementation": "absent",
-      "native_routes": [],
-      "native_scope": "No upstream-compatible handler is registered in the pinned native runtime",
-      "remaining_behavior": "Evidence-authenticated application graph/comparison/workflow semantics",
+      "native_implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_source_map"
+      ],
+      "native_scope": "Native decoding of explicitly admitted local source-map JSON and a finite actual-REA point projection: across-line greatest generated position, all coincident candidates, section/source/name declarations and embedded-content hashes.",
+      "remaining_behavior": "Exact upstream input/default/target selection and acquisition; authenticated script/application context; source URL resolution and embedded-content UTF-16 offset verification; complete Evidence/profile/typed outcomes; retained views and operation-specific recovery. The native report is not upstream REA Evidence.",
       "dependencies": [],
       "related_runtime_routes": [],
-      "related_auxiliary_capabilities": [],
+      "related_auxiliary_capabilities": [
+        "source_map_worker"
+      ],
       "required_behavior_gates": [
         "contracts",
         "results",
@@ -12725,7 +12801,8 @@
         "typed_outcomes",
         "limits_and_cancellation",
         "source_package_boundary",
-        "bundle_auth_and_unknowns",
+        "js_graph_semantics",
+        "format_architecture_corpus",
         "retention_and_pagination",
         "effects_and_recovery"
       ],
@@ -12733,7 +12810,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Evidence-authenticated application graph/comparison/workflow semantics"
+          "next_step": "Exact upstream input/default/target selection and acquisition; authenticated script/application context; source URL resolution and embedded-content UTF-16 offset verification; complete Evidence/profile/typed outcomes; retained views and operation-specific recovery. The native report is not upstream REA Evidence."
         },
         {
           "category": "behavioral_differential",
@@ -12746,7 +12823,8 @@
             "typed_outcomes",
             "limits_and_cancellation",
             "source_package_boundary",
-            "bundle_auth_and_unknowns",
+            "js_graph_semantics",
+            "format_architecture_corpus",
             "retention_and_pagination",
             "effects_and_recovery"
           ]
@@ -16604,10 +16682,12 @@
       "dependencies": [],
       "related_runtime_routes": [
         "rea_inspect_javascript_package",
-        "rea_inspect_archive"
+        "rea_inspect_archive",
+        "rea_inspect_source_map"
       ],
       "related_auxiliary_capabilities": [
-        "javascript_worker"
+        "javascript_worker",
+        "source_map_worker"
       ],
       "required_behavior_gates": [
         "contracts",

@@ -95,6 +95,9 @@ pub enum Commands {
 	/// Internal bounded JS/TS AST parser over controller-admitted source bytes.
 	#[command(hide = true)]
 	ReaJavascriptWorker,
+	/// Internal bounded source-map parser over controller-admitted bytes.
+	#[command(hide = true)]
+	ReaSourceMapWorker,
 	/// Fixed local-resource capture under an existing durable process job (Linux).
 	ReaBrowserCapture(hepta_runtime::mcp::rea_browser::BrowserCaptureArgs),
 	/// Internal ZIP directory parser over one admitted read-only descriptor.

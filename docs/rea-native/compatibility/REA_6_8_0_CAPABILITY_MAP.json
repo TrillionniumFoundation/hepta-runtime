@@ -1,6 +1,6 @@
 {
   "schema": "hepta.rea.capability-map.v1",
-  "runtime_baseline": "310add6db47bcfbed3545432eb528a72f5eb6dcd",
+  "runtime_baseline": "1d9ea7e7e7a1625c611d5f6e037a1ed9d57379d4",
   "interfaces": {
     "rea_inspect_artifact": {
       "source_paths": [
@@ -318,6 +318,25 @@
         "tests/rea_javascript_cancellation_external.py"
       ],
       "scope": "Bounded Oxc 0.144.0 native AST/lexical-scope inspection of explicitly selected JS/TS/JSX/TSX text; import/export and Electron callsite/IPC candidates, source-bound collection paging; NON-REA preview identity. No complete application graph or observed runtime behavior."
+    },
+    "rea_inspect_source_map": {
+      "source_paths": [
+        "src/mcp/rea_source_map.rs",
+        "src/mcp/rea_source_map_parser.rs",
+        "src/mcp/rea_source_map_worker.rs",
+        "docs/rea-native/SOURCE_MAP.md",
+        "docs/qualification/rea-source-map-20261104-r2/README.md",
+        "docs/qualification/rea-source-map-20261104-r2/independent-r4/qualification.json",
+        "docs/qualification/rea-source-map-20261104-r2/upstream-r3/qualification.json",
+        "docs/qualification/rea-source-map-20261104-r2/development-r3/mcp/qualification.json"
+      ],
+      "tests": [
+        "src/mcp/rea_source_map_tests.rs",
+        "scripts/rea-source-map-reference.mjs",
+        "scripts/rea-source-map-upstream-reference.mjs",
+        "tests/rea_source_map_mcp.py"
+      ],
+      "scope": "Native bounded version-3 map declarations and across-line greatest-position lookup, including embedded indexed maps, all coincident records and source-bound collection paging. No source URL fetch, browser acquisition, source equivalence, retained upstream views or REA Evidence identity."
     }
   },
   "family_defaults": {
@@ -962,10 +981,12 @@
       ],
       "related_runtime_routes": [
         "rea_inspect_javascript_package",
-        "rea_inspect_archive"
+        "rea_inspect_archive",
+        "rea_inspect_source_map"
       ],
       "related_auxiliary_capabilities": [
-        "javascript_worker"
+        "javascript_worker",
+        "source_map_worker"
       ],
       "scope": "Native Oxc AST and lexical-scope analysis of 1..16 explicitly selected JS/TS/JSX/TSX sources (at most 1 MiB each / 4 MiB total); selected-source imports, exports, conservative local module candidates, Electron callsites and literal-channel IPC candidate pairs. No target code execution. Runtime resolution, IPC delivery and complete application graph are explicitly unproved.",
       "missing": "Upstream ASAR/directory artifact inventory and integrity-policy contracts; whole-artifact identity with selected/unselected source coverage; supported bundled/source-map/route and richer semantic graph relations; exact upstream node/unknown/deadline/partial-Evidence behavior; retained summary/view contracts and operation-specific REA Evidence identity. The new tool's candidate graph is not an authenticated upstream Application Graph.",
@@ -1783,6 +1804,23 @@
         "bundle_auth_and_unknowns",
         "retention_and_pagination"
       ]
+    },
+    "trace_web_source_location": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_source_map"
+      ],
+      "related_auxiliary_capabilities": [
+        "source_map_worker"
+      ],
+      "scope": "Native decoding of explicitly admitted local source-map JSON and a finite actual-REA point projection: across-line greatest generated position, all coincident candidates, section/source/name declarations and embedded-content hashes.",
+      "missing": "Exact upstream input/default/target selection and acquisition; authenticated script/application context; source URL resolution and embedded-content UTF-16 offset verification; complete Evidence/profile/typed outcomes; retained views and operation-specific recovery. The native report is not upstream REA Evidence.",
+      "dependencies": [],
+      "extra_gates": [
+        "js_graph_semantics",
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
     }
   },
   "behavior_gates": {
@@ -1971,6 +2009,27 @@
       "scope": "Internal native Rust AST worker for explicitly admitted JS/TS/JSX/TSX text; Oxc lexical-scope facts and conservative static candidates. Node/Babel is a development reference only. No target execution or proof of live process pairs. The final frozen release passed actual MCP cancellation of its stopped owned worker: the original owner remained alive, reaped the worker within the unchanged five-second observation window, and served the recovery call. This finite lifecycle observation does not close upstream operation parity.",
       "upstream_tools": [
         "analyze_javascript_application"
+      ]
+    },
+    "source_map_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaSourceMapWorker",
+      "entrypoint": "hepta-runtime rea-source-map-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_source_map.rs",
+        "src/mcp/rea_source_map_parser.rs",
+        "src/mcp/rea_source_map_worker.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_source_map_tests.rs",
+        "scripts/rea-source-map-reference.mjs",
+        "scripts/rea-source-map-upstream-reference.mjs",
+        "tests/rea_source_map_mcp.py"
+      ],
+      "scope": "Internal admitted-byte native source-map decoder with fixed limits, real MCP cancellation/deadline kill and reap, and explicit non-REA declaration output.",
+      "upstream_tools": [
+        "trace_web_source_location"
       ]
     }
   }
