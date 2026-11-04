@@ -89,15 +89,27 @@ interprocedural dataflow are not resolved. The list of reported unknowns covers
 detected syntax patterns; it is not a claim that every unmodeled behavior has
 been enumerated.
 
-Package scripts, imported modules, preload expressions, URLs, source maps,
-archives and native addons remain unexecuted and unopened. ASAR extraction,
-source-map recovery, minifier/deobfuscation semantics, arbitrary application
-resolution and live Electron instrumentation require separate capabilities and
-qualification. This tool does not claim full REA 6.8.0 behavioral parity.
+Package scripts, imported modules, preload expressions, URLs, source maps and
+native addons are never loaded implicitly or executed. Explicit `source.asar`
+selection can now admit a packed regular ASAR member through the bounded
+[ASAR reader](ASAR.md), without extracting it to the filesystem. The member's
+complete admitted source bytes feed the same Oxc graph pipeline. Plain-file
+requests retain their original canonical identity; ASAR acquisition adds separate
+archive provenance without changing the logical source/content graph identity.
+Links and unpacked sidecar files remain declarations and are not followed.
+
+The separate [source-map declaration reader](SOURCE_MAP.md) decodes explicitly
+selected local maps and point queries; it does not automatically associate a map
+with an AST graph or authenticate the claimed generated/original relationship.
+Minifier/deobfuscation semantics, arbitrary application resolution, implicit
+archive traversal and live Electron instrumentation require further capability
+and qualification work. This tool does not claim full REA 6.8.0 behavioral parity.
 
 ## Resource and process boundaries
 
-The admission limits are 16 files, 1 MiB per file and 4 MiB total UTF-8 source.
+The admission limits are 16 selected sources, 1 MiB per plain file or selected
+ASAR member, and 4 MiB total UTF-8 source. ASAR header/member verification has
+its own bounded acquisition worker before the Oxc parser.
 The parser rejects more than 200,000 AST nodes in one source and more than
 10,000 combined observations or IPC candidate edges. Pages contain at most
 256 rows and one response is at most 1 MiB; oversized pages fail explicitly.

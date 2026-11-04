@@ -57,7 +57,7 @@ Desktop has an explicitly observed Ghidra 12.2 launcher, JDK 25 executable and J
 
 Firmware and PCAP corpus work is actionable code/testing work: the pinned upstream includes a Python tar/gzip + host-compiler firmware generator with an independent byte/offset oracle and an owned offline Ethernet/IPv4/TCP capture generator. Provider stubs are explicitly identified and cannot qualify an engine. The observation file links these exact sources rather than inventing a missing-corpus blocker.
 
-## Final native release observations
+## Historical 1d9ea7e native release observations
 
 The desktop executable used for native engine/AST/browser gates is pinned to SHA-256 `4da25b9b865ef262878098d3d97b5e0c70f44bc83192d4abb4c8d1888fb0dd5d` (17,820,288 bytes). Its content-bound source group is `9d08a4cc6b6c89f4db47eb300af5e54dd44092082434c93b1dee954c30b2209a`; the verification group is `b783c4f05a5c7f614ee7150ecc66bb4fe25f1cfd8ed548723e405e4612b6baa4`. The original receipts bind these same inputs before and after the applicable commands.
 
@@ -69,7 +69,7 @@ The desktop executable used for native engine/AST/browser gates is pinned to SHA
 | Native Chrome capture | [11 native checks, 10 selected Python-reference pairs and 6 expected deadline checks](../../qualification/rea-browser-final-release-20261104-r2/README.md) on desktop | Fixed owned HTTP resources and saved HAR representation; external Chrome and existing Python durable owner; no arbitrary application recording, process-level network isolation or full HAR/wire equivalence |
 | Ghidra revision 2 | [Eight real-engine checks](../../qualification/rea-ghidra-final-release-20261104-r2/README.md), including independent GNU entries/call sites, selected native decompile, restart and cancellation | Ghidra 12.2/JDK25 and the existing Python launcher/owner are external; cancelled scratch cleanup is recorded as harness cleanup; the older 141-input C comparison was not rerun |
 
-These are finite observations of the implemented native capabilities. All **229 upstream tools remain OPEN**, with **0 qualified**, **16 partial operations**, **23 related facilities** and **190 absent operations**. Required upstream behavior gates are unchanged. Every component's parity field remains `NOT_ESTABLISHED`; native receipts are recorded separately instead of being relabeled as complete operation parity.
+These are finite historical observations of the implemented native capabilities. That snapshot recorded **229 OPEN tools**, **0 qualified**, **16 partial operations**, **23 related facilities** and **190 absent operations**. Read the generated ledger summary for the current implementation inventory; later native increments do not retroactively qualify this binary. Required upstream behavior gates are unchanged. Every component's parity field remains `NOT_ESTABLISHED`; native receipts are recorded separately instead of being relabeled as complete operation parity.
 
 The source map binds the selected final receipt files and their archive manifests in addition to source/test contents. The full cached check authenticates the frozen upstream inputs; the offline check only checks repository snapshot/mapping consistency. Neither reruns the native engine/AST/browser receipts. The independent functional matrix below has its own executable and receipts. Remote CI is established only by PR/Actions records tied to the published head and prospective merge SHAs; these local receipts do not claim a CI result. Actual CI outcomes belong in PR text, so no extra compatibility-data commit is needed just to copy CI status. The original desktop 35-command run remains timed out after 34 completed commands.
 
@@ -91,6 +91,19 @@ The ROG matrix built a distinct **17,842,176-byte** executable, SHA-256 `2d02129
 The r3 environment reused the r2 Cargo target and whitelisted Cargo home. It corrected the task tmpfs mount to exec while retaining nosuid/nodev and actually executed an owned mode0700 shim before starting. It did not change source, tests, CI, the frozen runner, command argv, expected exits or budgets. The earlier r2 failure stays a failure. This is a functional qualification in that recorded environment, not general bare-ROG support or desktop ext4/power-loss durability evidence.
 
 Historical matrix ledger checks used their original inputs. Current canonical ENV/LEDGER consistency is checked separately in FINAL_MATRIX_VALIDATION; prior PREBUILD and FINAL_NATIVE receipts retain their original input snapshots rather than being silently reinterpreted against newer data.
+
+## Native continuation after 1d9ea7e
+
+The native [ASAR reader and explicit graph acquisition](../ASAR.md),
+[source-map declaration/point reader](../SOURCE_MAP.md), and
+[decimal-halfway Evidence correction](../../qualification/rea-evidence-halfway-20261104-r2/README.md)
+carry their own source/binary-bound receipts. ASAR header/selected-member
+consistency is separate from publisher authentication. Source-map declarations
+and a matching point projection are separate from a full upstream trace tool.
+The earlier 418-case numeric corpus did not contain the newly reproduced
+halfway ties; it remains pinned historical input, alongside the new 438-case
+producer and wider finite-bit oracle. Neither corpus replaces complete
+operation-specific Evidence and typed-outcome qualification.
 
 ## Historical npm Evidence replay
 

@@ -247,12 +247,20 @@
     },
     "rea_verify_evidence": {
       "source_paths": [
-        "src/mcp/rea_evidence.rs"
+        "src/mcp/rea_evidence.rs",
+        "Cargo.lock",
+        "docs/qualification/rea-evidence-halfway-20261104-r2/qualification.json",
+        "docs/qualification/rea-evidence-halfway-20261104-r2/package-attestation.json",
+        "docs/qualification/rea-evidence-halfway-20261104-r2/before-fix-lib.json",
+        "docs/qualification/rea-evidence-halfway-20261104-r2/after-fix-mcp.json"
       ],
       "tests": [
-        "src/mcp/rea_evidence_tests.rs"
+        "src/mcp/rea_evidence_tests.rs",
+        "scripts/rea-number-reference.mjs",
+        "scripts/rea-number-bit-reference.mjs",
+        "scripts/rea-evidence-number-mcp.py"
       ],
-      "scope": "Finite-number semantic digest and selected schema checks; not complete Zod/Evidence parity"
+      "scope": "Finite-number semantic digest and selected Evidence schema checks, using existing serde_json/zmij shortest ties-to-even digits. Actual npm 438-case/public-MCP and 1,052,304 finite-bit observations close the known decimal-halfway mismatch; no complete Zod/Evidence/tool parity is claimed."
     },
     "rea_retain_preview": {
       "source_paths": [
@@ -297,7 +305,15 @@
         "docs/qualification/rea-javascript-final-release-20261104-r1/gate-evidence/qualification.json",
         "docs/qualification/rea-javascript-final-release-20261104-r1/gate-evidence/reference-final-release.json",
         "docs/qualification/rea-js-cancellation-final-release-20261104-r2/artifact-manifest.json",
-        "docs/qualification/rea-js-cancellation-final-release-20261104-r2/workspace-evidence/qualification.json"
+        "docs/qualification/rea-js-cancellation-final-release-20261104-r2/workspace-evidence/qualification.json",
+        "src/mcp/rea_asar.rs",
+        "src/mcp/rea_asar_parser.rs",
+        "src/mcp/rea_asar_worker.rs",
+        "src/mcp/rea_evidence.rs",
+        "docs/rea-native/ASAR.md",
+        "docs/rea-native/qualification/asar-20261104-r2/README.md",
+        "docs/rea-native/qualification/asar-20261104-r2/external/qualification.json",
+        "docs/rea-native/qualification/asar-20261104-r2/manifest.json"
       ],
       "tests": [
         "src/mcp/rea_javascript_graph_tests.rs",
@@ -315,9 +331,14 @@
         "tests/fixtures/rea_javascript/package.json",
         "tests/fixtures/rea_javascript/manual-golden.json",
         "tests/fixtures/rea_javascript/reference.json",
-        "tests/rea_javascript_cancellation_external.py"
+        "tests/rea_javascript_cancellation_external.py",
+        "src/mcp/rea_asar_tests.rs",
+        "src/mcp/rea_asar_parser_tests.rs",
+        "tests/rea_asar_external.rs",
+        "tests/rea_asar_qualification.py",
+        "scripts/rea-asar-reference.mjs"
       ],
-      "scope": "Bounded Oxc 0.144.0 native AST/lexical-scope inspection of explicitly selected JS/TS/JSX/TSX text; import/export and Electron callsite/IPC candidates, source-bound collection paging; NON-REA preview identity. No complete application graph or observed runtime behavior."
+      "scope": "Bounded Oxc 0.144.0 native AST/lexical-scope inspection of explicitly selected plain-file or packed-ASAR JS/TS/JSX/TSX bytes; import/export and Electron callsite/IPC candidates, source-bound paging and separate archive acquisition provenance. Plain-file canonical graph identity is unchanged. NON-REA report; no complete application graph or observed runtime behavior."
     },
     "rea_inspect_source_map": {
       "source_paths": [
@@ -337,6 +358,50 @@
         "tests/rea_source_map_mcp.py"
       ],
       "scope": "Native bounded version-3 map declarations and across-line greatest-position lookup, including embedded indexed maps, all coincident records and source-bound collection paging. No source URL fetch, browser acquisition, source equivalence, retained upstream views or REA Evidence identity."
+    },
+    "rea_inspect_asar": {
+      "source_paths": [
+        "src/mcp/rea_asar.rs",
+        "src/mcp/rea_asar_parser.rs",
+        "src/mcp/rea_asar_worker.rs",
+        "src/mcp/rea_files.rs",
+        "src/mcp/rea_seccomp.rs",
+        "src/mcp/rea_evidence.rs",
+        "docs/rea-native/ASAR.md",
+        "docs/rea-native/qualification/asar-20261104-r2/README.md",
+        "docs/rea-native/qualification/asar-20261104-r2/external/qualification.json",
+        "docs/rea-native/qualification/asar-20261104-r2/manifest.json"
+      ],
+      "tests": [
+        "src/mcp/rea_asar_tests.rs",
+        "src/mcp/rea_asar_parser_tests.rs",
+        "tests/rea_asar_external.rs",
+        "tests/rea_asar_qualification.py",
+        "scripts/rea-asar-reference.mjs"
+      ],
+      "scope": "Complete bounded canonical Pickle/header declaration inventory, packed extent validation and bound paging; no full archive payload hash, extraction, link/sidecar reads, publisher authentication or REA Evidence."
+    },
+    "rea_read_asar_member": {
+      "source_paths": [
+        "src/mcp/rea_asar.rs",
+        "src/mcp/rea_asar_parser.rs",
+        "src/mcp/rea_asar_worker.rs",
+        "src/mcp/rea_files.rs",
+        "src/mcp/rea_seccomp.rs",
+        "src/mcp/rea_evidence.rs",
+        "docs/rea-native/ASAR.md",
+        "docs/rea-native/qualification/asar-20261104-r2/README.md",
+        "docs/rea-native/qualification/asar-20261104-r2/external/qualification.json",
+        "docs/rea-native/qualification/asar-20261104-r2/manifest.json"
+      ],
+      "tests": [
+        "src/mcp/rea_asar_tests.rs",
+        "src/mcp/rea_asar_parser_tests.rs",
+        "tests/rea_asar_external.rs",
+        "tests/rea_asar_qualification.py",
+        "scripts/rea-asar-reference.mjs"
+      ],
+      "scope": "Explicit packed regular member range acquisition after whole selected-member SHA256 and all declared block hashes match; descriptor/header preconditions, no link/unpacked following, no publisher authentication or REA Evidence."
     }
   },
   "family_defaults": {
@@ -657,14 +722,19 @@
       "native_routes": [
         "rea_inspect_artifact",
         "rea_inspect_archive",
-        "rea_inspect_application"
+        "rea_inspect_application",
+        "rea_inspect_asar",
+        "rea_read_asar_member"
       ],
-      "scope": "Selected header/ELF facts and classic-ZIP/APK/JAR declarations",
-      "missing": "Full container graph, ASAR/other formats, extraction, integrity-policy and complete coverage contracts",
+      "scope": "Selected header/ELF facts, classic-ZIP/APK/JAR declarations, bounded canonical ASAR header inventory and explicit packed-member verified byte ranges",
+      "missing": "Complete upstream container graph/Evidence/view and integrity-policy contracts, other formats and extraction; ASAR unpacked/link resolution, whole-archive content identity and publisher/fuse authentication remain unimplemented",
       "dependencies": [],
       "extra_gates": [
         "format_architecture_corpus",
         "retention_and_pagination"
+      ],
+      "related_auxiliary_capabilities": [
+        "asar_worker"
       ]
     },
     "inspect_elf_notes": {
@@ -982,14 +1052,17 @@
       "related_runtime_routes": [
         "rea_inspect_javascript_package",
         "rea_inspect_archive",
-        "rea_inspect_source_map"
+        "rea_inspect_source_map",
+        "rea_inspect_asar",
+        "rea_read_asar_member"
       ],
       "related_auxiliary_capabilities": [
         "javascript_worker",
-        "source_map_worker"
+        "source_map_worker",
+        "asar_worker"
       ],
-      "scope": "Native Oxc AST and lexical-scope analysis of 1..16 explicitly selected JS/TS/JSX/TSX sources (at most 1 MiB each / 4 MiB total); selected-source imports, exports, conservative local module candidates, Electron callsites and literal-channel IPC candidate pairs. No target code execution. Runtime resolution, IPC delivery and complete application graph are explicitly unproved.",
-      "missing": "Upstream ASAR/directory artifact inventory and integrity-policy contracts; whole-artifact identity with selected/unselected source coverage; supported bundled/source-map/route and richer semantic graph relations; exact upstream node/unknown/deadline/partial-Evidence behavior; retained summary/view contracts and operation-specific REA Evidence identity. The new tool's candidate graph is not an authenticated upstream Application Graph.",
+      "scope": "Native Oxc AST and lexical-scope analysis of 1..16 explicitly selected JS/TS/JSX/TSX sources, admitted as plain files or explicit packed ASAR members (at most 1 MiB each / 4 MiB total); selected-source imports, exports, conservative module candidates, Electron callsites and literal-channel IPC candidate pairs. Explicit ASAR acquisition preserves logical graph identity and carries separate archive provenance. No target execution, implicit resolution, complete application graph or live IPC proof.",
+      "missing": "Whole-artifact directory/ASAR inventory and selected/unselected source coverage in upstream application identity; unsupported/unpacked/link acquisition and publisher/integrity policies; automatic bundled/source-map/route associations and richer semantic graph relations; exact upstream node/unknown/deadline/partial-Evidence behavior; retained summary/view contracts and operation-specific REA Evidence identity.",
       "dependencies": [],
       "extra_gates": [
         "js_graph_semantics",
@@ -2030,6 +2103,32 @@
       "scope": "Internal admitted-byte native source-map decoder with fixed limits, real MCP cancellation/deadline kill and reap, and explicit non-REA declaration output.",
       "upstream_tools": [
         "trace_web_source_location"
+      ]
+    },
+    "asar_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaAsarWorker",
+      "entrypoint": "hepta-runtime rea-asar-worker --request JSON",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_asar.rs",
+        "src/mcp/rea_asar_parser.rs",
+        "src/mcp/rea_asar_worker.rs",
+        "src/mcp/rea_files.rs",
+        "src/mcp/rea_seccomp.rs",
+        "src/mcp/rea_evidence.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_asar_tests.rs",
+        "src/mcp/rea_asar_parser_tests.rs",
+        "tests/rea_asar_external.rs",
+        "tests/rea_asar_qualification.py",
+        "scripts/rea-asar-reference.mjs"
+      ],
+      "scope": "Internal bounded inherited read-only-descriptor ASAR header/member parser, with actual original-worker cancellation/deadline kill and reap. Native Pickle-header digest is distinct from the Electron JSON-only header digest.",
+      "upstream_tools": [
+        "inspect_artifact",
+        "analyze_javascript_application"
       ]
     }
   }

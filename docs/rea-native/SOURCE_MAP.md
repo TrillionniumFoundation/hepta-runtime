@@ -91,8 +91,9 @@ function and checks that projection separately.
 
 Capacity overflow is an error, not a shortened result with complete coverage.
 Unknown JSON extension properties are ignored. Recognized duplicate contract
-members, invalid UTF-8, invalid indexes, malformed VLQ and bounded-coordinate
-overflow are errors.
+members, invalid UTF-8, lone-surrogate JSON strings, invalid indexes, malformed
+VLQ and bounded-coordinate overflow are errors. Decoded strings must be Unicode
+scalar text; the native profile does not admit isolated UTF-16 surrogates.
 
 The controller owns file admission and the parser process. The worker receives
 the admitted bytes and request parameters, not the input path or runtime

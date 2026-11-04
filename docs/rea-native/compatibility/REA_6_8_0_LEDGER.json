@@ -22,12 +22,13 @@
   "runtime": {
     "baseline_commit": "1d9ea7e7e7a1625c611d5f6e037a1ed9d57379d4",
     "discovery": "Rust source handler discovery, not live MCP tools/list",
-    "interface_count": 23,
+    "interface_count": 25,
     "interfaces": [
       "rea_compare_web_captures",
       "rea_inspect_application",
       "rea_inspect_archive",
       "rea_inspect_artifact",
+      "rea_inspect_asar",
       "rea_inspect_javascript_graph",
       "rea_inspect_javascript_package",
       "rea_inspect_model",
@@ -37,6 +38,7 @@
       "rea_model_session_open",
       "rea_model_session_query",
       "rea_model_session_read",
+      "rea_read_asar_member",
       "rea_read_model",
       "rea_read_preview",
       "rea_replay_web_entry",
@@ -68,6 +70,18 @@
         "scope": "Internal admitted-byte artifact parser; no separate upstream tool count",
         "upstream_tools": [
           "inspect_artifact"
+        ],
+        "upstream_parity": "NOT_ESTABLISHED"
+      },
+      {
+        "id": "asar_worker",
+        "kind": "rust_cli",
+        "entrypoint": "hepta-runtime rea-asar-worker --request JSON",
+        "source_presence": "PRESENT",
+        "scope": "Internal bounded inherited read-only-descriptor ASAR header/member parser, with actual original-worker cancellation/deadline kill and reap. Native Pickle-header digest is distinct from the Electron JSON-only header digest.",
+        "upstream_tools": [
+          "inspect_artifact",
+          "analyze_javascript_application"
         ],
         "upstream_parity": "NOT_ESTABLISHED"
       },
@@ -178,6 +192,26 @@
         "bytes": 4883
       },
       {
+        "path": "docs/qualification/rea-evidence-halfway-20261104-r2/after-fix-mcp.json",
+        "sha256": "7ff3049517473f7fc82eb6581adf4faa3ee0338b76b448acf9fc920138f054ec",
+        "bytes": 744
+      },
+      {
+        "path": "docs/qualification/rea-evidence-halfway-20261104-r2/before-fix-lib.json",
+        "sha256": "2e13e970d6e45172cb2dba3f92b5cb43f072debd5b49a8bd3219c25b00858dd1",
+        "bytes": 1583
+      },
+      {
+        "path": "docs/qualification/rea-evidence-halfway-20261104-r2/package-attestation.json",
+        "sha256": "53f15146dfb6b5d445348090a527f1613e18f245f1d96e030367fc6d43163a92",
+        "bytes": 529
+      },
+      {
+        "path": "docs/qualification/rea-evidence-halfway-20261104-r2/qualification.json",
+        "sha256": "f5c214abfbe3801c1ea70203d517693a9e168731a07c800beaefe4f98871f5be",
+        "bytes": 3649
+      },
+      {
         "path": "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
         "sha256": "72c15c1308b72796ea6b2d5b8d91f5026195606b57f3b20192093d6efe183036",
         "bytes": 600
@@ -273,19 +307,59 @@
         "bytes": 2966
       },
       {
+        "path": "docs/rea-native/ASAR.md",
+        "sha256": "7c48c588bc75ea925e9a1475b4890bddddf1aa3c60ca681a98633df7d0d0a1f6",
+        "bytes": 12011
+      },
+      {
         "path": "docs/rea-native/JAVASCRIPT_AST.md",
-        "sha256": "c60819554d7e577821a81f1cbcd098054244c63f376db91e4f633a1bcb7f3dc8",
-        "bytes": 8966
+        "sha256": "cf21992c8b728ecab360d880fa12c637d277adeeac6e471cf7de144ead05d138",
+        "bytes": 9819
       },
       {
         "path": "docs/rea-native/SOURCE_MAP.md",
-        "sha256": "9a46a2a75e157d2eea1c3790ac211a0ce61328d686be0dacd9950295439054a1",
-        "bytes": 8345
+        "sha256": "49cab2308835b34d507ee49adaa83e2780f3021e58f940cf6260b4048745fc33",
+        "bytes": 8481
+      },
+      {
+        "path": "docs/rea-native/qualification/asar-20261104-r2/README.md",
+        "sha256": "9fd47bb4ea7027e29ae6d8a3bf2314570f89043deeba11575bdecc9383d4f589",
+        "bytes": 6323
+      },
+      {
+        "path": "docs/rea-native/qualification/asar-20261104-r2/external/qualification.json",
+        "sha256": "23fca34f8e69e8d552a2f3d4864d9145ad4b59ac29f4434b36011956a76b8a80",
+        "bytes": 24849
+      },
+      {
+        "path": "docs/rea-native/qualification/asar-20261104-r2/manifest.json",
+        "sha256": "1b35510f9eb4048b74d1c62c884f97572a79dc234759d5a86e667dac2ade9ce9",
+        "bytes": 5151
+      },
+      {
+        "path": "scripts/rea-asar-reference.mjs",
+        "sha256": "b1950ff6bb2f06831e28938c4538f6e091bd76395a25cf115350a8cbf0db83d6",
+        "bytes": 6296
+      },
+      {
+        "path": "scripts/rea-evidence-number-mcp.py",
+        "sha256": "5eeeb7fb9a6d7e3d2dcdfa65dd9afb116577bf76e554d91bed9d8d2e94bd7a1b",
+        "bytes": 7661
       },
       {
         "path": "scripts/rea-javascript-ast-reference.mjs",
         "sha256": "2287596907c24d362bae75a8103afcbf1499c070da6a7e9b09008264396bbcf9",
         "bytes": 19455
+      },
+      {
+        "path": "scripts/rea-number-bit-reference.mjs",
+        "sha256": "9ab5ab164889f6ebde4ce2d7f074584a74c4276a55adf67c1be1102122ce6603",
+        "bytes": 5317
+      },
+      {
+        "path": "scripts/rea-number-reference.mjs",
+        "sha256": "c8a443a1ec38a74db385efd49ce099cf17bac472f55985a48b7b89903c41a969",
+        "bytes": 11041
       },
       {
         "path": "scripts/rea-source-map-reference.mjs",
@@ -299,18 +373,18 @@
       },
       {
         "path": "src/cli.rs",
-        "sha256": "93584fbd8d7bf71a3a07dd954a540f38f3fcec45b5e330321f41869e26d3551e",
-        "bytes": 4298
+        "sha256": "5009ea8cac6533073ec4b179b259b82128eb414cf9886c4c5285ce0173d425aa",
+        "bytes": 4452
       },
       {
         "path": "src/main.rs",
-        "sha256": "043d2d08760cda8910c92c511101f5967e27fe2fb75037f91577bc4c0045736b",
-        "bytes": 12019
+        "sha256": "a270925209f5cf77d6739be49206517ac44ca0438e0590893093260ce40d09c5",
+        "bytes": 12107
       },
       {
         "path": "src/mcp/mod.rs",
-        "sha256": "be729a6ef3dee7cea1cf352c4fdc66482bf3125e81686e281dc4711efcbf793d",
-        "bytes": 2522
+        "sha256": "0cd71b584efc6f7f56075665852228fe75c015d0b9000b0fb0e5aea010fdbdec",
+        "bytes": 2540
       },
       {
         "path": "src/mcp/rea.rs",
@@ -351,6 +425,31 @@
         "path": "src/mcp/rea_artifact_zip_worker.rs",
         "sha256": "dfabceef9ef5aec2cf7c91323aa31bbee38d2cf93031dcfc83d8c1ae11ae6308",
         "bytes": 5411
+      },
+      {
+        "path": "src/mcp/rea_asar.rs",
+        "sha256": "5b8832584aa5a08a3ac31e192819725c859e3e2228a630dcf611361c72665c36",
+        "bytes": 14537
+      },
+      {
+        "path": "src/mcp/rea_asar_parser.rs",
+        "sha256": "53138ad0708c2a444171b144b28c3c5baef7ba79391641fa9bce07b688b081ff",
+        "bytes": 18656
+      },
+      {
+        "path": "src/mcp/rea_asar_parser_tests.rs",
+        "sha256": "820318b18837cad13d29fc8dd2d74723894de5caa767e92485e021c7e483a77c",
+        "bytes": 11147
+      },
+      {
+        "path": "src/mcp/rea_asar_tests.rs",
+        "sha256": "5c5e4ac3d4d53bff26e9d4404c5c535ab2b4cfdd65874e09c0d1afdbc36cad79",
+        "bytes": 5959
+      },
+      {
+        "path": "src/mcp/rea_asar_worker.rs",
+        "sha256": "003462046dd35f014aec21f772f277c62d3cd73fe8982ec196b0573c225e59a1",
+        "bytes": 5663
       },
       {
         "path": "src/mcp/rea_binary_parser.rs",
@@ -414,13 +513,13 @@
       },
       {
         "path": "src/mcp/rea_evidence.rs",
-        "sha256": "4882bde8afeeaad466fb5afbdd639264d1fb8613073f73c978e6ed4a4c950365",
-        "bytes": 20308
+        "sha256": "7e884827c62b6f95379a2e7335f7c6a9f567f189dfd218bbc9d6902a1463e6a7",
+        "bytes": 20451
       },
       {
         "path": "src/mcp/rea_evidence_tests.rs",
-        "sha256": "722a97212d011d231dd338d26ca2c703a81e206505f06ca16303890e6b4f0a98",
-        "bytes": 12236
+        "sha256": "8516c47e1b215f7d8d1c27389b3cdcd25605507ca58525026cf4b7706d13b09c",
+        "bytes": 15327
       },
       {
         "path": "src/mcp/rea_files.rs",
@@ -459,18 +558,18 @@
       },
       {
         "path": "src/mcp/rea_javascript_graph.rs",
-        "sha256": "703e79a306365cf4b12bca327cdf475eeee4639fade3eabb2f0f44a5d4952084",
-        "bytes": 11141
+        "sha256": "1b68ced13b6d9b87cbf191661ee0a7bf7b1328df77d2874365f6961bc6a8047c",
+        "bytes": 12121
       },
       {
         "path": "src/mcp/rea_javascript_graph_report.rs",
-        "sha256": "c69d1aa63810f01ccabd713d0321a7b6ceff837c7644a96eb78e00b64164d743",
-        "bytes": 9196
+        "sha256": "e4b93f41e050aad1728869d4e5eae6d8b9031fe10f84641fc9016181982c0c26",
+        "bytes": 9267
       },
       {
         "path": "src/mcp/rea_javascript_graph_tests.rs",
-        "sha256": "43a3efd0556be88c668433dbcbc82314ed8d5e182be855dbe9ccdbada0c9e9b6",
-        "bytes": 10832
+        "sha256": "933ffe08e3c9453242ae2931b55d5ba610b4923e05cfc0a5413b102eba8cc1cb",
+        "bytes": 10862
       },
       {
         "path": "src/mcp/rea_javascript_graph_worker.rs",
@@ -604,8 +703,8 @@
       },
       {
         "path": "src/mcp/server.rs",
-        "sha256": "9c658c67c6a955fc7a1173bede0098ae57517de4cecfe9d40db21d0c3b81edaa",
-        "bytes": 145105
+        "sha256": "8584d8845d9f95f9140317968e4fa00cf7c8b2b1f90202b75490b12381cdff6c",
+        "bytes": 147361
       },
       {
         "path": "tests/fixtures/rea_javascript/barrel.ts",
@@ -676,6 +775,16 @@
         "path": "tests/rea_artifact_zip_worker.rs",
         "sha256": "9c300492645ec718839f4656d25c90865ab7beae90831ebb31445e72644f7f1b",
         "bytes": 2653
+      },
+      {
+        "path": "tests/rea_asar_external.rs",
+        "sha256": "1ffe79e562e9056f20b1a3e9a918abc8b5be9208a41ef940b479c8b0e70f40ee",
+        "bytes": 10442
+      },
+      {
+        "path": "tests/rea_asar_qualification.py",
+        "sha256": "ab316b0e3d91312e38e13d388b1bdc52ff5005ba1a9728683e10cb3318c71f1b",
+        "bytes": 21366
       },
       {
         "path": "tests/rea_browser_capture_tests.py",
@@ -753,7 +862,7 @@
         "bytes": 7890
       }
     ],
-    "source_manifest_sha256": "efc4f2917e1b5015e0f943a128587cf8be2a12f80699f7a4f9dd8e1981a84ec9"
+    "source_manifest_sha256": "6edcfe35796e37f70358f39f72d680208ab789c570969c560d022a919a8a614b"
   },
   "environment_observations_sha256": "4ace5e8f041a05d205825fb2b2a41769fcfdc91f60810072eb7a6c17a12f3e9c",
   "dependency_assessments": {
@@ -1347,12 +1456,12 @@
       "hard_missing_dependency": "NOT_ESTABLISHED"
     }
   },
-  "mapping_sha256": "5d184e737ad9078499bb087413600e9d96a01e719c04f2580fcd19c4391c9875",
+  "mapping_sha256": "f049437c135737ab001f0d13c2d894901e967e9cfd22b2eefc1d70c2c5a7f710",
   "inputs_sha256": "d143681c5384d0cff75d72659cd36381eaff60ca5bf3fe45fb5290b3eccc6904",
   "summary": {
     "published_tools": 229,
     "families": 18,
-    "native_interfaces": 23,
+    "native_interfaces": 25,
     "implementation_counts": {
       "absent": 189,
       "partial_operation": 17,
@@ -7272,13 +7381,17 @@
       "native_routes": [
         "rea_inspect_artifact",
         "rea_inspect_archive",
-        "rea_inspect_application"
+        "rea_inspect_application",
+        "rea_inspect_asar",
+        "rea_read_asar_member"
       ],
-      "native_scope": "Selected header/ELF facts and classic-ZIP/APK/JAR declarations",
-      "remaining_behavior": "Full container graph, ASAR/other formats, extraction, integrity-policy and complete coverage contracts",
+      "native_scope": "Selected header/ELF facts, classic-ZIP/APK/JAR declarations, bounded canonical ASAR header inventory and explicit packed-member verified byte ranges",
+      "remaining_behavior": "Complete upstream container graph/Evidence/view and integrity-policy contracts, other formats and extraction; ASAR unpacked/link resolution, whole-archive content identity and publisher/fuse authentication remain unimplemented",
       "dependencies": [],
       "related_runtime_routes": [],
-      "related_auxiliary_capabilities": [],
+      "related_auxiliary_capabilities": [
+        "asar_worker"
+      ],
       "required_behavior_gates": [
         "contracts",
         "results",
@@ -7294,7 +7407,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Full container graph, ASAR/other formats, extraction, integrity-policy and complete coverage contracts"
+          "next_step": "Complete upstream container graph/Evidence/view and integrity-policy contracts, other formats and extraction; ASAR unpacked/link resolution, whole-archive content identity and publisher/fuse authentication remain unimplemented"
         },
         {
           "category": "behavioral_differential",
@@ -16677,17 +16790,20 @@
       "native_routes": [
         "rea_inspect_javascript_graph"
       ],
-      "native_scope": "Native Oxc AST and lexical-scope analysis of 1..16 explicitly selected JS/TS/JSX/TSX sources (at most 1 MiB each / 4 MiB total); selected-source imports, exports, conservative local module candidates, Electron callsites and literal-channel IPC candidate pairs. No target code execution. Runtime resolution, IPC delivery and complete application graph are explicitly unproved.",
-      "remaining_behavior": "Upstream ASAR/directory artifact inventory and integrity-policy contracts; whole-artifact identity with selected/unselected source coverage; supported bundled/source-map/route and richer semantic graph relations; exact upstream node/unknown/deadline/partial-Evidence behavior; retained summary/view contracts and operation-specific REA Evidence identity. The new tool's candidate graph is not an authenticated upstream Application Graph.",
+      "native_scope": "Native Oxc AST and lexical-scope analysis of 1..16 explicitly selected JS/TS/JSX/TSX sources, admitted as plain files or explicit packed ASAR members (at most 1 MiB each / 4 MiB total); selected-source imports, exports, conservative module candidates, Electron callsites and literal-channel IPC candidate pairs. Explicit ASAR acquisition preserves logical graph identity and carries separate archive provenance. No target execution, implicit resolution, complete application graph or live IPC proof.",
+      "remaining_behavior": "Whole-artifact directory/ASAR inventory and selected/unselected source coverage in upstream application identity; unsupported/unpacked/link acquisition and publisher/integrity policies; automatic bundled/source-map/route associations and richer semantic graph relations; exact upstream node/unknown/deadline/partial-Evidence behavior; retained summary/view contracts and operation-specific REA Evidence identity.",
       "dependencies": [],
       "related_runtime_routes": [
         "rea_inspect_javascript_package",
         "rea_inspect_archive",
-        "rea_inspect_source_map"
+        "rea_inspect_source_map",
+        "rea_inspect_asar",
+        "rea_read_asar_member"
       ],
       "related_auxiliary_capabilities": [
         "javascript_worker",
-        "source_map_worker"
+        "source_map_worker",
+        "asar_worker"
       ],
       "required_behavior_gates": [
         "contracts",
@@ -16705,7 +16821,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Upstream ASAR/directory artifact inventory and integrity-policy contracts; whole-artifact identity with selected/unselected source coverage; supported bundled/source-map/route and richer semantic graph relations; exact upstream node/unknown/deadline/partial-Evidence behavior; retained summary/view contracts and operation-specific REA Evidence identity. The new tool's candidate graph is not an authenticated upstream Application Graph."
+          "next_step": "Whole-artifact directory/ASAR inventory and selected/unselected source coverage in upstream application identity; unsupported/unpacked/link acquisition and publisher/integrity policies; automatic bundled/source-map/route associations and richer semantic graph relations; exact upstream node/unknown/deadline/partial-Evidence behavior; retained summary/view contracts and operation-specific REA Evidence identity."
         },
         {
           "category": "behavioral_differential",
