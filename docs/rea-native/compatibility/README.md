@@ -119,6 +119,29 @@ separately unclaimed capabilities.
 The earlier structural mapping check did not prove this semantic distinction;
 the corrected map preserves both upstream names and their original contracts.
 
+### Unified continuation release
+
+The new external observations bind one 18,437,832-byte release, SHA-256
+`0595fbf02e0f492bd151fec97eb90cb704a88810e9415b90582d348f3db99b6a`,
+with production/test/script source frozen at `b857dc7d646dc938e29a51fa82a5856d9b96f842`.
+The release runner and Source Map runner record the same unchanged 641-file
+input-tree digest `0ab735bb69893f88ea4f81c73d5d64d5220d234d3ead90cba88c55542eec9abb`.
+Other receipts state their own source/verification selection and digest; distinct
+selection definitions are not interchangeable inventories.
+
+| Current finite observation | Receipt and limits |
+| --- | --- |
+| Release build and Source Map | [Stage/Source Map archive](../../qualification/rea-final-source-map-release-20261104-r2/README.md): build passed; actual REA 8 fixtures/217 queries; 7 direct consumer agreements plus one preserved nested-offset divergence with independent equivalent golden; 7 public MCP gates. This build-stage archive does not assert the encompassing full Rust matrix terminal. |
+| ASAR and selected JavaScript | [Final archive](../../qualification/rea-asar-javascript-final-release-20261104-r2/README.md): 7/7 planned commands; real ASAR producer/range verification, worker cancellation and deadline; normal JS/Babel/manual golden and JS cancellation. JS has no separately exercised deadline branch in this plan. |
+| Evidence and APK | [Final independent archive](../../qualification/rea-final-independent-release-20261104-r2/README.md): 438 actual npm Evidence records; 20 APK projections plus 4 malformed workers; 6 APK public MCP gates. Full static APK tool/Evidence parity stays open. |
+| Chrome and Ghidra | [Final engine archive](../../qualification/rea-final-engine-regressions-20261104-r2/README.md): 11/10/6 finite Chrome checks and 8 real Ghidra checks. Ghidra remains operator-mode and one cancelled private scratch directory was removed by the harness. |
+
+The `currently 16 partial / 23 related / 190 absent` wording in
+[the earlier increment report](../NATIVE_ANALYSIS_INCREMENT_20261104.md) refers
+to its `1d9ea7e` historical sample. Its original bytes and original qualification
+records remain unchanged. Use the generated current ledger for the continuation
+inventory; these finite observations do not change full-tool qualification.
+
 ## Historical npm Evidence replay
 
 The recovered artifact includes 418 finite-number cases, corpus digest `9507bba36f7de741ad9a0100516cdaf0a85b496d11feb34e0b4fd8afe1d755fc`, and the original npm ELF-note Evidence record. These were replayed in native Rust at baseline `310add6db47bcfbed3545432eb528a72f5eb6dcd` using the existing ignored tests. Each filter actually executed one test; both passed. The test loops over the authenticated 418-case input. This exercises the Evidence semantic commitment and selected identity invariants, not all 229 operations.
