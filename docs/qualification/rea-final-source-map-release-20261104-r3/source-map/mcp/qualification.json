@@ -1,0 +1,50 @@
+{
+  "schema": "hepta.rea.source-map-mcp-qualification.v1",
+  "status": "pass",
+  "binary": {
+    "sha256": "aa580409a73bc2e0927ead93d32634239051a39fc951c3c2a92d5a1dece8347a",
+    "bytes": 18437864
+  },
+  "script_sha256": "25f42b6b625d903fab273a00bc53d46be8fd3b93f40f156927cfc0a478ed4770",
+  "results": [
+    {
+      "gate": "actual_mcp_worker_and_full_byte_identity",
+      "pass": true
+    },
+    {
+      "gate": "bound_continuation",
+      "pass": true
+    },
+    {
+      "gate": "admission_and_identity_refusals",
+      "pass": true,
+      "cases": 5
+    },
+    {
+      "gate": "malformed_and_stale_input_then_recovery",
+      "pass": true
+    },
+    {
+      "gate": "ordinary_mcp_cancellation_kills_reaps_and_recovers",
+      "pass": true,
+      "seconds": 0.002260418958030641,
+      "budget_seconds": 5,
+      "owned_pid": 2803860,
+      "manual_worker_cleanup_used_for_pass": false
+    },
+    {
+      "gate": "fixed_worker_deadline_kills_reaps_and_recovers",
+      "pass": true,
+      "seconds": 20.127819226006977,
+      "runtime_deadline_seconds": 20,
+      "observation_budget_seconds": 25,
+      "owned_pid": 2803882,
+      "manual_worker_cleanup_used_for_pass": false
+    },
+    {
+      "gate": "stateless_reinspection_after_controller_restart",
+      "pass": true
+    }
+  ],
+  "scope": "Finite owned fixtures, actual MCP and bounded worker on Linux; no full REA compatibility claim."
+}
