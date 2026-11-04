@@ -119,22 +119,59 @@ separately unclaimed capabilities.
 The earlier structural mapping check did not prove this semantic distinction;
 the corrected map preserves both upstream names and their original contracts.
 
-### Unified continuation release
+### Corrected continuation release
 
-The new external observations bind one 18,437,832-byte release, SHA-256
-`0595fbf02e0f492bd151fec97eb90cb704a88810e9415b90582d348f3db99b6a`,
-with production/test/script source frozen at `b857dc7d646dc938e29a51fa82a5856d9b96f842`.
-The release runner and Source Map runner record the same unchanged 641-file
-input-tree digest `0ab735bb69893f88ea4f81c73d5d64d5220d234d3ead90cba88c55542eec9abb`.
-Other receipts state their own source/verification selection and digest; distinct
-selection definitions are not interchangeable inventories.
+The current finite external observations bind one 18,437,864-byte release,
+SHA-256 `aa580409a73bc2e0927ead93d32634239051a39fc951c3c2a92d5a1dece8347a`,
+built with production/test/script source frozen at
+`ed74d9dbf04b97fad38112c2ac08127bf99b3590`.
+The release runner, Source Map runner and corrected full Rust matrix record
+the same unchanged 641-file input-tree digest
+`4021ee22efdf2eac830e08afc45eddf37b264e7fd31a222c329b4950ef2d94b6`.
+Other receipts state their own source/verification selection and digest;
+different selection definitions are not interchangeable inventories.
 
 | Current finite observation | Receipt and limits |
 | --- | --- |
-| Release build and Source Map | [Stage/Source Map archive](../../qualification/rea-final-source-map-release-20261104-r2/README.md): build passed; actual REA 8 fixtures/217 queries; 7 direct consumer agreements plus one preserved nested-offset divergence with independent equivalent golden; 7 public MCP gates. This build-stage archive does not assert the encompassing full Rust matrix terminal. |
-| ASAR and selected JavaScript | [Final archive](../../qualification/rea-asar-javascript-final-release-20261104-r2/README.md): 7/7 planned commands; real ASAR producer/range verification, worker cancellation and deadline; normal JS/Babel/manual golden and JS cancellation. JS has no separately exercised deadline branch in this plan. |
-| Evidence and APK | [Final independent archive](../../qualification/rea-final-independent-release-20261104-r2/README.md): 438 actual npm Evidence records; 20 APK projections plus 4 malformed workers; 6 APK public MCP gates. Full static APK tool/Evidence parity stays open. |
-| Chrome and Ghidra | [Final engine archive](../../qualification/rea-final-engine-regressions-20261104-r2/README.md): 11/10/6 finite Chrome checks and 8 real Ghidra checks. Ghidra remains operator-mode and one cancelled private scratch directory was removed by the harness. |
+| Release build and Source Map | [Corrected release archive](../../qualification/rea-final-source-map-release-20261104-r3/README.md): build passed; actual REA 8 fixtures/217 queries; 7 direct consumer agreements plus one preserved nested-offset divergence with an independent equivalent golden; 7 public MCP gates. |
+| ASAR and selected JavaScript | [Corrected archive](../../qualification/rea-asar-javascript-final-release-20261104-r3/README.md): 7/7 original planned commands; real ASAR producer/range verification, ASAR cancellation and deadline; normal JS/Babel/manual golden and JS cancellation. This plan contains no separately exercised JS deadline branch. |
+| Evidence and APK | [Corrected independent archive](../../qualification/rea-final-independent-release-20261104-r3/README.md): 438 actual npm Evidence records; 20 APK projections plus 4 malformed workers; 6 APK public MCP gates. Complete frozen static APK-tool/Evidence parity remains open. |
+| Chrome and Ghidra | [Corrected engine archive](../../qualification/rea-final-engine-regressions-20261104-r3/README.md): 11/10/6 finite Chrome checks and 8 real Ghidra checks under the original per-job resource profiles. Ghidra remains operator-mode; one cancelled private scratch directory was removed by the harness. |
+
+The corrected production registration adds `rea_inspect_source_map` to the
+runtime-only tool set. The ordinary directory still exposes exactly its
+original ten tools. A discovered-handler regression now checks every REA
+handler against the runtime-only set. The intent-publication fixture now owns
+a private audit directory and deterministically exercises parent-directory
+changes without weakening production audit binding or durability checks.
+
+The original full Rust r1 failure and Python timeout remain in the
+[continuation failure archive](../../qualification/rea-continuation-matrix-failures-20261104-r1/README.md).
+The [intent fixture proof](../../qualification/rea-job-intent-audit-fixture-20261104-r1/README.md)
+retains the deterministic failing and passing observations on the original
+ext4 temporary filesystem. The next full Rust r2 run still failed four SSH
+fixtures in both feature modes because its thirty-byte TMPDIR made the initial
+OpenSSH publication path ninety-one bytes, over the unchanged ninety-byte
+guard. The corrected r3 run used an exclusively created, mode0700, executable
+ten-byte tmpfs directory. With the same source, argv, deadlines and zero
+retries, both Clippy gates and all 1933/1906 executed Rust tests passed;
+40/28 tests remained skipped by the original nextest policy. This is functional
+qualification in the recorded profile, not ext4 latency, power-loss or
+cross-platform qualification. Full Rust matrices do not include doctests or
+automatically run all ignored external-provider tests.
+
+### Preserved earlier continuation release
+
+The earlier 18,437,832-byte release,
+SHA-256 `0595fbf02e0f492bd151fec97eb90cb704a88810e9415b90582d348f3db99b6a`,
+was built from `b857dc7d646dc938e29a51fa82a5856d9b96f842`, with selected
+641-file digest `0ab735bb69893f88ea4f81c73d5d64d5220d234d3ead90cba88c55542eec9abb`.
+Its [Source Map](../../qualification/rea-final-source-map-release-20261104-r2/README.md),
+[ASAR/JavaScript](../../qualification/rea-asar-javascript-final-release-20261104-r2/README.md),
+[Evidence/APK](../../qualification/rea-final-independent-release-20261104-r2/README.md)
+and [Chrome/Ghidra](../../qualification/rea-final-engine-regressions-20261104-r2/README.md)
+receipts remain unchanged. Their finite passes do not change the corresponding
+failed full-matrix result or qualify the newer executable.
 
 The `currently 16 partial / 23 related / 190 absent` wording in
 [the earlier increment report](../NATIVE_ANALYSIS_INCREMENT_20261104.md) refers
