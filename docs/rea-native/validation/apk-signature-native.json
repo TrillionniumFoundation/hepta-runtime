@@ -1,0 +1,3081 @@
+{
+  "format": "hepta.apk-native-qualification.v1",
+  "native_binary_sha256": "01ff4fc0127dda50f3a18a1901f77e43f900076a1cbcc32c888e76d7e0645157",
+  "rea_package_version": "6.8.0",
+  "rea_frozen_source_revision": "93b8b82db70279e40f484114cff9dc1958dc14ee",
+  "rea_tarball_sha256": "8d542ec76a9cb350584b60a6c9c088706ff812d5bb5b094c20c95b6dc25698bb",
+  "rea_package_files_checked": 2398,
+  "node_version": "v22.23.4",
+  "rea_provider_sha256": "a988b863a369c9067232002120ec50727027f9a529049e40358cb92f41d12b5e",
+  "apksigner_version": "0.9",
+  "apksigner_jar_sha256": "00ef9948f843fe395d2440ae3ef41405b8040a6d5d46493bd1902ac0ee6deae7",
+  "bc_provider_sha256": "5e0be358a7038ddae4fdad253b20aa7beb6cc261d70069b703b7f3e16d109ea6",
+  "java_runtime": "openjdk version \"21.0.12.1\" 2026-08-18\nOpenJDK Runtime Environment (build 21.0.12.1+1-1-24.04.4-Ubuntu)\nOpenJDK 64-Bit Server VM (build 21.0.12.1+1-1-24.04.4-Ubuntu, mixed mode, sharing)",
+  "native_source_sha256": {
+    "src/mcp/rea_apk_signature.rs": "95b4933628e4937e1e9bb09a6a5b2e5121c46fcfc7a8c2ac8983b881bfcc88a1",
+    "src/mcp/rea_apk_signature_parser.rs": "35e799efe6fb19d618f2015fd36600abf6fe3bb4e935d58f35510f63829a9d73",
+    "src/mcp/rea_apk_signature_worker.rs": "ddeba5c332b51c7bb3f5a4f3e8a6a3cbce5b7b7b659f371e931744174f0769a5",
+    "src/mcp/rea_apk_signature_tests.rs": "bbb7a3520442f0895593b316920311fce7cfcce4d7a05ffe6203fb3228d63d62"
+  },
+  "positive_fixtures": 19,
+  "forged_matching_digest_fixture": 1,
+  "worker_malformed_rejections": [
+    {
+      "case": 0,
+      "byte_length": 0,
+      "exit": 1,
+      "stderr": "Error: APK signature input must contain 1 byte through 128 MiB\n"
+    },
+    {
+      "case": 1,
+      "byte_length": 10,
+      "exit": 1,
+      "stderr": "Error: APK is shorter than the ZIP end record\n"
+    },
+    {
+      "case": 2,
+      "byte_length": 7,
+      "exit": 1,
+      "stderr": "Error: APK is shorter than the ZIP end record\n"
+    },
+    {
+      "case": 3,
+      "byte_length": 2105542,
+      "exit": 1,
+      "stderr": "Error: APK requires one unambiguous ZIP end record ending at EOF\n"
+    }
+  ],
+  "full_android_verification": false,
+  "rea_evidence_compatibility": false,
+  "results": [
+    {
+      "file": "chunk-boundary.apk",
+      "sha256": "c2114d9f1a269da8cc8dfd48074b1fb36a9eedc8ad419f768ab72860ed8e09ca",
+      "byte_length": 2105543,
+      "native_record_status": "verified",
+      "native_runtime_seconds": 0.046,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test rsa\nSigner #1 certificate SHA-256 digest: 8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a\nSigner #1 certificate SHA-1 digest: 2a416b610703e4ced9f2a23180c757b9dc06e011\nSigner #1 certificate MD5 digest: b8d88c34760a414041a4c0e27efe0a11\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 2048\nSigner #1 public key SHA-256 digest: a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2\nSigner #1 public key SHA-1 digest: 130068c3e2d5e7d7fa1b9f7897dd89db3183de31\nSigner #1 public key MD5 digest: 13171301610d4f48df803949a1dc1145\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "f26a4a787ea5958a2f70d523554d1dea9e8e46714743309f394e15966e051122",
+          "chunked_sha512": "9f53752f380d903cfbf4f9ebea7e4be70932d6e24ef7149eeee85245d4717bd78251813c984d6bcf965c88c143dd2be6f9546952e7ecd5b8fc713bf6f8851aea"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "f26a4a787ea5958a2f70d523554d1dea9e8e46714743309f394e15966e051122",
+                "content_digest_status": "match",
+                "declared_digest": "f26a4a787ea5958a2f70d523554d1dea9e8e46714743309f394e15966e051122",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:c2114d9f1a269da8cc8dfd48074b1fb36a9eedc8ad419f768ab72860ed8e09ca:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "dea1aae22d47a48d8a8cde04549e02bf975165863177c1d04628df38ae28c1da",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 4,
+            "uninterpreted_signed_data_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+          }
+        ],
+        "signing_block": {
+          "offset": 2101248,
+          "pairs": [
+            {
+              "byte_length": 1426,
+              "id": "0x7109871a",
+              "sha256": "85c1f5927751d884d383c78193c61edec231c2df86c09e9d6f537549f1c4cc75"
+            },
+            {
+              "byte_length": 2614,
+              "id": "0x42726577",
+              "sha256": "c94eb42dac842ee6ec718fab236ef15864c4b4d5b106168ff1c9f3130203dbad"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 2105543,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "c2114d9f1a269da8cc8dfd48074b1fb36a9eedc8ad419f768ab72860ed8e09ca"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "verified",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 2105344,
+          "entry_count": 2,
+          "eocd_offset": 2105474,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "custom-0101-rsa.apk",
+      "sha256": "3a6d70844f48b7fe24c4bca71997402998a972897e3971b6313321216e8cdc6f",
+      "byte_length": 2688,
+      "native_record_status": "verified",
+      "native_runtime_seconds": 0.004,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test rsa\nSigner #1 certificate SHA-256 digest: 8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a\nSigner #1 certificate SHA-1 digest: 2a416b610703e4ced9f2a23180c757b9dc06e011\nSigner #1 certificate MD5 digest: b8d88c34760a414041a4c0e27efe0a11\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 2048\nSigner #1 public key SHA-256 digest: a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2\nSigner #1 public key SHA-1 digest: 130068c3e2d5e7d7fa1b9f7897dd89db3183de31\nSigner #1 public key MD5 digest: 13171301610d4f48df803949a1dc1145\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+          "chunked_sha512": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+                "content_digest_status": "match",
+                "declared_digest": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+                "id": "0x00000101",
+                "name": "rsa_pss_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:3a6d70844f48b7fe24c4bca71997402998a972897e3971b6313321216e8cdc6f:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "41caf56636b895f699e7b031ac3201719ef6873f348ebfcf7cfddf7f48ab9817",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 1135,
+          "pairs": [
+            {
+              "byte_length": 1422,
+              "id": "0x7109871a",
+              "sha256": "25c4ff783c98add1b84517f0a267f95fd7eb543dc2f89382ec78f8ed6a7319c6"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 2688,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "3a6d70844f48b7fe24c4bca71997402998a972897e3971b6313321216e8cdc6f"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "verified",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 2601,
+          "entry_count": 1,
+          "eocd_offset": 2666,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "custom-0102-rsa.apk",
+      "sha256": "25ab62bc10601677fbbdea0d219da784d2f0fa3b949359900ea9ea94cd2421cd",
+      "byte_length": 2720,
+      "native_record_status": "verified",
+      "native_runtime_seconds": 0.005,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test rsa\nSigner #1 certificate SHA-256 digest: 8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a\nSigner #1 certificate SHA-1 digest: 2a416b610703e4ced9f2a23180c757b9dc06e011\nSigner #1 certificate MD5 digest: b8d88c34760a414041a4c0e27efe0a11\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 2048\nSigner #1 public key SHA-256 digest: a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2\nSigner #1 public key SHA-1 digest: 130068c3e2d5e7d7fa1b9f7897dd89db3183de31\nSigner #1 public key MD5 digest: 13171301610d4f48df803949a1dc1145\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+          "chunked_sha512": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773",
+                "content_digest_status": "match",
+                "declared_digest": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773",
+                "id": "0x00000102",
+                "name": "rsa_pss_sha512",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:25ab62bc10601677fbbdea0d219da784d2f0fa3b949359900ea9ea94cd2421cd:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "eaa4cf855904ddab39aec322c886dbbfa317cee61ac7ce91e0dc864311529e1a",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 1135,
+          "pairs": [
+            {
+              "byte_length": 1454,
+              "id": "0x7109871a",
+              "sha256": "0cb15434dd08a36df3f00d5e949c9326b9bd420b96f0960b1e9fbf51b129497f"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 2720,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "25ab62bc10601677fbbdea0d219da784d2f0fa3b949359900ea9ea94cd2421cd"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "verified",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 2633,
+          "entry_count": 1,
+          "eocd_offset": 2698,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "custom-0103-rsa.apk",
+      "sha256": "2319675743cca6f540fb2fe04385ddf25209d65a5f342613f4ddba0f8010aa7d",
+      "byte_length": 2688,
+      "native_record_status": "verified",
+      "native_runtime_seconds": 0.005,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test rsa\nSigner #1 certificate SHA-256 digest: 8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a\nSigner #1 certificate SHA-1 digest: 2a416b610703e4ced9f2a23180c757b9dc06e011\nSigner #1 certificate MD5 digest: b8d88c34760a414041a4c0e27efe0a11\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 2048\nSigner #1 public key SHA-256 digest: a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2\nSigner #1 public key SHA-1 digest: 130068c3e2d5e7d7fa1b9f7897dd89db3183de31\nSigner #1 public key MD5 digest: 13171301610d4f48df803949a1dc1145\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+          "chunked_sha512": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+                "content_digest_status": "match",
+                "declared_digest": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:2319675743cca6f540fb2fe04385ddf25209d65a5f342613f4ddba0f8010aa7d:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "cb999eafa8b603f643f18029b1ba52e163955e5cade7991a13ff2464bcf8a7a0",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 1135,
+          "pairs": [
+            {
+              "byte_length": 1422,
+              "id": "0x7109871a",
+              "sha256": "656fc9572db636f74589e387f6b1a184c79c06311df5dd9289dc9eeb4f053c96"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 2688,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "2319675743cca6f540fb2fe04385ddf25209d65a5f342613f4ddba0f8010aa7d"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "verified",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 2601,
+          "entry_count": 1,
+          "eocd_offset": 2666,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "custom-0103-rsa1024.apk",
+      "sha256": "6cffd04635e3a07141f198a110033c0d6d71992bc3a44d13534b4951e49fb4c0",
+      "byte_length": 2175,
+      "native_record_status": "partial",
+      "native_runtime_seconds": 0.005,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test rsa1024\nSigner #1 certificate SHA-256 digest: d890a2ae7d9397934e0cc63e2a1f4a9ee3f43af260c4d4dff02d51090e6aee0a\nSigner #1 certificate SHA-1 digest: f7cc6be249d221c78c4378de0caee78292fbfd5f\nSigner #1 certificate MD5 digest: 2cd8a237b78d56707d868879a4f9ae6a\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 1024\nSigner #1 public key SHA-256 digest: a7b53cb5c52420f99a980d199565788658ea5ed0b930abde9e586a78cce77de7\nSigner #1 public key SHA-1 digest: 239cb0660c9eca46defaeff8b0551503442ce012\nSigner #1 public key MD5 digest: 025395b0d998063cbb1e2e2f1fd46a49\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+          "chunked_sha512": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+                "content_digest_status": "match",
+                "declared_digest": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 128,
+                "signature_status": "unsupported"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 527,
+                "ordinal": 0,
+                "sha256": "d890a2ae7d9397934e0cc63e2a1f4a9ee3f43af260c4d4dff02d51090e6aee0a",
+                "subject_public_key_info_sha256": "a7b53cb5c52420f99a980d199565788658ea5ed0b930abde9e586a78cce77de7"
+              }
+            ],
+            "id": "apksig-v1:6cffd04635e3a07141f198a110033c0d6d71992bc3a44d13534b4951e49fb4c0:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 162,
+            "public_key_sha256": "a7b53cb5c52420f99a980d199565788658ea5ed0b930abde9e586a78cce77de7",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "9cf492f965f37d3e6bc9c69e88fcf1b62a5d33794ccd056a473f46ef2e775fda",
+            "status": "partial",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 1135,
+          "pairs": [
+            {
+              "byte_length": 909,
+              "id": "0x7109871a",
+              "sha256": "e4b4abf8d6f32b75bf3c41a0137dc62777771950dbdfe83b3901df890e566fda"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 2175,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "6cffd04635e3a07141f198a110033c0d6d71992bc3a44d13534b4951e49fb4c0"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "partial",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 2088,
+          "entry_count": 1,
+          "eocd_offset": 2153,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "custom-0103-rsa33.apk",
+      "sha256": "ce8c31b3a279d5b80803596f081de7d4a26e5f61f8bd99e3e9ceef83d5c3eafc",
+      "byte_length": 2696,
+      "native_record_status": "verified",
+      "native_runtime_seconds": 0.005,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test rsa33\nSigner #1 certificate SHA-256 digest: 4a97aa5986ac64ce6b1bdb4f768276ff8f67824b658f0060bc83bff5a5258f3f\nSigner #1 certificate SHA-1 digest: 1093a1787937c4c8ad7a036e664eb4901ac9bb0d\nSigner #1 certificate MD5 digest: eb6c385043ba1c03f0d7e7007a94c5c0\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 2048\nSigner #1 public key SHA-256 digest: e91d966448da83e8832b6b247d84bc51a21396f13d71ea6e4c325eb61e487b26\nSigner #1 public key SHA-1 digest: e872307350c42771809e035f5c200dc760ea6bc1\nSigner #1 public key MD5 digest: 4c0e58291b21bf363de42324026ee52c\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+          "chunked_sha512": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+                "content_digest_status": "match",
+                "declared_digest": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 786,
+                "ordinal": 0,
+                "sha256": "4a97aa5986ac64ce6b1bdb4f768276ff8f67824b658f0060bc83bff5a5258f3f",
+                "subject_public_key_info_sha256": "e91d966448da83e8832b6b247d84bc51a21396f13d71ea6e4c325eb61e487b26"
+              }
+            ],
+            "id": "apksig-v1:ce8c31b3a279d5b80803596f081de7d4a26e5f61f8bd99e3e9ceef83d5c3eafc:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 296,
+            "public_key_sha256": "e91d966448da83e8832b6b247d84bc51a21396f13d71ea6e4c325eb61e487b26",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "ce1bc9cdac6e1abf6bd99efcb970ea910f091eac984d63fa44dae25853214a34",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 1135,
+          "pairs": [
+            {
+              "byte_length": 1430,
+              "id": "0x7109871a",
+              "sha256": "731eb925cba20861c768e5d937c38ff1f810624a5b4fecb4c4a0166833869713"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 2696,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "ce8c31b3a279d5b80803596f081de7d4a26e5f61f8bd99e3e9ceef83d5c3eafc"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "verified",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 2609,
+          "entry_count": 1,
+          "eocd_offset": 2674,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "custom-0103-rsa34.apk",
+      "sha256": "4dd47e734b98bcf11a23a72ed73f72d2df4464cb2a97423eab55478c0873f196",
+      "byte_length": 2696,
+      "native_record_status": "partial",
+      "native_runtime_seconds": 0.006,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test rsa34\nSigner #1 certificate SHA-256 digest: bb86f244e7c8787cbb812fc3b7f59f8f035a0d829e2c3edb625b8c8b3887afda\nSigner #1 certificate SHA-1 digest: ef19f1e3852dcea7f2fb736d59f0ff90c870ada9\nSigner #1 certificate MD5 digest: 4521957484161aee037763f96bcfb425\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 2048\nSigner #1 public key SHA-256 digest: d784f744564235371030377c5daae8bf05b627e4793f4f780b730e0757a8191a\nSigner #1 public key SHA-1 digest: bb522c64e0ca075509b172c205189ebf3bab19ef\nSigner #1 public key MD5 digest: 7e868a0c6f0382ce735db056a827bb52\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+          "chunked_sha512": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+                "content_digest_status": "match",
+                "declared_digest": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "unsupported"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 786,
+                "ordinal": 0,
+                "sha256": "bb86f244e7c8787cbb812fc3b7f59f8f035a0d829e2c3edb625b8c8b3887afda",
+                "subject_public_key_info_sha256": "d784f744564235371030377c5daae8bf05b627e4793f4f780b730e0757a8191a"
+              }
+            ],
+            "id": "apksig-v1:4dd47e734b98bcf11a23a72ed73f72d2df4464cb2a97423eab55478c0873f196:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 296,
+            "public_key_sha256": "d784f744564235371030377c5daae8bf05b627e4793f4f780b730e0757a8191a",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "cd5d8f0493e6034e449a34e6b45c70cc0aea516f81ec4fbc76b4ce22bace06c2",
+            "status": "partial",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 1135,
+          "pairs": [
+            {
+              "byte_length": 1430,
+              "id": "0x7109871a",
+              "sha256": "3ebd5f9949bec946293718e9d85924fd43efc58e93d1eb5b443e9206812c8741"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 2696,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "4dd47e734b98bcf11a23a72ed73f72d2df4464cb2a97423eab55478c0873f196"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "partial",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 2609,
+          "entry_count": 1,
+          "eocd_offset": 2674,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "custom-0103-rsa34audit.apk",
+      "sha256": "008a67e253527e1f181d5d713fd90956c52ef7305a22fa36188c1476401ba041",
+      "byte_length": 2714,
+      "native_record_status": "partial",
+      "native_runtime_seconds": 0.006,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Owned Hepta exponent boundary\nSigner #1 certificate SHA-256 digest: 33a0aec15841a12e379a62cfbc547a36c42804b728aeb271c8867cbd1559a170\nSigner #1 certificate SHA-1 digest: 718b2ed9dc585263d8c10cf7620053740e2bf895\nSigner #1 certificate MD5 digest: 9da1720ed0542560a8497429238b5646\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 2048\nSigner #1 public key SHA-256 digest: 5fb78a82436a15d6815a15bc773c89191906d2579ad316d390265cdd98dcb8b5\nSigner #1 public key SHA-1 digest: 7965018170d31be73773d541b11737cef684625f\nSigner #1 public key MD5 digest: 515e342873152213092e499c6827357e\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+          "chunked_sha512": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+                "content_digest_status": "match",
+                "declared_digest": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "unsupported"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 804,
+                "ordinal": 0,
+                "sha256": "33a0aec15841a12e379a62cfbc547a36c42804b728aeb271c8867cbd1559a170",
+                "subject_public_key_info_sha256": "5fb78a82436a15d6815a15bc773c89191906d2579ad316d390265cdd98dcb8b5"
+              }
+            ],
+            "id": "apksig-v1:008a67e253527e1f181d5d713fd90956c52ef7305a22fa36188c1476401ba041:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 296,
+            "public_key_sha256": "5fb78a82436a15d6815a15bc773c89191906d2579ad316d390265cdd98dcb8b5",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "54c7cc8e14cbfc5b92a2e30fe362a1ef0d672afac37ef87a18a1af38e561bada",
+            "status": "partial",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 1135,
+          "pairs": [
+            {
+              "byte_length": 1448,
+              "id": "0x7109871a",
+              "sha256": "22bb1e1cbfa2b5f3e61ce145bd5100c3b4f8c37d75da241a1580789b4ef5e785"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 2714,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "008a67e253527e1f181d5d713fd90956c52ef7305a22fa36188c1476401ba041"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "partial",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 2627,
+          "entry_count": 1,
+          "eocd_offset": 2692,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "custom-0104-rsa.apk",
+      "sha256": "bf521abcdb87b2468fca679d13c6b6e1e11839d85049c3db74bf703067b91f2e",
+      "byte_length": 2720,
+      "native_record_status": "verified",
+      "native_runtime_seconds": 0.005,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test rsa\nSigner #1 certificate SHA-256 digest: 8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a\nSigner #1 certificate SHA-1 digest: 2a416b610703e4ced9f2a23180c757b9dc06e011\nSigner #1 certificate MD5 digest: b8d88c34760a414041a4c0e27efe0a11\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 2048\nSigner #1 public key SHA-256 digest: a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2\nSigner #1 public key SHA-1 digest: 130068c3e2d5e7d7fa1b9f7897dd89db3183de31\nSigner #1 public key MD5 digest: 13171301610d4f48df803949a1dc1145\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+          "chunked_sha512": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773",
+                "content_digest_status": "match",
+                "declared_digest": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773",
+                "id": "0x00000104",
+                "name": "rsa_pkcs1_v1_5_sha512",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:bf521abcdb87b2468fca679d13c6b6e1e11839d85049c3db74bf703067b91f2e:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "429cc86281e114bd4febfd51c9c017956c6fe1193923200344b6de04199804d8",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 1135,
+          "pairs": [
+            {
+              "byte_length": 1454,
+              "id": "0x7109871a",
+              "sha256": "9899d274fd85c09d7466b82591c82bfdd0a6b30a1d3352882fa38dc5aaed5468"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 2720,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "bf521abcdb87b2468fca679d13c6b6e1e11839d85049c3db74bf703067b91f2e"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "verified",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 2633,
+          "entry_count": 1,
+          "eocd_offset": 2698,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "custom-0201-p384.apk",
+      "sha256": "5ca3c82f17528716d36d135dd6e026ff2f8bebb615b23f67843d3535090476b4",
+      "byte_length": 2029,
+      "native_record_status": "verified",
+      "native_runtime_seconds": 0.007,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test p384\nSigner #1 certificate SHA-256 digest: 849e48da14d7efbe423412519e4b10bfc7b23d5e3b81ca1b80574af3c01cf4ff\nSigner #1 certificate SHA-1 digest: a19709349d38f5d358bfb431eb2c9f0ba3c389c7\nSigner #1 certificate MD5 digest: 024978c279bc72df98cfd4ac51730ca6\nSigner #1 key algorithm: EC\nSigner #1 key size (bits): 384\nSigner #1 public key SHA-256 digest: d6f6618f07f039e330cb90e41f1fbe85cdf958d0cda9c04810885eae6a6e6004\nSigner #1 public key SHA-1 digest: 5d8fc5e2c1175d1166f271c3b88018f98949c26c\nSigner #1 public key MD5 digest: 5cbd2cb40860e29f243d2fdf459b318d\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+          "chunked_sha512": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+                "content_digest_status": "match",
+                "declared_digest": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+                "id": "0x00000201",
+                "name": "ecdsa_sha256",
+                "signature_bytes": 104,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 447,
+                "ordinal": 0,
+                "sha256": "849e48da14d7efbe423412519e4b10bfc7b23d5e3b81ca1b80574af3c01cf4ff",
+                "subject_public_key_info_sha256": "d6f6618f07f039e330cb90e41f1fbe85cdf958d0cda9c04810885eae6a6e6004"
+              }
+            ],
+            "id": "apksig-v1:5ca3c82f17528716d36d135dd6e026ff2f8bebb615b23f67843d3535090476b4:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 120,
+            "public_key_sha256": "d6f6618f07f039e330cb90e41f1fbe85cdf958d0cda9c04810885eae6a6e6004",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "2c2eeff998b503316c9f562cb42573de77d4dc2dd5062f16eb9f10e4ba4d9c24",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 1135,
+          "pairs": [
+            {
+              "byte_length": 763,
+              "id": "0x7109871a",
+              "sha256": "b7d1b55d2cf643f2f6101dc222fbaf8dbe045c87731b6cbf384ec69f306af13a"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 2029,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "5ca3c82f17528716d36d135dd6e026ff2f8bebb615b23f67843d3535090476b4"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "verified",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 1942,
+          "entry_count": 1,
+          "eocd_offset": 2007,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "custom-0202-p521.apk",
+      "sha256": "d8d620fd74b2c360ec4aae612d414d70083a99025da4788be1901284bfb5d5f2",
+      "byte_length": 2208,
+      "native_record_status": "partial",
+      "native_runtime_seconds": 0.005,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test p521\nSigner #1 certificate SHA-256 digest: b78037f4b9662437686706a40b443e16457875f9ad5492f1d4061c6ae3b468fa\nSigner #1 certificate SHA-1 digest: 6c831a5ce68a589e8a946e151447d733e9b29819\nSigner #1 certificate MD5 digest: a0e98d1eda800468fb26eb9eaaaf3c17\nSigner #1 key algorithm: EC\nSigner #1 key size (bits): 521\nSigner #1 public key SHA-256 digest: c2681eb1c30ef66b9f939af47d842188261f8fa7ce799d9d46518fa6d0de7c0b\nSigner #1 public key SHA-1 digest: 0d2a0411490845cdb4809fcaee105d364e68cd3b\nSigner #1 public key MD5 digest: 8e3870d3902a5bfa4b3a4e5f0f999b04\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "98a2f7d132173e80de0819ebec83fa03aa5e1a3a39a147a4902809929f67dcd5",
+          "chunked_sha512": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773",
+                "content_digest_status": "match",
+                "declared_digest": "cbff45cddb7659d6fd7e487857312955f295ec2d8a818219f3a4fe1d19db9516d1e9278ed3bd38667e44d79295dbb8e467e592e7587b511c62c73d8bdc3e5773",
+                "id": "0x00000202",
+                "name": "ecdsa_sha512",
+                "signature_bytes": 138,
+                "signature_status": "unsupported"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 522,
+                "ordinal": 0,
+                "sha256": "b78037f4b9662437686706a40b443e16457875f9ad5492f1d4061c6ae3b468fa",
+                "subject_public_key_info_sha256": "c2681eb1c30ef66b9f939af47d842188261f8fa7ce799d9d46518fa6d0de7c0b"
+              }
+            ],
+            "id": "apksig-v1:d8d620fd74b2c360ec4aae612d414d70083a99025da4788be1901284bfb5d5f2:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 158,
+            "public_key_sha256": "c2681eb1c30ef66b9f939af47d842188261f8fa7ce799d9d46518fa6d0de7c0b",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "e2d13fe68dc9b3d3db9abcd0a8ac005acceb2ff960701a7ea68a0b5391c641a4",
+            "status": "partial",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 1135,
+          "pairs": [
+            {
+              "byte_length": 942,
+              "id": "0x7109871a",
+              "sha256": "060e3dc67759fabdc798ab4c7b84dbecd84eabd1f245f4275ff9fb3e4ccf4a09"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 2208,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "d8d620fd74b2c360ec4aae612d414d70083a99025da4788be1901284bfb5d5f2"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "partial",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 2121,
+          "entry_count": 1,
+          "eocd_offset": 2186,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "ecdsa-v2-v3.apk",
+      "sha256": "2fbe8050b066a120054cb75ba54e2cee10fc7997f0e1baa7708f310a4a34c444",
+      "byte_length": 8279,
+      "native_record_status": "verified",
+      "native_runtime_seconds": 0.006,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): true\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test p256\nSigner #1 certificate SHA-256 digest: 7dc29140c9ebfe7879a6ee018b945b3e3f40faa814c09a02026b2a3ddb99ca44\nSigner #1 certificate SHA-1 digest: a5a4c18fb98e3790b4cc25b4aeb3fd680bc25213\nSigner #1 certificate MD5 digest: ac4899080fa18184528da35f926e7136\nSigner #1 key algorithm: EC\nSigner #1 key size (bits): 256\nSigner #1 public key SHA-256 digest: 87fc95d8bbc5d501ce29bfebbd01af230e7c9104f3b2fcbe21176a13627b8c6e\nSigner #1 public key SHA-1 digest: d86e6eadaf46e5bc31f0153f778bedb2fba70dcf\nSigner #1 public key MD5 digest: fbf904e1de97ccf53372c960537446d0\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+          "chunked_sha512": "0b3fb35d3fa6602c4c65ca79876de388ba6e58a49701062c9755fa44bb795136c454be270a16223b98c4cbc8d8944929cae822dc94f044e4c7acff58d0a80b7e"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [
+              {
+                "byte_length": 4,
+                "id": "0xbeeff00d",
+                "interpretation": "v3_presence_requirement_met",
+                "sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178"
+              }
+            ],
+            "algorithms": [
+              {
+                "computed_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "content_digest_status": "match",
+                "declared_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "id": "0x00000201",
+                "name": "ecdsa_sha256",
+                "signature_bytes": 72,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 386,
+                "ordinal": 0,
+                "sha256": "7dc29140c9ebfe7879a6ee018b945b3e3f40faa814c09a02026b2a3ddb99ca44",
+                "subject_public_key_info_sha256": "87fc95d8bbc5d501ce29bfebbd01af230e7c9104f3b2fcbe21176a13627b8c6e"
+              }
+            ],
+            "id": "apksig-v1:2fbe8050b066a120054cb75ba54e2cee10fc7997f0e1baa7708f310a4a34c444:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 91,
+            "public_key_sha256": "87fc95d8bbc5d501ce29bfebbd01af230e7c9104f3b2fcbe21176a13627b8c6e",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "7634dbaf9adff2d62a6beb420c7fad119bb65bb8753cd9fc8f60d1efcfcf3907",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 4,
+            "uninterpreted_signed_data_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+          },
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "content_digest_status": "match",
+                "declared_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "id": "0x00000201",
+                "name": "ecdsa_sha256",
+                "signature_bytes": 70,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 386,
+                "ordinal": 0,
+                "sha256": "7dc29140c9ebfe7879a6ee018b945b3e3f40faa814c09a02026b2a3ddb99ca44",
+                "subject_public_key_info_sha256": "87fc95d8bbc5d501ce29bfebbd01af230e7c9104f3b2fcbe21176a13627b8c6e"
+              }
+            ],
+            "id": "apksig-v1:2fbe8050b066a120054cb75ba54e2cee10fc7997f0e1baa7708f310a4a34c444:v3:0",
+            "ordinal": 0,
+            "public_key_bytes": 91,
+            "public_key_sha256": "87fc95d8bbc5d501ce29bfebbd01af230e7c9104f3b2fcbe21176a13627b8c6e",
+            "rotation_lineage": "absent",
+            "scheme": "v3",
+            "sdk_range": {
+              "max": 2147483647,
+              "min": 24
+            },
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "50c1a0fdd73a27e2696c9fc51a5f085b14cba6ea932458293f25d957ed89bb60",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 4096,
+          "pairs": [
+            {
+              "byte_length": 657,
+              "id": "0x7109871a",
+              "sha256": "99ca07c3ca269a088be8cc3a531b2a2f2b5ca0ccf5043fd18c8b2e24011dc7f6"
+            },
+            {
+              "byte_length": 655,
+              "id": "0xf05368c0",
+              "sha256": "d63c3424a8ebc597169397fc6dd7b1937e6ac4cfb2c1b96e79478dabb6d252f6"
+            },
+            {
+              "byte_length": 2716,
+              "id": "0x42726577",
+              "sha256": "e983d55d238d751eff0e22d435e346f8767d88aea6db0d5ba52ba8f3fe74408c"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 8279,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "2fbe8050b066a120054cb75ba54e2cee10fc7997f0e1baa7708f310a4a34c444"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "verified",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 8192,
+          "entry_count": 1,
+          "eocd_offset": 8257,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "forged-matching-digest.apk",
+      "sha256": "4de137e722561f082a97ea19f036ef39a8c81014304c34747d084c33fe5b9d91",
+      "byte_length": 2688,
+      "native_record_status": "invalid",
+      "native_runtime_seconds": 0.005,
+      "android_exit": 1,
+      "android_stdout": "",
+      "android_stderr": "DOES NOT VERIFY\nERROR: APK Signature Scheme v2 signer #1: RSA_PKCS1_V1_5_WITH_SHA256 signature over signed-data did not verify\n",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "a2e4e64c05c583ff8ad5051d001fa781867dde515c7f99a018ae5de766b318e7",
+          "chunked_sha512": "f372ec677c37c7d0f31caf5ea50681f73b9a4b9136c1acb986ee40efd1c5206be5d99b8ec44f9bc1f553c49a0b1d01e37c875fe36df4b4b08bf723cc38982583"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "a2e4e64c05c583ff8ad5051d001fa781867dde515c7f99a018ae5de766b318e7",
+                "content_digest_status": "match",
+                "declared_digest": "a2e4e64c05c583ff8ad5051d001fa781867dde515c7f99a018ae5de766b318e7",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "invalid"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:4de137e722561f082a97ea19f036ef39a8c81014304c34747d084c33fe5b9d91:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "763ccf6a5b2a97a809a4747632ccaf8d11e73cacfeaeec19511752729a178d5b",
+            "status": "invalid",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 1135,
+          "pairs": [
+            {
+              "byte_length": 1422,
+              "id": "0x7109871a",
+              "sha256": "bf646d991e6feb58622100247b7dabd18d696074fa2dde5a1fbc14f3d60602b4"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 2688,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "4de137e722561f082a97ea19f036ef39a8c81014304c34747d084c33fe5b9d91"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "invalid",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 2601,
+          "entry_count": 1,
+          "eocd_offset": 2666,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "rotation-v3.apk",
+      "sha256": "6ef34e000f7af5d002951a9204180ad3b66a86c7f00c7715d3a03b866ba71c8b",
+      "byte_length": 12375,
+      "native_record_status": "verified",
+      "native_runtime_seconds": 0.005,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): true\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test second\nSigner #1 certificate SHA-256 digest: 6e0d2cd30960a41fab0ad76ad81cab98622a9e8a40e69acf7cb45c16699f4d65\nSigner #1 certificate SHA-1 digest: e567668b922a83e52828b660a7e1fb414a69420b\nSigner #1 certificate MD5 digest: f0cc2f45442ce79b8564ef2868b929f1\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 2048\nSigner #1 public key SHA-256 digest: 58324ee03b3dbd968ec6ea9f8c941ae3aef4ef86c785902e260dbefbce4d9d63\nSigner #1 public key SHA-1 digest: cfeac39938b20cb82c0b8bbd7c71669f01487327\nSigner #1 public key MD5 digest: f8d1dacc4c92cf2346c9f32cdabd0651\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+          "chunked_sha512": "0b3fb35d3fa6602c4c65ca79876de388ba6e58a49701062c9755fa44bb795136c454be270a16223b98c4cbc8d8944929cae822dc94f044e4c7acff58d0a80b7e"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [
+              {
+                "byte_length": 4,
+                "id": "0xbeeff00d",
+                "interpretation": "v3_presence_requirement_met",
+                "sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178"
+              }
+            ],
+            "algorithms": [
+              {
+                "computed_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "content_digest_status": "match",
+                "declared_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:6ef34e000f7af5d002951a9204180ad3b66a86c7f00c7715d3a03b866ba71c8b:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "e74fb4ae42a4db53eb147049d8722f44b0a4a62027ebf98d720c2590389ab09e",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 4,
+            "uninterpreted_signed_data_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+          },
+          {
+            "additional_attributes": [
+              {
+                "byte_length": 1882,
+                "id": "0x3ba06f8c",
+                "interpretation": "proof_of_rotation_present_unverified",
+                "sha256": "b0e2d430e91019d75293653138fdb7fd09faaa15ad1e6ce0c608b927f1ca0f05"
+              }
+            ],
+            "algorithms": [
+              {
+                "computed_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "content_digest_status": "match",
+                "declared_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 786,
+                "ordinal": 0,
+                "sha256": "6e0d2cd30960a41fab0ad76ad81cab98622a9e8a40e69acf7cb45c16699f4d65",
+                "subject_public_key_info_sha256": "58324ee03b3dbd968ec6ea9f8c941ae3aef4ef86c785902e260dbefbce4d9d63"
+              }
+            ],
+            "id": "apksig-v1:6ef34e000f7af5d002951a9204180ad3b66a86c7f00c7715d3a03b866ba71c8b:v3:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "58324ee03b3dbd968ec6ea9f8c941ae3aef4ef86c785902e260dbefbce4d9d63",
+            "rotation_lineage": "present_unverified",
+            "scheme": "v3",
+            "sdk_range": {
+              "max": 2147483647,
+              "min": 28
+            },
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "eda496d79ac24932076e5ea6d0e5c75358417dc6a8dc90c52d2bf83b78043e83",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 4096,
+          "pairs": [
+            {
+              "byte_length": 1438,
+              "id": "0x7109871a",
+              "sha256": "d07fc2ceeb88bb53e42495ffd2228f841c28dc91b8f962dc54d177c9eac007b5"
+            },
+            {
+              "byte_length": 3334,
+              "id": "0xf05368c0",
+              "sha256": "459868490c60d583b6212320213af585b9523b5d783b3b34490f1606b57e1ae7"
+            },
+            {
+              "byte_length": 3352,
+              "id": "0x42726577",
+              "sha256": "83721184f1da9a0842868fa9abc9b65eabb48e765fc9ba95cc1d7462cedc2f1b"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 12375,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "6ef34e000f7af5d002951a9204180ad3b66a86c7f00c7715d3a03b866ba71c8b"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "present_unverified",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "verified",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 12288,
+          "entry_count": 1,
+          "eocd_offset": 12353,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "rotation-v31.apk",
+      "sha256": "5127923e25443cfe023ec6ca2acdb6c188b1502665f244a2584a899d2885ee09",
+      "byte_length": 12375,
+      "native_record_status": "verified",
+      "native_runtime_seconds": 0.006,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): true\nVerified using v3.1 scheme (APK Signature Scheme v3.1): true\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner (minSdkVersion=33, maxSdkVersion=2147483647) certificate DN: CN=Hepta APK test second\nSigner (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: 6e0d2cd30960a41fab0ad76ad81cab98622a9e8a40e69acf7cb45c16699f4d65\nSigner (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-1 digest: e567668b922a83e52828b660a7e1fb414a69420b\nSigner (minSdkVersion=33, maxSdkVersion=2147483647) certificate MD5 digest: f0cc2f45442ce79b8564ef2868b929f1\nSigner (minSdkVersion=33, maxSdkVersion=2147483647) key algorithm: RSA\nSigner (minSdkVersion=33, maxSdkVersion=2147483647) key size (bits): 2048\nSigner (minSdkVersion=33, maxSdkVersion=2147483647) public key SHA-256 digest: 58324ee03b3dbd968ec6ea9f8c941ae3aef4ef86c785902e260dbefbce4d9d63\nSigner (minSdkVersion=33, maxSdkVersion=2147483647) public key SHA-1 digest: cfeac39938b20cb82c0b8bbd7c71669f01487327\nSigner (minSdkVersion=33, maxSdkVersion=2147483647) public key MD5 digest: f8d1dacc4c92cf2346c9f32cdabd0651\nSigner (minSdkVersion=24, maxSdkVersion=32) certificate DN: CN=Hepta APK test rsa\nSigner (minSdkVersion=24, maxSdkVersion=32) certificate SHA-256 digest: 8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a\nSigner (minSdkVersion=24, maxSdkVersion=32) certificate SHA-1 digest: 2a416b610703e4ced9f2a23180c757b9dc06e011\nSigner (minSdkVersion=24, maxSdkVersion=32) certificate MD5 digest: b8d88c34760a414041a4c0e27efe0a11\nSigner (minSdkVersion=24, maxSdkVersion=32) key algorithm: RSA\nSigner (minSdkVersion=24, maxSdkVersion=32) key size (bits): 2048\nSigner (minSdkVersion=24, maxSdkVersion=32) public key SHA-256 digest: a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2\nSigner (minSdkVersion=24, maxSdkVersion=32) public key SHA-1 digest: 130068c3e2d5e7d7fa1b9f7897dd89db3183de31\nSigner (minSdkVersion=24, maxSdkVersion=32) public key MD5 digest: 13171301610d4f48df803949a1dc1145\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+          "chunked_sha512": "0b3fb35d3fa6602c4c65ca79876de388ba6e58a49701062c9755fa44bb795136c454be270a16223b98c4cbc8d8944929cae822dc94f044e4c7acff58d0a80b7e"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [
+              {
+                "byte_length": 4,
+                "id": "0xbeeff00d",
+                "interpretation": "v3_presence_requirement_met",
+                "sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178"
+              }
+            ],
+            "algorithms": [
+              {
+                "computed_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "content_digest_status": "match",
+                "declared_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:5127923e25443cfe023ec6ca2acdb6c188b1502665f244a2584a899d2885ee09:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "e74fb4ae42a4db53eb147049d8722f44b0a4a62027ebf98d720c2590389ab09e",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 4,
+            "uninterpreted_signed_data_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+          },
+          {
+            "additional_attributes": [
+              {
+                "byte_length": 4,
+                "id": "0x559f8b02",
+                "interpretation": "signed_bytes_preserved_semantics_unverified",
+                "sha256": "9a090610d0aa9445db0890179a9dea330334e3b9086987e93af97dbc978fe311"
+              }
+            ],
+            "algorithms": [
+              {
+                "computed_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "content_digest_status": "match",
+                "declared_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:5127923e25443cfe023ec6ca2acdb6c188b1502665f244a2584a899d2885ee09:v3:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v3",
+            "sdk_range": {
+              "max": 32,
+              "min": 24
+            },
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "7df5a8e0e9a73d56b512d8200246e238143c1b2d145dd19cc317bd50f43d518c",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 4096,
+          "pairs": [
+            {
+              "byte_length": 1438,
+              "id": "0x7109871a",
+              "sha256": "d07fc2ceeb88bb53e42495ffd2228f841c28dc91b8f962dc54d177c9eac007b5"
+            },
+            {
+              "byte_length": 3334,
+              "id": "0x1b93ad61",
+              "sha256": "98eff5f47187f9d2d8423390d11d7e673d4fcff662c720d4b5b27e37391bb9b4"
+            },
+            {
+              "byte_length": 1450,
+              "id": "0xf05368c0",
+              "sha256": "57b015f4b61fb07559ec8736d280736478eaf28bdef2f900d3575d30dea1c241"
+            },
+            {
+              "byte_length": 1890,
+              "id": "0x42726577",
+              "sha256": "3aab648b3d9a6e06e0447e53d9d4b7207e55d6f9cd8e48fd714da7cb23a4eeae"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 12375,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "5127923e25443cfe023ec6ca2acdb6c188b1502665f244a2584a899d2885ee09"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "newer_scheme_not_examined",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "verified",
+          "v3_1": "present_unverified",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 12288,
+          "entry_count": 1,
+          "eocd_offset": 12353,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "rsa-v2-v3.apk",
+      "sha256": "4692fa07ba76cfb45233680e1f3d67f95a34814bc4fc494908a733a040dd05d0",
+      "byte_length": 8279,
+      "native_record_status": "verified",
+      "native_runtime_seconds": 0.006,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): true\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test rsa\nSigner #1 certificate SHA-256 digest: 8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a\nSigner #1 certificate SHA-1 digest: 2a416b610703e4ced9f2a23180c757b9dc06e011\nSigner #1 certificate MD5 digest: b8d88c34760a414041a4c0e27efe0a11\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 2048\nSigner #1 public key SHA-256 digest: a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2\nSigner #1 public key SHA-1 digest: 130068c3e2d5e7d7fa1b9f7897dd89db3183de31\nSigner #1 public key MD5 digest: 13171301610d4f48df803949a1dc1145\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+          "chunked_sha512": "0b3fb35d3fa6602c4c65ca79876de388ba6e58a49701062c9755fa44bb795136c454be270a16223b98c4cbc8d8944929cae822dc94f044e4c7acff58d0a80b7e"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [
+              {
+                "byte_length": 4,
+                "id": "0xbeeff00d",
+                "interpretation": "v3_presence_requirement_met",
+                "sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178"
+              }
+            ],
+            "algorithms": [
+              {
+                "computed_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "content_digest_status": "match",
+                "declared_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:4692fa07ba76cfb45233680e1f3d67f95a34814bc4fc494908a733a040dd05d0:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "e74fb4ae42a4db53eb147049d8722f44b0a4a62027ebf98d720c2590389ab09e",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 4,
+            "uninterpreted_signed_data_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+          },
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "content_digest_status": "match",
+                "declared_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:4692fa07ba76cfb45233680e1f3d67f95a34814bc4fc494908a733a040dd05d0:v3:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v3",
+            "sdk_range": {
+              "max": 2147483647,
+              "min": 24
+            },
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "49134958ad4cebf97a56fb9d8d32a9529204ada6ff96bd019e1567b002a745b5",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 4096,
+          "pairs": [
+            {
+              "byte_length": 1438,
+              "id": "0x7109871a",
+              "sha256": "d07fc2ceeb88bb53e42495ffd2228f841c28dc91b8f962dc54d177c9eac007b5"
+            },
+            {
+              "byte_length": 1438,
+              "id": "0xf05368c0",
+              "sha256": "1ba625773042e37fb512e66c60edcc345c51905bde13d4b83ba58a4b6f12bbe1"
+            },
+            {
+              "byte_length": 1152,
+              "id": "0x42726577",
+              "sha256": "4cf9816ed1062189ff0c8d427fba5e912cc68fc9af76cf7f08fd255977de3b33"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 8279,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "4692fa07ba76cfb45233680e1f3d67f95a34814bc4fc494908a733a040dd05d0"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "verified",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 8192,
+          "entry_count": 1,
+          "eocd_offset": 8257,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "rsa-v2.apk",
+      "sha256": "d6cbaadd7056e7d817b3f53bc62f13d456f62eddeb5a7d079b55ac22a76ab553",
+      "byte_length": 8279,
+      "native_record_status": "verified",
+      "native_runtime_seconds": 0.006,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test rsa\nSigner #1 certificate SHA-256 digest: 8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a\nSigner #1 certificate SHA-1 digest: 2a416b610703e4ced9f2a23180c757b9dc06e011\nSigner #1 certificate MD5 digest: b8d88c34760a414041a4c0e27efe0a11\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 2048\nSigner #1 public key SHA-256 digest: a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2\nSigner #1 public key SHA-1 digest: 130068c3e2d5e7d7fa1b9f7897dd89db3183de31\nSigner #1 public key MD5 digest: 13171301610d4f48df803949a1dc1145\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+          "chunked_sha512": "0b3fb35d3fa6602c4c65ca79876de388ba6e58a49701062c9755fa44bb795136c454be270a16223b98c4cbc8d8944929cae822dc94f044e4c7acff58d0a80b7e"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "content_digest_status": "match",
+                "declared_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:d6cbaadd7056e7d817b3f53bc62f13d456f62eddeb5a7d079b55ac22a76ab553:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "7c09c89772f307cde60dee38a8273f9af7b9ab347edbb6edd5f44b56b46ed54b",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 4,
+            "uninterpreted_signed_data_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+          }
+        ],
+        "signing_block": {
+          "offset": 4096,
+          "pairs": [
+            {
+              "byte_length": 1426,
+              "id": "0x7109871a",
+              "sha256": "6c7fcd3f1b9172f50ede863fef425d03024681b2d7aab6d22e816f5cece426ba"
+            },
+            {
+              "byte_length": 2614,
+              "id": "0x42726577",
+              "sha256": "c94eb42dac842ee6ec718fab236ef15864c4b4d5b106168ff1c9f3130203dbad"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 8279,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "d6cbaadd7056e7d817b3f53bc62f13d456f62eddeb5a7d079b55ac22a76ab553"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "verified",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 8192,
+          "entry_count": 1,
+          "eocd_offset": 8257,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "two-signers-v2.apk",
+      "sha256": "feb1a29059e866e657398d0cc68df2d2ede62d927c18844aa4356b24cdb87ac4",
+      "byte_length": 8279,
+      "native_record_status": "verified",
+      "native_runtime_seconds": 0.006,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): false\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 2\nSigner #1 certificate DN: CN=Hepta APK test rsa\nSigner #1 certificate SHA-256 digest: 8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a\nSigner #1 certificate SHA-1 digest: 2a416b610703e4ced9f2a23180c757b9dc06e011\nSigner #1 certificate MD5 digest: b8d88c34760a414041a4c0e27efe0a11\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 2048\nSigner #1 public key SHA-256 digest: a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2\nSigner #1 public key SHA-1 digest: 130068c3e2d5e7d7fa1b9f7897dd89db3183de31\nSigner #1 public key MD5 digest: 13171301610d4f48df803949a1dc1145\nSigner #2 certificate DN: CN=Hepta APK test second\nSigner #2 certificate SHA-256 digest: 6e0d2cd30960a41fab0ad76ad81cab98622a9e8a40e69acf7cb45c16699f4d65\nSigner #2 certificate SHA-1 digest: e567668b922a83e52828b660a7e1fb414a69420b\nSigner #2 certificate MD5 digest: f0cc2f45442ce79b8564ef2868b929f1\nSigner #2 key algorithm: RSA\nSigner #2 key size (bits): 2048\nSigner #2 public key SHA-256 digest: 58324ee03b3dbd968ec6ea9f8c941ae3aef4ef86c785902e260dbefbce4d9d63\nSigner #2 public key SHA-1 digest: cfeac39938b20cb82c0b8bbd7c71669f01487327\nSigner #2 public key MD5 digest: f8d1dacc4c92cf2346c9f32cdabd0651\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+          "chunked_sha512": "0b3fb35d3fa6602c4c65ca79876de388ba6e58a49701062c9755fa44bb795136c454be270a16223b98c4cbc8d8944929cae822dc94f044e4c7acff58d0a80b7e"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "content_digest_status": "match",
+                "declared_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:feb1a29059e866e657398d0cc68df2d2ede62d927c18844aa4356b24cdb87ac4:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "7c09c89772f307cde60dee38a8273f9af7b9ab347edbb6edd5f44b56b46ed54b",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 4,
+            "uninterpreted_signed_data_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+          },
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "content_digest_status": "match",
+                "declared_digest": "a137dfd1bdb8291bb44de0134d47715fa3ef09cd8df9c4f02338e40ab7be8ff4",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 786,
+                "ordinal": 0,
+                "sha256": "6e0d2cd30960a41fab0ad76ad81cab98622a9e8a40e69acf7cb45c16699f4d65",
+                "subject_public_key_info_sha256": "58324ee03b3dbd968ec6ea9f8c941ae3aef4ef86c785902e260dbefbce4d9d63"
+              }
+            ],
+            "id": "apksig-v1:feb1a29059e866e657398d0cc68df2d2ede62d927c18844aa4356b24cdb87ac4:v2:1",
+            "ordinal": 1,
+            "public_key_bytes": 294,
+            "public_key_sha256": "58324ee03b3dbd968ec6ea9f8c941ae3aef4ef86c785902e260dbefbce4d9d63",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "2133d66fd7a19c7323cb12d6dd9d1d6902132045556e43a2f0df7f61c33bb97f",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 4,
+            "uninterpreted_signed_data_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+          }
+        ],
+        "signing_block": {
+          "offset": 4096,
+          "pairs": [
+            {
+              "byte_length": 2854,
+              "id": "0x7109871a",
+              "sha256": "77c77ba34e08f52efcf062112b3ff65d6eedcb217acec7dd91b7d9e6dd295d74"
+            },
+            {
+              "byte_length": 1186,
+              "id": "0x42726577",
+              "sha256": "4e06dd99c937c0a9b39ff55a34179151a57821884bbf852ddcc107cfaf900a0c"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 8279,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "feb1a29059e866e657398d0cc68df2d2ede62d927c18844aa4356b24cdb87ac4"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_absent",
+          "v2_v3_records": "verified",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 8192,
+          "entry_count": 1,
+          "eocd_offset": 8257,
+          "legacy_signature_marker_count": 0
+        }
+      }
+    },
+    {
+      "file": "v1-only.apk",
+      "sha256": "28c68102f8710ab56a387b31c4a01911791fac5c176eb105287669a9928a56bc",
+      "byte_length": 2907,
+      "native_record_status": "absent",
+      "native_runtime_seconds": 0.005,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): true\nVerified using v2 scheme (APK Signature Scheme v2): false\nVerified using v3 scheme (APK Signature Scheme v3): false\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test rsa\nSigner #1 certificate SHA-256 digest: 8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a\nSigner #1 certificate SHA-1 digest: 2a416b610703e4ced9f2a23180c757b9dc06e011\nSigner #1 certificate MD5 digest: b8d88c34760a414041a4c0e27efe0a11\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 2048\nSigner #1 public key SHA-256 digest: a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2\nSigner #1 public key SHA-1 digest: 130068c3e2d5e7d7fa1b9f7897dd89db3183de31\nSigner #1 public key MD5 digest: 13171301610d4f48df803949a1dc1145\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": null,
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [],
+        "signing_block": {
+          "offset": null,
+          "pairs": [],
+          "present": false
+        },
+        "source": {
+          "byte_length": 2907,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "28c68102f8710ab56a387b31c4a01911791fac5c176eb105287669a9928a56bc"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_present_unverified",
+          "v2_v3_records": "absent",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 2631,
+          "entry_count": 4,
+          "eocd_offset": 2885,
+          "legacy_signature_marker_count": 2
+        }
+      }
+    },
+    {
+      "file": "v1-v2-v3.apk",
+      "sha256": "6f3dd818eb497d9c12ab939884bf6db6f2a92546ee67f8ae06fcbe7765b48b13",
+      "byte_length": 8468,
+      "native_record_status": "verified",
+      "native_runtime_seconds": 0.005,
+      "android_exit": 0,
+      "android_stdout": "Verifies\nVerified using v1 scheme (JAR signing): true\nVerified using v2 scheme (APK Signature Scheme v2): true\nVerified using v3 scheme (APK Signature Scheme v3): true\nVerified using v3.1 scheme (APK Signature Scheme v3.1): false\nVerified using v4 scheme (APK Signature Scheme v4): false\nVerified for SourceStamp: false\nNumber of signers: 1\nSigner #1 certificate DN: CN=Hepta APK test rsa\nSigner #1 certificate SHA-256 digest: 8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a\nSigner #1 certificate SHA-1 digest: 2a416b610703e4ced9f2a23180c757b9dc06e011\nSigner #1 certificate MD5 digest: b8d88c34760a414041a4c0e27efe0a11\nSigner #1 key algorithm: RSA\nSigner #1 key size (bits): 2048\nSigner #1 public key SHA-256 digest: a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2\nSigner #1 public key SHA-1 digest: 130068c3e2d5e7d7fa1b9f7897dd89db3183de31\nSigner #1 public key MD5 digest: 13171301610d4f48df803949a1dc1145\n",
+      "android_stderr": "",
+      "rea_field_comparison": {
+        "source_digest": true,
+        "source_length": true,
+        "scheme_signer_counts": true,
+        "leaf_certificate_fingerprints": true,
+        "public_key_lengths": true,
+        "signed_tail_lengths": true,
+        "algorithm_ids": true,
+        "declared_and_computed_digest_agreement": true,
+        "v3_sdk_ranges": true,
+        "v3_1_presence": true
+      },
+      "native_report": {
+        "budgets": {
+          "archive_max_bytes": 134217728,
+          "max_block_id_pairs": 128,
+          "max_certificate_bytes": 65536,
+          "max_scheme_signers": 32,
+          "max_signer_algorithms": 32,
+          "max_signer_certificates": 8,
+          "signing_block_max_bytes": 16777216
+        },
+        "computed_content_digests": {
+          "chunked_sha256": "7a6a1c5330bf342d721a0059951d33398c6bc1c13cbd02a8b04fbffecf5b1098",
+          "chunked_sha512": "2f82502eea482a18781d3f6b5dc6c58e6d9d83cd9d609533d34f88acc588b526b8d7ed5f3c769bec48fc00bdc027f0c561107cbe86910a3d3af2551a7501b59d"
+        },
+        "coverage": {
+          "certificate_parsing": "bounded DER envelope and exact leaf subjectPublicKeyInfo binding",
+          "digest_algorithms": [
+            "APK 1 MiB chunked SHA-256",
+            "APK 1 MiB chunked SHA-512"
+          ],
+          "signature_algorithms": [
+            "RSA-PSS SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1, digest-length salt)",
+            "RSA PKCS#1 v1.5 SHA-256/SHA-512 (2048..8192 bits, odd exponent 3..2^33-1)",
+            "ECDSA SHA-256 (P-256/P-384, ASN.1)"
+          ],
+          "v2_v3_semantics": "all declared supported signature records; exact digest/signature algorithm order; v3 SDK copy agreement; v2 v3-presence stripping attribute"
+        },
+        "limitations": [
+          "Verified means mathematical self-consistency of the supported v2/v3 records with these exact captured bytes and their leaf certificate public key. It does not establish trusted signer identity or Android installation acceptance.",
+          "v1 JAR signatures and per-entry coverage, v3.1, v3.2, v4 idsig, proof-of-rotation and source-stamp signatures are not verified. Presence never upgrades their verification status.",
+          "DSA, ECDSA SHA-512, verity digests and unknown algorithms are explicitly unsupported. All declared supported records are checked; Android strongest-algorithm and SDK selection rules are not implemented.",
+          "Certificate parsing extracts and binds the leaf public key; issuer signatures, validity periods, extensions, revocation and chain trust are not evaluated.",
+          "Only bounded classic single-volume ZIP is admitted. Manifest/resource semantics, entry decompression/CRC and code execution are outside this operation.",
+          "Native record and signer IDs are not REA Evidence or retained analysis-view compatibility. No package is executed, installed, extracted or fetched."
+        ],
+        "rea_evidence_compatible": false,
+        "record_format": "hepta.rea-apk-signature.v1",
+        "signers": [
+          {
+            "additional_attributes": [
+              {
+                "byte_length": 4,
+                "id": "0xbeeff00d",
+                "interpretation": "v3_presence_requirement_met",
+                "sha256": "9d9f290527a6be626a8f5985b26e19b237b44872b03631811df4416fc1713178"
+              }
+            ],
+            "algorithms": [
+              {
+                "computed_digest": "7a6a1c5330bf342d721a0059951d33398c6bc1c13cbd02a8b04fbffecf5b1098",
+                "content_digest_status": "match",
+                "declared_digest": "7a6a1c5330bf342d721a0059951d33398c6bc1c13cbd02a8b04fbffecf5b1098",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:6f3dd818eb497d9c12ab939884bf6db6f2a92546ee67f8ae06fcbe7765b48b13:v2:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v2",
+            "sdk_range": null,
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "9a4a78894e16f16ac816da73e05393b08d9c08b59294a6600d306430a67b2875",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 4,
+            "uninterpreted_signed_data_sha256": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+          },
+          {
+            "additional_attributes": [],
+            "algorithms": [
+              {
+                "computed_digest": "7a6a1c5330bf342d721a0059951d33398c6bc1c13cbd02a8b04fbffecf5b1098",
+                "content_digest_status": "match",
+                "declared_digest": "7a6a1c5330bf342d721a0059951d33398c6bc1c13cbd02a8b04fbffecf5b1098",
+                "id": "0x00000103",
+                "name": "rsa_pkcs1_v1_5_sha256",
+                "signature_bytes": 256,
+                "signature_status": "verified"
+              }
+            ],
+            "certificate_public_key_binding": "match",
+            "certificate_signature_and_dates": "not_evaluated",
+            "certificate_trust": "not_evaluated",
+            "certificates": [
+              {
+                "byte_length": 780,
+                "ordinal": 0,
+                "sha256": "8a413e7e45f79bbadd18b1e1e1ed4698fd858a4b8ffe7031f4887b438f11267a",
+                "subject_public_key_info_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2"
+              }
+            ],
+            "id": "apksig-v1:6f3dd818eb497d9c12ab939884bf6db6f2a92546ee67f8ae06fcbe7765b48b13:v3:0",
+            "ordinal": 0,
+            "public_key_bytes": 294,
+            "public_key_sha256": "a971e94b7c127bc7ce4b2fa1fd04da1eebcaa0157625dceba2a11943088a7bc2",
+            "rotation_lineage": "absent",
+            "scheme": "v3",
+            "sdk_range": {
+              "max": 2147483647,
+              "min": 24
+            },
+            "signed_and_unsigned_sdk_ranges_match": true,
+            "signed_data_sha256": "41fe978e2558fb1f7fb9509f79acacd711bb53fe7b9b42514fb23de65c588c64",
+            "status": "verified",
+            "uninterpreted_signed_data_bytes": 0,
+            "uninterpreted_signed_data_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ],
+        "signing_block": {
+          "offset": 4096,
+          "pairs": [
+            {
+              "byte_length": 1438,
+              "id": "0x7109871a",
+              "sha256": "23c12c4f7f9822e37037a2fe055be07d34f96154e856ffccd4a5a2b19d4b8466"
+            },
+            {
+              "byte_length": 1438,
+              "id": "0xf05368c0",
+              "sha256": "7794e4ccc806552eaf2cd4548d0e54ebac14ede251803b619aaf49c949d02015"
+            },
+            {
+              "byte_length": 1152,
+              "id": "0x42726577",
+              "sha256": "4cf9816ed1062189ff0c8d427fba5e912cc68fc9af76cf7f08fd255977de3b33"
+            }
+          ],
+          "present": true
+        },
+        "source": {
+          "byte_length": 8468,
+          "identity_scope": "complete_captured_archive",
+          "sha256": "6f3dd818eb497d9c12ab939884bf6db6f2a92546ee67f8ae06fcbe7765b48b13"
+        },
+        "verification": {
+          "android_installability": "not_evaluated",
+          "android_sdk_scheme_selection": "not_evaluated",
+          "certificate_identity_or_trust": "not_evaluated",
+          "complete_android_verification": false,
+          "rotation_lineage": "absent",
+          "scope": "supported_signature_records_and_content_digests_only",
+          "source_stamp": "absent",
+          "v1": "markers_present_unverified",
+          "v2_v3_records": "verified",
+          "v3_1": "absent",
+          "v3_2": "absent",
+          "v4": "external_idsig_not_examined"
+        },
+        "zip": {
+          "android_manifest_entry_present": true,
+          "central_directory_offset": 8192,
+          "entry_count": 4,
+          "eocd_offset": 8446,
+          "legacy_signature_marker_count": 2
+        }
+      }
+    }
+  ]
+}
