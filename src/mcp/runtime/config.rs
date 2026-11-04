@@ -360,7 +360,16 @@ fn claim_controller_state_dir(state_dir: &Path) -> Result<ControllerLocks> {
 
 pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
 	config.validate()?;
-	std::fs::create_dir_all(&config.state_dir)?;
+	// Request auditing requires an owner-private state root on first start.
+	// The creation mode preserves the permissions of existing directories.
+	let mut state_directory = std::fs::DirBuilder::new();
+	state_directory.recursive(true);
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::DirBuilderExt;
+		state_directory.mode(0o700);
+	}
+	state_directory.create(&config.state_dir)?;
 	config.state_dir = std::fs::canonicalize(&config.state_dir)?;
 	#[cfg(unix)]
 	{
