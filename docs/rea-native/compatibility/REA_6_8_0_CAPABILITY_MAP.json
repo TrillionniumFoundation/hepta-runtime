@@ -402,6 +402,30 @@
         "scripts/rea-asar-reference.mjs"
       ],
       "scope": "Explicit packed regular member range acquisition after whole selected-member SHA256 and all declared block hashes match; descriptor/header preconditions, no link/unpacked following, no publisher authentication or REA Evidence."
+    },
+    "rea_inspect_apk_signature": {
+      "source_paths": [
+        "src/mcp/rea_apk_signature.rs",
+        "src/mcp/rea_apk_signature_parser.rs",
+        "src/mcp/rea_apk_signature_worker.rs",
+        "src/mcp/rea_files.rs",
+        "src/mcp/rea_seccomp.rs",
+        "docs/rea-native/APK_SIGNATURE_NATIVE.md",
+        "docs/rea-native/validation/apk-signature-native.json",
+        "docs/qualification/rea-apk-public-mcp-20261104-r2/README.md",
+        "docs/qualification/rea-apk-public-mcp-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-apk-public-mcp-20261104-r2/post-exponent-fix-mcp.json",
+        "docs/qualification/rea-apk-public-mcp-20261104-r2/rsa-exponent-before.json",
+        "docs/qualification/rea-apk-public-mcp-20261104-r2/rsa-exponent-after.json"
+      ],
+      "tests": [
+        "src/mcp/rea_apk_signature_tests.rs",
+        "scripts/generate_apk_signature_fixtures.py",
+        "scripts/qualify_apk_signature_native.py",
+        "tests/rea_apk_signature_mcp.py",
+        "tests/fixtures/rea_apk_signature/provenance.json"
+      ],
+      "scope": "Native policy-admitted APK v2/v3 supported-record mathematical verification: whole captured-file identity, chunked content digest, signed-data signature, exact leaf DER/SPKI binding and selected SDK/algorithm/stripping consistency. Unsupported algorithms/key parameters are partial. No runtime Java/Node/REA dependency; no complete Android/platform-verification, trust, REA Evidence or retained upstream view claim."
     }
   },
   "family_defaults": {
@@ -858,8 +882,8 @@
         "rea_static_read",
         "rea_static_cancel"
       ],
-      "scope": "APK binary-XML declarations plus optional bounded JADX classes/sources",
-      "missing": "Exact package/class/reference inventories, APK signature/resource coverage, retained Evidence and all input/error variants",
+      "scope": "APK binary-XML declarations plus optional bounded JADX classes/sources; a separate native APK signature-record inspector provides a mathematical subset, without integration into the complete upstream package response.",
+      "missing": "Exact package/class/reference inventories and resource coverage; complete APK signature/platform policy beyond the separate native v2/v3 subset; retained Evidence and all input/error variants.",
       "dependencies": [
         {
           "component": "jadx-jdk",
@@ -872,6 +896,12 @@
         "provider_qualification",
         "format_architecture_corpus",
         "retention_and_pagination"
+      ],
+      "related_runtime_routes": [
+        "rea_inspect_apk_signature"
+      ],
+      "related_auxiliary_capabilities": [
+        "apk_signature_worker"
       ]
     },
     "search_android_classes": {
@@ -1391,7 +1421,16 @@
       "extra_gates": [
         "provider_qualification",
         "format_architecture_corpus"
-      ]
+      ],
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_apk_signature"
+      ],
+      "related_auxiliary_capabilities": [
+        "apk_signature_worker"
+      ],
+      "scope": "Bounded native APK v2/v3 supported signature records and chunked content digests, with 20 finite Android/REA projections and actual public-MCP lifecycle evidence. This subset uses native Rust cryptography and no external runtime verifier.",
+      "missing": "Exact upstream artifact/platform/provider selection, typed outcomes, Evidence and retained views; non-APK signatures; APK v1/JAR, v3.1/v3.2/v4, proof-of-rotation, source stamps, SDK/strongest-scheme/algorithm selection, unsupported cryptography and complete X.509/platform policy. Native verified records do not imply Android installability or trusted publisher identity."
     },
     "inspect_plist": {
       "dependencies": [
@@ -2129,6 +2168,31 @@
       "upstream_tools": [
         "inspect_artifact",
         "analyze_javascript_application"
+      ]
+    },
+    "apk_signature_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaApkSignatureWorker",
+      "entrypoint": "hepta-runtime rea-apk-signature-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_apk_signature.rs",
+        "src/mcp/rea_apk_signature_parser.rs",
+        "src/mcp/rea_apk_signature_worker.rs",
+        "src/mcp/rea_files.rs",
+        "src/mcp/rea_seccomp.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_apk_signature_tests.rs",
+        "scripts/generate_apk_signature_fixtures.py",
+        "scripts/qualify_apk_signature_native.py",
+        "tests/rea_apk_signature_mcp.py",
+        "tests/fixtures/rea_apk_signature/provenance.json"
+      ],
+      "scope": "Internal stdin-only bounded native APK signature-record verifier over controller-captured bytes, with fixed worker budgets, cancellation/deadline kill and reap. Finite v2/v3 mathematics only; all complete-Android and REA-Evidence flags remain false.",
+      "upstream_tools": [
+        "inspect_signature",
+        "inspect_android_package"
       ]
     }
   }

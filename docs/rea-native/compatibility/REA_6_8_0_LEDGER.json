@@ -22,9 +22,10 @@
   "runtime": {
     "baseline_commit": "1d9ea7e7e7a1625c611d5f6e037a1ed9d57379d4",
     "discovery": "Rust source handler discovery, not live MCP tools/list",
-    "interface_count": 25,
+    "interface_count": 26,
     "interfaces": [
       "rea_compare_web_captures",
+      "rea_inspect_apk_signature",
       "rea_inspect_application",
       "rea_inspect_archive",
       "rea_inspect_artifact",
@@ -51,6 +52,18 @@
       "rea_verify_evidence"
     ],
     "auxiliary_capabilities": [
+      {
+        "id": "apk_signature_worker",
+        "kind": "rust_cli",
+        "entrypoint": "hepta-runtime rea-apk-signature-worker",
+        "source_presence": "PRESENT",
+        "scope": "Internal stdin-only bounded native APK signature-record verifier over controller-captured bytes, with fixed worker budgets, cancellation/deadline kill and reap. Finite v2/v3 mathematics only; all complete-Android and REA-Evidence flags remain false.",
+        "upstream_tools": [
+          "inspect_signature",
+          "inspect_android_package"
+        ],
+        "upstream_parity": "NOT_ESTABLISHED"
+      },
       {
         "id": "archive_worker",
         "kind": "rust_cli",
@@ -165,6 +178,31 @@
         "path": "deploy/hepta_browser_capture.py",
         "sha256": "7ef7c2073fc5708851ed21b4cc4a2be02c43a045d0ac955290de8d7ad93d5b92",
         "bytes": 1817
+      },
+      {
+        "path": "docs/qualification/rea-apk-public-mcp-20261104-r2/README.md",
+        "sha256": "cdbd2990b2dc39a6fb36611647c4332e035dc6bca8e6630c8ee2b5c1c661f85d",
+        "bytes": 6996
+      },
+      {
+        "path": "docs/qualification/rea-apk-public-mcp-20261104-r2/artifact-manifest.json",
+        "sha256": "3f64f9c2073d8580173009915de30e6a731c298c06a256b6e9dcd06a5f6e02e2",
+        "bytes": 4180
+      },
+      {
+        "path": "docs/qualification/rea-apk-public-mcp-20261104-r2/post-exponent-fix-mcp.json",
+        "sha256": "fb887e65ec47357921856013a33f961040c1beaae7ab74b8d7a93a2733c057d0",
+        "bytes": 2272
+      },
+      {
+        "path": "docs/qualification/rea-apk-public-mcp-20261104-r2/rsa-exponent-after.json",
+        "sha256": "66193bd4f75e0dedaf6b3b327aeea81acb5652f0ef059f75bb97a9752f780692",
+        "bytes": 5920
+      },
+      {
+        "path": "docs/qualification/rea-apk-public-mcp-20261104-r2/rsa-exponent-before.json",
+        "sha256": "af961dd078ee02719b70d48be4e5b8441e0e0f5c5c6da41e2fea4ee8d3d17fa3",
+        "bytes": 3784
       },
       {
         "path": "docs/qualification/rea-browser-final-release-20261104-r2/artifact-manifest.json",
@@ -307,6 +345,11 @@
         "bytes": 2966
       },
       {
+        "path": "docs/rea-native/APK_SIGNATURE_NATIVE.md",
+        "sha256": "342a1d93c338f5cf3b721469dff0b1e2a9baf3c8fa6089fb140fa02249c87b72",
+        "bytes": 13505
+      },
+      {
         "path": "docs/rea-native/ASAR.md",
         "sha256": "7c48c588bc75ea925e9a1475b4890bddddf1aa3c60ca681a98633df7d0d0a1f6",
         "bytes": 12011
@@ -335,6 +378,21 @@
         "path": "docs/rea-native/qualification/asar-20261104-r2/manifest.json",
         "sha256": "1b35510f9eb4048b74d1c62c884f97572a79dc234759d5a86e667dac2ade9ce9",
         "bytes": 5151
+      },
+      {
+        "path": "docs/rea-native/validation/apk-signature-native.json",
+        "sha256": "3be561b76ac9e8a3a634e54c611f81703fe981da546a3876e4bcdf455264ee58",
+        "bytes": 167519
+      },
+      {
+        "path": "scripts/generate_apk_signature_fixtures.py",
+        "sha256": "f1854eb05127309d7f98702b5305bd863e7e048280914aebeee3ba964e833194",
+        "bytes": 11654
+      },
+      {
+        "path": "scripts/qualify_apk_signature_native.py",
+        "sha256": "e48840986768a84e29fbab1839e62699b60362179822b0e70d31a08abd5cb784",
+        "bytes": 10831
       },
       {
         "path": "scripts/rea-asar-reference.mjs",
@@ -373,23 +431,43 @@
       },
       {
         "path": "src/cli.rs",
-        "sha256": "5009ea8cac6533073ec4b179b259b82128eb414cf9886c4c5285ce0173d425aa",
-        "bytes": 4452
+        "sha256": "3eb224d70e76230578c50716d54309610cdcb2e6823599580dc46456603d290a",
+        "bytes": 4573
       },
       {
         "path": "src/main.rs",
-        "sha256": "a270925209f5cf77d6739be49206517ac44ca0438e0590893093260ce40d09c5",
-        "bytes": 12107
+        "sha256": "46430b4001f7f508e69a1effbe73e857b3b397ab934a1e88f21024a277f1d9f1",
+        "bytes": 12192
       },
       {
         "path": "src/mcp/mod.rs",
-        "sha256": "0cd71b584efc6f7f56075665852228fe75c015d0b9000b0fb0e5aea010fdbdec",
-        "bytes": 2540
+        "sha256": "412552df2d61b9f1247bb6b23e6f44a5669e467d5e32ef58adc0973f4bf01a2e",
+        "bytes": 2567
       },
       {
         "path": "src/mcp/rea.rs",
         "sha256": "2e9b2be8f08cbb894e6e9999354df7a21460d3d5b737c45eaaa8c2938df3b1f6",
         "bytes": 16111
+      },
+      {
+        "path": "src/mcp/rea_apk_signature.rs",
+        "sha256": "95b4933628e4937e1e9bb09a6a5b2e5121c46fcfc7a8c2ac8983b881bfcc88a1",
+        "bytes": 5823
+      },
+      {
+        "path": "src/mcp/rea_apk_signature_parser.rs",
+        "sha256": "35e799efe6fb19d618f2015fd36600abf6fe3bb4e935d58f35510f63829a9d73",
+        "bytes": 28330
+      },
+      {
+        "path": "src/mcp/rea_apk_signature_tests.rs",
+        "sha256": "bbb7a3520442f0895593b316920311fce7cfcce4d7a05ffe6203fb3228d63d62",
+        "bytes": 18615
+      },
+      {
+        "path": "src/mcp/rea_apk_signature_worker.rs",
+        "sha256": "ddeba5c332b51c7bb3f5a4f3e8a6a3cbce5b7b7b659f371e931744174f0769a5",
+        "bytes": 5054
       },
       {
         "path": "src/mcp/rea_application.rs",
@@ -703,8 +781,13 @@
       },
       {
         "path": "src/mcp/server.rs",
-        "sha256": "8584d8845d9f95f9140317968e4fa00cf7c8b2b1f90202b75490b12381cdff6c",
-        "bytes": 147361
+        "sha256": "a4230f1a81e2b3c8665980e73b54f40ef7e40b09ff1d9a99cf812e433a8a92e0",
+        "bytes": 148568
+      },
+      {
+        "path": "tests/fixtures/rea_apk_signature/provenance.json",
+        "sha256": "27195ce15de42db27d7b2fc6d29310729ac9c663f290f693b0cf777c9e79c50f",
+        "bytes": 30900
       },
       {
         "path": "tests/fixtures/rea_javascript/barrel.ts",
@@ -765,6 +848,11 @@
         "path": "tests/fixtures/rea_javascript/util.js",
         "sha256": "92f9be1410544b52e185c7d7945b645c0a1efe31a89886e3e53de3e530b91cf7",
         "bytes": 92
+      },
+      {
+        "path": "tests/rea_apk_signature_mcp.py",
+        "sha256": "633dd05e70696b5082f6d5f092e02a56f50ed5d43d7faf8b4ba64ff4105b1bbf",
+        "bytes": 18308
       },
       {
         "path": "tests/rea_application_external.rs",
@@ -862,7 +950,7 @@
         "bytes": 7890
       }
     ],
-    "source_manifest_sha256": "6edcfe35796e37f70358f39f72d680208ab789c570969c560d022a919a8a614b"
+    "source_manifest_sha256": "54b914d4bf9bb5be71e6be2b68bd0d24320a0aa0d4f07954f80eedbb05aa1257"
   },
   "environment_observations_sha256": "4ace5e8f041a05d205825fb2b2a41769fcfdc91f60810072eb7a6c17a12f3e9c",
   "dependency_assessments": {
@@ -1456,15 +1544,15 @@
       "hard_missing_dependency": "NOT_ESTABLISHED"
     }
   },
-  "mapping_sha256": "f049437c135737ab001f0d13c2d894901e967e9cfd22b2eefc1d70c2c5a7f710",
+  "mapping_sha256": "3ae1363a2a8c49aec46b8caeaec4e89ce310ec3203e9335d5856e1820260117e",
   "inputs_sha256": "d143681c5384d0cff75d72659cd36381eaff60ca5bf3fe45fb5290b3eccc6904",
   "summary": {
     "published_tools": 229,
     "families": 18,
-    "native_interfaces": 25,
+    "native_interfaces": 26,
     "implementation_counts": {
-      "absent": 189,
-      "partial_operation": 17,
+      "absent": 188,
+      "partial_operation": 18,
       "related_facility": 23
     },
     "qualified_tools": 0,
@@ -7063,10 +7151,12 @@
         "idempotentHint": true,
         "openWorldHint": true
       },
-      "native_implementation": "absent",
-      "native_routes": [],
-      "native_scope": "No upstream-compatible handler is registered in the pinned native runtime",
-      "remaining_behavior": "Exact native format operation or platform observation; header recognition is insufficient",
+      "native_implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_apk_signature"
+      ],
+      "native_scope": "Bounded native APK v2/v3 supported signature records and chunked content digests, with 20 finite Android/REA projections and actual public-MCP lifecycle evidence. This subset uses native Rust cryptography and no external runtime verifier.",
+      "remaining_behavior": "Exact upstream artifact/platform/provider selection, typed outcomes, Evidence and retained views; non-APK signatures; APK v1/JAR, v3.1/v3.2/v4, proof-of-rotation, source stamps, SDK/strongest-scheme/algorithm selection, unsupported cryptography and complete X.509/platform policy. Native verified records do not imply Android installability or trusted publisher identity.",
       "dependencies": [
         {
           "component": "native-platform-tools",
@@ -7077,7 +7167,9 @@
         }
       ],
       "related_runtime_routes": [],
-      "related_auxiliary_capabilities": [],
+      "related_auxiliary_capabilities": [
+        "apk_signature_worker"
+      ],
       "required_behavior_gates": [
         "contracts",
         "results",
@@ -7093,7 +7185,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Exact native format operation or platform observation; header recognition is insufficient"
+          "next_step": "Exact upstream artifact/platform/provider selection, typed outcomes, Evidence and retained views; non-APK signatures; APK v1/JAR, v3.1/v3.2/v4, proof-of-rotation, source stamps, SDK/strongest-scheme/algorithm selection, unsupported cryptography and complete X.509/platform policy. Native verified records do not imply Android installability or trusted publisher identity."
         },
         {
           "category": "behavioral_differential",
@@ -10304,8 +10396,8 @@
         "rea_static_read",
         "rea_static_cancel"
       ],
-      "native_scope": "APK binary-XML declarations plus optional bounded JADX classes/sources",
-      "remaining_behavior": "Exact package/class/reference inventories, APK signature/resource coverage, retained Evidence and all input/error variants",
+      "native_scope": "APK binary-XML declarations plus optional bounded JADX classes/sources; a separate native APK signature-record inspector provides a mathematical subset, without integration into the complete upstream package response.",
+      "remaining_behavior": "Exact package/class/reference inventories and resource coverage; complete APK signature/platform policy beyond the separate native v2/v3 subset; retained Evidence and all input/error variants.",
       "dependencies": [
         {
           "component": "jadx-jdk",
@@ -10315,8 +10407,12 @@
           "observation_ref": "jadx-jdk"
         }
       ],
-      "related_runtime_routes": [],
-      "related_auxiliary_capabilities": [],
+      "related_runtime_routes": [
+        "rea_inspect_apk_signature"
+      ],
+      "related_auxiliary_capabilities": [
+        "apk_signature_worker"
+      ],
       "required_behavior_gates": [
         "contracts",
         "results",
@@ -10333,7 +10429,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Exact package/class/reference inventories, APK signature/resource coverage, retained Evidence and all input/error variants"
+          "next_step": "Exact package/class/reference inventories and resource coverage; complete APK signature/platform policy beyond the separate native v2/v3 subset; retained Evidence and all input/error variants."
         },
         {
           "category": "behavioral_differential",

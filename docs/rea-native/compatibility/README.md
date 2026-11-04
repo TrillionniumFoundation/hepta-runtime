@@ -39,7 +39,7 @@ The original desktop cache is `/home/qian-qi/rea-ledger-inputs-20261104-r1`, wit
 - `REA_6_8_0_CAPABILITY_MAP.json` is the maintained semantic mapping. Family defaults are overridden for individual upstream tools. A related facility is not counted as an equivalent operation.
 - `REA_6_8_0_LEDGER.json` is generated. It contains all 229 names in original catalog order, both input-schema fingerprints, output-schema fingerprints, family/source bindings, native scope, required gates and remaining code/provider/differential work.
 - `REA_6_8_0_ENVIRONMENT.json` preserves exact bounded discovery output from seven configured host aliases, durable job identities and selected installation-path observations, then separately records pinned finite observations from the final native release. Its discovery probe source and stdout bytes stay hashed and unchanged. Aliases are not asserted to represent seven independent machines; component parity qualification remains NOT_ESTABLISHED.
-- `REA_6_8_0_VALIDATION.json`, `REA_6_8_0_INTEGRATED_VALIDATION_INTERIM.json` and `REA_6_8_0_PREBUILD_VALIDATION.json` retain their historical results. The exact eight pre-update files, including their old ENVIRONMENT and LEDGER inputs, are preserved in the [prebuild snapshot](../../qualification/rea-next-compatibility-prebuild-20261104-r1/). [REA_6_8_0_FINAL_NATIVE_VALIDATION.json](REA_6_8_0_FINAL_NATIVE_VALIDATION.json) retains the later native-only validation. Its complete original input bytes are preserved in the [native-final compatibility snapshot](../../qualification/rea-next-compatibility-native-final-20261104-r1/). [REA_6_8_0_FINAL_MATRIX_VALIDATION.json](REA_6_8_0_FINAL_MATRIX_VALIDATION.json) records the independent completed matrix and current regenerated full/offline/strict mapping checks. Successful historical Evidence digest replay does not qualify `inspect_elf_notes` or any other complete upstream tool.
+- `REA_6_8_0_VALIDATION.json`, `REA_6_8_0_INTEGRATED_VALIDATION_INTERIM.json` and `REA_6_8_0_PREBUILD_VALIDATION.json` retain their historical results. The exact eight pre-update files, including their old ENVIRONMENT and LEDGER inputs, are preserved in the [prebuild snapshot](../../qualification/rea-next-compatibility-prebuild-20261104-r1/). [REA_6_8_0_FINAL_NATIVE_VALIDATION.json](REA_6_8_0_FINAL_NATIVE_VALIDATION.json) retains the later native-only validation. Its complete original input bytes are preserved in the [native-final compatibility snapshot](../../qualification/rea-next-compatibility-native-final-20261104-r1/). [REA_6_8_0_FINAL_MATRIX_VALIDATION.json](REA_6_8_0_FINAL_MATRIX_VALIDATION.json) records the independent completed historical matrix and the full/offline/strict mapping checks sampled at that time. Successful historical Evidence digest replay does not qualify `inspect_elf_notes` or any other complete upstream tool.
 
 The script checks all discovered Rust `rea_*` MCP handlers against the map and refuses an unmapped added/deleted handler. It also discovers REA CLI variants separately, so internal workers and the native browser capture helper cannot inflate the 229-tool count. Optional mapped CLI entries are reported ABSENT until their actual source/dispatch is integrated. The selected-source AST handler maps only part of analyze_javascript_application; lexical scope does not implement semantic tracing, browser URL/import-map resolution or live Electron observation. Update the capability map and regenerate whenever mapped source or contract facts change; the ledger does not silently describe another worktree.
 
@@ -90,15 +90,18 @@ The ROG matrix built a distinct **17,842,176-byte** executable, SHA-256 `2d02129
 
 The r3 environment reused the r2 Cargo target and whitelisted Cargo home. It corrected the task tmpfs mount to exec while retaining nosuid/nodev and actually executed an owned mode0700 shim before starting. It did not change source, tests, CI, the frozen runner, command argv, expected exits or budgets. The earlier r2 failure stays a failure. This is a functional qualification in that recorded environment, not general bare-ROG support or desktop ext4/power-loss durability evidence.
 
-Historical matrix ledger checks used their original inputs. Current canonical ENV/LEDGER consistency is checked separately in FINAL_MATRIX_VALIDATION; prior PREBUILD and FINAL_NATIVE receipts retain their original input snapshots rather than being silently reinterpreted against newer data.
+Historical matrix ledger checks used their original inputs. FINAL_MATRIX_VALIDATION binds that earlier canonical ENV/LEDGER snapshot; later continuation checks are separate observations. Prior PREBUILD and FINAL_NATIVE receipts retain their original input snapshots rather than being silently reinterpreted against newer data.
 
 ## Native continuation after 1d9ea7e
 
 The native [ASAR reader and explicit graph acquisition](../ASAR.md),
-[source-map declaration/point reader](../SOURCE_MAP.md), and
+[source-map declaration/point reader](../SOURCE_MAP.md),
+[APK signature-record verifier](../APK_SIGNATURE_NATIVE.md), and
 [decimal-halfway Evidence correction](../../qualification/rea-evidence-halfway-20261104-r2/README.md)
 carry their own source/binary-bound receipts. ASAR header/selected-member
-consistency is separate from publisher authentication. Source-map declarations
+consistency is separate from publisher authentication. APK v2/v3 mathematical
+record verification is separate from complete Android verification, signature
+scheme selection and certificate trust. Source-map declarations
 and a matching point projection are separate from a full upstream trace tool.
 The earlier 418-case numeric corpus did not contain the newly reproduced
 halfway ties; it remains pinned historical input, alongside the new 438-case
