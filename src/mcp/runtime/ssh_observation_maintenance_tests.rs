@@ -424,6 +424,10 @@ fn isolated_master_retirement_preserves_other_hosts_and_cleanup_custody() {
 #[ignore = "private subprocess fixture; invoked by the bounded parent test"]
 async fn isolated_helper() {
 	let kind = std::env::var("HEPTA_RETIREMENT_TEST_FIXTURE").unwrap();
+	if kind == "background-notification" {
+		background_notification_fixture().await;
+		return;
+	}
 	let (_root, path, agent, _) = fixture_with_cold_host(true).await;
 	let core = core(&path).await;
 	tokio::task::LocalSet::new()
@@ -534,8 +538,48 @@ async fn idle_maintenance_benchmark() {
 	let _ = agent.await;
 }
 
-#[tokio::test(flavor = "current_thread")]
-async fn background_notification_survives_an_unconsumed_empty_maintenance_result() {
+#[test]
+fn background_notification_survives_an_unconsumed_empty_maintenance_result() {
+	// This fixture installs an immutable process-wide runtime configuration.
+	// Keep it in the existing subprocess harness so later server tests stay isolated.
+	let configured_before = crate::mcp::runtime::config::maybe_runtime_config().is_some();
+	let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+		.args([
+			"--exact",
+			"mcp::runtime::ssh::observation_pool::tests::maintenance::isolated_helper",
+			"--ignored",
+			"--nocapture",
+		])
+		.env("HEPTA_RETIREMENT_TEST_FIXTURE", "background-notification")
+		.stdin(Stdio::null())
+		.stdout(Stdio::null())
+		.stderr(Stdio::inherit())
+		.spawn()
+		.unwrap();
+	let deadline = std::time::Instant::now() + Duration::from_secs(30);
+	let status = loop {
+		if let Some(status) = child.try_wait().unwrap() {
+			break status;
+		}
+		if std::time::Instant::now() >= deadline {
+			child.kill().unwrap();
+			let _ = child.wait();
+			panic!("background notification fixture exceeded its deadline");
+		}
+		std::thread::sleep(Duration::from_millis(20));
+	};
+	assert_eq!(
+		crate::mcp::runtime::config::maybe_runtime_config().is_some(),
+		configured_before,
+		"isolated fixture changed the parent runtime configuration"
+	);
+	assert!(
+		status.success(),
+		"background notification fixture: {status}"
+	);
+}
+
+async fn background_notification_fixture() {
 	let (_root, path, agent, _) = fixture_with_cold_host(true).await;
 	let core = core(&path).await;
 	tokio::task::LocalSet::new()

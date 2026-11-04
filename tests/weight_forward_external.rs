@@ -223,6 +223,8 @@ fn native_linear_mcp_matches_real_pytorch_across_noop_patch_restore() {
 		"weight_artifact_patch",
 		"weight_artifact_restore",
 		"weight_linear_forward",
+		"weight_guarded_linear_patch",
+		"weight_linear_ridge_plan",
 	] {
 		assert!(
 			names.contains(&tool),
@@ -302,6 +304,35 @@ fn native_linear_mcp_matches_real_pytorch_across_noop_patch_restore() {
 	assert_eq!(std::fs::read(&source).unwrap(), original);
 	let forbidden_state_path = server.raw("weight_linear_forward", json!({"source":{"kind":"path","path":restored_path,"expected_sha256":digest,"tensor_name":"weight"},"inputs":inputs}));
 	assert_eq!(forbidden_state_path["isError"], true);
+	let guarded_args = json!({
+		"patch":patch_args(&source,&digest,"00000040"),"inputs":inputs,
+		"objective":{"kind":"squared_error","targets":[[-7.,4.],[-5.,8.],[9.,-4.]]},
+		"minimum_gain":0.0,"constraints":[{"kind":"preserve","column":1,"max_absolute_change":0.0}]
+	});
+	let guarded = server.call("weight_guarded_linear_patch", guarded_args.clone());
+	assert_eq!(guarded["outcome"], "accepted_on_supplied_rows");
+	assert_eq!(guarded["primary_after"], 0.0);
+	assert_eq!(guarded["candidate"]["sha256"], patched["sha256"]);
+	let mut bad_args = guarded_args;
+	bad_args["patch"]["edits"][0]["replacement_hex"] = json!("000000c0");
+	let rejected = server.call("weight_guarded_linear_patch", bad_args);
+	assert_eq!(rejected["outcome"], "rejected_and_restored");
+	let recovered_path = Path::new(rejected["restoration"]["artifact_path"].as_str().unwrap());
+	assert_eq!(
+		torch_reference(&python, recovered_path, &inputs, &Value::Null)["outputs"],
+		before["outputs"]
+	);
+	assert_eq!(std::fs::read(recovered_path).unwrap(), original);
+	assert_eq!(std::fs::read(&source).unwrap(), original);
+	println!(
+		"WEIGHT_NATIVE_GUARDED_PATCH_QUALIFICATION {}",
+		json!({
+			"positive_outcome":guarded["outcome"],"negative_outcome":rejected["outcome"],
+			"original_sha256":digest,"restored_sha256":rejected["restoration"]["sha256"],
+			"real_pytorch_restored_outputs_match":true,"original_source_unchanged":true,
+			"scope":"constructed F32 linear fixture; independent model capability improvement not established"
+		})
+	);
 	println!(
 		"WEIGHT_NATIVE_PYTORCH_LINEAR_QUALIFICATION {}",
 		json!({

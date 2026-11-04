@@ -39,7 +39,7 @@ use super::runtime;
 use super::McpToolCall;
 use super::{
 	rea, rea_artifact_zip, rea_evidence, rea_model, rea_provider, rea_store, weight,
-	weight_artifact, weight_forward, weight_tensor,
+	weight_artifact, weight_forward, weight_guard, weight_ridge, weight_tensor,
 };
 
 /// Per-session working directory state.
@@ -253,6 +253,8 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"weight_artifact_patch",
 	"weight_artifact_restore",
 	"weight_linear_forward",
+	"weight_guarded_linear_patch",
+	"weight_linear_ridge_plan",
 	"weight_open",
 	"weight_call",
 	"weight_status",
@@ -1805,6 +1807,47 @@ impl OctofsServer {
 		Parameters(params): Parameters<weight_forward::ForwardLinearParams>,
 	) -> Result<String, String> {
 		weight_forward::forward(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Plan a Native Proximal Linear Head Edit",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Solve a bounded supervised proximal weighted-ridge problem for frozen features in Rust using F64 Cholesky, then expose F32 rounding and exact element-edit proposals. Targets and sample weights are explicit training data, not model inputs. Reports numerical residuals; publishes no files. Caller-supplied initial weights are not authenticated to a checkpoint until a subsequent hash-pinned exact patch. No gradient steps, whole-task optimality or production eligibility claim."
+	)]
+	async fn weight_linear_ridge_plan(
+		&self,
+		Parameters(params): Parameters<weight_ridge::RidgePlanParams>,
+	) -> Result<String, String> {
+		weight_ridge::plan(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Evaluate Native Weight Edit With Exact Recovery",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Evaluate one exact F32 linear-head edit on fixed supplied rows in Rust. Requires strict negative-MSE or realized-action-value improvement plus all declared probability, terminal-Q and preservation constraints. On failure, automatically publishes the reverse patch and verifies original hash and predictions; recovery errors remain explicit. At most 64 input rows and 1 MiB per request. Original weights remain unchanged. Supplied rows are not independently verified holdout data; no production activation or global optimization claim."
+	)]
+	async fn weight_guarded_linear_patch(
+		&self,
+		Parameters(params): Parameters<weight_guard::GuardedPatchParams>,
+	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+		weight_guard::evaluate(params)
 			.await
 			.map_err(|error| error.to_string())
 	}

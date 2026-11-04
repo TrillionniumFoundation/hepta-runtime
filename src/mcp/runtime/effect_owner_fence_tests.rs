@@ -123,6 +123,7 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		"rea_static_cancel",
 		"weight_artifact_patch",
 		"weight_artifact_restore",
+		"weight_guarded_linear_patch",
 		"weight_open",
 		"weight_call",
 		"weight_close",
@@ -172,7 +173,7 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		actual, expected,
 		"MCP mutation contract expanded without owner audit"
 	);
-	assert_eq!(actual.difference(&retained).count(), 35);
+	assert_eq!(actual.difference(&retained).count(), 36);
 	let jobs = include_str!("jobs.rs");
 	let pty = include_str!("pty.rs");
 	assert!(jobs

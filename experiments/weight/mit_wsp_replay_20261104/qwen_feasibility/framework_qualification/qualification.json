@@ -1,0 +1,47 @@
+{
+  "schema": "hepta.mit_qwen.framework_transfer_qualification.v1",
+  "status": "passed_strict_cpu_load_and_finite_forward",
+  "execution": {
+    "exit_code": 0,
+    "state": "succeeded",
+    "timed_out": false,
+    "cancelled": false,
+    "output_complete": true,
+    "output_durable": true,
+    "stderr_bytes": 454,
+    "stderr": "[transformers] `causal_conv1d_fn` is falling back to its reference PyTorch implementation because `causal_conv1d` is not installed. This is correct but much slower; install `causal_conv1d` for the optimized kernel.\n[transformers] `chunk_gated_delta_rule` is falling back to its reference PyTorch implementation because `flash-linear-attention` is not installed. This is correct but much slower; install `flash-linear-attention` for the optimized kernel.\n"
+  },
+  "transfer": {
+    "receipt_bytes": 8787,
+    "receipt_sha256": "8cd96da30ae00a4fe8c327db646ece3f7a6e65fe8ba17da502b2fdb27a73d5e1",
+    "mapping_manifest_bytes": 232451,
+    "mapping_manifest_sha256": "df892a3746e7c1f96a896b27f3f858967d35fba7687560de412e6d032d9047e2",
+    "chunks": [
+      {
+        "offset": 0,
+        "next_offset": 65536,
+        "chunk_sha256": "3a3444905639ae56a12bfcb71482e15d0414c76bcd9fe85192ab655e915896df"
+      },
+      {
+        "offset": 65536,
+        "next_offset": 131072,
+        "chunk_sha256": "887b2043b5994ac5feadceaf1e4cee22ecea581f66bca6879479897977942a26"
+      },
+      {
+        "offset": 131072,
+        "next_offset": 196608,
+        "chunk_sha256": "6053812f0ba9364c05c388a53109fac9deff998224a0a2167fa78b8caa34cbfe"
+      },
+      {
+        "offset": 196608,
+        "next_offset": 232451,
+        "chunk_sha256": "35562532c6553e6e7c806ab3c54bc6d8370263a29ebbfb5c53a08a559d3c3223"
+      }
+    ],
+    "model_weight_bytes_downloaded": 0,
+    "logit_array_bytes_downloaded": 0
+  },
+  "source_export_receipt_sha256": "87ae658c7bee2d89a16cb7a828347a36d474ff485c870fe629e1753cc2b92768",
+  "driver_sha256": "d4ff765d249b6fee60e619ea90af3f2b00e54468c9601006ed962dc1e7c994f0",
+  "performance_caveat": "Exactly one forward per variant in fixed base-then-p50c order, no warmup controls; per-variant wall times do not estimate an editing speedup."
+}

@@ -320,7 +320,10 @@ fn failed_pending_intent_or_identity_never_reaches_effect_submission() {
 #[tokio::test(flavor = "current_thread")]
 async fn pending_publication_saves_frozen_intent_before_recoverable_identity() {
 	let root = tempfile::tempdir().unwrap();
-	let audit_path = root.path().join("audit.jsonl");
+	// Match the production state/audit/events.jsonl layout for parent binding.
+	let audit_directory = root.path().join("audit");
+	std::fs::create_dir(&audit_directory).unwrap();
+	let audit_path = audit_directory.join("events.jsonl");
 	let record_path = root.path().join("original-start.json");
 	let prepared = prepared(&audit_path);
 	let original_line = prepared.line.clone();

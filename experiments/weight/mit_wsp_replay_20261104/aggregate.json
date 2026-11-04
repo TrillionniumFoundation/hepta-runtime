@@ -1,0 +1,230 @@
+{
+  "schema": "hepta.mit-prescription-replay-aggregate.v1",
+  "execution_date": "2026-11-04",
+  "source_commit": "4d09ba6d6a7e891dd8063974dfe81b3d78e3494f",
+  "existing_replay_commit": "1f2d3d782e8803e769989234e7902ca5c04eff97",
+  "executed_script_sha256": "3e1641463d4cae2607084083ff672034046557bd7f4636a5f6a90d6d17ae40f0",
+  "full_result_path": "results/new_replay.json",
+  "full_result_sha256": "9d2fbf84d712e71821be0c5657fb1f47f5202c6cd9f744697f45a0d6a9450085",
+  "acquisition_manifest_sha256": "20cdeb2c87ffabe08ff230888e7c4010d75a5f3d7b99f27ee3707fed59cfb037",
+  "environment": {
+    "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.39",
+    "numpy": "2.3.5"
+  },
+  "method": "released prescription reconstruction plus independent environment evaluation; no LLM discovery, no training",
+  "comparability": "fresh explicit seeds; original RNG seeds and PPO checkpoints unavailable; zero baseline is not a training baseline",
+  "existing_qwen_array_audit": {
+    "status": "passed",
+    "pairs_verified": 14,
+    "scope": "independent recomputation of previously published arrays, no new inference"
+  },
+  "games": {
+    "breakout": {
+      "reconstruction": {
+        "statements": 92,
+        "bitwise_identical_to_released_checkpoint": true,
+        "differing_f32_entries": {
+          "W1": 0,
+          "b1": 0,
+          "W2": 0,
+          "b2": 0,
+          "W3": 0,
+          "b3": 0
+        },
+        "parameter_count": 20486,
+        "checkpoint_sha256": "6e8d42658aed3704c7bf6fb67015e9468cc03f1d67cb8a4fd192e6534fcccb4a",
+        "answer_sha256": "a30bdda1acef79b507498edcef7e48d4fff16aa85783741925da9d5d4f42faf0"
+      },
+      "variants": {
+        "zero": {
+          "episodes": 128,
+          "seeds": {
+            "env_first": 20261104,
+            "action_first": 20361104,
+            "scheme": "fresh episode seed = first + episode index"
+          },
+          "mean": 0.4609375,
+          "standard_error": 0.06264976519890834,
+          "mean_steps": 10.734375,
+          "max_score": 3,
+          "cut_share": 0.0,
+          "forward_calls": 1374,
+          "elapsed_seconds": 0.08573089700075798,
+          "cpu_seconds": 0.08571840400000001,
+          "game_source_sha256": "e57d96f99b2cfeed904418644c5689fc5dee6926076f34f8b1774dd69786117d"
+        },
+        "edited": {
+          "episodes": 128,
+          "seeds": {
+            "env_first": 20261104,
+            "action_first": 20361104,
+            "scheme": "fresh episode seed = first + episode index"
+          },
+          "mean": 528.203125,
+          "standard_error": 20.143793980944288,
+          "mean_steps": 7496.625,
+          "max_score": 777,
+          "cut_share": 0.484375,
+          "forward_calls": 959568,
+          "elapsed_seconds": 36.92969235499913,
+          "cpu_seconds": 36.923036730999996,
+          "game_source_sha256": "e57d96f99b2cfeed904418644c5689fc5dee6926076f34f8b1774dd69786117d"
+        }
+      },
+      "authors_1000_episode_result": {
+        "mean": 517.411,
+        "se": 7.416952829044303,
+        "episodes": 1000,
+        "max": 800.0,
+        "mean_length": 7417.202
+      }
+    },
+    "asterix": {
+      "reconstruction": {
+        "statements": 55,
+        "bitwise_identical_to_released_checkpoint": true,
+        "differing_f32_entries": {
+          "W1": 0,
+          "b1": 0,
+          "W2": 0,
+          "b2": 0,
+          "W3": 0,
+          "b3": 0
+        },
+        "parameter_count": 20486,
+        "checkpoint_sha256": "4c537e227824318c650d98e1e52de5a106071699213b7551e0810af71e9cdf1e",
+        "answer_sha256": "d4efb2cabc57190a8d900d66911570103223db91294825896aecc7e277a3cd16"
+      },
+      "variants": {
+        "zero": {
+          "episodes": 128,
+          "seeds": {
+            "env_first": 20261104,
+            "action_first": 20361104,
+            "scheme": "fresh episode seed = first + episode index"
+          },
+          "mean": 0.5234375,
+          "standard_error": 0.08223385529957294,
+          "mean_steps": 77.828125,
+          "max_score": 5,
+          "cut_share": 0.0,
+          "forward_calls": 9962,
+          "elapsed_seconds": 0.48139509899920085,
+          "cpu_seconds": 0.48139690699999704,
+          "game_source_sha256": "25e970472ebde3346d507334bec42378caa97d5b87dfb09d8d41d263e91e6a38"
+        },
+        "edited": {
+          "episodes": 128,
+          "seeds": {
+            "env_first": 20261104,
+            "action_first": 20361104,
+            "scheme": "fresh episode seed = first + episode index"
+          },
+          "mean": 54.3828125,
+          "standard_error": 2.7840174366051667,
+          "mean_steps": 863.375,
+          "max_score": 120,
+          "cut_share": 0.0,
+          "forward_calls": 110512,
+          "elapsed_seconds": 5.600832636999257,
+          "cpu_seconds": 5.600587605000001,
+          "game_source_sha256": "25e970472ebde3346d507334bec42378caa97d5b87dfb09d8d41d263e91e6a38"
+        }
+      },
+      "authors_1000_episode_result": {
+        "mean": 53.178,
+        "se": 1.023305169277215,
+        "episodes": 1000,
+        "max": 177.0,
+        "mean_length": 858.045
+      }
+    },
+    "seaquest": {
+      "reconstruction": {
+        "statements": 122,
+        "bitwise_identical_to_released_checkpoint": true,
+        "differing_f32_entries": {
+          "W1": 0,
+          "b1": 0,
+          "W2": 0,
+          "b2": 0,
+          "W3": 0,
+          "b3": 0
+        },
+        "parameter_count": 20486,
+        "checkpoint_sha256": "2625453048e97b678d73dcf199dfb44d7ef659eb9c94e15263c6c33035fb3e7e",
+        "answer_sha256": "9f4ad41bd23310d97dfac13482504659d1f40be096f48590492cbcfd56756a76"
+      },
+      "variants": {
+        "zero": {
+          "episodes": 128,
+          "seeds": {
+            "env_first": 20261104,
+            "action_first": 20361104,
+            "scheme": "fresh episode seed = first + episode index"
+          },
+          "mean": 0.078125,
+          "standard_error": 0.030597267694262024,
+          "mean_steps": 30.8671875,
+          "max_score": 3,
+          "cut_share": 0.0,
+          "forward_calls": 3951,
+          "elapsed_seconds": 0.2949220510054147,
+          "cpu_seconds": 0.29491432399999695,
+          "game_source_sha256": "6f2dacdd6c46cb6febeac1a520d38add79c2d3a6ed93096ae5751114305afb36"
+        },
+        "edited": {
+          "episodes": 128,
+          "seeds": {
+            "env_first": 20261104,
+            "action_first": 20361104,
+            "scheme": "fresh episode seed = first + episode index"
+          },
+          "mean": 51.2734375,
+          "standard_error": 3.836353429147969,
+          "mean_steps": 1375.9453125,
+          "max_score": 146,
+          "cut_share": 0.0,
+          "forward_calls": 176121,
+          "elapsed_seconds": 11.81349071799923,
+          "cpu_seconds": 11.813370073000002,
+          "game_source_sha256": "6f2dacdd6c46cb6febeac1a520d38add79c2d3a6ed93096ae5751114305afb36"
+        }
+      },
+      "authors_1000_episode_result": {
+        "mean": 53.11,
+        "se": 1.3573821814015339,
+        "episodes": 1000,
+        "max": 158.0,
+        "mean_length": 1411.613
+      }
+    }
+  },
+  "totals": {
+    "wall_seconds": 55.206063757002994,
+    "cpu_seconds": 55.19902404399999,
+    "episodes": 768,
+    "policy_action_evaluations": 1261488
+  },
+  "peak_rss_kib": 27848,
+  "counter_semantics": "forward_calls in raw result counts policy action evaluations. The zero baseline uses an exact constant-logit fast path, so its latency is not a neural forward or speed-comparison baseline.",
+  "original_p50c_editor_recorded_usage": {
+    "input_tokens": 5437759,
+    "cached_input_tokens": 5180032,
+    "cache_write_input_tokens": 0,
+    "output_tokens": 149017,
+    "reasoning_output_tokens": 46800,
+    "uncached_input_tokens": 257727
+  },
+  "editor_usage_semantics": "Cumulative within each conversation; add only four final turn records. Reasoning tokens are a breakout, not additional output tokens. Editor usage excludes target inference cost.",
+  "limits": [
+    "No independent LLM program discovery.",
+    "No new Qwen inference; Qwen portion only reanalyses previously published arrays.",
+    "Zero policy is random actions, not a trained baseline.",
+    "Original PPO checkpoints and original evaluation RNG seeds unavailable.",
+    "Replay timings exclude editor discovery, downloads and preparation.",
+    "Fresh seeds, explicit protocol; not a formal preregistration.",
+    "No HeptaTrader or NDU improvement established."
+  ]
+}
