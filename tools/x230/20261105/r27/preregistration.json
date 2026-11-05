@@ -1,0 +1,153 @@
+{
+  "accepted_source_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "automatic_retries": 0,
+  "baseline": {
+    "binaries": {
+      "hepta-runtime": {
+        "bytes": 14373416,
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/hepta-runtime",
+        "sha256": "bc14cab1e632d6cd703f6a0f65d1a8e513b4471c09a403186d72e989e3f74c13"
+      },
+      "hepta-runtime-jobctl": {
+        "bytes": 739016,
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/hepta-runtime-jobctl",
+        "sha256": "61c90260057a405626a24a36ad43303c632f72d2d97929296acdffd748b79d62"
+      },
+      "native_process_driver": {
+        "bytes": 2896456,
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/native_process_driver",
+        "sha256": "51165c1e38409248f5fdb7da2036ebe5e05eec7576035e95bd4b8e2a5c675530"
+      }
+    },
+    "campaign_report": {
+      "bytes": 100033,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/campaign-01/report.json",
+      "sha256": "066952f12414e8f7291e21e58a77d53d4cd712104557bd6bdfdd7c383f9f1e2a"
+    },
+    "publication_readback": {
+      "bytes": 1022,
+      "commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/final-publication-readback.json",
+      "sha256": "38866c01fac54133c8a88e25bee90ea4a551e7273614f493bf44522a8273d3ca"
+    },
+    "qualification_reports": [
+      {
+        "bytes": 83365,
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/report.json",
+        "sha256": "bf0c5814d28b163e4a90405026cd4d90e399370d1f910f8ac48cb580af1e4971",
+        "success_field": "qualified"
+      }
+    ],
+    "source": "/home/qian/hepta-runtime-optimization-20261105-r24/source"
+  },
+  "boundary": {
+    "attempts_per_burst": 32,
+    "bursts": 2,
+    "capacity_refusals_not_successful_throughput": true,
+    "fixed_rejection_count_required": false,
+    "total_tool_calls": 202
+  },
+  "campaign_budget_seconds": 3300,
+  "candidate": "accepted R24 plus borrowed observation serializer only",
+  "candidate_actual_qualification_job_id": null,
+  "candidate_actual_qualification_report_sha256": null,
+  "candidate_actual_runtime_sha256": null,
+  "candidate_actual_source_map_sha256": null,
+  "candidate_root": "/home/qian/hepta-runtime-optimization-20261105-b96-r27",
+  "cleanup_reserve_seconds": 160,
+  "compiler_monitor_limits": {
+    "join_timeout_seconds": 10.0,
+    "maximum_compiler_records": 8192,
+    "maximum_cpu_seconds_per_wall_second": 0.02,
+    "maximum_duration_ns": 3600000000000,
+    "maximum_error_records": 64,
+    "maximum_lateness_ns": 750000000,
+    "maximum_process_directories_per_scan": 16384,
+    "maximum_samples": 3603,
+    "maximum_scan_ns": 500000000,
+    "maximum_serialized_sample_bytes": 8388608,
+    "maximum_start_gap_ns": 2000000000,
+    "period_ns": 1000000000,
+    "ready_timeout_seconds": 5.0
+  },
+  "component_benchmark_can_authorize_end_to_end_adoption": false,
+  "fixed_performance_gates": {
+    "all_concurrency": [
+      1,
+      8,
+      16
+    ],
+    "cache_cap_evidence_scope": "source and qualification; RSS gate measures the actual process",
+    "controller_rss_b_over_a_max": 1.05,
+    "controller_rss_extra_kib_max": 512,
+    "p95_b_over_a_max": 1.1,
+    "primary_concurrency": 8,
+    "primary_controller_cpu_b_over_a_max": 0.97,
+    "primary_throughput_b_over_a_min": 1.03,
+    "rss_aggregation": "maximum sampled controller RSS across all four native controllers per arm, including restarts",
+    "rss_combination": "both limits; B <= min(A + 512 KiB, A * 1.05)",
+    "ssh_cache_hard_cap_bytes": 2097152,
+    "ssh_cache_target": "/usr/bin/ssh",
+    "ssh_cache_target_bytes": 846888,
+    "throughput_b_over_a_min": 0.95
+  },
+  "full_child_costs_add_new_rpc_calls": false,
+  "full_child_costs_required": true,
+  "holder_timeout_seconds": 3600,
+  "hosts": [
+    "ai395",
+    "mac",
+    "main",
+    "pocket4",
+    "rog",
+    "x230"
+  ],
+  "lifecycle": {
+    "cancel_reserve_saturation": false,
+    "cancellations": 12,
+    "extra_abba": false,
+    "new_starts": 6,
+    "private_transport_interruption_host": "rog",
+    "protocol": "unchanged candidate C6 cancel/recovery canary",
+    "same_key_lookups": 12
+  },
+  "native": {
+    "concurrency": [
+      1,
+      8,
+      16
+    ],
+    "failed_calls_required": 0,
+    "malloc_arena_max": 1,
+    "measured_calls_per_cell": 192,
+    "measured_calls_total": 2304,
+    "order": "ABBA",
+    "preflight_restart_calls": 72,
+    "tokio_workers": 2,
+    "total_calls": 2664,
+    "warmup_calls_per_cell": 24,
+    "warmup_calls_total": 288
+  },
+  "post_result_gate_changes": false,
+  "prepared_only": true,
+  "prior_gate_source": {
+    "path": "/workspace/scratch/806ba5f52f94/benchmark-r24/summarize_r24_campaign.py",
+    "sha256": "b5e68801fa6cccbcccebb608c612b811ba5ab8ca47d64aa3226fa913aa1acc98"
+  },
+  "protocol_fixed_before_sampling": true,
+  "qualification_and_measurement_pins_complete": false,
+  "quiescence_seconds": 90,
+  "remote_actions": 0,
+  "rust_compilations": 0,
+  "sample_selection": false,
+  "schema": "hepta-r27-serializer-six-host-preregistration/v1",
+  "stage_names": [
+    "native-observation",
+    "native-audit",
+    "native-boundary",
+    "boundary-audit",
+    "cancel-recovery",
+    "recovery-audit",
+    "campaign-summary"
+  ]
+}

@@ -257,8 +257,41 @@ fn parse_file_observation(
 	})
 }
 
+// Keep the locked serde_json::Map key order byte for byte. Borrowing the
+// validated fields avoids an intermediate Value map and identity-string clones.
+#[derive(Serialize)]
+#[serde(untagged)]
+enum JobObservationPayload<'a> {
+	PythonStatus {
+		job_dir: &'a str,
+		job_id: &'a str,
+		request_digest: &'a str,
+		unit: &'a str,
+		wait_seconds: u64,
+	},
+	PythonRead {
+		job_dir: &'a str,
+		job_id: &'a str,
+		limit: u64,
+		request_digest: &'a str,
+		stderr_offset: u64,
+		stdout_offset: u64,
+		unit: &'a str,
+	},
+	SystemStatus {
+		job_id: &'a str,
+		op: &'static str,
+	},
+	SystemRead {
+		job_id: &'a str,
+		limit: u64,
+		op: &'static str,
+		stderr_offset: u64,
+		stdout_offset: u64,
+	},
+}
+
 fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Duration, bool)> {
-	use serde_json::json;
 	let fields: &[&str] = match &value {
 		JobObservation::PythonStatus {
 			job_id,
@@ -278,7 +311,7 @@ fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Du
 			&[job_id]
 		}
 	};
-	// Reject before json! clones or expands an oversized original string.
+	// Reject oversized borrowed fields before serialization can expand them.
 	if fields
 		.iter()
 		.try_fold(0usize, |total, field| total.checked_add(field.len()))
@@ -295,7 +328,13 @@ fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Du
 			wait_seconds,
 		} => (
 			Some(ObservationScript::Status),
-			json!({"job_id":job_id,"job_dir":job_dir,"request_digest":request_digest,"unit":unit,"wait_seconds":wait_seconds.min(30)}),
+			JobObservationPayload::PythonStatus {
+				job_dir,
+				job_id,
+				request_digest,
+				unit,
+				wait_seconds: wait_seconds.min(30),
+			},
 			Duration::from_secs(wait_seconds.min(30) + 10),
 			false,
 		),
@@ -309,13 +348,24 @@ fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Du
 			limit,
 		} => (
 			Some(ObservationScript::Read),
-			json!({"job_id":job_id,"job_dir":job_dir,"request_digest":request_digest,"unit":unit,"stdout_offset":stdout_offset,"stderr_offset":stderr_offset,"limit":limit}),
+			JobObservationPayload::PythonRead {
+				job_dir,
+				job_id,
+				limit,
+				request_digest,
+				stderr_offset,
+				stdout_offset,
+				unit,
+			},
 			Duration::from_secs(15),
 			false,
 		),
 		JobObservation::SystemStatus { job_id } => (
 			None,
-			json!({"op":"status","job_id":job_id}),
+			JobObservationPayload::SystemStatus {
+				job_id,
+				op: "status",
+			},
 			Duration::from_secs(20),
 			true,
 		),
@@ -326,7 +376,13 @@ fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Du
 			limit,
 		} => (
 			None,
-			json!({"op":"read","job_id":job_id,"stdout_offset":stdout_offset,"stderr_offset":stderr_offset,"limit":limit}),
+			JobObservationPayload::SystemRead {
+				job_id,
+				limit,
+				op: "read",
+				stderr_offset,
+				stdout_offset,
+			},
 			Duration::from_secs(20),
 			true,
 		),
@@ -628,3 +684,7 @@ mod file_observation_tests;
 #[cfg(test)]
 #[path = "ssh_preparation_bench.rs"]
 mod preparation_bench;
+
+#[cfg(test)]
+#[path = "ssh_observation_serialization_tests.rs"]
+mod observation_serialization_tests;
