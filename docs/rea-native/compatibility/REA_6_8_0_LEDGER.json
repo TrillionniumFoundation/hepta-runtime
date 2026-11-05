@@ -20,7 +20,7 @@
     ]
   },
   "runtime": {
-    "baseline_commit": "da4ff14c24461033a8e5361ecd23629362e27b29",
+    "baseline_commit": "56e50b54341e28862723eb4030ee610a06669c56",
     "discovery": "Rust source handler discovery, not live MCP tools/list",
     "interface_count": 32,
     "interfaces": [
@@ -120,7 +120,7 @@
         "kind": "rust_cli",
         "entrypoint": "hepta-runtime rea-elf-notes-worker",
         "source_presence": "PRESENT",
-        "scope": "Internal captured-byte native ELF notes parser for the frozen inspect_elf_notes route; source-bound worker and retained Evidence are separate from complete operation qualification.",
+        "scope": "Internal captured-byte native ELF notes parser for the frozen inspect_elf_notes route. The explicit ELF adapter adds conservative destination-capacity proofs to the vendored decoder; generic default decoding remains unchanged. Sequence proofs require the fixed 64-bit, no-dictionary, bounded-history regular decoder dispatch. Only proven literal layouts, complete fields or mathematically bounded known input prefixes may select the typed capacity error; unsupported cases retain their existing format validation. Finite decoder evidence is separate from final binary, complete operation, platform and resource qualification.",
         "upstream_tools": [
           "inspect_elf_notes"
         ],
@@ -153,7 +153,7 @@
         "kind": "rust_cli",
         "entrypoint": "hepta-runtime rea-browser-capture --manifest ABS --expected-sha256 HASH --output-directory NEW",
         "source_presence": "PRESENT",
-        "scope": "Native Linux Rust CLI for fixed owned local-resource before/after HAR via an external Chrome CDP pipe under the original durable process job. Rust owns capture/fixture/CDP; the existing operator owner remains Python. Final fixed-fixture, finite differential and expected-deadline receipts are bound below. Resources are fetched as data; arbitrary input-page DOM, process-level network isolation and general browser state replay are not established.",
+        "scope": "Native Linux Rust CLI for fixed owned local-resource before/after HAR through an independent Chrome CDP pipe under the original durable job. Rust owns capture, fixtures, CDP and original Chrome child custody; the existing operator job owner still uses Python. HOME and XDG data/config/cache directories are owned beneath the private profile; custody is published before post-spawn verification, and unknown cleanup retains that profile. Listed 20261104 receipts belong to their historical binary identities and do not qualify this source combination; current capture/deadline qualification requires fresh identity-bound real execution. Resources are fetched as data. Arbitrary input-page DOM, process-level network isolation and general browser state replay remain open.",
         "upstream_tools": [
           "capture_browser_scenario"
         ],
@@ -493,6 +493,11 @@
         "bytes": 12011
       },
       {
+        "path": "docs/rea-native/ELF_ZSTD_DESTINATION_DIFFERENTIAL.md",
+        "sha256": "294a86b8fcfac9a45d05c72b06010dcbd864578938a5038963ce52b16c768a9b",
+        "bytes": 9591
+      },
+      {
         "path": "docs/rea-native/JAVASCRIPT_AST.md",
         "sha256": "f4a04de6b7c33808976176c582759a5bf5556d8eb18e0df7ce9164596e892d9b",
         "bytes": 11946
@@ -799,8 +804,8 @@
       },
       {
         "path": "src/mcp/rea_browser_capture.rs",
-        "sha256": "41be7f9dfe2949c6d5a7e685d74c0f23f17bf3fa77a0a8ed235398e49ee35999",
-        "bytes": 13206
+        "sha256": "66dc99cfda952ca7c710a97e1609554acb2b810e8fb84d3dc0c875873a637dcf",
+        "bytes": 13473
       },
       {
         "path": "src/mcp/rea_browser_cdp.rs",
@@ -819,13 +824,13 @@
       },
       {
         "path": "src/mcp/rea_browser_process.rs",
-        "sha256": "c3460ce4523927160829d0e783116cfd87c6d5261a9053108b972cade2f3249e",
-        "bytes": 12249
+        "sha256": "234bd2162b7cc3bbc72a874c37895199a21c6a02a33eef00eefdd9a0a78ac521",
+        "bytes": 13741
       },
       {
         "path": "src/mcp/rea_browser_process_tests.rs",
-        "sha256": "cff8e9158ac8b691119c94c1a048cce8e5bf0b408c65cf10657c2b8d08978a48",
-        "bytes": 2941
+        "sha256": "01ff41f1cd12b91e4fd5bbeca7069e6875fb23047072c3f3ffdc6c7f502442d8",
+        "bytes": 7820
       },
       {
         "path": "src/mcp/rea_browser_tests.rs",
@@ -904,8 +909,8 @@
       },
       {
         "path": "src/mcp/rea_elf_notes_compression.rs",
-        "sha256": "f2e44f3e72c46a3f8b70a3df8939cc14812acb2c41d0c5407e54f2bf7c64e42d",
-        "bytes": 16225
+        "sha256": "c7106b85190834487523ab16d74b98c3ddc455197f4b977d5ff8df8ca789e639",
+        "bytes": 20645
       },
       {
         "path": "src/mcp/rea_elf_notes_parser.rs",
@@ -914,8 +919,8 @@
       },
       {
         "path": "src/mcp/rea_elf_notes_parser_tests.rs",
-        "sha256": "b2478164026ab9653376a9b824fdfbf1d7823558e506cb2fd2474286fee3e042",
-        "bytes": 26607
+        "sha256": "a080c2fd8a750f1e41ba6cc1aa2f88479e3800c6682c5daf345bef4bb04b94a6",
+        "bytes": 30144
       },
       {
         "path": "src/mcp/rea_elf_notes_tests.rs",
@@ -989,33 +994,33 @@
       },
       {
         "path": "src/mcp/rea_evidence_export.rs",
-        "sha256": "2ba80830d6572af7145de5dcfb181e90045758b56bb1e45d74dffafb9124a1e9",
-        "bytes": 41170
+        "sha256": "65666e8ab6850f210f4b4b10f3a197548245a192d854342cb5c7d7ebd33a9532",
+        "bytes": 41884
       },
       {
         "path": "src/mcp/rea_evidence_export_tests.rs",
-        "sha256": "b62137e83961daa31d7b5c7b9d9ef93f644e6e676419224001a2e7f7ed32bd6c",
-        "bytes": 33487
+        "sha256": "89e729fb56c56eb065f7319fa7e418dd86ab22b5ed2e63046a5dd944050bb1ab",
+        "bytes": 34373
       },
       {
         "path": "src/mcp/rea_evidence_file.rs",
-        "sha256": "884eb75c162b6ef9e811bde34bdc0b314167420d9b574bbfb9105f1f6c052b12",
-        "bytes": 28890
+        "sha256": "c018965499453a69e746119a759f1bddf9f29a1df8e74eb398382240c92fbf66",
+        "bytes": 29672
       },
       {
         "path": "src/mcp/rea_evidence_file_tests.rs",
-        "sha256": "d0ab8c70584debfc7c4b0b7953185b9c98ca9ecd4123c1c11109a1090323c51a",
-        "bytes": 19035
+        "sha256": "55b7d77b3c0ffdb4434474f0e3e3cad9cd97d9bf9343bca3e8bb397ae814e7bc",
+        "bytes": 20458
       },
       {
         "path": "src/mcp/rea_evidence_import.rs",
-        "sha256": "abedb7e7aaf028dbf0cd4808b3390f68e3b07da206cd8e52cdd37450ef9737af",
-        "bytes": 10133
+        "sha256": "2476b196968ba228d49d426772e3e99be107c20922584b204b0eac0ab332f2a1",
+        "bytes": 10092
       },
       {
         "path": "src/mcp/rea_evidence_import_tests.rs",
-        "sha256": "6d36d188b9646962295311e141008366f7d0c9784527a60e27f3de1188003c78",
-        "bytes": 8229
+        "sha256": "ce3bdadc577516ee435a114faf804b5416f93f4265fa682c928c26c322395a18",
+        "bytes": 8275
       },
       {
         "path": "src/mcp/rea_evidence_session.rs",
@@ -1029,8 +1034,8 @@
       },
       {
         "path": "src/mcp/rea_evidence_source.rs",
-        "sha256": "0d2d145ede1a861f45d75f9e9a0b50fc69b74f8ef2f6c80ce25d660f8423b5e3",
-        "bytes": 44872
+        "sha256": "6b3f5884f06b813147bd4b8cc5e568f77cff5a05647f8a95d50b2b4c69058d85",
+        "bytes": 44724
       },
       {
         "path": "src/mcp/rea_evidence_source_length.rs",
@@ -1279,8 +1284,8 @@
       },
       {
         "path": "src/mcp/rea_structured_wire.rs",
-        "sha256": "18fb945f46c34be062ebb537aca5b383ef26a9d99af49a504799c1144492893a",
-        "bytes": 9018
+        "sha256": "cae260bb5c7d978283d67417a147950c6a9b334413a07fc7561e1b7b2b915a60",
+        "bytes": 9469
       },
       {
         "path": "src/mcp/rea_tests.rs",
@@ -1434,8 +1439,8 @@
       },
       {
         "path": "tests/rea_browser_external.py",
-        "sha256": "604fe68cfbf5b19bee0f48039b93967ed13b9a0ff519fee3f029f0fcc4038239",
-        "bytes": 25154
+        "sha256": "2f7387d528453adca71d6a96ab965426f19a82fb2cbbc04dd5f3e7507f2e760e",
+        "bytes": 31402
       },
       {
         "path": "tests/rea_browser_native_differential.py",
@@ -1506,9 +1511,39 @@
         "path": "tests/rea_web_external.rs",
         "sha256": "25626b841b67957e03ff559dc591f320ac9d735c00867a0aff7688a772903e7b",
         "bytes": 7890
+      },
+      {
+        "path": "vendor/ruzstd/src/decoding/block_decoder.rs",
+        "sha256": "2efe4f479fd9148d917684f146119ae2087738a3e10a8028095b636fab28cc44",
+        "bytes": 11944
+      },
+      {
+        "path": "vendor/ruzstd/src/decoding/errors.rs",
+        "sha256": "bc4ce01bcb676fc07ed46f9be7b5154493fbc61c58d0eb8ea3adc2c0f5ccf5b4",
+        "bytes": 39665
+      },
+      {
+        "path": "vendor/ruzstd/src/decoding/frame_decoder.rs",
+        "sha256": "17b386f04d5ab3252f07ce48fcb8a514af7f6bf29022f9cd3379745acb3c5473",
+        "bytes": 26016
+      },
+      {
+        "path": "vendor/ruzstd/src/decoding/scratch.rs",
+        "sha256": "bfdaf5b09599846df802f9ae972dee49e7966e405e6007c2cac7c5fbac05a2c0",
+        "bytes": 3875
+      },
+      {
+        "path": "vendor/ruzstd/src/decoding/sequence_execution.rs",
+        "sha256": "4bdcc314050ca8fa0ac9a9f346bacd5a486916246f286adef95973adc8690d15",
+        "bytes": 5011
+      },
+      {
+        "path": "vendor/ruzstd/src/decoding/sequence_section_decoder.rs",
+        "sha256": "2156e8e12a7e60b6f00efdf277cfb7934647832311e71f51a3ab7104620f320b",
+        "bytes": 23260
       }
     ],
-    "source_manifest_sha256": "9ce0808d1870702505fdfdf2b6c5351eb919bc3994a87439a2f2ab7c6091d11e"
+    "source_manifest_sha256": "a7d42c7b4e98a7b790f9c8a5eecb7f32f91991193f45b61a4ae358e6146e48ff"
   },
   "environment_observations_sha256": "4ace5e8f041a05d205825fb2b2a41769fcfdc91f60810072eb7a6c17a12f3e9c",
   "dependency_assessments": {
@@ -2102,7 +2137,7 @@
       "hard_missing_dependency": "NOT_ESTABLISHED"
     }
   },
-  "mapping_sha256": "649880ae509a1f4ce047e7d22fefb5775e69af37b7fc32a70255064d974c3b4d",
+  "mapping_sha256": "4cd11acf18b117e8076c21aac68f291adf60ef572985ef2af6260ed4dc251504",
   "inputs_sha256": "d143681c5384d0cff75d72659cd36381eaff60ca5bf3fe45fb5290b3eccc6904",
   "summary": {
     "published_tools": 229,
@@ -18934,7 +18969,7 @@
         "rea_import_evidence_bundle"
       ],
       "native_scope": "Public authenticated bulk import of records and complete unknown revision histories, process-capture validation, atomic union validation/rollback, repeat-import metadata semantics and retained session readback under the native Linux source/owner profile.",
-      "remaining_behavior": "Complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundary beyond the finite reference corpus; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits are recorded profile differences.",
+      "remaining_behavior": "Remaining original JSON parser diagnostics and value-representation profiles, including unpaired-surrogate and overflow cases; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries beyond the finite reference corpus; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits are recorded profile differences.",
       "dependencies": [],
       "related_runtime_routes": [
         "rea_verify_evidence",
@@ -18959,7 +18994,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundary beyond the finite reference corpus; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits are recorded profile differences."
+          "next_step": "Remaining original JSON parser diagnostics and value-representation profiles, including unpaired-surrogate and overflow cases; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries beyond the finite reference corpus; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits are recorded profile differences."
         },
         {
           "category": "behavioral_differential",

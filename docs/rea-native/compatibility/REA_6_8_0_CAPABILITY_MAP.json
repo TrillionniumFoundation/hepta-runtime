@@ -1,6 +1,6 @@
 {
   "schema": "hepta.rea.capability-map.v1",
-  "runtime_baseline": "da4ff14c24461033a8e5361ecd23629362e27b29",
+  "runtime_baseline": "56e50b54341e28862723eb4030ee610a06669c56",
   "interfaces": {
     "rea_inspect_artifact": {
       "source_paths": [
@@ -588,7 +588,14 @@
         "src/mcp/rea_mcp_transport.rs",
         "src/mcp/rea_response_encoding.rs",
         "src/mcp/rea_response_order.rs",
-        "src/mcp/rea_structured_wire.rs"
+        "src/mcp/rea_structured_wire.rs",
+        "vendor/ruzstd/src/decoding/block_decoder.rs",
+        "vendor/ruzstd/src/decoding/errors.rs",
+        "vendor/ruzstd/src/decoding/frame_decoder.rs",
+        "vendor/ruzstd/src/decoding/scratch.rs",
+        "vendor/ruzstd/src/decoding/sequence_execution.rs",
+        "vendor/ruzstd/src/decoding/sequence_section_decoder.rs",
+        "docs/rea-native/ELF_ZSTD_DESTINATION_DIFFERENTIAL.md"
       ],
       "tests": [
         "src/mcp/rea_elf_notes_parser_tests.rs",
@@ -1489,7 +1496,7 @@
         "rea_import_evidence_bundle"
       ],
       "scope": "Public authenticated bulk import of records and complete unknown revision histories, process-capture validation, atomic union validation/rollback, repeat-import metadata semantics and retained session readback under the native Linux source/owner profile.",
-      "missing": "Complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundary beyond the finite reference corpus; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits are recorded profile differences.",
+      "missing": "Remaining original JSON parser diagnostics and value-representation profiles, including unpaired-surrogate and overflow cases; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries beyond the finite reference corpus; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits are recorded profile differences.",
       "related_runtime_routes": [
         "rea_verify_evidence",
         "rea_retain_preview",
@@ -2422,7 +2429,11 @@
         "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
-        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json"
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json",
+        "src/native_observation.rs",
+        "src/native_observation_wire.rs",
+        "src/mcp/runtime/jobs.rs",
+        "src/bin/jobctl.rs"
       ],
       "tests": [
         "src/mcp/rea_browser_tests.rs",
@@ -2431,7 +2442,7 @@
         "tests/rea_browser_native_differential.py",
         "tests/rea_browser_deadline_external.py"
       ],
-      "scope": "Native Linux Rust CLI for fixed owned local-resource before/after HAR via an external Chrome CDP pipe under the original durable process job. Rust owns capture/fixture/CDP; the existing operator owner remains Python. Final fixed-fixture, finite differential and expected-deadline receipts are bound below. Resources are fetched as data; arbitrary input-page DOM, process-level network isolation and general browser state replay are not established.",
+      "scope": "Native Linux Rust CLI for fixed owned local-resource before/after HAR through an independent Chrome CDP pipe under the original durable job. Rust owns capture, fixtures, CDP and original Chrome child custody; the existing operator job owner still uses Python. HOME and XDG data/config/cache directories are owned beneath the private profile; custody is published before post-spawn verification, and unknown cleanup retains that profile. Listed 20261104 receipts belong to their historical binary identities and do not qualify this source combination; current capture/deadline qualification requires fresh identity-bound real execution. Resources are fetched as data. Arbitrary input-page DOM, process-level network isolation and general browser state replay remain open.",
       "upstream_tools": [
         "capture_browser_scenario"
       ]
@@ -2552,13 +2563,20 @@
         "src/mcp/rea_elf_notes.rs",
         "src/mcp/rea_elf_notes_worker.rs",
         "src/mcp/rea_elf_notes_parser.rs",
-        "src/mcp/rea_elf_notes_compression.rs"
+        "src/mcp/rea_elf_notes_compression.rs",
+        "vendor/ruzstd/src/decoding/block_decoder.rs",
+        "vendor/ruzstd/src/decoding/errors.rs",
+        "vendor/ruzstd/src/decoding/frame_decoder.rs",
+        "vendor/ruzstd/src/decoding/scratch.rs",
+        "vendor/ruzstd/src/decoding/sequence_execution.rs",
+        "vendor/ruzstd/src/decoding/sequence_section_decoder.rs",
+        "docs/rea-native/ELF_ZSTD_DESTINATION_DIFFERENTIAL.md"
       ],
       "tests": [
         "src/mcp/rea_elf_notes_worker_tests.rs",
         "src/mcp/rea_elf_notes_parser_tests.rs"
       ],
-      "scope": "Internal captured-byte native ELF notes parser for the frozen inspect_elf_notes route; source-bound worker and retained Evidence are separate from complete operation qualification.",
+      "scope": "Internal captured-byte native ELF notes parser for the frozen inspect_elf_notes route. The explicit ELF adapter adds conservative destination-capacity proofs to the vendored decoder; generic default decoding remains unchanged. Sequence proofs require the fixed 64-bit, no-dictionary, bounded-history regular decoder dispatch. Only proven literal layouts, complete fields or mathematically bounded known input prefixes may select the typed capacity error; unsupported cases retain their existing format validation. Finite decoder evidence is separate from final binary, complete operation, platform and resource qualification.",
       "upstream_tools": [
         "inspect_elf_notes"
       ]
