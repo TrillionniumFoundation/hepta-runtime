@@ -20,7 +20,7 @@
     ]
   },
   "runtime": {
-    "baseline_commit": "7611b52e3ae0d1ecd81b29eafb44de0c8bf709dd",
+    "baseline_commit": "11c0e2133f3f3ca19d46ce802325eeae7f2f329a",
     "discovery": "Rust source handler discovery, not live MCP tools/list",
     "interface_count": 32,
     "interfaces": [
@@ -167,6 +167,17 @@
         "scope": "Existing fixed local-resource before/after HAR capture via original process_start job; user resources fetched as data; no arbitrary-page DOM or general state replay",
         "upstream_tools": [
           "capture_browser_scenario"
+        ],
+        "upstream_parity": "NOT_ESTABLISHED"
+      },
+      {
+        "id": "recorded_core_worker",
+        "kind": "rust_cli",
+        "entrypoint": "hepta-runtime rea-recorded-core-worker",
+        "source_presence": "PRESENT",
+        "scope": "Internal captured-byte Rust Linux ELF64 recorded-core payload decoder and strict stdin worker. Native frame, resource limits and output admission are explicit, separate from the frozen Python request/reply-file helper. Historical PIDs and paths grant no live authority. Noncanonical PN_XNUM specialized section constructors and PT_DYNAMIC section traversal remain explicit admission differences. The original child owner must enforce wall deadlines and reap the worker. No public inspect_recorded_crash MCP route, Provider/Evidence integration, full helper parity, optional pwndbg enrichment or same-combination replacement qualification is claimed.",
+        "upstream_tools": [
+          "inspect_recorded_crash"
         ],
         "upstream_parity": "NOT_ESTABLISHED"
       },
@@ -593,14 +604,29 @@
         "bytes": 26075
       },
       {
+        "path": "scripts/rea_recorded_core_corpus.py",
+        "sha256": "026a42ba0b3a37a9a448e46366f52ef44968df221201990dfbfa1624396ac7fa",
+        "bytes": 20922
+      },
+      {
+        "path": "scripts/rea_recorded_core_differential.py",
+        "sha256": "0d3ab3c3db0b3ee3675ad360674a6e7c4cf5ef5b4112aacb6f0ddfc9f0ff7a8c",
+        "bytes": 36145
+      },
+      {
         "path": "src/bin/jobctl.rs",
         "sha256": "94ad22ee7e908f92c5a15932bdcec7a2c50964055346bc72d1c0b135592da15b",
         "bytes": 50491
       },
       {
         "path": "src/cli.rs",
-        "sha256": "6314bbb91df367b3552e37cacbe9d7c6b8917392fc1caaa85c8b2baeb74681d3",
-        "bytes": 4776
+        "sha256": "af759cb2b23bd230ecf5ca2fe8cbc3194abc50a2c49aaa9974dc1d77ba4b5066",
+        "bytes": 4983
+      },
+      {
+        "path": "src/cli_recorded_core_tests.rs",
+        "sha256": "846e55e11013412802a0bbb5d95dda6c4f0240ab410cf68f62ff04c9915c7840",
+        "bytes": 886
       },
       {
         "path": "src/jobctl_engine_scratch_tests.rs",
@@ -614,13 +640,13 @@
       },
       {
         "path": "src/main.rs",
-        "sha256": "c7782a35b6846db3600aaca92da1ace10a09b0e705075d56ebe3094cb0087739",
-        "bytes": 12530
+        "sha256": "c7d92845ca693e192a878a340d7532accdef99ebe77fdb6853d2fba269b0020e",
+        "bytes": 12843
       },
       {
         "path": "src/mcp/mod.rs",
-        "sha256": "81583bb3a307cd432e2451b24d82930be738a467bb445ab0e3e1d6fa531d3ba7",
-        "bytes": 3117
+        "sha256": "ac3d762c799bcb61b4f8b10ffd8125cb1a2be53e562fe67fffe6fd4f4493d46d",
+        "bytes": 3249
       },
       {
         "path": "src/mcp/rea.rs",
@@ -1223,6 +1249,41 @@
         "bytes": 25950
       },
       {
+        "path": "src/mcp/rea_recorded_core_budget.rs",
+        "sha256": "c007c6bc7377da99aca0054d744cec104b8d466e0c84d60b83525e5e7e3b1271",
+        "bytes": 4502
+      },
+      {
+        "path": "src/mcp/rea_recorded_core_layout.rs",
+        "sha256": "0f882f5c58aa130cec03d1078ceadbac0f265e0fac919652832d971807a338e4",
+        "bytes": 3755
+      },
+      {
+        "path": "src/mcp/rea_recorded_core_parser.rs",
+        "sha256": "493d2ab7db38159dcbd70daee4ab9705d1225b56810c7515b3ee10b54554553a",
+        "bytes": 15732
+      },
+      {
+        "path": "src/mcp/rea_recorded_core_parser_tests.rs",
+        "sha256": "2090140dba27d1875a717fae605f11c3b160938f112a1f69a8ef8e6095b8995f",
+        "bytes": 21969
+      },
+      {
+        "path": "src/mcp/rea_recorded_core_sections.rs",
+        "sha256": "ec6857f7c43ebfb88dc83393df2d4b9bcf1438e7a05756c129afe8c781c0daa0",
+        "bytes": 8596
+      },
+      {
+        "path": "src/mcp/rea_recorded_core_worker.rs",
+        "sha256": "e5dc24817d53dc5026d5d362e67cf64d60a842127cddd57f5dc98d89ed178e8e",
+        "bytes": 13896
+      },
+      {
+        "path": "src/mcp/rea_recorded_core_worker_tests.rs",
+        "sha256": "a61b3040f7f8c6161788802b79861811af4b247aa4ecc2369daab93f73729e55",
+        "bytes": 10884
+      },
+      {
         "path": "src/mcp/rea_residual_unknown.rs",
         "sha256": "e529c9021622f91d2e1f3fcc1024ff600abebe41fae090fc3add4bdbc5c6de72",
         "bytes": 21490
@@ -1543,7 +1604,7 @@
         "bytes": 23260
       }
     ],
-    "source_manifest_sha256": "84ca31d69d91380aa0ea372d5044d60fff95e124ec53f75ac76e7f8c149e77ee"
+    "source_manifest_sha256": "45da0111aafe2485f2a0fd410fc9124c26b163915479b002e375a87a3ad4d78f"
   },
   "environment_observations_sha256": "4ace5e8f041a05d205825fb2b2a41769fcfdc91f60810072eb7a6c17a12f3e9c",
   "dependency_assessments": {
@@ -2137,16 +2198,16 @@
       "hard_missing_dependency": "NOT_ESTABLISHED"
     }
   },
-  "mapping_sha256": "186ca0c7f5a6b4f65159304619dc4dc8dabd425d804b99f5cb5efe2a3033df67",
+  "mapping_sha256": "8a58a2d9f1fa304f05ecd30da89e349fc8a277f516e406dc6e017a074cfbd71e",
   "inputs_sha256": "d143681c5384d0cff75d72659cd36381eaff60ca5bf3fe45fb5290b3eccc6904",
   "summary": {
     "published_tools": 229,
     "families": 18,
     "native_interfaces": 32,
     "implementation_counts": {
-      "absent": 188,
+      "absent": 187,
       "partial_operation": 22,
-      "related_facility": 19
+      "related_facility": 20
     },
     "qualified_tools": 0,
     "open_tools": 229,
@@ -13262,10 +13323,17 @@
         "idempotentHint": true,
         "openWorldHint": true
       },
-      "native_implementation": "absent",
+      "native_implementation": "related_facility",
       "native_routes": [],
-      "native_scope": "No upstream-compatible handler is registered in the pinned native runtime",
-      "remaining_behavior": "Exact native format operation or platform observation; header recognition is insufficient",
+      "native_scope": "Native recorded-core payload parsing exists as an internal captured-byte worker. This is a partial helper migration with explicit admission and outer-protocol differences, not the public operation.",
+      "remaining_behavior": [
+        "Public inspect_recorded_crash MCP schema, handler and Provider integration",
+        "Original request/reply-file, resource-marker and effective-limit behavior parity",
+        "Noncanonical pyelftools section-constructor and PT_DYNAMIC section-traversal parity",
+        "Evidence retention, pagination, import/export and post-cancel query integration",
+        "Optional GDB/pwndbg crash enrichment and complete recorded-crash operation differential",
+        "Same-combination multi-host recovery and cost qualification"
+      ],
       "dependencies": [
         {
           "component": "pwntools-pyelftools-unicorn",
@@ -13283,7 +13351,9 @@
         }
       ],
       "related_runtime_routes": [],
-      "related_auxiliary_capabilities": [],
+      "related_auxiliary_capabilities": [
+        "recorded_core_worker"
+      ],
       "required_behavior_gates": [
         "contracts",
         "results",
@@ -13299,7 +13369,14 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Exact native format operation or platform observation; header recognition is insufficient"
+          "next_step": [
+            "Public inspect_recorded_crash MCP schema, handler and Provider integration",
+            "Original request/reply-file, resource-marker and effective-limit behavior parity",
+            "Noncanonical pyelftools section-constructor and PT_DYNAMIC section-traversal parity",
+            "Evidence retention, pagination, import/export and post-cancel query integration",
+            "Optional GDB/pwndbg crash enrichment and complete recorded-crash operation differential",
+            "Same-combination multi-host recovery and cost qualification"
+          ]
         },
         {
           "category": "behavioral_differential",
