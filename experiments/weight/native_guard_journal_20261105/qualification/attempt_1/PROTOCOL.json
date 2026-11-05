@@ -1,0 +1,75 @@
+{
+  "schema": "hepta.native-guard-journal-qualification-protocol.v1",
+  "status": "frozen_before_first_compilation_and_test_execution",
+  "base_public_commit": "d85852b3c1708d9b2e8162badc07116999eff15e",
+  "base_tree": "84f79718dda7ce1f976e6d21ad041031f4fd5c7f",
+  "trust_region_overlay": "Ten Rust source files authenticated against source_manifest_after_fmt.json before isolated checkout edits",
+  "scope": "Fixed F32 linear guard durability, current-content revalidation, exact restoration, privacy and bounded retention; no neural-network capability or trading evaluation",
+  "isolated_runtime_state": true,
+  "production_pointer_or_service_changes": false,
+  "real_crash_method": "Owned subprocess SIGKILL after a cfg(test)-only phase marker; wait for signal death; start a fresh process with the exact request and same isolated state",
+  "crash_boundaries": [
+    "after_intent",
+    "after_guard_before_candidate",
+    "after_candidate_before_completion",
+    "after_completion"
+  ],
+  "first_three_boundaries": {
+    "accepted": false,
+    "replay_guard_internal_accepted": true,
+    "outcome": "interrupted_rejected_and_restored",
+    "restored_full_file_bytes_equal_original": true,
+    "source_file_unchanged": true,
+    "second_completed_recovery_revalidation_still_rejects": true
+  },
+  "completed_boundary": {
+    "accepted": true,
+    "complete_guard_rerun_and_current_artifact_authentication": true,
+    "source_file_unchanged": true,
+    "no_extra_artifact_published": true
+  },
+  "real_crash_failure_cases": [
+    "source_removed_after_kill",
+    "source_changed_after_kill",
+    "artifact_quota_exhausted_after_kill"
+  ],
+  "failure_case_requirement": "accepted=false; recovery_verified=false; no invented restoration or new published artifact",
+  "concurrency": "A live owned subprocess holds the journal flock after intent; a second independent process must fail busy after the fixed 10-second lock deadline; killing the owner then permits explicit conservative recovery",
+  "additional_checks": [
+    "normal acceptance persisted before return",
+    "completed retry reruns current authentication and preserves immutable receipt",
+    "complete request, state, ordered roots and named semantics binding",
+    "one-MiB canonical request cap and finite JSON round-trip",
+    "owned 0700 directories and 0600 singly linked files",
+    "symlink and hardlink denial",
+    "changed canonical intent denial",
+    "accepted artifact tampering and parent source change denial",
+    "changed stored metrics cannot bypass fresh execution",
+    "128-entry and 64-MiB retention quotas include abandoned staging",
+    "L2 or label prepublication refusal is not bypassed by interrupted recovery"
+  ],
+  "resource_plan": {
+    "cargo_jobs": 2,
+    "test_threads": 1,
+    "per_command_timeout_seconds": 1200,
+    "process_address_space_limit_bytes": 8589934592,
+    "nofile_limit": 1024,
+    "gpu_used": false,
+    "reuse_preexisting_independent_cargo_target_serially": true,
+    "live_or_original_qualified_binary_overwritten": false
+  },
+  "planned_commands": [
+    "cargo fmt --all",
+    "cargo test --locked --offline --all-features --lib weight_guard_journal -- --test-threads=1 --nocapture",
+    "cargo clippy --locked --offline --all-features --all-targets -- -D warnings",
+    "cargo fmt --all -- --check"
+  ],
+  "failure_policy": "Retain each attempt source hashes, command exit, logs and measured costs. Fix software defects explicitly and create a new attempt; never replace a failed attempt with a claimed pass.",
+  "remaining_limits": [
+    "SIGKILL process recovery does not certify filesystem/device behavior under actual power loss",
+    "private owned state assumes the same UID and privileged administrator are trusted",
+    "named source fingerprint is not a complete compiler/OS/transitive execution closure",
+    "explicit same-request reconcile is not automatic background rollback",
+    "full final integrated source qualification remains separate from this focused journal test run"
+  ]
+}
