@@ -41,7 +41,7 @@ pub(super) const MAX_REQUEST_BYTES: usize = 32 * 1024 * 1024;
 pub(super) const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 pub(super) const MAX_ROWS: usize = 10_000;
 pub(super) const PARSER_VERSION: &str = "0.144.0";
-pub(super) const GRAPH_PROFILE: &str = "hepta.javascript-selected-source-graph.v3";
+pub(super) const GRAPH_PROFILE: &str = "hepta.javascript-selected-source-graph.v4";
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]

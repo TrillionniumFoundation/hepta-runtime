@@ -573,17 +573,21 @@ fn read_admitted(
 	let identity = rea_files::ensure_unchanged(before, &current_meta).map_err(|_| changed());
 	close_result(current_file, identity)?;
 	active(cancellation)?;
-	let value = parsed?;
 	let observed = state.borrow();
-	if observed.input_bytes != before.len()
-		|| first_digest
-			.as_ref()
-			.is_some_and(|digest| digest != &observed.digest())
+	// A syntax diagnostic now observes the complete second read as well.
+	// Do not publish a message from bytes that changed between the UTF-8 scan
+	// and parsing, even when the parsed outcome is an expected rejection.
+	if (parsed.is_ok() || observed.eof)
+		&& (observed.input_bytes != before.len()
+			|| first_digest
+				.as_ref()
+				.is_some_and(|digest| digest != &observed.digest()))
 	{
 		return Err(changed());
 	}
 	let sha256 = observed.digest();
 	drop(observed);
+	let value = parsed?;
 	Ok(OwnedJson {
 		value: value.value,
 		object_order: ObjectOrder(value.order),
@@ -602,6 +606,7 @@ struct State {
 	hash: Sha256,
 	prefix: Vec<u8>,
 	eof_diagnostic: Option<String>,
+	syntax_diagnostic: Option<String>,
 	eof: bool,
 	small: bool,
 }
@@ -616,6 +621,7 @@ impl State {
 			hash: Sha256::new(),
 			prefix: Vec::new(),
 			eof_diagnostic: None,
+			syntax_diagnostic: None,
 			eof: false,
 			small,
 		}
@@ -800,7 +806,11 @@ impl<R: Read> Read for CheckedReader<R> {
 			let mut state = self.state.borrow_mut();
 			state.eof = true;
 			if let Some(tracker) = self.eof_tracker.take() {
-				state.eof_diagnostic = tracker.finish();
+				if tracker.has_syntax_error() {
+					state.syntax_diagnostic = tracker.finish();
+				} else {
+					state.eof_diagnostic = tracker.finish();
+				}
 			}
 			return Ok(0);
 		}
@@ -846,14 +856,29 @@ fn take_reader_error(state: &Rc<RefCell<State>>, fallback: io::Error) -> FileRea
 
 fn parse_reader<R: Read>(reader: R, expected: u64, state: Rc<RefCell<State>>) -> Result<Parsed> {
 	let guarded = CheckedReader::new(reader, expected, Rc::clone(&state), true);
-	let buffered = BufReader::with_capacity(CHUNK, guarded);
-	let mut parser = serde_json::Deserializer::from_reader(buffered);
-	let result = Seed {
-		state: Rc::clone(&state),
-		depth: 0,
+	let mut buffered = BufReader::with_capacity(CHUNK, guarded);
+	let result = {
+		let mut parser = serde_json::Deserializer::from_reader(&mut buffered);
+		Seed {
+			state: Rc::clone(&state),
+			depth: 0,
+		}
+		.deserialize(&mut parser)
+		.and_then(|value| parser.end().map(|_| value))
+	};
+	// Small-file JSON.parse diagnostics can include source after the first
+	// error. Drain only this bounded profile through the same checked owner:
+	// UTF-8, physical I/O, cancellation and native budgets retain priority.
+	// The value parser still decides rejection; the observer never accepts a
+	// document, and large-file streaming/error behavior stays unchanged.
+	if result.is_err() && state.borrow().small && state.borrow().failure.is_none() {
+		let mut discard = [0_u8; CHUNK];
+		while buffered
+			.read(&mut discard)
+			.map_err(|error| take_reader_error(&state, error))?
+			!= 0
+		{}
 	}
-	.deserialize(&mut parser)
-	.and_then(|value| parser.end().map(|_| value));
 	match result {
 		Ok(value) => Ok(value),
 		Err(error) => {
@@ -864,10 +889,16 @@ fn parse_reader<R: Read>(reader: R, expected: u64, state: Rc<RefCell<State>>) ->
 			if state.bom() {
 				return Err(invalid_json(BOM_MESSAGE, true));
 			}
-			// Only an actual EOF, independently recognized as a valid JSON
-			// prefix, can use the frozen small-file V8 diagnostic. The tracker
-			// never overrides non-EOF syntax, representation or owned-reader
-			// failures, and is absent from the large-file streaming profile.
+			// A physical EOF and an independently observed grammar failure are
+			// required. Valid JSON with an unsupported value representation has
+			// no syntax diagnostic and remains an explicit native profile gap.
+			// IoRead may reach EOF while filling a four-byte Unicode escape
+			// after the observer has already found its first invalid hex unit.
+			if (error.is_syntax() || error.is_eof()) && state.small && state.eof {
+				if let Some(message) = state.syntax_diagnostic.take() {
+					return Err(invalid_json(&message, false));
+				}
+			}
 			if error.is_eof() && state.small && state.eof {
 				if let Some(message) = state.eof_diagnostic.take() {
 					return Err(invalid_json(&message, false));

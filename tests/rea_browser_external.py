@@ -27,6 +27,7 @@ import time
 from urllib.parse import urlsplit
 
 from rea_java_external import Mcp, digest, private_write, set_fence
+from rea_browser_environment import ChromeEnvironmentObserver, expected_environment
 
 
 def fixture(root, name, *, slow=False):
@@ -142,15 +143,13 @@ def installed_chrome_identity():
     return identity
 
 
-def original_browser_identity(started, installation):
-    """Read only the original owned PID through one retained /proc directory FD."""
+def original_browser_identity(started, installation, environment_observer=None):
+    """Bind the original live Chrome; exec environment needs its own observation."""
     pid, group = started['browser_pid'], started['browser_pgid']
     assert isinstance(pid, int) and pid > 0 and group == pid
     profile = Path(started['profile'])
     assert profile.is_absolute() and profile.resolve(strict=True) == profile
-    expected_environment = {key: str(profile / name) for key, name in (
-        ('HOME', 'home'), ('XDG_DATA_HOME', 'xdg-data'),
-        ('XDG_CONFIG_HOME', 'xdg-config'), ('XDG_CACHE_HOME', 'xdg-cache'))}
+    expected = expected_environment(profile)
     directory = os.open('/proc/' + str(pid), os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY)
     def read_bounded(name, limit):
         descriptor = os.open(name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=directory)
@@ -183,16 +182,30 @@ def original_browser_identity(started, installation):
         finally:
             os.close(executable)
         assert actual_executable == {key: expected_executable[key] for key in actual_executable}
+        raw = read_bounded('environ', 1024 * 1024)
         selected = {}
-        for item in read_bounded('environ', 1024 * 1024).split(b'\0'):
+        for item in raw.split(b'\0'):
             key, separator, value = item.partition(b'=')
             if key in (b'HOME', b'XDG_DATA_HOME', b'XDG_CONFIG_HOME', b'XDG_CACHE_HOME'):
                 name = key.decode('ascii')
                 assert separator and name not in selected, 'Repeated private environment key'
                 selected[name] = value.decode('utf-8')
-        assert selected == expected_environment, ('Original Chrome inherited a non-private environment', selected)
+        # Chromium moves the strings addressed by libc environ, then may reuse
+        # the initial stack region for its process title. Never certify getenv
+        # from an empty /proc selection or infer it from the parent's config.
+        fields = read_bounded('stat', 16384).decode('utf-8').rsplit(')', 1)[1].split()
+        environment_offset = int(fields[47]) - int(fields[45])
+        command_line = read_bounded('cmdline', 1024 * 1024)
+        tail_matches = (0 <= environment_offset < len(command_line)
+                        and bool(raw.rstrip(b'\0'))
+                        and raw.rstrip(b'\0') == command_line[environment_offset:].rstrip(b'\0'))
+        observation = dict(bytes=len(raw), nul_bytes=raw.count(b'\0'),
+            selected_private_values=selected, matches_expected=selected == expected,
+            matches_rewritten_command_line_tail=tail_matches,
+            scope='mutable initial /proc environment memory; not a current getenv attestation')
+        evidence = environment_observer.verify_live(original, expected) if environment_observer else None
         directories = {}
-        for key, path in selected.items():
+        for key, path in expected.items():
             value = Path(path).lstat()
             assert stat.S_ISDIR(value.st_mode) and stat.S_IMODE(value.st_mode) == 0o700
             assert value.st_uid == os.getuid() and Path(path).resolve(strict=True) == Path(path)
@@ -200,8 +213,10 @@ def original_browser_identity(started, installation):
         assert process_identity() == original
         assert os.readlink('exe', dir_fd=directory) == expected_executable['realpath']
         return dict(**original, executable=dict(realpath=expected_executable['realpath'], **actual_executable),
-                    environment=selected, private_directories=directories,
-                    scope='original owned Chrome leader before cancellation; unrelated environment values are not recorded')
+                    proc_initial_environment=observation, private_directories=directories,
+                    exec_environment_verified=evidence is not None, exec_environment_evidence=evidence,
+                    scope=('same instrumented Chrome PID at constructor exec boundary and before cancellation'
+                           if evidence else 'uninstrumented original Chrome identity and directories; getenv not attested'))
     finally:
         os.close(directory)
 
@@ -299,6 +314,9 @@ def main():
     source_files = (sorted((Path(__file__).resolve().parents[1] / 'src/mcp').glob('rea_browser*.rs')) if args.native_capture
                     else [helper, helper.parent / 'dc_compat/chromium_capture.py', helper.parent / 'dc_compat/chromium_pdf.py'])
     assert source_files, 'Native capture qualification requires its source files'
+    if args.native_capture:
+        source_files += [Path(__file__).resolve(), Path(__file__).resolve().parent / 'rea_browser_environment.py',
+                         Path(__file__).resolve().parent / 'fixtures/rea_browser_env_observer.c']
     source_pins = {str(path): digest(path) for path in source_files}
     result = dict(schema='hepta.rea.local-browser-qualification.v1', workspace=str(root), qualified=False,
                   runtime_sha256=digest(runtime), helper_sources=source_pins, python=interpreter_pin,
@@ -313,6 +331,10 @@ def main():
     try:
         if args.native_capture:
             result['browser_installation'] = installed_chrome_identity()
+            environment_observer = ChromeEnvironmentObserver(root, result['browser_installation'])
+            result['environment_observer'] = environment_observer.binding
+            result['environment_negative_controls'] = environment_observer.negative_controls()
+            result['checks'].append('eight_actual_chrome_exec_missing_and_non_private_environment_controls_rejected')
         server = Mcp(runtime, root)
         names = {tool['name'] for tool in server.request('tools/list', {})['tools']}
         assert {'process_start', 'process_status', 'process_read', 'process_cancel',
@@ -451,7 +473,8 @@ def main():
             observed = original_browser_identity(started, result['browser_installation'])
             result['original_browser_identity'] = observed
             private_write(root / 'capture-original-browser-identity.json', observed)
-            result['checks'].append('original_chrome_executable_distinct_from_launcher_and_all_four_environment_roots_private')
+            assert observed['exec_environment_verified'] is False
+            result['checks'].append('uninstrumented_original_chrome_executable_and_private_directories_verified')
         before_cancel = server.call('process_status', dict(host='local', job_id=cancel_job))
         assert before_cancel.get('state') not in ('succeeded', 'failed', 'cancelled', 'timed_out'), before_cancel
         cancel = server.call('process_cancel', dict(host='local', job_id=cancel_job, grace_seconds=10))
@@ -468,6 +491,42 @@ def main():
             cancel=cancel, terminal=stopped, output=cancelled_logs))
         result.update(cancel_job_id=cancel_job, cancel_terminal=stopped['state'])
         result['checks'].append('original_job_cancel_confirmed_and_no_owned_browser_profile_or_relaunch')
+        if args.native_capture:
+            env_manifest, env_output = fixture(root, 'environment-fixture', slow=True)
+            env_request = request(env_manifest, env_output, 'owned-browser-environment')
+            env_request['env'] = dict(LD_PRELOAD=str(environment_observer.library))
+            private_write(root / 'environment-request.json', env_request)
+            env_admission = server.call('process_start', env_request)
+            env_job = env_admission['job']['id']; active.append(env_job)
+            env_started = browser_start(server, env_job)
+            env_identity = original_browser_identity(
+                env_started, result['browser_installation'], environment_observer)
+            assert env_identity['exec_environment_verified'] is True
+            private_write(root / 'environment-original-browser-identity.json', env_identity)
+            env_cancel = server.call('process_cancel', dict(host='local', job_id=env_job, grace_seconds=10))
+            env_stopped = terminal(server, env_job)
+            active.remove(env_job)
+            assert env_stopped['state'] in ('cancelled', 'failed') and env_stopped['exit_code'] != 0
+            no_owned_browser(env_started['profile'], env_started['browser_pgid'])
+            assert not env_output.exists()
+            env_reused = server.call('process_start', env_request)
+            assert env_reused['reused'] is True and env_reused['job']['id'] == env_job
+            env_logs = original_output(server, env_job)
+            assert sum(json.loads(line).get('phase') == 'browser_started'
+                       for line in env_logs['stdout'].splitlines()) == 1
+            private_write(root / 'environment-cancelled.json', dict(
+                admission=env_admission, browser=env_started, cancel=env_cancel,
+                terminal=env_stopped, output=env_logs, identity=env_identity))
+            environment_observer.verify_closure()
+            result['environment_observation'] = dict(
+                uninstrumented_capture_job_id=job, uninstrumented_cancel_job_id=cancel_job,
+                instrumented_environment_job_id=env_job, instrumented_identity=env_identity,
+                uninstrumented_environment_qualified=False,
+                instrumented_exec_environment_qualified=True,
+                no_claim_about_current_getenv_after_constructor=True,
+                original_proc_failure_reclassified=False)
+            result['checks'].append(
+                'separate_instrumented_original_chrome_exec_four_private_keys_and_cancel_cleanup')
         assert {str(path): digest(path) for path in source_files} == source_pins
         assert digest(runtime) == result['runtime_sha256']
         if args.native_capture:
