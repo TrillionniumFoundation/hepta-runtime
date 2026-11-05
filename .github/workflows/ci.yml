@@ -14,6 +14,7 @@ on:
     branches:
       - hepta-runtime-base
       - feature/rea-native-foundation-20261102
+      - feature/rea-runtime-unified-20261103
       - work/native-runtime-convergence-20261030
       # Candidate branches are protected by exact HEAD and synthetic-merge gates.
       # Stacked fix and integration PRs otherwise receive no CI event.
@@ -103,6 +104,11 @@ jobs:
           set -euo pipefail
           /usr/bin/python3 -B tests/rea_compatibility_ledger_tests.py -v
           /usr/bin/python3 -B scripts/rea_compatibility_ledger.py check-mapping
+
+      - name: REA qualification evidence regressions
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B -m unittest discover -s tests -p 'rea_*tests.py' -v
 
       - name: Control-plane regression
         run: |
@@ -349,6 +355,11 @@ jobs:
           set -euo pipefail
           /usr/bin/python3 -B tests/rea_compatibility_ledger_tests.py -v
           /usr/bin/python3 -B scripts/rea_compatibility_ledger.py check-mapping
+
+      - name: REA qualification evidence regressions
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B -m unittest discover -s tests -p 'rea_*tests.py' -v
 
       - name: Control-plane regression
         run: |
