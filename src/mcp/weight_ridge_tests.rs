@@ -12,6 +12,7 @@ fn known() -> RidgePlanParams {
 		sample_weights: vec![vec![1.0], vec![3.0]],
 		base_weights: vec![vec![1.0, 2.0]],
 		lambda: 1.0,
+		max_update_l2_norm: None,
 	}
 }
 
@@ -93,6 +94,7 @@ fn each_output_uses_its_own_sample_weights_without_row_normalization() {
 		sample_weights: vec![vec![1.0, 0.0], vec![0.0, 3.0]],
 		base_weights: vec![vec![0.0], vec![0.0]],
 		lambda: 1.0,
+		max_update_l2_norm: None,
 	};
 	let report = solve(&params).unwrap();
 	let found = weights(&report, "weights_f64");
@@ -109,6 +111,7 @@ fn positive_lambda_solves_rank_deficiency_and_zero_weight_rows_preserve_anchor()
 		sample_weights: vec![vec![1.0], vec![1.0]],
 		base_weights: vec![vec![0.0, 0.0]],
 		lambda: 1.0,
+		max_update_l2_norm: None,
 	};
 	let report = solve(&params).unwrap();
 	for value in &weights(&report, "weights_f64")[0] {
@@ -135,6 +138,7 @@ fn f64_improvement_can_disappear_when_exported_to_f32() {
 		sample_weights: vec![vec![1.0]],
 		base_weights: vec![vec![1.0]],
 		lambda: 1.0,
+		max_update_l2_norm: None,
 	};
 	let report = solve(&params).unwrap();
 	assert!(weights(&report, "weights_f64")[0][0] > 1.0);
@@ -181,6 +185,7 @@ fn overflow_unrepresentable_candidates_and_lost_positive_definiteness_fail_close
 		sample_weights: vec![vec![1.0]],
 		base_weights: vec![vec![0.0]],
 		lambda: 1.0,
+		max_update_l2_norm: None,
 	};
 	assert!(solve(&params).unwrap_err().to_string().contains("overflow"));
 	params.features = vec![vec![1.0]];

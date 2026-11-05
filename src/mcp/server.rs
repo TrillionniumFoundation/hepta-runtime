@@ -1819,7 +1819,7 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Solve a bounded supervised proximal weighted-ridge problem for frozen features in Rust using F64 Cholesky, then expose F32 rounding and exact element-edit proposals. Targets and sample weights are explicit training data, not model inputs. Reports numerical residuals; publishes no files. Caller-supplied initial weights are not authenticated to a checkpoint until a subsequent hash-pinned exact patch. No gradient steps, whole-task optimality or production eligibility claim."
+		description = "Solve a bounded supervised proximal weighted-ridge problem for frozen features in Rust using F64 Cholesky, optionally solve a joint L2 trust region with a bounded shared-multiplier search, then expose F32 lowering and exact element-edit proposals. A budgeted plan requires exact F32 anchors and independently verifies represented-F32 feasibility; it does not certify a F32 optimum. Targets and sample weights are explicit training data, not model inputs. Reports numerical residuals; publishes no files. Caller-supplied initial weights are not authenticated to a checkpoint until a subsequent hash-pinned exact patch. No gradient steps, whole-task optimality or production eligibility claim."
 	)]
 	async fn weight_linear_ridge_plan(
 		&self,
@@ -1838,7 +1838,7 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Evaluate one exact F32 linear-head edit on fixed supplied rows in Rust. Requires strict negative-MSE or realized-action-value improvement plus all declared probability, terminal-Q and preservation constraints. On failure, automatically publishes the reverse patch and verifies original hash and predictions; recovery errors remain explicit. At most 64 input rows and 1 MiB per request. Original weights remain unchanged. Supplied rows are not independently verified holdout data; no production activation or global optimization claim."
+		description = "Evaluate one exact F32 linear-head edit on fixed supplied rows in Rust. With max_update_l2_norm, independently enforce an exact numeric budget on this patch's authenticated F32 differences before publication; this excludes supplied bias, environment changes and cumulative drift. Requires strict negative-MSE or realized-action-value improvement plus all declared probability, terminal-Q and preservation constraints. On failure, automatically publishes the reverse patch and verifies original hash and predictions; recovery errors remain explicit. At most 64 input rows and 1 MiB per request. Original weights remain unchanged. Supplied rows are not independently verified holdout data; no production activation or global optimization claim."
 	)]
 	async fn weight_guarded_linear_patch(
 		&self,
