@@ -785,3 +785,89 @@ fn deterministic_header_and_stream_mutations_do_not_panic() {
 		);
 	}
 }
+
+#[test]
+fn zstandard_sequence_mode_reserved_bits_are_rejected() {
+	// Real libzstd producer: 20,000 repeated bytes, one raw-literal sequence section.
+	let valid = unhex("28b52ffd00284d000010414101001bce0eb0");
+	assert_eq!(
+		decoded(&compressed_names(&valid, 20000, 2, true, true), true, true).unwrap(),
+		vec![b'A'; 20000]
+	);
+	for reserved in [1, 2, 3] {
+		let mut invalid = valid.clone();
+		invalid[13] |= reserved;
+		assert!(decoded(
+			&compressed_names(&invalid, 20000, 2, true, true),
+			true,
+			true
+		)
+		.unwrap_err()
+		.to_string()
+		.ends_with("Data corruption detected"));
+	}
+}
+
+#[test]
+fn zlib_primary_diagnostic_and_eof_precede_output_delivery_limits() {
+	let bad_distance = unhex("789c43d0cbcb2f49d5cb4bcc4d2d6600001c050427");
+	assert!(decoded(
+		&compressed_names(&bad_distance, 13, 1, true, true),
+		true,
+		true
+	)
+	.unwrap_err()
+	.to_string()
+	.ends_with("invalid distance too far back"));
+	let truncated = unhex("789c63d0cb");
+	assert!(
+		decoded(&compressed_names(&truncated, 0, 1, true, true), true, true)
+			.unwrap_err()
+			.to_string()
+			.ends_with("unexpected end of file")
+	);
+}
+
+#[test]
+fn zstandard_checksum_failure_precedes_final_chunk_delivery_limit() {
+	let bad_checksum = unhex("28b52ffd04284d000010414101001fce0eb02275d24c");
+	assert!(decoded(
+		&compressed_names(&bad_checksum, 20000, 2, true, true),
+		true,
+		true
+	)
+	.unwrap_err()
+	.to_string()
+	.ends_with("Restored data doesn't match checksum"));
+}
+
+#[test]
+fn zstandard_literals_respect_block_size_and_window_before_expansion() {
+	for (payload, declared) in [
+		("28b52ffd00882d00000dd4300000", 200000),
+		("28b52ffd0000250000057d0000", 2000),
+	] {
+		assert!(decoded(
+			&compressed_names(&unhex(payload), declared, 2, true, true),
+			true,
+			true
+		)
+		.unwrap_err()
+		.to_string()
+		.ends_with("Data corruption detected"));
+	}
+	for (payload, declared) in [
+		("28b52ffd00882d00000d00200000", 131072),
+		("28b52ffd000025000005400000", 1024),
+	] {
+		assert_eq!(
+			decoded(
+				&compressed_names(&unhex(payload), declared, 2, true, true),
+				true,
+				true
+			)
+			.unwrap(),
+			vec![0; declared as usize]
+		);
+	}
+}

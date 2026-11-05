@@ -102,9 +102,19 @@ fn inflate_zlib(payload: &[u8], limit: usize) -> Result<Vec<u8>, ElfNotesFailure
 				} else {
 					inflater.error_message().unwrap_or(error.as_str())
 				};
+				let message = if message == "repeated call with bad state" {
+					zlib_slow_error(payload, inflater.total_out()).unwrap_or(message)
+				} else {
+					message
+				};
 				return Err(decompression_failure(message));
 			}
 			Ok(status) => {
+				// The reference's Z_FINISH binding reports a short stream before publishing this
+				// output chunk; consequently EOF precedes its JavaScript maxOutputLength check.
+				if status == Status::BufError && written < chunk.len() {
+					return Err(decompression_failure("unexpected end of file"));
+				}
 				if written > limit - output.len() {
 					return Err(output_limit(limit));
 				}
@@ -118,6 +128,33 @@ fn inflate_zlib(payload: &[u8], limit: usize) -> Result<Vec<u8>, ElfNotesFailure
 			}
 		}
 	}
+}
+
+fn zlib_slow_error(payload: &[u8], already_decoded: u64) -> Option<&'static str> {
+	// zlib-rs 0.6.8's fast loop can overwrite the primary diagnostic when it enters Mode::Bad.
+	// Revisit only that failed prefix with <258 output bytes, which selects the checked slow
+	// loop. No output is retained; the replay cannot expand beyond the already observed prefix
+	// plus one normal output chunk, and never changes whether the input is accepted.
+	let mut inflater = Inflate::new(true, 15);
+	let mut chunk = [0_u8; 257];
+	while inflater.total_out() <= already_decoded.saturating_add(16 * 1024) {
+		let before_in = inflater.total_in();
+		let before_out = inflater.total_out();
+		let status = inflater.decompress(
+			&payload[before_in as usize..],
+			&mut chunk,
+			InflateFlush::Finish,
+		);
+		if let Err(error) = status {
+			return Some(inflater.error_message().unwrap_or(error.as_str()));
+		}
+		if status == Ok(Status::StreamEnd)
+			|| (before_in == inflater.total_in() && before_out == inflater.total_out())
+		{
+			break;
+		}
+	}
+	None
 }
 
 struct ZstdHeader {
@@ -215,12 +252,23 @@ fn zstd_failure(error: FrameDecoderError) -> ElfNotesFailure {
 	}
 }
 
+struct DrainResult {
+	bytes: u64,
+	overflowed: bool,
+	overflow_before_final_chunk: bool,
+}
+
 fn drain(
 	decoder: &mut FrameDecoder,
 	output: &mut Vec<u8>,
 	limit: usize,
-) -> Result<(), ElfNotesFailure> {
+) -> Result<DrainResult, ElfNotesFailure> {
 	let mut chunk = [0_u8; 16 * 1024];
+	let mut result = DrainResult {
+		bytes: 0,
+		overflowed: false,
+		overflow_before_final_chunk: false,
+	};
 	loop {
 		let written = decoder
 			.read(&mut chunk)
@@ -228,12 +276,18 @@ fn drain(
 		if written == 0 {
 			break;
 		}
-		if written > limit - output.len() {
-			return Err(output_limit(limit));
+		result.bytes += written as u64;
+		if result.overflowed {
+			result.overflow_before_final_chunk = true;
 		}
-		output.extend_from_slice(&chunk[..written]);
+		if written > limit - output.len() {
+			result.overflowed = true;
+		}
+		if !result.overflowed {
+			output.extend_from_slice(&chunk[..written]);
+		}
 	}
-	Ok(())
+	Ok(result)
 }
 
 fn decode_block(
@@ -256,7 +310,101 @@ fn finish_partial(
 	// Flush retained history without copying or extending target input. The synthetic empty
 	// final block is solely a decoder adapter for the producer's incomplete-stream behavior.
 	decode_block(decoder, &[1_u8, 0, 0][..], true)?;
-	drain(decoder, output, limit)
+	if drain(decoder, output, limit)?.overflowed {
+		return Err(output_limit(limit));
+	}
+	Ok(())
+}
+
+fn validate_compressed_block(body: &[u8], maximum_bytes: u64) -> Result<(), ElfNotesFailure> {
+	let Some(&first) = body.first() else {
+		return Ok(());
+	};
+	let kind = first & 3;
+	let size_format = (first >> 2) & 3;
+	let header_bytes = if kind < 2 {
+		match size_format {
+			0 | 2 => 1,
+			1 => 2,
+			_ => 3,
+		}
+	} else {
+		match size_format {
+			0 | 1 => 3,
+			2 => 4,
+			_ => 5,
+		}
+	};
+	if body.len() < header_bytes {
+		return Ok(());
+	}
+	let mut bits = 0_u64;
+	for (index, &byte) in body[..header_bytes].iter().enumerate() {
+		bits |= u64::from(byte) << (index * 8);
+	}
+	let regenerated_bytes = if kind < 2 {
+		if header_bytes == 1 {
+			bits >> 3
+		} else {
+			bits >> 4
+		}
+	} else {
+		let width = match size_format {
+			0 | 1 => 10,
+			2 => 14,
+			_ => 18,
+		};
+		(bits >> 4) & ((1 << width) - 1)
+	};
+	// A block cannot regenerate more than min(Window_Size, 128 KiB). In particular,
+	// ruzstd's zero-sequence path copies the literal buffer without its own size check.
+	// Reject that malformed header before the backend allocates or expands the literals.
+	if regenerated_bytes > maximum_bytes {
+		return Err(decompression_failure("Data corruption detected"));
+	}
+	let literal_bytes = match kind {
+		0 => {
+			if header_bytes == 1 {
+				bits >> 3
+			} else {
+				bits >> 4
+			}
+		}
+		1 => 1,
+		_ => {
+			let width = match size_format {
+				0 | 1 => 10,
+				2 => 14,
+				_ => 18,
+			};
+			(bits >> (4 + width)) & ((1 << width) - 1)
+		}
+	};
+	if literal_bytes > (body.len() - header_bytes) as u64 {
+		return Ok(());
+	}
+	let sequence_at = header_bytes + literal_bytes as usize;
+	let sequence = &body[sequence_at..];
+	let Some(&count) = sequence.first() else {
+		return Ok(());
+	};
+	let modes_at = match count {
+		0 => return Ok(()),
+		1..=127 => 1,
+		128..=254 => {
+			if sequence.len() < 2 || (count == 128 && sequence[1] == 0) {
+				return Ok(());
+			}
+			2
+		}
+		255 => 3,
+	};
+	// The low two Symbol_Compression_Modes bits are reserved and MUST be zero (RFC 8878,
+	// sequences section). ruzstd 0.9.1 extracts the three modes but does not reject these bits.
+	if sequence.get(modes_at).is_some_and(|modes| modes & 3 != 0) {
+		return Err(decompression_failure("Data corruption detected"));
+	}
+	Ok(())
 }
 
 fn inflate_zstd(payload: &[u8], limit: usize) -> Result<Vec<u8>, ElfNotesFailure> {
@@ -281,7 +429,10 @@ fn inflate_zstd(payload: &[u8], limit: usize) -> Result<Vec<u8>, ElfNotesFailure
 		let last = packed & 1 != 0;
 		let block_type = (packed >> 1) & 3;
 		let size = (packed >> 3) as usize;
-		if block_type == 3 || size > ZSTD_BLOCK_BYTES || size as u64 > header.window_bytes {
+		if block_type == 3 {
+			return Err(decompression_failure("Data corruption detected"));
+		}
+		if size > ZSTD_BLOCK_BYTES || size as u64 > header.window_bytes {
 			return Err(decompression_failure("Data corruption detected"));
 		}
 		let encoded_bytes = if block_type == 1 { 1 } else { size };
@@ -301,13 +452,21 @@ fn inflate_zstd(payload: &[u8], limit: usize) -> Result<Vec<u8>, ElfNotesFailure
 					Cursor::new(prefix).chain(Cursor::new(&payload[body_at..])),
 					true,
 				)?;
-				drain(&mut decoder, &mut output, limit)?;
+				if drain(&mut decoder, &mut output, limit)?.overflowed {
+					return Err(output_limit(limit));
+				}
 			} else {
 				finish_partial(&mut decoder, &mut output, limit)?;
 			}
 			return Ok(output);
 		}
 		let body_end = body_at + encoded_bytes;
+		if block_type == 2 {
+			validate_compressed_block(
+				&payload[body_at..body_end],
+				header.window_bytes.min(ZSTD_BLOCK_BYTES as u64),
+			)?;
+		}
 		let complete_checksum = last && header.checksum && payload.len() - body_end >= 4;
 		let block_end = body_end + if complete_checksum { 4 } else { 0 };
 		decode_block(
@@ -315,13 +474,17 @@ fn inflate_zstd(payload: &[u8], limit: usize) -> Result<Vec<u8>, ElfNotesFailure
 			Cursor::new(&payload[at..block_end]),
 			last && header.checksum && !complete_checksum,
 		)?;
-		drain(&mut decoder, &mut output, limit)?;
+		let previously_decoded = output.len() as u64;
+		let drained = drain(&mut decoder, &mut output, limit)?;
 		if last {
 			if header
 				.content_size
-				.is_some_and(|size| size != output.len() as u64)
+				.is_some_and(|size| size != previously_decoded + drained.bytes)
 			{
 				return Err(decompression_failure("Data corruption detected"));
+			}
+			if drained.overflow_before_final_chunk {
+				return Err(output_limit(limit));
 			}
 			if complete_checksum
 				&& decoder.get_checksum_from_data() != decoder.get_calculated_checksum()
@@ -330,7 +493,13 @@ fn inflate_zstd(payload: &[u8], limit: usize) -> Result<Vec<u8>, ElfNotesFailure
 					"Restored data doesn't match checksum",
 				));
 			}
+			if drained.overflowed {
+				return Err(output_limit(limit));
+			}
 			return Ok(output);
+		}
+		if drained.overflowed {
+			return Err(output_limit(limit));
 		}
 		at = body_end;
 	}
