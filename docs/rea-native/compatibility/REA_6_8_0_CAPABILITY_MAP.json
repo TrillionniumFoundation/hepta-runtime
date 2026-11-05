@@ -1,6 +1,6 @@
 {
   "schema": "hepta.rea.capability-map.v1",
-  "runtime_baseline": "fe5b43db5cd1ebead73cc11bbbbeeb65807d8ecc",
+  "runtime_baseline": "7eff96a5cc19c3ace590bb639342da5ca6174dc5",
   "interfaces": {
     "rea_inspect_artifact": {
       "source_paths": [
@@ -443,28 +443,30 @@
         "docs/qualification/rea-asar-javascript-final-release-20261104-r2/final-summary.json"
       ],
       "tests": [
-        "src/mcp/rea_javascript_graph_tests.rs",
-        "tests/rea_javascript_graph_external.rs",
+        "scripts/qualify_javascript_type_erasure.mjs",
+        "scripts/rea-asar-reference.mjs",
         "scripts/rea-javascript-ast-reference.mjs",
-        "tests/fixtures/rea_javascript/main.ts",
-        "tests/fixtures/rea_javascript/preload.cjs",
-        "tests/fixtures/rea_javascript/renderer.tsx",
-        "tests/fixtures/rea_javascript/dynamic.ts",
-        "tests/fixtures/rea_javascript/shadowing.cjs",
-        "tests/fixtures/rea_javascript/util.js",
-        "tests/fixtures/rea_javascript/types.ts",
-        "tests/fixtures/rea_javascript/barrel.ts",
-        "tests/fixtures/rea_javascript/manifest.json",
-        "tests/fixtures/rea_javascript/package.json",
-        "tests/fixtures/rea_javascript/manual-golden.json",
-        "tests/fixtures/rea_javascript/reference.json",
-        "tests/rea_javascript_cancellation_external.py",
-        "src/mcp/rea_asar_tests.rs",
         "src/mcp/rea_asar_parser_tests.rs",
+        "src/mcp/rea_asar_tests.rs",
+        "src/mcp/rea_javascript_alias_tests.rs",
+        "src/mcp/rea_javascript_graph_tests.rs",
+        "tests/fixtures/rea_javascript/alias-order-original-6.8.0.json",
+        "tests/fixtures/rea_javascript/barrel.ts",
+        "tests/fixtures/rea_javascript/dynamic.ts",
+        "tests/fixtures/rea_javascript/main.ts",
+        "tests/fixtures/rea_javascript/manifest.json",
+        "tests/fixtures/rea_javascript/manual-golden.json",
+        "tests/fixtures/rea_javascript/package.json",
+        "tests/fixtures/rea_javascript/preload.cjs",
+        "tests/fixtures/rea_javascript/reference.json",
+        "tests/fixtures/rea_javascript/renderer.tsx",
+        "tests/fixtures/rea_javascript/shadowing.cjs",
+        "tests/fixtures/rea_javascript/types.ts",
+        "tests/fixtures/rea_javascript/util.js",
         "tests/rea_asar_external.rs",
         "tests/rea_asar_qualification.py",
-        "scripts/rea-asar-reference.mjs",
-        "scripts/qualify_javascript_type_erasure.mjs"
+        "tests/rea_javascript_cancellation_external.py",
+        "tests/rea_javascript_graph_external.rs"
       ],
       "scope": "Bounded Oxc 0.144.0 native AST/lexical-scope inspection of selected plain-file or packed-ASAR JS/TS/JSX/TSX bytes; import/export, Electron callsite and IPC candidates. Graph profile hepta.javascript-selected-source-graph.v2 binds type_only_scope distinctions (declaration, named_specifiers, none); old v1 continuation IDs are not accepted as v2. Type-only syntax alone does not prove TypeScript runtime dependency erasure. NON-REA report; no complete application graph or observed runtime behavior."
     },
@@ -2466,7 +2468,9 @@
         "docs/qualification/rea-asar-javascript-final-release-20261104-r2/final-summary.json"
       ],
       "tests": [
-        "src/mcp/rea_javascript_graph_tests.rs"
+        "src/mcp/rea_javascript_alias_tests.rs",
+        "src/mcp/rea_javascript_graph_tests.rs",
+        "tests/fixtures/rea_javascript/alias-order-original-6.8.0.json"
       ],
       "scope": "Internal native Rust Oxc AST worker for explicitly admitted JS/TS/JSX/TSX text, lexical-scope facts and conservative candidates. Profile v2 distinguishes declaration-level and named-specifier type-only syntax without inferring erased runtime imports. Historical finite cancellation receipts below belong to their original source/binary combinations; this mapping does not transfer those results to a new build.",
       "upstream_tools": [
