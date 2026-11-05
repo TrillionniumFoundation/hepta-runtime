@@ -17,7 +17,7 @@ use tokio::time::{timeout_at, Instant};
 
 const MAX_PROFILE_BYTES: usize = 256 * 1024;
 const MAX_AGENT_BYTES: usize = 64 * 1024;
-const MAX_SSH_REFERENCE_BYTES: usize = 2 * 1024 * 1024;
+const MAX_EXECUTABLE_REFERENCE_BYTES: usize = 2 * 1024 * 1024;
 const VERIFY_BUFFER_BYTES: usize = 16 * 1024;
 const DIRECTIVES: &[&str] = &[
 	"batchmode",
@@ -236,10 +236,9 @@ fn hex_digest(value: &str) -> Result<[u8; 32]> {
 	Ok(result)
 }
 
-fn bounded_ssh_reference(bytes: Vec<u8>) -> Option<Arc<[u8]>> {
-	if bytes.len() > MAX_SSH_REFERENCE_BYTES {
-		return None;
-	}
+fn bounded_executable_reference(bytes: Vec<u8>, remaining: &mut usize) -> Option<Arc<[u8]>> {
+	let next = (*remaining).checked_sub(bytes.len())?;
+	*remaining = next;
 	Some(bytes.into())
 }
 
@@ -287,7 +286,7 @@ impl PinnedFile {
 		if stamp != self.stamp {
 			bail!("observation profile changed");
 		}
-		// Every check still reads every byte. Only the fixed SSH executable can
+		// Every check still reads every byte. Only the fixed public executables can
 		// use a bounded startup-pin-verified reference instead of rehashing.
 		// The same descriptor and path stamps still fence the complete read.
 		let mut hash = ring::digest::Context::new(&ring::digest::SHA256);
@@ -455,9 +454,11 @@ struct PinnedShell {
 	target: PinnedFile,
 }
 impl PinnedShell {
-	fn load(expected: &str) -> Result<Self> {
+	fn load(expected: &str, reference_budget: &mut usize) -> Result<Self> {
 		let (path, components) = fixed_shell_resolution()?;
-		let (target, _) = PinnedFile::load(&path, Some(expected), 16 * 1024 * 1024, false, true)?;
+		let (mut target, bytes) =
+			PinnedFile::load(&path, Some(expected), 16 * 1024 * 1024, false, true)?;
+		target.reference = bounded_executable_reference(bytes, reference_budget);
 		let result = Self { components, target };
 		result.verify()?;
 		Ok(result)
@@ -752,6 +753,7 @@ impl Profile {
 			false,
 		)?;
 		validate_config(&raw, &spec.known_hosts)?;
+		let mut reference_budget = MAX_EXECUTABLE_REFERENCE_BYTES;
 		let (mut ssh, ssh_bytes) = PinnedFile::load(
 			Path::new("/usr/bin/ssh"),
 			Some(&spec.ssh_sha256),
@@ -759,17 +761,18 @@ impl Profile {
 			false,
 			true,
 		)?;
-		// Only this fixed, public executable retains its already-verified bytes.
-		// Oversized files keep the original SHA path without retaining the Vec.
-		ssh.reference = bounded_ssh_reference(ssh_bytes);
-		let (false_program, _) = PinnedFile::load(
+		// Only fixed public executables share this profile's reference byte budget.
+		// Files that do not fit keep SHA and leave the remaining budget unchanged.
+		ssh.reference = bounded_executable_reference(ssh_bytes, &mut reference_budget);
+		let (mut false_program, false_bytes) = PinnedFile::load(
 			Path::new("/usr/bin/false"),
 			Some(&spec.false_sha256),
 			1024 * 1024,
 			false,
 			true,
 		)?;
-		let shell = PinnedShell::load(&spec.shell_sha256)?;
+		false_program.reference = bounded_executable_reference(false_bytes, &mut reference_budget);
+		let shell = PinnedShell::load(&spec.shell_sha256, &mut reference_budget)?;
 		let runtime = crate::mcp::runtime::config::runtime_config()?;
 		let hosts: BTreeMap<_, _> = runtime
 			.hosts

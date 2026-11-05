@@ -160,9 +160,10 @@ fn only_the_fixed_system_shell_alias_has_a_pinned_symlink_exception() {
 		.iter()
 		.map(|v| format!("{v:02x}"))
 		.collect::<String>();
-	let shell = PinnedShell::load(&hash).unwrap();
+	let mut reference_budget = MAX_EXECUTABLE_REFERENCE_BYTES;
+	let shell = PinnedShell::load(&hash, &mut reference_budget).unwrap();
 	shell.verify().unwrap();
-	assert!(PinnedShell::load(&"0".repeat(64)).is_err());
+	assert!(PinnedShell::load(&"0".repeat(64), &mut reference_budget).is_err());
 	assert!(
 		open_absolute(Path::new("/bin/sh"), false).is_err()
 			|| std::fs::symlink_metadata("/bin/sh").unwrap().is_file()

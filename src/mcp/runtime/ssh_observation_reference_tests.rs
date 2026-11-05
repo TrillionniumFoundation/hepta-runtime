@@ -1,6 +1,6 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
-//! Differential checks for bounded SSH references and complete fresh reads.
+//! Differential checks for bounded executable references and complete fresh reads.
 
 use super::*;
 use std::cell::Cell;
@@ -21,9 +21,10 @@ fn pin_pair(bytes: &[u8], maximum: usize) -> (tempfile::TempDir, PinnedFile, Pin
 	let (mut reference, loaded) =
 		PinnedFile::load(&path, Some(&pin_hex(bytes)), maximum, true, false).unwrap();
 	assert!(reference.reference.is_none());
-	// Production opts in only for /usr/bin/ssh. A private test file permits
+	// Production opts in only for fixed public executables. A private test file permits
 	// differential mutation tests without touching a system executable.
-	reference.reference = bounded_ssh_reference(loaded);
+	let mut reference_budget = MAX_EXECUTABLE_REFERENCE_BYTES;
+	reference.reference = bounded_executable_reference(loaded, &mut reference_budget);
 	let mut sha = reference.clone();
 	sha.reference = None;
 	(root, sha, reference)
@@ -95,15 +96,15 @@ fn reference_and_sha_agree_on_first_last_and_multi_chunk_changes() {
 #[test]
 fn reference_budget_preserves_initial_pins_and_sha_fallback() {
 	for length in [
-		MAX_SSH_REFERENCE_BYTES - 1,
-		MAX_SSH_REFERENCE_BYTES,
-		MAX_SSH_REFERENCE_BYTES + 1,
+		MAX_EXECUTABLE_REFERENCE_BYTES - 1,
+		MAX_EXECUTABLE_REFERENCE_BYTES,
+		MAX_EXECUTABLE_REFERENCE_BYTES + 1,
 	] {
 		let mut bytes = vec![37; length];
 		let (_root, mut sha, mut reference) = pin_pair(&bytes, length);
 		assert_eq!(
 			reference.reference.is_some(),
-			length <= MAX_SSH_REFERENCE_BYTES
+			length <= MAX_EXECUTABLE_REFERENCE_BYTES
 		);
 		assert_eq!(sha.digest, reference.digest);
 		sha.verify().unwrap();
@@ -122,6 +123,27 @@ fn reference_budget_preserves_initial_pins_and_sha_fallback() {
 		);
 		assert!(reference.verify().is_err());
 	}
+}
+
+#[test]
+fn executable_references_share_one_budget_without_spending_on_rejected_files() {
+	let mut remaining = MAX_EXECUTABLE_REFERENCE_BYTES;
+	let first =
+		bounded_executable_reference(vec![59; MAX_EXECUTABLE_REFERENCE_BYTES - 8], &mut remaining)
+			.unwrap();
+	assert_eq!(remaining, 8);
+	assert!(bounded_executable_reference(vec![61; 9], &mut remaining).is_none());
+	assert_eq!(remaining, 8);
+	let second = bounded_executable_reference(vec![67; 7], &mut remaining).unwrap();
+	assert_eq!(remaining, 1);
+	let third = bounded_executable_reference(vec![71; 1], &mut remaining).unwrap();
+	assert_eq!(remaining, 0);
+	assert_eq!(
+		first.len() + second.len() + third.len(),
+		MAX_EXECUTABLE_REFERENCE_BYTES
+	);
+	assert!(bounded_executable_reference(vec![73; 1], &mut remaining).is_none());
+	assert_eq!(remaining, 0);
 }
 
 #[test]
@@ -156,7 +178,8 @@ fn reference_length_must_match_the_complete_stream() {
 			if expected.len() == length {
 				continue;
 			}
-			reference.reference = bounded_ssh_reference(expected);
+			let mut reference_budget = MAX_EXECUTABLE_REFERENCE_BYTES;
+			reference.reference = bounded_executable_reference(expected, &mut reference_budget);
 			assert_eq!(
 				reference.verify().unwrap_err().to_string(),
 				"observation profile changed"
@@ -346,7 +369,8 @@ fn ssh_reference_complete_read_abba_microbenchmark() {
 	let (mut reference, bytes) =
 		PinnedFile::load(path, Some(&expected), maximum, false, true).unwrap();
 	let length = bytes.len();
-	reference.reference = bounded_ssh_reference(bytes);
+	let mut reference_budget = MAX_EXECUTABLE_REFERENCE_BYTES;
+	reference.reference = bounded_executable_reference(bytes, &mut reference_budget);
 	assert!(
 		reference.reference.is_some(),
 		"SSH executable exceeds the reference budget"
@@ -372,7 +396,7 @@ fn ssh_reference_complete_read_abba_microbenchmark() {
 			"path": path,
 			"sha256": expected,
 			"bytes": length,
-			"reference_limit_bytes": MAX_SSH_REFERENCE_BYTES,
+			"reference_limit_bytes": MAX_EXECUTABLE_REFERENCE_BYTES,
 			"read_buffer_bytes": VERIFY_BUFFER_BYTES,
 			"iterations_per_arm": ITERATIONS,
 			"blocks": BLOCKS,

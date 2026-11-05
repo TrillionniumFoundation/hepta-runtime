@@ -862,7 +862,9 @@ async fn renewal_error(ready: &mut watch::Receiver<Ready>) -> String {
 }
 
 async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
-	let (old, generation, _listener) = retired_generation(core, Duration::from_secs(10)).await;
+	let remaining = if kind == "renew-terminal" { 60 } else { 10 };
+	let (old, generation, _listener) =
+		retired_generation(core, Duration::from_secs(remaining)).await;
 	let cancel = CancellationToken::new();
 	let deadline = Instant::now() + Duration::from_secs(15);
 	let stale = core.entry("fixture", &cancel, deadline).await.unwrap();
@@ -979,7 +981,11 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 			assert_eq!(profile::socket_stamp(&old.socket).unwrap(), replacement);
 			std::fs::remove_file(&old.socket).unwrap();
 		}
-		"renew-deadline" => {
+		"renew-deadline" | "renew-terminal" => {
+			// Keep the original retirement waiting without running maintenance.
+			// The terminal case must renew even while accepting and within AGE.
+			assert!(old.accepting.load(Ordering::Acquire));
+			assert!(old.owned.terminal().await.unwrap());
 			old.active.store(1, Ordering::Release);
 			let request_cancel = CancellationToken::new();
 			let (reply, _) = oneshot::channel();
@@ -992,7 +998,11 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 				reply,
 				admission: test_admission(),
 			};
-			assert!(request.deadline > old.created + AGE);
+			assert_eq!(
+				request.deadline > old.created + AGE,
+				kind == "renew-deadline"
+			);
+			let next_generation = core.sequence.load(Ordering::Acquire);
 			let permits = Arc::new(Semaphore::new(1));
 			let permit = permits.clone().acquire_owned().await.unwrap();
 			let task_core = core.clone();
@@ -1010,6 +1020,10 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 			.unwrap();
 			let mut installed = core.entry("fixture", &cancel, deadline).await.unwrap();
 			assert_ne!(installed.generation, generation);
+			assert_eq!(installed.generation, next_generation);
+			assert_eq!(core.sequence.load(Ordering::Acquire), next_generation + 1);
+			assert!(Arc::ptr_eq(&installed.permits, &stale.permits));
+			assert_eq!(old.active.load(Ordering::Acquire), 1);
 			assert!(installed
 				.draining
 				.as_ref()
@@ -1036,6 +1050,8 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 			assert!(error.to_string().contains("cancelled"), "{error:#}");
 			assert!(!error.to_string().contains("lifetime cannot cover"));
 			assert_eq!(permits.available_permits(), 1);
+			assert_eq!(stale.permits.available_permits(), HOST_SESSIONS);
+			assert_eq!(core.sequence.load(Ordering::Acquire), next_generation + 1);
 			core.stop.cancel();
 			old.active.store(0, Ordering::Release);
 			assert!(renewal_error(&mut installed.ready)
@@ -2301,6 +2317,7 @@ fn isolated_actual_ssh_guard_cancellation_and_ownership_fixtures() {
 		"renew-refused",
 		"renew-cleanup",
 		"renew-deadline",
+		"renew-terminal",
 		"renew-maintain",
 		"renew-retirement",
 		"queue-capacity",
@@ -2513,7 +2530,9 @@ async fn isolated_helper() {
 				queued_admission_fixture(&core, &kind, &agent_control).await;
 			}
 			"renew-singleflight" | "renew-refused" | "renew-cleanup" | "renew-deadline"
-			| "renew-maintain" | "renew-retirement" => renewal_fixture(&core, &kind).await,
+			| "renew-terminal" | "renew-maintain" | "renew-retirement" => {
+				renewal_fixture(&core, &kind).await;
+			}
 			"admission-cancel" => {
 				agent_control.stall.store(true, Ordering::Release);
 				let cancel = CancellationToken::new();
