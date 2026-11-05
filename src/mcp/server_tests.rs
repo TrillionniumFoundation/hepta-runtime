@@ -1152,3 +1152,169 @@ fn execution_shadow_tool_requires_runtime_mode_discovery() {
 		.iter()
 		.any(|tool| tool.name.as_ref() == "execution_shadow_admit"));
 }
+
+/// A child process isolates the runtime singleton from filesystem-only tests.
+/// Its configured host cannot execute, write or open a PTY and is never used.
+#[tokio::test(flavor = "multi_thread")]
+async fn runtime_weight_semantic_replay_and_rejections_over_real_mcp() {
+	use crate::mcp::weight_semantic::weight_semantic_tests::{envelope, fixture};
+
+	const CHILD: &str = "HEPTA_WEIGHT_SEMANTIC_TEST_CHILD";
+	if std::env::var_os(CHILD).is_none() {
+		let mut command = tokio::process::Command::new(std::env::current_exe().unwrap());
+		command
+			.args([
+				"mcp::server::server_tests::runtime_weight_semantic_replay_and_rejections_over_real_mcp",
+				"--exact",
+				"--test-threads=1",
+			])
+			.env(CHILD, "1")
+			.kill_on_drop(true);
+		let output = tokio::time::timeout(Duration::from_secs(30), command.output())
+			.await
+			.expect("isolated semantic MCP test completes")
+			.unwrap();
+		assert!(
+			output.status.success(),
+			"{}\n{}",
+			String::from_utf8_lossy(&output.stdout),
+			String::from_utf8_lossy(&output.stderr)
+		);
+		return;
+	}
+	let root = tempfile::Builder::new()
+		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
+		.unwrap();
+	let state = root.path().join("state");
+	tokio::fs::create_dir(&state).await.unwrap();
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		tokio::fs::set_permissions(&state, std::fs::Permissions::from_mode(0o700))
+			.await
+			.unwrap();
+	}
+	let config_path = root.path().join("runtime.json");
+	let config_json = json!({
+		"state_dir": state,
+		"hosts": {
+			"fixture": {
+				"ssh_target": "never-connect.invalid",
+				"platform": "linux",
+				"remote_state_dir": "/never-launch",
+				"allow_execute": false,
+				"allow_pty": false,
+				"allow_write": false
+			}
+		}
+	});
+	tokio::fs::write(&config_path, serde_json::to_vec(&config_json).unwrap())
+		.await
+		.unwrap();
+	let config = crate::mcp::runtime::RuntimeConfig::load(&config_path).unwrap();
+	crate::mcp::runtime::init_runtime(config).unwrap();
+	let (client, _server_task, _) = connect().await;
+	let tools = client.list_tools(None).await.unwrap();
+	let tool = tools
+		.tools
+		.iter()
+		.find(|tool| tool.name == "weight_semantic_replay")
+		.unwrap();
+	assert!(super::RUNTIME_TOOL_NAMES.contains(&"weight_semantic_replay"));
+	let annotations = tool.annotations.as_ref().unwrap();
+	assert_eq!(annotations.read_only_hint, Some(true));
+	assert_eq!(annotations.destructive_hint, Some(false));
+	assert_eq!(annotations.open_world_hint, Some(false));
+	assert_eq!(tool.input_schema["additionalProperties"], false);
+	let properties = tool.input_schema["properties"].as_object().unwrap();
+	assert_eq!(properties.len(), 4);
+	assert_eq!(properties["request_json"]["maxLength"], 2097152);
+
+	let params = fixture();
+	let valid = serde_json::to_value(&params).unwrap();
+	let (failed, text) =
+		call_runtime_tool_text(&client, "weight_semantic_replay", valid.clone()).await;
+	assert!(!failed, "{text}");
+	let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+	assert_eq!(value["request_sha256"], params.expected_request_sha256);
+	assert_eq!(
+		value["core_source_sha256"],
+		params.expected_core_source_sha256
+	);
+	assert_eq!(
+		value["target_contract_sha256"],
+		params.expected_target_contract_sha256
+	);
+	assert_eq!(value["hidden_program_reexecuted"], true);
+	assert_eq!(value["teacher_program_reexecuted"], true);
+	assert_eq!(value["external_source_authenticated"], false);
+	assert_eq!(value["production_eligible"], false);
+	assert_eq!(value["weights_modified"], false);
+	assert_eq!(value["rows"].as_array().unwrap().len(), 1);
+
+	let mut cases = Vec::new();
+	for field in [
+		"expected_request_sha256",
+		"expected_core_source_sha256",
+		"expected_target_contract_sha256",
+	] {
+		let mut changed = valid.clone();
+		changed[field] = json!("0".repeat(64));
+		cases.push((field, changed));
+	}
+	let mut unknown_outer = valid;
+	unknown_outer["teacher_q"] = json!(vec![0.; 6]);
+	cases.push(("unknown outer field", unknown_outer));
+	for (name, field, replacement) in [
+		("unknown request field", "teacher_q", json!(vec![0.; 6])),
+		("unsupported profile", "profile", json!("first-passage")),
+		(
+			"checkpoint commitment",
+			"expected_checkpoint_sha256",
+			json!("0".repeat(64)),
+		),
+		(
+			"wrong observation time",
+			"traces",
+			json!([{
+				"source_row": 0,
+				"steps": [{
+					"action": 2,
+					"completion": {"observation_tick": 2, "failure": false, "observation": 1}
+				}]
+			}]),
+		),
+	] {
+		let mut request: serde_json::Value = serde_json::from_str(&params.request_json).unwrap();
+		request[field] = replacement;
+		cases.push((
+			name,
+			serde_json::to_value(envelope(request.to_string())).unwrap(),
+		));
+	}
+	for (name, arguments) in cases {
+		let result = client
+			.call_tool(
+				CallToolRequestParams::new("weight_semantic_replay")
+					.with_arguments(arguments.as_object().unwrap().clone()),
+			)
+			.await;
+		if let Ok(response) = result {
+			assert_eq!(
+				response.is_error,
+				Some(true),
+				"{name}: {:?}",
+				response.content
+			);
+		}
+	}
+	// Rejections must leave the single worker usable; they cannot publish a
+	// partial success or poison the admission permit for the next request.
+	let (failed, text) = call_runtime_tool_text(
+		&client,
+		"weight_semantic_replay",
+		serde_json::to_value(params).unwrap(),
+	)
+	.await;
+	assert!(!failed, "{text}");
+}
