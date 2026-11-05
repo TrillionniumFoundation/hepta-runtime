@@ -260,17 +260,22 @@ fn type_only_dependencies_preserve_declaration_and_inline_specifier_scopes() {
 #[test]
 fn graph_continuation_rejects_identity_from_previous_analysis_semantics() {
 	let mut selected = request(graph_sources(), JavascriptGraphCollection::Imports);
-	let legacy = sha256(
-		&serde_json::to_vec(&json!({
-			"profile":"hepta.javascript-selected-source-graph.v1",
-			"parser":{"name":"oxc","version":PARSER_VERSION},
-			"sources":source_identities(&selected)
-		}))
-		.expect("legacy graph identity"),
-	);
-	selected.expected_graph_sha256 = Some(legacy);
-	selected.offset = 1;
-	assert!(graph::report(&selected).is_err());
+	for profile in [
+		"hepta.javascript-selected-source-graph.v1",
+		"hepta.javascript-selected-source-graph.v2",
+	] {
+		let legacy = sha256(
+			&serde_json::to_vec(&json!({
+				"profile":profile,
+				"parser":{"name":"oxc","version":PARSER_VERSION},
+				"sources":source_identities(&selected)
+			}))
+			.expect("legacy graph identity"),
+		);
+		selected.expected_graph_sha256 = Some(legacy);
+		selected.offset = 1;
+		assert!(graph::report(&selected).is_err(), "{profile}");
+	}
 	selected.expected_graph_sha256 = None;
 	selected.offset = 0;
 	let first = graph::report(&selected).expect("current first page");
@@ -278,6 +283,51 @@ fn graph_continuation_rejects_identity_from_previous_analysis_semantics() {
 	selected.expected_graph_sha256 = Some(first["graph_sha256"].as_str().expect("hash").into());
 	selected.offset = 1;
 	assert!(graph::report(&selected).is_ok());
+}
+
+#[test]
+fn repaired_alias_graph_refuses_captured_v2_identity() {
+	let reference: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_javascript/alias-order-original-6.8.0.json"
+	))
+	.expect("actual original alias fixture");
+	let case = reference["cases"]
+		.as_array()
+		.expect("cases")
+		.iter()
+		.find(|case| case["id"] == "after.js")
+		.expect("captured source-order regression");
+	let mut selected = request(
+		vec![AdmittedSource {
+			id: "after.js".into(),
+			syntax: JavascriptSyntax::Javascript,
+			module_kind: JavascriptModuleKind::Commonjs,
+			text: case["source"].as_str().expect("source").into(),
+		}],
+		JavascriptGraphCollection::ElectronCalls,
+	);
+	// Actual old b80ff24a and pre-version-repair 4bd93ab8 workers returned
+	// this same v2 identity with respectively zero and one Electron rows.
+	let old_v2 = "e1032f30477d34882a64d5d86f648c416742e663a1bad3853913667ab885888c";
+	let first = graph::report(&selected).expect("current alias observations");
+	assert_eq!(
+		first["analysis_profile"],
+		"hepta.javascript-selected-source-graph.v3"
+	);
+	assert_eq!(first["total_rows"], 1);
+	assert_eq!(first["rows"][0]["channel"], "later");
+	assert_ne!(first["graph_sha256"], old_v2);
+	for offset in [0, 1] {
+		selected.expected_graph_sha256 = Some(old_v2.into());
+		selected.offset = offset;
+		assert!(graph::report(&selected).is_err(), "old v2 offset {offset}");
+	}
+	selected.expected_graph_sha256 = Some(first["graph_sha256"].as_str().expect("hash").into());
+	selected.offset = 0;
+	assert_eq!(
+		graph::report(&selected).expect("current identity")["rows"],
+		first["rows"]
+	);
 }
 
 #[test]

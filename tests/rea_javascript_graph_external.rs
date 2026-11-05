@@ -359,7 +359,7 @@ fn actual_mcp_preserves_type_modifier_scope_and_recovers_after_invalid_typescrip
 	let initial = report(mcp.call(2, arguments.clone()));
 	assert_eq!(
 		initial["analysis_profile"],
-		"hepta.javascript-selected-source-graph.v2"
+		"hepta.javascript-selected-source-graph.v3"
 	);
 	assert_eq!(initial["total_rows"], 4);
 	let scopes: Vec<_> = initial["rows"]

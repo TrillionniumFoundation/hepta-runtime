@@ -42,7 +42,13 @@ selected sources does not change their graph identity.
 The graph hash identifies the complete copied source set and its parser profile;
 it is not a checksum of all graph result rows. Changes to analysis or collection
 ordering semantics must advance the versioned
-`hepta.javascript-selected-source-graph.v2` profile. Independent reads of several
+`hepta.javascript-selected-source-graph.v3` profile. Version 3 binds the deferred
+lexical Electron alias resolution; both v1 and v2 continuation identities are
+refused even when the selected bytes and grammars are unchanged. A real late-alias
+fixture produced zero Electron rows in the old worker and one after the repair
+while retaining its v2 identity, so the alias repair must advance this profile.
+The original REA projection remains finite; this version change does not establish
+full application-graph or Evidence equivalence. Independent reads of several
 files do not constitute an atomic filesystem snapshot. Results use the native
 `hepta.rea-javascript-graph.v1` record format and explicitly set
 `rea_evidence_compatible: false`.
