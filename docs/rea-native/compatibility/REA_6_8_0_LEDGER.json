@@ -20,16 +20,21 @@
     ]
   },
   "runtime": {
-    "baseline_commit": "1d9ea7e7e7a1625c611d5f6e037a1ed9d57379d4",
+    "baseline_commit": "9b02a74ffb17feba2ea07055ee4ab0981b06cf83",
     "discovery": "Rust source handler discovery, not live MCP tools/list",
-    "interface_count": 26,
+    "interface_count": 31,
     "interfaces": [
       "rea_compare_web_captures",
+      "rea_export_evidence_bundle",
+      "rea_get_evidence_bundle",
+      "rea_inspect_analysis_view",
       "rea_inspect_apk_signature",
+      "rea_inspect_apk_signature_evidence",
       "rea_inspect_application",
       "rea_inspect_archive",
       "rea_inspect_artifact",
       "rea_inspect_asar",
+      "rea_inspect_elf_notes",
       "rea_inspect_javascript_graph",
       "rea_inspect_javascript_package",
       "rea_inspect_model",
@@ -61,6 +66,17 @@
         "upstream_tools": [
           "inspect_apk_signature",
           "inspect_android_package"
+        ],
+        "upstream_parity": "NOT_ESTABLISHED"
+      },
+      {
+        "id": "apk_static_worker",
+        "kind": "rust_cli",
+        "entrypoint": "hepta-runtime rea-apk-static-worker",
+        "source_presence": "PRESENT",
+        "scope": "Internal captured-byte static APK observations for the frozen inspect_apk_signature route; no target execution or platform-trust assertion. Distinct from the mathematical-verification worker.",
+        "upstream_tools": [
+          "inspect_apk_signature"
         ],
         "upstream_parity": "NOT_ESTABLISHED"
       },
@@ -99,11 +115,22 @@
         "upstream_parity": "NOT_ESTABLISHED"
       },
       {
+        "id": "elf_notes_worker",
+        "kind": "rust_cli",
+        "entrypoint": "hepta-runtime rea-elf-notes-worker",
+        "source_presence": "PRESENT",
+        "scope": "Internal captured-byte native ELF notes parser for the frozen inspect_elf_notes route; source-bound worker and retained Evidence are separate from complete operation qualification.",
+        "upstream_tools": [
+          "inspect_elf_notes"
+        ],
+        "upstream_parity": "NOT_ESTABLISHED"
+      },
+      {
         "id": "javascript_worker",
         "kind": "rust_cli",
         "entrypoint": "hepta-runtime rea-javascript-worker",
         "source_presence": "PRESENT",
-        "scope": "Internal native Rust AST worker for explicitly admitted JS/TS/JSX/TSX text; Oxc lexical-scope facts and conservative static candidates. Node/Babel is a development reference only. No target execution or proof of live process pairs. The final frozen release passed actual MCP cancellation of its stopped owned worker: the original owner remained alive, reaped the worker within the unchanged five-second observation window, and served the recovery call. This finite lifecycle observation does not close upstream operation parity.",
+        "scope": "Internal native Rust Oxc AST worker for explicitly admitted JS/TS/JSX/TSX text, lexical-scope facts and conservative candidates. Profile v2 distinguishes declaration-level and named-specifier type-only syntax without inferring erased runtime imports. Historical finite cancellation receipts below belong to their original source/binary combinations; this mapping does not transfer those results to a new build.",
         "upstream_tools": [
           "analyze_javascript_application"
         ],
@@ -166,13 +193,13 @@
     "source_files": [
       {
         "path": "Cargo.lock",
-        "sha256": "558136129c81ab5713f9ff381c6340be8b4ec61986b4c808d828aef85d901a59",
-        "bytes": 85395
+        "sha256": "7f39704b92d5fc762a98a5313949034db464ca9485827b19b5dde7aa69902d43",
+        "bytes": 90148
       },
       {
         "path": "Cargo.toml",
-        "sha256": "4d978c8c5398e8888a5b653a8ac46a0f3b3b0012b14633d601626084f09e82f7",
-        "bytes": 3627
+        "sha256": "4e352db1be937d65fe475b8748a49b25fb2424f61dde45eb729ad2a980474cc2",
+        "bytes": 4144
       },
       {
         "path": "deploy/hepta_browser_capture.py",
@@ -466,8 +493,8 @@
       },
       {
         "path": "docs/rea-native/JAVASCRIPT_AST.md",
-        "sha256": "cf21992c8b728ecab360d880fa12c637d277adeeac6e471cf7de144ead05d138",
-        "bytes": 9819
+        "sha256": "f4a04de6b7c33808976176c582759a5bf5556d8eb18e0df7ce9164596e892d9b",
+        "bytes": 11946
       },
       {
         "path": "docs/rea-native/SOURCE_MAP.md",
@@ -505,6 +532,11 @@
         "bytes": 10831
       },
       {
+        "path": "scripts/qualify_javascript_type_erasure.mjs",
+        "sha256": "fd1734bf468f805e78a05528e153db9b367349c7858b527ff51dbde7453d2b3b",
+        "bytes": 8149
+      },
+      {
         "path": "scripts/rea-asar-reference.mjs",
         "sha256": "b1950ff6bb2f06831e28938c4538f6e091bd76395a25cf115350a8cbf0db83d6",
         "bytes": 6296
@@ -516,8 +548,8 @@
       },
       {
         "path": "scripts/rea-javascript-ast-reference.mjs",
-        "sha256": "2287596907c24d362bae75a8103afcbf1499c070da6a7e9b09008264396bbcf9",
-        "bytes": 19455
+        "sha256": "329fa164859a1e54b8fe95fdf5e2690acb7eb1734b7f5278d3075aa30ae9c176",
+        "bytes": 19608
       },
       {
         "path": "scripts/rea-number-bit-reference.mjs",
@@ -541,18 +573,18 @@
       },
       {
         "path": "src/cli.rs",
-        "sha256": "3eb224d70e76230578c50716d54309610cdcb2e6823599580dc46456603d290a",
-        "bytes": 4573
+        "sha256": "6314bbb91df367b3552e37cacbe9d7c6b8917392fc1caaa85c8b2baeb74681d3",
+        "bytes": 4776
       },
       {
         "path": "src/main.rs",
-        "sha256": "46430b4001f7f508e69a1effbe73e857b3b397ab934a1e88f21024a277f1d9f1",
-        "bytes": 12192
+        "sha256": "c7782a35b6846db3600aaca92da1ace10a09b0e705075d56ebe3094cb0087739",
+        "bytes": 12530
       },
       {
         "path": "src/mcp/mod.rs",
-        "sha256": "412552df2d61b9f1247bb6b23e6f44a5669e467d5e32ef58adc0973f4bf01a2e",
-        "bytes": 2567
+        "sha256": "6fce4fa59e9fe7ee5ee7b27237a51161b324b4fd944c7e1bd103def64e86ef92",
+        "bytes": 3067
       },
       {
         "path": "src/mcp/rea.rs",
@@ -560,14 +592,74 @@
         "bytes": 16111
       },
       {
+        "path": "src/mcp/rea_analysis_view.rs",
+        "sha256": "7f7202efce271af7a2bfffc2a53fc8d6286efb87b46cf707e5724bac5b45327d",
+        "bytes": 18388
+      },
+      {
+        "path": "src/mcp/rea_analysis_view_mcp_input.rs",
+        "sha256": "996085ecc5abb352825911efb6e172c196e90e92aaec2b529de8f3b23717b884",
+        "bytes": 10881
+      },
+      {
+        "path": "src/mcp/rea_analysis_view_mcp_input_tests.rs",
+        "sha256": "c91e1d796d94ec6dc0aef3e7c9a849648ed846c675f9342f4b74264adca784ec",
+        "bytes": 369987
+      },
+      {
+        "path": "src/mcp/rea_analysis_view_tests.rs",
+        "sha256": "2b7bf0dd5676d8bda822ff2eb5c4a958af476c4e7bbee5cfca40e4f3f5abfca8",
+        "bytes": 5052
+      },
+      {
+        "path": "src/mcp/rea_apk_evidence.rs",
+        "sha256": "1bce5d5b4d8009a82bc79d41978b57f9234e83081b27583daccb767df8be19ad",
+        "bytes": 16754
+      },
+      {
+        "path": "src/mcp/rea_apk_evidence_tests.rs",
+        "sha256": "a2eb4dcabe9dc2ebde9a5d16432941663931d936dd130524185c1bb78f73bdf6",
+        "bytes": 9959
+      },
+      {
+        "path": "src/mcp/rea_apk_mcp_input.rs",
+        "sha256": "d26fe8e1d4cc305255308cf9b253dc03231905ec356d6c59f55fbc749e6341fd",
+        "bytes": 8394
+      },
+      {
+        "path": "src/mcp/rea_apk_mcp_input_tests.rs",
+        "sha256": "0ca667ae6cc049d55ca82b2564e5e35e507ec995a4fccbbd20e6598474ba2b4a",
+        "bytes": 89789
+      },
+      {
         "path": "src/mcp/rea_apk_signature.rs",
-        "sha256": "95b4933628e4937e1e9bb09a6a5b2e5121c46fcfc7a8c2ac8983b881bfcc88a1",
-        "bytes": 5823
+        "sha256": "35df121b49e6af4605687c3b692650cbfc757271a1f829d97ef2e21741160978",
+        "bytes": 7288
+      },
+      {
+        "path": "src/mcp/rea_apk_signature_archive.rs",
+        "sha256": "15d135bdef1752049faa0bd2ce8bed094ab533202926ef521cd05506e3bf8b10",
+        "bytes": 20624
+      },
+      {
+        "path": "src/mcp/rea_apk_signature_certificate.rs",
+        "sha256": "df09b1e8601389b391c3577c4e3c3b52241802211f3b3748143294b4cd17cd7d",
+        "bytes": 15602
+      },
+      {
+        "path": "src/mcp/rea_apk_signature_observation.rs",
+        "sha256": "86a442325a18dd53e3f036220bd41268e017083f73208f7cdd758c1170d4c949",
+        "bytes": 39710
+      },
+      {
+        "path": "src/mcp/rea_apk_signature_observation_tests.rs",
+        "sha256": "9f32aef09345545c73fd6e527c8d9fbddcb7292c7c8db0d6de6ddeaa814a1bdc",
+        "bytes": 22894
       },
       {
         "path": "src/mcp/rea_apk_signature_parser.rs",
-        "sha256": "35e799efe6fb19d618f2015fd36600abf6fe3bb4e935d58f35510f63829a9d73",
-        "bytes": 28330
+        "sha256": "54994bab1bb1c2b29a4aaf53222a444aeb480f4f6d08e2b14b7fe3dc98224112",
+        "bytes": 29676
       },
       {
         "path": "src/mcp/rea_apk_signature_tests.rs",
@@ -575,9 +667,34 @@
         "bytes": 18615
       },
       {
+        "path": "src/mcp/rea_apk_signature_v1.rs",
+        "sha256": "30e4693256c5f978006dec737a5128618a20b4e126da6ee0c54c74ca5e91d21a",
+        "bytes": 21193
+      },
+      {
+        "path": "src/mcp/rea_apk_signature_view.rs",
+        "sha256": "8745c301f87428948c85c717f79c0d2d955cca4d610863a3c3e6fff86eb14d32",
+        "bytes": 16237
+      },
+      {
+        "path": "src/mcp/rea_apk_signature_view_tests.rs",
+        "sha256": "55ed1695d3e798a6c055ca4d40579706abe8bd1f91e43dd96b19d9635ef17716",
+        "bytes": 6421
+      },
+      {
         "path": "src/mcp/rea_apk_signature_worker.rs",
         "sha256": "ddeba5c332b51c7bb3f5a4f3e8a6a3cbce5b7b7b659f371e931744174f0769a5",
         "bytes": 5054
+      },
+      {
+        "path": "src/mcp/rea_apk_static_worker.rs",
+        "sha256": "b0db0f51c9818826ead60b02e0639c9a1898842454779b2395a856e244f55386",
+        "bytes": 7388
+      },
+      {
+        "path": "src/mcp/rea_apk_static_worker_tests.rs",
+        "sha256": "8916e73d43055dbc650afdeaa459d66916b54026ab4efcf2087288b717b16ce3",
+        "bytes": 7544
       },
       {
         "path": "src/mcp/rea_application.rs",
@@ -685,6 +802,96 @@
         "bytes": 22117
       },
       {
+        "path": "src/mcp/rea_contract.rs",
+        "sha256": "c88c5e82bf4fca49b5a7a1ed823dd944468128275c2b710456c9465ad2e2d60f",
+        "bytes": 20868
+      },
+      {
+        "path": "src/mcp/rea_contract_schemas/export_evidence_bundle.input.json",
+        "sha256": "09a9a62510f387792a4bf0024e8e6a8aa5e4992b30ccfbe0665498cbda6e3d4e",
+        "bytes": 726
+      },
+      {
+        "path": "src/mcp/rea_contract_schemas/export_evidence_bundle.output.json",
+        "sha256": "718ab4eb982899644a3297eb574c42ed540c197ff844243a4147564ca552b24e",
+        "bytes": 991
+      },
+      {
+        "path": "src/mcp/rea_contract_schemas/get_evidence_bundle.input.json",
+        "sha256": "beb86eeee7e181c314aa0270bef3c949bdb451dae2eafbe3fb5779b8c4044f07",
+        "bytes": 1206
+      },
+      {
+        "path": "src/mcp/rea_contract_schemas/get_evidence_bundle.output.json",
+        "sha256": "8ee38c256334be3e69758f0c3cbae3af588acc5839e70ddd272771013d891202",
+        "bytes": 41013
+      },
+      {
+        "path": "src/mcp/rea_contract_schemas/inspect_analysis_view.input.json",
+        "sha256": "231407819efabe950165cfe5be94afac88c1a1af4f2e41237ba03c12f2aba025",
+        "bytes": 71633
+      },
+      {
+        "path": "src/mcp/rea_contract_schemas/inspect_analysis_view.output.json",
+        "sha256": "e1c94cca176ede2e4e5d9d6c63b9de4f0aaf1cd19ff05ebf3a41de6e4ec656d9",
+        "bytes": 382065
+      },
+      {
+        "path": "src/mcp/rea_contract_schemas/inspect_apk_signature.input.json",
+        "sha256": "17e02aaf8df2f43bd502bc0f732a87d67ec26d0c1f98776c83c59601864b9e07",
+        "bytes": 6084
+      },
+      {
+        "path": "src/mcp/rea_contract_schemas/inspect_apk_signature.output.json",
+        "sha256": "5810af2a5682472277b19f891e2cd1524cea024a2604c015e37f707df82c4daf",
+        "bytes": 62407
+      },
+      {
+        "path": "src/mcp/rea_contract_schemas/inspect_elf_notes.input.json",
+        "sha256": "05d9677e453f32abed21ace6a8550e36de6d523647723983d2c5764163de9372",
+        "bytes": 854
+      },
+      {
+        "path": "src/mcp/rea_contract_schemas/inspect_elf_notes.output.json",
+        "sha256": "a3a7bd395f7995d25660e7347b81bad32049458cd8b27518fe9aa4012869cade",
+        "bytes": 26461
+      },
+      {
+        "path": "src/mcp/rea_elf_notes.rs",
+        "sha256": "3bd3fa922b3cdd3c15fa40364c7e9263b2b3f0121ca13f6b848424c1d7dda10f",
+        "bytes": 15519
+      },
+      {
+        "path": "src/mcp/rea_elf_notes_compression.rs",
+        "sha256": "f2e44f3e72c46a3f8b70a3df8939cc14812acb2c41d0c5407e54f2bf7c64e42d",
+        "bytes": 16225
+      },
+      {
+        "path": "src/mcp/rea_elf_notes_parser.rs",
+        "sha256": "5708f4ede936de948c19c5952462cd5b12b328fdf6d03ba908d37b160d8870dc",
+        "bytes": 21805
+      },
+      {
+        "path": "src/mcp/rea_elf_notes_parser_tests.rs",
+        "sha256": "b2478164026ab9653376a9b824fdfbf1d7823558e506cb2fd2474286fee3e042",
+        "bytes": 26607
+      },
+      {
+        "path": "src/mcp/rea_elf_notes_tests.rs",
+        "sha256": "19b82765dea7192b197e01163a7f9e06631c63aef0997444323db61b5a242a38",
+        "bytes": 2558
+      },
+      {
+        "path": "src/mcp/rea_elf_notes_worker.rs",
+        "sha256": "f4a0efa152824cc59227561d91ae004f8a0434428fb267a9c7258c1043720fcd",
+        "bytes": 5432
+      },
+      {
+        "path": "src/mcp/rea_elf_notes_worker_tests.rs",
+        "sha256": "1b92b4bf79ab7535a6722c149550ae1e6a63cb1e66cc043f6770fb848055c4c7",
+        "bytes": 12625
+      },
+      {
         "path": "src/mcp/rea_engine.rs",
         "sha256": "11794445912b5e0104fc87b339f983fac2628bc240abc29061b709156a49fb19",
         "bytes": 18069
@@ -701,8 +908,48 @@
       },
       {
         "path": "src/mcp/rea_evidence.rs",
-        "sha256": "7e884827c62b6f95379a2e7335f7c6a9f567f189dfd218bbc9d6902a1463e6a7",
-        "bytes": 20451
+        "sha256": "6586a51457a711ede1ce44c64a61f77b39d9fecffa460260d35951bbd53e7b18",
+        "bytes": 20926
+      },
+      {
+        "path": "src/mcp/rea_evidence_export.rs",
+        "sha256": "2ba80830d6572af7145de5dcfb181e90045758b56bb1e45d74dffafb9124a1e9",
+        "bytes": 41170
+      },
+      {
+        "path": "src/mcp/rea_evidence_export_tests.rs",
+        "sha256": "b62137e83961daa31d7b5c7b9d9ef93f644e6e676419224001a2e7f7ed32bd6c",
+        "bytes": 33487
+      },
+      {
+        "path": "src/mcp/rea_evidence_file.rs",
+        "sha256": "2f790baffec4305f1b76a02f763c80ee5777c41c232b0964333d6e21698bb7fe",
+        "bytes": 28230
+      },
+      {
+        "path": "src/mcp/rea_evidence_file_tests.rs",
+        "sha256": "d0ab8c70584debfc7c4b0b7953185b9c98ca9ecd4123c1c11109a1090323c51a",
+        "bytes": 19035
+      },
+      {
+        "path": "src/mcp/rea_evidence_session.rs",
+        "sha256": "e3a5aad0c78a109f2c4ba8f9c3c6c4105cdd6496e2fbc6d54edd0c6f6412c2da",
+        "bytes": 16833
+      },
+      {
+        "path": "src/mcp/rea_evidence_session_tests.rs",
+        "sha256": "499ef1845bdf0dff9bdce293911ed4ffd912bf37aa2ed16ddbbe96dca1d4d168",
+        "bytes": 12394
+      },
+      {
+        "path": "src/mcp/rea_evidence_source.rs",
+        "sha256": "de3125a91d32c08780db06a0c3c897a0c2145c341fb008d7a1b127994bcd6071",
+        "bytes": 38430
+      },
+      {
+        "path": "src/mcp/rea_evidence_source_tests.rs",
+        "sha256": "45647253c42be19540de72a95f57f9ddca7ef93e2856ebeac2f8024adcd9ec66",
+        "bytes": 10497
       },
       {
         "path": "src/mcp/rea_evidence_tests.rs",
@@ -735,29 +982,34 @@
         "bytes": 8542
       },
       {
+        "path": "src/mcp/rea_inline_order.rs",
+        "sha256": "67887ec3a1a1e01b7bc2d46edef35eb7f204d98c880fdd455b17bfd9b51917cb",
+        "bytes": 3696
+      },
+      {
         "path": "src/mcp/rea_javascript.rs",
         "sha256": "718f23be2ef9aa149be11a8d34c80103ae59e421b0c34f9a9a8e770c110e7869",
         "bytes": 11872
       },
       {
         "path": "src/mcp/rea_javascript_ast.rs",
-        "sha256": "0f4c528cba86affc85ac01b898de8f4fc4e0f930ba0d74420e2ee91d6634a985",
-        "bytes": 21085
+        "sha256": "43e7ecca7f695790369884b88116e2795e04d34e1bcdee0c45b3d6600fec7b86",
+        "bytes": 21794
       },
       {
         "path": "src/mcp/rea_javascript_graph.rs",
-        "sha256": "1b68ced13b6d9b87cbf191661ee0a7bf7b1328df77d2874365f6961bc6a8047c",
-        "bytes": 12121
+        "sha256": "c699aa54ab2cb3ad045793dd97da07b37d65aa38385cb4aceea18b7735e9c6a4",
+        "bytes": 12175
       },
       {
         "path": "src/mcp/rea_javascript_graph_report.rs",
-        "sha256": "e4b93f41e050aad1728869d4e5eae6d8b9031fe10f84641fc9016181982c0c26",
-        "bytes": 9267
+        "sha256": "31962e65a64e118c067ba2a1d973838650c56fa7ba5bab694ec66fd1651e0400",
+        "bytes": 9500
       },
       {
         "path": "src/mcp/rea_javascript_graph_tests.rs",
-        "sha256": "933ffe08e3c9453242ae2931b55d5ba610b4923e05cfc0a5413b102eba8cc1cb",
-        "bytes": 10862
+        "sha256": "9a9eb1c78cb8c25484162c6c19eeed3151f81194961b70830ffced325da4d7dd",
+        "bytes": 13546
       },
       {
         "path": "src/mcp/rea_javascript_graph_worker.rs",
@@ -768,6 +1020,21 @@
         "path": "src/mcp/rea_javascript_tests.rs",
         "sha256": "956d8974f746855c8c362b586e27729fa95b564101fde65001f01cbdf996e27e",
         "bytes": 6971
+      },
+      {
+        "path": "src/mcp/rea_mcp_input.rs",
+        "sha256": "59df377b3dbaf12c498a6707faf16cce1c966a0a002d8e82ffe1114f48e53114",
+        "bytes": 7869
+      },
+      {
+        "path": "src/mcp/rea_mcp_input_tests.rs",
+        "sha256": "7d72fae612dc2ae994954637ec120faf75c88cf84224b3681d37f7d091eadc4a",
+        "bytes": 1882
+      },
+      {
+        "path": "src/mcp/rea_mcp_transport.rs",
+        "sha256": "73e76738f6b3b02306aef148f06ddec86fb4d0dd273471a7cf56193072c24e10",
+        "bytes": 14328
       },
       {
         "path": "src/mcp/rea_model.rs",
@@ -823,6 +1090,11 @@
         "path": "src/mcp/rea_provider_tests.rs",
         "sha256": "82c039d09ee1e65b79fc50b0ea555a40978475dca44cfb215751e66adf4ebe34",
         "bytes": 24995
+      },
+      {
+        "path": "src/mcp/rea_response_order.rs",
+        "sha256": "489a220f385c1024a5f1915a35c736a108c2abad274d163ddffd927b6f2add22",
+        "bytes": 19731
       },
       {
         "path": "src/mcp/rea_seccomp.rs",
@@ -891,8 +1163,8 @@
       },
       {
         "path": "src/mcp/server.rs",
-        "sha256": "87ba028c07d015bd57b9100be39b49f436021fbdf1efb75dc0c802b15dceffd3",
-        "bytes": 148595
+        "sha256": "75cc4ec46c96a8dde493fd0778811aa3d18c44a067b11cc54f3294f86fbb6e32",
+        "bytes": 160039
       },
       {
         "path": "tests/fixtures/rea_apk_signature/provenance.json",
@@ -1026,8 +1298,8 @@
       },
       {
         "path": "tests/rea_javascript_graph_external.rs",
-        "sha256": "0aeee9e333926fedc12d14e45fdfe994746270bad42e2647bc337276dada6514",
-        "bytes": 10676
+        "sha256": "77b15cd7610651553c8a4c871a0c7cdc091082dd9f51bf0248b9b077b279cb68",
+        "bytes": 12866
       },
       {
         "path": "tests/rea_mcp_external.rs",
@@ -1060,7 +1332,7 @@
         "bytes": 7890
       }
     ],
-    "source_manifest_sha256": "d07b76c6ce03e887e6926c150bd8a9f18250ae5a2fe5714c206d0d874bf433b0"
+    "source_manifest_sha256": "51cf6edd5e8b007140725750065e9839d494559fa1a3655cd97aeb7a62ff75bc"
   },
   "environment_observations_sha256": "4ace5e8f041a05d205825fb2b2a41769fcfdc91f60810072eb7a6c17a12f3e9c",
   "dependency_assessments": {
@@ -1654,16 +1926,16 @@
       "hard_missing_dependency": "NOT_ESTABLISHED"
     }
   },
-  "mapping_sha256": "867098cd88372f1f20fefd1564b5c8ce392ccfb0cd214c8299249246c6d3f470",
+  "mapping_sha256": "1f5325c7e06fe3c8ad0c3fb281619786d206dcb5d1da7b289c69a4f55dfa970c",
   "inputs_sha256": "d143681c5384d0cff75d72659cd36381eaff60ca5bf3fe45fb5290b3eccc6904",
   "summary": {
     "published_tools": 229,
     "families": 18,
-    "native_interfaces": 26,
+    "native_interfaces": 31,
     "implementation_counts": {
       "absent": 188,
-      "partial_operation": 18,
-      "related_facility": 23
+      "partial_operation": 21,
+      "related_facility": 20
     },
     "qualified_tools": 0,
     "open_tools": 229,
@@ -11418,14 +11690,12 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "native_implementation": "related_facility",
+      "native_implementation": "partial_operation",
       "native_routes": [
-        "rea_model_session_query",
-        "rea_model_session_read",
-        "rea_read_preview"
+        "rea_inspect_analysis_view"
       ],
-      "native_scope": "Paged native model records and preview retrieval",
-      "remaining_behavior": "Generic authenticated upstream Evidence views, view-specific fields/selectors and retained parents; native AST collection pages re-read selected sources and bind a graph digest, so they do not implement retained upstream Application Graph Evidence views",
+      "native_scope": "Native authenticated retained, inline and Linux evidence-file sources for APK summary, signer, digest and rotation-lineage pages. Retained reads never reopen the artifact; imported parents are not implicitly retained. Unsupported valid view kinds remain explicit capability gaps.",
+      "remaining_behavior": "All other upstream parent/view operations and exact selectors; complete cross-platform file-source, cancellation and recovery semantics; every malformed/oversized source and full operation differential qualification.",
       "dependencies": [],
       "related_runtime_routes": [],
       "related_auxiliary_capabilities": [],
@@ -11436,15 +11706,15 @@
         "typed_outcomes",
         "limits_and_cancellation",
         "source_package_boundary",
-        "bundle_auth_and_unknowns",
         "retention_and_pagination",
+        "bundle_auth_and_unknowns",
         "effects_and_recovery"
       ],
       "remaining_blockers": [
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Generic authenticated upstream Evidence views, view-specific fields/selectors and retained parents; native AST collection pages re-read selected sources and bind a graph digest, so they do not implement retained upstream Application Graph Evidence views"
+          "next_step": "All other upstream parent/view operations and exact selectors; complete cross-platform file-source, cancellation and recovery semantics; every malformed/oversized source and full operation differential qualification."
         },
         {
           "category": "behavioral_differential",
@@ -11457,8 +11727,8 @@
             "typed_outcomes",
             "limits_and_cancellation",
             "source_package_boundary",
-            "bundle_auth_and_unknowns",
             "retention_and_pagination",
+            "bundle_auth_and_unknowns",
             "effects_and_recovery"
           ]
         }
@@ -11686,15 +11956,15 @@
       },
       "native_implementation": "partial_operation",
       "native_routes": [
-        "rea_inspect_artifact",
-        "rea_static_start",
-        "rea_static_read"
+        "rea_inspect_elf_notes"
       ],
-      "native_scope": "Selected bounded ELF notes/build-ID inventory",
-      "remaining_behavior": "Exact PT_NOTE/SHT_NOTE coverage, owner/type/desc semantics and REA Evidence on an independent corpus",
+      "native_scope": "Frozen public MCP input/output contracts, native ELF note parsing, bounded capture/worker ownership and retained complete Evidence. The selected compressed-note corpus records both matches and remaining error-precedence differences.",
+      "remaining_behavior": "Complete frozen-operation differential coverage, including remaining compressed-note error precedence and all format/resource boundaries; complete same-combination lifecycle and recovery qualification.",
       "dependencies": [],
       "related_runtime_routes": [],
-      "related_auxiliary_capabilities": [],
+      "related_auxiliary_capabilities": [
+        "elf_notes_worker"
+      ],
       "required_behavior_gates": [
         "contracts",
         "results",
@@ -11710,7 +11980,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Exact PT_NOTE/SHT_NOTE coverage, owner/type/desc semantics and REA Evidence on an independent corpus"
+          "next_step": "Complete frozen-operation differential coverage, including remaining compressed-note error precedence and all format/resource boundaries; complete same-combination lifecycle and recovery qualification."
         },
         {
           "category": "behavioral_differential",
@@ -12578,13 +12848,16 @@
       },
       "native_implementation": "partial_operation",
       "native_routes": [
+        "rea_inspect_apk_signature_evidence"
+      ],
+      "native_scope": "Frozen public MCP static APK signature observations and Evidence, default summaries, selected signing pages and complete session retention; separate native mathematical verification remains available through rea_inspect_apk_signature.",
+      "remaining_behavior": "Full frozen static APK corpus and exact malformed, unknown, truncation and resource semantics across every input/view variant; complete same-combination protocol, retained source, lifecycle and recovery qualification.",
+      "dependencies": [],
+      "related_runtime_routes": [
         "rea_inspect_apk_signature"
       ],
-      "native_scope": "Bounded native APK v2/v3 supported signature records and chunked content digests, with 20 finite Android/REA projections and actual public-MCP lifecycle evidence. This subset uses native Rust cryptography and no external runtime verifier.",
-      "remaining_behavior": "Complete frozen static APK signature observations, including v1/JAR signers and certificate facts, v3.1 declarations, proof-of-rotation/key-rotation observations, all required signer/certificate fields, and exact unknown/truncation/unsupported semantics; every upstream ArtifactInput variant/default, Evidence identity, analysis/view envelope, retained state, pagination and typed error. The finite mathematical verifier does not supply all of these original static observations and contracts.",
-      "dependencies": [],
-      "related_runtime_routes": [],
       "related_auxiliary_capabilities": [
+        "apk_static_worker",
         "apk_signature_worker"
       ],
       "required_behavior_gates": [
@@ -12602,7 +12875,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Complete frozen static APK signature observations, including v1/JAR signers and certificate facts, v3.1 declarations, proof-of-rotation/key-rotation observations, all required signer/certificate fields, and exact unknown/truncation/unsupported semantics; every upstream ArtifactInput variant/default, Evidence identity, analysis/view envelope, retained state, pagination and typed error. The finite mathematical verifier does not supply all of these original static observations and contracts."
+          "next_step": "Full frozen static APK corpus and exact malformed, unknown, truncation and resource semantics across every input/view variant; complete same-combination protocol, retained source, lifecycle and recovery qualification."
         },
         {
           "category": "behavioral_differential",
@@ -18412,14 +18685,12 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "native_implementation": "related_facility",
+      "native_implementation": "partial_operation",
       "native_routes": [
-        "rea_verify_evidence",
-        "rea_retain_preview",
-        "rea_read_preview"
+        "rea_export_evidence_bundle"
       ],
-      "native_scope": "Selected Evidence digest verification and distinct native preview persistence",
-      "remaining_behavior": "Full upstream bundle schemas, authenticated record graph, import/export semantics and canonical Evidence generation",
+      "native_scope": "Frozen public MCP export of complete retained session records using bounded owned local filesystem publication and explicit overwrite.",
+      "remaining_behavior": "Every frozen filesystem/error/ownership/cancellation boundary across platforms and producers, plus complete import/export and multi-host recovery qualification.",
       "dependencies": [],
       "related_runtime_routes": [],
       "related_auxiliary_capabilities": [],
@@ -18438,7 +18709,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Full upstream bundle schemas, authenticated record graph, import/export semantics and canonical Evidence generation"
+          "next_step": "Every frozen filesystem/error/ownership/cancellation boundary across platforms and producers, plus complete import/export and multi-host recovery qualification."
         },
         {
           "category": "behavioral_differential",
@@ -18489,9 +18760,11 @@
         "rea_read_preview"
       ],
       "native_scope": "Selected Evidence digest verification and distinct native preview persistence",
-      "remaining_behavior": "Full upstream bundle schemas, authenticated record graph, import/export semantics and canonical Evidence generation",
+      "remaining_behavior": "No complete upstream bulk import operation or imported-session graph retention. inspect_analysis_view can authenticate one inline/file source and retain only its derived view; that does not implement import_evidence_bundle.",
       "dependencies": [],
-      "related_runtime_routes": [],
+      "related_runtime_routes": [
+        "rea_inspect_analysis_view"
+      ],
       "related_auxiliary_capabilities": [],
       "required_behavior_gates": [
         "contracts",
@@ -18508,7 +18781,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Full upstream bundle schemas, authenticated record graph, import/export semantics and canonical Evidence generation"
+          "next_step": "No complete upstream bulk import operation or imported-session graph retention. inspect_analysis_view can authenticate one inline/file source and retain only its derived view; that does not implement import_evidence_bundle."
         },
         {
           "category": "behavioral_differential",
@@ -18552,14 +18825,12 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "native_implementation": "related_facility",
+      "native_implementation": "partial_operation",
       "native_routes": [
-        "rea_verify_evidence",
-        "rea_retain_preview",
-        "rea_read_preview"
+        "rea_get_evidence_bundle"
       ],
-      "native_scope": "Selected Evidence digest verification and distinct native preview persistence",
-      "remaining_behavior": "Full upstream bundle schemas, authenticated record graph, import/export semantics and canonical Evidence generation",
+      "native_scope": "Frozen public MCP complete and summary session-bundle readback with retained record and origin serialization. New sessions start empty.",
+      "remaining_behavior": "Complete frozen bundle/filter/error/oversize behavior for every supported producer, authenticated full import operation and multi-host durable recovery.",
       "dependencies": [],
       "related_runtime_routes": [],
       "related_auxiliary_capabilities": [],
@@ -18578,7 +18849,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Full upstream bundle schemas, authenticated record graph, import/export semantics and canonical Evidence generation"
+          "next_step": "Complete frozen bundle/filter/error/oversize behavior for every supported producer, authenticated full import operation and multi-host durable recovery."
         },
         {
           "category": "behavioral_differential",

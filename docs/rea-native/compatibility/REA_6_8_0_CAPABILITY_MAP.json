@@ -1,6 +1,6 @@
 {
   "schema": "hepta.rea.capability-map.v1",
-  "runtime_baseline": "1d9ea7e7e7a1625c611d5f6e037a1ed9d57379d4",
+  "runtime_baseline": "9b02a74ffb17feba2ea07055ee4ab0981b06cf83",
   "interfaces": {
     "rea_inspect_artifact": {
       "source_paths": [
@@ -383,9 +383,10 @@
         "src/mcp/rea_asar_parser_tests.rs",
         "tests/rea_asar_external.rs",
         "tests/rea_asar_qualification.py",
-        "scripts/rea-asar-reference.mjs"
+        "scripts/rea-asar-reference.mjs",
+        "scripts/qualify_javascript_type_erasure.mjs"
       ],
-      "scope": "Bounded Oxc 0.144.0 native AST/lexical-scope inspection of explicitly selected plain-file or packed-ASAR JS/TS/JSX/TSX bytes; import/export and Electron callsite/IPC candidates, source-bound paging and separate archive acquisition provenance. Plain-file canonical graph identity is unchanged. NON-REA report; no complete application graph or observed runtime behavior."
+      "scope": "Bounded Oxc 0.144.0 native AST/lexical-scope inspection of selected plain-file or packed-ASAR JS/TS/JSX/TSX bytes; import/export, Electron callsite and IPC candidates. Graph profile hepta.javascript-selected-source-graph.v2 binds type_only_scope distinctions (declaration, named_specifiers, none); old v1 continuation IDs are not accepted as v2. Type-only syntax alone does not prove TypeScript runtime dependency erasure. NON-REA report; no complete application graph or observed runtime behavior."
     },
     "rea_inspect_source_map": {
       "source_paths": [
@@ -492,6 +493,102 @@
         "tests/fixtures/rea_apk_signature/provenance.json"
       ],
       "scope": "Native policy-admitted APK v2/v3 supported-record mathematical verification: whole captured-file identity, chunked content digest, signed-data signature, exact leaf DER/SPKI binding and selected SDK/algorithm/stripping consistency. Unsupported algorithms/key parameters are partial. No runtime Java/Node/REA dependency; no complete Android/platform-verification, trust, REA Evidence or retained upstream view claim."
+    },
+    "rea_inspect_elf_notes": {
+      "source_paths": [
+        "src/mcp/rea_contract.rs",
+        "src/mcp/rea_contract_schemas/inspect_elf_notes.input.json",
+        "src/mcp/rea_contract_schemas/inspect_elf_notes.output.json",
+        "src/mcp/rea_elf_notes.rs",
+        "src/mcp/rea_elf_notes_compression.rs",
+        "src/mcp/rea_elf_notes_parser.rs",
+        "src/mcp/rea_elf_notes_worker.rs",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_mcp_input.rs",
+        "src/mcp/rea_mcp_transport.rs",
+        "src/mcp/rea_response_order.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_elf_notes_parser_tests.rs",
+        "src/mcp/rea_elf_notes_tests.rs",
+        "src/mcp/rea_elf_notes_worker_tests.rs",
+        "src/mcp/rea_mcp_input_tests.rs"
+      ],
+      "scope": "Frozen inspect_elf_notes MCP route with native ELF note parsing, bounded worker ownership, complete retained Evidence and exact input/output schema declarations. Source presence and finite differential results do not establish complete operation parity."
+    },
+    "rea_inspect_apk_signature_evidence": {
+      "source_paths": [
+        "src/mcp/rea_apk_evidence.rs",
+        "src/mcp/rea_apk_mcp_input.rs",
+        "src/mcp/rea_apk_signature_parser.rs",
+        "src/mcp/rea_contract.rs",
+        "src/mcp/rea_contract_schemas/inspect_apk_signature.input.json",
+        "src/mcp/rea_contract_schemas/inspect_apk_signature.output.json",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_mcp_transport.rs",
+        "src/mcp/rea_response_order.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_apk_evidence_tests.rs",
+        "src/mcp/rea_apk_mcp_input_tests.rs"
+      ],
+      "scope": "Frozen inspect_apk_signature MCP route for static observations, complete retained Evidence, default summaries and selected signing pages. Separate from the native mathematical verification preview; no platform trust claim."
+    },
+    "rea_inspect_analysis_view": {
+      "source_paths": [
+        "src/mcp/rea_analysis_view.rs",
+        "src/mcp/rea_analysis_view_mcp_input.rs",
+        "src/mcp/rea_apk_evidence.rs",
+        "src/mcp/rea_contract.rs",
+        "src/mcp/rea_contract_schemas/inspect_analysis_view.input.json",
+        "src/mcp/rea_contract_schemas/inspect_analysis_view.output.json",
+        "src/mcp/rea_evidence_file.rs",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_evidence_source.rs",
+        "src/mcp/rea_inline_order.rs",
+        "src/mcp/rea_mcp_transport.rs",
+        "src/mcp/rea_response_order.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_analysis_view_mcp_input_tests.rs",
+        "src/mcp/rea_analysis_view_tests.rs",
+        "src/mcp/rea_evidence_file_tests.rs",
+        "src/mcp/rea_evidence_source_tests.rs"
+      ],
+      "scope": "Authenticated retained/inline/Linux evidence-file source resolution and APK summary/signing views; imported parents are borrowed and only derived records enter this session. Other valid upstream view kinds report an explicit capability gap. Bounded cancellation, file-descriptor and blocking-owner contracts are native-profile constraints."
+    },
+    "rea_get_evidence_bundle": {
+      "source_paths": [
+        "src/mcp/rea_contract.rs",
+        "src/mcp/rea_contract_schemas/get_evidence_bundle.input.json",
+        "src/mcp/rea_contract_schemas/get_evidence_bundle.output.json",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_mcp_input.rs",
+        "src/mcp/rea_mcp_transport.rs",
+        "src/mcp/rea_response_order.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_evidence_session_tests.rs",
+        "src/mcp/rea_mcp_input_tests.rs"
+      ],
+      "scope": "Frozen get_evidence_bundle MCP route over this session with full records/manifests or exact summary filters; a fresh session starts empty. Existing native preview persistence is a separate format."
+    },
+    "rea_export_evidence_bundle": {
+      "source_paths": [
+        "src/mcp/rea_contract.rs",
+        "src/mcp/rea_contract_schemas/export_evidence_bundle.input.json",
+        "src/mcp/rea_contract_schemas/export_evidence_bundle.output.json",
+        "src/mcp/rea_evidence_export.rs",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_mcp_input.rs",
+        "src/mcp/rea_mcp_transport.rs",
+        "src/mcp/rea_response_order.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_evidence_export_tests.rs",
+        "src/mcp/rea_mcp_input_tests.rs"
+      ],
+      "scope": "Frozen export_evidence_bundle MCP route with owned, confined local atomic publication, explicit overwrite and complete retained record serialization. Cross-host durable-store recovery is not established."
     }
   },
   "family_defaults": {
@@ -830,16 +927,17 @@
     "inspect_elf_notes": {
       "implementation": "partial_operation",
       "native_routes": [
-        "rea_inspect_artifact",
-        "rea_static_start",
-        "rea_static_read"
+        "rea_inspect_elf_notes"
       ],
-      "scope": "Selected bounded ELF notes/build-ID inventory",
-      "missing": "Exact PT_NOTE/SHT_NOTE coverage, owner/type/desc semantics and REA Evidence on an independent corpus",
+      "scope": "Frozen public MCP input/output contracts, native ELF note parsing, bounded capture/worker ownership and retained complete Evidence. The selected compressed-note corpus records both matches and remaining error-precedence differences.",
+      "missing": "Complete frozen-operation differential coverage, including remaining compressed-note error precedence and all format/resource boundaries; complete same-combination lifecycle and recovery qualification.",
       "dependencies": [],
       "extra_gates": [
         "format_architecture_corpus",
         "retention_and_pagination"
+      ],
+      "related_auxiliary_capabilities": [
+        "elf_notes_worker"
       ]
     },
     "inspect_binary_layout": {
@@ -1229,34 +1327,33 @@
       ]
     },
     "inspect_analysis_view": {
-      "implementation": "related_facility",
+      "implementation": "partial_operation",
       "native_routes": [
-        "rea_model_session_query",
-        "rea_model_session_read",
-        "rea_read_preview"
+        "rea_inspect_analysis_view"
       ],
-      "scope": "Paged native model records and preview retrieval",
-      "missing": "Generic authenticated upstream Evidence views, view-specific fields/selectors and retained parents; native AST collection pages re-read selected sources and bind a graph digest, so they do not implement retained upstream Application Graph Evidence views"
+      "scope": "Native authenticated retained, inline and Linux evidence-file sources for APK summary, signer, digest and rotation-lineage pages. Retained reads never reopen the artifact; imported parents are not implicitly retained. Unsupported valid view kinds remain explicit capability gaps.",
+      "missing": "All other upstream parent/view operations and exact selectors; complete cross-platform file-source, cancellation and recovery semantics; every malformed/oversized source and full operation differential qualification.",
+      "dependencies": [],
+      "extra_gates": [
+        "retention_and_pagination",
+        "bundle_auth_and_unknowns"
+      ]
     },
     "get_evidence_bundle": {
-      "implementation": "related_facility",
+      "implementation": "partial_operation",
       "native_routes": [
-        "rea_verify_evidence",
-        "rea_retain_preview",
-        "rea_read_preview"
+        "rea_get_evidence_bundle"
       ],
-      "scope": "Selected Evidence digest verification and distinct native preview persistence",
-      "missing": "Full upstream bundle schemas, authenticated record graph, import/export semantics and canonical Evidence generation"
+      "scope": "Frozen public MCP complete and summary session-bundle readback with retained record and origin serialization. New sessions start empty.",
+      "missing": "Complete frozen bundle/filter/error/oversize behavior for every supported producer, authenticated full import operation and multi-host durable recovery."
     },
     "export_evidence_bundle": {
-      "implementation": "related_facility",
+      "implementation": "partial_operation",
       "native_routes": [
-        "rea_verify_evidence",
-        "rea_retain_preview",
-        "rea_read_preview"
+        "rea_export_evidence_bundle"
       ],
-      "scope": "Selected Evidence digest verification and distinct native preview persistence",
-      "missing": "Full upstream bundle schemas, authenticated record graph, import/export semantics and canonical Evidence generation"
+      "scope": "Frozen public MCP export of complete retained session records using bounded owned local filesystem publication and explicit overwrite.",
+      "missing": "Every frozen filesystem/error/ownership/cancellation boundary across platforms and producers, plus complete import/export and multi-host recovery qualification."
     },
     "import_evidence_bundle": {
       "implementation": "related_facility",
@@ -1266,7 +1363,10 @@
         "rea_read_preview"
       ],
       "scope": "Selected Evidence digest verification and distinct native preview persistence",
-      "missing": "Full upstream bundle schemas, authenticated record graph, import/export semantics and canonical Evidence generation"
+      "missing": "No complete upstream bulk import operation or imported-session graph retention. inspect_analysis_view can authenticate one inline/file source and retain only its derived view; that does not implement import_evidence_bundle.",
+      "related_runtime_routes": [
+        "rea_inspect_analysis_view"
+      ]
     },
     "open_binary": {
       "implementation": "related_facility",
@@ -1999,13 +2099,17 @@
       ],
       "implementation": "partial_operation",
       "native_routes": [
-        "rea_inspect_apk_signature"
+        "rea_inspect_apk_signature_evidence"
       ],
       "related_auxiliary_capabilities": [
+        "apk_static_worker",
         "apk_signature_worker"
       ],
-      "scope": "Bounded native APK v2/v3 supported signature records and chunked content digests, with 20 finite Android/REA projections and actual public-MCP lifecycle evidence. This subset uses native Rust cryptography and no external runtime verifier.",
-      "missing": "Complete frozen static APK signature observations, including v1/JAR signers and certificate facts, v3.1 declarations, proof-of-rotation/key-rotation observations, all required signer/certificate fields, and exact unknown/truncation/unsupported semantics; every upstream ArtifactInput variant/default, Evidence identity, analysis/view envelope, retained state, pagination and typed error. The finite mathematical verifier does not supply all of these original static observations and contracts."
+      "scope": "Frozen public MCP static APK signature observations and Evidence, default summaries, selected signing pages and complete session retention; separate native mathematical verification remains available through rea_inspect_apk_signature.",
+      "missing": "Full frozen static APK corpus and exact malformed, unknown, truncation and resource semantics across every input/view variant; complete same-combination protocol, retained source, lifecycle and recovery qualification.",
+      "related_runtime_routes": [
+        "rea_inspect_apk_signature"
+      ]
     }
   },
   "behavior_gates": {
@@ -2199,7 +2303,7 @@
       "tests": [
         "src/mcp/rea_javascript_graph_tests.rs"
       ],
-      "scope": "Internal native Rust AST worker for explicitly admitted JS/TS/JSX/TSX text; Oxc lexical-scope facts and conservative static candidates. Node/Babel is a development reference only. No target execution or proof of live process pairs. The final frozen release passed actual MCP cancellation of its stopped owned worker: the original owner remained alive, reaped the worker within the unchanged five-second observation window, and served the recovery call. This finite lifecycle observation does not close upstream operation parity.",
+      "scope": "Internal native Rust Oxc AST worker for explicitly admitted JS/TS/JSX/TSX text, lexical-scope facts and conservative candidates. Profile v2 distinguishes declaration-level and named-specifier type-only syntax without inferring erased runtime imports. Historical finite cancellation receipts below belong to their original source/binary combinations; this mapping does not transfer those results to a new build.",
       "upstream_tools": [
         "analyze_javascript_application"
       ]
@@ -2285,6 +2389,51 @@
       "upstream_tools": [
         "inspect_apk_signature",
         "inspect_android_package"
+      ]
+    },
+    "elf_notes_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaElfNotesWorker",
+      "entrypoint": "hepta-runtime rea-elf-notes-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_elf_notes.rs",
+        "src/mcp/rea_elf_notes_worker.rs",
+        "src/mcp/rea_elf_notes_parser.rs",
+        "src/mcp/rea_elf_notes_compression.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_elf_notes_worker_tests.rs",
+        "src/mcp/rea_elf_notes_parser_tests.rs"
+      ],
+      "scope": "Internal captured-byte native ELF notes parser for the frozen inspect_elf_notes route; source-bound worker and retained Evidence are separate from complete operation qualification.",
+      "upstream_tools": [
+        "inspect_elf_notes"
+      ]
+    },
+    "apk_static_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaApkStaticWorker",
+      "entrypoint": "hepta-runtime rea-apk-static-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_apk_evidence.rs",
+        "src/mcp/rea_apk_static_worker.rs",
+        "src/mcp/rea_apk_signature_observation.rs",
+        "src/mcp/rea_apk_signature_archive.rs",
+        "src/mcp/rea_apk_signature_v1.rs",
+        "src/mcp/rea_apk_signature_certificate.rs",
+        "src/mcp/rea_apk_signature_view.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_apk_static_worker_tests.rs",
+        "src/mcp/rea_apk_evidence_tests.rs",
+        "src/mcp/rea_apk_signature_observation_tests.rs",
+        "src/mcp/rea_apk_signature_view_tests.rs"
+      ],
+      "scope": "Internal captured-byte static APK observations for the frozen inspect_apk_signature route; no target execution or platform-trust assertion. Distinct from the mathematical-verification worker.",
+      "upstream_tools": [
+        "inspect_apk_signature"
       ]
     }
   }
