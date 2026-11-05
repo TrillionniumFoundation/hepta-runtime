@@ -35,6 +35,9 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use tokio_util::sync::CancellationToken;
 
+#[path = "rea_json_eof.rs"]
+mod json_eof;
+
 const CHUNK: usize = 64 * 1024;
 const NATIVE_JSON_THRESHOLD: u64 = 8 * 1024 * 1024;
 const BOM_MESSAGE: &str = "JSON input begins with a UTF-8 byte-order mark (EF BB BF), which strict JSON input does not accept. Save the file as UTF-8 without a byte-order mark.";
@@ -598,8 +601,7 @@ struct State {
 	input_bytes: u64,
 	hash: Sha256,
 	prefix: Vec<u8>,
-	whitespace_only: bool,
-	last_non_whitespace: Option<u8>,
+	eof_diagnostic: Option<String>,
 	eof: bool,
 	small: bool,
 }
@@ -613,8 +615,7 @@ impl State {
 			input_bytes: 0,
 			hash: Sha256::new(),
 			prefix: Vec::new(),
-			whitespace_only: true,
-			last_non_whitespace: None,
+			eof_diagnostic: None,
 			eof: false,
 			small,
 		}
@@ -748,15 +749,18 @@ struct CheckedReader<R> {
 	state: Rc<RefCell<State>>,
 	utf8: Utf8,
 	meter: Option<TokenMeter>,
+	eof_tracker: Option<json_eof::Tracker>,
 }
 impl<R> CheckedReader<R> {
 	fn new(inner: R, expected: u64, state: Rc<RefCell<State>>, meter: bool) -> Self {
+		let eof_tracker = (meter && state.borrow().small).then(json_eof::Tracker::new);
 		Self {
 			inner,
 			expected,
 			state,
 			utf8: Utf8::default(),
 			meter: meter.then(TokenMeter::default),
+			eof_tracker,
 		}
 	}
 	fn refuse(&self, error: FileReadError) -> io::Error {
@@ -793,7 +797,11 @@ impl<R: Read> Read for CheckedReader<R> {
 				let small = self.state.borrow().small;
 				return Err(self.refuse(invalid_json(UTF8_MESSAGE, small)));
 			}
-			self.state.borrow_mut().eof = true;
+			let mut state = self.state.borrow_mut();
+			state.eof = true;
+			if let Some(tracker) = self.eof_tracker.take() {
+				state.eof_diagnostic = tracker.finish();
+			}
 			return Ok(0);
 		}
 		if position.saturating_add(count as u64) > self.expected {
@@ -816,20 +824,14 @@ impl<R: Read> Read for CheckedReader<R> {
 				}
 			}
 		}
+		if let Some(tracker) = &mut self.eof_tracker {
+			tracker.accept(&output[..count]);
+		}
 		let mut state = self.state.borrow_mut();
 		state.input_bytes += count as u64;
 		state.hash.update(&output[..count]);
 		let needed = 3_usize.saturating_sub(state.prefix.len()).min(count);
 		state.prefix.extend_from_slice(&output[..needed]);
-		if let Some(byte) = output[..count]
-			.iter()
-			.rev()
-			.find(|byte| !matches!(**byte, b' ' | b'\n' | b'\r' | b'\t'))
-			.copied()
-		{
-			state.whitespace_only = false;
-			state.last_non_whitespace = Some(byte);
-		}
 		Ok(count)
 	}
 }
@@ -862,18 +864,14 @@ fn parse_reader<R: Read>(reader: R, expected: u64, state: Rc<RefCell<State>>) ->
 			if state.bom() {
 				return Err(invalid_json(BOM_MESSAGE, true));
 			}
-			let diagnostic = error.to_string();
-			// The frozen small-file reader uses V8 JSON.parse. EOF before a
-			// value has this message, while unfinished strings, numbers and
-			// container delimiters have distinct diagnostics. Do not guess
-			// those diagnostics or the separate large-file streaming profile.
-			let missing_value = error.is_eof()
-				&& ((diagnostic.starts_with("EOF while parsing a list")
-					&& state.last_non_whitespace == Some(b'['))
-					|| (diagnostic.starts_with("EOF while parsing a value")
-						&& matches!(state.last_non_whitespace, Some(b'[' | b',' | b':'))));
-			if state.small && state.eof && (state.whitespace_only || missing_value) {
-				return Err(invalid_json("Unexpected end of JSON input", false));
+			// Only an actual EOF, independently recognized as a valid JSON
+			// prefix, can use the frozen small-file V8 diagnostic. The tracker
+			// never overrides non-EOF syntax, representation or owned-reader
+			// failures, and is absent from the large-file streaming profile.
+			if error.is_eof() && state.small && state.eof {
+				if let Some(message) = state.eof_diagnostic.take() {
+					return Err(invalid_json(&message, false));
+				}
 			}
 			Err(gap(
 				"json-diagnostic-or-value-representation",

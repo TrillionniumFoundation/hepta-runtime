@@ -634,7 +634,7 @@ fn original_alias_paths_preserve_error_spelling_directory_requirement_and_select
 }
 
 #[test]
-fn frozen_value_position_eof_is_exact_without_guessing_other_json_diagnostics() {
+fn frozen_eof_reference_errors_match_all_sixteen_inputs() {
 	let reference: Value = serde_json::from_str(include_str!(
 		"../../tests/fixtures/rea_evidence_file/eof-reference-r1.json"
 	))
@@ -647,41 +647,75 @@ fn frozen_value_position_eof_is_exact_without_guessing_other_json_diagnostics() 
 	assert_eq!(cases.len(), 16);
 	let owned = temporary();
 	let mut exact = 0;
-	let mut gaps = 0;
 	for (index, case) in cases.iter().enumerate() {
 		let input = case["input"].as_str().unwrap();
+		let expected = case["message"].as_str().unwrap();
+		// Reader chunk boundaries cannot change the syntax state or position.
+		for split in 0..=input.len() {
+			let mut tracker = json_eof::Tracker::new();
+			tracker.accept(&input.as_bytes()[..split]);
+			tracker.accept(&input.as_bytes()[split..]);
+			assert_eq!(tracker.finish().as_deref(), Some(expected), "{input:?}");
+		}
 		let path = owned.path().join(format!("eof-{index}.json"));
 		std::fs::write(&path, input).unwrap();
-		let admitted = matches!(
-			input,
-			"" | " " | "\n\t" | "[" | "{\"records\":[" | "[1," | "{\"a\":"
-		);
 		let outcome = load(&path, owned.path(), NativeJsonLimits::default());
-		if admitted {
-			match outcome {
-				Err(FileReadError::InvalidJson {
-					message,
-					user_message,
-				}) => {
-					assert_eq!(message, case["message"], "{input:?}");
-					assert!(user_message.is_none());
-				}
-				other => panic!("{input:?}: {other:?}"),
+		match outcome {
+			Err(FileReadError::InvalidJson {
+				message,
+				user_message,
+			}) => {
+				assert_eq!(message, expected, "{input:?}");
+				assert!(user_message.is_none());
 			}
-			exact += 1;
-		} else {
-			assert!(
-				matches!(
-					outcome,
-					Err(FileReadError::NativeProfileGap {
-						feature: "json-diagnostic-or-value-representation",
-						..
-					})
-				),
-				"{input:?}: {outcome:?}"
-			);
-			gaps += 1;
+			other => panic!("{input:?}: {other:?}"),
 		}
+		exact += 1;
 	}
-	assert_eq!((exact, gaps), (7, 9));
+	assert_eq!(exact, 16);
+}
+
+#[test]
+fn eof_diagnostics_do_not_reclassify_non_eof_or_representation_errors() {
+	let owned = temporary();
+	let inputs = [
+		"[1,]",
+		"{\"a\":}",
+		"\"\\q",
+		"\"\\u0q",
+		"\"abc\n",
+		"1e ",
+		"01",
+		"tru ",
+		"[]x",
+		"\"\\uD800\"",
+		"1e400",
+	];
+	for (index, input) in inputs.iter().enumerate() {
+		let path = owned.path().join(format!("non-eof-{index}.json"));
+		std::fs::write(&path, input).unwrap();
+		let outcome = load(&path, owned.path(), NativeJsonLimits::default());
+		assert!(
+			matches!(outcome, Err(FileReadError::NativeProfileGap { .. })),
+			"{input:?}: {outcome:?}"
+		);
+	}
+}
+
+#[test]
+fn eof_diagnostics_do_not_change_the_large_file_parser_profile() {
+	let input = b"{\"a\":1";
+	let state = Rc::new(RefCell::new(State::new(
+		CancellationToken::new(),
+		NativeJsonLimits::default(),
+		false,
+	)));
+	let outcome = parse_reader(io::Cursor::new(input), input.len() as u64, state);
+	assert!(matches!(
+		outcome,
+		Err(FileReadError::NativeProfileGap {
+			feature: "json-diagnostic-or-value-representation",
+			..
+		})
+	));
 }
