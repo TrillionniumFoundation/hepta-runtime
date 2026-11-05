@@ -42,6 +42,7 @@ use super::{
 	rea, rea_artifact_zip, rea_asar, rea_evidence, rea_javascript, rea_javascript_graph, rea_model,
 	rea_provider, rea_store, rea_web, weight, weight_artifact, weight_forward, weight_tensor,
 };
+use super::{rea_apk_evidence, rea_apk_mcp_input, rea_evidence_export};
 use super::{rea_contract, rea_elf_notes, rea_evidence_session, rea_mcp_input, rea_mcp_transport};
 
 /// Per-session working directory state.
@@ -250,6 +251,8 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"rea_inspect_source_map",
 	"rea_inspect_elf_notes",
 	"rea_get_evidence_bundle",
+	"rea_inspect_apk_signature_evidence",
+	"rea_export_evidence_bundle",
 	"rea_model_session_open",
 	"rea_model_session_query",
 	"rea_model_session_read",
@@ -340,6 +343,7 @@ pub struct OctofsServer {
 	/// return only what changed.
 	view_cache: Arc<fs::delta::ViewCache>,
 	rea_session: Arc<rea_evidence_session::EvidenceSession>,
+	rea_exports: Arc<rea_evidence_export::ExportRegistry>,
 }
 
 impl OctofsServer {
@@ -352,6 +356,13 @@ impl OctofsServer {
 	/// each build their own instance this way; tests use it to isolate the
 	/// per-cwd background-job guard from sibling tests.
 	pub fn with_root(root: PathBuf) -> Self {
+		let view_cache = Arc::new(fs::delta::ViewCache::default());
+		let publication_cache = Arc::clone(&view_cache);
+		let rea_exports = Arc::new(rea_evidence_export::ExportRegistry::new(Arc::new(
+			move |_| {
+				publication_cache.forget_all();
+			},
+		)));
 		Self {
 			search_owner: Arc::new(runtime::search_jobs::new_owner_id().ok()),
 			owner_binding: Arc::new(runtime::caller_scope::SessionOwnerBinding::default()),
@@ -361,9 +372,31 @@ impl OctofsServer {
 			workdir: Arc::new(SessionWorkdir::new(root)),
 			session_applied: Arc::new(std::sync::atomic::AtomicBool::new(false)),
 			subscriptions: Arc::new(SubscriptionRegistry::default()),
-			view_cache: Arc::new(fs::delta::ViewCache::default()),
+			view_cache,
+			rea_exports,
 			rea_session: Arc::new(rea_evidence_session::EvidenceSession::default()),
 		}
+	}
+
+	/// Finish every admitted native export before the STDIO session exits.
+	/// Failed cleanup retains its owner and is returned as an actual failure.
+	pub async fn close_rea_exports(&self) -> anyhow::Result<()> {
+		let outcome = Arc::clone(&self.rea_exports).close().await;
+		let completed = self.rea_exports.take_completed();
+		if !completed.is_empty() {
+			warn!(outcomes = ?completed, "REA exports completed after their request delivery ended");
+		}
+		if let Err(error) = outcome {
+			anyhow::bail!("REA export session cleanup failed: {}", error.0);
+		}
+		let pending = self.rea_exports.pending();
+		if !pending.is_empty() {
+			anyhow::bail!(
+				"REA export session retains unresolved cleanup: {}",
+				serde_json::json!(pending)
+			);
+		}
+		Ok(())
 	}
 
 	/// Apply the octomind session context from client capabilities
@@ -1715,6 +1748,139 @@ impl OctofsServer {
 			}
 		};
 		Ok(rea_elf_notes::inspect(params, &self.rea_session, context.ct.clone(), admission).await)
+	}
+
+	#[tool(
+		title = "Inspect Apk Signature",
+		input_schema = rea_contract::apk_input_schema(),
+		output_schema = rea_contract::apk_output_schema(),
+		annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
+		description = "Inspect APK, ZIP or AAB signing declarations and content digests from one admitted local file. Retains complete Evidence in this session; returns a summary by default or complete Evidence with detail: complete. A view selects signer, digest or rotation-lineage rows and fields. Inspection executes no target code and does not establish Android platform trust. Input and output contracts are frozen from REA 6.8.0."
+	)]
+	async fn rea_inspect_apk_signature_evidence(
+		&self,
+		Parameters(params): Parameters<serde_json::Value>,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResult, ErrorData> {
+		let raw = context
+			.extensions
+			.get::<rea_mcp_transport::ReaRawArguments>();
+		if let Some(error) = raw.and_then(|raw| raw.protocol_error()) {
+			return Err(error);
+		}
+		if let Err(error) = rea_apk_mcp_input::validate(
+			&params,
+			raw.and_then(|raw| raw.object_keys(&[])),
+			raw.and_then(|raw| raw.object_keys(&["view"])),
+		) {
+			return Ok(error.wire());
+		}
+		let admission = match runtime::effect_owner_fence::admit_new_effect().await {
+			Ok(permit) => Arc::new(permit),
+			Err(error) => {
+				return Ok(rea_contract::Failure::output(
+					"inspect_apk_signature",
+					error.to_string(),
+				)
+				.wire())
+			}
+		};
+		Ok(rea_apk_evidence::inspect(
+			params,
+			Arc::clone(&self.rea_session),
+			context.ct.clone(),
+			admission,
+		)
+		.await)
+	}
+
+	#[tool(
+		title = "Export Evidence Bundle",
+		input_schema = rea_evidence_export::input_schema(),
+		output_schema = rea_evidence_export::output_schema(),
+		annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false),
+		description = "Atomically export this session's complete retained Evidence bundle to a selected absolute local path under the configured workspace roots. The parent directory must exist. Existing files require overwrite: true. Returns the published path, byte count and record counts."
+	)]
+	async fn rea_export_evidence_bundle(
+		&self,
+		Parameters(params): Parameters<serde_json::Value>,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResult, ErrorData> {
+		fn error_result(error: rea_contract::Failure) -> CallToolResult {
+			let mut result = error.wire();
+			result.meta = None;
+			result
+		}
+		let raw = context
+			.extensions
+			.get::<rea_mcp_transport::ReaRawArguments>();
+		if let Some(error) = raw.and_then(|raw| raw.protocol_error()) {
+			return Err(error);
+		}
+		let keys = raw.and_then(|raw| raw.object_keys(&[]));
+		if let Err(error) = rea_mcp_input::export_ordered(&params, keys)
+			.and_then(|_| rea_evidence_export::validate(&params, keys))
+		{
+			return Ok(error_result(error));
+		}
+		let Some(path) = params["path"].as_str() else {
+			return Ok(error_result(rea_contract::Failure::output(
+				"export_evidence_bundle",
+				"Validated export path is unavailable.",
+			)));
+		};
+		let path = PathBuf::from(path);
+		if let Err(error) = runtime::config::check_local_path(&path) {
+			return Ok(error_result(rea_contract::Failure::output(
+				"export_evidence_bundle",
+				error.to_string(),
+			)));
+		}
+		let roots = match runtime::runtime_config() {
+			Ok(config) => config.controller_workspace_roots.clone(),
+			Err(error) => {
+				return Ok(error_result(rea_contract::Failure::output(
+					"export_evidence_bundle",
+					error.to_string(),
+				)))
+			}
+		};
+		let admission = match runtime::effect_owner_fence::admit_new_effect().await {
+			Ok(permit) => Arc::new(permit),
+			Err(error) => {
+				return Ok(error_result(rea_contract::Failure::output(
+					"export_evidence_bundle",
+					error.to_string(),
+				)))
+			}
+		};
+		// Pass the shared lock object. The independent owner retries any retained
+		// cleanup before locking the path, including when it already holds that
+		// path's lock through a failed earlier cleanup.
+		let file_lock =
+			match fs::text_editing::acquire_file_lock(&fs::PathSource::Local(path)).await {
+				Ok(lock) => lock,
+				Err(error) => {
+					return Ok(error_result(rea_contract::Failure::output(
+						"export_evidence_bundle",
+						error.to_string(),
+					)))
+				}
+			};
+		let snapshot = match self.rea_session.snapshot() {
+			Ok(snapshot) => snapshot,
+			Err(error) => return Ok(error_result(error)),
+		};
+		Ok(rea_evidence_export::export(
+			params,
+			snapshot,
+			roots,
+			context.ct.clone(),
+			admission,
+			Arc::clone(&self.rea_exports),
+			file_lock,
+		)
+		.await)
 	}
 
 	#[tool(
@@ -3447,7 +3613,10 @@ impl ServerHandler for OctofsServer {
 				// and schema-version metadata; they are not schemars generator noise.
 				if matches!(
 					tool.name.as_ref(),
-					"rea_inspect_elf_notes" | "rea_get_evidence_bundle"
+					"rea_inspect_elf_notes"
+						| "rea_get_evidence_bundle"
+						| "rea_inspect_apk_signature_evidence"
+						| "rea_export_evidence_bundle"
 				) {
 					return tool;
 				}

@@ -33,7 +33,75 @@ pub(super) struct RetainedRecord {
 	pub(super) reference: Value,
 }
 
+/// Immutable ownership of one session's complete records at selection time.
+/// Payloads are shared, so export and projection do not duplicate large reports.
+#[derive(Clone, Debug)]
+pub(super) struct EvidenceSnapshot {
+	records: BTreeMap<String, Arc<Value>>,
+}
+
+impl EvidenceSnapshot {
+	pub(super) fn record_count(&self) -> usize {
+		self.records.len()
+	}
+	pub(super) fn unknown_count(&self) -> usize {
+		0
+	}
+
+	pub(super) fn write_canonical<W: std::io::Write>(&self, output: &mut W) -> anyhow::Result<()> {
+		fn array<'a, W: std::io::Write>(
+			output: &mut W,
+			values: impl IntoIterator<Item = &'a Value>,
+		) -> anyhow::Result<()> {
+			output.write_all(b"[")?;
+			for (index, value) in values.into_iter().enumerate() {
+				if index != 0 {
+					output.write_all(b",")?;
+				}
+				rea_evidence::write_canonical(value, output)?;
+			}
+			output.write_all(b"]")?;
+			Ok(())
+		}
+		let view = bundle(&self.records);
+		// ASCII bundle member names have the same canonical UTF-16 order.
+		output.write_all(b"{\"artifacts\":")?;
+		array(output, &view.artifacts)?;
+		output.write_all(b",\"captures\":")?;
+		array(output, &view.captures)?;
+		output.write_all(b",\"environments\":")?;
+		array(output, &view.environments)?;
+		output.write_all(b",\"providers\":")?;
+		array(output, &view.providers)?;
+		output.write_all(b",\"records\":")?;
+		array(output, view.records)?;
+		output.write_all(b",\"scenarios\":")?;
+		array(output, &view.scenarios)?;
+		output.write_all(b",\"unknowns\":")?;
+		array(output, &view.unknowns)?;
+		output.write_all(b"}")?;
+		Ok(())
+	}
+}
+
 impl EvidenceSession {
+	pub(super) fn snapshot(&self) -> Result<EvidenceSnapshot, Failure> {
+		let records = self
+			.records
+			.lock()
+			.map_err(|_| Failure::integrity("Evidence session registry is unavailable"))?;
+		Ok(EvidenceSnapshot {
+			records: records.clone(),
+		})
+	}
+
+	pub(super) fn lookup(&self, id: &str) -> Result<Option<Arc<Value>>, Failure> {
+		let records = self
+			.records
+			.lock()
+			.map_err(|_| Failure::integrity("Evidence session registry is unavailable"))?;
+		Ok(records.get(id).cloned())
+	}
 	/// Validate identity before publication. A repeated semantic record keeps
 	/// its first display metadata, as the frozen session ledger does.
 	pub(super) fn record(&self, evidence: Value) -> Result<RetainedRecord, Failure> {

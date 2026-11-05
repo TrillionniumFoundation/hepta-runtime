@@ -162,6 +162,9 @@ async fn run(cli: Cli) -> Result<()> {
 		Commands::ReaApkSignatureWorker => {
 			mcp::rea_apk_signature::serve_once()?;
 		}
+		Commands::ReaApkStaticWorker => {
+			mcp::rea_apk_evidence::run_worker()?;
+		}
 		Commands::ReaJavascriptWorker => {
 			mcp::rea_javascript_graph::serve_once()?;
 		}
@@ -189,6 +192,7 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 
 	tracing::info!("Starting MCP server (STDIO mode)");
 
+	let rea_cleanup = server.clone();
 	let (input, output) = stdio();
 	let service = server
 		.serve(mcp::ReaMcpTransport::new(input, output))
@@ -224,6 +228,7 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 	// Kill request-scoped shell trees and interactive SSH PTYs. Durable runtime jobs
 	// are deliberately independent and remain queryable after this process restarts.
 	mcp::runtime::shutdown_request_scoped().await;
+	rea_cleanup.close_rea_exports().await?;
 
 	Ok(())
 }

@@ -33,7 +33,7 @@ use tokio::sync::OwnedSemaphorePermit;
 use tokio_util::sync::CancellationToken;
 
 #[cfg(unix)]
-const MEMORY_BYTES: libc::rlim_t = 1024 * 1024 * 1024;
+const MEMORY_BYTES: libc::rlim_t = 2 * 1024 * 1024 * 1024;
 #[cfg(unix)]
 const CPU_SECONDS: libc::rlim_t = 20;
 const READ_CHUNK_BYTES: usize = 64 * 1024;

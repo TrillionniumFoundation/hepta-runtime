@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "examples": [
+    {
+      "path": "/artifacts/app.apk"
+    }
+  ],
+  "properties": {
+    "detail": {
+      "default": "summary",
+      "enum": [
+        "summary",
+        "complete"
+      ],
+      "type": "string"
+    },
+    "path": {
+      "allOf": [
+        {
+          "pattern": "^[^\\x00]*$"
+        },
+        {
+          "pattern": "^\\/"
+        }
+      ],
+      "description": "Selected local APK/ZIP/AAB; static inspection only",
+      "minLength": 1,
+      "type": "string"
+    },
+    "view": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "collection": {
+              "const": "signers",
+              "type": "string"
+            },
+            "fields": {
+              "items": {
+                "enum": [
+                  "id",
+                  "scheme",
+                  "index",
+                  "certificate",
+                  "certificate_sha256",
+                  "signatures",
+                  "public_key_bytes",
+                  "uninterpreted_signed_data_bytes",
+                  "uninterpreted_signer_bytes",
+                  "min_sdk",
+                  "max_sdk",
+                  "signature_file",
+                  "block_file",
+                  "signer_infos",
+                  "decode_error"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "limit": {
+              "default": 32,
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            "offset": {
+              "default": 0,
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "schemes": {
+              "items": {
+                "enum": [
+                  "v1",
+                  "v2",
+                  "v3",
+                  "v3.1"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "signer_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "collection"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "collection": {
+              "const": "digests",
+              "type": "string"
+            },
+            "fields": {
+              "items": {
+                "enum": [
+                  "uninterpreted_bytes",
+                  "signature_algorithm_id",
+                  "algorithm",
+                  "declared_digest_hex",
+                  "matches_apk",
+                  "id",
+                  "scheme",
+                  "index",
+                  "signer_id",
+                  "signer_index"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "limit": {
+              "default": 32,
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            "offset": {
+              "default": 0,
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "schemes": {
+              "items": {
+                "enum": [
+                  "v1",
+                  "v2",
+                  "v3",
+                  "v3.1"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "signer_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "collection"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "collection": {
+              "const": "lineage",
+              "type": "string"
+            },
+            "fields": {
+              "items": {
+                "enum": [
+                  "certificate",
+                  "flags",
+                  "capabilities",
+                  "id",
+                  "scheme",
+                  "index",
+                  "signer_id",
+                  "signer_index",
+                  "previous_id",
+                  "certificate_sha256"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "limit": {
+              "default": 32,
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            "offset": {
+              "default": 0,
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "schemes": {
+              "items": {
+                "enum": [
+                  "v1",
+                  "v2",
+                  "v3",
+                  "v3.1"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "signer_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "collection"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "required": [
+    "path"
+  ],
+  "type": "object"
+}

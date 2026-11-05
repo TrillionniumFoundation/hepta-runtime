@@ -476,3 +476,27 @@ async fn actual_rmcp_context_receives_private_facts_and_returns_rpc_error() {
 		.unwrap()
 		.unwrap();
 }
+
+#[tokio::test]
+async fn evidence_source_keys_stay_private_and_follow_last_duplicate_source() {
+	let message = decode(call_line(
+		"rea_inspect_analysis_view",
+		r#"{"source":{"discarded":1},"view":{"kind":"summary"},"source":{"zzz":1,"10":2,"2":3,"kind":"retained-evidence","aaa":4,"zzz":5}}"#,
+		7,
+	)).await;
+	assert_eq!(raw(&message).object_keys(&[]).unwrap(), ["source", "view"]);
+	assert_eq!(
+		raw(&message).object_keys(&["source"]).unwrap(),
+		["2", "10", "zzz", "kind", "aaa"]
+	);
+	let wire = serde_json::to_value(&message).unwrap();
+	assert_eq!(wire["params"]["arguments"]["source"]["zzz"], 5);
+	assert!(wire["params"].get("_meta").is_none());
+	let null = decode(call_line(
+		"rea_inspect_analysis_view",
+		r#"{"source":{"old":1},"source":null}"#,
+		8,
+	))
+	.await;
+	assert!(raw(&null).object_keys(&["source"]).is_none());
+}

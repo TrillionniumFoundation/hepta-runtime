@@ -53,6 +53,15 @@ impl Failure {
 		)
 	}
 
+	pub(super) fn adapter(provider: &str, operation: &str) -> Self {
+		let message = "Analysis could not complete. Run `rea doctor` and review the reported details; repeating the unchanged request is not expected to succeed.";
+		Self(
+			json!({"code":"execution_failure","category":"execution_failure",
+			"message":message,"retryable":false,"remediation":{"action":message},
+			"details":{"provider_id":provider,"operation":operation}}),
+		)
+	}
+
 	pub(super) fn integrity(reason: impl Into<String>) -> Self {
 		let message =
 			"Evidence is invalid or has changed. Recreate or re-import it, then try again.";
@@ -419,6 +428,34 @@ pub(super) fn bundle_output_schema() -> Arc<JsonObject> {
 					"rea_contract_schemas/get_evidence_bundle.output.json"
 				))
 				.expect("frozen bundle output schema"),
+			)
+		})
+		.clone()
+}
+
+pub(super) fn apk_input_schema() -> Arc<JsonObject> {
+	static SCHEMA: OnceLock<Arc<JsonObject>> = OnceLock::new();
+	SCHEMA
+		.get_or_init(|| {
+			Arc::new(
+				serde_json::from_str(include_str!(
+					"rea_contract_schemas/inspect_apk_signature.input.json"
+				))
+				.expect("frozen APK input schema"),
+			)
+		})
+		.clone()
+}
+
+pub(super) fn apk_output_schema() -> Arc<JsonObject> {
+	static SCHEMA: OnceLock<Arc<JsonObject>> = OnceLock::new();
+	SCHEMA
+		.get_or_init(|| {
+			Arc::new(
+				serde_json::from_str(include_str!(
+					"rea_contract_schemas/inspect_apk_signature.output.json"
+				))
+				.expect("frozen APK output schema"),
 			)
 		})
 		.clone()

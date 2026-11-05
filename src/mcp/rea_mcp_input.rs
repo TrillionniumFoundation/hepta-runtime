@@ -185,6 +185,31 @@ pub(super) fn bundle(raw: &Value) -> Result<(), Failure> {
 	bundle_ordered(raw, None, None)
 }
 
+pub(super) fn export_ordered(raw: &Value, argument_keys: Option<&[String]>) -> Result<(), Failure> {
+	let empty = Map::new();
+	let map = raw.as_object().unwrap_or(&empty);
+	let mut errors = Vec::new();
+	if string(map.get("path"), "path", true, &mut errors) {
+		let path = map["path"].as_str().unwrap_or_default();
+		if path.contains('\0') {
+			errors.push("path: Local filesystem paths cannot contain NUL".to_owned());
+		}
+		if !path.starts_with('/') {
+			errors.push("path: must be an absolute local filesystem path".to_owned());
+		}
+	}
+	if let Some(value) = map.get("overwrite") {
+		if !value.is_boolean() {
+			errors.push(format!(
+				"overwrite: Invalid input: expected boolean, received {}",
+				received(Some(value))
+			));
+		}
+	}
+	unknown(map, &["path", "overwrite"], "", argument_keys, &mut errors);
+	finish("export_evidence_bundle", errors)
+}
+
 pub(super) fn bundle_ordered(
 	raw: &Value,
 	argument_keys: Option<&[String]>,
@@ -257,3 +282,7 @@ pub(super) fn bundle_ordered(
 	unknown(map, &["detail", "filters"], "", argument_keys, &mut errors);
 	finish("get_evidence_bundle", errors)
 }
+
+#[cfg(test)]
+#[path = "rea_mcp_input_tests.rs"]
+mod tests;

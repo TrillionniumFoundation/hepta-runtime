@@ -104,6 +104,9 @@ pub enum Commands {
 	/// Internal bounded APK signature verifier over captured stdin bytes.
 	#[command(hide = true)]
 	ReaApkSignatureWorker,
+	/// Internal bounded static APK report over controller-admitted bytes.
+	#[command(hide = true)]
+	ReaApkStaticWorker,
 	/// Fixed local-resource capture under an existing durable process job (Linux).
 	ReaBrowserCapture(hepta_runtime::mcp::rea_browser::BrowserCaptureArgs),
 	/// Internal bounded ASAR parser over one admitted read-only descriptor.

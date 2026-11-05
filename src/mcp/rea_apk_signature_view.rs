@@ -109,7 +109,17 @@ pub fn validate_static_report(report: &Value) -> Result<(), ApkViewError> {
 
 /// Validate and default a summary/page selection before acquiring its artifact.
 pub fn normalize_static_view(view: &Value) -> Result<Value, ApkViewError> {
-	schema::normalize_view(view)
+	let mut normalized = schema::normalize_view(view)?;
+	// Validation has established finite nonnegative safe integers. JavaScript
+	// serializes their numeric value independently of the caller's exponent,
+	// decimal point, or negative-zero spelling; retain that public value here.
+	for key in ["offset", "limit"] {
+		if let Some(value) = normalized.get(key) {
+			let value = integer(value);
+			normalized[key] = json!(value);
+		}
+	}
+	Ok(normalized)
 }
 
 // These accessors are used only after complete report/selection validation. In

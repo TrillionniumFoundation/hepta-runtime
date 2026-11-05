@@ -6,7 +6,11 @@
 #![cfg(unix)]
 
 use super::*;
+use crate::mcp::rea_worker_transport::{
+	await_owned, read_reply, supervise_child, BoundedReader, WorkerSpec,
+};
 use serde_json::json;
+use std::io::Write;
 use std::os::fd::OwnedFd;
 use std::os::unix::net::UnixStream;
 use std::process::Stdio;
@@ -272,8 +276,11 @@ async fn child_success_and_malformed_output_both_finish_owned_readers() {
 			b"{}".to_vec(),
 			Arc::new(vec![]),
 			CancellationToken::new(),
-			1024,
-			Duration::from_secs(5),
+			WorkerSpec {
+				operation: OP,
+				reply_limit: 1024,
+				deadline_ms: 5000,
+			},
 		)
 		.await;
 		assert_reaped(pid);
@@ -301,8 +308,11 @@ async fn child_timeout_and_cancellation_reap_before_returning() {
 			b"{}".to_vec(),
 			Arc::new(vec![]),
 			cancellation,
-			1024,
-			Duration::from_millis(20),
+			WorkerSpec {
+				operation: OP,
+				reply_limit: 1024,
+				deadline_ms: 20,
+			},
 		)
 		.await;
 		assert_eq!(
@@ -337,6 +347,7 @@ async fn aborting_request_keeps_lease_and_admission_until_owned_cleanup_finishes
 		await_owned(
 			(lease, admission),
 			&CancellationToken::new(),
+			OP,
 			move |token| async move {
 				let _ = started.send(());
 				supervise_child(
@@ -344,8 +355,11 @@ async fn aborting_request_keeps_lease_and_admission_until_owned_cleanup_finishes
 					b"{}".to_vec(),
 					Arc::new(vec![]),
 					token,
-					1024,
-					Duration::from_secs(30),
+					WorkerSpec {
+						operation: OP,
+						reply_limit: 1024,
+						deadline_ms: 30000,
+					},
 				)
 				.await
 			},
@@ -365,17 +379,25 @@ async fn aborting_request_keeps_lease_and_admission_until_owned_cleanup_finishes
 	// A subsequent owner can use the same capacity after the cancelled owner ends.
 	let lease = semaphore.clone().try_acquire_owned().unwrap();
 	let child = child_fixture("/bin/cat >/dev/null; printf '{\"report\":{}}'");
-	let result = await_owned(lease, &CancellationToken::new(), move |token| async move {
-		supervise_child(
-			child,
-			b"{}".to_vec(),
-			Arc::new(vec![]),
-			token,
-			1024,
-			Duration::from_secs(5),
-		)
-		.await
-	})
+	let result = await_owned(
+		lease,
+		&CancellationToken::new(),
+		OP,
+		move |token| async move {
+			supervise_child(
+				child,
+				b"{}".to_vec(),
+				Arc::new(vec![]),
+				token,
+				WorkerSpec {
+					operation: OP,
+					reply_limit: 1024,
+					deadline_ms: 5000,
+				},
+			)
+			.await
+		},
+	)
 	.await;
 	assert_eq!(result.unwrap(), json!({"report":{}}));
 }
@@ -393,6 +415,7 @@ async fn outer_abort_does_not_drop_guards_during_a_paused_cleanup() {
 		await_owned(
 			(lease, admission),
 			&CancellationToken::new(),
+			OP,
 			move |token| async move {
 				let _ = started.send(());
 				token.cancelled().await;

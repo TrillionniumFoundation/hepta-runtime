@@ -128,6 +128,10 @@ pub(crate) fn canonical_digest(value: &Value) -> Result<String> {
 		.collect())
 }
 
+pub(crate) fn write_canonical<W: Write>(value: &Value, output: &mut W) -> Result<()> {
+	canonical(value, output, 0)
+}
+
 fn equal(left: &Value, right: &Value, depth: usize) -> Result<bool> {
 	if depth > 128 {
 		bail!("REA subset canonicalization depth exceeded");

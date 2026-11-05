@@ -659,4 +659,4 @@ pub(super) use creation::create_record_owned;
 
 #[path = "rea_evidence_stream.rs"]
 mod stream;
-pub(super) use stream::{canonical_digest, semantic_digest, semantic_equal};
+pub(super) use stream::{canonical_digest, semantic_digest, semantic_equal, write_canonical};

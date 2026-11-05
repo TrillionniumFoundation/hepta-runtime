@@ -1,0 +1,2326 @@
+{
+  "$defs": {
+    "__schema0": {
+      "pattern": "^ev_[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "__schema1": {
+      "anyOf": [
+        {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "architecture": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "x86",
+                        "x86_64",
+                        "arm",
+                        "arm64",
+                        "arm64_32",
+                        "mips",
+                        "riscv",
+                        "powerpc",
+                        "hexagon"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "digest": {
+                  "$ref": "#/$defs/__schema3"
+                },
+                "format": {
+                  "enum": [
+                    "hopper",
+                    "analysis-database",
+                    "mach-o",
+                    "elf",
+                    "pe",
+                    "dos-mz",
+                    "dos-com",
+                    "zip",
+                    "ipa",
+                    "apk",
+                    "msix",
+                    "appx",
+                    "hap",
+                    "hsp",
+                    "app-pack",
+                    "asar",
+                    "godot-pck",
+                    "dmg",
+                    "pkg",
+                    "plist",
+                    "javascript",
+                    "source-map",
+                    "directory",
+                    "file",
+                    "unknown",
+                    "mach-o-universal",
+                    "javascript-bundle",
+                    "entitlements",
+                    "pyinstaller",
+                    "node-sea"
+                  ],
+                  "type": "string"
+                },
+                "local_path": {
+                  "$ref": "#/$defs/__schema5"
+                },
+                "name": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "name",
+                "digest",
+                "local_path",
+                "format",
+                "architecture"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "architecture": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "6502",
+                        "x86",
+                        "x86_64",
+                        "arm",
+                        "arm64",
+                        "arm64_32",
+                        "mips",
+                        "riscv",
+                        "powerpc",
+                        "m68k",
+                        "hexagon"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "digest": {
+                  "$ref": "#/$defs/__schema3"
+                },
+                "format": {
+                  "const": "raw-binary",
+                  "type": "string"
+                },
+                "local_path": {
+                  "$ref": "#/$defs/__schema5"
+                },
+                "name": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "name",
+                "digest",
+                "local_path",
+                "format",
+                "architecture"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "architecture": {
+                  "const": "powerpc",
+                  "type": "string"
+                },
+                "digest": {
+                  "$ref": "#/$defs/__schema3"
+                },
+                "format": {
+                  "const": "gamecube-dol",
+                  "type": "string"
+                },
+                "local_path": {
+                  "$ref": "#/$defs/__schema5"
+                },
+                "name": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "name",
+                "digest",
+                "local_path",
+                "format",
+                "architecture"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema10": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "__schema11": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "__schema12": {
+      "$ref": "#/$defs/__schema5",
+      "description": "Verbatim direct-request path; not part of semantic identity."
+    },
+    "__schema13": {
+      "anyOf": [
+        {},
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema14": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "artifact": {
+              "$ref": "#/$defs/__schema15"
+            },
+            "posture": {
+              "$ref": "#/$defs/__schema35"
+            },
+            "runtime_execution": {
+              "const": "not-performed",
+              "type": "string"
+            },
+            "schemes": {
+              "additionalProperties": false,
+              "properties": {
+                "v1": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "block_files": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "has_manifest": {
+                      "type": "boolean"
+                    },
+                    "present": {
+                      "type": "boolean"
+                    },
+                    "signature_files": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "signers": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "block_file": {
+                            "type": "string"
+                          },
+                          "certificate": {
+                            "$ref": "#/$defs/__schema16"
+                          },
+                          "certificates": {
+                            "items": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "sha256_fingerprint": {
+                                  "$ref": "#/$defs/__schema4"
+                                },
+                                "subject": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "sha256_fingerprint",
+                                "subject"
+                              ],
+                              "type": "object"
+                            },
+                            "type": "array"
+                          },
+                          "decode_error": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "signature_file": {
+                            "type": "string"
+                          },
+                          "signer_infos": {
+                            "$ref": "#/$defs/__schema17"
+                          }
+                        },
+                        "required": [
+                          "signature_file",
+                          "block_file",
+                          "certificate",
+                          "certificates",
+                          "signer_infos",
+                          "decode_error"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "present",
+                    "has_manifest",
+                    "signature_files",
+                    "block_files",
+                    "signers"
+                  ],
+                  "type": "object"
+                },
+                "v2": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "present": {
+                      "type": "boolean"
+                    },
+                    "signers": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "certificate": {
+                            "$ref": "#/$defs/__schema16"
+                          },
+                          "digests": {
+                            "$ref": "#/$defs/__schema20"
+                          },
+                          "max_sdk": {
+                            "$ref": "#/$defs/__schema29"
+                          },
+                          "min_sdk": {
+                            "$ref": "#/$defs/__schema28"
+                          },
+                          "public_key_bytes": {
+                            "$ref": "#/$defs/__schema27"
+                          },
+                          "signatures": {
+                            "$ref": "#/$defs/__schema26"
+                          },
+                          "uninterpreted_signed_data_bytes": {
+                            "$ref": "#/$defs/__schema18"
+                          },
+                          "uninterpreted_signer_bytes": {
+                            "$ref": "#/$defs/__schema19"
+                          }
+                        },
+                        "required": [
+                          "uninterpreted_signed_data_bytes",
+                          "uninterpreted_signer_bytes",
+                          "certificate",
+                          "digests",
+                          "signatures",
+                          "public_key_bytes",
+                          "min_sdk",
+                          "max_sdk"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "uninterpreted_bytes": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "present",
+                    "signers",
+                    "uninterpreted_bytes"
+                  ],
+                  "type": "object"
+                },
+                "v3": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "present": {
+                      "type": "boolean"
+                    },
+                    "signers": {
+                      "items": {
+                        "$ref": "#/$defs/__schema30"
+                      },
+                      "type": "array"
+                    },
+                    "uninterpreted_bytes": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "present",
+                    "signers",
+                    "uninterpreted_bytes"
+                  ],
+                  "type": "object"
+                },
+                "v3.1": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "present": {
+                      "type": "boolean"
+                    },
+                    "signers": {
+                      "items": {
+                        "$ref": "#/$defs/__schema30"
+                      },
+                      "type": "array"
+                    },
+                    "uninterpreted_bytes": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "present",
+                    "signers",
+                    "uninterpreted_bytes"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "v1",
+                "v2",
+                "v3",
+                "v3.1"
+              ],
+              "type": "object"
+            },
+            "source_stamp": {
+              "additionalProperties": false,
+              "properties": {
+                "certificate": {
+                  "$ref": "#/$defs/__schema16"
+                },
+                "decode_error": {
+                  "$ref": "#/$defs/__schema34"
+                },
+                "present": {
+                  "$ref": "#/$defs/__schema33"
+                }
+              },
+              "required": [
+                "present",
+                "certificate",
+                "decode_error"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "artifact",
+            "schemes",
+            "source_stamp",
+            "posture",
+            "runtime_execution"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "artifact": {
+              "$ref": "#/$defs/__schema37"
+            },
+            "coverage": {
+              "$ref": "#/$defs/__schema38"
+            },
+            "kind": {
+              "const": "summary",
+              "type": "string"
+            },
+            "limitations": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "parent_digest": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "parent_evidence_id": {
+              "$ref": "#/$defs/__schema36"
+            },
+            "parent_operation": {
+              "const": "inspect_apk_signature",
+              "type": "string"
+            },
+            "summary": {
+              "additionalProperties": false,
+              "properties": {
+                "artifact": {
+                  "$ref": "#/$defs/__schema15"
+                },
+                "counts": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "digests": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "lineage": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "signers": {
+                      "maximum": 9007199254740991,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "signers",
+                    "digests",
+                    "lineage"
+                  ],
+                  "type": "object"
+                },
+                "posture": {
+                  "$ref": "#/$defs/__schema35"
+                },
+                "schemes": {
+                  "additionalProperties": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "present": {
+                        "type": "boolean"
+                      },
+                      "signers": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "present",
+                      "signers"
+                    ],
+                    "type": "object"
+                  },
+                  "propertyNames": {
+                    "$ref": "#/$defs/__schema41"
+                  },
+                  "required": [
+                    "v1",
+                    "v2",
+                    "v3",
+                    "v3.1"
+                  ],
+                  "type": "object"
+                },
+                "signers": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "certificate_sha256": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/__schema4"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "index": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "scheme": {
+                        "$ref": "#/$defs/__schema41"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "scheme",
+                      "index",
+                      "certificate_sha256"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "source_coverage": {
+                  "$ref": "#/$defs/__schema42"
+                },
+                "source_stamp": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "certificate_sha256": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/__schema4"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "decode_error": {
+                      "$ref": "#/$defs/__schema34"
+                    },
+                    "present": {
+                      "$ref": "#/$defs/__schema33"
+                    }
+                  },
+                  "required": [
+                    "present",
+                    "decode_error",
+                    "certificate_sha256"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "artifact",
+                "schemes",
+                "signers",
+                "counts",
+                "source_stamp",
+                "posture",
+                "source_coverage"
+              ],
+              "type": "object"
+            },
+            "unknowns": {
+              "$ref": "#/$defs/__schema40"
+            },
+            "view": {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "summary",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "type": "object"
+            },
+            "view_digest": {
+              "$ref": "#/$defs/__schema4"
+            }
+          },
+          "required": [
+            "kind",
+            "view",
+            "parent_evidence_id",
+            "parent_operation",
+            "parent_digest",
+            "view_digest",
+            "artifact",
+            "coverage",
+            "limitations",
+            "unknowns",
+            "summary"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "artifact": {
+              "$ref": "#/$defs/__schema37"
+            },
+            "coverage": {
+              "$ref": "#/$defs/__schema38"
+            },
+            "items": {
+              "anyOf": [
+                {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "block_file": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "certificate": {
+                        "$ref": "#/$defs/__schema16"
+                      },
+                      "certificate_sha256": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/__schema4"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "decode_error": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "id": {
+                        "$ref": "#/$defs/__schema49"
+                      },
+                      "index": {
+                        "$ref": "#/$defs/__schema47"
+                      },
+                      "max_sdk": {
+                        "$ref": "#/$defs/__schema29"
+                      },
+                      "min_sdk": {
+                        "$ref": "#/$defs/__schema28"
+                      },
+                      "public_key_bytes": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/__schema47"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "scheme": {
+                        "$ref": "#/$defs/__schema41"
+                      },
+                      "signature_file": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "signatures": {
+                        "$ref": "#/$defs/__schema26"
+                      },
+                      "signer_infos": {
+                        "$ref": "#/$defs/__schema17"
+                      },
+                      "uninterpreted_signed_data_bytes": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/__schema47"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "uninterpreted_signer_bytes": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/__schema47"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "scheme",
+                      "index",
+                      "certificate_sha256"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "algorithm": {
+                        "$ref": "#/$defs/__schema23"
+                      },
+                      "declared_digest_hex": {
+                        "$ref": "#/$defs/__schema24"
+                      },
+                      "id": {
+                        "$ref": "#/$defs/__schema49"
+                      },
+                      "index": {
+                        "$ref": "#/$defs/__schema47"
+                      },
+                      "matches_apk": {
+                        "$ref": "#/$defs/__schema25"
+                      },
+                      "scheme": {
+                        "$ref": "#/$defs/__schema41"
+                      },
+                      "signature_algorithm_id": {
+                        "$ref": "#/$defs/__schema22"
+                      },
+                      "signer_id": {
+                        "$ref": "#/$defs/__schema50"
+                      },
+                      "signer_index": {
+                        "$ref": "#/$defs/__schema47"
+                      },
+                      "uninterpreted_bytes": {
+                        "$ref": "#/$defs/__schema21"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "scheme",
+                      "index",
+                      "signer_id",
+                      "signer_index"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "capabilities": {
+                        "$ref": "#/$defs/__schema32"
+                      },
+                      "certificate": {
+                        "$ref": "#/$defs/__schema16"
+                      },
+                      "certificate_sha256": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/__schema4"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "flags": {
+                        "$ref": "#/$defs/__schema31"
+                      },
+                      "id": {
+                        "$ref": "#/$defs/__schema49"
+                      },
+                      "index": {
+                        "$ref": "#/$defs/__schema47"
+                      },
+                      "previous_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "scheme": {
+                        "$ref": "#/$defs/__schema41"
+                      },
+                      "signer_id": {
+                        "$ref": "#/$defs/__schema50"
+                      },
+                      "signer_index": {
+                        "$ref": "#/$defs/__schema47"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "scheme",
+                      "index",
+                      "signer_id",
+                      "signer_index",
+                      "certificate_sha256"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "kind": {
+              "const": "apk-signature",
+              "type": "string"
+            },
+            "limitations": {
+              "$ref": "#/$defs/__schema39"
+            },
+            "parent_digest": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "parent_evidence_id": {
+              "$ref": "#/$defs/__schema36"
+            },
+            "parent_operation": {
+              "const": "inspect_apk_signature",
+              "type": "string"
+            },
+            "source_coverage": {
+              "$ref": "#/$defs/__schema42"
+            },
+            "unknowns": {
+              "$ref": "#/$defs/__schema40"
+            },
+            "view": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "collection": {
+                      "const": "signers",
+                      "type": "string"
+                    },
+                    "fields": {
+                      "items": {
+                        "enum": [
+                          "id",
+                          "scheme",
+                          "index",
+                          "certificate",
+                          "certificate_sha256",
+                          "signatures",
+                          "public_key_bytes",
+                          "uninterpreted_signed_data_bytes",
+                          "uninterpreted_signer_bytes",
+                          "min_sdk",
+                          "max_sdk",
+                          "signature_file",
+                          "block_file",
+                          "signer_infos",
+                          "decode_error"
+                        ],
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "ids": {
+                      "$ref": "#/$defs/__schema43"
+                    },
+                    "kind": {
+                      "const": "apk-signature",
+                      "type": "string"
+                    },
+                    "limit": {
+                      "$ref": "#/$defs/__schema48"
+                    },
+                    "offset": {
+                      "$ref": "#/$defs/__schema46"
+                    },
+                    "schemes": {
+                      "$ref": "#/$defs/__schema44"
+                    },
+                    "signer_ids": {
+                      "$ref": "#/$defs/__schema45"
+                    }
+                  },
+                  "required": [
+                    "offset",
+                    "limit",
+                    "collection",
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "collection": {
+                      "const": "digests",
+                      "type": "string"
+                    },
+                    "fields": {
+                      "items": {
+                        "enum": [
+                          "uninterpreted_bytes",
+                          "signature_algorithm_id",
+                          "algorithm",
+                          "declared_digest_hex",
+                          "matches_apk",
+                          "id",
+                          "scheme",
+                          "index",
+                          "signer_id",
+                          "signer_index"
+                        ],
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "ids": {
+                      "$ref": "#/$defs/__schema43"
+                    },
+                    "kind": {
+                      "const": "apk-signature",
+                      "type": "string"
+                    },
+                    "limit": {
+                      "$ref": "#/$defs/__schema48"
+                    },
+                    "offset": {
+                      "$ref": "#/$defs/__schema46"
+                    },
+                    "schemes": {
+                      "$ref": "#/$defs/__schema44"
+                    },
+                    "signer_ids": {
+                      "$ref": "#/$defs/__schema45"
+                    }
+                  },
+                  "required": [
+                    "offset",
+                    "limit",
+                    "collection",
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "collection": {
+                      "const": "lineage",
+                      "type": "string"
+                    },
+                    "fields": {
+                      "items": {
+                        "enum": [
+                          "certificate",
+                          "flags",
+                          "capabilities",
+                          "id",
+                          "scheme",
+                          "index",
+                          "signer_id",
+                          "signer_index",
+                          "previous_id",
+                          "certificate_sha256"
+                        ],
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "ids": {
+                      "$ref": "#/$defs/__schema43"
+                    },
+                    "kind": {
+                      "const": "apk-signature",
+                      "type": "string"
+                    },
+                    "limit": {
+                      "$ref": "#/$defs/__schema48"
+                    },
+                    "offset": {
+                      "$ref": "#/$defs/__schema46"
+                    },
+                    "schemes": {
+                      "$ref": "#/$defs/__schema44"
+                    },
+                    "signer_ids": {
+                      "$ref": "#/$defs/__schema45"
+                    }
+                  },
+                  "required": [
+                    "offset",
+                    "limit",
+                    "collection",
+                    "kind"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "view_digest": {
+              "$ref": "#/$defs/__schema4"
+            }
+          },
+          "required": [
+            "parent_evidence_id",
+            "parent_operation",
+            "parent_digest",
+            "view_digest",
+            "artifact",
+            "coverage",
+            "limitations",
+            "unknowns",
+            "kind",
+            "view",
+            "items",
+            "source_coverage"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "__schema15": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/__schema4"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "__schema16": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "issuer": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "not_after": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "not_before": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "public_key_algorithm": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "serial_number": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sha256_fingerprint": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "subject": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "sha256_fingerprint",
+            "subject",
+            "issuer",
+            "serial_number",
+            "not_before",
+            "not_after",
+            "public_key_algorithm"
+          ],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema17": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "certificate_sha256": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/__schema4"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "digest_algorithm_oid": {
+            "type": "string"
+          },
+          "identified_by": {
+            "enum": [
+              "issuer-and-serial",
+              "subject-key-identifier"
+            ],
+            "type": "string"
+          },
+          "signature_algorithm_oid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identified_by",
+          "certificate_sha256",
+          "digest_algorithm_oid",
+          "signature_algorithm_oid"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "__schema18": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "__schema19": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "__schema2": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "__schema20": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "algorithm": {
+            "$ref": "#/$defs/__schema23"
+          },
+          "declared_digest_hex": {
+            "$ref": "#/$defs/__schema24"
+          },
+          "matches_apk": {
+            "$ref": "#/$defs/__schema25"
+          },
+          "signature_algorithm_id": {
+            "$ref": "#/$defs/__schema22"
+          },
+          "uninterpreted_bytes": {
+            "$ref": "#/$defs/__schema21"
+          }
+        },
+        "required": [
+          "uninterpreted_bytes",
+          "signature_algorithm_id",
+          "algorithm",
+          "declared_digest_hex",
+          "matches_apk"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "__schema21": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "__schema22": {
+      "maximum": 4294967295,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "__schema23": {
+      "enum": [
+        "sha256",
+        "sha512",
+        "verity-sha256",
+        "unknown"
+      ],
+      "type": "string"
+    },
+    "__schema24": {
+      "pattern": "^(?:[a-f0-9]{2})*$",
+      "type": "string"
+    },
+    "__schema25": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema26": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "algorithm": {
+            "$ref": "#/$defs/__schema23"
+          },
+          "signature_algorithm_id": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "signature_bytes": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "uninterpreted_bytes": {
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "signature_algorithm_id",
+          "algorithm",
+          "signature_bytes",
+          "uninterpreted_bytes"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "__schema27": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "__schema28": {
+      "anyOf": [
+        {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema29": {
+      "anyOf": [
+        {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema3": {
+      "additionalProperties": false,
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/__schema4"
+        }
+      },
+      "required": [
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "__schema30": {
+      "additionalProperties": false,
+      "properties": {
+        "certificate": {
+          "$ref": "#/$defs/__schema16"
+        },
+        "digests": {
+          "$ref": "#/$defs/__schema20"
+        },
+        "max_sdk": {
+          "$ref": "#/$defs/__schema29"
+        },
+        "min_sdk": {
+          "$ref": "#/$defs/__schema28"
+        },
+        "public_key_bytes": {
+          "$ref": "#/$defs/__schema27"
+        },
+        "rotation": {
+          "additionalProperties": false,
+          "properties": {
+            "decode_error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lineage": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "capabilities": {
+                    "$ref": "#/$defs/__schema32"
+                  },
+                  "certificate": {
+                    "$ref": "#/$defs/__schema16"
+                  },
+                  "flags": {
+                    "$ref": "#/$defs/__schema31"
+                  }
+                },
+                "required": [
+                  "certificate",
+                  "flags",
+                  "capabilities"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "present": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "present",
+            "lineage",
+            "decode_error"
+          ],
+          "type": "object"
+        },
+        "signatures": {
+          "$ref": "#/$defs/__schema26"
+        },
+        "uninterpreted_signed_data_bytes": {
+          "$ref": "#/$defs/__schema18"
+        },
+        "uninterpreted_signer_bytes": {
+          "$ref": "#/$defs/__schema19"
+        }
+      },
+      "required": [
+        "uninterpreted_signed_data_bytes",
+        "uninterpreted_signer_bytes",
+        "certificate",
+        "digests",
+        "signatures",
+        "public_key_bytes",
+        "min_sdk",
+        "max_sdk",
+        "rotation"
+      ],
+      "type": "object"
+    },
+    "__schema31": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "__schema32": {
+      "additionalProperties": false,
+      "properties": {
+        "auth": {
+          "type": "boolean"
+        },
+        "installed_data": {
+          "type": "boolean"
+        },
+        "permission": {
+          "type": "boolean"
+        },
+        "rollback": {
+          "type": "boolean"
+        },
+        "shared_uid": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "installed_data",
+        "shared_uid",
+        "permission",
+        "rollback",
+        "auth"
+      ],
+      "type": "object"
+    },
+    "__schema33": {
+      "type": "boolean"
+    },
+    "__schema34": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema35": {
+      "additionalProperties": false,
+      "properties": {
+        "rotation_present": {
+          "type": "boolean"
+        },
+        "schemes_agree_on_signer": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "self_consistent": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "signer_change_declared_by_rotation": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_stamp_present": {
+          "type": "boolean"
+        },
+        "strongest_scheme": {
+          "enum": [
+            "none",
+            "v1",
+            "v2",
+            "v3",
+            "v3.1"
+          ],
+          "type": "string"
+        },
+        "v1_only": {
+          "type": "boolean"
+        },
+        "v1_signers_match_block_signers": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "v1_only",
+        "schemes_agree_on_signer",
+        "signer_change_declared_by_rotation",
+        "v1_signers_match_block_signers",
+        "rotation_present",
+        "source_stamp_present",
+        "strongest_scheme",
+        "self_consistent"
+      ],
+      "type": "object"
+    },
+    "__schema36": {
+      "pattern": "^ev_[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "__schema37": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Selected artifact path, or the canonical resource root when resource-only Evidence has no executable subject.",
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/__schema4"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "__schema38": {
+      "additionalProperties": false,
+      "properties": {
+        "examined": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exhausted": {
+          "type": "boolean"
+        },
+        "next_offset": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "enum": [
+            "complete-within-view",
+            "page",
+            "empty"
+          ],
+          "type": "string"
+        },
+        "total": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "status",
+        "examined",
+        "total",
+        "next_offset",
+        "exhausted"
+      ],
+      "type": "object"
+    },
+    "__schema39": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "__schema4": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "__schema40": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "__schema41": {
+      "enum": [
+        "v1",
+        "v2",
+        "v3",
+        "v3.1"
+      ],
+      "type": "string"
+    },
+    "__schema42": {
+      "additionalProperties": false,
+      "properties": {
+        "authenticity": {
+          "const": "unknown",
+          "type": "string"
+        },
+        "lineage_decoding": {
+          "enum": [
+            "complete-within-records",
+            "partial"
+          ],
+          "type": "string"
+        },
+        "scope": {
+          "const": "declared-signing-records",
+          "type": "string"
+        },
+        "signature_verification": {
+          "const": "not-performed",
+          "type": "string"
+        },
+        "signer_identity": {
+          "enum": [
+            "complete-within-records",
+            "partial"
+          ],
+          "type": "string"
+        },
+        "uninterpreted_bytes": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "v1_entry_coverage": {
+          "const": "unknown",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "uninterpreted_bytes",
+        "signer_identity",
+        "lineage_decoding",
+        "signature_verification",
+        "v1_entry_coverage",
+        "authenticity"
+      ],
+      "type": "object"
+    },
+    "__schema43": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "__schema44": {
+      "items": {
+        "$ref": "#/$defs/__schema41"
+      },
+      "type": "array"
+    },
+    "__schema45": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "__schema46": {
+      "$ref": "#/$defs/__schema47",
+      "default": 0
+    },
+    "__schema47": {
+      "maximum": 9007199254740991,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "__schema48": {
+      "default": 32,
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991,
+      "type": "integer"
+    },
+    "__schema49": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "__schema5": {
+      "pattern": "^[^\\x00]*$",
+      "type": "string"
+    },
+    "__schema50": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "__schema51": {
+      "enum": [
+        "observed",
+        "derived",
+        "inferred"
+      ],
+      "type": "string"
+    },
+    "__schema52": {
+      "enum": [
+        "shipped-artifact",
+        "controlled-replay",
+        "historical-reference",
+        "external-service",
+        "analyst-inference"
+      ],
+      "type": "string"
+    },
+    "__schema53": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "architecture": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "id": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "isolation": {
+              "enum": [
+                "none",
+                "process",
+                "container",
+                "virtual-machine"
+              ],
+              "type": "string"
+            },
+            "platform": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "platform",
+            "architecture",
+            "isolation"
+          ],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema54": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "__schema55": {
+      "anyOf": [
+        {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "diagnostics": {
+                  "$ref": "#/$defs/__schema56"
+                },
+                "status": {
+                  "const": "complete",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "diagnostics": {
+                  "$ref": "#/$defs/__schema56"
+                },
+                "limitations": {
+                  "items": {
+                    "$ref": "#/$defs/__schema58"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "limited_directions": {
+                  "$ref": "#/$defs/__schema59"
+                },
+                "status": {
+                  "const": "partial",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status",
+                "limitations"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "diagnostics": {
+                  "$ref": "#/$defs/__schema56"
+                },
+                "limited_directions": {
+                  "$ref": "#/$defs/__schema59"
+                },
+                "reason": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "status": {
+                  "const": "unknown",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status",
+                "reason"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema56": {
+      "items": {
+        "$ref": "#/$defs/__schema57"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "__schema57": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "__schema58": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "__schema59": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/__schema61"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/__schema60"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/__schema63"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/__schema62"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/__schema66"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/__schema64"
+            },
+            {
+              "$ref": "#/$defs/__schema65"
+            }
+          ],
+          "type": "array"
+        }
+      ]
+    },
+    "__schema6": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "__schema60": {
+      "const": "callers",
+      "type": "string"
+    },
+    "__schema61": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/__schema60"
+        }
+      ]
+    },
+    "__schema62": {
+      "const": "callees",
+      "type": "string"
+    },
+    "__schema63": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/__schema62"
+        }
+      ]
+    },
+    "__schema64": {
+      "const": "callers",
+      "type": "string"
+    },
+    "__schema65": {
+      "const": "callees",
+      "type": "string"
+    },
+    "__schema66": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/__schema64"
+        },
+        {
+          "$ref": "#/$defs/__schema65"
+        }
+      ]
+    },
+    "__schema67": {
+      "items": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "address": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "kind": {
+                "const": "address",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "address"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "end": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "kind": {
+                "const": "address-range",
+                "type": "string"
+              },
+              "start": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "start",
+              "end"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "artifact-path",
+                "type": "string"
+              },
+              "path": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "file-offset",
+                "type": "string"
+              },
+              "offset": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "offset"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "end": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "kind": {
+                "const": "file-offset-range",
+                "type": "string"
+              },
+              "start": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "start",
+              "end"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "type": "array"
+    },
+    "__schema68": {
+      "items": {
+        "pattern": "^ev_[a-f0-9]{64}$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "__schema7": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "digest": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "parameters": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "provider": {
+              "$ref": "#/$defs/__schema8"
+            }
+          },
+          "required": [
+            "provider",
+            "parameters",
+            "digest"
+          ],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema8": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "__schema9": {
+      "additionalProperties": {},
+      "type": "object"
+    }
+  },
+  "$id": "urn:rea:tool-output:sha256:5f48a90f6224f7c53ad5c74e1100004fe6d9df40a8608b8304cedbdb1572145e",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "analysis_profile": {
+      "$ref": "#/$defs/__schema7"
+    },
+    "authority": {
+      "$ref": "#/$defs/__schema52"
+    },
+    "caller_input_path": {
+      "$ref": "#/$defs/__schema12"
+    },
+    "confidence": {
+      "$ref": "#/$defs/__schema51"
+    },
+    "environment": {
+      "$ref": "#/$defs/__schema53"
+    },
+    "evidence_id": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "evidence_links": {
+      "$ref": "#/$defs/__schema68"
+    },
+    "limitations": {
+      "$ref": "#/$defs/__schema54"
+    },
+    "locations": {
+      "$ref": "#/$defs/__schema67"
+    },
+    "normalized_result": {
+      "$ref": "#/$defs/__schema14"
+    },
+    "operation": {
+      "$ref": "#/$defs/__schema11"
+    },
+    "parameters": {
+      "$ref": "#/$defs/__schema9"
+    },
+    "predicate_type": {
+      "$ref": "#/$defs/__schema10"
+    },
+    "provider": {
+      "$ref": "#/$defs/__schema6"
+    },
+    "raw_result": {
+      "$ref": "#/$defs/__schema13"
+    },
+    "relationship_coverage": {
+      "$ref": "#/$defs/__schema55"
+    },
+    "subject": {
+      "$ref": "#/$defs/__schema1"
+    }
+  },
+  "required": [
+    "evidence_id",
+    "subject",
+    "provider",
+    "analysis_profile",
+    "predicate_type",
+    "operation",
+    "parameters",
+    "raw_result",
+    "normalized_result",
+    "confidence",
+    "authority",
+    "environment",
+    "limitations",
+    "relationship_coverage",
+    "locations",
+    "evidence_links"
+  ],
+  "type": "object"
+}

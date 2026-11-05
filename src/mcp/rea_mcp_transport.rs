@@ -55,6 +55,7 @@ struct OrderNode {
 	keys: Vec<String>,
 	child: Option<Box<OrderNode>>,
 	view: Option<Box<OrderNode>>,
+	source: Option<Box<OrderNode>>,
 }
 
 impl OrderNode {
@@ -64,6 +65,7 @@ impl OrderNode {
 			keys: Vec::new(),
 			child: None,
 			view: None,
+			source: None,
 		}
 	}
 }
@@ -77,12 +79,13 @@ pub(crate) struct ReaRawArguments {
 }
 
 impl ReaRawArguments {
-	/// JavaScript Object.keys order for arguments (`[]`), filters or static view.
+	/// JavaScript Object.keys order for arguments (`[]`), filters, static view or Evidence source.
 	pub(crate) fn object_keys(&self, path: &[&str]) -> Option<&[String]> {
 		let node = match path {
 			[] => &self.arguments,
 			["filters"] => self.arguments.child.as_deref()?,
 			["view"] => self.arguments.view.as_deref()?,
+			["source"] => self.arguments.source.as_deref()?,
 			_ => return None,
 		};
 		(node.kind == Kind::Object).then_some(node.keys.as_slice())
@@ -205,6 +208,8 @@ impl<'de> Visitor<'de> for OrderScanner {
 			if next == Some(key.as_str()) {
 				// JSON.parse retains a property's first position but its last value.
 				node.child = Some(Box::new(map.next_value_seed(OrderScanner(self.0 + 1))?));
+			} else if self.0 == 2 && key == "source" {
+				node.source = Some(Box::new(map.next_value_seed(OrderScanner(3))?));
 			} else if self.0 == 2 && key == "view" {
 				node.view = Some(Box::new(map.next_value_seed(OrderScanner(3))?));
 			} else {

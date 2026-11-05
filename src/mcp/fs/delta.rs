@@ -47,6 +47,14 @@ pub struct ViewCache {
 }
 
 impl ViewCache {
+	/// Publication can outlive its request. An owned publisher clears this
+	/// session directly, without relying on a request-local cache context.
+	pub(crate) fn forget_all(&self) {
+		if let Ok(mut entries) = self.entries.lock() {
+			entries.clear();
+		}
+	}
+
 	fn get(&self, key: &str) -> Option<String> {
 		self.entries.lock().ok()?.get(key).cloned()
 	}
