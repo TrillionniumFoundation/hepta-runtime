@@ -173,16 +173,18 @@ def save_json(path, value):
 def file_identity(metadata):
     return (
         metadata.st_dev, metadata.st_ino, metadata.st_size,
-        metadata.st_mode, metadata.st_mtime_ns, metadata.st_ctime_ns,
+        metadata.st_mode, metadata.st_nlink, metadata.st_mtime_ns, metadata.st_ctime_ns,
     )
 
 
 def source_file(path, relative):
-    fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, "rb") as stream:
         before = os.fstat(stream.fileno())
         if not stat.S_ISREG(before.st_mode):
             raise RuntimeError("non-regular source input: " + relative)
+        if before.st_nlink != 1:
+            raise RuntimeError("source input must be a single-link regular file: " + relative)
         digest = hashlib.sha256()
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)

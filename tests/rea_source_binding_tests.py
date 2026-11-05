@@ -4,6 +4,8 @@
 """Actual filesystem regressions for the unified execution-input snapshot."""
 
 from pathlib import Path
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -117,6 +119,29 @@ class SourceBindingTests(unittest.TestCase):
         for name in ("extra", "extra/src", "generated"):
             with self.subTest(path=name):
                 self.assertTrue(matrix.storage_overlaps_inputs(self.repo, self.repo / name))
+
+    def test_external_hardlink_alias_is_refused_before_source_monitoring(self):
+        path = self.write("src/input.rs")
+        os.link(path, self.root / "external-alias.rs")
+        self.assertEqual(path.stat().st_nlink, 2)
+        with self.assertRaisesRegex(RuntimeError, "single-link regular"):
+            self.selection.snapshot()
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "POSIX FIFO input")
+    def test_fifo_is_refused_without_blocking_source_acquisition(self):
+        path = self.repo / "src/input.rs"
+        path.parent.mkdir()
+        os.mkfifo(path)
+        command = [sys.executable, "-B", "-c",
+                   "import sys;sys.path.insert(0,sys.argv[1]);"
+                   "import rea_full_qualification as m;"
+                   "m.source_file(m.Path(sys.argv[2]),'src/input.rs')",
+                   str(Path(matrix.__file__).parent), str(path)]
+        # subprocess.run kills and reaps the owned observer if the old blocking
+        # open regresses; no FIFO writer or unrelated process is involved.
+        completed = subprocess.run(command, capture_output=True, timeout=2)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn(b"non-regular source input", completed.stderr)
 
 
 if __name__ == "__main__":

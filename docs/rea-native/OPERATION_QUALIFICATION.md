@@ -136,6 +136,11 @@ Native schemas and Java bridges are already covered under `src`. Cache and
 output directories may not overlap these selected inputs, including the frozen
 reference ancestors and Cargo configuration. Generated qualification receipts,
 ledgers and other documentation remain excluded to prevent circular identities.
+Additional workspace members selected by their `.rs` or Cargo/build filenames
+are checked before any cache/output mask is admitted. Source acquisition uses a
+nonblocking, no-follow descriptor and requires a single-link regular file; a
+FIFO cannot block qualification and an existing external hard-link alias cannot
+silently evade the directory-based monitor.
 
 Earlier snapshots omitted some non-Rust execution inputs. They remain historical
 observations of their narrower selection and cannot authenticate this complete
