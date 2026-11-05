@@ -37,6 +37,7 @@ pub mod weight_config;
 pub mod weight_forward;
 pub mod weight_guard;
 pub mod weight_native;
+pub mod weight_norm;
 pub mod weight_ridge;
 pub mod weight_tensor;
 

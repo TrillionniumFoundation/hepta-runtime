@@ -37,6 +37,11 @@ pub struct RidgePlanParams {
 	pub base_weights: Vec<Vec<f64>>,
 	/// Positive finite coefficient, without implicit sample-count normalization.
 	pub lambda: f64,
+	/// Optional joint L2/Frobenius update radius across every output. Finite and
+	/// nonnegative; zero returns the unchanged anchor. Requires exact F32 anchors.
+	/// F64 KKT diagnostics and exact F32 feasibility do not certify F32 optimality.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub max_update_l2_norm: Option<f64>,
 }
 
 #[derive(Clone, Copy)]
@@ -83,7 +88,20 @@ fn validate(params: &RidgePlanParams) -> Result<Dimensions> {
 	}
 	let (n, p, o) = (rows as u64, features as u64, outputs as u64);
 	// Conservative work units cover normal equations, solves, residuals and three objectives.
-	let work = o * (n * (p * p + 6 * p + 16) + p * p * p + 10 * p * p);
+	let work = if let Some(radius) = params.max_update_l2_norm {
+		super::weight_norm::validate_radius(radius)?;
+		if params
+			.base_weights
+			.iter()
+			.flatten()
+			.any(|x| f64::from(*x as f32) != *x)
+		{
+			bail!("an L2-budgeted plan requires anchors exactly representable as finite F32");
+		}
+		trust_region::maximum_work(n, p, o, radius == 0.0)
+	} else {
+		o * (n * (p * p + 6 * p + 16) + p * p * p + 10 * p * p)
+	};
 	if work > MAX_WORK {
 		bail!("ridge exceeds its scalar arithmetic work budget");
 	}
@@ -293,6 +311,17 @@ fn solve(params: &RidgePlanParams) -> Result<Value> {
 		.iter()
 		.map(|byte| format!("{byte:02x}"))
 		.collect();
+	if let Some(radius) = params.max_update_l2_norm {
+		return trust_region::solve(
+			params,
+			dims,
+			radius,
+			started,
+			end,
+			request_sha256,
+			commitment.bytes,
+		);
+	}
 	let mut weights_f64 = Vec::with_capacity(dims.outputs);
 	let mut weights_f32 = Vec::with_capacity(dims.outputs);
 	let mut edits = Vec::new();
@@ -385,6 +414,9 @@ pub async fn plan(params: RidgePlanParams) -> Result<String> {
 	.context("native ridge planning worker failed")??;
 	Ok(serde_json::to_string(&result)?)
 }
+
+#[path = "weight_trust_region.rs"]
+mod trust_region;
 
 #[cfg(test)]
 #[path = "weight_ridge_tests.rs"]

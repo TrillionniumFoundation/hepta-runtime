@@ -1,0 +1,63 @@
+{
+  "schema": "hepta.native-wsp-trust-region-protocol.v1",
+  "published_parent_commit": "d85852b3c1708d9b2e8162badc07116999eff15e",
+  "published_parent_tree": "84f79718dda7ce1f976e6d21ad041031f4fd5c7f",
+  "scope": "Numerical direct-solve and authenticated one-patch F32 feasibility/recovery qualification; no model-value experiment or production activation.",
+  "objective": "sum_j sum_i sample_weights[i][j]*(features[i] dot weights[j]-targets[i][j])^2 + lambda*sum_j||weights[j]-base_weights[j]||^2",
+  "constraint": "One joint L2/Frobenius update ball across all output coefficients, around exact F32 anchors; no row-count normalization.",
+  "invariants": [
+    "None preserves the previous unconstrained request-serialization identity and execution semantics.",
+    "Some participates in the canonical request commitment.",
+    "A zero radius is a singleton; no finite multiplier or general KKT condition is fabricated.",
+    "Per-output sample weights may differ; every output shares the same radius multiplier.",
+    "F64 stationarity and radius checks are numerical diagnostics, not exact global-optimality certificates.",
+    "F32 lowering toward the anchor is independently checked using exact 576-bit integer squared differences against the exact F64 radius square.",
+    "F32 feasibility never certifies F32 optimality, held-out quality or task value.",
+    "Guard independently recomputes this single patch's budget from expected/replacement bytes; the existing patch path authenticates the complete source SHA and expected bytes.",
+    "Repeated addresses, forged source bytes and malformed data cannot be accepted.",
+    "The budget excludes separately supplied bias, environment changes and cumulative drift across multiple patches.",
+    "Signed-zero numeric difference is zero even when bytes change.",
+    "The strict gain > minimum_gain rule and original recovery checks remain in force."
+  ],
+  "resource_limits": {
+    "maximum_rows": 2048,
+    "maximum_features": 64,
+    "maximum_outputs": 8,
+    "maximum_scalar_operation_model_units": 80000000,
+    "maximum_shift_solve_batches": 96,
+    "maximum_bracket_steps": 8,
+    "maximum_bisection_steps": 80,
+    "compute_deadline_seconds": 30,
+    "planner_worker_permits": 2,
+    "maximum_exact_norm_pairs": 1024
+  },
+  "verification": {
+    "unit_and_file_cases": [
+      "Scalar active and inactive balls with analytic solutions.",
+      "Two differently weighted outputs with nonzero anchors and a known common multiplier.",
+      "Zero radius; illegal radii; anchors not exactly representable as F32.",
+      "F32 rounding outward at decimal boundaries and inward lowering.",
+      "Exact norm boundary and adjacent F64 radii; subnormal updates and extreme radii.",
+      "1024 opposite maximum-F32 updates and mixed extreme exponents.",
+      "Pre-publication budget rejection, forged expected bytes, repeated indices and zero-gain restoration.",
+      "Worst-case multiplier search admitted against the original 80M work cap."
+    ],
+    "external_rpc": "Launch the newly built controller and use its shipped stdio MCP path; record binary and source hashes. Compare the exact norm receipt with Python Fraction and constrained F64 solutions with an independent eigensystem reference.",
+    "norm_random_seed": 1782417,
+    "norm_random_cases": 16,
+    "norm_random_lengths_cycle": [1, 2, 7, 31, 127, 512, 1024],
+    "real_public_fixture": "hepta-private-ci@2d0120e208ed81515837a7530c9f6943af03e87f:tools/hcsn/wsp_20261104/joint/fixtures/rust_fixture.json",
+    "real_public_fixture_git_blob": "6095b4d665c8b2b9872a71448cdc80220d2def4c",
+    "fixture_precision": "Explicitly derive a serialized F32 anchor from the public F64 fixture and lift those exact values to F64 for both solvers; identify the derived fixture separately.",
+    "f64_reference_tolerance": "max absolute parameter error <= 1e-8*(1+max absolute reference parameter); report multiplier, KKT and objective differences separately.",
+    "f32_feasibility": "Exact Fraction squared norm <= exact Fraction radius squared; no tolerance and no dropped failing cases.",
+    "failures": "Retain failed builds, tests, RPC attempts and their costs; corrections require new attempt records."
+  },
+  "qualification_flags": {
+    "end_to_end_model_gain_claimed": false,
+    "trading_value_gain_claimed": false,
+    "full_graph_optimization_claimed": false,
+    "cross_process_crash_recovery_claimed": false,
+    "production_activation": false
+  }
+}

@@ -71,6 +71,11 @@ pub struct GuardedPatchParams {
 	/// Required strict improvement in negative MSE or mean realized action value.
 	pub minimum_gain: f64,
 	pub constraints: Vec<Constraint>,
+	/// Optional exact L2 budget on this patch's authenticated F32 differences.
+	/// Excludes supplied bias, environment changes and cumulative drift across patches.
+	/// Signed zeros have zero numeric difference. An excess fails before publication.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub max_update_l2_norm: Option<f64>,
 }
 
 /// Bound the extra canonical-request copy before allocation grows beyond the cap.
@@ -295,6 +300,18 @@ pub(super) async fn evaluate_with_roots(
 	serde_json::to_writer(&mut buffer, &params)?;
 	let encoded = buffer.0;
 	let evaluation_id = format!("wg1_{}", digest(&encoded));
+	let update_budget = params
+		.max_update_l2_norm
+		.map(|radius| super::weight_norm::check_edits(&params.patch.edits, radius))
+		.transpose()?;
+	if update_budget
+		.as_ref()
+		.is_some_and(|budget| !budget.within_budget)
+	{
+		bail!(
+			"declared F32 patch exceeds its exact joint L2 update budget; no candidate published"
+		);
+	}
 	let before = run_forward(
 		&params,
 		LinearSource::Path {
@@ -396,6 +413,9 @@ pub(super) async fn evaluate_with_roots(
 		"outcome":outcome, "accepted":accepted, "candidate":candidate, "restoration":restoration,
 		"primary_before":primary_before, "primary_after":primary_after, "gain":gain,
 		"minimum_gain":params.minimum_gain, "score_direction":"higher_is_better",
+		"f32_update_budget":update_budget,
+		"f32_update_budget_source_bytes_authenticated":update_budget.is_some(),
+		"f32_update_budget_scope":"numeric F32 differences in this patch only; excludes supplied bias, environment changes and cumulative drift across patches",
 		"parent_constraint_violations":original_violations,"candidate_constraint_violations":violations,
 		"evaluation_error":error,"restoration_error":restoration_error,
 		"evaluation_examples":params.inputs.len(),"request_sha256":digest(&encoded),

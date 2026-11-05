@@ -40,6 +40,7 @@ async fn fixture(
 		},
 		minimum_gain: 0.0,
 		constraints: Vec::new(),
+		max_update_l2_norm: None,
 	};
 	(temp, params, bytes)
 }
@@ -260,4 +261,66 @@ fn complement_and_bounded_probabilities_are_distinct_from_primary_gain() {
 		check_constraints(&constraints, &[vec![1.25, -0.25]], &parent).unwrap(),
 		vec![0, 1]
 	);
+}
+
+#[tokio::test]
+async fn exact_update_budget_is_independent_of_score_and_rejects_before_publication() {
+	for radius in [0.0, 1.0_f64.next_down()] {
+		let (temp, mut params, original) = fixture(&[1.0, -3.0], 2).await;
+		params.max_update_l2_norm = Some(radius);
+		let path = params.patch.path.clone();
+		let error = evaluate_with_roots(
+			params,
+			&[temp.path().to_owned()],
+			&temp.path().join("state"),
+		)
+		.await
+		.unwrap_err();
+		assert!(error.to_string().contains("exact joint L2 update budget"));
+		assert_eq!(tokio::fs::read(path).await.unwrap(), original);
+		assert!(!temp.path().join("state/weight-artifacts-v1").exists());
+	}
+	let (temp, mut params, _) = fixture(&[1.0, -3.0], 2).await;
+	params.max_update_l2_norm = Some(1.0);
+	let accepted = run(&temp, params).await;
+	assert_eq!(accepted["accepted"], true);
+	assert_eq!(accepted["f32_update_budget"]["within_budget"], true);
+	assert_eq!(
+		accepted["f32_update_budget_source_bytes_authenticated"],
+		true
+	);
+}
+
+#[tokio::test]
+async fn budget_cannot_authenticate_forged_old_bytes_or_admit_repeated_addresses() {
+	for duplicate in [false, true] {
+		let (temp, mut params, original) = fixture(&[1.0, -3.0], 2).await;
+		params.max_update_l2_norm = Some(2.0);
+		if duplicate {
+			params.patch.edits.push(params.patch.edits[0].clone());
+		} else {
+			params.patch.edits[0].expected_hex = element(0.0);
+		}
+		let path = params.patch.path.clone();
+		assert!(evaluate_with_roots(
+			params,
+			&[temp.path().to_owned()],
+			&temp.path().join("state")
+		)
+		.await
+		.is_err());
+		assert_eq!(tokio::fs::read(path).await.unwrap(), original);
+	}
+}
+
+#[tokio::test]
+async fn zero_budget_noop_still_fails_strict_gain_and_is_restored() {
+	let (temp, mut params, original) = fixture(&[1.0, -3.0], 2).await;
+	params.max_update_l2_norm = Some(0.0);
+	params.patch.edits[0].replacement_hex = element(1.0);
+	let report = run(&temp, params.clone()).await;
+	assert_eq!(report["outcome"], "rejected_and_restored");
+	assert_eq!(report["f32_update_budget"]["squared_update_units_hex"], "0");
+	assert_eq!(report["gain"], 0.0);
+	assert_eq!(tokio::fs::read(params.patch.path).await.unwrap(), original);
 }
