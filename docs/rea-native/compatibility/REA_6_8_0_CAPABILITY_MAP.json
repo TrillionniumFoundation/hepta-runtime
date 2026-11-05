@@ -1,6 +1,6 @@
 {
   "schema": "hepta.rea.capability-map.v1",
-  "runtime_baseline": "8e5f668d8e6ca75f3350f286780311dbc18324f8",
+  "runtime_baseline": "971612c8b4fc6477640838c3bb4d131f972e1eec",
   "interfaces": {
     "rea_inspect_artifact": {
       "source_paths": [
@@ -1035,8 +1035,8 @@
         "rea_model_session_query",
         "rea_model_session_read"
       ],
-      "scope": "GGUF/safetensors directory, header/full hash, selected extents and immutable model snapshots",
-      "missing": "Upstream Evidence, exact supported type/layout/metadata semantics and default limits, all error/detail/view cases",
+      "scope": "GGUF/safetensors directory, header/full hash, 18 pinned invariant GGML scalar/block layouts with fastest-dimension constraints, checked exact ranges and immutable model snapshots under parser profile v2. Historical ambiguous layouts remain explicit.",
+      "missing": "Full upstream Evidence and supported metadata/value semantics, quantized payload decoding, unknown or historically ambiguous layouts, exact default limits and every error/detail/view case. Old v1 model indexes are explicitly rejected; source reopen is required and retained v1 directories keep global listing fail-closed.",
       "dependencies": [],
       "extra_gates": [
         "format_architecture_corpus",
@@ -1499,8 +1499,8 @@
       "native_routes": [
         "rea_import_evidence_bundle"
       ],
-      "scope": "Public authenticated bulk import of records and complete unknown revision histories, process-capture validation, atomic union validation/rollback, repeat-import metadata semantics and retained session readback under the native Linux source/owner profile.",
-      "missing": "Remaining original JSON parser diagnostics and value-representation profiles, including unpaired-surrogate and overflow cases; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries beyond the finite reference corpus; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits are recorded profile differences.",
+      "scope": "Public authenticated bulk import of records and complete unknown revision histories, process-capture validation, atomic union validation/rollback, repeat-import metadata semantics and retained session readback under the native Linux source/owner profile. Bounded small-file JSON observation retains pinned EOF and non-EOF diagnostics and typed string-root rejection while preserving late read, UTF-8, quota and cancellation failures.",
+      "missing": "Unrepresentable V8 diagnostic windows that split UTF-16 surrogate pairs, nested unpaired-surrogate and numeric-overflow representation profiles, and syntax beyond the finite captured corpus; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits remain explicit profile differences.",
       "related_runtime_routes": [
         "rea_verify_evidence",
         "rea_retain_preview",
@@ -1669,7 +1669,7 @@
       "missing": [
         "Public inspect_recorded_crash MCP schema, handler and Provider integration",
         "Original request/reply-file, resource-marker and effective-limit behavior parity",
-        "Noncanonical pyelftools section-constructor and PT_DYNAMIC section-traversal parity",
+        "Complete noncanonical section payload semantics, including nonempty ELF/GNU hash bodies and non-ASCII Python diagnostic representation, beyond bounded constructor traversal",
         "Evidence retention, pagination, import/export and post-cancel query integration",
         "Optional GDB/pwndbg crash enrichment and complete recorded-crash operation differential",
         "Same-combination multi-host recovery and cost qualification"
@@ -2358,10 +2358,22 @@
       "entrypoint": "hepta-runtime rea-model-worker",
       "required": true,
       "source_paths": [
-        "src/mcp/rea_model.rs"
+        "src/mcp/rea_model.rs",
+        "src/mcp/rea_model_parser.rs",
+        "src/mcp/rea_model_session.rs",
+        "src/mcp/rea_model_session_index.rs",
+        "src/mcp/rea_model_session_store.rs",
+        "src/mcp/rea_model_worker.rs"
       ],
-      "tests": [],
-      "scope": "Internal descriptor-based model declaration parser; no model inference",
+      "tests": [
+        "src/mcp/rea_model_parser_tests.rs",
+        "src/mcp/rea_model_session_tests.rs",
+        "src/mcp/rea_model_tests.rs",
+        "scripts/rea-model-gguf-layout-diff.mjs",
+        "scripts/rea-model-gguf-layout-probe.cpp",
+        "scripts/rea-model-worker-lifecycle.test.mjs"
+      ],
+      "scope": "Internal descriptor-based model declaration parser, immutable snapshots and exact range reads. Eighteen pinned invariant GGML layouts validate fastest-dimension block constraints and checked extents; historical ambiguity and unsupported zero-element layouts remain explicit. Retained index profile v2 refuses old proofs rather than relabeling them. No model inference, dequantization or whole-provider qualification.",
       "upstream_tools": [
         "inspect_model_artifact"
       ]
@@ -2645,9 +2657,10 @@
         "src/mcp/rea_recorded_core_worker_tests.rs",
         "src/mcp/rea_recorded_core_parser_tests.rs",
         "scripts/rea_recorded_core_corpus.py",
-        "scripts/rea_recorded_core_differential.py"
+        "scripts/rea_recorded_core_differential.py",
+        "tests/fixtures/rea_recorded_core/dynamic-sections-rea-6.8.0.json"
       ],
-      "scope": "Internal captured-byte Rust Linux ELF64 recorded-core payload decoder and strict stdin worker. Native frame, resource limits and output admission are explicit, separate from the frozen Python request/reply-file helper. Historical PIDs and paths grant no live authority. Noncanonical PN_XNUM specialized section constructors and PT_DYNAMIC section traversal remain explicit admission differences. The original child owner must enforce wall deadlines and reap the worker. No public inspect_recorded_crash MCP route, Provider/Evidence integration, full helper parity, optional pwndbg enrichment or same-combination replacement qualification is claimed.",
+      "scope": "Internal captured-byte Rust Linux ELF64 recorded-core payload decoder and strict stdin worker. Bounded PN_XNUM/PT_DYNAMIC section construction preserves source order, constructor failures and the first matching dynamic section with a shared work budget. Nonempty ELF/GNU hash bodies and unsupported diagnostic representations remain explicit gaps. Native frame, resource limits and output admission are separate from the frozen Python request/reply-file helper. Historical PIDs and paths grant no live authority. The original child owner must enforce wall deadlines and reap the worker. No public inspect_recorded_crash MCP route, Provider/Evidence integration, full helper parity, optional pwndbg enrichment or same-combination replacement qualification is claimed.",
       "upstream_tools": [
         "inspect_recorded_crash"
       ]

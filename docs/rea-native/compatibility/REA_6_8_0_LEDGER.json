@@ -20,7 +20,7 @@
     ]
   },
   "runtime": {
-    "baseline_commit": "8e5f668d8e6ca75f3350f286780311dbc18324f8",
+    "baseline_commit": "971612c8b4fc6477640838c3bb4d131f972e1eec",
     "discovery": "Rust source handler discovery, not live MCP tools/list",
     "interface_count": 32,
     "interfaces": [
@@ -142,7 +142,7 @@
         "kind": "rust_cli",
         "entrypoint": "hepta-runtime rea-model-worker",
         "source_presence": "PRESENT",
-        "scope": "Internal descriptor-based model declaration parser; no model inference",
+        "scope": "Internal descriptor-based model declaration parser, immutable snapshots and exact range reads. Eighteen pinned invariant GGML layouts validate fastest-dimension block constraints and checked extents; historical ambiguity and unsupported zero-element layouts remain explicit. Retained index profile v2 refuses old proofs rather than relabeling them. No model inference, dequantization or whole-provider qualification.",
         "upstream_tools": [
           "inspect_model_artifact"
         ],
@@ -175,7 +175,7 @@
         "kind": "rust_cli",
         "entrypoint": "hepta-runtime rea-recorded-core-worker",
         "source_presence": "PRESENT",
-        "scope": "Internal captured-byte Rust Linux ELF64 recorded-core payload decoder and strict stdin worker. Native frame, resource limits and output admission are explicit, separate from the frozen Python request/reply-file helper. Historical PIDs and paths grant no live authority. Noncanonical PN_XNUM specialized section constructors and PT_DYNAMIC section traversal remain explicit admission differences. The original child owner must enforce wall deadlines and reap the worker. No public inspect_recorded_crash MCP route, Provider/Evidence integration, full helper parity, optional pwndbg enrichment or same-combination replacement qualification is claimed.",
+        "scope": "Internal captured-byte Rust Linux ELF64 recorded-core payload decoder and strict stdin worker. Bounded PN_XNUM/PT_DYNAMIC section construction preserves source order, constructor failures and the first matching dynamic section with a shared work budget. Nonempty ELF/GNU hash bodies and unsupported diagnostic representations remain explicit gaps. Native frame, resource limits and output admission are separate from the frozen Python request/reply-file helper. Historical PIDs and paths grant no live authority. The original child owner must enforce wall deadlines and reap the worker. No public inspect_recorded_crash MCP route, Provider/Evidence integration, full helper parity, optional pwndbg enrichment or same-combination replacement qualification is claimed.",
         "upstream_tools": [
           "inspect_recorded_crash"
         ],
@@ -569,6 +569,21 @@
         "bytes": 19608
       },
       {
+        "path": "scripts/rea-model-gguf-layout-diff.mjs",
+        "sha256": "2aa9915a5191c08b3fc776cd979c5a013e0211fb09fbdd6e16fed4fcf9d8eb92",
+        "bytes": 10746
+      },
+      {
+        "path": "scripts/rea-model-gguf-layout-probe.cpp",
+        "sha256": "cb8934f1f313938d4455691a1ed5d882d91894f0680839bf8d81527ea13731b7",
+        "bytes": 1778
+      },
+      {
+        "path": "scripts/rea-model-worker-lifecycle.test.mjs",
+        "sha256": "923bf4c91dfe1cb6b18f2c2bdbd66b037c3b14dbd62b390a0299f3ab339d844e",
+        "bytes": 4055
+      },
+      {
         "path": "scripts/rea-number-bit-reference.mjs",
         "sha256": "9ab5ab164889f6ebde4ce2d7f074584a74c4276a55adf67c1be1102122ce6603",
         "bytes": 5317
@@ -655,8 +670,8 @@
       },
       {
         "path": "src/mcp/rea_analysis_view.rs",
-        "sha256": "21fd3021a6a31a1e42f50634de58b674e865e7e494b8c868b1f47e47bc6c6094",
-        "bytes": 18470
+        "sha256": "0c19d98a5d318cc6eb2c9f11c0b67d608512bfebf5c65843037ed9690be50020",
+        "bytes": 18585
       },
       {
         "path": "src/mcp/rea_analysis_view_mcp_input.rs",
@@ -1030,23 +1045,23 @@
       },
       {
         "path": "src/mcp/rea_evidence_file.rs",
-        "sha256": "05f7d30ba3c7dc87b94eb72a7105990e136cd67ee27b9ae7fc4b0194b2fb0879",
-        "bytes": 29492
+        "sha256": "34513e5cd302f34a939d3fdf6e022b176f8aa5d3eb0e5a986903827a04002830",
+        "bytes": 30961
       },
       {
         "path": "src/mcp/rea_evidence_file_tests.rs",
-        "sha256": "7e9ef99cf482bee998e0bce734cb0f6f196508fc0c83800e3953cbc3445ac530",
-        "bytes": 21454
+        "sha256": "e99931f917926ba4a053e8a480e21f62ed0790cd83b81aafd86ede69b29841d9",
+        "bytes": 25594
       },
       {
         "path": "src/mcp/rea_evidence_import.rs",
-        "sha256": "2476b196968ba228d49d426772e3e99be107c20922584b204b0eac0ab332f2a1",
-        "bytes": 10092
+        "sha256": "140dfe69b4cd477f2d5d05c615b410ce8555f54f86d29e99b2488467d55a8d39",
+        "bytes": 10230
       },
       {
         "path": "src/mcp/rea_evidence_import_tests.rs",
-        "sha256": "ce3bdadc577516ee435a114faf804b5416f93f4265fa682c928c26c322395a18",
-        "bytes": 8275
+        "sha256": "cc0c3338f1379e7c784ca6b4cf9044bc2d0ae297e41a3966bf1ac5ad79049b3a",
+        "bytes": 10222
       },
       {
         "path": "src/mcp/rea_evidence_session.rs",
@@ -1060,8 +1075,8 @@
       },
       {
         "path": "src/mcp/rea_evidence_source.rs",
-        "sha256": "6b3f5884f06b813147bd4b8cc5e568f77cff5a05647f8a95d50b2b4c69058d85",
-        "bytes": 44724
+        "sha256": "50c3c7520bb07d15ad54634f8d6f33d270cd7b2cb556212c5afe17bf2dcf3703",
+        "bytes": 45310
       },
       {
         "path": "src/mcp/rea_evidence_source_length.rs",
@@ -1185,8 +1200,8 @@
       },
       {
         "path": "src/mcp/rea_json_eof.rs",
-        "sha256": "0cdd762d8f8c22c2d740517a93a7e4916f236146bf0afef4f7283f6efe15b38c",
-        "bytes": 8756
+        "sha256": "8714c6f91a03a815ac89ef84850085128ab0c05db2ddfc342a31ae2455d58630",
+        "bytes": 11559
       },
       {
         "path": "src/mcp/rea_mcp_input.rs",
@@ -1210,18 +1225,18 @@
       },
       {
         "path": "src/mcp/rea_model_parser.rs",
-        "sha256": "271b5f75e110d71405258257d99b0f655b22983401f53e8e015f3932eaa5c8bf",
-        "bytes": 21593
+        "sha256": "1997cc703253a9223a5b2f693e6830c77ab592a3cb0246281d6374e3307a99ad",
+        "bytes": 24570
       },
       {
         "path": "src/mcp/rea_model_parser_tests.rs",
-        "sha256": "805c0e90f6b28d428827ff83690c3c070094087099a89f44f2f1cf0612f1bc5c",
-        "bytes": 9410
+        "sha256": "2d97b4bed49c92ddd270e06571755695c3f759320f30dead58389a9183c4be94",
+        "bytes": 16688
       },
       {
         "path": "src/mcp/rea_model_session.rs",
-        "sha256": "088598b2ca7f33affef61f859c4738b4fbb618b3ab060b8626f47c3fd54d679c",
-        "bytes": 27246
+        "sha256": "b1b9d7dd3c64b2bffe2103c9d28c1eaf349a26527b7d457f11fd09fbc348e095",
+        "bytes": 27551
       },
       {
         "path": "src/mcp/rea_model_session_index.rs",
@@ -1235,8 +1250,8 @@
       },
       {
         "path": "src/mcp/rea_model_session_tests.rs",
-        "sha256": "da4c781fe16963a5ef6e491752c167cd08b67a8768d9b9475edd95b6925ee7e4",
-        "bytes": 22960
+        "sha256": "4446044d54971fe16dde8c961c3aa1ee9306dea732350ba714f3bd978c3383a2",
+        "bytes": 30968
       },
       {
         "path": "src/mcp/rea_model_tests.rs",
@@ -1265,23 +1280,23 @@
       },
       {
         "path": "src/mcp/rea_recorded_core_layout.rs",
-        "sha256": "0f882f5c58aa130cec03d1078ceadbac0f265e0fac919652832d971807a338e4",
-        "bytes": 3755
+        "sha256": "8599656a07c9339f5b1af61daa33b39d41f559cbc766fa04f6ccc562d08f82cd",
+        "bytes": 4111
       },
       {
         "path": "src/mcp/rea_recorded_core_parser.rs",
-        "sha256": "493d2ab7db38159dcbd70daee4ab9705d1225b56810c7515b3ee10b54554553a",
-        "bytes": 15732
+        "sha256": "bdb49c6874d09c0e9bc6524c93c022eba5b19f532271474a654c06be0aedbbf7",
+        "bytes": 15600
       },
       {
         "path": "src/mcp/rea_recorded_core_parser_tests.rs",
-        "sha256": "2090140dba27d1875a717fae605f11c3b160938f112a1f69a8ef8e6095b8995f",
-        "bytes": 21969
+        "sha256": "d14f2b62814fc01d2211ff37ecd0a9ff72f865a9d6a940e09b318e66f12cc167",
+        "bytes": 25886
       },
       {
         "path": "src/mcp/rea_recorded_core_sections.rs",
-        "sha256": "ec6857f7c43ebfb88dc83393df2d4b9bcf1438e7a05756c129afe8c781c0daa0",
-        "bytes": 8596
+        "sha256": "db898c0c76dc4bb0a0ebb8c21995895e2fbafe33548fc6d7e05a2a1bec8dde95",
+        "bytes": 12726
       },
       {
         "path": "src/mcp/rea_recorded_core_worker.rs",
@@ -1479,6 +1494,11 @@
         "bytes": 92
       },
       {
+        "path": "tests/fixtures/rea_recorded_core/dynamic-sections-rea-6.8.0.json",
+        "sha256": "c44df75dc8d80ffcdf49791d371600ab172849c30abb33194bbd8a234117f111",
+        "bytes": 70934
+      },
+      {
         "path": "tests/rea_apk_signature_mcp.py",
         "sha256": "633dd05e70696b5082f6d5f092e02a56f50ed5d43d7faf8b4ba64ff4105b1bbf",
         "bytes": 18308
@@ -1619,7 +1639,7 @@
         "bytes": 23260
       }
     ],
-    "source_manifest_sha256": "b4bd1db35eb7c062efda7f5ae27726dbfbde16b42c6e4613d2bab7f4fb5f2871"
+    "source_manifest_sha256": "7995e5704d382208273b1b996ec2e3b020a037959afbfa67ba5612ed41769d5e"
   },
   "environment_observations_sha256": "4ace5e8f041a05d205825fb2b2a41769fcfdc91f60810072eb7a6c17a12f3e9c",
   "dependency_assessments": {
@@ -2213,7 +2233,7 @@
       "hard_missing_dependency": "NOT_ESTABLISHED"
     }
   },
-  "mapping_sha256": "02d6fe9e934c1f3faea51e41f764983630b7205d0d0116499d203f34f31029a9",
+  "mapping_sha256": "173452c391156019b9ea4379b1bc63b73548e0e4e3425d0e5e3a7c1633332215",
   "inputs_sha256": "d143681c5384d0cff75d72659cd36381eaff60ca5bf3fe45fb5290b3eccc6904",
   "summary": {
     "published_tools": 229,
@@ -2592,8 +2612,8 @@
         "rea_model_session_query",
         "rea_model_session_read"
       ],
-      "native_scope": "GGUF/safetensors directory, header/full hash, selected extents and immutable model snapshots",
-      "remaining_behavior": "Upstream Evidence, exact supported type/layout/metadata semantics and default limits, all error/detail/view cases",
+      "native_scope": "GGUF/safetensors directory, header/full hash, 18 pinned invariant GGML scalar/block layouts with fastest-dimension constraints, checked exact ranges and immutable model snapshots under parser profile v2. Historical ambiguous layouts remain explicit.",
+      "remaining_behavior": "Full upstream Evidence and supported metadata/value semantics, quantized payload decoding, unknown or historically ambiguous layouts, exact default limits and every error/detail/view case. Old v1 model indexes are explicitly rejected; source reopen is required and retained v1 directories keep global listing fail-closed.",
       "dependencies": [],
       "related_runtime_routes": [],
       "related_auxiliary_capabilities": [],
@@ -2612,7 +2632,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Upstream Evidence, exact supported type/layout/metadata semantics and default limits, all error/detail/view cases"
+          "next_step": "Full upstream Evidence and supported metadata/value semantics, quantized payload decoding, unknown or historically ambiguous layouts, exact default limits and every error/detail/view case. Old v1 model indexes are explicitly rejected; source reopen is required and retained v1 directories keep global listing fail-closed."
         },
         {
           "category": "behavioral_differential",
@@ -13344,7 +13364,7 @@
       "remaining_behavior": [
         "Public inspect_recorded_crash MCP schema, handler and Provider integration",
         "Original request/reply-file, resource-marker and effective-limit behavior parity",
-        "Noncanonical pyelftools section-constructor and PT_DYNAMIC section-traversal parity",
+        "Complete noncanonical section payload semantics, including nonempty ELF/GNU hash bodies and non-ASCII Python diagnostic representation, beyond bounded constructor traversal",
         "Evidence retention, pagination, import/export and post-cancel query integration",
         "Optional GDB/pwndbg crash enrichment and complete recorded-crash operation differential",
         "Same-combination multi-host recovery and cost qualification"
@@ -13387,7 +13407,7 @@
           "next_step": [
             "Public inspect_recorded_crash MCP schema, handler and Provider integration",
             "Original request/reply-file, resource-marker and effective-limit behavior parity",
-            "Noncanonical pyelftools section-constructor and PT_DYNAMIC section-traversal parity",
+            "Complete noncanonical section payload semantics, including nonempty ELF/GNU hash bodies and non-ASCII Python diagnostic representation, beyond bounded constructor traversal",
             "Evidence retention, pagination, import/export and post-cancel query integration",
             "Optional GDB/pwndbg crash enrichment and complete recorded-crash operation differential",
             "Same-combination multi-host recovery and cost qualification"
@@ -19060,8 +19080,8 @@
       "native_routes": [
         "rea_import_evidence_bundle"
       ],
-      "native_scope": "Public authenticated bulk import of records and complete unknown revision histories, process-capture validation, atomic union validation/rollback, repeat-import metadata semantics and retained session readback under the native Linux source/owner profile.",
-      "remaining_behavior": "Remaining original JSON parser diagnostics and value-representation profiles, including unpaired-surrogate and overflow cases; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries beyond the finite reference corpus; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits are recorded profile differences.",
+      "native_scope": "Public authenticated bulk import of records and complete unknown revision histories, process-capture validation, atomic union validation/rollback, repeat-import metadata semantics and retained session readback under the native Linux source/owner profile. Bounded small-file JSON observation retains pinned EOF and non-EOF diagnostics and typed string-root rejection while preserving late read, UTF-8, quota and cancellation failures.",
+      "remaining_behavior": "Unrepresentable V8 diagnostic windows that split UTF-16 surrogate pairs, nested unpaired-surrogate and numeric-overflow representation profiles, and syntax beyond the finite captured corpus; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits remain explicit profile differences.",
       "dependencies": [],
       "related_runtime_routes": [
         "rea_verify_evidence",
@@ -19086,7 +19106,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Remaining original JSON parser diagnostics and value-representation profiles, including unpaired-surrogate and overflow cases; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries beyond the finite reference corpus; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits are recorded profile differences."
+          "next_step": "Unrepresentable V8 diagnostic windows that split UTF-16 surrogate pairs, nested unpaired-surrogate and numeric-overflow representation profiles, and syntax beyond the finite captured corpus; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits remain explicit profile differences."
         },
         {
           "category": "behavioral_differential",
