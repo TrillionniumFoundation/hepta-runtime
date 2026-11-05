@@ -1,6 +1,6 @@
 {
   "schema": "hepta.rea.capability-map.v1",
-  "runtime_baseline": "9b02a74ffb17feba2ea07055ee4ab0981b06cf83",
+  "runtime_baseline": "da4ff14c24461033a8e5361ecd23629362e27b29",
   "interfaces": {
     "rea_inspect_artifact": {
       "source_paths": [
@@ -158,132 +158,212 @@
     },
     "rea_static_profiles": {
       "source_paths": [
-        "src/mcp/rea_provider.rs",
-        "src/mcp/rea_engine_profile.rs",
-        "src/mcp/rea_engine_ghidra.rs",
-        "src/mcp/rea_ghidra_contract.rs",
-        "src/mcp/rea_ghidra_analysis_bridge.java",
-        "src/mcp/rea_ghidra_inventory_v2.java",
-        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
-        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
-        "docs/qualification/rea-ghidra-final-release-20261104-r2/artifact-manifest.json",
-        "docs/qualification/rea-ghidra-final-release-20261104-r2/workspace-evidence/qualification.json",
-        "docs/qualification/rea-ghidra-final-release-20261104-r2/workspace-evidence/release-wrapper-binding.json",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
-        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json"
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "docs/qualification/rea-ghidra-final-release-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-ghidra-final-release-20261104-r2/workspace-evidence/qualification.json",
+        "docs/qualification/rea-ghidra-final-release-20261104-r2/workspace-evidence/release-wrapper-binding.json",
+        "src/bin/jobctl.rs",
+        "src/mcp/rea_engine_directory.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_engine_job_owner.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_scratch.rs",
+        "src/mcp/rea_engine_usage.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_provider.rs",
+        "src/mcp/runtime/jobs.rs",
+        "src/native_observation.rs",
+        "src/native_observation_wire.rs"
       ],
       "tests": [
-        "src/mcp/rea_provider_tests.rs",
+        "src/jobctl_engine_scratch_tests.rs",
+        "src/jobctl_tests.rs",
+        "src/mcp/rea_engine_scratch_tests.rs",
+        "src/mcp/rea_engine_tests.rs",
+        "src/mcp/rea_engine_usage_tests.rs",
         "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "src/native_scratch_tests.rs",
+        "tests/rea_engine_cleanup_assertions.py",
+        "tests/rea_engine_owner_tests.py",
         "tests/rea_ghidra_analysis_external.py"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations under the existing durable process owner; selected Ghidra revision 2 adds bounded functions/function/xrefs/native-decompile with four fixed analyzers"
+      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
     },
     "rea_static_start": {
       "source_paths": [
-        "src/mcp/rea_provider.rs",
-        "src/mcp/rea_static.rs",
-        "src/mcp/rea_engine.rs",
-        "src/mcp/rea_engine_ghidra.rs",
-        "src/mcp/rea_engine_profile.rs",
-        "src/mcp/rea_ghidra_contract.rs",
-        "src/mcp/rea_ghidra_analysis_bridge.java",
-        "src/mcp/rea_ghidra_inventory_v2.java",
-        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json",
         "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
         "docs/qualification/rea-ghidra-final-release-20261104-r2/artifact-manifest.json",
         "docs/qualification/rea-ghidra-final-release-20261104-r2/workspace-evidence/qualification.json",
         "docs/qualification/rea-ghidra-final-release-20261104-r2/workspace-evidence/release-wrapper-binding.json",
-        "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
-        "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
-        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
-        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
-        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json"
+        "src/bin/jobctl.rs",
+        "src/mcp/rea_engine.rs",
+        "src/mcp/rea_engine_directory.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_engine_job_owner.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_scratch.rs",
+        "src/mcp/rea_engine_usage.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_static.rs",
+        "src/mcp/runtime/jobs.rs",
+        "src/native_observation.rs",
+        "src/native_observation_wire.rs"
       ],
       "tests": [
-        "tests/rea_static_external.rs",
-        "tests/rea_java_external.py",
-        "tests/rea_ghidra_external.py",
+        "src/jobctl_engine_scratch_tests.rs",
+        "src/jobctl_tests.rs",
+        "src/mcp/rea_engine_scratch_tests.rs",
+        "src/mcp/rea_engine_tests.rs",
+        "src/mcp/rea_engine_usage_tests.rs",
         "src/mcp/rea_ghidra_contract_tests.rs",
         "src/mcp/rea_provider_tests.rs",
-        "tests/rea_ghidra_analysis_external.py"
+        "src/native_scratch_tests.rs",
+        "tests/rea_engine_cleanup_assertions.py",
+        "tests/rea_engine_owner_tests.py",
+        "tests/rea_ghidra_analysis_external.py",
+        "tests/rea_ghidra_external.py",
+        "tests/rea_java_external.py",
+        "tests/rea_static_external.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations under the existing durable process owner; selected Ghidra revision 2 adds bounded functions/function/xrefs/native-decompile with four fixed analyzers"
+      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
     },
     "rea_static_status": {
       "source_paths": [
-        "src/mcp/rea_provider.rs",
-        "src/mcp/rea_engine_profile.rs",
-        "src/mcp/rea_engine_ghidra.rs",
-        "src/mcp/rea_ghidra_contract.rs",
-        "src/mcp/rea_ghidra_analysis_bridge.java",
-        "src/mcp/rea_ghidra_inventory_v2.java",
-        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
-        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
-        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json"
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "src/bin/jobctl.rs",
+        "src/mcp/rea_engine_directory.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_engine_job_owner.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_scratch.rs",
+        "src/mcp/rea_engine_usage.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_provider.rs",
+        "src/mcp/runtime/jobs.rs",
+        "src/native_observation.rs",
+        "src/native_observation_wire.rs"
       ],
       "tests": [
-        "src/mcp/rea_provider_tests.rs",
+        "src/jobctl_engine_scratch_tests.rs",
+        "src/jobctl_tests.rs",
+        "src/mcp/rea_engine_scratch_tests.rs",
+        "src/mcp/rea_engine_tests.rs",
+        "src/mcp/rea_engine_usage_tests.rs",
         "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "src/native_scratch_tests.rs",
+        "tests/rea_engine_cleanup_assertions.py",
+        "tests/rea_engine_owner_tests.py",
         "tests/rea_ghidra_analysis_external.py"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations under the existing durable process owner; selected Ghidra revision 2 adds bounded functions/function/xrefs/native-decompile with four fixed analyzers"
+      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
     },
     "rea_static_read": {
       "source_paths": [
-        "src/mcp/rea_provider.rs",
-        "src/mcp/rea_static.rs",
-        "src/mcp/rea_engine_profile.rs",
-        "src/mcp/rea_engine_ghidra.rs",
-        "src/mcp/rea_ghidra_contract.rs",
-        "src/mcp/rea_ghidra_analysis_bridge.java",
-        "src/mcp/rea_ghidra_inventory_v2.java",
-        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
-        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
-        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json"
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "src/bin/jobctl.rs",
+        "src/mcp/rea_engine_directory.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_engine_job_owner.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_scratch.rs",
+        "src/mcp/rea_engine_usage.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_static.rs",
+        "src/mcp/runtime/jobs.rs",
+        "src/native_observation.rs",
+        "src/native_observation_wire.rs"
       ],
       "tests": [
-        "tests/rea_static_external.rs",
+        "src/jobctl_engine_scratch_tests.rs",
+        "src/jobctl_tests.rs",
+        "src/mcp/rea_engine_scratch_tests.rs",
+        "src/mcp/rea_engine_tests.rs",
+        "src/mcp/rea_engine_usage_tests.rs",
         "src/mcp/rea_ghidra_contract_tests.rs",
         "src/mcp/rea_provider_tests.rs",
-        "tests/rea_ghidra_analysis_external.py"
+        "src/native_scratch_tests.rs",
+        "tests/rea_engine_cleanup_assertions.py",
+        "tests/rea_engine_owner_tests.py",
+        "tests/rea_ghidra_analysis_external.py",
+        "tests/rea_static_external.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations under the existing durable process owner; selected Ghidra revision 2 adds bounded functions/function/xrefs/native-decompile with four fixed analyzers"
+      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
     },
     "rea_static_cancel": {
       "source_paths": [
-        "src/mcp/rea_provider.rs",
-        "src/mcp/rea_engine_profile.rs",
-        "src/mcp/rea_engine_ghidra.rs",
-        "src/mcp/rea_ghidra_contract.rs",
-        "src/mcp/rea_ghidra_analysis_bridge.java",
-        "src/mcp/rea_ghidra_inventory_v2.java",
-        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
-        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
         "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
-        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json"
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "src/bin/jobctl.rs",
+        "src/mcp/rea_engine_directory.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_engine_job_owner.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_scratch.rs",
+        "src/mcp/rea_engine_usage.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_provider.rs",
+        "src/mcp/runtime/jobs.rs",
+        "src/native_observation.rs",
+        "src/native_observation_wire.rs"
       ],
       "tests": [
-        "tests/rea_static_external.rs",
+        "src/jobctl_engine_scratch_tests.rs",
+        "src/jobctl_tests.rs",
+        "src/mcp/rea_engine_scratch_tests.rs",
+        "src/mcp/rea_engine_tests.rs",
+        "src/mcp/rea_engine_usage_tests.rs",
         "src/mcp/rea_ghidra_contract_tests.rs",
         "src/mcp/rea_provider_tests.rs",
-        "tests/rea_ghidra_analysis_external.py"
+        "src/native_scratch_tests.rs",
+        "tests/rea_engine_cleanup_assertions.py",
+        "tests/rea_engine_owner_tests.py",
+        "tests/rea_ghidra_analysis_external.py",
+        "tests/rea_static_external.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations under the existing durable process owner; selected Ghidra revision 2 adds bounded functions/function/xrefs/native-decompile with four fixed analyzers"
+      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
     },
     "rea_verify_evidence": {
       "source_paths": [
@@ -506,7 +586,9 @@
         "src/mcp/rea_evidence_session.rs",
         "src/mcp/rea_mcp_input.rs",
         "src/mcp/rea_mcp_transport.rs",
-        "src/mcp/rea_response_order.rs"
+        "src/mcp/rea_response_encoding.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/rea_structured_wire.rs"
       ],
       "tests": [
         "src/mcp/rea_elf_notes_parser_tests.rs",
@@ -526,7 +608,9 @@
         "src/mcp/rea_contract_schemas/inspect_apk_signature.output.json",
         "src/mcp/rea_evidence_session.rs",
         "src/mcp/rea_mcp_transport.rs",
-        "src/mcp/rea_response_order.rs"
+        "src/mcp/rea_response_encoding.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/rea_structured_wire.rs"
       ],
       "tests": [
         "src/mcp/rea_apk_evidence_tests.rs",
@@ -547,7 +631,9 @@
         "src/mcp/rea_evidence_source.rs",
         "src/mcp/rea_inline_order.rs",
         "src/mcp/rea_mcp_transport.rs",
-        "src/mcp/rea_response_order.rs"
+        "src/mcp/rea_response_encoding.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/rea_structured_wire.rs"
       ],
       "tests": [
         "src/mcp/rea_analysis_view_mcp_input_tests.rs",
@@ -565,13 +651,15 @@
         "src/mcp/rea_evidence_session.rs",
         "src/mcp/rea_mcp_input.rs",
         "src/mcp/rea_mcp_transport.rs",
-        "src/mcp/rea_response_order.rs"
+        "src/mcp/rea_response_encoding.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/rea_structured_wire.rs"
       ],
       "tests": [
         "src/mcp/rea_evidence_session_tests.rs",
         "src/mcp/rea_mcp_input_tests.rs"
       ],
-      "scope": "Frozen get_evidence_bundle MCP route over this session with full records/manifests or exact summary filters; a fresh session starts empty. Existing native preview persistence is a separate format."
+      "scope": "Frozen get_evidence_bundle route over retained session records, imported residual-unknown revisions and canonical manifests, with full and exact summary/filter variants. A fresh session starts empty. Native preview persistence is a separate format; complete multi-host store recovery is not established."
     },
     "rea_export_evidence_bundle": {
       "source_paths": [
@@ -582,13 +670,53 @@
         "src/mcp/rea_evidence_session.rs",
         "src/mcp/rea_mcp_input.rs",
         "src/mcp/rea_mcp_transport.rs",
-        "src/mcp/rea_response_order.rs"
+        "src/mcp/rea_response_encoding.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/rea_structured_wire.rs"
       ],
       "tests": [
         "src/mcp/rea_evidence_export_tests.rs",
         "src/mcp/rea_mcp_input_tests.rs"
       ],
-      "scope": "Frozen export_evidence_bundle MCP route with owned, confined local atomic publication, explicit overwrite and complete retained record serialization. Cross-host durable-store recovery is not established."
+      "scope": "Frozen export_evidence_bundle route with owned, confined local atomic publication, explicit overwrite, complete retained records and imported residual-unknown revision serialization. Cross-host durable-store recovery is not established."
+    },
+    "rea_import_evidence_bundle": {
+      "source_paths": [
+        "src/mcp/rea_contract.rs",
+        "src/mcp/rea_contract_schemas/import_evidence_bundle.input.json",
+        "src/mcp/rea_contract_schemas/import_evidence_bundle.output.json",
+        "src/mcp/rea_evidence.rs",
+        "src/mcp/rea_evidence_file.rs",
+        "src/mcp/rea_evidence_import.rs",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_evidence_source.rs",
+        "src/mcp/rea_evidence_source_length.rs",
+        "src/mcp/rea_evidence_source_process.rs",
+        "src/mcp/rea_evidence_source_process_coverage.rs",
+        "src/mcp/rea_evidence_source_process_schema.rs",
+        "src/mcp/rea_evidence_source_process_semantics.rs",
+        "src/mcp/rea_evidence_stream.rs",
+        "src/mcp/rea_mcp_input.rs",
+        "src/mcp/rea_mcp_transport.rs",
+        "src/mcp/rea_residual_unknown.rs",
+        "src/mcp/rea_response_encoding.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/rea_structured_wire.rs"
+      ],
+      "tests": [
+        "scripts/rea_evidence_import_fixtures.mjs",
+        "scripts/rea_evidence_import_overflow.py",
+        "scripts/rea_evidence_import_qualification.py",
+        "src/mcp/rea_evidence_file_tests.rs",
+        "src/mcp/rea_evidence_import_tests.rs",
+        "src/mcp/rea_evidence_session_tests.rs",
+        "src/mcp/rea_evidence_source_length_tests.rs",
+        "src/mcp/rea_evidence_source_process_tests.rs",
+        "src/mcp/rea_evidence_source_tests.rs",
+        "src/mcp/rea_mcp_input_tests.rs",
+        "src/mcp/rea_residual_unknown_tests.rs"
+      ],
+      "scope": "Frozen public import_evidence_bundle route authenticates complete records, residual-unknown revisions, all revision references and current-head dependency cycles, canonical manifests and process-capture normalized results before atomically merging into this session. Preserves original record-only reimport versus unknown-bearing metadata replacement, union conflict rollback and original schema-exception responses. Linux file admission has explicit native estimated materialization/token/depth budgets; the original 8 MiB parser threshold is not treated as a file-size limit. Public differential and cancellation evidence is bound separately to each tested binary; no complete cross-platform or multi-host replacement qualification is declared."
     }
   },
   "family_defaults": {
@@ -1344,28 +1472,35 @@
       "native_routes": [
         "rea_get_evidence_bundle"
       ],
-      "scope": "Frozen public MCP complete and summary session-bundle readback with retained record and origin serialization. New sessions start empty.",
-      "missing": "Complete frozen bundle/filter/error/oversize behavior for every supported producer, authenticated full import operation and multi-host durable recovery."
+      "scope": "Frozen public complete and summary session readback with retained records, authenticated imported revisions and original-value serialization. New sessions start empty.",
+      "missing": "Every frozen filter/error/oversize and producer boundary plus complete multi-host durable recovery beyond the finite source/binary-bound public gates."
     },
     "export_evidence_bundle": {
       "implementation": "partial_operation",
       "native_routes": [
         "rea_export_evidence_bundle"
       ],
-      "scope": "Frozen public MCP export of complete retained session records using bounded owned local filesystem publication and explicit overwrite.",
-      "missing": "Every frozen filesystem/error/ownership/cancellation boundary across platforms and producers, plus complete import/export and multi-host recovery qualification."
+      "scope": "Frozen public export of complete retained records and imported revision histories using bounded owned local filesystem publication and explicit overwrite.",
+      "missing": "Every frozen filesystem/error/ownership/cancellation boundary across platforms and producers plus complete multi-host recovery qualification beyond finite import/export closure."
     },
     "import_evidence_bundle": {
-      "implementation": "related_facility",
+      "implementation": "partial_operation",
       "native_routes": [
+        "rea_import_evidence_bundle"
+      ],
+      "scope": "Public authenticated bulk import of records and complete unknown revision histories, process-capture validation, atomic union validation/rollback, repeat-import metadata semantics and retained session readback under the native Linux source/owner profile.",
+      "missing": "Complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundary beyond the finite reference corpus; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits are recorded profile differences.",
+      "related_runtime_routes": [
         "rea_verify_evidence",
         "rea_retain_preview",
-        "rea_read_preview"
-      ],
-      "scope": "Selected Evidence digest verification and distinct native preview persistence",
-      "missing": "No complete upstream bulk import operation or imported-session graph retention. inspect_analysis_view can authenticate one inline/file source and retain only its derived view; that does not implement import_evidence_bundle.",
-      "related_runtime_routes": [
+        "rea_read_preview",
         "rea_inspect_analysis_view"
+      ],
+      "extra_gates": [
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination",
+        "effects_and_recovery",
+        "cross_host_recovery"
       ]
     },
     "open_binary": {
@@ -2213,10 +2348,27 @@
       "entrypoint": "hepta-runtime rea-static-worker",
       "required": true,
       "source_paths": [
-        "src/mcp/rea_static.rs"
+        "src/bin/jobctl.rs",
+        "src/mcp/rea_engine_directory.rs",
+        "src/mcp/rea_engine_job_owner.rs",
+        "src/mcp/rea_engine_scratch.rs",
+        "src/mcp/rea_engine_usage.rs",
+        "src/mcp/rea_static.rs",
+        "src/mcp/runtime/jobs.rs",
+        "src/native_observation.rs",
+        "src/native_observation_wire.rs"
       ],
-      "tests": [],
-      "scope": "Fixed selected provider worker under existing static job owner",
+      "tests": [
+        "src/jobctl_engine_scratch_tests.rs",
+        "src/jobctl_tests.rs",
+        "src/mcp/rea_engine_scratch_tests.rs",
+        "src/mcp/rea_engine_tests.rs",
+        "src/mcp/rea_engine_usage_tests.rs",
+        "src/native_scratch_tests.rs",
+        "tests/rea_engine_cleanup_assertions.py",
+        "tests/rea_engine_owner_tests.py"
+      ],
+      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open.",
       "upstream_tools": []
     },
     "archive_worker": {

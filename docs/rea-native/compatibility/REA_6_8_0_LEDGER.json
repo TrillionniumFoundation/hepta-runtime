@@ -20,13 +20,14 @@
     ]
   },
   "runtime": {
-    "baseline_commit": "9b02a74ffb17feba2ea07055ee4ab0981b06cf83",
+    "baseline_commit": "da4ff14c24461033a8e5361ecd23629362e27b29",
     "discovery": "Rust source handler discovery, not live MCP tools/list",
-    "interface_count": 31,
+    "interface_count": 32,
     "interfaces": [
       "rea_compare_web_captures",
       "rea_export_evidence_bundle",
       "rea_get_evidence_bundle",
+      "rea_import_evidence_bundle",
       "rea_inspect_analysis_view",
       "rea_inspect_apk_signature",
       "rea_inspect_apk_signature_evidence",
@@ -185,7 +186,7 @@
         "kind": "rust_cli",
         "entrypoint": "hepta-runtime rea-static-worker",
         "source_presence": "PRESENT",
-        "scope": "Fixed selected provider worker under existing static job owner",
+        "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open.",
         "upstream_tools": [],
         "upstream_parity": "NOT_ESTABLISHED"
       }
@@ -198,8 +199,8 @@
       },
       {
         "path": "Cargo.toml",
-        "sha256": "4e352db1be937d65fe475b8748a49b25fb2424f61dde45eb729ad2a980474cc2",
-        "bytes": 4144
+        "sha256": "377e7dca547f0ff0d832fb28cf01862a6d84b4b6ed42c8b36dae9075cbbbb78f",
+        "bytes": 4157
       },
       {
         "path": "deploy/hepta_browser_capture.py",
@@ -572,9 +573,39 @@
         "bytes": 5844
       },
       {
+        "path": "scripts/rea_evidence_import_fixtures.mjs",
+        "sha256": "7bde7c4e0430ce4928b465df4fb9102e4a3c4983b15c3d7f551156a26e703e69",
+        "bytes": 11155
+      },
+      {
+        "path": "scripts/rea_evidence_import_overflow.py",
+        "sha256": "4127b3d01b0d1d9800967c0fbd5d1da3f2f1ef0b267142e47e998c1519bc59b4",
+        "bytes": 13320
+      },
+      {
+        "path": "scripts/rea_evidence_import_qualification.py",
+        "sha256": "c3036552976cc6d518e492ef56e2db3aa3f913d02cc2f7fccc78fb7a9520723e",
+        "bytes": 26075
+      },
+      {
+        "path": "src/bin/jobctl.rs",
+        "sha256": "94ad22ee7e908f92c5a15932bdcec7a2c50964055346bc72d1c0b135592da15b",
+        "bytes": 50491
+      },
+      {
         "path": "src/cli.rs",
         "sha256": "6314bbb91df367b3552e37cacbe9d7c6b8917392fc1caaa85c8b2baeb74681d3",
         "bytes": 4776
+      },
+      {
+        "path": "src/jobctl_engine_scratch_tests.rs",
+        "sha256": "cc33b4b89c6a02bf622dc60395358e4886665954f8e7d641e44c4c61770dd1be",
+        "bytes": 7016
+      },
+      {
+        "path": "src/jobctl_tests.rs",
+        "sha256": "97c8f867e25b07da2f378a1261c99c03d31d124ede2055cfee40b2c6f07cf717",
+        "bytes": 42524
       },
       {
         "path": "src/main.rs",
@@ -583,8 +614,8 @@
       },
       {
         "path": "src/mcp/mod.rs",
-        "sha256": "6fce4fa59e9fe7ee5ee7b27237a51161b324b4fd944c7e1bd103def64e86ef92",
-        "bytes": 3067
+        "sha256": "81583bb3a307cd432e2451b24d82930be738a467bb445ab0e3e1d6fa531d3ba7",
+        "bytes": 3117
       },
       {
         "path": "src/mcp/rea.rs",
@@ -593,8 +624,8 @@
       },
       {
         "path": "src/mcp/rea_analysis_view.rs",
-        "sha256": "7f7202efce271af7a2bfffc2a53fc8d6286efb87b46cf707e5724bac5b45327d",
-        "bytes": 18388
+        "sha256": "21fd3021a6a31a1e42f50634de58b674e865e7e494b8c868b1f47e47bc6c6094",
+        "bytes": 18470
       },
       {
         "path": "src/mcp/rea_analysis_view_mcp_input.rs",
@@ -803,8 +834,8 @@
       },
       {
         "path": "src/mcp/rea_contract.rs",
-        "sha256": "c88c5e82bf4fca49b5a7a1ed823dd944468128275c2b710456c9465ad2e2d60f",
-        "bytes": 20868
+        "sha256": "d65da738c1fc619c92d2c81a2fd16ffc007c970f8951ddddc8afedea8545837d",
+        "bytes": 21211
       },
       {
         "path": "src/mcp/rea_contract_schemas/export_evidence_bundle.input.json",
@@ -825,6 +856,16 @@
         "path": "src/mcp/rea_contract_schemas/get_evidence_bundle.output.json",
         "sha256": "8ee38c256334be3e69758f0c3cbae3af588acc5839e70ddd272771013d891202",
         "bytes": 41013
+      },
+      {
+        "path": "src/mcp/rea_contract_schemas/import_evidence_bundle.input.json",
+        "sha256": "e3db54b13193cf052efcbbfc4e5cb9071a6e90b7b6b4107a2558064abc763010",
+        "bytes": 554
+      },
+      {
+        "path": "src/mcp/rea_contract_schemas/import_evidence_bundle.output.json",
+        "sha256": "f40b7e95059a498284311b6e8c8ef2b70a92ae2f1caf4372ad1b75fecbcb04f0",
+        "bytes": 933
       },
       {
         "path": "src/mcp/rea_contract_schemas/inspect_analysis_view.input.json",
@@ -893,18 +934,53 @@
       },
       {
         "path": "src/mcp/rea_engine.rs",
-        "sha256": "11794445912b5e0104fc87b339f983fac2628bc240abc29061b709156a49fb19",
-        "bytes": 18069
+        "sha256": "946583fc250276084cd6ec146e7114b3caf2789071a13bbeae278d8e79b391f9",
+        "bytes": 17135
+      },
+      {
+        "path": "src/mcp/rea_engine_directory.rs",
+        "sha256": "cb26383e617645ccb17dc0200c223c9d7c4ba913aa071dc59a751e978a412f16",
+        "bytes": 6535
       },
       {
         "path": "src/mcp/rea_engine_ghidra.rs",
-        "sha256": "5eb0f63e10b8a361b8d66be367b7d3736cae96ffd26d442dbf1868bce58e95f1",
-        "bytes": 14454
+        "sha256": "b6301b6e449e0fa7caa2630d9e39935937f3bf24c095ded579342d224c7a10c5",
+        "bytes": 15397
+      },
+      {
+        "path": "src/mcp/rea_engine_job_owner.rs",
+        "sha256": "47d2d6c136828fd833f3d6ab48ecdc7c158691b33ac871c364ab7360b879c103",
+        "bytes": 7592
       },
       {
         "path": "src/mcp/rea_engine_profile.rs",
         "sha256": "4dbcca87a48821092b6493bffc6d1f5bbc944a0c3c8e4bcc8cafb82de80c14d3",
         "bytes": 4571
+      },
+      {
+        "path": "src/mcp/rea_engine_scratch.rs",
+        "sha256": "0defdb457253f2fec65adea69917b027eb63d8c7fec2fb22383fdc0f2614761b",
+        "bytes": 4760
+      },
+      {
+        "path": "src/mcp/rea_engine_scratch_tests.rs",
+        "sha256": "f14b7628b72dc4c61565006e508d792447a7d71d9405c3bd301c5b7cc0272b44",
+        "bytes": 4184
+      },
+      {
+        "path": "src/mcp/rea_engine_tests.rs",
+        "sha256": "eda227619f8f73ee718949c4ded54520217c6f99741b3401ceac5f11bc3d70e8",
+        "bytes": 1340
+      },
+      {
+        "path": "src/mcp/rea_engine_usage.rs",
+        "sha256": "4f82a82cdbde8e2ec6a97efbf7448c6d65d6d5f77d496b1836d5d529e9dec71c",
+        "bytes": 5121
+      },
+      {
+        "path": "src/mcp/rea_engine_usage_tests.rs",
+        "sha256": "73e0076701d73792fe700a5d27f4763e4a473f4b018d5e10e496e3f66a0bb03d",
+        "bytes": 4007
       },
       {
         "path": "src/mcp/rea_evidence.rs",
@@ -923,8 +999,8 @@
       },
       {
         "path": "src/mcp/rea_evidence_file.rs",
-        "sha256": "2f790baffec4305f1b76a02f763c80ee5777c41c232b0964333d6e21698bb7fe",
-        "bytes": 28230
+        "sha256": "884eb75c162b6ef9e811bde34bdc0b314167420d9b574bbfb9105f1f6c052b12",
+        "bytes": 28890
       },
       {
         "path": "src/mcp/rea_evidence_file_tests.rs",
@@ -932,24 +1008,74 @@
         "bytes": 19035
       },
       {
+        "path": "src/mcp/rea_evidence_import.rs",
+        "sha256": "abedb7e7aaf028dbf0cd4808b3390f68e3b07da206cd8e52cdd37450ef9737af",
+        "bytes": 10133
+      },
+      {
+        "path": "src/mcp/rea_evidence_import_tests.rs",
+        "sha256": "6d36d188b9646962295311e141008366f7d0c9784527a60e27f3de1188003c78",
+        "bytes": 8229
+      },
+      {
         "path": "src/mcp/rea_evidence_session.rs",
-        "sha256": "e3a5aad0c78a109f2c4ba8f9c3c6c4105cdd6496e2fbc6d54edd0c6f6412c2da",
-        "bytes": 16833
+        "sha256": "f5bee5498f2ce762fffc83955f018486af77c2880779945ba1c9522dfa4566b4",
+        "bytes": 21598
       },
       {
         "path": "src/mcp/rea_evidence_session_tests.rs",
-        "sha256": "499ef1845bdf0dff9bdce293911ed4ffd912bf37aa2ed16ddbbe96dca1d4d168",
-        "bytes": 12394
+        "sha256": "29b014b779e63834c14ac4bde547d12130f7e76c16fcfb60da8bedf27573b888",
+        "bytes": 12441
       },
       {
         "path": "src/mcp/rea_evidence_source.rs",
-        "sha256": "de3125a91d32c08780db06a0c3c897a0c2145c341fb008d7a1b127994bcd6071",
-        "bytes": 38430
+        "sha256": "0d2d145ede1a861f45d75f9e9a0b50fc69b74f8ef2f6c80ce25d660f8423b5e3",
+        "bytes": 44872
+      },
+      {
+        "path": "src/mcp/rea_evidence_source_length.rs",
+        "sha256": "dd464371c3aab29fa32e0b3282ff3010316fcaa726bdbd6186b4c2d903ada270",
+        "bytes": 4326
+      },
+      {
+        "path": "src/mcp/rea_evidence_source_length_tests.rs",
+        "sha256": "e1cdc8c30dd4403561c44d053394b8a13ec1dcecbf63f84e8e5317d68a503f6c",
+        "bytes": 1114
+      },
+      {
+        "path": "src/mcp/rea_evidence_source_process.rs",
+        "sha256": "e33033242ee23cf57af027965873053aa21858f537cfe525da09f71a86019ebd",
+        "bytes": 7602
+      },
+      {
+        "path": "src/mcp/rea_evidence_source_process_coverage.rs",
+        "sha256": "75db1d74a5bf3811c77d7f230707fc75a0d5fde4edb4150f5a2261566b30bf01",
+        "bytes": 14082
+      },
+      {
+        "path": "src/mcp/rea_evidence_source_process_schema.rs",
+        "sha256": "032b30708c40df9a898608c775685c1669279e122f2b0750a2b7792779e4d736",
+        "bytes": 14910
+      },
+      {
+        "path": "src/mcp/rea_evidence_source_process_semantics.rs",
+        "sha256": "8ce705568203497d7b05b7f53918f1167240572e0cc50e4c7cbe15667ae7954f",
+        "bytes": 7489
+      },
+      {
+        "path": "src/mcp/rea_evidence_source_process_tests.rs",
+        "sha256": "14dc30a0f7816d253ae5fe435ae3212b2bef8347fb4720044ebab76c38a1efd3",
+        "bytes": 5464
       },
       {
         "path": "src/mcp/rea_evidence_source_tests.rs",
-        "sha256": "45647253c42be19540de72a95f57f9ddca7ef93e2856ebeac2f8024adcd9ec66",
-        "bytes": 10497
+        "sha256": "f184f4c53e7ed2b9c2a191087af67d46a31bde6d66ff0df02be12f494c7f2605",
+        "bytes": 12591
+      },
+      {
+        "path": "src/mcp/rea_evidence_stream.rs",
+        "sha256": "473e1e4b35d315d2632560fb9e795b24b68702ef5b9089e27801b1962d33832f",
+        "bytes": 5083
       },
       {
         "path": "src/mcp/rea_evidence_tests.rs",
@@ -1023,8 +1149,8 @@
       },
       {
         "path": "src/mcp/rea_mcp_input.rs",
-        "sha256": "59df377b3dbaf12c498a6707faf16cce1c966a0a002d8e82ffe1114f48e53114",
-        "bytes": 7869
+        "sha256": "3400046533082a528d739401b5129b8187d887dbdba2f2bdb4c2ea89f8ad51aa",
+        "bytes": 8588
       },
       {
         "path": "src/mcp/rea_mcp_input_tests.rs",
@@ -1033,8 +1159,8 @@
       },
       {
         "path": "src/mcp/rea_mcp_transport.rs",
-        "sha256": "73e76738f6b3b02306aef148f06ddec86fb4d0dd273471a7cf56193072c24e10",
-        "bytes": 14328
+        "sha256": "3aca3e49cb4ae779617a5439350da6304fcf275a55fb594baabf9c38f2b96862",
+        "bytes": 14477
       },
       {
         "path": "src/mcp/rea_model.rs",
@@ -1083,18 +1209,33 @@
       },
       {
         "path": "src/mcp/rea_provider.rs",
-        "sha256": "72d39aa76896f8449f53588bc24f31dcbdebdf9fb77814645b88399812d44322",
-        "bytes": 23277
+        "sha256": "8c0984ac19432da103f12937b23ee876fb6015fe3a6cfee6f7f50bace6483663",
+        "bytes": 25220
       },
       {
         "path": "src/mcp/rea_provider_tests.rs",
-        "sha256": "82c039d09ee1e65b79fc50b0ea555a40978475dca44cfb215751e66adf4ebe34",
-        "bytes": 24995
+        "sha256": "1a6cef8917851c5cf5ced907bfc7be0b62fb3e89e9fda2901ba82e77071d48a9",
+        "bytes": 25950
+      },
+      {
+        "path": "src/mcp/rea_residual_unknown.rs",
+        "sha256": "e529c9021622f91d2e1f3fcc1024ff600abebe41fae090fc3add4bdbc5c6de72",
+        "bytes": 21490
+      },
+      {
+        "path": "src/mcp/rea_residual_unknown_tests.rs",
+        "sha256": "5851ec6ca13df9ede3f868eef2b744ed85898b4d85a2686ef3bff861ca770816",
+        "bytes": 3052
+      },
+      {
+        "path": "src/mcp/rea_response_encoding.rs",
+        "sha256": "b3761fc1e6ba87ced2e49fc7a077e8437d3b97b0f66f0bdf6260f351557a5531",
+        "bytes": 22496
       },
       {
         "path": "src/mcp/rea_response_order.rs",
-        "sha256": "489a220f385c1024a5f1915a35c736a108c2abad274d163ddffd927b6f2add22",
-        "bytes": 19731
+        "sha256": "836926e692bd37a19982c1bab95fe478f79aef8fd5e9abd50fa0b91ed4ce1089",
+        "bytes": 22509
       },
       {
         "path": "src/mcp/rea_seccomp.rs",
@@ -1137,6 +1278,11 @@
         "bytes": 21228
       },
       {
+        "path": "src/mcp/rea_structured_wire.rs",
+        "sha256": "18fb945f46c34be062ebb537aca5b383ef26a9d99af49a504799c1144492893a",
+        "bytes": 9018
+      },
+      {
         "path": "src/mcp/rea_tests.rs",
         "sha256": "8df6cf043fd92e1166d9103cd31b0fc9b3c7712ce560902b31267a049f3fcd07",
         "bytes": 11692
@@ -1162,9 +1308,29 @@
         "bytes": 10701
       },
       {
+        "path": "src/mcp/runtime/jobs.rs",
+        "sha256": "284b1793a00d66b0d326d15317da4b6d250df90802445ece1f581e80120fe553",
+        "bytes": 186848
+      },
+      {
         "path": "src/mcp/server.rs",
-        "sha256": "75cc4ec46c96a8dde493fd0778811aa3d18c44a067b11cc54f3294f86fbb6e32",
-        "bytes": 160039
+        "sha256": "f817bdc993a41d739dc6fe1dbd4969d0ac2c386476c5bd8b42097580e7cdfd98",
+        "bytes": 162099
+      },
+      {
+        "path": "src/native_observation.rs",
+        "sha256": "7ba437bac3e8b7072ea801f2bebf776e83f81d1e6e7eaa36bd1686083986e78b",
+        "bytes": 6236
+      },
+      {
+        "path": "src/native_observation_wire.rs",
+        "sha256": "9ba260c9ad42b230c1f58ab7a4fbc7c91878042c27ba3839763cd02d99c7dab0",
+        "bytes": 7694
+      },
+      {
+        "path": "src/native_scratch_tests.rs",
+        "sha256": "bdf8936779d54de11035565b6d6a23c42f9bda3c09e2d105da3ece080b9aa09d",
+        "bytes": 2825
       },
       {
         "path": "tests/fixtures/rea_apk_signature/provenance.json",
@@ -1277,19 +1443,29 @@
         "bytes": 23414
       },
       {
+        "path": "tests/rea_engine_cleanup_assertions.py",
+        "sha256": "fd5d02dbf8abc5d476d3abd0b9236db1127e2686a1aeb21f3e6c403a2ee20601",
+        "bytes": 7033
+      },
+      {
+        "path": "tests/rea_engine_owner_tests.py",
+        "sha256": "5b4db0b1e8856d2be77c08bd4edba696113c31bf78a75481c61e4219c5265d82",
+        "bytes": 9966
+      },
+      {
         "path": "tests/rea_ghidra_analysis_external.py",
-        "sha256": "7932b234cd96decf2df522be161d4e03b11d4d129e50512f69949ce1eaa00c0a",
-        "bytes": 20723
+        "sha256": "e93f5a89a2dcf63efff21bf1751a154533214563d060ec8265b32f46234c53b3",
+        "bytes": 25430
       },
       {
         "path": "tests/rea_ghidra_external.py",
-        "sha256": "06cab1fe063671d84a069b9c0ecc5e1aedf29d8d4cc21d8fdb5d2c6d1a201257",
-        "bytes": 12930
+        "sha256": "62821709797e3a245e02504a2c2e51a6186fcc99cff982de4fee9add36618b46",
+        "bytes": 13337
       },
       {
         "path": "tests/rea_java_external.py",
-        "sha256": "39d0f80ff09b6647c030cab4a0a80afa43e91253c07b4e5eff701f50b4728e07",
-        "bytes": 17039
+        "sha256": "42011fb7685208659f89603aa382a263c4145abe4c7847d6c102a7bb567a1f60",
+        "bytes": 17490
       },
       {
         "path": "tests/rea_javascript_cancellation_external.py",
@@ -1332,7 +1508,7 @@
         "bytes": 7890
       }
     ],
-    "source_manifest_sha256": "51cf6edd5e8b007140725750065e9839d494559fa1a3655cd97aeb7a62ff75bc"
+    "source_manifest_sha256": "9ce0808d1870702505fdfdf2b6c5351eb919bc3994a87439a2f2ab7c6091d11e"
   },
   "environment_observations_sha256": "4ace5e8f041a05d205825fb2b2a41769fcfdc91f60810072eb7a6c17a12f3e9c",
   "dependency_assessments": {
@@ -1926,16 +2102,16 @@
       "hard_missing_dependency": "NOT_ESTABLISHED"
     }
   },
-  "mapping_sha256": "1f5325c7e06fe3c8ad0c3fb281619786d206dcb5d1da7b289c69a4f55dfa970c",
+  "mapping_sha256": "649880ae509a1f4ce047e7d22fefb5775e69af37b7fc32a70255064d974c3b4d",
   "inputs_sha256": "d143681c5384d0cff75d72659cd36381eaff60ca5bf3fe45fb5290b3eccc6904",
   "summary": {
     "published_tools": 229,
     "families": 18,
-    "native_interfaces": 31,
+    "native_interfaces": 32,
     "implementation_counts": {
       "absent": 188,
-      "partial_operation": 21,
-      "related_facility": 20
+      "partial_operation": 22,
+      "related_facility": 19
     },
     "qualified_tools": 0,
     "open_tools": 229,
@@ -18689,8 +18865,8 @@
       "native_routes": [
         "rea_export_evidence_bundle"
       ],
-      "native_scope": "Frozen public MCP export of complete retained session records using bounded owned local filesystem publication and explicit overwrite.",
-      "remaining_behavior": "Every frozen filesystem/error/ownership/cancellation boundary across platforms and producers, plus complete import/export and multi-host recovery qualification.",
+      "native_scope": "Frozen public export of complete retained records and imported revision histories using bounded owned local filesystem publication and explicit overwrite.",
+      "remaining_behavior": "Every frozen filesystem/error/ownership/cancellation boundary across platforms and producers plus complete multi-host recovery qualification beyond finite import/export closure.",
       "dependencies": [],
       "related_runtime_routes": [],
       "related_auxiliary_capabilities": [],
@@ -18709,7 +18885,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Every frozen filesystem/error/ownership/cancellation boundary across platforms and producers, plus complete import/export and multi-host recovery qualification."
+          "next_step": "Every frozen filesystem/error/ownership/cancellation boundary across platforms and producers plus complete multi-host recovery qualification beyond finite import/export closure."
         },
         {
           "category": "behavioral_differential",
@@ -18753,16 +18929,17 @@
         "idempotentHint": true,
         "openWorldHint": false
       },
-      "native_implementation": "related_facility",
+      "native_implementation": "partial_operation",
       "native_routes": [
-        "rea_verify_evidence",
-        "rea_retain_preview",
-        "rea_read_preview"
+        "rea_import_evidence_bundle"
       ],
-      "native_scope": "Selected Evidence digest verification and distinct native preview persistence",
-      "remaining_behavior": "No complete upstream bulk import operation or imported-session graph retention. inspect_analysis_view can authenticate one inline/file source and retain only its derived view; that does not implement import_evidence_bundle.",
+      "native_scope": "Public authenticated bulk import of records and complete unknown revision histories, process-capture validation, atomic union validation/rollback, repeat-import metadata semantics and retained session readback under the native Linux source/owner profile.",
+      "remaining_behavior": "Complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundary beyond the finite reference corpus; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits are recorded profile differences.",
       "dependencies": [],
       "related_runtime_routes": [
+        "rea_verify_evidence",
+        "rea_retain_preview",
+        "rea_read_preview",
         "rea_inspect_analysis_view"
       ],
       "related_auxiliary_capabilities": [],
@@ -18775,13 +18952,14 @@
         "source_package_boundary",
         "bundle_auth_and_unknowns",
         "retention_and_pagination",
-        "effects_and_recovery"
+        "effects_and_recovery",
+        "cross_host_recovery"
       ],
       "remaining_blockers": [
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "No complete upstream bulk import operation or imported-session graph retention. inspect_analysis_view can authenticate one inline/file source and retain only its derived view; that does not implement import_evidence_bundle."
+          "next_step": "Complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundary beyond the finite reference corpus; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits are recorded profile differences."
         },
         {
           "category": "behavioral_differential",
@@ -18796,7 +18974,8 @@
             "source_package_boundary",
             "bundle_auth_and_unknowns",
             "retention_and_pagination",
-            "effects_and_recovery"
+            "effects_and_recovery",
+            "cross_host_recovery"
           ]
         }
       ],
@@ -18829,8 +19008,8 @@
       "native_routes": [
         "rea_get_evidence_bundle"
       ],
-      "native_scope": "Frozen public MCP complete and summary session-bundle readback with retained record and origin serialization. New sessions start empty.",
-      "remaining_behavior": "Complete frozen bundle/filter/error/oversize behavior for every supported producer, authenticated full import operation and multi-host durable recovery.",
+      "native_scope": "Frozen public complete and summary session readback with retained records, authenticated imported revisions and original-value serialization. New sessions start empty.",
+      "remaining_behavior": "Every frozen filter/error/oversize and producer boundary plus complete multi-host durable recovery beyond the finite source/binary-bound public gates.",
       "dependencies": [],
       "related_runtime_routes": [],
       "related_auxiliary_capabilities": [],
@@ -18849,7 +19028,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Complete frozen bundle/filter/error/oversize behavior for every supported producer, authenticated full import operation and multi-host durable recovery."
+          "next_step": "Every frozen filter/error/oversize and producer boundary plus complete multi-host durable recovery beyond the finite source/binary-bound public gates."
         },
         {
           "category": "behavioral_differential",
