@@ -1,0 +1,229 @@
+{
+  "actual_measurement_dispatch": [
+    "Frozen native Controller passes --runtime-observation-pool-profile and initialization fails rather than falling back if the pool cannot start.",
+    "process_status -> status_job -> status_observation -> run_job_observation -> capture_observation -> observation_pool::capture.",
+    "process_read -> read_job pool-requested branch -> run_job_observation -> capture_observation -> observation_pool::capture.",
+    "DirectAdmission and direct::capture_admitted are not executed by these measured pooled calls."
+  ],
+  "all_frozen_thresholds_exact": true,
+  "candidate_source_or_gate_edits": 0,
+  "causal_limits": [
+    "C1 A round RPS spread25.8957% and CPU21.1458->30.9375ms/call; the two B rounds are30.4167/31.1458ms and A last round is similar. This does not establish candidate causality.",
+    "The pooled preregistered gate remains rejected; do not drop the first A round, reweight, weaken gates, pool history, or rerun unchanged candidate for a passing sample."
+  ],
+  "controller_rss": {
+    "A_peak_kib": 18932,
+    "B_peak_kib": 19124,
+    "ceiling_kib": 19444,
+    "passed": true
+  },
+  "correction_to_initial_trace": "Earlier shared-hot-path language concerned ordinary direct SSH, not the actually enabled observation pool. It must not be cited as an executed C1 mechanism.",
+  "derived_cases": [
+    {
+      "arms": {
+        "A": {
+          "calls": 384,
+          "controller_cpu_seconds": 10.0,
+          "round_calls_per_second": [
+            9.766758899407023,
+            7.757815257788737
+          ],
+          "round_controller_cpu_ms_per_call": [
+            21.145833333333332,
+            30.9375
+          ],
+          "round_rate_max_min_spread_percent": 25.895739649140715,
+          "seconds": 44.407753338999996
+        },
+        "B": {
+          "calls": 384,
+          "controller_cpu_seconds": 11.82,
+          "round_calls_per_second": [
+            8.151901893851809,
+            7.981882220212825
+          ],
+          "round_controller_cpu_ms_per_call": [
+            30.416666666666668,
+            31.145833333333332
+          ],
+          "round_rate_max_min_spread_percent": 2.130069937745227,
+          "seconds": 47.607262616
+        }
+      },
+      "concurrency": 1,
+      "gates": {
+        "controller_cpu_regression_gate_passed": false,
+        "p95_regression_gate_passed": true,
+        "regression_gate_passed": false,
+        "throughput_regression_gate_passed": false
+      },
+      "ratios": {
+        "calls_per_second": 0.9327936726207674,
+        "controller_cpu_ms_per_call": 1.182,
+        "p50_ms": 1.0414535596545749,
+        "p95_ms": 1.0040470151852163,
+        "p99_ms": 1.0306736171755133
+      }
+    },
+    {
+      "arms": {
+        "A": {
+          "calls": 384,
+          "controller_cpu_seconds": 7.77,
+          "round_calls_per_second": [
+            45.07688271913487,
+            53.381193161404966
+          ],
+          "round_controller_cpu_ms_per_call": [
+            20.78125,
+            19.6875
+          ],
+          "round_rate_max_min_spread_percent": 18.422548191747445,
+          "seconds": 7.856161837
+        },
+        "B": {
+          "calls": 384,
+          "controller_cpu_seconds": 7.55,
+          "round_calls_per_second": [
+            55.24573814342188,
+            51.79457520452545
+          ],
+          "round_controller_cpu_ms_per_call": [
+            19.6875,
+            19.635416666666668
+          ],
+          "round_rate_max_min_spread_percent": 6.663174522174464,
+          "seconds": 7.1823331249999995
+        }
+      },
+      "concurrency": 8,
+      "gates": {
+        "controller_cpu_regression_gate_passed": true,
+        "p95_regression_gate_passed": true,
+        "regression_gate_passed": true,
+        "throughput_regression_gate_passed": true
+      },
+      "ratios": {
+        "calls_per_second": 1.09381752423242,
+        "controller_cpu_ms_per_call": 0.9716859716859716,
+        "p50_ms": 0.918412932625717,
+        "p95_ms": 0.9150113269988797,
+        "p99_ms": 1.0065748248559874
+      }
+    },
+    {
+      "arms": {
+        "A": {
+          "calls": 384,
+          "controller_cpu_seconds": 8.030000000000001,
+          "round_calls_per_second": [
+            44.27391602663888,
+            55.044903129149816
+          ],
+          "round_controller_cpu_ms_per_call": [
+            21.822916666666668,
+            20.0
+          ],
+          "round_rate_max_min_spread_percent": 24.328065075676196,
+          "seconds": 7.824700571
+        },
+        "B": {
+          "calls": 384,
+          "controller_cpu_seconds": 7.75,
+          "round_calls_per_second": [
+            55.64553107857643,
+            56.45616116219468
+          ],
+          "round_controller_cpu_ms_per_call": [
+            20.052083333333332,
+            20.3125
+          ],
+          "round_rate_max_min_spread_percent": 1.456774817143125,
+          "seconds": 6.851280705
+        }
+      },
+      "concurrency": 16,
+      "gates": {
+        "controller_cpu_regression_gate_passed": true,
+        "p95_regression_gate_passed": true,
+        "regression_gate_passed": true,
+        "throughput_regression_gate_passed": true
+      },
+      "ratios": {
+        "calls_per_second": 1.1420785263242255,
+        "controller_cpu_ms_per_call": 0.9651307596513076,
+        "p50_ms": 0.9239420387687075,
+        "p95_ms": 0.7633299291708887,
+        "p99_ms": 0.6799750318392601
+      }
+    }
+  ],
+  "exact_rejection_reasons": [
+    "C1 regression gate",
+    "C1 controller CPU regression gate"
+  ],
+  "frozen_summary_source": {
+    "bytes": 14456,
+    "path": "/workspace/scratch/806ba5f52f94/benchmark-r25/revision-02/summarize_r25_campaign.py",
+    "sha256": "2418bad36fe4aef75d52c5a00c898ff93fef9bb4b6efb10028105143106a1864"
+  },
+  "native_analysis": {
+    "bytes": 65153,
+    "path": "/workspace/scratch/806ba5f52f94/r25-results/observation-02-native-analysis.json",
+    "sha256": "02d3014fcc7799e4677f6f463efce9ec18757bbde1c418d0f2c58f36df7de5b8"
+  },
+  "next_action": "Preserve and export rejected observation. Obtain the separately frozen common-path mechanism diagnostic before selecting a concrete R26 code change; do not claim a direct-wrapper rewrite fixes C1.",
+  "observed_outcome": "correctness succeeded; frozen observation gate rejected; accepted production stays R24",
+  "original_observation_job": "1a1aacd207e-fc05-4774",
+  "p95_C1_passes": true,
+  "plausible_but_unproved_links": [
+    "status_observation/read_job future types still include the direct fallback await state; direct future layout can in principle affect their compile-time size despite taking the pool branch. No future sizes or allocation/assembly evidence has been measured.",
+    "Whole-program release LTO/code layout or startup allocation placement can affect unchanged code; no causal evidence is available for these possibilities."
+  ],
+  "raw_latency_rederivation_scope": "This review rechecks the actual independent analysis and summary arithmetic. It does not claim to rehash the 3.56 MB original report/transport locally; the unchanged original independent auditor did that once and its exact result is bound here.",
+  "read_only_local_analysis": true,
+  "recorded_utc": "2026-11-05T08:41:04.467134+00:00",
+  "remote_calls": 0,
+  "schema": "hepta-r25-observation-rejection-independent-review/v1",
+  "shared_changes_outside_measured_route": [
+    "Direct Proxy startup allocates two reserve semaphores and changes mailbox capacity8->9, once before normal MCP readiness; measured cells follow24 balanced warmups.",
+    "Direct child Leases use Option for host permit and the direct submit future is factored into capture_admitted; this changes direct-route type/code layout, not pool admission.",
+    "Two test files are cfg(test) and the only jobs.rs behavior change is the cancellation call path."
+  ],
+  "source_binding": {
+    "all_actual_local_source_bytes_verified_to_qualified_maps": true,
+    "baseline_files": 220,
+    "candidate_files": 221,
+    "changed_files": [
+      "src/mcp/runtime/jobs.rs",
+      "src/mcp/runtime/ssh.rs",
+      "src/mcp/runtime/ssh_direct.rs",
+      "src/mcp/runtime/ssh_direct_cancellation_tests.rs",
+      "src/mcp/runtime/ssh_direct_tests.rs"
+    ],
+    "observation_pool_files_unchanged": [
+      "src/mcp/runtime/ssh_observation_agent_timeout_tests.rs",
+      "src/mcp/runtime/ssh_observation_maintenance_tests.rs",
+      "src/mcp/runtime/ssh_observation_owner_custody_tests.rs",
+      "src/mcp/runtime/ssh_observation_pool.rs",
+      "src/mcp/runtime/ssh_observation_pool_tests.rs",
+      "src/mcp/runtime/ssh_observation_postspawn.rs",
+      "src/mcp/runtime/ssh_observation_postspawn_tests.rs",
+      "src/mcp/runtime/ssh_observation_profile.rs",
+      "src/mcp/runtime/ssh_observation_profile_tests.rs",
+      "src/mcp/runtime/ssh_observation_reference_tests.rs",
+      "src/mcp/runtime/ssh_observation_socket_publication_tests.rs",
+      "src/mcp/runtime/ssh_observation_transport_tests.rs",
+      "src/mcp/runtime/ssh_observation_validation.rs",
+      "src/mcp/runtime/ssh_observation_validation_tests.rs"
+    ],
+    "ssh_observation_prefix_unchanged": true
+  },
+  "summary": {
+    "bytes": 14430,
+    "path": "/workspace/scratch/806ba5f52f94/r25-results/observation-02-summary.json",
+    "sha256": "68fd9d1cc05d2c0eab670ccd6d3d99ec4922a3eb369b02cb3b3d16e70bc9737c"
+  },
+  "summary_math_recomputed": true,
+  "workload_executions": 0
+}
