@@ -38,6 +38,34 @@ The two small complete Evidence inputs are stored as `bare-record.json` and
 reference's hex fields. `producer/` preserves the original runners, requests
 and receipts; historical paths are not rewritten.
 
+## POSIX path aliases and directory requirements
+
+`alias-reference-r1.json` adds seven actual original calls, after rechecking all
+2,398 installed npm files. Missing and empty JSON aliases use the normalized
+`absoluteCallerPath` in filesystem/JSON errors. Original `readJsonFileWithSource`
+also exposes that normalized path, but `readEvidenceFileSource` uses the original
+caller spelling in selector messages.
+
+The helper therefore keeps `OwnedJson.selected_path` as the original caller
+string for authentication and selector messages. Its separate
+`normalized_error_path(&str) -> Result<String, FileReadError>` gives the original
+POSIX spelling for filesystem and JSON-decoding error projection. It collapses
+interior dot segments and repeated slashes, and preserves a trailing slash or
+`/.` as one trailing slash. Parent traversal is an explicit native admission gap;
+no symlink or filesystem lookup occurs in this normalization function.
+
+A trailing slash or `/.` on a regular file produces the original `missing`
+outcome from ENOTDIR. It must not be silently read as a regular file. The actual
+descriptor open adds O_DIRECTORY for this condition while retaining O_NOFOLLOW.
+A trailing directory requirement on a symlink remains a native admission gap,
+not a path that bypasses the symlink policy. An actual selected directory still
+produces `not-file`.
+
+Nine component tests and strict Clippy passed after this correction. The
+original eight-test qualification remains historical evidence, and the new
+`alias-provenance.json` binds this source revision and the seven original cases.
+The parent's actual runtime/MCP projection remains a separate gate.
+
 ## Caller interface
 
 `read_json(path, roots, cancellation, ownership, NativeJsonLimits)` consumes its

@@ -218,6 +218,36 @@ fn policy(reason: &str) -> FileReadError {
 	gap("controller-workspace-admission", json!({"reason":reason}))
 }
 
+/// Frozen POSIX error spelling for this Linux admission profile. Interior dots
+/// and duplicate separators disappear, but a trailing slash or "/." keeps its
+/// directory requirement. No filesystem lookup or symlink resolution occurs.
+/// The original caller path remains separate for Evidence selector messages.
+pub(super) fn normalized_error_path(path: &str) -> Result<String> {
+	if !path.starts_with('/') {
+		return Err(policy("an absolute local path is required"));
+	}
+	if path.contains('\0') {
+		return Err(policy("path contains NUL"));
+	}
+	let mut normalized = String::with_capacity(path.len());
+	normalized.push('/');
+	for segment in path.split('/') {
+		match segment {
+			"" | "." => continue,
+			".." => return Err(policy("parent or non-normal path component")),
+			_ => {}
+		}
+		if normalized.len() > 1 {
+			normalized.push('/');
+		}
+		normalized.push_str(segment);
+	}
+	if normalized.len() > 1 && (path.ends_with('/') || path.ends_with("/.")) {
+		normalized.push('/');
+	}
+	Ok(normalized)
+}
+
 /// G is the caller's owned admission/lease tuple. It remains in the blocking
 /// closure even when this future is aborted or its JoinHandle is dropped.
 /// Cancellation is cooperative around descriptor calls; a blocked kernel read
@@ -267,6 +297,8 @@ fn open_confined(
 	use std::os::unix::ffi::OsStrExt;
 	use std::path::Component;
 	active(cancellation)?;
+	let spelling = path.as_os_str().as_bytes();
+	let directory_required = spelling.ends_with(b"/") || spelling.ends_with(b"/.");
 	if !path.is_absolute() {
 		return Err(policy("an absolute local path is required"));
 	}
@@ -336,13 +368,21 @@ fn open_confined(
 					last.as_ptr(),
 					libc::O_RDONLY
 						| libc::O_CLOEXEC | libc::O_NOFOLLOW
-						| libc::O_NONBLOCK | libc::O_NOCTTY,
+						| libc::O_NONBLOCK | libc::O_NOCTTY
+						| if directory_required {
+							libc::O_DIRECTORY
+						} else {
+							0
+						},
 				)
 			};
 		if fd < 0 {
 			let error = io::Error::last_os_error();
 			let errno = error.raw_os_error();
-			if errno == Some(libc::ELOOP) {
+			if errno == Some(libc::ELOOP)
+				|| (errno == Some(libc::ENOTDIR)
+					&& is_named_type(directory.as_raw_fd(), last, libc::S_IFLNK))
+			{
 				return Err(policy("symlink traversal is not admitted"));
 			}
 			if matches!(errno, Some(libc::ENXIO | libc::EOPNOTSUPP))
@@ -430,6 +470,10 @@ fn read_blocking(
 	{
 		return Err(gap("native-json-limit-configuration", json!(limits)));
 	}
+	// Validate the admitted lexical profile without changing the caller spelling
+	// retained by the Evidence-source selector.
+	active(&cancellation)?;
+	let _ = normalized_error_path(path)?;
 	let (mut file, before) = open_confined(Path::new(path), roots, &cancellation)?;
 	let result = read_admitted(&mut file, &before, path, roots, &cancellation, limits);
 	let result = close_result(file, result);

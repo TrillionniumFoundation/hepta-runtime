@@ -502,3 +502,133 @@ fn file_errno_contract_and_cleanup_facts_are_typed() {
 	assert_eq!(value["native_cleanup_incomplete"], true);
 	assert_eq!(value["primary"]["kind"], "cancelled");
 }
+
+#[test]
+fn original_alias_paths_preserve_error_spelling_directory_requirement_and_selection() {
+	let reference: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_evidence_file/alias-reference-r1.json"
+	))
+	.unwrap();
+	assert_eq!(reference["cases"].as_array().unwrap().len(), 7);
+	let owned = temporary();
+	std::fs::write(
+		owned.path().join("bare.json"),
+		include_bytes!("../../tests/fixtures/rea_evidence_file/bare-record.json"),
+	)
+	.unwrap();
+	std::fs::write(owned.path().join("empty.json"), []).unwrap();
+	std::fs::create_dir(owned.path().join("directory")).unwrap();
+	for case in reference["cases"].as_array().unwrap() {
+		assert_eq!(
+			normalized_error_path(case["path"].as_str().unwrap()).unwrap(),
+			case["normalized_path"],
+			"the exact original error path"
+		);
+		let name = case["name"].as_str().unwrap();
+		let suffix = match name {
+			"missing-alias" => "absent.json",
+			"empty-alias" => "empty.json",
+			"bare-source-alias" | "bare-selector-alias" => "bare.json",
+			"file-trailing-slash" => "bare.json//",
+			"file-trailing-dot" => "bare.json/.",
+			"directory-alias" => "directory//.",
+			_ => panic!("unexpected original alias case {name}"),
+		};
+		let raw = format!("{}//./{suffix}", owned.path().display());
+		let actual = runtime().block_on(read_json(
+			raw.clone(),
+			vec![owned.path().to_owned()],
+			CancellationToken::new(),
+			(),
+			Default::default(),
+		));
+		if matches!(name, "bare-source-alias" | "bare-selector-alias") {
+			let parsed = actual.unwrap();
+			assert_eq!(parsed.selected_path, raw, "selector keeps caller spelling");
+			if name == "bare-source-alias" {
+				assert_eq!(parsed.value["evidence_id"], case["expected"]["evidence_id"]);
+			} else {
+				let order = parsed.object_order;
+				let resolver = |path: &[Value]| order.keys(path);
+				let error = super::super::rea_evidence_source::authenticate_file_with_order(
+					parsed.value,
+					&parsed.selected_path,
+					case["evidence_id"].as_str(),
+					Some(&resolver),
+				)
+				.unwrap_err();
+				let super::super::rea_evidence_source::SourceError::Selection { message } = error
+				else {
+					panic!("wrong selector outcome {error:?}");
+				};
+				assert_eq!(
+					message,
+					case["expected"]["projected"]["message"]
+						.as_str()
+						.unwrap()
+						.replace(case["path"].as_str().unwrap(), &raw)
+				);
+			}
+		} else {
+			match actual.unwrap_err() {
+				FileReadError::File { reason, .. } => {
+					assert_eq!(
+						reason.as_str(),
+						case["expected"]["typed_error"]["reason"],
+						"{name}"
+					);
+				}
+				FileReadError::InvalidJson {
+					message,
+					user_message,
+				} => {
+					assert_eq!(
+						json!([{"path":[],"reason":"invalid_format","expected":"JSON","message":message}]),
+						case["expected"]["typed_error"]["contentIssues"]
+					);
+					assert_eq!(user_message, None);
+				}
+				error => panic!("unexpected alias error {name}: {error:?}"),
+			}
+		}
+	}
+	for (raw, normalized) in [
+		("/", "/"),
+		("///./", "/"),
+		("/a//./b/.", "/a/b/"),
+		("/a//b///", "/a/b/"),
+		("/a/.../b", "/a/.../b"),
+	] {
+		assert_eq!(normalized_error_path(raw).unwrap(), normalized);
+	}
+	for raw in ["relative.json", "/a/../b.json", "/a/\0b"] {
+		assert!(matches!(
+			normalized_error_path(raw),
+			Err(FileReadError::NativeProfileGap { .. })
+		));
+	}
+	symlink(
+		owned.path().join("bare.json"),
+		owned.path().join("link.json"),
+	)
+	.unwrap();
+	for suffix in ["link.json/", "link.json/."] {
+		let raw = format!("{}/{}", owned.path().display(), suffix);
+		assert!(
+			matches!(
+				runtime().block_on(read_json(
+					raw,
+					vec![owned.path().into()],
+					CancellationToken::new(),
+					(),
+					Default::default()
+				)),
+				Err(FileReadError::NativeProfileGap {
+					feature: "controller-workspace-admission",
+					..
+				})
+			),
+			"a trailing directory requirement must not follow a symlink"
+		);
+	}
+}
