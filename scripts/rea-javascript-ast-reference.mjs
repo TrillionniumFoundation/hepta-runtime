@@ -176,7 +176,8 @@ for (const source of sources) {
       const node = p.node;
       if (node.source) dependency(p,
         node.specifiers.some(specifier => specifier.type === "ExportNamespaceSpecifier") ? "esm_reexport_all" : "esm_reexport",
-        node.source.value, node.exportKind === "type");
+        node.source.value, node.exportKind === "type" || (node.specifiers.length > 0
+          && node.specifiers.every(specifier => specifier.type === "ExportSpecifier" && specifier.exportKind === "type")));
       if (node.declaration) {
         const typeOnly = node.exportKind === "type" || ["TSInterfaceDeclaration", "TSTypeAliasDeclaration"].includes(node.declaration.type);
         // Babel's binding helper covers value bindings, not these TypeScript-only IDs.

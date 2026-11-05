@@ -42,7 +42,7 @@ selected sources does not change their graph identity.
 The graph hash identifies the complete copied source set and its parser profile;
 it is not a checksum of all graph result rows. Changes to analysis or collection
 ordering semantics must advance the versioned
-`hepta.javascript-selected-source-graph.v1` profile. Independent reads of several
+`hepta.javascript-selected-source-graph.v2` profile. Independent reads of several
 files do not constitute an atomic filesystem snapshot. Results use the native
 `hepta.rea-javascript-graph.v1` record format and explicitly set
 `rea_evidence_compatible: false`.
@@ -77,6 +77,43 @@ files do not constitute an atomic filesystem snapshot. Results use the native
   edge. Every edge sets `runtime_observed: false` and `process_pair_proven: false`.
   Dynamic module specifiers, channel/key expressions, member names, CommonJS
   export names and detected dynamic preload declarations appear in `unknowns`.
+
+## Type modifiers and runtime dependencies
+
+Dependency rows preserve `type_only` as a syntactic statement: the declaration
+or all its named specifiers use TypeScript type modifiers. The additional
+`type_only_scope` distinguishes `declaration`, `named_specifiers`, and `none`.
+A mixed type/value clause, an empty clause and a side-effect import use `none`.
+Individual import bindings and exported names retain their own type flags.
+
+`import type { T } from "./types"` and `export type { T } from "./types"`
+mark the whole declaration for type erasure. By contrast,
+`import { type T } from "./types"` and `export { type T } from "./types"`
+can retain an empty import/export that loads `./types`, including its side
+effects. TypeScript's `verbatimModuleSyntax` option demonstrates this difference;
+the native graph does not read compiler settings or infer the absence of a
+runtime dependency from `type_only: true`.
+See the [TypeScript option reference](https://www.typescriptlang.org/tsconfig/verbatimModuleSyntax.html).
+
+Pure inline type reexports now carry the same syntactic classification as pure
+inline type imports. The analysis profile advances to v2, which also changes
+`graph_sha256` and refuses continuation tokens from the previous semantics.
+The report exposes that version as `analysis_profile`.
+
+The additional independent check parses fourteen authored declarations with a
+separately selected TypeScript compiler, compares those observations with the
+actual native worker, and records emitted dependencies under both
+`verbatimModuleSyntax=false` and `true`. It hashes the native executable and the
+actual TypeScript implementation before and after the comparison. Emitted code
+and its dependencies are never executed. The shipped MCP integration regression
+also checks these fields and same-session recovery after malformed TypeScript.
+
+```text
+node scripts/qualify_javascript_type_erasure.mjs /absolute/hepta-runtime /absolute/typescript-package /absolute/new-receipt.json
+```
+
+This finite comparison does not qualify arbitrary TypeScript emit options, a
+live Electron application, or the upstream REA contract.
 
 ## Remaining scope
 

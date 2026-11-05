@@ -329,3 +329,65 @@ fn actual_mcp_worker_matches_babel_imports_preserves_unknowns_and_never_executes
 		}
 	}
 }
+
+#[test]
+fn actual_mcp_preserves_type_modifier_scope_and_recovers_after_invalid_typescript() {
+	let root = tempfile::tempdir().expect("root");
+	let workspace = root.path().join("workspace");
+	std::fs::create_dir(&workspace).expect("workspace");
+	let source = workspace.join("fixture.ts");
+	let text = "import type { Foo } from './types';\nimport { type Bar } from './types';\nexport type { Foo } from './types';\nexport { type Bar } from './types';";
+	std::fs::write(&source, text).expect("TypeScript source");
+	let config = root.path().join("policy.json");
+	std::fs::write(
+		&config,
+		serde_json::to_vec(&json!({
+			"state_dir":root.path().join("state"),"controller_workspace_roots":[workspace],
+			"hosts":{"never-connect":{
+				"ssh_target":"never-connect-invalid","remote_state_dir":root.path().join("remote-state"),
+				"allow_execute":false,"allow_pty":false,"allow_write":false,"allow_job_network":false
+			}}
+		}))
+		.expect("policy JSON"),
+	)
+	.expect("policy");
+	let arguments = json!({
+		"sources":[{"id":"fixture.ts","path":source,"syntax":"typescript","module_kind":"module"}],
+		"collection":"imports","limit":16
+	});
+	let mut mcp = RunningMcp::start(&config);
+	let initial = report(mcp.call(2, arguments.clone()));
+	assert_eq!(
+		initial["analysis_profile"],
+		"hepta.javascript-selected-source-graph.v2"
+	);
+	assert_eq!(initial["total_rows"], 4);
+	let scopes: Vec<_> = initial["rows"]
+		.as_array()
+		.expect("dependency rows")
+		.iter()
+		.map(|row| {
+			assert_eq!(row["type_only"], true);
+			assert_eq!(row["runtime_resolution_proven"], false);
+			row["type_only_scope"]
+				.as_str()
+				.expect("type modifier scope")
+		})
+		.collect();
+	assert_eq!(
+		scopes,
+		[
+			"declaration",
+			"named_specifiers",
+			"declaration",
+			"named_specifiers"
+		]
+	);
+	std::fs::write(&source, "export type { from './types';").expect("invalid syntax fixture");
+	let invalid = mcp.call(3, arguments.clone());
+	assert_eq!(invalid["isError"], true);
+	std::fs::write(&source, text).expect("restore valid captured bytes");
+	let recovered = report(mcp.call(4, arguments));
+	assert_eq!(recovered["graph_sha256"], initial["graph_sha256"]);
+	assert_eq!(recovered["rows"], initial["rows"]);
+}

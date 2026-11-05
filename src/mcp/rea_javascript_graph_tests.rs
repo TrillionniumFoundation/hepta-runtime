@@ -206,6 +206,81 @@ fn pagination_is_bound_to_every_selected_source_and_explicit_grammar() {
 }
 
 #[test]
+fn type_only_dependencies_preserve_declaration_and_inline_specifier_scopes() {
+	// Node type stripping and TypeScript verbatimModuleSyntax retain an empty
+	// dependency for inline modifiers. A type-only binding is not proof of a
+	// type-only module dependency. Empty import/export clauses are value syntax.
+	for (text, type_only, scope) in [
+		("import type { Foo } from './types';", true, "declaration"),
+		(
+			"import type * as Types from './types';",
+			true,
+			"declaration",
+		),
+		(
+			"import { type Foo } from './types';",
+			true,
+			"named_specifiers",
+		),
+		(
+			"import { type Foo, type Bar as B } from './types';",
+			true,
+			"named_specifiers",
+		),
+		("import { type Foo, value } from './types';", false, "none"),
+		("import {} from './types';", false, "none"),
+		("import './types';", false, "none"),
+		("export type { Foo } from './types';", true, "declaration"),
+		(
+			"export { type Foo } from './types';",
+			true,
+			"named_specifiers",
+		),
+		(
+			"export { type Foo, type Bar as B } from './types';",
+			true,
+			"named_specifiers",
+		),
+		("export { type Foo, value } from './types';", false, "none"),
+		("export {} from './types';", false, "none"),
+		("export type * from './types';", true, "declaration"),
+		("export * from './types';", false, "none"),
+	] {
+		let mut selected = source("types.ts", text);
+		selected.syntax = JavascriptSyntax::Typescript;
+		let inspected = graph::report(&request(vec![selected], JavascriptGraphCollection::Imports))
+			.expect("valid declaration grammar");
+		assert_eq!(inspected["total_rows"], 1, "{text}");
+		assert_eq!(inspected["rows"][0]["type_only"], type_only, "{text}");
+		assert_eq!(inspected["rows"][0]["type_only_scope"], scope, "{text}");
+		assert_eq!(inspected["rows"][0]["runtime_resolution_proven"], false);
+	}
+}
+
+#[test]
+fn graph_continuation_rejects_identity_from_previous_analysis_semantics() {
+	let mut selected = request(graph_sources(), JavascriptGraphCollection::Imports);
+	let legacy = sha256(
+		&serde_json::to_vec(&json!({
+			"profile":"hepta.javascript-selected-source-graph.v1",
+			"parser":{"name":"oxc","version":PARSER_VERSION},
+			"sources":source_identities(&selected)
+		}))
+		.expect("legacy graph identity"),
+	);
+	selected.expected_graph_sha256 = Some(legacy);
+	selected.offset = 1;
+	assert!(graph::report(&selected).is_err());
+	selected.expected_graph_sha256 = None;
+	selected.offset = 0;
+	let first = graph::report(&selected).expect("current first page");
+	assert_eq!(first["analysis_profile"], GRAPH_PROFILE);
+	selected.expected_graph_sha256 = Some(first["graph_sha256"].as_str().expect("hash").into());
+	selected.offset = 1;
+	assert!(graph::report(&selected).is_ok());
+}
+
+#[test]
 fn invalid_ast_semantic_errors_utf16_surrogates_and_resource_excess_refuse() {
 	let one = graph::report(&request(
 		vec![source("one.js", "0;")],

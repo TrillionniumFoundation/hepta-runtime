@@ -22,7 +22,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
 	ast, graph_identity, source_identities, validate_request, JavascriptGraphCollection,
-	WorkerRequest, MAX_RESPONSE_BYTES, MAX_ROWS, PARSER_VERSION,
+	WorkerRequest, GRAPH_PROFILE, MAX_RESPONSE_BYTES, MAX_ROWS, PARSER_VERSION,
 };
 
 fn source_position(value: &Value) -> (&str, u64, u64) {
@@ -192,6 +192,7 @@ pub(super) fn report(request: &WorkerRequest) -> Result<Value> {
 		"record_format":"hepta.rea-javascript-graph.v1",
 		"rea_evidence_compatible":false,
 		"graph_sha256":digest,
+		"analysis_profile":GRAPH_PROFILE,
 		"identity_scope":"complete_selected_source_bytes_and_explicit_grammars",
 		"parser":{"name":"oxc","version":PARSER_VERSION,"semantic_syntax_checks":true},
 		"sources":sources,
@@ -208,7 +209,7 @@ pub(super) fn report(request: &WorkerRequest) -> Result<Value> {
 		"complete_application_graph":false,
 		"limitations":[
 			"Only explicitly selected files or pinned packed ASAR members are admitted. Package declarations, imports, source maps, dependencies, preload paths and URLs are never followed or executed; unpacked ASAR sidecars and links are never followed.",
-			"Relative import links identify selected logical-path candidates, not Node, bundler or TypeScript module resolution. Type-only records are retained and are not runtime dependencies.",
+			"Relative import links identify selected logical-path candidates, not Node, bundler or TypeScript module resolution. type_only describes syntax; type_only_scope distinguishes whole declarations from named specifiers. Inline type specifiers can leave empty runtime imports/exports under type erasure; compiler options and dependency side effects are not evaluated.",
 			"Electron receivers use lexical symbols from electron imports, unshadowed require calls and direct aliases. Reassigned bindings are excluded; property mutation, eval, factories, indirect calls and interprocedural dataflow are not resolved.",
 			"A matching literal channel and API role produces a candidate edge only. Branch reachability, process identity, window ownership, listener registration, sender validation, payload compatibility and runtime message delivery are unobserved.",
 			"Dynamic expressions remain unknown. Reported unknowns cover detected syntax patterns, not an exhaustive list of every unmodeled application behavior.",

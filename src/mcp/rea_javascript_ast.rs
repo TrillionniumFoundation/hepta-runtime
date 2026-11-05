@@ -264,7 +264,14 @@ impl Observations<'_> {
 		}
 	}
 
-	fn dependency(&mut self, span: Span, kind: &str, specifier: Option<&str>, type_only: bool) {
+	fn dependency(
+		&mut self,
+		span: Span,
+		kind: &str,
+		specifier: Option<&str>,
+		type_only: bool,
+		declaration_type_only: bool,
+	) {
 		if specifier.is_some_and(|value| value.len() > MAX_TEXT_BYTES) {
 			self.error = Some("JavaScript module specifier exceeds 8192 bytes".into());
 			return;
@@ -272,7 +279,14 @@ impl Observations<'_> {
 		self.add(
 			Collection::Imports,
 			span,
-			json!({"kind":kind,"specifier":specifier,"type_only":type_only,"bindings":[]}),
+			json!({
+				"kind":kind,"specifier":specifier,"type_only":type_only,
+				// Inline type specifiers can leave an empty runtime import/export.
+				// Keep their syntax distinct from whole-declaration type erasure.
+				"type_only_scope":if declaration_type_only {"declaration"}
+					else if type_only {"named_specifiers"} else {"none"},
+				"bindings":[]
+			}),
 		);
 		if specifier.is_none() {
 			self.unknown(span, "dynamic_module_specifier", kind);
@@ -407,6 +421,7 @@ impl<'a> Visit<'a> for Observations<'_> {
 							)
 						})
 				}),
+			matches!(declaration.import_kind, ImportOrExportKind::Type),
 		);
 		if self.error.is_none() {
 			let bindings: Vec<_> = declaration
@@ -457,6 +472,11 @@ impl<'a> Visit<'a> for Observations<'_> {
 			declaration.span,
 			"esm_reexport",
 			Some(declaration.source.value.as_str()),
+			matches!(declaration.export_kind, ImportOrExportKind::Type)
+				|| (!declaration.specifiers.is_empty()
+					&& declaration.specifiers.iter().all(|specifier| {
+						matches!(specifier.export_kind, ImportOrExportKind::Type)
+					})),
 			matches!(declaration.export_kind, ImportOrExportKind::Type),
 		);
 		walk::walk_export_from_declaration(self, declaration);
@@ -468,6 +488,7 @@ impl<'a> Visit<'a> for Observations<'_> {
 			"esm_reexport_all",
 			Some(declaration.source.value.as_str()),
 			matches!(declaration.export_kind, ImportOrExportKind::Type),
+			matches!(declaration.export_kind, ImportOrExportKind::Type),
 		);
 		walk::walk_export_all_declaration(self, declaration);
 	}
@@ -477,6 +498,7 @@ impl<'a> Visit<'a> for Observations<'_> {
 			expression.span,
 			"dynamic_import",
 			literal(&expression.source),
+			false,
 			false,
 		);
 		walk::walk_import_expression(self, expression);
@@ -488,6 +510,7 @@ impl<'a> Visit<'a> for Observations<'_> {
 				call.span,
 				"commonjs_require",
 				argument_literal(call.arguments.first()),
+				false,
 				false,
 			);
 		}
