@@ -34,7 +34,7 @@ mod worker;
 
 pub(super) const OP: &str = "inspect_elf_notes";
 pub(super) const MAX_BYTES: u64 = 536_870_912;
-pub(super) const MAX_WORKER_REPLY: usize = 64 * 1024 * 1024;
+pub(super) const MAX_WORKER_REPLY: usize = 6 * (MAX_BYTES as usize) + 64 * 1024 * 1024;
 pub(super) const DEADLINE_MS: u64 = 30_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -306,9 +306,9 @@ fn evidence(report: Value, input: &Input, digest: &str, length: u64) -> Result<V
 		|| report["artifact"]["bytes"].as_u64() != Some(length)
 		|| length > input.max_file_bytes
 		|| entries.len() > input.max_entries as usize
-		|| !report["coverage"]["examined_entries"]
+		|| report["coverage"]["examined_entries"]
 			.as_u64()
-			.is_some_and(|n| n <= input.max_entries as u64)
+			.is_none_or(|n| n > input.max_entries as u64)
 		|| !tables
 			.iter()
 			.all(|table| valid_location(&table["location"]))
@@ -340,9 +340,14 @@ fn evidence(report: Value, input: &Input, digest: &str, length: u64) -> Result<V
 	let target =
 		json!({"path":input.path,"format":"elf","sha256":digest,"architecture":architecture});
 	let provider = json!({"id":"rea-elf-notes","name":"REA ELF note parser","version":"1"});
-	let observation = json!({"operation":OP,"parameters":input,"result":report,
-		"confidence":"observed","limitations":report["limitations"],"locations":locations});
-	rea_evidence::create_record(Some(&target), &provider, &observation)
+	let mut observation = serde_json::Map::new();
+	observation.insert("operation".to_owned(), json!(OP));
+	observation.insert("parameters".to_owned(), json!(input));
+	observation.insert("confidence".to_owned(), json!("observed"));
+	observation.insert("limitations".to_owned(), report["limitations"].clone());
+	observation.insert("locations".to_owned(), Value::Array(locations));
+	observation.insert("result".to_owned(), report);
+	rea_evidence::create_record_owned(Some(&target), &provider, Value::Object(observation))
 		.map_err(|error| Failure::output(OP, format!("Evidence construction failed: {error:#}")))
 }
 
@@ -350,27 +355,53 @@ async fn execute(
 	input: Input,
 	roots: &[PathBuf],
 	cancellation: &CancellationToken,
+	admission: Arc<runtime::effect_owner_fence::AdmissionPermit>,
 ) -> Result<Value, Failure> {
 	static SLOTS: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
-	let _permit = Arc::clone(SLOTS.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(2))))
+	let permit = Arc::new(Arc::clone(SLOTS.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(2))))
 		.try_acquire_owned().map_err(|_| Failure::resource(OP,"capacity","Native ELF parser capacity is occupied.",
-			json!({"max_concurrent_elf_workers":2}),true,"Wait for an active analysis to complete, then retry within the reported admission limits."))?;
+			json!({"max_concurrent_elf_workers":2}),true,"Wait for an active analysis to complete, then retry within the reported admission limits."))?);
 	let (bytes, digest) = capture(&input, roots, cancellation).await?;
 	let length = bytes.len() as u64;
-	let result = worker::inspect_isolated(&input, &digest, &bytes, cancellation).await?;
+	let result = worker::inspect_isolated(
+		&input,
+		&digest,
+		Arc::new(bytes),
+		cancellation,
+		Arc::clone(&permit),
+		Arc::clone(&admission),
+	)
+	.await?;
 	// A normal parser rejection does not retain a record or a partial snapshot
 	// in the frozen provider. Only completed Evidence is retained below.
 	if result.get("failure").is_some() {
 		return Err(parser_failure(&result["failure"], &input));
 	}
-	evidence(result["report"].clone(), &input, &digest, length)
+	let Value::Object(mut result) = result else {
+		return Err(Failure::output(
+			OP,
+			"ELF worker returned a non-object response.",
+		));
+	};
+	let report = result
+		.remove("report")
+		.ok_or_else(|| Failure::output(OP, "ELF worker omitted its complete report."))?;
+	// Identity construction scans the complete report. Keep it off async
+	// executor threads and retain both guards if the caller drops while hashing.
+	tokio::task::spawn_blocking(move || {
+		let _permit = permit;
+		let _admission = admission;
+		evidence(report, &input, &digest, length)
+	})
+	.await
+	.map_err(|error| Failure::output(OP, format!("Evidence construction worker failed: {error}")))?
 }
 
 pub(super) async fn inspect(
 	raw: Value,
 	session: &EvidenceSession,
 	cancellation: CancellationToken,
-	_owner_admission: Arc<runtime::effect_owner_fence::AdmissionPermit>,
+	owner_admission: Arc<runtime::effect_owner_fence::AdmissionPermit>,
 ) -> CallToolResult {
 	if let Err(error) = active(&cancellation) {
 		return error.wire();
@@ -386,17 +417,24 @@ pub(super) async fn inspect(
 		Ok(config) => config,
 		Err(error) => return Failure::output(OP, error.to_string()).wire(),
 	};
-	match execute(input, &config.controller_workspace_roots, &cancellation).await {
+	match execute(
+		input,
+		&config.controller_workspace_roots,
+		&cancellation,
+		owner_admission,
+	)
+	.await
+	{
 		Err(error) => error.wire(),
 		Ok(record) => {
-			let retained = match session.record(record.clone()) {
-				Ok(reference) => reference,
+			let retained = match session.record(record) {
+				Ok(retained) => retained,
 				Err(error) => return error.wire(),
 			};
 			if cancellation.is_cancelled() {
-				return Failure::cancelled(OP).partial(retained).wire();
+				return Failure::cancelled(OP).partial(retained.reference).wire();
 			}
-			rea_contract::success(OP, record, Some(retained))
+			rea_contract::success_borrowed(OP, retained.evidence.as_ref(), Some(retained.reference))
 		}
 	}
 }

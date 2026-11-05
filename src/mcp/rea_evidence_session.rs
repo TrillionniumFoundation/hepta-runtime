@@ -21,17 +21,22 @@ use super::rea_evidence;
 use rmcp::model::CallToolResult;
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Default)]
 pub(super) struct EvidenceSession {
-	records: Mutex<BTreeMap<String, Value>>,
+	records: Mutex<BTreeMap<String, Arc<Value>>>,
+}
+
+pub(super) struct RetainedRecord {
+	pub(super) evidence: Arc<Value>,
+	pub(super) reference: Value,
 }
 
 impl EvidenceSession {
 	/// Validate identity before publication. A repeated semantic record keeps
 	/// its first display metadata, as the frozen session ledger does.
-	pub(super) fn record(&self, evidence: Value) -> Result<Value, Failure> {
+	pub(super) fn record(&self, evidence: Value) -> Result<RetainedRecord, Failure> {
 		rea_evidence::verify_record(&evidence)
 			.map_err(|error| Failure::integrity(error.to_string()))?;
 		let id = evidence["evidence_id"]
@@ -42,26 +47,20 @@ impl EvidenceSession {
 			.records
 			.lock()
 			.map_err(|_| Failure::integrity("Evidence session registry is unavailable"))?;
+		let evidence = Arc::new(evidence);
 		if let Some(existing) = records.get(&id) {
-			let left = rea_evidence::semantic_record_content(existing)
-				.map_err(|error| Failure::integrity(error.to_string()))?;
-			let right = rea_evidence::semantic_record_content(&evidence)
-				.map_err(|error| Failure::integrity(error.to_string()))?;
-			// Canonical IEEE-754 projection also makes integer/f64 spellings
-			// identical, matching JavaScript's single Number representation.
-			let mut left_json = String::new();
-			let mut right_json = String::new();
-			rea_evidence::canonical(&left, &mut left_json, 0)
-				.map_err(|error| Failure::integrity(error.to_string()))?;
-			rea_evidence::canonical(&right, &mut right_json, 0)
-				.map_err(|error| Failure::integrity(error.to_string()))?;
-			if left_json != right_json {
+			if !rea_evidence::semantic_equal(existing, &evidence)
+				.map_err(|error| Failure::integrity(error.to_string()))?
+			{
 				return Err(Failure::integrity("Conflicting evidence record"));
 			}
 		} else {
-			records.insert(id.clone(), evidence);
+			records.insert(id.clone(), Arc::clone(&evidence));
 		}
-		Ok(json!({"kind":"retained-evidence","evidence_id":id}))
+		Ok(RetainedRecord {
+			evidence,
+			reference: json!({"kind":"retained-evidence","evidence_id":id}),
+		})
 	}
 
 	pub(super) fn get_bundle(&self, raw: Value) -> CallToolResult {
@@ -76,13 +75,25 @@ impl EvidenceSession {
 			Ok(records) => records,
 			Err(_) => return Failure::integrity("Evidence session registry is unavailable").wire(),
 		};
-		let value = if options.summary {
-			summarize(&records, &options.filters)
+		if options.summary {
+			let value = summarize(&records, &options.filters);
+			drop(records);
+			rea_contract::success("get_evidence_bundle", json!({"result":value}), None)
 		} else {
-			bundle(&records)
-		};
-		drop(records);
-		rea_contract::success("get_evidence_bundle", json!({"result":value}), None)
+			// The view borrows payloads. Serialization checks the transport
+			// bound before constructing a second owned JSON representation.
+			#[derive(serde::Serialize)]
+			struct ResultView<'a> {
+				result: BundleView<'a>,
+			}
+			rea_contract::success_borrowed(
+				"get_evidence_bundle",
+				&ResultView {
+					result: bundle(&records),
+				},
+				None,
+			)
+		}
 	}
 }
 
@@ -189,7 +200,18 @@ fn manifest_key(value: &Value, keys: &[&str]) -> String {
 	format!("{{{}}}", fields.join(","))
 }
 
-fn bundle(records: &BTreeMap<String, Value>) -> Value {
+#[derive(serde::Serialize)]
+struct BundleView<'a> {
+	artifacts: Vec<Value>,
+	providers: Vec<Value>,
+	environments: Vec<Value>,
+	scenarios: Vec<Value>,
+	captures: Vec<Value>,
+	unknowns: Vec<Value>,
+	records: Vec<&'a Value>,
+}
+
+fn bundle(records: &BTreeMap<String, Arc<Value>>) -> BundleView<'_> {
 	let mut artifacts = BTreeMap::new();
 	let mut providers = BTreeMap::new();
 	let mut environments = BTreeMap::new();
@@ -228,11 +250,15 @@ fn bundle(records: &BTreeMap<String, Value>) -> Value {
 			);
 		}
 	}
-	json!({"artifacts":artifacts.into_values().collect::<Vec<_>>(),
-		"providers":providers.into_values().collect::<Vec<_>>(),
-		"environments":environments.into_values().collect::<Vec<_>>(),
-		"scenarios":scenarios,"captures":captures,"unknowns":[],
-		"records":records.values().collect::<Vec<_>>()})
+	BundleView {
+		artifacts: artifacts.into_values().collect(),
+		providers: providers.into_values().collect(),
+		environments: environments.into_values().collect(),
+		scenarios,
+		captures,
+		unknowns: vec![],
+		records: records.values().map(Arc::as_ref).collect(),
+	}
 }
 
 fn native_summary(record: &Value) -> Value {
@@ -275,7 +301,7 @@ fn native_summary(record: &Value) -> Value {
 	json!({"available":true,"procedure_address":procedure["address"],"procedure_name":procedure["name"],"value_flow":value_flow})
 }
 
-fn summarize(records: &BTreeMap<String, Value>, filters: &Map<String, Value>) -> Value {
+fn summarize(records: &BTreeMap<String, Arc<Value>>, filters: &Map<String, Value>) -> Value {
 	let mut selected = Vec::new();
 	for record in records.values() {
 		if [

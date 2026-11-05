@@ -23,8 +23,11 @@ use rmcp::schemars;
 use serde::de::{Error as DeError, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{json, Map, Number, Value};
+#[cfg(test)]
 use sha2::{Digest, Sha256};
-use std::fmt::{self, Write};
+use std::fmt;
+#[cfg(test)]
+use std::fmt::Write;
 use std::path::Path;
 
 use super::{rea_files, runtime};
@@ -195,6 +198,7 @@ fn json_safe_unsigned(v: &Value) -> bool {
 	})
 }
 
+#[cfg(test)]
 pub(super) fn canonical(value: &Value, out: &mut String, depth: usize) -> Result<()> {
 	if depth > 128 {
 		bail!("REA subset canonicalization depth exceeded");
@@ -233,6 +237,7 @@ pub(super) fn canonical(value: &Value, out: &mut String, depth: usize) -> Result
 	Ok(())
 }
 
+#[cfg(test)]
 fn canonical_sha(value: &Value) -> Result<String> {
 	let mut encoded = String::new();
 	canonical(value, &mut encoded, 0)?;
@@ -413,7 +418,7 @@ fn profile(v: &Value, owner: &Value) -> Result<()> {
 	let checksum = nonempty(field(p, "digest")?, "profile digest")?;
 	hash_form(&Value::String(format!("sha_{checksum}")), "sha_")?;
 	let unsigned = json!({"provider":field(p,"provider")?, "parameters":field(p,"parameters")?});
-	if checksum != canonical_sha(&unsigned)? {
+	if checksum != canonical_digest(&unsigned)? {
 		bail!("analysis_profile digest mismatch");
 	}
 	Ok(())
@@ -472,6 +477,7 @@ fn coverage(v: &Value) -> Result<()> {
 	Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn semantic_record_content(record: &Value) -> Result<Value> {
 	let m = obj(record, "Evidence")?;
 	let subject_identity = subject(field(m, "subject")?)?;
@@ -611,8 +617,7 @@ pub(super) fn verify_record(record: &Value) -> Result<Value> {
 			bail!("caller_input_path contains NUL");
 		}
 	}
-	let projected = semantic_record_content(record)?;
-	let expected = format!("ev_{}", canonical_sha(&projected)?);
+	let expected = format!("ev_{}", semantic_digest(record)?);
 	let supplied = nonempty(field(m, "evidence_id")?, "evidence_id")?;
 	if supplied != expected {
 		bail!("REA semantic digest mismatch (including relationship_coverage)");
@@ -650,4 +655,8 @@ mod rea_evidence_tests;
 
 #[path = "rea_evidence_creation.rs"]
 mod creation;
-pub(super) use creation::create_record;
+pub(super) use creation::create_record_owned;
+
+#[path = "rea_evidence_stream.rs"]
+mod stream;
+pub(super) use stream::{canonical_digest, semantic_digest, semantic_equal};

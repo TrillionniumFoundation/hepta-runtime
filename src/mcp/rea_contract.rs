@@ -148,17 +148,38 @@ fn target_meta() -> rmcp::model::MetaObject {
 	rmcp::model::MetaObject(meta)
 }
 
-/// Stop the serializer at the receive budget instead of allocating an
-/// unbounded second JSON representation merely to measure it.
-struct BoundedCounter {
+const NODE_STRING_CODE_UNITS: usize = 536_870_888;
+const RESERVED_STRING_CODE_UNITS: usize = NODE_STRING_CODE_UNITS - 1024;
+
+/// Count both structured JSON and its escaped text representation directly
+/// from serializer fragments. No document-sized escaped buffer is allocated.
+struct WireCounter {
 	bytes: usize,
+	code_units: usize,
 	limit: usize,
+	constraint: &'static str,
 }
-impl Write for BoundedCounter {
+impl Write for WireCounter {
 	fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-		self.bytes = self.bytes.saturating_add(bytes.len());
-		if self.bytes > self.limit {
-			return Err(io::Error::other("REA MCP result exceeds receive budget"));
+		let text = std::str::from_utf8(bytes).map_err(io::Error::other)?;
+		for character in text.chars() {
+			let extra = match character {
+				'"' | '\\' | '\u{8}' | '\t' | '\n' | '\u{c}' | '\r' => 1,
+				c if c < ' ' => 5,
+				_ => 0,
+			};
+			self.bytes = self.bytes.saturating_add(2 * character.len_utf8() + extra);
+			self.code_units = self
+				.code_units
+				.saturating_add(2 * character.len_utf16() + extra);
+			if self.bytes > self.limit || self.code_units > RESERVED_STRING_CODE_UNITS {
+				self.constraint = if self.code_units > RESERVED_STRING_CODE_UNITS {
+					"string-length"
+				} else {
+					"receive-buffer"
+				};
+				return Err(io::Error::other("REA MCP result exceeds receive budget"));
+			}
 		}
 		Ok(bytes.len())
 	}
@@ -168,27 +189,127 @@ impl Write for BoundedCounter {
 }
 
 pub(super) fn success(operation: &str, value: Value, retained: Option<Value>) -> CallToolResult {
-	let limit = RESPONSE_BYTES - ENVELOPE_RESERVATION;
-	let mut counter = BoundedCounter { bytes: 0, limit };
-	let raw_fits = serde_json::to_writer(&mut counter, &value).is_ok();
-	if raw_fits {
-		let mut result = CallToolResult::structured(value);
-		// Frozen REA omits isError on success; the SDK's constructor inserts false.
-		result.is_error = None;
-		result.meta = Some(target_meta());
-		let mut delivered = BoundedCounter { bytes: 0, limit };
-		if serde_json::to_writer(&mut delivered, &result).is_ok() {
-			return result;
+	let bundle_summary = value
+		.get("result")
+		.and_then(|v| v.get("kind"))
+		.is_some_and(|kind| kind == "evidence-bundle-summary");
+	deliver(operation, &value, retained, bundle_summary)
+}
+
+pub(super) fn success_borrowed<T: serde::Serialize + ?Sized>(
+	operation: &str,
+	value: &T,
+	retained: Option<Value>,
+) -> CallToolResult {
+	deliver(operation, value, retained, false)
+}
+
+fn deliver<T: serde::Serialize + ?Sized>(
+	operation: &str,
+	value: &T,
+	retained: Option<Value>,
+	bundle_summary: bool,
+) -> CallToolResult {
+	let response_bytes = match response_budget() {
+		Ok(value) => value,
+		Err(error) => return error.wire(),
+	};
+	let limit = response_bytes - ENVELOPE_RESERVATION;
+	let envelope = json!({"content":[{"type":"text","text":""}],"structuredContent":null})
+		.to_string()
+		.len() - 4
+		+ json!({"_meta":target_meta()}).to_string().len()
+		- 1;
+	let mut counter = WireCounter {
+		bytes: envelope,
+		code_units: envelope,
+		limit,
+		constraint: "receive-buffer",
+	};
+	if let Err(error) = serde_json::to_writer(&mut counter, value) {
+		if counter.bytes <= limit && counter.code_units <= RESERVED_STRING_CODE_UNITS {
+			return Failure::output(
+				operation,
+				format!("Complete result serialization failed: {error}"),
+			)
+			.wire();
 		}
+		return overflow(
+			operation,
+			response_bytes,
+			&counter,
+			retained,
+			bundle_summary,
+		)
+		.wire();
 	}
-	let mut error = Failure::resource(operation, "transport",
-		"Complete result exceeds the native MCP response budget.",
-		json!({"maximum_response_bytes":RESPONSE_BYTES,"result_budget_bytes":limit}), false,
-		"Discover retained records with rea_get_evidence_bundle and detail: summary. A complete result requires a client and server with a sufficient response budget.");
+	let value = match serde_json::to_value(value) {
+		Ok(value) => value,
+		Err(error) => return Failure::output(operation, error.to_string()).wire(),
+	};
+	let mut result = CallToolResult::structured(value);
+	result.is_error = None;
+	result.meta = Some(target_meta());
+	result
+}
+
+fn response_budget() -> Result<usize, Failure> {
+	static BUDGET: OnceLock<Result<usize, String>> = OnceLock::new();
+	BUDGET.get_or_init(|| {
+		let Some(value) = std::env::var_os("REA_MCP_MAX_RESPONSE_BYTES") else { return Ok(RESPONSE_BYTES); };
+		let valid = value.to_str().and_then(|text| {
+			if text.is_empty() || text.starts_with('0') || !text.bytes().all(|b| b.is_ascii_digit()) { return None; }
+			text.parse::<u64>().ok().filter(|number| (RESPONSE_BYTES as u64..=9_007_199_254_740_991).contains(number)).and_then(|number| usize::try_from(number).ok())
+		});
+		valid.ok_or_else(|| "REA_MCP_MAX_RESPONSE_BYTES must be a decimal safe integer at least 10485760 bytes, the default stdio receive-buffer size.".to_owned())
+	}).clone().map_err(|reason| Failure(json!({"code":"configuration_invalid","category":"invalid_input",
+		"message":format!("REA configuration is invalid: {reason}"),"retryable":false,
+		"remediation":{"action":"Correct REA_MCP_MAX_RESPONSE_BYTES in the environment that starts REA (your shell or the MCP client's registration), then rerun."},
+		"details":{"settings":[{"setting":"REA_MCP_MAX_RESPONSE_BYTES","constraint":reason}]}})))
+}
+
+fn overflow(
+	operation: &str,
+	response_bytes: usize,
+	measured: &WireCounter,
+	retained: Option<Value>,
+	bundle_summary: bool,
+) -> Failure {
+	let next = if retained.is_some() {
+		"Export retained evidence to consume the complete analysis, or use complete CLI JSON output."
+	} else if operation == "get_evidence_bundle" && bundle_summary {
+		"Export complete retained session evidence through export_evidence_bundle to a caller-selected path, or use complete CLI JSON output. The connection remains usable."
+	} else if operation == "get_evidence_bundle" {
+		"Discover retained records with get_evidence_bundle and detail: summary, then inspect compatible records through inspect_analysis_view using an exact Evidence reference. Export complete retained session evidence through export_evidence_bundle to a caller-selected path, or use complete CLI JSON output. The connection remains usable."
+	} else {
+		"Use complete CLI JSON output to consume the analysis."
+	};
+	let string_limit = measured.constraint == "string-length";
+	let facts = if string_limit {
+		format!("REA's reserved single-string limit is {RESERVED_STRING_CODE_UNITS} UTF-16 code units, below Node's single-string ceiling of {NODE_STRING_CODE_UNITS} UTF-16 code units. This release has no runtime override for either limit, and REA_MCP_MAX_RESPONSE_BYTES does not raise them.")
+	} else {
+		format!("The effective REA_MCP_MAX_RESPONSE_BYTES value is {response_bytes} bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of {RESERVED_STRING_CODE_UNITS} UTF-16 code units or Node's single-string ceiling of {NODE_STRING_CODE_UNITS} UTF-16 code units. This release has no runtime override for either limit.")
+	};
+	let summary = if string_limit {
+		"The operation completed, but its complete MCP response exceeds REA's reserved single-string limit."
+	} else {
+		"The operation completed, but its complete MCP response exceeds the stdio response budget. The analysis result was not truncated."
+	};
+	let mut limits = json!({"boundary":"mcp-response","default_receive_buffer_bytes":RESPONSE_BYTES,
+		"result_budget_bytes":response_bytes-ENVELOPE_RESERVATION,"max_string_code_units":RESERVED_STRING_CODE_UNITS,
+		"response_bytes_at_least":measured.bytes,"response_code_units_at_least":measured.code_units,"constraint":measured.constraint});
 	if let Some(reference) = retained {
-		error = error.partial(reference);
+		limits["evidence_id"] = reference["evidence_id"].clone();
+		limits["evidence_reference"] = reference;
 	}
-	error.wire()
+	Failure::resource(
+		operation,
+		"transport",
+		&format!("{summary} {facts} {next}"),
+		limits,
+		false,
+		&format!("{next} {facts}"),
+	)
 }
 
 /// Input objects are parsed explicitly: a JSON number such as 1.0 or 1e0 is

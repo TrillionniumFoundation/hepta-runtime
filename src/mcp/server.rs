@@ -42,7 +42,7 @@ use super::{
 	rea, rea_artifact_zip, rea_asar, rea_evidence, rea_javascript, rea_javascript_graph, rea_model,
 	rea_provider, rea_store, rea_web, weight, weight_artifact, weight_forward, weight_tensor,
 };
-use super::{rea_contract, rea_elf_notes, rea_evidence_session};
+use super::{rea_contract, rea_elf_notes, rea_evidence_session, rea_mcp_input, rea_mcp_transport};
 
 /// Per-session working directory state.
 /// Each server instance has its own workdir, isolated from other sessions.
@@ -1687,7 +1687,7 @@ impl OctofsServer {
 		title = "Inspect ELF Notes",
 		input_schema = rea_contract::elf_input_schema(),
 		output_schema = rea_contract::elf_output_schema(),
-		annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
+		annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
 		description = "Inspect complete ELF note tables from one admitted local file using an isolated Rust parser. Returns complete Evidence and retains it in this MCP session; no target code is executed. The declared input and output schemas are frozen from REA 6.8.0."
 	)]
 	async fn rea_inspect_elf_notes(
@@ -1695,6 +1695,17 @@ impl OctofsServer {
 		Parameters(params): Parameters<serde_json::Value>,
 		context: RequestContext<RoleServer>,
 	) -> Result<CallToolResult, ErrorData> {
+		let raw = context
+			.extensions
+			.get::<rea_mcp_transport::ReaRawArguments>();
+		if let Some(error) = raw.and_then(|raw| raw.protocol_error()) {
+			return Err(error);
+		}
+		if let Err(error) =
+			rea_mcp_input::elf_ordered(&params, raw.and_then(|raw| raw.object_keys(&[])))
+		{
+			return Ok(error.wire());
+		}
 		let admission = match runtime::effect_owner_fence::admit_new_effect().await {
 			Ok(permit) => Arc::new(permit),
 			Err(error) => {
@@ -1716,7 +1727,21 @@ impl OctofsServer {
 	async fn rea_get_evidence_bundle(
 		&self,
 		Parameters(params): Parameters<serde_json::Value>,
+		context: RequestContext<RoleServer>,
 	) -> Result<CallToolResult, ErrorData> {
+		let raw = context
+			.extensions
+			.get::<rea_mcp_transport::ReaRawArguments>();
+		if let Some(error) = raw.and_then(|raw| raw.protocol_error()) {
+			return Err(error);
+		}
+		if let Err(error) = rea_mcp_input::bundle_ordered(
+			&params,
+			raw.and_then(|raw| raw.object_keys(&[])),
+			raw.and_then(|raw| raw.object_keys(&["filters"])),
+		) {
+			return Ok(error.wire());
+		}
 		Ok(self.rea_session.get_bundle(params))
 	}
 
@@ -3418,6 +3443,14 @@ impl ServerHandler for OctofsServer {
 				}
 			})
 			.map(|mut tool| {
+				// Frozen producer schemas are contracts, including nullable variants
+				// and schema-version metadata; they are not schemars generator noise.
+				if matches!(
+					tool.name.as_ref(),
+					"rea_inspect_elf_notes" | "rea_get_evidence_bundle"
+				) {
+					return tool;
+				}
 				let mut schema = tool.input_schema.as_ref().clone();
 				for value in schema.values_mut() {
 					strip_null_variants(value);

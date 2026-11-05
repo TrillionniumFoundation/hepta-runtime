@@ -100,11 +100,25 @@ fn integer(
 	}
 }
 
-fn unknown(map: &Map<String, Value>, allowed: &[&str], prefix: &str, errors: &mut Vec<String>) {
-	let keys: Vec<_> = map
-		.keys()
-		.filter(|key| !allowed.contains(&key.as_str()))
-		.collect();
+fn unknown(
+	map: &Map<String, Value>,
+	allowed: &[&str],
+	prefix: &str,
+	order: Option<&[String]>,
+	errors: &mut Vec<String>,
+) {
+	let keys: Vec<&str> = match order {
+		Some(keys) => keys
+			.iter()
+			.map(String::as_str)
+			.filter(|key| map.contains_key(*key) && !allowed.contains(key))
+			.collect(),
+		None => map
+			.keys()
+			.map(String::as_str)
+			.filter(|key| !allowed.contains(key))
+			.collect(),
+	};
 	if keys.is_empty() {
 		return;
 	}
@@ -137,6 +151,10 @@ fn finish(operation: &str, errors: Vec<String>) -> Result<(), Failure> {
 }
 
 pub(super) fn elf(raw: &Value) -> Result<(), Failure> {
+	elf_ordered(raw, None)
+}
+
+pub(super) fn elf_ordered(raw: &Value, argument_keys: Option<&[String]>) -> Result<(), Failure> {
 	let empty = Map::new();
 	let map = raw.as_object().unwrap_or(&empty);
 	let mut errors = Vec::new();
@@ -157,12 +175,21 @@ pub(super) fn elf(raw: &Value) -> Result<(), Failure> {
 		map,
 		&["path", "max_file_bytes", "max_entries"],
 		"",
+		argument_keys,
 		&mut errors,
 	);
 	finish("inspect_elf_notes", errors)
 }
 
 pub(super) fn bundle(raw: &Value) -> Result<(), Failure> {
+	bundle_ordered(raw, None, None)
+}
+
+pub(super) fn bundle_ordered(
+	raw: &Value,
+	argument_keys: Option<&[String]>,
+	filter_keys: Option<&[String]>,
+) -> Result<(), Failure> {
 	let empty = Map::new();
 	let map = raw.as_object().unwrap_or(&empty);
 	let mut errors = Vec::new();
@@ -217,6 +244,7 @@ pub(super) fn bundle(raw: &Value) -> Result<(), Failure> {
 					"procedure_address",
 				],
 				"filters",
+				filter_keys,
 				&mut errors,
 			);
 		} else {
@@ -226,6 +254,6 @@ pub(super) fn bundle(raw: &Value) -> Result<(), Failure> {
 			));
 		}
 	}
-	unknown(map, &["detail", "filters"], "", &mut errors);
+	unknown(map, &["detail", "filters"], "", argument_keys, &mut errors);
 	finish("get_evidence_bundle", errors)
 }

@@ -189,9 +189,13 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 
 	tracing::info!("Starting MCP server (STDIO mode)");
 
-	let service = server.serve(stdio()).await.inspect_err(|e| {
-		tracing::error!("serving error: {:?}", e);
-	})?;
+	let (input, output) = stdio();
+	let service = server
+		.serve(mcp::ReaMcpTransport::new(input, output))
+		.await
+		.inspect_err(|e| {
+			tracing::error!("serving error: {:?}", e);
+		})?;
 
 	// `waiting()` blocks until the transport closes naturally (EOF on stdin).
 	// For SIGTERM we cancel via the service's cancellation token so the task

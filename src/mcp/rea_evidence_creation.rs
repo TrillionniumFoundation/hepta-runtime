@@ -23,7 +23,7 @@ use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 use std::path::Path;
 
-use super::{canonical_sha, field, obj, semantic_record_content, verify_record};
+use super::{field, obj, semantic_digest, verify_record};
 
 fn optional<'a>(map: &'a Map<String, Value>, name: &str) -> Option<&'a Value> {
 	map.get(name).filter(|value| !value.is_null())
@@ -37,12 +37,31 @@ fn defaulted(map: &Map<String, Value>, name: &str, default: Value) -> Value {
 /// explicit null relationship-coverage commitment introduced before 6.8.0.
 /// The input convention is REA's observation object (camelCase for optional
 /// producer fields); the returned record uses the public snake_case schema.
+#[cfg(test)]
 pub(crate) fn create_record(
 	target: Option<&Value>,
 	provider: &Value,
 	observation: &Value,
 ) -> Result<Value> {
-	let observation = obj(observation, "Evidence observation")?;
+	create_record_owned(target, provider, observation.clone())
+}
+
+/// Move large normalized/raw results into the retained record. Keeping the
+/// borrowed convenience API above does not require production callers to copy
+/// a complete report before computing its semantic identity.
+pub(crate) fn create_record_owned(
+	target: Option<&Value>,
+	provider: &Value,
+	observation: Value,
+) -> Result<Value> {
+	let Value::Object(mut observation) = observation else {
+		bail!("Evidence observation must be object");
+	};
+	let normalized = observation
+		.remove("result")
+		.ok_or_else(|| anyhow!("Evidence observation requires result"))?;
+	let raw = observation.remove("rawResult").unwrap_or(Value::Null);
+	let observation = &observation;
 	let provider = obj(provider, "Evidence provider")?;
 	let subject = match target {
 		None => Value::Null,
@@ -121,8 +140,8 @@ pub(crate) fn create_record(
 		"predicate_type": defaulted(observation, "predicateType", json!("rea.analysis")),
 		"operation": field(observation, "operation")?,
 		"parameters": field(observation, "parameters")?,
-		"raw_result": defaulted(observation, "rawResult", Value::Null),
-		"normalized_result": field(observation, "result")?,
+		"raw_result": null,
+		"normalized_result": null,
 		"confidence": defaulted(observation, "confidence", json!("observed")),
 		"authority": defaulted(observation, "authority", json!("shipped-artifact")),
 		"environment": defaulted(observation, "environment", Value::Null),
@@ -131,7 +150,9 @@ pub(crate) fn create_record(
 		"locations": defaulted(observation, "locations", json!([])),
 		"evidence_links": defaulted(observation, "evidenceLinks", json!([]))
 	});
-	let digest = canonical_sha(&semantic_record_content(&record)?)?;
+	record["raw_result"] = raw;
+	record["normalized_result"] = normalized;
+	let digest = semantic_digest(&record)?;
 	record["evidence_id"] = json!(format!("ev_{digest}"));
 	verify_record(&record)?;
 	Ok(record)

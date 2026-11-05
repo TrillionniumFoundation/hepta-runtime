@@ -33,6 +33,8 @@ pub mod rea_files;
 pub mod rea_javascript;
 pub mod rea_javascript_graph;
 mod rea_mcp_input;
+mod rea_mcp_transport;
+pub use rea_mcp_transport::ReaMcpTransport;
 pub mod rea_model;
 pub mod rea_provider;
 pub mod rea_seccomp;

@@ -53,10 +53,16 @@ async fn captured_identity_is_bound_and_parser_failure_does_not_publish_a_record
 	.unwrap();
 	assert_eq!(snapshot, bytes);
 	assert_eq!(digest, super::super::rea_source_map::sha256(&bytes));
+	let admission = Arc::new(
+		runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.unwrap(),
+	);
 	let error = execute(
 		input,
 		&[dir.path().to_path_buf()],
 		&CancellationToken::new(),
+		admission,
 	)
 	.await
 	.unwrap_err();

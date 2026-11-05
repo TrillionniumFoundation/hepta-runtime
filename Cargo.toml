@@ -108,3 +108,8 @@ rpath = false
 [[bin]]
 name = "hepta-runtime-jobctl"
 path = "src/bin/jobctl.rs"
+
+# Preserve the frozen reader semantics while rejecting oversized Zstd blocks.
+# Upstream identity and the minimal pure-Rust fix are recorded under vendor/ruzstd.
+[patch.crates-io]
+ruzstd = { path = "vendor/ruzstd" }

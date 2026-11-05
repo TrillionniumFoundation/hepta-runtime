@@ -17,6 +17,13 @@ fn generated_records_equal_frozen_npm_producer_envelopes() {
 		let actual = create_record(case.get("target"), &case["provider"], &case["observation"])
 			.unwrap_or_else(|error| panic!("{}: {error}", case["name"]));
 		assert_eq!(actual, case["expected"], "{}", case["name"]);
+		let projected = super::super::semantic_record_content(&actual).unwrap();
+		assert_eq!(
+			super::super::semantic_digest(&actual).unwrap(),
+			super::super::canonical_sha(&projected).unwrap(),
+			"streamed identity: {}",
+			case["name"]
+		);
 	}
 }
 
