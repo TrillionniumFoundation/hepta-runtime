@@ -1,13 +1,14 @@
 # X230 compiler experiment — preparation only
 
-This preparation update adds a guarded qualification driver template, source/cache
-preparation designs, and exact metadata staging/execution requests. For this
+This preparation update adds a bounded source/public-registry inventory template
+alongside the existing qualification driver, preparation designs, and exact
+metadata staging/execution requests. For this
 compiler experiment, native metadata runs, builds, training, qualifications and
 performance measurements all remain **0**. No candidate is selected or adopted.
-The current native-work owner's reservation 24 supersedes reservation 23 and
+The current native-work owner's reservation 25 supersedes the earlier reservations and
 remains unreleased. No handoff or compiler preflight execution is claimed here.
-References to reservation 23 inside the frozen packages remain historical
-preparation records; current coordination follows reservation 24.
+References to earlier reservations inside the frozen packages remain historical
+preparation records; current coordination follows reservation 25.
 
 ## Why this direction is being checked
 
@@ -126,6 +127,33 @@ complete qualification and the unchanged full acceptance campaign remain future
 work. These materials are a preparation checkpoint, not an optimized runtime
 version or a change to the accepted candidate.
 
+## Read-only source and public-cache inventory
+
+The [inventory template](inventory/README.md) records identities for a selected
+accepted source, its original harness, and bounded public crates.io registry
+inputs. It performs no Cargo/Rust execution, subprocess, network, copying,
+unpacking or cache cleanup. Its [input template](inventory/input.template.json)
+remains `selected=false`, with all future bindings null. The preserved
+[manifest](inventory/manifest.json) records one actual local unbound rejection:
+**exit 2**, without reading selected source/cache paths or creating an evidence
+directory. The selected/native branch has never run; this publication copy did
+not rerun the check.
+
+Sparse-index file identities and archive-to-lock checksums do not establish the
+index checksum for an exact package version: that parser is not implemented and
+the value remains unknown. Cargo.lock entries are not the resolved
+target/features/host-build dependency closure. The observed registry map can
+include checksum mismatches; it is not a copy allowlist or a prepared private
+registry manifest. `inventory_complete` would only mean that bounded observation
+finished, not preparation, offline resolution, qualification or build success.
+
+Actual source/cache inventory, current free space and a fresh-build space budget
+remain unknown. The 16 MiB evidence-output cap is not a build-space budget.
+This template cannot serve directly as a preparation receipt; a later preparer
+must independently bind and verify the actual inputs and copies. The existing
+preflight, coordination routes, qualification stages and acceptance gates remain
+unchanged.
+
 ## Checkpoint files
 
 - [中文 prepared-only checkpoint](../../../../docs/X230_COMPILER_EXPERIMENT_20261105.md)
@@ -134,6 +162,8 @@ version or a change to the accepted candidate.
 - [Accepted R24 report](../../../../docs/X230_OPTIMIZATION_20261105_R24.md)
 - [Qualification design](candidate-qualification-design-01.md) and [JSON](candidate-qualification-design-01.json)
 - [Private preparation design](preparation-design-01.md) and [JSON](preparation-design-01.json)
+- [Read-only inventory script](inventory/inventory.py), [input template](inventory/input.template.json),
+  [scope README](inventory/README.md), and [frozen manifest](inventory/manifest.json)
 - [External driver](qualification-template-01/qualify_cpu.py), [exact diff](qualification-template-01/qualify_cpu.py.diff),
   [original tools map](qualification-template-01/original-harness-map.json), and [package manifest](qualification-template-01/manifest.json)
 - [Admission review JSON](qualification-template-01/root-review-admission-01.json) and [Cargo review JSON](qualification-template-01/root-review-cargo-01.json)
@@ -145,4 +175,7 @@ version or a change to the accepted candidate.
 The preserved JSON and history files retain their original local/remote provenance
 paths verbatim; the links above are the repository navigation for this checkpoint.
 All frozen package source, JSON, diffs, local checks and reviews are byte-identical
-copies. Only this entry README and the Chinese checkpoint document are updated.
+copies. This update adds only the four frozen inventory files; the previous 27
+non-entry files retain their exact bytes. Only this entry README and the Chinese
+checkpoint document are edited. This is a tools preparation checkpoint, not a
+new measured optimization version.

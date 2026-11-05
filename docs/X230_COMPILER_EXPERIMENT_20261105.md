@@ -1,6 +1,6 @@
-# X230 compiler experiment：资格模板与请求准备检查点
+# X230 compiler experiment：只读 inventory 准备检查点
 
-**状态：prepared-only，selected=false。** 本 compiler experiment 的 native metadata、构建、训练、资格执行和性能测量次数均为 **0**。preflight 尚未上传或执行，没有新候选选择或采纳。当前执行所有者的 reservation 24 已替代 reservation 23，仍未释放；本检查点不声称已取得 native handoff。冻结包中 reservation 23 的引用保留为历史准备记录，当前协调以 reservation 24 为准。此次增加可审查的资格模板、准备设计和精确请求文件；它们是准备材料，不是新的优化 runtime 版本。
+**状态：prepared-only，selected=false。** 本 compiler experiment 的 native metadata、构建、训练、资格执行和性能测量次数均为 **0**。preflight 尚未上传或执行，没有新候选选择或采纳。当前执行所有者的 reservation 25 已替代此前 reservation，仍未释放；本检查点不声称已取得 native handoff。冻结包中的旧 reservation 引用保留为历史准备记录，当前协调以 reservation 25 为准。此次在既有资格模板、准备设计和精确请求之上，只增加 source/public-cache inventory 模板及入口说明；它是工具准备检查点，不是新的优化 runtime 版本。
 
 ## 历史及本检查点最后核实的已接受基线
 
@@ -32,10 +32,18 @@ R24 已声明 `opt-level=3`、`lto=true`（fat LTO）、`codegen-units=1`、`pan
 
 [资格设计](../tools/x230/20261105/compiler-experiment/candidate-qualification-design-01.md) 和 [私有准备设计](../tools/x230/20261105/compiler-experiment/preparation-design-01.md) 明确剩余工作：实际执行权协调、当前 accepted 身份、native metadata、完整源码与 sparse registry 的独立准备、真实 checksum 和全新构建空间预算，以及固定输入后的完整资格。source/cache preparer 尚未实现；目录与 receipt 模板不能代替实际准备结果。
 
+## 新增只读 inventory 模板
+
+[inventory 包](../tools/x230/20261105/compiler-experiment/inventory/README.md) 有界记录所选 accepted source、原 harness 和公共 crates.io registry 输入的身份，不执行 Cargo/Rust、子进程、网络、复制、解包或缓存清理。[输入模板](../tools/x230/20261105/compiler-experiment/inventory/input.template.json) 仍是 `selected=false`，所有未来绑定为 null。[冻结 manifest](../tools/x230/20261105/compiler-experiment/inventory/manifest.json) 保留唯一一次实际本地未绑定拒绝：**exit 2**，未读取所选 source/cache 路径、未创建证据目录；selected/native 分支执行次数为 0。本次发布副本未重跑该检查。
+
+sparse-index 只记录文件身份，尚未解析某个包版本的 `cksum`；归档与 Cargo.lock checksum 的比较不能代替该项。Cargo.lock 全集也不是实际 target/features/host-build 依赖闭包。观察得到的 registry map 可以含 checksum 不符项，不能当作复制允许清单或已准备好的私有 registry manifest。即使将来返回 `inventory_complete=true`，也只表示有界清点完成，不代表 preparation、离线解析、资格或构建通过。
+
+实际源码/缓存 inventory、当前余量和 fresh-build 空间预算仍未知；16 MiB 只是证据输出上限，不是构建预算。[脚本](../tools/x230/20261105/compiler-experiment/inventory/inventory.py) 不能直接生成可供本轮 driver 采用的 preparation receipt。后续 preparer 仍需独立核对实际输入、副本、checksum 和容量，原 preflight、执行权协调、完整资格和验收门槛均不改变。
+
 ## 保持原评价边界
 
 [compiler-screen-plan.json](../tools/x230/20261105/compiler-experiment/compiler-screen-plan.json) 保留既定观测改善/非退化、资源、C32/C6 correctness 和完整 lifecycle 门槛。本 checkpoint 没有改变或执行这些门。当前没有选定 CPU 专用构建、PGO 或 BOLT；训练若以后发生，也不能作为独立验证样本，原失败不能用不变候选反复重跑覆盖。
 
 R27 serializer 仍是独立的组件实验，完整 runtime 未资格验证、未采纳；已拒绝的 R26 也不替换 accepted R24。这里没有合入两者的源码改动或混用其结果。preflight 的完成与否，更不能替代任何新编译产物的完整资格和原门槛验收。
 
-完整文件入口见 [compiler experiment README](../tools/x230/20261105/compiler-experiment/README.md)。本次新增的 11 个资格包文件、4 个设计文件和 6 个精确请求文件均保持冻结原件字节，包括 source、JSON、diff、负向检查和审查记录；既有脚本、计划及历史审查也不改动。只更新本入口文档与根 README。其中原绝对路径继续作为来源数据保留，仓库浏览使用相对链接。
+完整文件入口见 [compiler experiment README](../tools/x230/20261105/compiler-experiment/README.md)。本次在此前 29 文件版本上只新增 4 个冻结 inventory 文件；原 27 个非入口文件保留原字节，包括脚本、计划、请求、设计、JSON、diff、负向检查和审查记录。只修改本入口文档与 compiler experiment README。原绝对路径继续作为来源数据保留，仓库浏览使用相对链接；没有加入新的 native、资格或性能结果。
