@@ -1,0 +1,169 @@
+{
+  "schema": "hepta-native-boundary-independent-analysis/v1",
+  "evidence_verified": true,
+  "diagnostic_passed": true,
+  "report_sha256": "3cfadd39aff22b409a2274072c6219926a04c879e44804253a72694785f5fc37",
+  "candidate_sha256": "346b57590211e62ce8732dfcea703c2fae4b2dca5fd62f870c1abd34b1158d20",
+  "capacity_rendering_verified": true,
+  "classification_policy_sha256": "206d1a99abc328948d8df893daa77a862b25de878a8b97379090da7ce84393d3",
+  "counts": {
+    "success": 32,
+    "capacity_rejection": 32,
+    "other_error": 0
+  },
+  "bursts": [
+    {
+      "burst": 0,
+      "counts": {
+        "success": 16,
+        "capacity_rejection": 16,
+        "other_error": 0
+      },
+      "classified": {
+        "capacity_rejection": {
+          "count": 16,
+          "latency_ms": {
+            "max": 46.280388,
+            "p50": 43.465097,
+            "p95": 46.280388,
+            "p99": 46.280388
+          },
+          "rate_per_second": 36.692028854409685
+        },
+        "other_error": {
+          "count": 0,
+          "latency_ms": null,
+          "rate_per_second": 0.0
+        },
+        "success": {
+          "count": 16,
+          "latency_ms": {
+            "max": 425.789593,
+            "p50": 297.450465,
+            "p95": 425.789593,
+            "p99": 425.789593
+          },
+          "rate_per_second": 36.692028854409685
+        }
+      },
+      "seconds": 0.436062014,
+      "controller_cpu_ms_per_attempt": 14.0625,
+      "client_rpc_pending_peak": 32,
+      "all_rpc_started_before_first_response": true,
+      "serialized_send_span_ms": 6.287877,
+      "pool_identity_peak": null
+    },
+    {
+      "burst": 1,
+      "counts": {
+        "success": 16,
+        "capacity_rejection": 16,
+        "other_error": 0
+      },
+      "classified": {
+        "capacity_rejection": {
+          "count": 16,
+          "latency_ms": {
+            "max": 72.727246,
+            "p50": 65.126275,
+            "p95": 72.727246,
+            "p99": 72.727246
+          },
+          "rate_per_second": 37.81998442866146
+        },
+        "other_error": {
+          "count": 0,
+          "latency_ms": null,
+          "rate_per_second": 0.0
+        },
+        "success": {
+          "count": 16,
+          "latency_ms": {
+            "max": 412.945662,
+            "p50": 262.234143,
+            "p95": 412.945662,
+            "p99": 412.945662
+          },
+          "rate_per_second": 37.81998442866146
+        }
+      },
+      "seconds": 0.423056758,
+      "controller_cpu_ms_per_attempt": 13.75,
+      "client_rpc_pending_peak": 32,
+      "all_rpc_started_before_first_response": true,
+      "serialized_send_span_ms": 15.384484,
+      "pool_identity_peak": null
+    }
+  ],
+  "drain_and_recovery_passed": true,
+  "post_drain_calls": 96,
+  "warmup_calls": 24,
+  "preflight_restart_calls": 18,
+  "total_tool_calls": 202,
+  "automatic_rpc_retries": 0,
+  "raw_transport": {
+    "frames_rehashed": 204,
+    "rpc_envelopes_independently_verified": 204,
+    "notifications_retained": 0
+  },
+  "resource_traces": [
+    {
+      "phase": "first",
+      "trace_records_recomputed": 126,
+      "process_generations": 110,
+      "sampled_cpu_seconds_by_scope": {
+        "controller": 5.81,
+        "mixed_descendants": 0.0,
+        "other_descendants": 0.0,
+        "ssh_descendants": 1.0699999999999998,
+        "unknown_descendants": 0.0
+      },
+      "missing_observations": {
+        "VmRSS:UnavailableStatusField": 2,
+        "VmHWM:UnavailableStatusField": 2,
+        "fd:PermissionError": 2,
+        "executable:FileNotFoundError": 2,
+        "identity_after:FileNotFoundError": 2,
+        "identity_after:GenerationOrParentChanged": 2,
+        "identity_before:FileNotFoundError": 1,
+        "children:FileNotFoundError": 1
+      }
+    },
+    {
+      "phase": "restart",
+      "trace_records_recomputed": 41,
+      "process_generations": 20,
+      "sampled_cpu_seconds_by_scope": {
+        "controller": 0.73,
+        "mixed_descendants": 0.0,
+        "other_descendants": 0.0,
+        "ssh_descendants": 0.9199999999999999,
+        "unknown_descendants": 0.0
+      },
+      "missing_observations": {
+        "VmRSS:UnavailableStatusField": 1,
+        "VmHWM:UnavailableStatusField": 1,
+        "fd:PermissionError": 1,
+        "executable:FileNotFoundError": 1,
+        "tasks:FileNotFoundError": 1,
+        "identity_after:FileNotFoundError": 1,
+        "identity_after:GenerationOrParentChanged": 1,
+        "identity_before:FileNotFoundError": 1
+      }
+    }
+  ],
+  "topology": {
+    "verified": true,
+    "alias_count": 6,
+    "physical_machine_groups": 6,
+    "manifest_sha256": "8c0767d3318131a7d470d9cde8e327a59ce18adf022c8bc1b1d5a0fa9a865287"
+  },
+  "limitations": [
+    "32 client attempts do not imply 32 native pool identities; validation may queue requests.",
+    "No refusal count is required; all 32 may succeed. This cannot establish the exact admission peak.",
+    "Only success contributes to successful_rps. Rejection and other-error rates/latencies are separate.",
+    "Post-drain probes are new planned read requests, not automatic retries.",
+    "CPU is synchronous controller CPU per attempt; no per-class or whole-cluster CPU attribution.",
+    "100 ms descendant samples remain incomplete and can double-count shared memory."
+  ]
+}

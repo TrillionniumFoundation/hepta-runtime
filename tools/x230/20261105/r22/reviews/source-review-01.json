@@ -1,0 +1,72 @@
+{
+  "schema": "hepta-runtime/r22-independent-source-review/v1",
+  "reviewer": "/root/runtime_source_audit",
+  "updated_utc": "2026-11-05T03:44:52.110716+00:00",
+  "status": "independent_source_and_test_review_passed_execution_pending",
+  "baseline_commit": "e85f869e48e643a3e94cb7220d27181ad82c8562",
+  "baseline_profile_git_blob": "c8702a86b6685054d3e92525d5dd1fffd96e0a2e",
+  "reviewed_profile": {
+    "path": "/workspace/scratch/806ba5f52f94/source/src/mcp/runtime/ssh_observation_profile.rs",
+    "size_bytes": 24697,
+    "sha256": "32157a541eef37f8973c3ec5bc0425a3950ffe1e0fbb6b014213606588fb5aa7",
+    "git_blob_sha1": "9298b6b0511187d21c89934b866e160ddbfa7e36"
+  },
+  "checks": {
+    "startup_sha_pin_check_precedes_reference_installation": true,
+    "only_fixed_public_usr_bin_ssh_retains_reference": true,
+    "per_profile_reference_payload_cap_bytes": 2097152,
+    "oversized_input_falls_back_to_original_sha_and_vec_drops": true,
+    "arc_clones_share_immutable_reference_payload": true,
+    "original_read_size_take_eintr_and_checkpoint_structure_preserved": true,
+    "content_mismatch_does_not_end_read_loop": true,
+    "reference_range_get_handles_overlong_input_without_panic": true,
+    "final_length_check_present": true,
+    "original_verify_read_and_cancellation_precede_content_error": true,
+    "pool_validation_owner_and_await_fences_unchanged": true,
+    "other_five_files_retain_original_sha_verification": true,
+    "no_new_retained_fd_or_file_mapping": true
+  },
+  "contract_reasoning": "For immutable loaded bytes B already accepted against the startup SHA pin, exact fresh bytes C == B imply the original SHA equality. All descriptor, path, size and authority checks still run. This does not remove reliance on the initial SHA pin or create atomic filesystem snapshots.",
+  "memory_limits": "The 2 MiB limit bounds one retained payload per profile, not whole-process RSS or startup peak. Arc and allocator overhead remain; clones do not duplicate payload. Root reports actual X230 SSH length 846888 B; this reviewer has not independently measured that host file.",
+  "prior_work_search": "R16-R18 reports tested path parsing, 16 KiB buffer reuse, larger hash buffers and openat2. No tested/rejected exact-byte startup reference was found in the reviewed reports.",
+  "tests_review": {
+    "status": "passed_by_source_inspection_execution_not_performed",
+    "path": "/workspace/scratch/806ba5f52f94/source/src/mcp/runtime/ssh_observation_reference_tests.rs",
+    "size_bytes": 13352,
+    "sha256": "3d1741037b804e2ec5bd81ad2c44a2ed94db648e46c77d0d46efb48e21ea1ce3",
+    "regular_tests_added": 7,
+    "ignored_mechanism_bench_added": 1,
+    "covered": [
+      "Empty/single/chunk-boundary/multiple-chunk/partial-tail equality and changed-byte rejection against SHA path",
+      "2 MiB budget boundary, oversize SHA fallback and initial advertised-pin rejection",
+      "Arc payload sharing and independence from later file writes",
+      "Reference length mismatch and safe bounds handling",
+      "First-chunk mismatch preserves later checkpoints and injected cancellation priority",
+      "Before-open and after-read length/path/permissions/hardlink rejection precedence",
+      "Fresh owner validation rejects changed tail after worker acceptance, freezes and drains"
+    ],
+    "checkpoint_reasoning": "On the four-chunk fixture, success reaches 19 check_current calls. Content mismatch reaches 18; before final verify_read is check 17. Thus complete_checks-2 and mismatch_checks+1 are correct.",
+    "bench_scope": "Three ABBA blocks, 128 complete verify_checked calls per arm, same pinned real SSH file. CPU/wall include fresh opens/reads/stamps/check_current. Both pins coexist, so RSS is explicitly not comparable. This is not controller throughput or independent A/B process memory evidence.",
+    "limits": "This reviewer has not compiled or executed the new tests or bench. The added tests do not inject kernel EINTR/EIO or every filesystem interleaving; unchanged production I/O and error order were inspected."
+  },
+  "validation_scope": "Read-only source/diff review only. No compilation, full regression, six-host performance run or deployment performed by this reviewer.",
+  "blocking_findings": [],
+  "resolved_findings": [
+    {
+      "scope": "test_only",
+      "finding": "Independent after-read symlink fixtures can reach fstat stamp rejection or no-follow ELOOP depending on ctime ticks; requiring equal error text was nondeterministic.",
+      "resolution": "Only this case accepts exactly either existing boundary error and still requires the same final checkpoint. All other cases retain exact differential assertions.",
+      "verified_tests_sha256": "3d1741037b804e2ec5bd81ad2c44a2ed94db648e46c77d0d46efb48e21ea1ce3"
+    }
+  ],
+  "post_format_root_observation": {
+    "production_bytes_unchanged": true,
+    "formatted_tests_sha256": "449a98b938d3baa147a125c068806702ee94e314f04da9b2a663e674bea99bd0",
+    "formatted_tests_size": 13568,
+    "format_command": "cargo +1.95.0 fmt --all on x230",
+    "fmt_check_exit_code": 0,
+    "strict_clippy_exit_code": 0,
+    "format_diff": "ssh_observation_reference_tests.rustfmt.diff",
+    "scope": "Root readback of successful formatter output; independent reviewer original source identities retained above."
+  }
+}
