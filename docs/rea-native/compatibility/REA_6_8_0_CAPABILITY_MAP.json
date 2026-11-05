@@ -1660,6 +1660,19 @@
       "extra_gates": [
         "provider_qualification",
         "format_architecture_corpus"
+      ],
+      "implementation": "related_facility",
+      "related_auxiliary_capabilities": [
+        "recorded_core_worker"
+      ],
+      "scope": "Native recorded-core payload parsing exists as an internal captured-byte worker. This is a partial helper migration with explicit admission and outer-protocol differences, not the public operation.",
+      "missing": [
+        "Public inspect_recorded_crash MCP schema, handler and Provider integration",
+        "Original request/reply-file, resource-marker and effective-limit behavior parity",
+        "Noncanonical pyelftools section-constructor and PT_DYNAMIC section-traversal parity",
+        "Evidence retention, pagination, import/export and post-cancel query integration",
+        "Optional GDB/pwndbg crash enrichment and complete recorded-crash operation differential",
+        "Same-combination multi-host recovery and cost qualification"
       ]
     },
     "observe_native_ui": {
@@ -2610,6 +2623,33 @@
       "scope": "Internal captured-byte static APK observations for the frozen inspect_apk_signature route; no target execution or platform-trust assertion. Distinct from the mathematical-verification worker.",
       "upstream_tools": [
         "inspect_apk_signature"
+      ]
+    },
+    "recorded_core_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaRecordedCoreWorker",
+      "entrypoint": "hepta-runtime rea-recorded-core-worker",
+      "required": true,
+      "source_paths": [
+        "src/cli.rs",
+        "src/main.rs",
+        "src/mcp/mod.rs",
+        "src/mcp/rea_recorded_core_worker.rs",
+        "src/mcp/rea_recorded_core_parser.rs",
+        "src/mcp/rea_recorded_core_budget.rs",
+        "src/mcp/rea_recorded_core_layout.rs",
+        "src/mcp/rea_recorded_core_sections.rs"
+      ],
+      "tests": [
+        "src/cli_recorded_core_tests.rs",
+        "src/mcp/rea_recorded_core_worker_tests.rs",
+        "src/mcp/rea_recorded_core_parser_tests.rs",
+        "scripts/rea_recorded_core_corpus.py",
+        "scripts/rea_recorded_core_differential.py"
+      ],
+      "scope": "Internal captured-byte Rust Linux ELF64 recorded-core payload decoder and strict stdin worker. Native frame, resource limits and output admission are explicit, separate from the frozen Python request/reply-file helper. Historical PIDs and paths grant no live authority. Noncanonical PN_XNUM specialized section constructors and PT_DYNAMIC section traversal remain explicit admission differences. The original child owner must enforce wall deadlines and reap the worker. No public inspect_recorded_crash MCP route, Provider/Evidence integration, full helper parity, optional pwndbg enrichment or same-combination replacement qualification is claimed.",
+      "upstream_tools": [
+        "inspect_recorded_crash"
       ]
     }
   }

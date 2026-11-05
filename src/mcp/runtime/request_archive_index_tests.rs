@@ -1305,7 +1305,8 @@ pub(super) fn freeze_index(root: &Path, owner: &str) -> Arc<Slot> {
 	let archive = open_archive(root).unwrap();
 	// Keep a real caller reference through the metadata check. Its return value
 	// alone does not pin the index against another root's legitimate retirement.
-	let slot = ready(root, &archive, Instant::now() + QUERY_BUDGET).unwrap();
+	// Give fixture construction its own bounded cold-index initialization budget.
+	let slot = ready(root, &archive, Instant::now() + Duration::from_secs(30)).unwrap();
 	usage_stats_at(root, owner).unwrap();
 	slot.state.lock().unwrap().retired = true;
 	slot.wake.notify_one();
