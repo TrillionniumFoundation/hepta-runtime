@@ -14,10 +14,10 @@
 
 //! MCP server handlers, session state, and tool parameter schemas.
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 
 use rmcp::{
-	handler::server::{wrapper::Parameters, ServerHandler},
+	handler::server::{router::tool::ToolRouter, wrapper::Parameters, ServerHandler},
 	model::{
 		CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock,
 		CustomNotification, ExperimentalCapabilities, Implementation, JsonObject,
@@ -291,6 +291,13 @@ pub struct OctofsServer {
 }
 
 impl OctofsServer {
+	/// Reuse only compiled routes and metadata; each invocation still receives
+	/// its current server instance and request context.
+	fn shared_tool_router() -> &'static ToolRouter<Self> {
+		static ROUTER: OnceLock<ToolRouter<OctofsServer>> = OnceLock::new();
+		ROUTER.get_or_init(Self::tool_router)
+	}
+
 	/// Create a new server instance with the given session root directory.
 	pub fn new() -> Self {
 		Self::with_root(super::get_session_root_directory())
@@ -2414,7 +2421,7 @@ fn supports_cache_hints(context: &RequestContext<RoleServer>) -> bool {
 		.is_some_and(|version| version >= ProtocolVersion::V_2026_07_28)
 }
 
-#[tool_handler(router = Self::tool_router())]
+#[tool_handler(router = Self::shared_tool_router())]
 impl ServerHandler for OctofsServer {
 	async fn call_tool(
 		&self,
@@ -2423,7 +2430,7 @@ impl ServerHandler for OctofsServer {
 	) -> Result<CallToolResponse, ErrorData> {
 		use runtime::request_audit::AuditCompletion;
 		let cancelled = context.ct.clone();
-		let router = Self::tool_router();
+		let router = Self::shared_tool_router();
 		let enabled = runtime::config::maybe_runtime_config().is_some();
 		let known = router.get(request.name.as_ref());
 		let visible = known.is_some()
@@ -2603,7 +2610,7 @@ impl ServerHandler for OctofsServer {
 		context: RequestContext<RoleServer>,
 	) -> Result<ListToolsResult, ErrorData> {
 		let runtime_enabled = runtime::config::maybe_runtime_config().is_some();
-		let tools = Self::tool_router()
+		let tools = Self::shared_tool_router()
 			.list_all()
 			.into_iter()
 			.filter(|tool| {

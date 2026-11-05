@@ -1,0 +1,270 @@
+--- a/src/mcp/server.rs
++++ b/src/mcp/server.rs
+@@ -14,10 +14,10 @@
+ 
+ //! MCP server handlers, session state, and tool parameter schemas.
+ 
+-use std::sync::{Arc, RwLock};
++use std::sync::{Arc, OnceLock, RwLock};
+ 
+ use rmcp::{
+-	handler::server::{wrapper::Parameters, ServerHandler},
++	handler::server::{router::tool::ToolRouter, wrapper::Parameters, ServerHandler},
+ 	model::{
+ 		CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock,
+ 		CustomNotification, ExperimentalCapabilities, Implementation, JsonObject,
+@@ -291,6 +291,13 @@
+ }
+ 
+ impl OctofsServer {
++	/// Reuse only compiled routes and metadata; each invocation still receives
++	/// its current server instance and request context.
++	fn shared_tool_router() -> &'static ToolRouter<Self> {
++		static ROUTER: OnceLock<ToolRouter<OctofsServer>> = OnceLock::new();
++		ROUTER.get_or_init(Self::tool_router)
++	}
++
+ 	/// Create a new server instance with the given session root directory.
+ 	pub fn new() -> Self {
+ 		Self::with_root(super::get_session_root_directory())
+@@ -2414,7 +2421,7 @@
+ 		.is_some_and(|version| version >= ProtocolVersion::V_2026_07_28)
+ }
+ 
+-#[tool_handler(router = Self::tool_router())]
++#[tool_handler(router = Self::shared_tool_router())]
+ impl ServerHandler for OctofsServer {
+ 	async fn call_tool(
+ 		&self,
+@@ -2423,7 +2430,7 @@
+ 	) -> Result<CallToolResponse, ErrorData> {
+ 		use runtime::request_audit::AuditCompletion;
+ 		let cancelled = context.ct.clone();
+-		let router = Self::tool_router();
++		let router = Self::shared_tool_router();
+ 		let enabled = runtime::config::maybe_runtime_config().is_some();
+ 		let known = router.get(request.name.as_ref());
+ 		let visible = known.is_some()
+@@ -2603,7 +2610,7 @@
+ 		context: RequestContext<RoleServer>,
+ 	) -> Result<ListToolsResult, ErrorData> {
+ 		let runtime_enabled = runtime::config::maybe_runtime_config().is_some();
+-		let tools = Self::tool_router()
++		let tools = Self::shared_tool_router()
+ 			.list_all()
+ 			.into_iter()
+ 			.filter(|tool| {
+--- a/src/mcp/server_tests.rs
++++ b/src/mcp/server_tests.rs
+@@ -94,12 +94,24 @@
+ 	tokio::task::JoinHandle<()>,
+ 	Arc<Mutex<Vec<String>>>,
+ ) {
++	let root = tempfile::tempdir().expect("temp session root");
++	connect_with_lifecycle_in_root(protocol_version, lifecycle, root).await
++}
++
++async fn connect_with_lifecycle_in_root(
++	protocol_version: ProtocolVersion,
++	lifecycle: ClientLifecycleMode,
++	root: tempfile::TempDir,
++) -> (
++	RunningService<RoleClient, RecordingClient>,
++	tokio::task::JoinHandle<()>,
++	Arc<Mutex<Vec<String>>>,
++) {
+ 	let (client_io, server_io) = tokio::io::duplex(4096);
+ 	let server_task = tokio::spawn(async move {
+ 		// A per-test temp root keeps identical background commands from sibling
+-		// tests independent. The TempDir lives inside this task, so it is cleaned
++		// tests independent. The TempDir moves into this task, so it is cleaned
+ 		// up only after the connection closes.
+-		let root = tempfile::tempdir().expect("temp session root");
+ 		let server = OctofsServer::with_root(root.path().to_path_buf())
+ 			.serve(server_io)
+ 			.await
+@@ -523,6 +535,18 @@
+ /// The served tool list carries no generator noise and keeps every parameter.
+ #[tokio::test(flavor = "multi_thread")]
+ async fn served_tool_schemas_carry_no_generator_noise() {
++	let by_name = |tools: Vec<rmcp::model::Tool>| {
++		tools
++			.into_iter()
++			.map(|tool| {
++				(
++					tool.name.to_string(),
++					serde_json::to_value(&tool).expect("tool descriptor JSON"),
++				)
++			})
++			.collect::<std::collections::BTreeMap<_, _>>()
++	};
++	let raw_before = by_name(OctofsServer::shared_tool_router().list_all());
+ 	let (client, _server_task, _unsolicited) = connect_legacy().await;
+ 	let tools = client.list_tools(None).await.expect("list tools");
+ 	assert_eq!(tools.tools.len(), 10);
+@@ -569,6 +593,77 @@
+ 	] {
+ 		assert!(properties.contains_key(name), "view keeps `{name}`");
+ 	}
++	let again = client.list_tools(None).await.expect("list tools again");
++	assert_eq!(by_name(again.tools), by_name(tools.tools));
++	assert_eq!(
++		by_name(OctofsServer::shared_tool_router().list_all()),
++		raw_before,
++		"discovery must clean returned descriptors without changing shared schemas"
++	);
++}
++
++#[tokio::test(flavor = "multi_thread")]
++async fn shared_router_keeps_workdirs_and_view_caches_session_scoped() {
++	let root_a = tempfile::tempdir().expect("session A root");
++	let root_b = tempfile::tempdir().expect("session B root");
++	let nested_a = root_a.path().join("nested");
++	std::fs::create_dir(&nested_a).expect("session A nested directory");
++	std::fs::write(root_a.path().join("marker.txt"), "SESSION_A_ROOT\n").unwrap();
++	std::fs::write(root_b.path().join("marker.txt"), "SESSION_B_ROOT\n").unwrap();
++	std::fs::write(nested_a.join("marker.txt"), "SESSION_A_NESTED\n").unwrap();
++	let shared_path = root_a.path().join("shared.txt");
++	std::fs::write(&shared_path, "FIRST_VIEW_MUST_CONTAIN_THIS_LINE\n").unwrap();
++
++	let (client_a, _server_a, _) = connect_with_lifecycle_in_root(
++		ProtocolVersion::V_2025_11_25,
++		ClientLifecycleMode::Initialize,
++		root_a,
++	)
++	.await;
++	client_a.list_tools(None).await.expect("warm shared router");
++	let (client_b, _server_b, _) = connect_with_lifecycle_in_root(
++		ProtocolVersion::V_2025_11_25,
++		ClientLifecycleMode::Initialize,
++		root_b,
++	)
++	.await;
++	let ((failed_a, text_a), (failed_b, text_b)) = tokio::join!(
++		call_runtime_tool_text(&client_a, "view", json!({"path":"marker.txt"})),
++		call_runtime_tool_text(&client_b, "view", json!({"path":"marker.txt"})),
++	);
++	assert!(!failed_a && text_a.contains("SESSION_A_ROOT"), "{text_a}");
++	assert!(!failed_b && text_b.contains("SESSION_B_ROOT"), "{text_b}");
++	let (failed, changed) =
++		call_runtime_tool_text(&client_a, "workdir", json!({"path":nested_a})).await;
++	assert!(!failed, "{changed}");
++	let ((failed_a, text_a), (failed_b, text_b)) = tokio::join!(
++		call_runtime_tool_text(&client_a, "view", json!({"path":"marker.txt","full":true})),
++		call_runtime_tool_text(&client_b, "view", json!({"path":"marker.txt","full":true})),
++	);
++	assert!(
++		!failed_a && text_a.contains("SESSION_A_NESTED"),
++		"{text_a}"
++	);
++	assert!(!failed_b && text_b.contains("SESSION_B_ROOT"), "{text_b}");
++
++	let (failed, first_a) =
++		call_runtime_tool_text(&client_a, "view", json!({"path":shared_path})).await;
++	assert!(
++		!failed && first_a.contains("FIRST_VIEW_MUST_CONTAIN_THIS_LINE"),
++		"{first_a}"
++	);
++	let (failed, repeated_a) =
++		call_runtime_tool_text(&client_a, "view", json!({"path":shared_path})).await;
++	assert!(
++		!failed && repeated_a.contains("unchanged since you last viewed"),
++		"the first session's delta cache must be active: {repeated_a}"
++	);
++	let (failed, first_b) =
++		call_runtime_tool_text(&client_b, "view", json!({"path":shared_path})).await;
++	assert!(
++		!failed && first_b.contains("FIRST_VIEW_MUST_CONTAIN_THIS_LINE"),
++		"a different session must receive its first full view: {first_b}"
++	);
+ }
+ 
+ async fn call_runtime_tool_text(
+@@ -1076,6 +1171,14 @@
+ 		);
+ 		return;
+ 	}
++	let (client, _server_task, _) = connect().await;
++	let before_mode = client.list_tools(None).await.expect("filesystem tool list");
++	assert!(before_mode.tools.iter().any(|tool| tool.name == "shell"));
++	assert!(!before_mode.tools.iter().any(|tool| tool.name == "host_list"));
++	assert!(client
++		.call_tool(CallToolRequestParams::new("host_list"))
++		.await
++		.is_err());
+ 	let root = tempfile::Builder::new()
+ 		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
+ 		.unwrap();
+@@ -1092,7 +1195,9 @@
+ 	tokio::fs::write(&config_path, serde_json::to_vec(&json!({"state_dir":state,"hosts":{"fixture":{"ssh_target":"never-connect.invalid","platform":"linux","remote_state_dir":"/never-launch","allow_execute":false,"allow_pty":false,"allow_write":false}}})).unwrap()).await.unwrap();
+ 	let config = crate::mcp::runtime::RuntimeConfig::load(&config_path).unwrap();
+ 	crate::mcp::runtime::init_runtime(config).unwrap();
+-	let (client, _server_task, _) = connect().await;
++	let after_mode = client.list_tools(None).await.expect("runtime tool list");
++	assert!(!after_mode.tools.iter().any(|tool| tool.name == "shell"));
++	assert!(after_mode.tools.iter().any(|tool| tool.name == "host_list"));
+ 	let (failed, _) = call_runtime_tool_text(&client, "host_list", json!({})).await;
+ 	assert!(!failed);
+ 
+@@ -1134,6 +1239,61 @@
+ 		2,
+ 		"unknown routes must retain their ordinary audit admission"
+ 	);
++	let shell_arguments = json!({"command":"true"}).as_object().unwrap().clone();
++	assert!(client
++		.call_tool(CallToolRequestParams::new("shell").with_arguments(shell_arguments))
++		.await
++		.is_err());
++	assert_eq!(runtime_observer_audit_snapshot(&state).await.len(), 3);
++
++	let (other_client, _other_server, _) = connect().await;
++	let (failed, text) = call_runtime_tool_text(&other_client, "usage_stats", json!({})).await;
++	assert!(!failed, "{text}");
++	let empty: serde_json::Value = serde_json::from_str(&text).unwrap();
++	assert_eq!(empty["total_requests"], 0);
++	let (failed, text) =
++		call_runtime_tool_text(&other_client, "request_archive", json!({"limit":32})).await;
++	assert!(!failed, "{text}");
++	let empty_archive: serde_json::Value = serde_json::from_str(&text).unwrap();
++	assert_eq!(empty_archive["total"], 0);
++	let (failed, text) = call_runtime_tool_text(&other_client, "host_list", json!({})).await;
++	assert!(!failed, "{text}");
++	let ((failed_a, archive_a), (failed_b, archive_b)) = tokio::join!(
++		call_runtime_tool_text(&client, "request_archive", json!({"limit":32})),
++		call_runtime_tool_text(&other_client, "request_archive", json!({"limit":32})),
++	);
++	assert!(!failed_a && !failed_b, "{archive_a}\n{archive_b}");
++	let archive_a: serde_json::Value = serde_json::from_str(&archive_a).unwrap();
++	let archive_b: serde_json::Value = serde_json::from_str(&archive_b).unwrap();
++	assert_eq!(archive_a["total"], 3);
++	assert_eq!(archive_b["total"], 1);
++	let records_a = archive_a["requests"].as_array().unwrap();
++	let records_b = archive_b["requests"].as_array().unwrap();
++	assert_eq!(records_a.len(), 3);
++	assert_eq!(records_b.len(), 1);
++	let names_a: std::collections::BTreeSet<_> = records_a
++		.iter()
++		.map(|record| record["tool_name"].as_str().unwrap())
++		.collect();
++	assert_eq!(
++		names_a,
++		["_unknown_tool", "host_list", "shell"].into_iter().collect()
++	);
++	assert_eq!(records_b[0]["tool_name"], "host_list");
++	assert_eq!(records_b[0]["state"], "completed");
++	assert!(records_a.iter().all(|record| {
++		record["request_id"] != records_b[0]["request_id"]
++			&& if record["tool_name"] == "host_list" {
++				record["state"] == "completed"
++			} else {
++				record["state"] == "failed"
++			}
++	}));
++	let (failed, text) = call_runtime_tool_text(&other_client, "usage_stats", json!({})).await;
++	assert!(!failed, "{text}");
++	let one: serde_json::Value = serde_json::from_str(&text).unwrap();
++	assert_eq!(one["total_requests"], 1);
++	assert_eq!(one["completed"], 1);
+ }
+ 
+ #[test]
