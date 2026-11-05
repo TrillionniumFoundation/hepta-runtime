@@ -131,8 +131,9 @@ class Session:
         tool = views.ALIASES[operation] if self.label == "native" else operation
         response = self.client.call(tool, arguments)
         value = q.tool_value(response)
+        bundle_summary = value.get("structuredContent", {}).get("result", {}).get("kind") == "evidence-bundle-summary"
         row = {"id": name, "arguments": arguments, "value": value,
-               "view_order": views.view_order(value)}
+               "view_order": [] if bundle_summary else views.view_order(value)}
         self.rows.append(row)
         saved = save_gzip(self.output / (f"call-{len(self.rows):02d}-{name}.json.gz"),
                           {**row, "response": response})
