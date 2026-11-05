@@ -25,7 +25,7 @@ use oxc_semantic::{Scoping, SemanticBuilder, SymbolId};
 use oxc_span::{SourceType, Span};
 use oxc_syntax::module_record::{ExportExportName, ExportImportName, ExportLocalName};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap, VecDeque};
 
 use super::{AdmittedSource, JavascriptModuleKind, JavascriptSyntax, MAX_ROWS};
 
@@ -142,9 +142,47 @@ fn resolved_electron(
 	}
 }
 
+#[derive(Clone)]
+struct DeferredValue {
+	source: SymbolId,
+	components: Vec<ElectronValue>,
+}
+
+// A lexical module alias has at most one source symbol. Retain that symbol
+// and bounded namespace component selections, without retaining AST references
+// or recursively following aliases. Constructed objects are not new alias roots.
+fn deferred_electron(
+	expression: &Expression<'_>,
+	scoping: &Scoping,
+	depth: usize,
+) -> Option<DeferredValue> {
+	if depth > 16 {
+		return None;
+	}
+	if let Expression::Identifier(identifier) = expression.get_inner_expression() {
+		let reference = identifier.reference_id.get()?;
+		return Some(DeferredValue {
+			source: scoping.get_reference(reference).symbol_id()?,
+			components: Vec::new(),
+		});
+	}
+	let member = expression.get_member_expr()?;
+	let component = electron_component(member.static_property_name()?)?;
+	let mut value = deferred_electron(member.object(), scoping, depth + 1)?;
+	value.components.push(component);
+	Some(value)
+}
+
+struct DeferredBinding {
+	target: SymbolId,
+	value: DeferredValue,
+}
+
 struct Bindings<'s> {
 	scoping: &'s Scoping,
 	values: HashMap<SymbolId, ElectronValue>,
+	definition_counts: HashMap<SymbolId, usize>,
+	deferred: Vec<DeferredBinding>,
 	imports_only: bool,
 }
 
@@ -176,9 +214,99 @@ impl Bindings<'_> {
 			_ => {}
 		}
 	}
+
+	fn defer(&mut self, identifier: &BindingIdentifier<'_>, value: DeferredValue) {
+		if let Some(target) = identifier.symbol_id.get() {
+			if !self.scoping.symbol_is_mutated(target)
+				&& !self.scoping.symbol_is_mutated(value.source)
+			{
+				self.deferred.push(DeferredBinding { target, value });
+			}
+		}
+	}
+
+	fn defer_pattern(&mut self, pattern: &BindingPattern<'_>, value: DeferredValue) {
+		match pattern {
+			BindingPattern::BindingIdentifier(identifier) => self.defer(identifier, value),
+			BindingPattern::ObjectPattern(pattern) => {
+				for property in &pattern.properties {
+					if let (Some(name), BindingPattern::BindingIdentifier(identifier)) =
+						(property.key.static_name(), &property.value)
+					{
+						if let Some(component) = electron_component(name.as_ref()) {
+							let mut selected = value.clone();
+							selected.components.push(component);
+							self.defer(identifier, selected);
+						}
+					}
+				}
+			}
+			_ => {}
+		}
+	}
+
+	fn resolve_deferred(&mut self) {
+		let mut dependents: HashMap<SymbolId, Vec<DeferredBinding>> = HashMap::new();
+		for binding in std::mem::take(&mut self.deferred) {
+			// Preserve every value already learned by the existing passes. Only
+			// unique declarations can add new facts; redeclarations stay unknown.
+			if !self.values.contains_key(&binding.target)
+				&& self.definition_counts.get(&binding.target) == Some(&1)
+				&& self
+					.definition_counts
+					.get(&binding.value.source)
+					.copied()
+					.unwrap_or(0) <= 1
+			{
+				dependents
+					.entry(binding.value.source)
+					.or_default()
+					.push(binding);
+			}
+		}
+		let mut ready: VecDeque<_> = self.values.keys().copied().collect();
+		while let Some(source) = ready.pop_front() {
+			let value = self.values[&source];
+			// The fixed npm control recognizes the constructor alias, but not
+			// its constructed-object/WebContents alias chain. Preserve that
+			// boundary while leaving pre-existing instance observations intact.
+			if matches!(
+				value,
+				ElectronValue::BrowserWindow | ElectronValue::WebContents
+			) {
+				continue;
+			}
+			if let Some(bindings) = dependents.remove(&source) {
+				for binding in bindings {
+					if let Entry::Vacant(entry) = self.values.entry(binding.target) {
+						if let Some(value) = binding.value.components.into_iter().try_fold(
+							value,
+							|value, component| {
+								(value == ElectronValue::Namespace).then_some(component)
+							},
+						) {
+							entry.insert(value);
+							ready.push_back(binding.target);
+						}
+					}
+				}
+			}
+		}
+		// Each admitted declaration/edge is processed at most once. Cycles
+		// without a proven Electron seed never enter the queue. The existing
+		// AST-node cap bounds storage; initializer steps retain the depth cap.
+	}
 }
 
 impl<'a> Visit<'a> for Bindings<'_> {
+	fn visit_binding_identifier(&mut self, identifier: &BindingIdentifier<'a>) {
+		if !self.imports_only {
+			if let Some(symbol) = identifier.symbol_id.get() {
+				*self.definition_counts.entry(symbol).or_default() += 1;
+			}
+		}
+	}
+
 	fn visit_import_declaration(&mut self, declaration: &ImportDeclaration<'a>) {
 		if declaration.source.value == "electron"
 			&& !matches!(declaration.import_kind, ImportOrExportKind::Type)
@@ -210,12 +338,12 @@ impl<'a> Visit<'a> for Bindings<'_> {
 
 	fn visit_variable_declarator(&mut self, declaration: &VariableDeclarator<'a>) {
 		if !self.imports_only {
-			if let Some(value) = declaration
-				.init
-				.as_ref()
-				.and_then(|expression| resolved_electron(expression, self.scoping, &self.values, 0))
-			{
-				self.bind_pattern(&declaration.id, value);
+			if let Some(expression) = &declaration.init {
+				if let Some(value) = resolved_electron(expression, self.scoping, &self.values, 0) {
+					self.bind_pattern(&declaration.id, value);
+				} else if let Some(value) = deferred_electron(expression, self.scoping, 0) {
+					self.defer_pattern(&declaration.id, value);
+				}
 			}
 		}
 		walk::walk_variable_declarator(self, declaration);
@@ -636,13 +764,17 @@ pub(super) fn inspect(source: &AdmittedSource) -> Result<ModuleAnalysis> {
 	let mut bindings = Bindings {
 		scoping: semantic.scoping(),
 		values: HashMap::new(),
+		definition_counts: HashMap::new(),
+		deferred: Vec::new(),
 		imports_only: true,
 	};
 	bindings.visit_program(&parsed.program);
 	bindings.imports_only = false;
-	// Imports are hoisted. A second pass learns direct const aliases/require
-	// bindings in source order; general interprocedural dataflow is not inferred.
+	// Preserve the existing import and direct initializer observations, then
+	// resolve their pending lexical aliases independently of declaration order.
+	// This does not infer execution order or general interprocedural dataflow.
 	bindings.visit_program(&parsed.program);
+	bindings.resolve_deferred();
 	let mut observations = Observations {
 		source_id: &source.id,
 		scoping: semantic.scoping(),
@@ -695,3 +827,7 @@ pub(super) fn inspect(source: &AdmittedSource) -> Result<ModuleAnalysis> {
 	observations.result.scope_count = semantic.scoping().scopes_len();
 	Ok(observations.result)
 }
+
+#[cfg(test)]
+#[path = "rea_javascript_alias_tests.rs"]
+mod alias_tests;
