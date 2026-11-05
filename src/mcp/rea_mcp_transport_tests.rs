@@ -84,6 +84,89 @@ async fn duplicate_filters_keeps_its_last_object_order() {
 }
 
 #[tokio::test]
+async fn static_view_keys_preserve_numeric_and_duplicate_property_semantics() {
+	let message = decode(call_line(
+		"rea_inspect_apk_signature_evidence",
+		r#"{"view":{"old":1},"path":"/fixture.apk","view":{"zzz":1,"10":2,"2":3,"aaa":4,"zzz":5}}"#,
+		3,
+	))
+	.await;
+	assert_eq!(raw(&message).object_keys(&[]).unwrap(), ["view", "path"]);
+	assert_eq!(
+		raw(&message).object_keys(&["view"]).unwrap(),
+		["2", "10", "zzz", "aaa"]
+	);
+	assert_eq!(
+		serde_json::to_value(message).unwrap()["params"]["arguments"]["view"]["zzz"],
+		5
+	);
+}
+
+#[tokio::test]
+async fn failed_sdk_field_validation_restores_the_original_rejected_argument() {
+	let line = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"rea_inspect_elf_notes\",\"arguments\":[\"original\"],\"requestState\":[]}}\n";
+	let expected: RxJsonRpcMessage<RoleServer> = serde_json::from_str(line).unwrap();
+	let actual = decode(line.into()).await;
+	assert_eq!(
+		serde_json::to_value(actual).unwrap(),
+		serde_json::to_value(expected).unwrap()
+	);
+}
+
+#[test]
+fn over_budget_custom_request_keeps_large_argument_storage_without_a_clone() {
+	let line = call_line(
+		"rea_inspect_elf_notes",
+		&serde_json::to_string(&"x".repeat(MAX_CAPTURE_BYTES + 1)).unwrap(),
+		1,
+	);
+	let mut message: RxJsonRpcMessage<RoleServer> = serde_json::from_str(&line).unwrap();
+	fn argument_ptr(message: &RxJsonRpcMessage<RoleServer>) -> *const u8 {
+		let JsonRpcMessage::Request(request) = message else {
+			panic!("request")
+		};
+		let ClientRequest::CustomRequest(custom) = &request.request else {
+			panic!("SDK fallback")
+		};
+		custom.params.as_ref().unwrap()["arguments"]
+			.as_str()
+			.unwrap()
+			.as_ptr()
+	}
+	let before = argument_ptr(&message);
+	attach(&mut message, Some(CapturedLine::OverBudget));
+	assert_eq!(argument_ptr(&message), before);
+	assert!(raw(&message).protocol_error().is_some());
+}
+
+#[tokio::test]
+async fn actual_ten_mib_frame_limit_leaves_custom_rejected_and_next_frame_intact() {
+	let large = serde_json::to_string(&"x".repeat(MAX_CAPTURE_BYTES + 1)).unwrap();
+	let lines = format!(
+		"{}{}",
+		call_line("rea_inspect_elf_notes", &large, 1),
+		call_line("rea_get_evidence_bundle", r#"{"z":1,"a":2}"#, 2)
+	);
+	let mut transport = ReaMcpTransport::new(Cursor::new(lines.into_bytes()), tokio::io::sink());
+	let rejected = transport.receive().await.unwrap();
+	let JsonRpcMessage::Request(request) = &rejected else {
+		panic!("request")
+	};
+	assert!(matches!(request.request, ClientRequest::CustomRequest(_)));
+	assert!(raw(&rejected)
+		.protocol_error()
+		.unwrap()
+		.message
+		.contains("10485760-byte"));
+	assert_eq!(
+		raw(&transport.receive().await.unwrap())
+			.object_keys(&[])
+			.unwrap(),
+		["z", "a"]
+	);
+}
+
+#[tokio::test]
 async fn non_object_arguments_are_typed_calls_with_exact_rpc_rejections() {
 	for (arguments, received) in [
 		("null", "null"),

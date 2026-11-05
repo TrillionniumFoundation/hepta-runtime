@@ -28,7 +28,10 @@ use rmcp::{
 	transport::{async_rw::AsyncRwTransport, Transport},
 	RoleServer,
 };
-use serde::de::{DeserializeSeed, IgnoredAny, MapAccess, SeqAccess, Visitor};
+use serde::{
+	de::{DeserializeSeed, IgnoredAny, MapAccess, SeqAccess, Visitor},
+	Deserialize,
+};
 use tokio::io::{AsyncBufRead, AsyncRead, AsyncWrite, BufReader, ReadBuf};
 
 /// REA 6.8.0's actual Node STDIO default receive-buffer limit. This bounds the
@@ -51,6 +54,7 @@ struct OrderNode {
 	kind: Kind,
 	keys: Vec<String>,
 	child: Option<Box<OrderNode>>,
+	view: Option<Box<OrderNode>>,
 }
 
 impl OrderNode {
@@ -59,6 +63,7 @@ impl OrderNode {
 			kind,
 			keys: Vec::new(),
 			child: None,
+			view: None,
 		}
 	}
 }
@@ -72,11 +77,12 @@ pub(crate) struct ReaRawArguments {
 }
 
 impl ReaRawArguments {
-	/// JavaScript Object.keys order for arguments (`[]`) or its filters object.
+	/// JavaScript Object.keys order for arguments (`[]`), filters or static view.
 	pub(crate) fn object_keys(&self, path: &[&str]) -> Option<&[String]> {
 		let node = match path {
 			[] => &self.arguments,
 			["filters"] => self.arguments.child.as_deref()?,
+			["view"] => self.arguments.view.as_deref()?,
 			_ => return None,
 		};
 		(node.kind == Kind::Object).then_some(node.keys.as_slice())
@@ -199,6 +205,8 @@ impl<'de> Visitor<'de> for OrderScanner {
 			if next == Some(key.as_str()) {
 				// JSON.parse retains a property's first position but its last value.
 				node.child = Some(Box::new(map.next_value_seed(OrderScanner(self.0 + 1))?));
+			} else if self.0 == 2 && key == "view" {
+				node.view = Some(Box::new(map.next_value_seed(OrderScanner(3))?));
 			} else {
 				map.next_value::<IgnoredAny>()?;
 			}
@@ -358,10 +366,18 @@ fn attach(message: &mut RxJsonRpcMessage<RoleServer>, frame: Option<CapturedLine
 		)
 	});
 	if let ClientRequest::CustomRequest(custom) = &mut message.request {
+		// The base SDK has already parsed the frame, but the adapter must not
+		// allocate a second unbounded argument/metadata tree. Leave over-budget
+		// fallbacks on the SDK rejection path, carrying the private failure for
+		// an optional narrow custom-request handler to report directly.
+		if raw.failure.is_some() {
+			custom.extensions.insert(raw);
+			return;
+		}
 		// rmcp's custom-method fallback otherwise changes an invalid tools/call
 		// into -32601. Only repair the recognized non-object arguments shape;
 		// other malformed protocol fields remain the SDK's responsibility.
-		let Some(mut params) = custom.params.clone() else {
+		let Some(params) = custom.params.as_mut() else {
 			return;
 		};
 		let Some(arguments) = params.get_mut("arguments") else {
@@ -370,8 +386,15 @@ fn attach(message: &mut RxJsonRpcMessage<RoleServer>, frame: Option<CapturedLine
 		if arguments.is_object() {
 			return;
 		}
-		*arguments = serde_json::Value::Object(Default::default());
-		let Ok(params) = serde_json::from_value::<CallToolRequestParams>(params) else {
+		let original_arguments =
+			std::mem::replace(arguments, serde_json::Value::Object(Default::default()));
+		// Validate the remaining SDK fields while borrowing the existing tree.
+		// The rejected argument can be a large string or array: move, never clone.
+		let parsed = CallToolRequestParams::deserialize(&*params);
+		if let Some(arguments) = params.get_mut("arguments") {
+			*arguments = original_arguments;
+		}
+		let Ok(params) = parsed else {
 			return;
 		};
 		let mut replacement = CallToolRequest::new(params);
