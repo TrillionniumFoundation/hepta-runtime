@@ -13,4 +13,15 @@
 
 原 summary 工具因前序 lifecycle 失败而未执行；性能算术诊断只呈现已完成的 observation/capacity 结果，始终 `candidate_adopted=false`，没有替代全链采用门。
 
-完整 qualification/campaign 原始包由伴随取证提交追加。所有源码、调用记录和可发布工具保留；ELF、私有 transport configuration 与 owned SSH wrapper 的正文只保存实际远端身份，不公开其正文。省略内容不声称在本地重新哈希。
+完整原始包已补齐：
+
+| 原始包 | 字节数 | SHA256 |
+|---|---:|---|
+| [qualification-01.tar.gz](evidence/qualification-01.tar.gz) | 2,411,241 | `76478c6dae898e613b778ef097fa01f4434f0ead3a1c3e2a6b35ca0d97f7e8d2` |
+| [campaign-01.tar.gz](evidence/campaign-01.tar.gz) | 3,098,136 | `c75ec3596bb74a3927e7194dfb388e5c5f6bdf6a15e9cbe96d128ab1f5093aab` |
+
+85 个固定版本分片及两个整包的字节、SHA256 均已校验；tar QA 再逐一核对 7,464 个 payload 文件（38,630,135 B）。33 项省略正文只核对其实际远端身份元数据，没有在本地重哈希 ELF/私有 transport configuration/owned SSH wrapper 的正文。
+
+[实际导出报告](reviews/export-report-01.json)、[分片和整包身份](reviews/archive-identities-01.json)、[完整 tar QA](reviews/archive-tar-qa-01.json)、[实际传输/Git blob 回执](reviews/archive-transfer-01.json)、[包内失败语义回读](reviews/archive-semantic-readback-01.json)、[核心拒绝记录的发布回读](reviews/failure-publication-readback-01.json)及[失败导出器审查](reviews/failed-exporter-review-01.json)一并保留。导出器的 `passed=true` 仅表示取证完整性；它同时保留 `campaign_passed=false`、`candidate_adopted=false`、原失败错误及缺失的全链 summary。没有重新测量。
+
+工具：[失败取证导出器](evidence-tools/export_r23_failed_evidence_01.py)、[接收校验](evidence-tools/archive_receive.py)、[tar 全件校验](evidence-tools/archive_tar_qa.py)。

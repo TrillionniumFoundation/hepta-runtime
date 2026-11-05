@@ -47,3 +47,6 @@ C32 两次 burst 合计 **32 success、32 精确 capacity rejection、0 other er
 保留 R22，完整保存 R23 原失败。下一候选仅针对已定位的 admission 窗口修复：在远端 slave/命令尚未启动且原 Child 明确终态时，释放当前租约容量并进入已有的单代续建流程；身份、IO、socket、peer 等错误仍失败，不重放已提交命令。它需要自己的决定性回归测试、完整资格和新的六机对照，不以延迟 harness、增加 RPC 重试或改门槛消除失败。
 
 详见 [R23 证据索引](../tools/x230/20261105/r23/README.md)。原资格 report SHA256 为 `c9c78be4c93d2f9246a317d27f7a616431f31157a05b8cc46d9dc1cf86c848d7`；整体失败 campaign report 为 `44b74c25cc429ccbb125b88a65778ef2030fe4fa742d17a63994f4f4ec48dfa8`；取消/恢复 report 为 `04bccf0b9a38d7188521d7ed7d0c18ff4a28a4ab571333e4e84a80b3f12d1abf`。所有已绑定输入、A/B 源码及二进制在 campaign 前后未改变。
+
+
+完整 qualification/campaign 原始包已在伴随取证提交补齐：85 个固定版本分片、两个整包及 7,464 个 payload 的实际字节和 SHA256 均核对通过。33 项省略正文只保留远端身份；取证通过不改变 R23 的失败/不采用结论。
