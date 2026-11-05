@@ -17,6 +17,10 @@
 //! A request can drop, while its private owner completes kill, reap and reader
 //! joins before releasing the parser slot and runtime effect admission.
 
+#[cfg(all(test, unix))]
+#[path = "rea_worker_transport_tests.rs"]
+mod tests;
+
 use super::rea_contract::Failure;
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
@@ -229,14 +233,49 @@ pub(super) fn read_reply(
 }
 
 #[cfg(unix)]
-async fn read_stderr(reader: tokio::process::ChildStderr) -> Result<Vec<u8>> {
+#[derive(Debug)]
+struct StderrCapture {
+	bytes: Vec<u8>,
+	error: Option<String>,
+}
+
+#[cfg(unix)]
+async fn read_stderr(
+	mut reader: tokio::process::ChildStderr,
+	cancellation: CancellationToken,
+) -> StderrCapture {
 	use tokio::io::AsyncReadExt;
+	const LIMIT: usize = 64 * 1024;
 	let mut bytes = Vec::new();
-	reader.take((64 * 1024) + 1).read_to_end(&mut bytes).await?;
-	if bytes.len() > 64 * 1024 {
-		bail!("Native analysis worker stderr exceeds its allowance");
-	}
-	Ok(bytes)
+	let mut buffer = [0_u8; 4096];
+	let error = loop {
+		let allowed = buffer.len().min(LIMIT + 1 - bytes.len());
+		let read = tokio::select! {
+			// Retain already-readable diagnostics on cancellation, but at most the
+			// same one-byte overflow probe. An inherited writer cannot hold EOF.
+			biased;
+			read = reader.read(&mut buffer[..allowed]) => read,
+			_ = cancellation.cancelled() => {
+				break Some("Native analysis worker stderr read cancelled before EOF".to_owned());
+			}
+		};
+		match read {
+			Ok(0) => break None,
+			Ok(count) => {
+				bytes.extend_from_slice(&buffer[..count]);
+				if bytes.len() > LIMIT {
+					break Some("Native analysis worker stderr exceeds its allowance".to_owned());
+				}
+			}
+			Err(error) => {
+				break Some(format!(
+					"Native analysis worker stderr read failed: {error}"
+				))
+			}
+		}
+	};
+	bytes.truncate(LIMIT);
+	StderrCapture { bytes, error }
 }
 
 #[cfg(unix)]
@@ -292,9 +331,19 @@ pub(super) async fn supervise_child(
 		let reply = read_reply(stdout, spec.reply_limit, reader_token);
 		let _ = reply_sender.send(reply);
 	});
-	// Preserve diagnostics even when another branch fails before EOF. This task
-	// is also joined by the owner after the sole worker process has been reaped.
-	let stderr_reader = tokio::spawn(read_stderr(stderr));
+	// Report stderr completion inside the same deadline as all other pipes,
+	// while retaining its captured diagnostics for the sole owner's final join.
+	let stderr_cancel = reader_cancel.clone();
+	let (stderr_sender, stderr_receiver) = tokio::sync::oneshot::channel();
+	let stderr_reader = tokio::spawn(async move {
+		let capture = read_stderr(stderr, stderr_cancel).await;
+		let completion = match &capture.error {
+			Some(error) => Err(anyhow::Error::msg(error.clone())),
+			None => Ok(()),
+		};
+		let _ = stderr_sender.send(completion);
+		capture
+	});
 	let collected = tokio::select! {
 		biased;
 		_ = cancellation.cancelled() => Err(Failure::cancelled(operation)),
@@ -309,6 +358,7 @@ pub(super) async fn supervise_child(
 				},
 				async { reply_receiver.await.context("Native analysis worker JSON reader stopped without a result")? },
 				async { child.wait().await.map_err(anyhow::Error::from) },
+				async { stderr_receiver.await.context("Native analysis worker stderr reader stopped without a result")? },
 			)
 		}) => match collected {
 			Err(_) => Err(Failure::timeout(operation, deadline.as_millis().min(u128::from(u64::MAX)) as u64)),
@@ -324,26 +374,24 @@ pub(super) async fn supervise_child(
 			reader_cancel.cancel();
 			let joined = reader.await;
 			let stderr = stderr_reader.await;
-			if reaped.is_err() || joined.is_err() {
+			if reaped.is_err() || joined.is_err() || stderr.is_err() {
 				return Err(Failure::output(operation, format!("Native analysis worker cleanup failed: reap={reaped:?}; reader={joined:?}; stderr={stderr:?}; original={failure:?}")));
 			}
 			match stderr {
-				Ok(Ok(stderr)) if !stderr.is_empty() => {
-					failure.0["details"]["worker_stderr"] =
-						Value::String(String::from_utf8_lossy(&stderr).into_owned());
+				Ok(stderr) => {
+					if !stderr.bytes.is_empty() {
+						failure.0["details"]["worker_stderr"] =
+							Value::String(String::from_utf8_lossy(&stderr.bytes).into_owned());
+					}
+					if let Some(error) = stderr.error {
+						failure.0["details"]["worker_stderr_error"] = Value::String(error);
+					}
 				}
-				Err(error) => {
-					failure.0["details"]["worker_stderr_error"] = Value::String(error.to_string())
-				}
-				Ok(Err(error)) => {
-					failure.0["details"]["worker_stderr_error"] =
-						Value::String(format!("{error:#}"))
-				}
-				_ => {}
+				Err(_) => unreachable!("failed stderr join was rejected above"),
 			}
 			Err(failure)
 		}
-		Ok(((), reply, status)) => {
+		Ok(((), reply, status, ())) => {
 			// child.wait completed inside the join above. Join exactly once before
 			// returning any successful Value or dropping the owner's admission guards.
 			let joined = reader.await;
@@ -354,25 +402,21 @@ pub(super) async fn supervise_child(
 					format!("Native analysis worker JSON reader join failed: {error}"),
 				)
 			})?;
-			let stderr = stderr
-				.map_err(|error| {
-					Failure::output(
-						operation,
-						format!("Native analysis worker stderr reader join failed: {error}"),
-					)
-				})?
-				.map_err(|error| {
-					Failure::output(
-						operation,
-						format!("Native analysis worker stderr read failed: {error:#}"),
-					)
-				})?;
+			let stderr = stderr.map_err(|error| {
+				Failure::output(
+					operation,
+					format!("Native analysis worker stderr reader join failed: {error}"),
+				)
+			})?;
+			if let Some(error) = stderr.error {
+				return Err(Failure::output(operation, error));
+			}
 			if !status.success() {
 				return Err(Failure::output(
 					operation,
 					format!(
 						"Isolated native analysis parser exited ({status}): {}",
-						String::from_utf8_lossy(&stderr).trim()
+						String::from_utf8_lossy(&stderr.bytes).trim()
 					),
 				));
 			}
