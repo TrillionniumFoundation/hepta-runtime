@@ -1,0 +1,198 @@
+--- export_r26_evidence_03.py
++++ export_r26_evidence_04.py
+@@ -23,8 +23,8 @@
+ BASELINE = Path("/home/qian/hepta-runtime-optimization-20261105-r24")
+ R16 = Path("/home/qian/hepta-runtime-optimization-20261104-r16")
+ RECOVERY = R16 / "r26-cancel-recovery-01"
+-OUT = ROOT / "evidence-export-01"
+-EXPORTER = STAGE_ROOT / "tools/export_r26_evidence_03.py"
++OUT = ROOT / "evidence-export-02"
++EXPORTER = STAGE_ROOT / "tools/export_r26_evidence_04.py"
+ HELPER = STAGE_ROOT / "tools/r26_export_stable_archive_03.py"
+ INPUT = STAGE_ROOT / "tools/r26-evidence-export-input-03.json"
+ HEX = re.compile(r"[0-9a-f]{64}\Z")
+@@ -70,6 +70,8 @@
+ ORIGINAL_QUALIFICATION_JOB = "1a1ab4cb0fc-fc05-4c3c"
+ ORIGINAL_LIFECYCLE01_JOB = "1a1ababc175-fc05-4f94"
+ ORIGINAL_QUIET_JOB = "1a1abb2b75b-fc05-4fde"
++PREVIOUS_EXPORT_JOB = "1a1abf3aa03-fc05-5169"
++PREVIOUS_EXPORT_FILES = {'report': {'path': '/home/qian/hepta-runtime-optimization-20261105-r26/evidence-export-01/report.json', 'bytes': 130386, 'sha256': '4173bd01b102365d45c9d353ce994df7a8651a643536917d62e7aeef7d0b76eb'}, 'native_terminal': {'path': '/home/qian/hepta-runtime-optimization-20261105-r26/evidence-export-native-terminal-01.json', 'bytes': 726, 'sha256': 'b193360e727c878dec3bf79b5d55365499e036dfce9212d808b678e1b3559309'}, 'native_read': {'path': '/home/qian/hepta-runtime-optimization-20261105-r26/evidence-export-native-read-01.json', 'bytes': 783, 'sha256': 'a673b9d583430a756a3817abbc178eb87d31d676f3ee00116cf01df1383a4bef'}, 'exporter': {'path': '/home/qian/hepta-runtime-optimization-20261105-r25/tools/export_r26_evidence_03.py', 'bytes': 98881, 'sha256': '6f1c8ec3d8fb7abb9739d5b5109c2c621ff07f0a61b931095f63f27a10bc41c6'}}
+ FROZEN_ASSETS = {'/home/qian/hepta-runtime-optimization-20261105-r24/final-publication-readback.json': {'group': 'qualification',
+                                                                                         'identity': {'bytes': 1022,
+                                                                                                      'sha256': '38866c01fac54133c8a88e25bee90ea4a551e7273614f493bf44522a8273d3ca'},
+@@ -410,8 +412,14 @@
+                                                                                            'identity': {'bytes': 37172,
+                                                                                                         'sha256': '73435f80156d6b20b0ca8ffadbc7ae583182f3ae78b00949f77a16101522a182'},
+                                                                                            'member': 'attempt02-revision04/tools-04/r26_lifecycle_campaign.py'}}
++
++# The original failed export remains an immutable, independently bound attempt.
++FROZEN_ASSETS['/home/qian/hepta-runtime-optimization-20261105-r26/evidence-export-native-terminal-01.json'] = {'group': 'qualification', 'identity': {'bytes': 726, 'sha256': 'b193360e727c878dec3bf79b5d55365499e036dfce9212d808b678e1b3559309'}, 'member': 'previous-export-attempt01/native-terminal.json'}
++FROZEN_ASSETS['/home/qian/hepta-runtime-optimization-20261105-r26/evidence-export-native-read-01.json'] = {'group': 'qualification', 'identity': {'bytes': 783, 'sha256': 'a673b9d583430a756a3817abbc178eb87d31d676f3ee00116cf01df1383a4bef'}, 'member': 'previous-export-attempt01/native-read.json'}
++FROZEN_ASSETS['/home/qian/hepta-runtime-optimization-20261105-r25/tools/export_r26_evidence_03.py'] = {'group': 'qualification', 'identity': {'bytes': 98881, 'sha256': '6f1c8ec3d8fb7abb9739d5b5109c2c621ff07f0a61b931095f63f27a10bc41c6'}, 'member': 'previous-export-attempt01/export_r26_evidence_03.py'}
+ TREE_SCOPE = {
+     "qualification": (("qualification", ROOT / "qualification-01"), ("source", ROOT / "source"),
++                      ("previous-export-attempt01/output", ROOT / "evidence-export-01"),
+                       ("early-receipt-export", ROOT / "evidence-receipts-01"),
+                       ("early-receipt-export-tools", ROOT / "evidence-receipts-tools-01")),
+     "ci": (("rust", ROOT / "rust-ci-01"), ("rust-tools", ROOT / "rust-ci-tools-01")),
+@@ -456,7 +464,7 @@
+ OMITTED_CACHE_ROOTS = (ROOT / "target-build",)
+ OUTPUT_PREFIXES = ("qualification/", "rust/", "observation/", "recovery/", "control/", "abba/", "saturation/", "tool-tests/",
+                    "attempt02/control/", "attempt02/abba/", "attempt02/saturation/", "attempt02/tool-tests/",
+-                   "attempt02/natural-quiet/")
++                   "attempt02/natural-quiet/", "previous-export-attempt01/output/")
+ 
+ 
+ def need(value, reason):
+@@ -549,6 +557,45 @@
+     return {"state": value["state"], "exit_code": value["exit_code"],
+             "cancelled": value["cancelled"], "timed_out": value["timed_out"],
+             "native_logs_lossless_complete": bool(log_complete), "automatic_retry": False}
++
++
++def validate_previous_export_failure(previous_report, previous_terminal, previous_read):
++    """Preserve the actual failed export and complete original native streams."""
++    native = validate_terminal(previous_terminal, PREVIOUS_EXPORT_JOB)
++    need(native["state"] == "failed" and native["exit_code"] == 1
++         and native["cancelled"] is False and native["timed_out"] is False
++         and native["native_logs_lossless_complete"] is True,
++         "original export01 was not the bound complete failed operation")
++    need(previous_report.get("schema") == "hepta-r26-outcome-preserving-evidence-export/v1"
++         and previous_report.get("passed") is False and previous_report.get("archives") == {}
++         and previous_report.get("finished_utc")
++         and previous_report.get("no_workload_executed") is True
++         and type(previous_report.get("automatic_retries")) is int
++         and previous_report["automatic_retries"] == 0
++         and previous_report.get("error") == {"type": "RuntimeError", "reason":
++             "private key marker in evidence stream: " + str(ROOT / "qualification-01/hepta-runtime")},
++         "original export01 failure was altered or replaced")
++    original_source = previous_report["exporter"]
++    source_pin = PREVIOUS_EXPORT_FILES["exporter"]
++    need(original_source["source_path"] == source_pin["path"]
++         and original_source["bytes"] == source_pin["bytes"]
++         and original_source["sha256"] == source_pin["sha256"], "original failed source differs")
++    need(previous_read.get("job_id") == PREVIOUS_EXPORT_JOB and previous_read.get("audit_recorded") is True,
++         "original export01 native read belongs to another operation")
++    streams = {}
++    expected_stdout = (json.dumps({"passed": False, "report": PREVIOUS_EXPORT_FILES["report"]["path"],
++                                  "adoption_decision_made_here": False}) + "\n").encode()
++    for name, expected in (("stdout", expected_stdout), ("stderr", b"")):
++        row = previous_read[name]
++        raw = bytes.fromhex(row["bytes_hex"])
++        need(row["offset"] == 0 and row["next_offset"] == row["size"] == len(raw)
++             and row["eof"] is True and row["text"].encode("utf-8") == raw == expected
++             and previous_terminal["log_bytes"][name] == {"seen": len(raw), "stored": len(raw)},
++             "original export01 stream bytes or cursor differ")
++        streams[name] = {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
++    return {"job_id": PREVIOUS_EXPORT_JOB, "native_outcome": native, "original_passed": False,
++            "original_archives": {}, "original_error": previous_report["error"],
++            "native_streams": streams, "original_failure_preserved": True}
+ 
+ 
+ def original_report_projection(value):
+@@ -796,6 +843,17 @@
+         return result
+ 
+     try:
++        previous_values, previous_identities = {}, {}
++        for name, pin in PREVIOUS_EXPORT_FILES.items():
++            identity, raw = helper.read(Path(pin["path"]), retain=True)
++            need(identity["bytes"] == pin["bytes"] and identity["sha256"] == pin["sha256"],
++                 "original export01 bound file differs: " + pin["path"])
++            previous_identities[name] = remember(identity)
++            if name != "exporter":
++                previous_values[name] = json.loads(raw)
++        report["previous_export_attempt01"] = {"files": previous_identities,
++            **validate_previous_export_failure(previous_values["report"], previous_values["native_terminal"],
++                                               previous_values["native_read"])}
+         remember(self_identity)
+         remember(helper_identity)
+         remember(input_identity)
+@@ -928,7 +986,11 @@
+                     omitted.append({**identity, "archive_path": member, "body_read": False,
+                                     "omission_reason": "credential/service configuration metadata only; body not opened"})
+                     return
+-                identity, _ = helper.read(path, scan_private_markers=member.startswith(OUTPUT_PREFIXES))
++                # Classify the complete stable file before scanning output text. ELF
++                # bodies are identity-only omissions; executable test literals are not logs.
++                identity, _ = helper.read(path)
++                if not identity["is_elf"] and member.startswith(OUTPUT_PREFIXES):
++                    helper.read(path, expected=identity, scan_private_markers=True)
+                 remember(identity)
+                 if expected is not None:
+                     compare_recorded(path, identity, expected, "bound original input")
+@@ -993,13 +1055,14 @@
+                         external_rows.append({"recorded": recorded, "disposition": "recorded identity only; external system/profile/key input not reopened",
+                                               "current_identity_verified": False, "body_read": False})
+             recorded_external.extend(external_rows)
+-            for name, path in (("export_r26_evidence_03.py", EXPORTER), ("stable_archive.py", HELPER),
++            for name, path in (("export_r26_evidence_04.py", EXPORTER), ("stable_archive.py", HELPER),
+                                ("actual-export-input-01.json", INPUT)):
+                 add(path, "export-tools/" + name)
+             manifest = {"schema": "hepta-r26-outcome-preserving-archive-manifest/v1", "group": group,
+                         "files": files, "omitted_bodies": omitted, "source_trees": tree_rows,
+                         "absent_optional_paths": sorted(set(missing)), "original_external_bindings": external_rows,
+                         "original_stages": report["stages"], "candidate_disposition": report["candidate_disposition"],
++                        "previous_export_attempt01": report["previous_export_attempt01"],
+                         "adoption_decision_made_here": False, "native_raw_companion_required": True,
+                         "mac_holder_packages_required_if_executed": True,
+                         "python_ci_executed": False, "archive_success_is_not_runtime_success": True}
+--- verify_export_archives_03.py
++++ verify_export_archives_04.py
+@@ -16,7 +16,7 @@
+ 
+ HERE = Path(__file__).resolve().parent
+ HELPER_SHA = '34ce88cc28da10e1167dabaf6e3480aa42f5e6e76a29472d93959334aa9ec2ed'
+-EXPORTER_SHA = '6f1c8ec3d8fb7abb9739d5b5109c2c621ff07f0a61b931095f63f27a10bc41c6'
++EXPORTER_SHA = 'bac197db478f5d45fa3bbe742e21457484213d531786ecc48af6348895e6701b'
+ 
+ 
+ def need(value, reason):
+@@ -62,7 +62,7 @@
+     args = parser.parse_args()
+     need(not os.path.lexists(args.out), 'fresh independent local receipt required')
+     helper, helper_identity = load_reviewed('stable_archive.py', HELPER_SHA)
+-    exporter, exporter_identity = load_reviewed('export_r26_evidence_03.py', EXPORTER_SHA)
++    exporter, exporter_identity = load_reviewed('export_r26_evidence_04.py', EXPORTER_SHA)
+     own_identity, _ = basic_read(Path(__file__).absolute())
+     report_identity, raw = basic_read(args.report)
+     report = json.loads(raw)
+@@ -77,7 +77,8 @@
+     need(set(report['archives']) == set(exporter.TREE_SCOPE), 'all four original archive groups required')
+     sources, captures, original_bodies = {}, {}, {}
+     wanted = {str(exporter.INPUT), str(exporter.ROOT / 'preparation-01.json'),
+-              *map(str, exporter.NATIVE_PATHS.values()), *map(str, exporter.REPORT_PATHS.values())}
++              *map(str, exporter.NATIVE_PATHS.values()), *map(str, exporter.REPORT_PATHS.values()),
++              *(pin["path"] for pin in exporter.PREVIOUS_EXPORT_FILES.values())}
+     local_inputs = [helper_identity, exporter_identity, own_identity, report_identity]
+     for group, item in sorted(report['archives'].items()):
+         path = args.archives / (group + '-01.tar.gz')
+@@ -91,6 +92,7 @@
+         need(manifest['schema'] == 'hepta-r26-outcome-preserving-archive-manifest/v1'
+              and manifest['group'] == group and manifest['original_stages'] == report['stages']
+              and manifest['candidate_disposition'] == report['candidate_disposition']
++             and manifest['previous_export_attempt01'] == report['previous_export_attempt01']
+              and manifest['adoption_decision_made_here'] is False
+              and manifest['python_ci_executed'] is False
+              and manifest['archive_success_is_not_runtime_success'] is True,
+@@ -142,6 +144,20 @@
+     exporter.validate_stage_contract(actual_input)
+     check_original_pin(original_bodies[str(exporter.ROOT / 'preparation-01.json')], actual_input['preparation'])
+     check_original_pin(original_bodies[str(exporter.ROOT / 'preparation-01.json')], report['preparation']['identity'])
++    previous_values = {}
++    previous_retained = report["previous_export_attempt01"]
++    for name, pin in exporter.PREVIOUS_EXPORT_FILES.items():
++        body = original_bodies[pin["path"]]
++        check_original_pin(body, pin)
++        check_original_pin(body, previous_retained["files"][name])
++        need(previous_retained["files"][name]["source_path"] == pin["path"],
++             "original export01 source path differs")
++        if name != "exporter":
++            previous_values[name] = json.loads(body)
++    previous_summary = exporter.validate_previous_export_failure(previous_values["report"],
++        previous_values["native_terminal"], previous_values["native_read"])
++    need({key: value for key, value in previous_retained.items() if key != "files"} == previous_summary,
++         "original failed export was altered in the new report")
+     recovered_stages = {}
+     for stage, declaration in actual_input['stages'].items():
+         retained = report['stages'][stage]

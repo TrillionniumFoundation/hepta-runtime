@@ -1,0 +1,171 @@
+--- export_private_diagnostic_06.py
++++ export_private_diagnostic_07.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python3
+-"""Outcome-preserving private diagnostic export06; no process or workload execution."""
++"""Outcome-preserving private diagnostic export07; no process or workload execution."""
+ import argparse
+ import datetime
+ import hashlib
+@@ -14,12 +14,14 @@
+ 
+ ROOT = Path('/home/qian/hepta-runtime-optimization-20261105-r25')
+ PRIVATE05 = ROOT / 'mechanism-diagnostic-05'
+-OUT = ROOT / 'mechanism-evidence-export-06'
+-EXPORTER = ROOT / 'tools/export_private_diagnostic_06.py'
++OUT = ROOT / 'mechanism-evidence-export-07'
++EXPORTER = ROOT / 'tools/export_private_diagnostic_07.py'
+ HELPER = ROOT / 'tools/diagnostic_stable_archive_06.py'
+ INPUT = ROOT / 'tools/private-diagnostic-export-input-06.json'
+ HELPER_SHA = '34ce88cc28da10e1167dabaf6e3480aa42f5e6e76a29472d93959334aa9ec2ed'
+ BUILD05_SHA = '6364c71ca6567b40fbfe8c211f0479f7a89e1c4dab568e1e7756be36e528f705'
++PREVIOUS_EXPORT_JOB = '1a1ac07b969-fc05-51bc'
++PREVIOUS_EXPORT_FILES = {'report': {'path': '/home/qian/hepta-runtime-optimization-20261105-r25/mechanism-evidence-export-06/report.json', 'bytes': 13156, 'sha256': 'ad3cbcfbea41cd94a0ef39ddc41763fbb64429794cfb3e71abd917e47777ad52'}, 'terminal': {'path': '/home/qian/hepta-runtime-optimization-20261105-r25/tools/private-diagnostic-export06-native-terminal.json', 'bytes': 726, 'sha256': '1065cccbee05bc0782f0fb15953b030f528ab74b86151ab6af9340ef1d6e884b'}, 'read': {'path': '/home/qian/hepta-runtime-optimization-20261105-r25/tools/private-diagnostic-export06-native-read.json', 'bytes': 1783, 'sha256': '173d315183e7b7dc5b90123ee48713b981c75bbf9a6468d4f5189db7f1cc04eb'}, 'exporter': {'path': '/home/qian/hepta-runtime-optimization-20261105-r25/tools/export_private_diagnostic_06.py', 'bytes': 63898, 'sha256': '7bc9271573d8a60848ef4eaccb9bec3dfc975965f24eb64a3a50b5b492992fb4'}}
+ H = None
+ 
+ 
+@@ -250,6 +252,74 @@
+                 'original_identity': stamp(before), 'is_elf': True}
+     finally:
+         os.close(fd)
++
++
++def cache_directory_identity(path):
++    """Record present cache metadata or current absence; never replace ELF proof."""
++    path = Path(path)
++    need(path.is_absolute() and path.parent.resolve(strict=True) == path.parent,
++         'indirect private cache parent')
++    if not os.path.lexists(path):
++        return {'path': str(path), 'exists': False, 'directory_identity': None,
++                'reason': 'private reproducible Cargo cache is currently absent; no deletion cause inferred; referenced ELF evidence is handled independently'}
++    current = path.lstat()
++    need(path.resolve(strict=True) == path and stat.S_ISDIR(current.st_mode)
++         and current.st_uid == os.geteuid(), 'unsafe current private cache directory')
++    return {'path': str(path), 'exists': True, 'directory_identity': stamp(current),
++            'reason': 'private reproducible Cargo cache payload excluded; referenced actual test/runtime/release ELF identities retained'}
++
++
++def validate_previous_export06(previous, terminal_raw, native_read):
++    """Bind the original failed06 report and complete native byte streams."""
++    operation = validate_operation({'executed': True, 'job_id': PREVIOUS_EXPORT_JOB,
++        'terminal_raw': terminal_raw.decode('utf-8'), 'terminal_pin': byte_pin(terminal_raw), 'reason': None})
++    need(operation['state'] == 'failed' and operation['exit_code'] == 1
++         and operation['native_logs_lossless_complete'] is True
++         and operation['terminal_original']['cancelled'] is False
++         and operation['terminal_original']['timed_out'] is False,
++         'original export06 must retain its complete failed1 native outcome')
++    need(previous.get('schema') == 'hepta-r25-private-diagnostic-export/v3'
++         and previous.get('passed') is False and previous.get('export_completed') is False
++         and previous.get('finished_utc') and previous.get('no_workload_executed') is True
++         and previous.get('automatic_retries') == 0
++         and previous.get('error') == {'type': 'FileNotFoundError', 'reason':
++             "[Errno 2] No such file or directory: '" + str(ROOT / 'mechanism-diagnostic-03/target-build') + "'"},
++         'original export06 failure has changed')
++    source_pin = PREVIOUS_EXPORT_FILES['exporter']
++    need(previous['exporter']['source_path'] == source_pin['path']
++         and byte_pin_fields(previous['exporter']) == byte_pin_fields(source_pin),
++         'original failed exporter source differs')
++    need(previous['input']['source_path'] == str(INPUT)
++         and previous['input']['sha256'] == '1a89622435fb05faa40fb596aac52709534a9bb5f3a636917e56781931700dce'
++         and previous['archive_helper']['source_path'] == str(HELPER)
++         and previous['archive_helper']['sha256'] == HELPER_SHA,
++         'original input/helper binding differs')
++    need(native_read.get('job_id') == PREVIOUS_EXPORT_JOB and native_read.get('audit_recorded') is True,
++         'original export06 read belongs to another job')
++    streams = {}
++    for name in ('stdout', 'stderr'):
++        row = native_read[name]
++        raw = bytes.fromhex(row['bytes_hex'])
++        need(row['offset'] == 0 and row['next_offset'] == row['size'] == len(raw)
++             and row['eof'] is True and row['text'].encode('utf-8') == raw
++             and operation['terminal_original']['log_bytes'][name] == {'seen': len(raw), 'stored': len(raw)},
++             'original export06 native stream custody differs')
++        if name == 'stdout':
++            footer = json.loads(raw)
++            need(footer['passed'] is False and footer['export_completed'] is False
++                 and footer['report']['source_path'] == PREVIOUS_EXPORT_FILES['report']['path']
++                 and byte_pin_fields(footer['report']) == byte_pin_fields(PREVIOUS_EXPORT_FILES['report']),
++                 'original export06 stdout report binding differs')
++        else:
++            need(raw == b'', 'original export06 stderr differs')
++        streams[name] = byte_pin(raw)
++    return {'original_operation': operation, 'passed': False, 'export_completed': False,
++            'error': previous['error'], 'native_streams': streams,
++            'original_failure_preserved': True}
++
++
++def byte_pin_fields(value):
++    return {key: value[key] for key in ('bytes', 'sha256')}
+ 
+ 
+ def socket_metadata(path):
+@@ -394,6 +464,18 @@
+         return result
+ 
+     try:
++        previous_bytes, previous_ids = {}, {}
++        for label, pin in PREVIOUS_EXPORT_FILES.items():
++            current_id, raw = read(Path(pin['path']), retain=True)
++            need(byte_pin_fields(current_id) == byte_pin_fields(pin), 'original export06 file differs: ' + pin['path'])
++            previous_bytes[label], previous_ids[label] = raw, current_id
++            observed[pin['path']] = current_id
++        report['previous_export06'] = {'files': previous_ids, **validate_previous_export06(
++            json.loads(previous_bytes['report']), previous_bytes['terminal'], json.loads(previous_bytes['read']))}
++        tree(ROOT / 'mechanism-evidence-export-06', 'previous-export06/output')
++        for label in ('terminal', 'read', 'exporter'):
++            pin = PREVIOUS_EXPORT_FILES[label]
++            add(Path(pin['path']), 'previous-export06/' + Path(pin['path']).name, pin['sha256'])
+         qualification_identity, qualification = checked_json(ROOT / 'qualification-02/report.json', QUALIFICATION_SHA)
+         failed_identity, failed = checked_json(ROOT / 'mechanism-diagnostic-03/build-report.json', FAILED03_SHA)
+         current_identity, current = checked_json(PRIVATE05 / 'build-report.json', BUILD05_SHA)
+@@ -473,9 +555,11 @@
+                 assert Path(name).name == name and name.endswith('.py')
+                 add(source / 'tools/x230/20261028' / name, 'source-' + revision + '/tools/x230/20261028/' + name, digest)
+             target = private / 'target-build'
+-            assert target.resolve() == target and stat.S_ISDIR(target.lstat().st_mode)
+-            cache_exclusions.append({'path': str(target), 'directory_identity': stamp(target.lstat()),
+-                                     'reason': 'private reproducible Cargo cache payload excluded; referenced actual test/runtime/release ELF identities retained'})
++            cache_identity = cache_directory_identity(target)
++            cache_exclusions.append(cache_identity)
++            if not cache_identity['exists']:
++                absent(target)
++            # A missing cache never skips a reported test/runtime/release ELF.
+             binaries = []
+             if build.get('test_binary'):
+                 binary = build['test_binary']; path = Path(binary['path'])
+@@ -661,7 +745,7 @@
+                     discrepancies.append({'stage': 'phase' + revision, 'stream': stream,
+                                           'reason': 'original stream seal does not match retained complete current bytes; raw bytes preserved'})
+         add(ROOT / 'qualification-02/report.json', 'baseline/qualification-02-report.json', QUALIFICATION_SHA)
+-        add(EXPORTER, 'export-tools/export_private_diagnostic_06.py', self_identity['sha256'])
++        add(EXPORTER, 'export-tools/export_private_diagnostic_07.py', self_identity['sha256'])
+         add(HELPER, 'export-tools/stable_archive.py', HELPER_SHA)
+         add(INPUT, 'export-tools/actual-input-06.json', input_identity['sha256'])
+         report['integrity_discrepancies'] = discrepancies
+@@ -674,14 +758,15 @@
+                     'phase02_original_report_inputs': phase02_identities, 'phase02_original_reports': report['phase02_original_reports'],
+                     'cost03': report['cost03'], 'phase03_original_report_inputs': phase03_identities,
+                     'previous_installation_submission': PRIOR_UNKNOWN_INSTALL,
++                    'previous_export06': report['previous_export06'],
+                     'phase03_installation': installation, 'phase03': report['phase03'], 'phase03_monitor_proof': phase03_monitor,
+                     'phase03_socket_metadata': socket_before, 'integrity_discrepancies': discrepancies,
+                     'native_and_mac_companions_required': True, 'capacity_admission_made_here': False,
+                     'baseline_adoption_status': 'qualified_but_unadopted_R25', 'diagnostic_only': True,
+                     'production_candidate': False, 'original_failed_or_partial_reports_rewritten': False}
+-        archive = OUT / 'private-diagnostic-full-06.tar.gz'
++        archive = OUT / 'private-diagnostic-full-07.tar.gz'
+         manifest_raw, archive_proof = H.write_archive(archive, manifest, files,
+-            secret_prefixes=('phase02-', 'phase03-parent/', 'phase03-observation/', 'phase03-monitor/', 'cost03-output/'))
++            secret_prefixes=('phase02-', 'phase03-parent/', 'phase03-observation/', 'phase03-monitor/', 'cost03-output/', 'previous-export06/output/'))
+         for directory, expected in inventories.items():
+             need(H.listing(Path(directory)) == expected, 'original source directory inventory changed')
+         for expected in list(files.values()) + omissions:
+@@ -690,6 +775,8 @@
+             need(all(actual[key] == expected[key] for key in actual), 'original input changed after archive')
+         for value in metadata_only:
+             need(stamp(Path(value['source_path']).lstat()) == value['original_identity'], 'metadata-only omitted file changed')
++        for expected in cache_exclusions:
++            need(cache_directory_identity(Path(expected['path'])) == expected, 'original private cache presence or identity changed')
+         for path in absences: need(not os.path.lexists(path), 'original absent path appeared during export')
+         need(socket_metadata(Path('/home/qian/hr-r25-ph03')) == socket_before, 'attempt socket metadata changed during export')
+         need(compiler_source_map(ROOT / 'mechanism-diagnostic-03/source') == failed['diagnostic']['source_tested']
