@@ -13,12 +13,14 @@ application behavior or process-level network isolation.
 """
 import argparse
 from contextlib import contextmanager
+import hashlib
 import http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import sys
 import threading
 import time
@@ -97,6 +99,111 @@ def no_owned_browser(profile, process_group):
         if state not in ('Z', 'X') and (marker in arguments or group == process_group): found.append(int(directory.name))
     assert not found, ('own original private browser group still has live members', found)
     assert not Path(profile).parent.exists(), ('own private profile was not removed', profile)
+
+
+def file_version(value):
+    return dict(device=value.st_dev, inode=value.st_ino, size=value.st_size,
+                mode=value.st_mode, uid=value.st_uid, gid=value.st_gid, links=value.st_nlink,
+                mtime_ns=value.st_mtime_ns, ctime_ns=value.st_ctime_ns)
+
+
+def hash_regular_descriptor(descriptor):
+    before = os.fstat(descriptor)
+    assert stat.S_ISREG(before.st_mode) and 0 < before.st_size <= 1024 * 1024 * 1024
+    hasher, total = hashlib.sha256(), 0
+    while True:
+        chunk = os.read(descriptor, 1024 * 1024)
+        if not chunk: break
+        total += len(chunk)
+        assert total <= before.st_size, 'Executable grew while recording its identity'
+        hasher.update(chunk)
+    assert total == before.st_size and file_version(os.fstat(descriptor)) == file_version(before)
+    return dict(sha256=hasher.hexdigest(), **file_version(before))
+
+
+def installed_chrome_identity():
+    """Pin the fixed system launcher separately from the executable it dispatches."""
+    launcher = Path('/usr/bin/google-chrome')
+    resolved = launcher.resolve(strict=True)
+    paths = dict(launcher=launcher, executable=resolved.parent / 'chrome')
+    identity = {}
+    for kind, path in paths.items():
+        realpath = path.resolve(strict=True)
+        descriptor = os.open(realpath, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+        try:
+            value = hash_regular_descriptor(descriptor)
+            assert value['mode'] & 0o111, 'Chrome component is not executable'
+            assert file_version(realpath.lstat()) == file_version(os.fstat(descriptor))
+            assert path.resolve(strict=True) == realpath
+            identity[kind] = dict(invocation_path=str(path), realpath=str(realpath), **value)
+        finally:
+            os.close(descriptor)
+    assert identity['launcher']['realpath'] != identity['executable']['realpath']
+    return identity
+
+
+def original_browser_identity(started, installation):
+    """Read only the original owned PID through one retained /proc directory FD."""
+    pid, group = started['browser_pid'], started['browser_pgid']
+    assert isinstance(pid, int) and pid > 0 and group == pid
+    profile = Path(started['profile'])
+    assert profile.is_absolute() and profile.resolve(strict=True) == profile
+    expected_environment = {key: str(profile / name) for key, name in (
+        ('HOME', 'home'), ('XDG_DATA_HOME', 'xdg-data'),
+        ('XDG_CONFIG_HOME', 'xdg-config'), ('XDG_CACHE_HOME', 'xdg-cache'))}
+    directory = os.open('/proc/' + str(pid), os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY)
+    def read_bounded(name, limit):
+        descriptor = os.open(name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=directory)
+        try:
+            chunks, size = [], 0
+            while True:
+                chunk = os.read(descriptor, min(65536, limit + 1 - size))
+                if not chunk: return b''.join(chunks)
+                chunks.append(chunk); size += len(chunk)
+                assert size <= limit, 'Original browser observation exceeded its bound'
+        finally:
+            os.close(descriptor)
+    def process_identity():
+        value = read_bounded('stat', 16384).decode('utf-8')
+        fields = value.rsplit(')', 1)[1].split()
+        assert int(value.split('(', 1)[0]) == pid and fields[0] not in ('Z', 'X')
+        assert int(fields[2]) == group
+        return dict(pid=pid, parent_pid=int(fields[1]), pgid=group, start_ticks=int(fields[19]))
+    try:
+        original = process_identity()
+        expected_executable = installation['executable']
+        deadline = time.monotonic() + 5
+        while os.readlink('exe', dir_fd=directory) != expected_executable['realpath']:
+            assert process_identity() == original, 'Original Chrome process identity changed'
+            assert time.monotonic() < deadline, 'Original launcher did not exec the pinned Chrome executable'
+            time.sleep(.01)
+        executable = os.open('exe', os.O_RDONLY | os.O_CLOEXEC, dir_fd=directory)
+        try:
+            actual_executable = hash_regular_descriptor(executable)
+        finally:
+            os.close(executable)
+        assert actual_executable == {key: expected_executable[key] for key in actual_executable}
+        selected = {}
+        for item in read_bounded('environ', 1024 * 1024).split(b'\0'):
+            key, separator, value = item.partition(b'=')
+            if key in (b'HOME', b'XDG_DATA_HOME', b'XDG_CONFIG_HOME', b'XDG_CACHE_HOME'):
+                name = key.decode('ascii')
+                assert separator and name not in selected, 'Repeated private environment key'
+                selected[name] = value.decode('utf-8')
+        assert selected == expected_environment, ('Original Chrome inherited a non-private environment', selected)
+        directories = {}
+        for key, path in selected.items():
+            value = Path(path).lstat()
+            assert stat.S_ISDIR(value.st_mode) and stat.S_IMODE(value.st_mode) == 0o700
+            assert value.st_uid == os.getuid() and Path(path).resolve(strict=True) == Path(path)
+            directories[key] = dict(path=path, **file_version(value))
+        assert process_identity() == original
+        assert os.readlink('exe', dir_fd=directory) == expected_executable['realpath']
+        return dict(**original, executable=dict(realpath=expected_executable['realpath'], **actual_executable),
+                    environment=selected, private_directories=directories,
+                    scope='original owned Chrome leader before cancellation; unrelated environment values are not recorded')
+    finally:
+        os.close(directory)
 
 
 @contextmanager
@@ -204,6 +311,8 @@ def main():
                   rea_replay_scope='saved HAR content.text representation; no network replay')
     server, active = None, []
     try:
+        if args.native_capture:
+            result['browser_installation'] = installed_chrome_identity()
         server = Mcp(runtime, root)
         names = {tool['name'] for tool in server.request('tools/list', {})['tools']}
         assert {'process_start', 'process_status', 'process_read', 'process_cancel',
@@ -338,6 +447,11 @@ def main():
         cancel_admission = server.call('process_start', cancellation)
         cancel_job = cancel_admission['job']['id']; active.append(cancel_job)
         started = browser_start(server, cancel_job)
+        if args.native_capture:
+            observed = original_browser_identity(started, result['browser_installation'])
+            result['original_browser_identity'] = observed
+            private_write(root / 'capture-original-browser-identity.json', observed)
+            result['checks'].append('original_chrome_executable_distinct_from_launcher_and_all_four_environment_roots_private')
         before_cancel = server.call('process_status', dict(host='local', job_id=cancel_job))
         assert before_cancel.get('state') not in ('succeeded', 'failed', 'cancelled', 'timed_out'), before_cancel
         cancel = server.call('process_cancel', dict(host='local', job_id=cancel_job, grace_seconds=10))
@@ -356,6 +470,8 @@ def main():
         result['checks'].append('original_job_cancel_confirmed_and_no_owned_browser_profile_or_relaunch')
         assert {str(path): digest(path) for path in source_files} == source_pins
         assert digest(runtime) == result['runtime_sha256']
+        if args.native_capture:
+            assert installed_chrome_identity() == result['browser_installation']
         if python is not None: assert python_identity(python)[1] == interpreter_pin
         result['qualified'] = True
     except BaseException as error:

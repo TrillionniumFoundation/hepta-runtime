@@ -120,8 +120,64 @@ fn preflight() -> Result<()> {
 	Ok(())
 }
 
+fn private_environment(command: &mut Command, profile: &Directory) -> Result<Vec<Directory>> {
+	// The system launcher writes XDG files before exec. User-data-dir alone does
+	// not contain those effects; the existing profile owner must own these too.
+	let mut directories = Vec::with_capacity(4);
+	for (variable, name) in [
+		("HOME", "home"),
+		("XDG_DATA_HOME", "xdg-data"),
+		("XDG_CONFIG_HOME", "xdg-config"),
+		("XDG_CACHE_HOME", "xdg-cache"),
+	] {
+		let directory = profile
+			.create_child(name)
+			.with_context(|| format!("cannot create private Chrome {variable} directory"))?;
+		command.env(variable, &directory.path);
+		directories.push(directory);
+	}
+	verify_environment(profile, &directories)?;
+	Ok(directories)
+}
+
+fn verify_environment(profile: &Directory, directories: &[Directory]) -> Result<()> {
+	profile.verify_location()?;
+	for directory in directories {
+		directory.verify_location()?;
+	}
+	Ok(())
+}
+
+fn spawn_in_custody(
+	command: &mut Command,
+	custody: &mut Option<OwnedChrome>,
+	profile: &Directory,
+	environment: &[Directory],
+) -> Result<()> {
+	if custody.is_some() {
+		bail!("private Chrome launch refuses to replace existing child custody");
+	}
+	let child = command
+		.spawn()
+		.context("independent system Google Chrome failed to start")?;
+	// On this Linux-only path Child::id originates from the positive pid_t
+	// returned by spawn. Do not insert a fallible step before custody publication.
+	let pid = child.id() as i32;
+	*custody = Some(OwnedChrome {
+		child,
+		pid,
+		reaped: false,
+		lost: false,
+	});
+	verify_environment(profile, environment)
+		.context("Chrome profile or environment path changed during launch; outcome unconfirmed")
+}
+
 impl OwnedChrome {
-	pub fn launch(profile: &Directory) -> Result<(Self, UnixStream)> {
+	pub fn launch(profile: &Directory, custody: &mut Option<Self>) -> Result<UnixStream> {
+		if custody.is_some() {
+			bail!("private Chrome launch refuses to replace existing child custody");
+		}
 		profile.verify_location()?;
 		preflight()?;
 		check_cancelled()?;
@@ -136,6 +192,7 @@ impl OwnedChrome {
 		// SAFETY: fcntl returned a newly owned descriptor.
 		let pipe = unsafe { File::from_raw_fd(raw) };
 		let mut command = Command::new("/usr/bin/google-chrome");
+		let environment = private_environment(&mut command, profile)?;
 		command.args([
 			"--headless=new",
 			"--remote-debugging-pipe",
@@ -167,24 +224,10 @@ impl OwnedChrome {
 				Ok(())
 			});
 		}
-		let child = command
-			.spawn()
-			.context("independent system Google Chrome failed to start")?;
+		spawn_in_custody(&mut command, custody, profile, &environment)?;
 		drop(pipe);
 		drop(child_pipe);
-		let pid = i32::try_from(child.id()).context("Chrome PID out of range")?;
-		let mut owner = Self {
-			child,
-			pid,
-			reaped: false,
-			lost: false,
-		};
-		if let Err(error) = profile.verify_location() {
-			owner.cleanup()?;
-			return Err(error)
-				.context("Chrome profile path changed during launch; outcome unconfirmed");
-		}
-		Ok((owner, parent))
+		Ok(parent)
 	}
 
 	/// Observe without reaping, retaining the original PID/PGID even after exit.

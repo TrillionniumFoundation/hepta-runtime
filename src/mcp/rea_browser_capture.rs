@@ -58,9 +58,8 @@ pub(super) fn run(args: BrowserCaptureArgs) -> Result<()> {
 		)?);
 		let servers = fixtures.as_ref().context("owned fixtures missing")?;
 		servers.control_probe()?;
-		let (owner, stream) = OwnedChrome::launch(&chrome_profile)?;
-		let pid = owner.pid;
-		chrome = Some(owner);
+		let stream = OwnedChrome::launch(&chrome_profile, &mut chrome)?;
+		let pid = chrome.as_ref().context("owned Chrome custody missing")?.pid;
 		progress(
 			json!({"phase":"browser_started","implementation":"native-rust","browser_pid":pid,"browser_pgid":pid,"profile":chrome_profile.path,"origin":servers.origin,"probe_origin":servers.probe_origin,"automatic_retry":false}),
 		)?;
@@ -226,21 +225,7 @@ pub(super) fn run(args: BrowserCaptureArgs) -> Result<()> {
 		});
 		Ok(Captured { hars, receipt })
 	})();
-	// Cleanup is unconditional and takes priority over a successful capture or a
-	// cancellation. A retained leader reserves its original group through final reap.
-	let process_cleanup = if let Some(owner) = chrome.as_mut() {
-		owner.cleanup()
-	} else {
-		Ok(())
-	};
-	let fixture_cleanup = if let Some(servers) = fixtures.as_mut() {
-		servers.shutdown()
-	} else {
-		Ok(())
-	};
-	process_cleanup.context("private Chrome cleanup unconfirmed; original job requires inspection, automatic_retry=false")?;
-	fixture_cleanup?;
-	remove_profile(&admitted.parent, &profile)?;
+	cleanup_capture(&admitted.parent, &profile, &mut chrome, &mut fixtures)?;
 	let mut captured = captured?;
 	check_cancelled()?;
 	// Snapshot and validate counters only after both the browser owner cleanup
@@ -288,6 +273,29 @@ pub(super) fn run(args: BrowserCaptureArgs) -> Result<()> {
 		json!({"phase":"complete","implementation":"native-rust","output_directory":output.path,"receipt_path":output.path.join("capture-receipt.json"),"receipt_sha256":input::sha256(&receipt),"receipt_directory_fsynced":true,"artifacts":artifacts,"private_chrome_closed":true,"private_profile_removed":true,"automatic_retry":false}),
 	)?;
 	Ok(())
+}
+
+pub(super) fn cleanup_capture(
+	parent: &input::Directory,
+	profile: &input::Directory,
+	chrome: &mut Option<OwnedChrome>,
+	fixtures: &mut Option<Fixtures>,
+) -> Result<()> {
+	// Every spawned child is registered before launch validation can fail. Unknown
+	// child custody must retain the profile even when launch returned an error.
+	let process_cleanup = if let Some(owner) = chrome.as_mut() {
+		owner.cleanup()
+	} else {
+		Ok(())
+	};
+	let fixture_cleanup = if let Some(servers) = fixtures.as_mut() {
+		servers.shutdown()
+	} else {
+		Ok(())
+	};
+	process_cleanup.context("private Chrome cleanup unconfirmed; original job requires inspection, automatic_retry=false")?;
+	fixture_cleanup?;
+	remove_profile(parent, profile)
 }
 
 fn source_pins(admitted: &Admission) -> Vec<Value> {
