@@ -553,12 +553,14 @@ def main():
     parser.add_argument('--mode', choices=['minimal-crate', 'runtime'], required=True)
     parser.add_argument('--profile', choices=['legacy', 'frozen'], default='legacy')
     parser.add_argument('--worker-command')
-    parser.add_argument('--worker-report', choices=['legacy-envelope', 'static-inspection'], default='legacy-envelope')
+    parser.add_argument('--worker-report', choices=['legacy-envelope', 'static-inspection', 'frozen-framed'], default='legacy-envelope')
     parser.add_argument('--repo', type=Path, required=True)
     parser.add_argument('--rea-install', type=Path, required=True)
     parser.add_argument('--rea-tarball', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
+    if args.worker_report == 'frozen-framed':
+        assert args.mode == 'runtime' and args.profile == 'frozen'
     args.out.mkdir(parents=True, exist_ok=False)
     fixtures = args.out / 'cases'
     fixtures.mkdir()
@@ -589,16 +591,30 @@ def main():
         name = case['name']
         command = [str(args.binary)]
         if args.mode == 'runtime':
-            command += [args.worker_command or 'rea-apk-signature-worker']
+            command += [args.worker_command or ('rea-apk-static-worker' if args.worker_report == 'frozen-framed' else 'rea-apk-signature-worker')]
         elif args.profile == 'frozen':
             command += ['--frozen-static']
         started = time.monotonic()
-        native = subprocess.run(command, input=cases[name], capture_output=True, timeout=90, env={}, cwd='/')
+        captured = cases[name]
+        if args.worker_report == 'frozen-framed':
+            header = json.dumps(dict(input=dict(path=case['path']), sha256=case['sha256'], bytes=case['bytes']),
+                                separators=(',', ':')).encode()
+            captured = struct.pack('<I', len(header)) + header + captured
+        native = subprocess.run(command, input=captured, capture_output=True, timeout=90, env={}, cwd='/')
         (args.out / (name + '.native.stdout.json')).write_bytes(native.stdout)
         (args.out / (name + '.native.stderr.log')).write_bytes(native.stderr)
         if args.mode == 'minimal-crate':
             assert native.returncode == 0, native.stderr.decode(errors='replace')
             actual = json.loads(native.stdout)
+        elif args.worker_report == 'frozen-framed':
+            assert native.returncode == 0, native.stderr.decode(errors='replace')
+            envelope = json.loads(native.stdout)
+            if 'failure' in envelope:
+                assert set(envelope) == {'failure'}
+                actual = dict(ok=False, error=envelope['failure'])
+            else:
+                assert set(envelope) == {'report', 'limitations'}
+                actual = dict(ok=True, value=dict(result=envelope['report'], limitations=envelope['limitations']))
         elif native.returncode == 0:
             report = json.loads(native.stdout)
             if args.worker_report == 'legacy-envelope':
@@ -613,7 +629,8 @@ def main():
         assert len(native.stdout) <= (8 * 1048576 if args.profile == 'frozen' else 1048576) + 64
         expected = reference[name]
         if actual['ok'] and expected['ok']:
-            expected['value']['result']['artifact']['path'] = None
+            if args.worker_report != 'frozen-framed':
+                expected['value']['result']['artifact']['path'] = None
             change = differences(actual['value'], expected['value'])
         elif not actual['ok'] and not expected['ok']:
             change = differences({key:actual['error'][key] for key in ('_tag', 'resource')},
@@ -633,13 +650,14 @@ def main():
                     'rea_apk_signature_archive.rs', 'rea_apk_signature_certificate.rs', 'rea_apk_signature_v1.rs',
                     'rea_apk_signature_public_key.rs', 'rea_apk_signature_curves.rs', 'rea_apk_signature_observation_tests.rs']
     summary = dict(format='hepta.apk-static-contract-qualification.v1', mode=args.mode, profile=args.profile,
+                   worker_report=args.worker_report,
                    runtime_release_qualified=args.mode == 'runtime' and not failures,
                    binary_sha256=sha(args.binary.read_bytes()),
                    frozen_npm_tarball_sha256=FROZEN_PACKAGE, frozen_install_files_checked=checked,
                    public_curve_fixture_sha256=sha((args.repo/'tests/fixtures/rea_apk_signature_observation_curves.json').read_bytes()),
                    source_sha256={name:sha((args.repo/'src/mcp'/name).read_bytes()) for name in source_names},
                    corpus_cases=len(cases), matched=len(results)-len(failures), failures=failures, results=results,
-                   comparison='Full declared report and limitation arrays, or producing-boundary error tag/resource. Path is bound separately by controller.',
+                   comparison='Full declared report and limitation arrays, or producing-boundary error tag/resource. Framed worker includes admitted path; legacy path is bound separately by controller.',
                    scope='Finite original-producer differential within existing native bounds; not Android trust/installability or retained Evidence qualification.')
     (args.out / 'qualification.json').write_text(json.dumps(summary, indent=2, ensure_ascii=False) + '\n')
     print(json.dumps({key:summary[key] for key in ('mode','corpus_cases','matched','failures','binary_sha256')}), flush=True)

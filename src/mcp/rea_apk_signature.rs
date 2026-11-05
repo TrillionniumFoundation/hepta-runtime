@@ -31,6 +31,8 @@ use tokio_util::sync::CancellationToken;
 mod observation;
 #[path = "rea_apk_signature_parser.rs"]
 mod parser;
+#[path = "rea_apk_signature_view.rs"]
+mod view;
 #[path = "rea_apk_signature_worker.rs"]
 mod worker;
 
@@ -38,6 +40,8 @@ pub use observation::{
 	ApkErrorTag, ApkInspectionError, ApkResource, ApkSignatureReport, ApkStaticInspection,
 	StaticLimits,
 };
+
+pub use view::{project_static_view, validate_static_report, ApkViewError, ApkViewIssue};
 
 /// Bounded declared facts from already captured bytes; no filesystem or engine access.
 pub fn inspect_static(
