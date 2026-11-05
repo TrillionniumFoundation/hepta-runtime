@@ -260,6 +260,31 @@ fn row_times_matrix(v: &[f64], matrix: &[Vec<f64>]) -> Vec<f64> {
 		.collect()
 }
 
+// NumPy 2.3.5 reduces contiguous masses and compressed teacher events with eight
+// accumulators. These fixed arrays have at most 33 elements, so only its <8 and
+// <=128 branches apply (numpy/_core/src/umath/loops_utils.h.src, v2.3.5).
+// The encoder bank and matrix products have a different reduction order.
+fn contiguous_probability_sum(values: &[f64]) -> f64 {
+	debug_assert!(values.len() <= N);
+	if values.len() < 8 {
+		return values.iter().fold(-0., |sum, value| sum + value);
+	}
+	let mut lanes = [0.; 8];
+	lanes.copy_from_slice(&values[..8]);
+	let mut chunks = values[8..].chunks_exact(8);
+	for chunk in &mut chunks {
+		for (sum, value) in lanes.iter_mut().zip(chunk) {
+			*sum += value;
+		}
+	}
+	let sum = ((lanes[0] + lanes[1]) + (lanes[2] + lanes[3]))
+		+ ((lanes[4] + lanes[5]) + (lanes[6] + lanes[7]));
+	chunks
+		.remainder()
+		.iter()
+		.fold(sum, |sum, value| sum + value)
+}
+
 fn sigmoid(x: f64) -> f64 {
 	1. / (1. + (-x.clamp(-700., 700.)).exp())
 }
@@ -684,7 +709,7 @@ impl Engine {
 				for (i, x) in mass.iter_mut().enumerate() {
 					*x *= self.emissions[t][i][*y as usize];
 				}
-				let sum: f64 = mass.iter().sum();
+				let sum = contiguous_probability_sum(&mass);
 				ensure!(
 					sum > 0. && sum.is_finite(),
 					"impossible observation under checkpoint law"
@@ -723,9 +748,16 @@ impl Engine {
 			.sum()
 	}
 
-	fn posterior(&mut self, state: &State) -> Result<f64> {
+	fn teacher_posterior(&mut self, state: &State) -> Result<f64> {
 		let mass = self.mass(state)?;
-		Ok(self.probability(&self.future(&mass, state.tick, 6), 0.))
+		let future = self.future(&mass, state.tick, 6);
+		let event: Vec<_> = future
+			.iter()
+			.zip(&self.model.coordinates)
+			.filter(|(_, coordinate)| **coordinate > 0.)
+			.map(|(probability, _)| *probability)
+			.collect();
+		Ok(contiguous_probability_sum(&event))
 	}
 
 	fn value(&mut self, state: &State) -> Result<f64> {
@@ -758,7 +790,7 @@ impl Engine {
 	fn q(&mut self, state: &State) -> Result<[f64; 6]> {
 		self.check_deadline()?;
 		ensure!(!state.terminal, "cannot score terminal state");
-		let p = self.posterior(state)?;
+		let p = self.teacher_posterior(state)?;
 		let mask = legal(&self.public, state);
 		let mut values = [0.; 6]; // Illegal actions have an explicit mask, not sentinels.
 		values[4] = 1. - 2. * p;

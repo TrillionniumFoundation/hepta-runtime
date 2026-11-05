@@ -331,3 +331,54 @@ fn teacher_reuses_first_markov_representative_without_replacing_encoder_state() 
 		representative.minimum_teacher_margin
 	);
 }
+
+fn dyadic_reduction_fixture() -> ReplayParams {
+	let mut p = base();
+	let tiny = 2.0_f64.powi(-56);
+	let mut distribution = vec![0.; 33];
+	distribution[0] = 0.5 - 2.0_f64.powi(-52);
+	distribution[16] = 0.5;
+	distribution[17..31].fill(tiny);
+	distribution[32] = 2. * tiny;
+	change_model(&mut p, |model| {
+		let identity = model["core"]["tables"][0]["matrix"].clone();
+		model["core"]["tables"] = json!([
+			{"dt":1.,"drive":0,"matrix":identity},
+			{"dt":1.,"drive":1,"matrix":vec![distribution;33]}
+		]);
+		model["confusion"] = json!([[0.5, 0.5], [0.5, 0.5]]);
+	});
+	let mut public: Value = serde_json::from_str(&p.public_json).unwrap();
+	public["drive"] = json!([1, 0, 0, 0, 0, 0]);
+	p.public_json = serde_json::to_string(&public).unwrap();
+	p.expected_public_sha256 = sha(p.public_json.as_bytes());
+	p
+}
+
+#[test]
+fn case5009_teacher_reduction_keeps_encoder_bank_identity() {
+	// Synthetic dyadic probabilities expose the distinct reductions found at row
+	// 5009. The exact distribution sums to one and contains no checkpoint values.
+	let mut p = dyadic_reduction_fixture();
+	p.traces[0].steps = (0..6).map(|_| wait()).collect();
+	let result = replay(&p).unwrap();
+	let row = &result.rows[0];
+	assert_eq!(row.bank[7], 0.5);
+	assert_eq!(row.analytic_endpoint_belief, row.bank[7]);
+	assert_eq!(row.teacher_q[4], -2.0_f64.powi(-52));
+	assert_eq!(row.teacher_q[5], 2.0_f64.powi(-52));
+	assert_eq!(row.target_action, 5);
+}
+
+#[test]
+fn observation_normalization_uses_contiguous_mass_reduction() {
+	let mut p = dyadic_reduction_fixture();
+	p.traces[0].steps = vec![read(Some(1), 1)];
+	p.traces[0].steps.extend((0..5).map(|_| wait()));
+	let result = replay(&p).unwrap();
+	let row = &result.rows[0];
+	// The uninformative observation halves every component. The 33-term reference
+	// denominator is 0.5 - 2^-54; its left fold would instead be 0.5 - 2^-53.
+	assert_eq!(row.mass[0].to_bits(), 0x3fdffffffffffffd);
+	assert_eq!(row.analytic_endpoint_belief, row.bank[7]);
+}

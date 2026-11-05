@@ -102,10 +102,25 @@ charges to a common decimal value nor setting the compiled-row charge to zero
 reproduces the specified source. Recursive future Bellman values continue to omit
 sunk charges exactly as the pinned Oracle does.
 
-Arithmetic is rounded binary64 with separate products and left-to-right sums.
+Arithmetic uses rounded binary64 and separate products. Its reduction order is
+part of the pinned program. Contiguous posterior-mass normalization and the
+teacher's boolean-compressed positive endpoint event follow NumPy 2.3.5's
+eight-accumulator reduction, including its fixed final grouping and scalar tail.
+The arrays here contain 33 and 16 entries respectively, within that source's
+small-array branch. Matrix products, neural dots and the encoder's coordinate-
+ordered bank reduction retain their explicit left-to-right accumulation.
+
+The teacher posterior and encoder endpoint bank describe the same event through
+different rounding paths in the original source. `analytic_endpoint_belief`
+remains exactly `bank[7]`. The teacher computes its independent posterior inside
+the Bellman program and uses it for SUBMIT rewards; that value does not replace
+the existing encoder diagnostic or add an output field. The response's exact
+bank-identity check remains valid.
+
 The implementation uses platform `tanh` and `exp`; it is not an interval proof or
-a declaration that two compiler/target builds have identical bits. It is not a
-general NDU optimizer.
+a declaration that two compiler/target builds have identical bits. The pinned
+reduction order does not establish portability to other NumPy versions, memory
+layouts or native toolchains. It is not a general NDU optimizer.
 
 ## Response and resource admission
 
@@ -158,6 +173,19 @@ covering that case and the unchanged actual-trace encoder. Its added code and
 contract require a new source identity, build and strict corpus qualification.
 The failed attempt remains evidence; a focused standalone probe cannot transfer
 qualification from the earlier Runtime executable or establish full corpus parity.
+
+The corrected representative-state core then stopped at a second exact action
+mismatch in its standalone corpus attempt, after 12 complete batches and 825
+compared rows. A frozen single-world diagnostic reproduced the original
+310-state teacher table and all 66 captured witness rows. It isolated the
+teacher's compressed-event reduction and contiguous observation normalization
+from the encoder bank's different accumulation path. The reduction correction
+retains the original eight core tests and adds synthetic dyadic regressions for
+the distinct teacher/encoder reductions and normalization. The real failed
+batch and earlier representative-state batch remain separate private regression
+inputs. Revised Rust code still requires its own build, those strict regressions,
+the complete corpus and integrated MCP qualification; neither failed attempt is
+relabelled as successful.
 
 Additional tests cover raw-byte commitment, all envelope digest failures,
 unknown/duplicate fields, exact byte limits, bounded output, released permits
