@@ -251,3 +251,83 @@ async fn capture_rejects_symlinks_and_keeps_exact_caller_path() {
 	assert_eq!(bytes, empty_zip());
 	assert_eq!(digest, super::super::rea_source_map::sha256(&bytes));
 }
+
+fn frozen_refusal_bytes(row: &Value) -> Vec<u8> {
+	use std::io::Read;
+	let encoded = row["data"].as_str().unwrap();
+	assert_eq!(row["encoding"], "zlib-hex");
+	assert_eq!(encoded.len() % 2, 0);
+	let compressed = encoded
+		.as_bytes()
+		.chunks_exact(2)
+		.map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+		.collect::<Vec<_>>();
+	assert_eq!(
+		Sha256::digest(&compressed)
+			.iter()
+			.map(|byte| format!("{byte:02x}"))
+			.collect::<String>(),
+		row["compressed_sha256"].as_str().unwrap()
+	);
+	let size = row["bytes"].as_u64().unwrap();
+	assert!(
+		size <= 8 * 1024 * 1024,
+		"file-size fixture is capture-only metadata"
+	);
+	let mut bytes = Vec::new();
+	flate2::read::ZlibDecoder::new(compressed.as_slice())
+		.take(size + 1)
+		.read_to_end(&mut bytes)
+		.unwrap();
+	assert_eq!(bytes.len() as u64, size);
+	assert_eq!(
+		Sha256::digest(&bytes)
+			.iter()
+			.map(|byte| format!("{byte:02x}"))
+			.collect::<String>(),
+		row["sha256"].as_str().unwrap()
+	);
+	bytes
+}
+
+#[test]
+fn real_frozen_refusals_keep_the_entire_public_error_projection() {
+	let inputs: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_apk_signature/service-error-bytes-r1.json"
+	))
+	.unwrap();
+	let original: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_apk_signature/service-errors-r1.json"
+	))
+	.unwrap();
+	let cases = inputs["cases"].as_array().unwrap();
+	assert_eq!(cases.len(), 24);
+	for case in cases {
+		let expected = original["cases"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.find(|row| row["name"] == case["name"])
+			.unwrap();
+		let bytes = frozen_refusal_bytes(case);
+		let error = rea_apk_signature::inspect_static(&bytes).unwrap_err();
+		let actual = parser_failure(error, expected["input"]["path"].as_str().unwrap());
+		assert_eq!(actual.0, expected["expected"], "{}", case["name"]);
+	}
+	let large = inputs["capture_only"].as_array().unwrap();
+	assert_eq!(large.len(), 1);
+	for case in large {
+		let expected = original["cases"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.find(|row| row["name"] == case["name"])
+			.unwrap();
+		assert_eq!(
+			file_limit(expected["input"]["path"].as_str().unwrap(), false).0,
+			expected["expected"],
+			"{}",
+			case["name"]
+		);
+	}
+}

@@ -424,13 +424,11 @@ fn one_damaged_pkcs7_block_does_not_hide_an_independent_declared_signer() {
 		signers[0].certificate.as_ref().unwrap().sha256_fingerprint,
 		fingerprint(&certificate())
 	);
-	assert!(
-		signers[1]
-			.decode_error
-			.as_ref()
-			.unwrap()
-			.contains("Indefinite ASN.1 value has no end-of-contents marker")
-	);
+	assert!(signers[1]
+		.decode_error
+		.as_ref()
+		.unwrap()
+		.contains("Indefinite ASN.1 value has no end-of-contents marker"));
 	assert!(signers[1].certificate.is_none());
 	assert!(observed.result.posture.v1_only);
 	assert_eq!(observed.result.posture.self_consistent, None);
@@ -454,12 +452,10 @@ fn v1_pairing_is_case_sensitive_and_duplicate_metadata_preserves_unknown() {
 		result.result.schemes.v1.signers[0].decode_error.as_deref(),
 		Some("duplicate entry: META-INF/GOOD.SF")
 	);
-	assert!(
-		result
-			.limitations
-			.iter()
-			.any(|note| note.contains("Duplicate entry"))
-	);
+	assert!(result
+		.limitations
+		.iter()
+		.any(|note| note.contains("Duplicate entry")));
 }
 
 #[test]
@@ -640,12 +636,10 @@ fn frozen_profile_does_not_inherit_legacy_pair_or_directory_limits() {
 	);
 	let observed = inspect_with_limits(&bytes, StaticLimits::REA_6_8_0).unwrap();
 	assert!(!observed.result.schemes.v1.present);
-	assert!(
-		observed
-			.limitations
-			.iter()
-			.any(|note| note.contains("1 name more than once"))
-	);
+	assert!(observed
+		.limitations
+		.iter()
+		.any(|note| note.contains("1 name more than once")));
 }
 
 #[test]
@@ -667,13 +661,11 @@ fn zip64_read_scope_does_not_change_the_frozen_metadata_pairing_rule() {
 		Some("duplicate entry: META-INF/GOOD.SF")
 	);
 	assert!(observed.result.schemes.v1.signers[0].certificate.is_none());
-	assert!(
-		observed
-			.limitations
-			.iter()
-			.any(|note| note.contains("only the first 3 of the 4")
-				&& note.contains("duplicated only by records past those"))
-	);
+	assert!(observed
+		.limitations
+		.iter()
+		.any(|note| note.contains("only the first 3 of the 4")
+			&& note.contains("duplicated only by records past those")));
 	let bytes = zip64_directory(&plain, 4);
 	assert_eq!(
 		inspect_with_limits(&bytes, StaticLimits::REA_6_8_0)

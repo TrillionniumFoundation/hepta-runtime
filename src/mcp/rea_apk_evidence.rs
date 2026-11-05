@@ -257,12 +257,8 @@ fn parser_failure(error: rea_apk_signature::ApkInspectionError, path: &str) -> F
 		),
 		ApkErrorTag::AnalysisUnsupportedTargetError => {
 			let mut failure = Failure::unsupported(OP, path, &error.reason);
-			if error
-				.reason
-				.starts_with("The selected file is not a ZIP/APK (")
-			{
-				failure.0["remediation"]["action"] =
-					json!("Select a local .apk/.zip/.aab archive.");
+			if let Some(action) = error.remediation_action {
+				failure.0["remediation"]["action"] = json!(action.as_str());
 			}
 			failure
 		}
