@@ -7,10 +7,11 @@ CPU/call fell 60.96% and p95 fell 43.34%. Maximum sampled controller RSS rose
 launches or cluster compute throughput. The [full report](../../../../docs/X230_OPTIMIZATION_20261105_R22.md)
 explains the source change, conditions, tradeoffs and limitations.
 
-This first source/result commit contains the accepted source, tests and the
-completed result files linked below. The three full raw archives are preserved
-on X230; a subsequent evidence-only commit will add their GitHub downloads.
-That follow-up is evidence publication for the same R22 optimization.
+The accepted source/results were published in `afec5354d1e0`. This companion
+evidence commit adds the three complete raw archives, verified transfer records
+and download links for the same R22 optimization.
+[Source publication readback](reviews/source-publication-readback-01.json) binds
+the accepted commit, qualified source tree, branch and PR head at publication.
 
 ## Results available in this commit
 
@@ -47,17 +48,17 @@ not a lifecycle ABBA performance comparison. Capacity refusals remain separate
 from successful throughput; C32 client pending does not prove 32 successful
 internal admissions.
 
-## Remote archives saved; GitHub payloads follow separately
+## Complete original archives
 
-Export 02 completed successfully. These are actual remote archive identities,
-not download links. The current preserved directory is
+Export 02 and complete archive transfer/manifest verification passed. The
+original remote directory remains
 `/home/qian/hepta-runtime-optimization-20261105-r22/evidence-export-02/`.
 
 | Archive | Bytes | SHA256 |
 |---|---:|---|
-| `qualification-01.tar.gz` | 2,409,428 | `2ca84e7acd2fe7eda2eaaa2d97c9bd16062b3bb4a869e5891b8a2ddc8c83897d` |
-| `microbenchmark-01.tar.gz` | 8,065 | `e166e8c0e1ec18542917b726f557dee91bf168ff5eebd0b96a0049eddd55c0cb` |
-| `campaign-01.tar.gz` | 3,503,622 | `e322e45cd269ae13585f27bf31983c2fe70e7fd05e4b51640531b7297a1ff7d0` |
+| [qualification-01.tar.gz](evidence/qualification-01.tar.gz) | 2,409,428 | `2ca84e7acd2fe7eda2eaaa2d97c9bd16062b3bb4a869e5891b8a2ddc8c83897d` |
+| [microbenchmark-01.tar.gz](evidence/microbenchmark-01.tar.gz) | 8,065 | `e166e8c0e1ec18542917b726f557dee91bf168ff5eebd0b96a0049eddd55c0cb` |
+| [campaign-01.tar.gz](evidence/campaign-01.tar.gz) | 3,503,622 | `e322e45cd269ae13585f27bf31983c2fe70e7fd05e4b51640531b7297a1ff7d0` |
 
 Each contains an embedded manifest. Qualification has 3,575 payload files and
 8 omitted bodies; mechanism has 14 payload files and no omitted bodies;
@@ -72,8 +73,11 @@ libtest exceeded the initial 256 MiB streaming-read limit. Export 02 raises
 that limit to 1 GiB while still omitting ELF payloads, and rechecks all source
 inventories/identities across the three archives. The original code and failure
 report are retained. No test or performance workload was rerun for this fix.
-Local full-archive transport/replay and GitHub payload availability are separate
-publication steps; the remote export receipt does not assert their completion.
+The [transfer record](reviews/archive-transfer-01.json) verifies all 92 version-pinned
+chunks and complete archive identities. The [tar audit](reviews/archive-tar-qa-01.json)
+read all 7,698 members, rehashed all 7,695 payload files and checked exact manifest
+membership. Its 29 omitted bodies remain remote identity declarations; this
+local archive check does not replay runtime correctness or rehash omitted ELF bytes.
 
 ## Tools and identities
 
@@ -97,4 +101,4 @@ The 2 MiB limit bounds reference payload per profile, not process RSS. One finit
 six-host campaign does not establish global optimality. Accepted settings remain
 workers=2, arena1 and normal C8. Publication does not change a production
 controller service. Actual branch/PR/file-tree readback is performed by the
-publisher after the push; this result index does not assert that readback.
+publisher after the push; the accepted source readback is linked above.

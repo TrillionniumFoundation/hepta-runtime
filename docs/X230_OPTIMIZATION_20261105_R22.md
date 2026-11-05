@@ -74,7 +74,7 @@ C6 正确性 canary 完成 **90 native calls、36 次独立 SSH 检查、6 个�
 
 ## 证据与取舍
 
-源码审查及完整文件身份见 [R22 证据索引](../tools/x230/20261105/r22/README.md)、[实际资格与 Git 源码绑定](../tools/x230/20261105/r22/reviews/qualified-source-binding-01.json) 和 [正式 campaign 汇总](../tools/x230/20261105/r22/reviews/campaign-summary-01.json)。首提交发布源码、测试和实际结果小文件；三份完整原始包已在 X230 保存，由后续取证提交补入 GitHub，不作为另一个优化版本。本轮 qualification map 摘要为 `c998ca803237d1feb8f6ef925bc861171b70969e61602c126ceade8d1acf09b6`；campaign 的大小+SHA256 输入映射摘要为 `a9828a44ef0d8922e6a91dd8a71dadb172a07a4b4156fafab2831aa8b5f889bc`。两种映射编码不同，不能互换。最终 campaign report 原始字节 SHA256 为 `3ec6494b2dc9dd25dbe3650f7becd174b6891aabdc35a4f9f89d16082acfedf7`。
+源码审查及完整文件身份见 [R22 证据索引](../tools/x230/20261105/r22/README.md)、[实际资格与 Git 源码绑定](../tools/x230/20261105/r22/reviews/qualified-source-binding-01.json) 和 [正式 campaign 汇总](../tools/x230/20261105/r22/reviews/campaign-summary-01.json)。源码与结果已由 `afec5354d1e0` 发布；伴随取证提交补齐三份完整原始包与下载链接。92 个固定版本分片及 7,695 个 payload 文件的字节和 SHA256 均核对通过；省略的 ELF/私有配置仍只保留实际远端身份，没有在本地重新哈希其实体。本轮 qualification map 摘要为 `c998ca803237d1feb8f6ef925bc861171b70969e61602c126ceade8d1acf09b6`；campaign 的大小+SHA256 输入映射摘要为 `a9828a44ef0d8922e6a91dd8a71dadb172a07a4b4156fafab2831aa8b5f889bc`。两种映射编码不同，不能互换。最终 campaign report 原始字节 SHA256 为 `3ec6494b2dc9dd25dbe3650f7becd174b6891aabdc35a4f9f89d16082acfedf7`。
 
 第一次证据导出因保留的 libtest 为 540,751,056 B、超过导出器初版 256 MiB 读取上限而在首包前退出；这是取证工具边界，不是资格或性能失败。02 只将流式读取上限提高至 1 GiB 并补齐稳定性/配置排除检查，ELF 仍只留身份、不打包实体；原失败报告和原代码保留，测量未重跑。
 
