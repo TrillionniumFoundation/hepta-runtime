@@ -135,8 +135,20 @@ def inside(path, parent):
 def storage_overlaps_inputs(repo, directory):
     """A cache/output exclusion must never hide a selected execution input."""
     inputs = SOURCE_ROOTS | ROOT_FILES | CONFIG_FILES | REFERENCE_FILES
-    return any(inside(directory, repo / name) or inside(repo / name, directory)
-               for name in inputs)
+    if any(inside(directory, repo / name) or inside(repo / name, directory) for name in inputs):
+        return True
+    if not inside(directory, repo):
+        return False
+    # Extra workspace members and build scripts are selected regardless of their
+    # top-level folder. Inspect the unmasked selection before granting an output
+    # exclusion; the caller must not be able to hide those inputs with that mask.
+    selection = Selection(repo, None, None)
+    for parent, names in selection.walk():
+        for name in names:
+            path = parent / name
+            if selection.source(path) and inside(path, directory):
+                return True
+    return False
 
 
 def hash_file(path):
@@ -188,7 +200,8 @@ class Selection:
         self.repo, self.target, self.output = repo, target, output
 
     def ignored(self, path):
-        if inside(path, self.target) or inside(path, self.output):
+        if ((self.target is not None and inside(path, self.target))
+                or (self.output is not None and inside(path, self.output))):
             return True
         relative = path.relative_to(self.repo)
         parts = relative.parts

@@ -107,6 +107,17 @@ class SourceBindingTests(unittest.TestCase):
         for path in (self.root / "target", self.repo / "docs/qualification/new-run"):
             self.assertFalse(matrix.storage_overlaps_inputs(self.repo, path))
 
+    def test_storage_cannot_hide_an_additional_workspace_member(self):
+        for name in ("extra/Cargo.toml", "extra/src/lib.rs", "generated/build.rs"):
+            self.write(name)
+        selected = {row["path"] for row in self.selection.snapshot()["files"]}
+        self.assertIn("extra/Cargo.toml", selected)
+        self.assertIn("extra/src/lib.rs", selected)
+        self.assertIn("generated/build.rs", selected)
+        for name in ("extra", "extra/src", "generated"):
+            with self.subTest(path=name):
+                self.assertTrue(matrix.storage_overlaps_inputs(self.repo, self.repo / name))
+
 
 if __name__ == "__main__":
     unittest.main()
