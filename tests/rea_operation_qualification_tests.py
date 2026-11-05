@@ -4,6 +4,7 @@
 """Refusal and wire-integrity checks; fake MCPs never qualify an operation."""
 
 from copy import deepcopy
+from contextlib import redirect_stdout
 import hashlib
 import io
 import json
@@ -20,6 +21,13 @@ import rea_operation_qualification as q
 
 
 class OperationQualificationTests(unittest.TestCase):
+    def test_actual_operation_entrypoint_reaches_argument_parser(self):
+        output = io.StringIO()
+        with redirect_stdout(output), self.assertRaises(SystemExit) as raised:
+            q.main(["--help"])
+        self.assertEqual(raised.exception.code, 0)
+        self.assertIn("--reference-tarball", output.getvalue())
+
     def test_duplicate_members_and_nonfinite_numbers_fail_closed(self):
         for raw in (b'{"x":1,"x":2}', b'NaN', b'1e400', b'-Infinity'):
             with self.subTest(raw=raw), self.assertRaises(q.QualificationError):

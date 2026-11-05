@@ -771,10 +771,10 @@ def main(argv=None):
         report["reference_close"] = reference.close()
         report["native_close"] = native.close()
         report["cold_sessions"] = []
-        for label, arguments, env, tool in (
+        for label, cold_argv, env, tool in (
                 ("reference", [str(args.node), str(args.reference_package / "scripts/rea.mjs"), "mcp"], environment, "get_evidence_bundle"),
                 ("native", [str(args.binary), "mcp", "--runtime-config", str(config)], {}, "rea_get_evidence_bundle")):
-            cold = Mcp(arguments, workspace, env, output / (label + "-cold"))
+            cold = Mcp(cold_argv, workspace, env, output / (label + "-cold"))
             row = {"producer": label}
             try:
                 cold.initialize()
