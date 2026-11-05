@@ -1,0 +1,106 @@
+{
+  "schema": "hepta-x230-r22-local-git-source-binding/v1",
+  "status": "passed",
+  "reviewer": "runtime_source_audit",
+  "checked_at": "2026-11-05T04:11:28.885641+00:00",
+  "repository": "TrillionniumFoundation/hepta-runtime",
+  "baseline_commit": "e85f869e48e643a3e94cb7220d27181ad82c8562",
+  "git_data": {
+    "root_tree": "e2557f611ad47d9e6b4accb7fb02bc14f8eebdfc",
+    "src_tree": "3aa8c9aadbf42b6a0ebdac3954bd1e64b4055e20",
+    "examples_tree": "08a04977815f59ef6c4cf77398f04a6c73e3ff03",
+    "endpoints": [
+      "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/git/trees/e2557f611ad47d9e6b4accb7fb02bc14f8eebdfc",
+      "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/git/trees/3aa8c9aadbf42b6a0ebdac3954bd1e64b4055e20?recursive=1",
+      "https://api.github.com/repos/TrillionniumFoundation/hepta-runtime/git/trees/08a04977815f59ef6c4cf77398f04a6c73e3ff03?recursive=1"
+    ],
+    "all_responses_untruncated": true,
+    "root_tree_object_rehash_matches": true,
+    "baseline_src_tree_reconstructed_from_all_leaves_matches": true,
+    "baseline_examples_tree_reconstructed_matches": true,
+    "local_response_capture": "publication-draft/inputs/remote-trees.json",
+    "response_capture_sha256": "9b27ccce2c9f2367e28383dc4d949f2a5f3b40a1b46b858d4ddbe0f81bd9ee58"
+  },
+  "method": "Read every local src and examples leaf plus Cargo.toml, Cargo.lock and rustfmt.toml as complete bytes. Compute Git blob SHA1 over b\"blob \"+decimal_length+b\"\\0\"+bytes and compare with actual Git tree leaf IDs and modes. Reconstruct canonical Git trees; no full repository download or GitHub mutation.",
+  "coverage": {
+    "baseline_src_leaves": 215,
+    "candidate_src_leaves": 216,
+    "unchanged_src_leaves": 214,
+    "baseline_compilation_inputs": 219,
+    "candidate_compilation_inputs": 220,
+    "unchanged_compilation_inputs": 218,
+    "removed": [],
+    "mode_changes": [],
+    "non_regular_local_files": []
+  },
+  "modified": [
+    {
+      "path": "src/mcp/runtime/ssh_observation_profile.rs",
+      "baseline_git_blob_sha": "c8702a86b6685054d3e92525d5dd1fffd96e0a2e",
+      "candidate_git_blob_sha": "9298b6b0511187d21c89934b866e160ddbfa7e36",
+      "candidate_sha256": "32157a541eef37f8973c3ec5bc0425a3950ffe1e0fbb6b014213606588fb5aa7",
+      "candidate_bytes": 24697
+    }
+  ],
+  "added": [
+    {
+      "path": "src/mcp/runtime/ssh_observation_reference_tests.rs",
+      "candidate_git_blob_sha": "8f85821171a246b2f4eacce0596d06b006024498",
+      "candidate_sha256": "449a98b938d3baa147a125c068806702ee94e314f04da9b2a663e674bea99bd0",
+      "candidate_bytes": 13568,
+      "git_mode": "100644"
+    }
+  ],
+  "unchanged_non_src_inputs": [
+    {
+      "path": "Cargo.lock",
+      "git_blob_sha": "5924253dffa8a93701c8a0045c0127cb4eded6ac",
+      "sha256": "15b9fb468eb34a210238657d132cbf19e961552d1313de488e1f14936bfa4e5f",
+      "bytes": 69305
+    },
+    {
+      "path": "Cargo.toml",
+      "git_blob_sha": "66ea59e1729936f44815e5f211a878efbce09563",
+      "sha256": "3121870fbf66f65ce6b1925b3500eae8a05fc2d8019a2694da7d6fe941ad4d28",
+      "bytes": 3097
+    },
+    {
+      "path": "examples/native_process_driver.rs",
+      "git_blob_sha": "6d764cf8565da31c24fd08c4c7e81bbc1976deb2",
+      "sha256": "9927da64f02cd9e818ccb2cc7720eaecbea568033d8a396c41aa62db895d9ee7",
+      "bytes": 1598
+    },
+    {
+      "path": "rustfmt.toml",
+      "git_blob_sha": "218e203215e949dd53a7fef74c0bc306914d9e39",
+      "sha256": "bce79651b2e2ff42e1c54b9a26c5e17af5222f9f65ab51d9563a48fd159dae84",
+      "bytes": 17
+    }
+  ],
+  "candidate_src_tree_sha": "e0f8f7a8856c1ae4385a52aafa7d22204f19c435",
+  "candidate_compile_input_sha256_map_digest": "c998ca803237d1feb8f6ef925bc861171b70969e61602c126ceade8d1acf09b6",
+  "candidate_compile_input_digest_encoding": "SHA256(json.dumps({relative_path: complete_file_sha256}, sort_keys=True, indent=2, allow_nan=False) + \"\\n\")",
+  "qualification_scope": {
+    "origin_remote_path": "/home/qian/hepta-runtime-optimization-20261105-r22/qualification-01/source-map.json",
+    "local_download_path": "results/qualified-source-map.json",
+    "local_download_bytes": 24156,
+    "local_download_sha256": "c998ca803237d1feb8f6ef925bc861171b70969e61602c126ceade8d1acf09b6",
+    "remote_identity_reported_by_root_matches_current_local_raw_bytes": true,
+    "full_remote_qualified_input_map_reimported_by_this_review": true,
+    "all_220_entries_equal_complete_local_file_hashes": true,
+    "compact_report_says_source_unchanged": true,
+    "qualification_report_sha256": "206bf21590a6a66978a1abe2bd903bf911df54ac101701175742576367a41760",
+    "transport_note": "An initial local copy had one extra terminal LF. Root restored exact remote bytes; this review re-read the current 24156-byte file and revalidated its raw SHA256."
+  },
+  "limits": "Current local complete compilation-input bytes are bound to the actual remote qualification SHA256 map, the campaign size-plus-SHA256 map and baseline Git trees. This review did not locally read remote ELF bodies or create/push a Git commit; final publication readback is separate.",
+  "updated_at": "2026-11-05T04:23:24.907421+00:00",
+  "campaign_scope": {
+    "campaign_report_sha256": "3ec6494b2dc9dd25dbe3650f7becd174b6891aabdc35a4f9f89d16082acfedf7",
+    "source_inputs_sha256": "a9828a44ef0d8922e6a91dd8a71dadb172a07a4b4156fafab2831aa8b5f889bc",
+    "all_220_local_byte_counts_and_sha256_values_recomputed": true,
+    "encoding": "SHA256(json.dumps({relative_path: {bytes, sha256}}, sort_keys=True, indent=2, allow_nan=False) + \"\\n\")",
+    "input_identity_unchanged": true,
+    "source_inputs_unchanged": true,
+    "qualified_map_matches_campaign_inputs": true
+  }
+}

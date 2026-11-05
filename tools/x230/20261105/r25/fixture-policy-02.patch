@@ -1,0 +1,11 @@
+--- a/src/mcp/runtime/ssh_direct_cancellation_tests.rs
++++ b/src/mcp/runtime/ssh_direct_cancellation_tests.rs
+@@ -401,7 +401,7 @@
+ 	config::init_runtime(serde_json::from_value(json!({
+ 		"state_dir": root.path().join("state"),
+ 		"hosts": {
+-			"operator": {"ssh_target":"local-recorder.invalid", "platform":"linux", "execution_mode":"operator", "remote_state_dir":"/fixture-operator", "allow_execute":true},
++			"operator": {"ssh_target":"local-recorder.invalid", "platform":"linux", "execution_mode":"operator", "remote_state_dir":"/fixture-operator", "allow_execute":true, "allow_job_network":true},
+ 			"isolated": {"ssh_target":"local-recorder.invalid", "platform":"linux", "execution_mode":"isolated", "remote_state_dir":"/fixture-isolated", "allow_execute":true}
+ 		}
+ 	})).unwrap()).unwrap();

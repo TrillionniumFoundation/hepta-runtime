@@ -1,0 +1,706 @@
+#!/usr/bin/env python3
+# Copyright 2026 TrillionniumFoundation
+# SPDX-License-Identifier: Apache-2.0
+"""Qualify frozen R14 artifacts under arena1, then run two serial local ABBA blocks.
+No Cargo or compilation. A complete retained-test audit precedes one bounded
+root-controlled performance gate. Any failure stops without retry.
+This module also supplies binding/monitor utilities to the remote driver.
+"""
+import argparse
+import datetime
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import stat
+import subprocess
+import sys
+import time
+
+ROOT = Path("/home/qian/hepta-runtime-optimization-20261103-r15")
+R14 = Path("/home/qian/hepta-runtime-optimization-20261103-r14")
+R11 = Path("/home/qian/hepta-runtime-optimization-20261103-r11")
+SOURCE, QUAL, HERE = R14 / "source", R14 / "qualification-01", ROOT / "measurement-tools"
+OUT = ROOT / "local-campaigns-01"
+CONFIG_QUAL = ROOT / "configuration-qualification-01"
+PERF_GATE = ROOT / "perf-ready-01.json"
+LOCAL_READY = ROOT / "independent-audit-tools/local-orchestrator-ready-01.json"
+BASELINE_BINDING_SHA = "d701ad5c2d101ed389614083b386324c092182dcf19cb4f4bf0777e232d3c37a"
+CONFIG_READY_SHA = "fb4a2e8eab0bfafb0c272c4c3e259cd1d68dffbaa479796854a73a1100fcc947"
+TOOLING_SHA = "34f0d32bcdf5057ec1cf8148a51dd13773f1235841074e0f2b8914bdfb8e461d"
+SELFTEST_SHA = "0d82f2ee23f0bd5a8c92f431d7a403b413ca097b4ab0a7c53d392d15758f85fa"
+CANDIDATE_SHA = "51480b3cf630a95419d3afeb571eec17c90cffa5944101920d05333673de031d"
+R11_SHA = "660d64674fe3422006c0c2a82bc31f3f36edf19baf6613df7cdce51e8f3f8e4c"
+STAGES = ("format", "fmt-check", "harness-tests", "clippy", "test-build",
+          "isolated-tests", "audit-isolated-tests", "release")
+RELEASE_NAMES = {"hepta-runtime", "hepta-runtime-jobctl", "native_process_driver"}
+BASELINES = {"r14": (QUAL, CANDIDATE_SHA), "r11": (R11 / "qualification-01", R11_SHA)}
+CAMPAIGNS = {version: ROOT / ("cancel-" + version + "-r15-01") for version in BASELINES}
+ENV = {"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C", "SHELL": "/bin/sh",
+       "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"}
+BUILD_NAMES = {"cargo", "rustc", "rustdoc", "cc", "cc1", "cc1plus", "c++", "g++",
+               "gcc", "clang", "clang++", "ld", "ld.lld", "lld", "collect2"}
+REPORT, BOUND = {}, {}
+ACTIVE_ENV = dict(ENV)
+MONITOR_SECONDS = 5
+ARCHIVE_NAMES = {"tar", "gzip", "pigz", "xz", "zip", "7z", "7za", "bzip2", "zstd"}
+BENCHMARK_SCRIPT_NAMES = {
+    "run_cancel_responsiveness.py", "run_native_observation.py", "x230_observation_benchmark.py",
+    "run_six_host_cancel_recovery.py", "run_isolated_tests.py", "run_local_campaigns.py",
+    "run_remote_campaigns.py", "qualification-launch-01.py", "qualification-launch-02.py",
+    "qualification-launch-03.py", "audit_performance.py", "audit_qualification.py",
+    "audit_recovery.py", "run_independent_audits.py"}
+DRIVER_ROOTS = {"/home/qian/hepta-runtime-optimization-20261103-r" + str(n) for n in range(11, 16)}
+
+
+def require(value, message):
+    if not value:
+        raise RuntimeError(message)
+
+
+def utc():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def encoded(value):
+    return (json.dumps(value, sort_keys=True, indent=2) + "\n").encode()
+
+
+def sha(path):
+    with Path(path).open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def identity(path):
+    path = Path(path)
+    info = path.lstat()
+    require(stat.S_ISREG(info.st_mode) and path.resolve() == path,
+            "bound input is not a direct regular file: " + str(path))
+    return [info.st_dev, info.st_ino, info.st_uid, info.st_mode, info.st_nlink,
+            info.st_size, info.st_mtime_ns, info.st_ctime_ns]
+
+
+def bind(path, expected=None):
+    path = Path(path)
+    before, digest = identity(path), sha(path)
+    require(before == identity(path), "input changed while hashing: " + str(path))
+    require(expected is None or digest == expected, "bound SHA256 differs: " + str(path))
+    row = {"path": str(path), "sha256": digest, "identity": before}
+    require(str(path) not in BOUND or BOUND[str(path)] == row,
+            "bound input identity changed: " + str(path))
+    BOUND[str(path)] = row
+    return row
+
+
+def source_map():
+    files = [SOURCE / name for name in ("Cargo.toml", "Cargo.lock", "rustfmt.toml")]
+    for name in ("src", "examples"):
+        files.extend(p for p in (SOURCE / name).rglob("*") if p.is_file())
+    result = {}
+    for path in sorted(files):
+        if path.is_file():
+            identity(path)
+            result[str(path.relative_to(SOURCE))] = sha(path)
+    return result
+
+
+def save():
+    temporary = OUT / "report.next"
+    temporary.write_bytes(encoded(REPORT))
+    os.replace(temporary, OUT / "report.json")
+
+
+def event(state, **fields):
+    print(json.dumps({"utc": utc(), "state": state, **fields}), flush=True)
+
+
+def snapshot_json(path, name):
+    raw = Path(path).read_bytes()
+    value = json.loads(raw)
+    with (OUT / "bindings" / name).open("xb") as stream:
+        stream.write(raw)
+    bind(path, hashlib.sha256(raw).hexdigest())
+    return value
+
+
+def proc_info(pid):
+    try:
+        data = Path(f"/proc/{pid}/stat").read_text()
+        last = data.rfind(")")
+        fields = data[last + 2:].split()
+        return {"pid": int(pid), "ppid": int(fields[1]), "start_ticks": int(fields[19]),
+                "comm": data[data.find("(") + 1:last], "state": fields[0]}
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def processes():
+    rows = {}
+    for path in Path("/proc").iterdir():
+        if path.name.isdigit():
+            row = proc_info(int(path.name))
+            if row is not None:
+                rows[row["pid"]] = row
+    return rows
+
+
+def prohibit_compile():
+    rows = [row for row in processes().values()
+            if row["state"] not in {"Z", "X"} and (row["comm"] in BUILD_NAMES
+                or row["comm"].startswith(("rustc", "cargo")))]
+    require(not rows, "concurrent compiler process observed: " + json.dumps(rows))
+
+
+def telemetry():
+    result = {"utc": utc(), "scope": "host snapshots, not per-campaign causal attribution"}
+    for name in ("uptime", "meminfo", "loadavg"):
+        try:
+            result[name] = Path("/proc", name).read_text()
+        except OSError as error:
+            result[name + "_error"] = type(error).__name__
+    result["thermal"] = []
+    directories = (list(Path("/sys/class/thermal").glob("thermal_zone*"))
+                   + list(Path("/sys/class/hwmon").glob("hwmon*")))
+    for directory in sorted(directories):
+        row = {"path": str(directory)}
+        names = (["type", "temp"] if directory.name.startswith("thermal_zone") else
+                 ["name"] + sorted(p.name for p in directory.glob("temp*_input")))
+        for name in names:
+            try:
+                row[name] = (directory / name).read_text().strip()
+            except OSError as error:
+                row[name + "_error"] = type(error).__name__
+        result["thermal"].append(row)
+    result["cpu_frequency"] = []
+    for directory in sorted(Path("/sys/devices/system/cpu").glob("cpu[0-9]*/cpufreq")):
+        row = {"cpu": directory.parent.name}
+        for name in ("scaling_cur_freq", "scaling_min_freq", "scaling_max_freq",
+                     "scaling_governor", "cpuinfo_cur_freq"):
+            try:
+                row[name] = (directory / name).read_text().strip()
+            except OSError as error:
+                row[name + "_error"] = type(error).__name__
+        result["cpu_frequency"].append(row)
+    try:
+        result["cpu_top_scope"] = "ps lifetime %CPU, command names only; not interval CPU"
+        output = subprocess.run(
+            ["/bin/ps", "-eo", "pid=,ppid=,pcpu=,pmem=,comm=", "--sort=-pcpu"],
+            capture_output=True, timeout=10, check=True, text=True, env=ENV).stdout
+        result["cpu_top_comm"] = []
+        for line in output.splitlines()[:15]:
+            fields = line.split(None, 4)
+            if len(fields) == 5:
+                result["cpu_top_comm"].append({
+                    "pid": int(fields[0]), "ppid": int(fields[1]), "cpu_percent": float(fields[2]),
+                    "memory_percent": float(fields[3]), "comm": fields[4]})
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        result["cpu_top_error"] = type(error).__name__
+    return result
+
+
+def same_process(row):
+    now = proc_info(row["pid"])
+    return now is not None and now["start_ticks"] == row["start_ticks"]
+
+
+def stop_owned_tree(process, original):
+    """Stop only the new local driver's observed PID generations after failure."""
+    result = {"reason": "bounded local stage interrupted", "observed": [], "signals": []}
+    if original is None or not same_process(original):
+        return result
+    try:
+        os.kill(original["pid"], signal.SIGSTOP)
+    except ProcessLookupError:
+        return result
+    owned = {original["pid"]: original}
+    for unused in range(2):
+        table, changed = processes(), True
+        while changed:
+            changed = False
+            for pid, row in table.items():
+                if row["ppid"] in owned and pid not in owned:
+                    owned[pid], changed = row, True
+        for row in owned.values():
+            if same_process(row):
+                try:
+                    os.kill(row["pid"], signal.SIGSTOP)
+                except ProcessLookupError:
+                    pass
+    result["observed"] = list(owned.values())
+    for row in reversed(list(owned.values())):
+        if same_process(row):
+            try:
+                os.kill(row["pid"], signal.SIGKILL)
+                result["signals"].append({"pid": row["pid"], "start_ticks": row["start_ticks"],
+                                          "signal": "SIGKILL"})
+            except ProcessLookupError:
+                pass
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        result["driver_wait_timed_out"] = True
+    return result
+
+
+def record(path):
+    path = Path(path)
+    return {"path": str(path), "sha256": sha(path), "bytes": path.stat().st_size}
+
+
+def write_once(path, value):
+    with Path(path).open("xb") as stream:
+        stream.write(encoded(value))
+
+
+def bound_json(path, expected, snapshot_name=None):
+    bind(path, expected)
+    raw = Path(path).read_bytes()
+    require(hashlib.sha256(raw).hexdigest() == expected, "JSON changed during read: " + str(path))
+    if snapshot_name:
+        with (OUT / "bindings" / snapshot_name).open("xb") as stream:
+            stream.write(raw)
+    return json.loads(raw)
+
+
+def descendants(table, root_pid):
+    found = {root_pid}
+    changed = True
+    while changed:
+        changed = False
+        for pid, row in table.items():
+            if row["ppid"] in found and pid not in found:
+                found.add(pid)
+                changed = True
+    return found
+
+
+def contamination_check(performance=False):
+    table = processes()
+    own = descendants(table, os.getpid())
+    failures = []
+    for pid, row in table.items():
+        if row["state"] in {"Z", "X"} or pid in own:
+            continue
+        reason = None
+        if row["comm"] in BUILD_NAMES or row["comm"].startswith(("rustc", "cargo")):
+            reason = "concurrent compiler"
+        elif performance and row["comm"] in ARCHIVE_NAMES:
+            reason = "concurrent archive/compression"
+        else:
+            # Inspect only script basenames internally. Never retain command lines.
+            try:
+                words = Path(f"/proc/{pid}/cmdline").read_bytes()[:32768].split(b"\0")
+                for word in words:
+                    name = os.fsdecode(word)
+                    if not name.startswith("/home/qian/hepta-runtime-optimization-"):
+                        continue
+                    base = Path(name).name
+                    if (base in BENCHMARK_SCRIPT_NAMES or
+                        (performance and base.endswith(".py") and
+                         any(token in base for token in ("archive", "package", "diagnostic", "benchmark")))):
+                        reason = "concurrent optimization driver"
+                        break
+                if performance and reason is None:
+                    executable = os.readlink(f"/proc/{pid}/exe")
+                    if (executable.startswith("/home/qian/hepta-runtime-optimization-")
+                        and Path(executable).name.startswith(("hepta-runtime", "hepta_runtime", "native_process_driver"))):
+                        reason = "foreign optimization runtime"
+            except (OSError, ValueError):
+                pass
+        if reason:
+            failures.append({**row, "reason": reason})
+    require(not failures, "concurrent-work contamination observed: " + json.dumps(failures))
+    return {"utc": utc(), "processes_observed": len(table), "performance_guard": performance,
+            "compiler_and_known_foreign_work_absent": True}
+
+
+def verify_ready(expected):
+    require(re.fullmatch(r"[0-9a-f]{64}", expected) is not None, "invalid ready SHA256")
+    ready = bound_json(LOCAL_READY, expected, "local-orchestrator-ready.json")
+    require(ready.get("success") is True and ready.get("formal_workloads_started") is False,
+            "local orchestrator ready receipt differs")
+    for item in ready["files"]:
+        path = Path(item["path"])
+        require(path.parent == HERE and path.name in {"run_local_campaigns.py", "release_performance_gate.py"},
+                "unexpected local orchestration dependency")
+        bind(path, item["sha256"])
+    require({Path(item["path"]).name for item in ready["files"]}
+            == {"run_local_campaigns.py", "release_performance_gate.py"}, "missing local ready dependency")
+    return ready
+
+
+def establish_binding(ready_sha):
+    verify_ready(ready_sha)
+    baseline = bound_json(ROOT / "baseline-binding.json", BASELINE_BINDING_SHA, "baseline-binding.json")
+    configuration = bound_json(ROOT / "configuration/configuration-ready.json", CONFIG_READY_SHA,
+                               "configuration-ready.json")
+    require(configuration.get("success") is True and configuration.get("selected_arena_max") == "1"
+            and configuration["baseline_binding"]["sha256"] == BASELINE_BINDING_SHA,
+            "arena1 configuration-ready binding differs")
+    for item in configuration["files"].values():
+        require(Path(item["path"]).parent == ROOT / "configuration", "configuration input escaped R15")
+        bind(item["path"], item["sha256"])
+    tooling = bound_json(ROOT / "independent-audit-tools/tooling-install-01.json", TOOLING_SHA,
+                         "tooling-install.json")
+    require(tooling.get("success") is True and tooling["qualified_runtime_sha256"] == CANDIDATE_SHA
+            and tooling["baseline_binding_sha256"] == BASELINE_BINDING_SHA
+            and tooling["selftest"]["returncode"] == 0
+            and tooling["selftest"]["report_sha256"] == SELFTEST_SHA, "tool installation is not verified")
+    for item in tooling["files"]:
+        require(Path(item["path"]).parent == HERE, "measurement tool escaped R15")
+        bind(item["path"], item["sha256"])
+    selftest = bound_json(tooling["selftest"]["report_path"], SELFTEST_SHA, "environment-selftest.json")
+    require(selftest.get("success") is True and len(selftest["cases"]) == 7
+            and all(case.get("passed") is True for case in selftest["cases"]), "allocator selftest failed")
+    q = bound_json(QUAL / "report.json", baseline["qualification_sha256"], "r14-qualification.json")
+    require(baseline["source_root"] == str(SOURCE) and baseline["compiler_input_count"] == 219
+            and baseline["qualification"] == str(QUAL / "report.json"), "baseline source identity differs")
+    require(q["schema"] == "hepta-x230-composed-qualification/v1" and q.get("qualified") is True
+            and q.get("finished_utc") and q.get("source") == str(SOURCE)
+            and not q.get("error") and q.get("automatic_test_retries") == 0
+            and q.get("service_changes") is False, "R14 qualification is not successful")
+    require([item["name"] for item in q["stages"]] == list(STAGES)
+            and all(item.get("returncode") == 0 for item in q["stages"]), "R14 qualification stages differ")
+    frozen = bound_json(R14 / "implementation-ready.json", baseline["implementation_ready_sha256"],
+                        "r14-implementation-ready.json")
+    qaudit = bound_json(baseline["qualification_audit"], baseline["qualification_audit_sha256"],
+                       "r14-qualification-audit.json")
+    require(qaudit.get("success") is True and qaudit["qualification_report_sha256"] == baseline["qualification_sha256"]
+            and qaudit["source_input_count"] == 219, "R14 independent audit binding differs")
+    tested = q["source_tested"]
+    current = source_map()
+    require(len(current) == 219 and current == tested == q["source_after"] == frozen["source_after"],
+            "219 frozen/tested/post/current compiler inputs differ")
+    write_once(OUT / "bindings/source-map-current.json", current)
+    source_manifest = bound_json(QUAL / "source-map.json", qaudit["source_map_sha256"], "source-map.json")
+    require(source_manifest == tested, "retained source manifest differs")
+    require(set(q["binaries"]) == RELEASE_NAMES and set(baseline["release_binaries"]) == RELEASE_NAMES,
+            "three release artifacts required")
+    for name, item in q["binaries"].items():
+        require(item["path"] == str(QUAL / name) and
+                baseline["release_binaries"][name] == {"path": item["path"], "sha256": item["sha256"]},
+                "release artifact binding differs: " + name)
+        bind(item["path"], item["sha256"])
+    require(q["binaries"]["hepta-runtime"]["sha256"] == CANDIDATE_SHA, "candidate runtime differs")
+    isolated = bound_json(QUAL / "isolated-tests/summary.json", qaudit["isolated_summary_sha256"],
+                          "r14-isolated-summary.json")
+    require(isolated.get("success") is True and
+            {k: isolated[k] for k in ("passed", "failed", "ignored", "selected", "retries")}
+            == {"passed": 1637, "failed": 0, "ignored": 33, "selected": 1670, "retries": 0}
+            and isolated.get("filter") == "" and not isolated.get("enumeration_errors"),
+            "R14 complete isolated inventory differs")
+    artifacts = QUAL / "retained-artifacts.jsonl"
+    require(baseline["retained_artifacts"] == str(artifacts)
+            and baseline["retained_artifacts_sha256"] == isolated["artifacts_sha256"],
+            "retained artifact inventory binding differs")
+    bind(artifacts, baseline["retained_artifacts_sha256"])
+    raw = artifacts.read_bytes()
+    require(hashlib.sha256(raw).hexdigest() == isolated["artifacts_sha256"], "retained inventory changed")
+    with (OUT / "bindings/retained-artifacts.jsonl").open("xb") as stream:
+        stream.write(raw)
+    inventory = {}
+    for line in raw.splitlines():
+        item = json.loads(line)
+        if item.get("reason") == "compiler-artifact" and item.get("profile", {}).get("test") and item.get("executable"):
+            path = item["executable"]
+            require(path not in inventory or inventory[path] == item["target"], "ambiguous retained executable")
+            inventory[path] = item["target"]
+    require(set(inventory) == {item["path"] for item in isolated["binaries"]}, "retained executables differ")
+    retained = []
+    for item in isolated["binaries"]:
+        path = Path(item["path"])
+        require(path.parent == QUAL / "test-binaries" and inventory[str(path)] == item["target"],
+                "test executable is not the retained R14 copy")
+        retained.append(bind(path, item["sha256"]))
+    r11 = snapshot_json(R11 / "qualification-01/report.json", "r11-qualification.json")
+    require(r11.get("qualified") is True and r11.get("finished_utc")
+            and r11["binaries"]["hepta-runtime"]["path"] == str(BASELINES["r11"][0] / "hepta-runtime")
+            and r11["binaries"]["hepta-runtime"]["sha256"] == R11_SHA, "R11 baseline is not qualified")
+    bind(BASELINES["r11"][0] / "hepta-runtime", R11_SHA)
+    REPORT["gate"] = {"passed": True, "utc": utc(), "source_files": 219,
+        "source_tested_after_current_frozen_equal": True, "source_map_sha256": qaudit["source_map_sha256"],
+        "r14_qualification_sha256": baseline["qualification_sha256"],
+        "release_binaries": q["binaries"], "retained_test_binaries": retained,
+        "retained_artifacts_sha256": isolated["artifacts_sha256"],
+        "selected_allocator": {"MALLOC_ARENA_MAX": "1"}, "configuration_ready_sha256": CONFIG_READY_SHA,
+        "tooling_install_sha256": TOOLING_SHA, "local_orchestrator_ready_sha256": ready_sha}
+    REPORT["bound_inputs"] = list(BOUND.values())
+    REPORT["preflight_contamination_check"] = contamination_check()
+    save()
+    event("frozen_input_gate_passed", compiler_inputs=219, retained_executables=len(retained))
+    return q, isolated
+
+
+def check_binding(tested, deep=False):
+    require(source_map() == tested, "compiler inputs changed after frozen input gate")
+    for item in BOUND.values():
+        require(identity(item["path"]) == item["identity"], "bound input identity changed: " + item["path"])
+        if deep or item["identity"][5] < 2 * 1024 * 1024:
+            require(sha(item["path"]) == item["sha256"], "bound input SHA256 changed: " + item["path"])
+    return contamination_check()
+
+
+def run_stage(name, argv, timeout, performance=False):
+    row = {"name": name, "command": argv, "timeout_seconds": timeout, "started_utc": utc(),
+           "returncode": None, "automatic_retries": 0, "environment_before": telemetry(),
+           "driver_environment": {"allocator_entries": {}, "ssh_auth_sock_preserved": "SSH_AUTH_SOCK" in ACTIVE_ENV},
+           "monitor_interval_seconds": MONITOR_SECONDS, "monitor_samples": 0}
+    REPORT["stages"].append(row)
+    REPORT["current_stage"], REPORT["state"] = name, "running"
+    save()
+    event("stage_started", stage=name)
+    started, process, original = time.monotonic(), None, None
+    stdout_path, stderr_path = OUT / "logs" / (name + ".stdout"), OUT / "logs" / (name + ".stderr")
+    try:
+        contamination_check(performance)
+        require(not any(k.startswith("MALLOC_") or k == "GLIBC_TUNABLES" for k in ACTIVE_ENV),
+                "orchestrator driver environment contains allocator pollution")
+        with stdout_path.open("xb") as stdout, stderr_path.open("xb") as stderr:
+            process = subprocess.Popen(argv, cwd=ROOT, env=ACTIVE_ENV, stdout=stdout, stderr=stderr,
+                                       start_new_session=True)
+            original = proc_info(process.pid)
+            row["original_process"] = original
+            save()
+            while True:
+                remaining = timeout - (time.monotonic() - started)
+                require(remaining > 0, name + " exceeded its one-shot time limit")
+                try:
+                    row["returncode"] = process.wait(timeout=min(MONITOR_SECONDS, remaining))
+                    break
+                except subprocess.TimeoutExpired:
+                    contamination_check(performance)
+                    for item in BOUND.values():
+                        require(identity(item["path"]) == item["identity"],
+                                "bound input changed during stage: " + item["path"])
+                    row["monitor_samples"] += 1
+            contamination_check(performance)
+        require(row["returncode"] == 0, name + " failed; original logs retained, no retry")
+    except BaseException as error:
+        row["error"] = {"type": type(error).__name__, "reason": str(error)[:2000]}
+        if process is not None and process.poll() is None:
+            row["owned_cleanup"] = stop_owned_tree(process, original)
+            row["returncode"] = process.poll()
+        raise
+    finally:
+        row["seconds"], row["finished_utc"] = time.monotonic() - started, utc()
+        for field, path in (("stdout", stdout_path), ("stderr", stderr_path)):
+            if path.exists():
+                row[field] = record(path)
+        row["environment_after"] = telemetry()
+        save()
+        event("stage_finished", stage=name, returncode=row["returncode"])
+
+
+def qualification_commands():
+    return [
+        ("isolated-tests", ["/usr/bin/python3", "-B", str(HERE / "run_isolated_tests.py"),
+            "--artifacts", str(QUAL / "retained-artifacts.jsonl"), "--source-manifest", str(QUAL / "source-map.json"),
+            "--output", str(CONFIG_QUAL / "isolated-tests"), "--allocator-arena-max", "1", "--timeout", "180"], 1800),
+        ("audit-isolated-tests", ["/usr/bin/python3", "-B", str(HERE / "audit_isolated_tests.py"),
+            "--evidence", str(CONFIG_QUAL / "isolated-tests"), "--output", str(CONFIG_QUAL / "isolated-audit.json"),
+            "--expected-filter", ""], 300)]
+
+
+def cancel_commands(version):
+    directory = CAMPAIGNS[version]
+    return [
+        ("cancel-" + version + "-r15", [
+            "/usr/bin/python3", "-B", str(HERE / "run_cancel_responsiveness.py"),
+            "--baseline", str(BASELINES[version][0] / "hepta-runtime"),
+            "--candidate", str(QUAL / "hepta-runtime"), "--candidate-arena-max", "1",
+            "--out", str(directory), "--workers", "1", "2", "--receipt-bytes", "1024", "4194272",
+            "--payload", "escaped", "--concurrency", "8", "--waves", "24"], 1800),
+        ("analyze-cancel-" + version + "-r15", [
+            "/usr/bin/python3", "-B", str(HERE / "analyze_cancel_responsiveness.py"),
+            str(directory / "report.json"), "--summary", str(directory / "independent-summary.json"),
+            "--markdown", str(directory / "independent-summary.md")], 180)]
+
+
+def validate_config_qualification(original, ready_sha):
+    path = CONFIG_QUAL / "isolated-tests/summary.json"
+    summary = json.loads(path.read_bytes())
+    audit_path = CONFIG_QUAL / "isolated-audit.json"
+    audit = json.loads(audit_path.read_bytes())
+    counts = {k: original[k] for k in ("passed", "failed", "ignored", "selected")}
+    require(summary.get("success") is True and audit.get("success") is True
+            and {k: summary.get(k) for k in counts} == counts
+            and {k: audit.get(k) for k in counts} == counts
+            and summary.get("retries") == 0 and summary.get("filter") == ""
+            and audit.get("expected_filter") == "" and not summary.get("enumeration_errors"),
+            "arena1 complete isolated qualification/audit failed or inventory changed")
+    require(summary["artifacts_sha256"] == original["artifacts_sha256"]
+            and summary["source_manifest_sha256"] == original["source_manifest_sha256"]
+            and summary["binaries"] == original["binaries"], "arena1 retained inventory is not identical to R14")
+    selected = summary["allocator_configuration"]["variants"]["candidate"]["environment"]
+    require(selected == {"MALLOC_ARENA_MAX": "1"}
+            and summary["allocator_observation_counts"]["verified"] > 0, "arena1 configuration not verified")
+    result = {"schema": "hepta-x230-r15-configuration-qualification/v1", "success": True,
+        "finished_utc": utc(), "source": str(SOURCE), "qualification_reused": str(QUAL / "report.json"),
+        "r14_qualification_sha256": REPORT["gate"]["r14_qualification_sha256"],
+        "source_files": 219, "source_tested_after_current_frozen_equal": True,
+        "runtime_sha256": CANDIDATE_SHA, "release_binaries": REPORT["gate"]["release_binaries"],
+        "retained_test_binaries": REPORT["gate"]["retained_test_binaries"],
+        "configuration_ready_sha256": CONFIG_READY_SHA, "tooling_install_sha256": TOOLING_SHA,
+        "local_orchestrator_ready_sha256": ready_sha,
+        "allocator_environment": selected, "allocator_configuration": summary["allocator_configuration"],
+        "allocator_observation_counts": summary["allocator_observation_counts"],
+        "tests": {**counts, "retries": 0}, "source_manifest_sha256": summary["source_manifest_sha256"],
+        "artifacts_sha256": summary["artifacts_sha256"],
+        "summary": record(path), "audit": record(audit_path), "compiler_invocations": 0,
+        "automatic_retries": 0, "rust_source_modified": False,
+        "short_process_proof_limit": "An exited child can have unavailable_process_exited; explicit Popen env remains bound. No retry to obtain a live snapshot."}
+    write_once(CONFIG_QUAL / "report.json", result)
+    binding = bind(CONFIG_QUAL / "report.json")
+    REPORT["configuration_qualification"] = binding
+    REPORT["bound_inputs"] = list(BOUND.values())
+    save()
+    event("configuration_qualification_passed", report=binding["path"], sha256=binding["sha256"],
+          passed=counts["passed"], ignored=counts["ignored"])
+    return result, binding
+
+
+def validate_perf_gate(value, qualification_sha, ready_sha):
+    require(value.get("schema") == "hepta-x230-r15-performance-release/v1"
+            and value.get("success") is True and value.get("release_performance") is True
+            and value.get("archive_io_finished") is True
+            and value.get("configuration_qualification_path") == str(CONFIG_QUAL / "report.json")
+            and value.get("configuration_qualification_sha256") == qualification_sha
+            and value.get("local_orchestrator_ready_sha256") == ready_sha
+            and value.get("configuration_ready_sha256") == CONFIG_READY_SHA
+            and value.get("candidate_runtime_sha256") == CANDIDATE_SHA
+            and isinstance(value.get("released_utc"), str) and bool(value.get("reason")),
+            "explicit performance release gate does not bind this completed qualification")
+
+
+def wait_for_perf_gate(qualification_sha, ready_sha, seconds):
+    started, deadline = time.monotonic(), time.monotonic() + seconds
+    REPORT["state"], REPORT["current_stage"] = "waiting_perf_release", "perf-ready-gate"
+    REPORT["performance_gate_wait"] = {"path": str(PERF_GATE), "limit_seconds": seconds,
+                                     "started_utc": utc(), "wait_attempts": 1}
+    save()
+    event("waiting_for_explicit_performance_gate", path=str(PERF_GATE),
+          configuration_qualification_sha256=qualification_sha, limit_seconds=seconds)
+    while True:
+        require(time.monotonic() < deadline, "one bounded performance-gate wait expired; no campaign started")
+        if os.path.lexists(PERF_GATE):
+            if PERF_GATE.lstat().st_nlink == 2 and os.path.lexists(ROOT / "perf-ready-01.preparing"):
+                time.sleep(max(0, min(0.05, deadline - time.monotonic())))
+                continue
+            require(PERF_GATE.stat().st_size <= 16384, "performance gate is unexpectedly large")
+            identity(PERF_GATE)
+            raw = PERF_GATE.read_bytes()
+            value = json.loads(raw)
+            validate_perf_gate(value, qualification_sha, ready_sha)
+            bind(PERF_GATE, hashlib.sha256(raw).hexdigest())
+            REPORT["performance_gate_wait"].update(
+                elapsed_seconds=time.monotonic() - started, passed=True, gate=record(PERF_GATE))
+            REPORT["bound_inputs"] = list(BOUND.values())
+            save()
+            return
+        require(time.monotonic() < deadline, "one bounded performance-gate wait expired; no campaign started")
+        time.sleep(max(0, min(10, deadline - time.monotonic())))
+
+
+def validate_cancel(version):
+    directory = CAMPAIGNS[version]
+    raw_path, summary_path = directory / "report.json", directory / "independent-summary.json"
+    raw, summary = json.loads(raw_path.read_bytes()), json.loads(summary_path.read_bytes())
+    expected = {"A": BASELINES[version][1], "B": CANDIDATE_SHA}
+    require(raw.get("okay") is True and raw["binary_sha256"] == expected
+            and summary["binary_sha256"] == expected
+            and summary["source_sha256"] == sha(raw_path)
+            and summary.get("rpc_responses_and_statistical_fields_validated") is True
+            and summary.get("controller_generations") == 16
+            and summary["counts"]["measured"] == 3456 and summary["counts"]["warmup"] == 288
+            and {(row["workers"], row["receipt_bytes"]) for row in summary["cases"]}
+            == {(1, 1024), (1, 4194272), (2, 1024), (2, 4194272)},
+            "cancel campaign independent summary differs")
+    variants = raw["allocator_configuration"]["variants"]
+    require(variants["A"]["environment"] == {} and variants["B"]["environment"] == {"MALLOC_ARENA_MAX": "1"},
+            "cancel baseline/candidate allocator configurations differ")
+    for path in (raw_path, summary_path, directory / "independent-summary.md"):
+        bind(path)
+    REPORT.setdefault("campaign_results", {})[version] = {
+        "raw": record(raw_path), "analysis": record(summary_path), "binary_sha256": expected,
+        "allocator_environment_verification": summary["allocator_environment_verification"]}
+    REPORT["bound_inputs"] = list(BOUND.values())
+    save()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--expected-ready-sha256", required=True)
+    parser.add_argument("--perf-wait-seconds", type=int, default=3600)
+    args = parser.parse_args()
+    require(1 <= args.perf_wait_seconds <= 7200, "performance gate wait must be 1..7200 seconds")
+    os.umask(0o077)
+    require(ROOT.resolve() == ROOT and SOURCE.resolve() == SOURCE and QUAL.resolve() == QUAL,
+            "root/source/qualification paths must be direct")
+    OUT.mkdir(mode=0o700, exist_ok=False)
+    (OUT / "logs").mkdir(mode=0o700)
+    (OUT / "bindings").mkdir(mode=0o700)
+    started = time.monotonic()
+    REPORT.update({"schema": "hepta-x230-r15-local-campaigns/v1", "success": False,
+        "state": "preflight", "started_utc": utc(), "driver_sha256": sha(__file__),
+        "driver_process": proc_info(os.getpid()),
+        "local_orchestrator_ready_sha256": args.expected_ready_sha256,
+        "source": str(SOURCE), "qualification": str(QUAL / "report.json"),
+        "configuration_qualification_directory": str(CONFIG_QUAL),
+        "automatic_retries": 0, "remote_operations": 0, "production_service_changes": False,
+        "compilation_started": False, "rust_source_modified": False,
+        "candidate_allocator_environment": {"MALLOC_ARENA_MAX": "1"},
+        "campaign_directories": {key: str(value) for key, value in CAMPAIGNS.items()},
+        "stages": [], "environment_before": telemetry(),
+        "monitor_scope": "5-second compiler/known competing optimization/archive process snapshots. No full command lines or environment values retained. This cannot prove absence of every short-lived/background activity."})
+    save()
+    try:
+        require(not os.path.lexists(CONFIG_QUAL) and not os.path.lexists(PERF_GATE)
+                and all(not os.path.lexists(path) for path in CAMPAIGNS.values()),
+                "fresh configuration/campaign/gate outputs required; no resume or retry")
+        qualification, original_isolated = establish_binding(args.expected_ready_sha256)
+        CONFIG_QUAL.mkdir(mode=0o700)
+        for name, command, timeout in qualification_commands():
+            check_binding(qualification["source_tested"])
+            run_stage(name, command, timeout)
+        check_binding(qualification["source_tested"])
+        unused, config_binding = validate_config_qualification(original_isolated, args.expected_ready_sha256)
+        wait_for_perf_gate(config_binding["sha256"], args.expected_ready_sha256, args.perf_wait_seconds)
+        for version in ("r14", "r11"):
+            check_binding(qualification["source_tested"])
+            contamination_check(performance=True)
+            for name, command, timeout in cancel_commands(version):
+                run_stage(name, command, timeout, performance=True)
+            validate_cancel(version)
+            check_binding(qualification["source_tested"])
+        check_binding(qualification["source_tested"], deep=True)
+        REPORT["success"], REPORT["state"] = True, "completed"
+    except BaseException as error:
+        REPORT["success"], REPORT["state"] = False, "failed"
+        REPORT["error"] = {"type": type(error).__name__, "reason": str(error)[:3000]}
+        event("pipeline_stopped", error_type=type(error).__name__, reason=str(error)[:3000])
+    finally:
+        REPORT["environment_after"] = telemetry()
+        REPORT["finished_utc"], REPORT["seconds"] = utc(), time.monotonic() - started
+        REPORT["bound_inputs"] = list(BOUND.values())
+        REPORT["retained_result_files"] = []
+        for directory in CAMPAIGNS.values():
+            if directory.exists():
+                for name in ("report.json", "independent-summary.json", "independent-summary.md"):
+                    path = directory / name
+                    if path.is_file():
+                        REPORT["retained_result_files"].append(record(path))
+        save()
+        event("pipeline_finished", success=REPORT["success"], report=str(OUT / "report.json"))
+    return 0 if REPORT["success"] else 1
+
+
+def interrupted(signum, unused_frame):
+    raise InterruptedError("pipeline received signal " + str(signum))
+
+
+if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, interrupted)
+    signal.signal(signal.SIGINT, interrupted)
+    sys.exit(main())

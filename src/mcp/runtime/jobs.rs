@@ -21,6 +21,17 @@ use super::config::{check_environment, check_execution, runtime_config, valid_na
 use super::config::{ExecutionMode, Platform};
 use super::ssh::{run_jobctl, run_python_json};
 
+#[path = "jobs_record_projection.rs"]
+mod record_projection;
+use record_projection::{BorrowedJobString, ValidatedJobString};
+
+#[path = "jobs_operation_record.rs"]
+mod operation_record;
+use operation_record::{check_operation_ref, OperationRecord, OperationRecordRef};
+
+#[path = "jobs_persistence.rs"]
+mod persistence;
+
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 const START_LANE_COUNT: usize = 64;
 type StartLanes = [Arc<AsyncMutex<()>>; START_LANE_COUNT];
@@ -33,13 +44,19 @@ static START_IO_WORKERS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 const MAX_START_OUTCOME_PUBLICATIONS: usize = 8;
 static START_OUTCOME_PUBLICATIONS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 const MAX_CANCEL_PUBLICATIONS: usize = 8;
+const MAX_CANCEL_PREPARATIONS: usize = 2;
 static CANCEL_PUBLICATIONS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+static CANCEL_PREPARATIONS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<Option<AuditReadiness>>> = OnceLock::new();
 const MAX_OBSERVATION_AUDITS: usize = 8;
 static OBSERVATION_AUDITS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+const MAX_OBSERVATION_RECORD_READS: usize = 4;
+static OBSERVATION_RECORD_READS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 static REUSE_HITS: OnceLock<Mutex<ReuseHitCache>> = OnceLock::new();
 const MAX_REGISTRY_LOOKUPS: usize = 4;
 static REGISTRY_LOOKUPS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+const MAX_INVENTORY_READ_WORKERS: usize = 4;
+static INVENTORY_READ_SLOTS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 const MAX_COLD_DEMAND_BYTES: usize = 1024;
 const MAX_COLD_HINT_BYTES: usize = 16 * 1024;
 const MAX_COLD_COHORT_IDENTITIES: usize = 8;
@@ -149,30 +166,93 @@ pub struct ProcessListPageParams {
 	pub limit: Option<u16>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-struct JobRecord {
-	#[serde(default)]
-	execution_mode: ExecutionMode,
-	#[serde(default)]
-	system_jobctl: bool,
-	id: String,
-	host: String,
-	ssh_target: String,
-	unit: String,
-	remote_job_dir: String,
-	executable: String,
-	args: Vec<String>,
-	cwd: Option<String>,
-	env_keys: Vec<String>,
-	created_unix_ms: u128,
-	idempotency_key: Option<String>,
-	request_fingerprint: u64,
-	#[serde(default)]
-	request_digest: Option<String>,
-	#[serde(default = "default_launch_state")]
-	launch_state: String,
-	#[serde(default)]
-	launch_error: Option<String>,
+// Recovery keeps its concrete schema and derived decoder. Borrowed lookups and
+// inventories use the same field list, including every validation/default,
+// without allocating private command strings that their projection discards.
+macro_rules! job_record_schema {
+	($visibility:vis $name:ident $(<$parameter:ident>)?, $text:ident, $private_text:ident $(, $attribute:meta)?) => {
+		#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+		$(#[$attribute])?
+		$visibility struct $name $(<$parameter>)? {
+			#[serde(default)]
+			$visibility execution_mode: ExecutionMode,
+			#[serde(default)]
+			$visibility system_jobctl: bool,
+			$visibility id: String,
+			$visibility host: String,
+			$visibility ssh_target: $text,
+			$visibility unit: $text,
+			$visibility remote_job_dir: $text,
+			$visibility executable: $private_text,
+			$visibility args: Vec<$private_text>,
+			$visibility cwd: Option<$private_text>,
+			$visibility env_keys: Vec<$private_text>,
+			$visibility created_unix_ms: u128,
+			$visibility idempotency_key: Option<String>,
+			$visibility request_fingerprint: u64,
+			#[serde(default)]
+			$visibility request_digest: Option<$text>,
+			#[serde(default = "default_launch_state")]
+			$visibility launch_state: String,
+			#[serde(default)]
+			$visibility launch_error: Option<$private_text>,
+		}
+
+	};
+}
+
+job_record_schema!(JobRecord, String, String);
+job_record_schema!(
+	JobRecordData<Text>,
+	Text,
+	Text,
+	serde(bound(deserialize = "Text: Deserialize<'de>"))
+);
+
+mod operation_record_schema {
+	use super::*;
+
+	// Serde uses the Rust struct name for both top-level and sequence diagnostics.
+	// Keep the owned receipt's name while sharing its complete schema.
+	job_record_schema!(
+		pub(super) JobRecord<Text>,
+		Text,
+		ValidatedJobString,
+		serde(bound(deserialize = "Text: Deserialize<'de>"))
+	);
+}
+type OperationRecordData<Text> = operation_record_schema::JobRecord<Text>;
+
+impl JobRecordData<BorrowedJobString<'_>> {
+	fn into_owned(self) -> JobRecord {
+		JobRecord {
+			execution_mode: self.execution_mode,
+			system_jobctl: self.system_jobctl,
+			id: self.id,
+			host: self.host,
+			ssh_target: self.ssh_target.into_owned(),
+			unit: self.unit.into_owned(),
+			remote_job_dir: self.remote_job_dir.into_owned(),
+			executable: self.executable.into_owned(),
+			args: self
+				.args
+				.into_iter()
+				.map(BorrowedJobString::into_owned)
+				.collect(),
+			cwd: self.cwd.map(BorrowedJobString::into_owned),
+			env_keys: self
+				.env_keys
+				.into_iter()
+				.map(BorrowedJobString::into_owned)
+				.collect(),
+			created_unix_ms: self.created_unix_ms,
+			idempotency_key: self.idempotency_key,
+			request_fingerprint: self.request_fingerprint,
+			request_digest: self.request_digest.map(BorrowedJobString::into_owned),
+			launch_state: self.launch_state,
+			launch_error: self.launch_error.map(BorrowedJobString::into_owned),
+		}
+	}
 }
 
 fn default_launch_state() -> String {
@@ -264,12 +344,9 @@ fn save_record_with_registry_gate(
 
 fn save_record_at(path: &Path, record: &JobRecord) -> Result<()> {
 	let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
-	let bytes = serde_json::to_vec_pretty(record)?;
 	// The durable identity must remain readable by the bounded recovery path.
-	// Reject an oversized request before creating a receipt or remote effect.
-	if bytes.len() as u64 > MAX_JOB_RECORD_BYTES {
-		bail!("durable job record exceeds {} bytes", MAX_JOB_RECORD_BYTES);
-	}
+	// Reject an oversized encoding before creating a receipt or remote effect.
+	let bytes = persistence::encode_record(record)?;
 	#[cfg(unix)]
 	let mut file = {
 		use std::os::unix::fs::OpenOptionsExt;
@@ -293,106 +370,145 @@ fn save_record_at(path: &Path, record: &JobRecord) -> Result<()> {
 	Ok(())
 }
 
+#[cfg(test)]
 fn read_record_at(path: &Path, expected_id: &str) -> Result<JobRecord> {
 	read_record_at_with_buffer(path, expected_id, &mut Vec::new())
 }
 
+// Owned reads keep the original direct call boundary; borrowed selection can
+// use a closure while both paths share the same buffer lifetime and cap.
+macro_rules! job_record_read_buffer {
+	($bytes:ident, $read:expr) => {{
+		// A scan owns this scratch buffer; returned records own their decoded data.
+		// Clear even an early failure so later reads cannot observe earlier bytes.
+		$bytes.clear();
+		let result = $read;
+		$bytes.clear();
+		// A concurrent growth/read error can make read_to_end overallocate. Do not
+		// retain that capacity across receipts, even though the scan will refuse it.
+		if $bytes.capacity() > (MAX_JOB_RECORD_BYTES + 1) as usize {
+			*$bytes = Vec::new();
+		}
+		result
+	}};
+}
+
+#[cfg(test)]
 fn read_record_at_with_buffer(
 	path: &Path,
 	expected_id: &str,
 	bytes: &mut Vec<u8>,
 ) -> Result<JobRecord> {
-	// A scan owns this scratch buffer; returned records own their decoded data.
-	// Clear even an early failure so later reads cannot observe earlier bytes.
-	bytes.clear();
-	let result = read_record_at_into(path, expected_id, bytes);
-	bytes.clear();
-	// A concurrent growth/read error can make read_to_end overallocate. Do not
-	// retain that capacity across receipts, even though the scan will refuse it.
-	if bytes.capacity() > (MAX_JOB_RECORD_BYTES + 1) as usize {
-		*bytes = Vec::new();
-	}
-	result
+	job_record_read_buffer!(bytes, read_record_at_into(path, expected_id, bytes))
 }
 
-fn read_record_at_into(path: &Path, expected_id: &str, bytes: &mut Vec<u8>) -> Result<JobRecord> {
-	// A symlink or a mismatched identity is not a usable effect-owner receipt.
-	let metadata = std::fs::symlink_metadata(path)
-		.with_context(|| format!("cannot stat durable job record {}", path.display()))?;
-	if !metadata.file_type().is_file() {
-		bail!("unsafe durable job record type: {}", path.display());
-	}
-	let mut options = OpenOptions::new();
-	options.read(true);
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::OpenOptionsExt;
-		options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK);
-	}
-	// Recheck the opened file, not only the pathname inspected above:
-	// a concurrent symlink swap must never redirect a credentialed read.
-	let file = options
-		.open(path)
-		.with_context(|| format!("cannot open durable job record {}", path.display()))?;
-	let opened = file.metadata()?;
-	if !opened.is_file() || opened.len() > MAX_JOB_RECORD_BYTES {
-		bail!(
-			"invalid or oversized durable job record: {}",
-			path.display()
-		);
-	}
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::MetadataExt;
-		if opened.nlink() != 1
-			|| opened.uid() != unsafe { libc::geteuid() }
-			|| metadata.dev() != opened.dev()
-			|| metadata.ino() != opened.ino()
-		{
-			bail!("unsafe durable job receipt ownership or inode");
-		}
-	}
-	// The descriptor length is already bounded. One spare byte lets the same
-	// buffer observe EOF without growing for every unchanged regular receipt.
-	bytes
-		.try_reserve_exact(opened.len() as usize + 1)
-		.context("cannot allocate bounded durable job read buffer")?;
-	let mut bounded = (&file).take(MAX_JOB_RECORD_BYTES + 1);
-	bounded.read_to_end(bytes)?;
-	if bytes.len() as u64 > MAX_JOB_RECORD_BYTES {
-		bail!("oversized durable job record: {}", path.display());
-	}
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::MetadataExt;
-		let after = file.metadata()?;
-		let current = std::fs::symlink_metadata(path)?;
-		let stamp = |m: &std::fs::Metadata| {
-			(
-				m.dev(),
-				m.ino(),
-				m.mode(),
-				m.uid(),
-				m.nlink(),
-				m.len(),
-				m.mtime(),
-				m.mtime_nsec(),
-				m.ctime(),
-				m.ctime_nsec(),
-			)
-		};
-		if stamp(&opened) != stamp(&after) || stamp(&after) != stamp(&current) {
-			bail!("durable job receipt changed during read");
-		}
-	}
-	let record: JobRecord = serde_json::from_slice(bytes)
-		.with_context(|| format!("corrupt job record; durable job receipt {}", path.display()))?;
-	if record.id != expected_id {
-		bail!("durable job filename/identity mismatch: {}", path.display());
-	}
-	Ok(record)
+fn with_record_read_buffer<T>(
+	bytes: &mut Vec<u8>,
+	read: impl FnOnce(&mut Vec<u8>) -> Result<T>,
+) -> Result<T> {
+	job_record_read_buffer!(bytes, read(bytes))
 }
 
+// Both decoders expand the same descriptor checks. The owned function keeps
+// its concrete signature and direct serde call instead of a generic read path.
+macro_rules! job_record_reader {
+	($name:ident $(<$input_lifetime:lifetime>)?, $record:ty) => {
+		fn $name $(<$input_lifetime>)? (
+			path: &Path,
+			expected_id: &str,
+			bytes: & $($input_lifetime)? mut Vec<u8>,
+		) -> Result<$record> {
+			// A symlink or a mismatched identity is not a usable effect-owner receipt.
+			let metadata = std::fs::symlink_metadata(path)
+				.with_context(|| format!("cannot stat durable job record {}", path.display()))?;
+			if !metadata.file_type().is_file() {
+				bail!("unsafe durable job record type: {}", path.display());
+			}
+			let mut options = OpenOptions::new();
+			options.read(true);
+			#[cfg(unix)]
+			{
+				use std::os::unix::fs::OpenOptionsExt;
+				options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK);
+			}
+			// Recheck the opened file, not only the pathname inspected above:
+			// a concurrent symlink swap must never redirect a credentialed read.
+			let file = options
+				.open(path)
+				.with_context(|| format!("cannot open durable job record {}", path.display()))?;
+			let opened = file.metadata()?;
+			if !opened.is_file() || opened.len() > MAX_JOB_RECORD_BYTES {
+				bail!(
+					"invalid or oversized durable job record: {}",
+					path.display()
+				);
+			}
+			#[cfg(unix)]
+			{
+				use std::os::unix::fs::MetadataExt;
+				if opened.nlink() != 1
+					|| opened.uid() != unsafe { libc::geteuid() }
+					|| metadata.dev() != opened.dev()
+					|| metadata.ino() != opened.ino()
+				{
+					bail!("unsafe durable job receipt ownership or inode");
+				}
+			}
+			// The descriptor length is already bounded. One spare byte lets the same
+			// buffer observe EOF without growing for every unchanged regular receipt.
+			bytes
+				.try_reserve_exact(opened.len() as usize + 1)
+				.context("cannot allocate bounded durable job read buffer")?;
+			let mut bounded = (&file).take(MAX_JOB_RECORD_BYTES + 1);
+			bounded.read_to_end(bytes)?;
+			if bytes.len() as u64 > MAX_JOB_RECORD_BYTES {
+				bail!("oversized durable job record: {}", path.display());
+			}
+			#[cfg(unix)]
+			{
+				use std::os::unix::fs::MetadataExt;
+				let after = file.metadata()?;
+				let current = std::fs::symlink_metadata(path)?;
+				let stamp = |m: &std::fs::Metadata| {
+					(
+						m.dev(),
+						m.ino(),
+						m.mode(),
+						m.uid(),
+						m.nlink(),
+						m.len(),
+						m.mtime(),
+						m.mtime_nsec(),
+						m.ctime(),
+						m.ctime_nsec(),
+					)
+				};
+				if stamp(&opened) != stamp(&after) || stamp(&after) != stamp(&current) {
+					bail!("durable job receipt changed during read");
+				}
+			}
+			let record: $record = serde_json::from_slice(bytes)
+				.with_context(|| format!("corrupt job record; durable job receipt {}", path.display()))?;
+			if record.id != expected_id {
+				bail!("durable job filename/identity mismatch: {}", path.display());
+			}
+			Ok(record)
+
+		}
+	};
+}
+
+job_record_reader!(read_record_at_into, JobRecord);
+job_record_reader!(
+	read_borrowed_record_at_into<'bytes>,
+	JobRecordData<BorrowedJobString<'bytes>>
+);
+job_record_reader!(
+	read_operation_record_at_into<'bytes>,
+	OperationRecordData<BorrowedJobString<'bytes>>
+);
+
+#[cfg(test)]
 fn load_record(id: &str) -> Result<JobRecord> {
 	read_record_at(&record_path(id)?, id)
 		.with_context(|| format!("unknown or invalid durable job `{id}`"))
@@ -548,6 +664,7 @@ struct KnownReuseBinding {
 struct RegistryColdScans {
 	gate: Mutex<()>,
 	state: Mutex<RegistryColdState>,
+	completed: std::sync::Condvar,
 }
 
 #[derive(Default)]
@@ -555,23 +672,65 @@ struct RegistryColdState {
 	demands: HashMap<(String, String), usize>,
 	hints: HashMap<(String, String), RegistryColdHint>,
 	active: Option<Vec<(String, String)>>,
+	active_epoch: Option<RegistryEpoch>,
+	// A waiter pins this exact completion, never a later scan or an integer ABA.
+	active_completion: Option<Arc<()>>,
 }
 
 struct RegistryColdLeader<'a> {
 	scans: &'a RegistryColdScans,
-	_gate: MutexGuard<'a, ()>,
+	gate: Option<MutexGuard<'a, ()>>,
+}
+
+impl RegistryColdLeader<'_> {
+	fn finish_locked(&mut self, state: &mut RegistryColdState) {
+		state.active = None;
+		state.active_epoch = None;
+		state.active_completion = None;
+		#[cfg(all(test, unix))]
+		registry_coalescing_tests::before_cohort_gate_release();
+		// Admission checks the gate and membership under this same state lock.
+		// Never expose a still-held leader gate with already-cleared membership.
+		drop(self.gate.take());
+		self.scans.completed.notify_all();
+	}
+
+	fn publish(
+		mut self,
+		demand: &RegistryColdDemand,
+		cohort: Vec<RegistryColdTarget>,
+		epoch: RegistryEpoch,
+	) -> Result<()> {
+		let scans = self.scans;
+		let mut state = scans
+			.state
+			.lock()
+			.map_err(|_| anyhow::anyhow!("job registry cold demand unavailable"))?;
+		demand.publish_locked(&mut state, cohort, epoch);
+		self.finish_locked(&mut state);
+		Ok(())
+	}
 }
 
 impl Drop for RegistryColdLeader<'_> {
 	fn drop(&mut self) {
-		// Clear membership before the original gate unlocks, including on panic.
-		// A later leader must never inherit authority to queue unscanned keys.
-		self.scans
+		if self.gate.is_none() {
+			return;
+		}
+		let scans = self.scans;
+		let mut state = scans
 			.state
 			.lock()
-			.unwrap_or_else(|error| error.into_inner())
-			.active = None;
+			.unwrap_or_else(|error| error.into_inner());
+		// Preserve panic cleanup and poisoning of the original leader gate.
+		self.finish_locked(&mut state);
 	}
+}
+
+enum RegistryColdAdmission<'a> {
+	Leader(RegistryColdLeader<'a>, Vec<RegistryColdTarget>),
+	Covered(Arc<()>),
+	Independent,
 }
 
 #[derive(Clone)]
@@ -630,20 +789,93 @@ impl RegistryColdDemand {
 		Ok(self.targets(&state))
 	}
 
-	fn start_cohort<'a>(
-		&'a self,
-		gate: MutexGuard<'a, ()>,
+	fn admit_cohort(
+		&self,
 		recent: Vec<(String, String)>,
-	) -> Result<(RegistryColdLeader<'a>, Vec<RegistryColdTarget>)> {
-		let leader = RegistryColdLeader {
-			scans: &self.scans,
-			_gate: gate,
-		};
+		epoch: RegistryEpoch,
+	) -> Result<RegistryColdAdmission<'_>> {
+		#[cfg(all(test, unix))]
+		registry_coalescing_tests::before_cohort_admission();
+		let state = self
+			.scans
+			.state
+			.lock()
+			.map_err(|_| anyhow::anyhow!("job registry cold demand unavailable"))?;
+		// State never waits for the gate. A winning gate and its frozen coverage
+		// become visible together; an uncovered late key still scans independently.
+		match self.scans.gate.try_lock() {
+			Ok(gate) => {
+				#[cfg(all(test, unix))]
+				registry_coalescing_tests::after_cohort_gate_acquired();
+				let (leader, cohort) =
+					self.start_cohort_locked(gate, state, recent, Some(epoch))?;
+				Ok(RegistryColdAdmission::Leader(leader, cohort))
+			}
+			Err(TryLockError::WouldBlock) => {
+				if state.active_epoch == Some(epoch)
+					&& state
+						.active
+						.as_ref()
+						.is_some_and(|targets| targets.contains(&self.identity))
+				{
+					if let Some(completion) = &state.active_completion {
+						return Ok(RegistryColdAdmission::Covered(completion.clone()));
+					}
+				}
+				Ok(RegistryColdAdmission::Independent)
+			}
+			Err(TryLockError::Poisoned(_)) => {
+				bail!("job registry cold scan unavailable");
+			}
+		}
+	}
+
+	fn wait_for_cohort(&self, completion: &Arc<()>) -> Result<()> {
 		let mut state = self
 			.scans
 			.state
 			.lock()
 			.map_err(|_| anyhow::anyhow!("job registry cold demand unavailable"))?;
+		while state
+			.active_completion
+			.as_ref()
+			.is_some_and(|active| Arc::ptr_eq(active, completion))
+		{
+			state = self
+				.scans
+				.completed
+				.wait(state)
+				.map_err(|_| anyhow::anyhow!("job registry cold demand unavailable"))?;
+		}
+		// Followers never acquire the leader gate. They cannot create a second
+		// held-gate/empty-membership window while validating a published hint.
+		if self.scans.gate.is_poisoned() {
+			bail!("job registry cold scan unavailable");
+		}
+		Ok(())
+	}
+
+	#[cfg(all(test, target_os = "linux"))]
+	fn start_cohort<'a>(
+		&'a self,
+		gate: MutexGuard<'a, ()>,
+		recent: Vec<(String, String)>,
+	) -> Result<(RegistryColdLeader<'a>, Vec<RegistryColdTarget>)> {
+		let state = self
+			.scans
+			.state
+			.lock()
+			.map_err(|_| anyhow::anyhow!("job registry cold demand unavailable"))?;
+		self.start_cohort_locked(gate, state, recent, None)
+	}
+
+	fn start_cohort_locked<'a>(
+		&'a self,
+		gate: MutexGuard<'a, ()>,
+		mut state: MutexGuard<'_, RegistryColdState>,
+		recent: Vec<(String, String)>,
+		epoch: Option<RegistryEpoch>,
+	) -> Result<(RegistryColdLeader<'a>, Vec<RegistryColdTarget>)> {
 		// All actual other demands fit: at most three distinct keys, each at
 		// most 1 KiB. Predictions never displace them or reject the lookup.
 		let mut cohort = self.targets(&state);
@@ -680,7 +912,18 @@ impl RegistryColdDemand {
 				.map(|target| target.identity.clone())
 				.collect(),
 		);
-		Ok((leader, cohort))
+		state.active_epoch = epoch;
+		state.active_completion = Some(Arc::new(()));
+		drop(state);
+		// Construct cleanup ownership only after releasing the state guard; an
+		// allocation panic during freezing must not recursively lock that guard.
+		Ok((
+			RegistryColdLeader {
+				scans: &self.scans,
+				gate: Some(gate),
+			},
+			cohort,
+		))
 	}
 
 	fn read_hint(
@@ -714,21 +957,31 @@ impl RegistryColdDemand {
 		{
 			return Ok(None);
 		}
+		#[cfg(all(test, unix))]
+		registry_coalescing_tests::after_cohort_hint_verified();
 		Ok(Some(record))
 	}
 
+	#[cfg(all(test, unix))]
 	fn publish(&self, cohort: Vec<RegistryColdTarget>, epoch: RegistryEpoch) -> Result<()> {
-		if !registry_has_content_watch(&epoch) {
-			return Ok(());
-		}
 		let mut state = self
 			.scans
 			.state
 			.lock()
 			.map_err(|_| anyhow::anyhow!("job registry cold demand unavailable"))?;
-		// Close admission atomically with publication. A predicted key that
-		// registers after this point must not wait for an already finished scan.
-		state.active = None;
+		self.publish_locked(&mut state, cohort, epoch);
+		Ok(())
+	}
+
+	fn publish_locked(
+		&self,
+		state: &mut RegistryColdState,
+		cohort: Vec<RegistryColdTarget>,
+		epoch: RegistryEpoch,
+	) {
+		if !registry_has_content_watch(&epoch) {
+			return;
+		}
 		let mut retained = state
 			.hints
 			.iter()
@@ -749,7 +1002,6 @@ impl RegistryColdDemand {
 				.hints
 				.insert(target.identity, RegistryColdHint { epoch, id, digest });
 		}
-		Ok(())
 	}
 }
 
@@ -1063,7 +1315,27 @@ fn scan_registry_records_observed(
 			.file_stem()
 			.and_then(|name| name.to_str())
 			.context("invalid durable job record name")?;
-		let record = read_record_at_with_buffer(&path, expected_id, &mut bytes)?;
+		let record = with_record_read_buffer(&mut bytes, |bytes| {
+			if fingerprint {
+				// The no-watch fallback fingerprints every decoded field. Preserve
+				// its owned decode and canonical serialization without projection.
+				return read_record_at_into(&path, expected_id, bytes).map(Some);
+			}
+			let projection = read_borrowed_record_at_into(&path, expected_id, bytes)?;
+			let selected = (projection.host == host
+				&& projection.idempotency_key.as_deref() == Some(key))
+				|| cohort.iter().any(|target| {
+					projection.host == target.identity.0
+						&& projection.idempotency_key.as_deref() == Some(target.identity.1.as_str())
+				});
+			if !selected {
+				return Ok(None);
+			}
+			// Keep only selected originals, borrowing from the descriptor-validated
+			// bytes until now. This neither rereads the file nor reparses the JSON.
+			Ok(Some(projection.into_owned()))
+		})?;
+		let Some(record) = record else { continue };
 		for target in &mut *cohort {
 			target.observe(&record)?;
 		}
@@ -1370,54 +1642,45 @@ fn find_idempotent_in_with_probe(
 			bail!("job registry cold scan unavailable");
 		}
 		shared = demand.read_hint(dir, &epoch_probe)?;
+		#[cfg(all(test, unix))]
+		registry_coalescing_tests::after_cohort_hint_read();
 		if demand.scans.gate.is_poisoned() {
 			bail!("job registry cold scan unavailable");
 		}
 		if shared.is_none() {
-			match demand.scans.gate.try_lock() {
-				Ok(gate) => {
-					// A completed leader may have published after our first read.
+			// Never acquire the cache mutex from inside state admission.
+			let recent = {
+				let guard = cache
+					.lock()
+					.map_err(|_| anyhow::anyhow!("reuse cache unavailable"))?;
+				guard.recent_strict_candidates(dir)
+			};
+			match demand.admit_cohort(recent, epoch)? {
+				RegistryColdAdmission::Leader(leader, targets) => {
+					// A previous leader may have published after our first read.
 					shared = demand.read_hint(dir, &epoch_probe)?;
 					if shared.is_none() {
-						let recent = {
-							let guard = cache
-								.lock()
-								.map_err(|_| anyhow::anyhow!("reuse cache unavailable"))?;
-							guard.recent_strict_candidates(dir)
-						};
-						let (leader, targets) = demand.start_cohort(gate, recent)?;
 						cold_leader = Some(leader);
 						cohort = targets;
 					}
 				}
-				Err(TryLockError::WouldBlock) => {
-					let included = {
-						let state =
-							demand.scans.state.lock().map_err(|_| {
-								anyhow::anyhow!("job registry cold demand unavailable")
-							})?;
-						state
-							.active
-							.as_ref()
-							.is_some_and(|targets| targets.contains(&demand.identity))
-					};
-					if included {
-						#[cfg(all(test, unix))]
-						registry_coalescing_tests::cohort_wait_started();
-						let gate =
-							demand.scans.gate.lock().map_err(|_| {
-								anyhow::anyhow!("job registry cold scan unavailable")
-							})?;
-						shared = demand.read_hint(dir, &epoch_probe)?;
-						// Missing/changed hints must not turn a follower into another
-						// serial full scan. Fall back only after releasing the gate.
-						drop(gate);
-					}
+				RegistryColdAdmission::Covered(completion) => {
+					#[cfg(all(test, unix))]
+					registry_coalescing_tests::cohort_wait_started();
+					demand.wait_for_cohort(&completion)?;
+					shared = demand.read_hint(dir, &epoch_probe)?;
 				}
-				Err(TryLockError::Poisoned(_)) => {
-					bail!("job registry cold scan unavailable");
+				RegistryColdAdmission::Independent => {
+					// Publication may also have raced the first read of a late key.
+					// Recheck outside every gate/state lock before its independent scan.
+					shared = demand.read_hint(dir, &epoch_probe)?;
 				}
 			}
+		}
+		// Hint validation no longer holds a follower gate. Preserve the poison
+		// refusal if another original leader unwound during that strict read.
+		if demand.scans.gate.is_poisoned() {
+			bail!("job registry cold scan unavailable");
 		}
 	}
 	let (found, scanned_epoch) = if let Some(record) = shared {
@@ -1519,11 +1782,13 @@ fn find_idempotent_in_with_probe(
 			}
 		}
 	}
-	if let (Some(_), Some(demand), Some(scanned_epoch)) = (&cold_leader, &demand, scanned_epoch) {
+	if let (Some(leader), Some(demand), Some(scanned_epoch)) =
+		(cold_leader.take(), &demand, scanned_epoch)
+	{
 		// Publish only after all original refusal checks succeed. Each waiter
 		// verifies the complete digest and this exact epoch before using a hint.
 		prefill_scanned_strict_peers(dir, cache, epoch, scanned_epoch, &cohort, &epoch_probe)?;
-		demand.publish(cohort, scanned_epoch)?;
+		leader.publish(demand, cohort, scanned_epoch)?;
 	}
 	Ok(found)
 }
@@ -1650,11 +1915,29 @@ fn persist_pending_with(
 	})
 }
 
+async fn publish_pending_with(
+	record: JobRecord,
+	prepared: PreparedAudit,
+	slots: Arc<Semaphore>,
+	ownership: impl Send + 'static,
+	append: impl FnOnce(PreparedAudit) -> Result<()> + Send + 'static,
+	persist: impl FnOnce(&JobRecord) -> Result<()> + Send + 'static,
+) -> Result<JobRecord> {
+	// Transfer the original payload to its physical publisher. Returning it
+	// after both barriers avoids a second receipt copy while preserving custody
+	// if the awaiting caller is cancelled before or after worker submission.
+	run_start_io(slots, ownership, move || {
+		persist_pending_with(prepared, &record, append, persist)?;
+		Ok(record)
+	})
+	.await
+}
+
 async fn publish_pending_record(
-	record: &JobRecord,
+	record: JobRecord,
 	guard: &Option<OwnedStartGuard>,
 	owner: &Arc<super::effect_owner_fence::AdmissionPermit>,
-) -> Result<()> {
+) -> Result<JobRecord> {
 	let prepared = prepare_audit(
 		"process_start_intent",
 		&record.host,
@@ -1662,10 +1945,15 @@ async fn publish_pending_record(
 		&json!({"phase":"intent","remote_operation_submitted":false}),
 	)
 	.map_err(|_| operation_intent_unavailable())?;
-	let record = record.clone();
-	start_io(guard, owner, move || {
-		persist_pending_with(prepared, &record, append_audit, save_record)
-	})
+	// Freeze the same original intent before waiting for physical writer capacity.
+	publish_pending_with(
+		record,
+		prepared,
+		start_io_slots(),
+		(guard.clone(), owner.clone()),
+		append_audit,
+		save_record,
+	)
 	.await
 }
 
@@ -1772,6 +2060,7 @@ fn matches_request(record: &JobRecord, digest: &str) -> Result<bool> {
 		.is_ok())
 }
 
+#[cfg(test)]
 fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
 	let record = load_record(&params.job_id)?;
 	check_binding(&record)?;
@@ -1784,6 +2073,42 @@ fn check_ref(params: &ProcessRefParams) -> Result<JobRecord> {
 		);
 	}
 	Ok(record)
+}
+
+fn observation_record_read_slots() -> Arc<Semaphore> {
+	OBSERVATION_RECORD_READS
+		.get_or_init(|| Arc::new(Semaphore::new(MAX_OBSERVATION_RECORD_READS)))
+		.clone()
+}
+
+async fn run_observation_record_read<O: Send + 'static>(
+	slots: Arc<Semaphore>,
+	read: impl FnOnce() -> Result<O> + Send + 'static,
+) -> Result<O> {
+	// Separate from registry scans, inventories and durable writers so a slow
+	// historical receipt does not occupy their physical work capacity.
+	let permit = slots
+		.acquire_owned()
+		.await
+		.map_err(|_| anyhow::anyhow!("job observation record capacity unavailable"))?;
+	tokio::task::spawn_blocking(move || {
+		// Cancelling an observer does not stop a submitted filesystem read. Its
+		// slot covers the blocking-pool queue and remains held until actual exit.
+		let _permit = permit;
+		read()
+	})
+	.await
+	.map_err(|_| anyhow::anyhow!("job observation record worker unavailable"))?
+}
+
+async fn check_ref_async(params: &ProcessRefParams) -> Result<OperationRecord> {
+	let params = params.clone();
+	// The complete original decoder and host binding checks run once, before
+	// any remote observation. No cached receipt or new effect is introduced.
+	run_observation_record_read(observation_record_read_slots(), move || {
+		check_operation_ref(&params)
+	})
+	.await
 }
 
 struct PreparedAudit {
@@ -2265,7 +2590,16 @@ def private_read_json(name):
         before = os.fstat(stream.fileno())
         if before.st_size > 4 * 1024 * 1024:
             raise SystemExit("unsafe remote job file " + name + ": linked or oversized inode")
-        encoded = stream.read(4 * 1024 * 1024 + 1)
+        # Size the common allocation to the fresh snapshot, not the 4 MiB cap.
+        # A regular file may underreport its size; retain the original bounded
+        # read in that case before the unchanged metadata and JSON checks.
+        encoded = stream.read(max(0, before.st_size) + 1)
+        if encoded is not None and len(encoded) > before.st_size:
+            tail = stream.read(4 * 1024 * 1024 + 1 - len(encoded))
+            # BufferedReader preserves an available prefix when a later raw
+            # read would block. Keep that behavior without retrying the read.
+            if tail is not None:
+                encoded += tail
         after = os.fstat(stream.fileno())
         current = os.stat(name, dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
     def stamp(info):
@@ -3096,14 +3430,19 @@ def read_terminal_file(name, limit, missing_ok=False):
         if missing_ok:
             return None
         raise
-    with os.fdopen(fd, "rb") as stream:
-        before = os.fstat(stream.fileno())
-        if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid() or
-                before.st_nlink != 1 or stat.S_IMODE(before.st_mode) != 0o600 or before.st_size > limit):
-            raise ValueError("unsafe terminal publication file")
-        encoded = stream.read(limit + 1)
-        after = os.fstat(stream.fileno())
-        current = os.stat(name, dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
+    # Keep sole descriptor ownership even if fdopen rejects a substituted file.
+    try:
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            before = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.geteuid() or
+                    before.st_nlink != 1 or stat.S_IMODE(before.st_mode) != 0o600 or before.st_size > limit):
+                raise ValueError("unsafe terminal publication file")
+            # The checks below already require exactly this fresh snapshot size.
+            encoded = stream.read(max(0, before.st_size) + 1)
+            after = os.fstat(stream.fileno())
+            current = os.stat(name, dir_fd=_hepta_directory_pins[-1], follow_symlinks=False)
+    finally:
+        os.close(fd)
     def stamp(info):
         return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
                 info.st_size, info.st_mtime_ns, info.st_ctime_ns)
@@ -3486,11 +3825,12 @@ fn validate_start(params: &ProcessStartParams) -> Result<()> {
 	Ok(())
 }
 
-fn verify_host_binding(
-	record: &JobRecord,
+fn verify_host_binding<'a>(
+	record: impl Into<OperationRecordRef<'a>>,
 	configured_target: &str,
 	configured_state_dir: &str,
 ) -> Result<()> {
+	let record = record.into();
 	let expected_job_dir = format!(
 		"{}/jobs/{}",
 		configured_state_dir.trim_end_matches('/'),
@@ -3502,8 +3842,9 @@ fn verify_host_binding(
 	Ok(())
 }
 
-fn check_binding(record: &JobRecord) -> Result<()> {
-	let host = runtime_config()?.host(&record.host)?;
+fn check_binding<'a>(record: impl Into<OperationRecordRef<'a>>) -> Result<()> {
+	let record = record.into();
+	let host = runtime_config()?.host(record.host)?;
 	verify_host_binding(record, &host.ssh_target, &host.remote_state_dir)?;
 	if host.ssh_target != record.ssh_target || host.execution_mode != record.execution_mode {
 		bail!("host binding changed; refusing to operate an old job");
@@ -3511,9 +3852,13 @@ fn check_binding(record: &JobRecord) -> Result<()> {
 	Ok(())
 }
 
-async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
+async fn status_record<'a>(
+	record: impl Into<OperationRecordRef<'a>>,
+	wait_seconds: u64,
+) -> Result<Value> {
+	let record = record.into();
 	let config = runtime_config()?;
-	let host = config.host(&record.host)?;
+	let host = config.host(record.host)?;
 	check_binding(record)?;
 	if record.system_jobctl {
 		let deadline = tokio::time::Instant::now() + Duration::from_secs(wait_seconds.min(30));
@@ -3545,7 +3890,7 @@ async fn status_record(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
 
 /// Public observation routes opt in explicitly. Start/reuse reconciliation
 /// continues to call the unchanged status_record above.
-async fn status_observation(record: &JobRecord, wait_seconds: u64) -> Result<Value> {
+async fn status_observation(record: &OperationRecord, wait_seconds: u64) -> Result<Value> {
 	if !super::ssh::observation_pool_requested() {
 		return status_record(record, wait_seconds).await;
 	}
@@ -3597,20 +3942,32 @@ fn cancel_publication_slots() -> Arc<Semaphore> {
 		.clone()
 }
 
+fn cancel_preparation_slots() -> Arc<Semaphore> {
+	CANCEL_PREPARATIONS
+		.get_or_init(|| Arc::new(Semaphore::new(MAX_CANCEL_PREPARATIONS)))
+		.clone()
+}
+
 async fn run_cancel_intent<O: Send + 'static>(
-	prepared: PreparedAudit,
-	slots: Arc<Semaphore>,
-	ownership: O,
+	publication_slots: Arc<Semaphore>,
+	preparation_slots: Arc<Semaphore>,
+	prepare: impl FnOnce() -> Result<(PreparedAudit, O)> + Send + 'static,
 	append: impl FnOnce(PreparedAudit) -> Result<()> + Send + 'static,
 ) -> Result<(OwnedSemaphorePermit, O)> {
-	let permit = slots
+	let permit = publication_slots
+		.acquire_owned()
+		.await
+		.map_err(|_| operation_intent_unavailable())?;
+	let preparation_permit = preparation_slots
 		.acquire_owned()
 		.await
 		.map_err(|_| operation_intent_unavailable())?;
 	let result = tokio::task::spawn_blocking(move || {
-		// The same reservation follows this already-owned cancellation from
-		// durable intent through the remote response and completion audit.
-		// Cancelling a waiter never admits another worker before this one ends.
+		// Keep queued and running receipt/intent work within its own physical
+		// budget even if the caller disappears. Only the original publication
+		// reservation follows the binding through the remote response and audit.
+		let _preparation_permit = preparation_permit;
+		let (prepared, ownership) = prepare()?;
 		require_operation_intent(append(prepared))?;
 		Ok((permit, ownership))
 	})
@@ -4022,7 +4379,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	let id = next_job_id();
 	let unit = format!("hepta-runtime-job-{id}");
 	let remote_job_dir = format!("{}/jobs/{id}", host.remote_state_dir.trim_end_matches('/'));
-	let mut record = JobRecord {
+	let record = JobRecord {
 		system_jobctl: host.platform == Platform::Linux
 			&& host.execution_mode == ExecutionMode::Isolated,
 		execution_mode: host.execution_mode,
@@ -4044,7 +4401,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 	};
 	// Persist identity before remote launch. Later calls reconcile this same
 	// host, job ID and request binding; never invent a second remote job.
-	publish_pending_record(&record, &start_guard, &owner_admission).await?;
+	let mut record = publish_pending_record(record, &start_guard, &owner_admission).await?;
 	let launch = launch_record(&mut record, &params, &start_guard, &owner_admission).await?;
 	let mut result = json!({"reused": false, "job": record, "launch": launch.value});
 	attach_launch_record_warning(&mut result, &launch);
@@ -4062,7 +4419,7 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 }
 
 pub async fn status_job(params: ProcessRefParams) -> Result<String> {
-	let record = check_ref(&params)?;
+	let record = check_ref_async(&params).await?;
 	let status = status_observation(&record, 0).await?;
 	let completion = observation_completion_audit(
 		"process_status",
@@ -4081,7 +4438,7 @@ pub async fn wait_job(params: ProcessWaitParams) -> Result<String> {
 		host: params.host.clone(),
 		job_id: params.job_id.clone(),
 	};
-	let record = check_ref(&reference)?;
+	let record = check_ref_async(&reference).await?;
 	let wait = params.timeout_seconds.unwrap_or(10).min(30);
 	let status = status_observation(&record, wait).await?;
 	let completion = observation_completion_audit(
@@ -4101,7 +4458,7 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 		host: params.host.clone(),
 		job_id: params.job_id.clone(),
 	};
-	let record = check_ref(&reference)?;
+	let record = check_ref_async(&reference).await?;
 	let host = runtime_config()?.host(&record.host)?;
 	let request = json!({
 		"job_id": record.id,
@@ -4182,9 +4539,26 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 		host: params.host.clone(),
 		job_id: params.job_id.clone(),
 	};
-	// Cancellation continues an existing identity even when new effects are
-	// fenced off. Carry that verified binding, without acquiring a new owner.
-	let record = Arc::new(check_ref(&reference)?);
+	let (publication_permit, record) = run_cancel_intent(
+		cancel_publication_slots(),
+		cancel_preparation_slots(),
+		move || {
+			// Cancellation continues an existing identity even when new effects
+			// are fenced off. Verify the full original receipt before intent,
+			// without acquiring a new owner or introducing a receipt cache.
+			let record = Arc::new(check_operation_ref(&reference)?);
+			let intent = prepare_audit(
+				"process_cancel_intent",
+				&reference.host,
+				&reference.job_id,
+				&json!({"phase":"intent","remote_operation_submitted":false}),
+			)
+			.map_err(|_| operation_intent_unavailable())?;
+			Ok((intent, record))
+		},
+		append_audit,
+	)
+	.await?;
 	let host = runtime_config()?.host(&record.host)?;
 	let request = json!({
 		"job_id": record.id,
@@ -4193,15 +4567,6 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 		"unit": record.unit,
 		"grace_seconds": params.grace_seconds.unwrap_or(10).min(30),
 	});
-	let intent = prepare_audit(
-		"process_cancel_intent",
-		&params.host,
-		&params.job_id,
-		&json!({"phase":"intent","remote_operation_submitted":false}),
-	)
-	.map_err(|_| operation_intent_unavailable())?;
-	let (publication_permit, record) =
-		run_cancel_intent(intent, cancel_publication_slots(), record, append_audit).await?;
 	let remote = if record.system_jobctl {
 		run_jobctl(host, &json!({"op":"cancel","job_id":record.id})).await
 	} else {
@@ -4223,6 +4588,40 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 	let output =
 		complete_cancel_audit(output, completion, publication_permit, record, append_audit).await;
 	Ok(serde_json::to_string_pretty(&output)?)
+}
+
+fn inventory_read_slots() -> Arc<Semaphore> {
+	INVENTORY_READ_SLOTS
+		.get_or_init(|| Arc::new(Semaphore::new(MAX_INVENTORY_READ_WORKERS)))
+		.clone()
+}
+
+async fn run_inventory_read(
+	slots: Arc<Semaphore>,
+	read: impl FnOnce() -> Result<String> + Send + 'static,
+) -> Result<String> {
+	// Bound submitted physical reads, including the blocking-pool queue.
+	// Calls waiting for a slot are not a globally bounded admission queue.
+	let permit = slots
+		.acquire_owned()
+		.await
+		.map_err(|_| anyhow::anyhow!("Durable job inventory worker unavailable"))?;
+	tokio::task::spawn_blocking(move || {
+		// Dropping the awaiting request cannot stop an already submitted read.
+		// Keep its slot until the original closure actually exits.
+		let _permit = permit;
+		read()
+	})
+	.await
+	.map_err(|_| anyhow::anyhow!("Durable job inventory worker unavailable"))?
+}
+
+pub async fn list_jobs_async(params: ProcessListParams) -> Result<String> {
+	run_inventory_read(inventory_read_slots(), move || list_jobs(params)).await
+}
+
+pub async fn list_jobs_page_async(params: ProcessListPageParams) -> Result<String> {
+	run_inventory_read(inventory_read_slots(), move || list_jobs_page(params)).await
 }
 
 pub fn list_jobs(params: ProcessListParams) -> Result<String> {
@@ -4276,15 +4675,20 @@ fn list_job_rows_in(dir: &Path, host: Option<&str>) -> Result<Vec<InventoryRow>>
 		// Keep the complete compatibility read before filtering. A corrupt or
 		// unsafe neighbor must still refuse the inventory, even after an earlier
 		// row would exceed the wire budget. Only public fields survive this step.
-		let record = read_record_at_with_buffer(&path, expected_id, &mut bytes)?;
-		if host.is_none_or(|host| record.host == host) {
-			rows.push(InventoryRow {
-				id: record.id,
-				host: record.host,
-				created_unix_ms: record.created_unix_ms,
-				execution_mode: record.execution_mode,
-				launch_state: record.launch_state,
-			});
+		let row = with_record_read_buffer(&mut bytes, |bytes| {
+			let record = read_borrowed_record_at_into(&path, expected_id, bytes)?;
+			Ok(host
+				.is_none_or(|host| record.host == host)
+				.then_some(InventoryRow {
+					id: record.id,
+					host: record.host,
+					created_unix_ms: record.created_unix_ms,
+					execution_mode: record.execution_mode,
+					launch_state: record.launch_state,
+				}))
+		})?;
+		if let Some(row) = row {
+			rows.push(row);
 		}
 	}
 	// Stable sorting preserves encounter order for tied timestamps, as with
@@ -4339,14 +4743,14 @@ impl Default for InventoryLimits {
 
 #[cfg(all(test, unix))]
 fn inventory_records_at(root: &Path, limits: InventoryLimits) -> Result<Vec<JobRecord>> {
-	inventory_projected_at(root, limits, |record| record)
+	inventory_projected_at(root, limits, |record| record.into_owned())
 }
 
 #[cfg(unix)]
 fn inventory_projected_at<T>(
 	root: &Path,
 	limits: InventoryLimits,
-	mut project: impl FnMut(JobRecord) -> T,
+	mut project: impl for<'bytes> FnMut(JobRecordData<BorrowedJobString<'bytes>>) -> T,
 ) -> Result<Vec<T>> {
 	use std::fs::{File, Metadata};
 	use std::io::Read;
@@ -4484,8 +4888,8 @@ fn inventory_projected_at<T>(
 	let mut records = Vec::with_capacity(names.len());
 	let mut stamps = Vec::with_capacity(names.len());
 	let mut bytes = 0u64;
-	// Reuse only the raw input buffer within this scan. Every receipt is still
-	// read and validated in full before projection; no record survives in a cache.
+	// Validate the complete schema before projection. Private strings may borrow
+	// this scan-local buffer; the projection cannot retain those borrowed bytes.
 	let mut raw = Vec::new();
 	for name in &names {
 		deadline()?;
@@ -4513,7 +4917,11 @@ fn inventory_projected_at<T>(
 			bail!("durable inventory total source byte bound exceeded");
 		}
 		raw.clear();
-		raw.reserve_exact(before.len() as usize);
+		let capacity = usize::try_from(before.len())?
+			.checked_add(1)
+			.context("durable inventory read capacity overflow")?;
+		raw.try_reserve_exact(capacity)
+			.context("cannot allocate bounded durable inventory read buffer")?;
 		Read::by_ref(&mut file)
 			.take(before.len() + 1)
 			.read_to_end(&mut raw)?;
@@ -4521,7 +4929,7 @@ fn inventory_projected_at<T>(
 		if raw.len() as u64 != before.len() || stamp(&before) != stamp(&file.metadata()?) {
 			bail!("durable inventory metadata changed during observation");
 		}
-		let record: JobRecord =
+		let record: JobRecordData<BorrowedJobString<'_>> =
 			serde_json::from_slice(&raw).context("corrupt durable inventory metadata")?;
 		if record.id != id || !valid_name(&record.host) {
 			bail!("durable inventory record identity mismatch");
@@ -4556,7 +4964,7 @@ fn inventory_projected_at<T>(
 fn inventory_projected_at<T>(
 	_root: &Path,
 	_limits: InventoryLimits,
-	_project: impl FnMut(JobRecord) -> T,
+	_project: impl for<'bytes> FnMut(JobRecordData<BorrowedJobString<'bytes>>) -> T,
 ) -> Result<Vec<T>> {
 	bail!("bounded durable inventory requires Unix descriptor support")
 }
@@ -4575,12 +4983,7 @@ fn page_job_rows(
 	{
 		bail!("invalid durable job inventory page");
 	}
-	let binding =
-		serde_json::to_vec(&json!({"namespace":namespace,"host":params.host,"rows":rows}))?;
-	let fingerprint = Sha256::digest(&binding)
-		.iter()
-		.map(|byte| format!("{byte:02x}"))
-		.collect::<String>();
+	let fingerprint = inventory_snapshot_digest(rows, params.host.as_deref(), namespace)?;
 	let start = match params.cursor.as_deref() {
 		None => 0,
 		Some(cursor) => {
@@ -4623,6 +5026,53 @@ fn page_job_rows(
 		}
 		end -= 1;
 	}
+}
+
+fn inventory_snapshot_digest(
+	rows: &[Value],
+	host: Option<&str>,
+	namespace: &str,
+) -> Result<String> {
+	// Match the existing JSON object's sorted keys exactly so retained cursors
+	// remain valid. Borrow rows and hash bounded chunks instead of cloning the
+	// complete Value tree and then allocating another complete snapshot buffer.
+	#[derive(Serialize)]
+	struct Binding<'a> {
+		host: Option<&'a str>,
+		namespace: &'a str,
+		rows: &'a [Value],
+	}
+	struct DigestWriter(Sha256);
+	impl Write for DigestWriter {
+		fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+			self.0.update(bytes);
+			Ok(bytes.len())
+		}
+		fn flush(&mut self) -> std::io::Result<()> {
+			Ok(())
+		}
+	}
+	let mut digest = DigestWriter(Sha256::new());
+	{
+		// The serializer emits many tiny writes. A fixed 8 KiB buffer batches
+		// digest updates while keeping auxiliary memory independent of row count.
+		let mut writer = std::io::BufWriter::with_capacity(8 * 1024, &mut digest);
+		serde_json::to_writer(
+			&mut writer,
+			&Binding {
+				host,
+				namespace,
+				rows,
+			},
+		)?;
+		writer.flush()?;
+	}
+	Ok(digest
+		.0
+		.finalize()
+		.iter()
+		.map(|byte| format!("{byte:02x}"))
+		.collect())
 }
 
 fn job_inventory_rows_response(records: &[InventoryRow]) -> Result<String> {
@@ -4679,8 +5129,36 @@ fn job_inventory_response(records: &[JobRecord]) -> Result<String> {
 mod tests;
 
 #[cfg(test)]
+#[path = "jobs_registry_decode_tests.rs"]
+mod registry_decode_tests;
+
+#[cfg(test)]
 #[path = "jobs_inventory_streaming_tests.rs"]
 mod inventory_streaming_tests;
+
+#[cfg(test)]
+#[path = "jobs_inventory_async_tests.rs"]
+mod inventory_async_tests;
+
+#[cfg(test)]
+#[path = "jobs_observation_read_tests.rs"]
+mod observation_read_tests;
+
+#[cfg(all(test, unix))]
+#[path = "jobs_operation_record_tests.rs"]
+mod operation_record_tests;
+
+#[cfg(all(test, unix))]
+#[path = "jobs_inventory_borrowed_tests.rs"]
+mod inventory_borrowed_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_inventory_read_bench.rs"]
+mod inventory_read_bench;
+
+#[cfg(test)]
+#[path = "jobs_inventory_digest_tests.rs"]
+mod inventory_digest_tests;
 
 #[cfg(test)]
 #[path = "jobs_pagination_tests.rs"]
@@ -4719,8 +5197,16 @@ mod registry_async_tests;
 mod start_io_tests;
 
 #[cfg(test)]
+#[path = "jobs_pending_admission_tests.rs"]
+mod pending_admission_tests;
+
+#[cfg(test)]
 #[path = "jobs_cancel_io_tests.rs"]
 mod cancel_io_tests;
+
+#[cfg(test)]
+#[path = "jobs_cancel_read_tests.rs"]
+mod cancel_read_tests;
 
 #[cfg(all(test, unix))]
 #[path = "jobs_registry_coalescing_tests.rs"]
@@ -4745,3 +5231,7 @@ mod record_comparison_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "jobs_record_read_bench.rs"]
 mod record_read_bench;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "jobs_operation_record_bench.rs"]
+mod operation_record_bench;

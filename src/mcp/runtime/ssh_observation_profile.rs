@@ -10,12 +10,14 @@ use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tokio::time::{timeout_at, Instant};
 
 const MAX_PROFILE_BYTES: usize = 256 * 1024;
 const MAX_AGENT_BYTES: usize = 64 * 1024;
+const MAX_EXECUTABLE_REFERENCE_BYTES: usize = 2 * 1024 * 1024;
 const VERIFY_BUFFER_BYTES: usize = 16 * 1024;
 const DIRECTIVES: &[&str] = &[
 	"batchmode",
@@ -86,6 +88,7 @@ struct PinnedFile {
 	path: PathBuf,
 	stamp: Stamp,
 	digest: [u8; 32],
+	reference: Option<Arc<[u8]>>,
 	maximum: usize,
 	private: bool,
 	executable: bool,
@@ -233,6 +236,12 @@ fn hex_digest(value: &str) -> Result<[u8; 32]> {
 	Ok(result)
 }
 
+fn bounded_executable_reference(bytes: Vec<u8>, remaining: &mut usize) -> Option<Arc<[u8]>> {
+	let next = (*remaining).checked_sub(bytes.len())?;
+	*remaining = next;
+	Some(bytes.into())
+}
+
 impl PinnedFile {
 	fn load(
 		path: &Path,
@@ -251,6 +260,7 @@ impl PinnedFile {
 				path: path.to_owned(),
 				stamp,
 				digest,
+				reference: None,
 				maximum,
 				private,
 				executable,
@@ -276,9 +286,11 @@ impl PinnedFile {
 		if stamp != self.stamp {
 			bail!("observation profile changed");
 		}
-		// Rehash every byte on every check without allocating a whole executable.
+		// Every check still reads every byte. Only the fixed public executables can
+		// use a bounded startup-pin-verified reference instead of rehashing.
 		// The same descriptor and path stamps still fence the complete read.
 		let mut hash = ring::digest::Context::new(&ring::digest::SHA256);
+		let mut matches_reference = true;
 		let mut buffer = [0; VERIFY_BUFFER_BYTES];
 		let mut length = 0usize;
 		let mut reader = Read::by_ref(&mut file).take(self.maximum as u64 + 1);
@@ -296,13 +308,24 @@ impl PinnedFile {
 				break;
 			}
 			length += count;
-			hash.update(&buffer[..count]);
+			if let Some(reference) = &self.reference {
+				// Do not stop on a mismatch: later reads, cancellation and the
+				// original final descriptor/path checks still have to run.
+				matches_reference &=
+					reference.get(length - count..length) == Some(&buffer[..count]);
+			} else {
+				hash.update(&buffer[..count]);
+			}
 			check_current()?;
 		}
 		check_current()?;
 		verify_read(&self.path, &file, &stamp, length, self.maximum)?;
 		check_current()?;
-		if hash.finish().as_ref() != self.digest {
+		let content_matches = match &self.reference {
+			Some(reference) => matches_reference && length == reference.len(),
+			None => hash.finish().as_ref() == self.digest,
+		};
+		if !content_matches {
 			bail!("observation profile changed");
 		}
 		check_current()?;
@@ -431,9 +454,11 @@ struct PinnedShell {
 	target: PinnedFile,
 }
 impl PinnedShell {
-	fn load(expected: &str) -> Result<Self> {
+	fn load(expected: &str, reference_budget: &mut usize) -> Result<Self> {
 		let (path, components) = fixed_shell_resolution()?;
-		let (target, _) = PinnedFile::load(&path, Some(expected), 16 * 1024 * 1024, false, true)?;
+		let (mut target, bytes) =
+			PinnedFile::load(&path, Some(expected), 16 * 1024 * 1024, false, true)?;
+		target.reference = bounded_executable_reference(bytes, reference_budget);
 		let result = Self { components, target };
 		result.verify()?;
 		Ok(result)
@@ -728,21 +753,26 @@ impl Profile {
 			false,
 		)?;
 		validate_config(&raw, &spec.known_hosts)?;
-		let (ssh, _) = PinnedFile::load(
+		let mut reference_budget = MAX_EXECUTABLE_REFERENCE_BYTES;
+		let (mut ssh, ssh_bytes) = PinnedFile::load(
 			Path::new("/usr/bin/ssh"),
 			Some(&spec.ssh_sha256),
 			16 * 1024 * 1024,
 			false,
 			true,
 		)?;
-		let (false_program, _) = PinnedFile::load(
+		// Only fixed public executables share this profile's reference byte budget.
+		// Files that do not fit keep SHA and leave the remaining budget unchanged.
+		ssh.reference = bounded_executable_reference(ssh_bytes, &mut reference_budget);
+		let (mut false_program, false_bytes) = PinnedFile::load(
 			Path::new("/usr/bin/false"),
 			Some(&spec.false_sha256),
 			1024 * 1024,
 			false,
 			true,
 		)?;
-		let shell = PinnedShell::load(&spec.shell_sha256)?;
+		false_program.reference = bounded_executable_reference(false_bytes, &mut reference_budget);
+		let shell = PinnedShell::load(&spec.shell_sha256, &mut reference_budget)?;
 		let runtime = crate::mcp::runtime::config::runtime_config()?;
 		let hosts: BTreeMap<_, _> = runtime
 			.hosts
@@ -821,3 +851,7 @@ impl Profile {
 #[cfg(test)]
 #[path = "ssh_observation_profile_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ssh_observation_reference_tests.rs"]
+mod reference_tests;

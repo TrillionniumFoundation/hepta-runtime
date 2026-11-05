@@ -1,0 +1,28 @@
+{
+  "actual_first_snapshot_coverage": {
+    "bytes": 175584,
+    "local_path": "/workspace/scratch/806ba5f52f94/r25-lifecycle-audit/r26-native-custody-final-01/native-coverage-01.json",
+    "sha256": "d0ee2bf8786a1757af5d4edd2b04f5233b4f2cbe06262b4ac127f8b457f8cb31"
+  },
+  "concrete_remaining_blockers": [],
+  "final_archive_complete_claimed": false,
+  "findings": [
+    "Observed 36 job IDs have original starts and matching request source objects; each actual job retains exactly one request digest.",
+    "Matching fields are host, executable, args, idempotency_key and cwd. Full original request bodies and native request digest are preserved, but the request digest algorithm is explicitly not recomputed; this is not a claim of independent full acceptedRequestBinding reconstruction.",
+    "Native bytes_hex/text/offset/next_offset/size are compared, overlaps must agree, terminal stored/seen counts must match, every byte must be covered and a final EOF page is required for both streams.",
+    "Actual coverage has 27 succeeded and 8 failed strong original terminals with complete streams. Known unknown installation retains null terminal/exit and original launch_unknown starts, rather than borrowing a separate probe result.",
+    "This checker covers observed job records in the frozen inventory. It does not independently establish completeness of the final file scope or a finished archive; final builder/consumer remain required."
+  ],
+  "git_mutations": 0,
+  "host_RPC_calls": 0,
+  "main_executed": false,
+  "passed": true,
+  "review_scope": "Read-only original-request/start matching and lossless page-composition semantics, plus inspection of the completed original coverage result. No main/coverage replay.",
+  "schema": "hepta-native-custody-checker-narrow-review/v1",
+  "source": {
+    "bytes": 10267,
+    "local_path": "/workspace/scratch/806ba5f52f94/r25-lifecycle-audit/r26-native-custody-final-01/check_native_custody_01.py",
+    "sha256": "25f78777fc67a9ed129b565c290e020428f9bace08a62a56ad262758b6527a3e"
+  },
+  "tests_executed": false
+}

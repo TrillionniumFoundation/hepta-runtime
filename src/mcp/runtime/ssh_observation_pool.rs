@@ -482,6 +482,11 @@ fn process_identity(pid: u32) -> Result<ProcessIdentity> {
 	})
 }
 
+enum ChildLiveness {
+	Live,
+	Terminal,
+}
+
 struct OwnedChild {
 	id: u64,
 	pid: u32,
@@ -526,10 +531,10 @@ impl OwnedChild {
 	async fn terminal(&self) -> Result<bool> {
 		Ok(self.child.lock().await.try_wait()?.is_some())
 	}
-	async fn verify_live(&self) -> Result<()> {
+	async fn liveness(&self) -> Result<ChildLiveness> {
 		let mut child = self.child.lock().await;
 		if child.try_wait()?.is_some() {
-			bail!("observation SSH child exited");
+			return Ok(ChildLiveness::Terminal);
 		}
 		if self
 			.identity
@@ -537,6 +542,12 @@ impl OwnedChild {
 			.is_none_or(|v| process_identity(self.pid).ok().as_ref() != Some(v))
 		{
 			bail!("observation SSH child identity changed");
+		}
+		Ok(ChildLiveness::Live)
+	}
+	async fn verify_live(&self) -> Result<()> {
+		if matches!(self.liveness().await?, ChildLiveness::Terminal) {
+			bail!("observation SSH child exited");
 		}
 		Ok(())
 	}
@@ -1460,9 +1471,15 @@ impl Core {
 			if master.accepting.load(Ordering::Acquire) && request.deadline <= master.created + AGE
 			{
 				let active = ActiveMaster(master.clone());
-				break (master, host, budget, active);
+				// The original Child may terminate before maintenance closes leases.
+				// Only that terminal proof can renew before any slave is created.
+				match master.owned.liveness().await? {
+					ChildLiveness::Live => break (master, host, budget, active),
+					ChildLiveness::Terminal => drop(active),
+				}
+			} else {
+				master.active.fetch_sub(1, Ordering::AcqRel);
 			}
-			master.active.fetch_sub(1, Ordering::AcqRel);
 			drop(host);
 			drop(budget);
 			// No slave has been created. Join a single bounded admission renewal.
@@ -1475,7 +1492,6 @@ impl Core {
 			)
 			.await?;
 		};
-		master.owned.verify_live().await?;
 		self.root.verify(&self.profile)?;
 		if profile::socket_stamp(&master.socket)? != master.stamp {
 			self.stop.cancel();

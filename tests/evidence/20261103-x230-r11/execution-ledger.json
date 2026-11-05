@@ -1,0 +1,638 @@
+{
+  "schema": "hepta-x230-r11-execution-ledger/v1",
+  "host": "x230",
+  "service_changes": false,
+  "automatic_test_retries": 0,
+  "preparation_attempts": [
+    {
+      "sequence": 1,
+      "job_id": "1a1a0e80de5-96a-6b4b",
+      "authority_receipt": {
+        "at_unix_ms": 1793700927630,
+        "audit_recorded": true,
+        "cancelled": false,
+        "exit_code": 101,
+        "job_id": "1a1a0e80de5-96a-6b4b",
+        "log_bytes": {
+          "stderr": {
+            "seen": 204,
+            "stored": 204
+          },
+          "stdout": {
+            "seen": 32,
+            "stored": 32
+          }
+        },
+        "log_errors": {
+          "stderr": null,
+          "stdout": null
+        },
+        "log_truncated": {
+          "stderr": false,
+          "stdout": false
+        },
+        "output_complete": true,
+        "state": "failed",
+        "timed_out": false
+      },
+      "disposition": "Preparation failed before compilation because cargo fmt was absent from the supplied PATH. The next attempt supplied the verified cargo-bin PATH."
+    },
+    {
+      "sequence": 2,
+      "job_id": "1a1a0ea5a0e-96a-6b58",
+      "authority_receipt": {
+        "at_unix_ms": 1793701156208,
+        "audit_recorded": true,
+        "cancelled": true,
+        "exit_code": -15,
+        "job_id": "1a1a0ea5a0e-96a-6b58",
+        "log_bytes": {
+          "stderr": {
+            "seen": 0,
+            "stored": 0
+          },
+          "stdout": {
+            "seen": 0,
+            "stored": 0
+          }
+        },
+        "log_errors": {
+          "stderr": null,
+          "stdout": null
+        },
+        "log_truncated": {
+          "stderr": false,
+          "stdout": false
+        },
+        "output_complete": true,
+        "state": "cancelled",
+        "timed_out": false
+      },
+      "disposition": "Explicitly cancelled and reconciled to terminal state to align CARGO_PROFILE_DEV_DEBUG=0 and CARGO_PROFILE_TEST_DEBUG=0 with the qualified baseline."
+    },
+    {
+      "sequence": 3,
+      "job_id": "1a1a0ec0abd-96a-6b67",
+      "authority_receipt": {
+        "at_unix_ms": 1793701291867,
+        "audit_recorded": true,
+        "cancelled": true,
+        "exit_code": -15,
+        "job_id": "1a1a0ec0abd-96a-6b67",
+        "log_bytes": {
+          "stderr": {
+            "seen": 0,
+            "stored": 0
+          },
+          "stdout": {
+            "seen": 0,
+            "stored": 0
+          }
+        },
+        "log_errors": {
+          "stderr": null,
+          "stdout": null
+        },
+        "log_truncated": {
+          "stderr": false,
+          "stdout": false
+        },
+        "output_complete": true,
+        "state": "cancelled",
+        "timed_out": false
+      },
+      "disposition": "Explicitly cancelled and reconciled to terminal state to reuse completed R10e dependency artifacts in an independent R11 target directory."
+    },
+    {
+      "sequence": 4,
+      "job_id": "1a1a0ee2ca2-96a-6b73",
+      "authority_receipt": {
+        "at_unix_ms": 1793701366763,
+        "audit_recorded": true,
+        "cancelled": false,
+        "exit_code": 101,
+        "job_id": "1a1a0ee2ca2-96a-6b73",
+        "log_bytes": {
+          "stderr": {
+            "seen": 0,
+            "stored": 0
+          },
+          "stdout": {
+            "seen": 0,
+            "stored": 0
+          }
+        },
+        "log_errors": {
+          "stderr": null,
+          "stdout": null
+        },
+        "log_truncated": {
+          "stderr": false,
+          "stdout": false
+        },
+        "output_complete": true,
+        "state": "failed",
+        "timed_out": false
+      },
+      "disposition": "New benchmark compilation failed: sha2 0.11 digest byte arrays do not implement LowerHex. Both benchmark copies were corrected to explicit byte-wise hex encoding before a new attempt."
+    }
+  ],
+  "qualification": {
+    "job_id": "1a1a0efd31d-96a-6b7d",
+    "authority_receipt": {
+      "at_unix_ms": 1793703819770,
+      "audit_recorded": true,
+      "cancelled": false,
+      "exit_code": 0,
+      "job_id": "1a1a0efd31d-96a-6b7d",
+      "log_bytes": {
+        "stderr": {
+          "seen": 0,
+          "stored": 0
+        },
+        "stdout": {
+          "seen": 1341,
+          "stored": 1341
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "state": "succeeded",
+      "timed_out": false
+    },
+    "qualified": true,
+    "report_sha256": "08736bc54bc65c7774ba6ceb49a68279279bd24d4c9a4b2a8b68df299cd1b92c",
+    "passed": 1621,
+    "failed": 0,
+    "ignored": 31,
+    "selected": 1652,
+    "executed": 1621
+  },
+  "source_checkpoint": {
+    "sha256": "4cc731311d832babcada24fe886a7ff0e91d21dcbc6bac4a734ca25e250c1c30",
+    "compiler_inputs": 213,
+    "all_local_compiler_inputs_match": true
+  },
+  "build_resource_snapshots": [
+    {
+      "time_utc": "2026-11-03T10:44:28Z",
+      "loadavg": "6.17 5.40 3.98 8/659 1905651",
+      "meminfo": {
+        "MemAvailable": "1286280 kB",
+        "SwapTotal": "10485752 kB",
+        "SwapFree": "7287228 kB"
+      },
+      "this_campaign_builds": [
+        {
+          "Name": "cargo",
+          "State": "S (sleeping)",
+          "PPid": "1894670",
+          "VmRSS": "7352 kB",
+          "VmSwap": "53976 kB",
+          "Threads": "4",
+          "pid": 1896853,
+          "cwd": "/home/qian/hepta-runtime-optimization-20261103-r11/source"
+        },
+        {
+          "Name": "rustc",
+          "State": "S (sleeping)",
+          "PPid": "1896853",
+          "VmRSS": "2405944 kB",
+          "VmSwap": "103080 kB",
+          "Threads": "7",
+          "pid": 1896869,
+          "cwd": "/home/qian/hepta-runtime-optimization-20261103-r11/source"
+        },
+        {
+          "Name": "rustc",
+          "State": "S (sleeping)",
+          "PPid": "1896853",
+          "VmRSS": "507316 kB",
+          "VmSwap": "148420 kB",
+          "Threads": "7",
+          "pid": 1896870,
+          "cwd": "/home/qian/hepta-runtime-optimization-20261103-r11/source"
+        }
+      ],
+      "other_build_process_count": 2,
+      "scope": "read-only point-in-time build environment; unrelated process command lines and paths omitted"
+    },
+    {
+      "time_utc": "2026-11-03T10:53:33Z",
+      "loadavg": "4.64 5.59 4.80 4/629 1912852",
+      "meminfo": {
+        "MemAvailable": "4315848 kB",
+        "SwapTotal": "10485752 kB",
+        "SwapFree": "8282472 kB"
+      },
+      "this_campaign_builds": [
+        {
+          "Name": "cargo",
+          "State": "S (sleeping)",
+          "PPid": "1894670",
+          "VmRSS": "14416 kB",
+          "VmSwap": "52380 kB",
+          "Threads": "3",
+          "pid": 1896853,
+          "cwd": "/home/qian/hepta-runtime-optimization-20261103-r11/source",
+          "cpu_ticks": 60,
+          "birth_ticks": 240435456
+        },
+        {
+          "Name": "rustc",
+          "State": "S (sleeping)",
+          "PPid": "1896853",
+          "VmRSS": "1709516 kB",
+          "VmSwap": "79948 kB",
+          "Threads": "8",
+          "pid": 1896869,
+          "cwd": "/home/qian/hepta-runtime-optimization-20261103-r11/source",
+          "cpu_ticks": 94332,
+          "birth_ticks": 240435525
+        }
+      ],
+      "other_build_process_count": 0,
+      "scope": "read-only point-in-time build environment; unrelated process command lines and paths omitted"
+    }
+  ],
+  "inventory_preflight": {
+    "job_id": "1a1a116ba65-96a-6d01",
+    "authority_receipt": {
+      "at_unix_ms": 1793703986645,
+      "audit_recorded": true,
+      "cancelled": false,
+      "exit_code": 1,
+      "job_id": "1a1a116ba65-96a-6d01",
+      "log_bytes": {
+        "stderr": {
+          "seen": 141,
+          "stored": 141
+        },
+        "stdout": {
+          "seen": 242,
+          "stored": 242
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "state": "failed",
+      "timed_out": false
+    },
+    "measured_samples_executed": 0,
+    "error": "benchmark modules differ",
+    "original_report_sha256": "7b43f2449b485f4d846914ac6a0684eba2040abd9e8c2fd0709b81ddfc4c631e",
+    "baseline_benchmark_sha256": "e254d4738f489d4816802d3712d5f23737f9e59fc25c9cd929f9c39cd527032a",
+    "candidate_benchmark_sha256": "e0bd1eb185404122773c11415413e631d21bd04970ed1fb2764d654bdd3d1f56",
+    "exact_diff": "One pre-timing public_row parity expression; one post-timing cache-description field.",
+    "disposition": "Keep the source-equality gate. Rebuild a new baseline libtest from identical candidate benchmark text in source-baseline-02; retain both original inputs and the failure.",
+    "launcher_source": "import hashlib,json,os,pathlib,subprocess,time\nroot=pathlib.Path('/home/qian/hepta-runtime-optimization-20261103-r11')\nqual=root/'qualification-01'\nbaseline_qual=pathlib.Path('/home/qian/hepta-runtime-optimization-20261103-r10/qualification-r10e-01')\ndef sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()\nq=json.loads((qual/'report.json').read_text());bq=json.loads((baseline_qual/'report.json').read_text())\nassert q['qualified'] and bq['qualified'] and q['source_tested']==q['source_after']\nassert all(sha(root/'source'/p)==h for p,h in q['source_tested'].items())\nhook=b'\\n#[cfg(all(test, target_os = \"linux\"))]\\n#[path = \"jobs_inventory_read_bench.rs\"]\\nmod inventory_read_bench;\\n'\nbaseline_jobs=(root/'source-baseline/src/mcp/runtime/jobs.rs').read_bytes()\nassert baseline_jobs.count(hook)==1\nassert hashlib.sha256(baseline_jobs.replace(hook,b'',1)).hexdigest()==bq['source_tested']['src/mcp/runtime/jobs.rs']\nassert all(sha(root/'source-baseline'/p)==h for p,h in bq['source_tested'].items() if p!='src/mcp/runtime/jobs.rs')\nsummary=json.loads((qual/'isolated-tests/summary.json').read_text())\nlib=[x for x in summary['binaries'] if x['target']['kind']==['lib']][0]\nassert lib['sha256']=='664e821762647be2bea2224aa566be2fb9d9983131c77af22f6f085cb556668b'\nprofile=[json.loads(l)['profile'] for l in (qual/'retained-artifacts.jsonl').read_text().splitlines() if json.loads(l).get('executable')==lib['path']][0]\nbp=json.loads((root/'baseline-build-receipt.json').read_text())\nassert all(profile[k]==v for k,v in bp['profile'].items())\nout=root/'inventory-campaign-01';out.mkdir(mode=0o700)\ndef environment():\n p=pathlib.Path('/proc');builds=[];errors=[]\n for d in p.iterdir():\n  if not d.name.isdigit():continue\n  try:\n   name=(d/'comm').read_text().strip()\n   if name in ('cargo','rustc','cc','ld','ld.lld'):builds.append({'pid':int(d.name),'comm':name})\n  except FileNotFoundError:pass\n  except PermissionError:errors.append('process identity unavailable')\n thermal={}\n for f in pathlib.Path('/sys/class/thermal').glob('thermal_zone*/temp'):\n  try:thermal[str(f)]=int(f.read_text())\n  except OSError:pass\n return {'utc':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'loadavg':(p/'loadavg').read_text().strip(),'meminfo':{l.split(':',1)[0]:l.split(':',1)[1].strip() for l in (p/'meminfo').read_text().splitlines() if l.split(':',1)[0] in ('MemTotal','MemAvailable','SwapTotal','SwapFree')},'build_processes':builds,'observation_errors':errors,'thermal_millidegrees_celsius':thermal,'cpu_affinity':sorted(os.sched_getaffinity(0))}\nreport={'schema':'hepta-r11-inventory-campaign/v1','passed':False,'baseline_qualification_sha256':sha(baseline_qual/'report.json'),'candidate_qualification_sha256':sha(qual/'report.json'),'baseline_matches_r10e_except_identical_benchmark_module':True,'candidate_compiler_inputs_match_qualification':True,'matching_libtest_profiles':profile,'before':environment(),'stages':[]}\ndef save():(out/'campaign.json').write_text(json.dumps(report,indent=2)+'\\n')\nsave()\ncommon=['/usr/bin/python3','-B',str(root/'source/tools/x230/20261103/run_inventory_read_abba.py'),'--baseline',str(root/'baseline-libtest'),'--baseline-sha256','c4f0580a6c7a3a3e34b0328719366975ef2e29293bc5cac572d55b52079e5773','--baseline-source',str(root/'source-baseline'),'--candidate',lib['path'],'--candidate-sha256',lib['sha256'],'--candidate-source',str(root/'source'),'--modes','list','page','--calls-per-worker','2']\ntry:\n for style,payloads,widths in [('plain',['1024','65536','786432'],['1','4','8']),('escaped',['65536'],['4'])]:\n  argv=common+['--out',str(out/style),'--payload-style',style,'--payload-bytes']+payloads+['--concurrency']+widths\n  row={'style':style,'argv':argv};report['stages'].append(row);save()\n  start=time.monotonic();r=subprocess.run(argv,check=False,timeout=900)\n  row.update(returncode=r.returncode,seconds=time.monotonic()-start);save()\n  assert r.returncode==0,style+' comparison failed; original result retained'\n report['passed']=True\nexcept BaseException as e:\n report['error']=type(e).__name__+': '+str(e);raise\nfinally:\n report['after']=environment();save();print(json.dumps({'campaign':str(out/'campaign.json'),'passed':report['passed']}),flush=True)\n",
+    "rebuild_job_id": "1a1a11fd35e-96a-6d54"
+  },
+  "candidate_recovery": {
+    "job_id": "1a1a11b4d68-96a-6d2f",
+    "control_host": "main",
+    "controller_host": "x230",
+    "authority_receipt": {
+      "at_unix_ms": 1793704299391,
+      "audit_recorded": true,
+      "cancelled": false,
+      "exit_code": 0,
+      "job_id": "1a1a11b4d68-96a-6d2f",
+      "log_bytes": {
+        "stderr": {
+          "seen": 0,
+          "stored": 0
+        },
+        "stdout": {
+          "seen": 346,
+          "stored": 346
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "state": "succeeded",
+      "timed_out": false
+    },
+    "passed": true,
+    "raw_report_sha256": "1ed9d64397ec321ee00ccc0b4e7c31074c536f0aefb0cc8596425eda7a027a93",
+    "command": "/usr/bin/ssh -A -o BatchMode=yes -o ConnectTimeout=10 x230-ts /bin/bash -se <<'X230'\nset -euo pipefail\numask 077\nmkdir -m 700 /home/qian/h11c01\nexec /usr/bin/python3 -B /home/qian/hepta-runtime-optimization-20261103-r11/source/tools/x230/20261103/recovery/x230_six_running_recovery_canary.py --candidate /home/qian/hepta-runtime-optimization-20261103-r11/qualification-01/hepta-runtime --profile-template /home/qian/hepta-runtime-optimization-20261023/a28-a31-budget-r01-g0/profile/profile.json --frozen-jobs /home/qian/hepta-runtime-optimization-20261023/a28-a31-budget-r01-g0/round-0-A/state/jobs --socket-parent /home/qian/h11c01 --out /home/qian/hepta-runtime-optimization-20261023/r11-candidate-recovery-20261103-01 --workers 2 --interrupt-host rog\nX230"
+  },
+  "r10e_parent_commit": {
+    "sha": "9efb50d35ed70caf59e13a430762884eb551ed23",
+    "tree": "0e0b595545230b1868dc053ff7de1b786a501962",
+    "source_compiler_inputs": 210,
+    "all_unmodified_base_blobs_preserved": true
+  },
+  "baseline_benchmark_rebuild": {
+    "job_id": "1a1a11fd35e-96a-6d54",
+    "build_returncode": 0,
+    "build_seconds": 748.389262850862,
+    "compiler_inputs": 211,
+    "source_unchanged": true,
+    "profiles_equal": true,
+    "features_equal": true,
+    "raw_report_sha256": "515f5bd8f5ac5734c88999f1b6910d05eb41efc2904f46b8cd1a0a7bd1340af7",
+    "binary_sha256": "cd5e73d1df2a6def1385dd6699711ffeeeef78feea3ae7e2e0106fc360e26597",
+    "receipt": "baseline-build-v2-receipt.json.gz",
+    "authority_receipt": {
+      "at_unix_ms": 1793705332210,
+      "audit_recorded": true,
+      "cancelled": false,
+      "exit_code": 0,
+      "job_id": "1a1a11fd35e-96a-6d54",
+      "log_bytes": {
+        "stderr": {
+          "seen": 0,
+          "stored": 0
+        },
+        "stdout": {
+          "seen": 922,
+          "stored": 922
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "state": "succeeded",
+      "timed_out": false
+    }
+  },
+  "inventory_campaign_02": {
+    "job_id": "1a1a12da173-96a-6db4",
+    "authority_receipt": {
+      "at_unix_ms": 1793705633247,
+      "audit_recorded": true,
+      "cancelled": false,
+      "exit_code": 0,
+      "job_id": "1a1a12da173-96a-6db4",
+      "log_bytes": {
+        "stderr": {
+          "seen": 0,
+          "stored": 0
+        },
+        "stdout": {
+          "seen": 11641,
+          "stored": 11641
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "state": "succeeded",
+      "timed_out": false
+    },
+    "passed": true,
+    "counts": {
+      "cases": 20,
+      "samples": 80,
+      "successful_calls": 688,
+      "failed_calls": 0,
+      "automatic_retries": 0,
+      "canonical_fixture_manifests_checked": 4
+    },
+    "raw_sha256": {
+      "plain": "0d1f0b31e57e11c2366b3d191928fd68dd277df7d71838a9cf4d8b7871fcd5d2",
+      "escaped": "7b8512bb4f0df3b0b09cdb6d6fe4b4c8b3aa9572765738fd8222b4888b3e2666",
+      "campaign": "0c8fcb41608f8063fa3d04da2c40b5a889bf0c47efa58faf7c17e854254bdd0a"
+    },
+    "launcher_source": "import hashlib,json,os,pathlib,subprocess,time\nroot=pathlib.Path('/home/qian/hepta-runtime-optimization-20261103-r11')\nqual=root/'qualification-01'\nbaseline_qual=pathlib.Path('/home/qian/hepta-runtime-optimization-20261103-r10/qualification-r10e-01')\ndef sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()\nq=json.loads((qual/'report.json').read_text());bq=json.loads((baseline_qual/'report.json').read_text())\nassert q['qualified'] and bq['qualified'] and q['source_tested']==q['source_after']\nassert all(sha(root/'source'/p)==h for p,h in q['source_tested'].items())\nhook=b'\\n#[cfg(all(test, target_os = \"linux\"))]\\n#[path = \"jobs_inventory_read_bench.rs\"]\\nmod inventory_read_bench;\\n'\nbaseline_jobs=(root/'source-baseline-02/src/mcp/runtime/jobs.rs').read_bytes()\nassert baseline_jobs.count(hook)==1\nassert hashlib.sha256(baseline_jobs.replace(hook,b'',1)).hexdigest()==bq['source_tested']['src/mcp/runtime/jobs.rs']\nassert all(sha(root/'source-baseline-02'/p)==h for p,h in bq['source_tested'].items() if p!='src/mcp/runtime/jobs.rs')\nsummary=json.loads((qual/'isolated-tests/summary.json').read_text())\nlib=[x for x in summary['binaries'] if x['target']['kind']==['lib']][0]\nassert lib['sha256']=='664e821762647be2bea2224aa566be2fb9d9983131c77af22f6f085cb556668b'\nprofile=[json.loads(l)['profile'] for l in (qual/'retained-artifacts.jsonl').read_text().splitlines() if json.loads(l).get('executable')==lib['path']][0]\nbp=json.loads((root/'baseline-build-receipt.json').read_text())\nassert all(profile[k]==v for k,v in bp['profile'].items())\nassert sha(root/'baseline-build-v2-receipt.json')=='515f5bd8f5ac5734c88999f1b6910d05eb41efc2904f46b8cd1a0a7bd1340af7'\nout=root/'inventory-campaign-02';out.mkdir(mode=0o700)\ndef environment():\n p=pathlib.Path('/proc');builds=[];errors=[]\n for d in p.iterdir():\n  if not d.name.isdigit():continue\n  try:\n   name=(d/'comm').read_text().strip()\n   if name in ('cargo','rustc','cc','ld','ld.lld'):builds.append({'pid':int(d.name),'comm':name})\n  except FileNotFoundError:pass\n  except PermissionError:errors.append('process identity unavailable')\n thermal={}\n for f in pathlib.Path('/sys/class/thermal').glob('thermal_zone*/temp'):\n  try:thermal[str(f)]=int(f.read_text())\n  except OSError:pass\n return {'utc':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'loadavg':(p/'loadavg').read_text().strip(),'meminfo':{l.split(':',1)[0]:l.split(':',1)[1].strip() for l in (p/'meminfo').read_text().splitlines() if l.split(':',1)[0] in ('MemTotal','MemAvailable','SwapTotal','SwapFree')},'build_processes':builds,'observation_errors':errors,'thermal_millidegrees_celsius':thermal,'cpu_affinity':sorted(os.sched_getaffinity(0))}\nreport={'schema':'hepta-r11-inventory-campaign/v1','passed':False,'baseline_qualification_sha256':sha(baseline_qual/'report.json'),'candidate_qualification_sha256':sha(qual/'report.json'),'baseline_matches_r10e_except_identical_benchmark_module':True,'candidate_compiler_inputs_match_qualification':True,'baseline_build_v2_receipt_sha256':sha(root/'baseline-build-v2-receipt.json'),'matching_libtest_profiles':profile,'before':environment(),'stages':[]}\ndef save():(out/'campaign.json').write_text(json.dumps(report,indent=2)+'\\n')\nsave()\ncommon=['/usr/bin/python3','-B',str(root/'source/tools/x230/20261103/run_inventory_read_abba.py'),'--baseline',str(root/'baseline-libtest-v2'),'--baseline-sha256','cd5e73d1df2a6def1385dd6699711ffeeeef78feea3ae7e2e0106fc360e26597','--baseline-source',str(root/'source-baseline-02'),'--candidate',lib['path'],'--candidate-sha256',lib['sha256'],'--candidate-source',str(root/'source'),'--modes','list','page','--calls-per-worker','2']\ntry:\n for style,payloads,widths in [('plain',['1024','65536','786432'],['1','4','8']),('escaped',['65536'],['4'])]:\n  argv=common+['--out',str(out/style),'--payload-style',style,'--payload-bytes']+payloads+['--concurrency']+widths\n  row={'style':style,'argv':argv};report['stages'].append(row);save()\n  start=time.monotonic();r=subprocess.run(argv,check=False,timeout=900)\n  row.update(returncode=r.returncode,seconds=time.monotonic()-start);save()\n  assert r.returncode==0,style+' comparison failed; original result retained'\n report['passed']=True\nexcept BaseException as e:\n report['error']=type(e).__name__+': '+str(e);raise\nfinally:\n report['after']=environment();save();print(json.dumps({'campaign':str(out/'campaign.json'),'passed':report['passed']}),flush=True)\n",
+    "runner_at_execution": "inventory-runner-v1.py",
+    "runner_sha256": "28144077cd984778a26fb339b8a8faeb46f13085aea9c6ef28a79029e37c5be5",
+    "scope": "opt-level 1 libtest; local guarded inventory and response serialization; warm source bytes; not release MCP or SSH throughput"
+  },
+  "native_observation_abba": {
+    "job_id": "1a1a1325874-96a-6dc1",
+    "control_host": "main",
+    "controller_host": "x230",
+    "authority_receipt": {
+      "at_unix_ms": 1793705935617,
+      "audit_recorded": true,
+      "cancelled": false,
+      "exit_code": 0,
+      "job_id": "1a1a1325874-96a-6dc1",
+      "log_bytes": {
+        "stderr": {
+          "seen": 0,
+          "stored": 0
+        },
+        "stdout": {
+          "seen": 7389,
+          "stored": 7389
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "state": "succeeded",
+      "timed_out": false
+    },
+    "passed": true,
+    "measured_calls": 1152,
+    "total_tool_calls": 1224,
+    "failed_calls": 0,
+    "automatic_rpc_retries": 0,
+    "raw_report_sha256": "9fd1cc2fce6e01797c6269487f0d0a7379756e3a5ae205e0728e412c92a89ac0",
+    "command": "/usr/bin/ssh -A -o BatchMode=yes -o ConnectTimeout=10 x230-ts /bin/bash -se <<'X230'\nset -euo pipefail\numask 077\nmkdir -m 700 /home/qian/h11f01\nexec /usr/bin/python3 -B -s /home/qian/hepta-runtime-optimization-20261103-r11/source/tools/x230/20261103/recovery/x230_observation_benchmark.py --baseline /home/qian/hepta-runtime-optimization-20261103-r10/qualification-r10e-01/hepta-runtime --candidate /home/qian/hepta-runtime-optimization-20261103-r11/qualification-01/hepta-runtime --profile-template /home/qian/hepta-runtime-optimization-20261023/a28-a31-budget-r01-g0/profile/profile.json --frozen-jobs /home/qian/hepta-runtime-optimization-20261023/a28-a31-budget-r01-g0/round-0-A/state/jobs --out /home/qian/hepta-runtime-optimization-20261023/r11-native-observation-abba-20261103-01 --socket-parent /home/qian/h11f01 --calls 96 --concurrency 1 4 8 --workers 2 --order ABBA\nX230",
+    "fd_sampling_permission_errors": 9
+  },
+  "native_observation_c4_recheck": {
+    "job_id": "1a1a144d4f3-96a-6e03",
+    "control_host": "main",
+    "controller_host": "x230",
+    "authority_receipt": {
+      "at_unix_ms": 1793707067866,
+      "audit_recorded": true,
+      "cancelled": false,
+      "exit_code": 0,
+      "job_id": "1a1a144d4f3-96a-6e03",
+      "log_bytes": {
+        "stderr": {
+          "seen": 0,
+          "stored": 0
+        },
+        "stdout": {
+          "seen": 2605,
+          "stored": 2605
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "state": "succeeded",
+      "timed_out": false
+    },
+    "passed": true,
+    "measured_calls": 384,
+    "total_tool_calls": 456,
+    "failed_calls": 0,
+    "automatic_rpc_retries": 0,
+    "raw_report_sha256": "2f08bd36f0cd11843d1783e49b285f90717880572052d56ebf41ec75c473221f",
+    "command": "/usr/bin/ssh -A -o BatchMode=yes -o ConnectTimeout=10 x230-ts /bin/bash -se <<'X230'\nset -euo pipefail\numask 077\nmkdir -m 700 /home/qian/h11f02\nexec /usr/bin/python3 -B -s /home/qian/hepta-runtime-optimization-20261103-r11/source/tools/x230/20261103/recovery/x230_observation_benchmark.py --baseline /home/qian/hepta-runtime-optimization-20261103-r10/qualification-r10e-01/hepta-runtime --candidate /home/qian/hepta-runtime-optimization-20261103-r11/qualification-01/hepta-runtime --profile-template /home/qian/hepta-runtime-optimization-20261023/a28-a31-budget-r01-g0/profile/profile.json --frozen-jobs /home/qian/hepta-runtime-optimization-20261023/a28-a31-budget-r01-g0/round-0-A/state/jobs --out /home/qian/hepta-runtime-optimization-20261023/r11-native-observation-abba-20261103-02 --socket-parent /home/qian/h11f02 --calls 96 --concurrency 4 --workers 2 --order ABBA\nX230",
+    "fd_sampling_permission_errors": 8,
+    "reason": "First native block C4 p95 was 20.90% higher for R11; one independent targeted C4 ABBA investigates that specific risk. Both original blocks retained separately; not an automatic retry or pooled performance estimate.",
+    "context_difference": "Original C4 followed C1 within each arm; C4-only repeat started after preflight."
+  },
+  "rss_accounting_probe": {
+    "job_id": "1a1a13fa506-96a-6de7",
+    "all_exit_zero": true,
+    "raw_report_sha256": "bdb1b108c407c61b27124ffb726925f3741f2a93e87e193116260e69ce0898e8",
+    "launcher_source": "import hashlib,json,os,pathlib,platform,resource,subprocess,time\nroot=pathlib.Path('/home/qian/hepta-runtime-optimization-20261103-r11')\nout=root/'rss-floor-probe-01';out.mkdir(mode=0o700)\ntimebin=pathlib.Path('/usr/bin/time')\nreport={'schema':'hepta-rss-floor-probe/v1','kernel':platform.release(),'time_available':timebin.is_file(),'started_utc':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'rows':[]}\nif timebin.is_file():\n report['time_sha256']=hashlib.sha256(timebin.read_bytes()).hexdigest()\n report['time_version']=subprocess.run([str(timebin),'--version'],capture_output=True,text=True,check=True).stdout\n held=bytearray(32*1024*1024);held[::4096]=b'x'*(len(held)//4096)\n report['parent_rusage_maxrss_kib']=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss\n for label,cmd in [('true',['/usr/bin/true']),('python',['/usr/bin/python3','-c','import resource;print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)'])]:\n  for mode in ('direct','time'):\n   name=label+'-'+mode;usage=out/(name+'.usage.json');argv=cmd if mode=='direct' else [str(timebin),'-o',str(usage),'-f','{\"maxrss_kib\":%M,\"user_cpu_seconds\":%U,\"system_cpu_seconds\":%S,\"exit_code\":%x}','--']+cmd\n   with (out/(name+'.stdout')).open('xb') as stdout,(out/(name+'.stderr')).open('xb') as stderr:\n    child=subprocess.Popen(argv,stdout=stdout,stderr=stderr,start_new_session=True)\n    pid,status,r=os.wait4(child.pid,0);child.returncode=os.waitstatus_to_exitcode(status)\n   row={'label':label,'mode':mode,'argv':argv,'exit_code':child.returncode,'wrapper_wait4_maxrss_kib':r.ru_maxrss,'stdout':(out/(name+'.stdout')).read_text(),'stderr':(out/(name+'.stderr')).read_text()}\n   if mode=='time':row['time_child_usage']=json.loads(usage.read_text())\n   report['rows'].append(row)\n report['all_exit_zero']=all(r['exit_code']==0 for r in report['rows'])\n(out/'report.json').write_text(json.dumps(report,indent=2)+'\\n')\nprint(json.dumps(report),flush=True)\n",
+    "time_sha256": "3b11dec50514a8473e9f6efa7a34d584d0657538c09988f61b72d38ad4991a10",
+    "conclusion": "Python parent's pre-exec high-water can mask direct Rust child RSS; GNU time's direct child produces a lower uncontaminated floor. Wrapper wait4 retains inherited floor and is preserved separately."
+  },
+  "collection_transport_errors": {
+    "classification": "MCP report/status collection timeouts; distinct from benchmark failures and measured tool calls; no measurement job was duplicated in response.",
+    "examples": [
+      {
+        "operation": "native ABBA first process_read",
+        "raw": {
+          "content": [
+            {
+              "type": "text",
+              "text": "tool call error: tool call failed for `codex_apps/hepta_runtime_full_operator.process_read`\n\nCaused by:\n    Mcp error: -32603: MCP request timed out"
+            }
+          ],
+          "isError": true
+        }
+      },
+      {
+        "operation": "RSS campaign process_status",
+        "raw": {
+          "content": [
+            {
+              "type": "text",
+              "text": "tool call error: tool call failed for `codex_apps/hepta_runtime_full_operator.process_status`\n\nCaused by:\n    Mcp error: -32603: MCP request timed out"
+            }
+          ],
+          "isError": true
+        }
+      },
+      {
+        "operation": "RSS campaign campaign.json binary_read",
+        "raw": {
+          "content": [
+            {
+              "type": "text",
+              "text": "tool call error: tool call failed for `codex_apps/hepta_runtime_full_operator.binary_read`\n\nCaused by:\n    Mcp error: -32603: MCP request timed out"
+            }
+          ],
+          "isError": true
+        }
+      }
+    ],
+    "exhaustive": false
+  },
+  "publication": {
+    "repository": "TrillionniumFoundation/hepta-runtime",
+    "branch": "perf/x230-r11-20261103",
+    "parent_commit": "9efb50d35ed70caf59e13a430762884eb551ed23",
+    "review_base": "perf/x230-r9-20261031",
+    "production_deployment": false,
+    "unrelated_branches_preserved": true,
+    "final_commit_binding": "Commit containing this ledger; verify the branch head and PR head against that commit."
+  },
+  "inventory_rss_campaign_03": {
+    "job_id": "1a1a14a8bcc-96a-6e19",
+    "host": "x230",
+    "authority_receipt": {
+      "at_unix_ms": 1793707421057,
+      "audit_recorded": true,
+      "cancelled": false,
+      "exit_code": 0,
+      "job_id": "1a1a14a8bcc-96a-6e19",
+      "log_bytes": {
+        "stderr": {
+          "seen": 0,
+          "stored": 0
+        },
+        "stdout": {
+          "seen": 2639,
+          "stored": 2639
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "state": "succeeded",
+      "timed_out": false
+    },
+    "passed": true,
+    "cases": 4,
+    "measurement_processes": 16,
+    "successful_calls": 128,
+    "failed_calls": 0,
+    "automatic_retries": 0,
+    "raw_sha256": {
+      "r11-inventory-rss-plain-original.json": "faae969f03feb605d9cdf09c59273415195ed001764e2e6994f7be8f52bac277",
+      "r11-inventory-rss-escaped-original.json": "71d45f41e3a33bd31616250231eff71cbf2734c354959547bf8816550cca078a",
+      "r11-inventory-rss-campaign-03-original.json": "79ccad55220fe2ba967f21982c50600e244aa7b10425064ea313c11f4d462010"
+    },
+    "launcher_source": "import hashlib,json,os,pathlib,subprocess,time\nroot=pathlib.Path('/home/qian/hepta-runtime-optimization-20261103-r11')\nqual=root/'qualification-01'\nbaseline_qual=pathlib.Path('/home/qian/hepta-runtime-optimization-20261103-r10/qualification-r10e-01')\ndef sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()\nq=json.loads((qual/'report.json').read_text());bq=json.loads((baseline_qual/'report.json').read_text())\nassert q['qualified'] and bq['qualified'] and q['source_tested']==q['source_after']\nassert all(sha(root/'source'/p)==h for p,h in q['source_tested'].items())\nhook=b'\\n#[cfg(all(test, target_os = \"linux\"))]\\n#[path = \"jobs_inventory_read_bench.rs\"]\\nmod inventory_read_bench;\\n'\nbaseline_jobs=(root/'source-baseline-02/src/mcp/runtime/jobs.rs').read_bytes()\nassert baseline_jobs.count(hook)==1\nassert hashlib.sha256(baseline_jobs.replace(hook,b'',1)).hexdigest()==bq['source_tested']['src/mcp/runtime/jobs.rs']\nassert all(sha(root/'source-baseline-02'/p)==h for p,h in bq['source_tested'].items() if p!='src/mcp/runtime/jobs.rs')\nsummary=json.loads((qual/'isolated-tests/summary.json').read_text())\nlib=[x for x in summary['binaries'] if x['target']['kind']==['lib']][0]\nassert lib['sha256']=='664e821762647be2bea2224aa566be2fb9d9983131c77af22f6f085cb556668b'\nprofile=[json.loads(l)['profile'] for l in (qual/'retained-artifacts.jsonl').read_text().splitlines() if json.loads(l).get('executable')==lib['path']][0]\nbp=json.loads((root/'baseline-build-receipt.json').read_text())\nassert all(profile[k]==v for k,v in bp['profile'].items())\nassert sha(root/'baseline-build-v2-receipt.json')=='515f5bd8f5ac5734c88999f1b6910d05eb41efc2904f46b8cd1a0a7bd1340af7'\nassert sha(root/'source/tools/x230/20261103/run_inventory_read_abba.py')=='1396af8bfccade69e7932ff7ff32998583c5b9da97790c5bcf687d0a81c0b3a5'\nassert sha(pathlib.Path('/usr/bin/time'))=='3b11dec50514a8473e9f6efa7a34d584d0657538c09988f61b72d38ad4991a10'\nout=root/'inventory-rss-campaign-03';out.mkdir(mode=0o700)\ndef environment():\n p=pathlib.Path('/proc');builds=[];errors=[]\n for d in p.iterdir():\n  if not d.name.isdigit():continue\n  try:\n   name=(d/'comm').read_text().strip()\n   if name in ('cargo','rustc','cc','ld','ld.lld'):builds.append({'pid':int(d.name),'comm':name})\n  except FileNotFoundError:pass\n  except PermissionError:errors.append('process identity unavailable')\n thermal={}\n for f in pathlib.Path('/sys/class/thermal').glob('thermal_zone*/temp'):\n  try:thermal[str(f)]=int(f.read_text())\n  except OSError:pass\n return {'utc':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'loadavg':(p/'loadavg').read_text().strip(),'meminfo':{l.split(':',1)[0]:l.split(':',1)[1].strip() for l in (p/'meminfo').read_text().splitlines() if l.split(':',1)[0] in ('MemTotal','MemAvailable','SwapTotal','SwapFree')},'build_processes':builds,'observation_errors':errors,'thermal_millidegrees_celsius':thermal,'cpu_affinity':sorted(os.sched_getaffinity(0))}\nreport={'schema':'hepta-r11-inventory-campaign/v1','passed':False,'baseline_qualification_sha256':sha(baseline_qual/'report.json'),'candidate_qualification_sha256':sha(qual/'report.json'),'baseline_matches_r10e_except_identical_benchmark_module':True,'candidate_compiler_inputs_match_qualification':True,'baseline_build_v2_receipt_sha256':sha(root/'baseline-build-v2-receipt.json'),'matching_libtest_profiles':profile,'before':environment(),'stages':[]}\ndef save():(out/'campaign.json').write_text(json.dumps(report,indent=2)+'\\n')\nsave()\ncommon=['/usr/bin/python3','-B',str(root/'source/tools/x230/20261103/run_inventory_read_abba.py'),'--baseline',str(root/'baseline-libtest-v2'),'--baseline-sha256','cd5e73d1df2a6def1385dd6699711ffeeeef78feea3ae7e2e0106fc360e26597','--baseline-source',str(root/'source-baseline-02'),'--candidate',lib['path'],'--candidate-sha256',lib['sha256'],'--candidate-source',str(root/'source'),'--modes','list','page','--calls-per-worker','2','--native-rss-launcher','/usr/bin/time']\ntry:\n for style,payloads,widths in [('plain',['786432'],['4']),('escaped',['65536'],['4'])]:\n  argv=common+['--out',str(out/style),'--payload-style',style,'--payload-bytes']+payloads+['--concurrency']+widths\n  row={'style':style,'argv':argv};report['stages'].append(row);save()\n  start=time.monotonic();r=subprocess.run(argv,check=False,timeout=900)\n  row.update(returncode=r.returncode,seconds=time.monotonic()-start);save()\n  assert r.returncode==0,style+' comparison failed; original result retained'\n report['passed']=True\nexcept BaseException as e:\n report['error']=type(e).__name__+': '+str(e);raise\nfinally:\n report['after']=environment();save();print(json.dumps({'campaign':str(out/'campaign.json'),'passed':report['passed']}),flush=True)\n",
+    "runner_sha256": "1396af8bfccade69e7932ff7ff32998583c5b9da97790c5bcf687d0a81c0b3a5",
+    "native_rss_launcher": {
+      "path": "/usr/bin/time",
+      "sha256": "3b11dec50514a8473e9f6efa7a34d584d0657538c09988f61b72d38ad4991a10"
+    },
+    "rust_binary_and_benchmark_unchanged": true,
+    "scope": "Supplemental C4 ABBA for whole Rust-child peak RSS via pinned GNU time; two processes per arm per case, 128 receipts; original Python wrapper wait4 RSS preserved separately. Not pooled with original 20-case matrix.",
+    "independent_analysis": {
+      "passed": true,
+      "summary": "inventory-rss-campaign-03-summary.json",
+      "numeric_fields": 132,
+      "maximum_absolute_difference": 0,
+      "verified_usage_receipts": 20,
+      "compiler_inputs_equal_qualified_tested_after_and_local": 213
+    }
+  }
+}

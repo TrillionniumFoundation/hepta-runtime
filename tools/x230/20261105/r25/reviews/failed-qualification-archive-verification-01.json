@@ -1,0 +1,226 @@
+{
+  "all_member_sizes_and_sha256_match": true,
+  "archive": {
+    "bytes": 2238077,
+    "sha256": "2382c0bf4de0c48a21d31fcc2e4952b6c2036cc2897612f77227b46682bc5091"
+  },
+  "archive_regular_files": 3590,
+  "binary_identity_records_crosschecked": 5,
+  "binary_payload_limitation": "The five original binaries remain on X230. This audit crosschecks their recorded identities against inventories and cases, without downloading or executing those payloads.",
+  "binary_payloads_in_archive": false,
+  "compiler_source_files_match_tested_snapshot": 221,
+  "complete_command_records": 1663,
+  "complete_gzip_logs_crc_and_plain_size_checked": 3326,
+  "duplicates_or_unsafe_paths": false,
+  "enumeration_commands": 10,
+  "evidence_verification_passed": true,
+  "failed_cases": 1,
+  "failure": {
+    "fixture_source_sha256": "ef56e7844a1d95c5de4d46d97cddbd2ee3661c17f761c6cc456b980f12544bfc",
+    "interpretation": "Fixture configuration rejects the operator host at initialization. This case never reaches its start/reuse/cancel operations or assertions.",
+    "observed_error": "operator host `operator` requires explicit allow_job_network=true",
+    "record": {
+      "argv": [
+        "/home/qian/hepta-runtime-optimization-20261105-r25/qualification-01/test-binaries/hepta_runtime-1b8b761b89392e3b",
+        "mcp::runtime::ssh::direct::tests::cancellation_tests::public_start_reuse_and_cancel_keep_internal_reservation_selection",
+        "--exact",
+        "--test-threads=1"
+      ],
+      "attempt": 1,
+      "binary": "/home/qian/hepta-runtime-optimization-20261105-r25/qualification-01/test-binaries/hepta_runtime-1b8b761b89392e3b",
+      "binary_sha256": "b49f4e29b2aa300b0ade6fb1027f92efd06de41e5b4bdc5a1eb6e2b78d913b2e",
+      "elapsed_seconds": 0.032936858013272285,
+      "executed": true,
+      "exit_code": 101,
+      "name": "mcp::runtime::ssh::direct::tests::cancellation_tests::public_start_reuse_and_cancel_keep_internal_reservation_selection",
+      "pid": 3221408,
+      "started_utc": "2026-11-05T07:21:05.074972+00:00",
+      "status": "failed",
+      "stderr_bytes": 0,
+      "stderr_gzip": "case-001523.stderr.log.gz",
+      "stdout_bytes": 1766,
+      "stdout_gzip": "case-001523.stdout.log.gz",
+      "stdout_proof": {
+        "bytes": 1766,
+        "errors": [
+          "last nonempty stdout line is not a successful libtest summary",
+          "split outer test header lacks its own final standalone ok"
+        ],
+        "exact_name": "mcp::runtime::ssh::direct::tests::cancellation_tests::public_start_reuse_and_cancel_keep_internal_reservation_selection",
+        "gzip_sha256": "672291b654ed31f873d8a84b0c02558d20f33ba087eeee329d2937613151ab42",
+        "passed": false,
+        "plain_sha256": "f9c7f9c6df17f8091bbe26116df18279b8014162505b9ba8193ff87c6a76cd8f"
+      },
+      "timed_out": false
+    },
+    "stderr_bytes": 0,
+    "stdout_bytes": 1766,
+    "stdout_sha256": "f9c7f9c6df17f8091bbe26116df18279b8014162505b9ba8193ff87c6a76cd8f"
+  },
+  "format_stage_changed_input_paths": [
+    "src/mcp/runtime/jobs.rs",
+    "src/mcp/runtime/ssh.rs",
+    "src/mcp/runtime/ssh_direct_cancellation_tests.rs",
+    "src/mcp/runtime/ssh_direct_tests.rs"
+  ],
+  "harness_files_match_recorded_snapshot": 19,
+  "ignored_unexecuted_cases": 34,
+  "independently_checked_passed_cases": 1652,
+  "listed_expanded_bytes": 9428342,
+  "listed_files_verified": 3589,
+  "manifest": {
+    "bytes": 682622,
+    "sha256": "257dca906fd8a29c7b2b8b28d09dff574d215c5605c4ff90b9b265bc60425ab7"
+  },
+  "original_qualification_passed": false,
+  "original_terminal": {
+    "at_unix_ms": 1793863330344,
+    "audit_recorded": true,
+    "automatic_retry": false,
+    "cancelled": false,
+    "exit_code": 1,
+    "job_id": "1a1aa7fa690-fc05-43af",
+    "launch_nonce": "096b240ffd95a741f7358a6fe5f448aa",
+    "log_bytes": {
+      "stderr": {
+        "seen": 0,
+        "stored": 0
+      },
+      "stdout": {
+        "seen": 2483,
+        "stored": 2483
+      }
+    },
+    "log_errors": {
+      "stderr": null,
+      "stdout": null
+    },
+    "log_synced": {
+      "stderr": true,
+      "stdout": true
+    },
+    "log_truncated": {
+      "stderr": false,
+      "stdout": false
+    },
+    "output_complete": true,
+    "output_durable": true,
+    "state": "failed",
+    "terminal_publication_confirmed": true,
+    "terminal_publication_protocol": 1,
+    "timed_out": false
+  },
+  "preformat_source_snapshot_matches_install_payload": true,
+  "qualification02_validated_by_this_audit": false,
+  "qualification_stages": [
+    {
+      "command": [
+        "/home/qian/.cargo/bin/cargo",
+        "+1.95.0",
+        "fmt",
+        "--all"
+      ],
+      "name": "format",
+      "returncode": 0,
+      "seconds": 3.0216367612592876,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "/home/qian/.cargo/bin/cargo",
+        "+1.95.0",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "name": "fmt-check",
+      "returncode": 0,
+      "seconds": 2.5703713400289416,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "/home/qian/hepta-runtime-optimization-20261105-r25/source/tools/x230/20261028",
+        "-p",
+        "*_tests.py",
+        "-v"
+      ],
+      "name": "harness-tests",
+      "returncode": 0,
+      "seconds": 6.3319986360147595,
+      "stderr_sha256": "d2dbdedf0ec7f1458a3922c37a0b9109b592edb01690750291b4cd331683be31",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "/home/qian/.cargo/bin/cargo",
+        "+1.95.0",
+        "clippy",
+        "--offline",
+        "--locked",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "name": "clippy",
+      "returncode": 0,
+      "seconds": 59.25896448921412,
+      "stderr_sha256": "3d13558578f7b210b7052d3d1d5234b234f91a4837935f58a33b9af0a0a145c6",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "/home/qian/.cargo/bin/cargo",
+        "+1.95.0",
+        "test",
+        "--offline",
+        "--locked",
+        "--all-targets",
+        "--all-features",
+        "--no-run",
+        "--message-format=json"
+      ],
+      "name": "test-build",
+      "returncode": 0,
+      "seconds": 1120.6983705749735,
+      "stderr_sha256": "e4583d6c515f8b19fcb88673af07c0633c2ba3fe8d3f4996bd071e5334fa2d6e",
+      "stdout_sha256": "c773918e497eebda1470536ef28872d24d687526dfb8183957643f730f9024ae"
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "/home/qian/hepta-runtime-optimization-20261105-r25/source/tools/x230/20261028/run_isolated_tests.py",
+        "--artifacts",
+        "/home/qian/hepta-runtime-optimization-20261105-r25/qualification-01/retained-artifacts.jsonl",
+        "--source-manifest",
+        "/home/qian/hepta-runtime-optimization-20261105-r25/qualification-01/source-map.json",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261105-r25/qualification-01/isolated-tests",
+        "--timeout",
+        "180"
+      ],
+      "name": "isolated-tests",
+      "returncode": 1,
+      "seconds": 255.23405241500586,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "3ee82824dcfe545feeab853657e898b159ad11632f4fd166cba8d4db88343092"
+    }
+  ],
+  "remote_mutations": 0,
+  "schema": "hepta-r25-original-failed-qualification-independent-verification-v1",
+  "selected_cases": 1687,
+  "test_execution_attempts": 1653,
+  "test_retries": 0,
+  "workloads_reexecuted": 0
+}

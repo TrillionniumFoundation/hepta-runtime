@@ -1,0 +1,14 @@
+--- candidate/src/mcp/runtime/ssh_observation_pool_tests.rs
++++ formatted/src/mcp/runtime/ssh_observation_pool_tests.rs
+@@ -998,7 +998,10 @@
+ 				reply,
+ 				admission: test_admission(),
+ 			};
+-			assert_eq!(request.deadline > old.created + AGE, kind == "renew-deadline");
++			assert_eq!(
++				request.deadline > old.created + AGE,
++				kind == "renew-deadline"
++			);
+ 			let next_generation = core.sequence.load(Ordering::Acquire);
+ 			let permits = Arc::new(Semaphore::new(1));
+ 			let permit = permits.clone().acquire_owned().await.unwrap();

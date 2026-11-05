@@ -1,0 +1,22 @@
+{
+  "schema": "hepta-r25-lifecycle-gate-policy/v1",
+  "order": "ABBA",
+  "round_count": 4,
+  "new_jobs_per_round": 6,
+  "phase_concurrency": 6,
+  "workers": 2,
+  "arena_max": 1,
+  "measured_operation_phases": ["launch", "same_key_after_crash", "concurrent_cancel", "same_key_after_cancel", "cancel_after_terminal"],
+  "gated_groups": ["all_operations", "launch", "concurrent_cancel"],
+  "throughput_minimum_b_over_a": 0.95,
+  "rpc_p95_maximum_b_over_a": 1.10,
+  "cpu_counter_tolerance_ticks_per_phase_per_round": 1,
+  "rss_maximum_extra_kib": 512,
+  "rss_maximum_ratio": 1.05,
+  "automatic_retries": 0,
+  "sample_scope": "One finite ABBA; each arm has 60 aggregate operation calls and 12 launch/12 live-cancel calls. C6 descriptive comparison, not a saturation or significance claim.",
+  "throughput_scope": "Successful native RPC count divided by sum of per-phase complete RPC spans; prepare, independent SSH inspection, crash and observation-only phases excluded.",
+  "cpu_gate_scope": "Controller utime+stime from complete phase brackets. B total must not exceed A total plus one raw clock tick per included phase/round. This is a declared resolution tolerance, not a performance improvement claim.",
+  "rss_scope": "Largest sampled controller RSS across all three controller generations of both rounds per arm; must meet both absolute and ratio gates.",
+  "adoption_requires": ["normal lifecycle correctness and performance gates", "candidate-only six-host cancellation saturation proof", "complete exact-source qualification", "normal observation ABBA nonregression"]
+}

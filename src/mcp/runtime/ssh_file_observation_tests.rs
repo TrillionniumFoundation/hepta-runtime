@@ -1,14 +1,14 @@
-// Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
 //! Closed file wire protocol and startup rejection without network I/O.
 use super::*;
 use serde_json::{json, Value};
 
 #[test]
-fn file_observation_wire_preserves_the_original_helper_and_data_protocol() {
+fn file_observation_wire_uses_fixed_read_helpers_and_preserves_the_data_protocol() {
 	let source = concat!(
 		include_str!("file_metadata.py"),
-		"\n",
-		include_str!("inode_patch.py"),
 		"\n",
 		include_str!("binary_file.py")
 	);

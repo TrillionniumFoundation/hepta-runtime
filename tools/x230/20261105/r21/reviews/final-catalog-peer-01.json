@@ -1,0 +1,131 @@
+{
+  "already_correctly_updated": [
+    "selector revision=final-01, closed=true, publish_ready=true, pending_required=[]",
+    "identity catalog revision/status/closed/adoption_assessed/candidate_adopted/scope and pending_required_artifacts=[]",
+    "all selected row.status values become closed_verified_file",
+    "selector.identity_document replaces the draft path/identity/status with the newly written final document",
+    "identity catalog source_chain[-1].role becomes qualified_rejected_by_native_regression_screen",
+    "actual qualification and campaign come from the closed orchestration",
+    "final_decision retains R19 src tree 3aa8c9aadbf42b6a0ebdac3954bd1e64b4055e20 and distinguishes rejected qualified candidate 5f814d4faa80b87cfb3a34ca38275664444c0883",
+    "current commit hash remains unset; actual publication commit/ref verification remains separate"
+  ],
+  "archive_ids_for_crosscheck": [
+    "r20_qualification",
+    "status_cold",
+    "cancel",
+    "hash4096",
+    "hash64",
+    "r21_qualification_archive",
+    "r21_campaign_archive",
+    "r21_holder_terminal_evidence",
+    "r21_local_review_archive"
+  ],
+  "findings": [
+    {
+      "actual_final_scope": {
+        "R20": 5,
+        "R21": 4,
+        "R21_archives": [
+          "qualification",
+          "campaign",
+          "holder",
+          "local_review"
+        ],
+        "total": 9
+      },
+      "affected_paths": [
+        "publication-selector.json.original_archive_count",
+        "publication-selector.json.original_archive_classes"
+      ],
+      "current_inherited_values": {
+        "original_archive_classes": [
+          "qualification",
+          "coldprocess",
+          "cancelprocess",
+          "rejected_hash"
+        ],
+        "original_archive_count": 5
+      },
+      "id": "archive_catalog_still_R20_only",
+      "minimal_update": {
+        "original_archive_classes": [
+          "qualification",
+          "coldprocess",
+          "cancelprocess",
+          "rejected_hash",
+          "campaign",
+          "holder",
+          "local_review"
+        ],
+        "original_archive_count": 9,
+        "original_archive_count_scope": "All selected evidence archives: five R20 archives plus four R21 archives, including the newly generated local-review bundle."
+      },
+      "priority": "correct_before_freeze",
+      "recommendation": "Set the final selected archive count to 9, extend classes with campaign/holder/local_review, and explicitly scope the count to selected evidence archives. The new local-review bundle is review evidence, not another workload run or an original R20 raw package."
+    },
+    {
+      "affected_paths": [
+        "publication-selector.json.available_files[id=r21_source_binder].role",
+        "evidence-identities.json.available_artifacts[id=r21_source_binder].role"
+      ],
+      "current_inherited_value": "independent_source_binder_not_yet_run_on_final_qualification",
+      "id": "source_binder_role_still_not_run",
+      "minimal_python": "by_id[\"r21_source_binder\"][\"role\"] = \"independent_source_binder_tool\"",
+      "priority": "correct_before_freeze",
+      "reason": "The finalizer updates row.status but leaves this role untouched; both final catalogs receive the same rows after the actual final binder has completed.",
+      "recommendation": "Change the tool role to a neutral independent_source_binder_tool before both outputs are assembled. Keep the actual accepted proof in the separate r21_qualified_source_binding artifact and keep candidate rejection explicit."
+    },
+    {
+      "affected_paths": [
+        "publication-selector.json.supersedes_retained_draft"
+      ],
+      "current_inherited_source": "publication-selector-draft-01.json",
+      "id": "direct_draft_provenance_points_to_01",
+      "priority": "provenance_precision",
+      "reason": "Finalization actually consumes draft-02; carrying its previous supersedes pointer only names draft-01 and omits the immediately finalized input.",
+      "recommendation": "Point supersedes_retained_draft at the actual draft-02 bytes, or add finalized_from_draft for draft-02 while retaining the old pointer as historical provenance. Preserve both historical drafts."
+    }
+  ],
+  "historical_draft_references_to_keep": [
+    "evidence-identities.retained_initial_report_draft is explicitly historical and should not be relabelled as current.",
+    "Draft, failure, correction and transport receipt filenames in local_review_bundle_inputs describe retained history; do not remove them to eliminate the word draft.",
+    "The unchanged component_metrics describe completed R20 component experiments and are not stale merely because final R21 is rejected."
+  ],
+  "inputs": [
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r21/publication/finalize_selector_01.py",
+      "sha256": "ea1682b008a8b95da8ec9f775f5a9b0b44c10d5c0c7128cc304e081829fdd46d",
+      "size": 7430
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r21/publication/publication-selector-draft-02.json",
+      "sha256": "1eca2509d44cea3a3c36dcf9bb5eeb69c0adcdde4881af0ed165a1f796376080",
+      "size": 93662
+    },
+    {
+      "path": "/workspace/scratch/846f8b2ab644/r21/publication/evidence-identities-draft-02.json",
+      "sha256": "a45c20014e422d21aeee4538ca9e70e3aac0a3213edbf49ec779b6c6c5437df7",
+      "size": 59001
+    }
+  ],
+  "main_executed": false,
+  "new_gate_or_test_matrix_requested": false,
+  "producer_files_modified": false,
+  "remote_calls": 0,
+  "review_completed": true,
+  "reviewed_utc": "2026-11-05T03:01:53.864692+00:00",
+  "schema": "hepta-r21-final-catalog-static-peer/v1",
+  "scope": "Read-only static inspection of finalizer update coverage and inherited draft JSON fields; no main, workload, remote call, Git action, or edits to producer files.",
+  "status": "readable_metadata_updates_required_before_freeze",
+  "suggested_finalizer_patch_fragments": [
+    {
+      "code": "by_id[\"r21_source_binder\"][\"role\"] = \"independent_source_binder_tool\"",
+      "where": "after constructing by_id, before index.update"
+    },
+    {
+      "code": "original_archive_count=9,\noriginal_archive_classes=[\"qualification\", \"coldprocess\", \"cancelprocess\", \"rejected_hash\", \"campaign\", \"holder\", \"local_review\"],\noriginal_archive_count_scope=\"All selected evidence archives: five R20 plus four R21, including the newly generated local-review bundle.\",\nsupersedes_retained_draft={\"source\": str(here / \"publication-selector-draft-02.json\"), \"identity\": identity(here / \"publication-selector-draft-02.json\")},",
+      "where": "inside selector.update"
+    }
+  ],
+  "writer_state": "This peer receipt is the only new file; writes stop after saving it."
+}

@@ -1,0 +1,266 @@
+{
+  "automatic_audit_retries": 0,
+  "complete_analysis_objects_equal": true,
+  "controller_cleanup": [
+    {
+      "controller_directory": "first-controller",
+      "exit_code": -9,
+      "observed_descendant_survivors": [],
+      "reader_error": null,
+      "report_field": "intentional_crash",
+      "resource_error_counts": {
+        "identity_before:FileNotFoundError": 6,
+        "identity_before:ProcessLookupError": 5,
+        "ownership:ParentChanged": 1,
+        "parent_identity:ProcessLookupError": 1
+      },
+      "resource_sampling_limitations": [
+        "Only observed descendants of this controller; no remote/cluster CPU.",
+        "100 ms sampling can miss short-lived or reparented descendants.",
+        "RSS is a non-atomic sum and can double-count shared pages.",
+        "FD failure does not discard other metrics; all missing observations are in the trace.",
+        "SSH classification uses executable basename; generations changing class are mixed.",
+        "Lifetime CPU includes activity before first observation; interval deltas are diagnostic.",
+        "Sampler and transport capture run in the Python harness; their CPU is not controller CPU."
+      ],
+      "sampled_resource_peaks": {
+        "controller_fd": 76,
+        "controller_hwm_kib": 16056,
+        "controller_rss_kib": 16056,
+        "descendants": 10,
+        "mixed_descendants_fd": 0,
+        "mixed_descendants_rss_kib": 0,
+        "other_descendants_fd": 0,
+        "other_descendants_rss_kib": 0,
+        "ssh_descendants_fd": 105,
+        "ssh_descendants_rss_kib": 78868,
+        "tree_fd": 168,
+        "tree_rss_kib": 94896,
+        "unknown_descendants_fd": 0,
+        "unknown_descendants_rss_kib": 0
+      },
+      "shutdown_method": "already_exited",
+      "unmatched_responses": 0
+    },
+    {
+      "controller_directory": "after-crash-controller",
+      "exit_code": 0,
+      "observed_descendant_survivors": [],
+      "reader_error": null,
+      "report_field": "after_cancel_shutdown",
+      "resource_error_counts": {
+        "identity_before:FileNotFoundError": 1
+      },
+      "resource_sampling_limitations": [
+        "Only observed descendants of this controller; no remote/cluster CPU.",
+        "100 ms sampling can miss short-lived or reparented descendants.",
+        "RSS is a non-atomic sum and can double-count shared pages.",
+        "FD failure does not discard other metrics; all missing observations are in the trace.",
+        "SSH classification uses executable basename; generations changing class are mixed.",
+        "Lifetime CPU includes activity before first observation; interval deltas are diagnostic.",
+        "Sampler and transport capture run in the Python harness; their CPU is not controller CPU."
+      ],
+      "sampled_resource_peaks": {
+        "controller_fd": 76,
+        "controller_hwm_kib": 16560,
+        "controller_rss_kib": 16560,
+        "descendants": 12,
+        "mixed_descendants_fd": 0,
+        "mixed_descendants_rss_kib": 0,
+        "other_descendants_fd": 0,
+        "other_descendants_rss_kib": 0,
+        "ssh_descendants_fd": 68,
+        "ssh_descendants_rss_kib": 96312,
+        "tree_fd": 144,
+        "tree_rss_kib": 112552,
+        "unknown_descendants_fd": 0,
+        "unknown_descendants_rss_kib": 0
+      },
+      "shutdown_method": "stdin_eof",
+      "unmatched_responses": 0
+    },
+    {
+      "controller_directory": "after-cancel-controller",
+      "exit_code": 0,
+      "observed_descendant_survivors": [],
+      "reader_error": null,
+      "report_field": "shutdown",
+      "resource_error_counts": {
+        "identity_before:ProcessLookupError": 2
+      },
+      "resource_sampling_limitations": [
+        "Only observed descendants of this controller; no remote/cluster CPU.",
+        "100 ms sampling can miss short-lived or reparented descendants.",
+        "RSS is a non-atomic sum and can double-count shared pages.",
+        "FD failure does not discard other metrics; all missing observations are in the trace.",
+        "SSH classification uses executable basename; generations changing class are mixed.",
+        "Lifetime CPU includes activity before first observation; interval deltas are diagnostic.",
+        "Sampler and transport capture run in the Python harness; their CPU is not controller CPU."
+      ],
+      "sampled_resource_peaks": {
+        "controller_fd": 76,
+        "controller_hwm_kib": 15916,
+        "controller_rss_kib": 15916,
+        "descendants": 12,
+        "mixed_descendants_fd": 0,
+        "mixed_descendants_rss_kib": 0,
+        "other_descendants_fd": 0,
+        "other_descendants_rss_kib": 0,
+        "ssh_descendants_fd": 70,
+        "ssh_descendants_rss_kib": 95608,
+        "tree_fd": 146,
+        "tree_rss_kib": 111524,
+        "unknown_descendants_fd": 0,
+        "unknown_descendants_rss_kib": 0
+      },
+      "shutdown_method": "stdin_eof",
+      "unmatched_responses": 0
+    }
+  ],
+  "end_monotonic_ns": 80034229250647,
+  "final_runtime_sha256": "51480b3cf630a95419d3afeb571eec17c90cffa5944101920d05333673de031d",
+  "formal_dataset_count": 9,
+  "formal_dataset_ids": [
+    "r16-native-observation-01",
+    "r16-native-observation-02",
+    "r16-workers2-vs1-01",
+    "r16-workers2-vs4-01",
+    "r16-native-boundary-01",
+    "r16-cancel-recovery-01",
+    "r17-native-observation-01",
+    "r17-cancel-recovery-01",
+    "r18-cancel-recovery-01"
+  ],
+  "formal_dataset_totals": {
+    "cancellation_calls": 36,
+    "expected_capacity_rejections": 32,
+    "independent_ssh_checks": 108,
+    "measured_abba_calls": 9600,
+    "non_tool_response_frames": 51,
+    "other_tool_errors": 0,
+    "preflight_restart_abba_calls": 360,
+    "real_job_starts": 18,
+    "recovery_native_calls": 270,
+    "response_frames": 11923,
+    "same_key_lookups": 36,
+    "ssh_streams": 216,
+    "successful_tool_calls": 11840,
+    "tool_calls": 11872,
+    "warmup_abba_calls": 1440
+  },
+  "incremental_counts": {
+    "cancellation_calls": 12,
+    "expected_capacity_rejections": 0,
+    "independent_ssh_checks": 36,
+    "measured_abba_calls": 0,
+    "other_tool_errors": 0,
+    "preflight_restart_abba_calls": 0,
+    "real_job_starts": 6,
+    "recovery_native_calls": 90,
+    "response_frames": 93,
+    "same_key_lookups": 12,
+    "ssh_streams": 72,
+    "successful_tool_calls": 90,
+    "tool_calls": 90,
+    "warmup_abba_calls": 0
+  },
+  "incremental_package": {
+    "archive_receipt_sha256": "f9aad316c58d2b448b0581603b92e3c10544e0c91fce4e1445a7866170e47a41",
+    "archive_verification": {
+      "archive_bytes": 260043,
+      "archive_sha256": "affea8214740a6be03ed9a4fc5eeacfa32a3f95780104da28f6ec7e59c8f34ba",
+      "manifest_sha256": "9c208e77a35ddf2ccfbdeea7ffc3d08b1c584fd101e9072ac14bdd4ba4438677",
+      "member_files": 197,
+      "self_manifest_exclusion": "manifest does not hash itself; receipt hashes its exact bytes",
+      "verified": true
+    },
+    "argv": [
+      "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python",
+      "-B",
+      "/workspace/scratch/87f4a373402c/r16-r17-publication/relocation-audit-02/r18-cancel-recovery-01-mfhpath6/r18/measurement-tools/verify_cancel_recovery.py",
+      "--report",
+      "/workspace/scratch/87f4a373402c/r16-r17-publication/relocation-audit-02/r18-cancel-recovery-01-mfhpath6/r18/cancel-recovery-01/report.json",
+      "--output",
+      "/workspace/scratch/87f4a373402c/r16-r17-publication/relocation-audit-02/r18-cancel-recovery-01.recomputed.json"
+    ],
+    "automatic_audit_retries": 0,
+    "complete_analysis_objects_equal": true,
+    "counts": {
+      "cancellation_calls": 12,
+      "expected_capacity_rejections": 0,
+      "independent_ssh_checks": 36,
+      "measured_abba_calls": 0,
+      "other_tool_errors": 0,
+      "preflight_restart_abba_calls": 0,
+      "real_job_starts": 6,
+      "recovery_native_calls": 90,
+      "response_frames": 93,
+      "same_key_lookups": 12,
+      "ssh_streams": 72,
+      "successful_tool_calls": 90,
+      "tool_calls": 90,
+      "warmup_abba_calls": 0
+    },
+    "end_monotonic_ns": 80034222898450,
+    "kind": "recovery",
+    "new_extraction_directory": "/workspace/scratch/87f4a373402c/r16-r17-publication/relocation-audit-02/r18-cancel-recovery-01-mfhpath6",
+    "original_analysis_sha256": "91b1054551fc82b1368ec14411390808f059008c19ca1336d7f5a45c354789dc",
+    "original_archives_unchanged": true,
+    "package": "r18-cancel-recovery-01",
+    "package_verifier_sha256": "226edda9684f742178398c09266a171df38df5e505c0020372e72265ff684c43",
+    "passed": true,
+    "receipt_sha256": "f6d7b0434ad0f9ce93324534a53cb064a947a1bc97a6ec28aaa4e50423700082",
+    "recomputed_analysis_sha256": "91b1054551fc82b1368ec14411390808f059008c19ca1336d7f5a45c354789dc",
+    "report_sha256": "49894e6b60cee6110de391328e7c56447cf50fff03e981a3bebae4b388685ea2",
+    "returncode": 0,
+    "runner_sha256": "5ab9a044d05a897f56c4e2b9566279683bd89658fa9965b767a31b8e21da55fe",
+    "schema": "hepta-relocated-campaign-audit/v1",
+    "seconds": 0.161929045,
+    "start_monotonic_ns": 80034060969405,
+    "stderr": {
+      "bytes": 0,
+      "path": "/workspace/scratch/87f4a373402c/r16-r17-publication/relocation-audit-02/r18-cancel-recovery-01.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stdout": {
+      "bytes": 107,
+      "path": "/workspace/scratch/87f4a373402c/r16-r17-publication/relocation-audit-02/r18-cancel-recovery-01.stdout",
+      "sha256": "a4e665cefb66624432c97a89264c6cab04fdb09c17f95a22cdbcb920778bd4ab"
+    },
+    "verified_tool_sha256": {
+      "measurement-tools/allocator_environment.py": "f5c8e879c540b3f7cb1b7d3a7a0f5002c2f40c1a87963174b0b00470fa3a4525",
+      "measurement-tools/allocator_environment_audit.py": "4b082ce343ae3943e3098baa58af2f5def7198881b9c087d63d88360e9763727",
+      "measurement-tools/analyze_native_observation.py": "cc7f6884d581cd1ced430437350e808de51931c50d12441797205501b20cae66",
+      "measurement-tools/audit_native_evidence.py": "b69f6902d2de81eab41b21506f024c002d2f8264d60e86df6b1086623a77fd28",
+      "measurement-tools/observation_resources.py": "f3402d51cb37b2fe20f4351b3a81ec5990a9fdaff93a846d21c07ccd557cb894",
+      "measurement-tools/owned_ssh_interruption.py": "1989c57f0b944afae1ed759d6529b8f1cc26197e269e2c34c4fd49e43a32aa7b",
+      "measurement-tools/run_native_observation.py": "7606648c99b2ff2bbf0bba58384e8cab609ac3899f838c0b80ba54d6288d20bb",
+      "measurement-tools/run_six_host_cancel_recovery.py": "698eb7801cde3f2bd5ff202412c0833fc218fd7e912c3c949d2b37fde7a56a12",
+      "measurement-tools/test_native_harness.py": "2b450175b9e6122248ac1bcb51860aa8a6d3eff55f6ac8c877c0a905e3dd7d00",
+      "measurement-tools/verify_cancel_recovery.py": "0116652a0b489dc462f005e01d7c943feda9ba784563d7317c92bb5beb9a701c",
+      "measurement-tools/x230_observation_benchmark.py": "4d96f0bf2da2562e788f48be7c37589ab3a513be5f9d8b2d741afe5c08ea9eed",
+      "measurement-tools/x230_six_running_recovery_canary.py": "6219bc556b0ac6d142bd4c731466b959e8a410f0b4b55f3d8b303f8fdbfbaaf4"
+    },
+    "workload_processes_started": 0
+  },
+  "incremental_scope": "One R18 recovery-only dataset; no previous audit is rerun.",
+  "limitations": [
+    "This verifies archived byte closure and relocation; no workload or qualification is executed.",
+    "Totals include warmup and planned lifecycle checks; they are not a throughput denominator.",
+    "Cleanup covers only the reported/observed owned process generations; sampling omissions remain in raw evidence."
+  ],
+  "original_eight_package_receipt_unchanged": true,
+  "original_local_audit_runner_sha256": "5ab9a044d05a897f56c4e2b9566279683bd89658fa9965b767a31b8e21da55fe",
+  "passed": true,
+  "previous_receipt": {
+    "relative_path": "relocated-audit-01.json",
+    "sha256": "778d040ee245d75ad70de03c06dc7ead68d0ac776e61aa7c5843f337eadeb7ea"
+  },
+  "recomputed_analysis_bytes_equal": true,
+  "runner_sha256": "c30cce6f87dbce5d626e8f3375133a41b210d11ea8f2a3cc8cb9b7a2513b5428",
+  "schema": "hepta-x230-relocated-evidence-audit/v2",
+  "seconds": 0.19201241,
+  "start_monotonic_ns": 80034037238237,
+  "totals_complete": true,
+  "workload_processes_started": 0
+}

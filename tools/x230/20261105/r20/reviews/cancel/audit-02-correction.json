@@ -1,0 +1,185 @@
+{
+  "ast_passed": true,
+  "correction": "Restrict import mechanism predicates to native semantic successes and the explicitly blocked boundary, matching the frozen producer; preserve all mock metadata as observed, not a performance assertion. All script/stream/fixture/signal/close/counter/statistic/screen checks remain unchanged.",
+  "created_utc": "2026-11-05T01:38:12.700304+00:00",
+  "diff": {
+    "bytes": 3793,
+    "path": "/workspace/scratch/846f8b2ab644/r20/audit-python/cancel-probe-01/audit-01-to-02.diff",
+    "sha256": "8dfb328321cccfed4ae5038d5f9a249be5b3f8eb1250855c94e5c4db3aec5241"
+  },
+  "new_tool": {
+    "bytes": 47926,
+    "path": "/workspace/scratch/846f8b2ab644/r20/audit-python/cancel-probe-01/tools/audit_cancelprocess_02.py",
+    "sha256": "884467d020af1c3edb8517eb951faeb04c6e9105fb4d23fba1ac0d567a238eea"
+  },
+  "observations": [
+    {
+      "application_stderr_lines": [
+        "Traceback (most recent call last):",
+        "  File \"<string>\", line 175, in <module>",
+        "  File \"<string>\", line 15, in _r20_open",
+        "PermissionError: [Errno 1] R20 deliberate pidfd-open failure"
+      ],
+      "case": "pidfd_open_failure",
+      "metadata": {
+        "closed": [],
+        "events": [
+          {
+            "kind": "pidfd_open_failed",
+            "pid": 424242
+          }
+        ],
+        "initial_subprocess_loaded": false,
+        "mode": "mock",
+        "opened": [],
+        "ps_counts": {
+          "lstart=": 0,
+          "uid=": 0
+        },
+        "still_open": [],
+        "subprocess_loaded": true
+      },
+      "sequence": 11,
+      "variant": "B"
+    },
+    {
+      "application_stderr_lines": [
+        "Traceback (most recent call last):",
+        "  File \"<string>\", line 181, in <module>",
+        "  File \"<string>\", line 23, in _r20_send",
+        "PermissionError: [Errno 1] R20 deliberate pidfd-signal failure"
+      ],
+      "case": "pidfd_signal_failure",
+      "metadata": {
+        "closed": [
+          25
+        ],
+        "events": [
+          {
+            "fd": 25,
+            "kind": "pidfd_open",
+            "pid": 424242
+          },
+          {
+            "kind": "proc_identity"
+          },
+          {
+            "kind": "proc_uid"
+          },
+          {
+            "fd": 25,
+            "kind": "pidfd_send_signal",
+            "mock": true,
+            "returned": false,
+            "signal": 15
+          },
+          {
+            "fd": 25,
+            "kind": "pidfd_close"
+          }
+        ],
+        "initial_subprocess_loaded": false,
+        "mode": "mock",
+        "opened": [
+          25
+        ],
+        "ps_counts": {
+          "lstart=": 0,
+          "uid=": 0
+        },
+        "still_open": [],
+        "subprocess_loaded": true
+      },
+      "sequence": 13,
+      "variant": "B"
+    },
+    {
+      "application_stderr_lines": [
+        "Traceback (most recent call last):",
+        "  File \"<string>\", line 178, in <module>",
+        "  File \"<string>\", line 112, in atomic",
+        "FileExistsError: [Errno 17] File exists: 'cancel-request.json.tmp'"
+      ],
+      "case": "publication_failure",
+      "metadata": {
+        "closed": [
+          25
+        ],
+        "events": [
+          {
+            "fd": 25,
+            "kind": "pidfd_open",
+            "pid": 424242
+          },
+          {
+            "kind": "proc_identity"
+          },
+          {
+            "kind": "proc_uid"
+          },
+          {
+            "fd": 25,
+            "kind": "pidfd_close"
+          }
+        ],
+        "initial_subprocess_loaded": false,
+        "mode": "mock",
+        "opened": [
+          25
+        ],
+        "ps_counts": {
+          "lstart=": 0,
+          "uid=": 0
+        },
+        "still_open": [],
+        "subprocess_loaded": true
+      },
+      "sequence": 23,
+      "variant": "B"
+    },
+    {
+      "application_stderr_lines": [
+        "remote job request binding missing or mismatched"
+      ],
+      "case": "binding_mismatch",
+      "metadata": {
+        "closed": [],
+        "events": [],
+        "initial_subprocess_loaded": false,
+        "mode": "mock",
+        "opened": [],
+        "ps_counts": {
+          "lstart=": 0,
+          "uid=": 0
+        },
+        "still_open": [],
+        "subprocess_loaded": false
+      },
+      "sequence": 32,
+      "variant": "A"
+    }
+  ],
+  "old_tool": {
+    "bytes": 46747,
+    "path": "/workspace/scratch/846f8b2ab644/r20/audit-python/cancel-probe-01/tools/audit_cancelprocess_01.py",
+    "sha256": "0476ac24f810c52c0e0a20545e032baf4f5f2be229146bf60ecbdd8a7f38cf88"
+  },
+  "original_evidence_or_protocol_modified": false,
+  "performance_reruns": 0,
+  "producer_sha256": "ae5d82307c4ab36ff6b37e76deeaf0b71259f8c852ac4a2e8ae333a111731daa",
+  "raw_sha256": "1ad2f0d729bcaa605da04b23c96171d6eb25f71f6b8f9e0ae97e1be583dbe5d8",
+  "remote_calls": 0,
+  "retained_first_failure": {
+    "bytes": 3789,
+    "path": "/workspace/scratch/846f8b2ab644/r20/audit-python/cancel-probe-01/audit-x230-01.json",
+    "sha256": "0a9d3ab70488aee13ce3d0bfa5aef8efe0495b148313af841ceaa91e1f6eb24c"
+  },
+  "schema": "hepta-r20-cancel-auditor-correction/v1",
+  "source_basis": [
+    "The producer DIAGNOSTICS registers _r20_emit with atexit; subprocess_loaded is sys.modules membership at interpreter exit, not an import event trace.",
+    "The full producer applies its import-mechanism assertion only when spec[2] is native after each A/B semantic pair.",
+    "Production construction places BOUND_OBSERVATION_CODE before CANCEL_CODE. The mismatched request exits BOUND, so A has not reached the top-level CANCEL subprocess import.",
+    "Non-Linux mock prefix explicitly imports subprocess before production to install check_output mocks; its loaded state cannot represent native import cost.",
+    "B pidfd_open_failure, pidfd_signal_failure and publication_failure each have initial_subprocess_loaded false and subprocess_loaded true after uncaught traceback output. The available source and streams do not identify the importer. Additional loading source remains unknown; no claim is made that error formatting specifically caused it."
+  ]
+}

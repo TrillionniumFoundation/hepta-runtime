@@ -1,0 +1,94 @@
+{
+  "schema": "hepta-runtime-independent-source-review/v1",
+  "candidate": "R23",
+  "reviewer": "runtime_source_audit",
+  "reviewed_at": "2026-11-05T03:57:39.864571+00:00",
+  "status": "static_review_passed_execution_pending",
+  "blocking_findings": [],
+  "scope": "R23 candidate only. No source changes, builds, tests, remote workload or publication performed by this reviewer. R22 review was not modified.",
+  "integrity": {
+    "manifest_sha256": "7f588acbfe6696c2d2c6b77a2bac973a4966bb5f609e380dce3122b21839aeca",
+    "all_three_baseline_and_candidate_hashes_match": true,
+    "candidate_sizes_and_diff_hash_match": true,
+    "diff_exactly_reproduces_current_baseline_to_candidate": true,
+    "files": [
+      {
+        "path": "src/mcp/runtime/ssh_observation_profile.rs",
+        "candidate_sha256": "a62169343c2a08c38d69925f33fdc7551cf4be7b4b7f50cf89683f652a8f853a",
+        "candidate_bytes": 25093
+      },
+      {
+        "path": "src/mcp/runtime/ssh_observation_reference_tests.rs",
+        "candidate_sha256": "00f205e2e5f2359bc2f3272f01d84a0d0d8388645f35db006caefc40342f1524",
+        "candidate_bytes": 14709
+      },
+      {
+        "path": "src/mcp/runtime/ssh_observation_profile_tests.rs",
+        "candidate_sha256": "fed574449ceac0065dd3e1cc50a3f2a54345c2680535cc52bb5a47758a752563",
+        "candidate_bytes": 13781
+      }
+    ],
+    "diff_sha256": "0c3244dc00e0afe9ae9a05f367f37a1e7afe8d52a5c1b323606b09541754db20"
+  },
+  "production_checks": [
+    {
+      "check": "Shared per-profile budget",
+      "result": "PASS",
+      "detail": "Exactly one production remaining budget begins at 2097152 bytes in Profile::load and is passed through SSH, false, then fixed shell. No helper or shell-local budget reset. Retained payload sum equals initial budget minus remaining."
+    },
+    {
+      "check": "Rejected files and fallback",
+      "result": "PASS",
+      "detail": "checked_sub returns None before mutating remaining; the consumed Vec is dropped. PinnedFile defaults to reference=None and retains its original SHA digest, so files that do not fit use the original SHA path and later smaller files can still fit."
+    },
+    {
+      "check": "Initial trust and load order",
+      "result": "PASS",
+      "detail": "All three references are installed only after PinnedFile::load completed the fresh read, descriptor/path validation and expected SHA256 pin check. Original SSH/false/shell load order and fixed shell resolver remain unchanged."
+    },
+    {
+      "check": "Fixed shell initial verification",
+      "result": "PASS",
+      "detail": "result.verify() remains immediately after construction and still checks resolution before target content. Eligible shell content now uses the intended exact-reference comparison; invalid pins fail before reference installation or budget consumption."
+    },
+    {
+      "check": "Hot verification and ownership",
+      "result": "PASS",
+      "detail": "verify_checked and following impl are identical to R22 after removing comments. Full reads, checkpoints, cancellation/error precedence, descriptor/path checks and final length check remain intact. Arc clones share immutable payload. No pool or validation file appears in the exact three-file diff."
+    }
+  ],
+  "test_review": {
+    "result": "SUFFICIENT_FOR_NARROW_R22_TO_R23_DELTA",
+    "added_test": "executable_references_share_one_budget_without_spending_on_rejected_files",
+    "covers": [
+      "sum at exact budget cap",
+      "oversize rejection without budget debit",
+      "later smaller files still accepted",
+      "partial remainder consumption",
+      "exact exhaustion",
+      "nonempty rejection at zero remainder"
+    ],
+    "existing_coverage": "Boundary pin/SHA fallback, wrong initial pin, reference immutability and Arc sharing, complete-read/cancellation/error ordering tests remain. Existing fixed-shell success/verify/wrong-pin test is adapted to the same budget argument.",
+    "counts": {
+      "reference_functional": 8,
+      "reference_ignored": 1,
+      "old_profile_tests_before": 8,
+      "old_profile_tests_after": 8
+    },
+    "execution": "Not run by this reviewer; candidate qualification remains pending."
+  },
+  "limits": [
+    "The 2 MiB cap bounds retained reference payload per loaded Profile, not allocator/Arc overhead, transient Vec-to-Arc conversion memory, process-wide RSS or multiple concurrent profiles.",
+    "Startup SHA trust remains required; repeated exact comparison strengthens content acceptance against the validated reference but does not make filesystem reads atomic.",
+    "No R23 performance gain is established by static review. Measure end-to-end throughput, tail latency, CPU and RSS before adoption."
+  ],
+  "x230_memory_reported_by_root_not_independently_measured": {
+    "ssh_bytes": 846888,
+    "false_bytes": 26936,
+    "shell_bytes": 129784,
+    "total_reference_body_bytes": 1003608,
+    "added_reference_body_bytes_over_r22": 156720,
+    "profile_budget_bytes": 2097152
+  },
+  "recommendation": "Proceed with R23 qualification only after R22 acceptance and publication, as planned; no additional implementation or test changes requested by this review."
+}

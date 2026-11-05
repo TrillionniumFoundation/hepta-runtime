@@ -1590,7 +1590,9 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::jobs::ProcessListParams>,
 	) -> Result<String, String> {
-		runtime::jobs::list_jobs(params).map_err(|error| error.to_string())
+		runtime::jobs::list_jobs_async(params)
+			.await
+			.map_err(|error| error.to_string())
 	}
 
 	#[tool(
@@ -1607,9 +1609,8 @@ impl OctofsServer {
 		&self,
 		Parameters(params): Parameters<runtime::jobs::ProcessListPageParams>,
 	) -> Result<String, String> {
-		tokio::task::spawn_blocking(move || runtime::jobs::list_jobs_page(params))
+		runtime::jobs::list_jobs_page_async(params)
 			.await
-			.map_err(|_| "Durable job inventory worker unavailable".to_string())?
 			.map_err(|error| error.to_string())
 	}
 

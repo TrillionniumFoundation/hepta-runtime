@@ -1,0 +1,399 @@
+{
+  "created_utc": "2026-11-04T15:31:44.105803+00:00",
+  "current_campaign_counts": {
+    "boundary_frames": 204,
+    "boundary_tool_calls": 202,
+    "expected_capacity_rejection": 32,
+    "independent_ssh_checks": 36,
+    "native_frames": 2672,
+    "native_tool_calls": 2664,
+    "other_error": 0,
+    "recovery_frames": 93,
+    "recovery_native_calls": 90,
+    "success": 2924,
+    "total_frames": 2969,
+    "total_tool_calls": 2956
+  },
+  "historical_pre_campaign": {
+    "events": [
+      {
+        "key": "r19_qual02_install_job",
+        "result": {
+          "error": true,
+          "text": "tool call error: tool call failed for `codex_apps/heptaruntime_mac_controller.process_start`\n\nCaused by:\n    Mcp error: -32603: MCP request timed out"
+        }
+      },
+      {
+        "key": "r19_qual02_install_reconcile",
+        "result": {
+          "audit_recorded": true,
+          "job": {
+            "host": "x230",
+            "id": "1a1a6bb7f16-fc05-2883",
+            "idempotency_key": "x230-perf-20261104-r19-qualification-tools-install-02",
+            "launch_state": "launched"
+          },
+          "launch": {
+            "backend": "systemd",
+            "launcher_pid": null,
+            "ok": true,
+            "unit": "hepta-runtime-job-1a1a6bb7f16-fc05-2883"
+          },
+          "reused": false
+        }
+      },
+      {
+        "key": "r19_qual02_install_result_0",
+        "result": {
+          "error": true,
+          "text": "tool call error: tool call failed for `codex_apps/heptaruntime_mac_controller.process_status`\n\nCaused by:\n    Mcp error: -32603: MCP request timed out"
+        }
+      },
+      {
+        "key": "r19_qual02_install_result_1",
+        "result": {
+          "error": true,
+          "text": "tool call error: tool call failed for `codex_apps/heptaruntime_mac_controller.read_multiple_files`\n\nCaused by:\n    Mcp error: -32603: MCP request timed out"
+        }
+      },
+      {
+        "key": "r19_campaign02_mac_install",
+        "result": {
+          "error_code": "INVALID_ARGUMENT"
+        }
+      },
+      {
+        "key": "r19_campaign02_mac_install_job",
+        "result": {
+          "audit_recorded": true,
+          "job": {
+            "host": "mac",
+            "id": "1a1a6c2b67c-fc05-28a2",
+            "idempotency_key": "x230-perf-20261104-r19-mac-campaign02-install",
+            "launch_state": "launched"
+          },
+          "launch": {
+            "backend": "detached",
+            "launcher_pid": 73772,
+            "ok": true,
+            "systemd_error": "systemd user units unavailable on this platform",
+            "unit": "hepta-runtime-job-1a1a6c2b67c-fc05-28a2"
+          },
+          "reused": false
+        }
+      }
+    ],
+    "late_progress_read_error": {
+      "error": true,
+      "text": "tool call error: tool call failed for `codex_apps/heptaruntime_mac_controller.read_multiple_files`\n\nCaused by:\n    Mcp error: -32603: MCP request timed out"
+    },
+    "native_campaign_started": false,
+    "notes": [
+      "A failed create via text_file_write returned INVALID_ARGUMENT; the subsequent explicit create in the Mac-owned experiment directory succeeded without overwriting an existing target.",
+      "The upload was reconciled using the exact same idempotency key. Its actual stdout subsequently confirmed all four file hashes and available disk space.",
+      "Read-only observation tool timeouts did not trigger compilation or test retries."
+    ],
+    "qualification02": {
+      "job_id": "1a1a6bf3879-fc05-2891",
+      "request": {
+        "args": [
+          "-B",
+          "/home/qian/hepta-runtime-optimization-20261104-r19/tools/run_qualification_02.py",
+          "--expected-jobs-sha256",
+          "c9080de8aa9a35f7495aa2822a1495d297903900ae0f0de26d7b0c86d043d3c9",
+          "--expected-manifest-sha256",
+          "b5193baae4169243b92c6ae1f26460a19f0098429fb331f4a48b1450536b726b",
+          "--stage-timeout",
+          "3600",
+          "--overall-timeout",
+          "7200"
+        ],
+        "cpu_quota_percent": 200,
+        "cwd": "/home/qian/hepta-runtime-optimization-20261104-r19",
+        "executable": "/usr/bin/python3",
+        "host": "x230",
+        "idempotency_key": "x230-perf-20261104-r19-qualification-02",
+        "memory_max_bytes": 5368709120,
+        "nice": 5,
+        "timeout_seconds": 10800
+      }
+    },
+    "schema": "hepta-r19-orchestration-observations/v1",
+    "scope": "Upload, launch and read-only observation outcomes before native measurement. These calls are not performance workloads.",
+    "state": "open"
+  },
+  "notes": [
+    "Text transport attempts were remote reads, not benchmark reruns; the incomplete first-attempt orchestration memory log is explicitly retained as a limitation.",
+    "The first Mac process_start response timed out; exact same idempotency key/arguments were reconciled. Only the recorded durable copy job is asserted.",
+    "Owned Mac temporary agent was reaped; its return code is recorded separately and is not described as normal exit 0.",
+    "The source proof does not claim the later publication commit already exists.",
+    "Original failed qualification, ignored tests, errors and rejected candidates remain unchanged."
+  ],
+  "performance_workloads_added_during_collection_or_transfer": 0,
+  "publication_progress": {
+    "events": [
+      {
+        "job_id": "1a1a6edbc80-fc05-298b",
+        "kind": "publication_tools_install",
+        "receipt_sha256": "3a7444f1607c23795b11645051c7d0292399428ad6f104b3039a94ad82c759c3"
+      },
+      {
+        "idempotency_key": "x230-perf-20261104-r19-publication-final-install-01",
+        "job_id": "1a1a7015078-fc05-29d7",
+        "kind": "final_plan_and_collector_install",
+        "passed": true,
+        "receipt_sha256": "6074fad7af8e470be6709ec85617a2dd3a34f78e5ecc0305afb01479b3abc003"
+      },
+      {
+        "job_id": "1a1a7019a8f-fc05-29da",
+        "kind": "closed_evidence_collection",
+        "start_args": {
+          "args": [
+            "-B",
+            "/home/qian/hepta-runtime-optimization-20261104-r19/publication/run_remote_publication_01.py",
+            "--expected-plan-sha256",
+            "0d89dda957690e18372fdfe282d9d46b79e3c6bf779219b8a8b92c3db7b7c0e5",
+            "--expected-launcher-sha256",
+            "bb15123e263836094f6c746cbc07ffe66a3bdeff5547c58c28c6b9b360780436",
+            "--evidence-window-closed"
+          ],
+          "cpu_quota_percent": 100,
+          "executable": "/usr/bin/python3",
+          "host": "x230",
+          "idempotency_key": "x230-perf-20261104-r19-collection-01",
+          "memory_max_bytes": 1073741824,
+          "nice": 19,
+          "timeout_seconds": 3600
+        },
+        "terminal": {
+          "chunk_manifest": {
+            "bytes": 84377,
+            "path": "/home/qian/hepta-runtime-optimization-20261104-r19/transfer-envelope-01/chunk-manifest-01.json",
+            "sha256": "e4d1c183b51c8def9f028e595e766b79ceb5d963bfd2c4536593d2bac1e7e725"
+          },
+          "control_evidence_in_envelope": false,
+          "control_report": {
+            "bytes": 23505,
+            "path": "/home/qian/hepta-runtime-optimization-20261104-r19/publication/collection-control-01/report.json",
+            "sha256": "c113197c6fc4eca69cf891f003a9d2ce8398709130e4628cb1f347a41f5403a1"
+          },
+          "envelope": {
+            "bytes": 7712102,
+            "path": "/home/qian/hepta-runtime-optimization-20261104-r19/transfer-envelope-01/r19-transfer-envelope-01.tar.gz",
+            "sha256": "6e329b2b9adffc23c06496c68efeeea07605ce1ee28079a92cc3e2d508accd93"
+          },
+          "error": null,
+          "original_index": {
+            "bytes": 49733,
+            "path": "/home/qian/hepta-runtime-optimization-20261104-r19/publication/remote-index-01.json",
+            "sha256": "9d6386109be866f9b7f8104d82d461bed9a13f178560866b9e4fcfb0721880cd"
+          },
+          "passed": true
+        }
+      },
+      {
+        "actual_manifest_bytes": 84377,
+        "attempted_paths": [
+          "transfer-envelope-01/chunk-manifest-01.json",
+          "publication/collection-control-01/report.json",
+          "publication-final-installed-01.json"
+        ],
+        "automatic_workload_retries": 0,
+        "kind": "oversize_manifest_read_rejected",
+        "per_file_limit": 65536,
+        "response": {
+          "error_code": "INVALID_ARGUMENT"
+        }
+      },
+      {
+        "base64_sha256": "18e19417e0b5992546da21bc8e6c0efe7ca760940451b0be97130918770a8b29",
+        "files": 33,
+        "gzip_sha256": "064ad14869e43e5cbfb834db3b705e112597e7d7ff3575e31d3da9facca130d3",
+        "idempotency_key": "x230-perf-20261104-r19-collection-control-export-01",
+        "job_id": "1a1a703ab4e-fc05-29e0",
+        "kind": "closed_control_export",
+        "local_files_verified": 33,
+        "raw_json_sha256": "6d74a10cd4a7300044de7871f1e3a8ddb32448d06dc2dd7f2ffda0c78c1c37ce"
+      },
+      {
+        "action": "four concurrent groups of four text pieces; orchestrator terminated after failure notifications",
+        "error_detail_retained": false,
+        "kind": "text_transfer_attempt_01",
+        "note": "The yielded execution's in-memory rows did not survive termination; do not invent missing error text or completion states. Operations were read-only remote reads and content-addressed writes under the fresh local piece directory.",
+        "observed_failed_groups": [
+          0,
+          3,
+          1
+        ],
+        "verified_pieces_at_reconciliation": 16
+      },
+      {
+        "error": "MCP request timed out",
+        "failed": 2,
+        "groups": 8,
+        "kind": "text_transfer_attempt_02",
+        "passed": 6,
+        "receipt": "review/transfer-download-batch-02.json",
+        "verified_total_after": 45
+      },
+      {
+        "automatic_workload_retries": 0,
+        "failed": 8,
+        "inflight_results_unknown": true,
+        "kind": "text_transfer_attempt_03",
+        "passed": 17,
+        "receipt_directory": "review/transfer-download-03",
+        "retained_rows_at_reconciliation": 25,
+        "terminated_after_persistent_read_timeouts": true,
+        "verified_total_after": 62
+      },
+      {
+        "kind": "read_only_binary_probe",
+        "receipt": "review/binary-transfer-probe-01/report.json",
+        "receipt_sha256": "c46952d0479093f2d14b9d0e66d81ddcfd78ba770014ef1f23f599f2add8b6f3",
+        "scope": "one first block; no sustained-bandwidth inference"
+      },
+      {
+        "draft": true,
+        "head": "perf/x230-r11-20261103",
+        "head_sha": "a83fe08d736522cf01adee53902e3c13fbc1d5ae",
+        "kind": "pr_head_read",
+        "mutations": 0
+      }
+    ],
+    "native_workloads_added": 0,
+    "notes": [
+      "All completed experimental outputs remain unchanged.",
+      "Remote packaging and transfer are separate from workload retry counts.",
+      "New held-agent read-only archive copy is being prepared; not yet executed at this record."
+    ],
+    "qualification_workloads_added": 0,
+    "schema": "hepta-r19-orchestration-publication-progress/v1",
+    "state": "transport-in-progress"
+  },
+  "qualified_source": {
+    "actual_candidate_src_tree": "3aa8c9aadbf42b6a0ebdac3954bd1e64b4055e20",
+    "checks_passed": 22,
+    "report": {
+      "bytes": 87628,
+      "path": "/workspace/scratch/846f8b2ab644/r19/review/qualified-source-binding-01.json",
+      "sha256": "1b8fbf0126d2f78e1c588df7812aeb8a332398cfcfb2294cea9764e72d6f18f3"
+    },
+    "source_inputs": 219
+  },
+  "raw_replay": {
+    "analyses_identical_json_and_bytes": 3,
+    "original_index": {
+      "bytes": 49733,
+      "path": "/workspace/scratch/846f8b2ab644/r19/review/original-transfer-index-01.json",
+      "sha256": "9d6386109be866f9b7f8104d82d461bed9a13f178560866b9e4fcfb0721880cd"
+    },
+    "outer_restore": {
+      "bytes": 24405,
+      "path": "/workspace/scratch/846f8b2ab644/r19/review/outer-restore-01.json",
+      "sha256": "5b7797f667abb026e7fc2aac5c126165dbc282382c1e5f14d3f5158d3559a310"
+    },
+    "report": {
+      "bytes": 15929,
+      "path": "/workspace/scratch/846f8b2ab644/r19/review/offline-raw-audit-01/report.json",
+      "sha256": "a700ef8f737bf2ceb9704930a9afc6fc9c6c57f8cc0f5953a12f9163a78ddf38"
+    },
+    "verified_remote_packages": 9,
+    "verified_transfer_files": 83
+  },
+  "schema": "hepta-r19-orchestration-observations/v1",
+  "scope": "Through completed workload qualification, campaign closure, archive transfer and deterministic local replay; subsequent Git object uploads/ref publication have separate receipts.",
+  "state": "qualification-campaign-and-transfer-evidence-closed-before-publication",
+  "transfer_counts": {
+    "attempt03_failed_mcp_timeouts": 8,
+    "attempt03_passed": 17,
+    "attempt03_retained_rows": 25,
+    "first_manual_mac_binary_piece": 1,
+    "mac_binary_attempt04_failed": 0,
+    "mac_binary_attempt04_passed": 109,
+    "partial_text_pieces_reused": 62,
+    "verified_original_pieces": 172
+  },
+  "transport_completion": {
+    "known_pr_head": {
+      "branch": "perf/x230-r11-20261103",
+      "draft": true,
+      "sha": "a83fe08d736522cf01adee53902e3c13fbc1d5ae"
+    },
+    "mac_copy": {
+      "first_start": {
+        "error": true,
+        "text": "tool call error: tool call failed for `codex_apps/heptaruntime_mac_controller.process_start`\n\nCaused by:\n    Mcp error: -32603: MCP request timed out"
+      },
+      "holder_report_sha256": "0c2547bb39b64a4a88d2b1f64618b99fab1c3b799f7dfb6bb0d65bf065123332",
+      "idempotency_key": "x230-perf-20261104-r19-envelope-mac-copy-01",
+      "mac_export_manifest_sha256": "510a6e8a19ef50c0b3bb75c305cdd8839b96f8cdfdfecea40dca20e35ceb9aa1",
+      "reader_sha256": "41355dd4bcd29c3149b52af27bc326063629090e2c1e586f26d2b92a4a6c4fbc",
+      "reconciled_job_id": "1a1a71d142b-fc05-2a30",
+      "reconciled_reused": false,
+      "terminal_status": {
+        "at_unix_ms": 1793805064823,
+        "audit_recorded": true,
+        "automatic_retry": false,
+        "cancelled": false,
+        "exit_code": 0,
+        "job_id": "1a1a71d142b-fc05-2a30",
+        "launch_nonce": "2f03f6bf620758432d96636689603867",
+        "log_bytes": {
+          "stderr": {
+            "seen": 0,
+            "stored": 0
+          },
+          "stdout": {
+            "seen": 415,
+            "stored": 415
+          }
+        },
+        "log_errors": {
+          "stderr": null,
+          "stdout": null
+        },
+        "log_synced": {
+          "stderr": true,
+          "stdout": true
+        },
+        "log_truncated": {
+          "stderr": false,
+          "stdout": false
+        },
+        "output_complete": true,
+        "output_durable": true,
+        "state": "succeeded",
+        "terminal_publication_confirmed": true,
+        "terminal_publication_protocol": 1,
+        "timed_out": false
+      }
+    },
+    "mac_file_info": {
+      "metadata": {
+        "acl_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "gid": 20,
+        "link_count": 1,
+        "metadata_platform": "darwin",
+        "mode": 384,
+        "uid": 501,
+        "xattr_names": [],
+        "xattr_sha256": {}
+      },
+      "mode": 384,
+      "path": "/Users/qianqi/work/hepta-runtime-x230-r19-20261104/envelope-transfer-01/forwarded.stdout",
+      "sha256": "6e329b2b9adffc23c06496c68efeeea07605ce1ee28079a92cc3e2d508accd93",
+      "size": 7712102,
+      "version": "16777233:587608531:7712102:1793805064737516358:1793805064737516358"
+    },
+    "manual_first_mac_block": {
+      "chunk_sha256": "3470f6bec5ab2916a527dbcdedb73e72babb28db275e60e07a713b9a6d8bbeb1",
+      "eof": false,
+      "next_offset": 2655000,
+      "offset": 2610000,
+      "path": "/Users/qianqi/work/hepta-runtime-x230-r19-20261104/envelope-transfer-01/forwarded.stdout",
+      "size": 7712102,
+      "version": "16777233:587608531:7712102:1793805064737516358:1793805064737516358"
+    }
+  }
+}

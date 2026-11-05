@@ -1,0 +1,1404 @@
+{
+  "binary_locations_and_hashes": {
+    "hepta-runtime": {
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r19/qualification-02/hepta-runtime",
+      "sha256": "adab5f27f89b3cac6adaec916110a48d80697db9667e3bd7ee0fc713fe770a09",
+      "size": 14369848
+    },
+    "hepta-runtime-jobctl": {
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r19/qualification-02/hepta-runtime-jobctl",
+      "sha256": "61c90260057a405626a24a36ad43303c632f72d2d97929296acdffd748b79d62",
+      "size": 739016
+    },
+    "native_process_driver": {
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r19/qualification-02/native_process_driver",
+      "sha256": "51165c1e38409248f5fdb7da2036ebe5e05eec7576035e95bd4b8e2a5c675530",
+      "size": 2896456
+    }
+  },
+  "boundary": {
+    "bursts": [
+      {
+        "all_rpc_started_before_first_response": true,
+        "burst": 0,
+        "classified": {
+          "capacity_rejection": {
+            "count": 16,
+            "latency_ms": {
+              "max": 39.734289,
+              "p50": 38.743053,
+              "p95": 39.734289,
+              "p99": 39.734289
+            },
+            "rate_per_second": 21.988844385834707
+          },
+          "other_error": {
+            "count": 0,
+            "latency_ms": null,
+            "rate_per_second": 0.0
+          },
+          "success": {
+            "count": 16,
+            "latency_ms": {
+              "max": 714.063838,
+              "p50": 476.988936,
+              "p95": 714.063838,
+              "p99": 714.063838
+            },
+            "rate_per_second": 21.988844385834707
+          }
+        },
+        "client_rpc_pending_peak": 32,
+        "controller_cpu_ms_per_attempt": 35.625,
+        "counts": {
+          "capacity_rejection": 16,
+          "other_error": 0,
+          "success": 16
+        },
+        "pool_identity_peak": null,
+        "seconds": 0.727641695,
+        "serialized_send_span_ms": 10.118884
+      },
+      {
+        "all_rpc_started_before_first_response": true,
+        "burst": 1,
+        "classified": {
+          "capacity_rejection": {
+            "count": 16,
+            "latency_ms": {
+              "max": 49.697537,
+              "p50": 44.223226,
+              "p95": 49.697537,
+              "p99": 49.697537
+            },
+            "rate_per_second": 19.045548569756793
+          },
+          "other_error": {
+            "count": 0,
+            "latency_ms": null,
+            "rate_per_second": 0.0
+          },
+          "success": {
+            "count": 16,
+            "latency_ms": {
+              "max": 827.550645,
+              "p50": 506.082363,
+              "p95": 827.550645,
+              "p99": 827.550645
+            },
+            "rate_per_second": 19.045548569756793
+          }
+        },
+        "client_rpc_pending_peak": 32,
+        "controller_cpu_ms_per_attempt": 38.125,
+        "counts": {
+          "capacity_rejection": 16,
+          "other_error": 0,
+          "success": 16
+        },
+        "pool_identity_peak": null,
+        "seconds": 0.840091318,
+        "serialized_send_span_ms": 17.86462
+      }
+    ],
+    "counts": {
+      "capacity_rejection": 32,
+      "other_error": 0,
+      "success": 32
+    },
+    "drain_and_recovery_passed": true,
+    "post_drain_calls": 96,
+    "raw_frames": 204,
+    "successful_burst_calls_per_second_aggregate": 20.411638802429174,
+    "total_tool_calls": 202
+  },
+  "component_summary_projection": {
+    "private_small": {
+      "A": {
+        "cpu_ns_per_call_median": 82985.8515625,
+        "traced_peak_bytes_median": 4200374.0,
+        "wall_ns_per_call_median": 83252.40234375,
+        "worker_lifetime_hwm_bytes_median": 23588864.0
+      },
+      "B": {
+        "cpu_ns_per_call_median": 44870.986328125,
+        "traced_peak_bytes_median": 7225.0,
+        "wall_ns_per_call_median": 44857.81640625,
+        "worker_lifetime_hwm_bytes_median": 23588864.0
+      },
+      "paired_cpu_change_percent_median": -45.32722354357038,
+      "pre_registered_at_least_90_percent": true,
+      "traced_peak_reduction_percent": 99.82799150742291,
+      "worker_lifetime_hwm_bytes_change": 0.0
+    },
+    "terminal_small": {
+      "A": {
+        "cpu_ns_per_call_median": 66048.923828125,
+        "traced_peak_bytes_median": 1054678.0,
+        "wall_ns_per_call_median": 66272.640625,
+        "worker_lifetime_hwm_bytes_median": 23588864.0
+      },
+      "B": {
+        "cpu_ns_per_call_median": 34444.154296875,
+        "traced_peak_bytes_median": 7506.0,
+        "wall_ns_per_call_median": 34432.119140625,
+        "worker_lifetime_hwm_bytes_median": 23588864.0
+      },
+      "paired_cpu_change_percent_median": -52.46415643295224,
+      "pre_registered_at_least_90_percent": true,
+      "traced_peak_reduction_percent": 99.28831358955055,
+      "worker_lifetime_hwm_bytes_change": 0.0
+    }
+  },
+  "created_utc": "2026-11-04T15:32:34.401087+00:00",
+  "derived_from_verified_raw_replay": true,
+  "fixed_screens": {
+    "all_pass": true,
+    "all_three_correctness_replays_pass": true,
+    "component_small_traced_peaks_pass": true,
+    "native_all_C1_C8_C16_pass": true
+  },
+  "inputs": {
+    "/workspace/scratch/846f8b2ab644/r19/publication/replay-01/extracted/r19/component-probe-01/summary.json": {
+      "bytes": 9123,
+      "path": "/workspace/scratch/846f8b2ab644/r19/publication/replay-01/extracted/r19/component-probe-01/summary.json",
+      "sha256": "e144a0e80d6a68dbe73e835e7b007a149adf533f98b3ca31ebb5da85b64002d4"
+    },
+    "/workspace/scratch/846f8b2ab644/r19/publication/replay-01/extracted/r19/native-observation-01/report.json": {
+      "bytes": 3566817,
+      "path": "/workspace/scratch/846f8b2ab644/r19/publication/replay-01/extracted/r19/native-observation-01/report.json",
+      "sha256": "01eb0810120e03a8ee461eb7fdf3c02c835de5aef8f34b6d31dd1f07be0828d1"
+    },
+    "/workspace/scratch/846f8b2ab644/r19/review/offline-raw-audit-01/boundary-independent.json": {
+      "bytes": 5035,
+      "path": "/workspace/scratch/846f8b2ab644/r19/review/offline-raw-audit-01/boundary-independent.json",
+      "sha256": "0685551e81adfce9bbb0fc7b2e0a71d3390d25b8a40b61cae10dd0eaab589de1"
+    },
+    "/workspace/scratch/846f8b2ab644/r19/review/offline-raw-audit-01/native-independent.json": {
+      "bytes": 66533,
+      "path": "/workspace/scratch/846f8b2ab644/r19/review/offline-raw-audit-01/native-independent.json",
+      "sha256": "3b2bea3c5352dfbdc798b2ac7da44ad60e3cb06704728aeecfada429b6863355"
+    },
+    "/workspace/scratch/846f8b2ab644/r19/review/offline-raw-audit-01/recovery-independent.json": {
+      "bytes": 16319,
+      "path": "/workspace/scratch/846f8b2ab644/r19/review/offline-raw-audit-01/recovery-independent.json",
+      "sha256": "9945639e0ca109de0b00ec88fae4282a048163cf67a648b5197ec36f75a81364"
+    },
+    "/workspace/scratch/846f8b2ab644/r19/review/offline-raw-audit-01/report.json": {
+      "bytes": 15929,
+      "path": "/workspace/scratch/846f8b2ab644/r19/review/offline-raw-audit-01/report.json",
+      "sha256": "a700ef8f737bf2ceb9704930a9afc6fc9c6c57f8cc0f5953a12f9163a78ddf38"
+    },
+    "/workspace/scratch/846f8b2ab644/r19/review/qualified-source-binding-01.json": {
+      "bytes": 87628,
+      "path": "/workspace/scratch/846f8b2ab644/r19/review/qualified-source-binding-01.json",
+      "sha256": "1b8fbf0126d2f78e1c588df7812aeb8a332398cfcfb2294cea9764e72d6f18f3"
+    }
+  },
+  "interpretation": [
+    "Aggregate B/A rate is sum(successful calls)/sum(cell seconds) for each arm; pooled nearest-rank tails use 384 measured calls per arm per concurrency.",
+    "Pair ratios B1/A0 and B2/A3 describe the two ABBA pairs; they are not the pre-registered aggregate screen and do not establish significance.",
+    "C32 success and capacity refusal rates remain separate. Total attempted completions are not successful throughput; pool_identity_peak is unobserved.",
+    "Controller HWM/RSS values are sampled lifetime/phase peaks covering preflight, warmup and all concurrency cells, not per-cell deltas.",
+    "Tree RSS is a non-atomic process sum with shared-page double counting and incomplete descendant sampling; missing observations are retained.",
+    "A zero peak with zero metric samples means unavailable rather than measured zero. No memory reduction is inferred from unsampled scopes.",
+    "The component values here project the preserved component summary, already independently recomputed elsewhere; this script does not rerun or reanalyse its 96 cells.",
+    "Python traced allocation is not whole-process or six-host RSS. The small-scene worker lifetime HWM medians are unchanged.",
+    "Finite shared-host evidence with two rounds per version establishes these observations and fixed screens, not a universal performance ceiling."
+  ],
+  "native": {
+    "cases": [
+      {
+        "aggregate": {
+          "arms": {
+            "A": {
+              "calls": 384,
+              "calls_per_second": 4.428684028619093,
+              "controller_cpu_ms_per_call": 129.97395833333334,
+              "controller_cpu_seconds": 49.91,
+              "max_ms": 308.88804,
+              "p50_ms": 220.35972,
+              "p95_ms": 282.832619,
+              "p99_ms": 304.694813,
+              "round_calls_per_second": [
+                4.463033542918618,
+                4.394859214625326
+              ],
+              "round_controller_cpu_ms_per_call": [
+                130.20833333333334,
+                129.73958333333334
+              ],
+              "round_rate_max_min_spread_percent": 1.5512289464568063,
+              "seconds": 86.707472811
+            },
+            "B": {
+              "calls": 384,
+              "calls_per_second": 4.3849090669253075,
+              "controller_cpu_ms_per_call": 129.27083333333334,
+              "controller_cpu_seconds": 49.64,
+              "max_ms": 319.407471,
+              "p50_ms": 222.14961,
+              "p95_ms": 285.908119,
+              "p99_ms": 309.263748,
+              "round_calls_per_second": [
+                4.413753919155638,
+                4.356438781718922
+              ],
+              "round_controller_cpu_ms_per_call": [
+                128.38541666666666,
+                130.15625
+              ],
+              "round_rate_max_min_spread_percent": 1.3156419798030727,
+              "seconds": 87.573081708
+            }
+          },
+          "change_percent": {
+            "calls_per_second": -0.9884417450173211,
+            "controller_cpu_ms_per_call": -0.5409737527549585,
+            "p50_ms": 0.8122582475599271,
+            "p95_ms": 1.0873922572558703,
+            "p99_ms": 1.4995119066893992
+          },
+          "concurrency": 1
+        },
+        "aggregate_B_over_A": {
+          "calls_per_second": 0.9901155825498268,
+          "controller_cpu_ms_per_call": 0.9945902624724504,
+          "max_ms": 1.0340558054627171,
+          "p50_ms": 1.0081225824755993,
+          "p95_ms": 1.0108739225725587,
+          "p99_ms": 1.014995119066894
+        },
+        "concurrency": 1,
+        "descriptive_ABBA_pairs": [
+          {
+            "A_p95_ms": 282.142933,
+            "A_round": 0,
+            "B_over_A_controller_cpu_per_call": 0.986,
+            "B_over_A_p95": 1.008964995058019,
+            "B_over_A_successful_rate": 0.9889582672213676,
+            "B_p95_ms": 284.672343,
+            "B_round": 1,
+            "successful_rate_change_percent": -1.1041732778632407
+          },
+          {
+            "A_p95_ms": 284.941029,
+            "A_round": 3,
+            "B_over_A_controller_cpu_per_call": 1.0032115616218387,
+            "B_over_A_p95": 1.0070106821997895,
+            "B_over_A_successful_rate": 0.9912578694720079,
+            "B_p95_ms": 286.93866,
+            "B_round": 2,
+            "successful_rate_change_percent": -0.8742130527992109
+          }
+        ],
+        "pre_registered_screen": {
+          "p95_at_most_1_10": true,
+          "rate_at_least_0_95": true
+        }
+      },
+      {
+        "aggregate": {
+          "arms": {
+            "A": {
+              "calls": 384,
+              "calls_per_second": 23.352038652181996,
+              "controller_cpu_ms_per_call": 72.83854166666667,
+              "controller_cpu_seconds": 27.97,
+              "max_ms": 479.240575,
+              "p50_ms": 336.183972,
+              "p95_ms": 424.285506,
+              "p99_ms": 450.846869,
+              "round_calls_per_second": [
+                23.272006382132485,
+                23.43262328264881
+              ],
+              "round_controller_cpu_ms_per_call": [
+                73.02083333333333,
+                72.65625
+              ],
+              "round_rate_max_min_spread_percent": 0.690172123017474,
+              "seconds": 16.443960449
+            },
+            "B": {
+              "calls": 384,
+              "calls_per_second": 23.402087058859642,
+              "controller_cpu_ms_per_call": 72.86458333333333,
+              "controller_cpu_seconds": 27.979999999999997,
+              "max_ms": 504.860651,
+              "p50_ms": 332.550291,
+              "p95_ms": 427.337824,
+              "p99_ms": 459.458587,
+              "round_calls_per_second": [
+                23.767145285931132,
+                23.04807361757248
+              ],
+              "round_controller_cpu_ms_per_call": [
+                72.23958333333333,
+                73.48958333333333
+              ],
+              "round_rate_max_min_spread_percent": 3.119877523344994,
+              "seconds": 16.408792900999998
+            }
+          },
+          "change_percent": {
+            "calls_per_second": 0.21432135936008123,
+            "controller_cpu_ms_per_call": 0.03575259206292092,
+            "p50_ms": -1.0808608686436627,
+            "p95_ms": 0.7194019019824749,
+            "p99_ms": 1.910120396111692
+          },
+          "concurrency": 8
+        },
+        "aggregate_B_over_A": {
+          "calls_per_second": 1.0021432135936008,
+          "controller_cpu_ms_per_call": 1.0003575259206292,
+          "max_ms": 1.0534597388795806,
+          "p50_ms": 0.9891913913135634,
+          "p95_ms": 1.0071940190198247,
+          "p99_ms": 1.019101203961117
+        },
+        "concurrency": 8,
+        "descriptive_ABBA_pairs": [
+          {
+            "A_p95_ms": 423.569081,
+            "A_round": 0,
+            "B_over_A_controller_cpu_per_call": 0.9893009985734665,
+            "B_over_A_p95": 0.9942602939896834,
+            "B_over_A_successful_rate": 1.0212761588179522,
+            "B_p95_ms": 421.137919,
+            "B_round": 1,
+            "successful_rate_change_percent": 2.1276158817952195
+          },
+          {
+            "A_p95_ms": 427.28006,
+            "A_round": 3,
+            "B_over_A_controller_cpu_per_call": 1.0114695340501794,
+            "B_over_A_p95": 1.019808556008909,
+            "B_over_A_successful_rate": 0.9835891329605817,
+            "B_p95_ms": 435.743861,
+            "B_round": 2,
+            "successful_rate_change_percent": -1.6410867039418298
+          }
+        ],
+        "pre_registered_screen": {
+          "p95_at_most_1_10": true,
+          "rate_at_least_0_95": true
+        }
+      },
+      {
+        "aggregate": {
+          "arms": {
+            "A": {
+              "calls": 384,
+              "calls_per_second": 23.221141551804877,
+              "controller_cpu_ms_per_call": 73.41145833333333,
+              "controller_cpu_seconds": 28.189999999999998,
+              "max_ms": 869.255266,
+              "p50_ms": 681.026623,
+              "p95_ms": 809.357224,
+              "p99_ms": 847.542223,
+              "round_calls_per_second": [
+                22.871398084962756,
+                23.58174749697489
+              ],
+              "round_controller_cpu_ms_per_call": [
+                73.80208333333333,
+                73.02083333333333
+              ],
+              "round_rate_max_min_spread_percent": 3.1058416690283863,
+              "seconds": 16.536654718
+            },
+            "B": {
+              "calls": 384,
+              "calls_per_second": 23.323942035537506,
+              "controller_cpu_ms_per_call": 73.17708333333333,
+              "controller_cpu_seconds": 28.1,
+              "max_ms": 903.020124,
+              "p50_ms": 673.324115,
+              "p95_ms": 797.697572,
+              "p99_ms": 882.186529,
+              "round_calls_per_second": [
+                23.80836232518121,
+                22.858841312593032
+              ],
+              "round_controller_cpu_ms_per_call": [
+                72.39583333333333,
+                73.95833333333333
+              ],
+              "round_rate_max_min_spread_percent": 4.153845768486453,
+              "seconds": 16.463769264
+            }
+          },
+          "change_percent": {
+            "calls_per_second": 0.4427021105025686,
+            "controller_cpu_ms_per_call": -0.3192621496984738,
+            "p50_ms": -1.1310142276185209,
+            "p95_ms": -1.4406064039776734,
+            "p99_ms": 4.087620068929576
+          },
+          "concurrency": 16
+        },
+        "aggregate_B_over_A": {
+          "calls_per_second": 1.0044270211050257,
+          "controller_cpu_ms_per_call": 0.9968073785030153,
+          "max_ms": 1.0388434322122357,
+          "p50_ms": 0.9886898577238148,
+          "p95_ms": 0.9855939359602233,
+          "p99_ms": 1.0408762006892958
+        },
+        "concurrency": 16,
+        "descriptive_ABBA_pairs": [
+          {
+            "A_p95_ms": 829.001721,
+            "A_round": 0,
+            "B_over_A_controller_cpu_per_call": 0.9809456598447425,
+            "B_over_A_p95": 0.9220381714985607,
+            "B_over_A_successful_rate": 1.0409666360026535,
+            "B_p95_ms": 764.371231,
+            "B_round": 1,
+            "successful_rate_change_percent": 4.096663600265349
+          },
+          {
+            "A_p95_ms": 781.545007,
+            "A_round": 3,
+            "B_over_A_controller_cpu_per_call": 1.0128388017118404,
+            "B_over_A_p95": 1.0488202901410129,
+            "B_over_A_successful_rate": 0.9693446728460393,
+            "B_p95_ms": 819.700261,
+            "B_round": 2,
+            "successful_rate_change_percent": -3.0655327153960688
+          }
+        ],
+        "pre_registered_screen": {
+          "p95_at_most_1_10": true,
+          "rate_at_least_0_95": true
+        }
+      }
+    ],
+    "frame_counts_by_round": [
+      {
+        "frames_rehashed": 668,
+        "notifications_retained": 0,
+        "rpc_envelopes_independently_verified": 668
+      },
+      {
+        "frames_rehashed": 668,
+        "notifications_retained": 0,
+        "rpc_envelopes_independently_verified": 668
+      },
+      {
+        "frames_rehashed": 668,
+        "notifications_retained": 0,
+        "rpc_envelopes_independently_verified": 668
+      },
+      {
+        "frames_rehashed": 668,
+        "notifications_retained": 0,
+        "rpc_envelopes_independently_verified": 668
+      }
+    ],
+    "measured_calls": 2304,
+    "missing_observations": {
+      "VmHWM:UnavailableStatusField": 21,
+      "VmRSS:UnavailableStatusField": 21,
+      "children:FileNotFoundError": 11,
+      "executable:FileNotFoundError": 29,
+      "fd:FileNotFoundError": 4,
+      "fd:PermissionError": 23,
+      "identity_after:FileNotFoundError": 8,
+      "identity_after:GenerationOrParentChanged": 17,
+      "identity_after:ProcessLookupError": 9,
+      "identity_before:FileNotFoundError": 41,
+      "identity_before:ProcessLookupError": 161,
+      "status:FileNotFoundError": 2,
+      "status:ProcessLookupError": 1,
+      "tasks:FileNotFoundError": 5
+    },
+    "notifications": 0,
+    "preflight_restart_calls": 72,
+    "raw_frames": 2672,
+    "resource_observations": [
+      {
+        "error_counts": {
+          "VmHWM:UnavailableStatusField": 6,
+          "VmRSS:UnavailableStatusField": 6,
+          "executable:FileNotFoundError": 7,
+          "fd:FileNotFoundError": 1,
+          "fd:PermissionError": 6,
+          "identity_after:FileNotFoundError": 2,
+          "identity_after:GenerationOrParentChanged": 6,
+          "identity_after:ProcessLookupError": 4,
+          "identity_before:FileNotFoundError": 6,
+          "identity_before:ProcessLookupError": 44,
+          "status:ProcessLookupError": 1,
+          "tasks:FileNotFoundError": 1
+        },
+        "metric_samples": {
+          "controller_cpu": 644,
+          "controller_fd": 644,
+          "controller_fd_process_observations": 644,
+          "controller_hwm_kib": 644,
+          "controller_hwm_kib_process_observations": 644,
+          "controller_rss_kib": 644,
+          "controller_rss_kib_process_observations": 644,
+          "ssh_descendants_cpu": 4132,
+          "ssh_descendants_fd": 641,
+          "ssh_descendants_fd_process_observations": 4132,
+          "ssh_descendants_rss_kib": 641,
+          "ssh_descendants_rss_kib_process_observations": 4132,
+          "tree_fd": 644,
+          "tree_fd_process_observations": 4776,
+          "tree_rss_kib": 644,
+          "tree_rss_kib_process_observations": 4776,
+          "unknown_descendants_cpu": 1
+        },
+        "peaks": {
+          "controller_fd": 95,
+          "controller_hwm_kib": 17880,
+          "controller_rss_kib": 17880,
+          "descendants": 14,
+          "mixed_descendants_fd": 0,
+          "mixed_descendants_rss_kib": 0,
+          "other_descendants_fd": 0,
+          "other_descendants_rss_kib": 0,
+          "ssh_descendants_fd": 84,
+          "ssh_descendants_rss_kib": 105220,
+          "tree_fd": 177,
+          "tree_rss_kib": 121920,
+          "unknown_descendants_fd": 0,
+          "unknown_descendants_rss_kib": 0
+        },
+        "phase": "shutdown",
+        "round": 0,
+        "version": "A"
+      },
+      {
+        "error_counts": {
+          "VmHWM:UnavailableStatusField": 2,
+          "VmRSS:UnavailableStatusField": 2,
+          "executable:FileNotFoundError": 2,
+          "fd:PermissionError": 2,
+          "identity_after:GenerationOrParentChanged": 1,
+          "identity_after:ProcessLookupError": 1
+        },
+        "metric_samples": {
+          "controller_cpu": 50,
+          "controller_fd": 49,
+          "controller_fd_process_observations": 49,
+          "controller_hwm_kib": 49,
+          "controller_hwm_kib_process_observations": 49,
+          "controller_rss_kib": 49,
+          "controller_rss_kib_process_observations": 49,
+          "ssh_descendants_cpu": 165,
+          "ssh_descendants_fd": 47,
+          "ssh_descendants_fd_process_observations": 165,
+          "ssh_descendants_rss_kib": 47,
+          "ssh_descendants_rss_kib_process_observations": 165,
+          "tree_fd": 49,
+          "tree_fd_process_observations": 214,
+          "tree_rss_kib": 49,
+          "tree_rss_kib_process_observations": 214
+        },
+        "peaks": {
+          "controller_fd": 55,
+          "controller_hwm_kib": 14760,
+          "controller_rss_kib": 14760,
+          "descendants": 7,
+          "mixed_descendants_fd": 0,
+          "mixed_descendants_rss_kib": 0,
+          "other_descendants_fd": 0,
+          "other_descendants_rss_kib": 0,
+          "ssh_descendants_fd": 37,
+          "ssh_descendants_rss_kib": 54772,
+          "tree_fd": 92,
+          "tree_rss_kib": 69532,
+          "unknown_descendants_fd": 0,
+          "unknown_descendants_rss_kib": 0
+        },
+        "phase": "restart_shutdown",
+        "round": 0,
+        "version": "A"
+      },
+      {
+        "error_counts": {
+          "VmHWM:UnavailableStatusField": 4,
+          "VmRSS:UnavailableStatusField": 4,
+          "children:FileNotFoundError": 7,
+          "executable:FileNotFoundError": 4,
+          "fd:FileNotFoundError": 1,
+          "fd:PermissionError": 3,
+          "identity_after:FileNotFoundError": 2,
+          "identity_after:GenerationOrParentChanged": 3,
+          "identity_after:ProcessLookupError": 1,
+          "identity_before:FileNotFoundError": 9,
+          "identity_before:ProcessLookupError": 41,
+          "tasks:FileNotFoundError": 2
+        },
+        "metric_samples": {
+          "controller_cpu": 641,
+          "controller_fd": 641,
+          "controller_fd_process_observations": 641,
+          "controller_hwm_kib": 641,
+          "controller_hwm_kib_process_observations": 641,
+          "controller_rss_kib": 641,
+          "controller_rss_kib_process_observations": 641,
+          "ssh_descendants_cpu": 4117,
+          "ssh_descendants_fd": 635,
+          "ssh_descendants_fd_process_observations": 4117,
+          "ssh_descendants_rss_kib": 635,
+          "ssh_descendants_rss_kib_process_observations": 4117,
+          "tree_fd": 641,
+          "tree_fd_process_observations": 4758,
+          "tree_rss_kib": 641,
+          "tree_rss_kib_process_observations": 4758,
+          "unknown_descendants_cpu": 1
+        },
+        "peaks": {
+          "controller_fd": 95,
+          "controller_hwm_kib": 17804,
+          "controller_rss_kib": 17804,
+          "descendants": 14,
+          "mixed_descendants_fd": 0,
+          "mixed_descendants_rss_kib": 0,
+          "other_descendants_fd": 0,
+          "other_descendants_rss_kib": 0,
+          "ssh_descendants_fd": 83,
+          "ssh_descendants_rss_kib": 107260,
+          "tree_fd": 173,
+          "tree_rss_kib": 123700,
+          "unknown_descendants_fd": 0,
+          "unknown_descendants_rss_kib": 0
+        },
+        "phase": "shutdown",
+        "round": 1,
+        "version": "B"
+      },
+      {
+        "error_counts": {
+          "VmHWM:UnavailableStatusField": 1,
+          "VmRSS:UnavailableStatusField": 1,
+          "executable:FileNotFoundError": 1,
+          "fd:FileNotFoundError": 1,
+          "identity_after:FileNotFoundError": 1,
+          "identity_after:GenerationOrParentChanged": 1,
+          "status:FileNotFoundError": 1,
+          "tasks:FileNotFoundError": 1
+        },
+        "metric_samples": {
+          "controller_cpu": 48,
+          "controller_fd": 48,
+          "controller_fd_process_observations": 48,
+          "controller_hwm_kib": 48,
+          "controller_hwm_kib_process_observations": 48,
+          "controller_rss_kib": 48,
+          "controller_rss_kib_process_observations": 48,
+          "ssh_descendants_cpu": 164,
+          "ssh_descendants_fd": 46,
+          "ssh_descendants_fd_process_observations": 164,
+          "ssh_descendants_rss_kib": 46,
+          "ssh_descendants_rss_kib_process_observations": 164,
+          "tree_fd": 48,
+          "tree_fd_process_observations": 212,
+          "tree_rss_kib": 48,
+          "tree_rss_kib_process_observations": 212
+        },
+        "peaks": {
+          "controller_fd": 55,
+          "controller_hwm_kib": 14928,
+          "controller_rss_kib": 14928,
+          "descendants": 7,
+          "mixed_descendants_fd": 0,
+          "mixed_descendants_rss_kib": 0,
+          "other_descendants_fd": 0,
+          "other_descendants_rss_kib": 0,
+          "ssh_descendants_fd": 37,
+          "ssh_descendants_rss_kib": 54832,
+          "tree_fd": 92,
+          "tree_rss_kib": 69760,
+          "unknown_descendants_fd": 0,
+          "unknown_descendants_rss_kib": 0
+        },
+        "phase": "restart_shutdown",
+        "round": 1,
+        "version": "B"
+      },
+      {
+        "error_counts": {
+          "VmHWM:UnavailableStatusField": 3,
+          "VmRSS:UnavailableStatusField": 3,
+          "executable:FileNotFoundError": 7,
+          "fd:PermissionError": 6,
+          "identity_after:GenerationOrParentChanged": 2,
+          "identity_after:ProcessLookupError": 2,
+          "identity_before:FileNotFoundError": 15,
+          "identity_before:ProcessLookupError": 38
+        },
+        "metric_samples": {
+          "controller_cpu": 650,
+          "controller_fd": 650,
+          "controller_fd_process_observations": 650,
+          "controller_hwm_kib": 650,
+          "controller_hwm_kib_process_observations": 650,
+          "controller_rss_kib": 650,
+          "controller_rss_kib_process_observations": 650,
+          "ssh_descendants_cpu": 4181,
+          "ssh_descendants_fd": 646,
+          "ssh_descendants_fd_process_observations": 4181,
+          "ssh_descendants_rss_kib": 646,
+          "ssh_descendants_rss_kib_process_observations": 4181,
+          "tree_fd": 650,
+          "tree_fd_process_observations": 4832,
+          "tree_rss_kib": 650,
+          "tree_rss_kib_process_observations": 4835,
+          "unknown_descendants_cpu": 5,
+          "unknown_descendants_fd": 1,
+          "unknown_descendants_fd_process_observations": 1,
+          "unknown_descendants_rss_kib": 4,
+          "unknown_descendants_rss_kib_process_observations": 4
+        },
+        "peaks": {
+          "controller_fd": 92,
+          "controller_hwm_kib": 17628,
+          "controller_rss_kib": 17628,
+          "descendants": 12,
+          "mixed_descendants_fd": 0,
+          "mixed_descendants_rss_kib": 0,
+          "other_descendants_fd": 0,
+          "other_descendants_rss_kib": 0,
+          "ssh_descendants_fd": 74,
+          "ssh_descendants_rss_kib": 91964,
+          "tree_fd": 162,
+          "tree_rss_kib": 108492,
+          "unknown_descendants_fd": 3,
+          "unknown_descendants_rss_kib": 7636
+        },
+        "phase": "shutdown",
+        "round": 2,
+        "version": "B"
+      },
+      {
+        "error_counts": {
+          "VmHWM:UnavailableStatusField": 1,
+          "VmRSS:UnavailableStatusField": 1,
+          "executable:FileNotFoundError": 1,
+          "fd:PermissionError": 1,
+          "identity_before:ProcessLookupError": 1
+        },
+        "metric_samples": {
+          "controller_cpu": 48,
+          "controller_fd": 48,
+          "controller_fd_process_observations": 48,
+          "controller_hwm_kib": 48,
+          "controller_hwm_kib_process_observations": 48,
+          "controller_rss_kib": 48,
+          "controller_rss_kib_process_observations": 48,
+          "ssh_descendants_cpu": 159,
+          "ssh_descendants_fd": 46,
+          "ssh_descendants_fd_process_observations": 159,
+          "ssh_descendants_rss_kib": 46,
+          "ssh_descendants_rss_kib_process_observations": 159,
+          "tree_fd": 48,
+          "tree_fd_process_observations": 207,
+          "tree_rss_kib": 48,
+          "tree_rss_kib_process_observations": 207,
+          "unknown_descendants_cpu": 1
+        },
+        "peaks": {
+          "controller_fd": 55,
+          "controller_hwm_kib": 14744,
+          "controller_rss_kib": 14744,
+          "descendants": 7,
+          "mixed_descendants_fd": 0,
+          "mixed_descendants_rss_kib": 0,
+          "other_descendants_fd": 0,
+          "other_descendants_rss_kib": 0,
+          "ssh_descendants_fd": 37,
+          "ssh_descendants_rss_kib": 54976,
+          "tree_fd": 92,
+          "tree_rss_kib": 69720,
+          "unknown_descendants_fd": 0,
+          "unknown_descendants_rss_kib": 0
+        },
+        "phase": "restart_shutdown",
+        "round": 2,
+        "version": "B"
+      },
+      {
+        "error_counts": {
+          "VmHWM:UnavailableStatusField": 4,
+          "VmRSS:UnavailableStatusField": 4,
+          "children:FileNotFoundError": 1,
+          "executable:FileNotFoundError": 7,
+          "fd:FileNotFoundError": 1,
+          "fd:PermissionError": 5,
+          "identity_after:FileNotFoundError": 3,
+          "identity_after:GenerationOrParentChanged": 4,
+          "identity_after:ProcessLookupError": 1,
+          "identity_before:FileNotFoundError": 11,
+          "identity_before:ProcessLookupError": 37,
+          "status:FileNotFoundError": 1,
+          "tasks:FileNotFoundError": 1
+        },
+        "metric_samples": {
+          "controller_cpu": 646,
+          "controller_fd": 646,
+          "controller_fd_process_observations": 646,
+          "controller_hwm_kib": 646,
+          "controller_hwm_kib_process_observations": 646,
+          "controller_rss_kib": 646,
+          "controller_rss_kib_process_observations": 646,
+          "ssh_descendants_cpu": 4163,
+          "ssh_descendants_fd": 643,
+          "ssh_descendants_fd_process_observations": 4163,
+          "ssh_descendants_rss_kib": 643,
+          "ssh_descendants_rss_kib_process_observations": 4163,
+          "tree_fd": 646,
+          "tree_fd_process_observations": 4810,
+          "tree_rss_kib": 646,
+          "tree_rss_kib_process_observations": 4812,
+          "unknown_descendants_cpu": 4,
+          "unknown_descendants_fd": 1,
+          "unknown_descendants_fd_process_observations": 1,
+          "unknown_descendants_rss_kib": 3,
+          "unknown_descendants_rss_kib_process_observations": 3
+        },
+        "peaks": {
+          "controller_fd": 96,
+          "controller_hwm_kib": 17344,
+          "controller_rss_kib": 17344,
+          "descendants": 12,
+          "mixed_descendants_fd": 0,
+          "mixed_descendants_rss_kib": 0,
+          "other_descendants_fd": 0,
+          "other_descendants_rss_kib": 0,
+          "ssh_descendants_fd": 73,
+          "ssh_descendants_rss_kib": 92052,
+          "tree_fd": 169,
+          "tree_rss_kib": 108436,
+          "unknown_descendants_fd": 3,
+          "unknown_descendants_rss_kib": 7512
+        },
+        "phase": "shutdown",
+        "round": 3,
+        "version": "A"
+      },
+      {
+        "error_counts": {
+          "children:FileNotFoundError": 3
+        },
+        "metric_samples": {
+          "controller_cpu": 51,
+          "controller_fd": 51,
+          "controller_fd_process_observations": 51,
+          "controller_hwm_kib": 51,
+          "controller_hwm_kib_process_observations": 51,
+          "controller_rss_kib": 51,
+          "controller_rss_kib_process_observations": 51,
+          "ssh_descendants_cpu": 171,
+          "ssh_descendants_fd": 47,
+          "ssh_descendants_fd_process_observations": 171,
+          "ssh_descendants_rss_kib": 47,
+          "ssh_descendants_rss_kib_process_observations": 171,
+          "tree_fd": 51,
+          "tree_fd_process_observations": 222,
+          "tree_rss_kib": 51,
+          "tree_rss_kib_process_observations": 222
+        },
+        "peaks": {
+          "controller_fd": 55,
+          "controller_hwm_kib": 14896,
+          "controller_rss_kib": 14896,
+          "descendants": 7,
+          "mixed_descendants_fd": 0,
+          "mixed_descendants_rss_kib": 0,
+          "other_descendants_fd": 0,
+          "other_descendants_rss_kib": 0,
+          "ssh_descendants_fd": 37,
+          "ssh_descendants_rss_kib": 54684,
+          "tree_fd": 92,
+          "tree_rss_kib": 69260,
+          "unknown_descendants_fd": 0,
+          "unknown_descendants_rss_kib": 0
+        },
+        "phase": "restart_shutdown",
+        "round": 3,
+        "version": "A"
+      }
+    ],
+    "resource_summary_by_phase": {
+      "restart_shutdown": {
+        "controller_fd": {
+          "arms": {
+            "A": {
+              "maximum_round_peak": 55,
+              "mean_of_round_peaks": 55,
+              "metric_sample_counts": [
+                49,
+                51
+              ],
+              "minimum_round_peak": 55,
+              "round_values": [
+                55,
+                55
+              ]
+            },
+            "B": {
+              "maximum_round_peak": 55,
+              "mean_of_round_peaks": 55,
+              "metric_sample_counts": [
+                48,
+                48
+              ],
+              "minimum_round_peak": 55,
+              "round_values": [
+                55,
+                55
+              ]
+            }
+          },
+          "mean_peak_B_minus_A": 0,
+          "mean_peak_change_percent": 0.0
+        },
+        "controller_hwm_kib": {
+          "arms": {
+            "A": {
+              "maximum_round_peak": 14896,
+              "mean_of_round_peaks": 14828,
+              "metric_sample_counts": [
+                49,
+                51
+              ],
+              "minimum_round_peak": 14760,
+              "round_values": [
+                14760,
+                14896
+              ]
+            },
+            "B": {
+              "maximum_round_peak": 14928,
+              "mean_of_round_peaks": 14836,
+              "metric_sample_counts": [
+                48,
+                48
+              ],
+              "minimum_round_peak": 14744,
+              "round_values": [
+                14928,
+                14744
+              ]
+            }
+          },
+          "mean_peak_B_minus_A": 8,
+          "mean_peak_change_percent": 0.05395198273536739
+        },
+        "controller_rss_kib": {
+          "arms": {
+            "A": {
+              "maximum_round_peak": 14896,
+              "mean_of_round_peaks": 14828,
+              "metric_sample_counts": [
+                49,
+                51
+              ],
+              "minimum_round_peak": 14760,
+              "round_values": [
+                14760,
+                14896
+              ]
+            },
+            "B": {
+              "maximum_round_peak": 14928,
+              "mean_of_round_peaks": 14836,
+              "metric_sample_counts": [
+                48,
+                48
+              ],
+              "minimum_round_peak": 14744,
+              "round_values": [
+                14928,
+                14744
+              ]
+            }
+          },
+          "mean_peak_B_minus_A": 8,
+          "mean_peak_change_percent": 0.05395198273536739
+        },
+        "descendants": {
+          "arms": {
+            "A": {
+              "maximum_round_peak": 7,
+              "mean_of_round_peaks": 7,
+              "metric_sample_counts": [
+                null,
+                null
+              ],
+              "minimum_round_peak": 7,
+              "round_values": [
+                7,
+                7
+              ]
+            },
+            "B": {
+              "maximum_round_peak": 7,
+              "mean_of_round_peaks": 7,
+              "metric_sample_counts": [
+                null,
+                null
+              ],
+              "minimum_round_peak": 7,
+              "round_values": [
+                7,
+                7
+              ]
+            }
+          },
+          "mean_peak_B_minus_A": 0,
+          "mean_peak_change_percent": 0.0
+        },
+        "tree_fd": {
+          "arms": {
+            "A": {
+              "maximum_round_peak": 92,
+              "mean_of_round_peaks": 92,
+              "metric_sample_counts": [
+                49,
+                51
+              ],
+              "minimum_round_peak": 92,
+              "round_values": [
+                92,
+                92
+              ]
+            },
+            "B": {
+              "maximum_round_peak": 92,
+              "mean_of_round_peaks": 92,
+              "metric_sample_counts": [
+                48,
+                48
+              ],
+              "minimum_round_peak": 92,
+              "round_values": [
+                92,
+                92
+              ]
+            }
+          },
+          "mean_peak_B_minus_A": 0,
+          "mean_peak_change_percent": 0.0
+        },
+        "tree_rss_kib": {
+          "arms": {
+            "A": {
+              "maximum_round_peak": 69532,
+              "mean_of_round_peaks": 69396,
+              "metric_sample_counts": [
+                49,
+                51
+              ],
+              "minimum_round_peak": 69260,
+              "round_values": [
+                69532,
+                69260
+              ]
+            },
+            "B": {
+              "maximum_round_peak": 69760,
+              "mean_of_round_peaks": 69740,
+              "metric_sample_counts": [
+                48,
+                48
+              ],
+              "minimum_round_peak": 69720,
+              "round_values": [
+                69760,
+                69720
+              ]
+            }
+          },
+          "mean_peak_B_minus_A": 344,
+          "mean_peak_change_percent": 0.4957058043691287
+        }
+      },
+      "shutdown": {
+        "controller_fd": {
+          "arms": {
+            "A": {
+              "maximum_round_peak": 96,
+              "mean_of_round_peaks": 95.5,
+              "metric_sample_counts": [
+                644,
+                646
+              ],
+              "minimum_round_peak": 95,
+              "round_values": [
+                95,
+                96
+              ]
+            },
+            "B": {
+              "maximum_round_peak": 95,
+              "mean_of_round_peaks": 93.5,
+              "metric_sample_counts": [
+                641,
+                650
+              ],
+              "minimum_round_peak": 92,
+              "round_values": [
+                95,
+                92
+              ]
+            }
+          },
+          "mean_peak_B_minus_A": -2.0,
+          "mean_peak_change_percent": -2.0942408376963373
+        },
+        "controller_hwm_kib": {
+          "arms": {
+            "A": {
+              "maximum_round_peak": 17880,
+              "mean_of_round_peaks": 17612,
+              "metric_sample_counts": [
+                644,
+                646
+              ],
+              "minimum_round_peak": 17344,
+              "round_values": [
+                17880,
+                17344
+              ]
+            },
+            "B": {
+              "maximum_round_peak": 17804,
+              "mean_of_round_peaks": 17716,
+              "metric_sample_counts": [
+                641,
+                650
+              ],
+              "minimum_round_peak": 17628,
+              "round_values": [
+                17804,
+                17628
+              ]
+            }
+          },
+          "mean_peak_B_minus_A": 104,
+          "mean_peak_change_percent": 0.5905064728594089
+        },
+        "controller_rss_kib": {
+          "arms": {
+            "A": {
+              "maximum_round_peak": 17880,
+              "mean_of_round_peaks": 17612,
+              "metric_sample_counts": [
+                644,
+                646
+              ],
+              "minimum_round_peak": 17344,
+              "round_values": [
+                17880,
+                17344
+              ]
+            },
+            "B": {
+              "maximum_round_peak": 17804,
+              "mean_of_round_peaks": 17716,
+              "metric_sample_counts": [
+                641,
+                650
+              ],
+              "minimum_round_peak": 17628,
+              "round_values": [
+                17804,
+                17628
+              ]
+            }
+          },
+          "mean_peak_B_minus_A": 104,
+          "mean_peak_change_percent": 0.5905064728594089
+        },
+        "descendants": {
+          "arms": {
+            "A": {
+              "maximum_round_peak": 14,
+              "mean_of_round_peaks": 13,
+              "metric_sample_counts": [
+                null,
+                null
+              ],
+              "minimum_round_peak": 12,
+              "round_values": [
+                14,
+                12
+              ]
+            },
+            "B": {
+              "maximum_round_peak": 14,
+              "mean_of_round_peaks": 13,
+              "metric_sample_counts": [
+                null,
+                null
+              ],
+              "minimum_round_peak": 12,
+              "round_values": [
+                14,
+                12
+              ]
+            }
+          },
+          "mean_peak_B_minus_A": 0,
+          "mean_peak_change_percent": 0.0
+        },
+        "tree_fd": {
+          "arms": {
+            "A": {
+              "maximum_round_peak": 177,
+              "mean_of_round_peaks": 173,
+              "metric_sample_counts": [
+                644,
+                646
+              ],
+              "minimum_round_peak": 169,
+              "round_values": [
+                177,
+                169
+              ]
+            },
+            "B": {
+              "maximum_round_peak": 173,
+              "mean_of_round_peaks": 167.5,
+              "metric_sample_counts": [
+                641,
+                650
+              ],
+              "minimum_round_peak": 162,
+              "round_values": [
+                173,
+                162
+              ]
+            }
+          },
+          "mean_peak_B_minus_A": -5.5,
+          "mean_peak_change_percent": -3.1791907514450823
+        },
+        "tree_rss_kib": {
+          "arms": {
+            "A": {
+              "maximum_round_peak": 121920,
+              "mean_of_round_peaks": 115178,
+              "metric_sample_counts": [
+                644,
+                646
+              ],
+              "minimum_round_peak": 108436,
+              "round_values": [
+                121920,
+                108436
+              ]
+            },
+            "B": {
+              "maximum_round_peak": 123700,
+              "mean_of_round_peaks": 116096,
+              "metric_sample_counts": [
+                641,
+                650
+              ],
+              "minimum_round_peak": 108492,
+              "round_values": [
+                123700,
+                108492
+              ]
+            }
+          },
+          "mean_peak_B_minus_A": 918,
+          "mean_peak_change_percent": 0.7970272100574771
+        }
+      }
+    },
+    "resource_trace_records": 2779,
+    "total_tool_calls": 2664,
+    "warmup_calls": 288
+  },
+  "recovery": {
+    "cancellations": 12,
+    "elapsed_seconds": 14.39166259765625,
+    "hosts": {
+      "ai395": {
+        "execution_count": 1,
+        "exit_sha256": "d9a081072f704c782d62938daa5c664bb7bed7b9567c2ea1d0d9d4834bb6a36a",
+        "host_reported_name": "ai395",
+        "job_id": "1a1a6e50eb6-2b9a2a-1",
+        "launch_nonce": "27c10df86c0a61dba5f55812ed51ec95",
+        "request_sha256": "cbb5229bd48d51919907ff2b17bff816a0d0eb38ad62871c42f0598d8a745703",
+        "restart_terminal_bytes_unchanged": true
+      },
+      "mac": {
+        "execution_count": 1,
+        "exit_sha256": "be6a3a1dc957783c9ef56705b6b94b4b1c2d44819692d52ffe02a06f3d4ae943",
+        "host_reported_name": "MacBook-Pro.local",
+        "job_id": "1a1a6e50ebc-2b9a2a-2",
+        "launch_nonce": "bd3a0bfc5cfb35b2e4d03d326ccd36b5",
+        "request_sha256": "f5c341281bd2b8fc831c3e31f6d293ddc21e372aa693ffaeb222930e5350a3c0",
+        "restart_terminal_bytes_unchanged": true
+      },
+      "main": {
+        "execution_count": 1,
+        "exit_sha256": "14eb519b79824e23dd5a03ffdb07bf48d090e7155c8c2e381f81bddca3710553",
+        "host_reported_name": "qian-qi",
+        "job_id": "1a1a6e50ebc-2b9a2a-3",
+        "launch_nonce": "b1ad18e2848995de947f80a951ed6c0b",
+        "request_sha256": "76d72a5736df066965df00a11a9d3f921cdd81411c1b3601472cd8a40e0d09d9",
+        "restart_terminal_bytes_unchanged": true
+      },
+      "pocket4": {
+        "execution_count": 1,
+        "exit_sha256": "d84a9cb68744f3e3ea1ead00da7d6a0a1734eb332a5d3a9ff691aab717bc03b6",
+        "host_reported_name": "alex-G1628-04",
+        "job_id": "1a1a6e50ebc-2b9a2a-4",
+        "launch_nonce": "eeb3a68745e7d44b0da41453a51b1f11",
+        "request_sha256": "a6f3101b6c2d01c43aacb116277470729f9468c1b1c9b1808cc2cbf5933ba6d5",
+        "restart_terminal_bytes_unchanged": true
+      },
+      "rog": {
+        "execution_count": 1,
+        "exit_sha256": "ee77e840e7c12badce18fb02b3a387e6997df4a3e1f8daa2d375894e3c41003b",
+        "host_reported_name": "qian-qi-ROG-Flow-Z13-GZ302EA-GZ302EA",
+        "job_id": "1a1a6e50ebc-2b9a2a-6",
+        "launch_nonce": "fabc9076eb66c3681b1ff70b83a42941",
+        "request_sha256": "777d91f150758436530f007dfba742147ce9685fb5cee59017ec198d7a616ca4",
+        "restart_terminal_bytes_unchanged": true
+      },
+      "x230": {
+        "execution_count": 1,
+        "exit_sha256": "021e92ef79926a9f994301173c8fe4c0bd57d4304fa02253ff3556c1299a17ce",
+        "host_reported_name": "qian-ThinkPad-X230",
+        "job_id": "1a1a6e50ebc-2b9a2a-5",
+        "launch_nonce": "2a7a92b491a73b9ed6663a9f09c37879",
+        "request_sha256": "1d2320de068f650eeb9a345360fc4da74334aac9b0e0aa3104f8598128ca08e7",
+        "restart_terminal_bytes_unchanged": true
+      }
+    },
+    "independent_ssh_calls": 36,
+    "native_calls": 90,
+    "new_starts": 6,
+    "raw_frames": 93,
+    "same_key_lookups": 12,
+    "ssh_streams_rehashed": 72
+  },
+  "schema": "hepta-r19-offline-derived-metrics/v1",
+  "source_proof_verified": true,
+  "tool": {
+    "path": "/workspace/scratch/846f8b2ab644/r19/tools/derive_campaign_metrics_01.py",
+    "sha256": "1f72158c7513cd6b8b86cc3b54b83184f2d739ab03987e7f8ce61cc16d91f95e"
+  },
+  "totals": {
+    "capacity_refusals": 32,
+    "independent_ssh_checks_excluded_from_native_tool_count": 36,
+    "other_errors": 0,
+    "raw_frames": 2969,
+    "successful_tool_calls": 2924,
+    "tool_calls": 2956
+  },
+  "workloads_run": false
+}

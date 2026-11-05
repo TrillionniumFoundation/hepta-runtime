@@ -1,0 +1,484 @@
+{
+  "analysis_script_sha256": "deac0afa61c84cfb9c5e111d77adde6a0e103efbb77997f8d397fa8609d7b7ad",
+  "cpu_denominator": "Ready-to-after-load CPU includes 2 warmup plus 24 load waves: 208 cancellation refusals and 26 host_list calls. CPU/234 is mixed RPC cost, not isolated cancel CPU.",
+  "created_utc": "2026-11-03T22:00:53.222280+00:00",
+  "descriptive_process_means": {
+    "arena1": {
+      "after_idle_rss_kib": 17244,
+      "after_load_rss_kib": 17092,
+      "cpu_ms_per_mixed_rpc_including_warmup": 26.98717948717949,
+      "cpu_ready_through_warmup_and_load_seconds": 6.3149999999999995,
+      "processes": 2,
+      "whole_child_hwm_kib": 30788
+    },
+    "arena2": {
+      "after_idle_rss_kib": 17476,
+      "after_load_rss_kib": 17322,
+      "cpu_ms_per_mixed_rpc_including_warmup": 27.243589743589745,
+      "cpu_ready_through_warmup_and_load_seconds": 6.375,
+      "processes": 2,
+      "whole_child_hwm_kib": 39014
+    },
+    "arena4": {
+      "after_idle_rss_kib": 36424,
+      "after_load_rss_kib": 36270,
+      "cpu_ms_per_mixed_rpc_including_warmup": 27.094017094017094,
+      "cpu_ready_through_warmup_and_load_seconds": 6.34,
+      "processes": 2,
+      "whole_child_hwm_kib": 52988
+    },
+    "default": {
+      "after_idle_rss_kib": 102028,
+      "after_load_rss_kib": 101872,
+      "cpu_ms_per_mixed_rpc_including_warmup": 26.602564102564102,
+      "cpu_ready_through_warmup_and_load_seconds": 6.225,
+      "processes": 2,
+      "whole_child_hwm_kib": 102028
+    }
+  },
+  "inputs": [
+    {
+      "bytes": 1979484,
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-01/report.json",
+      "script_sha256": "67e26e38b16ae9c829fe66b75e766217ea83951529e4e1462ecd451154c82e1c",
+      "sha256": "1395c0e75c4c53e10386d7865e3e2f45c7f44bab184d7dffeb9e461dfb600937"
+    },
+    {
+      "bytes": 1980920,
+      "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-02/report.json",
+      "script_sha256": "179ad5088edcaa9db66dcf3e6d2c09e0a10b94c4103809196df9f1d4e3e5da5d",
+      "sha256": "20a37ece2406a3aaeb0819bb4ecd2c0d4cdb2fcdafc785a4687077ebbe184889"
+    }
+  ],
+  "limitations": [
+    "Two fresh processes per setting across two ordered diagnostics, with background archive/audit I/O; not a throughput benchmark.",
+    "Cross-campaign CPU means are descriptive only, without strong causal attribution.",
+    "One arena may cause allocator contention under other workloads; formal native C8, environment-bound ABBA, and recovery remain required.",
+    "All settings still reach 19 or 20 observed threads and 10 after idle: limiting arenas does not cap threads.",
+    "R14 formal throughput regressions remain valid; these diagnostics do not supersede them.",
+    "No source edits, new compilation, or production configuration changes."
+  ],
+  "memory_scope": "VmHWM is whole child since exec; VmRSS point samples after load/12s idle. smaps raw hashes verified; mapping-shape summaries retained from probe and are heuristic, not direct arena enumeration.",
+  "recommendation": "Evaluate arena1 formally: lowest observed HWM, idle RSS comparable to arena2, no clear diagnostic CPU disadvantage.",
+  "reply_hashes_and_results_verified": 1872,
+  "rows": [
+    {
+      "after_idle_rss_kib": 100424,
+      "after_load_rss_kib": 100268,
+      "arm": "default",
+      "cpu_ms_per_mixed_rpc_including_warmup": 26.752136752136753,
+      "cpu_ready_through_warmup_and_load_seconds": 6.26,
+      "diagnostic": "01",
+      "position": 0,
+      "rpc_count_including_warmup": {
+        "host_list": 26,
+        "process_cancel": 208
+      },
+      "smaps": [
+        {
+          "anonymous_writable_rss_kib_reported": 184,
+          "heap_rss_kib_reported": 108,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-01/00-default/ready.smaps.txt",
+          "phase": "ready",
+          "reservation_pair_count_reported": 5,
+          "reservation_pair_rss_kib_reported": 64,
+          "sha256": "dfbc256d74f1f9b61827eb97074d316842f29819af1c1026d0717e7d403728ff"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 88692,
+          "heap_rss_kib_reported": 120,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-01/00-default/after_load.smaps.txt",
+          "phase": "after_load",
+          "reservation_pair_count_reported": 18,
+          "reservation_pair_rss_kib_reported": 88248,
+          "sha256": "97622d0b40ee628c8934117a5ed8597197bf1e0d5c1afb122d198a22228cd67e"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 88656,
+          "heap_rss_kib_reported": 120,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-01/00-default/after_idle.smaps.txt",
+          "phase": "after_idle",
+          "reservation_pair_count_reported": 18,
+          "reservation_pair_rss_kib_reported": 88248,
+          "sha256": "08982d3f5d0a7591fbd0235a9f6f74ed44128139c59cdca5e499e1a1b5e5344e"
+        }
+      ],
+      "spawn_allocator_environment": {},
+      "threads_ready_peak_loaded_idle": [
+        6,
+        19,
+        19,
+        10
+      ],
+      "whole_child_hwm_kib": 100424
+    },
+    {
+      "after_idle_rss_kib": 19552,
+      "after_load_rss_kib": 19396,
+      "arm": "arena2",
+      "cpu_ms_per_mixed_rpc_including_warmup": 27.00854700854701,
+      "cpu_ready_through_warmup_and_load_seconds": 6.32,
+      "diagnostic": "01",
+      "position": 1,
+      "rpc_count_including_warmup": {
+        "host_list": 26,
+        "process_cancel": 208
+      },
+      "smaps": [
+        {
+          "anonymous_writable_rss_kib_reported": 128,
+          "heap_rss_kib_reported": 140,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-01/01-arena2/ready.smaps.txt",
+          "phase": "ready",
+          "reservation_pair_count_reported": 1,
+          "reservation_pair_rss_kib_reported": 8,
+          "sha256": "b788a1f6b01be93732af6a362278a21dd595e2a491bbebf5201f3dbf30c235a5"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 2152,
+          "heap_rss_kib_reported": 5780,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-01/01-arena2/after_load.smaps.txt",
+          "phase": "after_load",
+          "reservation_pair_count_reported": 1,
+          "reservation_pair_rss_kib_reported": 1708,
+          "sha256": "5b3a44caab7543ad322202b364336ce7f2be6daabc444011f87da2078a75b16a"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 2116,
+          "heap_rss_kib_reported": 5780,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-01/01-arena2/after_idle.smaps.txt",
+          "phase": "after_idle",
+          "reservation_pair_count_reported": 1,
+          "reservation_pair_rss_kib_reported": 1708,
+          "sha256": "de411758636d221cdb053f5e94fa9cb4992e52406c6470fbc8a4ef945e936f24"
+        }
+      ],
+      "spawn_allocator_environment": {
+        "MALLOC_ARENA_MAX": "2"
+      },
+      "threads_ready_peak_loaded_idle": [
+        6,
+        19,
+        19,
+        10
+      ],
+      "whole_child_hwm_kib": 38596
+    },
+    {
+      "after_idle_rss_kib": 15400,
+      "after_load_rss_kib": 15248,
+      "arm": "arena2",
+      "cpu_ms_per_mixed_rpc_including_warmup": 27.478632478632477,
+      "cpu_ready_through_warmup_and_load_seconds": 6.43,
+      "diagnostic": "01",
+      "position": 2,
+      "rpc_count_including_warmup": {
+        "host_list": 26,
+        "process_cancel": 208
+      },
+      "smaps": [
+        {
+          "anonymous_writable_rss_kib_reported": 128,
+          "heap_rss_kib_reported": 140,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-01/02-arena2/ready.smaps.txt",
+          "phase": "ready",
+          "reservation_pair_count_reported": 1,
+          "reservation_pair_rss_kib_reported": 8,
+          "sha256": "e4ead892a814139505313931bd22e03ead570f7e28b03769f3a22bd9a355c41f"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 2276,
+          "heap_rss_kib_reported": 1744,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-01/02-arena2/after_load.smaps.txt",
+          "phase": "after_load",
+          "reservation_pair_count_reported": 1,
+          "reservation_pair_rss_kib_reported": 1804,
+          "sha256": "be48b40be28bbfb0a6c7d38404f8c84e55c6d75abcb45ec12b30d46a3a4bc953"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 2236,
+          "heap_rss_kib_reported": 1744,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-01/02-arena2/after_idle.smaps.txt",
+          "phase": "after_idle",
+          "reservation_pair_count_reported": 1,
+          "reservation_pair_rss_kib_reported": 1804,
+          "sha256": "72f1aaebba49d25ee492b300c8b3408b83879a90d8b393146266078eab8479fa"
+        }
+      ],
+      "spawn_allocator_environment": {
+        "MALLOC_ARENA_MAX": "2"
+      },
+      "threads_ready_peak_loaded_idle": [
+        6,
+        20,
+        20,
+        10
+      ],
+      "whole_child_hwm_kib": 39432
+    },
+    {
+      "after_idle_rss_kib": 103632,
+      "after_load_rss_kib": 103476,
+      "arm": "default",
+      "cpu_ms_per_mixed_rpc_including_warmup": 26.45299145299145,
+      "cpu_ready_through_warmup_and_load_seconds": 6.19,
+      "diagnostic": "01",
+      "position": 3,
+      "rpc_count_including_warmup": {
+        "host_list": 26,
+        "process_cancel": 208
+      },
+      "smaps": [
+        {
+          "anonymous_writable_rss_kib_reported": 184,
+          "heap_rss_kib_reported": 108,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-01/03-default/ready.smaps.txt",
+          "phase": "ready",
+          "reservation_pair_count_reported": 5,
+          "reservation_pair_rss_kib_reported": 64,
+          "sha256": "f335c67e3904f7a3dc98539077a42b05453a703dceb1dc7298c44c4a68637f71"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 92192,
+          "heap_rss_kib_reported": 120,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-01/03-default/after_load.smaps.txt",
+          "phase": "after_load",
+          "reservation_pair_count_reported": 18,
+          "reservation_pair_rss_kib_reported": 91748,
+          "sha256": "cd3f953525a776445389f6b9aac464707817f9085fd5d710aadcc63e92d1a9c2"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 92156,
+          "heap_rss_kib_reported": 120,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-01/03-default/after_idle.smaps.txt",
+          "phase": "after_idle",
+          "reservation_pair_count_reported": 18,
+          "reservation_pair_rss_kib_reported": 91748,
+          "sha256": "e05256692d852c3d9b7eb8ea6a8be7c4debeed1b0b4c5629671da93c410e6b81"
+        }
+      ],
+      "spawn_allocator_environment": {},
+      "threads_ready_peak_loaded_idle": [
+        6,
+        19,
+        19,
+        10
+      ],
+      "whole_child_hwm_kib": 103632
+    },
+    {
+      "after_idle_rss_kib": 19112,
+      "after_load_rss_kib": 18960,
+      "arm": "arena1",
+      "cpu_ms_per_mixed_rpc_including_warmup": 26.752136752136753,
+      "cpu_ready_through_warmup_and_load_seconds": 6.26,
+      "diagnostic": "02",
+      "position": 0,
+      "rpc_count_including_warmup": {
+        "host_list": 26,
+        "process_cancel": 208
+      },
+      "smaps": [
+        {
+          "anonymous_writable_rss_kib_reported": 120,
+          "heap_rss_kib_reported": 148,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-02/00-arena1/ready.smaps.txt",
+          "phase": "ready",
+          "reservation_pair_count_reported": 0,
+          "reservation_pair_rss_kib_reported": 0,
+          "sha256": "964411af63568877e9f18dcfa9bdb6bfe8275452e550cf9eb4eb226086e47d95"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 472,
+          "heap_rss_kib_reported": 7320,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-02/00-arena1/after_load.smaps.txt",
+          "phase": "after_load",
+          "reservation_pair_count_reported": 0,
+          "reservation_pair_rss_kib_reported": 0,
+          "sha256": "242619851dc194606fb0d52812dbd63e68dce72a122e9e7fb29621e17c8b145a"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 432,
+          "heap_rss_kib_reported": 7320,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-02/00-arena1/after_idle.smaps.txt",
+          "phase": "after_idle",
+          "reservation_pair_count_reported": 0,
+          "reservation_pair_rss_kib_reported": 0,
+          "sha256": "3f9526a32284e4198808dd74342102719d2c3e325adff8e96ec9d9870d7a5171"
+        }
+      ],
+      "spawn_allocator_environment": {
+        "MALLOC_ARENA_MAX": "1"
+      },
+      "threads_ready_peak_loaded_idle": [
+        6,
+        20,
+        20,
+        10
+      ],
+      "whole_child_hwm_kib": 30928
+    },
+    {
+      "after_idle_rss_kib": 35864,
+      "after_load_rss_kib": 35708,
+      "arm": "arena4",
+      "cpu_ms_per_mixed_rpc_including_warmup": 26.41025641025641,
+      "cpu_ready_through_warmup_and_load_seconds": 6.18,
+      "diagnostic": "02",
+      "position": 1,
+      "rpc_count_including_warmup": {
+        "host_list": 26,
+        "process_cancel": 208
+      },
+      "smaps": [
+        {
+          "anonymous_writable_rss_kib_reported": 172,
+          "heap_rss_kib_reported": 108,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-02/01-arena4/ready.smaps.txt",
+          "phase": "ready",
+          "reservation_pair_count_reported": 3,
+          "reservation_pair_rss_kib_reported": 52,
+          "sha256": "ed79f0b7a18addda84f712f8ea295bf8bbca5e58a9b6b78a122760081c39ddaf"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 23912,
+          "heap_rss_kib_reported": 432,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-02/01-arena4/after_load.smaps.txt",
+          "phase": "after_load",
+          "reservation_pair_count_reported": 3,
+          "reservation_pair_rss_kib_reported": 23468,
+          "sha256": "5ba81aa8bc97d7705e3f924a0a885eedafc08375bf5c3ce3e42bf7cd8b76eb72"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 23876,
+          "heap_rss_kib_reported": 432,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-02/01-arena4/after_idle.smaps.txt",
+          "phase": "after_idle",
+          "reservation_pair_count_reported": 3,
+          "reservation_pair_rss_kib_reported": 23468,
+          "sha256": "11c4a08caef7e2b4a415e2cefb6caee90f542703efc894bd052bd65e39db233e"
+        }
+      ],
+      "spawn_allocator_environment": {
+        "MALLOC_ARENA_MAX": "4"
+      },
+      "threads_ready_peak_loaded_idle": [
+        6,
+        19,
+        19,
+        10
+      ],
+      "whole_child_hwm_kib": 50084
+    },
+    {
+      "after_idle_rss_kib": 36984,
+      "after_load_rss_kib": 36832,
+      "arm": "arena4",
+      "cpu_ms_per_mixed_rpc_including_warmup": 27.77777777777778,
+      "cpu_ready_through_warmup_and_load_seconds": 6.5,
+      "diagnostic": "02",
+      "position": 2,
+      "rpc_count_including_warmup": {
+        "host_list": 26,
+        "process_cancel": 208
+      },
+      "smaps": [
+        {
+          "anonymous_writable_rss_kib_reported": 176,
+          "heap_rss_kib_reported": 108,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-02/02-arena4/ready.smaps.txt",
+          "phase": "ready",
+          "reservation_pair_count_reported": 3,
+          "reservation_pair_rss_kib_reported": 56,
+          "sha256": "3a9dcd6d6cfe40179f6daa1b8b568de56d916b3fc832c7726976f14d553b2cde"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 14948,
+          "heap_rss_kib_reported": 10412,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-02/02-arena4/after_load.smaps.txt",
+          "phase": "after_load",
+          "reservation_pair_count_reported": 3,
+          "reservation_pair_rss_kib_reported": 14476,
+          "sha256": "93af669254fb0ff26f9e69830dc758d98a184df3e5c16c98218583c457b59f78"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 14908,
+          "heap_rss_kib_reported": 10412,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-02/02-arena4/after_idle.smaps.txt",
+          "phase": "after_idle",
+          "reservation_pair_count_reported": 3,
+          "reservation_pair_rss_kib_reported": 14476,
+          "sha256": "767e03875704538b81a7071746193d90990fb682541190c705e36c3a87596545"
+        }
+      ],
+      "spawn_allocator_environment": {
+        "MALLOC_ARENA_MAX": "4"
+      },
+      "threads_ready_peak_loaded_idle": [
+        6,
+        20,
+        20,
+        10
+      ],
+      "whole_child_hwm_kib": 55892
+    },
+    {
+      "after_idle_rss_kib": 15376,
+      "after_load_rss_kib": 15224,
+      "arm": "arena1",
+      "cpu_ms_per_mixed_rpc_including_warmup": 27.22222222222222,
+      "cpu_ready_through_warmup_and_load_seconds": 6.37,
+      "diagnostic": "02",
+      "position": 3,
+      "rpc_count_including_warmup": {
+        "host_list": 26,
+        "process_cancel": 208
+      },
+      "smaps": [
+        {
+          "anonymous_writable_rss_kib_reported": 120,
+          "heap_rss_kib_reported": 144,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-02/03-arena1/ready.smaps.txt",
+          "phase": "ready",
+          "reservation_pair_count_reported": 0,
+          "reservation_pair_rss_kib_reported": 0,
+          "sha256": "ef6dd949efe221586e9781e540dac720413c3c05067cba122fc74a7551dd5a66"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 472,
+          "heap_rss_kib_reported": 3364,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-02/03-arena1/after_load.smaps.txt",
+          "phase": "after_load",
+          "reservation_pair_count_reported": 0,
+          "reservation_pair_rss_kib_reported": 0,
+          "sha256": "cf12d57a270a6027a6dd92775ada78ffeb220c263c4f96cf9550032763ae54ba"
+        },
+        {
+          "anonymous_writable_rss_kib_reported": 432,
+          "heap_rss_kib_reported": 3364,
+          "path": "/home/qian/hepta-runtime-optimization-20261103-r14/thread-arena-diagnostic-02/03-arena1/after_idle.smaps.txt",
+          "phase": "after_idle",
+          "reservation_pair_count_reported": 0,
+          "reservation_pair_rss_kib_reported": 0,
+          "sha256": "c7664f37ea25db8e1db0a55aa244faf629565812e10732b46e76cae730d8d5d3"
+        }
+      ],
+      "spawn_allocator_environment": {
+        "MALLOC_ARENA_MAX": "1"
+      },
+      "threads_ready_peak_loaded_idle": [
+        6,
+        20,
+        20,
+        10
+      ],
+      "whole_child_hwm_kib": 30648
+    }
+  ],
+  "schema": "hepta-r14-allocator-diagnostic-summary/v1",
+  "selected_formal_candidate": {
+    "MALLOC_ARENA_MAX": "1"
+  },
+  "smaps_hashes_verified": 24,
+  "success": true
+}
