@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//! Runtime tools, native analysis workers and per-session context.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -51,6 +52,8 @@ mod rea_mcp_transport;
 pub use rea_mcp_transport::ReaMcpTransport;
 pub mod rea_model;
 pub mod rea_provider;
+mod rea_recorded_core_parser;
+pub mod rea_recorded_core_worker;
 pub mod rea_seccomp;
 pub mod rea_source_map;
 pub mod rea_static;

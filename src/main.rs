@@ -24,6 +24,13 @@ use cli::{Cli, Commands};
 
 fn main() -> Result<()> {
 	let cli = Cli::parse();
+	if matches!(&cli.command, Commands::ReaRecordedCoreWorker) {
+		let code = mcp::rea_recorded_core_worker::run_worker()?;
+		if code != 0 {
+			std::process::exit(code);
+		}
+		return Ok(());
+	}
 	if let Commands::ReaBrowserCapture(args) = &cli.command {
 		return mcp::rea_browser::run_cli(args.clone());
 	}
@@ -152,6 +159,9 @@ async fn run(cli: Cli) -> Result<()> {
 		}
 		Commands::ReaBrowserCapture(_) => {
 			anyhow::bail!("browser capture must run before Tokio initialization");
+		}
+		Commands::ReaRecordedCoreWorker => {
+			anyhow::bail!("recorded-core worker must run before Tokio initialization");
 		}
 		Commands::ReaElfNotesWorker => {
 			mcp::rea_elf_notes::run_worker()?;
