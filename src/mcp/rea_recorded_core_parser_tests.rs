@@ -509,7 +509,7 @@ fn recorded_core_extended_count_keeps_compression_constructor_and_seek_errors() 
 }
 
 #[test]
-fn recorded_core_dynamic_sections_are_explicitly_declined_before_unvalidated_success() {
+fn recorded_core_dynamic_sections_preserve_structural_failure_order() {
 	let mut bytes = core(62, &[]);
 	put32(&mut bytes, 64, 2);
 	put16(&mut bytes, 60, 1);
@@ -519,15 +519,17 @@ fn recorded_core_dynamic_sections_are_explicitly_declined_before_unvalidated_suc
 	put64(&mut bytes, 40, 64);
 	failure(
 		&bytes,
-		"unsupported-target",
-		"Native recorded-core PT_DYNAMIC with a section table requires unimplemented section-constructor validation.",
+		"format",
+		"Recorded core failed unchanged upstream structural parsing: expected 8, found 0",
 	);
 	put64(&mut bytes, 40, u64::MAX);
-	assert_eq!(
-		parse_recorded_core(&bytes, OUTPUT_LIMIT)
-			.unwrap_err()
-			.reason,
-		"unsupported-target"
+	// An invalid backing range still comes after section construction.
+	put64(&mut bytes, 72, u64::MAX);
+	put64(&mut bytes, 96, 1);
+	failure(
+		&bytes,
+		"format",
+		"Recorded core failed unchanged upstream structural parsing: Reading section 0 at offset 18446744073709551615 past EOF 120",
 	);
 }
 
@@ -557,14 +559,9 @@ fn recorded_core_extended_special_prefix_reports_exact_entry_size_errors() {
 			"format",
 			&format!("Recorded core failed unchanged upstream structural parsing: {text}"),
 		);
-		// Passing a constructor prefix remains an explicit native boundary.
+		// These constructors perform no relocation payload reads.
 		put64(&mut bytes, 120, expected);
-		assert_eq!(
-			parse_recorded_core(&bytes, OUTPUT_LIMIT)
-				.unwrap_err()
-				.reason,
-			"unsupported-target"
-		);
+		assert_eq!(parsed(&bytes)["segments"], json!([]));
 	}
 }
 
@@ -622,7 +619,7 @@ fn recorded_core_extended_special_prefix_preserves_constructor_order() {
 }
 
 #[test]
-fn recorded_core_extended_special_prefix_keeps_link_bounds_and_unsupported_successes() {
+fn recorded_core_extended_special_constructors_keep_link_bounds_and_hash_boundaries() {
 	let mut bytes = extended_special_core(62, 2);
 	put32(&mut bytes, 104, 4);
 	failure(&bytes, "format", "Recorded core failed unchanged upstream structural parsing: Reading section 4 at offset 320 past EOF 256");
@@ -632,11 +629,129 @@ fn recorded_core_extended_special_prefix_keeps_link_bounds_and_unsupported_succe
 		"format",
 		"Recorded core failed unchanged upstream structural parsing: expected 8, found 7",
 	);
-	for (section_type, linked_type) in [(2, 3), (5, 2), (6, 3), (0x6fff_fffd, 3)] {
+	for section_type in [2, 6, 11, 0x6fff_fff3, 0x6fff_fffd, 0x6fff_fffe] {
 		let mut bytes = extended_special_core(62, section_type);
-		put32(&mut bytes, 196, linked_type);
-		failure(&bytes, "unsupported-target", &format!(
-			"Native recorded-core extended program numbering does not implement the noncanonical section-zero constructor for sh_type={section_type}."
+		put32(&mut bytes, 196, 3);
+		put64(&mut bytes, 120, 24);
+		assert_eq!(parsed(&bytes)["segments"], json!([]));
+	}
+	for section_type in [5, 0x6fff_fff6, 0x6fff_fffc, 0x6fff_ffff] {
+		let mut bytes = extended_special_core(62, section_type);
+		put32(&mut bytes, 196, 2);
+		put32(&mut bytes, 232, 1);
+		put64(&mut bytes, 248, 24);
+		if section_type != 0x6fff_fff6 {
+			assert_eq!(parsed(&bytes)["segments"], json!([]));
+		}
+		if matches!(section_type, 5 | 0x6fff_fff6) {
+			put64(&mut bytes, 96, 1);
+			failure(&bytes, "unsupported-target", &format!(
+				"Native recorded-core section validation does not implement the hash-table body for sh_type={section_type}."
+			));
+		}
+	}
+}
+
+#[test]
+fn recorded_core_dynamic_constructor_fixed_reference_differences_match() {
+	let fixture: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_recorded_core/dynamic-sections-rea-6.8.0.json"
+	))
+	.unwrap();
+	let cases = fixture["cases"].as_array().unwrap();
+	assert_eq!(cases.len(), 37);
+	for case in cases {
+		let encoded = case["input_hex"].as_str().unwrap();
+		assert_eq!(encoded.len() % 2, 0);
+		let bytes: Vec<u8> = encoded
+			.as_bytes()
+			.chunks_exact(2)
+			.map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+			.collect();
+		assert_eq!(super::super::rea_provider::sha256(&bytes), case["sha256"]);
+		let actual = match parse_recorded_core(&bytes, OUTPUT_LIMIT) {
+			Ok(value) => json!({"ok":true, "value":value}),
+			Err(error) => json!({"ok":false, "reason":error.reason, "message":error.message}),
+		};
+		assert_eq!(actual, case["expected"], "original case {}", case["id"]);
+	}
+}
+
+#[test]
+fn recorded_core_dynamic_constructor_stops_at_the_first_matching_section() {
+	let mut bytes = core(62, &[]);
+	put32(&mut bytes, 64, 2);
+	put64(&mut bytes, 40, 120);
+	put16(&mut bytes, 60, 4);
+	put16(&mut bytes, 62, 1);
+	bytes.resize(313, 0);
+	put32(&mut bytes, 188, 3);
+	put64(&mut bytes, 208, 312);
+	put32(&mut bytes, 252, 6);
+	put64(&mut bytes, 272, 120);
+	put32(&mut bytes, 288, 1);
+	assert_eq!(parsed(&bytes)["segments"][0]["type"], "PT_DYNAMIC");
+	// The fourth section is truncated, but the matching third ends iteration.
+	put64(&mut bytes, 272, 121);
+	failure(
+		&bytes,
+		"format",
+		"Recorded core failed unchanged upstream structural parsing: expected 4, found 1",
+	);
+}
+
+#[test]
+fn recorded_core_symbol_constructor_diagnostics_preserve_ascii_repr() {
+	for (name, expected) in [
+		(b"\0".as_slice(), "''"),
+		(b"'\0".as_slice(), "\"'\""),
+		(b"\"\0".as_slice(), "'\"'"),
+		(b"'\"\\\n\r\t\x7f\0".as_slice(), "'\\'\"\\\\\\n\\r\\t\\x7f'"),
+	] {
+		let mut bytes = extended_special_core(62, 2);
+		put32(&mut bytes, 196, 3);
+		put64(&mut bytes, 152, 256);
+		bytes.extend_from_slice(name);
+		failure(&bytes, "format", &format!(
+			"Recorded core failed unchanged upstream structural parsing: Expected entry size of section {expected} to be > 0"
+		));
+		put64(&mut bytes, 120, 24);
+		put64(&mut bytes, 96, 1);
+		failure(&bytes, "format", &format!(
+			"Recorded core failed unchanged upstream structural parsing: Expected section size to be a multiple of entry size in section {expected}"
 		));
 	}
+	let mut bytes = extended_special_core(62, 2);
+	put32(&mut bytes, 196, 3);
+	put64(&mut bytes, 152, 256);
+	bytes.extend_from_slice("é\0".as_bytes());
+	failure(
+		&bytes,
+		"unsupported-target",
+		"Native recorded-core symbol-table diagnostics require an ASCII section name.",
+	);
+	// A valid symbol table never needs a diagnostic-name representation.
+	put64(&mut bytes, 120, 24);
+	assert_eq!(parsed(&bytes)["segments"], json!([]));
+}
+
+#[test]
+fn recorded_core_dynamic_section_work_is_bounded_across_segments() {
+	let segments = 513;
+	let sections = 512;
+	let shoff = 64 + segments * 56;
+	let mut bytes = header(62);
+	put64(&mut bytes, 32, 64);
+	put64(&mut bytes, 40, shoff as u64);
+	put16(&mut bytes, 56, segments as u16);
+	put16(&mut bytes, 60, sections as u16);
+	bytes.resize(shoff + sections * 64, 0);
+	for index in 0..segments {
+		put32(&mut bytes, 64 + index * 56, 2);
+	}
+	failure(
+		&bytes,
+		"resource-limit",
+		"Native recorded-core section-constructor work limit exceeded.",
+	);
 }

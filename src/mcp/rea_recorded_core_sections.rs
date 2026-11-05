@@ -13,20 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Extended ELF program counts retain the reference's section-zero checks.
+//! Bounded section-constructor checks from the frozen pyelftools 0.33 profile.
 //!
-//! Ordinary counts never inspect section tables. PN_XNUM does: pyelftools 0.33
-//! obtains `get_section(0)["sh_info"]`, including a string-table lookup and the
-//! Section constructor's compression-header read. Noncanonical section zero
-//! types with additional symbol/hash/version constructors remain outside this
-//! native admission. Their bounded constructor-prefix failures are reproduced
-//! in source order; passing a prefix never means the constructor was validated.
+//! PN_XNUM constructs section zero before reading its program count. PT_DYNAMIC
+//! constructs sections in order until the first matching dynamic section, before
+//! validating the segment's backing range. Constructors read only the captured
+//! bytes; they do not resolve paths, decode symbols, or traverse dynamic tags.
+//! Hash-table bodies and non-ASCII symbol-error names remain explicit native
+//! admission boundaries. A shared work limit bounds repeated section traversals.
 
 use super::super::{bytes_at, u16_at, u32_at, u64_at, CoreFailure};
 
 const STRUCTURAL_PREFIX: &str = "Recorded core failed unchanged upstream structural parsing: ";
 const SECTION_FIELDS: [u64; 10] = [4, 4, 8, 8, 8, 8, 4, 4, 8, 8];
 const COMPRESSION_FIELDS: [u64; 4] = [4, 4, 8, 8];
+const MAX_DIAGNOSTIC_NAME_BYTES: usize = 4096;
+
+pub(super) const MAX_SECTION_CONSTRUCTORS: usize = 262_144;
 
 struct Section<'a> {
 	header: &'a [u8],
@@ -59,7 +62,7 @@ fn verify_struct(content: &[u8], offset: u128, fields: &[u64]) -> Result<(), Cor
 	Ok(())
 }
 
-fn section(content: &[u8], index: u32) -> Result<Section<'_>, CoreFailure> {
+fn section(content: &[u8], index: u64) -> Result<Section<'_>, CoreFailure> {
 	let start = u64_at(content, 40)?;
 	let size = u16_at(content, 58)?;
 	if start > 0 && size < 64 {
@@ -144,88 +147,12 @@ fn section_type_text(section_type: u32, machine: u16) -> String {
 	label.to_owned()
 }
 
-fn validate_specialized_prefix(
-	content: &[u8],
-	zero: &Section<'_>,
-	section_type: u32,
-) -> Result<(), CoreFailure> {
-	match section_type {
-		4 | 9 => {
-			// RelocationSection constructs its base Section first, then checks
-			// the fixed ELF64 entry size without reading any relocation entries.
-			zero.validate_constructor(content)?;
-			let expected = if section_type == 4 { 24 } else { 16 };
-			if u64_at(zero.header, 56)? != expected {
-				let label = if section_type == 4 {
-					"SHT_RELA"
-				} else {
-					"SHT_REL"
-				};
-				return Err(structural(format!(
-					"Expected sh_entsize of {label} section to be {expected}"
-				)));
-			}
-		}
-		19 => {
-			zero.validate_constructor(content)?;
-			let entry_size = u64_at(zero.header, 56)?;
-			if entry_size != 8 {
-				return Err(structural(format!(
-					"Expected RELR entry size to be 8, got {entry_size}"
-				)));
-			}
-		}
-		2 | 11 | 0x6fff_fff3 | 0x6fff_fffd | 0x6fff_fffe => {
-			// Symbol and version factories resolve the linked header before
-			// constructing this section or its compression header.
-			let index = u32_at(zero.header, 40)?;
-			let linked = section(content, index)?;
-			let linked_type = u32_at(linked.header, 4)?;
-			if linked_type != 3 {
-				let label = section_type_text(linked_type, u16_at(content, 18)?);
-				return Err(structural(format!(
-					"SHT_SYMTAB section points at section {index} of type {label}, expected SHT_STRTAB"
-				)));
-			}
-		}
-		5 | 0x6fff_fff6 | 0x6fff_fffc | 0x6fff_ffff => {
-			let index = u32_at(zero.header, 40)?;
-			let linked = section(content, index)?;
-			let linked_type = u32_at(linked.header, 4)?;
-			if !matches!(linked_type, 2 | 11) {
-				let label = section_type_text(linked_type, u16_at(content, 18)?);
-				return Err(structural(format!(
-					"Section points at section {index} of type {label}, expected SHT_SYMTAB/SHT_DYNSYM"
-				)));
-			}
-		}
-		6 => {
-			// DynamicSection's base constructor precedes get_section's type
-			// validation. Accepted linked types require further constructors.
-			zero.validate_constructor(content)?;
-			let linked = section(content, u32_at(zero.header, 40)?)?;
-			let linked_type = u32_at(linked.header, 4)?;
-			if !matches!(linked_type, 0 | 3 | 8) {
-				let label = section_type_text(linked_type, u16_at(content, 18)?);
-				return Err(structural(format!(
-					"Unexpected section type {label}, expected ('SHT_STRTAB', 'SHT_NOBITS', 'SHT_NULL')"
-				)));
-			}
-		}
-		_ => {}
-	}
-	Err(CoreFailure::new("unsupported-target", format!(
-		"Native recorded-core extended program numbering does not implement the noncanonical section-zero constructor for sh_type={section_type}.",
-	)))
-}
-
-pub(super) fn extended_program_count(content: &[u8]) -> Result<u64, CoreFailure> {
-	let zero = section(content, 0)?;
+fn name_offset(content: &[u8], current: &Section<'_>) -> Result<u128, CoreFailure> {
 	let string_index = u16_at(content, 62)?;
 	let string_index = if string_index == 0xffff {
-		u32_at(zero.header, 40)?
+		u64::from(u32_at(section(content, 0)?.header, 40)?)
 	} else {
-		u32::from(string_index)
+		u64::from(string_index)
 	};
 	let string_table = section(content, string_index).map_err(|error| {
 		if is_section_parse_failure(&error) {
@@ -237,25 +164,225 @@ pub(super) fn extended_program_count(content: &[u8]) -> Result<u64, CoreFailure>
 	string_table.validate_constructor(content)?;
 	// get_string ignores the declared table size. A missing NUL, an offset at
 	// EOF, or an offset beyond EOF produces an empty name. No host path is read.
-	let name_offset =
-		u128::from(u64_at(string_table.header, 24)?) + u128::from(u32_at(zero.header, 0)?);
-	if name_offset > i64::MAX as u128 {
+	let offset =
+		u128::from(u64_at(string_table.header, 24)?) + u128::from(u32_at(current.header, 0)?);
+	if offset > i64::MAX as u128 {
 		return Err(overflow());
 	}
-	let section_type = u32_at(zero.header, 4)?;
-	if matches!(
-		section_type,
-		2 | 4
-			| 5 | 6 | 9
-			| 11 | 19 | 0x6fff_fff3
-			| 0x6fff_fff6
-			| 0x6fff_fffc
-			| 0x6fff_fffd
-			| 0x6fff_fffe
-			| 0x6fff_ffff
-	) {
-		validate_specialized_prefix(content, &zero, section_type)?;
+	Ok(offset)
+}
+
+fn work_limit() -> CoreFailure {
+	CoreFailure::new(
+		"resource-limit",
+		"Native recorded-core section-constructor work limit exceeded.",
+	)
+}
+
+// A name influences the admitted constructors only in symbol-table diagnostics.
+// Avoid scanning or allocating unused names; still check the original seek
+// before any type/link validation. Non-ASCII repr depends on Python's Unicode
+// table, so that exceptional diagnostic remains outside this native profile.
+fn diagnostic_name(content: &[u8], offset: u128) -> Result<String, CoreFailure> {
+	let suffix = if offset < content.len() as u128 {
+		&content[offset as usize..]
+	} else {
+		&[]
+	};
+	let scanned = &suffix[..suffix.len().min(MAX_DIAGNOSTIC_NAME_BYTES + 1)];
+	let name = match scanned.iter().position(|&byte| byte == 0) {
+		Some(length) if length <= MAX_DIAGNOSTIC_NAME_BYTES => &scanned[..length],
+		_ if suffix.len() <= MAX_DIAGNOSTIC_NAME_BYTES => &[],
+		_ => return Err(work_limit()),
+	};
+	if !name.is_ascii() {
+		return Err(CoreFailure::new(
+			"unsupported-target",
+			"Native recorded-core symbol-table diagnostics require an ASCII section name.",
+		));
 	}
-	zero.validate_constructor(content)?;
+	let quote = if name.contains(&b'\'') && !name.contains(&b'"') {
+		b'"'
+	} else {
+		b'\''
+	};
+	let mut result = String::new();
+	result
+		.try_reserve(name.len().saturating_mul(4).saturating_add(2))
+		.map_err(|_| CoreFailure::allocation())?;
+	result.push(char::from(quote));
+	for &byte in name {
+		match byte {
+			b'\\' => result.push_str("\\\\"),
+			b'\t' => result.push_str("\\t"),
+			b'\n' => result.push_str("\\n"),
+			b'\r' => result.push_str("\\r"),
+			value if value == quote => {
+				result.push('\\');
+				result.push(char::from(value));
+			}
+			0x20..=0x7e => result.push(char::from(byte)),
+			value => {
+				const HEX: &[u8; 16] = b"0123456789abcdef";
+				result.push_str("\\x");
+				result.push(char::from(HEX[usize::from(value >> 4)]));
+				result.push(char::from(HEX[usize::from(value & 15)]));
+			}
+		}
+	}
+	result.push(char::from(quote));
+	Ok(result)
+}
+
+fn linked_string_table(
+	content: &[u8],
+	current: &Section<'_>,
+	work_remaining: &mut usize,
+) -> Result<(), CoreFailure> {
+	let index = u64::from(u32_at(current.header, 40)?);
+	let linked = section(content, index)?;
+	let linked_type = u32_at(linked.header, 4)?;
+	if linked_type != 3 {
+		let label = section_type_text(linked_type, u16_at(content, 18)?);
+		return Err(structural(format!(
+			"SHT_SYMTAB section points at section {index} of type {label}, expected SHT_STRTAB"
+		)));
+	}
+	validate_section(content, &linked, work_remaining)
+}
+
+fn linked_symbol_table(
+	content: &[u8],
+	current: &Section<'_>,
+	work_remaining: &mut usize,
+) -> Result<(), CoreFailure> {
+	let index = u64::from(u32_at(current.header, 40)?);
+	let linked = section(content, index)?;
+	let linked_type = u32_at(linked.header, 4)?;
+	if !matches!(linked_type, 2 | 11) {
+		let label = section_type_text(linked_type, u16_at(content, 18)?);
+		return Err(structural(format!(
+			"Section points at section {index} of type {label}, expected SHT_SYMTAB/SHT_DYNSYM"
+		)));
+	}
+	validate_section(content, &linked, work_remaining)
+}
+
+fn validate_section(
+	content: &[u8],
+	current: &Section<'_>,
+	work_remaining: &mut usize,
+) -> Result<(), CoreFailure> {
+	*work_remaining = work_remaining.checked_sub(1).ok_or_else(work_limit)?;
+	let name = name_offset(content, current)?;
+	let section_type = u32_at(current.header, 4)?;
+	match section_type {
+		4 | 9 => {
+			current.validate_constructor(content)?;
+			let expected = if section_type == 4 { 24 } else { 16 };
+			if u64_at(current.header, 56)? != expected {
+				let label = if section_type == 4 {
+					"SHT_RELA"
+				} else {
+					"SHT_REL"
+				};
+				return Err(structural(format!(
+					"Expected sh_entsize of {label} section to be {expected}"
+				)));
+			}
+		}
+		19 => {
+			current.validate_constructor(content)?;
+			let entry_size = u64_at(current.header, 56)?;
+			if entry_size != 8 {
+				return Err(structural(format!(
+					"Expected RELR entry size to be 8, got {entry_size}"
+				)));
+			}
+		}
+		2 | 11 | 0x6fff_fff3 => {
+			// The linked string table is constructed before this Section.
+			linked_string_table(content, current, work_remaining)?;
+			current.validate_constructor(content)?;
+			let entry_size = u64_at(current.header, 56)?;
+			if entry_size == 0 {
+				let name = diagnostic_name(content, name)?;
+				return Err(structural(format!(
+					"Expected entry size of section {name} to be > 0"
+				)));
+			}
+			if u64_at(current.header, 32)? % entry_size != 0 {
+				let name = diagnostic_name(content, name)?;
+				return Err(structural(format!(
+					"Expected section size to be a multiple of entry size in section {name}"
+				)));
+			}
+		}
+		0x6fff_fffd | 0x6fff_fffe => {
+			linked_string_table(content, current, work_remaining)?;
+			current.validate_constructor(content)?;
+		}
+		5 | 0x6fff_fff6 | 0x6fff_fffc | 0x6fff_ffff => {
+			linked_symbol_table(content, current, work_remaining)?;
+			current.validate_constructor(content)?;
+			// An empty ELF hash table performs no payload parse. Nonempty ELF
+			// and all GNU hash bodies need their own bounded parser and oracle.
+			if section_type == 0x6fff_fff6
+				|| (section_type == 5 && u64_at(current.header, 32)? != 0)
+			{
+				return Err(CoreFailure::new("unsupported-target", format!(
+					"Native recorded-core section validation does not implement the hash-table body for sh_type={section_type}.",
+				)));
+			}
+		}
+		6 => {
+			current.validate_constructor(content)?;
+			let linked = section(content, u64::from(u32_at(current.header, 40)?))?;
+			let linked_type = u32_at(linked.header, 4)?;
+			if !matches!(linked_type, 0 | 3 | 8) {
+				let label = section_type_text(linked_type, u16_at(content, 18)?);
+				return Err(structural(format!(
+					"Unexpected section type {label}, expected ('SHT_STRTAB', 'SHT_NOBITS', 'SHT_NULL')"
+				)));
+			}
+			validate_section(content, &linked, work_remaining)?;
+		}
+		_ => current.validate_constructor(content)?,
+	}
+	Ok(())
+}
+
+pub(super) fn extended_program_count(
+	content: &[u8],
+	work_remaining: &mut usize,
+) -> Result<u64, CoreFailure> {
+	let zero = section(content, 0)?;
+	validate_section(content, &zero, work_remaining)?;
 	Ok(u64::from(u32_at(zero.header, 44)?))
+}
+
+pub(super) fn validate_dynamic_segment(
+	content: &[u8],
+	segment_offset: u64,
+	work_remaining: &mut usize,
+) -> Result<(), CoreFailure> {
+	if u64_at(content, 40)? == 0 {
+		return Ok(());
+	}
+	let count = match u16_at(content, 60)? {
+		0 => u64_at(section(content, 0)?.header, 32)?,
+		value => u64::from(value),
+	};
+	for index in 0..count {
+		let current = section(content, index)?;
+		validate_section(content, &current, work_remaining)?;
+		if u32_at(current.header, 4)? == 6 && u64_at(current.header, 24)? == segment_offset {
+			// DynamicSegment requests the matched section's link once more,
+			// then stops. Invalid later sections are deliberately not visited.
+			let linked = section(content, u64::from(u32_at(current.header, 40)?))?;
+			validate_section(content, &linked, work_remaining)?;
+			break;
+		}
+	}
+	Ok(())
 }

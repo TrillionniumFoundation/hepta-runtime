@@ -27,6 +27,8 @@ use serde_json::{json, Value};
 #[path = "rea_recorded_core_sections.rs"]
 mod sections;
 
+pub(super) const MAX_SECTION_CONSTRUCTORS: usize = sections::MAX_SECTION_CONSTRUCTORS;
+
 // The selected pwntools ctypes is a 32-byte prefix, not Linux's usual entire
 // 128-byte siginfo_t. Additional recorded bytes remain in the original descriptor.
 pub(super) const SIGINFO_SIZE: usize = 32;
@@ -115,10 +117,21 @@ pub(super) fn program_type(value: u32, architecture: Architecture) -> Value {
 	json!(label)
 }
 
-pub(super) fn program_count(content: &[u8]) -> Result<u64, CoreFailure> {
+pub(super) fn program_count(
+	content: &[u8],
+	work_remaining: &mut usize,
+) -> Result<u64, CoreFailure> {
 	let count = u16_at(content, 56)?;
 	if count != 0xffff {
 		return Ok(u64::from(count));
 	}
-	sections::extended_program_count(content)
+	sections::extended_program_count(content, work_remaining)
+}
+
+pub(super) fn validate_dynamic_segment(
+	content: &[u8],
+	segment_offset: u64,
+	work_remaining: &mut usize,
+) -> Result<(), CoreFailure> {
+	sections::validate_dynamic_segment(content, segment_offset, work_remaining)
 }

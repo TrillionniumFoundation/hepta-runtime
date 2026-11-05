@@ -120,7 +120,8 @@ pub(super) fn parse_recorded_core(
 	max_output_bytes: usize,
 ) -> Result<Value, CoreFailure> {
 	let architecture = validate_header(content)?;
-	let count = layout::program_count(content)?;
+	let mut section_work = layout::MAX_SECTION_CONSTRUCTORS;
+	let count = layout::program_count(content, &mut section_work)?;
 	let phoff = u64_at(content, 32)?;
 	let phentsize = u64::from(u16_at(content, 54)?);
 	if count > 0 && phentsize < 56 {
@@ -143,14 +144,10 @@ pub(super) fn parse_recorded_core(
 		)?;
 		let header = bytes_at(content, header_offset, 56)?;
 		let type_id = u32_at(header, 0)?;
-		// The reference's DynamicSegment constructor walks the section table
-		// before the helper validates file backing. Until that separate route is
-		// implemented, decline it explicitly rather than return unvalidated success.
-		if type_id == 2 && u64_at(content, 40)? != 0 {
-			return Err(CoreFailure::new(
-				"unsupported-target",
-				"Native recorded-core PT_DYNAMIC with a section table requires unimplemented section-constructor validation.",
-			));
+		// Preserve the reference constructor's validation order, including
+		// its lazy first-match stop, before checking this segment's backing.
+		if type_id == 2 {
+			layout::validate_dynamic_segment(content, u64_at(header, 8)?, &mut section_work)?;
 		}
 		let flags = u32_at(header, 4)?;
 		let offset = u64_at(header, 8)?;
