@@ -36,6 +36,10 @@ A failing gate does not suppress later gates. Test retries are zero. Nextest's
 --build-jobs controls compilation; its --jobs alias controls test concurrency
 and must not be confused with Cargo's --jobs.
 
+After those gates, an explicit all-feature Cargo build emits JSON compiler
+artifacts for the actual MCP binary. The binary requires remote-fs; observing a
+file after no-default-feature nextest does not prove that feature set built it.
+
 Source/fixture/config/script SHA-256 inventories bracket the gates. Linux
 inotify also records local writes, replacements and metadata changes during the
 interval, including a change subsequently restored to the original bytes.
@@ -99,6 +103,13 @@ CACHE_DIRS = {
 }
 TEST_TEMP_DIRS = {"tmp", ".tmp", "temp", "test-output", "test-results"}
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+BUILD_ENVIRONMENT_NAMES = {
+    "RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "RUSTC", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER",
+    "RUSTDOC", "RUSTDOCFLAGS", "CARGO_ENCODED_RUSTDOCFLAGS", "CARGO_INCREMENTAL", "RUSTUP_TOOLCHAIN",
+    "CARGO_HOME", "CARGO_NET_OFFLINE", "CARGO_TERM_COLOR", "NEXTEST_TEST_THREADS", "NEXTEST_RETRIES",
+}
+BUILD_ENVIRONMENT_PREFIXES = ("CARGO_BUILD_", "CARGO_PROFILE_", "CARGO_TARGET_")
+BUILD_PROFILE_NAMES = ("CARGO_PROFILE_DEV_DEBUG", "CARGO_PROFILE_TEST_DEBUG")
 
 
 def utc_now():
@@ -437,6 +448,27 @@ def observe_binary(target, relative):
     return {"path": str(path), "exists": True, **{key: value for key, value in facts.items() if key != "path"}}
 
 
+def producer_source(repo):
+    """Bind this executing runner, not an unexecuted same-name repository file."""
+    actual = Path(__file__).resolve()
+    selected = repo / "scripts/rea_full_qualification.py"
+    if actual != selected or selected.is_symlink():
+        raise RuntimeError("run the selected repository's scripts/rea_full_qualification.py")
+    return source_file(actual, str(actual))
+
+
+def build_environment(environment):
+    """Record the effective Cargo/Rust overrides without exposing credentials."""
+    return {
+        "schema": "hepta.rea.build-environment.v1",
+        "selection": {"exact_names": sorted(BUILD_ENVIRONMENT_NAMES), "prefixes": list(BUILD_ENVIRONMENT_PREFIXES)},
+        "sha256": {name: hashlib.sha256(value.encode()).hexdigest()
+                   for name, value in sorted(environment.items())
+                   if name in BUILD_ENVIRONMENT_NAMES or name.startswith(BUILD_ENVIRONMENT_PREFIXES)},
+        "profiles": {name: environment.get(name) for name in BUILD_PROFILE_NAMES},
+    }
+
+
 def pin_target(target, repo):
     target.mkdir(parents=True, exist_ok=True)
     fd = os.open(target / ".rea-qualification.lock", os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
@@ -475,8 +507,8 @@ def arguments():
     if not 1 <= result.jobs <= 256:
         parser.error("--jobs must be between 1 and 256")
     binary = Path(result.binary_relative_path)
-    if binary.is_absolute() or ".." in binary.parts or not binary.parts:
-        parser.error("--binary-relative-path must stay inside target_dir")
+    if binary != Path("debug/hepta-runtime"):
+        parser.error("this qualification profile requires --binary-relative-path debug/hepta-runtime")
     result.binary_relative_path = binary
     return result
 
@@ -543,6 +575,7 @@ def main():
             "CARGO_HOME", "CARGO_TARGET_DIR", "CARGO_BUILD_JOBS", "CARGO_NET_OFFLINE",
             "CARGO_TERM_COLOR", "RUSTUP_TOOLCHAIN", "RUSTC", "NEXTEST_TEST_THREADS", "NEXTEST_RETRIES",
         )}
+        report["build_environment"] = build_environment(env)
         report["executables"] = {
             "cargo": {"invoked": cargo, "resolved": os.path.realpath(cargo)},
             "rustc": {"invoked": rustc, "resolved": os.path.realpath(rustc)},
@@ -555,6 +588,10 @@ def main():
             if name in os.environ
         }
         report["binary_before_gates"] = observe_binary(args.target_dir, args.binary_relative_path)
+        report["producer_source"] = {
+            "repository_path": "scripts/rea_full_qualification.py",
+            "before": producer_source(args.repo),
+        }
         monitor = SourceMonitor(selection)
         monitor.start()
         before = selection.snapshot()
@@ -620,11 +657,35 @@ def main():
                 if stage["exit_code"] == 0 and not binary["exists"]:
                     report["invalid_reasons"].append("successful nextest stage has no expected native binary: " + name)
             save_json(report_path, report)
+        command = [cargo, "build", "--locked", "--offline", "--all-features", "--bin", "hepta-runtime",
+                   "--message-format=json-render-diagnostics"] + cargo_build
+        if cancellation.signal is not None:
+            report["stages"].append({"name": "build-native-binary", "kind": "build", "command": command,
+                                     "status": "not_run_after_interrupt", "exit_code": None})
+        else:
+            stage = run_stage(len(report["stages"]) + 1, "build-native-binary", command, args.repo,
+                              args.output_dir, env, cancellation, "build")
+            report["stages"].append(stage)
+            binary = observe_binary(args.target_dir, args.binary_relative_path)
+            report["binary_after_build"] = {**binary, "feature_set": "all-features",
+                                            "stage": stage["name"], "stage_exit_code": stage["exit_code"]}
+            if stage["exit_code"] == 0 and not binary["exists"]:
+                report["invalid_reasons"].append("successful explicit binary build has no expected MCP binary")
+        save_json(report_path, report)
     except BaseException as error:
         fatal = type(error).__name__ + ": " + str(error)
         report["invalid_reasons"].append(fatal)
         (args.output_dir / "runner-error.log").write_text(traceback.format_exc(), encoding="utf-8")
     finally:
+        try:
+            producer = producer_source(args.repo)
+            if "producer_source" not in report:
+                raise RuntimeError("no original build producer observation")
+            report["producer_source"]["after"] = producer
+            if producer != report["producer_source"]["before"]:
+                raise RuntimeError("original build producer changed during qualification")
+        except BaseException as error:
+            report["invalid_reasons"].append("build producer binding unavailable: " + str(error))
         try:
             after = selection.snapshot()
             report["source_after"] = save_json(args.output_dir / "source-after.json", after)
@@ -666,7 +727,9 @@ def main():
                 except OSError as error:
                     report["invalid_reasons"].append("stage log unavailable: " + str(error))
         gates = [stage for stage in report["stages"] if stage["kind"] == "gate"]
-        passed = len(gates) == 5 and all(stage["exit_code"] == 0 for stage in gates)
+        builds = [stage for stage in report["stages"] if stage["kind"] == "build"]
+        passed = (len(gates) == 5 and all(stage["exit_code"] == 0 for stage in gates)
+                  and len(builds) == 1 and builds[0]["exit_code"] == 0)
         report["interrupted_by_signal"] = cancellation.signal
         report["status"] = "invalid" if report["invalid_reasons"] else ("passed" if passed else "failed")
         report["qualified"] = report["status"] == "passed"

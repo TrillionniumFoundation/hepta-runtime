@@ -185,6 +185,20 @@ def derive_assessment(comparisons, registration, retention, cold, open_requireme
             "unimplemented_required_observations": list(open_requirements)}
 
 
+def build_binding(root, report, source):
+    """A producer's PASS/binding summary cannot replace its original artifacts."""
+    bundle = report.get("build_evidence")
+    if bundle is None:
+        # Earlier receipts only retained one unvalidated JSON file. Preserve
+        # their evidence identity without treating them as source attestation.
+        if report.get("build_summary") is not None:
+            read_artifact(root, report["build_summary"], q.MAX_WIRE_BYTES)
+        return None
+    q.require(isinstance(bundle, dict) and report.get("build_summary") == bundle.get("summary"),
+              "build summary differs from the retained original build bundle")
+    return _module("rea_build_evidence").validate_bundle(root, bundle, source, report["native_before"])
+
+
 def validate_report(repo, receipt_path, expected_sha256, snapshot=None):
     receipt_path = contained_path(repo, receipt_path)
     q.require(q.file_hash(receipt_path) == expected_sha256, "qualification receipt digest mismatch")
@@ -237,6 +251,7 @@ def validate_report(repo, receipt_path, expected_sha256, snapshot=None):
               "runtime identity changed or is outside the reviewed profile")
     q.require(re.fullmatch(r"[0-9a-f]{64}", report["native_before"]["sha256"]) is not None,
               "native binary digest is absent")
+    built = build_binding(root, report, before)
     wires = {label: wire_index(read_artifact(root, report[label + "_wire"])) for label in ("reference", "native")}
     launches = {}
     for label in wires:
@@ -304,11 +319,14 @@ def validate_report(repo, receipt_path, expected_sha256, snapshot=None):
             q.require(owner_closed(close), "cold owner needed forced cleanup")
         except (KeyError, TypeError, ValueError):
             cold = False
-    assessment = derive_assessment(comparisons, registration, retention, cold, q.UNIMPLEMENTED_REQUIREMENTS)
+    outstanding = [name for name in q.UNIMPLEMENTED_REQUIREMENTS
+                   if built is None or name != q.BUILD_REQUIREMENT]
+    assessment = derive_assessment(comparisons, registration, retention, cold, outstanding)
     assessment.update({"profile": q.PROFILE, "receipt": receipt_path.relative_to(repo).as_posix(),
                        "receipt_sha256": expected_sha256, "native_binary_sha256": report["native_before"]["sha256"],
                        "source_tree_sha256": before["tree_sha256"], "schema_equal": registration,
-                       "retention_equal": retention, "cold_session_empty": cold})
+                       "retention_equal": retention, "cold_session_empty": cold,
+                       "build_source_binding": built})
     return assessment
 
 

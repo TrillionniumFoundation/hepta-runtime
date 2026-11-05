@@ -43,9 +43,11 @@ PROVIDER = {"id": "rea-elf-notes", "name": "REA ELF note parser", "version": "1"
 UNIMPLEMENTED_REQUIREMENTS = ["active-cancellation-owner-drain", "deadline-owner-drain",
                             "format-overflow-and-compressed-name-corpus", "build-source-attestation",
                             "oversized-result-retention"]
+BUILD_REQUIREMENT = "build-source-attestation"
 PRODUCER_FILES = ("scripts/rea_full_qualification.py", "scripts/rea_operation_qualification.py",
-                  "scripts/rea_operation_evidence.py", "tests/rea_operation_qualification_tests.py",
-                  "tests/rea_operation_evidence_tests.py")
+                  "scripts/rea_operation_evidence.py", "scripts/rea_build_evidence.py",
+                  "tests/rea_operation_qualification_tests.py", "tests/rea_operation_evidence_tests.py",
+                  "tests/rea_build_evidence_tests.py")
 
 
 class QualificationError(ValueError):
@@ -659,7 +661,9 @@ def arguments(argv=None):
     parser.add_argument("--node", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--build-summary", type=Path,
-                        help="Original build receipt; retained verbatim, never replaced by a handwritten PASS")
+                        help="Original complete Rust matrix receipt with its sibling artifacts; verified before native launch")
+    parser.add_argument("--build-summary-sha256",
+                        help="Exact original build receipt SHA-256; required together with --build-summary")
     return parser.parse_args(argv)
 
 
@@ -667,6 +671,8 @@ def main(argv=None):
     args = arguments(argv)
     for name in ("repo", "binary", "reference_package", "reference_tarball", "node", "output_dir"):
         require(getattr(args, name).is_absolute(), "all paths must be absolute")
+    require((args.build_summary is None) == (args.build_summary_sha256 is None),
+            "--build-summary and --build-summary-sha256 must be supplied together")
     require(not args.output_dir.exists(), "refusing to reuse an evidence directory")
     args.output_dir.mkdir(parents=True, mode=0o700)
     output = args.output_dir
@@ -704,11 +710,6 @@ def main(argv=None):
             require(executed["sha256"] == selected["sha256"] and executed["bytes"] == selected["bytes"],
                     "executing runner/consumer differs from the selected repository: " + name)
             report["producer_execution_files"].append({**executed, "repository_path": name})
-        if args.build_summary is not None:
-            require(args.build_summary.is_absolute(), "build summary must be absolute")
-            with (output / "build-summary.json").open("xb") as handle:
-                handle.write(args.build_summary.read_bytes())
-            report["build_summary"] = artifact_reference(output / "build-summary.json", output)
         from rea_full_qualification import Selection, SourceMonitor
         selection = Selection(args.repo, output / "unused-target", output)
         monitor = SourceMonitor(selection)
@@ -716,7 +717,17 @@ def main(argv=None):
         if producer_repo != args.repo.resolve():
             producer_monitor = SourceMonitor(Selection(producer_repo, output / "unused-producer-target", output))
             producer_monitor.start()
-        report["source_before"] = artifact_json(output, "source-before.json", selection.snapshot())
+        source_before = selection.snapshot()
+        report["source_before"] = artifact_json(output, "source-before.json", source_before)
+        if args.build_summary is not None:
+            from rea_build_evidence import capture_build
+            bundle, binding = capture_build(args.build_summary, args.build_summary_sha256,
+                                            output, source_before, report["native_before"])
+            report["build_evidence"] = bundle
+            report["build_summary"] = bundle["summary"]
+            # Informational only: the consumer replays the retained originals.
+            report["build_binding"] = binding
+            report["unimplemented_required_observations"].remove(BUILD_REQUIREMENT)
         config = output / "runtime.json"
         write_json(config, {"controller_workspace_roots": [str(workspace)], "state_dir": str(output / "state"),
                    "hosts": {"never-connect": {"ssh_target": "never-connect-invalid", "remote_state_dir": str(output / "unused-remote"),

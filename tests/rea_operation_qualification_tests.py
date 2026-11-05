@@ -28,6 +28,23 @@ class OperationQualificationTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 0)
         self.assertIn("--reference-tarball", output.getvalue())
 
+    def test_build_summary_and_pin_are_required_together_before_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "not-created"
+            argv = ["--operation", "inspect_elf_notes", "--repo", "/unused/repo",
+                    "--binary", "/unused/native", "--binary-sha256", "0" * 64,
+                    "--reference-package", "/unused/package", "--reference-tarball", "/unused/package.tgz",
+                    "--node", "/unused/node", "--output-dir", str(output)]
+            for extra in (["--build-summary", "/unused/summary.json"],
+                          ["--build-summary-sha256", "0" * 64]):
+                with self.subTest(extra=extra), mock.patch.object(q, "reference_package") as package, \
+                        mock.patch.object(q.subprocess, "run") as process, \
+                        self.assertRaisesRegex(q.QualificationError, "must be supplied together"):
+                    q.main(argv + extra)
+                package.assert_not_called()
+                process.assert_not_called()
+                self.assertFalse(output.exists())
+
     def test_duplicate_members_and_nonfinite_numbers_fail_closed(self):
         for raw in (b'{"x":1,"x":2}', b'NaN', b'1e400', b'-Infinity'):
             with self.subTest(raw=raw), self.assertRaises(q.QualificationError):
