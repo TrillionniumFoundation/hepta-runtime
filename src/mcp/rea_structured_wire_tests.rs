@@ -81,6 +81,12 @@ fn mismatched_duplicate_error_and_unrelated_results_keep_exact_sdk_bytes() {
 		r#"{"operation":"inspect_analysis_view","n":0,"n":1}"#,
 	));
 	cases.push(result(r#"{"operation":"unrelated","z":1,"a":2}"#));
+	cases.push(result(
+		"{\n\"operation\":\"inspect_analysis_view\",\"z\":1,\"a\":2}",
+	));
+	cases.push(result(
+		"{\r\"operation\":\"inspect_analysis_view\",\"z\":1,\"a\":2}",
+	));
 	let mut error = result(sample());
 	error.is_error = Some(true);
 	cases.push(error);

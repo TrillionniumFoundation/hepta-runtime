@@ -57,6 +57,9 @@ fn ordered_text(result: &CallToolResult) -> Option<&str> {
 		return None;
 	};
 	let text = content.as_text()?.text.as_str();
+	if text.bytes().any(|byte| matches!(byte, b'\n' | b'\r')) {
+		return None;
+	}
 	// Reject duplicate members and mismatches instead of using one
 	// representation to conceal an invalid second representation.
 	let parsed = super::rea_evidence::parse_unique_json(text.as_bytes()).ok()?;

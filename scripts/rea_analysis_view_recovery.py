@@ -269,7 +269,14 @@ def main(argv=None):
                 report["corrupt_input"] = q.identity(corrupt)
             failure = error(session.call("reject-tampered", "inspect_analysis_view", {
                 "source": {"kind": "evidence-file", "path": str(corrupt)}, "view": {"kind": "summary"}}))
-            q.require(failure["code"] == "evidence_integrity_mismatch", "tampered complete parent was accepted")
+            message = "The selected file does not contain valid Evidence. Repair or recreate the file and try again."
+            q.require(failure == {
+                "code": "invalid_request", "category": "invalid_input", "message": message,
+                "retryable": False, "remediation": {"action": message},
+                "details": {"operation": "read", "reason": "wrong-kind", "path": str(corrupt),
+                            "content_issues": [{"path": ["evidence_id"], "reason": "invalid_value",
+                                                "message": "Evidence semantic identifier does not match its record"}]}},
+                "tampered file rejection differs from the independently observed original contract")
             retained = a.payload(session.call("after-import-and-error", "get_evidence_bundle", {"detail": "summary"}))["result"]
             q.require(retained["total_retained_records"] == 8, "import or rejected source changed retention")
             session.close()
