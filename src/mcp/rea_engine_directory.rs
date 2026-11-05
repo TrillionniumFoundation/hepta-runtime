@@ -13,7 +13,7 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, Instant};
 
-fn open_at(parent: &File, name: &OsStr) -> Result<File> {
+pub(crate) fn open_at(parent: &File, name: &OsStr) -> Result<File> {
 	let name = CString::new(name.as_bytes())?;
 	// The parent descriptor, not a re-resolved pathname, selects each child.
 	let fd = unsafe {
@@ -138,7 +138,7 @@ impl Directory {
 		Ok(())
 	}
 
-	pub(crate) fn remove(self) -> Result<()> {
+	pub(crate) fn remove(&self) -> Result<()> {
 		self.verify()?;
 		clear(
 			&self.file,
@@ -198,7 +198,7 @@ fn clear(directory: &File, count: &mut usize, depth: usize, deadline: Instant) -
 	Ok(())
 }
 
-fn mount_id(directory: &File) -> Result<u64> {
+pub(crate) fn mount_id(directory: &File) -> Result<u64> {
 	let mut bytes = Vec::new();
 	File::open(format!("/proc/self/fdinfo/{}", directory.as_raw_fd()))?
 		.take(16_385)

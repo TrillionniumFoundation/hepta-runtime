@@ -43,3 +43,15 @@ The deployed-owner GDB cancellation fixture predates this candidate and remains 
 ## Final focused candidate build
 
 After the nonce/retention changes, all-feature Clippy with `-D warnings`, all 45 jobctl tests, and an all-feature binary build completed with exit zero. The real worker consumer is compiled into the nonce contract test, sharing the same Directory implementation; no parser mock or handwritten valid nonce is substituted. `final-focused-build.json` preserves command output and authoritative terminal metadata. This candidate is explicitly separate from the final combined root build.
+
+## Live scratch sampling follow-up
+
+The first candidate run (runtime `678ca51a70330ccf43040fb27bdba194aab11b9a93167de774e5f683911b6e32`) passed real JADX's eight checks, including original-owner cancellation cleanup and restart readback. Its real Ghidra run stopped during cross-reference analysis with a bare `ENOENT`; the failed original job and successful cleanup receipt remain retained. **The original failing stack was not captured.** Six separate managed xrefs observations with backtraces enabled subsequently succeeded; these do not erase or qualify that failure.
+
+An independent copy of the original scanner, with error-path contexts and an explicit 20 ms enumeration-to-stat scheduling delay, observed a real Ghidra cache file disappear while Java remained live:
+`ghidra/ghidra18396893581974543027.cache`.
+The diagnostic root remained device 2050 / inode 7097944, and Java PID 1222154 / start time 93477577 was in state S. This establishes the live-entry race mechanism under an observer scheduling intervention. It is not a direct attribution of the earlier uninstrumented failure. Full source identities and receipts are in `sampling-race.json`.
+
+The follow-up sampler traverses from the worker's already-owned directory descriptor, verifies the original root and parent before and after, checks enumerated inode identity, and uses no-follow descriptor-relative metadata and directory opens. Only a just-enumerated descendant's confirmed disappearance is a missing sample. A vanished root, replacement inode, permission error, symlink, mounted descendant, unsupported type or traversal-budget failure remains an error. A child that disappears before opening is absent from that sample. For directories already opened, removal requires zero links; a still-live directory moved away is rejected. The sampler does not claim to detect every unobserved rename between samples. This remains sampled accounting, not a hard filesystem quota.
+
+The first four deterministic fixtures passed in an independent small Rust target: disappearing descendant, replaced leaf/root, permission/symlink/resource errors, and vanished root. Review added a fifth regression contrasting unlink of an already-open child directory with moving that live directory away; its focused receipt is retained separately. Runtime/JRE pin and Ghidra installation inventory errors also gain path/stage context without becoming ignorable. The full root build and real Ghidra/JADX/Chrome qualification must still run against one frozen final binary.

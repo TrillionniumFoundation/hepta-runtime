@@ -1,0 +1,43 @@
+{
+  "schema": "hepta.rea.engine-scratch-sampling-review-fixture.v1",
+  "status": {
+    "at_unix_ms": 1793857567893,
+    "audit_recorded": true,
+    "automatic_retry": false,
+    "cancelled": false,
+    "exit_code": 0,
+    "job_id": "1a1aa3e270e-fc05-3fc8",
+    "launch_nonce": "7ea7b2e90da660788e557f62a3d3d2a0",
+    "log_bytes": {
+      "stderr": {
+        "seen": 3735,
+        "stored": 3735
+      },
+      "stdout": {
+        "seen": 1038,
+        "stored": 1038
+      }
+    },
+    "log_errors": {
+      "stderr": null,
+      "stdout": null
+    },
+    "log_synced": {
+      "stderr": true,
+      "stdout": true
+    },
+    "log_truncated": {
+      "stderr": false,
+      "stdout": false
+    },
+    "output_complete": true,
+    "output_durable": true,
+    "state": "succeeded",
+    "terminal_publication_confirmed": true,
+    "terminal_publication_protocol": 1,
+    "timed_out": false
+  },
+  "stdout": "\nrunning 5 tests\ntest usage::tests::sampling_distinguishes_an_unlinked_open_directory_from_a_live_renamed_directory ... ok\ntest usage::tests::sampling_never_treats_a_disappeared_root_as_an_empty_sample ... ok\ntest usage::tests::sampling_preserves_permission_symlink_and_resource_errors ... ok\ntest usage::tests::sampling_refuses_replaced_entries_and_root_rebinding ... ok\ntest usage::tests::vanished_enumerated_file_is_a_sample_absence_with_owned_root_unchanged ... ok\n\ntest result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n{\"scope\": \"five owned-directory fixtures; not runtime rebuild\", \"sources\": {\"rea_engine_directory.rs\": \"cb26383e617645ccb17dc0200c223c9d7c4ba913aa071dc59a751e978a412f16\", \"rea_engine_usage.rs\": \"4f82a82cdbde8e2ec6a97efbf7448c6d65d6d5f77d496b1836d5d529e9dec71c\", \"rea_engine_usage_tests.rs\": \"73e0076701d73792fe700a5d27f4763e4a473f4b018d5e10e496e3f66a0bb03d\"}}\n",
+  "stderr": "   Compiling hepta-engine-usage-fixture v0.0.0 (/home/qian-qi/work/hepta-rea-engine-usage-fixture-ca464-20261105-r1)\nwarning: function `open_at` is never used\n  --> src/rea_engine_directory.rs:16:15\n   |\n16 | pub(crate) fn open_at(parent: &File, name: &OsStr) -> Result<File> {\n   |               ^^^^^^^\n   |\n   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\nwarning: function `open_path` is never used\n  --> src/rea_engine_directory.rs:32:4\n   |\n32 | fn open_path(path: &Path) -> Result<File> {\n   |    ^^^^^^^^^\n\nwarning: function `same_directory` is never used\n  --> src/rea_engine_directory.rs:47:4\n   |\n47 | fn same_directory(left: &Metadata, right: &Metadata) -> bool {\n   |    ^^^^^^^^^^^^^^\n\nwarning: struct `Directory` is never constructed\n  --> src/rea_engine_directory.rs:57:19\n   |\n57 | pub(crate) struct Directory {\n   |                   ^^^^^^^^^\n\nwarning: associated items `create`, `open`, `identity`, `verify`, and `remove` are never used\n   --> src/rea_engine_directory.rs:65:16\n    |\n 64 | impl Directory {\n    | -------------- associated items in this implementation\n 65 |     pub(crate) fn create(parent: &Path, name: &str) -> Result<Self> {\n    |                   ^^^^^^\n...\n 89 |     pub(crate) fn open(path: &Path, device: u64, inode: u64) -> Result<Self> {\n    |                   ^^^^\n...\n110 |     pub(crate) fn identity(&self) -> (u64, u64) {\n    |                   ^^^^^^^^\n...\n114 |     pub(crate) fn verify(&self) -> Result<()> {\n    |                   ^^^^^^\n...\n141 |     pub(crate) fn remove(&self) -> Result<()> {\n    |                   ^^^^^^\n\nwarning: function `clear` is never used\n   --> src/rea_engine_directory.rs:168:4\n    |\n168 | fn clear(directory: &File, count: &mut usize, depth: usize, deadline: Instant) -> Result<()> {\n    |    ^^^^^\n\nwarning: function `mount_id` is never used\n   --> src/rea_engine_directory.rs:201:15\n    |\n201 | pub(crate) fn mount_id(directory: &File) -> Result<u64> {\n    |               ^^^^^^^^\n\nwarning: struct `Budget` is never constructed\n  --> src/rea_engine_usage.rs:15:8\n   |\n15 | struct Budget {\n   |        ^^^^^^\n\nwarning: function `stat_at` is never used\n  --> src/rea_engine_usage.rs:23:4\n   |\n23 | fn stat_at(parent: &File, name: &OsStr) -> std::io::Result<libc::stat> {\n   |    ^^^^^^^\n\nwarning: function `absent` is never used\n  --> src/rea_engine_usage.rs:40:4\n   |\n40 | fn absent(error: &anyhow::Error) -> bool {\n   |    ^^^^^^\n\nwarning: function `scan` is never used\n  --> src/rea_engine_usage.rs:46:4\n   |\n46 | fn scan(\n   |    ^^^^\n\nwarning: function `sample_with` is never used\n   --> src/rea_engine_usage.rs:132:4\n    |\n132 | fn sample_with(\n    |    ^^^^^^^^^^^\n\nwarning: function `sample` is never used\n   --> src/rea_engine_usage.rs:155:15\n    |\n155 | pub(super) fn sample(directory: &Directory, max_bytes: u64, max_entries: usize) -> Result<u64> {\n    |               ^^^^^^\n\nwarning: `hepta-engine-usage-fixture` (lib) generated 13 warnings\nwarning: associated items `open` and `remove` are never used\n   --> src/rea_engine_directory.rs:89:16\n    |\n 64 | impl Directory {\n    | -------------- associated items in this implementation\n...\n 89 |     pub(crate) fn open(path: &Path, device: u64, inode: u64) -> Result<Self> {\n    |                   ^^^^\n...\n141 |     pub(crate) fn remove(&self) -> Result<()> {\n    |                   ^^^^^^\n    |\n    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `hepta-engine-usage-fixture` (lib test) generated 2 warnings (1 duplicate)\n    Finished `test` profile [unoptimized] target(s) in 0.40s\n     Running unittests src/lib.rs (target/debug/deps/hepta_engine_usage_fixture-f22ca26f61e2f17a)\n   Doc-tests hepta_engine_usage_fixture\n",
+  "scope": "Five deterministic real-filesystem fixtures compiled in an independent small Cargo target. No full runtime rebuild; final combined build and real engine suites remain required."
+}

@@ -12,9 +12,13 @@ use std::io::Write;
 use std::ops::Deref;
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use super::engine_directory as directory;
 use directory::Directory;
+
+#[path = "rea_engine_usage.rs"]
+mod usage;
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -28,7 +32,7 @@ struct OwnerBinding {
 }
 
 pub(super) struct Scratch {
-	directory: Directory,
+	directory: Arc<Directory>,
 	owner_managed: bool,
 }
 
@@ -40,6 +44,12 @@ impl Deref for Scratch {
 }
 
 impl Scratch {
+	pub(super) async fn sampled_bytes(&self, max_bytes: u64, max_entries: usize) -> Result<u64> {
+		let directory = Arc::clone(&self.directory);
+		tokio::task::spawn_blocking(move || usage::sample(&directory, max_bytes, max_entries))
+			.await?
+	}
+
 	pub(super) fn cleanup_owner(&self) -> &'static str {
 		if self.owner_managed {
 			"durable_job"
@@ -140,7 +150,7 @@ pub(super) fn create(
 	}
 	eprintln!("hepta_{engine}_owned_scratch={}", directory.path.display());
 	Ok(Scratch {
-		directory,
+		directory: Arc::new(directory),
 		owner_managed: root.is_some(),
 	})
 }

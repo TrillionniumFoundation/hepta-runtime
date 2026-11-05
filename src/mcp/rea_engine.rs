@@ -40,7 +40,9 @@ struct Pin {
 }
 
 async fn pin(path: &str, expected: &str, roots: Vec<String>, deadline: Instant) -> Result<Pin> {
-	let canonical_path = tokio::fs::canonicalize(path).await?;
+	let canonical_path = tokio::fs::canonicalize(path)
+		.await
+		.with_context(|| format!("canonicalize installed Java component {path}"))?;
 	if canonical_path != Path::new(path) {
 		bail!("Java runtime manifest paths must name their canonical installation files");
 	}
@@ -136,38 +138,10 @@ mod engine_directory;
 
 #[path = "rea_engine_scratch.rs"]
 mod scratch_owner;
-use scratch_owner::scratch;
+use scratch_owner::{scratch, Scratch};
 
-async fn disk_usage(root: &Path) -> Result<u64> {
-	let mut dirs = vec![root.to_path_buf()];
-	let mut entries = 0usize;
-	let mut bytes = 0u64;
-	while let Some(dir) = dirs.pop() {
-		let mut listing = tokio::fs::read_dir(dir).await?;
-		while let Some(entry) = listing.next_entry().await? {
-			entries += 1;
-			if entries > MAX_DISK_ENTRIES {
-				bail!("JADX scratch entry budget exceeded");
-			}
-			let metadata = tokio::fs::symlink_metadata(entry.path()).await?;
-			if metadata.is_symlink() {
-				bail!("JADX scratch unexpectedly contains a symlink");
-			}
-			if metadata.is_dir() {
-				dirs.push(entry.path());
-			} else if metadata.is_file() {
-				bytes = bytes
-					.checked_add(metadata.len())
-					.context("JADX scratch size overflow")?;
-				if bytes > MAX_DISK_BYTES {
-					bail!("JADX scratch byte budget exceeded");
-				}
-			} else {
-				bail!("JADX scratch contains an unsupported file type");
-			}
-		}
-	}
-	Ok(bytes)
+async fn disk_usage(root: &Scratch) -> Result<u64> {
+	root.sampled_bytes(MAX_DISK_BYTES, MAX_DISK_ENTRIES).await
 }
 
 fn network_filter() -> Result<Vec<libc::sock_filter>> {
@@ -237,7 +211,7 @@ fn network_filter() -> Result<Vec<libc::sock_filter>> {
 }
 
 struct JavaLaunch<'a> {
-	work: &'a Path,
+	work: &'a Scratch,
 	java_home: &'a str,
 	max_output: usize,
 	deadline: Instant,
@@ -268,11 +242,11 @@ async fn run_java(
 		.env_clear()
 		.env("LC_ALL", "C")
 		.env("JAVA_HOME", java_home)
-		.env("HOME", work)
-		.env("XDG_CONFIG_HOME", work)
-		.env("XDG_CACHE_HOME", work)
-		.env("TMPDIR", work)
-		.current_dir(work)
+		.env("HOME", work.as_os_str())
+		.env("XDG_CONFIG_HOME", work.as_os_str())
+		.env("XDG_CACHE_HOME", work.as_os_str())
+		.env("TMPDIR", work.as_os_str())
+		.current_dir(&**work)
 		.stdin(Stdio::null())
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
@@ -341,11 +315,13 @@ async fn run_java(
 async fn analyze_inner(
 	input: &WorkerRequest,
 	engine: &JavaEngineProfile,
-	work: &Path,
+	work: &Scratch,
 	started: Instant,
 	deadline: Instant,
 ) -> Result<Value> {
-	hash_runtime(&input.profile.runtime_sha256, deadline).await?;
+	hash_runtime(&input.profile.runtime_sha256, deadline)
+		.await
+		.context("verify current runtime identity before JADX execution")?;
 	let java = pin(
 		&input.profile.backend_executable,
 		&input.profile.backend_sha256,

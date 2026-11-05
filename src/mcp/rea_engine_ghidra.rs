@@ -44,20 +44,38 @@ struct Installation {
 
 async fn file_inventory(root: &str) -> Result<BTreeSet<String>> {
 	let base = Path::new(root).join("Ghidra");
-	if !tokio::fs::symlink_metadata(&base).await?.is_dir() {
+	if !tokio::fs::symlink_metadata(&base)
+		.await
+		.with_context(|| format!("inspect Ghidra installation root {}", base.display()))?
+		.is_dir()
+	{
 		bail!("Ghidra installation data root must be a real directory");
 	}
 	let mut directories = vec![base];
 	let mut files = BTreeSet::new();
 	let mut entries = 0usize;
 	while let Some(directory) = directories.pop() {
-		let mut listing = tokio::fs::read_dir(directory).await?;
-		while let Some(entry) = listing.next_entry().await? {
+		let mut listing = tokio::fs::read_dir(&directory).await.with_context(|| {
+			format!("read Ghidra installation directory {}", directory.display())
+		})?;
+		while let Some(entry) = listing.next_entry().await.with_context(|| {
+			format!(
+				"enumerate Ghidra installation directory {}",
+				directory.display()
+			)
+		})? {
 			entries += 1;
 			if entries > 3 * MAX_INSTALLATION_FILES {
 				bail!("Ghidra installation entry budget exceeded");
 			}
-			let metadata = tokio::fs::symlink_metadata(entry.path()).await?;
+			let metadata = tokio::fs::symlink_metadata(entry.path())
+				.await
+				.with_context(|| {
+					format!(
+						"inspect Ghidra installation entry {}",
+						entry.path().display()
+					)
+				})?;
 			if metadata.is_symlink() {
 				bail!("Ghidra installation contains a symlink");
 			}
@@ -107,8 +125,14 @@ async fn installation(
 	protected: &[String],
 	deadline: Instant,
 ) -> Result<Installation> {
-	if tokio::fs::canonicalize(&engine.installation_root).await?
-		!= Path::new(&engine.installation_root)
+	if tokio::fs::canonicalize(&engine.installation_root)
+		.await
+		.with_context(|| {
+			format!(
+				"canonicalize Ghidra installation root {}",
+				engine.installation_root
+			)
+		})? != Path::new(&engine.installation_root)
 	{
 		bail!("Ghidra installation root must be canonical");
 	}
@@ -246,11 +270,13 @@ async fn bridge_snapshot(
 async fn analyze_inner(
 	input: &WorkerRequest,
 	engine: &GhidraEngineProfile,
-	work: &Path,
+	work: &super::Scratch,
 	started: Instant,
 	deadline: Instant,
 ) -> Result<Value> {
-	hash_runtime(&input.profile.runtime_sha256, deadline).await?;
+	hash_runtime(&input.profile.runtime_sha256, deadline)
+		.await
+		.context("verify current runtime identity before Ghidra execution")?;
 	let java = pin(
 		&input.profile.backend_executable,
 		&input.profile.backend_sha256,
