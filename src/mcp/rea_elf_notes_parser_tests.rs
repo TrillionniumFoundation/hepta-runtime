@@ -935,3 +935,119 @@ fn zstandard_dependency_enforces_bounds_without_the_elf_header_adapter() {
 		assert_eq!(output, vec![0; expected]);
 	}
 }
+
+#[test]
+fn zstandard_sequence_header_errors_preserve_literal_and_bitstream_precedence() {
+	// Hand-encoded raw literals followed by absent, short or malformed sequence headers.
+	// Exact diagnostics were independently observed through Node v22.23.4 / libzstd 1.5.7.
+	for (body, message) in [
+		("00", "Data corruption detected"),
+		("0800", "Src size is incorrect"),
+		("080080", "Src size is incorrect"),
+		("08008000", "Data corruption detected"),
+		("0800ff", "Src size is incorrect"),
+		("0800ff00", "Src size is incorrect"),
+		("0800ff0000", "Src size is incorrect"),
+		("0800ff000000", "Data corruption detected"),
+		("080001", "Src size is incorrect"),
+		("08000100", "Data corruption detected"),
+		("080000", "Data corruption detected"),
+		("08000000", "Data corruption detected"),
+	] {
+		let body = unhex(body);
+		let mut payload = unhex("28b52ffd2040");
+		let block = ((body.len() as u32) << 3) | 5;
+		payload.extend_from_slice(&block.to_le_bytes()[..3]);
+		payload.extend_from_slice(&body);
+		assert_eq!(
+			decoded(&compressed_names(&payload, 64, 2, true, true), true, true)
+				.unwrap_err()
+				.to_string(),
+			format!("ELF compressed section-name table could not be decompressed: {message}"),
+			"body {body:02x?}"
+		);
+	}
+}
+
+#[test]
+fn zstandard_oversized_encoded_blocks_follow_complete_first_frame_dispatch() {
+	// The original producer made the compressed alphabet payload. Reducing only its
+	// frame content size to eight makes the encoded block exceed the frame window.
+	let original = unhex(
+		"28b52ffd2008150100d04142434445464748494a4b4c4d4e4f505152535455565758595a0100ceef6a8e01",
+	);
+	let source = "Src size is incorrect";
+	let corrupt = "Data corruption detected";
+	let mut cases = vec![
+		(original.clone(), 20000, source),
+		(original.clone(), 1, source),
+	];
+	let mut trailing = original.clone();
+	trailing.extend_from_slice(b"tail");
+	cases.push((trailing, 20000, source));
+	for missing in [1, 2, 4] {
+		cases.push((
+			original[..original.len() - missing].to_vec(),
+			20000,
+			corrupt,
+		));
+	}
+	for checksum_bytes in [0, 1, 3, 4] {
+		let mut payload = original.clone();
+		payload[4] |= 4;
+		payload.resize(payload.len() + checksum_bytes, 0);
+		cases.push((
+			payload,
+			20000,
+			if checksum_bytes == 4 { source } else { corrupt },
+		));
+	}
+	let mut nonfinal = original.clone();
+	nonfinal[6] &= !1;
+	cases.push((nonfinal.clone(), 20000, corrupt));
+	let mut completed = nonfinal.clone();
+	completed.extend_from_slice(&[1, 0, 0]);
+	cases.push((completed, 20000, source));
+	nonfinal.extend_from_slice(&[7, 0, 0]);
+	cases.push((nonfinal, 20000, corrupt));
+	for (payload, declared, message) in cases {
+		assert_eq!(
+			decoded(
+				&compressed_names(&payload, declared, 2, true, true),
+				true,
+				true
+			)
+			.unwrap_err()
+			.to_string(),
+			format!("ELF compressed section-name table could not be decompressed: {message}"),
+			"payload {payload:02x?}, declared {declared}"
+		);
+	}
+}
+
+#[test]
+fn zstandard_single_pass_error_selection_uses_the_fixed_producer_output_chunk() {
+	for content_size in [16383_u32, 16384, 16385] {
+		let mut payload = unhex("28b52ffd60");
+		payload.extend_from_slice(&((content_size - 256) as u16).to_le_bytes());
+		let block = ((content_size + 1) << 3) | 5;
+		payload.extend_from_slice(&block.to_le_bytes()[..3]);
+		payload.resize(payload.len() + content_size as usize + 1, 0);
+		let message = if content_size <= 16384 {
+			"Src size is incorrect"
+		} else {
+			"Data corruption detected"
+		};
+		assert_eq!(
+			decoded(
+				&compressed_names(&payload, 20000, 2, true, true),
+				true,
+				true
+			)
+			.unwrap_err()
+			.to_string(),
+			format!("ELF compressed section-name table could not be decompressed: {message}"),
+			"frame content size {content_size}"
+		);
+	}
+}

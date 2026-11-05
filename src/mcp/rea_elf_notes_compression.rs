@@ -5,7 +5,7 @@
 
 use std::io::{Cursor, Read};
 
-use ruzstd::decoding::errors::FrameDecoderError;
+use ruzstd::decoding::errors::{DecodeBlockContentError, DecompressBlockError, FrameDecoderError};
 use ruzstd::decoding::{BlockDecodingStrategy, FrameDecoder};
 use zlib_rs::{Inflate, InflateError, InflateFlush, Status};
 
@@ -13,6 +13,7 @@ use super::{format_failure, read_u32, ElfNotesFailure};
 
 const ZSTD_WINDOW_BYTES: u64 = 128 * 1024 * 1024;
 const ZSTD_BLOCK_BYTES: usize = 128 * 1024;
+const ZSTD_OUTPUT_CHUNK_BYTES: u64 = 16 * 1024;
 
 pub(super) enum DecodedNames {
 	Available(Vec<u8>),
@@ -248,8 +249,50 @@ fn zstd_failure(error: FrameDecoderError) -> ElfNotesFailure {
 			decompression_failure("Frame requires too much memory for decoding")
 		}
 		FrameDecoderError::DictNotProvided { .. } => decompression_failure("Dictionary mismatch"),
+		FrameDecoderError::FailedToReadBlockBody(
+			DecodeBlockContentError::DecompressBlockError(
+				DecompressBlockError::SequencesHeaderParseError(_),
+			),
+		) => decompression_failure("Src size is incorrect"),
 		_ => decompression_failure("Data corruption detected"),
 	}
+}
+
+fn zstd_single_pass(payload: &[u8], header: &ZstdHeader) -> bool {
+	// Node's fixed producer offers one 16 KiB output chunk initially. libzstd 1.5.7
+	// takes its single-pass path only when a known-size, complete first frame fits.
+	// That path reports an oversized compressed block as srcSize_wrong; the streaming
+	// header check reports corruption instead. This scan classifies errors only.
+	if header
+		.content_size
+		.is_none_or(|size| size > ZSTD_OUTPUT_CHUNK_BYTES)
+	{
+		return false;
+	}
+	let mut at = header.header_bytes;
+	while payload.len() - at >= 3 {
+		let packed = u32::from(payload[at])
+			| (u32::from(payload[at + 1]) << 8)
+			| (u32::from(payload[at + 2]) << 16);
+		let block_type = (packed >> 1) & 3;
+		if block_type == 3 {
+			return false;
+		}
+		let bytes = if block_type == 1 {
+			1
+		} else {
+			(packed >> 3) as usize
+		};
+		at += 3;
+		if bytes > payload.len() - at {
+			return false;
+		}
+		at += bytes;
+		if packed & 1 != 0 {
+			return !header.checksum || payload.len() - at >= 4;
+		}
+	}
+	false
 }
 
 struct DrainResult {
@@ -317,9 +360,12 @@ fn finish_partial(
 }
 
 fn validate_compressed_block(body: &[u8], maximum_bytes: u64) -> Result<(), ElfNotesFailure> {
-	let Some(&first) = body.first() else {
-		return Ok(());
-	};
+	// libzstd rejects a compressed body shorter than MIN_CBLOCK_SIZE before it
+	// attempts to parse the sequence header. Preserve that earlier format error.
+	if body.len() < 2 {
+		return Err(decompression_failure("Data corruption detected"));
+	}
+	let first = body[0];
 	let kind = first & 3;
 	let size_format = (first >> 2) & 3;
 	let header_bytes = if kind < 2 {
@@ -433,7 +479,13 @@ fn inflate_zstd(payload: &[u8], limit: usize) -> Result<Vec<u8>, ElfNotesFailure
 			return Err(decompression_failure("Data corruption detected"));
 		}
 		if size > ZSTD_BLOCK_BYTES || size as u64 > header.window_bytes {
-			return Err(decompression_failure("Data corruption detected"));
+			return Err(decompression_failure(
+				if block_type == 2 && zstd_single_pass(payload, &header) {
+					"Src size is incorrect"
+				} else {
+					"Data corruption detected"
+				},
+			));
 		}
 		let encoded_bytes = if block_type == 1 { 1 } else { size };
 		let body_at = at + 3;
