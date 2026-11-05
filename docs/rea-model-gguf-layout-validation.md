@@ -177,3 +177,28 @@ whole-provider operation set are not qualified by these fixtures. Other preexist
 differences, including header budgets, zero-rank acceptance, name constraints and
 large-integer capacity policy, remain outside this change. The mapping is pinned:
 newer type IDs are left unknown until independently reviewed.
+
+## Retained index profile upgrade
+
+The retained parser identity is now hepta.rea.model-directory-index.v2. It binds
+validation meaning as well as the page encoding: the previous profile could mark
+unknown empty types as verified and did not derive stable quantized byte extents.
+An old v1 index is explicitly rejected; its immutable files are not rewritten,
+relabeled or silently treated as a v2 proof.
+
+Opening an available original source creates a distinct v2 session. Query and
+read by that new session ID remain available even when old v1 directories are
+retained, and work from the captured bytes after the original source is removed.
+Opening the same source again can reuse its v2 index.
+
+There is a deliberate compatibility limitation: the existing discovery policy
+fails closed on any unsupported index schema. Therefore model_session_list
+continues to report an unsupported-schema error while a retained v1 directory
+is present, including after a v2 session is opened. Old files remain unchanged
+and count against retention quotas. No automatic deletion or migration is
+performed, and an unavailable original source cannot be reopened under v2.
+
+The upgrade regression constructs a hash-valid v1 index containing the actual
+old Q4_0 and unknown-empty meanings, proves its query/read/list rejection,
+checks v2 recapture/reuse and ranges with v1 still present, then verifies that
+the preserved v1 files have not changed.

@@ -796,3 +796,150 @@ async fn gguf_quantized_snapshot_restores_verified_ranges_and_keeps_historical_r
 		super::super::digest_hex(&(64_u8..104).collect::<Vec<_>>())
 	);
 }
+
+#[tokio::test]
+async fn gguf_parser_profile_upgrade_rejects_legacy_proofs_and_recaptures_current_layouts() {
+	let mut bytes = b"GGUF".to_vec();
+	bytes.extend_from_slice(&3_u32.to_le_bytes());
+	bytes.extend_from_slice(&2_u64.to_le_bytes());
+	bytes.extend_from_slice(&0_u64.to_le_bytes());
+	for (name, dtype, elements, offset) in [("weights", 2_u32, 64_u64, 0_u64), ("empty", 31, 0, 64)]
+	{
+		bytes.extend_from_slice(&(name.len() as u64).to_le_bytes());
+		bytes.extend_from_slice(name.as_bytes());
+		bytes.extend_from_slice(&1_u32.to_le_bytes());
+		bytes.extend_from_slice(&elements.to_le_bytes());
+		bytes.extend_from_slice(&dtype.to_le_bytes());
+		bytes.extend_from_slice(&offset.to_le_bytes());
+	}
+	bytes.resize(bytes.len().div_ceil(32) * 32, 0);
+	bytes.extend(0_u8..64);
+	let (_temp, scope) = environment();
+	let params = source(&scope, &bytes);
+	let initial = open_at(&scope, &params).await.unwrap();
+	let (directory, mut legacy) = load(&scope, id(&initial)).await.unwrap();
+	assert_eq!(legacy.parser_schema, "hepta.rea.model-directory-index.v2");
+
+	// Reconstruct a structurally valid, fully hash-bound v1 index with the
+	// actual former meanings: Q4_0 was unknown and removed empty IDs were
+	// incorrectly marked verified. Keep the same captured bytes/name buckets.
+	let page_path = directory.join("tensors-0000.json");
+	let mut rows: Value = serde_json::from_slice(&std::fs::read(&page_path).unwrap()).unwrap();
+	rows[0]["dtype"] = json!("GGML_TYPE_2");
+	rows[0]["byte_length"] = Value::Null;
+	rows[0]["storage_length_verified"] = json!(false);
+	rows[1]["byte_length"] = json!(0);
+	rows[1]["storage_length_verified"] = json!(true);
+	let legacy_page = serde_json::to_vec(&rows).unwrap();
+	legacy.tensor_pages[0].sha256 = hash(&legacy_page);
+	legacy.tensor_pages[0].byte_length = legacy_page.len();
+	legacy.parser_schema = "hepta.rea.model-directory-index.v1".into();
+	legacy.summary["limitations"] = json!([
+		"GGUF dimensions retain their declared fastest-first order.",
+		"Only F32/F16 and zero-element GGUF storage lengths are verified; other layouts are unknown.",
+		"Unknown quantized storage layouts are not inferred from adjacent offsets; tensor-scoped reads of those rows are refused."
+	]);
+	let legacy_manifest = serde_json::to_vec(&legacy).unwrap();
+	let legacy_id = identity(&legacy).unwrap();
+	let legacy_directory = directory.with_file_name(&legacy_id);
+	std::fs::write(&page_path, &legacy_page).unwrap();
+	std::fs::write(directory.join("manifest.json"), &legacy_manifest).unwrap();
+	std::fs::rename(&directory, &legacy_directory).unwrap();
+	index::verify_all(&legacy_directory, &legacy).await.unwrap();
+	verify_snapshot(&legacy_directory, &legacy).await.unwrap();
+
+	let restored_scope = Scope {
+		state: scope.state.clone(),
+		roots: scope.roots.clone(),
+		owner_sha256: scope.owner_sha256.clone(),
+		policy_sha256: scope.policy_sha256.clone(),
+	};
+	assert!(query_at(&restored_scope, query_params(&legacy_id, 0, 2))
+		.await
+		.unwrap_err()
+		.to_string()
+		.contains("schema"));
+	assert!(read_at(&restored_scope, raw_read(&legacy_id, 0, 1))
+		.await
+		.unwrap_err()
+		.to_string()
+		.contains("schema"));
+	assert!(list_at(&restored_scope)
+		.await
+		.unwrap_err()
+		.to_string()
+		.contains("unsupported schema"));
+
+	let current = open_at(&restored_scope, &params).await.unwrap();
+	assert_eq!(current["reused"], false);
+	assert_eq!(current["directory_parses_this_open"], 1);
+	assert_ne!(id(&current), legacy_id);
+	assert_eq!(
+		current["capabilities"]["retained_index_format"],
+		"hepta.rea.model-directory-index.v2"
+	);
+	let reused = open_at(&restored_scope, &params).await.unwrap();
+	assert_eq!(id(&current), id(&reused));
+	assert_eq!(reused["reused"], true);
+	assert_eq!(reused["directory_parses_this_open"], 0);
+	// Discovery remains fail-closed with an unsupported retained profile;
+	// direct access to the separately returned v2 ID still works below.
+	assert!(list_at(&restored_scope)
+		.await
+		.unwrap_err()
+		.to_string()
+		.contains("unsupported schema"));
+	std::fs::remove_file(&params.path).unwrap();
+	let restored = parse(
+		query_at(&restored_scope, query_params(id(&current), 0, 2))
+			.await
+			.unwrap(),
+	);
+	assert_eq!(restored["directory_parse_count"], 0);
+	assert_eq!(restored["result"]["rows"][0]["dtype"], "Q4_0");
+	assert_eq!(restored["result"]["rows"][0]["byte_length"], 36);
+	assert_eq!(
+		restored["result"]["rows"][0]["storage_length_verified"],
+		true
+	);
+	assert_eq!(restored["result"]["rows"][1]["dtype"], "GGML_TYPE_31");
+	assert!(restored["result"]["rows"][1]["byte_length"].is_null());
+	assert_eq!(
+		restored["result"]["rows"][1]["storage_length_verified"],
+		false
+	);
+	let read = ReadModelSessionParams {
+		session_id: id(&current).into(),
+		tensor_name: Some("weights".into()),
+		offset: 34,
+		length: 2,
+	};
+	assert_eq!(
+		parse(read_at(&restored_scope, read.clone()).await.unwrap())["bytes_hex"],
+		"2223"
+	);
+	assert!(read_at(
+		&restored_scope,
+		ReadModelSessionParams {
+			tensor_name: Some("empty".into()),
+			offset: 0,
+			length: 1,
+			..read
+		}
+	)
+	.await
+	.unwrap_err()
+	.to_string()
+	.contains("verified storage layout"));
+	assert!(query_at(&restored_scope, query_params(&legacy_id, 0, 2))
+		.await
+		.is_err());
+	assert_eq!(
+		std::fs::read(legacy_directory.join("manifest.json")).unwrap(),
+		legacy_manifest
+	);
+	assert_eq!(
+		std::fs::read(legacy_directory.join("tensors-0000.json")).unwrap(),
+		legacy_page
+	);
+}
