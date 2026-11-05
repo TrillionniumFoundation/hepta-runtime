@@ -599,6 +599,7 @@ struct State {
 	hash: Sha256,
 	prefix: Vec<u8>,
 	whitespace_only: bool,
+	last_non_whitespace: Option<u8>,
 	eof: bool,
 	small: bool,
 }
@@ -613,6 +614,7 @@ impl State {
 			hash: Sha256::new(),
 			prefix: Vec::new(),
 			whitespace_only: true,
+			last_non_whitespace: None,
 			eof: false,
 			small,
 		}
@@ -819,9 +821,15 @@ impl<R: Read> Read for CheckedReader<R> {
 		state.hash.update(&output[..count]);
 		let needed = 3_usize.saturating_sub(state.prefix.len()).min(count);
 		state.prefix.extend_from_slice(&output[..needed]);
-		state.whitespace_only &= output[..count]
+		if let Some(byte) = output[..count]
 			.iter()
-			.all(|byte| matches!(*byte, b' ' | b'\n' | b'\r' | b'\t'));
+			.rev()
+			.find(|byte| !matches!(**byte, b' ' | b'\n' | b'\r' | b'\t'))
+			.copied()
+		{
+			state.whitespace_only = false;
+			state.last_non_whitespace = Some(byte);
+		}
 		Ok(count)
 	}
 }
@@ -854,7 +862,17 @@ fn parse_reader<R: Read>(reader: R, expected: u64, state: Rc<RefCell<State>>) ->
 			if state.bom() {
 				return Err(invalid_json(BOM_MESSAGE, true));
 			}
-			if state.small && state.eof && state.whitespace_only {
+			let diagnostic = error.to_string();
+			// The frozen small-file reader uses V8 JSON.parse. EOF before a
+			// value has this message, while unfinished strings, numbers and
+			// container delimiters have distinct diagnostics. Do not guess
+			// those diagnostics or the separate large-file streaming profile.
+			let missing_value = error.is_eof()
+				&& ((diagnostic.starts_with("EOF while parsing a list")
+					&& state.last_non_whitespace == Some(b'['))
+					|| (diagnostic.starts_with("EOF while parsing a value")
+						&& matches!(state.last_non_whitespace, Some(b'[' | b',' | b':'))));
+			if state.small && state.eof && (state.whitespace_only || missing_value) {
 				return Err(invalid_json("Unexpected end of JSON input", false));
 			}
 			Err(gap(

@@ -40,6 +40,21 @@ fn supported(value: &Value) -> bool {
 		}) {
 		return true;
 	}
+	const EXPORT_COUNTS: [&str; 3] = ["bytes", "records", "unknowns"];
+	if value.as_object().is_some_and(|object| object.len() == 1)
+		&& bundle.len() == EXPORT_COUNTS.len() + 1
+		&& bundle
+			.get("path")
+			.and_then(Value::as_str)
+			.is_some_and(|path| path.starts_with('/'))
+		&& EXPORT_COUNTS.iter().all(|key| {
+			bundle
+				.get(*key)
+				.and_then(Value::as_u64)
+				.is_some_and(|value| value <= 9_007_199_254_740_991)
+		}) {
+		return true;
+	}
 	const KEYS: [&str; 7] = [
 		"artifacts",
 		"providers",

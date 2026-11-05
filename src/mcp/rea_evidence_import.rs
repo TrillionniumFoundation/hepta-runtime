@@ -157,14 +157,11 @@ fn file_failure(error: FileReadError, path: &str) -> Failure {
 
 fn source_failure(error: ImportSourceError, path: &str) -> Failure {
 	match error {
-		ImportSourceError::SingleRecord {
-			evidence_id,
-			issues,
-		} => {
+		ImportSourceError::SingleRecord { evidence_id } => {
 			let message = format!("Expected an Evidence bundle with records and manifest arrays, but this JSON is one Evidence record ({evidence_id}). Export a session bundle with the MCP export_evidence_bundle tool and supply that file.");
 			Failure(
 				json!({"code":"invalid_request","category":"invalid_input","message":message,"retryable":false,
-				"remediation":{"action":message},"details":{"operation":"read","reason":"wrong-kind","path":path,"content_issues":issues}}),
+				"remediation":{"action":message},"details":{"operation":"read","reason":"wrong-kind","path":path}}),
 			)
 		}
 		ImportSourceError::Source(SourceError::InvalidBundle { message }) => Failure(json!({

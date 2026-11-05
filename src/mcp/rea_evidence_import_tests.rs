@@ -156,7 +156,10 @@ async fn standalone_record_has_import_wrong_kind_and_is_not_implicitly_retained(
 	let result = call(&path, dir.path(), &session, CancellationToken::new()).await;
 	let failure = payload(&result);
 	assert_eq!(failure["error"]["code"], "invalid_request");
-	assert_eq!(failure["error"]["details"]["reason"], "wrong-kind");
+	assert_eq!(
+		failure["error"]["details"],
+		json!({"operation":"read","reason":"wrong-kind","path":path})
+	);
 	assert!(failure["error"]["message"]
 		.as_str()
 		.unwrap()

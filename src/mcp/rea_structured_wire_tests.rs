@@ -216,3 +216,23 @@ async fn cancelled_flush_retains_accepted_frame_until_later_send_drains() {
 		[expected.as_slice(), expected.as_slice()].concat()
 	);
 }
+
+#[test]
+fn export_receipt_wire_order_requires_its_complete_safe_integer_shape() {
+	let text = r#"{"result":{"path":"/tmp/complete.json","bytes":31,"records":2,"unknowns":3}}"#;
+	let mut bytes = frame(&result(text));
+	rewrite(&mut bytes, 16384).unwrap();
+	assert_eq!(structured(&bytes), text);
+	for text in [
+		r#"{"result":{"path":"/tmp/complete.json","bytes":-1,"records":2,"unknowns":3}}"#,
+		r#"{"result":{"path":"/tmp/complete.json","bytes":31,"records":2,"unknowns":9007199254740992}}"#,
+		r#"{"result":{"path":false,"bytes":31,"records":2,"unknowns":3}}"#,
+		r#"{"result":{"path":"/tmp/complete.json","bytes":31,"records":2}}"#,
+		r#"{"result":{"path":"/tmp/complete.json","bytes":31,"records":2,"unknowns":3},"extra":1}"#,
+	] {
+		let mut bytes = frame(&result(text));
+		let original = bytes.clone();
+		rewrite(&mut bytes, 16384).unwrap();
+		assert_eq!(bytes, original, "{text}");
+	}
+}

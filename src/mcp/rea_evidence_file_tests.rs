@@ -632,3 +632,56 @@ fn original_alias_paths_preserve_error_spelling_directory_requirement_and_select
 		);
 	}
 }
+
+#[test]
+fn frozen_value_position_eof_is_exact_without_guessing_other_json_diagnostics() {
+	let reference: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_evidence_file/eof-reference-r1.json"
+	))
+	.unwrap();
+	assert_eq!(
+		reference["node_sha256"],
+		"94efd062ed066c1a0b332e18249859c905e920eeada5df55d24c99b919629a90"
+	);
+	let cases = reference["cases"].as_array().unwrap();
+	assert_eq!(cases.len(), 16);
+	let owned = temporary();
+	let mut exact = 0;
+	let mut gaps = 0;
+	for (index, case) in cases.iter().enumerate() {
+		let input = case["input"].as_str().unwrap();
+		let path = owned.path().join(format!("eof-{index}.json"));
+		std::fs::write(&path, input).unwrap();
+		let admitted = matches!(
+			input,
+			"" | " " | "\n\t" | "[" | "{\"records\":[" | "[1," | "{\"a\":"
+		);
+		let outcome = load(&path, owned.path(), NativeJsonLimits::default());
+		if admitted {
+			match outcome {
+				Err(FileReadError::InvalidJson {
+					message,
+					user_message,
+				}) => {
+					assert_eq!(message, case["message"], "{input:?}");
+					assert!(user_message.is_none());
+				}
+				other => panic!("{input:?}: {other:?}"),
+			}
+			exact += 1;
+		} else {
+			assert!(
+				matches!(
+					outcome,
+					Err(FileReadError::NativeProfileGap {
+						feature: "json-diagnostic-or-value-representation",
+						..
+					})
+				),
+				"{input:?}: {outcome:?}"
+			);
+			gaps += 1;
+		}
+	}
+	assert_eq!((exact, gaps), (7, 9));
+}

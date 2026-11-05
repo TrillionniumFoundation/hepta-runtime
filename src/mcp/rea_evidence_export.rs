@@ -23,10 +23,11 @@
 
 use super::rea_contract::{self, Failure};
 use super::rea_evidence_session::EvidenceSnapshot;
+use super::rea_response_encoding::{self, JsonView, ObjectOrder, PathComponent};
 use super::runtime::effect_owner_fence::AdmissionPermit;
 use rmcp::model::CallToolResult;
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -469,9 +470,38 @@ async fn run_owned(
 	outcome
 }
 
+struct ReceiptOrder;
+impl ObjectOrder for ReceiptOrder {
+	fn keys<'a>(
+		&self,
+		path: &[PathComponent<'_>],
+		object: &'a Map<String, Value>,
+	) -> anyhow::Result<Vec<&'a str>> {
+		match path {
+			[] => rea_response_encoding::declared_keys(object, &["result"]),
+			[PathComponent::Key("result")] => rea_response_encoding::declared_keys(
+				object,
+				&["path", "bytes", "records", "unknowns"],
+			),
+			_ => anyhow::bail!("Export receipt contains an unexpected object"),
+		}
+	}
+}
+
 fn wire(outcome: Outcome) -> CallToolResult {
 	let mut result = match outcome {
-		Ok(receipt) => rea_contract::success(OPERATION, json!({"result":receipt}), None),
+		Ok(receipt) => {
+			let value = json!({"result":receipt});
+			rea_contract::deliver_view(
+				OPERATION,
+				JsonView::Value(&value),
+				Some(&ReceiptOrder),
+				None,
+				false,
+				false,
+				|| Ok(value.clone()),
+			)
+		}
 		Err(error) => error.wire(),
 	};
 	// The frozen contract explicitly lists export as target-content-free.

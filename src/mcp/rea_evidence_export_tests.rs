@@ -1177,3 +1177,30 @@ async fn close_reports_unreleased_cleanup_without_undoing_publication() {
 	assert!(registry.pending().is_empty());
 	assert_eq!(fs::read(&path).unwrap(), EMPTY);
 }
+
+#[test]
+fn frozen_export_receipt_keeps_path_before_bytes_in_both_wire_representations() {
+	let result = wire(Ok(Receipt {
+		path: "/tmp/complete.json".into(),
+		bytes: 31,
+		records: 2,
+		unknowns: 3,
+	}));
+	let expected =
+		r#"{"result":{"path":"/tmp/complete.json","bytes":31,"records":2,"unknowns":3}}"#;
+	assert_eq!(result.content[0].as_text().unwrap().text, expected);
+	assert!(result.meta.is_none());
+	assert_eq!(
+		result.structured_content.as_ref().unwrap(),
+		&serde_json::from_str::<Value>(expected).unwrap()
+	);
+	#[derive(serde::Deserialize)]
+	struct Encoded {
+		#[serde(rename = "structuredContent")]
+		structured: Box<serde_json::value::RawValue>,
+	}
+	let bytes =
+		serde_json::to_vec(&super::super::rea_structured_wire::WireToolResult(&result)).unwrap();
+	let encoded: Encoded = serde_json::from_slice(&bytes).unwrap();
+	assert_eq!(encoded.structured.get(), expected);
+}

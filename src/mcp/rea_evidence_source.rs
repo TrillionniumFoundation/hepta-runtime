@@ -95,10 +95,7 @@ pub(super) struct AuthenticatedBundle {
 #[derive(Debug)]
 pub(super) enum ImportSourceError {
 	Source(SourceError),
-	SingleRecord {
-		evidence_id: String,
-		issues: Vec<Value>,
-	},
+	SingleRecord { evidence_id: String },
 }
 
 impl From<SourceError> for ImportSourceError {
@@ -1533,13 +1530,9 @@ pub(super) fn authenticate_import_with_order<'a>(
 			Ok(())
 		});
 		return match checked.and_then(|()| validation.finish()) {
-			Ok(()) => match shape_error {
-				SourceError::InvalidRecord { issues, .. } => Err(ImportSourceError::SingleRecord {
-					evidence_id: checked_string(&value["evidence_id"])?.to_owned(),
-					issues,
-				}),
-				other => Err(other.into()),
-			},
+			Ok(()) => Err(ImportSourceError::SingleRecord {
+				evidence_id: checked_string(&value["evidence_id"])?.to_owned(),
+			}),
 			Err(SourceError::InvalidRecord { .. }) => Err(bundle_schema_error(shape_error).into()),
 			Err(other) => Err(other.into()),
 		};
