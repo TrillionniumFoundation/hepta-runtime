@@ -61,20 +61,42 @@ fn wide(bytes: &[u8], at: usize) -> ApkResult<u64> {
 	]))
 }
 
-fn safe_zip64(bytes: &[u8], at: usize) -> ApkResult<usize> {
+fn unsupported(detail: &str, zip64: bool, limits: StaticLimits) -> ApkInspectionError {
+	let mut error = ApkInspectionError::unsupported(detail);
+	if limits.frozen {
+		error.reason = if zip64 {
+			format!("This archive uses a Zip64 structure this reader does not decode ({detail}).")
+		} else {
+			error.remediation_action =
+				Some(Box::new("Select a local .apk/.zip/.aab archive.".into()));
+			format!("The selected file is not a ZIP/APK ({detail}).")
+		}
+		.into_boxed_str();
+	}
+	error
+}
+
+fn safe_zip64(bytes: &[u8], at: usize, detail: &str, limits: StaticLimits) -> ApkResult<usize> {
 	let n = wide(bytes, at)?;
 	if n > SAFE_INTEGER {
-		return Err(ApkInspectionError::unsupported("Zip64 sizes exceed safe range").at(at));
+		return Err(unsupported(
+			if limits.frozen {
+				detail
+			} else {
+				"Zip64 sizes exceed safe range"
+			},
+			true,
+			limits,
+		)
+		.at(at));
 	}
 	usize::try_from(n)
-		.map_err(|_| ApkInspectionError::unsupported("Zip64 size exceeds addressable range").at(at))
+		.map_err(|_| unsupported("Zip64 size exceeds addressable range", true, limits).at(at))
 }
 
 pub(super) fn zip_tail(bytes: &[u8], limits: StaticLimits) -> ApkResult<ZipTail> {
 	if bytes.len() < 22 {
-		return Err(ApkInspectionError::unsupported(
-			"shorter than a ZIP EOCD record",
-		));
+		return Err(unsupported("shorter than a ZIP EOCD record", false, limits));
 	}
 	let mut found = Vec::new();
 	for at in (bytes.len().saturating_sub(22 + 65535)..=bytes.len() - 22).rev() {
@@ -85,12 +107,17 @@ pub(super) fn zip_tail(bytes: &[u8], limits: StaticLimits) -> ApkResult<ZipTail>
 		}
 	}
 	if found.len() > 1 {
-		return Err(ApkInspectionError::input("multiple end-of-central-directory records each end the archive; the central directory is ambiguous").at(found[0]));
+		let detail = if limits.frozen {
+			format!("{} end-of-central-directory records each end the archive (one inside another's comment); the central directory is ambiguous", found.len())
+		} else {
+			"multiple end-of-central-directory records each end the archive; the central directory is ambiguous".into()
+		};
+		return Err(ApkInspectionError::input(detail).at(found[0]));
 	}
 	let eocd = found.first().copied().ok_or_else(|| {
 		if bytes.starts_with(b"PK\x03\x04") {
 			ApkInspectionError::input("ZIP local headers present but no end-of-central-directory (truncated or damaged archive)").at(bytes.len())
-		} else { ApkInspectionError::unsupported("no end-of-central-directory record") }
+		} else { unsupported("no end-of-central-directory record", false, limits) }
 	})?;
 	let classic_count = short(bytes, eocd + 10)? as usize;
 	let mut count = classic_count;
@@ -119,11 +146,18 @@ pub(super) fn zip_tail(bytes: &[u8], limits: StaticLimits) -> ApkResult<ZipTail>
 				.at(locator + 4));
 			}
 			if disks > 1 {
-				return Err(ApkInspectionError::unsupported(
+				return Err(unsupported(
 					"multi-disk Zip64 archives are not supported",
+					true,
+					limits,
 				));
 			}
-			let record = safe_zip64(bytes, locator + 8)?;
+			let record = safe_zip64(
+				bytes,
+				locator + 8,
+				"Zip64 EOCD offset exceeds safe range",
+				limits,
+			)?;
 			if record.checked_add(56).is_none_or(|end| end > locator) {
 				return Err(ApkInspectionError::input(
 					"Zip64 EOCD record extends beyond its locator",
@@ -133,9 +167,9 @@ pub(super) fn zip_tail(bytes: &[u8], limits: StaticLimits) -> ApkResult<ZipTail>
 			if span(bytes, record, 4)? != b"PK\x06\x06" {
 				return Err(ApkInspectionError::input("invalid Zip64 EOCD signature").at(record));
 			}
-			central = safe_zip64(bytes, record + 48)?;
-			central_size = safe_zip64(bytes, record + 40)?;
-			count = safe_zip64(bytes, record + 32)?;
+			central = safe_zip64(bytes, record + 48, "Zip64 sizes exceed safe range", limits)?;
+			central_size = safe_zip64(bytes, record + 40, "Zip64 sizes exceed safe range", limits)?;
+			count = safe_zip64(bytes, record + 32, "Zip64 sizes exceed safe range", limits)?;
 			records_start = record;
 		} else if central == u32::MAX as usize || central_size == u32::MAX as usize {
 			return Err(ApkInspectionError::input("missing Zip64 EOCD locator").at(eocd));
@@ -175,19 +209,38 @@ pub(super) fn signing_block<'a>(
 		return Ok(None);
 	}
 	if end < 24 {
-		return Err(ApkInspectionError::input("bad APK signing-block trailing size").at(end));
+		// The frozen producer reports cdOffset - 24, which can be negative.
+		// Its exact signed byte location is supplied by the caller's block boundary.
+		return Err(if limits.frozen {
+			ApkInspectionError::input("bad trailing size")
+		} else {
+			ApkInspectionError::input("bad APK signing-block trailing size").at(end)
+		});
 	}
 	let size = wide(bytes, end - 24)?;
 	if !(24..=SAFE_INTEGER).contains(&size) {
-		return Err(ApkInspectionError::input("bad APK signing-block trailing size").at(end - 24));
+		return Err(ApkInspectionError::input(if limits.frozen {
+			"bad trailing size"
+		} else {
+			"bad APK signing-block trailing size"
+		})
+		.at(end - 24));
 	}
 	let start = (end as u64).checked_sub(size + 8).ok_or_else(|| {
-		ApkInspectionError::input("APK signing block extends before file start").at(end)
+		ApkInspectionError::input(if limits.frozen {
+			"block extends before file start"
+		} else {
+			"APK signing block extends before file start"
+		})
+		.at(end)
 	})? as usize;
 	if wide(bytes, start)? != size {
-		return Err(
-			ApkInspectionError::input("APK signing-block leading/trailing size mismatch").at(start),
-		);
+		return Err(ApkInspectionError::input(if limits.frozen {
+			"leading/trailing size mismatch"
+		} else {
+			"APK signing-block leading/trailing size mismatch"
+		})
+		.at(start));
 	}
 	if size + 8 > limits.block_bytes as u64 {
 		return Err(ApkInspectionError::capacity(
@@ -200,11 +253,21 @@ pub(super) fn signing_block<'a>(
 	let mut pairs = Vec::new();
 	while at < pairs_end {
 		if pairs_end - at < 8 {
-			return Err(ApkInspectionError::input("signing-block pair length out of range").at(at));
+			return Err(ApkInspectionError::input(if limits.frozen {
+				"pair length out of range"
+			} else {
+				"signing-block pair length out of range"
+			})
+			.at(at));
 		}
 		let length = wide(bytes, at)?;
 		if length < 4 || length > (pairs_end - at - 8) as u64 {
-			return Err(ApkInspectionError::input("signing-block pair length out of range").at(at));
+			return Err(ApkInspectionError::input(if limits.frozen {
+				"pair length out of range"
+			} else {
+				"signing-block pair length out of range"
+			})
+			.at(at));
 		}
 		if pairs.len() >= limits.pairs {
 			return Err(ApkInspectionError::capacity(
@@ -303,7 +366,11 @@ pub(super) fn signature_file(name: &str) -> String {
 	}
 }
 
-pub(super) fn directory<'a>(bytes: &'a [u8], tail: &ZipTail) -> ApkResult<Directory<'a>> {
+pub(super) fn directory<'a>(
+	bytes: &'a [u8],
+	tail: &ZipTail,
+	limits: StaticLimits,
+) -> ApkResult<Directory<'a>> {
 	let end = tail.central + tail.central_size;
 	let mut at = tail.central;
 	let mut apksig_end = at;
@@ -367,10 +434,16 @@ pub(super) fn directory<'a>(bytes: &'a [u8], tail: &ZipTail) -> ApkResult<Direct
 		}
 	}
 	if at != end {
-		return Err(ApkInspectionError::input(
-			"central-directory records do not consume the declared extent",
-		)
-		.at(at));
+		let detail = if limits.frozen {
+			format!(
+				"{} bytes of the declared central directory remain after {} records",
+				end as i64 - at as i64,
+				tail.count
+			)
+		} else {
+			"central-directory records do not consume the declared extent".into()
+		};
+		return Err(ApkInspectionError::input(detail).at(at));
 	}
 	// Hashes only group candidate names. Equality and order within every group
 	// use the full Java-decoded name, so a collision never invents a duplicate.

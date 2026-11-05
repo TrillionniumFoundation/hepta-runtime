@@ -17,6 +17,120 @@
 
 use super::*;
 
+fn refusal_fixture_bytes(row: &serde_json::Value) -> Vec<u8> {
+	use std::io::Read;
+	let encoded = row["data"].as_str().unwrap();
+	assert_eq!(row["encoding"], "zlib-hex");
+	assert_eq!(encoded.len() % 2, 0);
+	let compressed = encoded
+		.as_bytes()
+		.chunks_exact(2)
+		.map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
+		.collect::<Vec<_>>();
+	assert_eq!(
+		fingerprint(&compressed),
+		row["compressed_sha256"].as_str().unwrap()
+	);
+	let size = row["bytes"].as_u64().unwrap();
+	assert!(
+		size <= 8 * 1024 * 1024,
+		"large file-size fixture belongs to capture tests"
+	);
+	let mut bytes = Vec::new();
+	flate2::read::ZlibDecoder::new(compressed.as_slice())
+		.take(size + 1)
+		.read_to_end(&mut bytes)
+		.unwrap();
+	assert_eq!(bytes.len() as u64, size);
+	assert_eq!(fingerprint(&bytes), row["sha256"].as_str().unwrap());
+	bytes
+}
+
+#[test]
+fn frozen_refusals_preserve_the_complete_original_producer_facts() {
+	let input: serde_json::Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_apk_signature/service-error-bytes-r1.json"
+	))
+	.unwrap();
+	let golden: serde_json::Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_apk_signature/service-errors-r1.json"
+	))
+	.unwrap();
+	let cases = input["cases"].as_array().unwrap();
+	assert_eq!(cases.len(), 24);
+	assert_eq!(input["capture_only"].as_array().unwrap().len(), 1);
+	for case in cases {
+		let bytes = refusal_fixture_bytes(case);
+		let expected = golden["cases"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.find(|row| row["name"] == case["name"])
+			.unwrap();
+		let error = inspect_with_limits(&bytes, StaticLimits::REA_6_8_0).unwrap_err();
+		assert_eq!(
+			serde_json::to_value(error.tag).unwrap(),
+			expected["typed_error"]["_tag"],
+			"{}",
+			case["name"]
+		);
+		let details = &expected["expected"]["details"];
+		let reason = if error.tag == ApkErrorTag::AnalysisInputError {
+			&details["issues"][0]["message"]
+		} else {
+			&details["reason"]
+		};
+		assert_eq!(
+			error.reason.as_ref(),
+			reason.as_str().unwrap(),
+			"{}",
+			case["name"]
+		);
+		if error.resource == Some(ApkResource::Capacity) {
+			assert_eq!(
+				serde_json::to_value(&error.reported_limits).unwrap(),
+				details["reported_limits"],
+				"{}",
+				case["name"]
+			);
+		}
+		if error.tag == ApkErrorTag::AnalysisUnsupportedTargetError {
+			assert_eq!(
+				error.remediation_action.as_deref().map(String::as_str),
+				expected["typed_error"]["remediationAction"].as_str(),
+				"{}",
+				case["name"]
+			);
+		}
+	}
+}
+
+#[test]
+fn legacy_profile_preserves_the_observed_pre_change_results() {
+	let input: serde_json::Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_apk_signature/service-error-bytes-r1.json"
+	))
+	.unwrap();
+	assert_eq!(
+		input["legacy_baseline_binary_sha256"],
+		"9399f9799852deba4f03c9616a424326cbeb0ac008d74c76e083498bc9707558"
+	);
+	for case in input["cases"].as_array().unwrap() {
+		let bytes = refusal_fixture_bytes(case);
+		let result = match inspect(&bytes) {
+			Ok(value) => serde_json::json!({"ok": true, "value": value}),
+			Err(error) => serde_json::json!({"ok": false, "error": error}),
+		};
+		let expected = input["legacy_expected"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.find(|row| row["name"] == case["name"])
+			.unwrap();
+		assert_eq!(result, expected["result"], "{}", case["name"]);
+	}
+}
+
 #[test]
 fn path_binding_counts_the_entire_utf8_json_at_the_frozen_boundary() {
 	let mut inspection = inspect_with_limits(CUSTOM, StaticLimits::REA_6_8_0).unwrap();

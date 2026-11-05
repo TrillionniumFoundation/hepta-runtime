@@ -128,12 +128,14 @@ pub struct ApkInspectionError {
 	pub tag: ApkErrorTag,
 	pub operation: Box<str>,
 	pub reason: Box<str>,
-	pub path: Option<String>,
+	pub path: Option<Box<str>>,
 	pub offset: Option<usize>,
 	pub scheme: Option<Box<str>>,
 	pub resource: Option<ApkResource>,
 	pub reported_limits: Box<BTreeMap<String, usize>>,
 	pub timeout_ms: Option<u64>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub remediation_action: Option<Box<String>>,
 }
 
 impl ApkInspectionError {
@@ -148,6 +150,7 @@ impl ApkInspectionError {
 			resource: None,
 			reported_limits: Box::default(),
 			timeout_ms: None,
+			remediation_action: None,
 		}
 	}
 
@@ -643,7 +646,17 @@ fn scheme<'a>(
 			uninterpreted: reader.remaining(),
 		})
 	};
-	decode().map_err(|e: ApkInspectionError| e.in_scheme(name))
+	decode().map_err(|e: ApkInspectionError| {
+		let mut error = e.in_scheme(name);
+		if limits.frozen && error.tag == ApkErrorTag::AnalysisInputError {
+			error.reason = format!(
+				"Malformed APK Signature Scheme {name} block: {}.",
+				error.reason
+			)
+			.into_boxed_str();
+		}
+		error
+	})
 }
 
 fn digest_algorithm(id: u32) -> DigestAlgorithm {
@@ -702,10 +715,7 @@ impl OutputBudget {
 	fn add(&mut self, bytes: usize) -> ApkResult<()> {
 		self.used = self.used.saturating_add(bytes);
 		if self.used > self.limits.output_bytes {
-			return Err(ApkInspectionError::capacity(
-				"output-bytes",
-				self.limits.output_bytes,
-			));
+			return Err(output_budget_error(self.used as u64, self.limits));
 		}
 		Ok(())
 	}
@@ -723,6 +733,83 @@ impl OutputBudget {
 		bounded(bytes, "certificate-bytes", self.limits.certificate_bytes)?;
 		Ok(certificate::facts(bytes))
 	}
+}
+
+/// The frozen producer counts the entire declared projection after every
+/// scheme has decoded, before certificate facts or digest hex are expanded.
+/// In particular an early oversized scheme must not hide a later decode error.
+fn projected_output_bytes(schemes: [&RawScheme<'_>; 3], v1_bytes: u64, stamp_bytes: usize) -> u64 {
+	let mut total = 4096 + 256 + 4 * stamp_bytes as u64 + v1_bytes;
+	for scheme in schemes {
+		for signer in &scheme.signers {
+			total += 512 + 256 + 4 * signer.certificate.map_or(0, <[u8]>::len) as u64;
+			for digest in &signer.digests {
+				total += 160 + 2 * digest.bytes.len() as u64;
+			}
+			total += 160 * signer.signatures.len() as u64;
+			for (certificate, _) in &signer.rotation.nodes {
+				total += 192 + 256 + 4 * certificate.len() as u64;
+			}
+		}
+	}
+	total
+}
+
+fn output_budget_error(bytes: u64, limits: StaticLimits) -> ApkInspectionError {
+	let mut error = ApkInspectionError::capacity("output-bytes", limits.output_bytes);
+	if limits.frozen {
+		error.reason = format!(
+			"The decoded signing report ({bytes} bytes) exceeds the {}-byte output budget.",
+			limits.output_bytes,
+		)
+		.into_boxed_str();
+	}
+	error
+}
+
+fn capacity_failure(mut error: ApkInspectionError, limits: StaticLimits) -> ApkInspectionError {
+	if !limits.frozen || error.resource != Some(ApkResource::Capacity) {
+		return error;
+	}
+	let Some((key, limit)) = error.reported_limits.first_key_value() else {
+		return error;
+	};
+	// These already carry the complete projected or measured byte count.
+	if key == "max_output_bytes" {
+		return error;
+	}
+	let reason = if let Some(scheme) = &error.scheme {
+		let resource = key.strip_prefix("max_").unwrap_or(key).replace('_', "-");
+		format!("APK Signature Scheme {scheme} holds more {resource} than the {limit} limit.")
+	} else {
+		match key.as_str() {
+			"max_signing_block_pairs" => {
+				format!("APK Signing Block holds more signing-block-pairs than the {limit} limit.")
+			}
+			"max_v1_signature_entries" => format!(
+				"The central directory holds more than {limit} META-INF v1 signing entries."
+			),
+			"max_v1_signers" => {
+				format!("The archive pairs more than {limit} v1 signature blocks with .SF files.")
+			}
+			_ => return error,
+		}
+	};
+	error.reason = reason.into_boxed_str();
+	error
+}
+
+fn input_failure(
+	mut error: ApkInspectionError,
+	limits: StaticLimits,
+	boundary: &str,
+	fallback_offset: i64,
+) -> ApkInspectionError {
+	if limits.frozen && error.tag == ApkErrorTag::AnalysisInputError {
+		let offset = error.offset.map_or(fallback_offset, |offset| offset as i64);
+		error.reason = format!("{boundary} at byte {offset}: {}.", error.reason).into_boxed_str();
+	}
+	error
 }
 
 fn signer_facts(
@@ -977,7 +1064,9 @@ fn posture(schemes: &SigningSchemes, stamp: &SourceStamp) -> (SigningPosture, Op
 			let fp = match rotation.filter(|r| r.present && fp.is_some()) {
 				None => fp,
 				Some(rotation) if rotation.decode_error.is_some() => {
-					note = Some(format!("v1_signers_match_block_signers is null: the {scheme} signer's declared rotation lineage could not be decoded, so the original certificate v1 is expected to carry is unknown."));
+					note = Some(format!(
+						"v1_signers_match_block_signers is null: the {scheme} signer's declared rotation lineage could not be decoded, so the original certificate v1 is expected to carry is unknown."
+					));
 					None
 				}
 				Some(rotation) => {
@@ -986,7 +1075,9 @@ fn posture(schemes: &SigningSchemes, stamp: &SourceStamp) -> (SigningPosture, Op
 						.first()
 						.and_then(|n| fingerprint_of(&n.certificate));
 					if origin.is_none() {
-						note = Some(format!("v1_signers_match_block_signers is null: the {scheme} signer's declared rotation lineage names no readable original certificate, so the original certificate v1 is expected to carry is unknown."));
+						note = Some(format!(
+							"v1_signers_match_block_signers is null: the {scheme} signer's declared rotation lineage names no readable original certificate, so the original certificate v1 is expected to carry is unknown."
+						));
 					}
 					origin
 				}
@@ -1074,25 +1165,56 @@ pub(super) fn inspect_with_limits(
 	bytes: &[u8],
 	limits: StaticLimits,
 ) -> ApkResult<ApkStaticInspection> {
+	inspect_inner(bytes, limits).map_err(|error| capacity_failure(error, limits))
+}
+
+fn inspect_inner(bytes: &[u8], limits: StaticLimits) -> ApkResult<ApkStaticInspection> {
 	if bytes.len() > limits.input_bytes {
 		let mut e = ApkInspectionError::capacity("input-bytes", limits.input_bytes);
 		e.resource = Some(ApkResource::FileSize);
 		return Err(e);
 	}
-	let tail = archive::zip_tail(bytes, limits)?;
-	let block = archive::signing_block(bytes, &tail, limits)?;
-	let directory = archive::directory(bytes, &tail)?;
+	let tail = archive::zip_tail(bytes, limits)
+		.map_err(|error| input_failure(error, limits, "Damaged ZIP/APK", 0))?;
+	let block = archive::signing_block(bytes, &tail, limits).map_err(|error| {
+		input_failure(
+			error,
+			limits,
+			"Malformed APK Signing Block",
+			tail.central as i64 - 24,
+		)
+	})?;
+	let directory = archive::directory(bytes, &tail, limits).map_err(|error| {
+		input_failure(
+			error,
+			limits,
+			"Malformed ZIP central directory",
+			tail.central as i64,
+		)
+	})?;
 	v1::validate_count(&directory)?;
+	let entries_end = block.as_ref().map_or(tail.central, |b| b.start);
+	let prepared_v1 = if limits.frozen {
+		Some(v1::prepare(bytes, &directory, entries_end)?)
+	} else {
+		None
+	};
 	let v2 = scheme(&block, V2, "v2", limits)?;
 	let v3 = scheme(&block, V3, "v3", limits)?;
 	let v31 = scheme(&block, V31, "v3.1", limits)?;
-	let mut budget = OutputBudget::new(limits, stamp_pair(&block).map_or(0, <[u8]>::len))?;
-	let (v1, v1_notes) = v1::inspect(
-		bytes,
-		&directory,
-		block.as_ref().map_or(tail.central, |b| b.start),
-		&mut budget,
-	)?;
+	let stamp_bytes = stamp_pair(&block).map_or(0, <[u8]>::len);
+	if let Some(prepared) = &prepared_v1 {
+		let projected =
+			projected_output_bytes([&v2, &v3, &v31], prepared.projected_bytes(), stamp_bytes);
+		if projected > limits.output_bytes as u64 {
+			return Err(output_budget_error(projected, limits));
+		}
+	}
+	let mut budget = OutputBudget::new(limits, stamp_bytes)?;
+	let (v1, v1_notes) = match prepared_v1 {
+		Some(prepared) => prepared.materialize(&mut budget)?,
+		None => v1::inspect(bytes, &directory, entries_end, &mut budget)?,
+	};
 	let can_recompute =
 		block.is_some() && tail.central.checked_add(tail.central_size) == Some(tail.eocd);
 	let requested = v2
@@ -1259,17 +1381,7 @@ fn check_serialized_output(
 ) -> ApkResult<()> {
 	let bytes = serialized_output_bytes(inspection)?;
 	if bytes > limits.output_bytes {
-		let mut error = ApkInspectionError::capacity("output-bytes", limits.output_bytes);
-		if limits.frozen {
-			// apkSignatureFailures.js::apkOutputBudgetError: the measured size is
-			// explanatory, while max_output_bytes remains the sole fixed limit.
-			error.reason = format!(
-				"The decoded signing report ({bytes} bytes) exceeds the {}-byte output budget.",
-				limits.output_bytes,
-			)
-			.into_boxed_str();
-		}
-		return Err(error);
+		return Err(output_budget_error(bytes as u64, limits));
 	}
 	Ok(())
 }
