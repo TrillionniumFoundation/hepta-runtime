@@ -7,7 +7,7 @@
 //! The original REA chunk budget is separate. This guard includes the actual
 //! SDK result discriminator, runtime metadata, exact request ID and newline.
 //! It also covers SDK protocol errors produced before `ServerHandler::call_tool`.
-//! Only the five explicitly named tools with successful private raw admission
+//! Only the five explicitly named tools with successful private raw capture
 //! are covered. Other requests and transports without that admission pass through.
 
 use super::rea_contract::{self, Failure};
@@ -130,12 +130,13 @@ impl FrameContext {
 			_ => return None,
 		};
 		// These facts can only be constructed by the bounded raw STDIO reader.
-		// The proof covers the entire admitted tools/call line, including ID.
-		if context
+		// The proof covers the entire captured tools/call line, including ID.
+		// Invalid argument shapes still have that proof; their protocol errors
+		// need final-frame accounting as much as successful business results.
+		if !context
 			.extensions
 			.get::<ReaRawArguments>()?
-			.protocol_error()
-			.is_some()
+			.has_bounded_frame()
 		{
 			return None;
 		}

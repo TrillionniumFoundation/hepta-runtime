@@ -122,6 +122,7 @@ enum Outcome {
 	Small,
 	Large,
 	RpcError,
+	RawProtocolError,
 	Task,
 }
 
@@ -135,10 +136,15 @@ impl ServerHandler for Handler {
 	async fn call_tool(
 		&self,
 		request: CallToolRequestParams,
-		_context: RequestContext<RoleServer>,
+		context: RequestContext<RoleServer>,
 	) -> Result<CallToolResponse, ErrorData> {
 		self.calls.fetch_add(1, Ordering::SeqCst);
 		match self.outcome {
+			Outcome::RawProtocolError => Err(context
+				.extensions
+				.get::<ReaRawArguments>()
+				.and_then(ReaRawArguments::protocol_error)
+				.expect("fixture requires a real raw argument protocol error")),
 			Outcome::RpcError => Err(ErrorData::invalid_params(
 				"independent protocol refusal ".repeat(32),
 				Some(json!({"preserve":"only while bounded"})),
@@ -458,4 +464,82 @@ fn wrapper_preserves_inner_advertised_configuration_and_protocol_versions() {
 		Service::supported_protocol_versions(&wrapped).as_ref(),
 		versions.as_slice()
 	);
+}
+
+/// Malformed arguments are still a bounded, privately captured raw frame.
+/// The real handler rejects them before producing a business result, so that
+/// refusal must pass the same final SDK frame guard as every other outcome.
+#[tokio::test]
+async fn actual_sdk_malformed_arguments_remain_under_final_frame_budget() {
+	for modern in [false, true] {
+		for arguments in [
+			Value::Null,
+			json!(true),
+			json!(7),
+			json!("value"),
+			json!([]),
+		] {
+			let mut params = tool_params("rea_inspect_elf_notes", modern);
+			params["arguments"] = arguments.clone();
+			let raw = maximal_call(params);
+			let version = if modern { "2026-07-28" } else { "2024-11-05" };
+			let baseline = handler(Outcome::RawProtocolError);
+			let old = exchange(baseline.clone(), version, raw.clone(), true).await;
+			assert_eq!(baseline.calls.load(Ordering::SeqCst), 1);
+			assert_eq!(old.value["error"]["code"], -32602);
+			assert!(
+				old.raw_bytes > rea_contract::RESPONSE_BYTES,
+				"unguarded malformed-argument fixture must demonstrate a real overflow"
+			);
+			let guarded = handler(Outcome::RawProtocolError);
+			let new = exchange(ReaFramedService::new(guarded.clone()), version, raw, true).await;
+			assert_eq!(guarded.calls.load(Ordering::SeqCst), 1);
+			println!(
+				"{}",
+				json!({
+					"case":"raw-argument-protocol-error", "modern":modern, "arguments":arguments,
+					"input_bytes":old.input_bytes, "unguarded_response_bytes":old.raw_bytes,
+					"guarded_response_bytes":new.raw_bytes, "same_id_preserved":true
+				})
+			);
+			assert!(
+				new.raw_bytes <= rea_contract::RESPONSE_BYTES,
+				"admitted malformed arguments escaped final frame accounting: {} bytes",
+				new.raw_bytes
+			);
+			assert!(new.value.get("error").is_some());
+			assert!(new.value.get("result").is_none());
+		}
+	}
+}
+
+#[tokio::test]
+async fn actual_sdk_small_raw_argument_protocol_errors_preserve_diagnostics() {
+	for arguments in [
+		Value::Null,
+		json!(false),
+		json!(1),
+		json!("value"),
+		json!([]),
+	] {
+		let mut params = tool_params("rea_inspect_elf_notes", true);
+		params["arguments"] = arguments;
+		let raw = call(params, json!("raw-shape-error"));
+		let old = exchange(
+			handler(Outcome::RawProtocolError),
+			"2026-07-28",
+			raw.clone(),
+			true,
+		)
+		.await;
+		let new = exchange(
+			ReaFramedService::new(handler(Outcome::RawProtocolError)),
+			"2026-07-28",
+			raw,
+			true,
+		)
+		.await;
+		assert_eq!(new.value, old.value);
+		assert_eq!(new.value["error"]["code"], -32602);
+	}
 }

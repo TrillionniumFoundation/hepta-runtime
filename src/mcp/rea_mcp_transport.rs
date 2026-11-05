@@ -79,6 +79,13 @@ pub(crate) struct ReaRawArguments {
 }
 
 impl ReaRawArguments {
+	/// Successful capture and JSON decoding prove that the complete request,
+	/// including its ID, fit the raw frame limit. Argument shape is a separate
+	/// decision: a non-object argument still needs a bounded protocol refusal.
+	pub(crate) fn has_bounded_frame(&self) -> bool {
+		self.failure.is_none()
+	}
+
 	/// JavaScript Object.keys order for arguments (`[]`), filters, static view or Evidence source.
 	pub(crate) fn object_keys(&self, path: &[&str]) -> Option<&[String]> {
 		let node = match path {

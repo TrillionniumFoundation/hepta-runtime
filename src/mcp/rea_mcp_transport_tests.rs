@@ -500,3 +500,23 @@ async fn evidence_source_keys_stay_private_and_follow_last_duplicate_source() {
 	.await;
 	assert!(raw(&null).object_keys(&["source"]).is_none());
 }
+
+#[test]
+fn bounded_frame_admission_is_independent_from_argument_shape() {
+	for arguments in ["null", "true", "7", "\"value\"", "[]"] {
+		let request = format!(
+			r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"rea_inspect_elf_notes","arguments":{arguments}}}}}"#
+		);
+		let raw = ReaRawArguments::from_line(CapturedLine::Bytes(request.into_bytes()));
+		assert!(raw.has_bounded_frame());
+		assert!(raw.protocol_error().is_some());
+	}
+	for raw in [
+		ReaRawArguments::from_line(CapturedLine::OverBudget),
+		ReaRawArguments::from_line(CapturedLine::Bytes(b"invalid".to_vec())),
+		ReaRawArguments::failed("raw capture unavailable"),
+	] {
+		assert!(!raw.has_bounded_frame());
+		assert!(raw.protocol_error().is_some());
+	}
+}
