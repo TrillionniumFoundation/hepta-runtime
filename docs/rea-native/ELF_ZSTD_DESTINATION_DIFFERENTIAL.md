@@ -12,10 +12,12 @@ comparison. Their SHA-256 is
 `4ee44f2adbb29c5ea185282d0e58e228c7dee310fdd4cd8cd7d2905ac9dd0ec1`.
 The actual original parser and the pre-change production Rust parser were rerun:
 84 complete JSON responses differed. The conservative checkpoint parser reports
-34 differences, all from those original 84; there are no new differences. An
-intermediate prototype had 26 differences, but eight were restored when the
-proof stopped depending on zero-padded missing input bits. The checkpoint closes
-50 original differences, without treating that intermediate 58 count as final. These
+4 differences, all from those original 84; there are no new differences. The
+first conservative checkpoint closed 50 and retained 34. The follow-up closed
+another 26 through destination upper bounds and the next-sequence minimum, then
+four through wholly present match-length fields. Thus 80 original differences
+are closed. An intermediate prototype's lower count was not retained when its
+proof depended on zero-padded missing input bits; that history remains recorded. These
 numbers concern the standalone adapters invoking the real parsers, not a shipping
 Runtime/MCP operation or mock engine.
 
@@ -47,11 +49,12 @@ tracks the destination position across blocks and streaming buffer reuse.
 
 A single-pass decoder may place copied literals after the maximum block plus
 32 bytes inside that output region. Consequently its actual sequence boundary
-can be smaller than the nominal 16 KiB chunk. This checkpoint only infers that
-placement for raw/RLE literal sections of at most 64 bytes, which fit the minimum
-supported literal scratch. Larger, split and Huffman literal layouts retain their
-existing validation. It does not replace every window/format error with a
-destination error.
+can be smaller than the nominal 16 KiB chunk. For raw/RLE literals this allocator
+branch precedes the configurable scratch/split decision, so its boundary does not
+require an assumed scratch size. Other raw/RLE layouts use the entire remaining
+destination only as a safe upper bound: exceeding it proves exhaustion even if a
+split layout allows less. Huffman layout is not inferred. The adapter does not
+replace every window/format error with a destination error.
 
 The optional vendor hook validates a decoded sequence's output length while
 decoding that sequence, before the later bitstream exhaustion check. The proof
@@ -59,13 +62,27 @@ checks output capacity before literal and offset validity, following the origina
 decoder's execution order. A prior invalid literal/offset prefix disables further
 capacity inference, so a later sequence cannot replace that earlier data error.
 An incomplete sequence is not inferred from the backend's zero-padded missing
-bits: only a lower bound from an already complete FSE state may prove exhaustion.
-If that lower bound does not exceed the destination, the original short-bitstream
-error is preserved. Only a distinct typed `OutputCapacityExceeded` result selects
+bits: only a lower bound from an already complete FSE state and wholly present
+extra fields may prove exhaustion. Extra fields are read offset, match length,
+then literal length; a complete match-length field remains known when the later
+literal-length field is short. If the known lower bound does not exceed the
+destination, the original short-bitstream error is preserved. Only a distinct typed `OutputCapacityExceeded` result selects
 the destination message. Ordinary decoder consumers default to no additional capacity inference;
 the frame/window bounds remain enforced. The hook persists until explicitly
 updated and is only used here without an external dictionary. It is not a general
 output-budget API for raw blocks or zero-sequence literal copies.
+
+If a complete valid sequence fills the destination but the section declares
+another sequence, that next sequence needs at least a three-byte match. This
+minimum is independent of unknown next-state bits; the proof does not continue
+decoding a truncated stream. It applies only to the fixed reference's regular
+sequence decoder. The optional proof is disabled unless the target is 64-bit and
+cumulative decoded output plus the maximum block size is at most 16 MiB. This
+bounds dictionary-free history and excludes the reference's large-history
+prefetch decoder, whose final queued sequences have different error precedence.
+The cumulative counter is independent of ring-buffer position and never resets
+when that destination position wraps. Larger-history error equivalence remains
+unqualified; ordinary format/window validation still runs.
 
 For RLE blocks, the encoded payload is one byte. The header must not compare the
 regenerated RLE length against the encoded-size admission bound. Once the byte is
@@ -81,11 +98,11 @@ including `ZSTD_allocateLiteralsBuffer`, `ZSTD_execSequenceEnd`,
 streaming block/flush loop. The downloaded source is retained separately and was
 read as evidence; it was not substituted as the Rust implementation.
 
-The 34 remaining cases are explicitly unresolved at this checkpoint: twelve
-exhaust the sequence bitstream after filling the destination, fourteen use larger
-literal sections outside this initial placement proof, and eight require a more
-precise proof for partially present sequence extra bits. Their exact original and
-native errors remain in the differential file. They are not normalized away.
+Four cases remain explicitly unresolved: `zstd-bit-9-141`, `zstd-bit-9-144`,
+`zstd-bit-11-141`, and `zstd-bit-11-144`. Their match-length extra field is only
+partly present. The original reports destination exhaustion; this conservative
+checkpoint still reports data corruption. Their exact original and native
+responses remain in the differential file. They are not normalized away.
 
 All paths below are on the authorized desktop host under
 `/home/qian-qi/work/hepta-rea-static-elf-ca464-20261105/`:
@@ -96,10 +113,13 @@ All paths below are on the authorized desktop host under
 | `capacity-prototype-r1` | Retained offline build failure before dependency alignment; no semantic result |
 | `capacity-prototype-r2` | Root-aligned lock and intermediate prototype, 26 differences; superseded by the stricter proof guard |
 | `capacity-checkpoint-r4` | Conservative proof, 32 real parser tests and strict Clippy passed, exact 5,244 comparisons with 34 differences and zero new differences |
-| `capacity-checkpoint-r5` | Source/driver identities, retained comparison and commit receipt for this checkpoint |
+| `capacity-checkpoint-r5` | First conservative commit, 50 closed and 34 retained |
+| `capacity-proof-r6` | Destination upper bounds and next-sequence minimum: 8 retained, zero new differences, 33 tests and strict Clippy passed |
+| `capacity-proof-r7` | Regular-dispatch gate and wholly present extra fields: 4 retained, zero new differences, 33 tests and strict Clippy passed |
+| `capacity-checkpoint-r7` | Follow-up source/driver identities and commit receipt |
 | `reference-libzstd-1.5.7-r2` | Fixed-tag official source bytes and identities |
 
-Three regression payloads in `rea_elf_notes_parser_tests.rs` are copied unchanged
+Six regression payloads in `rea_elf_notes_parser_tests.rs` are copied unchanged
 from the existing corpus (`zstd-bit-8-37`, `zstd-bit-9-145`,
-`zstd-bit-10-48`). The full unchanged corpus also retains its adjacent valid and
+`zstd-bit-10-48`, `zstd-bit-9-105`, `zstd-bit-13-48`, `zstd-bit-12-44`). The full unchanged corpus also retains its adjacent valid and
 malformed controls. No new fuzz corpus was introduced for this work.

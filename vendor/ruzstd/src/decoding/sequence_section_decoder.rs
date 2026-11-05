@@ -68,7 +68,8 @@ impl SequenceOutputCapacity {
     fn incomplete(&mut self, known_minimum: Option<(u32, u32)>) -> Result<(), DecodeSequenceError> {
         // Missing input bits are padded by this backend. Do not treat that
         // padded value as the other decoder's sequence length. Only a symbol
-        // selected from a complete FSE state supplies a reliable lower bound.
+        // selected from a complete FSE state, plus any wholly present extra
+        // field, supplies a reliable lower bound.
         if self.valid_prefix {
             if let Some((literals, matches)) = known_minimum {
                 let required = self
@@ -84,6 +85,21 @@ impl SequenceOutputCapacity {
             }
         }
         self.valid_prefix = false;
+        Ok(())
+    }
+
+    fn next_sequence_minimum(&self) -> Result<(), DecodeSequenceError> {
+        // The reference executes every declared sequence before its final
+        // bitstream check. Any next sequence has a match of at least three
+        // bytes, independent of a missing/unknown next FSE state. Do not decode
+        // padded bits to guess that state or use a later literal/offset error.
+        let required = self.generated.saturating_add(3);
+        if self.valid_prefix && required > self.limit {
+            return Err(DecodeSequenceError::OutputCapacityExceeded {
+                capacity: self.limit,
+                required,
+            });
+        }
         Ok(())
     }
 
@@ -203,7 +219,17 @@ fn decode_sequences_with_rle(
             });
         }
 
+        let available_value_bits = br.bits_remaining();
         let (obits, ml_add, ll_add) = br.get_bits_triple(of_code, ml_num_bits, ll_num_bits);
+        // Extra fields are read offset, match length, literal length. A fully
+        // present match-length field remains evidence even if the later
+        // literal-length field is short. Never include a padded field value.
+        let minimum_match =
+            if available_value_bits >= isize::from(of_code) + isize::from(ml_num_bits) {
+                ml_value + ml_add as u32
+            } else {
+                ml_value
+            };
         let offset = obits as u32 + (1u32 << of_code);
 
         if offset == 0 {
@@ -238,10 +264,15 @@ fn decode_sequences_with_rle(
             if sequence_bits_complete {
                 capacity.advance(target[target.len() - 1])?;
             } else {
-                capacity.incomplete(state_bits_complete.then_some((ll_value, ml_value)))?;
+                capacity.incomplete(state_bits_complete.then_some((ll_value, minimum_match)))?;
             }
         }
         if br.bits_remaining() < 0 {
+            if sequence_bits_complete && target.len() < section.num_sequences as usize {
+                if let Some(capacity) = capacity.as_deref_mut() {
+                    capacity.next_sequence_minimum()?;
+                }
+            }
             return Err(DecodeSequenceError::NotEnoughBytesForNumSequences);
         }
     }
@@ -288,7 +319,17 @@ fn decode_sequences_without_rle(
             });
         }
 
+        let available_value_bits = br.bits_remaining();
         let (obits, ml_add, ll_add) = br.get_bits_triple(of_code, ml_num_bits, ll_num_bits);
+        // Extra fields are read offset, match length, literal length. A fully
+        // present match-length field remains evidence even if the later
+        // literal-length field is short. Never include a padded field value.
+        let minimum_match =
+            if available_value_bits >= isize::from(of_code) + isize::from(ml_num_bits) {
+                ml_value + ml_add as u32
+            } else {
+                ml_value
+            };
         let offset = obits as u32 + (1u32 << of_code);
 
         if offset == 0 {
@@ -317,10 +358,15 @@ fn decode_sequences_without_rle(
             if sequence_bits_complete {
                 capacity.advance(target[target.len() - 1])?;
             } else {
-                capacity.incomplete(state_bits_complete.then_some((ll_value, ml_value)))?;
+                capacity.incomplete(state_bits_complete.then_some((ll_value, minimum_match)))?;
             }
         }
         if br.bits_remaining() < 0 {
+            if sequence_bits_complete && target.len() < section.num_sequences as usize {
+                if let Some(capacity) = capacity.as_deref_mut() {
+                    capacity.next_sequence_minimum()?;
+                }
+            }
             return Err(DecodeSequenceError::NotEnoughBytesForNumSequences);
         }
     }

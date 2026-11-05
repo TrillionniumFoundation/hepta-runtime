@@ -1075,3 +1075,23 @@ fn zstandard_destination_exhaustion_precedes_later_format_failures() {
 		);
 	}
 }
+
+#[test]
+fn zstandard_declared_next_sequence_and_large_literals_keep_destination_precedence() {
+	// Exact existing corpus payloads: next-sequence minimum output after a full
+	// destination, copied literals in a single-pass output, and a streaming
+	// destination upper bound without assuming the literal scratch allocation.
+	for (id, payload, declared) in [
+		("zstd-bit-9-105", "28b52ffd60204d4d000010414103001bce0eb0", 20000),
+		("zstd-bit-13-48", "28b52ffd60001e55080004100012263c546e8aa8c8ea0e345c86b2e0104276ace41e5a98d81a5ea4ec3682d02072c61c74ce2a88e84aae147ce652c030a2168c047efa78f87afe840c9622b040d266fc942eca6808aa4ef49c46f2a05002b66c24de9a5818da9e642cf6c290603206dcb48e6a48280aeed4bca692807062564c443e3a38383a3e444c5662708092a6bcd4ee0a28486a8eb4dc06326090c2f62c649eda18589ade246cb60250a0f2469cf44eaa0868ca2e94fc66d240b022960c84fe7af878fa7e048c16a230c052e67c14ae4ae8882ace741cc67220d08236eca45e1ad8985a1ee4ac764210e0b2865c340eeac8a88a6e543c261200f0e2d6ccc4bebab8b8babec4ccd6e2f0010000fd3ed0af29", 8192),
+		("zstd-bit-12-44", "28b52ffd000855080004100012263c546e8aa8c8ea0e345c86b2e0104276ace41e5a98d81a5ea4ec3682d02072c61c74ce2a88e84aae147ce652c030a2168c047efa78f87afe840c9622b040d266fc942eca6808aa4ef49c46f2a05002b66c24de9a5818da9e642cf6c290603206dcb48e6a48280aeed4bca692807062564c443e3a38383a3e444c5662708092a6bcd4ee0a28486a8eb4dc06326090c2f62c649eda18589ade246cb60250a0f2469cf44eaa0868ca2e94fc66d240b022960c84fe7af878fa7e048c16a230c052e67c14ae4ae8882ace741cc67220d08236eca45e1ad8985a1ee4ac764210e0b2865c340eeac8a88a6e543c261200f0e2d6ccc4bebab8b8babec4ccd6e2f0010000fd3ed0af29", 8192),
+	] {
+		assert_eq!(
+			decoded(&compressed_names(&unhex(payload), declared, 2, true, true), true, true)
+				.unwrap_err()
+				.to_string(),
+			"ELF compressed section-name table could not be decompressed: Destination buffer is too small",
+			"{id}"
+		);
+	}
+}

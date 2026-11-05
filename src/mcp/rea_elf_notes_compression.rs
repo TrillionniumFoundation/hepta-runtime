@@ -308,6 +308,7 @@ struct ZstdDestination {
 	single_pass: bool,
 	capacity: u64,
 	position: u64,
+	produced_total: u64,
 	block_max: u64,
 	frame_size: Option<u64>,
 }
@@ -330,6 +331,7 @@ impl ZstdDestination {
 			single_pass,
 			capacity,
 			position: 0,
+			produced_total: 0,
 			block_max,
 			frame_size: header.content_size,
 		}
@@ -344,6 +346,7 @@ impl ZstdDestination {
 			return Err(decompression_failure("Destination buffer is too small"));
 		}
 		self.position += bytes as u64;
+		self.produced_total = self.produced_total.saturating_add(bytes as u64);
 		if !self.single_pass
 			&& self.capacity < self.frame_size.unwrap_or(u64::MAX)
 			&& self.position + self.block_max > self.capacity
@@ -354,6 +357,16 @@ impl ZstdDestination {
 	}
 
 	fn sequence_capacity(&self, body: &[u8]) -> Option<usize> {
+		// The frozen 64-bit reference's non-prefetch decoder executes sequences
+		// before the final bitstream check. Above 16 MiB of possible history it
+		// can choose a queued decoder with different error ordering. Cumulative
+		// output plus one block bounds history without an external dictionary;
+		// disable this proof when that dispatch can no longer be excluded.
+		if !cfg!(target_pointer_width = "64")
+			|| self.produced_total.saturating_add(self.block_max) > (1 << 24)
+		{
+			return None;
+		}
 		let first = *body.first()?;
 		let kind = first & 3;
 		if kind > 1 {
@@ -370,13 +383,6 @@ impl ZstdDestination {
 			.enumerate()
 			.fold(0_u64, |v, (i, b)| v | (u64::from(*b) << (8 * i)));
 		let literals = bits >> if header_bytes == 1 { 3 } else { 4 };
-		// 64 bytes fit even in libzstd's minimum permitted literal scratch.
-		// Larger/split and Huffman literal placement is not inferred here; its
-		// ordinary format validation remains unchanged, rather than inventing a
-		// destination bound from the RFC block limit.
-		if literals > 64 {
-			return None;
-		}
 		let encoded = if kind == 1 { 1 } else { literals };
 		if encoded > body.len().saturating_sub(header_bytes) as u64 {
 			return None;
@@ -386,6 +392,10 @@ impl ZstdDestination {
 		// is present. Otherwise the non-streaming allocator may put them after
 		// the block in the output arena, limiting sequence output to that point.
 		let direct_input = kind == 0 && header_bytes as u64 + literals + 32 <= body.len() as u64;
+		// The in-destination branch precedes the configurable scratch/split
+		// choice, so this bound does not assume a particular scratch size. In
+		// other layouts the complete remaining destination is a safe upper
+		// bound: exceeding it proves failure even if a split layout is smaller.
 		let bound =
 			if !direct_input && self.single_pass && remaining > self.block_max + literals + 64 {
 				self.block_max + 32
