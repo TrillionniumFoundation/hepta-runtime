@@ -871,3 +871,67 @@ fn zstandard_literals_respect_block_size_and_window_before_expansion() {
 		);
 	}
 }
+
+#[test]
+fn zstandard_sequence_tail_is_included_in_each_block_limit() {
+	for (payload, declared) in [
+		("28b52ffd00004d0000054000015401000001", 1027),
+		("28b52ffd00885500000d002000015401000001", 131075),
+	] {
+		assert!(decoded(
+			&compressed_names(&unhex(payload), declared, 2, true, true),
+			true,
+			true
+		)
+		.unwrap_err()
+		.to_string()
+		.ends_with("Data corruption detected"));
+	}
+	for (payload, declared) in [
+		("28b52ffd00004500000900015401000001", 4),
+		("28b52ffd00004d0000d53f00015401000001", 1024),
+		("28b52ffd0088550000ddff1f00015401000001", 131072),
+	] {
+		assert_eq!(
+			decoded(
+				&compressed_names(&unhex(payload), declared, 2, true, true),
+				true,
+				true
+			)
+			.unwrap(),
+			vec![0; declared as usize]
+		);
+	}
+}
+
+#[test]
+fn zstandard_dependency_enforces_bounds_without_the_elf_header_adapter() {
+	use std::io::{Cursor, Read};
+	// Directly exercise the vendored decoder, so the ELF precheck cannot hide
+	// a regression in the dependency's zero-sequence or final-literal paths.
+	for payload in [
+		"28b52ffd00882d00000dd4300000",
+		"28b52ffd0000250000057d0000",
+		"28b52ffd00004d0000054000015401000001",
+		"28b52ffd00885500000d002000015401000001",
+	] {
+		let data = unhex(payload);
+		let mut decoder = ruzstd::decoding::StreamingDecoder::new(Cursor::new(data)).unwrap();
+		let mut output = Vec::new();
+		assert!(
+			decoder.read_to_end(&mut output).is_err(),
+			"accepted {payload}"
+		);
+	}
+	for (payload, expected) in [
+		("28b52ffd00004500000900015401000001", 4),
+		("28b52ffd00004d0000d53f00015401000001", 1024),
+		("28b52ffd0088550000ddff1f00015401000001", 131072),
+	] {
+		let mut decoder =
+			ruzstd::decoding::StreamingDecoder::new(Cursor::new(unhex(payload))).unwrap();
+		let mut output = Vec::new();
+		decoder.read_to_end(&mut output).unwrap();
+		assert_eq!(output, vec![0; expected]);
+	}
+}
