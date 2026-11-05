@@ -13,7 +13,7 @@ import { open, readFile, mkdir, writeFile } from "node:fs/promises";
 import { openSync, closeSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { spawnSync } from "node:child_process";
+import { runModelWorker } from "./rea-model-worker-lifecycle.mjs";
 
 const options = {};
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -25,6 +25,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
 }
 if (!options.rea || !options.work) throw new Error("--rea and --work are required");
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+const nativeBinarySha256 = options.native ? hash(await readFile(options.native)) : null;
 const packageJson = JSON.parse(await readFile(join(options.rea, "package.json"), "utf8"));
 if (packageJson.version !== "6.8.0") throw new Error("oracle must be rea-agents@6.8.0");
 const expectedModules = {
@@ -144,16 +145,20 @@ async function oracle(path, size) {
     return { accepted: false, kind: error.kind ?? error.name, message: String(error.message).slice(0, 800) };
   } finally { await file.close(); }
 }
-function native(path) {
+async function native(path) {
   const fd = openSync(path, "r");
   try {
     const request = JSON.stringify({ operation: "inspect", collection: "tensors", offset: 0, limit: 256 });
-    const result = spawnSync(options.native, ["rea-model-worker", "--request", request],
-      { stdio: [fd, "pipe", "pipe"], env: {}, encoding: "utf8", timeout: 30000, maxBuffer: 2 * 1024 * 1024 });
-    if (result.error) throw result.error;
-    if (result.signal) throw new Error("native worker signal: " + result.signal);
-    if (result.status !== 0) return { accepted: false, status: result.status, message: result.stderr.slice(0, 800) };
-    return { accepted: true, projection: projectNative(JSON.parse(result.stdout)) };
+    const result = await runModelWorker(options.native, ["rea-model-worker", "--request", request], fd);
+    const lifecycle = result.lifecycle;
+    if (result.error) return { accepted: false, harness_failure: result.error, lifecycle };
+    if (result.signal) return { accepted: false, harness_failure: { kind: "native_signal", message: result.signal }, lifecycle };
+    if (result.status !== 0) return { accepted: false, status: result.status, message: result.stderr.slice(0, 800), lifecycle };
+    try {
+      return { accepted: true, projection: projectNative(JSON.parse(result.stdout)), lifecycle };
+    } catch (error) {
+      return { accepted: false, harness_failure: { kind: "invalid_native_reply", message: String(error.message) }, lifecycle };
+    }
   } finally { closeSync(fd); }
 }
 const results = [];
@@ -162,8 +167,9 @@ for (const item of cases) {
   const path = join(options.work, item.name + ".gguf");
   await writeFile(path, bytes, { flag: "wx" });
   const rea = await oracle(path, bytes.length);
-  const actual = options.native ? native(path) : null;
+  const actual = options.native ? await native(path) : null;
   const reasons = [];
+  if (actual?.harness_failure) reasons.push("native harness failed: " + actual.harness_failure.kind);
   if (rea.accepted !== item.reaAccept) reasons.push("oracle acceptance differed from fixture expectation");
   if (actual && actual.accepted !== item.nativeAccept) reasons.push("native acceptance differed from fixture expectation");
   if (actual?.accepted && rea.accepted && JSON.stringify(actual.projection) !== JSON.stringify(rea.projection))
@@ -171,14 +177,18 @@ for (const item of cases) {
   results.push({ name: item.name, fixture_sha256: hash(bytes), fixture_bytes: bytes.length,
     expected: { rea_accept: item.reaAccept, native_accept: item.nativeAccept },
     intentional_difference: item.intentionalDifference ?? null, rea, native: actual, failures: reasons });
+  if (actual?.harness_failure) break;
 }
 const failures = results.filter((row) => row.failures.length > 0);
 const summary = {
   classification: "bounded_model_layout_differential_not_complete_rea_qualification",
   oracle_version: packageJson.version, oracle_module_sha256: expectedModules,
-  native_binary_sha256: options.native ? hash(await readFile(options.native)) : null,
-  cases: results.length, oracle_accepted: results.filter((row) => row.rea.accepted).length,
-  native_executed: options.native !== undefined, mismatches: options.native ? failures.length : null,
+  native_binary_sha256: nativeBinarySha256,
+  planned_cases: cases.length, cases: results.length, oracle_accepted: results.filter((row) => row.rea.accepted).length,
+  native_executed: options.native !== undefined,
+  native_lifecycle_scope: options.native ? "linux_owned_process_group" : null,
+  harness_failures: results.filter((row) => row.native?.harness_failure).length,
+  mismatches: options.native ? failures.length : null,
   expectation_failures: failures.length, intentional_differences: results.filter((row) => row.intentional_difference).length,
 };
 if (options.out) await writeFile(options.out, JSON.stringify({ summary, results }, null, 2) + "\n", { flag: "wx" });

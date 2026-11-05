@@ -133,6 +133,42 @@ and the patch passed git diff --check before integration. Rust compilation and t
 combined full test matrix are owned by the integration worktree; this branch creates
 no independent Cargo target.
 
+## Native runner lifecycle
+
+The optional native comparison is qualified on Linux. Each case launches one
+worker in its own process group with an inherited read-only fixture descriptor,
+an empty environment and no shell. The runner enforces a 30-second wall deadline
+and a combined 2 MiB stdout/stderr cap. It sends SIGKILL only to that launch's group
+on failure or leader exit and allows at most two seconds for cleanup observations.
+The file descriptor closes in the caller's finally block.
+
+Each native row records spawn, exit, exit signal, stream close, timeout and
+interruption observations, plus group-signal attempts and cleanup errors.
+Successful signal delivery is never reported as proof of cleanup: a separate
+kill(group, 0) probe must return ESRCH before group absence is recorded. A missing
+close or absence observation fails the harness. The original failure remains
+primary even if cleanup also fails. Infrastructure failures stop the run, preserve
+a partial report with planned/completed case counts and cause a nonzero exit;
+they cannot satisfy an expected parser rejection.
+
+This scope does not prove cleanup of descendants that escape into a new session.
+It is a bounded runner for the native worker, not a general process-custody framework.
+The native worker additionally applies its own resource limits and Linux seccomp.
+
+Six Linux lifecycle tests ran successfully on 2026-11-05: normal completion,
+missing executable, a deadline with a SIGTERM-resistant worker, excessive output,
+a terminating signal, and cleanup of a descendant retaining pipes while an
+unrelated child survives. The tests independently probe group absence after the
+helper returns.
+
+~~~sh
+node --test scripts/rea-model-worker-lifecycle.test.mjs
+~~~
+
+The Node primary API reference documents why synchronous timeout was insufficient
+and how detached processes acquire a separate group:
+https://nodejs.org/api/child_process.html (spawnSync, options.detached, close, kill).
+
 ## Remaining boundaries
 
 The result remains a directory and raw-storage proof. It does not validate quantized
