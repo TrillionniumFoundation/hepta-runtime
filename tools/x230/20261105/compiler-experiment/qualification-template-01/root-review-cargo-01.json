@@ -1,0 +1,171 @@
+{
+  "schema": "hepta-compiler-qualification-template-cargo-review/v1",
+  "status": "prepared_static_review_only",
+  "reviewed_driver": {
+    "path": "/workspace/scratch/b96be991ab90/compiler-experiment/qualification-template-01/qualify_cpu.py",
+    "bytes": 31131,
+    "sha256": "e9dede814f34e414969019408c692da01e3254279440f10d255e32e6454fe2af"
+  },
+  "conclusion": "No concrete blocker found in the requested Cargo/stage/inventory/path scope; selected execution and actual new release parser compatibility remain unverified.",
+  "blocking_findings": [],
+  "native_calls": 0,
+  "rust_or_cargo_executed": false,
+  "qualified_branch_executed": false,
+  "tests_executed": false,
+  "frozen_files_modified": false,
+  "source_identities": {
+    "driver": {
+      "path": "/workspace/scratch/b96be991ab90/compiler-experiment/qualification-template-01/qualify_cpu.py",
+      "bytes": 31131,
+      "sha256": "e9dede814f34e414969019408c692da01e3254279440f10d255e32e6454fe2af"
+    },
+    "readme": {
+      "path": "/workspace/scratch/b96be991ab90/compiler-experiment/qualification-template-01/README.md",
+      "bytes": 13648,
+      "sha256": "aa7ba8d53e7d1820e89a8dfd260043383529d606aec0b0d9f212f9c3b4bbaabe"
+    },
+    "input": {
+      "path": "/workspace/scratch/b96be991ab90/compiler-experiment/qualification-template-01/input-template.json",
+      "bytes": 3224,
+      "sha256": "b1fad781cac7f5fe179f9b13284fc0cd2f5bec05b724408051915249adeeb1d0"
+    },
+    "local_validation": {
+      "path": "/workspace/scratch/b96be991ab90/compiler-experiment/qualification-template-01/local-validation.json",
+      "bytes": 1215,
+      "sha256": "0b174539ae662f483b52dd0bde7bf13ef77cd78de0b5c1249a36318d6f5824f1"
+    },
+    "original_qualifier": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/tools/x230/20261028/qualify.py",
+      "bytes": 7661,
+      "sha256": "95717717fd5421f2e31dbce24e2f8821696f57d779ce93e988ed66764159552d"
+    },
+    "original_runner": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/tools/x230/20261028/run_isolated_tests.py",
+      "bytes": 9355,
+      "sha256": "9e1439b27e630aa8a00aa34f02248800dd929314fa0041532294df106f189c62"
+    },
+    "original_auditor": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/tools/x230/20261028/audit_isolated_tests.py",
+      "bytes": 17433,
+      "sha256": "736b2dcc85fbd5214b855813b6c1f0ceed3dedc1cc0957e709a9ee6cb0110c40"
+    },
+    "cargo_manifest": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/Cargo.toml",
+      "bytes": 3097,
+      "sha256": "3121870fbf66f65ce6b1925b3500eae8a05fc2d8019a2694da7d6fe941ad4d28"
+    },
+    "r24_actual_summary": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/isolated-tests-summary.json",
+      "bytes": 6878,
+      "sha256": "ccf23b817d83bbcd1bee10473fa897739c452b0727d9d85f53d3b593c45d90f1"
+    },
+    "r24_actual_qualification": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/qualification-report.json",
+      "bytes": 83365,
+      "sha256": "bf0c5814d28b163e4a90405026cd4d90e399370d1f910f8ac48cb580af1e4971"
+    },
+    "r26_actual_same_auditor_shape": {
+      "path": "/workspace/scratch/806ba5f52f94/benchmark-r26/actual-qualification-receipts-01/isolated-tests-audit-01.json",
+      "bytes": 1426982,
+      "sha256": "c97eae41d39dec519a63516a9db766b7bf315adc2d67508b98e503e6843676c4"
+    }
+  },
+  "checks": [
+    {
+      "id": "stages",
+      "source": "qualify_cpu.py:24-25,405-425,427-486; original qualify.py:89-134",
+      "result": "All eight stage names/order and original scopes retained. Only deliberate compiler-stage target/verbosity/release-JSON changes; full offline locked all-target/all-feature tests, original runner/auditor, 180-second case/enumeration timeout, 3600-second stage timeout, no automatic retry."
+    },
+    {
+      "id": "toolchain_argv",
+      "source": "qualify_cpu.py:274-278,378-387,429-438,467-468",
+      "result": "Direct pinned sysroot Cargo replaces rustup shim plus +1.95.0. Direct RUSTC/RUSTDOC and selected toolchain bin first in PATH are consistent with direct-toolchain invocation. Explicit --target and -vv occur before Clippy -- -D warnings. Test/release JSON flags stay on Cargo, not rustc. No execution performed."
+    },
+    {
+      "id": "zero_inventory_and_exact_comparison",
+      "source": "qualify_cpu.py:111-145,442-465; R24 summary $.binaries[0]",
+      "result": "Capture uses profile.test and executable, not target.test. Logical targets are preserved independently of test cases. Source-root prefix alone is normalized in target.src_path; full target objects, exact test names and ignored flags are compared. Counts derive from actual accepted evidence. R24 zero-case native_process_driver target survives and its removal changes targets equality."
+    },
+    {
+      "id": "audit_schema",
+      "source": "qualify_cpu.py:114-122,142-145; original auditor audit(); actual R26 same-auditor JSON",
+      "result": "Referenced summary/audit keys and original auditor digest match an actual retained report produced by the same auditor. R26 is used solely to verify schema shape, not as a selected baseline or future passing result."
+    },
+    {
+      "id": "release_json_paths",
+      "source": "qualify_cpu.py:311-333,347-350",
+      "result": "Requires exactly one successful build-finished event and one non-fresh compiler-artifact for each original retained product at fresh target/triple/release path. Matches manifest/source/kind/name/features/release profile. Copies and hashes exact expected artifact. No old target/release, old ELF, or historical fallback."
+    },
+    {
+      "id": "release_argv_evidence",
+      "source": "qualify_cpu.py:314-320,334-359",
+      "result": "Reads raw -vv Running commands with shlex; requires unique final compiler command per retained product, one selected target, exact CPU/O3/CGU1/panic abort/strip symbols and accepted fat-LTO spelling with no duplicate parsed codegen keys. Root library requires unique command and matching CPU/target. Actual argv and line identity retained; missing/ambiguous shapes fail closed."
+    },
+    {
+      "id": "scope_and_truthfulness",
+      "source": "README.md; input-template.json; local-validation.json; qualify_cpu.py:197-204,393-398,469-486",
+      "result": "Template remains selected=false and future leaves null. Local checks claim AST/diff/original/unbound-refusal only. No selected qualification claim is made. Successful future qualification would still leave performance_accepted=false."
+    }
+  ],
+  "actual_r24_inventory_targets": [
+    {
+      "name": "native_process_driver",
+      "kind": [
+        "example"
+      ],
+      "target_test": false,
+      "inventory_count": 0,
+      "ignored_count": 0
+    },
+    {
+      "name": "hepta-runtime",
+      "kind": [
+        "bin"
+      ],
+      "target_test": true,
+      "inventory_count": 2,
+      "ignored_count": 0
+    },
+    {
+      "name": "hepta-effect-ownerctl",
+      "kind": [
+        "bin"
+      ],
+      "target_test": true,
+      "inventory_count": 18,
+      "ignored_count": 0
+    },
+    {
+      "name": "hepta-runtime-jobctl",
+      "kind": [
+        "bin"
+      ],
+      "target_test": true,
+      "inventory_count": 37,
+      "ignored_count": 0
+    },
+    {
+      "name": "hepta_runtime",
+      "kind": [
+        "lib"
+      ],
+      "target_test": true,
+      "inventory_count": 1622,
+      "ignored_count": 34
+    }
+  ],
+  "actual_r24_inventory_counts": {
+    "passed": 1645,
+    "failed": 0,
+    "ignored": 34,
+    "selected": 1679
+  },
+  "limits": [
+    "No raw native Cargo compiler-artifact JSON or release -vv log was present in the bounded inspected R24 small-evidence paths. The original R24 release argv had neither -vv nor --message-format=json. Actual retained target shape was checked using original isolated-test summary; this does not establish raw release-command parser compatibility.",
+    "No candidate module import/execution, selected admission, Rust, Cargo, native call, build, test, network/GitHub, archive extraction or owner-directory edit occurred in this review. Static inspection cannot qualify the selected branch.",
+    "The parser deliberately accepts a narrow Running-backtick / separate -C argument rendering and specified profile JSON keys. A real future unsupported Cargo shape will fail evidence closure. No flags should be reconstructed from intended recipe, and no permissive fallback is warranted.",
+    "The original three retained release products are preserved; --bins still builds the automatically discovered hepta-effect-ownerctl. This review does not expand original artifact-retention or deployment scope.",
+    "Metadata/handoff/accepted-version binding and live ownership are independently reviewed by root and are not approved here. No baseline, CPU or target triple was selected."
+  ],
+  "future_bindings_supplied": false
+}

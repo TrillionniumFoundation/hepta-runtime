@@ -1,0 +1,507 @@
+--- original/qualify.py
++++ external/qualify_cpu.py
+@@ -1,22 +1,66 @@
+ #!/usr/bin/env python3
+ # Copyright 2026 TrillionniumFoundation
+ # SPDX-License-Identifier: Apache-2.0
+-"""Qualify one explicit source snapshot; retain every original stage and test result."""
++"""External compiler-recipe derivative of qualify.py; unbound inputs cannot execute."""
+ import argparse
+ import datetime
++import difflib
+ import hashlib
+ import json
+ import os
+ from pathlib import Path
++import pwd
++import re
++import shlex
+ import shutil
++import stat
+ import subprocess
+ import sys
+ import time
+ 
++ORIGINAL_SHA = "95717717fd5421f2e31dbce24e2f8821696f57d779ce93e988ed66764159552d"
++HARNESS_MAP_SHA = "e3d3660f26a8a3c8e895434f376564e0f2f17d1cdc922b2de94a73d0b2b4b1ef"
++AUDITOR_SHA = "736b2dcc85fbd5214b855813b6c1f0ceed3dedc1cc0957e709a9ee6cb0110c40"
++STAGES = ("format", "fmt-check", "harness-tests", "clippy", "test-build",
++          "isolated-tests", "audit-isolated-tests", "release")
++PRODUCTS = {"hepta-runtime": ("bin", "src/main.rs"),
++            "hepta-runtime-jobctl": ("bin", "src/bin/jobctl.rs"),
++            "examples/native_process_driver": ("example", "examples/native_process_driver.rs")}
++TOOLS = ("cargo", "rustc", "rustdoc", "cargo-fmt", "rustfmt", "cargo-clippy", "clippy-driver")
++CACHE_FILE = r"registry/(?:cache/[^/]+/[^/]+\.crate|index/[^/]+/(?:config\.json|\.cache/.+))"
++
++
++def need(condition, message):
++    if not condition:
++        raise ValueError(message)
++
+ 
+ def sha(path):
+     with path.open("rb") as stream:
+         return hashlib.file_digest(stream, "sha256").hexdigest()
++
++
++def identity(path):
++    path = Path(path)
++    need(path.is_absolute() and path.resolve(strict=True) == path, "noncanonical input path")
++    before = path.lstat()
++    need(stat.S_ISREG(before.st_mode), "input is not a regular file: " + str(path))
++    digest = sha(path)
++    after = path.lstat()
++    need((before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns)
++         == (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns),
++         "input changed while hashing: " + str(path))
++    return {"path": str(path), "bytes": before.st_size, "sha256": digest}
++
++
++def bound(ref, as_json=False):
++    need(set(ref) == {"path", "bytes", "sha256"}, "file reference must bind path/bytes/SHA")
++    need(identity(ref["path"]) == ref, "bound file identity differs: " + str(ref["path"]))
++    if as_json:
++        value = json.loads(Path(ref["path"]).read_text())
++        need(identity(ref["path"]) == ref, "JSON changed while reading")
++        return value
++    return Path(ref["path"])
+ 
+ 
+ def source_map(source):
+@@ -26,38 +70,332 @@
+     return {str(path.relative_to(source)): sha(path) for path in sorted(files) if path.is_file()}
+ 
+ 
+-def main():
++def tree_map(root, private=False, cache=False):
++    result = {}
++    for path in sorted(root.rglob("*")):
++        info = path.lstat()
++        need(stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode), "special/symlink source or cache input")
++        if path.is_file():
++            relative = str(path.relative_to(root))
++            need(not (path.parent.name == ".cargo" and path.name in ("config", "config.toml")),
++                 "unbound source Cargo config; contents not read")
++            need(not cache or re.fullmatch(CACHE_FILE, relative), "unbound private cache file; contents not read")
++            need(not private or (info.st_uid == os.geteuid() and info.st_nlink == 1),
++                 "private input is not an owned independent copy")
++            result[relative] = identity(path)["sha256"]
++    return result
++
++
++def config_absence(source, cargo_home):
++    paths = {base / ".cargo" / name for base in (source, *source.parents)
++             for name in ("config", "config.toml")}
++    paths.update(cargo_home / name for name in ("config", "config.toml"))
++    result = []
++    for path in sorted(paths):
++        try:
++            path.lstat()
++        except FileNotFoundError:
++            # A dangling parent symlink is not evidence of definite configuration absence.
++            for ancestor in path.parents:
++                try:
++                    info = ancestor.lstat()
++                except FileNotFoundError:
++                    continue
++                need(stat.S_ISDIR(info.st_mode), "indeterminate Cargo config ancestor")
++            result.append({"path": str(path), "state": "absent"})
++        else:
++            raise ValueError("unbound Cargo configuration exists: " + str(path))
++    return result
++
++
++def inventory(summary_ref, audit_ref, rows_ref, source, source_sha):
++    summary, audit = bound(summary_ref, True), bound(audit_ref, True)
++    rows = [json.loads(line) for line in bound(rows_ref).read_text().splitlines()]
++    need(summary["success"] is True and audit["success"] is True
++         and summary["filter"] == audit["expected_filter"] == ""
++         and summary["retries"] == 0 and summary["case_timeout_seconds"] == 180
++         and not summary.get("fatal_error") and not summary["enumeration_errors"]
++         and not audit.get("fatal_error") and not audit.get("errors"), "incomplete test audit")
++    need(audit["input_sha256"]["summary.json"] == summary_ref["sha256"]
++         and audit["input_sha256"]["tests.jsonl"] == rows_ref["sha256"]
++         and audit["input_sha256"]["source-manifest.input"] == summary["source_manifest_sha256"] == source_sha
++         and audit["auditor_sha256"] == AUDITOR_SHA, "audit input hashes differ")
++    targets, cases = {}, set()
++    for binary in summary["binaries"]:
++        target = dict(binary["target"])
++        target["src_path"] = str(Path(target["src_path"]).relative_to(source))
++        key = json.dumps(target, sort_keys=True)
++        need(key not in targets.values(), "duplicate logical Cargo test target")
++        targets[binary["path"]] = key
++        own = [row for row in rows if row["binary"] == binary["path"]]
++        need(len(own) == binary["inventory_count"], "test inventory count differs")
++        ignored = {row["name"] for row in own if row["status"] == "ignored"}
++        need(ignored == set(binary["ignored_names"]), "ignored inventory differs")
++        for row in own:
++            is_ignored = row["name"] in ignored
++            need(row["binary_sha256"] == binary["sha256"] and row["status"] == ("ignored" if is_ignored else "passed")
++                 and row["executed"] is (not is_ignored) and row["attempt"] == (0 if is_ignored else 1),
++                 "failed/retried/unbound test case")
++            key_case = (key, row["name"], is_ignored)
++            need(key_case not in cases, "duplicate test case")
++            cases.add(key_case)
++    need(len(rows) == len(cases) == summary["selected"] == audit["selected"], "unbound test rows")
++    counts = {"passed": sum(not row[2] for row in cases), "ignored": sum(row[2] for row in cases), "failed": 0}
++    need(counts["passed"] > 0 and all(summary[k] == audit[k] == v for k, v in counts.items()), "test totals differ")
++    return {"targets": sorted(targets.values()), "cases": sorted(cases), "counts": counts}
++
++
++def require_bound(value):
++    need(value is not None, "unbound recipe value")
++    if isinstance(value, dict):
++        for item in value.values():
++            require_bound(item)
++    elif isinstance(value, list):
++        for item in value:
++            require_bound(item)
++    elif isinstance(value, str):
++        need(value and "<" not in value and ">" not in value, "placeholder recipe value")
++
++
++def native_preflight(meta):
++    start = bound(meta["native_start_receipt"], True)
++    request, response = start["request"], start["response"]
++    need(response.get("isError") is False, "native start is an error response")
++    dto = response.get("structuredContent")
++    if dto is None:
++        texts = [item["text"] for item in response["content"] if item["type"] == "text"]
++        need(len(texts) == 1, "ambiguous native start response")
++        dto = json.loads(texts[0])
++    job = dto["job"]
++    need(request["host"] == job["host"] == "x230"
++         and request["executable"] == job["executable"] == "/usr/bin/python3"
++         and request["args"] == job["args"] == [meta["runner"]["path"]]
++         and request["idempotency_key"] == job["idempotency_key"] == meta["idempotency_key"]
++         and job["id"] == meta["job_id"] and job["launch_state"] == "launched"
++         and job["launch_error"] is None and dto["launch"]["ok"] is True
++         and dto["audit_recorded"] is True and dto["local_record_pending"] is False,
++         "native start is not bound to the selected preflight")
++    terminal = bound(meta["native_terminal_receipt"], True)
++    status, read = terminal["status"], terminal["read"]
++    need(status["job_id"] == read["job_id"] == meta["job_id"]
++         and status["state"] == "succeeded" and type(status["exit_code"]) is int and status["exit_code"] == 0
++         and type(status["terminal_publication_protocol"]) is int and status["terminal_publication_protocol"] == 1
++         and all(status[key] is True for key in ("terminal_publication_confirmed", "output_complete", "output_durable", "audit_recorded"))
++         and all(status[key] is False for key in ("automatic_retry", "cancelled", "timed_out")),
++         "native preflight terminal is not a strong success")
++    for stream in ("stdout", "stderr"):
++        log, row = status["log_bytes"][stream], read[stream]
++        raw = bytes.fromhex(row["bytes_hex"])
++        need(status["log_errors"][stream] is None and status["log_synced"][stream] is True
++             and status["log_truncated"][stream] is False and row["eof"] is True and row["offset"] == 0
++             and log["seen"] == log["stored"] == row["size"] == row["next_offset"] == len(raw)
++             and row["text"] == raw.decode("utf-8"), "incomplete native preflight output")
++    footer = json.loads(read["stdout"]["text"])
++    need(footer["passed"] is True and footer["report"] == meta["report"]["path"], "native metadata footer differs")
++
++
++def admit(input_path, input_sha):
++    # Read-only gate. In particular, selected=false never touches host paths or subprocesses.
++    raw = input_path.read_bytes()
++    need(hashlib.sha256(raw).hexdigest() == input_sha, "input SHA differs")
++    plan = json.loads(raw)
++    need(plan["schema"] == "hepta-compiler-qualification-input/v1", "input schema differs")
++    need(plan["selected"] is True, "unbound template: selected must be true in a NEW frozen input")
++    require_bound(plan)
++    p = plan["paths"]
++    paths = {key: Path(value) for key, value in p.items()}
++    for key, path in paths.items():
++        need(path.is_absolute() and path.resolve(strict=key not in ("target", "output")) == path,
++             "noncanonical selected path: " + key)
++    source, out, target = paths["source"], paths["output"], paths["target"]
++    root, cargo_home = paths["run_root"], paths["cargo_home"]
++    need(str(paths["home"]) == pwd.getpwuid(os.geteuid()).pw_dir, "HOME is not the build account home")
++    need(len({source, out, target, cargo_home}) == 4
++         and all(path.parent == root for path in (source, out, target, cargo_home)), "private layout differs")
++    for path in (root, source, cargo_home):
++        info = path.lstat()
++        need(stat.S_ISDIR(info.st_mode) and info.st_uid == os.geteuid()
++             and stat.S_IMODE(info.st_mode) == 0o700, "private directory owner/mode differs")
++    for path in (out, target):
++        try:
++            path.lstat()
++        except FileNotFoundError:
++            pass
++        else:
++            raise ValueError("fresh output/target already exists")
++    config = config_absence(source, cargo_home)
++    need(plan["jobs"] in (1, 2) and plan["stage_timeout_seconds"] == 3600, "original limits differ")
++    need(re.fullmatch(r"[A-Za-z0-9_.-]+", plan["target_cpu"])
++         and re.fullmatch(r"[A-Za-z0-9_-]+", plan["target_triple"]), "invalid CPU/triple token")
++    driver = bound(plan["driver"])
++    need(driver == Path(__file__).resolve() and not driver.is_relative_to(source), "external driver identity differs")
++    original = source / "tools/x230/20261028/qualify.py"
++    need(sha(original) == ORIGINAL_SHA, "original qualifier changed")
++    expected_diff = "".join(difflib.unified_diff(original.read_text().splitlines(True), driver.read_text().splitlines(True),
++                                               fromfile="original/qualify.py", tofile="external/qualify_cpu.py"))
++    need(bound(plan["diff"]).read_text() == expected_diff, "external driver diff differs")
++    harness_map = bound(plan["original_harness_map"], True)
++    need(plan["original_harness_map"]["sha256"] == HARNESS_MAP_SHA
++         and len(harness_map) == 19 and harness_map["qualify.py"] == ORIGINAL_SHA, "original harness map differs")
++    harness = source / "tools/x230/20261028"
++    need({f.name: sha(f) for f in sorted(harness.glob("*.py"))} == harness_map, "source harness changed")
++    accepted = plan["accepted"]
++    need(source != Path(accepted["source"]), "candidate source must be a separate copy")
++    receipt = bound(accepted["publication"], True)
++    qualified = bound(accepted["qualification"], True)
++    compiled_map = bound(accepted["source_map"], True)
++    full_map = bound(accepted["full_source_map"], True)
++    bound(accepted["runtime"])
++    need(receipt["verified"] is True and receipt["candidate_adopted"] is True
++         and receipt["commit"] == accepted["commit"] and receipt["source_tree"] == accepted["source_tree"]
++         and receipt["qualification_report_sha256"] == accepted["qualification"]["sha256"]
++         and receipt["runtime_sha256"] == accepted["runtime"]["sha256"], "accepted publication binding differs")
++    need(qualified["qualified"] is True and qualified["automatic_test_retries"] == 0
++         and [s["name"] for s in qualified["stages"]] == list(STAGES)
++         and all(s["returncode"] == 0 for s in qualified["stages"])
++         and qualified["source"] == accepted["source"]
++         and qualified["source_tested"] == qualified["source_after"] == compiled_map
++         and qualified["harness_before"] == qualified["harness_after"] == harness_map
++         and qualified["binaries"]["hepta-runtime"]["sha256"] == accepted["runtime"]["sha256"],
++         "accepted qualification binding differs")
++    need(tree_map(Path(accepted["source"])) == tree_map(source, True) == full_map
++         and source_map(source) == compiled_map, "full/compiler source map differs")
++    cache_map = bound(plan["registry_manifest"], True)
++    need(tree_map(cargo_home, True, True) == cache_map and cache_map, "private registry manifest differs")
++    need(all(re.fullmatch(CACHE_FILE, name)
++             for name in cache_map), "only prepared sparse registry metadata/archives are allowed")
++    prepared = bound(plan["preparation_receipt"], True)
++    need(prepared["passed"] is True and prepared["run_root"] == str(root)
++         and prepared["full_source_map_sha256"] == accepted["full_source_map"]["sha256"]
++         and prepared["registry_manifest_sha256"] == plan["registry_manifest"]["sha256"]
++         and prepared["cargo_lock_sha256"] == compiled_map["Cargo.lock"]
++         and prepared["sparse_registry_checksums_verified"] is True
++         and prepared["fresh_build_space_budget_passed"] is True, "external preparation binding is incomplete")
++    sysroot = Path(plan["toolchain"]["sysroot"])
++    need(sysroot.is_absolute() and sysroot.resolve(strict=True) == sysroot, "noncanonical toolchain")
++    need(set(plan["toolchain"]["files"]) == set(TOOLS), "toolchain executable set differs")
++    for name, ref in plan["toolchain"]["files"].items():
++        need(bound(ref) == sysroot / "bin" / name and os.access(ref["path"], os.X_OK), "toolchain binary differs")
++    meta = plan["metadata"]
++    native_preflight(meta)
++    preflight = bound(meta["report"], True)
++    bound(meta["runner"])
++    version = bound(meta["version_stdout"]).read_text()
++    bound(meta["selected_cfg_stdout"])
++    need(version == meta["version_text"] and "host: " + plan["target_triple"] + "\n" in version,
++         "actual metadata toolchain version/host differs")
++    need(preflight["schema"] == meta["schema"] and preflight["passed"] is True
++         and preflight["metadata_only"] is True and preflight["accepted_commit"] == accepted["commit"]
++         and preflight["runner"]["sha256"] == meta["runner"]["sha256"]
++         and preflight["runner"]["path"] == meta["runner"]["path"]
++         and preflight["rustc"]["sha256"] == plan["toolchain"]["files"]["rustc"]["sha256"]
++         and preflight["runtime"]["sha256"] == accepted["runtime"]["sha256"], "metadata scope differs")
++    commands = {row["name"]: row for row in preflight["commands"]}
++    for name, ref in (("rustc-version", meta["version_stdout"]), (meta["selected_cfg_command"], meta["selected_cfg_stdout"])):
++        row = commands[name]
++        need(row["returncode"] == 0 and row["capture_complete"] is True and row["child_reaped"] is True
++             and not row["error"] and row["stdout"]["sha256"] == ref["sha256"], "incomplete metadata command")
++    need(commands[meta["selected_cfg_command"]]["argv"] == [str(sysroot / "bin/rustc"), "--target", plan["target_triple"],
++         "-C", "target-cpu=" + plan["target_cpu"], "--print", "cfg"], "selected CPU has no exact metadata command")
++    handoff = bound(plan["native_handoff"], True)
++    bound(plan["coordination_evidence"])
++    need(handoff["authorized"] is True and all(handoff[k] == plan[k] for k in ("run_id", "target_cpu", "target_triple"))
++         and handoff["accepted_commit"] == accepted["commit"] and handoff["driver_sha256"] == plan["driver"]["sha256"]
++         and handoff["metadata_report_sha256"] == meta["report"]["sha256"]
++         and handoff["coordination_evidence_sha256"] == plan["coordination_evidence"]["sha256"], "native handoff is not bound")
++    baseline_inventory = inventory(accepted["test_summary"], accepted["test_audit"], accepted["test_rows"],
++                                   Path(accepted["source"]), accepted["source_map"]["sha256"])
++    return plan, raw, paths, config, baseline_inventory
++
++
++def release_evidence(out, source, target, plan):
++    events = [json.loads(line) for line in (out / "cargo-release.jsonl").read_text().splitlines()]
++    need([e.get("success") for e in events if e.get("reason") == "build-finished"] == [True], "release build-finished differs")
++    commands = []
++    for number, line in enumerate((out / "release.stderr").read_text().splitlines(), 1):
++        if "Running `" in line and line.endswith("`"):
++            words = shlex.split(line.split("Running `", 1)[1][:-1])
++            compiler = plan["toolchain"]["files"]["rustc"]["path"]
++            if compiler in words:
++                commands.append((number, words[words.index(compiler):]))
++    binaries, evidence = {}, []
++    for relative, (kind, src) in PRODUCTS.items():
++        old = target / plan["target_triple"] / "release" / relative
++        matches = [e for e in events if e.get("reason") == "compiler-artifact" and e.get("executable") == str(old)]
++        need(len(matches) == 1, "ambiguous/missing fresh release artifact")
++        event = matches[0]
++        need(event["fresh"] is False and event["manifest_path"] == str(source / "Cargo.toml")
++             and event["target"]["name"] == old.name and event["target"]["kind"] == [kind]
++             and event["target"]["src_path"] == str(source / src)
++             and sorted(event["features"]) == sorted(plan["release_features"])
++             and event["profile"]["test"] is False and event["profile"]["opt_level"] == "3"
++             and event["profile"]["overflow_checks"] is False and event["profile"]["debug_assertions"] is False,
++             "release artifact source/profile/features differ")
++        matched = [(n, argv) for n, argv in commands if "--crate-name" in argv
++                   and argv[argv.index("--crate-name") + 1] == old.name.replace("-", "_")
++                   and (src in argv or str(source / src) in argv)]
++        need(len(matched) == 1, "missing/ambiguous observed final release rustc command")
++        number, argv = matched[0]
++        flags = [argv[i + 1] for i, word in enumerate(argv[:-1]) if word == "-C"]
++        need(argv.count("--target") == 1 and argv[argv.index("--target") + 1] == plan["target_triple"]
++             and {"opt-level=3", "codegen-units=1", "panic=abort", "strip=symbols", "target-cpu=" + plan["target_cpu"]}.issubset(flags)
++             and any(flag in ("lto", "lto=yes", "lto=fat") for flag in flags)
++             and all(sum(flag.split("=", 1)[0] == key for flag in flags) == 1
++                     for key in ("opt-level", "codegen-units", "panic", "strip", "target-cpu", "lto"))
++             and all(flag not in ("overflow-checks=yes", "overflow-checks=on", "overflow-checks=true") for flag in flags),
++             "observed release codegen recipe differs")
++        copied = out / old.name
++        shutil.copy2(old, copied)
++        need(sha(old) == sha(copied), "release executable changed during preservation")
++        binaries[old.name] = identity(copied)
++        evidence.append({"artifact": event, "release_stderr_line": number, "observed_rustc_argv": argv,
++                         "built_identity": identity(old), "retained_identity": binaries[old.name]})
++    libraries = [(n, argv) for n, argv in commands if "src/lib.rs" in argv or str(source / "src/lib.rs") in argv]
++    need(len(libraries) == 1, "missing/ambiguous root library compiler command")
++    number, argv = libraries[0]
++    need(argv.count("--target") == 1 and argv[argv.index("--target") + 1] == plan["target_triple"]
++         and [argv[i + 1] for i, word in enumerate(argv[:-1]) if word == "-C" and argv[i + 1].startswith("target-cpu=")]
++         == ["target-cpu=" + plan["target_cpu"]], "root library CPU/target differs")
++    evidence.append({"scope": "root library", "release_stderr_line": number, "observed_rustc_argv": argv})
++    return binaries, evidence
++
++
++def main(argv=None):
+     parser = argparse.ArgumentParser(description=__doc__)
+-    parser.add_argument("--source", type=Path, required=True)
+-    parser.add_argument("--output", type=Path, required=True)
+-    parser.add_argument("--target", type=Path, required=True)
+-    parser.add_argument("--cargo-home", type=Path, required=True)
+-    parser.add_argument("--jobs", type=int, default=1, choices=(1, 2))
+-    parser.add_argument("--stage-timeout", type=int, default=3600)
+-    args = parser.parse_args()
+-    source, out = args.source.resolve(), args.output.resolve()
++    parser.add_argument("--input", type=Path, required=True)
++    parser.add_argument("--input-sha256", required=True)
++    args = parser.parse_args(argv)
++    try:
++        plan, raw, paths, config, baseline_inventory = admit(args.input, args.input_sha256)
++    except Exception as error:
++        print(json.dumps({"admitted": False, "qualified": False, "error": f"{type(error).__name__}: {error}"}), flush=True)
++        return 2
++    source, out, target = paths["source"], paths["output"], paths["target"]
+     harness = source / "tools/x230/20261028"
+     out.mkdir(mode=0o700, parents=False, exist_ok=False)
++    target.mkdir(mode=0o700, parents=False, exist_ok=False)
+     os.umask(0o022)
+-    env = dict(os.environ)
+-    for key in list(env):
+-        if key.startswith(("HEPTA_", "SSH_", "RUST_TEST_")) or key in {
+-            "RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "RUSTDOCFLAGS", "RUSTC_WRAPPER",
+-            "RUSTC_WORKSPACE_WRAPPER", "PYTHONPATH", "PYTHONHOME", "RUST_LOG",
+-        }:
+-            env.pop(key)
+-    env.update({"PATH": "/home/qian/.cargo/bin:/usr/local/bin:/usr/bin:/bin",
+-                "CARGO_HOME": str(args.cargo_home.resolve()),
+-                "CARGO_TARGET_DIR": str(args.target.resolve()),
+-                "CARGO_BUILD_JOBS": str(args.jobs), "CARGO_INCREMENTAL": "0",
+-                "RUST_TEST_THREADS": "1", "TOKIO_WORKER_THREADS": "2",
+-                "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"})
+-    cargo = ["/home/qian/.cargo/bin/cargo", "+1.95.0"]
++    # No ambient values are copied. Direct pinned tools have no rustup/install fallback.
++    sysroot = Path(plan["toolchain"]["sysroot"])
++    env = {"PATH": str(sysroot / "bin") + ":/usr/bin:/bin", "HOME": str(paths["home"]),
++           "LANG": "C", "LC_ALL": "C", "CARGO_HOME": str(paths["cargo_home"]), "CARGO_TARGET_DIR": str(target),
++           "CARGO_BUILD_JOBS": str(plan["jobs"]), "CARGO_INCREMENTAL": "0", "RUST_TEST_THREADS": "1",
++           "TOKIO_WORKER_THREADS": "2", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1",
++           "CARGO_TERM_COLOR": "never", "RUSTC": str(sysroot / "bin/rustc"), "RUSTDOC": str(sysroot / "bin/rustdoc")}
++    env["CARGO_ENCODED_RUSTFLAGS"] = "\x1f".join(["-C", "target-cpu=" + plan["target_cpu"]])
++    cargo = [str(sysroot / "bin/cargo")]
++    compile_args = ["--target", plan["target_triple"], "-vv"]
+     report = {"schema": "hepta-x230-composed-qualification/v1", "qualified": False,
+               "source": str(source), "started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+-              "source_input": source_map(source), "jobs": args.jobs, "stages": [],
++              "source_input": source_map(source), "jobs": plan["jobs"], "stages": [],
+               "harness_before": {p.name: sha(p) for p in sorted(harness.glob("*.py"))},
+-              "service_changes": False, "automatic_test_retries": 0}
++              "service_changes": False, "automatic_test_retries": 0,
++              "compiler_recipe": {"schema": "hepta-compiler-qualified-recipe/v1", "input_sha256": args.input_sha256,
++                                  "driver": plan["driver"], "diff": plan["diff"], "constructed_environment": env,
++                                  "verified_toolchain": plan["toolchain"], "metadata": plan["metadata"],
++                                  "config_before": config, "full_source_before": tree_map(source, True),
++                                  "harness_scope": "unchanged source tools; executed external driver is separately identified",
++                                  "effective_flags_verified": False, "performance_accepted": False}}
+ 
+     def save():
+         temporary = out / "report.next"
+@@ -75,7 +413,7 @@
+         try:
+             with stdout_path.open("xb") as stdout, stderr_path.open("xb") as stderr:
+                 process = subprocess.run(argv, cwd=source, env=env, stdout=stdout, stderr=stderr,
+-                                         timeout=args.stage_timeout)
++                                         timeout=plan["stage_timeout_seconds"])
+             row["returncode"] = process.returncode
+         finally:
+             row["seconds"] = time.monotonic() - started
+@@ -87,15 +425,17 @@
+             raise RuntimeError(f"{name} failed; original logs retained")
+ 
+     try:
++        (out / "frozen-build-recipe.json").write_bytes(raw)
+         stage("format", cargo + ["fmt", "--all"])
++        need(tree_map(source, True) == report["compiler_recipe"]["full_source_before"], "format changed compiler-only source")
+         stage("fmt-check", cargo + ["fmt", "--all", "--", "--check"])
+         stage("harness-tests", ["/usr/bin/python3", "-B", "-m", "unittest", "discover",
+                                 "-s", str(harness), "-p", "*_tests.py", "-v"])
+         report["source_tested"] = source_map(source)
+         (out / "source-map.json").write_text(json.dumps(report["source_tested"], indent=2) + "\n")
+-        stage("clippy", cargo + ["clippy", "--offline", "--locked", "--all-targets", "--all-features", "--", "-D", "warnings"])
++        stage("clippy", cargo + ["clippy", "--offline", "--locked", "--all-targets", "--all-features"] + compile_args + ["--", "-D", "warnings"])
+         stage("test-build", cargo + ["test", "--offline", "--locked", "--all-targets", "--all-features",
+-                                     "--no-run", "--message-format=json"], "cargo-no-run.jsonl")
++                                     "--no-run", "--message-format=json"] + compile_args, "cargo-no-run.jsonl")
+         binary_dir = out / "test-binaries"
+         binary_dir.mkdir(mode=0o700)
+         artifacts = []
+@@ -103,7 +443,9 @@
+             event = json.loads(line)
+             if event.get("reason") == "compiler-artifact" and event.get("profile", {}).get("test") and event.get("executable"):
+                 old = Path(event["executable"])
++                need(old.is_relative_to(target / plan["target_triple"]) and not event["fresh"], "test artifact is not from fresh target")
+                 copied = binary_dir / old.name
++                need(not copied.exists(), "duplicate retained test executable name")
+                 shutil.copy2(old, copied)
+                 if sha(old) != sha(copied):
+                     raise RuntimeError("test executable changed during preservation")
+@@ -117,20 +459,30 @@
+         stage("audit-isolated-tests", ["/usr/bin/python3", str(harness / "audit_isolated_tests.py"),
+                                        "--evidence", str(out / "isolated-tests"),
+                                        "--output", str(out / "isolated-tests.audit.json")])
+-        stage("release", cargo + ["build", "--offline", "--locked", "--all-features", "--release", "--bins", "--examples"])
+-        binaries = {}
+-        for relative in ("hepta-runtime", "hepta-runtime-jobctl", "examples/native_process_driver"):
+-            old = args.target.resolve() / "release" / relative
+-            copied = out / old.name
+-            shutil.copy2(old, copied)
+-            binaries[old.name] = {"path": str(copied), "sha256": sha(copied)}
+-        report["binaries"] = binaries
++        actual_inventory = inventory(identity(out / "isolated-tests/summary.json"), identity(out / "isolated-tests.audit.json"),
++                                     identity(out / "isolated-tests/tests.jsonl"), source, sha(out / "source-map.json"))
++        need(actual_inventory == baseline_inventory, "accepted logical test inventory differs")
++        report["compiler_recipe"]["test_inventory"] = {"matched_accepted": True, "counts": actual_inventory["counts"],
++                                                       "targets": len(actual_inventory["targets"])}
++        stage("release", cargo + ["build", "--offline", "--locked", "--all-features", "--release", "--bins", "--examples"]
++              + compile_args + ["--message-format=json"], "cargo-release.jsonl")
++        report["binaries"], evidence = release_evidence(out, source, target, plan)
++        (out / "compiler-build-evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
++        report["compiler_recipe"]["build_evidence"] = identity(out / "compiler-build-evidence.json")
++        report["compiler_recipe"]["effective_flags_verified"] = True
+         report["source_after"] = source_map(source)
+-        if report["source_after"] != report["source_tested"]:
++        if report["source_after"] != report["source_tested"] or report["source_after"] != report["source_input"]:
+             raise RuntimeError("source changed during qualification")
+         report["harness_after"] = {p.name: sha(p) for p in sorted(harness.glob("*.py"))}
+         if report["harness_after"] != report["harness_before"]:
+             raise RuntimeError("qualification tools changed during qualification")
++        report["compiler_recipe"]["full_source_after"] = tree_map(source, True)
++        need(report["compiler_recipe"]["full_source_after"] == report["compiler_recipe"]["full_source_before"], "full source changed")
++        report["compiler_recipe"]["config_after"] = config_absence(source, paths["cargo_home"])
++        bound(plan["driver"])
++        for ref in plan["toolchain"]["files"].values():
++            bound(ref)
++        need([row["name"] for row in report["stages"]] == list(STAGES), "eight stages differ")
+         report["qualified"] = True
+     except Exception as error:
+         report["error"] = f"{type(error).__name__}: {error}"

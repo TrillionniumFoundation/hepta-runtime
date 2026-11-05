@@ -1,8 +1,8 @@
-# X230 compiler experiment：首个准备检查点
+# X230 compiler experiment：资格模板与请求准备检查点
 
-**状态：prepared-only。** 当前没有可用的独占 native slot，原运行会话仍持有 X230/Mac 的归档 I/O 窗口。preflight 尚未向目标主机上传、尚未执行；没有 compiler 实验构建、PGO 训练、性能结果、候选选择或采纳。首次 checkpoint 保存的是可审查的准备材料，不是新的优化收益版本。
+**状态：prepared-only，selected=false。** 本 compiler experiment 的 native metadata、构建、训练、资格执行和性能测量次数均为 **0**。preflight 尚未上传或执行，没有新候选选择或采纳。当前执行所有者的 reservation 24 已替代 reservation 23，仍未释放；本检查点不声称已取得 native handoff。冻结包中 reservation 23 的引用保留为历史准备记录，当前协调以 reservation 24 为准。此次增加可审查的资格模板、准备设计和精确请求文件；它们是准备材料，不是新的优化 runtime 版本。
 
-## 已接受基线
+## 历史及本检查点最后核实的已接受基线
 
 | 身份 | 值 |
 |---|---|
@@ -14,13 +14,23 @@
 
 基线依据为本分支已有的 [R24 报告](X230_OPTIMIZATION_20261105_R24.md)、[原资格报告](../tools/x230/20261105/r24/reviews/qualification-report-01.json) 和 [220 项已验证源码映射](../tools/x230/20261105/r24/reviews/qualified-source-map-01.json)。本检查点只增加准备文件，未重写旧源码、报告或数据。
 
+这不是对未来候选基线的选择。如果 R28 或其他版本在选择前被采纳，必须建立新的固定输入，绑定当时 accepted 源码、实际 ELF、测试 inventory 和相符的 native metadata。原 R24 preflight 保留历史身份，不能改名或补写成新版本的实际证据。
+
 R24 已声明 `opt-level=3`、`lto=true`（fat LTO）、`codegen-units=1`、`panic="abort"`、`strip=true`；这些 release 设置已经存在，不构成新优化。有限历史筛查未找到 CPU 专用编译、PGO 或 BOLT 的既有实测记录，但未穷尽所有历史。更具体的缺口是：资格报告记录了 Cargo 命令及输入身份，尚未建立每条最终 rustc 的完整 effective flags；原 qualifier 也未整族清除 `CARGO_PROFILE_*`、`CARGO_TARGET_*`、`CARGO_BUILD_*` 覆盖。不能从 Cargo.toml 或构建地点反推完整历史 target 设置。[历史核对](../tools/x230/20261105/compiler-experiment/reviews/compiler-optimization-history-01.md) 保留来源、范围和原结论。
 
 ## 下一步只做 metadata preflight
 
-取得原运行会话的明确窗口交接后，才可提交 [冻结 preflight](../tools/x230/20261105/compiler-experiment/preflight-plan.json)。其范围是绑定 accepted R24 的回执、源码和二进制身份，记录 CPU/affinity/磁盘元数据，并在唯一指定 Rust 1.95.0 sysroot 下查询版本、默认及 `target-cpu=native` 的 cfg、支持的 CPU 名称，以及指定路径下可选 `llvm-profdata` 的版本。缺少工具就记录不可用，不安装、不下载、不改用其他工具链。
+与当前 native 执行所有者协调后，有两条执行路径：由该所有者在自己的窗口内按 [精确请求协议](../tools/x230/20261105/compiler-experiment/native-requests-01/protocol.md) 执行 [冻结 preflight](../tools/x230/20261105/compiler-experiment/preflight-plan.json)，或在明确交接窗口后由我们执行。原所有者自行执行无需转移执行权；目前两条路径都没有产生本 compiler preflight 的实际执行。请求包包含 create-only 私有父目录、脚本原字节写入、文件身份查询和单一稳定 key 的执行请求，均未执行。原 preflight 的范围是绑定历史 accepted R24 的回执、源码和二进制身份，记录 CPU/affinity/磁盘元数据，并在唯一指定 Rust 1.95.0 sysroot 下查询版本、默认及 `target-cpu=native` 的 cfg、支持的 CPU 名称，以及指定路径下可选 `llvm-profdata` 的版本。缺少工具就记录不可用，不安装、不下载、不改用其他工具链。
 
 这些命令没有 Rust 源码输入，不执行 Cargo、构建、链接或 benchmark。默认/native cfg 的差异只描述该次 metadata 调用，不能补成旧 R24 effective flags。仓库 Cargo 配置仅记录指定文件的存在性、大小和哈希，不输出配置正文、不读取继承环境，也不声称覆盖全部 Cargo 自动发现来源。将来若选择 compiler-only 构建，仍需另行冻结实际 recipe、环境、产物、资格及部署兼容范围。
+
+## 新增资格模板及本地检查
+
+[外置资格 driver](../tools/x230/20261105/compiler-experiment/qualification-template-01/README.md) 保留原 8 个阶段、19 个 Python 工具、版权、完整测试 inventory 和零重试语义。新模板构造干净环境，分别绑定 target 目录与 triple，记录实际源文件、工具链、Cargo 配置、driver、native metadata 和产物身份。编译阶段保留 `-vv` 与 Cargo JSON；缺失或歧义的实际编译参数使证据闭合失败，不用计划中的 flags 补齐。第一版没有 wrapper 或旧编译 target 复用。
+
+[输入模板](../tools/x230/20261105/compiler-experiment/qualification-template-01/input-template.json) 的未来绑定全部为 null，`selected=false`。[已保存的本地负向检查](../tools/x230/20261105/compiler-experiment/qualification-template-01/local-validation.json) 结果为 **exit 2，mutation/subprocess 调用 0**，仅证明未绑定模板在写入和子进程之前拒绝执行。本次发布副本没有重跑测试。独立的 [Cargo 静态审查](../tools/x230/20261105/compiler-experiment/qualification-template-01/root-review-cargo-01.md) 与 [admission 静态审查](../tools/x230/20261105/compiler-experiment/qualification-template-01/root-review-admission-01.md) 在限定范围内未发现明确阻断，但没有执行 selected 路径或验证实际编译日志的兼容性。
+
+[资格设计](../tools/x230/20261105/compiler-experiment/candidate-qualification-design-01.md) 和 [私有准备设计](../tools/x230/20261105/compiler-experiment/preparation-design-01.md) 明确剩余工作：实际执行权协调、当前 accepted 身份、native metadata、完整源码与 sparse registry 的独立准备、真实 checksum 和全新构建空间预算，以及固定输入后的完整资格。source/cache preparer 尚未实现；目录与 receipt 模板不能代替实际准备结果。
 
 ## 保持原评价边界
 
@@ -28,4 +38,4 @@ R24 已声明 `opt-level=3`、`lto=true`（fat LTO）、`codegen-units=1`、`pan
 
 R27 serializer 仍是独立的组件实验，完整 runtime 未资格验证、未采纳；已拒绝的 R26 也不替换 accepted R24。这里没有合入两者的源码改动或混用其结果。preflight 的完成与否，更不能替代任何新编译产物的完整资格和原门槛验收。
 
-准备文件、原 manifest 与历史审查的入口见 [compiler experiment README](../tools/x230/20261105/compiler-experiment/README.md)。Python、三个 JSON 及两份历史审查保持原字节；其中历史本地/远端路径是来源记录，仓库浏览使用 README 中的相对链接。
+完整文件入口见 [compiler experiment README](../tools/x230/20261105/compiler-experiment/README.md)。本次新增的 11 个资格包文件、4 个设计文件和 6 个精确请求文件均保持冻结原件字节，包括 source、JSON、diff、负向检查和审查记录；既有脚本、计划及历史审查也不改动。只更新本入口文档与根 README。其中原绝对路径继续作为来源数据保留，仓库浏览使用相对链接。

@@ -1,9 +1,13 @@
 # X230 compiler experiment — preparation only
 
-No compiler experiment has been launched. No tool has been installed, no Rust
-binary built, and no performance result or adoption decision exists here. The
-other native-work owner retains the archive I/O window. The preflight must not
-be uploaded or executed until that window is explicitly handed over.
+This preparation update adds a guarded qualification driver template, source/cache
+preparation designs, and exact metadata staging/execution requests. For this
+compiler experiment, native metadata runs, builds, training, qualifications and
+performance measurements all remain **0**. No candidate is selected or adopted.
+The current native-work owner's reservation 24 supersedes reservation 23 and
+remains unreleased. No handoff or compiler preflight execution is claimed here.
+References to reservation 23 inside the frozen packages remain historical
+preparation records; current coordination follows reservation 24.
 
 ## Why this direction is being checked
 
@@ -18,8 +22,10 @@ clear every Cargo profile/target/build override. Its actual report does not
 capture every rustc argument. Consequently, the historical effective CPU target
 and all profile overrides are not established merely by reading Cargo.toml.
 Any future candidate will have a separately recorded, clean build recipe and
-will be compared with the actual accepted R24 binary. A product difference will
-not automatically be attributed to a single compiler flag.
+will be compared with the actual accepted binary bound when that recipe is
+frozen. R24 below is the historical and last verified accepted reference for
+this checkpoint. A later R28 adoption requires a new binding. A product difference
+will not automatically be attributed to a single compiler flag.
 
 The first proposed action is a bounded [metadata preflight](preflight-plan.json). It checks the actual
 compiler and host CPU, compatible profiling-tool availability, available disk,
@@ -29,17 +35,23 @@ download or by substituting another toolchain.
 
 ## Candidate sequence, not execution approval
 
-1. Review the preflight and obtain the native-work handoff. Execute its one
-   original job, reconcile that exact identity if transport becomes uncertain,
-   and read back the complete report and command outputs.
+1. Review the preflight and [exact request protocol](native-requests-01/protocol.md)
+   with the current native-work owner. That owner may execute the exact kit within
+   its own window, or explicitly hand the window over before we execute it. Use
+   its one original job, reconcile that exact identity if transport becomes
+   uncertain, and read back the complete report and command outputs. The request
+   files themselves are still unexecuted; owner execution needs no ownership transfer.
 2. Select an exact compiler-only recipe only after that evidence exists. The
-   first possible variant is accepted R24 source with an explicit X230 CPU
-   target and a clean, fully recorded environment. Generic release settings,
+   first possible variant is the then-accepted source with an explicit verified
+   X230 CPU target and a clean, fully recorded environment. Generic release settings,
    source trust checks, concurrency limits and runtime semantics remain bound
    to the chosen source, not inferred from the recipe name.
 3. Freeze the source map, flags, output directory, toolchain, environment,
    qualification launcher and unchanged acceptance gates before any build or
-   measurement. Use fresh candidate outputs and retain original failures.
+   measurement. Use the [guarded driver design](candidate-qualification-design-01.md)
+   and [private preparation design](preparation-design-01.md) to bind fresh candidate
+   inputs and outputs; retain original failures. The source/cache preparer is not
+   implemented by this checkpoint.
 4. Complete native formatting, Clippy, the full selected all-features tests,
    release build, artifact identity and cleanup checks. Any change in required
    tools or environment receives a new explicit preparation record.
@@ -63,12 +75,17 @@ No PGO training or final build is currently selected. BOLT is not selected.
 
 ## Fixed evaluation boundaries
 
-The baseline is accepted R24 source commit
+The historical and last verified accepted reference is R24 source commit
 `baab4def80be7af015b2e7a594cb302f66c4130e`, source tree
 `b71cac25e2c2138837f27f3c74f6a2dc5c56b565`, runtime SHA-256
 `bc14cab1e632d6cd703f6a0f65d1a8e513b4471c09a403186d72e989e3f74c13`.
 R25/R26 and the rejected phase-diagnostic result are not substituted as the
 accepted baseline. The prepared R27 serializer is not included.
+
+This checkpoint does not choose a future candidate baseline. If R28 or another
+version is adopted before selection, a new fixed recipe must bind its actual
+accepted source, ELF, tests and matching native metadata. Do not relabel the
+historical R24 preflight or fill the template from stale R24 assumptions.
 
 Controller own CPU, waited local-child CPU, sampled RSS and remote-host costs
 remain distinct. Child-CPU improvement cannot replace a failing own-CPU gate.
@@ -82,12 +99,50 @@ and qualification still need to be created. This is a bounded next experiment,
 not a claim that the current product is globally optimal or that another
 compiler setting will improve it.
 
+## Guarded driver and local checks
+
+The [external driver package](qualification-template-01/README.md) preserves the
+original eight qualification stages, original 19 Python tools, copyright, full
+test inventory and no-retry behavior. It builds a clean allowlist environment,
+uses separately bound target-directory and target-triple fields, and requires
+actual source/toolchain/config/metadata/driver/artifact identities. Explicit Cargo
+`--target`, `-vv` and release JSON provide evidence; missing or ambiguous actual
+compiler commands fail closure. No wrapper or old compiled-target cache is added.
+
+The [input template](qualification-template-01/input-template.json) remains
+`selected=false`, with every future binding null. The preserved
+[local negative check](qualification-template-01/local-validation.json) returned
+**exit 2 with 0 mutation/subprocess calls**. That result only establishes refusal
+of the unbound template; it is not a native metadata result or a successful
+qualification. This publication copy did not rerun the check. The
+[admission review](qualification-template-01/root-review-admission-01.md) and
+[Cargo review](qualification-template-01/root-review-cargo-01.md) found no definite
+blocker within their static scope; selected execution and actual compiler-log
+compatibility remain unverified.
+
+Actual coordination, accepted-version selection, native metadata, independent
+source and sparse-registry preparation, a measured fresh-build space budget,
+complete qualification and the unchanged full acceptance campaign remain future
+work. These materials are a preparation checkpoint, not an optimized runtime
+version or a change to the accepted candidate.
+
 ## Checkpoint files
 
 - [中文 prepared-only checkpoint](../../../../docs/X230_COMPILER_EXPERIMENT_20261105.md)
 - [Preflight script](preflight.py), [frozen plan](preflight-plan.json), and [original local manifest](preflight-manifest.json)
 - [History review JSON](reviews/compiler-optimization-history-01.json)
 - [Accepted R24 report](../../../../docs/X230_OPTIMIZATION_20261105_R24.md)
+- [Qualification design](candidate-qualification-design-01.md) and [JSON](candidate-qualification-design-01.json)
+- [Private preparation design](preparation-design-01.md) and [JSON](preparation-design-01.json)
+- [External driver](qualification-template-01/qualify_cpu.py), [exact diff](qualification-template-01/qualify_cpu.py.diff),
+  [original tools map](qualification-template-01/original-harness-map.json), and [package manifest](qualification-template-01/manifest.json)
+- [Admission review JSON](qualification-template-01/root-review-admission-01.json) and [Cargo review JSON](qualification-template-01/root-review-cargo-01.json)
+- [Create-only parent request](native-requests-01/01-setup-tools-parent.process_start.request.json),
+  [exact script write](native-requests-01/02-stage-preflight.binary_write.request.json),
+  [file identity request](native-requests-01/03-verify-preflight.file_info.request.json),
+  [single-key execution request](native-requests-01/04-run-preflight.process_start.request.json), and [request manifest](native-requests-01/manifest.json)
 
 The preserved JSON and history files retain their original local/remote provenance
 paths verbatim; the links above are the repository navigation for this checkpoint.
+All frozen package source, JSON, diffs, local checks and reviews are byte-identical
+copies. Only this entry README and the Chinese checkpoint document are updated.
