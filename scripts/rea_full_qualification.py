@@ -687,4 +687,7 @@ def main():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "operations":
+        from rea_operation_qualification import main as operations_main
+        sys.exit(operations_main(sys.argv[2:]))
     sys.exit(main())
