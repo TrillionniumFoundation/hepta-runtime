@@ -160,36 +160,41 @@ fn target_meta() -> rmcp::model::MetaObject {
 const NODE_STRING_CODE_UNITS: usize = 536_870_888;
 const RESERVED_STRING_CODE_UNITS: usize = NODE_STRING_CODE_UNITS - 1024;
 
-/// Count both structured JSON and its escaped text representation directly
-/// from serializer fragments. No document-sized escaped buffer is allocated.
-struct WireCounter {
-	bytes: usize,
-	code_units: usize,
-	limit: usize,
+/// This is an explicitly selected counting order, not a reconstruction of an
+/// unknown JavaScript producer. Complete JSON byte and escape totals are
+/// independent of member order. Only a Fits result can use that fact; an
+/// overflow requires its actual producer order.
+struct CountingOrder;
+impl super::rea_response_encoding::ObjectOrder for CountingOrder {
+	fn keys<'a>(
+		&self,
+		_path: &[super::rea_response_encoding::PathComponent<'_>],
+		object: &'a Map<String, Value>,
+	) -> anyhow::Result<Vec<&'a str>> {
+		let keys: Vec<&str> = object.keys().map(String::as_str).collect();
+		super::rea_response_encoding::declared_keys(object, &keys)
+	}
+}
+
+struct WireMeasurement {
+	bytes: u64,
+	code_units: u64,
 	constraint: &'static str,
 }
-impl Write for WireCounter {
+
+/// A checked destination for the already measured, admitted JSON text.
+struct MeasuredText {
+	bytes: Vec<u8>,
+	limit: usize,
+}
+impl Write for MeasuredText {
 	fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-		let text = std::str::from_utf8(bytes).map_err(io::Error::other)?;
-		for character in text.chars() {
-			let extra = match character {
-				'"' | '\\' | '\u{8}' | '\t' | '\n' | '\u{c}' | '\r' => 1,
-				c if c < ' ' => 5,
-				_ => 0,
-			};
-			self.bytes = self.bytes.saturating_add(2 * character.len_utf8() + extra);
-			self.code_units = self
-				.code_units
-				.saturating_add(2 * character.len_utf16() + extra);
-			if self.bytes > self.limit || self.code_units > RESERVED_STRING_CODE_UNITS {
-				self.constraint = if self.code_units > RESERVED_STRING_CODE_UNITS {
-					"string-length"
-				} else {
-					"receive-buffer"
-				};
-				return Err(io::Error::other("REA MCP result exceeds receive budget"));
-			}
+		if bytes.len() > self.limit.saturating_sub(self.bytes.len()) {
+			return Err(io::Error::other(
+				"Response encoder exceeded its measured text size",
+			));
 		}
+		self.bytes.extend_from_slice(bytes);
 		Ok(bytes.len())
 	}
 	fn flush(&mut self) -> io::Result<()> {
@@ -200,69 +205,155 @@ impl Write for WireCounter {
 pub(super) fn success(operation: &str, value: Value, retained: Option<Value>) -> CallToolResult {
 	let bundle_summary = value
 		.get("result")
-		.and_then(|v| v.get("kind"))
+		.and_then(|value| value.get("kind"))
 		.is_some_and(|kind| kind == "evidence-bundle-summary");
-	deliver(operation, &value, retained, bundle_summary)
+	let summary_order = super::rea_response_order::BundleSummaryOrder(&value);
+	let order: Option<&dyn super::rea_response_encoding::ObjectOrder> = if bundle_summary {
+		Some(&summary_order)
+	} else {
+		None
+	};
+	deliver_view(
+		operation,
+		super::rea_response_encoding::JsonView::Value(&value),
+		order,
+		retained,
+		bundle_summary,
+		operation != "export_evidence_bundle",
+		|| Ok(value.clone()),
+	)
 }
 
-pub(super) fn success_borrowed<T: serde::Serialize + ?Sized>(
+pub(super) fn success_borrowed(
 	operation: &str,
-	value: &T,
+	value: &Value,
 	retained: Option<Value>,
+	origin: super::rea_response_order::RecordOrigin,
 ) -> CallToolResult {
-	deliver(operation, value, retained, false)
+	let order = super::rea_response_order::RecordOrder::new(value, origin);
+	deliver_view(
+		operation,
+		super::rea_response_encoding::JsonView::Value(value),
+		Some(&order),
+		retained,
+		false,
+		true,
+		|| Ok(value.clone()),
+	)
 }
 
-fn deliver<T: serde::Serialize + ?Sized>(
+/// Borrow even large retained payloads while checking their complete delivery.
+/// `materialize` runs only after admission; refusal never deep-clones a bundle.
+pub(super) fn deliver_view(
 	operation: &str,
-	value: &T,
+	value: super::rea_response_encoding::JsonView<'_>,
+	original_order: Option<&dyn super::rea_response_encoding::ObjectOrder>,
 	retained: Option<Value>,
 	bundle_summary: bool,
+	target_content: bool,
+	materialize: impl FnOnce() -> serde_json::Result<Value>,
 ) -> CallToolResult {
+	use super::rea_response_encoding::{self as encoding, Budget, Measurement, Representations};
 	let response_bytes = match response_budget() {
 		Ok(value) => value,
 		Err(error) => return error.wire(),
 	};
-	let limit = response_bytes - ENVELOPE_RESERVATION;
-	let envelope = json!({"content":[{"type":"text","text":""}],"structuredContent":null})
-		.to_string()
-		.len() - 4
-		+ json!({"_meta":target_meta()}).to_string().len()
-		- 1;
-	let mut counter = WireCounter {
-		bytes: envelope,
-		code_units: envelope,
-		limit,
-		constraint: "receive-buffer",
+	let budget = Budget {
+		bytes: (response_bytes - ENVELOPE_RESERVATION) as u64,
+		representations: Representations::StructuredAndText,
+		target_content,
 	};
-	if let Err(error) = serde_json::to_writer(&mut counter, value) {
-		if counter.bytes <= limit && counter.code_units <= RESERVED_STRING_CODE_UNITS {
+	let formatter = super::rea_evidence::canonical_js_number;
+	let order = original_order.unwrap_or(&CountingOrder);
+	let measured = match encoding::measure_view(value, order, formatter, budget) {
+		Ok(value) => value,
+		Err(error) => {
 			return Failure::output(
 				operation,
-				format!("Complete result serialization failed: {error}"),
+				format!("Complete result measurement failed: {error:#}"),
+			)
+			.wire()
+		}
+	};
+	if matches!(measured, Measurement::Overflow { .. }) && original_order.is_none() {
+		return Failure::output(operation, "Complete result exceeds its response budget, but its original producer field order is unavailable; no approximate overflow count was reported.").wire();
+	}
+	let json_bytes = match measured {
+		Measurement::Overflow {
+			bytes_at_least,
+			code_units_at_least,
+			constraint,
+		} => {
+			let measured = WireMeasurement {
+				bytes: bytes_at_least,
+				code_units: code_units_at_least,
+				constraint: constraint.as_str(),
+			};
+			return overflow(
+				operation,
+				response_bytes,
+				&measured,
+				retained,
+				bundle_summary,
 			)
 			.wire();
 		}
-		return overflow(
+		Measurement::Fits { json_bytes, .. } => match usize::try_from(json_bytes) {
+			Ok(size) => size,
+			Err(_) => {
+				return Failure::output(
+					operation,
+					"Admitted JSON size is not addressable on this host.",
+				)
+				.wire()
+			}
+		},
+	};
+	let mut output = MeasuredText {
+		bytes: Vec::new(),
+		limit: json_bytes,
+	};
+	if output.bytes.try_reserve_exact(json_bytes).is_err() {
+		return Failure::resource(
 			operation,
-			response_bytes,
-			&counter,
-			retained,
-			bundle_summary,
+			"memory",
+			"Host memory could not hold the admitted response text.",
+			json!({"response_text_bytes":json_bytes}),
+			false,
+			"Retry with sufficient host memory, or export the retained Evidence.",
 		)
 		.wire();
 	}
-	let value = match serde_json::to_value(value) {
+	if let Err(error) = encoding::write_json_view(value, order, formatter, &mut output) {
+		return Failure::output(
+			operation,
+			format!("Complete result encoding failed: {error:#}"),
+		)
+		.wire();
+	}
+	if output.bytes.len() != json_bytes {
+		return Failure::output(
+			operation,
+			"Response encoder changed its measured JSON size.",
+		)
+		.wire();
+	}
+	let text = match String::from_utf8(output.bytes) {
+		Ok(text) => text,
+		Err(error) => return Failure::output(operation, error.to_string()).wire(),
+	};
+	let structured = match materialize() {
 		Ok(value) => value,
 		Err(error) => return Failure::output(operation, error.to_string()).wire(),
 	};
-	let mut result = CallToolResult::structured(value);
+	let mut result = CallToolResult::success(vec![ContentBlock::text(text)]);
 	result.is_error = None;
-	result.meta = Some(target_meta());
+	result.structured_content = Some(structured);
+	result.meta = target_content.then(target_meta);
 	result
 }
 
-fn response_budget() -> Result<usize, Failure> {
+pub(super) fn response_budget() -> Result<usize, Failure> {
 	static BUDGET: OnceLock<Result<usize, String>> = OnceLock::new();
 	BUDGET.get_or_init(|| {
 		let Some(value) = std::env::var_os("REA_MCP_MAX_RESPONSE_BYTES") else { return Ok(RESPONSE_BYTES); };
@@ -280,7 +371,7 @@ fn response_budget() -> Result<usize, Failure> {
 fn overflow(
 	operation: &str,
 	response_bytes: usize,
-	measured: &WireCounter,
+	measured: &WireMeasurement,
 	retained: Option<Value>,
 	bundle_summary: bool,
 ) -> Failure {

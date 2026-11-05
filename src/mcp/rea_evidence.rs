@@ -116,7 +116,7 @@ pub(super) fn parse_unique_json(data: &[u8]) -> Result<Value> {
 /// breaks exact decimal ties differently from ECMAScript. The transformations
 /// below only choose decimal/exponent notation. Independent npm Evidence and
 /// Node bit-pattern fixtures verify the result; exhaustive f64 coverage is not claimed.
-fn canonical_js_number(source: &Number) -> Result<String> {
+pub(super) fn canonical_js_number(source: &Number) -> Result<String> {
 	let number = source
 		.as_f64()
 		.ok_or_else(|| anyhow!("REA JSON number is not representable as f64"))?;

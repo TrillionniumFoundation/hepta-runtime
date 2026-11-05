@@ -18,6 +18,8 @@
 
 use super::rea_contract::{self, Failure};
 use super::rea_evidence;
+use super::rea_response_encoding::JsonView;
+use super::rea_response_order::{BundleOrder, RecordOrigin};
 use rmcp::model::CallToolResult;
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
@@ -25,12 +27,21 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Default)]
 pub(super) struct EvidenceSession {
-	records: Mutex<BTreeMap<String, Arc<Value>>>,
+	records: Mutex<BTreeMap<String, SessionRecord>>,
+}
+
+/// Payload and its first producing entry point are published atomically.
+#[derive(Clone, Debug)]
+struct SessionRecord {
+	evidence: Arc<Value>,
+	origin: RecordOrigin,
 }
 
 pub(super) struct RetainedRecord {
 	pub(super) evidence: Arc<Value>,
 	pub(super) reference: Value,
+	/// The current invocation; the registry separately keeps its first origin.
+	pub(super) origin: RecordOrigin,
 }
 
 /// Immutable ownership of one session's complete records at selection time.
@@ -91,7 +102,10 @@ impl EvidenceSession {
 			.lock()
 			.map_err(|_| Failure::integrity("Evidence session registry is unavailable"))?;
 		Ok(EvidenceSnapshot {
-			records: records.clone(),
+			records: records
+				.iter()
+				.map(|(id, entry)| (id.clone(), Arc::clone(&entry.evidence)))
+				.collect(),
 		})
 	}
 
@@ -100,11 +114,20 @@ impl EvidenceSession {
 			.records
 			.lock()
 			.map_err(|_| Failure::integrity("Evidence session registry is unavailable"))?;
-		Ok(records.get(id).cloned())
+		Ok(records.get(id).map(|entry| Arc::clone(&entry.evidence)))
 	}
 	/// Validate identity before publication. A repeated semantic record keeps
 	/// its first display metadata, as the frozen session ledger does.
+	#[cfg(test)]
 	pub(super) fn record(&self, evidence: Value) -> Result<RetainedRecord, Failure> {
+		self.record_with_origin(evidence, RecordOrigin::Unknown)
+	}
+
+	pub(super) fn record_with_origin(
+		&self,
+		evidence: Value,
+		origin: RecordOrigin,
+	) -> Result<RetainedRecord, Failure> {
 		rea_evidence::verify_record(&evidence)
 			.map_err(|error| Failure::integrity(error.to_string()))?;
 		let id = evidence["evidence_id"]
@@ -117,16 +140,23 @@ impl EvidenceSession {
 			.map_err(|_| Failure::integrity("Evidence session registry is unavailable"))?;
 		let evidence = Arc::new(evidence);
 		if let Some(existing) = records.get(&id) {
-			if !rea_evidence::semantic_equal(existing, &evidence)
+			if !rea_evidence::semantic_equal(&existing.evidence, &evidence)
 				.map_err(|error| Failure::integrity(error.to_string()))?
 			{
 				return Err(Failure::integrity("Conflicting evidence record"));
 			}
 		} else {
-			records.insert(id.clone(), Arc::clone(&evidence));
+			records.insert(
+				id.clone(),
+				SessionRecord {
+					evidence: Arc::clone(&evidence),
+					origin,
+				},
+			);
 		}
 		Ok(RetainedRecord {
 			evidence,
+			origin,
 			reference: json!({"kind":"retained-evidence","evidence_id":id}),
 		})
 	}
@@ -139,10 +169,19 @@ impl EvidenceSession {
 			Ok(value) => value,
 			Err(error) => return error.wire(),
 		};
-		let records = match self.records.lock() {
+		let registry = match self.records.lock() {
 			Ok(records) => records,
 			Err(_) => return Failure::integrity("Evidence session registry is unavailable").wire(),
 		};
+		// Clone only Arc handles while holding the mutex. Response measurement
+		// and encoding run against an immutable selection after releasing it.
+		let selected_origins: Vec<RecordOrigin> =
+			registry.values().map(|entry| entry.origin).collect();
+		let records: BTreeMap<String, Arc<Value>> = registry
+			.iter()
+			.map(|(id, entry)| (id.clone(), Arc::clone(&entry.evidence)))
+			.collect();
+		drop(registry);
 		if options.summary {
 			let value = summarize(&records, &options.filters);
 			drop(records);
@@ -154,12 +193,46 @@ impl EvidenceSession {
 			struct ResultView<'a> {
 				result: BundleView<'a>,
 			}
-			rea_contract::success_borrowed(
+			let complete = ResultView {
+				result: bundle(&records),
+			};
+			let view = &complete.result;
+			let artifacts: Vec<&Value> = view.artifacts.iter().collect();
+			let providers: Vec<&Value> = view.providers.iter().collect();
+			let environments: Vec<&Value> = view.environments.iter().collect();
+			let scenarios: Vec<&Value> = view.scenarios.iter().collect();
+			let captures: Vec<&Value> = view.captures.iter().collect();
+			let unknowns: Vec<&Value> = view.unknowns.iter().collect();
+			let fields = [
+				("artifacts", JsonView::Values(&artifacts)),
+				("providers", JsonView::Values(&providers)),
+				("environments", JsonView::Values(&environments)),
+				("scenarios", JsonView::Values(&scenarios)),
+				("captures", JsonView::Values(&captures)),
+				("unknowns", JsonView::Values(&unknowns)),
+				("records", JsonView::Values(&view.records)),
+			];
+			let result = [("result", JsonView::Object(&fields))];
+			let order = match BundleOrder::new(&view.records, &selected_origins) {
+				Ok(order) => order,
+				Err(error) => {
+					return Failure::output("get_evidence_bundle", error.to_string()).wire()
+				}
+			};
+			// Generic records without recorded producer provenance have no known
+			// source order. Their Fits size is order independent; overflow never fabricates
+			// a source order. Production producers always supply an explicit origin.
+			let known = !selected_origins.contains(&RecordOrigin::Unknown);
+			let original_order: Option<&dyn super::rea_response_encoding::ObjectOrder> =
+				known.then_some(&order);
+			rea_contract::deliver_view(
 				"get_evidence_bundle",
-				&ResultView {
-					result: bundle(&records),
-				},
+				JsonView::Object(&result),
+				original_order,
 				None,
+				false,
+				true,
+				|| serde_json::to_value(&complete),
 			)
 		}
 	}
