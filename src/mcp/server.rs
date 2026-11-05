@@ -42,6 +42,7 @@ use super::{
 	rea, rea_artifact_zip, rea_asar, rea_evidence, rea_javascript, rea_javascript_graph, rea_model,
 	rea_provider, rea_store, rea_web, weight, weight_artifact, weight_forward, weight_tensor,
 };
+use super::{rea_analysis_view, rea_analysis_view_mcp_input};
 use super::{rea_apk_evidence, rea_apk_mcp_input, rea_evidence_export};
 use super::{rea_contract, rea_elf_notes, rea_evidence_session, rea_mcp_input, rea_mcp_transport};
 
@@ -252,6 +253,7 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"rea_inspect_elf_notes",
 	"rea_get_evidence_bundle",
 	"rea_inspect_apk_signature_evidence",
+	"rea_inspect_analysis_view",
 	"rea_export_evidence_bundle",
 	"rea_model_session_open",
 	"rea_model_session_query",
@@ -1787,6 +1789,64 @@ impl OctofsServer {
 		};
 		Ok(rea_apk_evidence::inspect(
 			params,
+			Arc::clone(&self.rea_session),
+			context.ct.clone(),
+			admission,
+		)
+		.await)
+	}
+
+	#[tool(
+		title = "Inspect Analysis View",
+		input_schema = rea_contract::view_input_schema(),
+		output_schema = rea_contract::view_output_schema(),
+		annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
+		description = "Inspect summary or paginated APK signing views from complete retained Evidence, an authenticated inline record, or an explicitly selected Evidence JSON file. Retained views never reopen the original artifact. File sources must be absolute local paths under configured workspace roots; imported parents are not implicitly retained. Successful derived views are retained in this MCP session and can be read or exported. Other upstream view kinds return an explicit native capability boundary. The declared input and output schemas are frozen from REA 6.8.0."
+	)]
+	async fn rea_inspect_analysis_view(
+		&self,
+		Parameters(params): Parameters<serde_json::Value>,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResult, ErrorData> {
+		let raw = context
+			.extensions
+			.get::<rea_mcp_transport::ReaRawArguments>();
+		if let Some(error) = raw.and_then(|raw| raw.protocol_error()) {
+			return Err(error);
+		}
+		match rea_analysis_view_mcp_input::validate(
+			&params,
+			raw.and_then(|raw| raw.object_keys(&[])),
+			raw.and_then(|raw| raw.object_keys(&["source"])),
+			raw.and_then(|raw| raw.object_keys(&["view"])),
+		) {
+			Err(error) => return Ok(error.wire()),
+			Ok(rea_analysis_view_mcp_input::Validation::CapabilityGap { .. }) => {
+				return Ok(rea_analysis_view::profile_gap().wire());
+			}
+			Ok(_) => {}
+		}
+		let inline_order = raw.and_then(|raw| raw.inline_evidence_order());
+		let roots = match runtime::runtime_config() {
+			Ok(config) => config.controller_workspace_roots.clone(),
+			Err(error) => {
+				return Ok(
+					rea_contract::Failure::output(rea_analysis_view::OP, error.to_string()).wire(),
+				)
+			}
+		};
+		let admission = match runtime::effect_owner_fence::admit_new_effect().await {
+			Ok(permit) => Arc::new(permit),
+			Err(error) => {
+				return Ok(
+					rea_contract::Failure::output(rea_analysis_view::OP, error.to_string()).wire(),
+				)
+			}
+		};
+		Ok(rea_analysis_view::inspect(
+			params,
+			inline_order,
+			roots,
 			Arc::clone(&self.rea_session),
 			context.ct.clone(),
 			admission,
@@ -3616,6 +3676,7 @@ impl ServerHandler for OctofsServer {
 					"rea_inspect_elf_notes"
 						| "rea_get_evidence_bundle"
 						| "rea_inspect_apk_signature_evidence"
+						| "rea_inspect_analysis_view"
 						| "rea_export_evidence_bundle"
 				) {
 					return tool;

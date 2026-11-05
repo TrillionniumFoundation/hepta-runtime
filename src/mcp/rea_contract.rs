@@ -551,3 +551,31 @@ pub(super) fn apk_output_schema() -> Arc<JsonObject> {
 		})
 		.clone()
 }
+
+pub(super) fn view_input_schema() -> Arc<JsonObject> {
+	static SCHEMA: OnceLock<Arc<JsonObject>> = OnceLock::new();
+	SCHEMA
+		.get_or_init(|| {
+			Arc::new(
+				serde_json::from_str(include_str!(
+					"rea_contract_schemas/inspect_analysis_view.input.json"
+				))
+				.expect("frozen analysis view input schema"),
+			)
+		})
+		.clone()
+}
+
+pub(super) fn view_output_schema() -> Arc<JsonObject> {
+	static SCHEMA: OnceLock<Arc<JsonObject>> = OnceLock::new();
+	SCHEMA
+		.get_or_init(|| {
+			Arc::new(
+				serde_json::from_str(include_str!(
+					"rea_contract_schemas/inspect_analysis_view.output.json"
+				))
+				.expect("frozen analysis view output schema"),
+			)
+		})
+		.clone()
+}

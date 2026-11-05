@@ -128,6 +128,35 @@ impl EvidenceSession {
 		evidence: Value,
 		origin: RecordOrigin,
 	) -> Result<RetainedRecord, Failure> {
+		self.record_checked(evidence, origin, || Ok(()))
+	}
+
+	/// Check cancellation again after digest/conflict validation, immediately
+	/// before the publication point. The caller handles later cancellation with
+	/// the complete retained reference; records are never rolled back by ID.
+	pub(super) fn record_if_active(
+		&self,
+		evidence: Value,
+		origin: RecordOrigin,
+		cancellation: &tokio_util::sync::CancellationToken,
+		operation: &str,
+	) -> Result<RetainedRecord, Failure> {
+		self.record_checked(evidence, origin, || {
+			if cancellation.is_cancelled() {
+				Err(Failure::cancelled(operation))
+			} else {
+				Ok(())
+			}
+		})
+	}
+
+	fn record_checked(
+		&self,
+		evidence: Value,
+		origin: RecordOrigin,
+		active: impl Fn() -> Result<(), Failure>,
+	) -> Result<RetainedRecord, Failure> {
+		active()?;
 		rea_evidence::verify_record(&evidence)
 			.map_err(|error| Failure::integrity(error.to_string()))?;
 		let id = evidence["evidence_id"]
@@ -145,7 +174,9 @@ impl EvidenceSession {
 			{
 				return Err(Failure::integrity("Conflicting evidence record"));
 			}
+			active()?;
 		} else {
+			active()?;
 			records.insert(
 				id.clone(),
 				SessionRecord {

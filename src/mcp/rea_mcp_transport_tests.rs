@@ -1,3 +1,9 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+// SPDX-License-Identifier: Apache-2.0
+
+//! Raw-frame ownership, property order and protocol error regressions.
+
 use super::*;
 use std::{io::Cursor, time::Duration};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
@@ -81,6 +87,49 @@ async fn duplicate_filters_keeps_its_last_object_order() {
 		["filters", "detail"]
 	);
 	assert_eq!(raw(&message).object_keys(&["filters"]).unwrap(), ["z", "a"]);
+}
+
+#[tokio::test]
+async fn inline_source_order_keeps_nested_arrays_and_replaces_duplicate_subtrees() {
+	let message = decode(call_line("rea_inspect_analysis_view",
+		r#"{"source":{"kind":"inline","evidence":{"old":1},"evidence":{"z":{},"10":0,"2":0,"a":[{"z":1,"a":2,"z":3}],"z":{"new_z":1,"new_a":2}}},"view":{"kind":"summary"}}"#, 6)).await;
+	let order = raw(&message).inline_evidence_order().unwrap();
+	assert_eq!(order.keys(&[]).unwrap(), ["2", "10", "z", "a"]);
+	assert_eq!(
+		order
+			.keys(&[serde_json::json!("a"), serde_json::json!(0)])
+			.unwrap(),
+		["z", "a"]
+	);
+	assert_eq!(
+		order.keys(&[serde_json::json!("z")]).unwrap(),
+		["new_z", "new_a"]
+	);
+	assert!(order.keys(&[serde_json::json!("old")]).is_none());
+	assert!(raw(&message).protocol_error().is_none());
+}
+
+#[tokio::test]
+async fn inline_order_budget_refuses_without_corrupting_the_next_frame() {
+	let array = format!("[{}null]", "null,".repeat(131_072));
+	let arguments = format!(
+		r#"{{"source":{{"kind":"inline","evidence":{{"items":{array}}}}},"view":{{"kind":"summary"}}}}"#
+	);
+	let lines = format!(
+		"{}{}",
+		call_line("rea_inspect_analysis_view", &arguments, 7),
+		call_line("rea_get_evidence_bundle", "{}", 8)
+	);
+	let mut transport = ReaMcpTransport::new(Cursor::new(lines.into_bytes()), tokio::io::sink());
+	let rejected = transport.receive().await.unwrap();
+	assert!(raw(&rejected)
+		.protocol_error()
+		.unwrap()
+		.message
+		.contains("131072"));
+	assert!(raw(&transport.receive().await.unwrap())
+		.protocol_error()
+		.is_none());
 }
 
 #[tokio::test]

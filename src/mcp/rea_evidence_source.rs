@@ -1282,6 +1282,7 @@ fn list_record_ids(records: &[Value]) -> SourceResult<String> {
 	})
 }
 
+#[cfg(test)]
 pub(super) fn authenticate_file(
 	value: Value,
 	path: &str,

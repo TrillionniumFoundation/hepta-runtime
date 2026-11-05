@@ -19,6 +19,7 @@ use std::{
 	task::{Context, Poll},
 };
 
+pub(crate) use super::rea_inline_order::InlineEvidenceOrder;
 use rmcp::{
 	model::{
 		CallToolRequest, CallToolRequestParams, ClientRequest, ErrorData, GetExtensions,
@@ -56,6 +57,7 @@ struct OrderNode {
 	child: Option<Box<OrderNode>>,
 	view: Option<Box<OrderNode>>,
 	source: Option<Box<OrderNode>>,
+	inline_evidence: Option<Arc<InlineEvidenceOrder>>,
 }
 
 impl OrderNode {
@@ -66,6 +68,7 @@ impl OrderNode {
 			child: None,
 			view: None,
 			source: None,
+			inline_evidence: None,
 		}
 	}
 }
@@ -96,6 +99,16 @@ impl ReaRawArguments {
 			_ => return None,
 		};
 		(node.kind == Kind::Object).then_some(node.keys.as_slice())
+	}
+
+	/// Borrow only metadata authenticated from this request's inline source.
+	pub(crate) fn inline_evidence_order(&self) -> Option<Arc<InlineEvidenceOrder>> {
+		self.arguments
+			.source
+			.as_ref()?
+			.inline_evidence
+			.as_ref()
+			.map(Arc::clone)
 	}
 
 	/// The actual REA SDK rejects a present non-object arguments value at the
@@ -148,6 +161,13 @@ impl ReaRawArguments {
 					.unwrap_or_else(|| OrderNode::scalar(Kind::Missing)),
 				failure: None,
 			},
+			Err(error)
+				if error
+					.to_string()
+					.contains(super::rea_inline_order::BUDGET_ERROR) =>
+			{
+				Self::failed(super::rea_inline_order::BUDGET_ERROR)
+			}
 			Err(_) => Self::failed(
 				"REA raw argument boundary could not authenticate the received JSON frame.",
 			),
@@ -155,8 +175,8 @@ impl ReaRawArguments {
 	}
 }
 
-// Retain only the four relevant object levels. Unrelated values are consumed by
-// serde's JSON parser as IgnoredAny, including nested arrays and unknown objects.
+// Retain the four relevant object levels and bounded inline Evidence order.
+// Unrelated values are consumed without retaining a second payload tree.
 struct OrderScanner(u8);
 
 impl<'de> DeserializeSeed<'de> for OrderScanner {
@@ -216,9 +236,11 @@ impl<'de> Visitor<'de> for OrderScanner {
 				// JSON.parse retains a property's first position but its last value.
 				node.child = Some(Box::new(map.next_value_seed(OrderScanner(self.0 + 1))?));
 			} else if self.0 == 2 && key == "source" {
-				node.source = Some(Box::new(map.next_value_seed(OrderScanner(3))?));
+				node.source = Some(Box::new(map.next_value_seed(OrderScanner(4))?));
 			} else if self.0 == 2 && key == "view" {
 				node.view = Some(Box::new(map.next_value_seed(OrderScanner(3))?));
+			} else if self.0 == 4 && key == "evidence" {
+				node.inline_evidence = Some(Arc::new(map.next_value::<InlineEvidenceOrder>()?));
 			} else {
 				map.next_value::<IgnoredAny>()?;
 			}

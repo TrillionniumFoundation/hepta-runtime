@@ -36,13 +36,6 @@ use std::sync::OnceLock;
 pub(super) enum RecordOrigin {
 	NativeTool,
 	ApkToolDerived,
-	#[cfg_attr(
-		not(test),
-		allow(
-			dead_code,
-			reason = "Direct analysis-view provenance is covered by the frozen order oracle and session tests; its production route is integrated in the next stage."
-		)
-	)]
 	AnalysisViewToolDerived,
 	#[default]
 	Unknown,

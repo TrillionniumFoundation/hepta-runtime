@@ -289,7 +289,7 @@ fn parser_failure(error: rea_apk_signature::ApkInspectionError, path: &str) -> F
 	}
 }
 
-fn view_failure(operation: &str, error: rea_apk_signature::ApkViewError) -> Failure {
+pub(super) fn view_failure(operation: &str, error: rea_apk_signature::ApkViewError) -> Failure {
 	let issues = error
 		.issues
 		.into_iter()
@@ -346,7 +346,7 @@ fn complete_record(
 	)
 }
 
-fn project_record(parent: &Value, view: &Value) -> Result<Value, Failure> {
+pub(super) fn project_record(parent: &Value, view: &Value) -> Result<Value, Failure> {
 	let id = parent["evidence_id"]
 		.as_str()
 		.ok_or_else(|| Failure::integrity("Parent Evidence identifier is missing."))?;
