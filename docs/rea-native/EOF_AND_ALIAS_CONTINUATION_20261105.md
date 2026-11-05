@@ -66,3 +66,15 @@ Qualification follows the actual original contract. `inspect_model_artifact` ins
 The complete source/build monitor, existing nine-stage matrix, independent build consumer, actual new-binary EOF and JS comparisons, and exploratory same-parsed-body cost probe are external evidence tied to the final frozen candidate. They are not marked passed in advance. Full schema/Evidence/float and representation closure, authentic persistence, concurrency negatives, all original formats/tools, real IDA/Hopper profiles, dynamic isolation, cross-host recovery and deployment remain open.
 
 GitHub publication is separate: a retained same-repository publication attempt returned account-suspension HTTP 403. No alternate identity/transport is used; local source commits and evidence must not be described as already present in PR84.
+
+## Superseding graph identity repair
+
+The actual 3beb8a28 / 4bd93ab8 diagnostic worker repaired five selected alias/constructor projections, but retained the old graph profile v2. The old b80ff24a and repaired 4bd93ab8 workers returned the same graph SHA for changed rows. For after.js that captured identity is e1032f30477d34882a64d5d86f648c416742e663a1bad3853913667ab885888c. This violates the documented rule that analysis/collection semantics must advance the graph profile.
+
+The production change advances only GRAPH_PROFILE to v3. Tests retain v1 refusal, add v2 refusal, and use that actual captured v2 identity at offsets 0 and 1 with a current-v3 positive control. Explicit external/type-erasure profile expectations and the capability scope are updated. The JSON EOF observer and lexical alias algorithm remain unchanged.
+
+The owner deliberately cancelled its R2 full matrix before editing source: original job 1a1ac7d38f4-fc05-54b0, complete/durable cancelled terminal, exit -15; inner matrix exit 143, signal 15, build_bound false, no final binding. The before/after full tracked source snapshots agree and the worktree remained clean. This is a retained cancelled attempt, not a successful full matrix or a code-test failure.
+
+The R2 finite captures remain historical, not promoted by a later binary: JSON/Evidence collected 116 cases with 89/89 EOF matches, 14 non-EOF diagnostic mismatches and one complete unpaired-surrogate representation mismatch (parsed 101/116; full unnormalized object 1/116; raw frame 0/116). The selected internal JS worker projection matched 13/13 with five repaired cases and zero observed regressions. Fresh captures and a new full matrix are required for this v3 candidate; no complete tool, full schema, external engine, isolation, performance or deployment qualification follows from these finite results.
+
+Four source tests for actual npm Evidence, finite-number rendering, fractional Evidence and schema rejection require explicit ignored-test execution with pinned real inputs. An ordinary full matrix does not execute these acceptance gates. Their eventual results must be reported separately. Global HOLD/NO_GO and all 229 open tool rows remain unchanged.
