@@ -17,7 +17,7 @@ Eight qualification stages returned zero. Across five test targets, 1,645 passed
 | [Qualification and format review](reviews/qualification-review-01.json) | Review scope and limits; known-terminal regression fixture |
 | [Output identities](reviews/qualification-output-identities-01.json) | Independent remote full SHA-256/size receipts for the three output files |
 
-The complete audit body and ELF bodies were not downloaded for this qualification closure. Audit-stage rc=0 comes from the full terminal report; the empty audit error list comes from the exact compact evidence generated from the terminal audit report. The original audit file's full SHA-256 and size were independently checked. Future raw archives remain separate evidence.
+The complete audit body and ELF bodies were not downloaded for this qualification closure. Audit-stage rc=0 comes from the full terminal report; the empty audit error list comes from the exact compact evidence generated from the terminal audit report. The original audit file's full SHA-256 and size were independently checked. The complete audit body is now included in the raw qualification archive below. ELF and private configuration bodies remain omitted, with their original remote identities retained.
 
 ## Source and static review
 
@@ -68,4 +68,21 @@ The complete control report has `passed=true`, `adoption_passed=true`, unchanged
 
 The control report SHA-256 is `066952f12414e8f7291e21e58a77d53d4cd712104557bd6bdfdd7c383f9f1e2a`. The actual candidate source size/SHA map digest is `e449e138216242c89b2ceff69babafe658411a42c73df0c66b222899540bdff7`. These are the actual completed campaign identities, not a replacement success wrapper.
 
-Core source, qualification and campaign evidence may publish together. Full raw archives follow in a companion evidence commit for this same R24 version; download links are added after the archives are in the repository. The unchanged lifecycle harness stores this run's raw evidence at `/home/qian/hepta-runtime-optimization-20261104-r16/r24-cancel-recovery-01`, explicitly bound by the control report. Final publication success remains tied to actual GitHub commit/ref readback.
+Core source and evidence were published in [baab4def80be](https://github.com/TrillionniumFoundation/hepta-runtime/commit/baab4def80be7af015b2e7a594cb302f66c4130e), with branch/PR head and qualified source-tree readback. The complete raw archives below are preserved in the companion evidence commit for the same accepted R24 source. The unchanged lifecycle harness stores this run's raw evidence at `/home/qian/hepta-runtime-optimization-20261104-r16/r24-cancel-recovery-01`, explicitly bound by the control report. Final publication success remains tied to actual GitHub commit/ref readback.
+
+## Published source and full raw archives
+
+[Actual source publication receipt](reviews/source-publication-readback-01.json) binds commit `baab4def80be7af015b2e7a594cb302f66c4130e`, source tree `b71cac25e2c2138837f27f3c74f6a2dc5c56b565`, the actual qualification/campaign and matching branch/PR heads. Its remote receipt installation also completed successfully; [native status](reviews/publication-receipt-install-status-01.json) is preserved.
+
+| Archive | Bytes | SHA256 |
+|---|---:|---|
+| [qualification-01.tar.gz](evidence/qualification-01.tar.gz) | 2,411,207 | `b2c036b66a4ca69c3300bfd8602d4363b62f101f3e28e81c8fc5c5a1e50af210` |
+| [campaign-01.tar.gz](evidence/campaign-01.tar.gz) | 3,273,618 | `f94bb9a855a0727dfccae6ccdd8db714079644a9cd4fbcae0c34be6ba75066b0` |
+
+All 87 fixed-version chunks and both whole archives passed byte/SHA checks. One complete tar QA read all 7,684 payload files (41,405,167 bytes), both manifests, the exact member sets, gzip EOF/CRC and tar padding. All 220 compiled source input bodies and the actual qualification/campaign/summary/lifecycle report bodies were independently bound to their original bytes. The 29 omitted ELF/private bodies have metadata-only evidence; no local body rehash is claimed.
+
+Evidence: [actual export](reviews/export-report-01.json), [archive identities](reviews/archive-identities-01.json), [assembly](reviews/archive-assembly-01.json), [full tar QA](reviews/archive-tar-qa-01.json), [semantic readback](reviews/archive-semantic-readback-01.json), [transfer report](reviews/archive-transfer-01.json), [actual Git blob receipts](reviews/github-archive-blobs-01.json), [terminal control/lifecycle readback](reviews/terminal-report-readback-01.json), [Mac native terminal status](reviews/mac-native-terminal-status-01.json). The [operator read event](reviews/operator-read-events-01.json) preserves a failed read-only inspection while the campaign report was still being written; it was not a campaign RPC or a workload retry.
+
+Tools: [export](evidence-tools/export_r24_evidence.py), [fixed-version receive](evidence-tools/archive_receive.py), [tar QA](evidence-tools/archive_tar_qa.py), [semantic readback](evidence-tools/archive_semantic_readback.py), with the [preparation review](reviews/archive-preparation-review-01.json).
+
+The subsequent [reference-buffer screen](../reference-buffer/README.md) rejected 64 KiB under its unchanged gates. R24 retains the actual qualified 16 KiB implementation; the companion commit does not change its source tree.

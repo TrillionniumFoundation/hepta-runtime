@@ -119,6 +119,12 @@ Mac holder 报告 `passed=true`、远端 returncode=0；本轮持有的 agent �
 
 ## 证据归档状态
 
-核心提交包含资格、源码绑定、审查、实际 inputs、冻结工具、完整 campaign 控制报告及各项独立分析原字节。完整原始日志包由同一 R24 版本的伴随取证提交补齐；下载链接在实际入库后加入证据索引。
+[源码提交 baab4def80be](https://github.com/TrillionniumFoundation/hepta-runtime/commit/baab4def80be7af015b2e7a594cb302f66c4130e) 已包含资格、源码绑定、审查、实际 inputs、冻结工具、完整 campaign 控制报告及各项独立分析原字节，分支与 PR 的提交身份也已实际回读一致。完整原始日志包在同版伴随取证提交补齐，见 [完整证据索引](../tools/x230/20261105/r24/README.md)。87 个固定版本分片、两个整包和 7,684 个 payload 文件（41,405,167 B）的实际字节与 SHA256 均已核对；29 项省略正文只保留远端身份元数据。
 
 原始取消恢复证据按未修改的 harness 约束保存在 `/home/qian/hepta-runtime-optimization-20261104-r16/r24-cancel-recovery-01`，由本轮控制报告明确绑定。这是本次 R24 的新目录，不覆盖 R23 原失败证据。
+
+## 后续筛选与本轮停止依据
+
+随后对 reference 路径做了冻结的 16 KiB / 64 KiB 公共文件组件对照。输出工具的一处 JSON 宏语法错误先导致编译退出 1，零性能样本；原失败原样保留。单独修正元数据括号后，首次实际测量完整执行 48 个 cell，所有矩阵、门槛、被计时代码和依赖身份保持原值。
+
+64 KiB 的完整 public triplet CPU 只下降 5.672%，未达到 20% 门；`false` CPU 增加 2.739%，超过 2% 回退门。该方向不采用，生产源码保留 R24 的 16 KiB。具体原始数据、失败与工具修正、独立重算及范围限制见 [筛选报告](X230_OPTIMIZATION_20261105_REFERENCE_BUFFER.md)。本轮停止依据限于当前负载、资源与正确性约束，不声称所有运行场景已达到全局最优。
