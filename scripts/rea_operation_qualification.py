@@ -675,7 +675,7 @@ def main(argv=None):
               "unimplemented_required_observations": list(UNIMPLEMENTED_REQUIREMENTS),
               "execution": {"repo": str(args.repo), "output": str(output), "python": sys.version,
                             "scope": "Linux local functional profile; not malicious same-UID execution attestation"}}
-    reference = native = monitor = None
+    reference = native = monitor = producer_monitor = None
     exit_code = 1
     try:
         report["reference_before"] = reference_package(args.reference_package, args.reference_tarball)
@@ -691,7 +691,19 @@ def main(argv=None):
         fixtures, cases = fixture_cases(workspace)
         report["workspace"] = str(workspace)
         report["case_manifest"] = artifact_json(output, "cases.json", {"profile": PROFILE, "fixtures": fixtures, "cases": cases})
-        report["producer_files"] = [{**identity(args.repo / name), "path": name} for name in PRODUCER_FILES]
+        producer_repo = Path(__file__).resolve().parents[1]
+        report["execution"]["producer_repo"] = str(producer_repo)
+        report["producer_files"] = [{**identity(producer_repo / name), "path": name} for name in PRODUCER_FILES]
+        report["producer_execution_files"] = []
+        for name in PRODUCER_FILES:
+            if not name.startswith("scripts/"):
+                continue
+            actual = Path(__file__).parent / Path(name).name
+            executed = identity(actual)
+            selected = next(item for item in report["producer_files"] if item["path"] == name)
+            require(executed["sha256"] == selected["sha256"] and executed["bytes"] == selected["bytes"],
+                    "executing runner/consumer differs from the selected repository: " + name)
+            report["producer_execution_files"].append({**executed, "repository_path": name})
         if args.build_summary is not None:
             require(args.build_summary.is_absolute(), "build summary must be absolute")
             with (output / "build-summary.json").open("xb") as handle:
@@ -701,6 +713,9 @@ def main(argv=None):
         selection = Selection(args.repo, output / "unused-target", output)
         monitor = SourceMonitor(selection)
         monitor.start()
+        if producer_repo != args.repo.resolve():
+            producer_monitor = SourceMonitor(Selection(producer_repo, output / "unused-producer-target", output))
+            producer_monitor.start()
         report["source_before"] = artifact_json(output, "source-before.json", selection.snapshot())
         config = output / "runtime.json"
         write_json(config, {"controller_workspace_roots": [str(workspace)], "state_dir": str(output / "state"),
@@ -778,6 +793,8 @@ def main(argv=None):
         report["reference_after"] = reference_package(args.reference_package, args.reference_tarball)
         report["native_after"] = identity(args.binary)
         report["source_after"] = artifact_json(output, "source-after.json", selection.snapshot())
+        report["producer_files_after"] = [{**identity(producer_repo / name), "path": name} for name in PRODUCER_FILES]
+        require(report["producer_files_after"] == report["producer_files"], "actual qualification producer changed during execution")
         require(report["reference_before"] == report["reference_after"], "reference changed during execution")
         require(report["native_before"] == report["native_after"], "native binary changed during execution")
         require(parse_json((output / report["source_before"]["path"]).read_bytes()) ==
@@ -809,6 +826,12 @@ def main(argv=None):
             report["source_monitor"] = artifact_json(output, "source-monitor.json", observation)
             if observation["event_count"] or observation["errors"]:
                 report["errors"].append({"stage": "source_monitor", "error": "source changed or monitor coverage was lost"})
+                exit_code = 1
+        if producer_monitor is not None:
+            observation = producer_monitor.stop()
+            report["producer_source_monitor"] = artifact_json(output, "producer-source-monitor.json", observation)
+            if observation["event_count"] or observation["errors"]:
+                report["errors"].append({"stage": "producer_source_monitor", "error": "producer changed or monitor coverage was lost"})
                 exit_code = 1
         report["comparison_exit_code"] = exit_code
         # This initial executable profile exposes its unfinished requirements.

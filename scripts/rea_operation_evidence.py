@@ -205,6 +205,14 @@ def validate_report(repo, receipt_path, expected_sha256, snapshot=None):
               "producer source bindings are incomplete")
     for item in bindings:
         read_artifact(repo, item)
+    q.require(report.get("producer_files_after") == bindings, "actual producer files changed during execution")
+    executed = report.get("producer_execution_files")
+    expected_scripts = [item for item in bindings if item["path"].startswith("scripts/")]
+    q.require(isinstance(executed, list) and [item["repository_path"] for item in executed]
+              == [item["path"] for item in expected_scripts], "actual executing profile source is not bound")
+    for actual, selected in zip(executed, expected_scripts, strict=True):
+        q.require(actual["sha256"] == selected["sha256"] and actual["bytes"] == selected["bytes"],
+                  "a different runner was executed than the selected source tree")
     before = artifact_json(root, report["source_before"])
     after = artifact_json(root, report["source_after"])
     q.require(before == after and before["tree_sha256"] == q.digest(before["files"]),
@@ -215,6 +223,10 @@ def validate_report(repo, receipt_path, expected_sha256, snapshot=None):
     monitor = artifact_json(root, report["source_monitor"])
     q.require(monitor["event_count"] == 0 and monitor["errors"] == [] and monitor["retained_events"] == []
               and monitor["events_truncated"] is False, "source changed or monitor coverage was lost")
+    if report["execution"]["producer_repo"] != report["execution"]["repo"]:
+        monitor = artifact_json(root, report["producer_source_monitor"])
+        q.require(monitor["event_count"] == 0 and monitor["errors"] == [] and monitor["retained_events"] == []
+                  and monitor["events_truncated"] is False, "actual producer changed or its monitor coverage was lost")
     reference = report["reference_before"]
     q.require(reference == report["reference_after"], "reference package changed during execution")
     for key, expected in {"name": "rea-agents", "version": "6.8.0", "file_count": 2398,
