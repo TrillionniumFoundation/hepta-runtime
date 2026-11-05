@@ -54,6 +54,6 @@ R27 没有 R25 的取消 reserve 改动，因此不继承该机制专用的 satu
 
 总 campaign 保留 3300 s、Mac held-agent envelope 3600 s，并为 cleanup 预留 160 s。原 Child 的 PID/birth/process-group 保管、等待回收、SIGINT 120 s 再有界 SIGTERM/SIGKILL 的次序不改。监视器失败保留原性能结果，但禁止性能归因和采纳。
 
-根代理统一安排独占测量窗口。另一个会话独占其正在推进的 R26/diagnostic05；本任务不查询或操作它们。R27 运行前必须确保没有会重叠的编译、打包或其他压测。测量与输出只使用新的 b96/R27 路径；不得覆盖旧目录。
+根代理统一安排独占测量窗口。另一个会话独占其正在推进的 R26/diagnostic05；本任务不查询或操作它们。R27 运行前必须确保没有会重叠的编译、打包或其他压测。测量与输出只使用新的 b96/R27 路径；不得覆盖旧目录。 三个全新 socket 父目录由既有 `private_directory` 在 90 s 冷却前创建并核验当前 operator UID 与 0700 模式；若父路径缺失或无法创建，会在冷却前停止。每个阶段前再次核验。只创建本次三个私有目录，不创建或更改 `/home/qian`、R16 或其他会话的目录。
 
 只执行一次冻结 attempt。完整保留原 holder、stdout/stderr、terminal DTO、原始调用、资源 traces、监视 ledger、所有审计和失败状态。未知 effect 按原 job/key 对账，不重放，不换 key，不选择“好样本”，不丢掉某个 round，不自动重试。完成但未通过性能门是有效拒绝结果，继续保留已接受 R24。

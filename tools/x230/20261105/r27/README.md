@@ -1,63 +1,80 @@
-# R27: borrowed observation serialization experiment
+# R27 borrowed observation serializer experiment
 
-**Status: experimental checkpoint; not yet measured, fully qualified, or adopted.**
-The accepted optimization remains R24. This independent branch preserves the
-next candidate and the frozen test protocol before its first measurement.
+**Disposition: component improvement verified; not promoted to full qualification
+or six-host acceptance; not adopted.** The full gates were not run or evaluated.
+The [complete report](../../../../docs/X230_OPTIMIZATION_20261105_R27.md) explains
+the change, actual results, retained failure, scope and stopping decision.
 
-## Candidate
+The independent experiment branch contains the R24-based source change and seven
+new sibling regression tests. The initial code/protocol checkpoint was
+`9d01233e21ef57190b43661afa18674cf1e837e9`. Only the component was compiled and run;
+the complete runtime's expected 1,652-pass/34-ignored qualification was not run.
 
-The production delta is limited to `src/mcp/runtime/ssh.rs` and a new sibling
-`ssh_observation_serialization_tests.rs`. The source basis is accepted R24,
-commit `baab4def80be7af015b2e7a594cb302f66c4130e`, carried unchanged through parent
-`bfa0d6113d675bb9f597baa474f913c3a12df37a`.
+## Results
 
-`prepare_observation` previously constructed an owned `serde_json::Value` map
-before serializing. A private borrowed `Serialize` enum now writes the same
-four job observation payloads directly. Field declarations preserve the locked
-JSON map's lexicographic output order. Original-size checks, command construction,
-numeric domains, wait clipping, deadlines, system newline, and the final combined
-64 KiB byte budget retain their original order and behavior. The direct transport,
-cancellation lanes, pool capacities, and `jobs.rs` are unchanged.
+| Ordinary case | CPU A to B, us/call | Allocation calls A to B |
+|---|---:|---:|
+| Python status | 0.859366 to 0.403238 | 12 to 2 |
+| Python read | 1.242566 to 0.461635 | 14 to 2 |
 
-Seven sibling tests retain the original function as an independent byte/error
-oracle, including escaping, Unicode, maximum unsigned values, defaults, and exact
-payload boundaries. The patch was independently reviewed and applied to isolated
-R24 and R26 source copies. Those checks are not Rust compilation or qualification.
-This branch uses the R24 application; it does not inherit the rejected R25 reserve.
+One realloc remains in each ordinary case. The equal mix of ordinary Python
+status/read fixtures saves 0.61852976 us and 830.5 cumulative requested allocation
+bytes per preparation call. This is
+about 0.003201% of the published historical R24 controller CPU/call, a magnitude
+comparison rather than measured whole-runtime throughput or RSS. All six cases,
+all 48 timing samples and all 12 allocation records are preserved below.
 
-## Fixed component experiment
+## Original successful attempt 02
 
-The [component source](component/bench.rs) embeds the actual old and new function
-bodies with source and fragment hashes. It uses identical small command stubs,
-so it measures preparation mechanisms rather than full RPC transport. The
-[generator](component/generate.py) and [runner](component/run_component.py)
-preserve that scope. The [planned original native request](component/planned-native-request.json)
-has not been dispatched at this checkpoint.
+- [Native request and start](evidence/component-02/native-start.json)
+- [Strong native terminal and complete native logs](evidence/component-02/native-terminal.json)
+- [Full component report](evidence/component-02/report.json)
+- [Every timing sample and summary](evidence/component-02/timing.stdout)
+- [Every allocation record](evidence/component-02/allocation.stdout)
+- [Exact compiler identification](evidence/component-02/compiler-version.stdout)
+- [Actual dependency product fingerprint](evidence/component-02/qualified-product-fingerprint.json)
+- [All retrieved file identities](evidence/component-02/receipt-verification.json)
+- [Full readback response](evidence/component-02/readback.json)
 
-The ordinary allocator binary records two fixed ABBA rounds for six cases,
-48 timing samples in total. A separate counting binary records allocations and
-reallocations without making timing claims. Byte-equivalence checks cover every
-case. No sample selection or automatic workload retry is permitted. Absolute
-ordinary status/read CPU savings must be considered alongside the complete
-controller cost; a component speedup cannot establish end-to-end adoption.
+All five stage stdout/stderr files are retained in that directory, including
+empty files. ELF and dependency archive bodies are omitted explicitly; their
+native hashes and exact paths remain in the report.
 
-## Full qualification and acceptance
+## Preserved original failure and correction
 
-The [preregistered protocol](PREREGISTRATION.md) and its
-[machine-readable counterpart](preregistration.json) freeze the original R24
-criteria before R27 sampling. Full Rust qualification still has to run on X230:
-format, format check, harness tests, Clippy, all-feature test build, isolated
-tests, independent audit, and release build. Expected test inventory is 1,652
-passes plus 34 ignored cases, with zero failures or retries; these are expected
-counts, not results.
+Attempt 01 stopped before any Rust compiler or sample because the old R25 cache
+fingerprint was absent. It was not a failed performance run or discarded sample.
 
-Full six-host acceptance retains C1/C8/C16 ABBA, the original C32 boundary test,
-and the original six-host cancellation/crash/recovery canary. Every concurrency
-requires throughput B/A >= 0.95 and p95 B/A <= 1.10. At C8, throughput must be
->= 1.03 and controller PID CPU/call <= 0.97. Sampled controller RSS must satisfy
-both B <= A + 512 KiB and B <= A * 1.05. Child costs remain separately reported.
-All source, binaries, original jobs, raw results, and terminal states must be
-bound to their actual identities before any adoption claim.
+- [Original failed report](evidence/component-01/report.json) and [exception](evidence/component-01/exception.txt)
+- [Original request/start](evidence/component-01/native-start.json) and [terminal/log](evidence/component-01/native-terminal.json)
+- [Readback](evidence/component-01/readback.json)
+- [Read-only dependency inventory request/start](evidence/dependency-layout-native-start.json) and [result](evidence/dependency-layout-native-result.json)
 
-This checkpoint contains no R27 performance result or passed CI claim. Actual
-results and the decision will be committed after the coordinated experiment.
+The correction selects the four direct dependencies matching the pinned R26
+product fingerprint in the current cache. No Hepta runtime library is linked, and no cause of the
+old cache absence is asserted. Benchmark source, cases, rounds and counts remain
+unchanged.
+
+## Source, methods and audits
+
+- [Exact candidate patch](borrowed-observation-serialization.patch)
+- [Unchanged source-extracted benchmark](component/bench.rs) and [generator](component/generate.py)
+- [Successful attempt02 runner](component/run_component_02.py) and [exact request](component/attempt02-native-request.json)
+- [Original attempt01 runner](component/run_component.py) and [original request](component/planned-native-request.json)
+- [Component method and scope](component/README.md)
+- [Root arithmetic review](reviews/root-arithmetic-review.json)
+- [Independent full audit](reviews/independent-review-01.md) and [structured audit](reviews/independent-review-01.json)
+- [Prequalification source map](reviews/prequalification-source-map.json)
+- [Unchanged full acceptance gates](PREREGISTRATION.md) and [machine-readable plan](preregistration.json)
+
+The original independent review retains local scratch paths and sandbox links as
+provenance. Use the repository evidence links above for GitHub navigation.
+
+The prepared full qualification/campaign materials are archived under
+[prepared-not-executed](prepared-not-executed/README.md). They are retained planning
+work, not executed tests or ready-to-launch approval. The observed old cache
+absence requires updating and rechecking their cache bindings before use.
+
+Further serializer-capacity tuning stops on the current absolute-cost evidence.
+Any future integration still requires full Rust qualification and the frozen
+six-host acceptance; this experiment does not establish a global optimum.

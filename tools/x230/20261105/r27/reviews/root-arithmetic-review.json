@@ -1,0 +1,119 @@
+{
+  "schema": "hepta-r27-component-arithmetic/v1",
+  "raw_timing_samples": 48,
+  "raw_allocation_rows": 12,
+  "byte_equivalent_cases_per_binary": 6,
+  "source_sha256": "eb088497f092b82c21d70dd8a17ef191e5430164f6e9967b9816d95514504e35",
+  "all_samples_used": true,
+  "cases": [
+    {
+      "case": "python_status",
+      "calls_per_arm": 400000,
+      "baseline_cpu_ns_per_call": 859.3661,
+      "candidate_cpu_ns_per_call": 403.2380475,
+      "saved_cpu_ns_per_call": 456.12805249999997,
+      "cpu_change_percent": -53.0772685238573,
+      "baseline_alloc_calls": 12.0,
+      "candidate_alloc_calls": 2.0,
+      "baseline_realloc_calls": 1.0,
+      "candidate_realloc_calls": 1.0,
+      "baseline_requested_bytes": 1247.0,
+      "candidate_requested_bytes": 426.0
+    },
+    {
+      "case": "python_read",
+      "calls_per_arm": 400000,
+      "baseline_cpu_ns_per_call": 1242.5662525,
+      "candidate_cpu_ns_per_call": 461.634785,
+      "saved_cpu_ns_per_call": 780.9314675,
+      "cpu_change_percent": -62.848275971506,
+      "baseline_alloc_calls": 14.0,
+      "candidate_alloc_calls": 2.0,
+      "baseline_realloc_calls": 1.0,
+      "candidate_realloc_calls": 1.0,
+      "baseline_requested_bytes": 1266.0,
+      "candidate_requested_bytes": 426.0
+    },
+    {
+      "case": "system_status",
+      "calls_per_arm": 400000,
+      "baseline_cpu_ns_per_call": 294.1941125,
+      "candidate_cpu_ns_per_call": 114.1968025,
+      "saved_cpu_ns_per_call": 179.99731000000003,
+      "cpu_change_percent": -61.18317884420614,
+      "baseline_alloc_calls": 7.0,
+      "candidate_alloc_calls": 2.0,
+      "baseline_realloc_calls": 0.0,
+      "candidate_realloc_calls": 0.0,
+      "baseline_requested_bytes": 833.0,
+      "candidate_requested_bytes": 175.0
+    },
+    {
+      "case": "system_read",
+      "calls_per_arm": 400000,
+      "baseline_cpu_ns_per_call": 654.3168675,
+      "candidate_cpu_ns_per_call": 207.64055,
+      "saved_cpu_ns_per_call": 446.6763175,
+      "cpu_change_percent": -68.26605574248015,
+      "baseline_alloc_calls": 10.0,
+      "candidate_alloc_calls": 2.0,
+      "baseline_realloc_calls": 0.0,
+      "candidate_realloc_calls": 0.0,
+      "baseline_requested_bytes": 862.0,
+      "candidate_requested_bytes": 175.0
+    },
+    {
+      "case": "python_read_escaped_unicode",
+      "calls_per_arm": 400000,
+      "baseline_cpu_ns_per_call": 1256.2255625,
+      "candidate_cpu_ns_per_call": 560.30091,
+      "saved_cpu_ns_per_call": 695.9246525,
+      "cpu_change_percent": -55.3980649076308,
+      "baseline_alloc_calls": 14.0,
+      "candidate_alloc_calls": 2.0,
+      "baseline_realloc_calls": 2.0,
+      "candidate_realloc_calls": 2.0,
+      "baseline_requested_bytes": 1748.0,
+      "candidate_requested_bytes": 938.0
+    },
+    {
+      "case": "python_read_64k_boundary",
+      "calls_per_arm": 8000,
+      "baseline_cpu_ns_per_call": 66907.685,
+      "candidate_cpu_ns_per_call": 47905.41825,
+      "saved_cpu_ns_per_call": 19002.266749999995,
+      "cpu_change_percent": -28.400723698630436,
+      "baseline_alloc_calls": 14.0,
+      "candidate_alloc_calls": 2.0,
+      "baseline_realloc_calls": 2.0,
+      "candidate_realloc_calls": 2.0,
+      "baseline_requested_bytes": 262126.0,
+      "candidate_requested_bytes": 196046.0
+    }
+  ],
+  "ordinary_python_equal_mix": {
+    "saved_cpu_ns_per_call": 618.52976,
+    "saved_cpu_us_per_call": 0.61852976,
+    "baseline_alloc_calls_per_call": 13,
+    "candidate_alloc_calls_per_call": 2,
+    "realloc_calls_per_call_both": 1,
+    "requested_bytes_saved_per_call": 830.5
+  },
+  "historical_scale_comparison": {
+    "r24_c8_controller_self_cpu_ms_per_call": 19.322916666666668,
+    "source_summary_sha256": "5f0cf4538c5e4e7dff9f3f6a43e88f4fd4675f76640137908ec565daea285015",
+    "local_saving_percent_of_historical_controller_cpu": 0.003201016547708895,
+    "historical_three_percent_budget_us": 579.6875,
+    "three_percent_budget_over_component_saving": 937.202277866145,
+    "scope": "Magnitude comparison only; not a measured full-runtime change or a release-wide upper bound"
+  },
+  "disposition": {
+    "component_improvement_established": true,
+    "full_source_qualified": false,
+    "full_acceptance_executed": false,
+    "full_gate_evaluated": false,
+    "candidate_adopted": false,
+    "promoted_to_full_qualification": false,
+    "reason": "Ordinary-path measured savings are far below the fixed full-controller improvement scale; no observed larger mechanism justifies another full qualification/campaign for this serializer-only candidate. Retain experiment and stop capacity micro-tuning."
+  }
+}

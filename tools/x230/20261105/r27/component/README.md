@@ -75,5 +75,21 @@ It reports no timings. Requested bytes sum allocation sizes and each realloc's
 requested new size; they are not RSS, peak heap usage, or net live bytes.
 
 This is a mechanism comparison, not a performance acceptance rule. Real-command
-payload limits and error precedence are covered by the repository sibling tests.
-No compilation or benchmark execution was performed while preparing these files.
+payload limits and error precedence have repository sibling tests, but those
+tests have not been run as a Cargo qualification for this experiment.
+
+## Recorded execution and disposition
+
+The original attempt stopped before compilation or sampling because its R25 cache
+fingerprint was absent. `run_component_02.py` preserves that failure and selects
+the exact matching four third-party dependencies from the verified R26 cache;
+it does not link a Hepta production library. The benchmark source, matrix, order
+and counts were unchanged. The second attempt completed successfully on X230,
+with all 48 timing records, 12 allocation records and both builds' six byte-exact
+equivalence checks retained under [evidence](../evidence/component-02/).
+
+The ordinary equal Python status/read mix saved 0.61852976 microseconds per call.
+This remains a component CPU result, not an RPC throughput or RSS result. R27 was
+not promoted to full qualification or six-host acceptance. See the
+[experiment report](../../../../../docs/X230_OPTIMIZATION_20261105_R27.md) and
+[evidence index](../README.md) for the complete result and limits.

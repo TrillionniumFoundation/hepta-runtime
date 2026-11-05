@@ -1,0 +1,452 @@
+{
+  "schema": "hepta-r27-serializer-component/v1",
+  "passed": true,
+  "scope": "Source-extracted preparation with identical fixed command stub; not RPC/RSS/lifecycle qualification",
+  "started_utc": "2026-11-05T11:58:19.741286+00:00",
+  "source": {
+    "path": "/home/qian/hepta-runtime-optimization-20261105-r25/tools/b96_r27_serializer_bench.rs",
+    "bytes": 22983,
+    "sha256": "eb088497f092b82c21d70dd8a17ef191e5430164f6e9967b9816d95514504e35"
+  },
+  "launcher": {
+    "path": "/home/qian/hepta-runtime-optimization-20261105-r25/tools/b96_run_r27_component_03.py",
+    "bytes": 11755,
+    "sha256": "b373a21be6346f95407e957d7ca9a3b3aec7337b735813b696a7845b65ff7c1d"
+  },
+  "accepted_baseline_source": {
+    "path": "/home/qian/hepta-runtime-optimization-20261105-r24/source/src/mcp/runtime/ssh.rs",
+    "bytes": 16929,
+    "sha256": "4db25902c01d1a501f699ca26c9a70af49860127c625a9e0ff402572ad3e9829"
+  },
+  "production_source_modified": false,
+  "automatic_retries": 0,
+  "stages": [
+    {
+      "name": "compiler-version",
+      "argv": [
+        "/home/qian/.cargo/bin/rustc",
+        "+1.95.0",
+        "-Vv"
+      ],
+      "returncode": 0,
+      "seconds": 0.03236044803634286,
+      "waited_child_cpu_seconds": 0.019065,
+      "stdout": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/compiler-version.stdout",
+        "bytes": 196,
+        "sha256": "4fdff2578428e9c5c08ddd7a0d3079c1a106b1cdaa46e73e46f7cd32b0fb9cad"
+      },
+      "stderr": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/compiler-version.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "build-time",
+      "argv": [
+        "/home/qian/.cargo/bin/rustc",
+        "+1.95.0",
+        "--edition=2021",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "debuginfo=0",
+        "-C",
+        "panic=abort",
+        "-L",
+        "dependency=/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/deps",
+        "--extern",
+        "anyhow=/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/deps/libanyhow-db0ef1feb57ec46b.rlib",
+        "--extern",
+        "serde=/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/deps/libserde-9c5217aee751d33a.rlib",
+        "--extern",
+        "serde_json=/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/deps/libserde_json-6973800f1ef9ad6c.rlib",
+        "--extern",
+        "libc=/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/deps/liblibc-f8423ffd3fdea8c4.rlib",
+        "/home/qian/hepta-runtime-optimization-20261105-r25/tools/b96_r27_serializer_bench.rs",
+        "-o",
+        "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/serializer-time"
+      ],
+      "returncode": 0,
+      "seconds": 1.6726579768583179,
+      "waited_child_cpu_seconds": 2.966251,
+      "stdout": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/build-time.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stderr": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/build-time.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "build-alloc",
+      "argv": [
+        "/home/qian/.cargo/bin/rustc",
+        "+1.95.0",
+        "--edition=2021",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "debuginfo=0",
+        "-C",
+        "panic=abort",
+        "-L",
+        "dependency=/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/deps",
+        "--extern",
+        "anyhow=/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/deps/libanyhow-db0ef1feb57ec46b.rlib",
+        "--extern",
+        "serde=/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/deps/libserde-9c5217aee751d33a.rlib",
+        "--extern",
+        "serde_json=/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/deps/libserde_json-6973800f1ef9ad6c.rlib",
+        "--extern",
+        "libc=/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/deps/liblibc-f8423ffd3fdea8c4.rlib",
+        "--cfg",
+        "count_allocations",
+        "/home/qian/hepta-runtime-optimization-20261105-r25/tools/b96_r27_serializer_bench.rs",
+        "-o",
+        "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/serializer-alloc"
+      ],
+      "returncode": 0,
+      "seconds": 1.3738849889487028,
+      "waited_child_cpu_seconds": 2.878438,
+      "stdout": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/build-alloc.stdout",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stderr": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/build-alloc.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "timing",
+      "argv": [
+        "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/serializer-time"
+      ],
+      "returncode": 0,
+      "seconds": 3.3723863209597766,
+      "waited_child_cpu_seconds": 3.3558600000000003,
+      "stdout": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/timing.stdout",
+        "bytes": 15151,
+        "sha256": "0d19da01fcfd480b4ea901b504954c13fa8e2b1ce7a5aaa2977166d64a11ec9a"
+      },
+      "stderr": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/timing.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "allocation",
+      "argv": [
+        "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/serializer-alloc"
+      ],
+      "returncode": 0,
+      "seconds": 0.16459331009536982,
+      "waited_child_cpu_seconds": 0.13859800000000067,
+      "stdout": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/allocation.stdout",
+        "bytes": 7053,
+        "sha256": "23a00f8ce535f2b07f98ef790e846f43fbdef62becc52c3c4abc9ac7f3061b3d"
+      },
+      "stderr": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/allocation.stderr",
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ],
+  "attempt": "02",
+  "prior_attempt": {
+    "job_id": "1a1ab85c2c3-fc05-4e78",
+    "report_sha256": "f3ed69b104573fa4f2c667a4a165cf18c58b0f63e87e646d7af0a008e3511f6d",
+    "disposition": "failed before any compiler or sample because the old cache fingerprint was absent"
+  },
+  "dependency_cache_scope": "R26 third-party release dependencies only; no Hepta library linked",
+  "guard_scope": "Before-build, before-timing and after-timing process snapshots; not continuous exclusivity proof",
+  "product_dependency_fingerprint": {
+    "path": "/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/.fingerprint/hepta-runtime-edfb8cc1d486112f/lib-hepta_runtime.json",
+    "bytes": 1569,
+    "sha256": "ed3d18008e23932331e4f6422e9935cc13f172522a75cfaa56785c41f359c6ee"
+  },
+  "dependencies": {
+    "anyhow": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/deps/libanyhow-db0ef1feb57ec46b.rlib",
+      "bytes": 531636,
+      "sha256": "016a86b5d6dfce6bfa3b00c06f0161077c1b90f7c93d0affdc8f2e0538c8b3e6"
+    },
+    "serde": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/deps/libserde-9c5217aee751d33a.rlib",
+      "bytes": 962914,
+      "sha256": "6f2b858badc8e07ca2974ef267d2ab22f90270b09d9f3c5f512c003adf6ee4af"
+    },
+    "serde_json": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/deps/libserde_json-6973800f1ef9ad6c.rlib",
+      "bytes": 1975512,
+      "sha256": "39e49cd94c24abc9c78643e047fde4d7d672598d4373b48f46f23844f06212a5"
+    },
+    "libc": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r26/target-build/release/deps/liblibc-f8423ffd3fdea8c4.rlib",
+      "bytes": 5840616,
+      "sha256": "da3232449132dfc171306d5b7fc5182266772dab755d47de40cc958c9002b818"
+    }
+  },
+  "binaries": {
+    "time": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/serializer-time",
+      "bytes": 4487624,
+      "sha256": "08b03d127aa22d16f5c8f772f19762cc204081b918c49a62265e9ecf8e6a852d"
+    },
+    "alloc": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-b96-r27-component-02/serializer-alloc",
+      "bytes": 4489136,
+      "sha256": "71d65afcefaac04e1bfbafe69b8cd07e600683b29b281d74c190425b64ed52bb"
+    }
+  },
+  "summary": [
+    {
+      "baseline_cpu_ns_per_call": 859.3661,
+      "baseline_wall_ns_per_call": 859.41898,
+      "calls_per_version": 400000,
+      "candidate_cpu_ns_per_call": 403.2380475,
+      "candidate_cpu_over_baseline": 0.46922731476142704,
+      "candidate_wall_ns_per_call": 403.2638975,
+      "candidate_wall_over_baseline": 0.469228521692644,
+      "case": "python_status",
+      "kind": "summary"
+    },
+    {
+      "baseline_cpu_ns_per_call": 1242.5662525,
+      "baseline_wall_ns_per_call": 1242.6612275,
+      "calls_per_version": 400000,
+      "candidate_cpu_ns_per_call": 461.634785,
+      "candidate_cpu_over_baseline": 0.37151724028494004,
+      "candidate_wall_ns_per_call": 461.6470625,
+      "candidate_wall_over_baseline": 0.3714987257055946,
+      "case": "python_read",
+      "kind": "summary"
+    },
+    {
+      "baseline_cpu_ns_per_call": 294.1941125,
+      "baseline_wall_ns_per_call": 294.206555,
+      "calls_per_version": 400000,
+      "candidate_cpu_ns_per_call": 114.1968025,
+      "candidate_cpu_over_baseline": 0.3881682115579386,
+      "candidate_wall_ns_per_call": 114.227515,
+      "candidate_wall_over_baseline": 0.3882561862022415,
+      "case": "system_status",
+      "kind": "summary"
+    },
+    {
+      "baseline_cpu_ns_per_call": 654.3168675,
+      "baseline_wall_ns_per_call": 654.687915,
+      "calls_per_version": 400000,
+      "candidate_cpu_ns_per_call": 207.64055,
+      "candidate_cpu_over_baseline": 0.31733944257519847,
+      "candidate_wall_ns_per_call": 207.7412625,
+      "candidate_wall_over_baseline": 0.3173134217698214,
+      "case": "system_read",
+      "kind": "summary"
+    },
+    {
+      "baseline_cpu_ns_per_call": 1256.2255625,
+      "baseline_wall_ns_per_call": 1256.6399125,
+      "calls_per_version": 400000,
+      "candidate_cpu_ns_per_call": 560.30091,
+      "candidate_cpu_over_baseline": 0.4460193509236921,
+      "candidate_wall_ns_per_call": 560.58818,
+      "candidate_wall_over_baseline": 0.446100887313652,
+      "case": "python_read_escaped_unicode",
+      "kind": "summary"
+    },
+    {
+      "baseline_cpu_ns_per_call": 66907.685,
+      "baseline_wall_ns_per_call": 67504.684125,
+      "calls_per_version": 8000,
+      "candidate_cpu_ns_per_call": 47905.41825,
+      "candidate_cpu_over_baseline": 0.7159927630136956,
+      "candidate_wall_ns_per_call": 47936.88225,
+      "candidate_wall_over_baseline": 0.7101267544817209,
+      "case": "python_read_64k_boundary",
+      "kind": "summary"
+    }
+  ],
+  "allocation": [
+    {
+      "alloc_calls": 12000,
+      "alloc_calls_per_call": 12.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_status",
+      "dealloc_calls": 12000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 1000,
+      "realloc_calls_per_call": 1.0,
+      "requested_bytes": 1247000,
+      "requested_bytes_per_call": 1247.0,
+      "version": "baseline"
+    },
+    {
+      "alloc_calls": 2000,
+      "alloc_calls_per_call": 2.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_status",
+      "dealloc_calls": 2000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 1000,
+      "realloc_calls_per_call": 1.0,
+      "requested_bytes": 426000,
+      "requested_bytes_per_call": 426.0,
+      "version": "candidate"
+    },
+    {
+      "alloc_calls": 14000,
+      "alloc_calls_per_call": 14.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_read",
+      "dealloc_calls": 14000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 1000,
+      "realloc_calls_per_call": 1.0,
+      "requested_bytes": 1266000,
+      "requested_bytes_per_call": 1266.0,
+      "version": "baseline"
+    },
+    {
+      "alloc_calls": 2000,
+      "alloc_calls_per_call": 2.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_read",
+      "dealloc_calls": 2000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 1000,
+      "realloc_calls_per_call": 1.0,
+      "requested_bytes": 426000,
+      "requested_bytes_per_call": 426.0,
+      "version": "candidate"
+    },
+    {
+      "alloc_calls": 7000,
+      "alloc_calls_per_call": 7.0,
+      "alloc_zeroed_calls": 0,
+      "case": "system_status",
+      "dealloc_calls": 7000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 0,
+      "realloc_calls_per_call": 0.0,
+      "requested_bytes": 833000,
+      "requested_bytes_per_call": 833.0,
+      "version": "baseline"
+    },
+    {
+      "alloc_calls": 2000,
+      "alloc_calls_per_call": 2.0,
+      "alloc_zeroed_calls": 0,
+      "case": "system_status",
+      "dealloc_calls": 2000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 0,
+      "realloc_calls_per_call": 0.0,
+      "requested_bytes": 175000,
+      "requested_bytes_per_call": 175.0,
+      "version": "candidate"
+    },
+    {
+      "alloc_calls": 10000,
+      "alloc_calls_per_call": 10.0,
+      "alloc_zeroed_calls": 0,
+      "case": "system_read",
+      "dealloc_calls": 10000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 0,
+      "realloc_calls_per_call": 0.0,
+      "requested_bytes": 862000,
+      "requested_bytes_per_call": 862.0,
+      "version": "baseline"
+    },
+    {
+      "alloc_calls": 2000,
+      "alloc_calls_per_call": 2.0,
+      "alloc_zeroed_calls": 0,
+      "case": "system_read",
+      "dealloc_calls": 2000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 0,
+      "realloc_calls_per_call": 0.0,
+      "requested_bytes": 175000,
+      "requested_bytes_per_call": 175.0,
+      "version": "candidate"
+    },
+    {
+      "alloc_calls": 14000,
+      "alloc_calls_per_call": 14.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_read_escaped_unicode",
+      "dealloc_calls": 14000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 2000,
+      "realloc_calls_per_call": 2.0,
+      "requested_bytes": 1748000,
+      "requested_bytes_per_call": 1748.0,
+      "version": "baseline"
+    },
+    {
+      "alloc_calls": 2000,
+      "alloc_calls_per_call": 2.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_read_escaped_unicode",
+      "dealloc_calls": 2000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 2000,
+      "realloc_calls_per_call": 2.0,
+      "requested_bytes": 938000,
+      "requested_bytes_per_call": 938.0,
+      "version": "candidate"
+    },
+    {
+      "alloc_calls": 14000,
+      "alloc_calls_per_call": 14.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_read_64k_boundary",
+      "dealloc_calls": 14000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 2000,
+      "realloc_calls_per_call": 2.0,
+      "requested_bytes": 262126000,
+      "requested_bytes_per_call": 262126.0,
+      "version": "baseline"
+    },
+    {
+      "alloc_calls": 2000,
+      "alloc_calls_per_call": 2.0,
+      "alloc_zeroed_calls": 0,
+      "case": "python_read_64k_boundary",
+      "dealloc_calls": 2000,
+      "iterations": 1000,
+      "kind": "allocation",
+      "realloc_calls": 2000,
+      "realloc_calls_per_call": 2.0,
+      "requested_bytes": 196046000,
+      "requested_bytes_per_call": 196046.0,
+      "version": "candidate"
+    }
+  ],
+  "finished_utc": "2026-11-05T11:58:26.676665+00:00"
+}

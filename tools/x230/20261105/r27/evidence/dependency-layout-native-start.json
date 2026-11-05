@@ -1,0 +1,24 @@
+{
+  "request": {
+    "host": "x230",
+    "executable": "/usr/bin/python3",
+    "args": [
+      "-I",
+      "-B",
+      "-c",
+      "from pathlib import Path\nimport json,hashlib\nnames=('anyhow','serde','serde_json','libc')\nfor root in (Path('/home/qian/hepta-runtime-optimization-20261105-r25/target-build-02'),Path('/home/qian/hepta-runtime-optimization-20261105-r26/target-build')):\n print(json.dumps({'kind':'cache','root':str(root),'exists':root.is_dir(),'release_exists':(root/'release').is_dir()}),flush=True)\n for p in sorted((root/'release/.fingerprint').glob('hepta-runtime-*/lib-hepta_runtime.json')):\n  b=p.read_bytes();j=json.loads(b);tag=p.parent.name.removeprefix('hepta-runtime-')\n  print(json.dumps({'kind':'product','path':str(p),'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest(),'rlib_exists':(root/'release/deps'/('libhepta_runtime-'+tag+'.rlib')).is_file(),'features':j.get('features'),'profile':j.get('profile'),'rustc':j.get('rustc'),'deps':[x for x in j.get('deps',[]) if x[1] in names]}),flush=True)\n for name in names:\n  for p in sorted((root/'release/deps').glob('lib'+name+'-*.rlib')):\n   tag=p.name[len('lib'+name+'-'):-len('.rlib')];fp=root/'release/.fingerprint'/(name+'-'+tag)/('lib-'+name)\n   print(json.dumps({'kind':'dependency','name':name,'path':str(p),'bytes':p.stat().st_size,'fingerprint':fp.read_text().strip() if fp.is_file() else None}),flush=True)\n"
+    ],
+    "idempotency_key": "hepta-x230-b96-r27-dependency-layout-20261105-01",
+    "timeout_seconds": 60
+  },
+  "response": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"audit_recorded\": true,\n  \"job\": {\n    \"args\": [\n      \"-I\",\n      \"-B\",\n      \"-c\",\n      \"from pathlib import Path\\nimport json,hashlib\\nnames=('anyhow','serde','serde_json','libc')\\nfor root in (Path('/home/qian/hepta-runtime-optimization-20261105-r25/target-build-02'),Path('/home/qian/hepta-runtime-optimization-20261105-r26/target-build')):\\n print(json.dumps({'kind':'cache','root':str(root),'exists':root.is_dir(),'release_exists':(root/'release').is_dir()}),flush=True)\\n for p in sorted((root/'release/.fingerprint').glob('hepta-runtime-*/lib-hepta_runtime.json')):\\n  b=p.read_bytes();j=json.loads(b);tag=p.parent.name.removeprefix('hepta-runtime-')\\n  print(json.dumps({'kind':'product','path':str(p),'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest(),'rlib_exists':(root/'release/deps'/('libhepta_runtime-'+tag+'.rlib')).is_file(),'features':j.get('features'),'profile':j.get('profile'),'rustc':j.get('rustc'),'deps':[x for x in j.get('deps',[]) if x[1] in names]}),flush=True)\\n for name in names:\\n  for p in sorted((root/'release/deps').glob('lib'+name+'-*.rlib')):\\n   tag=p.name[len('lib'+name+'-'):-len('.rlib')];fp=root/'release/.fingerprint'/(name+'-'+tag)/('lib-'+name)\\n   print(json.dumps({'kind':'dependency','name':name,'path':str(p),'bytes':p.stat().st_size,'fingerprint':fp.read_text().strip() if fp.is_file() else None}),flush=True)\\n\"\n    ],\n    \"created_unix_ms\": 1793879347880,\n    \"cwd\": null,\n    \"env_keys\": [],\n    \"executable\": \"/usr/bin/python3\",\n    \"execution_mode\": \"operator\",\n    \"host\": \"x230\",\n    \"id\": \"1a1ab8a92a8-fc05-4e8c\",\n    \"idempotency_key\": \"hepta-x230-b96-r27-dependency-layout-20261105-01\",\n    \"launch_error\": null,\n    \"launch_state\": \"launched\",\n    \"remote_job_dir\": \"/home/qian/.local/state/hepta-runtime-mac-worker/jobs/1a1ab8a92a8-fc05-4e8c\",\n    \"request_digest\": \"3f744d294365ab5abdc479b2b717710228b286653f63f1929c6a8acd43bb5723\",\n    \"request_fingerprint\": 4572364361307630426,\n    \"ssh_target\": \"x230-ts\",\n    \"system_jobctl\": false,\n    \"unit\": \"hepta-runtime-job-1a1ab8a92a8-fc05-4e8c\"\n  },\n  \"launch\": {\n    \"backend\": \"systemd\",\n    \"launcher_pid\": null,\n    \"ok\": true,\n    \"unit\": \"hepta-runtime-job-1a1ab8a92a8-fc05-4e8c\"\n  },\n  \"local_record_pending\": false,\n  \"reused\": false\n}"
+      }
+    ],
+    "structuredContent": null,
+    "isError": false
+  }
+}
