@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! MCP schemas, tool routing and the shared runtime request-audit boundary.
+
 //! MCP server handlers, session state, and tool parameter schemas.
 
 use std::sync::{Arc, RwLock};
@@ -38,6 +40,7 @@ use super::request_ctx;
 use super::runtime;
 use super::weight_bellman;
 use super::weight_certificate;
+use super::weight_semantic;
 use super::McpToolCall;
 use super::{
 	rea, rea_artifact_zip, rea_evidence, rea_model, rea_provider, rea_store, weight,
@@ -259,6 +262,7 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"weight_linear_ridge_plan",
 	"weight_bellman_plan",
 	"weight_continuation_certificate",
+	"weight_semantic_replay",
 	"weight_open",
 	"weight_call",
 	"weight_status",
@@ -1868,6 +1872,25 @@ impl OctofsServer {
 		Parameters(params): Parameters<weight_certificate::CertificateParams>,
 	) -> Result<String, String> {
 		weight_certificate::verify(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Replay a Native Endpoint Policy and Teacher",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Reconstruct causal decision states, 85 input features, 49 hidden coefficients, network scores, legal masks and finite-horizon Bellman teacher Q for one explicit renewal endpoint profile in Rust. Requires exact request, compiled core-source and target-contract SHA256 values; checks checkpoint and public schedule bytes internally. At most 2 MiB request, 128 traces of six steps, 8192 cache states and a 30-second cooperative core deadline. One non-queued worker retains its permit after caller cancellation. Uses supplied transition tables, current-at-due observations and sensor-only repair; this is not First-Passage/Reset or a general NDU optimizer. Rounded binary64 results do not authenticate external sources or extend an existing certificate. No file or process access by the replay, parameter editing, independent holdout, task-value improvement or production eligibility."
+	)]
+	async fn weight_semantic_replay(
+		&self,
+		Parameters(params): Parameters<weight_semantic::SemanticReplayParams>,
+	) -> Result<String, String> {
+		weight_semantic::replay(params)
 			.await
 			.map_err(|error| error.to_string())
 	}

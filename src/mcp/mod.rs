@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! MCP tool modules and per-call workspace context.
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -42,6 +44,7 @@ pub mod weight_guard_journal;
 pub mod weight_native;
 pub mod weight_norm;
 pub mod weight_ridge;
+pub mod weight_semantic;
 pub mod weight_tensor;
 
 // Session working directory is now stored per-server-instance (see server.rs).
