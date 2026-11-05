@@ -262,6 +262,58 @@ fn shape_product(shape: &[u64]) -> Result<u64> {
 	})
 }
 
+// Stable layouts and historical ambiguity follow REA 6.8.0 ModelTensorTypes.js;
+// the REA-derived mapping is covered by LICENSES/REA-MIT.txt. GGML source pins
+// and a reproducible comparison are in docs/rea-model-gguf-layout-validation.md.
+// A row multiple for an ambiguous layout is only a necessary constraint: it
+// must never be used as a storage-block size or inferred from file padding.
+fn ggml_layout(type_id: u32) -> Option<(&'static str, u64, Option<u64>)> {
+	Some(match type_id {
+		0 => ("F32", 1, Some(4)),
+		1 => ("F16", 1, Some(2)),
+		2 => ("Q4_0", 32, Some(18)),
+		3 => ("Q4_1", 32, Some(20)),
+		6 => ("Q5_0", 32, Some(22)),
+		7 => ("Q5_1", 32, Some(24)),
+		8 => ("Q8_0", 32, Some(34)),
+		9 => ("Q8_1", 32, None),
+		10 => ("Q2_K", 64, None),
+		11 => ("Q3_K", 64, None),
+		12 => ("Q4_K", 64, None),
+		13 => ("Q5_K", 64, None),
+		14 => ("Q6_K", 64, None),
+		15 => ("Q8_K", 64, None),
+		16..=25 => ("AMBIGUOUS", 1, None),
+		26 => ("I32", 1, Some(4)),
+		27 => ("I64", 1, Some(8)),
+		28 => ("F64", 1, Some(8)),
+		29 => ("IQ1_M", 256, Some(56)),
+		30 => ("BF16", 1, Some(2)),
+		34 => ("TQ1_0", 256, Some(54)),
+		35 => ("TQ2_0", 256, Some(66)),
+		39 => ("MXFP4", 32, Some(17)),
+		40 => ("NVFP4", 64, Some(36)),
+		41 => ("Q1_0", 128, Some(18)),
+		42 => ("Q2_0", 64, Some(18)),
+		_ => return None,
+	})
+}
+
+fn ggml_layout_limitation(type_id: u32, elements: u64) -> Option<&'static str> {
+	match type_id {
+		9 if elements != 0 => Some(
+			"Q8_1 has released 36-byte and 40-byte blocks per 32 elements. GGUF and quantization versions, offsets and padding do not select the layout; nonempty storage lengths remain unknown.",
+		),
+		10..=15 if elements != 0 => Some(
+			"GGUF K-quantization IDs 10-15 have released 64-element and 256-element blocks. The shared 64-element row constraint does not select a storage block; nonempty storage lengths remain unknown.",
+		),
+		16..=25 => Some(
+			"GGUF tensor type IDs 16-25 have released conflicting scalar/quantized identities with the same GGUF and quantization versions. Textual identities and nonempty storage lengths remain unknown.",
+		),
+		_ => None,
+	}
+}
+
 fn parse_gguf(mut reader: HeaderReader<'_>) -> Result<Directory> {
 	let version_bytes = reader.fixed::<4>()?;
 	let little_version = u32::from_le_bytes(version_bytes);
@@ -306,6 +358,7 @@ fn parse_gguf(mut reader: HeaderReader<'_>) -> Result<Directory> {
 		metadata.push(row);
 	}
 	let mut tensors = Vec::new();
+	let mut layout_limitations = Vec::new();
 	names.clear();
 	for _ in 0..tensor_count {
 		let name = reader.string()?;
@@ -325,24 +378,43 @@ fn parse_gguf(mut reader: HeaderReader<'_>) -> Result<Directory> {
 		if relative_offset % alignment != 0 {
 			bail!("GGUF tensor offset violates declared alignment");
 		}
-		// Quantized layouts depend on producer/version details. This first native
-		// reader verifies only invariant scalar layouts, never guessed block sizes.
-		let (dtype, scalar_bytes) = match type_id {
-			0 => ("F32".to_string(), Some(4_u64)),
-			1 => ("F16".to_string(), Some(2_u64)),
-			_ => (format!("GGML_TYPE_{type_id}"), None),
-		};
-		let byte_length = if elements == 0 {
-			Some(0)
-		} else {
-			scalar_bytes
-				.map(|size| {
-					elements
-						.checked_mul(size)
-						.ok_or_else(|| anyhow!("GGUF tensor storage length overflow"))
-				})
-				.transpose()?
-		};
+		let (dtype, byte_length) =
+			if let Some((name, row_multiple, block_bytes)) = ggml_layout(type_id) {
+				// Divisibility applies to the fastest dimension, even when later
+				// dimensions make the total divisible or the tensor empty.
+				if shape.first().copied().unwrap_or(1) % row_multiple != 0 {
+					bail!(
+					"GGUF tensor first dimension must be a multiple of {row_multiple} elements for type {type_id}"
+				);
+				}
+				let length = if elements == 0 {
+					Some(0)
+				} else {
+					block_bytes
+						.map(|size| {
+							(elements / row_multiple)
+								.checked_mul(size)
+								.ok_or_else(|| anyhow!("GGUF tensor storage length overflow"))
+						})
+						.transpose()?
+				};
+				if let Some(reason) = ggml_layout_limitation(type_id, elements) {
+					if !layout_limitations.iter().any(|item| item == reason) {
+						retain_budget(&mut retained, reason.len())?;
+						layout_limitations.push(reason.to_string());
+					}
+				}
+				let name = if (16..=25).contains(&type_id) {
+					format!("{name}_{type_id}")
+				} else {
+					name.to_string()
+				};
+				(name, length)
+			} else {
+				// Unknown or removed type IDs have no established row constraints;
+				// a zero element count does not prove an unsupported layout valid.
+				(format!("GGML_TYPE_{type_id}"), None)
+			};
 		retain_budget(&mut retained, name.len() * 2 + 256)?;
 		tensors.push(Tensor {
 			name,
@@ -393,10 +465,11 @@ fn parse_gguf(mut reader: HeaderReader<'_>) -> Result<Directory> {
 	let unknown = tensors.iter().any(|row| row.byte_length.is_none());
 	let mut limitations = vec![
 		"GGUF dimensions retain their declared fastest-first order.".to_string(),
-		"Only F32/F16 and zero-element GGUF storage lengths are verified; other layouts are unknown.".to_string(),
+		"Stable GGML block layouts validate the fastest dimension before deriving storage length; historical layout/type collisions remain explicit.".to_string(),
 	];
+	limitations.extend(layout_limitations);
 	if unknown {
-		limitations.push("Unknown quantized storage layouts are not inferred from adjacent offsets; tensor-scoped reads of those rows are refused.".to_string());
+		limitations.push("Unknown or historically ambiguous storage layouts are not inferred from adjacent offsets; tensor-scoped reads of those rows are refused.".to_string());
 	}
 	Ok(Directory {
 		format: "gguf",

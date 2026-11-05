@@ -709,3 +709,90 @@ async fn discovery_reports_damaged_missing_and_unsupported_manifests_as_unknown_
 		.to_string()
 		.contains("snapshot is unavailable"));
 }
+
+#[tokio::test]
+async fn gguf_quantized_snapshot_restores_verified_ranges_and_keeps_historical_ranges_unknown() {
+	let mut bytes = b"GGUF".to_vec();
+	bytes.extend_from_slice(&3_u32.to_le_bytes());
+	bytes.extend_from_slice(&2_u64.to_le_bytes());
+	bytes.extend_from_slice(&0_u64.to_le_bytes());
+	for (name, dtype, elements, offset) in
+		[("weights", 2_u32, 64_u64, 0_u64), ("historical", 9, 32, 64)]
+	{
+		bytes.extend_from_slice(&(name.len() as u64).to_le_bytes());
+		bytes.extend_from_slice(name.as_bytes());
+		bytes.extend_from_slice(&1_u32.to_le_bytes());
+		bytes.extend_from_slice(&elements.to_le_bytes());
+		bytes.extend_from_slice(&dtype.to_le_bytes());
+		bytes.extend_from_slice(&offset.to_le_bytes());
+	}
+	bytes.resize(bytes.len().div_ceil(32) * 32, 0);
+	let data_offset = bytes.len() as u64;
+	bytes.extend(0_u8..104);
+	let (_temp, scope) = environment();
+	let params = source(&scope, &bytes);
+	let receipt = open_at(&scope, &params).await.unwrap();
+	let restored_scope = Scope {
+		state: scope.state.clone(),
+		roots: scope.roots.clone(),
+		owner_sha256: scope.owner_sha256.clone(),
+		policy_sha256: scope.policy_sha256.clone(),
+	};
+	std::fs::remove_file(&params.path).unwrap();
+	let restored = parse(
+		query_at(&restored_scope, query_params(id(&receipt), 0, 2))
+			.await
+			.unwrap(),
+	);
+	assert_eq!(restored["directory_parse_count"], 0);
+	assert_eq!(restored["result"]["rows"][0]["dtype"], "Q4_0");
+	assert_eq!(restored["result"]["rows"][0]["byte_length"], 36);
+	assert_eq!(
+		restored["result"]["rows"][0]["storage_length_verified"],
+		true
+	);
+	assert_eq!(restored["result"]["rows"][1]["dtype"], "Q8_1");
+	assert!(restored["result"]["rows"][1]["byte_length"].is_null());
+	assert_eq!(
+		restored["result"]["rows"][1]["storage_length_verified"],
+		false
+	);
+	let read = ReadModelSessionParams {
+		session_id: id(&receipt).into(),
+		tensor_name: Some("weights".into()),
+		offset: 34,
+		length: 2,
+	};
+	let result = parse(read_at(&restored_scope, read.clone()).await.unwrap());
+	assert_eq!(result["bytes_hex"], "2223");
+	assert_eq!(result["directory_parse_count"], 0);
+	assert!(read_at(
+		&restored_scope,
+		ReadModelSessionParams { offset: 35, ..read }
+	)
+	.await
+	.is_err());
+	assert!(read_at(
+		&restored_scope,
+		ReadModelSessionParams {
+			session_id: id(&receipt).into(),
+			tensor_name: Some("historical".into()),
+			offset: 0,
+			length: 1,
+		}
+	)
+	.await
+	.is_err());
+	let raw = parse(
+		read_at(
+			&restored_scope,
+			raw_read(id(&receipt), data_offset + 64, 40),
+		)
+		.await
+		.unwrap(),
+	);
+	assert_eq!(
+		raw["bytes_hex"],
+		super::super::digest_hex(&(64_u8..104).collect::<Vec<_>>())
+	);
+}
