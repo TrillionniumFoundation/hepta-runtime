@@ -37,6 +37,7 @@ use super::fs;
 use super::request_ctx;
 use super::runtime;
 use super::weight_bellman;
+use super::weight_certificate;
 use super::McpToolCall;
 use super::{
 	rea, rea_artifact_zip, rea_evidence, rea_model, rea_provider, rea_store, weight,
@@ -257,6 +258,7 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"weight_guarded_linear_patch",
 	"weight_linear_ridge_plan",
 	"weight_bellman_plan",
+	"weight_continuation_certificate",
 	"weight_open",
 	"weight_call",
 	"weight_status",
@@ -1847,6 +1849,25 @@ impl OctofsServer {
 		Parameters(params): Parameters<weight_bellman::BellmanPlanParams>,
 	) -> Result<String, String> {
 		weight_bellman::plan(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Verify an Exact Continuation Ordering Certificate",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Verify a fixed-representation continuation-ordering separation witness using exact binary64 integer arithmetic. Checks a caller-pinned joint-policy-v1 checkpoint, extracts its 147 continuation coefficients, verifies supplied hidden bytes and first-max labels, then checks ideal and conservative binary64-relaxed infeasibility separately. At most 8192 rows, 1 MiB checkpoint and 8 MiB request; bounded workers with cooperative deadlines. The SHA values bind supplied bytes, not authenticated provenance: hidden features and teacher programs are not reexecuted. No file access, weight edit, witness search, task-value improvement, whole-network impossibility or production eligibility."
+	)]
+	async fn weight_continuation_certificate(
+		&self,
+		Parameters(params): Parameters<weight_certificate::CertificateParams>,
+	) -> Result<String, String> {
+		weight_certificate::verify(params)
 			.await
 			.map_err(|error| error.to_string())
 	}

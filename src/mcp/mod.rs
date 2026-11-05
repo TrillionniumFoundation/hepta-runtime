@@ -34,6 +34,7 @@ pub mod server;
 pub mod weight;
 pub mod weight_artifact;
 pub mod weight_bellman;
+pub mod weight_certificate;
 pub mod weight_config;
 pub mod weight_forward;
 pub mod weight_guard;
