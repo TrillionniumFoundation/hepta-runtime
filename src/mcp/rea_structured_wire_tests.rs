@@ -53,6 +53,7 @@ fn both_representations_keep_current_origin_without_a_request_id_registry() {
 		sample(),
 		r#"{"operation":"inspect_analysis_view","parameters":{"view":{"kind":"apk-signature","offset":0,"limit":1,"collection":"signers"}},"normalized_result":{"items":[{"z":1,"a":2}]}}"#,
 	];
+	assert_ne!(texts[0], texts[1]);
 	let mut semantics = None;
 	for text in texts {
 		let result = result(text);
@@ -61,10 +62,15 @@ fn both_representations_keep_current_origin_without_a_request_id_registry() {
 		rewrite(&mut bytes, 16384).unwrap();
 		assert_eq!(structured(&bytes), text);
 		assert_eq!(serde_json::from_slice::<Value>(&bytes).unwrap(), original);
+		let current = original["result"]["structuredContent"].clone();
+		let textual: Value =
+			serde_json::from_str(original["result"]["content"][0]["text"].as_str().unwrap())
+				.unwrap();
+		assert_eq!(current, textual);
 		if let Some(previous) = &semantics {
-			assert_eq!(previous, &original);
+			assert_eq!(previous, &current);
 		}
-		semantics = Some(original);
+		semantics = Some(current);
 		let guarded = serde_json::to_vec(&WireToolResult(&result)).unwrap();
 		let envelope: Frame<'_> = serde_json::from_slice(&bytes).unwrap();
 		assert_eq!(envelope.result.unwrap().get().as_bytes(), guarded);
