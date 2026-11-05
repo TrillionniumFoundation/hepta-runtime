@@ -73,6 +73,19 @@ class FrameQualificationBoundaries(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "compressed wire changed"):
                 client.original(entry)
 
+    def test_full_sdk_error_keeps_code_data_and_supported_versions(self):
+        response = {"jsonrpc": "2.0", "id": 9, "error": copy.deepcopy(runner.SDK_VERSION_ERROR)}
+        runner.sdk_version_refusal(response)
+        for key in ("code", "message", "data"):
+            changed = copy.deepcopy(response)
+            del changed["error"][key]
+            with self.assertRaisesRegex(ValueError, "complete SDK"):
+                runner.sdk_version_refusal(changed)
+        changed = copy.deepcopy(response)
+        changed["error"]["data"]["supported"].pop()
+        with self.assertRaisesRegex(ValueError, "complete SDK"):
+            runner.sdk_version_refusal(changed)
+
 
 if __name__ == "__main__":
     unittest.main()

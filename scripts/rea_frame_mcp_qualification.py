@@ -28,10 +28,14 @@ from rea_full_qualification import Selection, SourceMonitor
 
 FRAME_BYTES = 10 * 1024 * 1024
 LARGE_ID_HEADROOM = 8192
+NOTES_FIXTURE_SHA256 = "4a4e52384c20cf7bfe23c13a97de163cbc4a6d08319379bfc703d09d73b890f6"
 MODERN_META = {"io.modelcontextprotocol/protocolVersion": "2026-07-28",
                "io.modelcontextprotocol/clientCapabilities": {}}
 TOOL_NAMES = {"notes": "rea_inspect_elf_notes", "apk": "rea_inspect_apk_signature_evidence",
               "bundle": "rea_get_evidence_bundle", "export": "rea_export_evidence_bundle"}
+SDK_VERSION_ERROR = {"code": -32022, "message": "Unsupported protocol version", "data": {
+    "requested": "2999-01-01",
+    "supported": ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25", "2026-07-28"]}}
 
 
 def call_bytes(params, request_id):
@@ -139,6 +143,14 @@ def rpc_refusal(response, empty=False):
               "expected a bounded internal protocol refusal")
     if empty:
         q.require(response["error"].get("message") == "", "minimal same-ID error was not used")
+
+
+def sdk_version_refusal(response):
+    # rmcp 3.4.1 puts the requested version in ErrorData.data, not its message.
+    # This complete object is also observed with the same raw request against
+    # the immutable pre-wrapper r6 binary and its identical Cargo.lock.
+    q.require("result" not in response and response.get("error") == SDK_VERSION_ERROR,
+              "complete SDK unsupported-version ErrorData differs")
 
 
 def check_build(args, output):
@@ -278,8 +290,7 @@ def run_main(session, workspace):
 
     sdk = params("notes", omit=True)
     sdk["_meta"] = {"io.modelcontextprotocol/protocolVersion": "2999-01-01"}
-    small = session.exchange("sdk-pre-dispatch-small", sdk, verify=lambda r: q.require(
-        "error" in r and "2999-01-01" in r["error"]["message"], "SDK did not reject unsupported per-request version"))
+    small = session.exchange("sdk-pre-dispatch-small", sdk, verify=sdk_version_refusal)
     q.require("error" in small, "missing SDK error witness")
     session.exchange("sdk-pre-dispatch-maximum-id", sdk, maximal_id(sdk), verify=rpc_refusal)
     session.exchange("recovery-after-sdk-refusal", params("bundle"), verify=retained)
@@ -347,7 +358,12 @@ def main(argv=None):
         report["reference_before"] = q.reference_package(args.reference_package, args.reference_tarball)
         workspace = output / "workspace"
         workspace.mkdir(mode=0o700)
-        notes = q.elf(q.note(owner=b"FRAME_OWNER_" + b"n" * 16384 + b"\0", kind=0x1234))
+        # The original parser charges owner text and its hexadecimal bytes to an
+        # image-derived allowance. Unreferenced padding makes this a valid large
+        # result without changing any parser or transport budget. The fixed npm
+        # MCP producer independently accepted these exact 82,088 input bytes.
+        notes = q.elf(q.note(owner=b"FRAME_OWNER_" + b"n" * 16384 + b"\0", kind=0x1234)) + bytes(65536)
+        q.require(hashlib.sha256(notes).hexdigest() == NOTES_FIXTURE_SHA256, "original-approved ELF fixture changed")
         (workspace / "notes.elf").write_bytes(notes)
         apk = args.repo / "tests/fixtures/rea_apk_signature/rotation-v31.apk"
         q.require(q.file_hash(apk) == alias.FIXTURE_SHA256, "frozen APK fixture changed")
