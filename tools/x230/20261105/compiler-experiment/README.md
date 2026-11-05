@@ -1,14 +1,43 @@
-# X230 compiler experiment — preparation only
+# X230 compiler experiment — native metadata verified
 
-This preparation update adds a bounded source/public-registry inventory template
-alongside the existing qualification driver, preparation designs, and exact
-metadata staging/execution requests. For this
-compiler experiment, native metadata runs, builds, training, qualifications and
-performance measurements all remain **0**. No candidate is selected or adopted.
-The current native-work owner's reservation 25 supersedes the earlier reservations and
-remains unreleased. No handoff or compiler preflight execution is claimed here.
-References to earlier reservations inside the frozen packages remain historical
-preparation records; current coordination follows reservation 25.
+One original metadata preflight completed on X230: job
+`1a1acae0548-fc05-5655`, strong succeeded / exit0 at
+2026-11-05 17:08:05.345 UTC, complete durable115 B stdout /0 B stderr.
+The first MCP start response timed out; the unchanged full request and key
+reconciled to that same job, reused=true and retried_launch=false. All five
+rustc metadata commands returned0; their ten original output files are verified.
+
+The native-work owner executed the frozen kit inside reservation26; no ownership
+handoff occurred. Source/cache inventory, compiler builds, training, qualifications
+and performance measurements remain **0**. Both future input templates remain
+selected=false. This update adds the [actual result and original evidence](actual-metadata-01/README.md)
+without changing runtime source, frozen tools, qualification or performance gates.
+No compiler variant is selected, qualified or adopted.
+
+## Actual metadata
+
+| Item | Observed result |
+|---|---|
+| CPU | Intel Core i5-3230M @2.60GHz;4logical CPUs, affinity0–3 |
+| rustc / LLVM | 1.95.0 (59807616e) /22.1.2 |
+| native CPU identification | ivybridge, explicitly stated in original target-cpus output |
+| Toolchain default CPU | x86-64 for the current x86_64-unknown-linux-gnu target |
+| Selected llvm-profdata path | unavailable; no alternate search or installation |
+| Available-space snapshot | 3,267,739,648 B, approximately3.04 GiB; not a clean-build budget |
+
+The [report](actual-metadata-01/report.json) is15772 B, SHA256
+`93d2c3acc11247b86cb9d016a9df2facc6f06c1a01eab0a7fecb175058a85754`.
+The [closure](actual-metadata-01/closure-01.json) and [independent review](actual-metadata-01/actual-review-02.md)
+bind original requests, terminal state, report and ten command streams. Reads
+are independent file snapshots, not a ten-file atomic snapshot. Native cfg adds
+13 features and removes none: aes,avx,cmpxchg16b,f16c,pclmulqdq,popcnt,rdrand,sse3,
+sse4.1,sse4.2,ssse3,xsave,xsaveopt. This was independently recomputed from original
+default/native stdout and matches the report. No named ivybridge cfg or build ran.
+
+The metadata cfg's debug_assertions and panic=unwind describe only those commands.
+They do not reconstruct historical release settings. The absent selected
+llvm-profdata path does not establish absence elsewhere. The220-input binding is
+not a full source inventory; available space does not establish build feasibility.
 
 ## Why this direction is being checked
 
@@ -28,20 +57,19 @@ frozen. R24 below is the historical and last verified accepted reference for
 this checkpoint. A later R28 adoption requires a new binding. A product difference
 will not automatically be attributed to a single compiler flag.
 
-The first proposed action is a bounded [metadata preflight](preflight-plan.json). It checks the actual
+The completed first action was the bounded [metadata preflight](preflight-plan.json). It checked the actual
 compiler and host CPU, compatible profiling-tool availability, available disk,
-and the accepted source/binary identities. It performs no compilation or
-installation. Missing prerequisites are recorded, never filled by an implicit
+and the accepted source/binary identities. It performed no compilation or
+installation. Missing prerequisites were recorded, never filled by an implicit
 download or by substituting another toolchain.
 
 ## Candidate sequence, not execution approval
 
-1. Review the preflight and [exact request protocol](native-requests-01/protocol.md)
-   with the current native-work owner. That owner may execute the exact kit within
-   its own window, or explicitly hand the window over before we execute it. Use
-   its one original job, reconcile that exact identity if transport becomes
-   uncertain, and read back the complete report and command outputs. The request
-   files themselves are still unexecuted; owner execution needs no ownership transfer.
+1. Completed: the owner executed the unchanged [exact request protocol](native-requests-01/protocol.md)
+   in its own window. Original timeout, same-key reconciliation, full terminal
+   output, report and command streams are preserved in [actual metadata](actual-metadata-01/README.md).
+   Frozen request packages retain their historical preparation wording; this
+   result does not transfer ownership or authorize an overlapping native workload.
 2. Select an exact compiler-only recipe only after that evidence exists. The
    first possible variant is the then-accepted source with an explicit verified
    X230 CPU target and a clean, fully recorded environment. Generic release settings,
@@ -121,10 +149,10 @@ qualification. This publication copy did not rerun the check. The
 blocker within their static scope; selected execution and actual compiler-log
 compatibility remain unverified.
 
-Actual coordination, accepted-version selection, native metadata, independent
+Further coordination, current accepted-version binding, independent
 source and sparse-registry preparation, a measured fresh-build space budget,
 complete qualification and the unchanged full acceptance campaign remain future
-work. These materials are a preparation checkpoint, not an optimized runtime
+work. The completed metadata is not an optimized runtime
 version or a change to the accepted candidate.
 
 ## Read-only source and public-cache inventory
@@ -147,8 +175,8 @@ include checksum mismatches; it is not a copy allowlist or a prepared private
 registry manifest. `inventory_complete` would only mean that bounded observation
 finished, not preparation, offline resolution, qualification or build success.
 
-Actual source/cache inventory, current free space and a fresh-build space budget
-remain unknown. The 16 MiB evidence-output cap is not a build-space budget.
+Actual source/cache inventory and a fresh-build space budget
+remain unknown. The metadata gives only one3.04 GiB available-space snapshot. The 16 MiB evidence-output cap is not a build-space budget.
 This template cannot serve directly as a preparation receipt; a later preparer
 must independently bind and verify the actual inputs and copies. The existing
 preflight, coordination routes, qualification stages and acceptance gates remain
@@ -156,7 +184,8 @@ unchanged.
 
 ## Checkpoint files
 
-- [中文 prepared-only checkpoint](../../../../docs/X230_COMPILER_EXPERIMENT_20261105.md)
+- [Actual metadata report and evidence](actual-metadata-01/README.md), [closure](actual-metadata-01/closure-01.json), and [independent review](actual-metadata-01/actual-review-02.json)
+- [中文实际metadata检查点](../../../../docs/X230_COMPILER_EXPERIMENT_20261105.md)
 - [Preflight script](preflight.py), [frozen plan](preflight-plan.json), and [original local manifest](preflight-manifest.json)
 - [History review JSON](reviews/compiler-optimization-history-01.json)
 - [Accepted R24 report](../../../../docs/X230_OPTIMIZATION_20261105_R24.md)
@@ -174,8 +203,8 @@ unchanged.
 
 The preserved JSON and history files retain their original local/remote provenance
 paths verbatim; the links above are the repository navigation for this checkpoint.
-All frozen package source, JSON, diffs, local checks and reviews are byte-identical
-copies. This update adds only the four frozen inventory files; the previous 27
-non-entry files retain their exact bytes. Only this entry README and the Chinese
-checkpoint document are edited. This is a tools preparation checkpoint, not a
-new measured optimization version.
+All31 non-entry files from the previous33-file checkpoint retain their exact bytes.
+Only this entry README and the Chinese checkpoint are edited; original native
+metadata, tool wrappers, command streams and independent review are added.
+No runtime source or frozen tool is modified, and no new measured optimization
+version is claimed.
