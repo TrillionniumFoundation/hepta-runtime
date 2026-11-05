@@ -107,6 +107,11 @@ pub fn validate_static_report(report: &Value) -> Result<(), ApkViewError> {
 	schema::validate_report(report)
 }
 
+/// Validate and default a summary/page selection before acquiring its artifact.
+pub fn normalize_static_view(view: &Value) -> Result<Value, ApkViewError> {
+	schema::normalize_view(view)
+}
+
 // These accessors are used only after complete report/selection validation. In
 // particular, absent optional selectors are distinct from explicit empty arrays.
 fn array(value: &Value) -> &[Value] {
@@ -471,7 +476,7 @@ pub fn project_static_view(
 		issue.message = Some("Parent Evidence ID is not a digest-backed identifier.".into());
 		return Err(ApkViewError::input(vec![issue]));
 	};
-	let view = schema::normalize_view(view)?;
+	let view = normalize_static_view(view)?;
 	validate_static_report(report)?;
 	if subject
 		.filter(|subject| !subject.is_null())

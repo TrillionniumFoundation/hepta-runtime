@@ -41,7 +41,9 @@ pub use observation::{
 	StaticLimits,
 };
 
-pub use view::{project_static_view, validate_static_report, ApkViewError, ApkViewIssue};
+pub use view::{
+	normalize_static_view, project_static_view, validate_static_report, ApkViewError, ApkViewIssue,
+};
 
 /// Bounded declared facts from already captured bytes; no filesystem or engine access.
 pub fn inspect_static(
