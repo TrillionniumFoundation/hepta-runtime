@@ -84,6 +84,24 @@ remain in the encoder state but are omitted from future Bellman value. Selection
 uses the first legal maximum in the fixed action order. Illegal scores carry an
 explicit mask; zero-probability branches are skipped rather than renormalized.
 
+Teacher rows reproduce the pinned Python `planning.compile_own` state selection.
+Its `enumerate_states(full_state=False)` traverses structural causal support with
+a last-in, first-out stack and retains the first complete state for each Markov
+key. The key contains tick, remaining budget, broken status, pending request and
+observed history; it excludes accumulated fees. Successors are pushed in WAIT,
+READ, REPAIR order, and a due request pushes failure, observation 0, observation
+1 in that order. Structural enumeration includes zero-probability outcomes;
+actual trace validation still rejects them and Bellman expectation skips them.
+
+Q and its first-maximum action use that retained representative state. The
+returned state, public features and encoder use the actual supplied causal trace.
+This distinction preserves the old compiler's binary64 behavior: equivalent
+Markov states can carry accumulated fees that differ by one ULP, and subtraction
+of successor fees can then change a strict action tie. Neither rounding all
+charges to a common decimal value nor setting the compiled-row charge to zero
+reproduces the specified source. Recursive future Bellman values continue to omit
+sunk charges exactly as the pinned Oracle does.
+
 Arithmetic is rounded binary64 with separate products and left-to-right sums.
 The implementation uses platform `tanh` and `exp`; it is not an interval proof or
 a declaration that two compiler/target builds have identical bits. It is not a
@@ -116,8 +134,9 @@ serialization finish. Cancelling the asynchronous waiter does not stop an
 already running blocking task or release its permit early. A later request can
 be admitted after that original worker actually finishes.
 
-The core bounds traces to six steps, transition tables to 24, and each mass or
-Bellman cache to 8192 states. Its cooperative deadline is 30 seconds beginning at
+The core bounds traces to six steps, transition tables to 24, and each mass,
+Bellman-value or teacher-representative map to 8192 states. The DFS stack also has
+an 8192-state cap. Its cooperative deadline is 30 seconds beginning at
 core entry; it is not a bound on transport delay or Tokio scheduling. Result
 serialization is capped at 1 MiB and also respects Runtime's global result cap.
 An over-limit result fails without returning a partial JSON success. Request
@@ -131,6 +150,14 @@ The port changes copyright/formatting and replaces the sole non-test `unwrap`
 on the fixed prior-grid minimum with an explicit contextual error. The integrated strict Clippy gate also required a type alias for the mass-cache
 key; its representation and algorithm are unchanged. These changes produce
 a new source digest and require qualification of the integrated executable.
+
+The first integrated corpus attempt stopped on an exact teacher-action mismatch
+between two full traces with the same Markov key and different accumulated-fee
+bits. The representative-state correction has a synthetic identity-law regression
+covering that case and the unchanged actual-trace encoder. Its added code and
+contract require a new source identity, build and strict corpus qualification.
+The failed attempt remains evidence; a focused standalone probe cannot transfer
+qualification from the earlier Runtime executable or establish full corpus parity.
 
 Additional tests cover raw-byte commitment, all envelope digest failures,
 unknown/duplicate fields, exact byte limits, bounded output, released permits

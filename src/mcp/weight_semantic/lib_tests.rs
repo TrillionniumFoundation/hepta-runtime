@@ -259,3 +259,75 @@ fn zero_probability_trace_outcomes_are_rejected() {
 			.contains("zero probability"));
 	}
 }
+
+#[test]
+fn teacher_reuses_first_markov_representative_without_replacing_encoder_state() {
+	let mut p = base();
+	change_model(&mut p, |model| {
+		let identity = model["core"]["tables"][0]["matrix"].clone();
+		model["core"]["tables"] = json!([
+			{"dt":0.5,"drive":0,"matrix":identity},
+			{"dt":0.25,"drive":0,"matrix":identity}
+		]);
+		// Only this synthetic neuron reads path charges. All weights are public.
+		model["network"]["w1"][0][3] = json!(1.);
+		model["network"]["b1"][0] = json!(-0.265);
+	});
+	let mut public: Value = serde_json::from_str(&p.public_json).unwrap();
+	public["duration"] = json!([0.5, 0.25, 0.25, 0.5, 0.25, 0.25]);
+	public["read_delay"] = json!([1, 2, 1, 1, 1, 1]);
+	public["reliability"] = json!([0.65, 0.85, 0.85, 0.85, 0.85, 0.85]);
+	public["read_price"] = json!(vec![0.12; 6]);
+	public["latency_price"] = json!(0.025);
+	public["repair_price"] = json!(0.03);
+	public["failure_probability"] = json!(0.08);
+	p.public_json = serde_json::to_string(&public).unwrap();
+	p.expected_public_sha256 = sha(p.public_json.as_bytes());
+	p.traces = vec![
+		Trace {
+			source_row: 0,
+			steps: vec![read(Some(1), 1), wait(), read(None, 3)],
+		},
+		Trace {
+			source_row: 1,
+			steps: vec![
+				read(Some(1), 1),
+				Step {
+					action: 2,
+					completion: None,
+				},
+				Step {
+					action: 1,
+					completion: Some(Completion {
+						observation_tick: 3,
+						failure: true,
+						observation: None,
+					}),
+				},
+			],
+		},
+	];
+	let result = replay(&p).unwrap();
+	let actual = &result.rows[0];
+	let representative = &result.rows[1];
+	let mut expected_actual = representative.state.clone();
+	expected_actual.charges = 0.265;
+	assert_eq!(actual.state, expected_actual);
+	assert_eq!(representative.state.charges, 0.26499999999999996);
+	assert_eq!(actual.public_features[3], actual.state.charges);
+	assert_eq!(
+		representative.public_features[3],
+		representative.state.charges
+	);
+	assert_eq!(actual.hidden[0], 0.);
+	assert_ne!(representative.hidden[0], 0.);
+	assert_eq!(actual.mass, representative.mass);
+	assert_eq!(actual.bank, representative.bank);
+	assert_eq!(actual.legal, representative.legal);
+	assert_eq!(actual.teacher_q, representative.teacher_q);
+	assert_eq!(actual.target_action, representative.target_action);
+	assert_eq!(
+		actual.minimum_teacher_margin,
+		representative.minimum_teacher_margin
+	);
+}

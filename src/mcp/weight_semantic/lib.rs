@@ -446,6 +446,7 @@ struct Engine {
 	emissions: Vec<Vec<Vec<f64>>>,
 	mass_cache: HashMap<MassCacheKey, Vec<f64>>,
 	values: HashMap<Key, f64>,
+	teacher_representatives: HashMap<Key, State>,
 	deadline: Instant,
 	probability_error: f64,
 }
@@ -588,9 +589,65 @@ impl Engine {
 			emissions,
 			mass_cache: HashMap::new(),
 			values: HashMap::new(),
+			teacher_representatives: HashMap::new(),
 			deadline,
 			probability_error: 0.,
 		})
+	}
+
+	fn collect_teacher_representatives(&mut self) -> Result<()> {
+		// The pinned Python compiler keeps the first LIFO-DFS full state for
+		// each Markov key. Its charge bits affect rounded fee subtraction even
+		// though sunk charges do not affect the mathematical future utility.
+		let mut pending = vec![initial()];
+		while let Some(state) = pending.pop() {
+			self.check_deadline()?;
+			let key = Key::from(&state);
+			if self.teacher_representatives.contains_key(&key) {
+				continue;
+			}
+			ensure!(
+				self.teacher_representatives.len() < MAX_CACHE_STATES,
+				"teacher representative state budget exceeded"
+			);
+			self.teacher_representatives.insert(key, state.clone());
+			let mask = legal(&self.public, &state);
+			for (action, allowed) in mask.iter().enumerate().take(4).skip(1) {
+				if !allowed {
+					continue;
+				}
+				let due = due_request(&self.public, &state, action)?;
+				let completions = if let Some(tick) = due {
+					vec![
+						Some(Completion {
+							observation_tick: tick,
+							failure: true,
+							observation: None,
+						}),
+						Some(Completion {
+							observation_tick: tick,
+							failure: false,
+							observation: Some(0),
+						}),
+						Some(Completion {
+							observation_tick: tick,
+							failure: false,
+							observation: Some(1),
+						}),
+					]
+				} else {
+					vec![None]
+				};
+				for completion in completions {
+					ensure!(
+						pending.len() < MAX_CACHE_STATES,
+						"teacher DFS stack budget exceeded"
+					);
+					pending.push(successor(&self.public, &state, action, &completion)?);
+				}
+			}
+		}
+		Ok(())
 	}
 
 	fn transition(&self, tick: usize, v: &[f64]) -> Vec<f64> {
@@ -817,7 +874,12 @@ impl Engine {
 		let learned = sigmoid(out[3]);
 		hidden.push(1.);
 		let raw: Vec<u8> = hidden.iter().flat_map(|x| x.to_le_bytes()).collect();
-		let q = self.q(&state)?;
+		let representative = self
+			.teacher_representatives
+			.get(&Key::from(&state))
+			.context("trace state is absent from the teacher Markov support")?
+			.clone();
+		let q = self.q(&representative)?;
 		let mask = legal(&self.public, &state);
 		let mut action = 0;
 		for i in 1..6 {
@@ -887,6 +949,7 @@ pub fn replay(params: &ReplayParams) -> Result<ReplayResult> {
 	let model = serde_json::from_str(&params.checkpoint_json).context("checkpoint schema")?;
 	let public = serde_json::from_str(&params.public_json).context("public task schema")?;
 	let mut engine = Engine::new(model, public, start + Duration::from_secs(30))?;
+	engine.collect_teacher_representatives()?;
 	let mut rows = Vec::with_capacity(params.traces.len());
 	for trace in &params.traces {
 		rows.push(engine.score(trace)?);
