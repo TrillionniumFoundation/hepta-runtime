@@ -74,6 +74,101 @@ impl Fixture {
 		)
 	}
 }
+// Read one complete Rust method body, ignoring braces inside comments and
+// literals. A following tool's admission must never satisfy this tool's audit.
+fn owner_fence_tool_body(source: &str, start: usize) -> &str {
+	let bytes = source.as_bytes();
+	assert_eq!(bytes[start], b'{');
+	let mut at = start;
+	let mut depth = 0_usize;
+	while at < bytes.len() {
+		if bytes[at..].starts_with(b"//") {
+			at += source[at..].find('\n').unwrap_or(bytes.len() - at);
+			continue;
+		}
+		if bytes[at..].starts_with(b"/*") {
+			let mut comments = 1_usize;
+			at += 2;
+			while comments > 0 {
+				assert!(at + 1 < bytes.len(), "unterminated source comment");
+				if bytes[at..].starts_with(b"/*") {
+					comments += 1;
+					at += 2;
+				} else if bytes[at..].starts_with(b"*/") {
+					comments -= 1;
+					at += 2;
+				} else {
+					at += 1;
+				}
+			}
+			continue;
+		}
+		if bytes[at] == b'r' {
+			let mut opening = at + 1;
+			while bytes.get(opening) == Some(&b'#') {
+				opening += 1;
+			}
+			if bytes.get(opening) == Some(&b'"') {
+				let closing = format!("\"{}", "#".repeat(opening - at - 1));
+				let end = source[opening + 1..]
+					.find(&closing)
+					.expect("unterminated raw source literal");
+				at = opening + 1 + end + closing.len();
+				continue;
+			}
+		}
+		if bytes[at] == b'"' {
+			at += 1;
+			loop {
+				assert!(at < bytes.len(), "unterminated source string");
+				match bytes[at] {
+					b'\\' => at += 2,
+					b'"' => {
+						at += 1;
+						break;
+					}
+					_ => at += 1,
+				}
+			}
+			continue;
+		}
+		if bytes[at] == b'\'' {
+			let mut end = at + 1;
+			if bytes.get(end) == Some(&b'\\') {
+				end += match bytes.get(end + 1) {
+					Some(b'x') => 4,
+					Some(b'u') => {
+						source[end..]
+							.find('}')
+							.expect("unterminated character escape")
+							+ 1
+					}
+					_ => 2,
+				};
+			} else if let Some(character) = source[end..].chars().next() {
+				end += character.len_utf8();
+			}
+			// A lifetime has no closing apostrophe after one character.
+			if bytes.get(end) == Some(&b'\'') {
+				at = end + 1;
+				continue;
+			}
+		}
+		match bytes[at] {
+			b'{' => depth += 1,
+			b'}' => {
+				depth -= 1;
+				if depth == 0 {
+					return &source[start..=at];
+				}
+			}
+			_ => {}
+		}
+		at += 1;
+	}
+	panic!("unterminated tool method");
+}
+
 #[test]
 fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 	use std::collections::BTreeSet;
@@ -118,6 +213,11 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		"pty_write",
 		"pty_close",
 		"privileged_action",
+		"rea_inspect_elf_notes",
+		"rea_inspect_apk_signature_evidence",
+		"rea_inspect_analysis_view",
+		"rea_import_evidence_bundle",
+		"rea_export_evidence_bundle",
 		"rea_retain_preview",
 		"rea_model_session_open",
 		"rea_static_start",
@@ -147,6 +247,48 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 	.into_iter()
 	.collect();
 	let direct_native: BTreeSet<&str> = ["process_start", "pty_start"].into_iter().collect();
+	let rea_record_effects = [
+		(
+			"rea_inspect_elf_notes",
+			"rea_mcp_input::elf_ordered",
+			concat!(
+				"Ok(rea_elf_notes::inspect(params,&self.rea_session,",
+				"context.ct.clone(),admission).await)"
+			),
+		),
+		(
+			"rea_inspect_apk_signature_evidence",
+			"rea_apk_mcp_input::validate",
+			concat!(
+				"Ok(rea_apk_evidence::inspect(params,Arc::clone(&self.rea_session),",
+				"context.ct.clone(),admission,).await)"
+			),
+		),
+		(
+			"rea_inspect_analysis_view",
+			"rea_analysis_view_mcp_input::validate",
+			concat!(
+				"Ok(rea_analysis_view::inspect(params,inline_order,roots,",
+				"Arc::clone(&self.rea_session),context.ct.clone(),admission,).await)"
+			),
+		),
+		(
+			"rea_import_evidence_bundle",
+			"rea_mcp_input::import_ordered",
+			concat!(
+				"Ok(rea_evidence_import::import(params,roots,Arc::clone(&self.rea_session),",
+				"context.ct.clone(),admission,).await)"
+			),
+		),
+		(
+			"rea_export_evidence_bundle",
+			"rea_evidence_export::validate",
+			concat!(
+				"Ok(rea_evidence_export::export(params,snapshot,roots,context.ct.clone(),",
+				"admission,Arc::clone(&self.rea_exports),file_lock,).await)"
+			),
+		),
+	];
 	let mut actual = BTreeSet::new();
 	for capture in matcher.captures_iter(server_source) {
 		if !capture[1].contains("read_only_hint = false") {
@@ -156,16 +298,54 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		actual.insert(name);
 		let end = capture.get(0).unwrap().end();
 		let start = server_source[end..].find('{').unwrap() + end;
-		let short = &server_source[start..server_source.len().min(start + 400)];
+		let body = owner_fence_tool_body(server_source, start);
 		if retained.contains(name) {
 			assert!(
-				!short.contains("effect_owner_fence::admit_new_effect"),
+				!body.contains("effect_owner_fence::admit_new_effect"),
 				"{name} is already-owned continuation or local session state"
 			);
 		} else if !direct_native.contains(name) {
 			assert!(
-				short.contains("effect_owner_fence::admit_new_effect"),
+				body.contains("effect_owner_fence::admit_new_effect"),
 				"{name} lacks native new-effect owner admission"
+			);
+		}
+		if let Some(&(_, validation, dispatch)) =
+			rea_record_effects.iter().find(|(tool, _, _)| *tool == name)
+		{
+			let compact: String = body
+				.chars()
+				.filter(|value| !value.is_ascii_whitespace())
+				.collect();
+			let validation_at = compact
+				.find(validation)
+				.expect("missing REA input validation");
+			let admission_at = compact
+				.find("letadmission=matchruntime::effect_owner_fence::admit_new_effect().await{")
+				.expect("missing owned REA admission");
+			let dispatch_at = compact
+				.find(dispatch)
+				.expect("missing exact REA permit transfer");
+			assert!(
+				validation_at < admission_at && admission_at < dispatch_at,
+				"{name} must validate input before admission and admit before execution"
+			);
+			assert_eq!(
+				compact
+					.matches("effect_owner_fence::admit_new_effect")
+					.count(),
+				1,
+				"{name} must acquire its admission exactly once"
+			);
+			let admission = &compact[admission_at..dispatch_at];
+			assert!(
+				admission.contains("Ok(permit)=>Arc::new(permit),")
+					&& admission.contains("Err(error)=>{returnOk("),
+				"{name} must own its shared permit and return its tool failure before execution"
+			);
+			assert!(
+				compact.strip_suffix('}').unwrap().ends_with(dispatch),
+				"{name} must transfer that permit to its actual awaited executor"
 			);
 		}
 	}
@@ -173,7 +353,7 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		actual, expected,
 		"MCP mutation contract expanded without owner audit"
 	);
-	assert_eq!(actual.difference(&retained).count(), 36);
+	assert_eq!(actual.difference(&retained).count(), 41);
 	let jobs = include_str!("jobs.rs");
 	let pty = include_str!("pty.rs");
 	assert!(jobs
