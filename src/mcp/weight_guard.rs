@@ -428,7 +428,7 @@ pub(super) async fn evaluate_with_roots(
 
 pub async fn evaluate(params: GuardedPatchParams) -> Result<String> {
 	let config = super::runtime::runtime_config()?;
-	let result = evaluate_with_roots(
+	let result = super::weight_guard_journal::evaluate_with_roots(
 		params,
 		&config.controller_workspace_roots,
 		&config.state_dir,

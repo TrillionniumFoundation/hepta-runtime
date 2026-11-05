@@ -36,6 +36,7 @@ use tracing::{debug, warn};
 use super::fs;
 use super::request_ctx;
 use super::runtime;
+use super::weight_bellman;
 use super::McpToolCall;
 use super::{
 	rea, rea_artifact_zip, rea_evidence, rea_model, rea_provider, rea_store, weight,
@@ -255,6 +256,7 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"weight_linear_forward",
 	"weight_guarded_linear_patch",
 	"weight_linear_ridge_plan",
+	"weight_bellman_plan",
 	"weight_open",
 	"weight_call",
 	"weight_status",
@@ -1826,6 +1828,25 @@ impl OctofsServer {
 		Parameters(params): Parameters<weight_ridge::RidgePlanParams>,
 	) -> Result<String, String> {
 		weight_ridge::plan(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Plan a Bounded Finite-DAG Value Policy",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Compute Q values and first-maximum actions for a caller-declared finite DAG in Rust. At most 4096 topologically ordered states, six fixed action slots, two continuing actions per state and three branches per action. Keeps each fee and reward inside the ordered branch multiplication, skips zero probabilities, and never normalizes probabilities. Reports numerical consistency and tie diagnostics, canonical request and implementation identities, and bounded work. No file access, parameter editing, verification of the true environment law or checkpoint, real-arithmetic certificate, held-out task-value claim, or production activation."
+	)]
+	async fn weight_bellman_plan(
+		&self,
+		Parameters(params): Parameters<weight_bellman::BellmanPlanParams>,
+	) -> Result<String, String> {
+		weight_bellman::plan(params)
 			.await
 			.map_err(|error| error.to_string())
 	}
