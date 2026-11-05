@@ -42,6 +42,7 @@ use super::{
 	rea, rea_artifact_zip, rea_asar, rea_evidence, rea_javascript, rea_javascript_graph, rea_model,
 	rea_provider, rea_store, rea_web, weight, weight_artifact, weight_forward, weight_tensor,
 };
+use super::{rea_contract, rea_elf_notes, rea_evidence_session};
 
 /// Per-session working directory state.
 /// Each server instance has its own workdir, isolated from other sessions.
@@ -247,6 +248,8 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"rea_inspect_javascript_package",
 	"rea_inspect_javascript_graph",
 	"rea_inspect_source_map",
+	"rea_inspect_elf_notes",
+	"rea_get_evidence_bundle",
 	"rea_model_session_open",
 	"rea_model_session_query",
 	"rea_model_session_read",
@@ -336,6 +339,7 @@ pub struct OctofsServer {
 	/// Last full content served per file, so repeat whole-file views can
 	/// return only what changed.
 	view_cache: Arc<fs::delta::ViewCache>,
+	rea_session: Arc<rea_evidence_session::EvidenceSession>,
 }
 
 impl OctofsServer {
@@ -358,6 +362,7 @@ impl OctofsServer {
 			session_applied: Arc::new(std::sync::atomic::AtomicBool::new(false)),
 			subscriptions: Arc::new(SubscriptionRegistry::default()),
 			view_cache: Arc::new(fs::delta::ViewCache::default()),
+			rea_session: Arc::new(rea_evidence_session::EvidenceSession::default()),
 		}
 	}
 
@@ -1676,6 +1681,43 @@ impl OctofsServer {
 		rea_javascript_graph::inspect_graph(params, context.ct.clone())
 			.await
 			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Inspect ELF Notes",
+		input_schema = rea_contract::elf_input_schema(),
+		output_schema = rea_contract::elf_output_schema(),
+		annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
+		description = "Inspect complete ELF note tables from one admitted local file using an isolated Rust parser. Returns complete Evidence and retains it in this MCP session; no target code is executed. The declared input and output schemas are frozen from REA 6.8.0."
+	)]
+	async fn rea_inspect_elf_notes(
+		&self,
+		Parameters(params): Parameters<serde_json::Value>,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResult, ErrorData> {
+		let admission = match runtime::effect_owner_fence::admit_new_effect().await {
+			Ok(permit) => Arc::new(permit),
+			Err(error) => {
+				return Ok(
+					rea_contract::Failure::output("inspect_elf_notes", error.to_string()).wire(),
+				)
+			}
+		};
+		Ok(rea_elf_notes::inspect(params, &self.rea_session, context.ct.clone(), admission).await)
+	}
+
+	#[tool(
+		title = "Read Session Evidence Bundle",
+		input_schema = rea_contract::bundle_input_schema(),
+		output_schema = rea_contract::bundle_output_schema(),
+		annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
+		description = "Read complete observations retained by this MCP session, or discover record metadata using detail: summary and exact filters. Complete bundles contain canonical manifests and complete records; a new session starts empty."
+	)]
+	async fn rea_get_evidence_bundle(
+		&self,
+		Parameters(params): Parameters<serde_json::Value>,
+	) -> Result<CallToolResult, ErrorData> {
+		Ok(self.rea_session.get_bundle(params))
 	}
 
 	#[tool(

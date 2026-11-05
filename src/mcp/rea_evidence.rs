@@ -195,7 +195,7 @@ fn json_safe_unsigned(v: &Value) -> bool {
 	})
 }
 
-fn canonical(value: &Value, out: &mut String, depth: usize) -> Result<()> {
+pub(super) fn canonical(value: &Value, out: &mut String, depth: usize) -> Result<()> {
 	if depth > 128 {
 		bail!("REA subset canonicalization depth exceeded");
 	}
@@ -472,7 +472,29 @@ fn coverage(v: &Value) -> Result<()> {
 	Ok(())
 }
 
-fn verify_record(record: &Value) -> Result<Value> {
+pub(super) fn semantic_record_content(record: &Value) -> Result<Value> {
+	let m = obj(record, "Evidence")?;
+	let subject_identity = subject(field(m, "subject")?)?;
+	Ok(json!({
+		"subject":subject_identity,
+		"provider":field(m,"provider")?,
+		"analysis_profile":field(m,"analysis_profile")?,
+		"predicate_type":field(m,"predicate_type")?,
+		"operation":field(m,"operation")?,
+		"parameters":field(m,"parameters")?,
+		"raw_result":field(m,"raw_result")?,
+		"normalized_result":field(m,"normalized_result")?,
+		"confidence":field(m,"confidence")?,
+		"authority":field(m,"authority")?,
+		"environment":field(m,"environment")?,
+		"limitations":field(m,"limitations")?,
+		"relationship_coverage":field(m,"relationship_coverage")?,
+		"locations":field(m,"locations")?,
+		"evidence_links":field(m,"evidence_links")?
+	}))
+}
+
+pub(super) fn verify_record(record: &Value) -> Result<Value> {
 	let m = obj(record, "Evidence")?;
 	exact_fields(
 		m,
@@ -497,7 +519,7 @@ fn verify_record(record: &Value) -> Result<Value> {
 		&["caller_input_path"],
 	)?;
 	hash_form(field(m, "evidence_id")?, "ev_")?;
-	let subject_identity = subject(field(m, "subject")?)?;
+	subject(field(m, "subject")?)?;
 	provider(field(m, "provider")?)?;
 	profile(field(m, "analysis_profile")?, field(m, "provider")?)?;
 	nonempty(field(m, "predicate_type")?, "predicate_type")?;
@@ -589,23 +611,7 @@ fn verify_record(record: &Value) -> Result<Value> {
 			bail!("caller_input_path contains NUL");
 		}
 	}
-	let projected = json!({
-		"subject":subject_identity,
-		"provider":field(m,"provider")?,
-		"analysis_profile":field(m,"analysis_profile")?,
-		"predicate_type":field(m,"predicate_type")?,
-		"operation":field(m,"operation")?,
-		"parameters":field(m,"parameters")?,
-		"raw_result":field(m,"raw_result")?,
-		"normalized_result":field(m,"normalized_result")?,
-		"confidence":field(m,"confidence")?,
-		"authority":field(m,"authority")?,
-		"environment":field(m,"environment")?,
-		"limitations":field(m,"limitations")?,
-		"relationship_coverage":field(m,"relationship_coverage")?,
-		"locations":field(m,"locations")?,
-		"evidence_links":field(m,"evidence_links")?
-	});
+	let projected = semantic_record_content(record)?;
 	let expected = format!("ev_{}", canonical_sha(&projected)?);
 	let supplied = nonempty(field(m, "evidence_id")?, "evidence_id")?;
 	if supplied != expected {
@@ -641,3 +647,7 @@ pub async fn verify_evidence(params: VerifyEvidenceParams) -> Result<String> {
 #[cfg(test)]
 #[path = "rea_evidence_tests.rs"]
 mod rea_evidence_tests;
+
+#[path = "rea_evidence_creation.rs"]
+mod creation;
+pub(super) use creation::create_record;

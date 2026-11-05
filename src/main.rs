@@ -153,6 +153,9 @@ async fn run(cli: Cli) -> Result<()> {
 		Commands::ReaBrowserCapture(_) => {
 			anyhow::bail!("browser capture must run before Tokio initialization");
 		}
+		Commands::ReaElfNotesWorker => {
+			mcp::rea_elf_notes::run_worker()?;
+		}
 		Commands::ReaSourceMapWorker => {
 			mcp::rea_source_map::serve_once()?;
 		}

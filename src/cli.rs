@@ -98,6 +98,9 @@ pub enum Commands {
 	/// Internal bounded source-map parser over controller-admitted bytes.
 	#[command(hide = true)]
 	ReaSourceMapWorker,
+	/// Internal isolated ELF note parser.
+	#[command(hide = true)]
+	ReaElfNotesWorker,
 	/// Internal bounded APK signature verifier over captured stdin bytes.
 	#[command(hide = true)]
 	ReaApkSignatureWorker,
