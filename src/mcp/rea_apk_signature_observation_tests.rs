@@ -424,11 +424,13 @@ fn one_damaged_pkcs7_block_does_not_hide_an_independent_declared_signer() {
 		signers[0].certificate.as_ref().unwrap().sha256_fingerprint,
 		fingerprint(&certificate())
 	);
-	assert!(signers[1]
-		.decode_error
-		.as_ref()
-		.unwrap()
-		.contains("Indefinite ASN.1 value has no end-of-contents marker"));
+	assert!(
+		signers[1]
+			.decode_error
+			.as_ref()
+			.unwrap()
+			.contains("Indefinite ASN.1 value has no end-of-contents marker")
+	);
 	assert!(signers[1].certificate.is_none());
 	assert!(observed.result.posture.v1_only);
 	assert_eq!(observed.result.posture.self_consistent, None);
@@ -452,10 +454,12 @@ fn v1_pairing_is_case_sensitive_and_duplicate_metadata_preserves_unknown() {
 		result.result.schemes.v1.signers[0].decode_error.as_deref(),
 		Some("duplicate entry: META-INF/GOOD.SF")
 	);
-	assert!(result
-		.limitations
-		.iter()
-		.any(|note| note.contains("Duplicate entry")));
+	assert!(
+		result
+			.limitations
+			.iter()
+			.any(|note| note.contains("Duplicate entry"))
+	);
 }
 
 #[test]
@@ -636,10 +640,12 @@ fn frozen_profile_does_not_inherit_legacy_pair_or_directory_limits() {
 	);
 	let observed = inspect_with_limits(&bytes, StaticLimits::REA_6_8_0).unwrap();
 	assert!(!observed.result.schemes.v1.present);
-	assert!(observed
-		.limitations
-		.iter()
-		.any(|note| note.contains("1 name more than once")));
+	assert!(
+		observed
+			.limitations
+			.iter()
+			.any(|note| note.contains("1 name more than once"))
+	);
 }
 
 #[test]
@@ -661,11 +667,13 @@ fn zip64_read_scope_does_not_change_the_frozen_metadata_pairing_rule() {
 		Some("duplicate entry: META-INF/GOOD.SF")
 	);
 	assert!(observed.result.schemes.v1.signers[0].certificate.is_none());
-	assert!(observed
-		.limitations
-		.iter()
-		.any(|note| note.contains("only the first 3 of the 4")
-			&& note.contains("duplicated only by records past those")));
+	assert!(
+		observed
+			.limitations
+			.iter()
+			.any(|note| note.contains("only the first 3 of the 4")
+				&& note.contains("duplicated only by records past those"))
+	);
 	let bytes = zip64_directory(&plain, 4);
 	assert_eq!(
 		inspect_with_limits(&bytes, StaticLimits::REA_6_8_0)
@@ -678,4 +686,63 @@ fn zip64_read_scope_does_not_change_the_frozen_metadata_pairing_rule() {
 			.as_deref(),
 		Some("duplicate entry: META-INF/GOOD.SF")
 	);
+}
+
+#[test]
+fn complete_preflight_counts_and_later_structure_errors_match_the_original_service() {
+	let fixture: serde_json::Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_apk_signature/preflight-errors-r1.json"
+	))
+	.unwrap();
+	assert_eq!(
+		fixture["frozen_npm_tarball_sha256"],
+		"8d542ec76a9cb350584b60a6c9c088706ff812d5bb5b094c20c95b6dc25698bb"
+	);
+	let cases = fixture["cases"].as_array().unwrap();
+	assert_eq!(cases.len(), 4);
+	let mut capacities = 0;
+	let mut structural_errors = 0;
+	for case in cases {
+		let bytes = refusal_fixture_bytes(case);
+		let expected = &case["reference"];
+		let error = inspect_with_limits(&bytes, StaticLimits::REA_6_8_0).unwrap_err();
+		assert_eq!(
+			serde_json::to_value(error.tag).unwrap(),
+			expected["typed_error"]["_tag"],
+			"{}",
+			case["name"]
+		);
+		let details = &expected["expected"]["details"];
+		match error.tag {
+			ApkErrorTag::AnalysisInputError => {
+				structural_errors += 1;
+				assert_eq!(
+					error.reason.as_ref(),
+					details["issues"][0]["message"].as_str().unwrap(),
+					"{}",
+					case["name"]
+				);
+				assert_eq!(error.scheme.as_deref(), Some("v3"));
+				assert!(error.reported_limits.is_empty());
+			}
+			ApkErrorTag::AnalysisResourceConstraintError => {
+				capacities += 1;
+				assert_eq!(error.resource, Some(ApkResource::Capacity));
+				assert_eq!(
+					error.reason.as_ref(),
+					details["reason"].as_str().unwrap(),
+					"{}",
+					case["name"]
+				);
+				assert_eq!(
+					serde_json::to_value(&error.reported_limits).unwrap(),
+					details["reported_limits"],
+					"{}",
+					case["name"]
+				);
+			}
+			other => panic!("unexpected original classification {other:?}"),
+		}
+	}
+	assert_eq!((capacities, structural_errors), (2, 2));
 }
