@@ -334,8 +334,12 @@ impl<R: AsyncRead + Unpin> AsyncRead for CapturingReader<R> {
 
 /// STDIO adapter for explicitly selected frozen REA contracts. Other tool names and all
 /// notifications, responses, parsing errors and outbound writes retain SDK behavior.
-pub struct ReaMcpTransport<R: AsyncRead + Unpin, W: AsyncWrite> {
-	inner: AsyncRwTransport<RoleServer, CapturingReader<R>, W>,
+pub struct ReaMcpTransport<R: AsyncRead + Unpin, W: AsyncWrite + Unpin> {
+	inner: AsyncRwTransport<
+		RoleServer,
+		CapturingReader<R>,
+		super::rea_structured_wire::StructuredWriter<W>,
+	>,
 	frame: FrameSlot,
 }
 
@@ -359,7 +363,7 @@ where
 					limit,
 					frame: Arc::clone(&frame),
 				},
-				write,
+				super::rea_structured_wire::StructuredWriter::new(write),
 			),
 			frame,
 		}

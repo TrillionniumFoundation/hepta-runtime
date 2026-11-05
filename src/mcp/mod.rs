@@ -33,6 +33,7 @@ mod rea_contract;
 mod rea_response_encoding;
 mod rea_response_frame;
 mod rea_response_order;
+mod rea_structured_wire;
 pub use rea_response_frame::ReaFramedService;
 pub mod rea_elf_notes;
 pub mod rea_evidence;

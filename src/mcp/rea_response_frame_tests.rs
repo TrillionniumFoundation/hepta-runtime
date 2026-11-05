@@ -80,6 +80,35 @@ fn serialization_failure_is_distinct_from_budget_overflow() {
 }
 
 #[test]
+fn structured_original_spelling_is_counted_before_final_frame_admission() {
+	let mut frame = context(json!(1), true);
+	let text = format!(
+		r#"{{"operation":"inspect_analysis_view","value":0.0000001,"padding":"{}"}}"#,
+		"x".repeat(4096)
+	);
+	let mut complete = CallToolResult::success(vec![rmcp::model::ContentBlock::text(text.clone())]);
+	complete.structured_content = Some(serde_json::from_str(&text).unwrap());
+	let result = ServerResult::CallToolResult(complete);
+	let sdk = serde_json::to_vec(&JsonRpcResponse {
+		jsonrpc: JsonRpcVersion2_0,
+		id: frame.id.clone(),
+		result: &result,
+	})
+	.unwrap();
+	frame.limit = sdk.len() + 1;
+	assert!(matches!(
+		frame.count_result(&result),
+		Err(CountFailure::Overflow(_))
+	));
+	let bounded = frame.finish(Ok(result)).unwrap();
+	let ServerResult::CallToolResult(refusal) = &bounded else {
+		panic!("bounded tool refusal required")
+	};
+	assert_eq!(refusal.is_error, Some(true));
+	assert!(frame.count_result(&bounded).is_ok());
+}
+
+#[test]
 fn same_id_minimal_protocol_error_is_smaller_than_valid_admitted_requests() {
 	let names = [
 		"rea_inspect_elf_notes",

@@ -167,7 +167,7 @@ impl FrameContext {
 		self.count(&JsonRpcResponse {
 			jsonrpc: JsonRpcVersion2_0,
 			id: self.id.clone(),
-			result,
+			result: super::rea_structured_wire::WireServerResult(result),
 		})
 	}
 
