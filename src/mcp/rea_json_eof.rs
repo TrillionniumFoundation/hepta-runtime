@@ -13,14 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! EOF diagnostics for the frozen small-file JSON.parse profile.
+//! Syntax diagnostics for the frozen small-file JSON.parse profile.
 //!
-//! This observer recognizes an unfinished, otherwise grammatical JSON prefix.
-//! It neither parses values nor accepts a document. The owned reader validates
-//! UTF-8, enforces its budgets, and must observe physical EOF; the value parser
-//! must independently report EOF before any diagnostic here can become public.
-//! Any non-EOF syntax error disables the observer. No input bytes or values are
-//! retained, and the fixed stack covers the reader's existing depth profile.
+//! The observer retains bounded grammar state and source context. It never
+//! constructs a JSON value or admits an Evidence object. The owned reader must
+//! validate UTF-8 and quotas through physical EOF, and the value parser must
+//! independently reject syntax or a JS string representation before an observed
+//! diagnostic can become public. Large-file streaming keeps its separate profile.
+
+#[path = "rea_json_context.rs"]
+mod context;
+
+#[derive(Clone, Copy)]
+enum FaultKind {
+	Located(&'static str),
+	AfterRoot,
+	Unexpected(u8),
+}
+
+#[derive(Clone, Copy)]
+struct Fault {
+	kind: FaultKind,
+	position: usize,
+	line: usize,
+	column: usize,
+}
 
 #[derive(Clone, Copy)]
 enum Frame {
@@ -73,6 +90,9 @@ pub(super) struct Tracker {
 	line: usize,
 	column: usize,
 	previous_cr: bool,
+	fault: Option<Fault>,
+	context: context::Context,
+	root_string: bool,
 }
 
 impl Tracker {
@@ -86,6 +106,9 @@ impl Tracker {
 			line: 1,
 			column: 1,
 			previous_cr: false,
+			fault: None,
+			context: context::Context::new(),
+			root_string: false,
 		}
 	}
 
@@ -94,9 +117,10 @@ impl Tracker {
 	/// its continuation and observes EOF. UTF-8 continuation bytes add no units.
 	pub(super) fn accept(&mut self, bytes: &[u8]) {
 		for &byte in bytes {
-			if !self.valid_prefix {
-				break;
+			if self.valid_prefix {
+				self.accept_byte(byte);
 			}
+			self.context.accept(byte);
 			let units = match byte {
 				0x80..=0xbf => 0,
 				0xf0..=0xf4 => 2,
@@ -115,7 +139,6 @@ impl Tracker {
 				self.column += units;
 			}
 			self.previous_cr = byte == b'\r';
-			self.accept_byte(byte);
 		}
 	}
 
@@ -125,7 +148,7 @@ impl Tracker {
 			Token::String { key, escape } => self.accept_string(byte, key, escape),
 			Token::Literal { remaining } => {
 				if remaining[0] != byte {
-					self.valid_prefix = false;
+					self.unexpected(byte);
 				} else if remaining.len() == 1 {
 					self.token = Token::None;
 					self.complete_value();
@@ -161,7 +184,12 @@ impl Tracker {
 			(Frame::RootValue | Frame::ArrayFirst | Frame::ArrayValue | Frame::ObjectValue, _) => {
 				self.start_value(byte)
 			}
-			_ => self.valid_prefix = false,
+			(Frame::RootEnd, _) => self.fail(FaultKind::AfterRoot),
+			(Frame::ArrayEnd, _) => self.located("Expected ',' or ']' after array element"),
+			(Frame::ObjectFirst, _) => self.located("Expected property name or '}'"),
+			(Frame::ObjectKey, _) => self.located("Expected double-quoted property name"),
+			(Frame::ObjectColon, _) => self.located("Expected ':' after property name"),
+			(Frame::ObjectEnd, _) => self.located("Expected ',' or '}' after property value"),
 		}
 	}
 
@@ -170,6 +198,7 @@ impl Tracker {
 			b'[' => self.push(Frame::ArrayFirst),
 			b'{' => self.push(Frame::ObjectFirst),
 			b'"' => {
+				self.root_string |= self.depth == 1;
 				self.token = Token::String {
 					key: false,
 					escape: Escape::None,
@@ -181,8 +210,36 @@ impl Tracker {
 			b'-' => self.token = Token::Number(Number::Minus),
 			b'0' => self.token = Token::Number(Number::Zero),
 			b'1'..=b'9' => self.token = Token::Number(Number::Integer),
+			_ => self.unexpected(byte),
+		}
+	}
+
+	fn located(&mut self, message: &'static str) {
+		self.fail(FaultKind::Located(message));
+	}
+
+	fn unexpected(&mut self, byte: u8) {
+		match byte {
+			b'-' | b'0'..=b'9' => self.located("Unexpected number"),
+			b'"' => self.located("Unexpected string"),
+			0..=0x7f => {
+				self.context.mark();
+				self.fail(FaultKind::Unexpected(byte));
+			}
+			// V8 may place one unpaired UTF-16 surrogate in its error text.
+			// Do not replace that with U+FFFD or mislabel it as equivalent.
 			_ => self.valid_prefix = false,
 		}
+	}
+
+	fn fail(&mut self, kind: FaultKind) {
+		self.fault = Some(Fault {
+			kind,
+			position: self.position,
+			line: self.line,
+			column: self.column,
+		});
+		self.valid_prefix = false;
 	}
 
 	fn push(&mut self, frame: Frame) {
@@ -220,7 +277,7 @@ impl Tracker {
 			}
 			(Escape::None, b'\\') => Escape::Backslash,
 			(Escape::None, 0..=0x1f) => {
-				self.valid_prefix = false;
+				self.located("Bad control character in string literal");
 				return;
 			}
 			(Escape::None, _) => Escape::None,
@@ -235,8 +292,12 @@ impl Tracker {
 					Escape::Unicode(remaining - 1)
 				}
 			}
-			_ => {
-				self.valid_prefix = false;
+			(Escape::Unicode(_), _) => {
+				self.located("Bad Unicode escape");
+				return;
+			}
+			(Escape::Backslash, _) => {
+				self.located("Bad escaped character");
 				return;
 			}
 		};
@@ -253,8 +314,20 @@ impl Tracker {
 			(Point | Fraction, b'0'..=b'9') => Fraction,
 			(Exponent, b'+' | b'-') => ExponentSign,
 			(Exponent | ExponentSign | ExponentDigits, b'0'..=b'9') => ExponentDigits,
-			(Zero, b'0'..=b'9') | (Minus | Point | Exponent | ExponentSign, _) => {
-				self.valid_prefix = false;
+			(Zero, b'0'..=b'9') => {
+				self.located("Unexpected number");
+				return;
+			}
+			(Minus, _) => {
+				self.located("No number after minus sign");
+				return;
+			}
+			(Point, _) => {
+				self.located("Unterminated fractional number");
+				return;
+			}
+			(Exponent | ExponentSign, _) => {
+				self.located("Exponent part is missing a number");
 				return;
 			}
 			_ => {
@@ -269,7 +342,33 @@ impl Tracker {
 		self.token = Token::Number(next);
 	}
 
+	/// A complete top-level JS string can be rejected by an object schema
+	/// without fabricating a Rust string for unpaired escaped surrogates.
+	pub(super) fn complete_root_string(&self) -> bool {
+		self.valid_prefix
+			&& self.root_string
+			&& self.depth == 1
+			&& matches!(self.token, Token::None)
+			&& matches!(self.frames[0], Frame::RootEnd)
+	}
+
 	pub(super) fn finish(mut self) -> Option<String> {
+		if let Some(fault) = self.fault {
+			return match fault.kind {
+				FaultKind::Located(message) => Some(format!(
+					"{message} in JSON at position {} (line {} column {})",
+					fault.position, fault.line, fault.column
+				)),
+				FaultKind::AfterRoot => Some(format!(
+					"Unexpected non-whitespace character after JSON at position {} (line {} column {})",
+					fault.position, fault.line, fault.column
+				)),
+				FaultKind::Unexpected(token) => {
+					self.context
+						.unexpected(token, fault.position, self.position)
+				}
+			};
+		}
 		if !self.valid_prefix {
 			return None;
 		}

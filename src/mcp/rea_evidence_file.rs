@@ -95,6 +95,9 @@ pub(super) enum FileReadError {
 		message: String,
 		user_message: Option<String>,
 	},
+	/// A complete JSON.parse string whose escaped UTF-16 cannot become a Rust
+	/// string. Callers may reject its known root type; no value is fabricated.
+	RootString,
 	Cancelled,
 	NativeProfileGap {
 		feature: &'static str,
@@ -117,6 +120,9 @@ impl fmt::Display for FileReadError {
 			Self::InvalidJson { message, .. } | Self::Unexpected { message } => {
 				f.write_str(message)
 			}
+			Self::RootString => f.write_str(
+				"Evidence JSON root is a string outside the Rust Unicode representation",
+			),
 			Self::Cancelled => f.write_str("Evidence file acquisition cancelled"),
 			Self::NativeProfileGap { feature, .. } => {
 				write!(f, "Native Evidence JSON profile: {feature}")
@@ -573,6 +579,18 @@ fn read_admitted(
 	let identity = rea_files::ensure_unchanged(before, &current_meta).map_err(|_| changed());
 	close_result(current_file, identity)?;
 	active(cancellation)?;
+	let observed = state.borrow();
+	// Syntax diagnostics and known root-type rejections must describe the same
+	// complete bytes validated in the first pass, not a changed second read.
+	if observed.eof
+		&& (observed.input_bytes != before.len()
+			|| first_digest
+				.as_ref()
+				.is_some_and(|digest| digest != &observed.digest()))
+	{
+		return Err(changed());
+	}
+	drop(observed);
 	let value = parsed?;
 	let observed = state.borrow();
 	if observed.input_bytes != before.len()
@@ -601,7 +619,8 @@ struct State {
 	input_bytes: u64,
 	hash: Sha256,
 	prefix: Vec<u8>,
-	eof_diagnostic: Option<String>,
+	syntax_diagnostic: Option<String>,
+	complete_root_string: bool,
 	eof: bool,
 	small: bool,
 }
@@ -615,7 +634,8 @@ impl State {
 			input_bytes: 0,
 			hash: Sha256::new(),
 			prefix: Vec::new(),
-			eof_diagnostic: None,
+			syntax_diagnostic: None,
+			complete_root_string: false,
 			eof: false,
 			small,
 		}
@@ -800,7 +820,8 @@ impl<R: Read> Read for CheckedReader<R> {
 			let mut state = self.state.borrow_mut();
 			state.eof = true;
 			if let Some(tracker) = self.eof_tracker.take() {
-				state.eof_diagnostic = tracker.finish();
+				state.complete_root_string = tracker.complete_root_string();
+				state.syntax_diagnostic = tracker.finish();
 			}
 			return Ok(0);
 		}
@@ -846,14 +867,32 @@ fn take_reader_error(state: &Rc<RefCell<State>>, fallback: io::Error) -> FileRea
 
 fn parse_reader<R: Read>(reader: R, expected: u64, state: Rc<RefCell<State>>) -> Result<Parsed> {
 	let guarded = CheckedReader::new(reader, expected, Rc::clone(&state), true);
-	let buffered = BufReader::with_capacity(CHUNK, guarded);
-	let mut parser = serde_json::Deserializer::from_reader(buffered);
-	let result = Seed {
-		state: Rc::clone(&state),
-		depth: 0,
+	let mut buffered = BufReader::with_capacity(CHUNK, guarded);
+	let result = {
+		let mut parser = serde_json::Deserializer::from_reader(&mut buffered);
+		Seed {
+			state: Rc::clone(&state),
+			depth: 0,
+		}
+		.deserialize(&mut parser)
+		.and_then(|value| parser.end().map(|_| value))
+	};
+	if result
+		.as_ref()
+		.is_err_and(|error| error.is_syntax() || error.is_eof())
+		&& state.borrow().small
+		&& state.borrow().failure.is_none()
+	{
+		// A syntax failure can stop serde before the source ends. Keep the same
+		// bounded owner through UTF-8/token checks, cancellation and physical EOF
+		// so neither later read failures nor V8's following context are skipped.
+		let mut tail = [0_u8; CHUNK];
+		while buffered
+			.read(&mut tail)
+			.map_err(|error| take_reader_error(&state, error))?
+			!= 0
+		{}
 	}
-	.deserialize(&mut parser)
-	.and_then(|value| parser.end().map(|_| value));
 	match result {
 		Ok(value) => Ok(value),
 		Err(error) => {
@@ -864,13 +903,16 @@ fn parse_reader<R: Read>(reader: R, expected: u64, state: Rc<RefCell<State>>) ->
 			if state.bom() {
 				return Err(invalid_json(BOM_MESSAGE, true));
 			}
-			// Only an actual EOF, independently recognized as a valid JSON
-			// prefix, can use the frozen small-file V8 diagnostic. The tracker
-			// never overrides non-EOF syntax, representation or owned-reader
-			// failures, and is absent from the large-file streaming profile.
-			if error.is_eof() && state.small && state.eof {
-				if let Some(message) = state.eof_diagnostic.take() {
+			// The value parser rejected this same input, and the independently
+			// bounded observer reached physical EOF under the small-file profile.
+			// Complete root strings are rejected by each caller's object schema;
+			// they are never substituted, retained or treated as decoded values.
+			if (error.is_syntax() || error.is_eof()) && state.small && state.eof {
+				if let Some(message) = state.syntax_diagnostic.take() {
 					return Err(invalid_json(&message, false));
+				}
+				if state.complete_root_string {
+					return Err(FileReadError::RootString);
 				}
 			}
 			Err(gap(

@@ -134,6 +134,10 @@ fn file_failure(error: FileReadError, path: &str) -> Failure {
 					"content_issues":[{"path":[],"reason":"invalid_format","expected":"JSON","message":message}]}}),
 			)
 		}
+		FileReadError::RootString => source_failure(
+			ImportSourceError::Source(rea_evidence_source::reject_string_root(true)),
+			path,
+		),
 		FileReadError::Cancelled => Failure::cancelled(OP),
 		FileReadError::NativeProfileGap { feature, details } => profile_gap(feature, details),
 		FileReadError::Cleanup {

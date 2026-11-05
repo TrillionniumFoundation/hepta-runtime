@@ -1,5 +1,8 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
+
+//! Public import outcomes preserve schema failures and publish only authenticated bundles.
 
 use super::*;
 
@@ -234,4 +237,54 @@ async fn standalone_record_fallback_does_not_swallow_unexpected_schema_exception
 	let snapshot = session.snapshot().unwrap();
 	assert_eq!(snapshot.record_count(), 0);
 	assert_eq!(snapshot.unknown_count(), 0);
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn original_non_eof_and_root_string_failures_keep_complete_errors_and_session_contents() {
+	let fixture: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_evidence_file/syntax-reference-r1.json"
+	))
+	.unwrap();
+	let dir = tempfile::tempdir().unwrap();
+	let path = dir.path().join("invalid.json");
+	let session = Arc::new(EvidenceSession::default());
+	let before = payload(&session.get_bundle(json!({})));
+	let cases = fixture["public_cases"].as_array().unwrap();
+	assert_eq!(cases.len(), 15);
+	for case in cases {
+		let hex = case["input_hex"].as_str().unwrap();
+		let bytes: Vec<u8> = (0..hex.len())
+			.step_by(2)
+			.map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+			.collect();
+		tokio::fs::write(&path, &bytes).await.unwrap();
+		let result = call(&path, dir.path(), &session, CancellationToken::new()).await;
+		let mut expected = case["error"].clone();
+		if let Some(error_path) = expected["details"].get_mut("path") {
+			*error_path = json!(path);
+		}
+		assert_eq!(
+			payload(&result),
+			json!({"error": expected}),
+			"{}",
+			case["id"]
+		);
+		assert_eq!(result.is_error, Some(true));
+		assert_eq!(
+			payload(&session.get_bundle(json!({}))),
+			before,
+			"{}",
+			case["id"]
+		);
+	}
+	// Different valid root strings must reach the identical object-schema
+	// refusal. Their content is neither replaced nor retained as Evidence.
+	let expected = cases.last().unwrap()["error"].clone();
+	for input in [r#""plain""#, r#""\uDC00""#, " \n\"\\uD800x\" \r\n"] {
+		tokio::fs::write(&path, input).await.unwrap();
+		let result = call(&path, dir.path(), &session, CancellationToken::new()).await;
+		assert_eq!(payload(&result), json!({"error": expected}), "{input:?}");
+		assert_eq!(payload(&session.get_bundle(json!({}))), before);
+	}
 }
