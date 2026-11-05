@@ -313,7 +313,9 @@ fn signer(
 	budget: &mut OutputBudget,
 ) -> ApkResult<(V1SignerFacts, Vec<String>)> {
 	budget.add(
-		512 + 6 * signature_file.encode_utf16().count() + 6 * entry.name.encode_utf16().count(),
+		512 + usize::from(budget.limits.frozen) * 4
+			+ 6 * signature_file.encode_utf16().count()
+			+ 6 * entry.name.encode_utf16().count(),
 	)?;
 	let mut encrypted = entry.flags & 1 != 0;
 	let mut notes = Vec::new();
@@ -385,10 +387,38 @@ fn signer(
 			}
 		},
 	};
+	if budget.limits.frozen {
+		if let Some(error) = &result.decode_error {
+			budget.add(2 + 6 * error.encode_utf16().count())?;
+		}
+	}
 	if encrypted {
 		notes.insert(0, format!("{}: the entry declares encryption (general-purpose flag bit 0); apksig ignores the flag, so its bytes were read as stored and the PKCS#7 decoding decides.", entry.name));
 	}
 	Ok((result, notes))
+}
+
+pub(super) fn validate_count(directory: &Directory<'_>) -> ApkResult<()> {
+	let files = directory
+		.entries
+		.iter()
+		.filter(|entry| entry.name.ends_with(".SF"))
+		.map(|entry| entry.name.as_ref())
+		.collect::<BTreeSet<_>>();
+	let mut paired = BTreeSet::new();
+	for block in directory
+		.entries
+		.iter()
+		.filter(|entry| archive::is_block(&entry.name))
+	{
+		if files.contains(archive::signature_file(&block.name).as_str()) {
+			paired.insert(block.name.as_ref());
+		}
+		if paired.len() > MAX_SIGNERS {
+			return Err(ApkInspectionError::capacity("v1-signers", MAX_SIGNERS));
+		}
+	}
+	Ok(())
 }
 
 pub(super) fn inspect(
@@ -397,11 +427,7 @@ pub(super) fn inspect(
 	entries_end: usize,
 	budget: &mut OutputBudget,
 ) -> ApkResult<(V1Scheme, Vec<String>)> {
-	let selected = directory
-		.metadata
-		.iter()
-		.map(|index| &directory.entries[*index])
-		.collect::<Vec<_>>();
+	let selected = directory.entries.iter().collect::<Vec<_>>();
 	let signature_files = selected
 		.iter()
 		.filter(|entry| entry.name.ends_with(".SF"))
@@ -420,11 +446,7 @@ pub(super) fn inspect(
 		budget.add(3 + 6 * name.encode_utf16().count())?;
 	}
 	let sf_names = signature_files.iter().copied().collect::<BTreeSet<_>>();
-	let duplicates = directory
-		.duplicates
-		.iter()
-		.map(|(first, _)| directory.entries[*first].name.as_ref())
-		.collect::<BTreeSet<_>>();
+	let duplicates = &directory.duplicate_metadata;
 	let mut paired = BTreeSet::new();
 	let mut signers = Vec::new();
 	let mut notes = Vec::new();

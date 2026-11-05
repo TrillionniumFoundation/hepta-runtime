@@ -17,10 +17,11 @@
 //! error; it must not erase other readable signers. Names follow Java's UTF-8
 //! replacement rules, including its single replacement for encoded surrogates.
 
-use super::{ApkInspectionError, ApkResult, MAX_BLOCK, MAX_PAIRS, MAX_V1_ENTRIES};
+use super::{ApkInspectionError, ApkResult, StaticLimits, MAX_V1_ENTRIES};
 use std::borrow::Cow;
+use std::collections::{hash_map::RandomState, BTreeSet};
+use std::hash::BuildHasher;
 
-const MAX_ZIP_ENTRIES: usize = 50_000;
 const MANIFEST: &str = "META-INF/MANIFEST.MF";
 const SAFE_INTEGER: u64 = (1 << 53) - 1;
 
@@ -69,7 +70,7 @@ fn safe_zip64(bytes: &[u8], at: usize) -> ApkResult<usize> {
 		.map_err(|_| ApkInspectionError::unsupported("Zip64 size exceeds addressable range").at(at))
 }
 
-pub(super) fn zip_tail(bytes: &[u8]) -> ApkResult<ZipTail> {
+pub(super) fn zip_tail(bytes: &[u8], limits: StaticLimits) -> ApkResult<ZipTail> {
 	if bytes.len() < 22 {
 		return Err(ApkInspectionError::unsupported(
 			"shorter than a ZIP EOCD record",
@@ -149,8 +150,11 @@ pub(super) fn zip_tail(bytes: &[u8]) -> ApkResult<ZipTail> {
 	if (count == 0 || central_size == 0) && bytes.starts_with(b"PK\x03\x04") {
 		return Err(ApkInspectionError::input("end-of-central-directory declares no entries, but the archive holds local file entries").at(eocd));
 	}
-	if count > MAX_ZIP_ENTRIES {
-		return Err(ApkInspectionError::capacity("zip-entries", MAX_ZIP_ENTRIES));
+	if count > limits.zip_entries {
+		return Err(ApkInspectionError::capacity(
+			"zip-entries",
+			limits.zip_entries,
+		));
 	}
 	Ok(ZipTail {
 		central,
@@ -164,6 +168,7 @@ pub(super) fn zip_tail(bytes: &[u8]) -> ApkResult<ZipTail> {
 pub(super) fn signing_block<'a>(
 	bytes: &'a [u8],
 	tail: &ZipTail,
+	limits: StaticLimits,
 ) -> ApkResult<Option<SigningBlock<'a>>> {
 	let end = tail.central;
 	if end < 16 || span(bytes, end - 16, 16)? != b"APK Sig Block 42" {
@@ -184,10 +189,10 @@ pub(super) fn signing_block<'a>(
 			ApkInspectionError::input("APK signing-block leading/trailing size mismatch").at(start),
 		);
 	}
-	if size + 8 > MAX_BLOCK as u64 {
+	if size + 8 > limits.block_bytes as u64 {
 		return Err(ApkInspectionError::capacity(
 			"signing-block-bytes",
-			MAX_BLOCK,
+			limits.block_bytes,
 		));
 	}
 	let mut at = start + 8;
@@ -201,10 +206,10 @@ pub(super) fn signing_block<'a>(
 		if length < 4 || length > (pairs_end - at - 8) as u64 {
 			return Err(ApkInspectionError::input("signing-block pair length out of range").at(at));
 		}
-		if pairs.len() >= MAX_PAIRS {
+		if pairs.len() >= limits.pairs {
 			return Err(ApkInspectionError::capacity(
 				"signing-block-pairs",
-				MAX_PAIRS,
+				limits.pairs,
 			));
 		}
 		pairs.push((
@@ -228,9 +233,61 @@ pub(super) struct Entry<'a> {
 }
 
 pub(super) struct Directory<'a> {
+	/// Only selected META-INF records need materialized names and local metadata.
 	pub entries: Vec<Entry<'a>>,
-	pub metadata: Vec<usize>,
-	pub duplicates: Vec<(usize, usize)>,
+	pub duplicate_metadata: BTreeSet<Cow<'a, str>>,
+	records: usize,
+	apksig_records: usize,
+	within: DuplicateNames<'a>,
+	unread: DuplicateNames<'a>,
+}
+
+#[derive(Default)]
+struct DuplicateNames<'a> {
+	count: usize,
+	sample: Vec<NameSample<'a>>,
+}
+
+struct NameSample<'a> {
+	header: u32,
+	name: Cow<'a, str>,
+	stored_bytes: usize,
+}
+
+#[derive(Clone, Copy)]
+struct NameIndex {
+	fingerprint: u32,
+	header: u32,
+}
+
+/// Each offset was checked during the directory walk, before the index is
+/// sorted. The immutable input owns all names, so the full index is eight
+/// bytes per record instead of one allocated Entry/String per ZIP member.
+fn indexed_name(bytes: &[u8], header: u32) -> (&[u8], Cow<'_, str>) {
+	let header = header as usize;
+	let length = u16::from_le_bytes([bytes[header + 28], bytes[header + 29]]) as usize;
+	let raw = &bytes[header + 46..header + 46 + length];
+	(raw, java_name(raw))
+}
+
+fn add_duplicate<'a>(summary: &mut DuplicateNames<'a>, bytes: &'a [u8], header: u32) {
+	summary.count += 1;
+	if summary.sample.len() == 5
+		&& summary
+			.sample
+			.last()
+			.is_some_and(|entry| entry.header < header)
+	{
+		return;
+	}
+	let (raw, name) = indexed_name(bytes, header);
+	summary.sample.push(NameSample {
+		header,
+		name,
+		stored_bytes: raw.len(),
+	});
+	summary.sample.sort_unstable_by_key(|entry| entry.header);
+	summary.sample.truncate(5);
 }
 
 pub(super) fn is_block(name: &str) -> bool {
@@ -249,8 +306,10 @@ pub(super) fn signature_file(name: &str) -> String {
 pub(super) fn directory<'a>(bytes: &'a [u8], tail: &ZipTail) -> ApkResult<Directory<'a>> {
 	let end = tail.central + tail.central_size;
 	let mut at = tail.central;
+	let mut apksig_end = at;
 	let mut entries = Vec::new();
-	let mut metadata = Vec::new();
+	let mut names = Vec::with_capacity(tail.count.min(tail.central_size / 46));
+	let hash = RandomState::new();
 	for index in 0..tail.count {
 		if at.checked_add(46).is_none_or(|stop| stop > end) {
 			return Err(ApkInspectionError::input(format!(
@@ -276,28 +335,36 @@ pub(super) fn directory<'a>(bytes: &'a [u8], tail: &ZipTail) -> ApkResult<Direct
 		}
 		let raw_name = span(bytes, name_start, name_len)?;
 		let name = java_name(raw_name);
+		let header = u32::try_from(at)
+			.map_err(|_| ApkInspectionError::capacity("input-bytes", u32::MAX as usize))?;
+		names.push(NameIndex {
+			fingerprint: hash.hash_one(name.as_ref()) as u32,
+			header,
+		});
 		if raw_name.starts_with(b"META-INF/")
 			&& (name == MANIFEST || name.ends_with(".SF") || is_block(&name))
 		{
-			if metadata.len() >= MAX_V1_ENTRIES {
+			if entries.len() >= MAX_V1_ENTRIES {
 				return Err(ApkInspectionError::capacity(
 					"v1-signature-entries",
 					MAX_V1_ENTRIES,
 				));
 			}
-			metadata.push(entries.len());
+			entries.push(Entry {
+				name,
+				raw_name,
+				flags: short(bytes, at + 8)?,
+				method: short(bytes, at + 10)?,
+				crc32: word(bytes, at + 16)?,
+				compressed: word(bytes, at + 20)?,
+				uncompressed: word(bytes, at + 24)?,
+				local: word(bytes, at + 42)?,
+			});
 		}
-		entries.push(Entry {
-			name,
-			raw_name,
-			flags: short(bytes, at + 8)?,
-			method: short(bytes, at + 10)?,
-			crc32: word(bytes, at + 16)?,
-			compressed: word(bytes, at + 20)?,
-			uncompressed: word(bytes, at + 24)?,
-			local: word(bytes, at + 42)?,
-		});
 		at = name_start + name_len + extra + comment;
+		if index < tail.classic_count {
+			apksig_end = at;
+		}
 	}
 	if at != end {
 		return Err(ApkInspectionError::input(
@@ -305,26 +372,54 @@ pub(super) fn directory<'a>(bytes: &'a [u8], tail: &ZipTail) -> ApkResult<Direct
 		)
 		.at(at));
 	}
-	let mut order = (0..entries.len()).collect::<Vec<_>>();
-	order.sort_unstable_by(|a, b| entries[*a].name.cmp(&entries[*b].name).then(a.cmp(b)));
-	let mut duplicates = Vec::new();
+	// Hashes only group candidate names. Equality and order within every group
+	// use the full Java-decoded name, so a collision never invents a duplicate.
+	names.sort_unstable_by(|a, b| {
+		a.fingerprint
+			.cmp(&b.fingerprint)
+			.then_with(|| {
+				indexed_name(bytes, a.header)
+					.1
+					.cmp(&indexed_name(bytes, b.header).1)
+			})
+			.then(a.header.cmp(&b.header))
+	});
+	let mut directory = Directory {
+		entries,
+		duplicate_metadata: BTreeSet::new(),
+		records: tail.count,
+		apksig_records: tail.classic_count.min(tail.count),
+		within: DuplicateNames::default(),
+		unread: DuplicateNames::default(),
+	};
 	let mut at = 0;
-	while at < order.len() {
+	while at < names.len() {
+		let first = names[at];
+		let (raw_name, name) = indexed_name(bytes, first.header);
 		let mut stop = at + 1;
-		while stop < order.len() && entries[order[at]].name == entries[order[stop]].name {
+		while stop < names.len()
+			&& names[stop].fingerprint == first.fingerprint
+			&& indexed_name(bytes, names[stop].header).1 == name
+		{
 			stop += 1;
 		}
 		if stop - at > 1 {
-			duplicates.push((order[at], order[at + 1]));
+			if (names[at + 1].header as usize) < apksig_end {
+				add_duplicate(&mut directory.within, bytes, first.header);
+			} else {
+				add_duplicate(&mut directory.unread, bytes, first.header);
+			}
+			// The frozen provider conservatively pairs against every selected
+			// metadata record, independently of the narrower apksig-read note.
+			if raw_name.starts_with(b"META-INF/")
+				&& (name == MANIFEST || name.ends_with(".SF") || is_block(&name))
+			{
+				directory.duplicate_metadata.insert(name);
+			}
 		}
 		at = stop;
 	}
-	duplicates.sort_unstable_by_key(|pair| pair.0);
-	Ok(Directory {
-		entries,
-		metadata,
-		duplicates,
-	})
+	Ok(directory)
 }
 
 fn continuation(b: u8) -> bool {
@@ -471,7 +566,7 @@ pub(super) fn local_data<'a>(
 	Ok((&bytes[start..stop], (entry.flags | flags) & 1 != 0))
 }
 
-fn display_name(entry: &Entry<'_>) -> String {
+fn display_name(entry: &NameSample<'_>) -> String {
 	let name = entry.name.as_ref();
 	if name.len() <= 256 {
 		return serde_json::Value::String(name.into()).to_string();
@@ -483,19 +578,19 @@ fn display_name(entry: &Entry<'_>) -> String {
 	format!(
 		"{}… ({}-byte name)",
 		serde_json::Value::String(name[..cut].into()),
-		entry.raw_name.len()
+		entry.stored_bytes
 	)
 }
 
-fn listed(directory: &Directory<'_>, indices: &[usize]) -> String {
-	let sample = indices
+fn listed(names: &DuplicateNames<'_>) -> String {
+	let sample = names
+		.sample
 		.iter()
-		.take(5)
-		.map(|index| display_name(&directory.entries[*index]))
+		.map(display_name)
 		.collect::<Vec<_>>()
 		.join(", ");
-	if indices.len() > 5 {
-		format!("{sample} and {} more", indices.len() - 5)
+	if names.count > 5 {
+		format!("{sample} and {} more", names.count - 5)
 	} else {
 		sample
 	}
@@ -505,40 +600,29 @@ fn plural(count: usize) -> String {
 	format!("{count} {}", if count == 1 { "name" } else { "names" })
 }
 
-pub(super) fn duplicate_note(directory: &Directory<'_>, classic_count: usize) -> Option<String> {
-	let within = directory
-		.duplicates
-		.iter()
-		.filter(|(_, second)| *second < classic_count)
-		.map(|(first, _)| *first)
-		.collect::<Vec<_>>();
-	let unread = directory
-		.duplicates
-		.iter()
-		.filter(|(_, second)| *second >= classic_count)
-		.map(|(first, _)| *first)
-		.collect::<Vec<_>>();
-	if within.is_empty() && unread.is_empty() {
+pub(super) fn duplicate_note(directory: &Directory<'_>) -> Option<String> {
+	let (within, unread) = (&directory.within, &directory.unread);
+	if within.count == 0 && unread.count == 0 {
 		return None;
 	}
-	let partial = classic_count < directory.entries.len();
+	let partial = directory.apksig_records < directory.records;
 	let mut note = if partial {
-		format!("apksig reads only the first {classic_count} of the {} central-directory records (it takes the count from the classic end-of-central-directory record's 16-bit field and ignores the Zip64 count). ", directory.entries.len())
+		format!("apksig reads only the first {} of the {} central-directory records (it takes the count from the classic end-of-central-directory record's 16-bit field and ignores the Zip64 count). ", directory.apksig_records, directory.records)
 	} else {
 		String::new()
 	};
-	if !within.is_empty() {
-		note.push_str(&format!("{} central directory holds {} more than once ({}); apksig rejects the v1 signature of an archive with any duplicate entry (\"Duplicate entry\"). A v1 signer whose signature block, .SF or META-INF/MANIFEST.MF name is duplicated carries decode_error; other v1 signers are reported as declared.", if partial { "Among those, the" } else { "The" }, plural(within.len()), listed(directory, &within)));
+	if within.count != 0 {
+		note.push_str(&format!("{} central directory holds {} more than once ({}); apksig rejects the v1 signature of an archive with any duplicate entry (\"Duplicate entry\"). A v1 signer whose signature block, .SF or META-INF/MANIFEST.MF name is duplicated carries decode_error; other v1 signers are reported as declared.", if partial { "Among those, the" } else { "The" }, plural(within.count), listed(within)));
 	}
-	if !unread.is_empty() {
-		if !within.is_empty() {
+	if unread.count != 0 {
+		if within.count != 0 {
 			note.push(' ');
 		}
 		note.push_str(&format!(
 			"{} ({}) {} duplicated only by records past those, which apksig does not read.",
-			plural(unread.len()),
-			listed(directory, &unread),
-			if unread.len() == 1 { "is" } else { "are" }
+			plural(unread.count),
+			listed(unread),
+			if unread.count == 1 { "is" } else { "are" }
 		));
 	}
 	Some(note)

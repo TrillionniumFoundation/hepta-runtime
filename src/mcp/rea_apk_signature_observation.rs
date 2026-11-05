@@ -33,6 +33,56 @@ pub(super) use super::parser::{
 	MAX_ALGORITHMS, MAX_ATTRIBUTES, MAX_BLOCK, MAX_CERTIFICATE, MAX_CERTIFICATES, MAX_PAIRS,
 	MAX_SIGNERS,
 };
+
+/// Two separately admitted operations. The existing crypto-preview endpoint
+/// retains its original limits; the frozen static contract has its own profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StaticLimits {
+	pub input_bytes: usize,
+	pub output_bytes: usize,
+	pub(super) block_bytes: usize,
+	pub(super) pairs: usize,
+	pub(super) certificates: usize,
+	pub(super) certificate_bytes: usize,
+	pub(super) algorithms: usize,
+	pub(super) digest_bytes: usize,
+	pub(super) signature_bytes: usize,
+	pub(super) attributes: usize,
+	pub(super) zip_entries: usize,
+	frozen: bool,
+}
+
+impl StaticLimits {
+	pub const LEGACY: Self = Self {
+		input_bytes: super::MAX_APK_BYTES,
+		output_bytes: super::MAX_RESPONSE_BYTES,
+		block_bytes: MAX_BLOCK,
+		pairs: MAX_PAIRS,
+		certificates: MAX_CERTIFICATES,
+		certificate_bytes: MAX_CERTIFICATE,
+		algorithms: MAX_ALGORITHMS,
+		digest_bytes: 128,
+		signature_bytes: 16 * 1024,
+		attributes: MAX_ATTRIBUTES,
+		zip_entries: 50_000,
+		frozen: false,
+	};
+
+	pub const REA_6_8_0: Self = Self {
+		input_bytes: 512 * 1024 * 1024,
+		output_bytes: 8 * 1024 * 1024,
+		block_bytes: 512 * 1024 * 1024,
+		pairs: 4096,
+		certificates: 4096,
+		certificate_bytes: 512 * 1024 * 1024,
+		algorithms: 4096,
+		digest_bytes: 512 * 1024 * 1024,
+		signature_bytes: 512 * 1024 * 1024,
+		attributes: 4096,
+		zip_entries: usize::MAX,
+		frozen: true,
+	};
+}
 const V2: u32 = 0x7109_871a;
 const V3: u32 = 0xf053_68c0;
 const V31: u32 = 0x1b93_ad61;
@@ -431,8 +481,9 @@ fn algorithms<'a>(
 	bytes: &'a [u8],
 	what: &str,
 	max_bytes: usize,
+	limits: StaticLimits,
 ) -> ApkResult<Vec<AlgorithmRecord<'a>>> {
-	chunks(bytes, what, MAX_ALGORITHMS)?
+	chunks(bytes, what, limits.algorithms)?
 		.into_iter()
 		.map(|item| {
 			let mut reader = Reader::new(item);
@@ -459,6 +510,14 @@ struct RawSigner<'a> {
 	attributes: Vec<(u32, &'a [u8])>,
 	signed_tail: usize,
 	signer_tail: usize,
+	rotation: RawRotation<'a>,
+}
+
+#[derive(Default)]
+struct RawRotation<'a> {
+	present: bool,
+	nodes: Vec<(&'a [u8], u32)>,
+	decode_error: Option<String>,
 }
 
 struct RawScheme<'a> {
@@ -467,21 +526,22 @@ struct RawScheme<'a> {
 	uninterpreted: usize,
 }
 
-fn decode_signer<'a>(bytes: &'a [u8], v3: bool) -> ApkResult<RawSigner<'a>> {
+fn decode_signer<'a>(bytes: &'a [u8], v3: bool, limits: StaticLimits) -> ApkResult<RawSigner<'a>> {
 	let mut reader = Reader::new(bytes);
 	let mut data = Reader::new(reader.chunk("signed data missing or truncated")?);
 	let digests = algorithms(
 		data.chunk("digests sequence missing or truncated")?,
 		"digests",
-		128,
+		limits.digest_bytes,
+		limits,
 	)?;
 	let certificates = chunks(
 		data.chunk("certificates sequence missing or truncated")?,
 		"certificates",
-		MAX_CERTIFICATES,
+		limits.certificates,
 	)?;
 	for bytes in &certificates {
-		bounded(bytes, "certificate-bytes", MAX_CERTIFICATE)?;
+		bounded(bytes, "certificate-bytes", limits.certificate_bytes)?;
 	}
 	let (min_sdk, max_sdk) = if v3 {
 		(
@@ -494,7 +554,7 @@ fn decode_signer<'a>(bytes: &'a [u8], v3: bool) -> ApkResult<RawSigner<'a>> {
 	let attributes = chunks(
 		data.chunk("attributes sequence missing or truncated")?,
 		"attributes",
-		MAX_ATTRIBUTES,
+		limits.attributes,
 	)?
 	.into_iter()
 	.map(|bytes| {
@@ -515,10 +575,11 @@ fn decode_signer<'a>(bytes: &'a [u8], v3: bool) -> ApkResult<RawSigner<'a>> {
 	let signatures = algorithms(
 		reader.chunk("signatures sequence missing or truncated")?,
 		"signatures",
-		16 * 1024,
+		limits.signature_bytes,
+		limits,
 	)?;
 	let public_key = reader.chunk("public key truncated")?;
-	bounded(public_key, "public-key-bytes", MAX_CERTIFICATE)?;
+	bounded(public_key, "public-key-bytes", limits.certificate_bytes)?;
 	Ok(RawSigner {
 		certificate: certificates.first().copied(),
 		digests,
@@ -529,6 +590,7 @@ fn decode_signer<'a>(bytes: &'a [u8], v3: bool) -> ApkResult<RawSigner<'a>> {
 		attributes,
 		signed_tail: data.remaining(),
 		signer_tail: reader.remaining(),
+		rotation: RawRotation::default(),
 	})
 }
 
@@ -536,6 +598,7 @@ fn scheme<'a>(
 	block: &Option<archive::SigningBlock<'a>>,
 	id: u32,
 	name: &str,
+	limits: StaticLimits,
 ) -> ApkResult<RawScheme<'a>> {
 	let value = block.as_ref().and_then(|b| {
 		b.pairs
@@ -557,11 +620,11 @@ fn scheme<'a>(
 			"signers",
 			MAX_SIGNERS,
 		)?;
-		let signers = values
+		let mut signers = values
 			.into_iter()
 			.enumerate()
 			.map(|(index, bytes)| {
-				decode_signer(bytes, id != V2).map_err(|mut e| {
+				decode_signer(bytes, id != V2, limits).map_err(|mut e| {
 					if e.tag == ApkErrorTag::AnalysisInputError {
 						e.reason = format!("signer {index}: {}", e.reason).into_boxed_str();
 					}
@@ -569,6 +632,11 @@ fn scheme<'a>(
 				})
 			})
 			.collect::<ApkResult<Vec<_>>>()?;
+		if id != V2 {
+			for signer in &mut signers {
+				signer.rotation = decode_rotation(signer, limits)?;
+			}
+		}
 		Ok(RawScheme {
 			present: true,
 			signers,
@@ -614,25 +682,45 @@ fn content_digest<D: Digest + Default>(
 	top.finalize().to_vec()
 }
 
-/// Admission happens before names/DER expand into readable output. The exact
-/// serialized check remains authoritative, and shares the existing 1 MiB cap.
-struct OutputBudget(usize);
+/// Admission precedes name/DER expansion and is checked again on exact JSON.
+struct OutputBudget {
+	used: usize,
+	limits: StaticLimits,
+}
 
 impl OutputBudget {
+	fn new(limits: StaticLimits, stamp_bytes: usize) -> ApkResult<Self> {
+		let mut budget = Self { used: 0, limits };
+		budget.add(if limits.frozen {
+			4096 + 256 + 4 * stamp_bytes
+		} else {
+			8192
+		})?;
+		Ok(budget)
+	}
+
 	fn add(&mut self, bytes: usize) -> ApkResult<()> {
-		self.0 = self.0.saturating_add(bytes);
-		if self.0 > super::MAX_RESPONSE_BYTES {
+		self.used = self.used.saturating_add(bytes);
+		if self.used > self.limits.output_bytes {
 			return Err(ApkInspectionError::capacity(
 				"output-bytes",
-				super::MAX_RESPONSE_BYTES,
+				self.limits.output_bytes,
 			));
 		}
 		Ok(())
 	}
 
 	fn certificate(&mut self, bytes: &[u8]) -> ApkResult<CertificateFacts> {
-		bounded(bytes, "certificate-bytes", MAX_CERTIFICATE)?;
+		bounded(bytes, "certificate-bytes", self.limits.certificate_bytes)?;
 		self.add(256usize.saturating_add(bytes.len().saturating_mul(4)))?;
+		Ok(certificate::facts(bytes))
+	}
+
+	fn stamp_certificate(&mut self, bytes: &[u8]) -> ApkResult<CertificateFacts> {
+		if !self.limits.frozen {
+			return self.certificate(bytes);
+		}
+		bounded(bytes, "certificate-bytes", self.limits.certificate_bytes)?;
 		Ok(certificate::facts(bytes))
 	}
 }
@@ -648,6 +736,9 @@ fn signer_facts(
 		.certificate
 		.map(|cert| budget.certificate(cert))
 		.transpose()?;
+	if certificate.is_none() && budget.limits.frozen {
+		budget.add(256)?;
+	}
 	let mut digests = Vec::new();
 	for record in &raw.digests {
 		budget.add(160 + 2 * record.bytes.len())?;
@@ -686,15 +777,12 @@ fn signer_facts(
 	})
 }
 
-fn rotation(raw: &RawSigner<'_>, budget: &mut OutputBudget) -> ApkResult<RotationFacts> {
+fn decode_rotation<'a>(raw: &RawSigner<'a>, limits: StaticLimits) -> ApkResult<RawRotation<'a>> {
 	let Some((_, bytes)) = raw.attributes.iter().find(|(id, _)| *id == ROTATION) else {
-		return Ok(RotationFacts {
-			present: false,
-			lineage: Vec::new(),
-			decode_error: None,
-		});
+		return Ok(RawRotation::default());
 	};
-	let decode = || -> ApkResult<Vec<(&[u8], u32)>> {
+	let bytes = *bytes;
+	let decode = || -> ApkResult<Vec<(&'a [u8], u32)>> {
 		let mut reader = Reader::new(bytes);
 		let version = reader.u32("lineage version missing")?;
 		if version != 1 {
@@ -717,24 +805,29 @@ fn rotation(raw: &RawSigner<'_>, budget: &mut OutputBudget) -> ApkResult<Rotatio
 			signed.u32("lineage signed algorithm missing or truncated")?;
 			node.u32("lineage algorithm or signature missing or truncated")?;
 			node.chunk("lineage algorithm or signature missing or truncated")?;
-			bounded(cert, "certificate-bytes", MAX_CERTIFICATE)?;
+			bounded(cert, "certificate-bytes", limits.certificate_bytes)?;
 			nodes.push((cert, flags));
 		}
 		Ok(nodes)
 	};
-	let nodes = match decode() {
-		Ok(nodes) => nodes,
-		Err(e) if e.tag == ApkErrorTag::AnalysisInputError => {
-			return Ok(RotationFacts {
-				present: true,
-				lineage: Vec::new(),
-				decode_error: Some(e.reason.into_string()),
-			})
-		}
-		Err(e) => return Err(e),
-	};
+	match decode() {
+		Ok(nodes) => Ok(RawRotation {
+			present: true,
+			nodes,
+			decode_error: None,
+		}),
+		Err(e) if e.tag == ApkErrorTag::AnalysisInputError => Ok(RawRotation {
+			present: true,
+			nodes: Vec::new(),
+			decode_error: Some(e.reason.into_string()),
+		}),
+		Err(e) => Err(e),
+	}
+}
+
+fn rotation(raw: &RawSigner<'_>, budget: &mut OutputBudget) -> ApkResult<RotationFacts> {
 	let mut lineage = Vec::new();
-	for (cert, flags) in nodes {
+	for &(cert, flags) in &raw.rotation.nodes {
 		budget.add(192)?;
 		lineage.push(LineageNode {
 			certificate: Some(budget.certificate(cert)?),
@@ -749,23 +842,29 @@ fn rotation(raw: &RawSigner<'_>, budget: &mut OutputBudget) -> ApkResult<Rotatio
 		});
 	}
 	Ok(RotationFacts {
-		present: true,
+		present: raw.rotation.present,
 		lineage,
-		decode_error: None,
+		decode_error: raw.rotation.decode_error.clone(),
 	})
+}
+
+fn stamp_pair<'a>(block: &Option<archive::SigningBlock<'a>>) -> Option<&'a [u8]> {
+	block
+		.as_ref()
+		.and_then(|b| {
+			b.pairs
+				.iter()
+				.find(|(id, _)| *id == STAMP_V2)
+				.or_else(|| b.pairs.iter().find(|(id, _)| *id == STAMP_V1))
+		})
+		.map(|(_, value)| *value)
 }
 
 fn source_stamp(
 	block: &Option<archive::SigningBlock<'_>>,
 	budget: &mut OutputBudget,
 ) -> ApkResult<SourceStamp> {
-	let pair = block.as_ref().and_then(|b| {
-		b.pairs
-			.iter()
-			.find(|(id, _)| *id == STAMP_V2)
-			.or_else(|| b.pairs.iter().find(|(id, _)| *id == STAMP_V1))
-	});
-	let Some((_, bytes)) = pair else {
+	let Some(bytes) = stamp_pair(block) else {
 		return Ok(SourceStamp {
 			present: false,
 			certificate: None,
@@ -786,7 +885,7 @@ fn source_stamp(
 	match decode() {
 		Ok(cert) => Ok(SourceStamp {
 			present: true,
-			certificate: Some(budget.certificate(cert)?),
+			certificate: Some(budget.stamp_certificate(cert)?),
 			decode_error: None,
 		}),
 		Err(e) => Ok(SourceStamp {
@@ -968,24 +1067,32 @@ const LIMITATIONS: &[&str] = &[
 ];
 
 pub(super) fn inspect(bytes: &[u8]) -> ApkResult<ApkStaticInspection> {
-	if bytes.len() > super::MAX_APK_BYTES {
-		let mut e = ApkInspectionError::capacity("input-bytes", super::MAX_APK_BYTES);
+	inspect_with_limits(bytes, StaticLimits::LEGACY)
+}
+
+pub(super) fn inspect_with_limits(
+	bytes: &[u8],
+	limits: StaticLimits,
+) -> ApkResult<ApkStaticInspection> {
+	if bytes.len() > limits.input_bytes {
+		let mut e = ApkInspectionError::capacity("input-bytes", limits.input_bytes);
 		e.resource = Some(ApkResource::FileSize);
 		return Err(e);
 	}
-	let tail = archive::zip_tail(bytes)?;
-	let block = archive::signing_block(bytes, &tail)?;
+	let tail = archive::zip_tail(bytes, limits)?;
+	let block = archive::signing_block(bytes, &tail, limits)?;
 	let directory = archive::directory(bytes, &tail)?;
-	let mut budget = OutputBudget(8192);
+	v1::validate_count(&directory)?;
+	let v2 = scheme(&block, V2, "v2", limits)?;
+	let v3 = scheme(&block, V3, "v3", limits)?;
+	let v31 = scheme(&block, V31, "v3.1", limits)?;
+	let mut budget = OutputBudget::new(limits, stamp_pair(&block).map_or(0, <[u8]>::len))?;
 	let (v1, v1_notes) = v1::inspect(
 		bytes,
 		&directory,
 		block.as_ref().map_or(tail.central, |b| b.start),
 		&mut budget,
 	)?;
-	let v2 = scheme(&block, V2, "v2")?;
-	let v3 = scheme(&block, V3, "v3")?;
-	let v31 = scheme(&block, V31, "v3.1")?;
 	let can_recompute =
 		block.is_some() && tail.central.checked_add(tail.central_size) == Some(tail.eocd);
 	let requested = v2
@@ -1082,7 +1189,7 @@ pub(super) fn inspect(bytes: &[u8]) -> ApkResult<ApkStaticInspection> {
 	{
 		limitations.push("The content digest was not recomputed because the central directory is not immediately followed by the end-of-central-directory record (declared size mismatch or an intervening Zip64 record); matches_apk is null for those digests.".into());
 	}
-	if let Some(note) = archive::duplicate_note(&directory, tail.classic_count) {
+	if let Some(note) = archive::duplicate_note(&directory) {
 		limitations.push(note);
 	}
 	limitations.extend(v1_notes);
@@ -1107,10 +1214,10 @@ pub(super) fn inspect(bytes: &[u8]) -> ApkResult<ApkStaticInspection> {
 			format!("APK report serialization failed: {e}"),
 		)
 	})?;
-	if encoded.len() > super::MAX_RESPONSE_BYTES {
+	if encoded.len() > limits.output_bytes {
 		return Err(ApkInspectionError::capacity(
 			"output-bytes",
-			super::MAX_RESPONSE_BYTES,
+			limits.output_bytes,
 		));
 	}
 	Ok(result)

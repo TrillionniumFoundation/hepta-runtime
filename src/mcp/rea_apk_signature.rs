@@ -36,13 +36,22 @@ mod worker;
 
 pub use observation::{
 	ApkErrorTag, ApkInspectionError, ApkResource, ApkSignatureReport, ApkStaticInspection,
+	StaticLimits,
 };
 
 /// Bounded declared facts from already captured bytes; no filesystem or engine access.
 pub fn inspect_static(
 	bytes: &[u8],
 ) -> std::result::Result<ApkStaticInspection, ApkInspectionError> {
-	observation::inspect(bytes)
+	observation::inspect_with_limits(bytes, StaticLimits::REA_6_8_0)
+}
+
+/// Select an established bounded profile without changing the legacy endpoint.
+pub fn inspect_static_with_limits(
+	bytes: &[u8],
+	limits: StaticLimits,
+) -> std::result::Result<ApkStaticInspection, ApkInspectionError> {
+	observation::inspect_with_limits(bytes, limits)
 }
 
 /// Preserve declarations when the additional cryptographic verifier cannot complete.

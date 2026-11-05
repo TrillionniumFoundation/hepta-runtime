@@ -282,7 +282,7 @@ def v1_zip(block, **options):
                      {'name': b'META-INF/OWNED.RSA', 'data': block, **options}])
 
 
-def corpus(fixtures):
+def corpus(fixtures, profile='legacy'):
     cases = {p.stem: p.read_bytes() for p in sorted(fixtures.glob('*.apk'))}
     assert len(cases) == 20
     base = cases['custom-0103-rsa']
@@ -471,6 +471,46 @@ def corpus(fixtures):
     forged_end = bytearray(base)
     struct.pack_into('<H', forged_end, len(forged_end) - 2, 22)
     add('ambiguous-eocd', bytes(forged_end) + b'PK\x05\x06' + b'\0' * 18)
+    if profile == 'frozen':
+        for count in (4096, 4097):
+            add('frozen-pairs-' + str(count), rebuild(base, [(i, b'') for i in range(count)]))
+            for field, record in [('certificates', b''), ('attributes', struct.pack('<I', 0)),
+                                  ('digests', struct.pack('<I', 0xffffffff) + lp(b'')),
+                                  ('signatures', struct.pack('<I', 0x0103) + lp(b''))]:
+                add('frozen-' + field + '-' + str(count), change_signers(base, V2, lambda s, field=field, record=record, count=count: s[0].update({field:[record] * count})))
+        for field, value in [('certificates', [b'\0' * 65537]), ('key', b'\0' * 65537),
+                             ('signatures', [struct.pack('<I', 0x0103) + lp(b'\0' * 16385)]),
+                             ('digests', [struct.pack('<I', 0xffffffff) + lp(b'\0' * 129)])]:
+            add('frozen-large-' + field, change_signers(base, V2, lambda s, field=field, value=value: s[0].update({field:value})))
+        add('frozen-large-block', rebuild(base, pairs + [(0x11223344, b'\0' * (17 * 1024 * 1024))]))
+        add('frozen-directory-50001', make_zip([{'name':b'assets/repeated'}] * 50001))
+        add('frozen-v1-entry-cap', make_zip([{'name':b'META-INF/OWNED.SF'}] * 4097))
+        original = raw_signer(elements(take(next(v for k,v in pairs if k == V2))[0])[0], False)
+        fixed = 4096 + 256 + 512 + 256 + 4 * len(cert) + 160 + 160 * len(original['signatures'])
+        digest_length = (8 * 1024 * 1024 - fixed) // 2
+        for extra in (0, 1):
+            digest = struct.pack('<I', 0xffffffff) + lp(b'\0' * (digest_length + extra))
+            add('frozen-output-digest-' + str(extra), change_signers(base, V2, lambda s, digest=digest: s[0].update(digests=[digest])))
+        fixed += 2 * len(take(original['digests'][0], 4)[0])
+        stamp_length = (8 * 1024 * 1024 - fixed) // 4
+        for extra in (0, 1):
+            stamp = lp(lp(cert))
+            stamp += b'\0' * (stamp_length + extra - len(stamp))
+            add('frozen-output-stamp-' + str(extra), rebuild(base, pairs + [(STAMP_V2, stamp)]))
+        entries = [{'name': b'META-INF/MANIFEST.MF'}, {'name': b'META-INF/OWNED.SF'},
+                   {'name': b'META-INF/OWNED.RSA', 'data': block}, {'name': b'META-INF/OWNED.SF'}]
+        plain = make_zip(entries)
+        _, cd, end = signing_layout(plain)
+        cd_size = struct.unpack_from('<I', plain, end + 12)[0]
+        extra = struct.pack('<IQHHIIQQQQ', 0x06064b50, 44, 45, 45, 0, 0, 4, 4, cd_size, cd)
+        extra += struct.pack('<IIQI', 0x07064b50, 0, end, 1)
+        for count in (3, 4):
+            ending = bytearray(plain[end:])
+            struct.pack_into('<HHI', ending, 8, count, count, 0xffffffff)
+            add('frozen-classic-count-' + str(count), plain[:end] + extra + ending)
+        # This remains below the frozen 512 MiB input allowance and above the
+        # separately retained legacy 128 MiB boundary. No package is executed.
+        add('frozen-input-over-legacy', b'\0' * (129 * 1024 * 1024) + make_zip([]))
     return cases
 
 
@@ -511,6 +551,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--binary', type=Path, required=True)
     parser.add_argument('--mode', choices=['minimal-crate', 'runtime'], required=True)
+    parser.add_argument('--profile', choices=['legacy', 'frozen'], default='legacy')
+    parser.add_argument('--worker-command')
+    parser.add_argument('--worker-report', choices=['legacy-envelope', 'static-inspection'], default='legacy-envelope')
     parser.add_argument('--repo', type=Path, required=True)
     parser.add_argument('--rea-install', type=Path, required=True)
     parser.add_argument('--rea-tarball', type=Path, required=True)
@@ -528,7 +571,7 @@ def main():
                 assert member.name.startswith('package/') and '..' not in Path(member.name).parts
                 assert (args.rea_install / member.name.removeprefix('package/')).read_bytes() == archive.extractfile(member).read()
                 checked += 1
-    cases = corpus(args.repo / 'tests/fixtures/rea_apk_signature')
+    cases = corpus(args.repo / 'tests/fixtures/rea_apk_signature', args.profile)
     manifest = []
     for name, data in cases.items():
         path = fixtures / (name + '.apk')
@@ -544,7 +587,11 @@ def main():
     results, failures = [], []
     for case in manifest:
         name = case['name']
-        command = [str(args.binary)] + (['rea-apk-signature-worker'] if args.mode == 'runtime' else [])
+        command = [str(args.binary)]
+        if args.mode == 'runtime':
+            command += [args.worker_command or 'rea-apk-signature-worker']
+        elif args.profile == 'frozen':
+            command += ['--frozen-static']
         started = time.monotonic()
         native = subprocess.run(command, input=cases[name], capture_output=True, timeout=90, env={}, cwd='/')
         (args.out / (name + '.native.stdout.json')).write_bytes(native.stdout)
@@ -554,13 +601,16 @@ def main():
             actual = json.loads(native.stdout)
         elif native.returncode == 0:
             report = json.loads(native.stdout)
-            assert report['verification']['complete_android_verification'] is False
-            actual = dict(ok=True, value=report['static_inspection'])
+            if args.worker_report == 'legacy-envelope':
+                assert report['verification']['complete_android_verification'] is False
+                actual = dict(ok=True, value=report['static_inspection'])
+            else:
+                actual = dict(ok=True, value=report)
         else:
             line = native.stderr.decode().splitlines()[0]
             assert line.startswith('HEPTA_APK_TYPED_ERROR '), line
             actual = dict(ok=False, error=json.loads(line.removeprefix('HEPTA_APK_TYPED_ERROR ')))
-        assert len(native.stdout) <= 1048576 + 1
+        assert len(native.stdout) <= (8 * 1048576 if args.profile == 'frozen' else 1048576) + 64
         expected = reference[name]
         if actual['ok'] and expected['ok']:
             expected['value']['result']['artifact']['path'] = None
@@ -582,7 +632,7 @@ def main():
     source_names = ['rea_apk_signature.rs', 'rea_apk_signature_parser.rs', 'rea_apk_signature_observation.rs',
                     'rea_apk_signature_archive.rs', 'rea_apk_signature_certificate.rs', 'rea_apk_signature_v1.rs',
                     'rea_apk_signature_public_key.rs', 'rea_apk_signature_curves.rs', 'rea_apk_signature_observation_tests.rs']
-    summary = dict(format='hepta.apk-static-contract-qualification.v1', mode=args.mode,
+    summary = dict(format='hepta.apk-static-contract-qualification.v1', mode=args.mode, profile=args.profile,
                    runtime_release_qualified=args.mode == 'runtime' and not failures,
                    binary_sha256=sha(args.binary.read_bytes()),
                    frozen_npm_tarball_sha256=FROZEN_PACKAGE, frozen_install_files_checked=checked,

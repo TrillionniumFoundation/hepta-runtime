@@ -36,9 +36,11 @@ fn tlv(tag: u8, bytes: &[u8]) -> Vec<u8> {
 }
 
 fn certificate() -> Vec<u8> {
-	let tail = archive::zip_tail(CUSTOM).unwrap();
-	let block = archive::signing_block(CUSTOM, &tail).unwrap();
-	scheme(&block, V2, "v2").unwrap().signers[0]
+	let tail = archive::zip_tail(CUSTOM, StaticLimits::LEGACY).unwrap();
+	let block = archive::signing_block(CUSTOM, &tail, StaticLimits::LEGACY).unwrap();
+	scheme(&block, V2, "v2", StaticLimits::LEGACY)
+		.unwrap()
+		.signers[0]
 		.certificate
 		.unwrap()
 		.to_vec()
@@ -152,8 +154,10 @@ fn zip(entries: &[(&[u8], &[u8])]) -> Vec<u8> {
 }
 
 fn rebuild(pairs: &[(u32, Vec<u8>)]) -> Vec<u8> {
-	let tail = archive::zip_tail(CUSTOM).unwrap();
-	let old = archive::signing_block(CUSTOM, &tail).unwrap().unwrap();
+	let tail = archive::zip_tail(CUSTOM, StaticLimits::LEGACY).unwrap();
+	let old = archive::signing_block(CUSTOM, &tail, StaticLimits::LEGACY)
+		.unwrap()
+		.unwrap();
 	let mut values = Vec::new();
 	for (id, bytes) in pairs {
 		values.extend(((bytes.len() + 4) as u64).to_le_bytes());
@@ -224,8 +228,10 @@ fn real_android_v1_and_v31_declarations_are_complete_typed_observations() {
 
 #[test]
 fn declared_signers_survive_extra_crypto_refusal_without_a_verification_pass() {
-	let tail = archive::zip_tail(CUSTOM).unwrap();
-	let block = archive::signing_block(CUSTOM, &tail).unwrap().unwrap();
+	let tail = archive::zip_tail(CUSTOM, StaticLimits::LEGACY).unwrap();
+	let block = archive::signing_block(CUSTOM, &tail, StaticLimits::LEGACY)
+		.unwrap()
+		.unwrap();
 	let pair = block.pairs.iter().find(|(id, _)| *id == V2).unwrap();
 	let changed = rebuild(&[(pair.0, pair.1.to_vec()), (pair.0, pair.1.to_vec())]);
 	assert!(super::super::parser::inspect(&changed).is_err());
@@ -431,5 +437,96 @@ fn typed_global_refusals_separate_format_damage_and_fixed_capacity() {
 	assert_eq!(
 		serde_json::from_value::<ApkInspectionError>(value).unwrap(),
 		error
+	);
+}
+
+fn zip64_directory(bytes: &[u8], classic_count: u16) -> Vec<u8> {
+	let tail = archive::zip_tail(bytes, StaticLimits::REA_6_8_0).unwrap();
+	let mut result = bytes[..tail.eocd].to_vec();
+	result.extend(0x0606_4b50u32.to_le_bytes());
+	result.extend(44u64.to_le_bytes());
+	result.extend(45u16.to_le_bytes());
+	result.extend(45u16.to_le_bytes());
+	result.extend([0; 8]);
+	result.extend((tail.count as u64).to_le_bytes());
+	result.extend((tail.count as u64).to_le_bytes());
+	result.extend((tail.central_size as u64).to_le_bytes());
+	result.extend((tail.central as u64).to_le_bytes());
+	result.extend(0x0706_4b50u32.to_le_bytes());
+	result.extend(0u32.to_le_bytes());
+	result.extend((tail.eocd as u64).to_le_bytes());
+	result.extend(1u32.to_le_bytes());
+	let mut end = bytes[tail.eocd..].to_vec();
+	end[8..10].copy_from_slice(&classic_count.to_le_bytes());
+	end[10..12].copy_from_slice(&classic_count.to_le_bytes());
+	end[12..16].copy_from_slice(&u32::MAX.to_le_bytes());
+	result.extend(end);
+	result
+}
+
+#[test]
+fn frozen_profile_does_not_inherit_legacy_pair_or_directory_limits() {
+	let pairs = (0..4096).map(|id| (id, Vec::new())).collect::<Vec<_>>();
+	let bytes = rebuild(&pairs);
+	assert_eq!(
+		inspect(&bytes).unwrap_err().reported_limits["max_signing_block_pairs"],
+		128
+	);
+	assert!(inspect_with_limits(&bytes, StaticLimits::REA_6_8_0).is_ok());
+	let too_many = rebuild(&[pairs, vec![(4096, Vec::new())]].concat());
+	assert_eq!(
+		inspect_with_limits(&too_many, StaticLimits::REA_6_8_0)
+			.unwrap_err()
+			.reported_limits["max_signing_block_pairs"],
+		4096
+	);
+	let bytes = zip(&vec![(b"not-metadata".as_slice(), b"".as_slice()); 50_001]);
+	assert_eq!(
+		inspect(&bytes).unwrap_err().reported_limits["max_zip_entries"],
+		50_000
+	);
+	let observed = inspect_with_limits(&bytes, StaticLimits::REA_6_8_0).unwrap();
+	assert!(!observed.result.schemes.v1.present);
+	assert!(observed
+		.limitations
+		.iter()
+		.any(|note| note.contains("1 name more than once")));
+}
+
+#[test]
+fn zip64_read_scope_does_not_change_the_frozen_metadata_pairing_rule() {
+	let block = cms();
+	let plain = zip(&[
+		(b"META-INF/MANIFEST.MF", b""),
+		(b"META-INF/GOOD.SF", b""),
+		(b"META-INF/GOOD.RSA", &block),
+		(b"META-INF/GOOD.SF", b""),
+	]);
+	let bytes = zip64_directory(&plain, 3);
+	let observed = inspect_with_limits(&bytes, StaticLimits::REA_6_8_0).unwrap();
+	assert!(observed.result.schemes.v1.present);
+	assert_eq!(
+		observed.result.schemes.v1.signers[0]
+			.decode_error
+			.as_deref(),
+		Some("duplicate entry: META-INF/GOOD.SF")
+	);
+	assert!(observed.result.schemes.v1.signers[0].certificate.is_none());
+	assert!(observed
+		.limitations
+		.iter()
+		.any(|note| note.contains("only the first 3 of the 4")
+			&& note.contains("duplicated only by records past those")));
+	let bytes = zip64_directory(&plain, 4);
+	assert_eq!(
+		inspect_with_limits(&bytes, StaticLimits::REA_6_8_0)
+			.unwrap()
+			.result
+			.schemes
+			.v1
+			.signers[0]
+			.decode_error
+			.as_deref(),
+		Some("duplicate entry: META-INF/GOOD.SF")
 	);
 }
