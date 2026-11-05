@@ -46,9 +46,11 @@ class OperationQualificationTests(unittest.TestCase):
             q.tool_value({"result": {"content": [{"type": "text", "text": '{"x":1}'}],
                                      "structuredContent": {"x": 2}}})
 
-    def test_non_json_text_is_not_silently_stripped(self):
-        with self.assertRaises(ValueError):
-            q.tool_value({"result": {"content": [{"type": "text", "text": 'not JSON'}]}})
+    def test_non_json_text_is_compared_exactly(self):
+        left = {"result": {"content": [{"type": "text", "text": 'not JSON'}]}}
+        right = {"result": {"content": [{"type": "text", "text": 'different text'}]}}
+        self.assertEqual(q.tool_value(left)["content"][0]["text"], "not JSON")
+        self.assertNotEqual(q.tool_value(left), q.tool_value(right))
 
     def test_missing_route_and_full_schema_drift_are_rejected(self):
         rows = [{"name": name, "inputSchema": {"type": "object", "additionalProperties": False},

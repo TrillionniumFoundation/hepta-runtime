@@ -16,6 +16,7 @@ import argparse
 import base64
 from collections import Counter
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -31,7 +32,7 @@ INPUTS_PATH = "docs/rea-native/compatibility/REA_6_8_0_INPUTS.json"
 MAP_PATH = "docs/rea-native/compatibility/REA_6_8_0_CAPABILITY_MAP.json"
 LEDGER_PATH = "docs/rea-native/compatibility/REA_6_8_0_LEDGER.json"
 ENVIRONMENT_PATH = "docs/rea-native/compatibility/REA_6_8_0_ENVIRONMENT.json"
-STATES = {"partial_operation", "related_facility", "absent"}
+STATES = {"operation_candidate", "partial_operation", "related_facility", "absent"}
 MAX_JSON_BYTES = 16 * 1024 * 1024
 HELPERS = "official|enhanced|native|artifact|session|functionWorkflow"
 SNAPSHOT_FIELDS = ("upstream_tool", "catalog_index", "family", "source_contract_paths",
@@ -417,12 +418,46 @@ def assemble_ledger(root, pin, inputs, mapping, environment, snapshots):
     rows = [{**snapshot, **mapped_fields(snapshot["upstream_tool"], snapshot["family"],
                                         snapshot["upstream_annotations"], mapping, environment)}
             for snapshot in snapshots]
+    # The capability map can declare implementation scope, never PASS. An
+    # optional separate index points at exact operation receipts; the consumer
+    # replays their complete wire/fixture/schema/source checks read-only.
+    qualification_index = relative_path(root, "docs/rea-native/compatibility/REA_6_8_0_QUALIFICATIONS.json")
+    assessments = {}
+    if qualification_index.exists():
+        source = Path(__file__).with_name("rea_operation_evidence.py")
+        spec = importlib.util.spec_from_file_location("rea_operation_evidence", source)
+        consumer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(consumer)
+        assessments = consumer.consume_index(root, snapshots, mapping)
+    for row in rows:
+        assessment = assessments.get(row["upstream_tool"])
+        if assessment is None:
+            continue
+        required = set(row["required_behavior_gates"])
+        passed = set(assessment["passed_gates"])
+        require(passed <= set(mapping["behavior_gates"]), "receipt consumer returned an unknown behavior gate")
+        qualified = (assessment["status"] == "QUALIFIED"
+                     and row["native_implementation"] == "operation_candidate"
+                     and required <= passed and not assessment.get("failed_checks")
+                     and not assessment.get("unimplemented_required_observations"))
+        row["qualification"] = {**row["qualification"],
+            "status": "QUALIFIED" if qualified else "OPEN",
+            "passed_gates": sorted(passed & required), "operation_evidence": assessment}
+        if qualified:
+            row["remaining_behavior"] = "None within the recorded frozen operation/profile qualification scope"
+            row["remaining_blockers"] = []
+        else:
+            row["remaining_blockers"].append({"category": "operation_qualification", "status": "OPEN",
+                "required_gates": sorted(required - passed),
+                "unimplemented_observations": assessment.get("unimplemented_required_observations", [])})
     counts = Counter(row["native_implementation"] for row in rows)
+    qualified_count = sum(row["qualification"]["status"] == "QUALIFIED" for row in rows)
     by_family = {family: {"upstream_tools": sum(r["family"] == family for r in rows),
-                          "qualified_tools": 0}
+                          "qualified_tools": sum(r["family"] == family and r["qualification"]["status"] == "QUALIFIED" for r in rows)}
                  for family in inputs["tool_families"]}
     return {"schema": "hepta.rea.compatibility-ledger.v1",
-            "qualification_scope": "Verified frozen inventory and source mapping; no operation parity is established",
+            "qualification_scope": ("Verified frozen inventory and source mapping; operation qualifications are limited to their recorded profiles"
+                                    if qualified_count else "Verified frozen inventory and source mapping; no operation parity is established"),
             "upstream": {"package": pin["publishedPackage"], "package_sha256": pin["tarballSha256"],
                          "source_commit": inputs["source_commit"], "catalog_sha256": pin["catalogSha256"],
                          "full_input_catalog_sha256": pin["fullInputCatalogSha256"],
@@ -438,7 +473,7 @@ def assemble_ledger(root, pin, inputs, mapping, environment, snapshots):
             "summary": {"published_tools": len(rows), "families": len(by_family),
                         "native_interfaces": runtime["interface_count"],
                         "implementation_counts": dict(sorted(counts.items())),
-                        "qualified_tools": 0, "open_tools": len(rows), "by_family": by_family},
+                        "qualified_tools": qualified_count, "open_tools": len(rows) - qualified_count, "by_family": by_family},
             "behavior_gates": mapping["behavior_gates"], "tools": rows}
 
 
@@ -583,7 +618,7 @@ def main(argv=None):
         stored = read_json(relative_path(args.root, args.ledger))
         ledger = check_mapping(args.root, inputs, mapping, environment, stored)
         print(json.dumps({"mapping_check": "PASS", "raw_reference_authenticity": "NOT_REVERIFIED",
-                          "parity_gate": "OPEN", **ledger["summary"]}, sort_keys=True))
+                          "parity_gate": "OPEN" if ledger["summary"]["open_tools"] else "QUALIFIED", **ledger["summary"]}, sort_keys=True))
         return 3 if args.require_parity and ledger["summary"]["open_tools"] else 0
     require(args.cache is not None, args.command + " requires --cache")
     if args.command == "restore":
@@ -599,7 +634,7 @@ def main(argv=None):
     else:
         require(read_json(destination) == ledger, "stored ledger differs from current verified inputs/source mapping")
     print(json.dumps({"inventory_check": "PASS", "raw_reference_authenticity": "VERIFIED_AGAINST_PINS",
-                      "parity_gate": "OPEN", **ledger["summary"]}, sort_keys=True))
+                      "parity_gate": "OPEN" if ledger["summary"]["open_tools"] else "QUALIFIED", **ledger["summary"]}, sort_keys=True))
     return 3 if args.require_parity and ledger["summary"]["open_tools"] else 0
 
 

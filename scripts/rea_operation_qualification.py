@@ -18,6 +18,7 @@ import math
 import os
 from pathlib import Path, PurePosixPath
 import queue
+import select
 import signal
 import stat
 import struct
@@ -33,11 +34,18 @@ PROFILE = "rea-agents-6.8.0/inspect_elf_notes/v1"
 PACKAGE_SHA256 = "8d542ec76a9cb350584b60a6c9c088706ff812d5bb5b094c20c95b6dc25698bb"
 CATALOG_SHA256 = "d7228cf5da32faf435f9d54a7b8fa84c1081734d7c7dad562f962f221ea8b1e7"
 REFERENCE_COMMIT = "93b8b82db70279e40f484114cff9dc1958dc14ee"
+PACKAGE_FILES_SHA256 = "8f5a44ea76e5d93b27f8882d902e9449d7f41895e5428c213fe6ed3619592891"
 MAX_WIRE_BYTES = 16 * 1024 * 1024
 REQUEST_SECONDS = 30.0
 EOF_SECONDS = 15.0
 TARGET_META = {"provenance": {"untrusted_content": True, "source": "analysis_target"}}
 PROVIDER = {"id": "rea-elf-notes", "name": "REA ELF note parser", "version": "1"}
+UNIMPLEMENTED_REQUIREMENTS = ["active-cancellation-owner-drain", "deadline-owner-drain",
+                            "format-overflow-and-compressed-name-corpus", "build-source-attestation",
+                            "oversized-result-retention"]
+PRODUCER_FILES = ("scripts/rea_full_qualification.py", "scripts/rea_operation_qualification.py",
+                  "scripts/rea_operation_evidence.py", "tests/rea_operation_qualification_tests.py",
+                  "tests/rea_operation_evidence_tests.py")
 
 
 class QualificationError(ValueError):
@@ -107,6 +115,33 @@ def write_json(path, value):
     return identity(path)
 
 
+def artifact_reference(path, output):
+    item = identity(path)
+    item["path"] = Path(path).relative_to(output).as_posix()
+    return item
+
+
+def artifact_json(output, relative, value):
+    write_json(output / relative, value)
+    return artifact_reference(output / relative, output)
+
+
+def process_identity(pid):
+    raw = Path("/proc") / str(pid) / "stat"
+    value = raw.read_text()
+    tail = value[value.rfind(")") + 2:].split()
+    return {"pid": pid, "parent_pid": int(tail[1]), "process_group": int(tail[2]),
+            "start_time_ticks": int(tail[19])}
+
+
+def process_group_exists(group):
+    try:
+        os.killpg(group, 0)
+        return True
+    except ProcessLookupError:
+        return False
+
+
 def reference_package(package, archive):
     """Authenticate the actual installed package, not its version string.
 
@@ -154,7 +189,7 @@ def reference_package(package, archive):
             "git_source_commit": REFERENCE_COMMIT, "package_root": str(package),
             "file_count": len(expected), "files_sha256": digest(sorted(expected.values(), key=lambda x: x["path"])),
             "catalog_sha256": CATALOG_SHA256,
-            "authentication_scope": "all regular files in the published npm package; dependencies separately recorded"}
+            "authentication_scope": "all regular files in the published npm package; transitive dependencies remain trusted external inputs"}
 
 
 class Mcp:
@@ -170,14 +205,17 @@ class Mcp:
         self.pending = {}
         self.next_id = 1
         self.closed = False
+        self.received_bytes = 0
         self.process = subprocess.Popen(argv, cwd=directory, env=environment,
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         stderr=self.stderr, start_new_session=True)
+        self.pidfd = os.pidfd_open(self.process.pid)
+        self.owner = process_identity(self.process.pid)
         self.started = time.monotonic()
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
         write_json(self.output / "launch.json", {"argv": argv, "cwd": str(directory),
-                   "environment": environment, "pid": self.process.pid})
+                   "environment": environment, "pid": self.process.pid, "owner": self.owner})
 
     def _log(self, direction, raw):
         item = {"direction": direction, "monotonic_ns": time.monotonic_ns(),
@@ -194,6 +232,8 @@ class Mcp:
                     self.responses.put(QualificationError("MCP stdout closed"))
                     return
                 require(len(raw) <= MAX_WIRE_BYTES and raw.endswith(b"\n"), "oversized/unterminated MCP line")
+                self.received_bytes += len(raw)
+                require(self.received_bytes <= 256 * 1024 * 1024, "MCP session transcript exceeds its fixed allowance")
                 self._log("received", raw)
                 value = parse_json(raw)
                 require(isinstance(value, dict) and value.get("jsonrpc") == "2.0", "invalid MCP message")
@@ -267,8 +307,10 @@ class Mcp:
         require(len(names) == len(set(names)), "duplicate tool name")
         return rows
 
-    def call(self, name, arguments, number_spelling=None):
-        params = {"name": name, "arguments": arguments}
+    def call(self, name, arguments, number_spelling=None, omit_arguments=False):
+        params = {"name": name}
+        if not omit_arguments:
+            params["arguments"] = arguments
         raw = None
         if number_spelling:
             raw = json.dumps(params, ensure_ascii=True, separators=(",", ":")).encode()
@@ -297,12 +339,27 @@ class Mcp:
                 forced.append("SIGKILL")
                 os.killpg(self.process.pid, signal.SIGKILL)
                 code = self.process.wait(timeout=2)
+        if process_group_exists(self.process.pid):
+            # An exited parent with a surviving worker is also a failed owner
+            # lifecycle. Clean only this runner-created session's process group.
+            forced.append("SIGTERM-surviving-process-group")
+            os.killpg(self.process.pid, signal.SIGTERM)
+            deadline = time.monotonic() + 2
+            while process_group_exists(self.process.pid) and time.monotonic() < deadline:
+                time.sleep(0.02)
+            if process_group_exists(self.process.pid):
+                forced.append("SIGKILL-surviving-process-group")
+                os.killpg(self.process.pid, signal.SIGKILL)
         self.reader.join(timeout=2)
+        owner_exited = bool(select.select([self.pidfd], [], [], 0)[0])
+        os.close(self.pidfd)
         self.process.stdout.close()
         self.stderr.close()
         self.wire.close()
         self.close_observation = {"returncode": code, "elapsed_seconds": time.monotonic() - start,
-                                  "forced_cleanup": forced, "reader_stopped": not self.reader.is_alive()}
+                                  "forced_cleanup": forced, "reader_stopped": not self.reader.is_alive(),
+                                  "owner": self.owner, "owner_pidfd_exited": owner_exited,
+                                  "process_group_gone": not process_group_exists(self.process.pid)}
         write_json(self.output / "close.json", self.close_observation)
         return self.close_observation
 
@@ -316,7 +373,12 @@ def tool_value(response):
     content = result.get("content")
     require(isinstance(content, list) and len(content) == 1 and content[0].get("type") == "text",
             "expected the original single JSON text representation")
-    text = parse_json(content[0]["text"].encode())
+    try:
+        text = parse_json(content[0]["text"].encode())
+    except json.JSONDecodeError:
+        # Some protocol/SDK errors are plain text. Preserve those bytes as a
+        # string; never delete text to make an unequal response agree.
+        text = content[0]["text"]
     if "structuredContent" in result:
         require(result["structuredContent"] == text, "text/structuredContent disagreement")
     return {**result, "content": [{**content[0], "text": text}]}
@@ -399,14 +461,15 @@ def elf(notes, bits=64, order="little", program=True, section=False, declared_al
     return raw
 
 
-def fixture_cases(workspace):
+def fixture_cases(workspace, write=True):
     """Independent byte encodings; no REA/native parser generates expected facts."""
     workspace = Path(workspace)
     fixtures = {}
     cases = []
     def add(name, raw, entries, tables=1, **facts):
         path = workspace / (name + ".elf")
-        path.write_bytes(raw)
+        if write:
+            path.write_bytes(raw)
         fixtures[name] = {"path": str(path), "sha256": hashlib.sha256(raw).hexdigest(),
                           "bytes": len(raw), "entries": entries, "tables": tables, **facts}
         cases.append({"id": name, "kind": "success", "arguments": {"path": str(path)},
@@ -452,17 +515,88 @@ def fixture_cases(workspace):
                 ("directory_path", {"path": str(workspace)}),
                 ("file_budget", {"path": base, "max_file_bytes": 64}),
                 ("entry_budget", {"path": fixtures["multiple_notes"]["path"], "max_entries": 1})]
+    invalid += [("path_number", {"path": 1}), ("path_bool", {"path": True}),
+                ("path_array", {"path": []}), ("path_object", {"path": {}}),
+                ("multi_unknown_za", {"path": base, "zzz": 1, "aaa": 2}),
+                ("multi_unknown_az", {"path": base, "aaa": 2, "zzz": 1}),
+                ("multi_errors_reversed_input", {"extra": 1, "max_entries": 0, "max_file_bytes": 63, "path": None})]
+    for field in ("max_entries", "max_file_bytes"):
+        for index, value in enumerate(([], {}, False, "", -1, 1e30)):
+            invalid.append((field + "_extra_type_" + str(index), {"path": base, field: value}))
     for case_id, args in invalid:
-        cases.append({"id": case_id, "kind": "error", "arguments": args})
+        cases.append({"id": case_id, "kind": "error", "arguments": args,
+                      "argument_key_order": list(args)})
+    for name, value in (("null", None), ("array", []), ("string", "x")):
+        cases.append({"id": "arguments_" + name, "kind": "error", "arguments": value})
+    cases.append({"id": "arguments_omitted", "kind": "error", "arguments": None, "omit_arguments": True})
     for name, raw in (("nonzero_tail", elf(note() + b"\1")),
                       ("short_header", b"\x7fELF"),
                       ("wrong_magic", bytes(64)),
                       ("truncated_descriptor", elf(note())[:-1])):
         path = workspace / (name + ".elf")
-        path.write_bytes(raw)
-        fixtures[name] = identity(path)
+        if write:
+            path.write_bytes(raw)
+        fixtures[name] = {"path": str(path), "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
         cases.append({"id": name, "kind": "error", "arguments": {"path": str(path)}})
     return fixtures, cases
+
+
+def retention_queries(records):
+    """Get-bundle behavior necessary for a notes record, not that whole tool."""
+    records = sorted(records, key=lambda item: item["evidence_id"])
+    first = records[0] if records else None
+    queries = [{"id": "complete", "arguments": {}},
+               {"id": "summary", "arguments": {"detail": "summary"}},
+               {"id": "summary_empty_filters", "arguments": {"detail": "summary", "filters": {}}},
+               {"id": "operation_matches", "arguments": {"detail": "summary", "filters": {"operation": "inspect_elf_notes"}}},
+               {"id": "operation_misses", "arguments": {"detail": "summary", "filters": {"operation": "not-this-operation"}}},
+               {"id": "null_profile_cannot_match", "arguments": {"detail": "summary", "filters": {"analysis_profile_digest": "0" * 64}}},
+               {"id": "procedure_cannot_match", "arguments": {"detail": "summary", "filters": {"procedure_address": "0x0"}}},
+               {"id": "complete_filters_rejected", "arguments": {"detail": "complete", "filters": {}}, "expect_error": True},
+               {"id": "detail_null", "arguments": {"detail": None}, "expect_error": True},
+               {"id": "filters_null", "arguments": {"detail": "summary", "filters": None}, "expect_error": True},
+               {"id": "bad_evidence_id", "arguments": {"detail": "summary", "filters": {"evidence_id": "ev_" + "A" * 64}}, "expect_error": True},
+               {"id": "short_target_digest", "arguments": {"detail": "summary", "filters": {"target_sha256": "0" * 63}}, "expect_error": True},
+               {"id": "uppercase_profile_digest", "arguments": {"detail": "summary", "filters": {"analysis_profile_digest": "A" * 64}}, "expect_error": True},
+               {"id": "empty_operation", "arguments": {"detail": "summary", "filters": {"operation": ""}}, "expect_error": True},
+               {"id": "empty_procedure", "arguments": {"detail": "summary", "filters": {"procedure_address": ""}}, "expect_error": True},
+               {"id": "unknown_filter_keys", "arguments": {"detail": "summary", "filters": {"zzz": 1, "aaa": 2}}, "expect_error": True}]
+    if first is not None:
+        queries += [{"id": "evidence_id_matches", "arguments": {"detail": "summary", "filters": {"evidence_id": first["evidence_id"]}}},
+                    {"id": "artifact_matches", "arguments": {"detail": "summary", "filters": {"target_sha256": first["subject"]["digest"]["sha256"]}}},
+                    {"id": "and_filter_misses", "arguments": {"detail": "summary", "filters": {"evidence_id": first["evidence_id"], "operation": "not-this-operation"}}}]
+    return queries
+
+
+def check_retention_response(query, response, records):
+    value = tool_value(response)
+    if query.get("expect_error", False):
+        require(value.get("isError") is True, "invalid bundle input unexpectedly succeeded")
+        return
+    payload = evidence_value(response)["result"]
+    records = sorted(records, key=lambda item: item["evidence_id"])
+    if query["arguments"].get("detail", "complete") == "complete":
+        require(set(payload) == {"artifacts", "providers", "environments", "scenarios", "captures", "unknowns", "records"},
+                "complete bundle does not have the seven original manifests")
+        require(payload["records"] == records, "retained set/order/content differs from completed observations")
+        require(all(payload[key] == [] for key in ("environments", "scenarios", "captures", "unknowns")),
+                "notes-only session contains unrelated bundle metadata")
+        return
+    filters = query["arguments"].get("filters", {})
+    expected = []
+    for record in records:
+        facts = {"evidence_id": record["evidence_id"], "operation": record["operation"],
+                 "target_sha256": record["subject"]["digest"]["sha256"],
+                 "analysis_profile_digest": None, "procedure_address": None}
+        if not all(facts[key] == value for key, value in filters.items()):
+            continue
+        expected.append({key: record[key] for key in ("evidence_id", "subject", "provider", "operation", "confidence", "authority")}
+                        | {"analysis_profile_digest": None, "retention": "complete-record",
+                           "limitation_count": len(record["limitations"]),
+                           "native_dossier": {"available": False, "reason": "different-operation"}})
+    require(payload == {"kind": "evidence-bundle-summary", "filters": filters,
+                        "total_retained_records": len(records), "matching_records": len(expected),
+                        "unknown_revisions": 0, "records": expected}, "independent summary/filter projection differs")
 
 
 def check_independent_facts(record, case):
@@ -524,6 +658,8 @@ def arguments(argv=None):
     parser.add_argument("--reference-tarball", type=Path, required=True)
     parser.add_argument("--node", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--build-summary", type=Path,
+                        help="Original build receipt; retained verbatim, never replaced by a handwritten PASS")
     return parser.parse_args(argv)
 
 
@@ -536,12 +672,14 @@ def main(argv=None):
     output = args.output_dir
     report = {"schema": SCHEMA, "profile": PROFILE, "operation": args.operation,
               "status": "OPEN", "qualified": False, "cases": [], "errors": [],
-              "unimplemented_required_observations": ["active-cancellation-owner-drain", "deadline-owner-drain",
-                    "cold-session-retention", "format-overflow-and-compressed-name-corpus", "build-source-attestation"]}
-    reference = native = None
+              "unimplemented_required_observations": list(UNIMPLEMENTED_REQUIREMENTS),
+              "execution": {"repo": str(args.repo), "output": str(output), "python": sys.version,
+                            "scope": "Linux local functional profile; not malicious same-UID execution attestation"}}
+    reference = native = monitor = None
     exit_code = 1
     try:
         report["reference_before"] = reference_package(args.reference_package, args.reference_tarball)
+        require(report["reference_before"]["files_sha256"] == PACKAGE_FILES_SHA256, "frozen package file inventory mismatch")
         report["native_before"] = identity(args.binary)
         require(report["native_before"]["sha256"] == args.binary_sha256, "native binary digest mismatch")
         report["node_binary"] = identity(args.node.resolve())
@@ -551,10 +689,19 @@ def main(argv=None):
         workspace = output / "workspace"
         workspace.mkdir(mode=0o700)
         fixtures, cases = fixture_cases(workspace)
-        report["case_manifest"] = write_json(output / "cases.json", {"profile": PROFILE, "fixtures": fixtures, "cases": cases})
-        from rea_full_qualification import Selection
+        report["workspace"] = str(workspace)
+        report["case_manifest"] = artifact_json(output, "cases.json", {"profile": PROFILE, "fixtures": fixtures, "cases": cases})
+        report["producer_files"] = [{**identity(args.repo / name), "path": name} for name in PRODUCER_FILES]
+        if args.build_summary is not None:
+            require(args.build_summary.is_absolute(), "build summary must be absolute")
+            with (output / "build-summary.json").open("xb") as handle:
+                handle.write(args.build_summary.read_bytes())
+            report["build_summary"] = artifact_reference(output / "build-summary.json", output)
+        from rea_full_qualification import Selection, SourceMonitor
         selection = Selection(args.repo, output / "unused-target", output)
-        report["source_before"] = write_json(output / "source-before.json", selection.snapshot())
+        monitor = SourceMonitor(selection)
+        monitor.start()
+        report["source_before"] = artifact_json(output, "source-before.json", selection.snapshot())
         config = output / "runtime.json"
         write_json(config, {"controller_workspace_roots": [str(workspace)], "state_dir": str(output / "state"),
                    "hosts": {"never-connect": {"ssh_target": "never-connect-invalid", "remote_state_dir": str(output / "unused-remote"),
@@ -568,8 +715,8 @@ def main(argv=None):
         for client in (reference, native):
             client.initialize()
         original_tools, native_tools = reference.tools(), native.tools()
-        write_json(output / "reference-tools.json", original_tools)
-        write_json(output / "native-tools.json", native_tools)
+        report["reference_tools"] = artifact_json(output, "reference-tools.json", original_tools)
+        report["native_tools"] = artifact_json(output, "native-tools.json", native_tools)
         try:
             report["registration"] = compare_registration(original_tools, native_tools)
         except Exception as error:
@@ -578,36 +725,68 @@ def main(argv=None):
         for case in cases:
             row = {"id": case["id"]}
             try:
-                upstream = reference.call("inspect_elf_notes", case["arguments"], case.get("number_spelling"))
-                downstream = native.call("rea_inspect_elf_notes", case["arguments"], case.get("number_spelling"))
-                row["reference"] = write_json(output / "cases" / (case["id"] + ".reference.json"), upstream)
-                row["native"] = write_json(output / "cases" / (case["id"] + ".native.json"), downstream)
-                row["comparison"] = compare_case(case, upstream, downstream)
+                upstream = reference.call("inspect_elf_notes", case["arguments"], case.get("number_spelling"), case.get("omit_arguments", False))
+                downstream = native.call("rea_inspect_elf_notes", case["arguments"], case.get("number_spelling"), case.get("omit_arguments", False))
+                row["reference"] = artifact_json(output, "cases/" + case["id"] + ".reference.json", upstream)
+                row["native"] = artifact_json(output, "cases/" + case["id"] + ".native.json", downstream)
                 if case["kind"] == "success":
                     value = evidence_value(upstream)
                     retained.setdefault(value["evidence_id"], value)
+                row["comparison"] = compare_case(case, upstream, downstream)
                 row["status"] = "PASS"
             except Exception as error:
                 row["status"], row["error"] = "FAIL", str(error)
             report["cases"].append(row)
-        bundle_left = reference.call("get_evidence_bundle", {})
-        bundle_right = native.call("rea_get_evidence_bundle", {})
-        report["retention_reference"] = write_json(output / "retention.reference.json", bundle_left)
-        report["retention_native"] = write_json(output / "retention.native.json", bundle_right)
-        require(tool_value(bundle_left) == tool_value(bundle_right), "complete retained bundles differ")
-        bundle = evidence_value(bundle_left)["result"]
-        require(bundle["records"] == [retained[key] for key in sorted(retained)], "retained set/order/content differs from successful observations")
-        require(set(bundle) == {"artifacts", "providers", "environments", "scenarios", "captures", "unknowns", "records"},
-                "complete bundle does not have the original seven manifests")
-        report["retention"] = {"records": len(retained), "full_bundle_equal": True}
+        report["retention_cases"] = []
+        for query in retention_queries(list(retained.values())):
+            row = {"id": query["id"]}
+            try:
+                left = reference.call("get_evidence_bundle", query["arguments"])
+                right = native.call("rea_get_evidence_bundle", query["arguments"])
+                row["reference"] = artifact_json(output, "retention/" + query["id"] + ".reference.json", left)
+                row["native"] = artifact_json(output, "retention/" + query["id"] + ".native.json", right)
+                require(tool_value(left) == tool_value(right), "retained bundle/summary/filter responses differ")
+                check_retention_response(query, left, list(retained.values()))
+                row["status"] = "PASS"
+            except Exception as error:
+                row["status"], row["error"] = "FAIL", str(error)
+            report["retention_cases"].append(row)
+        # Session ownership is in-memory in the frozen original. A new process
+        # must start empty, even when it reuses the same native runtime config.
+        report["reference_close"] = reference.close()
+        report["native_close"] = native.close()
+        report["cold_sessions"] = []
+        for label, arguments, env, tool in (
+                ("reference", [str(args.node), str(args.reference_package / "scripts/rea.mjs"), "mcp"], environment, "get_evidence_bundle"),
+                ("native", [str(args.binary), "mcp", "--runtime-config", str(config)], {}, "rea_get_evidence_bundle")):
+            cold = Mcp(arguments, workspace, env, output / (label + "-cold"))
+            row = {"producer": label}
+            try:
+                cold.initialize()
+                value = cold.call(tool, {})
+                row["response"] = artifact_json(output, label + "-cold-empty.json", value)
+                check_retention_response({"id": "complete", "arguments": {}}, value, [])
+                row["status"] = "PASS"
+            except Exception as error:
+                row["status"], row["error"] = "FAIL", str(error)
+            finally:
+                row["close"] = cold.close()
+                row["wire"] = artifact_reference(cold.output / "wire.jsonl", output)
+                row["launch"] = artifact_reference(cold.output / "launch.json", output)
+                row["close_artifact"] = artifact_reference(cold.output / "close.json", output)
+            report["cold_sessions"].append(row)
         report["reference_after"] = reference_package(args.reference_package, args.reference_tarball)
         report["native_after"] = identity(args.binary)
-        report["source_after"] = write_json(output / "source-after.json", selection.snapshot())
+        report["source_after"] = artifact_json(output, "source-after.json", selection.snapshot())
         require(report["reference_before"] == report["reference_after"], "reference changed during execution")
         require(report["native_before"] == report["native_after"], "native binary changed during execution")
-        require(parse_json(Path(report["source_before"]["path"]).read_bytes()) ==
-                parse_json(Path(report["source_after"]["path"]).read_bytes()), "source changed during execution")
-        exit_code = 0 if not report["errors"] and all(case["status"] == "PASS" for case in report["cases"]) else 1
+        require(parse_json((output / report["source_before"]["path"]).read_bytes()) ==
+                parse_json((output / report["source_after"]["path"]).read_bytes()), "source changed during execution")
+        cold_closed = all(row["close"]["forced_cleanup"] == [] and row["close"]["returncode"] == 0
+                          and row["close"]["reader_stopped"] and row["close"]["owner_pidfd_exited"]
+                          and row["close"]["process_group_gone"] for row in report["cold_sessions"])
+        exit_code = 0 if not report["errors"] and cold_closed and all(case["status"] == "PASS" for case in
+                       report["cases"] + report["retention_cases"] + report["cold_sessions"]) else 1
     except BaseException as error:
         report["errors"].append({"stage": "execution", "error": type(error).__name__ + ": " + str(error)})
     finally:
@@ -615,11 +794,22 @@ def main(argv=None):
             if client is not None:
                 try:
                     report[label + "_close"] = client.close()
-                    if report[label + "_close"]["forced_cleanup"] or report[label + "_close"]["returncode"] != 0:
+                    report[label + "_wire"] = artifact_reference(client.output / "wire.jsonl", output)
+                    report[label + "_launch"] = artifact_reference(client.output / "launch.json", output)
+                    report[label + "_close_artifact"] = artifact_reference(client.output / "close.json", output)
+                    if (report[label + "_close"]["forced_cleanup"] or report[label + "_close"]["returncode"] != 0
+                            or not report[label + "_close"]["owner_pidfd_exited"]
+                            or not report[label + "_close"]["process_group_gone"]):
                         exit_code = 1
                 except BaseException as error:
                     report["errors"].append({"stage": label + "_close", "error": str(error)})
                     exit_code = 1
+        if monitor is not None:
+            observation = monitor.stop()
+            report["source_monitor"] = artifact_json(output, "source-monitor.json", observation)
+            if observation["event_count"] or observation["errors"]:
+                report["errors"].append({"stage": "source_monitor", "error": "source changed or monitor coverage was lost"})
+                exit_code = 1
         report["comparison_exit_code"] = exit_code
         # This initial executable profile exposes its unfinished requirements.
         # A successful comparison is useful evidence but does not close a row.

@@ -289,6 +289,30 @@ class LedgerIntegrityTests(unittest.TestCase):
             with self.assertRaisesRegex(ledger.LedgerError, "does not read --cache"):
                 ledger.main(["check-mapping", "--root", str(root), "--cache", str(root / "missing")])
 
+    def test_operation_candidate_is_not_a_qualification_without_receipts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inputs, mapping, environment, stored = self.offline_fixture(root)
+            mapping["overrides"]["inspect_example"] = {"implementation": "operation_candidate"}
+            actual = ledger.assemble_ledger(root, ledger.published_pin(root, inputs), inputs,
+                                             mapping, environment, ledger.snapshot_rows(stored["tools"]))
+            self.assertEqual(actual["summary"]["qualified_tools"], 0)
+            self.assertEqual(actual["summary"]["open_tools"], 2)
+            self.assertEqual(actual["tools"][0]["qualification"]["status"], "OPEN")
+            self.assertEqual(actual["tools"][0]["qualification"]["passed_gates"], [])
+
+    def test_optional_empty_index_preserves_inventory_and_fake_pass_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inputs, mapping, environment, stored = self.offline_fixture(root)
+            index = root / "docs/rea-native/compatibility/REA_6_8_0_QUALIFICATIONS.json"
+            ledger.write_json(index, {"schema": "hepta.rea.operation-qualifications.v1", "entries": []})
+            with mock.patch.object(ledger.subprocess, "run", side_effect=AssertionError("process used")):
+                self.assertEqual(ledger.check_mapping(root, inputs, mapping, environment, stored), stored)
+            ledger.write_json(index, {"schema": "hepta.rea.operation-qualifications.v1", "entries": [], "qualified": True})
+            with self.assertRaisesRegex(ValueError, "handwritten PASS"):
+                ledger.check_mapping(root, inputs, mapping, environment, stored)
+
     def test_offline_check_rejects_count_name_order_and_index_drift(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
