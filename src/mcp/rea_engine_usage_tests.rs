@@ -63,7 +63,7 @@ fn sampling_preserves_permission_symlink_and_resource_errors() {
 	assert!(sample(&directory, 4, 32).is_err());
 	assert!(sample(&directory, 1024, 1).is_err());
 	if unsafe { libc::geteuid() } != 0 {
-		std::fs::set_permissions(&child, std::fs::Permissions::from_mode(0)).unwrap();
+		std::fs::set_permissions(&child, std::fs::Permissions::from_mode(0o0)).unwrap();
 		let error = sample(&directory, 1024, 32).unwrap_err();
 		assert_eq!(
 			error.downcast_ref::<std::io::Error>().unwrap().kind(),
