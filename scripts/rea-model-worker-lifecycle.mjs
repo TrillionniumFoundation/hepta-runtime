@@ -5,6 +5,8 @@
 // One Linux process group for the model differential runner; no shell, PID
 // matching, or platform-wide cleanup. Escaped sessions are outside this scope.
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 
 export async function runModelWorker(binary, args, fd, {
@@ -116,4 +118,27 @@ export async function runModelWorker(binary, args, fd, {
   lifecycle.elapsed_ms = Math.round(performance.now() - started);
   return { error: firstError, lifecycle, status: lifecycle.exit_code, signal: lifecycle.exit_signal,
     stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") };
+}
+
+export function modelWorkerFailure(result, expectedDiagnostic) {
+  if (result.error) return result.error;
+  if (result.signal) return { kind: "native_signal", code: null, message: result.signal };
+  if (result.status === 0) return null;
+  if (result.status === 1 && expectedDiagnostic && result.stdout === ""
+      && result.stderr.trim() === "Error: " + expectedDiagnostic) return null;
+  return { kind: result.status === 1 ? "unexpected_native_rejection" : "native_exit",
+    code: result.status, message: result.stderr.slice(0, 800) };
+}
+
+export async function modelWorkerIdentity(binary, beforeSha256) {
+  const identity = { before_sha256: beforeSha256, after_sha256: null, unchanged: false, error: null };
+  try {
+    identity.after_sha256 = createHash("sha256").update(await readFile(binary)).digest("hex");
+    identity.unchanged = identity.after_sha256 === beforeSha256;
+    if (!identity.unchanged) identity.error = { kind: "native_identity_changed", code: null,
+      message: "native binary content differs from its pre-run SHA-256" };
+  } catch (error) {
+    identity.error = { kind: "native_identity_unreadable", code: error.code ?? null, message: error.message };
+  }
+  return identity;
 }

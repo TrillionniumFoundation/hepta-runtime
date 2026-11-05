@@ -3,10 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { once } from "node:events";
 import { openSync, closeSync } from "node:fs";
 import test from "node:test";
-import { runModelWorker } from "./rea-model-worker-lifecycle.mjs";
+import { runModelWorker, modelWorkerFailure, modelWorkerIdentity } from "./rea-model-worker-lifecycle.mjs";
 
 const linux = { skip: process.platform !== "linux", timeout: 7000 };
 async function run(code, options = {}) {
@@ -87,4 +90,43 @@ test("model worker descendants cannot retain pipes or survive a successful leade
     unrelated.kill("SIGKILL");
     await unrelatedExit;
   }
+});
+
+test("model worker rejection requires exit one and the exact expected parser diagnostic", linux, async () => {
+  const expected = "GGUF tensor range extends beyond the admitted file";
+  for (const [code, diagnostic, kind] of [
+    [101, expected, "native_exit"],
+    [1, "model worker cannot establish resource limits", "unexpected_native_rejection"],
+    [1, expected, null],
+  ]) {
+    const result = await run("process.stderr.write(" + JSON.stringify("Error: " + diagnostic + "\n") + "); process.exit(" + code + ");");
+    closed(result);
+    assert.equal(modelWorkerFailure(result, expected)?.kind ?? null, kind);
+  }
+  const original = { kind: "timeout", code: null, message: "original timeout" };
+  assert.equal(modelWorkerFailure({ error: original, signal: "SIGKILL" }, expected), original);
+});
+
+test("model worker post-run identity detects an executable changed during launch and read failures", linux, async () => {
+  const directory = await mkdtemp(join(process.cwd(), ".model-layout-lifecycle-test-"));
+  const binary = join(directory, "owned-worker.cjs");
+  try {
+    await writeFile(binary, "#!" + process.execPath + "\nrequire('node:fs').appendFileSync(__filename, '\\n// changed during worker\\n');\n", { mode: 0o700 });
+    const before = createHash("sha256").update(await readFile(binary)).digest("hex");
+    const fd = openSync("/dev/null", "r");
+    let result;
+    try { result = await runModelWorker(binary, [], fd, { timeoutMs: 1200, cleanupMs: 1500 }); }
+    finally { closeSync(fd); }
+    assert.equal(result.error, null);
+    assert.equal(result.status, 0);
+    closed(result);
+    const changed = await modelWorkerIdentity(binary, before);
+    assert.equal(changed.unchanged, false);
+    assert.notEqual(changed.before_sha256, changed.after_sha256);
+    assert.equal(changed.error.kind, "native_identity_changed");
+    await rm(binary);
+    const removed = await modelWorkerIdentity(binary, before);
+    assert.equal(removed.error.kind, "native_identity_unreadable");
+    assert.equal(removed.error.code, "ENOENT");
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });

@@ -13,7 +13,7 @@ import { open, readFile, mkdir, writeFile } from "node:fs/promises";
 import { openSync, closeSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { runModelWorker } from "./rea-model-worker-lifecycle.mjs";
+import { runModelWorker, modelWorkerFailure, modelWorkerIdentity } from "./rea-model-worker-lifecycle.mjs";
 
 const options = {};
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -58,13 +58,14 @@ for (const [type, , block, bytes] of layouts) {
     const suffix = little ? "le" : "be";
     add("stable-" + type + "-" + suffix, type, [block * 2, 3, 2], bytes * 12, { little });
     add("truncated-" + type + "-" + suffix, type, [block * 2, 3, 2], bytes * 12 - 1,
-      { little, reaAccept: false, nativeAccept: false });
+      { little, reaAccept: false, nativeAccept: false, nativeReject: "GGUF tensor range extends beyond the admitted file" });
   }
 }
 for (const [type, block] of [[2, 32], [9, 32], [10, 64], [29, 256], [40, 64]]) {
   for (const last of [0, 2]) {
     add("invalid-row-" + type + "-" + last, type, [block / 2, last], 1024,
-      { reaAccept: false, nativeAccept: false });
+      { reaAccept: false, nativeAccept: false,
+        nativeReject: "GGUF tensor first dimension must be a multiple of " + block + " elements for type " + type });
   }
 }
 for (let type = 9; type <= 25; type++) {
@@ -81,19 +82,20 @@ for (const type of [4, 5, 31, 32, 33, 36, 37, 38, 43, 0xffffffff]) {
 for (const bytes of [36, 40]) add("q8-1-historical-size-" + bytes, 9, [32], bytes);
 add("stable-overlap", 2, [64], 128, {
   rows: [{ name: "first", type: 2, shape: [64], offset: 0 }, { name: "second", type: 2, shape: [64], offset: 32 }],
-  nativeAccept: false, intentionalDifference: "Native validation already rejects overlapping verified extents; the original GgufHeader parser permits them.",
+  nativeAccept: false, nativeReject: "GGUF tensor declaration overlaps a verified tensor extent", intentionalDifference: "Native validation already rejects overlapping verified extents; the original GgufHeader parser permits them.",
 });
 add("stable-aligned-padding", 2, [64], 100, {
   rows: [{ name: "first", type: 2, shape: [64], offset: 0 }, { name: "second", type: 2, shape: [64], offset: 64 }],
 });
 add("unaligned-offset", 2, [32], 128, {
   rows: [{ name: "weights", type: 2, shape: [32], offset: 1 }],
-  reaAccept: false, nativeAccept: false,
+  reaAccept: false, nativeAccept: false, nativeReject: "GGUF tensor offset violates declared alignment",
 });
-add("storage-overflow", 27, ["2305843009213693952"], 0, { reaAccept: false, nativeAccept: false });
+add("storage-overflow", 27, ["2305843009213693952"], 0, { reaAccept: false, nativeAccept: false,
+  nativeReject: "GGUF tensor storage length overflow" });
 add("absolute-offset-overflow", 2, [32], 32, {
   rows: [{ name: "weights", type: 2, shape: [32], offset: "18446744073709551584" }],
-  reaAccept: false, nativeAccept: false,
+  reaAccept: false, nativeAccept: false, nativeReject: "GGUF tensor absolute offset overflow",
 });
 
 function fixture(item) {
@@ -145,15 +147,16 @@ async function oracle(path, size) {
     return { accepted: false, kind: error.kind ?? error.name, message: String(error.message).slice(0, 800) };
   } finally { await file.close(); }
 }
-async function native(path) {
+async function native(path, item) {
   const fd = openSync(path, "r");
   try {
     const request = JSON.stringify({ operation: "inspect", collection: "tensors", offset: 0, limit: 256 });
     const result = await runModelWorker(options.native, ["rea-model-worker", "--request", request], fd);
     const lifecycle = result.lifecycle;
-    if (result.error) return { accepted: false, harness_failure: result.error, lifecycle };
-    if (result.signal) return { accepted: false, harness_failure: { kind: "native_signal", message: result.signal }, lifecycle };
-    if (result.status !== 0) return { accepted: false, status: result.status, message: result.stderr.slice(0, 800), lifecycle };
+    const failure = modelWorkerFailure(result, item.nativeReject);
+    if (failure) return { accepted: false, harness_failure: failure, lifecycle };
+    if (result.status !== 0) return { accepted: false, status: result.status, expected_diagnostic_matched: true,
+      message: result.stderr.slice(0, 800), lifecycle };
     try {
       return { accepted: true, projection: projectNative(JSON.parse(result.stdout)), lifecycle };
     } catch (error) {
@@ -167,7 +170,7 @@ for (const item of cases) {
   const path = join(options.work, item.name + ".gguf");
   await writeFile(path, bytes, { flag: "wx" });
   const rea = await oracle(path, bytes.length);
-  const actual = options.native ? await native(path) : null;
+  const actual = options.native ? await native(path, item) : null;
   const reasons = [];
   if (actual?.harness_failure) reasons.push("native harness failed: " + actual.harness_failure.kind);
   if (rea.accepted !== item.reaAccept) reasons.push("oracle acceptance differed from fixture expectation");
@@ -175,22 +178,29 @@ for (const item of cases) {
   if (actual?.accepted && rea.accepted && JSON.stringify(actual.projection) !== JSON.stringify(rea.projection))
     reasons.push("successful semantic projections differ");
   results.push({ name: item.name, fixture_sha256: hash(bytes), fixture_bytes: bytes.length,
-    expected: { rea_accept: item.reaAccept, native_accept: item.nativeAccept },
+    expected: { rea_accept: item.reaAccept, native_accept: item.nativeAccept, native_rejection_diagnostic: item.nativeReject ?? null },
     intentional_difference: item.intentionalDifference ?? null, rea, native: actual, failures: reasons });
   if (actual?.harness_failure) break;
 }
 const failures = results.filter((row) => row.failures.length > 0);
+const nativeIdentity = options.native ? await modelWorkerIdentity(options.native, nativeBinarySha256) : null;
+const finalizationFailures = nativeIdentity?.error ? [nativeIdentity.error] : [];
 const summary = {
   classification: "bounded_model_layout_differential_not_complete_rea_qualification",
   oracle_version: packageJson.version, oracle_module_sha256: expectedModules,
   native_binary_sha256: nativeBinarySha256,
+  native_binary_sha256_after: nativeIdentity?.after_sha256 ?? null,
+  native_binary_identity_unchanged: nativeIdentity?.unchanged ?? null,
   planned_cases: cases.length, cases: results.length, oracle_accepted: results.filter((row) => row.rea.accepted).length,
   native_executed: options.native !== undefined,
   native_lifecycle_scope: options.native ? "linux_owned_process_group" : null,
-  harness_failures: results.filter((row) => row.native?.harness_failure).length,
-  mismatches: options.native ? failures.length : null,
+  harness_failures: results.filter((row) => row.native?.harness_failure).length + finalizationFailures.length,
+  mismatches: options.native ? failures.length + finalizationFailures.length : null,
   expectation_failures: failures.length, intentional_differences: results.filter((row) => row.intentional_difference).length,
 };
-if (options.out) await writeFile(options.out, JSON.stringify({ summary, results }, null, 2) + "\n", { flag: "wx" });
+if (options.out) await writeFile(options.out, JSON.stringify({ summary, results, finalization_failures: finalizationFailures }, null, 2) + "\n", { flag: "wx" });
 console.log(JSON.stringify(summary, null, 2));
-if (failures.length) { console.error(JSON.stringify(failures, null, 2)); process.exitCode = 1; }
+if (failures.length || finalizationFailures.length) {
+  console.error(JSON.stringify({ case_failures: failures, finalization_failures: finalizationFailures }, null, 2));
+  process.exitCode = 1;
+}

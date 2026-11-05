@@ -151,6 +151,27 @@ primary even if cleanup also fails. Infrastructure failures stop the run, preser
 a partial report with planned/completed case counts and cause a nonzero exit;
 they cannot satisfy an expected parser rejection.
 
+
+A native parser rejection is accepted only for exit code 1, empty stdout and the
+exact fixture-specific parser diagnostic. Panics (including exit 101), different
+exit codes and unrelated exit-1 diagnostics are infrastructure failures. Native
+binary SHA-256 is captured before launch and checked again after all completed
+cases, including after an earlier failure. A changed or unreadable binary adds a
+retained finalization failure and forces a nonzero runner exit without replacing
+the original row failure. The before/after hashes establish endpoint observations,
+not a claim that concurrent changes restored between observations are detectable.
+
+Two additional Linux regressions exercise actual exit-101/wrong-diagnostic workers
+and an executable that changes its own bytes while running, including failed
+post-run reads. The complete lifecycle/runner helper test file contains eight tests.
+
+Controlled fake-worker checks also exercised the full runner: exit 101 and an
+unrelated exit-1 diagnostic on the second (expected-invalid) fixture each stopped
+at 2/160 with a harness failure. A self-mutating fake worker returned matching
+projections for all 160 rows; the runner still exited 1 solely for the identity
+mismatch. These negative checks validate the harness and are not native model
+qualification. Receipts remain in the task-local `.model-layout-evidence/` directory.
+
 This scope does not prove cleanup of descendants that escape into a new session.
 It is a bounded runner for the native worker, not a general process-custody framework.
 The native worker additionally applies its own resource limits and Linux seccomp.
