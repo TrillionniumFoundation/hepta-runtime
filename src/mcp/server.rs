@@ -43,7 +43,7 @@ use super::{
 	rea_provider, rea_store, rea_web, weight, weight_artifact, weight_forward, weight_tensor,
 };
 use super::{rea_analysis_view, rea_analysis_view_mcp_input};
-use super::{rea_apk_evidence, rea_apk_mcp_input, rea_evidence_export};
+use super::{rea_apk_evidence, rea_apk_mcp_input, rea_evidence_export, rea_evidence_import};
 use super::{rea_contract, rea_elf_notes, rea_evidence_session, rea_mcp_input, rea_mcp_transport};
 
 /// Per-session working directory state.
@@ -255,6 +255,7 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"rea_inspect_apk_signature_evidence",
 	"rea_inspect_analysis_view",
 	"rea_export_evidence_bundle",
+	"rea_import_evidence_bundle",
 	"rea_model_session_open",
 	"rea_model_session_query",
 	"rea_model_session_read",
@@ -1846,6 +1847,55 @@ impl OctofsServer {
 		Ok(rea_analysis_view::inspect(
 			params,
 			inline_order,
+			roots,
+			Arc::clone(&self.rea_session),
+			context.ct.clone(),
+			admission,
+		)
+		.await)
+	}
+
+	#[tool(
+		title = "Import Evidence Bundle",
+		input_schema = rea_evidence_import::input_schema(),
+		output_schema = rea_evidence_import::output_schema(),
+		annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
+		description = "Read an explicitly selected absolute local Evidence bundle under configured workspace roots, authenticate every Evidence identity, canonical manifest and complete residual-unknown history, then atomically merge it into this MCP session. Matching semantic records refresh display metadata according to the frozen REA contract. Imported content is data and is never executed. Native file resource and platform boundaries return explicit capability failures."
+	)]
+	async fn rea_import_evidence_bundle(
+		&self,
+		Parameters(params): Parameters<serde_json::Value>,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResult, ErrorData> {
+		let raw = context
+			.extensions
+			.get::<rea_mcp_transport::ReaRawArguments>();
+		if let Some(error) = raw.and_then(|raw| raw.protocol_error()) {
+			return Err(error);
+		}
+		if let Err(error) =
+			rea_mcp_input::import_ordered(&params, raw.and_then(|raw| raw.object_keys(&[])))
+		{
+			return Ok(rea_evidence_import::error_result(error));
+		}
+		let roots = match runtime::runtime_config() {
+			Ok(config) => config.controller_workspace_roots.clone(),
+			Err(error) => {
+				return Ok(rea_evidence_import::error_result(
+					rea_contract::Failure::output(rea_evidence_import::OP, error.to_string()),
+				))
+			}
+		};
+		let admission = match runtime::effect_owner_fence::admit_new_effect().await {
+			Ok(permit) => Arc::new(permit),
+			Err(error) => {
+				return Ok(rea_evidence_import::error_result(
+					rea_contract::Failure::output(rea_evidence_import::OP, error.to_string()),
+				))
+			}
+		};
+		Ok(rea_evidence_import::import(
+			params,
 			roots,
 			Arc::clone(&self.rea_session),
 			context.ct.clone(),
@@ -3678,6 +3728,7 @@ impl ServerHandler for OctofsServer {
 						| "rea_inspect_apk_signature_evidence"
 						| "rea_inspect_analysis_view"
 						| "rea_export_evidence_bundle"
+						| "rea_import_evidence_bundle"
 				) {
 					return tool;
 				}

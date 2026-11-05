@@ -30,6 +30,12 @@ const ENVELOPE_RESERVATION: usize = 1024;
 pub(super) struct Failure(pub Value);
 
 impl Failure {
+	/// Frozen Zod coercion exceptions are plain SDK error text, not a JSON
+	/// analysis failure. Only internal validators construct this representation.
+	pub(super) fn schema_exception(message: &'static str) -> Self {
+		Self(Value::String(message.to_owned()))
+	}
+
 	pub(super) fn input(operation: &str, issues: Vec<Value>) -> Self {
 		let mut error = json!({
 			"code":"invalid_request", "category":"invalid_input",
@@ -140,9 +146,11 @@ impl Failure {
 	}
 
 	pub(super) fn wire(self) -> CallToolResult {
-		let mut result = CallToolResult::error(vec![ContentBlock::text(
-			json!({"error":self.0}).to_string(),
-		)]);
+		let text = match self.0 {
+			Value::String(message) => message,
+			value => json!({"error":value}).to_string(),
+		};
+		let mut result = CallToolResult::error(vec![ContentBlock::text(text)]);
 		result.meta = Some(target_meta());
 		result
 	}

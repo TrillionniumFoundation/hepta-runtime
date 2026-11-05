@@ -299,7 +299,7 @@ fn existing_canonical_stream_and_new_borrowed_identity_agree() {
 }
 
 #[test]
-fn unsupported_authentication_profiles_are_separate_from_corrupt_records() {
+fn recognized_unknown_and_capture_profiles_reject_corrupt_payloads() {
 	let files = file_reference();
 	let case = files["cases"]
 		.as_array()
@@ -311,21 +311,44 @@ fn unsupported_authentication_profiles_are_separate_from_corrupt_records() {
 	unknowns["unknowns"] = json!([{}]);
 	assert!(matches!(
 		authenticate_file(unknowns, "unknowns.json", None),
-		Err(SourceError::ProfileGap {
-			feature: "residual-unknown-schema-and-history-authentication"
-		})
+		Err(SourceError::InvalidBundle { message }) if message.starts_with("Evidence bundle does not match the bundle schema")
 	));
 	let mut capture = case["input"].clone();
 	capture["records"][0]["predicate_type"] = json!("rea.process-capture");
 	capture["records"][0]["evidence_id"] =
 		json!(record_digest(&capture["records"][0], false).unwrap());
 	capture["captures"] = json!([{"evidence_id":capture["records"][0]["evidence_id"],"predicate_type":"rea.process-capture"}]);
+	let prefix = format!(
+		"Process capture record {} has an invalid normalized_result (",
+		capture["records"][0]["evidence_id"].as_str().unwrap()
+	);
+	// A direct domain call has no owned raw key order. Malformed objects with
+	// several unknown keys therefore retain an explicit metadata boundary.
 	assert!(matches!(
-		authenticate_file(capture, "capture.json", None),
+		authenticate_file(capture.clone(), "capture.json", None),
 		Err(SourceError::ProfileGap {
-			feature: "process-capture-payload-authentication"
+			feature: "unknown-key-order-metadata-unavailable"
 		})
 	));
+	// Define the canonical JSON spelling of this test input. Public callers
+	// obtain these private facts from the actual file parser.
+	let order = |path: &[Value]| {
+		let mut value = &capture;
+		for part in path {
+			value = if let Some(key) = part.as_str() {
+				value.get(key)?
+			} else {
+				value.get(usize::try_from(part.as_u64()?).ok()?)?
+			};
+		}
+		Some(value.as_object()?.keys().cloned().collect::<Vec<_>>())
+	};
+	let error = authenticate_file_with_order(capture.clone(), "capture.json", None, Some(&order))
+		.unwrap_err();
+	assert!(
+		matches!(&error, SourceError::InvalidBundle { message } if message.starts_with(&prefix)),
+		"{error:?}"
+	);
 }
 
 #[test]
@@ -350,4 +373,41 @@ fn deep_json_is_explicitly_outside_the_current_canonical_profile() {
 		wide.push(json!({"leaf": true}));
 	}
 	assert!(!deeper_than(&Value::Array(wide), 2));
+}
+
+#[test]
+fn unknown_key_labels_keep_original_unescaped_characters_and_owned_order() {
+	let reference: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_evidence_source/unknown-keys-reference-r1.json"
+	))
+	.unwrap();
+	assert_eq!(reference["results"].as_array().unwrap().len(), 7);
+	for case in reference["results"].as_array().unwrap() {
+		let issue = &case["issues"][0];
+		let keys = issue["keys"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.map(|key| key.as_str().unwrap().to_owned())
+			.collect::<Vec<_>>();
+		let object = keys
+			.iter()
+			.map(|key| (key.clone(), json!(1)))
+			.collect::<Map<String, Value>>();
+		let order = |_path: &[Value]| Some(keys.clone());
+		let mut validation = Validation::new(Some(&order));
+		validation.unknown(&object, &[], &[]);
+		assert!(validation.gap.is_none());
+		assert_eq!(validation.issues.len(), 1);
+		assert_eq!(
+			validation.issues[0].message,
+			issue["message"].as_str().unwrap()
+		);
+		assert_eq!(
+			validation.issues[0].projected,
+			keys.iter()
+				.map(|key| json!({"path":[key],"reason":"unknown_argument"}))
+				.collect::<Vec<_>>()
+		);
+	}
 }

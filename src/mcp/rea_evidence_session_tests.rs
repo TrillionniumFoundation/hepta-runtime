@@ -56,10 +56,10 @@ fn tampered_record_is_never_published_and_sessions_are_independent() {
 	let mut changed = record.clone();
 	changed["normalized_result"] = json!({"forged":true});
 	assert!(first.record(changed).is_err());
-	assert_eq!(first.records.lock().unwrap().len(), 0);
+	assert_eq!(first.state.lock().unwrap().records.len(), 0);
 	first.record(record).unwrap();
-	assert_eq!(first.records.lock().unwrap().len(), 1);
-	assert_eq!(second.records.lock().unwrap().len(), 0);
+	assert_eq!(first.state.lock().unwrap().records.len(), 1);
+	assert_eq!(second.state.lock().unwrap().records.len(), 0);
 }
 
 #[test]
@@ -330,7 +330,8 @@ fn same_id_current_delivery_and_first_retention_keep_separate_creation_orders() 
 		assert!(!Arc::ptr_eq(&first.evidence, &current.evidence));
 		check_current(&current, current_origin);
 		{
-			let records = session.records.lock().unwrap();
+			let state = session.state.lock().unwrap();
+			let records = &state.records;
 			assert_eq!(records.len(), 1);
 			assert_eq!(records[id].origin, first_origin);
 			assert!(Arc::ptr_eq(&records[id].evidence, &first.evidence));

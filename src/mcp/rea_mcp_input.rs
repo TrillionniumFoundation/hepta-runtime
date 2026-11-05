@@ -32,27 +32,36 @@ fn received(value: Option<&Value>) -> &'static str {
 	}
 }
 
-fn string(value: Option<&Value>, path: &str, nonempty: bool, errors: &mut Vec<String>) -> bool {
-	if !value.is_some_and(Value::is_string) {
+fn string(
+	value: Option<&Value>,
+	path: &str,
+	nonempty: bool,
+	errors: &mut Vec<String>,
+) -> Result<bool, Failure> {
+	let is_string = value.is_some_and(Value::is_string);
+	if !is_string {
 		errors.push(format!(
 			"{path}: Invalid input: expected string, received {}",
 			received(value)
 		));
-		// Zod's min-length check also reports an empty array after the type
-		// diagnostic. This observable behavior was captured over real MCP.
-		if nonempty && value.is_some_and(|v| v.as_array().is_some_and(Vec::is_empty)) {
-			errors.push(format!(
-				"{path}: Too small: expected array to have >=1 items"
-			));
-		}
-		return false;
 	}
-	if nonempty && value.and_then(Value::as_str) == Some("") {
-		errors.push(format!(
-			"{path}: Too small: expected string to have >=1 characters"
-		));
+	if nonempty {
+		let messages =
+			super::rea_evidence_source::minimum_length_messages(value, 1).map_err(|error| {
+				match error {
+					super::rea_evidence_source::SourceError::SchemaException { message } => {
+						Failure::schema_exception(message)
+					}
+					other => Failure::output("validate_mcp_arguments", other.to_string()),
+				}
+			})?;
+		errors.extend(
+			messages
+				.into_iter()
+				.map(|message| format!("{path}: {message}")),
+		);
 	}
-	true
+	Ok(is_string)
 }
 
 fn integer(
@@ -111,12 +120,12 @@ fn unknown(
 		Some(keys) => keys
 			.iter()
 			.map(String::as_str)
-			.filter(|key| map.contains_key(*key) && !allowed.contains(key))
+			.filter(|key| map.contains_key(*key) && *key != "__proto__" && !allowed.contains(key))
 			.collect(),
 		None => map
 			.keys()
 			.map(String::as_str)
-			.filter(|key| !allowed.contains(key))
+			.filter(|key| *key != "__proto__" && !allowed.contains(key))
 			.collect(),
 	};
 	if keys.is_empty() {
@@ -158,7 +167,7 @@ pub(super) fn elf_ordered(raw: &Value, argument_keys: Option<&[String]>) -> Resu
 	let empty = Map::new();
 	let map = raw.as_object().unwrap_or(&empty);
 	let mut errors = Vec::new();
-	if string(map.get("path"), "path", true, &mut errors)
+	if string(map.get("path"), "path", true, &mut errors)?
 		&& map["path"].as_str().is_some_and(|path| path.contains('\0'))
 	{
 		errors.push("path: Local filesystem paths cannot contain NUL".to_owned());
@@ -189,7 +198,7 @@ pub(super) fn export_ordered(raw: &Value, argument_keys: Option<&[String]>) -> R
 	let empty = Map::new();
 	let map = raw.as_object().unwrap_or(&empty);
 	let mut errors = Vec::new();
-	if string(map.get("path"), "path", true, &mut errors) {
+	if string(map.get("path"), "path", true, &mut errors)? {
 		let path = map["path"].as_str().unwrap_or_default();
 		if path.contains('\0') {
 			errors.push("path: Local filesystem paths cannot contain NUL".to_owned());
@@ -208,6 +217,23 @@ pub(super) fn export_ordered(raw: &Value, argument_keys: Option<&[String]>) -> R
 	}
 	unknown(map, &["path", "overwrite"], "", argument_keys, &mut errors);
 	finish("export_evidence_bundle", errors)
+}
+
+pub(super) fn import_ordered(raw: &Value, argument_keys: Option<&[String]>) -> Result<(), Failure> {
+	let empty = Map::new();
+	let map = raw.as_object().unwrap_or(&empty);
+	let mut errors = Vec::new();
+	if string(map.get("path"), "path", true, &mut errors)? {
+		let path = map["path"].as_str().unwrap_or_default();
+		if path.contains('\0') {
+			errors.push("path: Local filesystem paths cannot contain NUL".to_owned());
+		}
+		if !path.starts_with('/') {
+			errors.push("path: must be an absolute local filesystem path".to_owned());
+		}
+	}
+	unknown(map, &["path"], "", argument_keys, &mut errors);
+	finish("import_evidence_bundle", errors)
 }
 
 pub(super) fn bundle_ordered(
@@ -238,7 +264,7 @@ pub(super) fn bundle_ordered(
 				};
 				let path = format!("filters.{key}");
 				let nonempty = matches!(key, "operation" | "procedure_address");
-				if !string(Some(value), &path, nonempty, &mut errors) || nonempty {
+				if !string(Some(value), &path, nonempty, &mut errors)? || nonempty {
 					continue;
 				}
 				let prefix = if key == "evidence_id" { "ev_" } else { "" };

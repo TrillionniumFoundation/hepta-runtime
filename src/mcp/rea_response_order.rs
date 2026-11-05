@@ -22,11 +22,12 @@
 //! Array union candidates are carried to the visited element, avoiding a full
 //! records/items scan for every local order query. Payloads remain borrowed.
 
+use super::rea_evidence_file;
 use super::rea_response_encoding::{declared_keys, pointer, ObjectOrder, PathComponent};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use serde_json::{Map, Value};
 use std::collections::HashSet;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 /// Creation provenance is not recoverable from semantic Evidence JSON: APK
 /// inline views and the direct analysis-view tool can have the same semantic
@@ -48,6 +49,8 @@ pub(super) struct RecordOrder<'a> {
 pub(super) struct BundleOrder<'a> {
 	records: &'a [&'a Value],
 	origins: &'a [RecordOrigin],
+	imported_orders: Option<&'a [Option<Arc<rea_evidence_file::ObjectOrder>>]>,
+	unknowns: Option<&'a [&'a Value]>,
 }
 pub(super) struct BundleSummaryOrder<'a>(pub(super) &'a Value);
 
@@ -62,7 +65,28 @@ impl<'a> BundleOrder<'a> {
 			records.len() == origins.len(),
 			"Bundle record/origin counts differ"
 		);
-		Ok(Self { records, origins })
+		Ok(Self {
+			records,
+			origins,
+			imported_orders: None,
+			unknowns: None,
+		})
+	}
+
+	pub(super) fn with_imports(
+		records: &'a [&'a Value],
+		origins: &'a [RecordOrigin],
+		imported_orders: &'a [Option<Arc<rea_evidence_file::ObjectOrder>>],
+		unknowns: &'a [&'a Value],
+	) -> Result<Self> {
+		ensure!(
+			records.len() == imported_orders.len(),
+			"Bundle import order count differs"
+		);
+		let mut result = Self::new(records, origins)?;
+		result.imported_orders = Some(imported_orders);
+		result.unknowns = Some(unknowns);
+		Ok(result)
 	}
 }
 
@@ -608,6 +632,48 @@ impl ObjectOrder for RecordOrder<'_> {
 	}
 }
 
+/// The original import reparses the fixed Evidence envelope, while generic
+/// JSON members retain the exact acquired file's JavaScript property order.
+/// This authority follows the immutable record; it is never caller metadata.
+fn imported_record_keys<'a>(
+	record: &Value,
+	order: &rea_evidence_file::ObjectOrder,
+	path: &[PathComponent<'_>],
+	object: &'a Map<String, Value>,
+) -> Result<Vec<&'a str>> {
+	let root = &schemas()?.bundle;
+	let schema = root
+		.pointer("/$defs/__schema0/anyOf/0/properties/records/items")
+		.context("Frozen Evidence schema is absent")?;
+	let location = locate(root, vec![schema], record, path)?;
+	if location
+		.candidates
+		.iter()
+		.any(|schema| schema.get("x-hepta-object-order").is_some())
+		|| object.is_empty()
+	{
+		return keys_at(location, object);
+	}
+	ensure!(
+		location
+			.value
+			.as_object()
+			.is_some_and(|value| std::ptr::eq(value, object)),
+		"Imported order does not own the serialized object"
+	);
+	let path = path
+		.iter()
+		.map(|part| match part {
+			PathComponent::Key(key) => Value::String((*key).to_owned()),
+			PathComponent::Index(index) => serde_json::json!(index),
+		})
+		.collect::<Vec<_>>();
+	let keys = order
+		.keys(&path)
+		.context("Imported JSON object order is absent")?;
+	declared_keys(object, &keys.iter().map(String::as_str).collect::<Vec<_>>())
+}
+
 impl ObjectOrder for BundleOrder<'_> {
 	fn keys<'a>(
 		&self,
@@ -646,7 +712,29 @@ impl ObjectOrder for BundleOrder<'_> {
 				.get(index)
 				.copied()
 				.context("Bundle record origin is absent")?;
+			if let Some(order) = self
+				.imported_orders
+				.and_then(|orders| orders.get(index))
+				.and_then(Option::as_deref)
+			{
+				return imported_record_keys(record, order, &path[3..], object);
+			}
 			return RecordOrder::new(record, origin).keys(&path[3..], object);
+		}
+		if path.len() >= 3 && has_keys(&path[..2], &["result", "unknowns"]) {
+			let PathComponent::Index(index) = path[2] else {
+				bail!("Bundle unknowns require an array index");
+			};
+			let unknown = self
+				.unknowns
+				.and_then(|unknowns| unknowns.get(index))
+				.copied()
+				.context("Bundle unknown index is out of range")?;
+			let root = &schemas()?.bundle;
+			let schema = root
+				.pointer("/$defs/__schema0/anyOf/0/properties/unknowns/items")
+				.context("Frozen unknown schema is absent")?;
+			return keys_at(locate(root, vec![schema], unknown, &path[3..])?, object);
 		}
 		match path {
 			[PathComponent::Key("result"), PathComponent::Key("artifacts"), PathComponent::Index(_)] => {

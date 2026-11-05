@@ -18,6 +18,8 @@
 
 use super::rea_contract::{self, Failure};
 use super::rea_evidence;
+use super::rea_evidence_file::ObjectOrder as ImportedObjectOrder;
+use super::rea_evidence_source::{self, AuthenticatedBundle};
 use super::rea_response_encoding::JsonView;
 use super::rea_response_order::{BundleOrder, RecordOrigin};
 use rmcp::model::CallToolResult;
@@ -27,7 +29,13 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Default)]
 pub(super) struct EvidenceSession {
-	records: Mutex<BTreeMap<String, SessionRecord>>,
+	state: Mutex<SessionState>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct SessionState {
+	records: BTreeMap<String, SessionRecord>,
+	unknowns: BTreeMap<(String, u64), Arc<Value>>,
 }
 
 /// Payload and its first producing entry point are published atomically.
@@ -35,6 +43,7 @@ pub(super) struct EvidenceSession {
 struct SessionRecord {
 	evidence: Arc<Value>,
 	origin: RecordOrigin,
+	imported_order: Option<Arc<ImportedObjectOrder>>,
 }
 
 pub(super) struct RetainedRecord {
@@ -49,6 +58,7 @@ pub(super) struct RetainedRecord {
 #[derive(Clone, Debug)]
 pub(super) struct EvidenceSnapshot {
 	records: BTreeMap<String, Arc<Value>>,
+	unknowns: BTreeMap<(String, u64), Arc<Value>>,
 }
 
 impl EvidenceSnapshot {
@@ -56,7 +66,7 @@ impl EvidenceSnapshot {
 		self.records.len()
 	}
 	pub(super) fn unknown_count(&self) -> usize {
-		0
+		self.unknowns.len()
 	}
 
 	pub(super) fn write_canonical<W: std::io::Write>(&self, output: &mut W) -> anyhow::Result<()> {
@@ -74,7 +84,7 @@ impl EvidenceSnapshot {
 			output.write_all(b"]")?;
 			Ok(())
 		}
-		let view = bundle(&self.records);
+		let view = bundle(&self.records, &self.unknowns);
 		// ASCII bundle member names have the same canonical UTF-16 order.
 		output.write_all(b"{\"artifacts\":")?;
 		array(output, &view.artifacts)?;
@@ -89,7 +99,7 @@ impl EvidenceSnapshot {
 		output.write_all(b",\"scenarios\":")?;
 		array(output, &view.scenarios)?;
 		output.write_all(b",\"unknowns\":")?;
-		array(output, &view.unknowns)?;
+		array(output, view.unknowns)?;
 		output.write_all(b"}")?;
 		Ok(())
 	}
@@ -97,24 +107,29 @@ impl EvidenceSnapshot {
 
 impl EvidenceSession {
 	pub(super) fn snapshot(&self) -> Result<EvidenceSnapshot, Failure> {
-		let records = self
-			.records
+		let state = self
+			.state
 			.lock()
 			.map_err(|_| Failure::integrity("Evidence session registry is unavailable"))?;
 		Ok(EvidenceSnapshot {
-			records: records
+			records: state
+				.records
 				.iter()
 				.map(|(id, entry)| (id.clone(), Arc::clone(&entry.evidence)))
 				.collect(),
+			unknowns: state.unknowns.clone(),
 		})
 	}
 
 	pub(super) fn lookup(&self, id: &str) -> Result<Option<Arc<Value>>, Failure> {
-		let records = self
-			.records
+		let state = self
+			.state
 			.lock()
 			.map_err(|_| Failure::integrity("Evidence session registry is unavailable"))?;
-		Ok(records.get(id).map(|entry| Arc::clone(&entry.evidence)))
+		Ok(state
+			.records
+			.get(id)
+			.map(|entry| Arc::clone(&entry.evidence)))
 	}
 	/// Validate identity before publication. A repeated semantic record keeps
 	/// its first display metadata, as the frozen session ledger does.
@@ -163,12 +178,12 @@ impl EvidenceSession {
 			.as_str()
 			.ok_or_else(|| Failure::integrity("Missing evidence identifier"))?
 			.to_owned();
-		let mut records = self
-			.records
+		let mut state = self
+			.state
 			.lock()
 			.map_err(|_| Failure::integrity("Evidence session registry is unavailable"))?;
 		let evidence = Arc::new(evidence);
-		if let Some(existing) = records.get(&id) {
+		if let Some(existing) = state.records.get(&id) {
 			if !rea_evidence::semantic_equal(&existing.evidence, &evidence)
 				.map_err(|error| Failure::integrity(error.to_string()))?
 			{
@@ -177,11 +192,12 @@ impl EvidenceSession {
 			active()?;
 		} else {
 			active()?;
-			records.insert(
+			state.records.insert(
 				id.clone(),
 				SessionRecord {
 					evidence: Arc::clone(&evidence),
 					origin,
+					imported_order: None,
 				},
 			);
 		}
@@ -192,6 +208,105 @@ impl EvidenceSession {
 		})
 	}
 
+	pub(super) fn import_if_active(
+		&self,
+		candidate: AuthenticatedBundle,
+		orders: Vec<ImportedObjectOrder>,
+		cancellation: &tokio_util::sync::CancellationToken,
+	) -> Result<ImportCounts, Failure> {
+		const OP: &str = "import_evidence_bundle";
+		let active = || {
+			if cancellation.is_cancelled() {
+				Err(Failure::cancelled(OP))
+			} else {
+				Ok(())
+			}
+		};
+		active()?;
+		if candidate.records.len() != orders.len() {
+			return Err(Failure::output(
+				OP,
+				"Authenticated record/order counts differ.",
+			));
+		}
+		let mut state = self
+			.state
+			.lock()
+			.map_err(|_| Failure::integrity("Evidence session registry is unavailable"))?;
+		let mut pending = state.clone();
+		let has_unknowns = !candidate.unknowns.is_empty();
+		for (evidence, order) in candidate.records.into_iter().zip(orders) {
+			let id = evidence["evidence_id"]
+				.as_str()
+				.ok_or_else(|| Failure::integrity("Missing evidence identifier"))?
+				.to_owned();
+			if let Some(existing) = pending.records.get(&id) {
+				if !rea_evidence::semantic_equal(&existing.evidence, &evidence)
+					.map_err(|error| Failure::integrity(error.to_string()))?
+				{
+					return Err(Failure::integrity("Conflicting evidence record"));
+				}
+				// The original record-only fast path keeps a matching immutable
+				// payload unless one of the three display fields changed.
+				if !has_unknowns && display_metadata_agrees(&existing.evidence, &evidence) {
+					continue;
+				}
+			}
+			pending.records.insert(
+				id,
+				SessionRecord {
+					evidence: Arc::new(evidence),
+					origin: RecordOrigin::Unknown,
+					imported_order: Some(Arc::new(order)),
+				},
+			);
+		}
+		let mut graph_order = state.unknowns.keys().cloned().collect::<Vec<_>>();
+		for unknown in candidate.unknowns {
+			let id = unknown["unknown_id"]
+				.as_str()
+				.ok_or_else(|| Failure::integrity("Missing unknown identifier"))?
+				.to_owned();
+			let revision = unknown["revision"]
+				.as_u64()
+				.ok_or_else(|| Failure::integrity("Missing unknown revision"))?;
+			let key = (id, revision);
+			if let Some(existing) = pending.unknowns.get(&key) {
+				if existing["revision_digest"] != unknown["revision_digest"] {
+					return Err(Failure::integrity("Conflicting unknown revision"));
+				}
+			} else {
+				graph_order.push(key.clone());
+			}
+			pending.unknowns.insert(key, Arc::new(unknown));
+		}
+		if has_unknowns {
+			let records = pending
+				.records
+				.values()
+				.map(|entry| entry.evidence.as_ref())
+				.collect::<Vec<_>>();
+			let unknowns = graph_order
+				.iter()
+				.map(|key| pending.unknowns.get(key).map(Arc::as_ref))
+				.collect::<Option<Vec<_>>>()
+				.ok_or_else(|| Failure::integrity("Unknown merge candidate changed"))?;
+			rea_evidence_source::validate_unknown_union(&unknowns, &records)
+				.map_err(|_| Failure::integrity("Evidence bundle unknown registry failed"))?;
+		}
+		let result = ImportCounts {
+			imported: pending.records.len() - state.records.len(),
+			unknowns_added: pending.unknowns.len() - state.unknowns.len(),
+			total: pending.records.len(),
+		};
+		// This final check is the commit decision while the registry is locked.
+		// Cancellation observed here publishes nothing; after it passes, publish
+		// the complete candidate. Later cancellation never rolls records back.
+		active()?;
+		*state = pending;
+		Ok(result)
+	}
+
 	pub(super) fn get_bundle(&self, raw: Value) -> CallToolResult {
 		if let Err(error) = super::rea_mcp_input::bundle(&raw) {
 			return error.wire();
@@ -200,21 +315,31 @@ impl EvidenceSession {
 			Ok(value) => value,
 			Err(error) => return error.wire(),
 		};
-		let registry = match self.records.lock() {
+		let registry = match self.state.lock() {
 			Ok(records) => records,
 			Err(_) => return Failure::integrity("Evidence session registry is unavailable").wire(),
 		};
 		// Clone only Arc handles while holding the mutex. Response measurement
 		// and encoding run against an immutable selection after releasing it.
-		let selected_origins: Vec<RecordOrigin> =
-			registry.values().map(|entry| entry.origin).collect();
+		let selected_origins: Vec<RecordOrigin> = registry
+			.records
+			.values()
+			.map(|entry| entry.origin)
+			.collect();
+		let selected_import_orders = registry
+			.records
+			.values()
+			.map(|entry| entry.imported_order.clone())
+			.collect::<Vec<_>>();
+		let unknowns = registry.unknowns.clone();
 		let records: BTreeMap<String, Arc<Value>> = registry
+			.records
 			.iter()
 			.map(|(id, entry)| (id.clone(), Arc::clone(&entry.evidence)))
 			.collect();
 		drop(registry);
 		if options.summary {
-			let value = summarize(&records, &options.filters);
+			let value = summarize(&records, &options.filters, unknowns.len());
 			drop(records);
 			rea_contract::success("get_evidence_bundle", json!({"result":value}), None)
 		} else {
@@ -225,7 +350,7 @@ impl EvidenceSession {
 				result: BundleView<'a>,
 			}
 			let complete = ResultView {
-				result: bundle(&records),
+				result: bundle(&records, &unknowns),
 			};
 			let view = &complete.result;
 			let artifacts: Vec<&Value> = view.artifacts.iter().collect();
@@ -233,7 +358,7 @@ impl EvidenceSession {
 			let environments: Vec<&Value> = view.environments.iter().collect();
 			let scenarios: Vec<&Value> = view.scenarios.iter().collect();
 			let captures: Vec<&Value> = view.captures.iter().collect();
-			let unknowns: Vec<&Value> = view.unknowns.iter().collect();
+			let unknowns: Vec<&Value> = view.unknowns.clone();
 			let fields = [
 				("artifacts", JsonView::Values(&artifacts)),
 				("providers", JsonView::Values(&providers)),
@@ -244,7 +369,12 @@ impl EvidenceSession {
 				("records", JsonView::Values(&view.records)),
 			];
 			let result = [("result", JsonView::Object(&fields))];
-			let order = match BundleOrder::new(&view.records, &selected_origins) {
+			let order = match BundleOrder::with_imports(
+				&view.records,
+				&selected_origins,
+				&selected_import_orders,
+				&view.unknowns,
+			) {
 				Ok(order) => order,
 				Err(error) => {
 					return Failure::output("get_evidence_bundle", error.to_string()).wire()
@@ -253,7 +383,10 @@ impl EvidenceSession {
 			// Generic records without recorded producer provenance have no known
 			// source order. Their Fits size is order independent; overflow never fabricates
 			// a source order. Production producers always supply an explicit origin.
-			let known = !selected_origins.contains(&RecordOrigin::Unknown);
+			let known = selected_origins
+				.iter()
+				.zip(&selected_import_orders)
+				.all(|(origin, order)| *origin != RecordOrigin::Unknown || order.is_some());
 			let original_order: Option<&dyn super::rea_response_encoding::ObjectOrder> =
 				known.then_some(&order);
 			rea_contract::deliver_view(
@@ -267,6 +400,19 @@ impl EvidenceSession {
 			)
 		}
 	}
+}
+
+#[derive(Debug, serde::Serialize)]
+pub(super) struct ImportCounts {
+	pub(super) imported: usize,
+	pub(super) unknowns_added: usize,
+	pub(super) total: usize,
+}
+
+fn display_metadata_agrees(left: &Value, right: &Value) -> bool {
+	left["subject"]["name"] == right["subject"]["name"]
+		&& left["subject"]["local_path"] == right["subject"]["local_path"]
+		&& left.get("caller_input_path") == right.get("caller_input_path")
 }
 
 #[derive(Debug)]
@@ -379,11 +525,14 @@ struct BundleView<'a> {
 	environments: Vec<Value>,
 	scenarios: Vec<Value>,
 	captures: Vec<Value>,
-	unknowns: Vec<Value>,
+	unknowns: Vec<&'a Value>,
 	records: Vec<&'a Value>,
 }
 
-fn bundle(records: &BTreeMap<String, Arc<Value>>) -> BundleView<'_> {
+fn bundle<'a>(
+	records: &'a BTreeMap<String, Arc<Value>>,
+	unknowns: &'a BTreeMap<(String, u64), Arc<Value>>,
+) -> BundleView<'a> {
 	let mut artifacts = BTreeMap::new();
 	let mut providers = BTreeMap::new();
 	let mut environments = BTreeMap::new();
@@ -428,7 +577,7 @@ fn bundle(records: &BTreeMap<String, Arc<Value>>) -> BundleView<'_> {
 		environments: environments.into_values().collect(),
 		scenarios,
 		captures,
-		unknowns: vec![],
+		unknowns: unknowns.values().map(Arc::as_ref).collect(),
 		records: records.values().map(Arc::as_ref).collect(),
 	}
 }
@@ -473,7 +622,11 @@ fn native_summary(record: &Value) -> Value {
 	json!({"available":true,"procedure_address":procedure["address"],"procedure_name":procedure["name"],"value_flow":value_flow})
 }
 
-fn summarize(records: &BTreeMap<String, Arc<Value>>, filters: &Map<String, Value>) -> Value {
+fn summarize(
+	records: &BTreeMap<String, Arc<Value>>,
+	filters: &Map<String, Value>,
+	unknown_revisions: usize,
+) -> Value {
 	let mut selected = Vec::new();
 	for record in records.values() {
 		if [
@@ -503,7 +656,7 @@ fn summarize(records: &BTreeMap<String, Arc<Value>>, filters: &Map<String, Value
 			"native_dossier":native}));
 	}
 	json!({"kind":"evidence-bundle-summary","filters":filters,"total_retained_records":records.len(),
-		"matching_records":selected.len(),"unknown_revisions":0,"records":selected})
+		"matching_records":selected.len(),"unknown_revisions":unknown_revisions,"records":selected})
 }
 
 #[cfg(test)]

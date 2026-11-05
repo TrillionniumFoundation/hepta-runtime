@@ -165,6 +165,7 @@ fn source_failure(error: SourceError, file_path: Option<&str>) -> Failure {
 			failure.0["details"]["reason"] = json!(format!("The native Rust Evidence source authentication profile does not yet cover {feature}."));
 			failure
 		}
+		SourceError::SchemaException { message } => Failure::schema_exception(message),
 		SourceError::Internal { message } => Failure::output(OP, message),
 	}
 }

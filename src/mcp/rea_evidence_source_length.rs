@@ -7,7 +7,7 @@
 //! JavaScript numeric comparison then determines whether to emit another issue.
 
 use super::Validation;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 fn js_space(c: char) -> bool {
 	matches!(c, '\u{0009}'..='\u{000d}' | '\u{0020}' | '\u{00a0}' | '\u{1680}'

@@ -52,6 +52,9 @@ pub(super) enum SourceError {
 	Selection { message: String },
 	/// A known native profile boundary; never reported as corrupt source data.
 	ProfileGap { feature: &'static str },
+	/// A frozen schema coercion throws instead of yielding a validation issue.
+	/// The public SDK delivers this exact text as an error CallToolResult.
+	SchemaException { message: &'static str },
 	/// Unexpected implementation failure, separate from caller correction facts.
 	Internal { message: String },
 }
@@ -63,6 +66,7 @@ impl fmt::Display for SourceError {
 			Self::InvalidBundle { message }
 			| Self::Selection { message }
 			| Self::Internal { message } => output.write_str(message),
+			Self::SchemaException { message } => output.write_str(message),
 			Self::ProfileGap { feature } => {
 				write!(output, "Evidence source profile gap: {feature}")
 			}
@@ -72,6 +76,45 @@ impl fmt::Display for SourceError {
 
 impl std::error::Error for SourceError {}
 type SourceResult<T> = Result<T, SourceError>;
+
+#[path = "rea_evidence_source_length.rs"]
+mod length_checks;
+#[path = "rea_evidence_source_process.rs"]
+mod process_capture;
+#[path = "rea_residual_unknown.rs"]
+mod residual_unknown;
+
+/// The complete authenticated candidate is still private until one session
+/// commits all records and revisions together. No input payload is executed.
+#[derive(Debug)]
+pub(super) struct AuthenticatedBundle {
+	pub(super) records: Vec<Value>,
+	pub(super) unknowns: Vec<Value>,
+}
+
+#[derive(Debug)]
+pub(super) enum ImportSourceError {
+	Source(SourceError),
+	SingleRecord {
+		evidence_id: String,
+		issues: Vec<Value>,
+	},
+}
+
+impl From<SourceError> for ImportSourceError {
+	fn from(error: SourceError) -> Self {
+		Self::Source(error)
+	}
+}
+
+/// Validate an already authenticated union before publishing it. This shares
+/// the exact graph rules with standalone file authentication.
+pub(super) fn validate_unknown_union(
+	unknowns: &[&Value],
+	records: &[&Value],
+) -> Result<(), String> {
+	residual_unknown::validate_graph(unknowns, records)
+}
 
 const FORMATS: &[&str] = &[
 	"hopper",
@@ -160,6 +203,22 @@ const SEMANTIC_FIELDS: &[&str] = &[
 	"subject",
 ];
 const LEGACY_ID_MESSAGE: &str = "Evidence uses an earlier relationship_coverage identity commitment: explicit null was omitted from that digest. Recreate this observation with the current REA release; re-exporting the old bundle cannot update its identity.";
+
+/// Share the frozen length-check behavior with the MCP input schema boundary.
+/// Type checks remain the caller's responsibility and precede these messages.
+pub(super) fn minimum_length_messages(
+	value: Option<&Value>,
+	minimum: u64,
+) -> SourceResult<Vec<String>> {
+	let mut validation = Validation::new(None);
+	validation.min_length(value, &[], minimum);
+	let messages = std::mem::take(&mut validation.issues)
+		.into_iter()
+		.map(|issue| issue.message)
+		.collect();
+	validation.finish()?;
+	Ok(messages)
+}
 
 fn child(path: &[Value], key: impl Into<Value>) -> Vec<Value> {
 	let mut result = path.to_vec();
@@ -268,18 +327,14 @@ impl<'a> Validation<'a> {
 		path: &[Value],
 		nonempty: bool,
 	) -> Option<&'v str> {
-		let Some(text) = value.and_then(Value::as_str) else {
+		let text = value.and_then(Value::as_str);
+		if text.is_none() {
 			self.invalid_type(value, path, "string");
-			// Zod runs the nonempty length check for an empty array even after the string type aborts.
-			if nonempty && value.and_then(Value::as_array).is_some_and(Vec::is_empty) {
-				self.minimum(path, 1, "string");
-			}
-			return None;
-		};
-		if nonempty && text.is_empty() {
-			self.minimum(path, 1, "string");
 		}
-		Some(text)
+		if nonempty {
+			self.min_length(value, path, 1);
+		}
+		text
 	}
 
 	fn digest(&mut self, value: Option<&Value>, path: &[Value], prefix: &str) {
@@ -371,15 +426,24 @@ impl<'a> Validation<'a> {
 	}
 
 	fn unknown(&mut self, map: &Map<String, Value>, allowed: &[&str], path: &[Value]) {
+		if self.gap == Some("original-length-coercion-exception") {
+			return;
+		}
 		let mut keys: Vec<&str> = map
 			.keys()
 			.map(String::as_str)
-			.filter(|key| !allowed.contains(key))
+			.filter(|key| *key != "__proto__" && !allowed.contains(key))
 			.collect();
 		if keys.is_empty() {
 			return;
 		}
-		let hints = self.order.and_then(|resolver| resolver(path));
+		let hints = self
+			.order
+			.and_then(|resolver| resolver(path))
+			.map(|mut keys| {
+				keys.retain(|key| key != "__proto__" || map.contains_key(key));
+				keys
+			});
 		if keys.len() > 1 {
 			let Some(hints) = hints.as_ref() else {
 				self.gap = Some("unknown-key-order-metadata-unavailable");
@@ -394,16 +458,18 @@ impl<'a> Validation<'a> {
 				self.gap = Some("unknown-key-order-metadata-invalid");
 				return;
 			}
-			keys.sort_by_key(|key| {
-				hints
-					.iter()
-					.position(|hint| hint == key)
-					.unwrap_or(usize::MAX)
-			});
+			// The validated order is already a permutation of this exact object.
+			// Filtering it once preserves the original error order without a
+			// quadratic rank search for each comparison on wide invalid objects.
+			keys = hints
+				.iter()
+				.map(String::as_str)
+				.filter(|key| *key != "__proto__" && !allowed.contains(key))
+				.collect();
 		}
 		let labels = keys
 			.iter()
-			.map(|key| json!(key).to_string())
+			.map(|key| format!("\"{key}\""))
 			.collect::<Vec<_>>()
 			.join(", ");
 		let noun = if keys.len() == 1 { "key" } else { "keys" };
@@ -425,7 +491,13 @@ impl<'a> Validation<'a> {
 
 	fn finish(self) -> SourceResult<()> {
 		if let Some(feature) = self.gap {
-			return Err(SourceError::ProfileGap { feature });
+			return Err(if feature == "original-length-coercion-exception" {
+				SourceError::SchemaException {
+					message: "Cannot convert object to primitive value",
+				}
+			} else {
+				SourceError::ProfileGap { feature }
+			});
 		}
 		if self.issues.is_empty() {
 			return Ok(());
@@ -520,14 +592,13 @@ impl Validation<'_> {
 	}
 
 	fn strings(&mut self, value: Option<&Value>, path: &[Value], nonempty: bool, min_count: bool) {
-		let Some(values) = self.array(value, path) else {
-			return;
-		};
-		for (index, value) in values.iter().enumerate() {
-			self.string(Some(value), &child(path, index), nonempty);
+		if let Some(values) = self.array(value, path) {
+			for (index, value) in values.iter().enumerate() {
+				self.string(Some(value), &child(path, index), nonempty);
+			}
 		}
-		if min_count && values.is_empty() {
-			self.minimum(path, 1, "array");
+		if min_count {
+			self.min_length(value, path, 1);
 		}
 	}
 
@@ -1003,6 +1074,34 @@ fn authenticate_identity(
 	Ok(())
 }
 
+fn strip_proto(value: &mut Value) {
+	if let Some(map) = value.as_object_mut() {
+		map.remove("__proto__");
+	}
+}
+
+fn normalize_record_schema(value: &mut Value) {
+	strip_proto(value);
+	for path in [
+		"/subject",
+		"/subject/digest",
+		"/provider",
+		"/analysis_profile",
+		"/analysis_profile/provider",
+		"/environment",
+		"/relationship_coverage",
+	] {
+		if let Some(value) = value.pointer_mut(path) {
+			strip_proto(value);
+		}
+	}
+	if let Some(values) = value.get_mut("locations").and_then(Value::as_array_mut) {
+		for value in values {
+			strip_proto(value);
+		}
+	}
+}
+
 /// Authenticate an owned inline record. The caller applies the chosen view's
 /// inline admission budget before calling this function, as the frozen Service
 /// does. Payload ownership transfers into the returned immutable Arc.
@@ -1011,9 +1110,10 @@ pub(super) fn authenticate_inline(record: Value) -> SourceResult<Arc<Value>> {
 }
 
 pub(super) fn authenticate_inline_with_order<'a>(
-	record: Value,
+	mut record: Value,
 	order: Option<&'a KeyOrderResolver<'a>>,
 ) -> SourceResult<Arc<Value>> {
+	normalize_record_schema(&mut record);
 	let mut validation = Validation::new(order);
 	validation.record(&record, &[])?;
 	if !validation.aborted_from(0) && validation.gap.is_none() {
@@ -1042,10 +1142,15 @@ fn bundle_constraint(message: &str) -> SourceError {
 	}
 }
 
-fn bundle_shape<'a>(value: &Value, order: Option<&'a KeyOrderResolver<'a>>) -> SourceResult<()> {
+fn bundle_shape<'a>(
+	value: &mut Value,
+	order: Option<&'a KeyOrderResolver<'a>>,
+) -> SourceResult<()> {
+	strip_proto(value);
 	let mut validation = Validation::new(order);
-	let Some(map) = validation.object(Some(value), &[]) else {
-		return validation.finish().map_err(bundle_schema_error);
+	let Some(map) = value.as_object_mut() else {
+		validation.invalid_type(Some(value), &[], "object");
+		return validation.finish();
 	};
 	for field in [
 		"artifacts",
@@ -1057,19 +1162,30 @@ fn bundle_shape<'a>(value: &Value, order: Option<&'a KeyOrderResolver<'a>>) -> S
 		"records",
 	] {
 		let path = vec![json!(field)];
-		let Some(values) = validation.array(map.get(field), &path) else {
+		let Some(values) = map.get_mut(field).and_then(Value::as_array_mut) else {
+			validation.invalid_type(map.get(field), &path, "array");
 			continue;
 		};
-		if field == "unknowns" && !values.is_empty() {
-			validation.gap = Some("residual-unknown-schema-and-history-authentication");
-		}
-		for (index, value) in values.iter().enumerate() {
+		for (index, value) in values.iter_mut().enumerate() {
 			let path = child(&path, index);
+			match field {
+				"records" => normalize_record_schema(value),
+				"unknowns" => {}
+				_ => {
+					strip_proto(value);
+					if field == "artifacts" {
+						if let Some(digest) = value.get_mut("digest") {
+							strip_proto(digest);
+						}
+					}
+				}
+			}
 			match field {
 				"artifacts" => validation.subject(Some(value), &path, true),
 				"providers" => validation.provider(Some(value), &path, false),
 				"environments" => validation.environment(Some(value), &path),
 				"records" => validation.record(value, &path)?,
+				"unknowns" => residual_unknown::validate_shape(value, &path, &mut validation)?,
 				"scenarios" | "captures" => {
 					let Some(item) = validation.object(Some(value), &path) else {
 						continue;
@@ -1109,7 +1225,7 @@ fn bundle_shape<'a>(value: &Value, order: Option<&'a KeyOrderResolver<'a>>) -> S
 		],
 		&[],
 	);
-	validation.finish().map_err(bundle_schema_error)
+	validation.finish()
 }
 
 /// These manifest members have only strings and fixed nested digest objects.
@@ -1137,6 +1253,20 @@ fn equal_manifest<'a>(actual: &Value, expected: impl IntoIterator<Item = &'a Val
 }
 
 fn canonical_bundle(value: &Value) -> SourceResult<bool> {
+	let unknowns = checked_array(&value["unknowns"])?;
+	let mut prior_unknown: Option<(&str, u64)> = None;
+	for unknown in unknowns {
+		let key = (
+			checked_string(&unknown["unknown_id"])?,
+			unknown["revision"]
+				.as_u64()
+				.ok_or_else(|| internal("validated unknown revision is unavailable"))?,
+		);
+		if prior_unknown.is_some_and(|prior| prior >= key) {
+			return Ok(false);
+		}
+		prior_unknown = Some(key);
+	}
 	let records = checked_array(&value["records"])?;
 	let mut artifacts = BTreeMap::new();
 	let mut providers = BTreeMap::new();
@@ -1212,10 +1342,17 @@ fn canonical_bundle(value: &Value) -> SourceResult<bool> {
 }
 
 fn bundle_authenticate<'a>(
+	value: &mut Value,
+	order: Option<&'a KeyOrderResolver<'a>>,
+) -> SourceResult<()> {
+	bundle_shape(value, order).map_err(bundle_schema_error)?;
+	bundle_semantics(value, order)
+}
+
+fn bundle_semantics<'a>(
 	value: &Value,
 	order: Option<&'a KeyOrderResolver<'a>>,
 ) -> SourceResult<()> {
-	bundle_shape(value, order)?;
 	let records = checked_array(&value["records"])?;
 	let mut ids = BTreeSet::new();
 	for record in records {
@@ -1225,6 +1362,12 @@ fn bundle_authenticate<'a>(
 			));
 		}
 	}
+	let unknowns = checked_array(&value["unknowns"])?;
+	residual_unknown::validate_graph(
+		&unknowns.iter().collect::<Vec<_>>(),
+		&records.iter().collect::<Vec<_>>(),
+	)
+	.map_err(|message| bundle_constraint(&message))?;
 	for (index, record) in records.iter().enumerate() {
 		let mut validation = Validation::new(order);
 		authenticate_identity(record, &[json!("records"), json!(index)], &mut validation)?;
@@ -1235,13 +1378,27 @@ fn bundle_authenticate<'a>(
 			"Evidence bundle manifests are not canonical",
 		));
 	}
-	if records
-		.iter()
-		.any(|record| record["predicate_type"] == "rea.process-capture")
-	{
-		return Err(SourceError::ProfileGap {
-			feature: "process-capture-payload-authentication",
-		});
+	for (index, record) in records.iter().enumerate() {
+		if record["predicate_type"] != "rea.process-capture" {
+			continue;
+		}
+		let resolver = |path: &[Value]| {
+			let mut prefixed = vec![json!("records"), json!(index), json!("normalized_result")];
+			prefixed.extend_from_slice(path);
+			order.and_then(|resolve| resolve(&prefixed))
+		};
+		let capture_order: Option<&KeyOrderResolver<'_>> =
+			order.map(|_| &resolver as &KeyOrderResolver<'_>);
+		if let Err(error) =
+			process_capture::authenticate(&record["normalized_result"], capture_order)
+		{
+			return Err(match error {
+				SourceError::InvalidRecord { description, .. } => SourceError::InvalidBundle {
+					message: format!("Process capture record {} has an invalid normalized_result ({description}). Recreate or re-export the bundle, then try again.", checked_string(&record["evidence_id"])?),
+				},
+				other => other,
+			});
+		}
 	}
 	Ok(())
 }
@@ -1292,7 +1449,7 @@ pub(super) fn authenticate_file(
 }
 
 pub(super) fn authenticate_file_with_order<'a>(
-	value: Value,
+	mut value: Value,
 	path: &str,
 	evidence_id: Option<&str>,
 	order: Option<&'a KeyOrderResolver<'a>>,
@@ -1314,7 +1471,7 @@ pub(super) fn authenticate_file_with_order<'a>(
 		}
 		return Ok(record);
 	}
-	bundle_authenticate(&value, order)?;
+	bundle_authenticate(&mut value, order)?;
 	let records = checked_array(&value["records"])?;
 	let selected = if let Some(id) = evidence_id {
 		let Some(index) = records
@@ -1353,6 +1510,51 @@ pub(super) fn authenticate_file_with_order<'a>(
 		return Err(internal("validated bundle records changed shape"));
 	};
 	Ok(Arc::new(records.swap_remove(selected)))
+}
+
+/// Unlike a file-backed view, public import requires all seven bundle arrays.
+/// A valid standalone Evidence record has the upstream wrong-kind diagnostic;
+/// Ordinary record validation failures retain the bundle-schema diagnostic;
+/// unexpected schema exceptions propagate exactly as the original fallback.
+pub(super) fn authenticate_import_with_order<'a>(
+	mut value: Value,
+	order: Option<&'a KeyOrderResolver<'a>>,
+) -> Result<AuthenticatedBundle, ImportSourceError> {
+	if let Err(shape_error) = bundle_shape(&mut value, order) {
+		if !matches!(&shape_error, SourceError::InvalidRecord { .. }) {
+			return Err(shape_error.into());
+		}
+		normalize_record_schema(&mut value);
+		let mut validation = Validation::new(order);
+		let checked = validation.record(&value, &[]).and_then(|_| {
+			if !validation.aborted_from(0) && validation.gap.is_none() {
+				authenticate_identity(&value, &[], &mut validation)?;
+			}
+			Ok(())
+		});
+		return match checked.and_then(|()| validation.finish()) {
+			Ok(()) => match shape_error {
+				SourceError::InvalidRecord { issues, .. } => Err(ImportSourceError::SingleRecord {
+					evidence_id: checked_string(&value["evidence_id"])?.to_owned(),
+					issues,
+				}),
+				other => Err(other.into()),
+			},
+			Err(SourceError::InvalidRecord { .. }) => Err(bundle_schema_error(shape_error).into()),
+			Err(other) => Err(other.into()),
+		};
+	}
+	bundle_semantics(&value, order)?;
+	let Value::Object(mut bundle) = value else {
+		return Err(internal("authenticated bundle lost its object").into());
+	};
+	let Some(Value::Array(records)) = bundle.remove("records") else {
+		return Err(internal("authenticated records are unavailable").into());
+	};
+	let Some(Value::Array(unknowns)) = bundle.remove("unknowns") else {
+		return Err(internal("authenticated unknowns are unavailable").into());
+	};
+	Ok(AuthenticatedBundle { records, unknowns })
 }
 
 #[cfg(test)]

@@ -142,6 +142,22 @@ enum OrderNode {
 pub(super) struct ObjectOrder(OrderNode);
 
 impl ObjectOrder {
+	/// Move the exact parser-owned record subtrees after bundle authentication.
+	/// They accompany immutable records through metadata replacement and export.
+	pub(super) fn into_record_orders(self) -> Result<Vec<ObjectOrder>> {
+		let OrderNode::Object { mut children, .. } = self.0 else {
+			return Err(FileReadError::Unexpected {
+				message: "Authenticated bundle order is not an object".into(),
+			});
+		};
+		let Some(OrderNode::Array(records)) = children.remove("records") else {
+			return Err(FileReadError::Unexpected {
+				message: "Authenticated record order is not an array".into(),
+			});
+		};
+		Ok(records.into_iter().map(ObjectOrder).collect())
+	}
+
 	/// Metadata is a parallel tree owned by this exact parsed Value. Replacing
 	/// a duplicate key also replaces its order subtree, preventing stale hints.
 	pub(super) fn keys(&self, path: &[Value]) -> Option<Vec<String>> {

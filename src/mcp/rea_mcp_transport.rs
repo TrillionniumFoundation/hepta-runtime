@@ -378,6 +378,7 @@ fn selected(name: &str) -> bool {
 			| "rea_inspect_apk_signature_evidence"
 			| "rea_inspect_analysis_view"
 			| "rea_export_evidence_bundle"
+			| "rea_import_evidence_bundle"
 	)
 }
 

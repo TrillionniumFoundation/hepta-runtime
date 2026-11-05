@@ -30,6 +30,16 @@ fn supported(value: &Value) -> bool {
 	if bundle.get("kind").and_then(Value::as_str) == Some("evidence-bundle-summary") {
 		return true;
 	}
+	const IMPORT_KEYS: [&str; 3] = ["imported", "unknowns_added", "total"];
+	if bundle.len() == IMPORT_KEYS.len()
+		&& IMPORT_KEYS.iter().all(|key| {
+			bundle
+				.get(*key)
+				.and_then(Value::as_u64)
+				.is_some_and(|value| value <= 9_007_199_254_740_991)
+		}) {
+		return true;
+	}
 	const KEYS: [&str; 7] = [
 		"artifacts",
 		"providers",
