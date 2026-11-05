@@ -4,6 +4,7 @@
 """Actual filesystem regressions for the unified execution-input snapshot."""
 
 from pathlib import Path
+import hashlib
 import os
 import subprocess
 import sys
@@ -126,6 +127,53 @@ class SourceBindingTests(unittest.TestCase):
         self.assertEqual(path.stat().st_nlink, 2)
         with self.assertRaisesRegex(RuntimeError, "single-link regular"):
             self.selection.snapshot()
+
+    def test_cargo_output_hardlinks_are_observed_without_relaxing_source_inputs(self):
+        target = self.root / "target"
+        output = target / "debug/hepta-runtime"
+        output.parent.mkdir(parents=True)
+        payload = b"actual Cargo-style hardlinked output\n"
+        output.write_bytes(payload)
+        output.chmod(0o755)
+        alias = target / "debug/deps/hepta_runtime-build"
+        alias.parent.mkdir()
+        os.link(output, alias)
+        self.assertEqual(output.stat().st_nlink, 2)
+        observed = matrix.observe_binary(target, Path("debug/hepta-runtime"))
+        self.assertTrue(observed["exists"])
+        self.assertEqual(observed["sha256"], hashlib.sha256(payload).hexdigest())
+        self.assertEqual(observed["bytes"], len(payload))
+        self.assertEqual(alias.read_bytes(), payload)
+        with self.assertRaisesRegex(RuntimeError, "single-link regular"):
+            matrix.source_file(output, "src/not-an-artifact.rs")
+
+    def test_generated_artifact_symlinks_and_directories_remain_refused(self):
+        target = self.root / "target"
+        target.mkdir()
+        real = target / "real"
+        real.write_bytes(b"binary")
+        for name, destination in (("linked", real), ("dangling", target / "absent")):
+            (target / name).symlink_to(destination)
+            with self.subTest(name=name), self.assertRaises(OSError):
+                matrix.observe_binary(target, Path(name))
+        (target / "directory").mkdir()
+        with self.assertRaises((OSError, RuntimeError)):
+            matrix.observe_binary(target, Path("directory"))
+        self.assertFalse(matrix.observe_binary(target, Path("missing"))["exists"])
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "POSIX FIFO output")
+    def test_fifo_is_refused_without_blocking_artifact_observation(self):
+        target = self.root / "target"
+        target.mkdir()
+        os.mkfifo(target / "output")
+        command = [sys.executable, "-B", "-c",
+                   "import sys;sys.path.insert(0,sys.argv[1]);"
+                   "import rea_full_qualification as m;"
+                   "m.observe_binary(m.Path(sys.argv[2]),m.Path('output'))",
+                   str(Path(matrix.__file__).parent), str(target)]
+        completed = subprocess.run(command, capture_output=True, timeout=2)
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn(b"non-regular build artifact", completed.stderr)
 
     @unittest.skipUnless(hasattr(os, "mkfifo"), "POSIX FIFO input")
     def test_fifo_is_refused_without_blocking_source_acquisition(self):

@@ -177,24 +177,39 @@ def file_identity(metadata):
     )
 
 
-def source_file(path, relative):
+def regular_file_observation(path, relative, *, source_input):
+    label = "source input" if source_input else "build artifact"
     fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, "rb") as stream:
         before = os.fstat(stream.fileno())
         if not stat.S_ISREG(before.st_mode):
-            raise RuntimeError("non-regular source input: " + relative)
-        if before.st_nlink != 1:
+            raise RuntimeError("non-regular " + label + ": " + relative)
+        if source_input and before.st_nlink != 1:
             raise RuntimeError("source input must be a single-link regular file: " + relative)
         digest = hashlib.sha256()
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
         after = os.fstat(stream.fileno())
     if file_identity(before) != file_identity(after) or file_identity(after) != file_identity(path.lstat()):
-        raise RuntimeError("source changed while hashing: " + relative)
+        raise RuntimeError(("source" if source_input else label) + " changed while hashing: " + relative)
     return {
         "path": relative, "bytes": before.st_size,
         "mode": oct(stat.S_IMODE(before.st_mode)), "sha256": digest.hexdigest(),
     }
+
+
+def source_file(path, relative):
+    # Source aliases outside the monitored tree could otherwise hide a
+    # write-and-restore. This constraint remains mandatory for every input.
+    return regular_file_observation(path, relative, source_input=True)
+
+
+def build_artifact_file(path, relative):
+    # Cargo normally hardlinks debug/<bin> to debug/deps/<bin>-<hash>.
+    # The task-exclusive target is an output, not an execution input. Retain
+    # the no-follow/nonblocking regular-file and FD/path stability checks;
+    # shipping copies are made separately after all build gates have exited.
+    return regular_file_observation(path, relative, source_input=False)
 
 
 class Selection:
@@ -486,9 +501,11 @@ def executable(value):
 
 def observe_binary(target, relative):
     path = target / relative
-    if not path.exists():
+    try:
+        path.lstat()
+    except FileNotFoundError:
         return {"path": str(path), "exists": False}
-    facts = source_file(path, relative.as_posix())
+    facts = build_artifact_file(path, relative.as_posix())
     return {"path": str(path), "exists": True, **{key: value for key, value in facts.items() if key != "path"}}
 
 
