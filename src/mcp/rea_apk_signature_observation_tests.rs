@@ -17,6 +17,41 @@
 
 use super::*;
 
+#[test]
+fn path_binding_counts_the_entire_utf8_json_at_the_frozen_boundary() {
+	let mut inspection = inspect_with_limits(CUSTOM, StaticLimits::REA_6_8_0).unwrap();
+	inspection.result.artifact.path = Some(String::new());
+	let limit = StaticLimits::REA_6_8_0.output_bytes;
+	let fill = limit - serialized_output_bytes(&inspection).unwrap();
+	inspection.limitations.push("x".repeat(fill - 3));
+	assert_eq!(serialized_output_bytes(&inspection).unwrap(), limit);
+	// The counter includes the escaped quote and the four UTF-8 bytes of the
+	// supplementary scalar, not the source string's scalar or UTF-16 count.
+	let path = "/\"\u{10000}";
+	inspection
+		.limitations
+		.last_mut()
+		.unwrap()
+		.truncate(fill - 10);
+	let bound = bind_static_path(inspection.clone(), path).unwrap();
+	assert_eq!(serialized_output_bytes(&bound).unwrap(), limit);
+	assert_eq!(serde_json::to_vec(&bound).unwrap().len(), limit);
+	let error = bind_static_path(inspection, &format!("{path}a")).unwrap_err();
+	assert_eq!(error.tag, ApkErrorTag::AnalysisResourceConstraintError);
+	assert_eq!(error.resource, Some(ApkResource::Capacity));
+	assert_eq!(
+		*error.reported_limits,
+		BTreeMap::from([("max_output_bytes".into(), limit)])
+	);
+	assert_eq!(
+		error.reason.as_ref(),
+		format!(
+			"The decoded signing report ({} bytes) exceeds the {limit}-byte output budget.",
+			limit + 1
+		)
+	);
+}
+
 const CUSTOM: &[u8] = include_bytes!("../../tests/fixtures/rea_apk_signature/custom-0103-rsa.apk");
 const V1_APK: &[u8] = include_bytes!("../../tests/fixtures/rea_apk_signature/v1-v2-v3.apk");
 const ROTATED: &[u8] = include_bytes!("../../tests/fixtures/rea_apk_signature/rotation-v31.apk");

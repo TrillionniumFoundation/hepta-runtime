@@ -1208,19 +1208,70 @@ pub(super) fn inspect_with_limits(
 		},
 		limitations,
 	};
-	let encoded = serde_json::to_vec(&result).map_err(|e| {
+	check_serialized_output(&result, limits)?;
+	Ok(result)
+}
+
+/// Bind the already admitted display path and recheck the complete frozen wire result.
+pub(super) fn bind_static_path(
+	mut inspection: ApkStaticInspection,
+	path: &str,
+) -> ApkResult<ApkStaticInspection> {
+	inspection.result.artifact.path = Some(path.to_owned());
+	check_serialized_output(&inspection, StaticLimits::REA_6_8_0)?;
+	Ok(inspection)
+}
+
+/// Count serialized UTF-8, including escapes, without allocating another report.
+#[derive(Default)]
+struct JsonByteCounter {
+	bytes: usize,
+}
+
+impl std::io::Write for JsonByteCounter {
+	fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+		self.bytes = self
+			.bytes
+			.checked_add(bytes.len())
+			.ok_or_else(|| std::io::Error::other("APK serialized byte count overflow"))?;
+		Ok(bytes.len())
+	}
+
+	fn flush(&mut self) -> std::io::Result<()> {
+		Ok(())
+	}
+}
+
+fn serialized_output_bytes(inspection: &ApkStaticInspection) -> ApkResult<usize> {
+	let mut counter = JsonByteCounter::default();
+	serde_json::to_writer(&mut counter, inspection).map_err(|e| {
 		ApkInspectionError::new(
 			ApkErrorTag::ProviderAdapterError,
 			format!("APK report serialization failed: {e}"),
 		)
 	})?;
-	if encoded.len() > limits.output_bytes {
-		return Err(ApkInspectionError::capacity(
-			"output-bytes",
-			limits.output_bytes,
-		));
+	Ok(counter.bytes)
+}
+
+fn check_serialized_output(
+	inspection: &ApkStaticInspection,
+	limits: StaticLimits,
+) -> ApkResult<()> {
+	let bytes = serialized_output_bytes(inspection)?;
+	if bytes > limits.output_bytes {
+		let mut error = ApkInspectionError::capacity("output-bytes", limits.output_bytes);
+		if limits.frozen {
+			// apkSignatureFailures.js::apkOutputBudgetError: the measured size is
+			// explanatory, while max_output_bytes remains the sole fixed limit.
+			error.reason = format!(
+				"The decoded signing report ({bytes} bytes) exceeds the {}-byte output budget.",
+				limits.output_bytes,
+			)
+			.into_boxed_str();
+		}
+		return Err(error);
 	}
-	Ok(result)
+	Ok(())
 }
 
 #[cfg(test)]

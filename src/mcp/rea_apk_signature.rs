@@ -58,6 +58,15 @@ pub fn inspect_static_with_limits(
 	observation::inspect_with_limits(bytes, limits)
 }
 
+/// Bind an admitted path and enforce the frozen 8 MiB budget on the complete JSON.
+/// The byte counter streams serialization, including UTF-8 and JSON escapes.
+pub fn bind_static_path(
+	inspection: ApkStaticInspection,
+	path: &str,
+) -> std::result::Result<ApkStaticInspection, ApkInspectionError> {
+	observation::bind_static_path(inspection, path)
+}
+
 /// Preserve declarations when the additional cryptographic verifier cannot complete.
 pub fn inspect_captured_with_observations(bytes: &[u8]) -> Result<serde_json::Value> {
 	parser::inspect_with_observations(bytes)
