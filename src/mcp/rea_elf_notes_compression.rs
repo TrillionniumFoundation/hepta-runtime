@@ -5,7 +5,9 @@
 
 use std::io::{Cursor, Read};
 
-use ruzstd::decoding::errors::{DecodeBlockContentError, DecompressBlockError, FrameDecoderError};
+use ruzstd::decoding::errors::{
+	DecodeBlockContentError, DecodeSequenceError, DecompressBlockError, FrameDecoderError,
+};
 use ruzstd::decoding::{BlockDecodingStrategy, FrameDecoder};
 use zlib_rs::{Inflate, InflateError, InflateFlush, Status};
 
@@ -251,6 +253,13 @@ fn zstd_failure(error: FrameDecoderError) -> ElfNotesFailure {
 		FrameDecoderError::DictNotProvided { .. } => decompression_failure("Dictionary mismatch"),
 		FrameDecoderError::FailedToReadBlockBody(
 			DecodeBlockContentError::DecompressBlockError(
+				DecompressBlockError::DecodeSequenceError(
+					DecodeSequenceError::OutputCapacityExceeded { .. },
+				),
+			),
+		) => decompression_failure("Destination buffer is too small"),
+		FrameDecoderError::FailedToReadBlockBody(
+			DecodeBlockContentError::DecompressBlockError(
 				DecompressBlockError::SequencesHeaderParseError(_),
 			),
 		) => decompression_failure("Src size is incorrect"),
@@ -293,6 +302,98 @@ fn zstd_single_pass(payload: &[u8], header: &ZstdHeader) -> bool {
 		}
 	}
 	false
+}
+
+struct ZstdDestination {
+	single_pass: bool,
+	capacity: u64,
+	position: u64,
+	block_max: u64,
+	frame_size: Option<u64>,
+}
+
+impl ZstdDestination {
+	fn new(payload: &[u8], header: &ZstdHeader) -> Self {
+		let single_pass = zstd_single_pass(payload, header);
+		let block_max = header.window_bytes.min(ZSTD_BLOCK_BYTES as u64);
+		// libzstd 1.5.7 ZSTD_decodingBufferSize_internal, with its 32-byte
+		// WILDCOPY_OVERLENGTH at both ends. The known frame size can shorten it.
+		let capacity = if single_pass {
+			ZSTD_OUTPUT_CHUNK_BYTES
+		} else {
+			header
+				.content_size
+				.unwrap_or(u64::MAX)
+				.min(header.window_bytes + 2 * block_max + 64)
+		};
+		Self {
+			single_pass,
+			capacity,
+			position: 0,
+			block_max,
+			frame_size: header.content_size,
+		}
+	}
+
+	fn remaining(&self) -> u64 {
+		self.capacity.saturating_sub(self.position)
+	}
+
+	fn advance(&mut self, bytes: usize) -> Result<(), ElfNotesFailure> {
+		if bytes as u64 > self.remaining() {
+			return Err(decompression_failure("Destination buffer is too small"));
+		}
+		self.position += bytes as u64;
+		if !self.single_pass
+			&& self.capacity < self.frame_size.unwrap_or(u64::MAX)
+			&& self.position + self.block_max > self.capacity
+		{
+			self.position = 0;
+		}
+		Ok(())
+	}
+
+	fn sequence_capacity(&self, body: &[u8]) -> Option<usize> {
+		let first = *body.first()?;
+		let kind = first & 3;
+		if kind > 1 {
+			return None;
+		}
+		let header_bytes = match (first >> 2) & 3 {
+			0 | 2 => 1,
+			1 => 2,
+			_ => 3,
+		};
+		let header = body.get(..header_bytes)?;
+		let bits = header
+			.iter()
+			.enumerate()
+			.fold(0_u64, |v, (i, b)| v | (u64::from(*b) << (8 * i)));
+		let literals = bits >> if header_bytes == 1 { 3 } else { 4 };
+		// 64 bytes fit even in libzstd's minimum permitted literal scratch.
+		// Larger/split and Huffman literal placement is not inferred here; its
+		// ordinary format validation remains unchanged, rather than inventing a
+		// destination bound from the RFC block limit.
+		if literals > 64 {
+			return None;
+		}
+		let encoded = if kind == 1 { 1 } else { literals };
+		if encoded > body.len().saturating_sub(header_bytes) as u64 {
+			return None;
+		}
+		let remaining = self.remaining();
+		// Raw literals can reference the input directly when its wild-copy tail
+		// is present. Otherwise the non-streaming allocator may put them after
+		// the block in the output arena, limiting sequence output to that point.
+		let direct_input = kind == 0 && header_bytes as u64 + literals + 32 <= body.len() as u64;
+		let bound =
+			if !direct_input && self.single_pass && remaining > self.block_max + literals + 64 {
+				self.block_max + 32
+			} else {
+				remaining
+			};
+		usize::try_from(bound).ok()
+	}
 }
 
 struct DrainResult {
@@ -457,6 +558,7 @@ fn inflate_zstd(payload: &[u8], limit: usize) -> Result<Vec<u8>, ElfNotesFailure
 	let Some(header) = zstd_header(payload)? else {
 		return Ok(Vec::new());
 	};
+	let mut destination = ZstdDestination::new(payload, &header);
 	let mut decoder = FrameDecoder::new();
 	decoder.set_max_window_size(ZSTD_WINDOW_BYTES);
 	decoder
@@ -478,7 +580,8 @@ fn inflate_zstd(payload: &[u8], limit: usize) -> Result<Vec<u8>, ElfNotesFailure
 		if block_type == 3 {
 			return Err(decompression_failure("Data corruption detected"));
 		}
-		if size > ZSTD_BLOCK_BYTES || size as u64 > header.window_bytes {
+		let encoded_bytes = if block_type == 1 { 1 } else { size };
+		if encoded_bytes > ZSTD_BLOCK_BYTES || encoded_bytes as u64 > header.window_bytes {
 			return Err(decompression_failure(
 				if block_type == 2 && zstd_single_pass(payload, &header) {
 					"Src size is incorrect"
@@ -487,7 +590,6 @@ fn inflate_zstd(payload: &[u8], limit: usize) -> Result<Vec<u8>, ElfNotesFailure
 				},
 			));
 		}
-		let encoded_bytes = if block_type == 1 { 1 } else { size };
 		let body_at = at + 3;
 		if encoded_bytes > payload.len() - body_at {
 			if block_type == 0 {
@@ -513,19 +615,38 @@ fn inflate_zstd(payload: &[u8], limit: usize) -> Result<Vec<u8>, ElfNotesFailure
 			return Ok(output);
 		}
 		let body_end = body_at + encoded_bytes;
+		if block_type == 1 {
+			// A received RLE byte expands into the actual available destination;
+			// compressed size is one even when its regenerated count is oversized.
+			if size as u64 > destination.remaining() {
+				return Err(decompression_failure("Destination buffer is too small"));
+			}
+			if size > ZSTD_BLOCK_BYTES || size as u64 > header.window_bytes {
+				return Err(decompression_failure("Data corruption detected"));
+			}
+		}
 		if block_type == 2 {
 			validate_compressed_block(
 				&payload[body_at..body_end],
 				header.window_bytes.min(ZSTD_BLOCK_BYTES as u64),
 			)?;
 		}
+		decoder
+			.set_block_output_capacity(if block_type == 2 {
+				destination.sequence_capacity(&payload[body_at..body_end])
+			} else {
+				None
+			})
+			.map_err(zstd_failure)?;
 		let complete_checksum = last && header.checksum && payload.len() - body_end >= 4;
 		let block_end = body_end + if complete_checksum { 4 } else { 0 };
+		let buffered_before = decoder.buffered_output_bytes();
 		decode_block(
 			&mut decoder,
 			Cursor::new(&payload[at..block_end]),
 			last && header.checksum && !complete_checksum,
 		)?;
+		destination.advance(decoder.buffered_output_bytes() - buffered_before)?;
 		let previously_decoded = output.len() as u64;
 		let drained = drain(&mut decoder, &mut output, limit)?;
 		if last {

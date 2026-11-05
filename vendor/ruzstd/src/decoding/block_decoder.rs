@@ -4,7 +4,7 @@ use super::super::blocks::literals_section::LiteralsSection;
 use super::super::blocks::literals_section::LiteralsSectionType;
 use super::super::blocks::sequence_section::SequencesHeader;
 use super::literals_section_decoder::decode_literals;
-use super::sequence_section_decoder::decode_sequences;
+use super::sequence_section_decoder::{decode_sequences, SequenceOutputCapacity};
 use crate::common::MAX_BLOCK_SIZE;
 use crate::decoding::errors::DecodeSequenceError;
 use crate::decoding::errors::{
@@ -188,12 +188,24 @@ impl BlockDecoder {
         vprintln!("Slice for sequences: {}", raw.len());
 
         if seq_section.num_sequences != 0 {
+            let mut capacity = workspace.block_output_capacity.map(|limit| {
+                SequenceOutputCapacity::new(
+                    limit,
+                    workspace.literals_buffer.len(),
+                    workspace.buffer.len(),
+                    workspace.offset_hist,
+                )
+            });
             decode_sequences(
                 &seq_section,
                 raw,
                 &mut workspace.fse,
                 &mut workspace.sequences,
+                capacity.as_mut(),
             )?;
+            if let Some(capacity) = capacity {
+                capacity.finish()?;
+            }
             vprintln!("Executing sequences");
             execute_sequences(workspace, max_block_decoded_len)?;
         } else {

@@ -10,12 +10,106 @@ use crate::decoding::errors::DecodeSequenceError;
 use crate::fse::FSEDecoder;
 use alloc::vec::Vec;
 
+/// Validate the actual destination while decoding each sequence, before examining
+/// later FSE symbols or the final bitstream state. No decoded bytes are allocated.
+/// A prior invalid literal/offset ends this capacity proof: it must not be replaced
+/// by a later capacity error. The normal executor still validates all data.
+pub struct SequenceOutputCapacity {
+    limit: usize,
+    generated: usize,
+    literals: usize,
+    literals_used: usize,
+    history: usize,
+    offsets: [u32; 3],
+    valid_prefix: bool,
+}
+
+impl SequenceOutputCapacity {
+    pub(super) fn new(limit: usize, literals: usize, history: usize, offsets: [u32; 3]) -> Self {
+        Self {
+            limit,
+            generated: 0,
+            literals,
+            literals_used: 0,
+            history,
+            offsets,
+            valid_prefix: true,
+        }
+    }
+
+    fn advance(&mut self, sequence: Sequence) -> Result<(), DecodeSequenceError> {
+        if !self.valid_prefix {
+            return Ok(());
+        }
+        let after_literals = self.generated.saturating_add(sequence.ll as usize);
+        let required = after_literals.saturating_add(sequence.ml as usize);
+        if required > self.limit {
+            return Err(DecodeSequenceError::OutputCapacityExceeded {
+                capacity: self.limit,
+                required,
+            });
+        }
+        self.literals_used = self.literals_used.saturating_add(sequence.ll as usize);
+        let offset = super::sequence_execution::do_offset_history(
+            sequence.of,
+            sequence.ll,
+            &mut self.offsets,
+        );
+        if self.literals_used > self.literals
+            || offset == 0
+            || offset as usize > self.history.saturating_add(after_literals)
+        {
+            self.valid_prefix = false;
+        }
+        self.generated = required;
+        Ok(())
+    }
+
+    fn incomplete(&mut self, known_minimum: Option<(u32, u32)>) -> Result<(), DecodeSequenceError> {
+        // Missing input bits are padded by this backend. Do not treat that
+        // padded value as the other decoder's sequence length. Only a symbol
+        // selected from a complete FSE state supplies a reliable lower bound.
+        if self.valid_prefix {
+            if let Some((literals, matches)) = known_minimum {
+                let required = self
+                    .generated
+                    .saturating_add(literals as usize)
+                    .saturating_add(matches as usize);
+                if required > self.limit {
+                    return Err(DecodeSequenceError::OutputCapacityExceeded {
+                        capacity: self.limit,
+                        required,
+                    });
+                }
+            }
+        }
+        self.valid_prefix = false;
+        Ok(())
+    }
+
+    pub(super) fn finish(self) -> Result<(), DecodeSequenceError> {
+        if self.valid_prefix {
+            let required = self
+                .generated
+                .saturating_add(self.literals - self.literals_used);
+            if required > self.limit {
+                return Err(DecodeSequenceError::OutputCapacityExceeded {
+                    capacity: self.limit,
+                    required,
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Decode the provided source as a series of sequences into the supplied `target`.
 pub fn decode_sequences(
     section: &SequencesHeader,
     source: &[u8],
     scratch: &mut FSEScratch,
     target: &mut Vec<Sequence>,
+    capacity: Option<&mut SequenceOutputCapacity>,
 ) -> Result<(), DecodeSequenceError> {
     let bytes_read = maybe_update_fse_tables(section, source, scratch)?;
 
@@ -40,9 +134,9 @@ pub fn decode_sequences(
     }
 
     if scratch.ll_rle.is_some() || scratch.ml_rle.is_some() || scratch.of_rle.is_some() {
-        decode_sequences_with_rle(section, &mut br, scratch, target)
+        decode_sequences_with_rle(section, &mut br, scratch, target, capacity)
     } else {
-        decode_sequences_without_rle(section, &mut br, scratch, target)
+        decode_sequences_without_rle(section, &mut br, scratch, target, capacity)
     }
 }
 
@@ -51,6 +145,7 @@ fn decode_sequences_with_rle(
     br: &mut BitReaderReversed<'_>,
     scratch: &FSEScratch,
     target: &mut Vec<Sequence>,
+    mut capacity: Option<&mut SequenceOutputCapacity>,
 ) -> Result<(), DecodeSequenceError> {
     let mut ll_dec = FSEDecoder::new(&scratch.literal_lengths);
     let mut ml_dec = FSEDecoder::new(&scratch.match_lengths);
@@ -70,6 +165,7 @@ fn decode_sequences_with_rle(
     target.reserve(section.num_sequences as usize);
 
     for _seq_idx in 0..section.num_sequences {
+        let state_bits_complete = br.bits_remaining() >= 0;
         //get the codes from either the RLE byte or from the decoder
         let ll_code = if let Some(ll_rle) = scratch.ll_rle {
             ll_rle
@@ -119,6 +215,7 @@ fn decode_sequences_with_rle(
             ml: ml_value + ml_add as u32,
             of: offset,
         });
+        let sequence_bits_complete = br.bits_remaining() >= 0;
 
         if target.len() < section.num_sequences as usize {
             //println!(
@@ -137,6 +234,13 @@ fn decode_sequences_with_rle(
             }
         }
 
+        if let Some(capacity) = capacity.as_deref_mut() {
+            if sequence_bits_complete {
+                capacity.advance(target[target.len() - 1])?;
+            } else {
+                capacity.incomplete(state_bits_complete.then_some((ll_value, ml_value)))?;
+            }
+        }
         if br.bits_remaining() < 0 {
             return Err(DecodeSequenceError::NotEnoughBytesForNumSequences);
         }
@@ -156,6 +260,7 @@ fn decode_sequences_without_rle(
     br: &mut BitReaderReversed<'_>,
     scratch: &FSEScratch,
     target: &mut Vec<Sequence>,
+    mut capacity: Option<&mut SequenceOutputCapacity>,
 ) -> Result<(), DecodeSequenceError> {
     let mut ll_dec = FSEDecoder::new(&scratch.literal_lengths);
     let mut ml_dec = FSEDecoder::new(&scratch.match_lengths);
@@ -169,6 +274,7 @@ fn decode_sequences_without_rle(
     target.reserve(section.num_sequences as usize);
 
     for _seq_idx in 0..section.num_sequences {
+        let state_bits_complete = br.bits_remaining() >= 0;
         let ll_code = ll_dec.decode_symbol();
         let ml_code = ml_dec.decode_symbol();
         let of_code = of_dec.decode_symbol();
@@ -194,6 +300,7 @@ fn decode_sequences_without_rle(
             ml: ml_value + ml_add as u32,
             of: offset,
         });
+        let sequence_bits_complete = br.bits_remaining() >= 0;
 
         if target.len() < section.num_sequences as usize {
             //println!(
@@ -206,6 +313,13 @@ fn decode_sequences_without_rle(
             of_dec.update_state(br);
         }
 
+        if let Some(capacity) = capacity.as_deref_mut() {
+            if sequence_bits_complete {
+                capacity.advance(target[target.len() - 1])?;
+            } else {
+                capacity.incomplete(state_bits_complete.then_some((ll_value, ml_value)))?;
+            }
+        }
         if br.bits_remaining() < 0 {
             return Err(DecodeSequenceError::NotEnoughBytesForNumSequences);
         }

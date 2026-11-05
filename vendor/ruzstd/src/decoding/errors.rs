@@ -738,6 +738,7 @@ impl From<DecodeBufferError> for ExecuteSequencesError {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum DecodeSequenceError {
+    OutputCapacityExceeded { capacity: usize, required: usize },
     GetBitsError(GetBitsError),
     FSEDecoderError(FSEDecoderError),
     FSETableError(FSETableError),
@@ -767,6 +768,12 @@ impl std::error::Error for DecodeSequenceError {
 impl core::fmt::Display for DecodeSequenceError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            DecodeSequenceError::OutputCapacityExceeded { capacity, required } => {
+                write!(
+                    f,
+                    "Decoded sequence requires {required} output bytes, destination has {capacity}"
+                )
+            }
             DecodeSequenceError::GetBitsError(e) => write!(f, "{e:?}"),
             DecodeSequenceError::FSEDecoderError(e) => write!(f, "{e:?}"),
             DecodeSequenceError::FSETableError(e) => write!(f, "{e:?}"),

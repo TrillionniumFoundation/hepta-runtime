@@ -1051,3 +1051,27 @@ fn zstandard_single_pass_error_selection_uses_the_fixed_producer_output_chunk() 
 		);
 	}
 }
+
+#[test]
+fn zstandard_destination_exhaustion_precedes_later_format_failures() {
+	// Unmodified payloads from the frozen 5,244-case corpus. The original Node
+	// v22.23.4 parser reports destination exhaustion for all three cases: the
+	// single-pass literal placement limit, literal/sequence priority, and RLE
+	// encoded-size versus regenerated-size ordering, respectively.
+	for (id, payload) in [
+		("zstd-bit-8-37", "28b52ffd20284d000010414101001bce0eb0"),
+		("zstd-bit-9-145", "28b52ffd60204d4d000010414101001bce0eb2"),
+		(
+			"zstd-bit-10-48",
+			"28b52ffd04284c000010414101001bce0eb02275d24c",
+		),
+	] {
+		assert_eq!(
+			decoded(&compressed_names(&unhex(payload), 20000, 2, true, true), true, true)
+				.unwrap_err()
+				.to_string(),
+			"ELF compressed section-name table could not be decompressed: Destination buffer is too small",
+			"{id}"
+		);
+	}
+}

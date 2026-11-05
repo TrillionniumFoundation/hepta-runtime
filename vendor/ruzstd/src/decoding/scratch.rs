@@ -24,6 +24,8 @@ pub struct DecoderScratch {
     pub literals_buffer: Vec<u8>,
     pub sequences: Vec<Sequence>,
     pub block_content_buffer: Vec<u8>,
+    /// Optional caller-owned destination capacity for the next compressed block.
+    pub block_output_capacity: Option<usize>,
 }
 
 impl DecoderScratch {
@@ -46,6 +48,7 @@ impl DecoderScratch {
             block_content_buffer: Vec::new(),
             literals_buffer: Vec::new(),
             sequences: Vec::new(),
+            block_output_capacity: None,
         }
     }
 
@@ -54,6 +57,7 @@ impl DecoderScratch {
         self.literals_buffer.clear();
         self.sequences.clear();
         self.block_content_buffer.clear();
+        self.block_output_capacity = None;
 
         self.buffer.reset(window_size);
 

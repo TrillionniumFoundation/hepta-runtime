@@ -242,6 +242,32 @@ impl FrameDecoder {
         Ok(())
     }
 
+    /// Supply a destination bound for compressed sequence error ordering.
+    ///
+    /// The default is `None`. A supplied value persists until changed or the
+    /// decoder is reset; callers must update it for every distinct destination.
+    /// This optional proof assumes no external dictionary and does not bound raw
+    /// blocks or zero-sequence literal copies. It is not a general output budget.
+    /// Format/window limits remain independently enforced. Set it after init.
+    pub fn set_block_output_capacity(
+        &mut self,
+        capacity: Option<usize>,
+    ) -> Result<(), FrameDecoderError> {
+        let state = self
+            .state
+            .as_mut()
+            .ok_or(FrameDecoderError::NotYetInitialized)?;
+        state.decoder_scratch.block_output_capacity = capacity;
+        Ok(())
+    }
+
+    /// Bytes currently retained, including history not yet collectible by `Read`.
+    pub fn buffered_output_bytes(&self) -> usize {
+        self.state
+            .as_ref()
+            .map_or(0, |state| state.decoder_scratch.buffer.len())
+    }
+
     /// Returns how many bytes the frame contains after decompression
     pub fn content_size(&self) -> u64 {
         match &self.state {
