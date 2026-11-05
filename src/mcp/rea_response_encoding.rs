@@ -22,7 +22,7 @@
 //! does not establish the original JavaScript Object.keys order.
 //!
 //! These APIs borrow payloads and buffer only bounded serialization fragments.
-//! `write_tool_result` uses the same formatter for both JSON representations,
+//! The test-only full-wire reference writer uses one formatter for both JSON representations,
 //! avoiding a budget computed for JavaScript numbers followed by a different
 //! serde numeric wire representation. It writes the CallToolResult object,
 //! without the enclosing JSON-RPC message or its 1024-byte reservation.
@@ -35,7 +35,9 @@
 use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{Map, Number, Value};
 use std::collections::HashSet;
-use std::io::{self, Write};
+#[cfg(test)]
+use std::io;
+use std::io::Write;
 
 const SHORT_STRING_UNITS: usize = 8192;
 const JSON_PART_UNITS: usize = 16 * 1024;
@@ -80,11 +82,46 @@ pub(super) trait ObjectOrder {
 pub(super) enum JsonView<'a> {
 	Value(&'a Value),
 	Object(&'a [(&'a str, JsonView<'a>)]),
+	#[cfg_attr(
+		not(test),
+		allow(
+			dead_code,
+			reason = "Borrowed composite arrays are covered by the frozen encoder oracle; current production bundles borrow Value arrays."
+		)
+	)]
 	Array(&'a [JsonView<'a>]),
 	Values(&'a [&'a Value]),
+	#[cfg_attr(
+		not(test),
+		allow(
+			dead_code,
+			reason = "Typed borrowed scalars are covered by the frozen encoder oracle; current producers retain JSON Values."
+		)
+	)]
 	String(&'a str),
+	#[cfg_attr(
+		not(test),
+		allow(
+			dead_code,
+			reason = "Typed borrowed scalars are covered by the frozen encoder oracle; current producers retain JSON Values."
+		)
+	)]
 	Number(&'a Number),
+	#[cfg_attr(
+		not(test),
+		allow(
+			dead_code,
+			reason = "Typed borrowed scalars are covered by the frozen encoder oracle; current producers retain JSON Values."
+		)
+	)]
 	Bool(bool),
+	#[cfg_attr(
+		not(test),
+		allow(
+			dead_code,
+			reason = "Typed borrowed scalars are covered by the frozen encoder oracle; current producers retain JSON Values."
+		)
+	)]
 	Null,
 }
 
@@ -177,6 +214,13 @@ fn validate_enumeration<'a>(keys: impl Iterator<Item = &'a str>) -> Result<()> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Representations {
 	StructuredAndText,
+	#[cfg_attr(
+		not(test),
+		allow(
+			dead_code,
+			reason = "The frozen error representation is covered by the encoder oracle; native failures currently use their typed error projector."
+		)
+	)]
 	ErrorText,
 }
 
@@ -217,6 +261,7 @@ pub(super) enum Measurement {
 	},
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum JsonMeasurement {
 	Fits { bytes: u64 },
@@ -536,6 +581,7 @@ fn envelope(budget: Budget) -> u64 {
 		}) as u64
 }
 
+#[cfg(test)]
 pub(super) fn measure<O: ObjectOrder + ?Sized>(
 	value: &Value,
 	order: &O,
@@ -602,6 +648,7 @@ pub(super) fn measure_view<O: ObjectOrder + ?Sized>(
 /// Equivalent to measureMcpResultWithinBudget for an already formed result.
 /// A caller checking the final native wire must supply that wire's actual
 /// object order and numeric formatter, not an upstream-order assumption.
+#[cfg(test)]
 pub(super) fn measure_json<O: ObjectOrder + ?Sized>(
 	value: &Value,
 	order: &O,
@@ -611,6 +658,7 @@ pub(super) fn measure_json<O: ObjectOrder + ?Sized>(
 	measure_json_view(JsonView::Value(value), order, number, budget_bytes)
 }
 
+#[cfg(test)]
 pub(super) fn measure_json_view<O: ObjectOrder + ?Sized>(
 	value: JsonView<'_>,
 	order: &O,
@@ -633,6 +681,7 @@ pub(super) fn measure_json_view<O: ObjectOrder + ?Sized>(
 	})
 }
 
+#[cfg(test)]
 pub(super) fn write_json<O: ObjectOrder + ?Sized, W: Write>(
 	value: &Value,
 	order: &O,
@@ -655,9 +704,11 @@ pub(super) fn write_json_view<O: ObjectOrder + ?Sized, W: Write>(
 	Ok(())
 }
 
+#[cfg(test)]
 struct EscapeWriter<'a, W> {
 	output: &'a mut W,
 }
+#[cfg(test)]
 impl<W: Write> Write for EscapeWriter<'_, W> {
 	fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
 		let text = std::str::from_utf8(bytes).map_err(io::Error::other)?;
@@ -700,6 +751,7 @@ impl<W: Write> Write for EscapeWriter<'_, W> {
 /// Refusal writes no output. Success streams the same bytes that were counted,
 /// without creating a complete escaped document. The caller still owns its
 /// output's atomicity and may stage before sending if its Write can fail.
+#[cfg(test)]
 pub(super) fn write_tool_result<O: ObjectOrder + ?Sized, W: Write>(
 	value: &Value,
 	order: &O,
@@ -710,6 +762,7 @@ pub(super) fn write_tool_result<O: ObjectOrder + ?Sized, W: Write>(
 	write_tool_result_view(JsonView::Value(value), order, number, budget, output)
 }
 
+#[cfg(test)]
 pub(super) fn write_tool_result_view<O: ObjectOrder + ?Sized, W: Write>(
 	value: JsonView<'_>,
 	order: &O,
