@@ -19,6 +19,7 @@
 
 use super::rea_contract::{self, Failure};
 use super::rea_evidence_session::{EvidenceSession, RetainedRecord};
+use super::rea_response_order::RecordOrigin;
 use super::{rea_apk_signature, rea_evidence, rea_files, runtime};
 use rmcp::model::CallToolResult;
 use serde_json::{json, Map, Value};
@@ -453,7 +454,7 @@ async fn execute(
 		let _lease = lease;
 		let _admission = owner_admission;
 		let parent = complete_record(reply, &input, &digest, length)?;
-		let retained = session.record(parent)?;
+		let retained = session.record_with_origin(parent, RecordOrigin::NativeTool)?;
 		if cancellation.is_cancelled() {
 			return Err(Failure::cancelled(OP).partial(retained.reference));
 		}
@@ -467,7 +468,7 @@ async fn execute(
 			.lookup(id)?
 			.ok_or_else(|| Failure::integrity("Completed APK parent is not retained."))?;
 		let projected = project_record(&parent, &input.view)?;
-		let view = session.record(projected)?;
+		let view = session.record_with_origin(projected, RecordOrigin::ApkToolDerived)?;
 		if cancellation.is_cancelled() {
 			return Err(Failure::cancelled(OP).partial(view.reference));
 		}
@@ -495,9 +496,12 @@ pub(super) async fn inspect(
 		Err(error) => return Failure::output(OP, error.to_string()).wire(),
 	};
 	match execute(input, &roots, session, cancellation, owner_admission).await {
-		Ok(retained) => {
-			rea_contract::success_borrowed(OP, retained.evidence.as_ref(), Some(retained.reference))
-		}
+		Ok(retained) => rea_contract::success_borrowed(
+			OP,
+			retained.evidence.as_ref(),
+			Some(retained.reference),
+			retained.origin,
+		),
 		Err(error) => error.wire(),
 	}
 }

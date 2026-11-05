@@ -194,7 +194,7 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 
 	let rea_cleanup = server.clone();
 	let (input, output) = stdio();
-	let service = server
+	let service = mcp::ReaFramedService::new(server)
 		.serve(mcp::ReaMcpTransport::new(input, output))
 		.await
 		.inspect_err(|e| {

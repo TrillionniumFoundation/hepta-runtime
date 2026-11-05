@@ -17,6 +17,7 @@
 //! a captured snapshot, not a pathname it can reopen or controller credentials.
 
 use super::rea_contract::{self, Failure};
+use super::rea_response_order::RecordOrigin;
 use super::{rea_evidence, rea_evidence_session::EvidenceSession, rea_files, runtime};
 use rmcp::model::CallToolResult;
 use serde::{Deserialize, Serialize};
@@ -427,14 +428,19 @@ pub(super) async fn inspect(
 	{
 		Err(error) => error.wire(),
 		Ok(record) => {
-			let retained = match session.record(record) {
+			let retained = match session.record_with_origin(record, RecordOrigin::NativeTool) {
 				Ok(retained) => retained,
 				Err(error) => return error.wire(),
 			};
 			if cancellation.is_cancelled() {
 				return Failure::cancelled(OP).partial(retained.reference).wire();
 			}
-			rea_contract::success_borrowed(OP, retained.evidence.as_ref(), Some(retained.reference))
+			rea_contract::success_borrowed(
+				OP,
+				retained.evidence.as_ref(),
+				Some(retained.reference),
+				retained.origin,
+			)
 		}
 	}
 }
