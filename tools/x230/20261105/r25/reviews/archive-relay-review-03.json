@@ -1,0 +1,53 @@
+{
+  "schema": "hepta-r25-archive-relay-decoder-review/v3",
+  "reviewer": "r25_lifecycle_audit",
+  "static_review_passed": true,
+  "decoder": {
+    "bytes": 22082,
+    "sha256": "3875fed7c5da14fcf787039be3d7f454a80a8946bcf5f8d39d67c929f2960b58"
+  },
+  "prior_decoder_preserved": {
+    "bytes": 19277,
+    "sha256": "0cd45429c72c940b064da12e4e1761a2eb815bee735467d79fd5f175aa758235"
+  },
+  "manifest": {
+    "bytes": 790,
+    "sha256": "740daa873eb7c7b4a27c2360cea2c3585cfb96de84308ac17552cef917658d14"
+  },
+  "streamer_unchanged": {
+    "bytes": 4974,
+    "sha256": "34e720eee4a762c3f0010d90b00bd3eb55878719c1a6f0b1415568dd67673f4c"
+  },
+  "actual_directory_probe": {
+    "bytes": 6783,
+    "sha256": "93729d309d834d1ef7daed30bba19f72f2f517563381121a3e0861b3118c664a"
+  },
+  "lock_diagnosis": {
+    "bytes": 1659,
+    "sha256": "a5c1dde49b9039c47fd336f32faee4533fcb3faa601f1b88d0811ca0c2863402"
+  },
+  "checks": [
+    "Exactly two producer-derived lock names, each required to be zero-byte owned nlink1 regular0600 and descriptor/path-stable before and after decode. No prefix wildcard or generic sidecar permission.",
+    "Actual observed metadata records match these two names, mode33152,size0,nlink1,uid501; source c15e8900 rule has persistent flock files and no unlink of them.",
+    "Original failed decoder source02 SHA fixed; actual failure report SHA must be supplied explicitly. Prior report must have exact directory-guard error, archives empty object, matching original holder/export and all effect/extraction/adoption flags false.",
+    "Exact directory inventory adds only these two locks and original failure report. Fresh result report02/decoded02; old decoded must remain absent.",
+    "Every helper other than main is AST-identical, including native terminal/read stdout/footer, frame/archive verification and safe file I/O. Streamer is byte-identical.",
+    "All new original inputs enter the existing final stable identity recheck. No new SSH, workload, signal, settings or archive execution."
+  ],
+  "unchanged_functions": [
+    "need",
+    "sha",
+    "encode",
+    "stamp",
+    "read",
+    "write",
+    "verify_terminal",
+    "native_streams",
+    "parse_stream"
+  ],
+  "remote_actions_by_reviewer": 0,
+  "decoder_executed_by_reviewer": false,
+  "limits": [
+    "Actual prior failure report SHA/read and decoder03 native terminal remain execution gates; this review does not claim the archives are locally decoded or independently audited yet."
+  ]
+}

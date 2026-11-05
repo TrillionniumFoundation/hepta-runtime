@@ -15,10 +15,11 @@ was changed, and no historical sample was pooled into the result. The campaign's
 establishes final candidate adoption.
 
 The [evidence index](../tools/x230/20261105/r25/README.md) links exact reports,
-the complete rejected patch and original native operation receipts. Full raw
-archives have been exported on the X230. Their separate publication follows
-lossless transfer and independent archive verification; this initial evidence
-commit does not claim that transfer or publication is complete.
+the complete rejected patch and original native operation receipts. This companion
+commit includes all four original X230 archives after lossless transfer and
+independent archive verification, together with the complete transport recovery
+chain. The two original qualification attempts, rejected observation and successful
+external CI remain distinct. No workload was repeated to obtain these archives.
 
 ## Candidate and bounded cancellation contract
 
@@ -118,8 +119,9 @@ in pooled reads; that redundant construction existed in R24 too.
 
 Remaining work is recorded explicitly: phase attribution of the capacity plateau,
 qualification and measurement of any new candidate, matched lifecycle performance,
-real cancellation under direct saturation, exact Git integration and full raw
-evidence publication. This report does not assert that every optimization blocker
+real cancellation under direct saturation and exact Git integration. Publication
+of this experiment's complete raw evidence is closed by the companion archives.
+This report does not assert that every optimization blocker
 is closed or that hardware/software performance has reached a global optimum.
 
 ## External CI and hosted Actions
