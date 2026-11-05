@@ -84,6 +84,7 @@ fn completed_fixture() -> (Record, Exit) {
 			output_complete: None,
 			output_durable: None,
 			capture: None,
+			scratch_cleanup: None,
 		},
 	)
 }

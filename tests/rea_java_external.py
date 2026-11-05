@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import threading
 import time
+from rea_engine_cleanup_assertions import assert_owner_cleanup, wait_source_java, assert_original_processes_stopped
 import zipfile
 
 
@@ -283,6 +284,8 @@ def main():
         private_write(root / "cancel-request.json", cancellation)
         active = server.call("rea_static_start", cancellation)
         result["cancel_job_id"] = active["job"]["id"]
+        native_java = wait_source_java(active["job"], args.execution_mode)
+        private_write(root / "live-cancel-java.json", native_java)
         set_fence(root, "frozen")
         status_before = server.call("rea_static_status", cancellation)
         assert status_before["job"]["id"] == active["job"]["id"]
@@ -305,12 +308,13 @@ def main():
         assert digest(artifact) == classes_request["artifact_sha256"]
         assert digest(cancellation_artifact) == cancellation["artifact_sha256"]
         result["checks"].append("inspected_artifact_bytes_unchanged")
-        # Only this newly created workspace's terminal-job scratch is removed.
-        leftover = list(root.glob(".hepta-rea-jadx-*"))
-        for path in leftover:
-            assert path.is_dir() and not path.is_symlink() and path.stat().st_uid == os.getuid()
-            shutil.rmtree(path)
-        result["cancelled_private_scratch_removed_by_harness"] = len(leftover)
+        result["cancel_scratch_cleanup"] = assert_owner_cleanup(cancelled, terminal, active["job"], root)
+        result["cancel_original_processes"] = assert_original_processes_stopped([native_java])
+        server.close()
+        server = Mcp(runtime, root)
+        assert server.complete(cancellation) == cancelled
+        assert_owner_cleanup(server.complete(cancellation), server.call("rea_static_status", cancellation), active["job"], root)
+        result["checks"].append("cancelled_scratch_cleaned_by_original_owner_and_receipt_survives_controller_restart")
         result["qualified"] = True
     except Exception as error:
         result["qualified"] = False

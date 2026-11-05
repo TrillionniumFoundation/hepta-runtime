@@ -2517,6 +2517,16 @@ else:
         raise SystemExit("prior or uncertain job artifacts exist without request binding; no launch submitted")
     req["launch_nonce"] = os.urandom(16).hex()
     req["terminal_publication_protocol"] = 1
+    # Only the fixed Java worker can adopt this namespace. No caller chooses
+    # a cleanup path; old requests keep their original immutable metadata.
+    if req.get("args") == ["rea-static-worker"] and stdin_text is not None:
+        try:
+            static_request = json.loads(stdin_text)
+            if (static_request.get("schema") == "hepta.rea.static-request.v1" and
+                    static_request.get("profile", {}).get("provider") in ("jadx", "ghidra")):
+                req["engine_scratch_protocol"] = 1
+        except (ValueError, TypeError, AttributeError):
+            pass
     if stdin_text is not None:
         stage_file("stdin.bin", stdin_text.encode("utf-8"), 0o600)
         req["stdin_path"] = str(pathlib.Path(req["job_dir"]) / "stdin.bin")
@@ -2553,7 +2563,157 @@ def atomic(name, value):
     os.fsync(_hepta_directory_pins[-1])
     return encoded
 
+# Embedded only in the existing original-job supervisor, before any workload.
+engine_scratch = None
+
+def prepare_engine_scratch():
+    if req.get("engine_scratch_protocol") != 1:
+        return None
+    if sys.platform != "linux":
+        raise RuntimeError("managed static scratch requires Linux original-group observation")
+    parent = _hepta_directory_pins[-1]
+    os.mkdir("engine-scratch", 0o700, dir_fd=parent)
+    fd = os.open("engine-scratch", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                 dir_fd=parent)
+    info = os.fstat(fd)
+    binding = {"schema": "hepta.rea.engine-scratch-owner.v1", "job_id": req["job_id"],
+               "launch_nonce": req["launch_nonce"], "path": req["job_dir"] + "/engine-scratch",
+               "device": info.st_dev, "inode": info.st_ino}
+    if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:
+        os.close(fd)
+        raise RuntimeError("managed engine directory is not private")
+    os.fsync(fd)
+    atomic("engine-scratch.json", binding)
+    return {"fd": fd, "binding": binding}
+
+def engine_group_members(group, deadline):
+    members = []
+    for count, entry in enumerate(os.scandir("/proc")):
+        if count > 100000 or time.monotonic() >= deadline:
+            raise RuntimeError("engine original-group observation budget exceeded")
+        if not entry.name.isdigit():
+            continue
+        try:
+            with open(entry.path + "/stat", "rb") as stream:
+                raw = stream.read(16385)
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        if len(raw) > 16384:
+            raise RuntimeError("engine process identity exceeds its bound")
+        fields = raw.rsplit(b")", 1)[1].split()
+        if int(fields[2]) == group and fields[0] not in (b"Z", b"X"):
+            members.append(int(entry.name))
+    return members
+
+def stop_engine_group_before_reap(child):
+    # A held, unreaped leader reserves the original PGID. No saved numeric
+    # group is ever signalled after the wait boundary or after ECHILD.
+    with open("/proc/self/mountinfo", "rb") as source:
+        mounts = source.read(1048577)
+    if len(mounts) > 1048576:
+        raise RuntimeError("engine process visibility exceeds its bound")
+    for line in mounts.decode().splitlines():
+        parts = line.split()
+        if len(parts) > 5 and parts[4] == "/proc":
+            for option in ",".join(parts[5:]).split(","):
+                if option.startswith("hidepid=") and option not in ("hidepid=0", "hidepid=off"):
+                    raise RuntimeError("engine original-group visibility is restricted")
+    deadline = time.monotonic() + 2
+    while True:
+        exited = os.waitid(os.P_PID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+        if exited is None or exited.si_pid != child.pid:
+            raise RuntimeError("engine original child exit is unconfirmed; scratch retained")
+        if not engine_group_members(child.pid, deadline):
+            return True
+        # Static Java children deliberately inherit this original group. A
+        # crashed worker cannot leave its native decompiler writing scratch.
+        try:
+            os.killpg(child.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        if time.monotonic() >= deadline:
+            raise RuntimeError("engine original process group has not stopped")
+        time.sleep(.01)
+
+def engine_mount_id(fd):
+    with open(f"/proc/self/fdinfo/{fd}", "rb") as source:
+        raw = source.read(16385)
+    if len(raw) > 16384:
+        raise RuntimeError("engine mount identity exceeds its bound")
+    return next(int(line.split(b":", 1)[1]) for line in raw.splitlines() if line.startswith(b"mnt_id:"))
+
+def clear_engine_directory(fd, count, depth, deadline):
+    if depth > 32:
+        raise RuntimeError("engine cleanup depth exceeded")
+    with os.scandir(fd) as entries:
+        for entry in entries:
+            count[0] += 1
+            if count[0] > 100000 or time.monotonic() >= deadline:
+                raise RuntimeError("engine cleanup budget exceeded")
+            if entry.is_dir(follow_symlinks=False):
+                child_fd = os.open(entry.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                                   dir_fd=fd)
+                try:
+                    if engine_mount_id(fd) != engine_mount_id(child_fd):
+                        raise RuntimeError("engine cleanup refuses a mounted descendant")
+                    original = os.fstat(child_fd)
+                    clear_engine_directory(child_fd, count, depth + 1, deadline)
+                    current = os.stat(entry.name, dir_fd=fd, follow_symlinks=False)
+                    if (original.st_dev, original.st_ino) != (current.st_dev, current.st_ino):
+                        raise RuntimeError("engine cleanup descendant identity changed")
+                    os.rmdir(entry.name, dir_fd=fd)
+                finally:
+                    os.close(child_fd)
+            else:
+                os.unlink(entry.name, dir_fd=fd)
+
+def finish_engine_scratch(group_stopped, child_reaped, error=None):
+    binding = engine_scratch["binding"]
+    result = {"schema": "hepta.rea.engine-scratch-cleanup.v1", "job_id": req["job_id"],
+              "launch_nonce": req["launch_nonce"], "directory": "engine-scratch",
+              "device": binding["device"], "inode": binding["inode"],
+              "state": "retained", "removed": False, "durable": False, "worker_adopted": False,
+              "original_process_group_stopped": group_stopped, "original_child_reaped": child_reaped}
+    if not (group_stopped and child_reaped):
+        result["error"] = error or "original child/group outcome unconfirmed; no cleanup submitted"
+        return result
+    fd = engine_scratch["fd"]
+    parent = _hepta_directory_pins[-1]
+    def verify():
+        current = os.stat("engine-scratch", dir_fd=parent, follow_symlinks=False)
+        if (not stat.S_ISDIR(current.st_mode) or current.st_uid != os.geteuid() or
+                stat.S_IMODE(current.st_mode) != 0o700 or
+                (current.st_dev, current.st_ino) != (binding["device"], binding["inode"])):
+            raise RuntimeError("engine directory identity changed; original and replacement retained")
+    try:
+        verify()
+        try:
+            claim_fd = os.open("claim.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                               dir_fd=fd)
+            with os.fdopen(claim_fd, "rb") as claim_file:
+                meta = os.fstat(claim_file.fileno())
+                if not stat.S_ISREG(meta.st_mode) or meta.st_nlink != 1 or meta.st_uid != os.geteuid() or stat.S_IMODE(meta.st_mode) != 0o600 or meta.st_size > 16384:
+                    raise ValueError("invalid worker adoption file")
+                claim = json.loads(claim_file.read(16385))
+            result["worker_adopted"] = (claim.get("schema") == "hepta.rea.engine-scratch-claim.v1" and
+                                        claim.get("owner") == binding and claim.get("worker_pid") == child.pid and
+                                        claim.get("engine") in ("ghidra", "jadx"))
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass
+        result["state"] = "incomplete"
+        clear_engine_directory(fd, [0], 0, time.monotonic() + 3)
+        verify()
+        os.rmdir("engine-scratch", dir_fd=parent)
+        result["removed"] = True
+        os.fsync(parent)
+        result.update(state="removed", durable=True)
+    except Exception as exc:
+        result["error"] = type(exc).__name__ + ": " + str(exc)
+    return result
+
 def publish_terminal(value):
+    if engine_scratch is not None and "scratch_cleanup" not in value:
+        value = {**value, "scratch_cleanup": finish_engine_scratch(False, False)}
     value = {**value, "terminal_publication_protocol": 1,
              "job_id": req["job_id"], "launch_nonce": req["launch_nonce"]}
     encoded = atomic("exit.json", value)
@@ -2650,7 +2810,12 @@ if req.get("stdin_path"):
 env = os.environ.copy()
 env.update(req.get("env", {}))
 env["HEPTA_RUNTIME_JOB_ID"] = req["job_id"]
+# The launcher alone chooses this binding, overriding caller or inherited env.
+env.pop("HEPTA_RUNTIME_ENGINE_SCRATCH", None)
 try:
+    engine_scratch = prepare_engine_scratch()
+    if engine_scratch is not None:
+        env["HEPTA_RUNTIME_ENGINE_SCRATCH"] = json.dumps(engine_scratch["binding"], sort_keys=True)
     child = subprocess.Popen(
         [req["executable"], *req.get("args", [])],
         cwd=req.get("cwd") or req.get("default_cwd"),
@@ -2996,6 +3161,12 @@ while True:
         if exited is not None and (all(log_eof.values()) or now >= stop_deadline):
             break
     time.sleep(.05)
+engine_group_stopped, engine_group_error = False, None
+if engine_scratch is not None:
+    try:
+        engine_group_stopped = stop_engine_group_before_reap(child)
+    except Exception as exc:
+        engine_group_error = type(exc).__name__ + ": " + str(exc)
 try:
     # Every loop exit already observed the original leader's exit. Consume its
     # actual status once, without creating another child-wait interval.
@@ -3102,6 +3273,10 @@ if leader_drain_error is not None:
         "child_reaped": True,
         "child_exit_code": child.returncode,
     })
+if engine_scratch is not None:
+    # The actual waitpid above consumed the retained original child only after
+    # its complete group was observed stopped. Unknown paths never reach here.
+    terminal["scratch_cleanup"] = finish_engine_scratch(engine_group_stopped, True, engine_group_error)
 publish_terminal(terminal)
 supervisor_rc = 125 if leader_drain_error is not None else rc if output_durable or rc != 0 else 74
 raise SystemExit(int(supervisor_rc) if 0 <= int(supervisor_rc) <= 255 else 1)

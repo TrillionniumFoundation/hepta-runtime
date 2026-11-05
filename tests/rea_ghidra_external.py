@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import time
 from rea_java_external import Mcp, digest, private_write, set_fence
+from rea_engine_cleanup_assertions import assert_owner_cleanup, assert_original_group_membership
 from rea_java_kernel_probe import java_observation, process_identity, run_observed_worker
 
 RELEASE_SHA = "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67"
@@ -161,6 +162,7 @@ def main():
         active = server.call("rea_static_start", cancellation)
         private_write(root / "cancel-initial-job.json", active)
         java = live_java(active["job"]["unit"], args.execution_mode, time.monotonic() + 100)
+        java["original_group"] = assert_original_group_membership(active["job"], runtime, args.execution_mode, [java.copy()])
         assert java["NoNewPrivs"] == "1" and java["Seccomp"] == "2", java
         private_write(root / "live-cancel-java-kernel-flags.json", java)
         set_fence(root, "frozen")
@@ -186,11 +188,12 @@ def main():
         result["checks"].append("frozen_original_owner_cancel_live_ghidra_java_process_and_no_relaunch")
         assert digest(artifact) == normal["artifact_sha256"]
         assert digest(cancellation_artifact) == cancellation["artifact_sha256"]
-        leftovers = list(root.glob(".hepta-rea-ghidra-*"))
-        for path in leftovers:
-            assert path.is_dir() and not path.is_symlink() and path.stat().st_uid == os.getuid()
-            shutil.rmtree(path)
-        result["cancelled_private_scratch_removed_by_harness"] = len(leftovers)
+        result["cancel_scratch_cleanup"] = assert_owner_cleanup(terminal_output, terminal, active["job"], root)
+        server.close()
+        server = Mcp(runtime, root)
+        assert server.complete(cancellation) == terminal_output
+        assert_owner_cleanup(server.complete(cancellation), server.call("rea_static_status", cancellation), active["job"], root)
+        result["checks"].append("cancelled_scratch_cleaned_by_original_owner_and_receipt_survives_controller_restart")
         result["qualified"] = True
     except Exception as error:
         result["qualified"] = False

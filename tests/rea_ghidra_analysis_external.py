@@ -10,9 +10,12 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import time
 from rea_java_external import Mcp, digest, private_write, set_fence
+from rea_engine_cleanup_assertions import (assert_owner_cleanup, signal_original_worker, wait_source_java,
+                                           assert_original_processes_stopped, assert_original_group_membership)
 from rea_java_kernel_probe import java_observation, process_identity, run_observed_worker
 
 RELEASE_SHA = "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67"
@@ -140,7 +143,7 @@ def main():
                                   "allowed_cwd_prefixes": [] if args.execution_mode == "operator" else [str(root)],
                                   "allowed_read_path_prefixes": [str(root), str(java_home), str(ghidra_home)],
                                   "allowed_write_path_prefixes": [str(root)]}},
-              "rea_static_profiles": {"owned_ghidra": profile}}
+              "rea_static_profiles": {"owned_ghidra": profile, "owned_ghidra_timeout": dict(profile, timeout_seconds=20)}}
     private_write(root / "config.json", config)
     nm = subprocess.run(["/usr/bin/nm", "-n", str(artifact)], check=True, capture_output=True, text=True, timeout=10).stdout
     private_write(root / "gnu-nm.txt", nm.encode())
@@ -168,7 +171,8 @@ def main():
     original_hash = digest(artifact)
     try:
         server = Mcp(runtime, root)
-        admitted = server.call("rea_static_profiles", {})["profiles"][0]
+        admitted_profiles = {item["profile"]: item for item in server.call("rea_static_profiles", {})["profiles"]}
+        admitted = admitted_profiles["owned_ghidra"]
         def request(key, operation, path=artifact, address=None):
             value = {"profile": "owned_ghidra", "profile_sha256": admitted["profile_sha256"],
                      "idempotency_key": key, "operation": operation, "artifact_path": str(path),
@@ -263,6 +267,7 @@ def main():
         private_write(root / "cancel-initial-job.json", active)
         result["job_ids"]["cancel"] = active["job"]["id"]
         native = live_native_decompiler(active["job"]["unit"], args.execution_mode, time.monotonic() + 110)
+        native["original_group"] = assert_original_group_membership(active["job"], runtime, args.execution_mode, native["owned_processes"])
         private_write(root / "live-native-decompiler.json", native)
         set_fence(root, "frozen")
         assert server.call("rea_static_status", cancellation)["job"]["id"] == active["job"]["id"]
@@ -286,11 +291,59 @@ def main():
         result["cancel_terminal_state"] = terminal["status"]["state"]
         result["checks"].append("frozen_original_owner_cancel_during_real_native_decompilation_and_no_relaunch")
         assert digest(artifact) == original_hash and digest(cancellation_artifact) == cancellation["artifact_sha256"]
-        leftovers = list(root.glob(".hepta-rea-ghidra-*"))
-        for path in leftovers:
-            assert path.is_dir() and not path.is_symlink() and path.stat().st_uid == os.getuid()
-            shutil.rmtree(path)
-        result["cancelled_private_scratch_removed_by_harness"] = len(leftovers)
+        result["cancel_scratch_cleanup"] = assert_owner_cleanup(terminal_output, terminal, active["job"], root)
+        server.close()
+        server = Mcp(runtime, root)
+        assert server.complete(cancellation) == terminal_output
+        assert_owner_cleanup(server.complete(cancellation), server.call("rea_static_status", cancellation), active["job"], root)
+        result["checks"].append("cancelled_scratch_cleaned_by_original_owner_and_receipt_survives_controller_restart")
+
+        crashed_request = request("owned-ghidra-live-worker-crash", "decompile", cancellation_artifact, cancel_address)
+        crashed_start = server.call("rea_static_start", crashed_request)
+        crashed_native = live_native_decompiler(crashed_start["job"]["unit"], args.execution_mode, time.monotonic() + 110)
+        crashed_native["original_group"] = assert_original_group_membership(crashed_start["job"], runtime, args.execution_mode, crashed_native["owned_processes"])
+        killed = signal_original_worker(crashed_start["job"], runtime, args.execution_mode, signal.SIGKILL)
+        crashed_output = server.complete(crashed_request)
+        crashed_terminal = server.call("rea_static_status", crashed_request)
+        assert crashed_output["process_succeeded"] is False and crashed_terminal["status"]["state"] == "failed"
+        crashed_cleanup = assert_owner_cleanup(crashed_output, crashed_terminal, crashed_start["job"], root)
+        stopped = assert_original_processes_stopped(crashed_native["owned_processes"] + [killed])
+        server.close()
+        server = Mcp(runtime, root)
+        assert server.complete(crashed_request) == crashed_output
+        replay_crashed = server.call("rea_static_start", crashed_request)
+        assert replay_crashed["job"]["id"] == crashed_start["job"]["id"] and replay_crashed["reused"] is True
+        private_write(root / "worker-crash-result.json", {"request":crashed_request, "initial":crashed_start,
+                      "native":crashed_native, "worker_signal":killed, "stopped":stopped,
+                      "result":crashed_output, "terminal":crashed_terminal})
+        result["job_ids"]["worker_crash"] = crashed_start["job"]["id"]
+        result["worker_crash_scratch_cleanup"] = crashed_cleanup
+        result["checks"].append("live_native_decompiler_worker_sigkill_original_group_cleanup_and_restart_readback")
+
+        timeout_request = request("owned-ghidra-original-owner-timeout", "decompile", cancellation_artifact, cancel_address)
+        timeout_request.update(profile="owned_ghidra_timeout", profile_sha256=admitted_profiles["owned_ghidra_timeout"]["profile_sha256"])
+        timeout_start = server.call("rea_static_start", timeout_request)
+        timeout_java = wait_source_java(timeout_start["job"], args.execution_mode, timeout=18)
+        stopped_worker = signal_original_worker(timeout_start["job"], runtime, args.execution_mode, signal.SIGSTOP)
+        # Freeze only this original worker so its in-process deadline cannot
+        # win the race. The existing durable owner's 25-second timeout and
+        # original-group escalation must terminate it without a harness kill.
+        server.close()
+        server = Mcp(runtime, root)
+        assert server.call("rea_static_status", timeout_request)["job"]["id"] == timeout_start["job"]["id"]
+        timeout_output = server.complete(timeout_request)
+        timeout_terminal = server.call("rea_static_status", timeout_request)
+        assert timeout_output["process_succeeded"] is False and timeout_terminal["status"]["state"] == "timed_out"
+        timeout_cleanup = assert_owner_cleanup(timeout_output, timeout_terminal, timeout_start["job"], root)
+        timeout_stopped = assert_original_processes_stopped([timeout_java, stopped_worker])
+        timeout_replay = server.call("rea_static_start", timeout_request)
+        assert timeout_replay["job"]["id"] == timeout_start["job"]["id"] and timeout_replay["reused"] is True
+        private_write(root / "owner-timeout-result.json", {"request":timeout_request, "initial":timeout_start,
+                      "java":timeout_java, "worker_signal":stopped_worker, "stopped":timeout_stopped,
+                      "result":timeout_output, "terminal":timeout_terminal})
+        result["job_ids"]["owner_timeout"] = timeout_start["job"]["id"]
+        result["timeout_scratch_cleanup"] = timeout_cleanup
+        result["checks"].append("live_java_stopped_worker_original_owner_timeout_cleanup_and_restart_readback")
         result["qualified"] = True
     except Exception as error:
         result["qualified"] = False

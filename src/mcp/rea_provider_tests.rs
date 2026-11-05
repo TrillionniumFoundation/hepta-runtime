@@ -5,6 +5,32 @@
 
 use super::*;
 
+#[test]
+fn static_engine_scratch_states_preserve_unknown_and_legacy_distinction() {
+	for scratch in [
+		json!({"removed_after_operation":true}),
+		json!({"cleanup_owner":"standalone_worker","removed_after_operation":true,"cleanup_pending":false}),
+		json!({"cleanup_owner":"durable_job","removed_after_operation":false,"cleanup_pending":true}),
+	] {
+		assert!(
+			valid_worker_scratch(&json!({"scratch":scratch})),
+			"{scratch}"
+		);
+	}
+	for scratch in [
+		json!({"cleanup_owner":"future-owner","removed_after_operation":true}),
+		json!({"cleanup_owner":null,"removed_after_operation":true}),
+		json!({"cleanup_owner":"standalone_worker","removed_after_operation":true,"cleanup_pending":true}),
+		json!({"cleanup_owner":"durable_job","removed_after_operation":true,"cleanup_pending":true}),
+		json!({"removed_after_operation":true,"cleanup_pending":true}),
+	] {
+		assert!(
+			!valid_worker_scratch(&json!({"scratch":scratch})),
+			"{scratch}"
+		);
+	}
+}
+
 fn profile() -> ReaStaticProfile {
 	ReaStaticProfile {
 		host: "owned".into(),

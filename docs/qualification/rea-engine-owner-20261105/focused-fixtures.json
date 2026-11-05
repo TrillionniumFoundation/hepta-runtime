@@ -1,0 +1,128 @@
+{
+  "schema": "hepta.rea.engine-owner-focused-validation.v1",
+  "scope": "Synthetic owned process fixtures and Rust tests; not real engine or final combination qualification",
+  "focused": {
+    "job_id": "1a1aa1245ed-fc05-3c79",
+    "status": {
+      "at_unix_ms": 1793855180540,
+      "audit_recorded": true,
+      "automatic_retry": false,
+      "cancelled": false,
+      "exit_code": 0,
+      "job_id": "1a1aa1245ed-fc05-3c79",
+      "launch_nonce": "c8a892d1bd3733508397d0bfa8960eec",
+      "log_bytes": {
+        "stderr": {
+          "seen": 924,
+          "stored": 924
+        },
+        "stdout": {
+          "seen": 7659,
+          "stored": 7659
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_synced": {
+        "stderr": true,
+        "stdout": true
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "output_durable": true,
+      "state": "succeeded",
+      "terminal_publication_confirmed": true,
+      "terminal_publication_protocol": 1,
+      "timed_out": false
+    },
+    "stdout": "{\"command\": [\"cargo\", \"+1.95.0\", \"clippy\", \"--all-features\", \"--all-targets\", \"--locked\", \"--offline\", \"--\", \"-D\", \"warnings\"]}\n{\"command\": [\"cargo\", \"+1.95.0\", \"test\", \"--all-features\", \"--lib\", \"engine\", \"--locked\", \"--offline\", \"--\", \"--test-threads=1\"]}\n\nrunning 11 tests\ntest mcp::rea_provider::tests::java_profiles_require_matching_engine_manifest_and_fixed_operations ... ok\ntest mcp::rea_provider::tests::java_report_cannot_rebind_engine_or_claim_source_correctness ... ok\ntest mcp::rea_provider::tests::static_engine_scratch_states_preserve_unknown_and_legacy_distinction ... ok\ntest mcp::rea_static::engine::scratch_owner::tests::cleanup_refuses_a_replaced_root_and_unlinks_symlinks_without_following_them ... ok\ntest mcp::rea_static::engine::scratch_owner::tests::cleanup_refuses_rebound_parent_even_when_absolute_leaf_inode_is_unchanged ... ok\ntest mcp::rea_static::engine::scratch_owner::tests::worker_adopts_exact_owner_and_defers_removal_to_original_owner ... ok\ntest mcp::rea_static::engine::scratch_owner::tests::wrong_owner_or_substituted_inode_cannot_be_adopted ... ok\ntest mcp::rea_static::engine::tests::installed_runtime_pin_detects_name_replacement_even_with_identical_bytes ... ok\ntest mcp::rea_static::engine::tests::private_engine_scratch_is_created_with_owner_only_permissions ... ok\ntest native::observation::wire::scratch_tests::engine_scratch_receipt_is_part_of_the_stable_original_terminal_proof ... ok\ntest native::observation::wire::scratch_tests::engine_scratch_removal_cannot_be_claimed_without_original_group_and_wait ... ok\n\ntest result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 2081 filtered out; finished in 0.14s\n\n{\"command\": [\"cargo\", \"+1.95.0\", \"test\", \"--all-features\", \"--bin\", \"hepta-runtime-jobctl\", \"--locked\", \"--offline\", \"--\", \"--test-threads=1\"]}\n\nrunning 39 tests\ntest engine_scratch_tests::engine_scratch_lost_child_custody_never_authorizes_numeric_group_cleanup ... ok\ntest engine_scratch_tests::engine_scratch_owner_stops_original_group_before_reap_and_publishes_cleanup ... ok\ntest tests::a_delayed_inherited_writer_cannot_change_logs_after_terminal_publication ... ok\ntest tests::actual_exit_directory_sync_failure_leaves_visible_exit_unconfirmed ... ok\ntest tests::actual_fsync_failure_cannot_produce_a_successful_complete_receipt ... ok\ntest tests::actual_launch_namespace_sync_failures_preserve_pending_inputs_without_spawn ... ok\ntest tests::actual_read_error_is_retained_without_claiming_pipe_eof ... ok\ntest tests::actual_witness_publication_failure_cannot_promote_visible_exit ... ok\ntest tests::argv_and_stdin_bind_full_digest ... ok\ntest tests::cancellation_ack_cannot_overwrite_a_witnessed_original_exit ... ok\ntest tests::cap_plus_one_retains_the_bound_and_reports_lost_output_in_status_and_reads ... ok\ntest tests::completed_result_preserves_exit_from_previous_boot ... ok\ntest tests::completion_must_match_owned_nonce_and_job ... ok\ntest tests::confirmed_capture_pages_preserve_all_bytes_and_standard_digest_wire_format ... ok\ntest tests::confirmed_capture_reads_reject_deleted_truncated_or_appended_logs ... ok\ntest tests::cwd_symlink_escape_is_rejected ... ok\ntest tests::fresh_launch_namespace_sync_precedes_both_submission_modes ... ok\ntest tests::json_fifo_rejected_without_waiting_for_a_writer ... ok\ntest tests::legacy_completion_and_pty_never_invent_output_completeness ... ok\ntest tests::legacy_specs_upgrade_but_declared_capture_and_pty_modes_cannot_change ... ok\ntest tests::nonblocking_empty_pipe_then_hangup_preserves_bytes_and_exact_eof ... ok\ntest tests::original_pipes_are_fully_synced_before_the_terminal_capture_receipt ... ok\ntest tests::probe_failure_without_a_terminal_receipt_stays_an_error ... ok\ntest tests::read_and_status_refuse_foreign_or_inconsistent_terminal_capture_evidence ... ok\ntest tests::real_sink_write_failure_is_retained_without_stopping_other_stream_capture ... ok\ntest tests::resources_are_capped_by_admin ... ok\ntest tests::setup_failure_has_explicit_capture_evidence_and_never_looks_like_legacy ... ok\ntest tests::status_preserves_live_observations_and_legacy_terminal_states ... ok\ntest tests::status_rereads_terminal_publication_after_systemd_collection_or_probe_error ... ok\ntest tests::status_rereads_unwitnessed_publication_before_interpreting_unit_failure ... ok\ntest tests::strict_owned_ids ... ok\ntest tests::terminal_publication_during_boot_probe_remains_valid_after_reboot ... ok\ntest tests::timeout_and_cancellation_reap_the_original_child_and_keep_capture_evidence ... ok\ntest tests::unknown_root_actions_and_pid_fields_cannot_deserialize ... ok\ntest tests::unsafe_or_existing_log_refuses_before_the_original_child_is_spawned ... ok\ntest tests::versioned_reboot_without_a_receipt_is_unknown_and_never_replayed ... ok\ntest tests::versioned_status_without_terminal_receipt_never_invents_a_terminal_outcome ... ok\ntest tests::visible_witness_proves_prior_exit_barrier_not_its_own_directory_sync ... ok\ntest tests::witness_binds_exact_exit_bytes_identity_protocol_and_new_record_marker ... ok\n\ntest result: ok. 39 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.26s\n\n{\"command\": [\"cargo\", \"+1.95.0\", \"test\", \"--all-features\", \"--lib\", \"native::\", \"--locked\", \"--offline\", \"--\", \"--test-threads=1\"]}\n\nrunning 22 tests\ntest mcp::weight_native::tests::bounded_large_worker_error_preserves_bytes_and_failure_status ... ok\ntest mcp::weight_native::tests::file_identity_hash_matches_sha256_for_empty_and_multichunk_bytes ... ok\ntest mcp::weight_native::tests::framing_requires_one_bounded_newline_terminated_frame ... ok\ntest mcp::weight_native::tests::missing_or_nonprivate_socket_is_refused_before_sending ... ok\ntest mcp::weight_native::tests::options_and_request_identity_do_not_expand_the_owner_contract ... ok\ntest mcp::weight_native::tests::package_pin_matches_python_ascii_sorted_string_dictionary ... ok\ntest mcp::weight_native::tests::response_requires_exact_id_unique_json_and_a_complete_envelope ... ok\ntest mcp::weight_native::tests::socket_exchange_preserves_request_and_response_bytes ... ok\ntest mcp::weight_native::tests::socket_protocol_failures_are_unknown_and_preserve_the_original_id ... ok\ntest mcp::weight_native::tests::socket_timeout_does_not_reconnect_or_resend_after_a_possible_effect ... ok\ntest native::entry_tests::checked_native_entry_retains_original_job_and_never_relaunches ... ok\ntest native::observation::pages::tests::binary_megabyte_output_is_complete_with_four_read_futures_at_most ... ok\ntest native::observation::pages::tests::cancelled_observation_drops_the_entire_window_without_detached_reads ... ok\ntest native::observation::pages::tests::corrupted_identity_length_cursor_and_bytes_are_rejected_without_retry ... ok\ntest native::observation::pages::tests::empty_terminal_streams_still_require_a_bound_empty_page ... ok\ntest native::observation::pages::tests::oversized_or_overflowed_output_is_refused_before_any_read ... ok\ntest native::observation::pages::tests::pages_finish_out_of_order_but_preserve_original_stream_order ... ok\ntest native::observation::wire::scratch_tests::engine_scratch_receipt_is_part_of_the_stable_original_terminal_proof ... ok\ntest native::observation::wire::scratch_tests::engine_scratch_removal_cannot_be_claimed_without_original_group_and_wait ... ok\ntest native::observation::wire::scratch_tests::retained_and_legacy_scratch_remain_queryable_without_fabricated_cleanup ... ok\ntest native::tests::key_bound_uses_bytes_and_retains_original_request ... ok\ntest native::tests::missing_or_empty_key_fails_before_runtime_initialization ... ok\n\ntest result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 2070 filtered out; finished in 1.02s\n\n",
+    "stderr": "    Checking hepta-runtime v0.1.0 (/home/qian-qi/work/hepta-rea-engine-ca464-20261105)\n    Finished `dev` profile [optimized] target(s) in 35.50s\n   Compiling hepta-runtime v0.1.0 (/home/qian-qi/work/hepta-rea-engine-ca464-20261105)\n    Finished `test` profile [optimized] target(s) in 5m 18s\n     Running unittests src/lib.rs (/home/qian-qi/work/hepta-rea-sixpack-ca464-20261105-target/debug/deps/hepta_runtime-2305b895849fde7e)\n   Compiling hepta-runtime v0.1.0 (/home/qian-qi/work/hepta-rea-engine-ca464-20261105)\n    Finished `test` profile [optimized] target(s) in 2m 11s\n     Running unittests src/bin/jobctl.rs (/home/qian-qi/work/hepta-rea-sixpack-ca464-20261105-target/debug/deps/hepta_runtime_jobctl-6383d88d8d9245bb)\n    Finished `test` profile [optimized] target(s) in 0.33s\n     Running unittests src/lib.rs (/home/qian-qi/work/hepta-rea-sixpack-ca464-20261105-target/debug/deps/hepta_runtime-2305b895849fde7e)\n"
+  },
+  "operator_owner": {
+    "job_id": "1a1aa127285-fc05-3c7d",
+    "status": {
+      "at_unix_ms": 1793854704205,
+      "audit_recorded": true,
+      "automatic_retry": false,
+      "cancelled": false,
+      "exit_code": 0,
+      "job_id": "1a1aa127285-fc05-3c7d",
+      "launch_nonce": "459f4655a023118ee762f7dfaf62d29f",
+      "log_bytes": {
+        "stderr": {
+          "seen": 1261,
+          "stored": 1261
+        },
+        "stdout": {
+          "seen": 0,
+          "stored": 0
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_synced": {
+        "stderr": true,
+        "stdout": true
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "output_durable": true,
+      "state": "succeeded",
+      "terminal_publication_confirmed": true,
+      "terminal_publication_protocol": 1,
+      "timed_out": false
+    },
+    "stdout": "",
+    "stderr": "test_cancel_stops_term_ignoring_descendant_before_cleanup (__main__.EngineOwnerTests.test_cancel_stops_term_ignoring_descendant_before_cleanup) ... ok\ntest_normal_completion_removes_only_original_private_namespace (__main__.EngineOwnerTests.test_normal_completion_removes_only_original_private_namespace) ... ok\ntest_owner_loss_stays_unknown_and_never_deletes_scratch_on_status (__main__.EngineOwnerTests.test_owner_loss_stays_unknown_and_never_deletes_scratch_on_status) ... ok\ntest_replaced_directory_is_retained_without_deleting_original_or_replacement (__main__.EngineOwnerTests.test_replaced_directory_is_retained_without_deleting_original_or_replacement) ... ok\ntest_timeout_and_worker_crash_are_readable_without_harness_cleanup (__main__.EngineOwnerTests.test_timeout_and_worker_crash_are_readable_without_harness_cleanup) ... ok\ntest_unprivate_claim_does_not_become_positive_worker_adoption (__main__.EngineOwnerTests.test_unprivate_claim_does_not_become_positive_worker_adoption) ... ok\ntest_worker_sigkill_cannot_leave_a_live_writer_in_removed_scratch (__main__.EngineOwnerTests.test_worker_sigkill_cannot_leave_a_live_writer_in_removed_scratch) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 4.962s\n\nOK\n"
+  },
+  "earlier_environment_mismatch": {
+    "status": {
+      "at_unix_ms": 1793853983077,
+      "audit_recorded": true,
+      "automatic_retry": false,
+      "cancelled": true,
+      "exit_code": -15,
+      "job_id": "1a1aa04e912-fc05-3b5f",
+      "launch_nonce": "3e74bed86ddbf259a62b19ea7053165f",
+      "log_bytes": {
+        "stderr": {
+          "seen": 10333,
+          "stored": 10333
+        },
+        "stdout": {
+          "seen": 0,
+          "stored": 0
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_synced": {
+        "stderr": true,
+        "stdout": true
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "output_durable": true,
+      "state": "cancelled",
+      "terminal_publication_confirmed": true,
+      "terminal_publication_protocol": 1,
+      "timed_out": false
+    },
+    "difference": "CARGO_PROFILE_DEV_DEBUG and CARGO_PROFILE_TEST_DEBUG were not initially set to 0; duplicate compilation was explicitly cancelled, not counted as validation."
+  }
+}

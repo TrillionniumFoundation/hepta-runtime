@@ -10,7 +10,6 @@ use anyhow::{anyhow, bail, Context, Result};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::os::fd::AsRawFd;
-use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{
@@ -132,25 +131,12 @@ async fn bridge_snapshot(deadline: Instant) -> Result<Snapshot> {
 	.await
 }
 
-async fn scratch(profile_root: &str, engine: &str) -> Result<PathBuf> {
-	use ring::rand::SecureRandom;
-	let mut random = [0u8; 16];
-	ring::rand::SystemRandom::new()
-		.fill(&mut random)
-		.map_err(|_| anyhow!("engine scratch identity unavailable"))?;
-	let suffix: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
-	let path = Path::new(profile_root).join(format!(".hepta-rea-{engine}-{suffix}"));
-	let selected = path.clone();
-	tokio::task::spawn_blocking(move || {
-		let mut builder = std::fs::DirBuilder::new();
-		builder.mode(0o700);
-		builder.create(selected)
-	})
-	.await?
-	.context("cannot atomically create private engine scratch")?;
-	eprintln!("hepta_{engine}_owned_scratch={}", path.display());
-	Ok(path)
-}
+#[path = "rea_engine_directory.rs"]
+mod engine_directory;
+
+#[path = "rea_engine_scratch.rs"]
+mod scratch_owner;
+use scratch_owner::scratch;
 
 async fn disk_usage(root: &Path) -> Result<u64> {
 	let mut dirs = vec![root.to_path_buf()];
@@ -515,7 +501,7 @@ async fn analyze_inner(
 			"System shared libraries and the full JRE installation closure are not attested by the selected manifest",
 			"Java executes a verified installed inode; jar, bridge and input are sealed, but this is not a full namespace sandbox",
 			"Scratch bytes are sampled every 250 ms, so the aggregate byte limit is a monitored budget rather than a hard filesystem quota; individual files are limited to 16 MiB",
-			"Interruption can leave the logged private scratch directory for explicit owner cleanup"]
+			"Durable jobs clean their adopted private scratch only after the original process group stops; unknown owner outcomes retain it. Standalone workers have no crash-recovery owner"]
 	});
 	report["native_report_id"] = json!(format!(
 		"hepta_rea_static_v1_{}",
@@ -534,10 +520,14 @@ pub(super) async fn analyze(input: WorkerRequest) -> Result<Value> {
 	let deadline = started + Duration::from_secs(input.profile.timeout_seconds);
 	let work = scratch(&input.profile.working_directory, "jadx").await?;
 	let result = analyze_inner(&input, engine, &work, started, deadline).await;
-	let cleanup = tokio::fs::remove_dir_all(&work).await;
+	let cleanup_owner = work.cleanup_owner();
+	let retained_path = work.display().to_string();
+	let cleanup = work.finish().await;
 	match (result, cleanup) {
-		(Ok(mut report), Ok(())) => {
-			report["scratch"]["removed_after_operation"] = json!(true);
+		(Ok(mut report), Ok(removed)) => {
+			report["scratch"]["removed_after_operation"] = json!(removed);
+			report["scratch"]["cleanup_pending"] = json!(!removed);
+			report["scratch"]["cleanup_owner"] = json!(cleanup_owner);
 			report
 				.as_object_mut()
 				.context("engine report is not an object")?
@@ -548,9 +538,10 @@ pub(super) async fn analyze(input: WorkerRequest) -> Result<Value> {
 			));
 			Ok(report)
 		}
-		(Err(error), Ok(())) => Err(error),
-		(_, Err(error)) => Err(error)
-			.with_context(|| format!("JADX scratch cleanup incomplete: {}", work.display())),
+		(Err(error), Ok(_)) => Err(error),
+		(_, Err(error)) => {
+			Err(error).with_context(|| format!("JADX scratch cleanup incomplete: {retained_path}"))
+		}
 	}
 }
 

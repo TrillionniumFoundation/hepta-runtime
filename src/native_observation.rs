@@ -45,6 +45,7 @@ pub struct NativeTerminalOutput {
 	job_id: String,
 	exit_code: i32,
 	outcome: NativeJobOutcome,
+	scratch_cleanup: Option<Value>,
 	stdout: Vec<u8>,
 	stderr: Vec<u8>,
 	timing: NativeOutputObservationTiming,
@@ -65,6 +66,11 @@ impl NativeTerminalOutput {
 	}
 	pub fn outcome(&self) -> NativeJobOutcome {
 		self.outcome
+	}
+	/// Original owner's witnessed engine-directory cleanup; absent for legacy
+	/// jobs and jobs which did not reserve an engine scratch namespace.
+	pub fn scratch_cleanup(&self) -> Option<&Value> {
+		self.scratch_cleanup.as_ref()
 	}
 	pub fn into_streams(self) -> (Vec<u8>, Vec<u8>) {
 		(self.stdout, self.stderr)
@@ -142,6 +148,7 @@ pub async fn observe_terminal_output(
 		job_id,
 		exit_code: proof.exit_code,
 		outcome,
+		scratch_cleanup: proof.scratch_cleanup,
 		stdout: streams.stdout,
 		stderr: streams.stderr,
 		timing: NativeOutputObservationTiming {

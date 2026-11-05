@@ -522,29 +522,78 @@ pub async fn read(request: ReaStaticRequest) -> Result<String> {
 	};
 	let job = output.job_id().to_owned();
 	let exit_code = output.exit_code();
+	let outcome = output.outcome();
+	let state = match outcome {
+		crate::native::NativeJobOutcome::Succeeded => "succeeded",
+		crate::native::NativeJobOutcome::Failed => "failed",
+		crate::native::NativeJobOutcome::Cancelled => "cancelled",
+		crate::native::NativeJobOutcome::TimedOut => "timed_out",
+	};
+	let process_succeeded = outcome == crate::native::NativeJobOutcome::Succeeded;
+	let scratch_cleanup = output.scratch_cleanup().cloned();
+	let cleanup_complete = scratch_cleanup.as_ref().map(|receipt| {
+		receipt["state"] == "removed"
+			&& receipt["durable"] == true
+			&& receipt["worker_adopted"] == true
+	});
 	let (stdout, stderr) = output.into_streams();
+	let mut report_error = None;
 	let report = if stdout.is_empty() {
-		if exit_code == 0 {
+		if process_succeeded {
 			bail!("successful static worker omitted its report");
 		}
 		Value::Null
 	} else {
-		let report = serde_json::from_slice::<Value>(&stdout)
-			.context("static worker output was not a complete JSON record")?;
-		let worker: WorkerRequest = serde_json::from_str(
-			params
-				.stdin
-				.as_deref()
-				.context("original static request absent")?,
-		)?;
-		validate_report(&report, &worker, exit_code)?;
-		report
+		let validated = (|| -> Result<Value> {
+			let report = serde_json::from_slice::<Value>(&stdout)
+				.context("static worker output was not a complete JSON record")?;
+			let worker: WorkerRequest = serde_json::from_str(
+				params
+					.stdin
+					.as_deref()
+					.context("original static request absent")?,
+			)?;
+			validate_report(&report, &worker, exit_code)?;
+			if scratch_cleanup.is_some() != (report["scratch"]["cleanup_owner"] == "durable_job") {
+				bail!("static report and original owner disagree on scratch lifecycle");
+			}
+			Ok(report)
+		})();
+		match validated {
+			Ok(report) => report,
+			Err(error) if !process_succeeded => {
+				// Cancellation can interrupt the final JSON write. Keep the original
+				// failed/cancelled output queryable without accepting a partial report.
+				report_error = Some(format!("{error:#}"));
+				Value::Null
+			}
+			Err(error) => return Err(error),
+		}
 	};
 	Ok(serde_json::to_string(&json!({
-		"job_id":job,"exit_code":exit_code,"process_succeeded":exit_code==0,
+		"job_id":job,"state":state,"exit_code":exit_code,"process_succeeded":process_succeeded,
 		"complete":true,"observation_only":true,"report":report,
+		"scratch_cleanup":scratch_cleanup,"cleanup_complete":cleanup_complete,
+		"worker_stdout":report_error.as_ref().map(|_| String::from_utf8_lossy(&stdout)),
+		"report_error":report_error,
 		"worker_stderr":String::from_utf8_lossy(&stderr),"rea_evidence_compatible":false
 	}))?)
+}
+
+fn valid_worker_scratch(report: &Value) -> bool {
+	let scratch = &report["scratch"];
+	match scratch.get("cleanup_owner") {
+		None => {
+			scratch["removed_after_operation"] == true && scratch.get("cleanup_pending").is_none()
+		}
+		Some(Value::String(owner)) if owner == "durable_job" => {
+			scratch["removed_after_operation"] == false && scratch["cleanup_pending"] == true
+		}
+		Some(Value::String(owner)) if owner == "standalone_worker" => {
+			scratch["removed_after_operation"] == true && scratch["cleanup_pending"] == false
+		}
+		_ => false,
+	}
 }
 
 fn validate_report(report: &Value, input: &WorkerRequest, exit_code: i32) -> Result<()> {
@@ -582,7 +631,7 @@ fn validate_report(report: &Value, input: &WorkerRequest, exit_code: i32) -> Res
 			|| report["bridge_sha256"] != sha256(include_str!("rea_jadx_bridge.java").as_bytes())
 			|| report["backend"]["snapshot"] != "verified_installed_inode"
 			|| report["network_syscalls_denied"] != true
-			|| report["scratch"]["removed_after_operation"] != true
+			|| !valid_worker_scratch(report)
 		{
 			bail!("JADX report does not retain the admitted engine, bridge and cleanup identities");
 		}
@@ -625,7 +674,7 @@ fn validate_report(report: &Value, input: &WorkerRequest, exit_code: i32) -> Res
 				) || report["backend"]["snapshot"] != "verified_installed_inode"
 			|| report["installation_snapshot"] != "verified_installed_paths"
 			|| report["network_syscalls_denied"] != true
-			|| report["scratch"]["removed_after_operation"] != true
+			|| !valid_worker_scratch(report)
 		{
 			bail!("Ghidra report does not retain its admitted installation, bridge and cleanup identities");
 		}

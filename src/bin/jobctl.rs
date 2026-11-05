@@ -16,6 +16,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+#[path = "../mcp/rea_engine_job_owner.rs"]
+mod engine_owner;
+
 const ROOT: &str = "/var/lib/hepta-runtime-jobctl";
 const POLICY: &str = "/etc/hepta-runtime/job-policy.json";
 const HELPER: &str = "/usr/local/libexec/hepta-runtime-jobctl";
@@ -46,6 +49,21 @@ fn boot() -> Result<String> {
 	Ok(fs::read_to_string("/proc/sys/kernel/random/boot_id")?
 		.trim()
 		.to_owned())
+}
+fn launch_nonce() -> Result<String> {
+	// The worker adoption and witnessed terminal wire share this exact format.
+	// Existing records retain their original nonce; only a new launch calls here.
+	let nonce = fs::read_to_string("/proc/sys/kernel/random/uuid")?
+		.trim()
+		.replace('-', "");
+	if nonce.len() != 32
+		|| !nonce
+			.bytes()
+			.all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+	{
+		bail!("kernel launch nonce is not 128-bit lowercase hexadecimal");
+	}
+	Ok(nonce)
 }
 fn safe_id(id: &str) -> bool {
 	!id.is_empty() && id.len() <= 96 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
@@ -298,6 +316,8 @@ struct Exit {
 	output_durable: Option<bool>,
 	#[serde(default)]
 	capture: Option<OutputCapture>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	scratch_cleanup: Option<Value>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -379,6 +399,7 @@ impl Exit {
 			output_complete: capture.as_ref().map(OutputCapture::complete),
 			output_durable: capture.as_ref().map(OutputCapture::durable),
 			capture,
+			scratch_cleanup: None,
 		}
 	}
 }
@@ -700,6 +721,26 @@ fn completed_result(r: &Record, terminal: &ConfirmedExit) -> Result<Value> {
 	value["cancelled"] = json!(state == "cancelled");
 	value["automatic_retry"] = json!(false);
 	value["backend"] = json!("systemd_system");
+	if let Some(receipt) = &e.scratch_cleanup {
+		value["scratch_cleanup"] = receipt.clone();
+	}
+	if terminal.witnessed {
+		if let Some(capture) = &e.capture {
+			value["terminal_publication_protocol"] = json!(1);
+			value["launch_nonce"] = json!(e.nonce);
+			value["at_unix_ms"] = json!(e.at_unix_ms);
+			for (name, stream) in [("stdout", &capture.stdout), ("stderr", &capture.stderr)] {
+				value["log_bytes"][name] = json!({"seen":stream.seen,"stored":stream.saved});
+				value["log_truncated"][name] = json!(stream.truncated);
+				value["log_synced"][name] = json!(stream.synced);
+				value["log_errors"][name] = json!(stream
+					.read_error
+					.as_ref()
+					.or(stream.write_error.as_ref())
+					.or(stream.sync_error.as_ref()));
+			}
+		}
+	}
 	Ok(value)
 }
 
@@ -711,7 +752,58 @@ fn completion_at(r: &Record, directory: &Path) -> Result<Option<Value>> {
 	}
 }
 
-fn missing_terminal_result(r: &Record, state: &str, reason: &str) -> Result<Value> {
+fn retained_engine_scratch_at(r: &Record, directory: &Path) -> Result<Option<Value>> {
+	let path = directory.join("engine-scratch.retained.json");
+	let receipt: Value = match json_file(&path) {
+		Ok(receipt) => receipt,
+		Err(error)
+			if error
+				.downcast_ref::<std::io::Error>()
+				.is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) =>
+		{
+			return Ok(None)
+		}
+		Err(error) => return Err(error).context("read retained engine scratch observation"),
+	};
+	// This negative observation is deliberately outside the terminal witness.
+	// It can never authorize cleanup or promote an unknown job to a final exit.
+	if receipt["schema"] != "hepta.rea.engine-scratch-cleanup.v1"
+		|| receipt["job_id"] != r.job_id
+		|| receipt["launch_nonce"] != r.nonce
+		|| receipt["directory"] != "engine-scratch"
+		|| receipt["state"] != "retained"
+		|| receipt["device"].as_u64().is_none()
+		|| receipt["inode"].as_u64().is_none()
+		|| receipt["error"].as_str().is_none()
+		|| [
+			"removed",
+			"durable",
+			"worker_adopted",
+			"original_process_group_stopped",
+			"original_child_reaped",
+		]
+		.iter()
+		.any(|key| receipt[*key] != false)
+	{
+		bail!("invalid retained engine scratch observation");
+	}
+	Ok(Some(receipt))
+}
+
+fn add_retained_engine_scratch(r: &Record, directory: &Path, value: &mut Value) -> Result<()> {
+	if let Some(receipt) = retained_engine_scratch_at(r, directory)? {
+		value["scratch_cleanup"] = receipt;
+		value["scratch_cleanup_publication"] = json!("retained_without_terminal");
+	}
+	Ok(())
+}
+
+fn missing_terminal_result(
+	r: &Record,
+	directory: &Path,
+	state: &str,
+	reason: &str,
+) -> Result<Value> {
 	let mut value = capture_metadata(r, None)?;
 	value["job_id"] = json!(r.job_id);
 	value["state"] = json!(state);
@@ -721,6 +813,7 @@ fn missing_terminal_result(r: &Record, state: &str, reason: &str) -> Result<Valu
 	value["automatic_retry"] = json!(false);
 	value["terminal_publication_confirmed"] = json!(false);
 	value["backend"] = json!("systemd_system");
+	add_retained_engine_scratch(r, directory, &mut value)?;
 	Ok(value)
 }
 
@@ -740,7 +833,7 @@ fn status_at(
 			return Ok(completed);
 		}
 		if r.terminal_protocol.is_some() {
-			return missing_terminal_result(r, "lost", "target_reboot");
+			return missing_terminal_result(r, directory, "lost", "target_reboot");
 		}
 		return Ok(
 			json!({"job_id":r.job_id,"state":"lost","reason":"target_reboot","backend":"systemd_system"}),
@@ -767,7 +860,8 @@ fn status_at(
 		"lost"
 	};
 	if r.terminal_protocol.is_some() && state != "running" {
-		let mut value = missing_terminal_result(r, "finalizing", "terminal_receipt_missing")?;
+		let mut value =
+			missing_terminal_result(r, directory, "finalizing", "terminal_receipt_missing")?;
 		value["systemd"] = json!(p);
 		value["launch_state"] = json!(r.launch_state);
 		return Ok(value);
@@ -857,6 +951,9 @@ fn read_output_at(
 			terminal.receipt.capture.as_ref(),
 		),
 	};
+	if matches!(&observation, TerminalObservation::Missing) {
+		add_retained_engine_scratch(r, directory, &mut value)?;
+	}
 	value["job_id"] = json!(r.job_id);
 	value["stdout"] = read_part(
 		directory,
@@ -926,9 +1023,7 @@ fn start(mut q: Request, interactive: bool) -> Result<Value> {
 	let dir = path.parent().context("record directory")?;
 	fs::create_dir_all(dir)?;
 	fs::set_permissions(dir, fs::Permissions::from_mode(0o700))?;
-	let nonce = fs::read_to_string("/proc/sys/kernel/random/uuid")?
-		.trim()
-		.to_owned();
+	let nonce = launch_nonce()?;
 	let mut r = Record {
 		job_id: q.job_id.clone(),
 		unit: format!("hepta-job-{}.service", q.job_id),
@@ -1297,27 +1392,74 @@ struct Supervision {
 	timed_out: bool,
 	cancelled: bool,
 	capture: Option<OutputCapture>,
+	engine_group_stopped: bool,
 }
 
 fn finish_supervision(
+	child: OriginalChild,
+	capture: Option<Capture>,
+	timeout: Duration,
+	cancel_requested: impl Fn() -> bool,
+) -> Result<Supervision> {
+	finish_supervision_with_engine_group(child, capture, timeout, cancel_requested, false)
+}
+
+fn finish_supervision_with_engine_group(
+	child: OriginalChild,
+	capture: Option<Capture>,
+	timeout: Duration,
+	cancel_requested: impl Fn() -> bool,
+	engine_group: bool,
+) -> Result<Supervision> {
+	finish_supervision_with_group_stop(
+		child,
+		capture,
+		timeout,
+		cancel_requested,
+		engine_group,
+		engine_owner::stop_original_group,
+	)
+}
+
+fn finish_supervision_with_group_stop(
 	mut child: OriginalChild,
 	mut capture: Option<Capture>,
 	timeout: Duration,
 	cancel_requested: impl Fn() -> bool,
+	engine_group: bool,
+	stop_group: impl Fn(u32) -> Result<()>,
 ) -> Result<Supervision> {
 	let begin = Instant::now();
 	let mut status = None;
 	let mut timed_out = false;
 	let mut cancelled = false;
 	let mut drain_until = None;
+	let mut engine_group_stopped = false;
 	loop {
 		if status.is_none() {
-			status = child.try_wait()?;
-			if status.is_none() {
+			if engine_group {
+				let exited = engine_owner::original_exited(child.child.id())?;
 				cancelled |= cancel_requested();
-				timed_out = begin.elapsed() >= timeout;
-				if cancelled || timed_out {
-					status = Some(child.stop_and_wait()?);
+				if !exited {
+					timed_out = begin.elapsed() >= timeout;
+				}
+				if exited || cancelled || timed_out {
+					stop_group(child.child.id())?;
+					status = Some(
+						child
+							.try_wait()?
+							.context("original engine exit vanished before reap")?,
+					);
+					engine_group_stopped = true;
+				}
+			} else {
+				status = child.try_wait()?;
+				if status.is_none() {
+					cancelled |= cancel_requested();
+					timed_out = begin.elapsed() >= timeout;
+					if cancelled || timed_out {
+						status = Some(child.stop_and_wait()?);
+					}
 				}
 			}
 			if status.is_some() {
@@ -1351,7 +1493,24 @@ fn finish_supervision(
 		timed_out,
 		cancelled: cancelled || cancel_requested(),
 		capture: capture.map(Capture::finish),
+		engine_group_stopped,
 	})
+}
+fn retain_engine_supervision_failure<T>(
+	state: &Path,
+	owner: &engine_owner::ScratchOwner,
+	result: Result<T>,
+) -> Result<T> {
+	match result {
+		Ok(value) => Ok(value),
+		Err(error) => {
+			let receipt = owner.retained(&format!("{error:#}"));
+			atomic(&state.join("engine-scratch.retained.json"), &receipt).with_context(|| {
+				format!("retain scratch after original supervision error: {error:#}")
+			})?;
+			Err(error)
+		}
+	}
 }
 fn supervise(id: &str, interactive: bool) -> Result<()> {
 	if unsafe { libc::geteuid() } == 0 {
@@ -1368,6 +1527,14 @@ fn supervise(id: &str, interactive: bool) -> Result<()> {
 	// this upgrade emits a witnessed receipt without issuing a new dispatch.
 	let state = PathBuf::from(std::env::var("STATE_DIRECTORY")?);
 	let q = spec.request;
+	let scratch = if !interactive && engine_owner::selected(&q.args, q.stdin.as_deref()) {
+		let owner =
+			engine_owner::ScratchOwner::prepare(&fs::canonicalize(&state)?, id, &spec.nonce)?;
+		atomic(&state.join("engine-scratch.json"), &owner.binding)?;
+		Some(owner)
+	} else {
+		None
+	};
 	let cwd =
 		Path::new(q.cwd.as_deref().unwrap_or(&spec.workspace)).strip_prefix(&spec.workspace)?;
 	let exe = if Path::new(&q.executable).starts_with(&spec.workspace) {
@@ -1384,7 +1551,18 @@ fn supervise(id: &str, interactive: bool) -> Result<()> {
 		.env("LANG", "C.UTF-8")
 		.env("TERM", "xterm-256color")
 		.envs(&q.env)
-		.env("HEPTA_RUNTIME_JOB_ID", id);
+		.env("HEPTA_RUNTIME_JOB_ID", id)
+		.env_remove("HEPTA_RUNTIME_ENGINE_SCRATCH");
+	if let Some(owner) = &scratch {
+		use std::os::unix::process::CommandExt;
+		cmd.env(
+			"HEPTA_RUNTIME_ENGINE_SCRATCH",
+			serde_json::to_string(&owner.binding)?,
+		);
+		// This remains inside the original systemd unit. Its unreaped leader
+		// reserves the group until every engine descendant is stopped.
+		cmd.process_group(0);
+	}
 	if interactive {
 		cmd.stdin(Stdio::inherit())
 			.stdout(Stdio::inherit())
@@ -1409,12 +1587,23 @@ fn supervise(id: &str, interactive: bool) -> Result<()> {
 			return Err(e);
 		}
 	};
-	let outcome = finish_supervision(
-		child,
-		capture,
-		Duration::from_secs(q.timeout_seconds.unwrap_or(3600)),
-		|| STOP.load(Ordering::SeqCst),
-	)?;
+	let worker_pid = child.child.id();
+	let timeout = Duration::from_secs(q.timeout_seconds.unwrap_or(3600));
+	let outcome = if let Some(owner) = &scratch {
+		retain_engine_supervision_failure(
+			&state,
+			owner,
+			finish_supervision_with_engine_group(
+				child,
+				capture,
+				timeout,
+				|| STOP.load(Ordering::SeqCst),
+				true,
+			),
+		)?
+	} else {
+		finish_supervision(child, capture, timeout, || STOP.load(Ordering::SeqCst))?
+	};
 	let code = if outcome.timed_out {
 		124
 	} else {
@@ -1423,7 +1612,7 @@ fn supervise(id: &str, interactive: bool) -> Result<()> {
 			.code()
 			.unwrap_or(128 + outcome.status.signal().unwrap_or(0))
 	};
-	let receipt = Exit::new(
+	let mut receipt = Exit::new(
 		id,
 		spec.nonce,
 		code,
@@ -1432,6 +1621,8 @@ fn supervise(id: &str, interactive: bool) -> Result<()> {
 		protocol,
 		outcome.capture,
 	);
+	receipt.scratch_cleanup =
+		scratch.map(|owner| owner.finish(worker_pid, outcome.engine_group_stopped));
 	publish_terminal(&state, &receipt)?;
 	supervisor_capture_result(&receipt)?;
 	Ok(())
@@ -1501,3 +1692,7 @@ fn main() {
 #[cfg(test)]
 #[path = "../jobctl_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "../jobctl_engine_scratch_tests.rs"]
+mod engine_scratch_tests;

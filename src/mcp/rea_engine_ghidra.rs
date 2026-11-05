@@ -8,7 +8,7 @@ use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use std::os::fd::AsRawFd;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{
 	atomic::{AtomicU64, Ordering},
 	Arc,
@@ -402,7 +402,8 @@ async fn analyze_inner(
 		},
 			"Ghidra installation files are hash-checked against a sealed manifest and re-admitted before and after import, but are not sealed execution snapshots",
 			"Selected JRE path checks do not attest the complete system shared-library closure; privileged concurrent writers can race observations",
-			"Aggregate scratch bytes are sampled every 250 ms rather than enforced by a hard filesystem quota; interruption can leave logged private scratch"]
+			"Aggregate scratch bytes are sampled every 250 ms rather than enforced by a hard filesystem quota",
+			"Durable jobs clean adopted private scratch only after the original process group stops; unknown owner outcomes retain it. Standalone workers have no crash-recovery owner"]
 	}))
 }
 
@@ -414,20 +415,24 @@ pub(super) async fn analyze(input: WorkerRequest) -> Result<Value> {
 		.context("Ghidra profile lacks installation identity")?;
 	let started = Instant::now();
 	let deadline = started + Duration::from_secs(input.profile.timeout_seconds);
-	let work: PathBuf = scratch(&input.profile.working_directory, "ghidra").await?;
+	let work = scratch(&input.profile.working_directory, "ghidra").await?;
 	let result = analyze_inner(&input, engine, &work, started, deadline).await;
-	let cleanup = tokio::fs::remove_dir_all(&work).await;
+	let cleanup_owner = work.cleanup_owner();
+	let retained_path = work.display().to_string();
+	let cleanup = work.finish().await;
 	match (result, cleanup) {
-		(Ok(mut report), Ok(())) => {
-			report["scratch"]["removed_after_operation"] = json!(true);
+		(Ok(mut report), Ok(removed)) => {
+			report["scratch"]["removed_after_operation"] = json!(removed);
+			report["scratch"]["cleanup_pending"] = json!(!removed);
+			report["scratch"]["cleanup_owner"] = json!(cleanup_owner);
 			report["native_report_id"] = json!(format!(
 				"hepta_rea_static_v1_{}",
 				sha256(&serde_json::to_vec(&report)?)
 			));
 			Ok(report)
 		}
-		(Err(error), Ok(())) => Err(error),
+		(Err(error), Ok(_)) => Err(error),
 		(_, Err(error)) => Err(error)
-			.with_context(|| format!("Ghidra scratch cleanup incomplete: {}", work.display())),
+			.with_context(|| format!("Ghidra scratch cleanup incomplete: {retained_path}")),
 	}
 }

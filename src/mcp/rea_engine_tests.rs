@@ -38,7 +38,7 @@ async fn private_engine_scratch_is_created_with_owner_only_permissions() {
 		.await
 		.unwrap();
 	assert_eq!(
-		tokio::fs::metadata(&work)
+		tokio::fs::metadata(&*work)
 			.await
 			.unwrap()
 			.permissions()
@@ -46,5 +46,5 @@ async fn private_engine_scratch_is_created_with_owner_only_permissions() {
 		0o700
 	);
 	assert_eq!(disk_usage(&work).await.unwrap(), 0);
-	tokio::fs::remove_dir_all(work).await.unwrap();
+	assert!(work.finish().await.unwrap());
 }
