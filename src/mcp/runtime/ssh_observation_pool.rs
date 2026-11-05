@@ -2,6 +2,7 @@
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! A separate, explicitly opted-in transport; it never falls back or replays.
+//! 待验容量候选：全局预算 12、接纳上限 16；每主机 2、master 8 及原生命周期约束保持不变。
 #[path = "ssh_observation_postspawn.rs"]
 mod postspawn;
 #[path = "ssh_observation_profile.rs"]
@@ -32,12 +33,12 @@ use tokio::time::{timeout, timeout_at, Instant};
 use tokio_util::sync::CancellationToken;
 
 const MAX_MASTERS: usize = 8;
-const MAX_SESSIONS: usize = 8;
+const MAX_SESSIONS: usize = 12;
 const HOST_SESSIONS: usize = 2;
 const QUEUE: usize = 8;
-// Same logical request bound as eight executing/retained outputs plus the
-// original eight channel entries. Moving a waiter cannot create new capacity.
-const MAX_ADMITTED: usize = MAX_SESSIONS + QUEUE;
+// Keep the logical request bound independent of the active global budget and
+// channel size. Moving a waiter cannot create a seventeenth accepted identity.
+const MAX_ADMITTED: usize = 16;
 const IDLE: Duration = Duration::from_secs(30);
 const AGE: Duration = Duration::from_secs(120);
 const START: Duration = Duration::from_secs(12);
@@ -1390,7 +1391,7 @@ impl Core {
 		initial: OwnedSemaphorePermit,
 	) -> Result<()> {
 		// The full initial authority check and its bounded agent frame use the
-		// same eight-budget pool as capture. No budget waits behind a hot host.
+		// same global budget pool as capture. No budget waits behind a hot host.
 		let _budget = initial;
 		tokio::select! {
 			value = self.verify_request_profile(request.deadline) => value?,
@@ -1812,7 +1813,7 @@ impl Core {
 					if let Err(error) = result { break Err(anyhow!("observation request supervisor failed: {error}")); }
 				},
 				// At most sixteen logical requests exist, including these cheap
-				// host waiters. Expensive preflight/capture still share global8.
+				// host waiters. Expensive preflight/capture share the global budget.
 				permit = global.clone().acquire_owned(), if !pending.is_empty() && work.len() < MAX_ADMITTED => {
 					let permit = match permit {
 						Ok(permit) => permit,

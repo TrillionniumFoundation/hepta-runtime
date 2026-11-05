@@ -2,6 +2,7 @@
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! Isolated observation scheduling, ownership and recovery fixtures.
+//! 全局预算扩至 12 后仍验证 16 个接纳身份，并保留排队、取消、输出持有及失败冻结覆盖。
 use super::*;
 use serde_json::json;
 use std::future::Future;
@@ -96,7 +97,7 @@ async fn queued_proxy_waiters_keep_sixteen_identities_and_send_each_request_once
 	let deadline = Instant::now() + Duration::from_secs(30);
 	let mut replies = fill_proxy_channel(&proxy, deadline).await;
 	let mut waiters = Vec::new();
-	for index in 0..MAX_ADMITTED - QUEUE {
+	for index in 0..16 - QUEUE {
 		let mut task = Box::pin(proxy_submission(
 			proxy.clone(),
 			format!("waiting-{index}"),
@@ -145,7 +146,7 @@ async fn queued_proxy_waiters_keep_sixteen_identities_and_send_each_request_once
 		assert_eq!(proxy.sender.capacity(), 0);
 		assert_eq!(proxy.admission.available_permits(), 0);
 	}
-	for index in 0..MAX_ADMITTED - QUEUE {
+	for index in 0..16 - QUEUE {
 		let request = receiver.try_recv().unwrap();
 		assert_eq!(request.command, format!("waiting-{index}"));
 		requests.push(request);
@@ -154,7 +155,7 @@ async fn queued_proxy_waiters_keep_sixteen_identities_and_send_each_request_once
 		receiver.try_recv(),
 		Err(mpsc::error::TryRecvError::Empty)
 	));
-	assert_eq!(requests.len(), MAX_ADMITTED);
+	assert_eq!(requests.len(), 16);
 	for request in &requests {
 		assert_eq!(request.host, "fixture");
 		assert_eq!(request.input.as_slice(), request.command.as_bytes());
@@ -169,7 +170,7 @@ async fn queued_proxy_waiters_keep_sixteen_identities_and_send_each_request_once
 		assert!(reply.await.is_err());
 	}
 	assert_eq!(proxy.sender.capacity(), QUEUE);
-	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED);
+	assert_eq!(proxy.admission.available_permits(), 16);
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -1144,10 +1145,12 @@ async fn queued_admission_fixture(core: &Arc<Core>, kind: &str, agent: &Arc<Agen
 	let (sender, receiver) = mpsc::channel(QUEUE);
 	let mut replies = Vec::new();
 	let mut cancellations = Vec::new();
+	let remaining = MAX_ADMITTED - MAX_SESSIONS;
+	assert!((3..=QUEUE).contains(&remaining));
 	let initially_queued = if kind == "queue-stop" {
-		QUEUE - 1
+		remaining - 1
 	} else {
-		QUEUE
+		remaining
 	};
 	for _ in 0..initially_queued {
 		let (reply, receive) = oneshot::channel();
@@ -1175,7 +1178,7 @@ async fn queued_admission_fixture(core: &Arc<Core>, kind: &str, agent: &Arc<Agen
 	.await;
 	assert_eq!(sender.capacity(), QUEUE);
 	assert_eq!(permits.available_permits(), 0);
-	assert_eq!(admissions.available_permits(), QUEUE - initially_queued);
+	assert_eq!(admissions.available_permits(), remaining - initially_queued);
 	for reply in &mut replies {
 		assert!(matches!(
 			reply.as_mut().unwrap().try_recv(),
@@ -1183,7 +1186,7 @@ async fn queued_admission_fixture(core: &Arc<Core>, kind: &str, agent: &Arc<Agen
 		));
 	}
 	if kind == "queue-stop" {
-		// The actor is not polled between enqueue and cancellation: seven
+		// The actor is not polled between enqueue and cancellation: earlier
 		// requests are pending and one remains in the channel when stop fires.
 		let waiting = enqueue_fair_request(
 			&sender,
@@ -1522,6 +1525,9 @@ async fn fairness_fixture(core: &Arc<Core>, kind: &str) {
 		"fair-retained" => {
 			release.add_permits(MAX_SESSIONS);
 			for index in 0..MAX_SESSIONS {
+				if sender.capacity() == 0 {
+					drained(&sender).await;
+				}
 				requests.push(enqueue_fair_request(
 					&sender,
 					&admissions,
@@ -1545,15 +1551,16 @@ async fn fairness_fixture(core: &Arc<Core>, kind: &str) {
 				phase_notice(&mut preflight).await;
 			}
 			executed.sort();
-			assert_eq!(
-				executed,
-				(0..MAX_SESSIONS)
-					.map(|index| format!("output-{index}"))
-					.collect::<Vec<_>>()
-			);
+			let mut expected: Vec<_> = (0..MAX_SESSIONS)
+				.map(|index| format!("output-{index}"))
+				.collect();
+			expected.sort();
+			assert_eq!(executed, expected);
+			assert_eq!(retained.len(), 12);
 			assert_eq!(permits.available_permits(), 0);
-			assert_eq!(admissions.available_permits(), QUEUE);
-			for index in 0..QUEUE {
+			let remaining = 16 - retained.len();
+			assert_eq!(admissions.available_permits(), remaining);
+			for index in 0..remaining {
 				requests.push(enqueue_fair_request(
 					&sender,
 					&admissions,
@@ -1563,8 +1570,8 @@ async fn fairness_fixture(core: &Arc<Core>, kind: &str) {
 				));
 			}
 			drained(&sender).await;
-			// Captured outputs count toward the same 16: eight retained plus
-			// eight pending cannot turn into eight retained plus 16 pending.
+			// Twelve retained outputs leave only four logical identities; moving
+			// them from the channel into pending cannot enlarge admission16.
 			assert_eq!(admissions.available_permits(), 0);
 			assert!(admissions.clone().try_acquire_owned().is_err());
 			assert!(started.try_recv().is_err());
@@ -1615,6 +1622,23 @@ async fn fairness_fixture(core: &Arc<Core>, kind: &str) {
 			let closed = enqueue_fair_request(&sender, &admissions, "fixture", "closed", deadline);
 			let unknown =
 				enqueue_fair_request(&sender, &admissions, "outside-profile", "unknown", deadline);
+			drained(&sender).await;
+			cancelled.cancel.cancel();
+			drop(closed);
+			// Only four non-output identities fit while twelve budgets are held.
+			// Observe every original refusal before adding the future deadline;
+			// none may require a global budget or submit a child.
+			for request in [cancelled, expired] {
+				let error = timeout(Duration::from_secs(3), request.reply)
+					.await
+					.unwrap()
+					.unwrap()
+					.err()
+					.unwrap();
+				assert!(error.to_string().contains("cancelled before admission"));
+			}
+			let error = unknown.reply.await.unwrap().err().unwrap();
+			assert!(error.to_string().contains("outside observation profile"));
 			requests.push(enqueue_fair_request(
 				&sender,
 				&admissions,
@@ -1622,12 +1646,7 @@ async fn fairness_fixture(core: &Arc<Core>, kind: &str) {
 				"still-pending",
 				deadline,
 			));
-			drained(&sender).await;
-			cancelled.cancel.cancel();
-			drop(closed);
-			// Introduce the future deadline only after the earlier queue is
-			// drained. With no intervening await, this assertion has no race
-			// against the actor or a slow three-second drain timeout.
+			// No await separates this deadline from its initial empty reply.
 			let mut expiring = enqueue_fair_request(
 				&sender,
 				&admissions,
@@ -1639,17 +1658,13 @@ async fn fairness_fixture(core: &Arc<Core>, kind: &str) {
 				expiring.reply.try_recv(),
 				Err(oneshot::error::TryRecvError::Empty)
 			));
-			for request in [cancelled, expired, expiring] {
-				let error = timeout(Duration::from_secs(3), request.reply)
-					.await
-					.unwrap()
-					.unwrap()
-					.err()
-					.unwrap();
-				assert!(error.to_string().contains("cancelled before admission"));
-			}
-			let error = unknown.reply.await.unwrap().err().unwrap();
-			assert!(error.to_string().contains("outside observation profile"));
+			let error = timeout(Duration::from_secs(3), expiring.reply)
+				.await
+				.unwrap()
+				.unwrap()
+				.err()
+				.unwrap();
+			assert!(error.to_string().contains("cancelled before admission"));
 			assert_eq!(
 				admissions.available_permits(),
 				MAX_ADMITTED - MAX_SESSIONS - 1
@@ -1961,6 +1976,9 @@ async fn phased_preflight_fixture(core: &Arc<Core>, agent: &Arc<AgentControl>) {
 	let actor = tokio::task::spawn_local(core.clone().run_with_capacity(receiver, permits.clone()));
 	let mut requests = Vec::new();
 	for index in 0..MAX_SESSIONS {
+		if sender.capacity() == 0 {
+			drained(&sender).await;
+		}
 		requests.push(enqueue_fair_request(
 			&sender,
 			&admissions,
@@ -1969,7 +1987,7 @@ async fn phased_preflight_fixture(core: &Arc<Core>, agent: &Arc<AgentControl>) {
 			Instant::now() + Duration::from_secs(40),
 		));
 	}
-	// Run the actual execute path. All eight real agent/profile checks finish
+	// Run the actual execute path. All twelve real agent/profile checks finish
 	// while the original host semaphore is occupied and no SSH child exists.
 	timeout(Duration::from_secs(5), async {
 		loop {

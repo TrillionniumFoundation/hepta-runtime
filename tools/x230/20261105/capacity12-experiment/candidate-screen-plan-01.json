@@ -1,0 +1,375 @@
+{
+  "schema": "hepta-pooled-observation-capacity12-screen-plan/v1",
+  "created_utc": "2026-11-05T17:49:03.839577+00:00",
+  "status": "decision_rules_preselected; execution_blocked; not_executed",
+  "candidate_selected_for_execution": false,
+  "decision_rules_fixed_before_this_candidate_measurement": true,
+  "execution_protocol_frozen": false,
+  "source_scope": "R24 plus the two bound capacity12 pool/test files only; no compiler CPU flags or direct/cancellation reserve change",
+  "A": {
+    "version": "accepted R24",
+    "source_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+    "src_tree": "b71cac25e2c2138837f27f3c74f6a2dc5c56b565",
+    "runtime": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/hepta-runtime",
+      "bytes": 14373416,
+      "sha256": "bc14cab1e632d6cd703f6a0f65d1a8e513b4471c09a403186d72e989e3f74c13"
+    },
+    "identity_evidence": "R24_ELF_metadata",
+    "revalidate_accepted_before_execution": true
+  },
+  "B": {
+    "runtime": {
+      "path": null,
+      "bytes": null,
+      "sha256": null
+    },
+    "source_commit": null,
+    "formatted_source_map": null,
+    "qualification_receipt": null,
+    "rust_CI_receipt": null,
+    "python_CI_receipt": null,
+    "native_recipe": null,
+    "output_root": null,
+    "launch_idempotency_key": null,
+    "performance_results": null
+  },
+  "qualification_before_measurement": {
+    "native_X230_only": true,
+    "stages": [
+      "format",
+      "fmt-check",
+      "harness-tests",
+      "clippy",
+      "test-build",
+      "isolated-tests",
+      "audit-isolated-tests",
+      "release"
+    ],
+    "expected_passed": 1645,
+    "expected_failed": 0,
+    "expected_ignored": 34,
+    "expected_selected": 1679,
+    "test_filter": "",
+    "automatic_retries": 0,
+    "original_case_timeout_seconds": 180,
+    "exact_case_names_and_ignored_state_must_match_R24_by_target": true,
+    "original_summary_evidence": "R24_test_summary",
+    "original_named_inventory_audit": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/isolated-tests.audit.json",
+      "bytes": 1419928,
+      "sha256": "ef6c04fc00bcf273fc7c46b79dd41dbc6b654fa088aa0f642d1a0de4e9990aa5",
+      "identity_source": "R24_original_audit_file_info",
+      "full_named_inventory_not_materialized_or_compared_in_this_plan_task": true
+    },
+    "pool_isolated_fixture_kinds_preserved": 50,
+    "formatted_source_must_be_rehashed_and_match_tested_and_release_inputs": true,
+    "full_native_Rust_and_Python_CI_required": true,
+    "counts_are_expected_inventory_not_B_results": true
+  },
+  "common_campaign": {
+    "hosts": [
+      "ai395",
+      "mac",
+      "main",
+      "pocket4",
+      "rog",
+      "x230"
+    ],
+    "controller": "x230",
+    "workers": 2,
+    "MALLOC_ARENA_MAX": "1",
+    "order": [
+      "A",
+      "B",
+      "B",
+      "A"
+    ],
+    "rounds": 4,
+    "observation_ABBA_campaigns": 1,
+    "normal_lifecycle_ABBA_campaigns": 1,
+    "same_original_workload_warmup_aggregation_and_evidence_rules": true,
+    "exact_harness_topology_config_monitor_inputs_and_fresh_output_paths_must_be_bound_before_execution": true,
+    "reuse_compiler_or_R28_run_directories": false,
+    "training": false
+  },
+  "observation": {
+    "concurrency": [
+      1,
+      8,
+      16
+    ],
+    "each_concurrency": {
+      "successful_throughput_B_over_A_min": 0.95,
+      "RPC_p95_B_over_A_max": 1.1,
+      "controller_own_CPU_per_success_B_over_A_max": 1.1
+    },
+    "common_threshold_evidence": "R28_observation_summary",
+    "metric_mapping": {
+      "throughput": "cases[].calls_per_second under original zero-failed-call correctness validation",
+      "CPU": "cases[].controller_cpu_ms_per_call; same-PID/birth utime+stime only; all measured calls must be successful",
+      "aggregation": "original independent observation analysis and arm aggregation, with all original cells retained",
+      "excluded_CPU": [
+        "waited local child CPU",
+        "SSH/harness CPU",
+        "remote-host or cluster CPU"
+      ]
+    },
+    "RSS": {
+      "extra_KiB_max": 512,
+      "ratio_max": 1.05,
+      "combination": "B <= min(A + 512 KiB, A * 1.05)",
+      "aggregation": "maximum sampled controller RSS across all four native controllers per arm, including restarts"
+    },
+    "original_C32": {
+      "required": true,
+      "normal_admitted_limit": 16,
+      "original_independent_boundary_verifier_pass_required": true,
+      "capacity_rejection_observed_required": true,
+      "drain_and_recovery_required": true,
+      "other_errors_allowed": 0,
+      "fixed_rejection_count_required": false,
+      "scope": "retain original C32 boundary proof; do not promote historical observed32/32 counts into a new fixed gate"
+    },
+    "original_C6_canary": {
+      "required": true,
+      "full_original_correctness_and_independent_audit_required": true,
+      "new_jobs": 6,
+      "same_key_lookups": 12,
+      "cancellations": 12,
+      "not_a_lifecycle_ABBA_performance_claim": true
+    }
+  },
+  "capacity_adoption_rule": {
+    "preselected_for_this_new_candidate": true,
+    "observed_result": null,
+    "primary_concurrency": 16,
+    "C16_successful_throughput_B_over_A_min": 1.03,
+    "C16_controller_own_CPU_per_success_B_over_A_max": 1.0,
+    "all_other_applicable_common_gates_must_pass": true,
+    "failure_of_any_applicable_gate_rejects_candidate": true,
+    "global_budget_increase_to12_alone_is_not_success": true,
+    "compiler_C8_1p03_and_0p97_rule_not_transferred": true,
+    "statistical_significance_or_global_optimality_claim": false
+  },
+  "normal_lifecycle": {
+    "required": true,
+    "policy_evidence": "normal_lifecycle_policy",
+    "analyzer_evidence": "normal_lifecycle_analyzer",
+    "required_groups": [
+      "all_operations",
+      "launch",
+      "concurrent_cancel"
+    ],
+    "measured_phases": [
+      "launch",
+      "same_key_after_crash",
+      "concurrent_cancel",
+      "same_key_after_cancel",
+      "cancel_after_terminal"
+    ],
+    "new_jobs_per_round": 6,
+    "phase_concurrency": 6,
+    "per_arm_all_operations_calls": 60,
+    "per_arm_launch_calls": 12,
+    "per_arm_concurrent_cancel_calls": 12,
+    "throughput_B_over_A_min": 0.95,
+    "RPC_p95_B_over_A_max": 1.1,
+    "throughput_definition": "successful RPC count / sum of complete per-phase RPC spans",
+    "p95_definition": "sorted RPC latency at ceil(n*0.95)-1",
+    "CPU_gate": "B_group_own_CPU_seconds <= A_group_own_CPU_seconds + sum(1 / actual_clock_ticks_per_second for each selected B phase/round)",
+    "CPU_tolerance_ticks_per_selected_B_phase_per_round": 1,
+    "original_analyzer_numeric_epsilon_seconds": 1e-12,
+    "CPU_scope": "utime+stime only; waited local child CPU remains separate and cannot replace this gate",
+    "RSS": {
+      "extra_KiB_max": 512,
+      "ratio_max": 1.05,
+      "combination": "B <= min(A + 512 KiB, A * 1.05)",
+      "aggregation": "maximum sampled controller RSS across all three generations in both rounds per arm"
+    },
+    "no_new_tick_or_RSS_tolerance": true
+  },
+  "historical_cancel_reserve_saturation": {
+    "applicability": false,
+    "result": null,
+    "is_a_pass": false,
+    "scope_decision_recorded_before_capacity12_measurement": true,
+    "owner": "R25 cancellation-reserve candidate, inherited by R26 and R28",
+    "reason": "Prior R24 API did not promise cancellation admission under ordinary direct overload. Capacity12 changes the separate observation pool only; R24 same-key reconciliation and cancellation still share ordinary direct16/8/2 without reserve. No reserve capability is added or claimed.",
+    "scope_evidence": [
+      "R25_reserve_scope",
+      "R25_reserve_candidate",
+      "R24_direct_route_sources"
+    ],
+    "original_gate_and_requirements_unchanged": true,
+    "original_requirements": {
+      "pressure_original_same_key_calls": 32,
+      "normal_pending_before_cancel": 16,
+      "normal_status_unavailable": 16,
+      "unchanged_original_held_Children": 8,
+      "ordinary_per_host_max": 2,
+      "cancel_acknowledgements_before_release": 6,
+      "fixed_gate_seconds": 8,
+      "zero_automatic_retries": true,
+      "original_status_predicate_only_effect_commands_ungated": true,
+      "full_original_job_identity_terminal_output_witness_restart_and_topology_audit": true,
+      "release_then_complete_drain_then_retire_before_restart": true
+    },
+    "verifier_evidence": [
+      "original_saturation_verifier",
+      "original_saturation_full_auditor"
+    ],
+    "scope_is_control_availability_not_throughput": true,
+    "if_direct_cancel_or_reserve_scope_changes": "invalidate this scope decision and freeze a new candidate plan before any measurement; do not silently reuse applicability=false"
+  },
+  "R28_context": {
+    "accepted": false,
+    "original_observation_rejected": true,
+    "C1_throughput_B_over_A": 0.920406142147403,
+    "C1_throughput_change_percent": -7.959385785259698,
+    "same_failed_candidate_repeated": false,
+    "cache_only_does_not_mean_only_cache_changed_relative_to_R24": true,
+    "qualified_source_still_has_and_routes_cancellation_to_reserve": true,
+    "source_map_evidence": "R28_qualified_source_map",
+    "source_evidence": "R28_reserve_route_sources",
+    "R26_or_R28_gates_or_results_modified": false
+  },
+  "attempt_rules": {
+    "unchanged_failed_candidate_retry": false,
+    "threshold_change_after_result": false,
+    "new_key_to_repeat_failed_campaign": false,
+    "round_subset_or_favorable_run_selection": false,
+    "unknown_launch_same_full_request_same_key_reconciliation": true,
+    "retain_all_original_failures_and_full_outputs": true,
+    "training_is_validation": false,
+    "changed_accepted_version_requires_new_binding_and_pre_measurement_plan": true
+  },
+  "execution_blockers": [
+    "B actual formatted/tested source map and release ELF identity are unknown; full native qualification and exact original case-name comparison not yet performed.",
+    "B Rust/Python CI and the complete exact native recipe/config/topology/monitor/input/output/key bindings are not prepared or verified.",
+    "Native and disk windows are not granted; available space and safe preparation have not been established for this candidate.",
+    "Recheck the accepted version before selection; if it changes fromR24, rebind the baseline and candidate instead of relabeling this plan."
+  ],
+  "native_executed": false,
+  "CI_executed": false,
+  "measurement_executed": false,
+  "executor_or_request_created": false,
+  "old_patch_manifest_and_sources_unchanged": true,
+  "evidence": {
+    "candidate_manifest": {
+      "path": "/workspace/scratch/b96be991ab90/capacity12-candidate-01/manifest.json",
+      "bytes": 9835,
+      "sha256": "3710652ef5f2fa77b6ff7e494584f4959f5477ea09a5ad4489c6ba29ef862150"
+    },
+    "candidate_patch": {
+      "path": "/workspace/scratch/b96be991ab90/capacity12-candidate-01/capacity12.patch",
+      "bytes": 9516,
+      "sha256": "4ff4db05cae2c4a4d00092597d34460e363987584a0eb619af5bf464ae5689d6"
+    },
+    "R24_qualification": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/qualification-report.json",
+      "bytes": 83365,
+      "sha256": "bf0c5814d28b163e4a90405026cd4d90e399370d1f910f8ac48cb580af1e4971"
+    },
+    "R24_test_summary": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/isolated-tests-summary.json",
+      "bytes": 6878,
+      "sha256": "ccf23b817d83bbcd1bee10473fa897739c452b0727d9d85f53d3b593c45d90f1"
+    },
+    "R24_original_audit_file_info": {
+      "path": "/workspace/scratch/806ba5f52f94/r24-results/qualification-output-identities.json",
+      "bytes": 2806,
+      "sha256": "180fe8eee2484a61c310f4c41a0e745a8e1e651f6687a6715a38faa9f2033cdb"
+    },
+    "R24_ELF_metadata": {
+      "path": "/workspace/scratch/b96be991ab90/compiler-experiment/actual-metadata-01/report.json",
+      "bytes": 15772,
+      "sha256": "93d2c3acc11247b86cb9d016a9df2facc6f06c1a01eab0a7fecb175058a85754"
+    },
+    "R28_observation_summary": {
+      "path": "/workspace/scratch/806ba5f52f94/benchmark-r28/observation-operations-01/actual-receipts-01/summary.json",
+      "bytes": 13588,
+      "sha256": "c1df02071f3ebecde73de47cc3fe62daef2908981486db40287a995daabf5a0c"
+    },
+    "compiler_screen_plan_unchanged": {
+      "path": "/workspace/scratch/b96be991ab90/compiler-experiment/compiler-screen-plan.json",
+      "bytes": 3811,
+      "sha256": "0bb6cec902402e7fda41b1fc9e763d92735ee74e00f801ed588196d5470b8997"
+    },
+    "normal_lifecycle_policy": {
+      "path": "/workspace/scratch/806ba5f52f94/r25-lifecycle-audit/r26-tools-04/lifecycle-tools-04/lifecycle-gate-policy.json",
+      "bytes": 1575,
+      "sha256": "36658346c4e265bf551a1ae1a4c6210bec8e4729f7961302a203008741cd381e"
+    },
+    "normal_lifecycle_analyzer": {
+      "path": "/workspace/scratch/806ba5f52f94/r25-lifecycle-audit/r26-tools-04/lifecycle-tools-04/analyze_lifecycle_gates.py",
+      "bytes": 7581,
+      "sha256": "c7a861a94a89dd81debb5c055773918d89a1c9c29b699e2e5a0341e51be69553"
+    },
+    "R25_reserve_scope": {
+      "path": "/workspace/scratch/806ba5f52f94/r25-lifecycle-audit/lifecycle-tools/README.md",
+      "bytes": 9051,
+      "sha256": "344148096d20937e62772e2b4592ca5a2f0d6ba333239f522a6848752d2337d9"
+    },
+    "R25_reserve_candidate": {
+      "path": "/workspace/scratch/806ba5f52f94/r25-lifecycle-audit/candidate-manifest.json",
+      "bytes": 2032,
+      "sha256": "b02c9c8e8b2fb474a40b5a4783c1697e9397ac5a6efbca727bd4dfbdaca43835"
+    },
+    "original_saturation_verifier": {
+      "path": "/workspace/scratch/806ba5f52f94/r25-lifecycle-audit/r26-tools-04/lifecycle-tools-04/verify_saturation_extension.py",
+      "bytes": 9418,
+      "sha256": "23dfd25517b517067a4fbb3f4a3227f12bafff46b828eb05f7bf322596124e6a"
+    },
+    "original_saturation_full_auditor": {
+      "path": "/workspace/scratch/806ba5f52f94/r25-lifecycle-audit/r26-tools-04/lifecycle-tools-04/verify_cancel_saturation.py",
+      "bytes": 17123,
+      "sha256": "d3b6772ddffc711a23aa4aa9566f903c149535a3d3c4cc3466ee73690cbc1e75"
+    },
+    "R28_qualified_source_map": {
+      "path": "/workspace/scratch/806ba5f52f94/benchmark-r28/actual-qualification-receipts-02/qualified-source-map-01.json",
+      "bytes": 24278,
+      "sha256": "da8cbdfef75c1c9fc5861e4fe0bd96aeb98f635e95fc122610021cd725db1d28"
+    },
+    "R24_direct_route_sources": [
+      {
+        "repository_path": "src/mcp/runtime/jobs.rs",
+        "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/src/mcp/runtime/jobs.rs",
+        "bytes": 186456,
+        "sha256": "c9080de8aa9a35f7495aa2822a1495d297903900ae0f0de26d7b0c86d043d3c9"
+      },
+      {
+        "repository_path": "src/mcp/runtime/ssh.rs",
+        "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/src/mcp/runtime/ssh.rs",
+        "bytes": 16929,
+        "sha256": "4db25902c01d1a501f699ca26c9a70af49860127c625a9e0ff402572ad3e9829"
+      },
+      {
+        "repository_path": "src/mcp/runtime/ssh_direct.rs",
+        "path": "/workspace/scratch/806ba5f52f94/r24-tested-source/src/mcp/runtime/ssh_direct.rs",
+        "bytes": 19964,
+        "sha256": "9adc4ea54b1a53b301439135f6c9ac506fa75064759ce29552a6cee57a0ab083"
+      }
+    ],
+    "R28_reserve_route_sources": [
+      {
+        "repository_path": "src/mcp/runtime/ssh_direct.rs",
+        "path": "/workspace/scratch/806ba5f52f94/r26-candidate-proposal/candidate/src/mcp/runtime/ssh_direct.rs",
+        "bytes": 23292,
+        "sha256": "e6551f77683d80959e7f7c56f818edeb2ecb3d029442bbc87df475df5ab8ae0d"
+      },
+      {
+        "repository_path": "src/mcp/runtime/ssh.rs",
+        "path": "/workspace/scratch/806ba5f52f94/r25-capacity-audit/cancel-command-candidate-01/cache-only/src/mcp/runtime/ssh.rs",
+        "bytes": 19820,
+        "sha256": "b674dfcb60bc57c46a08f1ab1f424a8aadcdb2078abdcfdff30f71632e807b3d"
+      },
+      {
+        "repository_path": "src/mcp/runtime/jobs.rs",
+        "path": "/workspace/scratch/806ba5f52f94/r25-capacity-audit/cancel-command-candidate-01/cache-only/src/mcp/runtime/jobs.rs",
+        "bytes": 186541,
+        "sha256": "061c2576e3c1dd8a1e4f5bfd7d3498f7cc4141d6577d53365a9a4738c7980af6"
+      }
+    ]
+  }
+}
