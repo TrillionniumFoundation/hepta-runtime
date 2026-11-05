@@ -126,6 +126,25 @@ artifact's debug profile. An older receipt without those observations cannot
 authenticate the environment by assuming default values. This selection is
 not an inventory of every system, linker, toolchain or dependency input.
 
+The source selection now identifies `hepta.rea.execution-inputs.v2`. In addition
+to native source, tests and scripts, it includes complete non-cache inputs under
+`config`, `deploy`, `workers`, `vendor` and `tools`, plus `server.json`. The frozen
+REA package/source identity, compatibility inputs and capability map are selected
+explicitly under `docs/rea-native`. Their parent directories are monitored so a
+temporary edit followed by byte-for-byte restoration still invalidates a run.
+Native schemas and Java bridges are already covered under `src`. Cache and
+output directories may not overlap these selected inputs, including the frozen
+reference ancestors and Cargo configuration. Generated qualification receipts,
+ledgers and other documentation remain excluded to prevent circular identities.
+
+Earlier snapshots omitted some non-Rust execution inputs. They remain historical
+observations of their narrower selection and cannot authenticate this complete
+combination. The existing independent build consumer requires the original build
+snapshot to equal the current operation snapshot, including its selection, so an
+old receipt cannot be silently reused after the selection changes. This does not
+authenticate installed external engine bytes; each actual engine run still pins
+its own provider, executable and bridge observations.
+
 The importer preserves the original summary, three source artifacts and
 eighteen stage logs byte for byte in `build-evidence/`. It reads only the fixed
 sibling filenames, refuses links and special files, enforces size bounds and

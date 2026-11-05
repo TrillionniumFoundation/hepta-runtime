@@ -40,12 +40,15 @@ After those gates, an explicit all-feature Cargo build emits JSON compiler
 artifacts for the actual MCP binary. The binary requires remote-fs; observing a
 file after no-default-feature nextest does not prove that feature set built it.
 
-Source/fixture/config/script SHA-256 inventories bracket the gates. Linux
+Source/fixture/config/script SHA-256 inventories bracket the gates. Native
+bridges, deployed helpers, worker sources and complete vendored inputs share
+that inventory. Frozen REA identity and capability-map inputs are included even
+under docs; generated qualification outputs are excluded. Linux
 inotify also records local writes, replacements and metadata changes during the
 interval, including a change subsequently restored to the original bytes.
 Observed changes or loss of monitoring invalidate the run. This requires Linux
 and a filesystem delivering local inotify events; it is not a malicious same-UID
-or remote-filesystem mutation proof. Docs, results, build/cache directories and
+or remote-filesystem mutation proof. Other docs, results, build/cache directories and
 explicit test temporary directories are excluded. Toolchain, system libraries
 and the offline dependency cache remain trusted external inputs.
 
@@ -90,11 +93,20 @@ SCHEMA = "hepta.rea.full-qualification.v1"
 TOOLCHAIN = "1.95.0"
 # Match CI without changing the runner process or its private evidence permissions.
 CHILD_LAUNCH_UMASK = 0o022
-SOURCE_ROOTS = {"src", "tests", "test", "benches", "examples", "scripts", "crates"}
+SOURCE_ROOTS = {"src", "tests", "test", "benches", "examples", "scripts", "crates",
+                "config", "deploy", "workers", "vendor", "tools"}
+# These files select the reference and operation scope; generated ledger and
+# qualification receipts must remain outside the source identity to avoid a
+# receipt referring to itself. Existing source schemas and Java bridges are in src.
+REFERENCE_FILES = {
+    "docs/rea-native/PUBLISHED_6_8_0_ORACLE.json", "docs/rea-native/UPSTREAM.json",
+    "docs/rea-native/compatibility/REA_6_8_0_INPUTS.json",
+    "docs/rea-native/compatibility/REA_6_8_0_CAPABILITY_MAP.json",
+}
 ROOT_FILES = {
     "Cargo.toml", "Cargo.lock", "build.rs", "rust-toolchain",
     "rust-toolchain.toml", "rustfmt.toml", ".rustfmt.toml",
-    "clippy.toml", ".clippy.toml",
+    "clippy.toml", ".clippy.toml", "server.json",
 }
 CONFIG_FILES = {".cargo/config", ".cargo/config.toml", ".config/nextest.toml"}
 CACHE_DIRS = {
@@ -118,6 +130,13 @@ def utc_now():
 
 def inside(path, parent):
     return path == parent or parent in path.parents
+
+
+def storage_overlaps_inputs(repo, directory):
+    """A cache/output exclusion must never hide a selected execution input."""
+    inputs = SOURCE_ROOTS | ROOT_FILES | CONFIG_FILES | REFERENCE_FILES
+    return any(inside(directory, repo / name) or inside(repo / name, directory)
+               for name in inputs)
 
 
 def hash_file(path):
@@ -175,8 +194,15 @@ class Selection:
         parts = relative.parts
         if not parts:
             return False
-        if parts[0] == "docs" or any(part in CACHE_DIRS for part in parts):
+        if any(part in CACHE_DIRS for part in parts):
             return True
+        if parts[0] == "docs":
+            name = relative.as_posix()
+            # Keep only frozen input files and their parent directories visible
+            # to traversal/inotify. New results and prose do not invalidate builds.
+            if name not in REFERENCE_FILES and not any(
+                    reference.startswith(name + "/") for reference in REFERENCE_FILES):
+                return True
         # Exact temporary roots only; fixtures below tests/fixtures stay bound.
         if len(parts) >= 2 and parts[0] in {"test", "tests"} and parts[1] in TEST_TEMP_DIRS:
             return True
@@ -188,7 +214,7 @@ class Selection:
         relative = path.relative_to(self.repo)
         parts = relative.parts
         return bool(parts) and (
-            parts[0] in SOURCE_ROOTS or relative.as_posix() in CONFIG_FILES
+            parts[0] in SOURCE_ROOTS or relative.as_posix() in CONFIG_FILES | REFERENCE_FILES
             or (len(parts) == 1 and path.name in ROOT_FILES)
             or path.suffix == ".rs" or path.name in {"Cargo.toml", "Cargo.lock", "build.rs"}
         )
@@ -221,10 +247,13 @@ class Selection:
         return {
             "schema": "hepta.rea.source-snapshot.v1",
             "selection": {
+                "profile": "hepta.rea.execution-inputs.v2",
                 "source_roots": sorted(SOURCE_ROOTS), "root_files": sorted(ROOT_FILES),
                 "configuration_files": sorted(CONFIG_FILES),
+                "reference_files": sorted(REFERENCE_FILES),
                 "additional": "all .rs and Cargo.toml/Cargo.lock/build.rs outside exclusions",
-                "excluded": ["docs/**", "explicit target_dir/**", "explicit output_dir/**"]
+                "excluded": ["docs/** except reference_files and their ancestors",
+                             "explicit target_dir/**", "explicit output_dir/**"]
                 + sorted(CACHE_DIRS)
                 + ["tests/" + name + "/**" for name in sorted(TEST_TEMP_DIRS)]
                 + ["test/" + name + "/**" for name in sorted(TEST_TEMP_DIRS)]
@@ -554,14 +583,10 @@ def main():
                             (args.output_dir, args.cargo_home)):
             if inside(left, right) or inside(right, left):
                 raise RuntimeError("cargo_home, target_dir and output_dir must not overlap")
-        if inside(args.target_dir, args.repo):
-            relative_target = args.target_dir.relative_to(args.repo)
-            if relative_target.parts and relative_target.parts[0] in SOURCE_ROOTS:
-                raise RuntimeError("target_dir cannot occupy source inputs")
-        if inside(args.output_dir, args.repo):
-            relative = args.output_dir.relative_to(args.repo)
-            if relative.parts and relative.parts[0] in SOURCE_ROOTS:
-                raise RuntimeError("output_dir cannot occupy source, fixture or script inputs")
+        if storage_overlaps_inputs(args.repo, args.target_dir):
+            raise RuntimeError("target_dir cannot occupy source, reference or execution inputs")
+        if storage_overlaps_inputs(args.repo, args.output_dir):
+            raise RuntimeError("output_dir cannot occupy source, reference or execution inputs")
         target_lock = pin_target(args.target_dir, args.repo)
         cargo, rustc = executable(args.cargo), executable(args.rustc)
         env = os.environ.copy()
