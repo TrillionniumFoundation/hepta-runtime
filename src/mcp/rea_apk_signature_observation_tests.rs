@@ -1,0 +1,435 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Actual Android fixtures and adversarial declaration/verification separation.
+
+use super::*;
+
+const CUSTOM: &[u8] = include_bytes!("../../tests/fixtures/rea_apk_signature/custom-0103-rsa.apk");
+const V1_APK: &[u8] = include_bytes!("../../tests/fixtures/rea_apk_signature/v1-v2-v3.apk");
+const ROTATED: &[u8] = include_bytes!("../../tests/fixtures/rea_apk_signature/rotation-v31.apk");
+
+fn tlv(tag: u8, bytes: &[u8]) -> Vec<u8> {
+	let mut result = vec![tag];
+	if bytes.len() < 128 {
+		result.push(bytes.len() as u8);
+	} else {
+		let encoded = (bytes.len() as u32).to_be_bytes();
+		let start = encoded.iter().position(|b| *b != 0).unwrap();
+		result.push(0x80 | (4 - start) as u8);
+		result.extend(&encoded[start..]);
+	}
+	result.extend(bytes);
+	result
+}
+
+fn certificate() -> Vec<u8> {
+	let tail = archive::zip_tail(CUSTOM).unwrap();
+	let block = archive::signing_block(CUSTOM, &tail).unwrap();
+	scheme(&block, V2, "v2").unwrap().signers[0]
+		.certificate
+		.unwrap()
+		.to_vec()
+}
+
+fn certificate_field(cert: &[u8], index: usize, replacement: &[u8]) -> Vec<u8> {
+	let root = certificate::BerReader::new(cert)
+		.read(0, cert.len(), 0)
+		.unwrap();
+	let fields = &root.children[0].children;
+	let offset = usize::from(fields[0].tag == 0xa0);
+	let body = fields
+		.iter()
+		.enumerate()
+		.flat_map(|(at, node)| {
+			if at == offset + index {
+				replacement.to_vec()
+			} else {
+				node.full.to_vec()
+			}
+		})
+		.collect::<Vec<_>>();
+	tlv(
+		0x30,
+		&[
+			tlv(0x30, &body),
+			root.children[1].full.to_vec(),
+			root.children[2].full.to_vec(),
+		]
+		.concat(),
+	)
+}
+
+fn cms() -> Vec<u8> {
+	let cert = certificate();
+	let root = certificate::BerReader::new(&cert)
+		.read(0, cert.len(), 0)
+		.unwrap();
+	let fields = &root.children[0].children;
+	let offset = usize::from(fields[0].tag == 0xa0);
+	let sha256 = tlv(0x30, &tlv(0x06, b"\x60\x86\x48\x01\x65\x03\x04\x02\x01"));
+	let rsa = tlv(0x30, &tlv(0x06, b"\x2a\x86\x48\x86\xf7\x0d\x01\x01\x01"));
+	let signer = tlv(
+		0x30,
+		&[
+			tlv(2, &[1]),
+			tlv(
+				0x30,
+				&[fields[offset + 2].full, fields[offset].full].concat(),
+			),
+			sha256.clone(),
+			rsa,
+			tlv(4, b"declared-only-not-a-signature"),
+		]
+		.concat(),
+	);
+	let signed = tlv(
+		0x30,
+		&[
+			tlv(2, &[1]),
+			tlv(0x31, &sha256),
+			tlv(0x30, &tlv(6, b"\x2a\x86\x48\x86\xf7\x0d\x01\x07\x01")),
+			tlv(0xa0, &cert),
+			tlv(0x31, &signer),
+		]
+		.concat(),
+	);
+	tlv(
+		0x30,
+		&[
+			tlv(6, b"\x2a\x86\x48\x86\xf7\x0d\x01\x07\x02"),
+			tlv(0xa0, &signed),
+		]
+		.concat(),
+	)
+}
+
+fn zip(entries: &[(&[u8], &[u8])]) -> Vec<u8> {
+	let mut bytes = Vec::new();
+	let mut directory = Vec::new();
+	for (name, data) in entries {
+		let offset = bytes.len() as u32;
+		let mut local = vec![0; 30];
+		local[..4].copy_from_slice(b"PK\x03\x04");
+		local[18..22].copy_from_slice(&(data.len() as u32).to_le_bytes());
+		local[22..26].copy_from_slice(&(data.len() as u32).to_le_bytes());
+		local[26..28].copy_from_slice(&(name.len() as u16).to_le_bytes());
+		bytes.extend(local);
+		bytes.extend(*name);
+		bytes.extend(*data);
+		let mut central = vec![0; 46];
+		central[..4].copy_from_slice(b"PK\x01\x02");
+		central[20..24].copy_from_slice(&(data.len() as u32).to_le_bytes());
+		central[24..28].copy_from_slice(&(data.len() as u32).to_le_bytes());
+		central[28..30].copy_from_slice(&(name.len() as u16).to_le_bytes());
+		central[42..46].copy_from_slice(&offset.to_le_bytes());
+		directory.extend(central);
+		directory.extend(*name);
+	}
+	let central = bytes.len();
+	let size = directory.len();
+	bytes.extend(directory);
+	let mut end = vec![0; 22];
+	end[..4].copy_from_slice(b"PK\x05\x06");
+	end[8..10].copy_from_slice(&(entries.len() as u16).to_le_bytes());
+	end[10..12].copy_from_slice(&(entries.len() as u16).to_le_bytes());
+	end[12..16].copy_from_slice(&(size as u32).to_le_bytes());
+	end[16..20].copy_from_slice(&(central as u32).to_le_bytes());
+	bytes.extend(end);
+	bytes
+}
+
+fn rebuild(pairs: &[(u32, Vec<u8>)]) -> Vec<u8> {
+	let tail = archive::zip_tail(CUSTOM).unwrap();
+	let old = archive::signing_block(CUSTOM, &tail).unwrap().unwrap();
+	let mut values = Vec::new();
+	for (id, bytes) in pairs {
+		values.extend(((bytes.len() + 4) as u64).to_le_bytes());
+		values.extend(id.to_le_bytes());
+		values.extend(bytes);
+	}
+	let size = (values.len() + 24) as u64;
+	let mut bytes = CUSTOM[..old.start].to_vec();
+	bytes.extend(size.to_le_bytes());
+	bytes.extend(values);
+	bytes.extend(size.to_le_bytes());
+	bytes.extend(b"APK Sig Block 42");
+	let central = bytes.len();
+	bytes.extend(&CUSTOM[tail.central..tail.eocd]);
+	let mut end = CUSTOM[tail.eocd..].to_vec();
+	end[16..20].copy_from_slice(&(central as u32).to_le_bytes());
+	bytes.extend(end);
+	bytes
+}
+
+#[test]
+fn real_android_v1_and_v31_declarations_are_complete_typed_observations() {
+	let observed = inspect(V1_APK).unwrap();
+	let v1 = &observed.result.schemes.v1;
+	assert!(v1.present && v1.has_manifest);
+	assert_eq!(v1.signers.len(), 1);
+	let signer = &v1.signers[0];
+	assert!(signer.decode_error.is_none());
+	assert_eq!(
+		signer.signer_infos[0].identified_by,
+		SignerIdentifier::IssuerAndSerial
+	);
+	let cert = signer.certificate.as_ref().unwrap();
+	assert_eq!(
+		signer.signer_infos[0].certificate_sha256.as_deref(),
+		Some(cert.sha256_fingerprint.as_str())
+	);
+	assert_eq!(cert.public_key_algorithm.as_deref(), Some("rsa"));
+	assert_eq!(cert.serial_number.as_deref(), Some("11"));
+	assert_eq!(
+		observed.result.posture.v1_signers_match_block_signers,
+		Some(true)
+	);
+	assert_eq!(observed.result.posture.self_consistent, Some(true));
+	let observed = inspect(ROTATED).unwrap();
+	assert!(observed.result.schemes.v3_1.present);
+	assert_eq!(
+		observed.result.posture.strongest_scheme,
+		StrongestScheme::V31
+	);
+	let lineage = &observed.result.schemes.v3_1.signers[0].rotation;
+	assert!(lineage.present && lineage.decode_error.is_none());
+	assert_eq!(lineage.lineage.len(), 2);
+	assert_eq!(
+		observed.result.posture.signer_change_declared_by_rotation,
+		Some(true)
+	);
+	assert_eq!(
+		observed.result.runtime_execution,
+		RuntimeExecution::NotPerformed
+	);
+	let json = serde_json::to_value(&observed).unwrap();
+	assert_eq!(
+		serde_json::from_value::<ApkStaticInspection>(json).unwrap(),
+		observed
+	);
+}
+
+#[test]
+fn declared_signers_survive_extra_crypto_refusal_without_a_verification_pass() {
+	let tail = archive::zip_tail(CUSTOM).unwrap();
+	let block = archive::signing_block(CUSTOM, &tail).unwrap().unwrap();
+	let pair = block.pairs.iter().find(|(id, _)| *id == V2).unwrap();
+	let changed = rebuild(&[(pair.0, pair.1.to_vec()), (pair.0, pair.1.to_vec())]);
+	assert!(super::super::parser::inspect(&changed).is_err());
+	let declared = inspect(&changed).unwrap();
+	assert_eq!(declared.result.schemes.v2.signers.len(), 1);
+	assert_eq!(declared.result.posture.self_consistent, Some(true));
+	let report = super::super::parser::inspect_with_observations(&changed).unwrap();
+	assert_eq!(
+		report["cryptographic_inspection"]["status"],
+		"not_performed"
+	);
+	assert_eq!(report["verification"]["v2_v3_records"], "not_performed");
+	assert_eq!(
+		report["verification"]["complete_android_verification"],
+		false
+	);
+	assert_eq!(
+		report["static_inspection"]["result"]["schemes"]["v2"]["signers"]
+			.as_array()
+			.unwrap()
+			.len(),
+		1
+	);
+}
+
+#[test]
+fn one_damaged_pkcs7_block_does_not_hide_an_independent_declared_signer() {
+	let block = cms();
+	let bytes = zip(&[
+		(b"META-INF/MANIFEST.MF", b""),
+		(b"META-INF/GOOD.SF", b""),
+		(b"META-INF/GOOD.RSA", &block),
+		(b"META-INF/BAD.SF", b""),
+		(b"META-INF/BAD.RSA", b"\x30\x80"),
+	]);
+	let observed = inspect(&bytes).unwrap();
+	let signers = &observed.result.schemes.v1.signers;
+	assert_eq!(signers.len(), 2);
+	assert!(signers[0].decode_error.is_none());
+	assert_eq!(
+		signers[0].certificate.as_ref().unwrap().sha256_fingerprint,
+		fingerprint(&certificate())
+	);
+	assert!(signers[1]
+		.decode_error
+		.as_ref()
+		.unwrap()
+		.contains("Indefinite ASN.1 value has no end-of-contents marker"));
+	assert!(signers[1].certificate.is_none());
+	assert!(observed.result.posture.v1_only);
+	assert_eq!(observed.result.posture.self_consistent, None);
+}
+
+#[test]
+fn v1_pairing_is_case_sensitive_and_duplicate_metadata_preserves_unknown() {
+	let block = cms();
+	let bytes = zip(&[(b"META-INF/GOOD.sf", b""), (b"META-INF/GOOD.RSA", &block)]);
+	let result = inspect(&bytes).unwrap();
+	assert!(!result.result.schemes.v1.present);
+	assert_eq!(result.result.schemes.v1.block_files, ["META-INF/GOOD.RSA"]);
+	let bytes = zip(&[
+		(b"META-INF/GOOD.SF", b""),
+		(b"META-INF/GOOD.SF", b""),
+		(b"META-INF/GOOD.RSA", &block),
+	]);
+	let result = inspect(&bytes).unwrap();
+	assert!(result.result.schemes.v1.present);
+	assert_eq!(
+		result.result.schemes.v1.signers[0].decode_error.as_deref(),
+		Some("duplicate entry: META-INF/GOOD.SF")
+	);
+	assert!(result
+		.limitations
+		.iter()
+		.any(|note| note.contains("Duplicate entry")));
+}
+
+#[test]
+fn java_name_replacement_does_not_split_an_encoded_surrogate() {
+	for (raw, expected) in [
+		(b"a\xed\xa0\x80b".as_slice(), "a\u{fffd}b"),
+		(b"\xed\xa0".as_slice(), "\u{fffd}"),
+		(b"\xe0\x80\x80".as_slice(), "\u{fffd}\u{fffd}\u{fffd}"),
+		(b"\xf0\x90\x80".as_slice(), "\u{fffd}"),
+		(b"\xef\xbb\xbfZ".as_slice(), "\u{feff}Z"),
+	] {
+		assert_eq!(archive::java_name(raw), expected);
+	}
+}
+
+#[test]
+fn certificate_offsets_are_normalized_before_emitting_utc_dates() {
+	let cert = certificate();
+	let root = certificate::BerReader::new(&cert)
+		.read(0, cert.len(), 0)
+		.unwrap();
+	let fields = &root.children[0].children;
+	let offset = usize::from(fields[0].tag == 0xa0);
+	let not_after = fields[offset + 3].children[1].full;
+	for (tag, encoded, expected) in [
+		(
+			0x17,
+			b"261104010203+0100".as_slice(),
+			"2026-11-04T00:02:03.000Z",
+		),
+		(
+			0x17,
+			b"261104000203+0100".as_slice(),
+			"2026-11-03T23:02:03.000Z",
+		),
+		(
+			0x17,
+			b"000101000000+0200".as_slice(),
+			"1999-12-31T22:00:00.000Z",
+		),
+		(
+			0x17,
+			b"000301000000+0200".as_slice(),
+			"2000-02-29T22:00:00.000Z",
+		),
+		(
+			0x17,
+			b"991231230000-0200".as_slice(),
+			"2000-01-01T01:00:00.000Z",
+		),
+		(
+			0x18,
+			b"20500101000000-0100".as_slice(),
+			"2050-01-01T01:00:00.000Z",
+		),
+	] {
+		let validity = tlv(0x30, &[tlv(tag, encoded), not_after.to_vec()].concat());
+		let modified = certificate_field(&cert, 3, &validity);
+		let facts = certificate::facts(&modified);
+		assert_eq!(facts.not_before.as_deref(), Some(expected));
+		assert_eq!(facts.serial_number.as_deref(), Some("11"));
+		assert_eq!(facts.public_key_algorithm.as_deref(), Some("rsa"));
+	}
+}
+
+#[test]
+fn unreadable_public_key_does_not_hide_other_certificate_facts() {
+	let cert = certificate();
+	let signature = |algorithm: Vec<u8>, key: Vec<u8>| {
+		tlv(
+			0x30,
+			&[tlv(0x30, &algorithm), tlv(3, &[vec![0], key].concat())].concat(),
+		)
+	};
+	let ec = tlv(6, b"\x2a\x86\x48\xce\x3d\x02\x01");
+	let p256 = tlv(6, b"\x2a\x86\x48\xce\x3d\x03\x01\x07");
+	let rsa = tlv(6, b"\x2a\x86\x48\x86\xf7\x0d\x01\x01\x01");
+	let ed25519 = tlv(6, b"\x2b\x65\x70");
+	for key in [
+		signature(
+			[ec.clone(), p256.clone()].concat(),
+			[vec![4], vec![0; 64]].concat(),
+		),
+		signature([ec, p256].concat(), vec![4, 1]),
+		signature(rsa.clone(), tlv(0x30, &tlv(2, &[1]).repeat(3))),
+		signature([ed25519, tlv(5, &[])].concat(), vec![1; 32]),
+	] {
+		let modified = certificate_field(&cert, 5, &key);
+		let facts = certificate::facts(&modified);
+		assert_eq!(facts.sha256_fingerprint, fingerprint(&modified));
+		assert_eq!(facts.subject.as_deref(), Some("CN=Hepta APK test rsa"));
+		assert_eq!(facts.serial_number.as_deref(), Some("11"));
+		assert_eq!(facts.public_key_algorithm, None);
+	}
+	let inner = [
+		tlv(0x30, &[tlv(2, &[1]), tlv(2, &[3])].concat()),
+		b"accepted inner suffix".to_vec(),
+	]
+	.concat();
+	let modified = certificate_field(&cert, 5, &signature(rsa, inner));
+	assert_eq!(
+		certificate::facts(&modified)
+			.public_key_algorithm
+			.as_deref(),
+		Some("rsa")
+	);
+}
+
+#[test]
+fn typed_global_refusals_separate_format_damage_and_fixed_capacity() {
+	for bytes in [b"".as_slice(), b"not a zip"] {
+		assert_eq!(
+			inspect(bytes).unwrap_err().tag,
+			ApkErrorTag::AnalysisUnsupportedTargetError
+		);
+	}
+	let mut truncated = b"PK\x03\x04".to_vec();
+	truncated.extend([0; 30]);
+	assert_eq!(
+		inspect(&truncated).unwrap_err().tag,
+		ApkErrorTag::AnalysisInputError
+	);
+	let bytes = rebuild(&(0..129).map(|id| (id, Vec::new())).collect::<Vec<_>>());
+	let error = inspect(&bytes).unwrap_err();
+	assert_eq!(error.tag, ApkErrorTag::AnalysisResourceConstraintError);
+	assert_eq!(error.reported_limits["max_signing_block_pairs"], 128);
+	let value = serde_json::to_value(&error).unwrap();
+	assert_eq!(
+		serde_json::from_value::<ApkInspectionError>(value).unwrap(),
+		error
+	);
+}

@@ -31,13 +31,13 @@ const V32_ID: u32 = 0x70e1_c89f;
 const SOURCE_STAMP_ID: u32 = 0x6dff_800d;
 const ROTATION_ID: u32 = 0x3ba0_6f8c;
 const STRIPPING_ID: u32 = 0xbeef_f00d;
-const MAX_BLOCK: usize = 16 * 1024 * 1024;
-const MAX_PAIRS: usize = 128;
-const MAX_SIGNERS: usize = 32;
-const MAX_CERTIFICATES: usize = 8;
-const MAX_CERTIFICATE: usize = 64 * 1024;
-const MAX_ALGORITHMS: usize = 32;
-const MAX_ATTRIBUTES: usize = 64;
+pub(super) const MAX_BLOCK: usize = 16 * 1024 * 1024;
+pub(super) const MAX_PAIRS: usize = 128;
+pub(super) const MAX_SIGNERS: usize = 32;
+pub(super) const MAX_CERTIFICATES: usize = 8;
+pub(super) const MAX_CERTIFICATE: usize = 64 * 1024;
+pub(super) const MAX_ALGORITHMS: usize = 32;
+pub(super) const MAX_ATTRIBUTES: usize = 64;
 const CHUNK: usize = 1024 * 1024;
 
 pub(super) fn hex(bytes: &[u8]) -> String {
@@ -733,6 +733,28 @@ fn signer_report(
 		"certificate_trust":"not_evaluated","certificate_signature_and_dates":"not_evaluated",
 		"rotation_lineage":if signer.attributes.iter().any(|(id,_)|*id==ROTATION_ID) {"present_unverified"} else {"absent"}}),
 	)
+}
+
+/// Preserve declared facts that do not meet the additional verifier's stricter
+/// subset. Its failure is explicit and can never become a verification pass.
+pub(super) fn inspect_with_observations(bytes: &[u8]) -> Result<Value> {
+	let observation = super::observation::inspect(bytes)?;
+	let mut report = match inspect(bytes) {
+		Ok(mut report) => {
+			report["cryptographic_inspection"] = json!({"status":"completed","error":null});
+			report
+		}
+		Err(error) => json!({
+			"record_format":"hepta.rea-apk-signature.v1","rea_evidence_compatible":false,
+			"source":{"sha256":observation.result.artifact.sha256,"byte_length":bytes.len(),"identity_scope":"complete_captured_archive"},
+			"cryptographic_inspection":{"status":"not_performed","error":error.to_string()},
+			"verification":{"scope":"extra_verifier_did_not_complete","v2_v3_records":"not_performed",
+				"complete_android_verification":false,"android_installability":"not_evaluated"},
+			"limitations":["The static declaration report is independent of the additional native cryptographic verifier. That verifier did not complete for this input; no signature, trusted identity or Android acceptance is established."]
+		}),
+	};
+	report["static_inspection"] = serde_json::to_value(observation)?;
+	Ok(report)
 }
 
 pub(super) fn inspect(bytes: &[u8]) -> Result<Value> {

@@ -27,10 +27,28 @@ use std::time::{Duration, Instant};
 use tokio::io::AsyncReadExt;
 use tokio_util::sync::CancellationToken;
 
+#[path = "rea_apk_signature_observation.rs"]
+mod observation;
 #[path = "rea_apk_signature_parser.rs"]
 mod parser;
 #[path = "rea_apk_signature_worker.rs"]
 mod worker;
+
+pub use observation::{
+	ApkErrorTag, ApkInspectionError, ApkResource, ApkSignatureReport, ApkStaticInspection,
+};
+
+/// Bounded declared facts from already captured bytes; no filesystem or engine access.
+pub fn inspect_static(
+	bytes: &[u8],
+) -> std::result::Result<ApkStaticInspection, ApkInspectionError> {
+	observation::inspect(bytes)
+}
+
+/// Preserve declarations when the additional cryptographic verifier cannot complete.
+pub fn inspect_captured_with_observations(bytes: &[u8]) -> Result<serde_json::Value> {
+	parser::inspect_with_observations(bytes)
+}
 
 pub(super) const MAX_APK_BYTES: usize = 128 * 1024 * 1024;
 pub(super) const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
