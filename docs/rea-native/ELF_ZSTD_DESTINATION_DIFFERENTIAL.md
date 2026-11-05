@@ -12,11 +12,12 @@ comparison. Their SHA-256 is
 `4ee44f2adbb29c5ea185282d0e58e228c7dee310fdd4cd8cd7d2905ac9dd0ec1`.
 The actual original parser and the pre-change production Rust parser were rerun:
 84 complete JSON responses differed. The conservative checkpoint parser reports
-4 differences, all from those original 84; there are no new differences. The
-first conservative checkpoint closed 50 and retained 34. The follow-up closed
-another 26 through destination upper bounds and the next-sequence minimum, then
-four through wholly present match-length fields. Thus 80 original differences
-are closed. An intermediate prototype's lower count was not retained when its
+zero differences. All 5,244 complete JSON responses match, including exact error
+text; no inputs or comparison rules were changed. The first conservative
+checkpoint closed 50 and retained 34. The follow-up closed another 26 through
+destination upper bounds and the next-sequence minimum, four through wholly
+present match-length fields, and the last four through proven high-order input
+prefixes. Thus all 84 original differences are closed in this fixed corpus. An intermediate prototype's lower count was not retained when its
 proof depended on zero-padded missing input bits; that history remains recorded. These
 numbers concern the standalone adapters invoking the real parsers, not a shipping
 Runtime/MCP operation or mock engine.
@@ -62,10 +63,16 @@ checks output capacity before literal and offset validity, following the origina
 decoder's execution order. A prior invalid literal/offset prefix disables further
 capacity inference, so a later sequence cannot replace that earlier data error.
 An incomplete sequence is not inferred from the backend's zero-padded missing
-bits: only a lower bound from an already complete FSE state and wholly present
-extra fields may prove exhaustion. Extra fields are read offset, match length,
-then literal length; a complete match-length field remains known when the later
-literal-length field is short. If the known lower bound does not exceed the
+bits: only a lower bound from an already complete FSE state and the actual
+present high-order match-length prefix may prove exhaustion. Extra fields are
+read offset, match length, then literal length. The known match prefix is masked
+by shifting right by every missing low bit, then left by the same count. This is
+a minimum over all unknown suffix values, not an assertion that missing input
+was zero. Zero present match bits contribute only the already known symbol base.
+The fixed 64-bit reference's `BIT_lookBitsFast` double shift preserves a present
+prefix when its field starts before exhaustion; a positive present-bit count
+also proves that the preceding offset field was complete. Unknown FSE states
+never use this inference. If the known lower bound does not exceed the
 destination, the original short-bitstream error is preserved. Only a distinct typed `OutputCapacityExceeded` result selects
 the destination message. Ordinary decoder consumers default to no additional capacity inference;
 the frame/window bounds remain enforced. The hook persists until explicitly
@@ -96,13 +103,18 @@ The ordering was checked against the official fixed-tag
 including `ZSTD_allocateLiteralsBuffer`, `ZSTD_execSequenceEnd`,
 `ZSTD_decompressSequences_body`, `ZSTD_decodingBufferSize_internal`, and the
 streaming block/flush loop. The downloaded source is retained separately and was
-read as evidence; it was not substituted as the Rust implementation.
+read as evidence; it was not substituted as the Rust implementation. The fixed
+`lib/common/bitstream.h` used for the final prefix proof has SHA-256
+`a9461685c9add6f609078acc950a08db4c02e6e6a849d550f45182ba2ae38556`.
 
-Four cases remain explicitly unresolved: `zstd-bit-9-141`, `zstd-bit-9-144`,
-`zstd-bit-11-141`, and `zstd-bit-11-144`. Their match-length extra field is only
-partly present. The original reports destination exhaustion; this conservative
-checkpoint still reports data corruption. Their exact original and native
-responses remain in the differential file. They are not normalized away.
+The final run repeats the actual original Node parser and rebuilt Rust parser
+on all unchanged inputs. It has zero differences; its fresh reference output is
+also structurally identical to the earlier 84-difference baseline. The last four
+cases (`zstd-bit-9-141`, `zstd-bit-9-144`, `zstd-bit-11-141`,
+`zstd-bit-11-144`) are closed by the present-prefix lower bound above. This does
+not qualify untested large-history/prefetch behavior, Huffman placement, another
+producer build or the final public Runtime operation. Those remain separate
+qualification work.
 
 All paths below are on the authorized desktop host under
 `/home/qian-qi/work/hepta-rea-static-elf-ca464-20261105/`:
@@ -116,10 +128,14 @@ All paths below are on the authorized desktop host under
 | `capacity-checkpoint-r5` | First conservative commit, 50 closed and 34 retained |
 | `capacity-proof-r6` | Destination upper bounds and next-sequence minimum: 8 retained, zero new differences, 33 tests and strict Clippy passed |
 | `capacity-proof-r7` | Regular-dispatch gate and wholly present extra fields: 4 retained, zero new differences, 33 tests and strict Clippy passed |
-| `capacity-checkpoint-r7` | Follow-up source/driver identities and commit receipt |
+| `capacity-checkpoint-r7` | Second conservative commit, 80 closed and 4 retained |
+| `capacity-proof-r8` | Fresh original and native full runs, zero differences, 34 tests and strict Clippy passed |
+| `capacity-checkpoint-r8` | Complete retained input, output, per-item comparison, driver, actual Rust sources, fixed official C sources and manifest |
+| `capacity-checkpoint-r8.tar.gz` | Portable archive of the complete checkpoint directory |
 | `reference-libzstd-1.5.7-r2` | Fixed-tag official source bytes and identities |
 
-Six regression payloads in `rea_elf_notes_parser_tests.rs` are copied unchanged
+Ten regression payloads in `rea_elf_notes_parser_tests.rs` are copied unchanged
 from the existing corpus (`zstd-bit-8-37`, `zstd-bit-9-145`,
-`zstd-bit-10-48`, `zstd-bit-9-105`, `zstd-bit-13-48`, `zstd-bit-12-44`). The full unchanged corpus also retains its adjacent valid and
+`zstd-bit-10-48`, `zstd-bit-9-105`, `zstd-bit-13-48`, `zstd-bit-12-44`,
+`zstd-bit-9-141`, `zstd-bit-9-144`, `zstd-bit-9-148`, `zstd-bit-9-150`). The full unchanged corpus also retains its adjacent valid and
 malformed controls. No new fuzz corpus was introduced for this work.

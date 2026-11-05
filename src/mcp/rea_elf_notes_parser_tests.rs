@@ -1095,3 +1095,24 @@ fn zstandard_declared_next_sequence_and_large_literals_keep_destination_preceden
 		);
 	}
 }
+
+#[test]
+fn zstandard_partial_sequence_fields_use_only_present_length_prefixes() {
+	// Existing frozen corpus bytes: two partially present match fields and two
+	// fully present match fields followed by short literal fields. No missing
+	// low bits are used as an observed producer value.
+	for (id, payload) in [
+		("zstd-bit-9-141", "28b52ffd60204d4d000010414101001bce2eb0"),
+		("zstd-bit-9-144", "28b52ffd60204d4d000010414101001bce0eb1"),
+		("zstd-bit-9-148", "28b52ffd60204d4d000010414101001bce0ea0"),
+		("zstd-bit-9-150", "28b52ffd60204d4d000010414101001bce0ef0"),
+	] {
+		assert_eq!(
+			decoded(&compressed_names(&unhex(payload), 20000, 2, true, true), true, true)
+				.unwrap_err()
+				.to_string(),
+			"ELF compressed section-name table could not be decompressed: Destination buffer is too small",
+			"{id}"
+		);
+	}
+}

@@ -68,8 +68,8 @@ impl SequenceOutputCapacity {
     fn incomplete(&mut self, known_minimum: Option<(u32, u32)>) -> Result<(), DecodeSequenceError> {
         // Missing input bits are padded by this backend. Do not treat that
         // padded value as the other decoder's sequence length. Only a symbol
-        // selected from a complete FSE state, plus any wholly present extra
-        // field, supplies a reliable lower bound.
+        // selected from a complete FSE state, plus a proven present high-order
+        // prefix of the current extra field, supplies a reliable lower bound.
         if self.valid_prefix {
             if let Some((literals, matches)) = known_minimum {
                 let required = self
@@ -221,15 +221,16 @@ fn decode_sequences_with_rle(
 
         let available_value_bits = br.bits_remaining();
         let (obits, ml_add, ll_add) = br.get_bits_triple(of_code, ml_num_bits, ll_num_bits);
-        // Extra fields are read offset, match length, literal length. A fully
-        // present match-length field remains evidence even if the later
-        // literal-length field is short. Never include a padded field value.
-        let minimum_match =
-            if available_value_bits >= isize::from(of_code) + isize::from(ml_num_bits) {
-                ml_value + ml_add as u32
-            } else {
-                ml_value
-            };
+        // Extra fields are read offset, match length, literal length. Keep
+        // only the match field's high-order prefix actually present in input.
+        // The frozen 64-bit BIT_lookBitsFast double shift preserves that prefix
+        // when the field begins before exhaustion. Discard every missing low
+        // bit; all its possible values are at least prefix << missing.
+        let present_match_bits =
+            (available_value_bits - isize::from(of_code)).clamp(0, isize::from(ml_num_bits)) as u8;
+        let missing_match_bits = ml_num_bits - present_match_bits;
+        let known_match_prefix = (ml_add as u32) >> missing_match_bits;
+        let minimum_match = ml_value + (known_match_prefix << missing_match_bits);
         let offset = obits as u32 + (1u32 << of_code);
 
         if offset == 0 {
@@ -321,15 +322,16 @@ fn decode_sequences_without_rle(
 
         let available_value_bits = br.bits_remaining();
         let (obits, ml_add, ll_add) = br.get_bits_triple(of_code, ml_num_bits, ll_num_bits);
-        // Extra fields are read offset, match length, literal length. A fully
-        // present match-length field remains evidence even if the later
-        // literal-length field is short. Never include a padded field value.
-        let minimum_match =
-            if available_value_bits >= isize::from(of_code) + isize::from(ml_num_bits) {
-                ml_value + ml_add as u32
-            } else {
-                ml_value
-            };
+        // Extra fields are read offset, match length, literal length. Keep
+        // only the match field's high-order prefix actually present in input.
+        // The frozen 64-bit BIT_lookBitsFast double shift preserves that prefix
+        // when the field begins before exhaustion. Discard every missing low
+        // bit; all its possible values are at least prefix << missing.
+        let present_match_bits =
+            (available_value_bits - isize::from(of_code)).clamp(0, isize::from(ml_num_bits)) as u8;
+        let missing_match_bits = ml_num_bits - present_match_bits;
+        let known_match_prefix = (ml_add as u32) >> missing_match_bits;
+        let minimum_match = ml_value + (known_match_prefix << missing_match_bits);
         let offset = obits as u32 + (1u32 << of_code);
 
         if offset == 0 {
