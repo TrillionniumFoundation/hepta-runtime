@@ -246,6 +246,53 @@ class BuildEvidenceTests(unittest.TestCase):
             with self.subTest(raw=raw), self.assertRaisesRegex(ValueError, "nextest"):
                 self.fixture.validate()
 
+    def test_observed_nextest_slow_summaries_are_accepted(self):
+        # These exact terminal lines came from the R4 real nextest runs. The
+        # surrounding fixture remains synthetic and does not qualify Rust.
+        self.fixture.replace_log(7, "stderr", b"Summary [1479.970s] 2216 tests run: 2216 passed (2 slow), 40 skipped\n")
+        self.fixture.replace_log(8, "stderr", b"Summary [2084.619s] 2188 tests run: 2188 passed (2 slow), 28 skipped\n")
+        result = self.fixture.validate()
+        self.assertEqual(result["verified_stage_names"], list(build.STAGES))
+        for slow in (0, 9):
+            with self.subTest(slow=slow):
+                self.fixture.replace_log(7, "stderr", f"Summary [0.010s] 9 tests run: 9 passed ({slow} slow)\n".encode())
+                self.fixture.validate()
+
+    def test_slow_annotation_does_not_allow_failed_empty_or_arbitrary_summaries(self):
+        for raw in (b"Summary [0.010s] 0 tests run: 0 passed (0 slow), 9 skipped\n",
+                    b"Summary [0.010s] 9 tests run: 8 passed (2 slow), 2 skipped\n",
+                    b"Summary [0.010s] 9 tests run: 9 passed (10 slow), 2 skipped\n",
+                    b"Summary [0.010s] 9 tests run: 9 passed (-1 slow), 2 skipped\n",
+                    b"Summary [0.010s] 9 tests run: 9 passed (2.0 slow), 2 skipped\n",
+                    b"Summary [0.010s] 9 tests run: 9 passed (2 slow, 1 flaky), 2 skipped\n",
+                    b"Summary [0.010s] 9 tests run: 9 passed (2 slow), 1 failed, 2 skipped\n",
+                    b"Summary [0.010s] 9 tests run: 9 passed (2 slow), 2 skipped, interrupted\n"):
+            for stage in (7, 8):
+                fixture = BuildFixture(self.root / "invalid-summary")
+                fixture.replace_log(stage, "stderr", raw)
+                with self.subTest(raw=raw, stage=stage), self.assertRaisesRegex(ValueError, "nextest"):
+                    fixture.validate()
+
+    def test_slow_summary_still_requires_original_log_and_terminal_stage(self):
+        raw = b"Summary [0.010s] 9 tests run: 9 passed (2 slow), 2 skipped\n"
+        for stage in (7, 8):
+            for change in ("duplicate", "exit", "interrupted", "digest", "exit-digest"):
+                fixture = BuildFixture(self.root / "slow-integrity")
+                fixture.replace_log(stage, "stderr", raw)
+                row = fixture.report["stages"][stage - 1]
+                if change == "duplicate":
+                    fixture.replace_log(stage, "stdout", raw)
+                elif change == "exit":
+                    row["exit_code"] = 100
+                elif change == "interrupted":
+                    row["interrupted"] = True
+                elif change == "digest":
+                    row["logs"]["stderr"]["sha256"] = "f" * 64
+                else:
+                    row["logs"]["stderr"]["sha256_at_stage_exit"] = "f" * 64
+                with self.subTest(stage=stage, change=change), self.assertRaises(ValueError):
+                    fixture.validate()
+
     def test_original_references_cannot_read_an_arbitrary_absolute_or_parent_path(self):
         for path in ("/etc/passwd", "../source-before.json", "/original/retained/build/../secret"):
             report = deepcopy(self.fixture.report)

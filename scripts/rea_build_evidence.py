@@ -369,9 +369,11 @@ def _validate_matrix(raw_summary, read, source, native):
             lines = [ANSI.sub("", line).strip() for line in (stdout + "\n" + stderr).splitlines()]
             summaries = [line for line in lines if line.startswith("Summary [")]
             require(len(summaries) == 1, "original nextest terminal summary is missing or ambiguous")
-            counts = re.fullmatch(r"Summary \[[^\]]+\] (\d+) tests run: (\d+) passed(?:, \d+ skipped)?",
+            counts = re.fullmatch(r"Summary \[[^\]]+\] (\d+) tests run: (\d+) passed"
+                                  r"(?: \((\d+) slow\))?(?:, \d+ skipped)?",
                                   summaries[0])
-            require(counts is not None and int(counts[1]) > 0 and counts[1] == counts[2],
+            require(counts is not None and int(counts[1]) > 0 and counts[1] == counts[2]
+                    and (counts[3] is None or int(counts[3]) <= int(counts[2])),
                     "original nextest log does not show a successful nonempty run")
     final = report.get("final_binary")
     wanted_path = str(absolute_name(inputs["target_dir"]) / inputs["binary_relative_path"])
