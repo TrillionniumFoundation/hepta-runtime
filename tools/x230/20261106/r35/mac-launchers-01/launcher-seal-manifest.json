@@ -1,0 +1,227 @@
+{
+  "actual_installed_lifecycle_tool_pins": {
+    "lifecycle-tools-manifest-01.json": {
+      "bytes": 4066,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/lifecycle-tools-01/lifecycle-tools-manifest-01.json",
+      "sha256": "eb50cd7ab0376c4b3dc768e8d184fdc23eeaa90c2ce5bdd4b9e9ac551448504e"
+    },
+    "run_lifecycle_abba_01.py": {
+      "bytes": 14787,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/lifecycle-tools-01/run_lifecycle_abba_01.py",
+      "sha256": "e01357cfb04f72f1ee1d56747df81b572e55c1528d2941f8dbbb0aa5e9a2ac84"
+    },
+    "run_six_host_cancel_recovery_timed.py": {
+      "bytes": 30163,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/lifecycle-tools-01/run_six_host_cancel_recovery_timed.py",
+      "sha256": "54186d9750952061b54b255a509848ce72a252d676f584dd288edd263883c0d8"
+    }
+  },
+  "baseline_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "candidate_binaries": {
+    "hepta-runtime": {
+      "bytes": 14373416,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/qualification-01/hepta-runtime",
+      "sha256": "416662310fef6ca6d68907658bb1b882584d1e431bf4ed4263f62984495d8251"
+    },
+    "hepta-runtime-jobctl": {
+      "bytes": 739016,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/qualification-01/hepta-runtime-jobctl",
+      "sha256": "61c90260057a405626a24a36ad43303c632f72d2d97929296acdffd748b79d62"
+    },
+    "native_process_driver": {
+      "bytes": 2896240,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/qualification-01/native_process_driver",
+      "sha256": "31d90610e618041faa5f562c029e496afc39c603fbe3a51d740e4eec3aacd54e"
+    }
+  },
+  "changed_paths_from_r24": [
+    "src/mcp/runtime/jobs.rs",
+    "src/mcp/runtime/ssh_observation_pool.rs",
+    "src/mcp/runtime/ssh_observation_pool_tests.rs"
+  ],
+  "commands": {
+    "materialize_normal_lifecycle_after_observation_gate": [
+      "/usr/bin/python3",
+      "-B",
+      "/home/qian/hepta-runtime-optimization-20261106-r35/tools-01/prepare_lifecycle_inputs.py",
+      "--example-sha256",
+      "7b4d6ef124a2ada384100d59fdd71a325ae2f8c162d6ef2656bcbd2a41c9173a",
+      "--preparer-sha256",
+      "4c2a58793760c106cafbff5ca21813e85372a92391d9c3d3510ba8e46e58210c"
+    ],
+    "materialize_observation": [
+      "/usr/bin/python3",
+      "-B",
+      "/home/qian/hepta-runtime-optimization-20261106-r35/tools-01/prepare_campaign_inputs.py",
+      "--example-sha256",
+      "27897ee74e6abd9a7aff24359eaa16c86a4b9471eb95b15117721d7eaef059c1",
+      "--preparer-sha256",
+      "1449776932b014d70de282d234d82c1a104f3b2f90ddf2c846371d180091f707",
+      "--preparation-sha256",
+      "4770faa3c73ec2e9287fd43154ad5f9b6df149d85767ddb5f18e6aeb153ea1cc",
+      "--qualification-terminal-sha256",
+      "8b171dde1644b1c9cacfc126be053484a3649031f946c648db7a69f9be404844",
+      "--qualification-job-id",
+      "1a1af619097-fc05-6813"
+    ],
+    "normal_lifecycle_holder_after_observation_gate": [
+      "/usr/bin/python3",
+      "-B",
+      "-u",
+      "/Users/qianqi/work/hepta-runtime-r35-recovery-20261106/parent-staging/mac-launchers-01/held_agent_campaign_02.py",
+      "--remote-script",
+      "/Users/qianqi/work/hepta-runtime-r35-recovery-20261106/parent-staging/mac-launchers-01/r35_lifecycle_campaign.py",
+      "--out",
+      "/Users/qianqi/work/hepta-runtime-r35-lifecycle-holder-01",
+      "--timeout-seconds",
+      "3600"
+    ],
+    "observation_holder": [
+      "/usr/bin/python3",
+      "-B",
+      "-u",
+      "/Users/qianqi/work/hepta-runtime-r35-recovery-20261106/parent-staging/mac-launchers-01/held_agent_campaign_02.py",
+      "--remote-script",
+      "/Users/qianqi/work/hepta-runtime-r35-recovery-20261106/parent-staging/mac-launchers-01/r35_campaign.py",
+      "--out",
+      "/Users/qianqi/work/hepta-runtime-r35-observation-holder-01",
+      "--timeout-seconds",
+      "3600"
+    ]
+  },
+  "exact_ci_completed_receipts": null,
+  "exact_ci_final_result": null,
+  "exact_ci_job_identity_source": "coordinator reported actual original launch",
+  "exact_ci_original_job_id": "1a1af88c330-fc05-696f",
+  "exact_ci_prerequisite": "coordinator must close the original successful native/report/audit/source evidence before observation; this script package infers no CI result",
+  "files": {
+    "held_agent_campaign_02.py": {
+      "bytes": 11374,
+      "sha256": "715e996217c7d33a7483354f16f2d39c9a033f51f3a20a52484495a00262dd65"
+    },
+    "r35_campaign.py": {
+      "bytes": 84362,
+      "sha256": "3707cbc2e3307a29aa6e645afdf8f6da7a5e80d36e90a86d505bd8f18061778c"
+    },
+    "r35_lifecycle_campaign.py": {
+      "bytes": 25109,
+      "sha256": "372f880ec4679147b06ae89e0df8ec64be74ac79a171704715e6499e79191e29"
+    }
+  },
+  "holder_bytes_unchanged": true,
+  "holder_reference_git_blob": "c642b45500ed44abee56ba45614932855cd29892",
+  "mac_directory_existence_or_deployment_not_observed": true,
+  "native_holder_or_ssh_agent_started": false,
+  "normal_lifecycle_gate": "actual original observation gate must pass before normal lifecycle input materialization or holder launch",
+  "normal_observation_started_by_this_task": false,
+  "normal_protocol_scope": "unchanged accepted-R24 normal observation, original boundary/recovery and conditional normal lifecycle; no R34 reserve-specific capacity campaign is added",
+  "observation_input_materialized_by_this_task": false,
+  "parent_bytes_equal_to_reviewed_generated_R35_tools": true,
+  "parent_installation": {
+    "bundle": {
+      "bytes": 4160,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/tools-01/runner-bundle-manifest.json",
+      "sha256": "0e1ad9df3ae5caddc4edb47ecf1dbf1f41f3c00ad243c197c34d6c136f0597f4"
+    },
+    "campaign_example": {
+      "bytes": 4479,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/campaign-inputs-01.example.json",
+      "sha256": "27897ee74e6abd9a7aff24359eaa16c86a4b9471eb95b15117721d7eaef059c1"
+    },
+    "campaign_preparer": {
+      "bytes": 9921,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/tools-01/prepare_campaign_inputs.py",
+      "sha256": "1449776932b014d70de282d234d82c1a104f3b2f90ddf2c846371d180091f707"
+    },
+    "evidence_source": "exact local original installer terminal/read/receipt/example bytes, no new remote read by this task",
+    "job_id": "1a1af801235-fc05-6921",
+    "lifecycle_example": {
+      "bytes": 3246,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/lifecycle-inputs-01.example.json",
+      "sha256": "7b4d6ef124a2ada384100d59fdd71a325ae2f8c162d6ef2656bcbd2a41c9173a"
+    },
+    "lifecycle_preparer": {
+      "bytes": 12203,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/tools-01/prepare_lifecycle_inputs.py",
+      "sha256": "4c2a58793760c106cafbff5ca21813e85372a92391d9c3d3510ba8e46e58210c"
+    },
+    "original_read": {
+      "bytes": 3667,
+      "sha256": "ca6b91023ac46797ecd52fcbc10d67969cb1f799a7146a72fbaa3c23e59d0c77"
+    },
+    "original_stderr": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "original_stdout": {
+      "bytes": 1093,
+      "sha256": "c6be4ba9f11b9fc7b5681accdea861adbf2fd9fb6c5ff988c98c42d225f687f8"
+    },
+    "original_terminal": {
+      "bytes": 731,
+      "sha256": "38bf066213a890e2e0dce529241cf009769da33aa6040e7e67a3c233201ae069"
+    },
+    "receipt": {
+      "bytes": 26099,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/parent-tools-install-01.json",
+      "sha256": "542fee8a1f146105125e402be5d7892709b76ff29ae273b162ffc4bff4f16bed"
+    }
+  },
+  "proposed_mac_directory": "/Users/qianqi/work/hepta-runtime-r35-recovery-20261106/parent-staging/mac-launchers-01",
+  "protocol_change": false,
+  "qualification_counts": {
+    "failed": 0,
+    "ignored": 34,
+    "passed": 1645,
+    "retries": 0,
+    "selected": 1679
+  },
+  "qualification_job_id": "1a1af619097-fc05-6813",
+  "qualification_originals": {
+    "preparation.json": {
+      "bytes": 62335,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/preparation.json",
+      "sha256": "4770faa3c73ec2e9287fd43154ad5f9b6df149d85767ddb5f18e6aeb153ea1cc"
+    },
+    "qualification-01/isolated-tests.audit.json": {
+      "bytes": 1419928,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/qualification-01/isolated-tests.audit.json",
+      "sha256": "cdd5497f7646ddca0ba028cf2d93d4df76c737a87569e19e9596625620397894"
+    },
+    "qualification-01/isolated-tests/summary.json": {
+      "bytes": 6878,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/qualification-01/isolated-tests/summary.json",
+      "sha256": "10eb5d260f26f15cfea9334ddc6f22456f22dea54ad1b755e118fd49cc67d904"
+    },
+    "qualification-01/report.json": {
+      "bytes": 83363,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/qualification-01/report.json",
+      "sha256": "5369433b6eb2db62a907593f1b679f968b411d0cde96ce9eabe8e124420cf8e1"
+    },
+    "qualification-01/source-map.json": {
+      "bytes": 24156,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/qualification-01/source-map.json",
+      "sha256": "87f085a95a1c1925ecc444b46c996a0aec399c74ce7d0c32afff572e24055313"
+    },
+    "qualification-native-read-01.json": {
+      "bytes": 3812,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/qualification-native-read-01.json",
+      "sha256": "4275444d755edf7b4893827ff2224fa1d70aee529a6ac2e1be4c0c5989a5a043"
+    },
+    "qualification-terminal-status-01.json": {
+      "bytes": 731,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r35/qualification-terminal-status-01.json",
+      "sha256": "8b171dde1644b1c9cacfc126be053484a3649031f946c648db7a69f9be404844"
+    }
+  },
+  "qualification_postflight": {
+    "bytes": 8190,
+    "path": "/home/qian/hepta-runtime-optimization-20261106-r35/qualification-postflight-01.json",
+    "sha256": "99e198adfeecb2f09b25d928a157a5067ef4a10315b1ead52134721665df630d"
+  },
+  "remote_calls": 0,
+  "remote_root": "/home/qian/hepta-runtime-optimization-20261106-r35",
+  "schema": "hepta-r35-mac-launcher-seal/v1",
+  "source_map_sha256": "87f085a95a1c1925ecc444b46c996a0aec399c74ce7d0c32afff572e24055313",
+  "status": "scripts_sealed_ci_completion_pending_not_deployed_by_this_task"
+}
