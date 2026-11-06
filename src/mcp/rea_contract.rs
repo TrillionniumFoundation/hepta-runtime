@@ -32,6 +32,9 @@ pub(super) struct Failure(pub Value);
 #[path = "rea_failure_order.rs"]
 mod failure_order;
 
+#[path = "rea_overflow_order.rs"]
+mod overflow_order;
+
 impl Failure {
 	/// Frozen Zod coercion exceptions are plain SDK error text, not a JSON
 	/// analysis failure. Only internal validators construct this representation.
@@ -150,6 +153,11 @@ impl Failure {
 
 	pub(super) fn wire(self) -> CallToolResult {
 		self.wire_with_text(None)
+	}
+
+	fn wire_overflow(self) -> CallToolResult {
+		let ordered = overflow_order::text(&self.0);
+		self.wire_with_text(ordered)
 	}
 
 	/// Only independently observed Evidence import error shapes have an
@@ -318,7 +326,7 @@ pub(super) fn deliver_view(
 				retained,
 				bundle_summary,
 			)
-			.wire();
+			.wire_overflow();
 		}
 		Measurement::Fits { json_bytes, .. } => match usize::try_from(json_bytes) {
 			Ok(size) => size,
@@ -601,3 +609,7 @@ pub(super) fn view_output_schema() -> Arc<JsonObject> {
 		})
 		.clone()
 }
+
+#[cfg(test)]
+#[path = "rea_contract_overflow_tests.rs"]
+mod overflow_tests;
