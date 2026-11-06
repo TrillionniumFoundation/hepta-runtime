@@ -1,0 +1,66 @@
+--- import_sealed_payloads_01.py
++++ hepta-runtime-d1-c1-mac-importer-02.py
+@@ -15,6 +15,11 @@
+ ROOT = Path('/Users/qianqi/work/hepta-runtime-d1-c1-sealed-staging-01')
+ ARCHIVE_NAME = 'sealed-payloads-01.tar.gz'
+ IMPORTER_NAME = 'import_sealed_payloads_01.py'
++EXECUTING_PATH = Path('/Users/qianqi/work/hepta-runtime-d1-c1-mac-importer-02.py')
++PRIOR_IMPORTER_BYTES = 14918
++PRIOR_IMPORTER_SHA256 = 'deb82a9c072729208c1dc6ba1a2a009ad2faa78ea08fdb9ebff3ec72ec8a850e'
++OBSERVED_LOCKS = ('.hepta-lock-43ab8cc39e522dce1f636e3e',
++                  '.hepta-lock-ea8fd5f905048ab8cd6d37bc')
+ ARCHIVE_BYTES = 174654
+ ARCHIVE_SHA256 = 'efe412bd28dd0e2fa6935f57a699e3742eb91c2d064bb1861f7c63a9282ac760'
+ EXPECTED = {
+@@ -234,9 +239,24 @@
+                 'directory path changed: ' + name)
+ 
+ 
++def preserved_transport_locks(directory):
++    states = {}
++    for name in OBSERVED_LOCKS:
++        before = os.stat(name, dir_fd=directory, follow_symlinks=False)
++        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
++                and before.st_uid == os.geteuid() and stat.S_IMODE(before.st_mode) == 0o600
++                and before.st_size == 0, 'observed transport lock identity differs: ' + name)
++        require(read_regular(directory, name, 0) == b'', 'observed transport lock is not empty: ' + name)
++        require(stamp(os.stat(name, dir_fd=directory, follow_symlinks=False)) == stamp(before),
++                'observed transport lock changed while read: ' + name)
++        states[name] = stamp(before)
++    return states
++
++
+ def inventory(dirs, complete):
+     allowed = {key: set(value) for key, value in DIRECTORY_CHILDREN.items()}
+     allowed[''].update((ARCHIVE_NAME, IMPORTER_NAME))
++    allowed[''].update(OBSERVED_LOCKS)
+     if complete:
+         for name in EXPECTED:
+             parent, _, leaf = name.rpartition('/')
+@@ -248,7 +268,7 @@
+ 
+ def main():
+     require(sys.platform == 'darwin' and os.geteuid() != 0, 'requires the non-root Mac owner')
+-    require(len(sys.argv) == 1 and Path(__file__).absolute() == ROOT / IMPORTER_NAME,
++    require(len(sys.argv) == 1 and Path(__file__).absolute() == EXECUTING_PATH,
+             'fixed importer path or arguments differ')
+     require(isinstance(EXPECTED, dict) and len(EXPECTED) == 23, 'unsealed transport importer')
+     os.umask(0o077)
+@@ -288,6 +308,9 @@
+         inventory(dirs, False)
+         archive = read_regular(dirs[''], ARCHIVE_NAME, MAX_ARCHIVE)
+         importer = read_regular(dirs[''], IMPORTER_NAME, MAX_FILE)
++        require(len(importer) == PRIOR_IMPORTER_BYTES and sha(importer) == PRIOR_IMPORTER_SHA256,
++                'original importer evidence identity differs')
++        locks = preserved_transport_locks(dirs[''])
+         files = parse_archive(archive)
+         # Every identity and every absent output is checked before the first write.
+         check_directories(checks)
+@@ -321,6 +344,7 @@
+                     'final payload identity differs: ' + name)
+         require(read_regular(dirs[''], ARCHIVE_NAME, MAX_ARCHIVE) == archive, 'archive changed')
+         require(read_regular(dirs[''], IMPORTER_NAME, MAX_FILE) == importer, 'importer changed')
++        require(preserved_transport_locks(dirs['']) == locks, 'observed transport locks changed')
+         for directory in dirs.values():
+             os.fsync(directory)
+         check_directories(checks)
