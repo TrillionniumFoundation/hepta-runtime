@@ -1,0 +1,47 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "Action completed."
+    }
+  ],
+  "structuredContent": {
+    "url": "https://github.com/TrillionniumFoundation/hepta-runtime/pull/106",
+    "number": 106,
+    "state": "open",
+    "merged": false,
+    "mergeable": false,
+    "draft": true,
+    "body": "## Problem and change\n\nSuccessful ordinary and reserved audit admission deep-copied the completed record vector again when publishing it to the hot cache. This candidate transfers that final vector into the existing owned-cache path.\n\nThe input snapshot clone remains in place. Persistence, ownership checks, lookup pins, archived-identity rejection, active-ticket ordering and failure behavior keep their original order. Regression cases now verify that refused admissions retain reusable cache contents and cannot expose another owner's records or replay an archived reserved identity.\n\n## Source and validation\n\n- Parent: `86155fbf3b89e5a77e2a4aadebd2128c663fe50b`; accepted runtime source remains R24 `baab4def80be7af015b2e7a594cb302f66c4130e`.\n- Candidate source commit: `d3590733f6c301a91cb8f4fcc54ee5c3251a9530`.\n- All 220 local compiler inputs match the actual source tested on X230.\n- X230 format, format check, harness regression, strict all-target/all-feature Clippy, test build and independent isolated-test audit have passed.\n- Isolated tests: **1,645 passed, 0 failed, 34 ignored, 0 retries**.\n- Release qualification is still running. Exact Rust CI and six-host performance acceptance have not yet completed.\n\n## Performance decision\n\nThis PR publishes a candidate and does not adopt it yet. The fixed R24-versus-R36 ABBA keeps C1/C8/C16 throughput, p95, CPU/call and RSS gates, the capacity-boundary and cancellation/recovery checks, and the required normal C6 lifecycle throughput/latency gates. A separately frozen C1/C8 real asynchronous-read supplement will describe admission and fully verified settlement behavior without changing those gates.\n\nOriginal attempts, failures, unexecuted stages, source/binary identities and complete evidence will be added when the campaign closes. A failing candidate will not replace accepted R24. No production service or release tag is changed.",
+    "title": "perf(x230): R36 audit admission cache ownership candidate",
+    "base": "perf/x230-r11-20261103",
+    "base_sha": "86155fbf3b89e5a77e2a4aadebd2128c663fe50b",
+    "head": "perf/x230-r36-20261106",
+    "head_sha": "d3590733f6c301a91cb8f4fcc54ee5c3251a9530",
+    "head_repo_id": 1400900949,
+    "head_repo_full_name": "TrillionniumFoundation/hepta-runtime",
+    "merge_commit_sha": null,
+    "user": {
+      "login": "Franksudoman",
+      "name": "Franksudoman",
+      "email": null,
+      "avatar_url": "https://avatars.githubusercontent.com/u/273670192?v=4",
+      "id": 273670192
+    },
+    "requested_reviewers": null,
+    "requested_team_reviewers": null,
+    "diff": null,
+    "comments": null,
+    "created_at": "2026-11-06T10:07:56Z",
+    "updated_at": "2026-11-06T10:07:56Z",
+    "closed_at": null,
+    "merged_at": null,
+    "commits": 1,
+    "changed_files": 3,
+    "additions": 47,
+    "deletions": 2,
+    "display_url": "https://github.com/TrillionniumFoundation/hepta-runtime/pull/106",
+    "display_title": "perf(x230): R36 audit admission cache ownership candidate"
+  },
+  "isError": false
+}
