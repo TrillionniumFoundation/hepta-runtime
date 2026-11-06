@@ -1,0 +1,88 @@
+{
+  "schema": "hepta-d2-c1-recovery-mac-transport-operators/v1",
+  "transport_preparation_complete": true,
+  "archive": {
+    "git_blob": "d0690bb0f5b677ed43d6fd30a39fa1e75650f8a8",
+    "bytes": 737358,
+    "sha256": "4a9d5af52aba5b030d8206fa0b03b1f5c60dfab5f90caf085ef69d79a80ed263",
+    "stage_path": "/Users/qianqi/work/hepta-runtime-d2-c1-sealed-payloads-02.tar.gz"
+  },
+  "archive_base64_companion": {
+    "git_blob": "1f0eb7620bce6f11e5d265c689cf42e35177b45c",
+    "bytes": 983145,
+    "sha256": "4ff36e1e4b104c4b815ef621cd386dae97f70f46b91e2ef9727ef953ae9ea583"
+  },
+  "importer": {
+    "git_blob": "dc48bdfd5df5ce7daf832c22ccb3cb01e3de3470",
+    "bytes": 15014,
+    "sha256": "c2fa1c88deb8ba446e76f1780bfa184a46d80cd588cd4a34086fbff92e16a1ac",
+    "stage_path": "/Users/qianqi/work/hepta-runtime-d2-c1-importer-02.py"
+  },
+  "actual_runtime_seal_manifest": {
+    "git_blob": "be4d62eef1e30e9f6c6798998b76b0258257415c",
+    "bytes": 325264,
+    "sha256": "a3009f021e4287d45d60099e613e4812ba04f17094b9a500ebe0c590cc7aaebe",
+    "source_path": "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-sealed-02/seal-manifest.json"
+  },
+  "staging": {
+    "root": "/Users/qianqi/work/hepta-runtime-d2-c1-sealed-staging-02",
+    "directories": [
+      "",
+      "x230",
+      "x230/c1-tools-02",
+      "x230/c1-tools-02/reference",
+      "mac"
+    ],
+    "mode": "0700",
+    "owner": "the non-root Mac user",
+    "initial_inventory": "only these five directories; no existing payload, upload input, sidecar or extra entry"
+  },
+  "payload_count": 23,
+  "payload_bytes": 708990,
+  "private_configuration_bodies_included": false,
+  "importer_argv": [
+    "/usr/bin/python3",
+    "-B",
+    "/Users/qianqi/work/hepta-runtime-d2-c1-importer-02.py"
+  ],
+  "runtime_installer_argv": [
+    "/usr/bin/python3",
+    "-B",
+    "/Users/qianqi/work/hepta-runtime-d2-c1-sealed-staging-02/install_campaign.py",
+    "--sealed-dir",
+    "/Users/qianqi/work/hepta-runtime-d2-c1-sealed-staging-02",
+    "--target",
+    "mac",
+    "--manifest-sha256",
+    "a3009f021e4287d45d60099e613e4812ba04f17094b9a500ebe0c590cc7aaebe"
+  ],
+  "original_holder_argv": [
+    "/usr/bin/python3",
+    "-B",
+    "/Users/qianqi/work/hepta-runtime-d2-launchers-02/held_agent_campaign_02.py",
+    "--remote-script",
+    "/Users/qianqi/work/hepta-runtime-d2-launchers-02/d2_campaign.py",
+    "--out",
+    "/Users/qianqi/work/hepta-runtime-d2-c1-holder-02",
+    "--timeout-seconds",
+    "3600"
+  ],
+  "final_runtime_files": 2,
+  "final_runtime_destination": "/Users/qianqi/work/hepta-runtime-d2-launchers-02",
+  "runtime_destination_and_holder_output_must_not_preexist": true,
+  "order": [
+    "Root creates only the five owned private staging directories.",
+    "Root stages and verifies the exact archive and importer outside the staging tree.",
+    "Root executes this importer once and preserves its original native terminal and complete read.",
+    "Root executes the original runtime installer once with the actual manifest SHA and preserves its original native terminal and complete read.",
+    "After Linux19 and Mac2 installations and all preparation/transfer jobs have closed, root invokes the unchanged holder once under the formal observation lock."
+  ],
+  "formal_lock": "Until the original holder has reached terminal state and cleanup has closed, root observes only that original holder's status/read; no other host operation, transfer, compilation or probe.",
+  "actual_importer_job": null,
+  "actual_mac_installer_job": null,
+  "actual_holder_job": null,
+  "actual_measurement": null,
+  "original_attempt01_unchanged": true,
+  "target_code_executed_by_preparer": false,
+  "host_calls_by_preparer": 0
+}

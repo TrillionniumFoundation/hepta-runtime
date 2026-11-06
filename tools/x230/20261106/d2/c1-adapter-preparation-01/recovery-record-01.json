@@ -1,0 +1,22 @@
+{
+  "schema": "hepta-d2-unexecuted-adapter-recovery/v1",
+  "reason": "Local executor became unavailable after static review and before D2 qualification; no D2 build or workload had started.",
+  "original_static_finding": "closed_matrix supplies a raw_timing interval, while measured_counter expects a cell containing raw_timing.",
+  "correction": "Only wrap the call-site interval as {raw_timing: cells[0]}; the ten reused helper functions remain exact.",
+  "restoration": "Recovered from the previously saved exact unexecuted source and the recorded single call-site edit.",
+  "corrected_adapter": {
+    "bytes": 30442,
+    "sha256": "ba2cd36aa4755888fe01be6a5e0487fb6bf6d7fb0d486618b046e2c166778740",
+    "git_blob": "5587f8f2e4a6a2affca0091e171aa58bac3c28a1"
+  },
+  "reviewed_corrected_source_sha256_matches": true,
+  "superseded_unexecuted_sources_retained": true,
+  "target_programs_executed": false,
+  "workload_replayed": false,
+  "source_is_sealed": false,
+  "remaining_bindings": [
+    "actual D2 parser replaces the explicitly unsealed old parser placeholder",
+    "actual completed D2 Q/CI/ordinary/qualified ELF and parent input"
+  ],
+  "independent_review_git_blob": "a236fa66fcec0e0417ec3c8dc58411fb0a896ffe"
+}

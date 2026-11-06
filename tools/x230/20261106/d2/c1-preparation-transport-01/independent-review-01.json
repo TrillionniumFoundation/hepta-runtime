@@ -1,0 +1,71 @@
+{
+  "schema": "hepta-d2-c1-source-preparation-transport-independent-review/v1",
+  "verdict": "no_blocking_issue_found",
+  "scope": "Narrow immutable-source text/byte and manifest JSON review only. No installer or packaged source was imported/executed; no host call and no new tar extraction/verification run.",
+  "installer": {
+    "git_blob": "4139fa211a63263a6e7f74db707e883dcf3523d6",
+    "bytes": 9480,
+    "sha256": "d143a26d4ae0d5635d389daf7196bf3894b60665c23238cf38dc753ca68188f9"
+  },
+  "reference": {
+    "git_blob": "b528256167ffb1e5bb278ad7aaba9982edd20838",
+    "bytes": 9443,
+    "sha256": "166f6f9df734065a6bc9fd1565da3c596de3c4d62c97b295309c87cd12b0af35"
+  },
+  "source_manifest": {
+    "git_blob": "db29b908298a97861770f6454bef3c64e7707cca",
+    "bytes": 10577,
+    "sha256": "9fcf4d95387e5b5fdb124acaf273c807ca59cf8d78c4fdc9f73577166e6e44f7"
+  },
+  "independent_checks": {
+    "exact_explicit_replacements": 13,
+    "entire_reconstructed_source_byte_equal": true,
+    "unchanged_functions": [
+      "need",
+      "canonical",
+      "identity",
+      "stamp",
+      "regular",
+      "directory",
+      "sync_directory",
+      "write_new",
+      "main"
+    ],
+    "manifest_file_rows": 39,
+    "manifest_bytes": 10577,
+    "member_count_including_manifest": 40,
+    "payload_bytes_excluding_manifest": 504261,
+    "payload_bytes_including_manifest": 514838,
+    "manifest_revision": "02",
+    "manifest_source_package_only": true,
+    "future_fields_none": true,
+    "tar_body_reread": false,
+    "target_executed": false,
+    "host_calls": 0
+  },
+  "fixed_paths": {
+    "root": "/home/qian/hepta-runtime-validation-cost-20261106-d2",
+    "destination": "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-parent-preparation-01",
+    "receipt": "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-preparation-install-01.json",
+    "archive": "/home/qian/hepta-runtime-d2-c1-parent-preparation-01.tar.gz"
+  },
+  "declared_archive_identity": {
+    "bytes": 138598,
+    "sha256": "78fb352cae7e77cc34cef6be84059a38c423668e48a0dc5014ea012ebad38cdc"
+  },
+  "delta": "Exactly thirteen explicit string replacements reconstruct every byte of the new installer from the reviewed original: description, root, destination, receipt, external archive path, manifest identity, member count, total size, archive identity, two schemas, source revision and source_package_only field.",
+  "preserved_behavior": [
+    "All archive bytes and exact manifest/member identities are checked before any destination mutation.",
+    "Original 4 MiB single-member, 16 MiB total, 128-member and expanded-tar bounds remain unchanged.",
+    "Regular owned single-link stable reads, no symlinks/path traversal/nonregular members, fixed create-only destination/receipt, O_EXCL 0600 writes, complete readback and file/directory fsync remain unchanged.",
+    "Partial installation failures retain created paths and original logs; no deletion, overwrite or replay was added.",
+    "No actual source sealing, compiler, target import, workload or performance outcome is initiated or claimed."
+  ],
+  "manifest_semantics": "The actual manifest is revision 02 and source_package_only=true. It lists 39 source members/504261 bytes; its own 10577 bytes make the exact 40-member/514838-byte preparation package. The destination's first-attempt 01 does not rewrite the source revision.",
+  "tar_scope": "The tar's declared whole identity is bound by the installer. This reviewer did not repeat the author's deterministic tar construction or forty-member byte check.",
+  "execution": {
+    "target_entrypoints": 0,
+    "host_calls": 0,
+    "tar_files_extracted": 0
+  }
+}

@@ -23,7 +23,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::OnceLock;
 use std::time::Duration;
 
-const EVENT_CAPACITY: usize = 32_768;
+const EVENT_CAPACITY: usize = 131_072;
 const REQUEST_CAPACITY: usize = 2_048;
 const NATIVE_ID_BYTES: usize = 128;
 const OUTPUT_LIMIT: u64 = 32 * 1024 * 1024;
@@ -81,6 +81,13 @@ pub(crate) enum Phase {
 	AuditWrite,
 	AuditSync,
 	Binding,
+	FileChecked,
+	FileReadReference,
+	FileReadHash,
+	FileFinalCheck,
+	FileIdentity,
+	ShellResolution,
+	ProfilePolicy,
 }
 
 #[derive(Clone, Copy, Serialize)]
@@ -772,7 +779,7 @@ pub fn start_from_env(
 	let mut output = Output::create(Path::new(&path))?;
 	output.line(&json!({
 		"type": "header", "schema": "hepta-phase-cost-trace/v1",
-		"preparation_revision": "recovery-02",
+		"preparation_revision": "validation-cost-d2-01",
 		"mode": if enabled { "on" } else { "off" },
 		"pid": std::process::id(), "start_ticks": start_ticks, "boot_id": boot.trim(),
 		"start_monotonic_ns": start_ns, "wall_clock": "CLOCK_MONOTONIC",

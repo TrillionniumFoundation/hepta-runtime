@@ -1,0 +1,166 @@
+{
+  "schema": "hepta-d2-c1-parent-core-independent-review/v1",
+  "reviewer": "/root/audit_acceptance",
+  "disposition": "no_remaining_static_blocker_in_the_reviewed_three_source_templates",
+  "scope": "Core parent, metadata sealer and create-only installer only. Complete package inventory, final foundation/ordinary producer implementation and actual Q/CI/ordinary/runtime results are separate pending bindings.",
+  "sources": {
+    "d2-main": {
+      "bytes": 47093,
+      "sha256": "ee13bca3dc1660e373c558e665c2d51967f7973b70221af20c41a95090c9660c",
+      "git_blob": "951c23dec754859f16e2dbfbaebb397518398273"
+    },
+    "d2-sealer": {
+      "bytes": 17407,
+      "sha256": "e9af9b320da52ac6a4fe45768816fff32c8ced159d6ce0e4486cb481b154740c",
+      "git_blob": "a2285b3483a883651730f655643b63e4b2eecb01"
+    },
+    "d2-installer": {
+      "bytes": 12402,
+      "sha256": "bd6e33588cb938a15ffc6ca68bed3f6e11c2df1a1e51da743202dd1a9941faba",
+      "git_blob": "717148a3ed5a25860fb21a0d07b03f2e41150c3a"
+    }
+  },
+  "baseline_sources": {
+    "d1-main": {
+      "bytes": 46302,
+      "sha256": "7346d37e0dd7a5eaba9ae09bfdbce62f53505ffc1832cf7ab04b9e32930d6ab9",
+      "git_blob": "590e6740975acc686d351b5b07863256f29cd10e"
+    },
+    "d1-sealer": {
+      "bytes": 15866,
+      "sha256": "2cb28e0ea18704d3f9b615567c6491bea2834cfc4c67f0a9fcbaa242cc6580b2",
+      "git_blob": "abc65b1483e3b9e0a48f19bda0395d7d611f4afb"
+    },
+    "d1-installer": {
+      "bytes": 12349,
+      "sha256": "0045ac1a119727260a99f4aab98c554e033f3486d16ae45cca9464e0c811d40a",
+      "git_blob": "68b7969cc41e8a93befed970773c5c06622b4909"
+    }
+  },
+  "local_static_check": {
+    "installer": {
+      "added_functions": [],
+      "all_ast_parsed": true,
+      "changed_functions": [
+        "install"
+      ],
+      "unchanged_functions": [
+        "canonical",
+        "directory",
+        "identity",
+        "main",
+        "need",
+        "regular",
+        "stamp",
+        "sync_directory",
+        "write_new"
+      ]
+    },
+    "main": {
+      "added_functions": [],
+      "all_ast_parsed": true,
+      "changed_functions": [
+        "bind_adapter",
+        "bind_ordinary_prerequisite",
+        "diagnostic_result",
+        "expected_inputs",
+        "main",
+        "require_sealed",
+        "verify_completed_compiler_monitor"
+      ],
+      "entire_main_including_quiet_exact_after_namespace_and_two_file_delta_normalization": true,
+      "future_ACTUAL": null,
+      "nested_owner_functions_exact": [
+        "run_stage",
+        "bind",
+        "unchanged",
+        "checkpoint"
+      ],
+      "unchanged_functions": [
+        "bind_compiler_monitor_inputs",
+        "bind_static_sources",
+        "canonical",
+        "checked",
+        "command_plan",
+        "compiler_activity",
+        "create",
+        "finish_compiler_monitor",
+        "group_present",
+        "interrupted",
+        "machine_snapshot",
+        "monitor_module",
+        "need",
+        "prepare_compiler_monitor",
+        "private_directory",
+        "process_identity",
+        "qualification_projection",
+        "save",
+        "source_inputs",
+        "utc"
+      ]
+    },
+    "sealer": {
+      "added_functions": [
+        "adapter_with_d2_parser"
+      ],
+      "all_ast_parsed": true,
+      "changed_functions": [
+        "seal"
+      ],
+      "unchanged_functions": [
+        "assignment",
+        "canonical",
+        "identity",
+        "main",
+        "module",
+        "need",
+        "new_file",
+        "regular",
+        "stamp"
+      ]
+    }
+  },
+  "resolved_finding": {
+    "description": "Each initial D2 parent/sealer/installer retained one /home/qian/hd1c01 literal, inconsistent with the already reviewed D2 adapter's /home/qian/hd2c01.",
+    "correction": "Each corrected source is byte-exact to its preserved unexecuted first draft except one hd1c01 to hd2c01 replacement.",
+    "old_draft_git_blobs": [
+      "4e50812dfa3812ae8372cb2d24c2eb8f36cf5bca",
+      "24fe0cadb26cb8e7b056cffd9393991719dc0271",
+      "aec03fe9d223e634b7a098a76dbe868dd9149df2"
+    ],
+    "all_three_corrections_independently_fetched_and_rehashed": true,
+    "no_target_execution": true
+  },
+  "findings": [
+    "The entire parent main reverses exactly to D1 after namespace and two-file/no-added-source normalization. Nested checkpoint/bind/unchanged/run_stage functions are byte-identical. The quiet90 block, deadlines, compiler monitoring, child process ownership and final cleanup remain within that unchanged main.",
+    "The original two-stage command_plan is unchanged: original native observation adapter followed by the original native auditor. No lifecycle/capacity/performance adoption gate or retry was added.",
+    "D2 source is compared against the actually qualified D1 source root. The parent requires the current qualified 222 map with exactly two changed paths and no additions; accepted production R24 is not relabeled as an adopted D1 or D2 optimization.",
+    "ACTUAL remains None and mandatory ordinary verifier/input/postflight pins are checked before any parent output or monitor. Ordinary read-only validation must match its original postflight and both retained feature and ordinary release sets.",
+    "D2 parser 15070/ca0e7e and correlation 15615/891f511e are included in STATIC_INPUTS. The static reference directory inventory therefore requires the additional correlation source rather than loading an unbound extra helper.",
+    "The sealer pins corrected adapter ba2cd36a, changes exactly one literal parser REFERENCE identity with inverse-byte and AST checks, then injects only SPEC. Parent sealing still injects only ACTUAL. Original holder 715e996 and clarification 7848ccc remain exact required bytes.",
+    "diagnostic_result consumes actual D2 adapter fields: eight controller records, 468 bijected ON requests, 384 measured ON requests, correct per-controller groups, and whole validation inclusive CPU semantics. The original unchanged auditor must verify all 936 calls independently.",
+    "Installer retains bounded full-package prevalidation, owned direct paths, O_EXCL/NOFOLLOW writes, fsync/readback and fixed Linux/Mac inventories. Its only new inventory member is correlation, in addition to D2 names. It does not launch the campaign."
+  ],
+  "agreed_interface_not_yet_an_actual_result": {
+    "root": "/home/qian/hepta-runtime-validation-cost-20261106-d2",
+    "socket_parent": "/home/qian/hd2c01",
+    "full_binder": "bind_d2_prerequisites(prerequisites, bind)",
+    "ordinary_verifier": "verify_ordinary(inputs, bind, foundation, qualified)",
+    "ordinary_verifier_path": "ordinary-tools-01/verify_ordinary_01.py",
+    "ordinary_input_path": "ordinary-verification-input-01.json",
+    "ordinary_postflight_path": "ordinary-postflight-01.json",
+    "ordinary_validation_schema": "hepta-d2-ordinary-supplement-validation/v1",
+    "ordinary_postflight_schema": "hepta-d2-ordinary-supplement-postflight/v1",
+    "qualified_source_map": null,
+    "qualified_feature_elf": null,
+    "actual_ordinary_postflight": null,
+    "actual_c1_result": null
+  },
+  "review_boundary": [
+    "The final full foundation and ordinary verifier are being reviewed separately; this source review does not assert their current/future original receipts have passed.",
+    "I fetched and rehashed these three templates and their three exact D1 references, and performed only AST/text/metadata comparisons.",
+    "The review metadata checker initially assumed quiet was a separate function and then a particular inline variable name. Those checker assumptions were removed after inspecting the actual AST. Exact whole-main inverse comparison covers the inline quiet code; neither failed checker invoked target code.",
+    "No host calls, source changes, Rust commands, sealer/installer/parent entries, parser, auditor or workload were executed."
+  ],
+  "blockers": []
+}

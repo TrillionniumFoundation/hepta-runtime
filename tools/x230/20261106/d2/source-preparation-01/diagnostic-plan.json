@@ -1,0 +1,147 @@
+{
+  "schema": "hepta-d2-validation-cost-diagnostic-plan/v1",
+  "approved_scope": "Three full-file segments and three existing synchronous method scopes; no runtime optimization",
+  "runtime_root": "/home/qian/hepta-runtime-validation-cost-20261106-d2",
+  "source_parent": "8eb1a0af7a85768e374717d24848fd9798871cc9",
+  "accepted_production_baseline": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "changed_source_paths": [
+    "src/mcp/runtime/phase_cost.rs",
+    "src/mcp/runtime/ssh_observation_profile.rs"
+  ],
+  "phases": [
+    {
+      "name": "file_checked",
+      "scope": "Only the original initial checked_file call in PinnedFile::verify_checked; ends before the next original check_current",
+      "meaning": "Path walk, open, initial metadata and executable capability checks together"
+    },
+    {
+      "name": "file_read_reference",
+      "scope": "Entire unchanged read loop when the already-loaded reference is Some",
+      "meaning": "Complete read, original cancellation/deadline checks and byte comparison together; not pure read syscall or pure comparison CPU"
+    },
+    {
+      "name": "file_read_hash",
+      "scope": "Same entire unchanged read loop when the already-loaded reference is None",
+      "meaning": "Complete read, original cancellation/deadline checks and hash.update together; hash.finish remains outside"
+    },
+    {
+      "name": "file_final_check",
+      "scope": "Only original verify_read call; ends before the next check_current",
+      "meaning": "Final descriptor metadata and path reopening/metadata validation"
+    },
+    {
+      "name": "file_identity",
+      "scope": "PinnedFile::verify_identity body",
+      "meaning": "Original owner boundary fresh checked_file and pinned-stamp comparison"
+    },
+    {
+      "name": "shell_resolution",
+      "scope": "PinnedShell::verify_resolution body",
+      "meaning": "Existing fixed-shell resolution and component comparison"
+    },
+    {
+      "name": "profile_policy",
+      "scope": "Profile::verify_policy body",
+      "meaning": "Existing private-directory, runtime-policy digest and agent environment checks"
+    }
+  ],
+  "preserved": [
+    "Original statements, token order, ? early returns and short-circuit conditions after removing only the new diagnostic cfg statements",
+    "16 KiB buffer and original complete read loop, all check_current locations",
+    "reference allocation budget, fresh content reads, hash/reference semantics and final content_matches",
+    "worker permits, owner checks, process ownership, cancellation, deadlines and cleanup",
+    "existing synchronous !Send RAII recorder and parent/child CPU arithmetic",
+    "32 MiB output bound, failure on drops/incomplete capture and complete original raw evidence"
+  ],
+  "bounds": {
+    "event_capacity": 131072,
+    "request_capacity": 2048,
+    "trace_output_limit": 33554432,
+    "buffer_bytes": 16384,
+    "per_chunk_instrumentation": false,
+    "predicted_existing_events_per_request": 73,
+    "predicted_full_file_verifications_per_request": 72,
+    "predicted_boundary_file_identities_per_request": 36,
+    "predicted_shell_resolution_per_request": 18,
+    "predicted_policy_checks_per_request": 18,
+    "predicted_added_events_per_request": 288,
+    "predicted_total_events_per_request": 361,
+    "predicted_first_requests": 222,
+    "predicted_first_events": 80142,
+    "conditional_serialization_envelope": {
+      "conditional_only": "D1 first-controller phase counts repeated in D2; not a universal per-request bound",
+      "old_event_rows": 16206,
+      "old_rows_full_width_upper": 5998884,
+      "new_rows_upper": 25014960,
+      "new_row_bytes": {
+        "file_checked": 388,
+        "file_read_reference": 395,
+        "file_final_check": 392,
+        "file_identity": 389,
+        "shell_resolution": 392,
+        "profile_policy": 390
+      },
+      "new_rows_count": 63936,
+      "request_row_max": 355,
+      "request_bytes_upper": 78810,
+      "header_footer_reserve": 131072,
+      "total_trace_bytes_upper_if_same_success_path_counts": 31223726,
+      "output_limit": 33554432,
+      "margin": 2330706,
+      "detail_max": "master_lease"
+    },
+    "all_predictions_require_same_success_path_as_D1": true,
+    "overflow_is_failure_not_truncation_or_sampling": true
+  },
+  "memory": {
+    "actual_D1_event_slot_bytes": 136,
+    "actual_D1_request_slot_bytes": 184,
+    "conditional_D2_event_slot_bytes_if_layout_unchanged": 17825792,
+    "conditional_D2_request_slot_bytes_if_layout_unchanged": 376832,
+    "conditional_D2_slot_total_bytes_if_layout_unchanged": 18202624,
+    "conditional_slot_increase_bytes": 13369344,
+    "off_and_on_both_preallocate_same_slots": true,
+    "actual_D2_sizeof_not_yet_measured": true,
+    "header_reports_actual_sizeof": true,
+    "slot_size_excludes_allocator_hosts_and_RSS": true,
+    "not_an_optimization_memory_result": true
+  },
+  "parser": {
+    "original_git_blob": "064cd62dd7f60ee11d538b4b21f4674283591572",
+    "derived_git_blob": "68d4aeddb165eade2c684bd1dca7523c139557d9",
+    "derived_file": "summarize_trace_d2.py",
+    "edits": [
+      "line-count upper capacity 32768 to 131072",
+      "header event_capacity equality 32768 to 131072",
+      "event slot maximum 32767 to 131071",
+      "preparation_revision recovery-02 to validation-cost-d2-01"
+    ],
+    "other_parser_logic_unchanged": true,
+    "executed": false
+  },
+  "qualification": {
+    "original_eight_stages": true,
+    "original_nineteen_tools": true,
+    "jobs": 2,
+    "disk_floor_bytes": 3221225472,
+    "tests_dynamic_from_real_inventory": true,
+    "actual_job_id": null,
+    "actual_counts": null,
+    "actual_source_map": null
+  },
+  "measurement": {
+    "same_feature_elf_OFF_ON": true,
+    "diagnostic_only": true,
+    "actual_job_id": null,
+    "actual_result": null,
+    "performance_adoption": false,
+    "D1_original_failed_workflow_preserved": true,
+    "D2_driver_and_correlator_sealing_is_separate_future_work": true
+  },
+  "forbidden_in_this_preparation": [
+    "host/controller APIs",
+    "Rust formatter/compiler/test execution",
+    "original parser/auditor execution",
+    "Git ref/commit/tree mutations"
+  ]
+}
