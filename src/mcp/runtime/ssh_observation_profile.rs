@@ -269,6 +269,10 @@ impl PinnedFile {
 		))
 	}
 	fn verify_identity(&self) -> Result<()> {
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		let _phase_cost_identity = crate::mcp::runtime::phase_cost::sync_span(
+			crate::mcp::runtime::phase_cost::Phase::FileIdentity,
+		);
 		let (_, stamp) = checked_file(&self.path, self.maximum, self.private, self.executable)?;
 		if stamp != self.stamp {
 			bail!("observation profile changed after complete validation");
@@ -280,8 +284,14 @@ impl PinnedFile {
 	}
 	fn verify_checked(&self, check_current: &impl Fn() -> Result<()>) -> Result<()> {
 		check_current()?;
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		let diagnostic_file_checked = crate::mcp::runtime::phase_cost::sync_span(
+			crate::mcp::runtime::phase_cost::Phase::FileChecked,
+		);
 		let (mut file, stamp) =
 			checked_file(&self.path, self.maximum, self.private, self.executable)?;
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		drop(diagnostic_file_checked);
 		check_current()?;
 		if stamp != self.stamp {
 			bail!("observation profile changed");
@@ -294,6 +304,14 @@ impl PinnedFile {
 		let mut buffer = [0; VERIFY_BUFFER_BYTES];
 		let mut length = 0usize;
 		let mut reader = Read::by_ref(&mut file).take(self.maximum as u64 + 1);
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		let diagnostic_file_read = crate::mcp::runtime::phase_cost::sync_span(
+			if self.reference.is_some() {
+				crate::mcp::runtime::phase_cost::Phase::FileReadReference
+			} else {
+				crate::mcp::runtime::phase_cost::Phase::FileReadHash
+			},
+		);
 		loop {
 			check_current()?;
 			let count = match Read::read(&mut reader, &mut buffer) {
@@ -318,8 +336,16 @@ impl PinnedFile {
 			}
 			check_current()?;
 		}
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		drop(diagnostic_file_read);
 		check_current()?;
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		let diagnostic_file_final = crate::mcp::runtime::phase_cost::sync_span(
+			crate::mcp::runtime::phase_cost::Phase::FileFinalCheck,
+		);
 		verify_read(&self.path, &file, &stamp, length, self.maximum)?;
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		drop(diagnostic_file_final);
 		check_current()?;
 		let content_matches = match &self.reference {
 			Some(reference) => matches_reference && length == reference.len(),
@@ -464,6 +490,10 @@ impl PinnedShell {
 		Ok(result)
 	}
 	fn verify_resolution(&self) -> Result<()> {
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		let _phase_cost_shell_resolution = crate::mcp::runtime::phase_cost::sync_span(
+			crate::mcp::runtime::phase_cost::Phase::ShellResolution,
+		);
 		let (path, components) = fixed_shell_resolution()?;
 		if path != self.target.path
 			|| components.len() != self.components.len()
@@ -838,6 +868,10 @@ impl Profile {
 		check_current()
 	}
 	fn verify_policy(&self) -> Result<()> {
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		let _phase_cost_profile_policy = crate::mcp::runtime::phase_cost::sync_span(
+			crate::mcp::runtime::phase_cost::Phase::ProfilePolicy,
+		);
 		if !private_directory(&self.socket_parent)?.same_directory(&self.parent_stamp)
 			|| crate::mcp::runtime::config::runtime_policy_digest()? != self.policy
 			|| std::env::var_os("SSH_AUTH_SOCK").as_deref() != Some(self.agent.as_os_str())

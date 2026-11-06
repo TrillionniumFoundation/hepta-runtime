@@ -1,0 +1,153 @@
+{
+  "schema": "hepta-d2-c1-adapter-independent-review/v1",
+  "reviewer": "/root/audit_acceptance",
+  "disposition": "no_remaining_static_blocker_in_corrected_unsealed_source",
+  "scope": "Independent local text, byte/hash, AST and call-shape review only. No target modules, parser, auditor, workload, builder entry point or host operations were executed by this review.",
+  "exact_static_check": {
+    "all_python_ast_parsed": true,
+    "completed_d1_interpreter": {
+      "bytes": 41876,
+      "sha256": "7857a1f8960e82cbb1ba7700c1e805b87f7363cf5d8c3fecf32c5ebbf0dfa870"
+    },
+    "corrected_call_shape_only_vs_superseded_unexecuted": true,
+    "environment_binding_exact": true,
+    "exact_reused_helpers": [
+      "aggregate",
+      "canonical",
+      "correlate",
+      "json_object",
+      "measured_counter",
+      "need",
+      "phase_values",
+      "sha",
+      "transport_calls",
+      "uint"
+    ],
+    "future_SPEC": null,
+    "host_calls": 0,
+    "identities": {
+      "README.md": {
+        "bytes": 5689,
+        "sha256": "e17867407c162d3310db88a0c100615d3eb05a984b91e7f04d3184922238c3d6"
+      },
+      "build_adapter.py": {
+        "bytes": 7250,
+        "sha256": "826988fee154e71ecd17af9ed543bc55cadcab48fcefe5dc247c3ebeb62fa1e1"
+      },
+      "correlate_trace.py": {
+        "bytes": 15615,
+        "sha256": "891f511e80273c5fb4a1a76ff3606b7de90827c3eab5d01bb3e283dba952cd84"
+      },
+      "run_c1_phase_cost.unsealed.py": {
+        "bytes": 30442,
+        "sha256": "ba2cd36aa4755888fe01be6a5e0487fb6bf6d7fb0d486618b046e2c166778740"
+      },
+      "select_trace.fragment.py": {
+        "bytes": 4490,
+        "sha256": "b5d87c30c247f3b982d395ee7dd61d2c72136aaba921732a5c1c2b4bc8ed78ef"
+      },
+      "source-construction.json": {
+        "bytes": 3041,
+        "sha256": "6b038a178677caaccf171e1c322f1d2e977bb9f8a8e734eabf6c281445db59e3"
+      },
+      "static-review-correction-01.json": {
+        "bytes": 1077,
+        "sha256": "e8f361604893b707adefccb157ad6eed3ea39bc5621eed15d6dfd2f4f1058fc8"
+      }
+    },
+    "original_adapter": {
+      "bytes": 31131,
+      "sha256": "b49b95b00f67b33b05b726527ee5f63766fe568f7fed6d372f32417d3f811189"
+    },
+    "original_main_exact_after_reversing_only_declared_postmatrix_changes": true,
+    "original_modules_exact_after_namespace_only": true,
+    "require_sealed_exact_after_namespace_only": true,
+    "schema": "hepta-d2-c1-adapter-independent-static-check/v1",
+    "target_imports_or_executions": 0
+  },
+  "source_root": "/home/qian/hepta-runtime-validation-cost-20261106-d2",
+  "private_socket_parent": "/home/qian/hd2c01",
+  "real_finding_and_correction": {
+    "superseded_adapter": {
+      "bytes": 30409,
+      "sha256": "eb925eca4a7c9129143111ceca95a46904c7533bf536720857813acaaf3aa7ab"
+    },
+    "superseded_fragment": {
+      "bytes": 4457,
+      "sha256": "ce3bd22cce9d076d4fde9ce740c96829b062fb38eb30afc88e5dff1282a0292f"
+    },
+    "finding": "closed_matrix groups store a cell's raw_timing object as interval. The initial D2 bridge passed that interval directly to the original measured_counter helper, which expects a whole cell and indexes cell['raw_timing']. This would fail during postmatrix interpretation.",
+    "correction": "The call site now passes {'raw_timing': cells[0]} to the unchanged helper. The original timing object and numeric computation are unchanged.",
+    "correction_byte_exact": true,
+    "old_draft_preserved": "d2-c1-adapter-preparation-01/superseded-unexecuted-01",
+    "no_workload_was_executed_to_find_or_fix_this_issue": true
+  },
+  "findings": [
+    {
+      "id": "unsealed_guard",
+      "conclusion": "SPEC is None. require_sealed is invoked before loading original helper modules, creating the evidence directory or launching the original wrapper. Its only changes from D1 are the explicit D2 namespace."
+    },
+    {
+      "id": "original_workload_preserved",
+      "conclusion": "EnvironmentBinding and closed_matrix are byte-identical to the frozen D1 template. Main reconstructs exactly after reversing only the new boot record, postmatrix helper load/interpretation/coverage block and namespace. Original wrapper argv retains the same feature ELF for A and B, ABBA modes off/on/on/off, C1, 192 measured, 24 warmup, two workers, six preflight and twelve restart calls per round."
+    },
+    {
+      "id": "original_ownership",
+      "conclusion": "Original Controller.__init__, close, cell, save_report and direct Popen identities remain checked. No new Popen wrapper, reaper, FD-exec mechanism or workload cancellation hook is introduced. The environment hook is restored in its existing finally paths and frame references are released."
+    },
+    {
+      "id": "read_after_close",
+      "conclusion": "No trace is read until the original complete matrix returns successfully and closed_matrix verifies all eight normal controller closes. On workload, warmup, exception or close failure, the adapter preserves its original failure/report behavior and does not claim successful trace interpretation. The original constructor partial-owner limitation remains an outer ownership responsibility."
+    },
+    {
+      "id": "copied_correlation",
+      "conclusion": "All ten correlation helper function bodies are byte-exact copies of the completed D1 offline interpreter pinned by SHA256 7857a1f8960e82cbb1ba7700c1e805b87f7363cf5d8c3fecf32c5ebbf0dfa870. Only module imports/constants and namespace are newly supplied. The module itself has no process launch, host client, extraction or native-auditor call."
+    },
+    {
+      "id": "transport_identity",
+      "conclusion": "The bridge first reads the original raw transport and index through the retained bounded stable regular-file reader and compares them with shutdown capture identities. Copied helpers require contiguous indexed complete frames, canonical request and response hashes, unique JSON-RPC/frame use and original ordered RPC/call/cell intervals. Reader read_start is not treated as the lower RPC bound."
+    },
+    {
+      "id": "trace_identity_and_bijection",
+      "conclusion": "The trace header must match the original controller mode, PID, birth ticks, persisted current-campaign boot and qualified feature ELF. Its start/end bounds remain inside the original controller lifetime. Each ON whole request span must match exactly one original same-host/same-operation RPC and every original call must match exactly one trace request. Matrix-wide native IDs must be unique across 468 selected ON requests, with 384 measured requests."
+    },
+    {
+      "id": "wire_id_semantics",
+      "conclusion": "The copied transport checker verifies that status/read responses do not expose the request-v8 marker. It records wire_native_request_id as null; the actual internal identity comes from the bound trace. It never presents a synthesized wire ID or assumes the failed D1 public-ID contract."
+    },
+    {
+      "id": "phase_arithmetic",
+      "conclusion": "The parser validates each entire trace before any selection. The reused selective arithmetic must exactly reproduce all parser phase distributions, every request CPU total and whole-trace recorded CPU total. Preflight/warmup/measured/restart groups are separate; only the 384 measured ON requests enter the combined measured phase summary. OFF absence is not reported as zero work CPU."
+    },
+    {
+      "id": "nested_cost_semantics",
+      "conclusion": "The adapter explicitly names ValidationOwner/ValidationWorker inclusive CPU as the whole-validation values. Their exclusive values are only the residual after direct synchronous children. Whole read-loop labels include original reads, cancellation checks and comparison/hash update; nested wall sums are nonadditive. Controller-minus-recorded residuals retain their sign and are not assigned to remote/network CPU."
+    },
+    {
+      "id": "failure_and_external_receipts",
+      "conclusion": "The unchanged main catches interpretation failure, retains raw outputs and writes an analysis_complete=false report, returning failure. The adapter does not execute the native auditor and still requires the parent to run the original auditor and close held-agent, quiet90, compiler-monitor and source/ELF custody. This review does not substitute for those future receipts."
+    }
+  ],
+  "remaining_preparation_not_actual_results": {
+    "sealed": false,
+    "actual_qualification_exact_ci_ordinary_and_ELF": null,
+    "frozen_parser_pending": {
+      "current_explicit_placeholder": {
+        "bytes": 15057,
+        "sha256": "f6e65c2e206d4aa90143a17893e5e57c158bca9f8eec5f74897b19c3596e32c5"
+      },
+      "reviewed_D2_parser": {
+        "bytes": 15070,
+        "sha256": "ca0e7e0d7c670daec20e54c6703bc1849f80138224570ef5366abd60079c7927"
+      },
+      "requirement": "Before actual source sealing, replace the clearly declared D1 parser placeholder with the exact D2 parser and bind correlation plus parser in the parent/source/installation inventory."
+    },
+    "actual_c1_workload_results": null,
+    "original_D1_workflow_failure_preserved": true
+  },
+  "static_check_history": [
+    "Initial corrected-source byte comparison expected a one-line replacement. It failed because the actual minimal call-shape correction is formatted across two lines. Direct diff identified only that formatting and wrapper; the corrected exact byte comparison passed. No target entry point was run by either check."
+  ],
+  "blockers": [],
+  "no_new_gate_or_workload_added": true
+}
