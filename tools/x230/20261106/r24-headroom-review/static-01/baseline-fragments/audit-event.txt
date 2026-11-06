@@ -1,0 +1,18 @@
+fn prepare_audit_at(
+	path: PathBuf,
+	action: &str,
+	host: &str,
+	subject: &str,
+	outcome: &Value,
+) -> Result<PreparedAudit> {
+	let event = json!({
+		"at_unix_ms": now_ms(),
+		"action": action,
+		"host": host,
+		"subject": subject,
+		"outcome": outcome,
+	});
+	let mut line = serde_json::to_vec(&event)?;
+	line.push(b'\n');
+	Ok(PreparedAudit { path, line })
+}

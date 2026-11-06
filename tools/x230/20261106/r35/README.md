@@ -12,7 +12,7 @@ The JSON adjustment is the exact previously published R26 selected delta, isolat
 
 The sealed preparation contains 39 files / 1,383,630 expanded bytes. Its 354,738-byte package SHA256 is `7303e1ded7ac4aab5f02c5240b1e6211bbaf7ca8cd7ebe19d686546842366dba`. Independent static review checked every package member, the unchanged 19-file original harness, full 220-path source map including embedded Python, exact three-file overlay and the original eight-stage commands with jobs=2 and no automatic retry.
 
-The first actual qualification job is `1a1af619097-fc05-6813`, using the exact sealed argv. At this progress milestone, format, fmt-check, harness-tests and Clippy have returned zero, and test-build is running. Future test counts, formatted source custody and retained program hashes will be bound to actual completed original reports; no count or success is predicted here.
+The first actual qualification job is `1a1af619097-fc05-6813`, using the exact sealed argv. At this progress milestone, format, fmt-check, harness-tests, Clippy and test-build have returned zero, and isolated-tests is running. Future test counts, formatted source custody and retained program hashes will be bound to actual completed original reports; no count or success is predicted here.
 
 The preparer revalidates the original closed R34 qualification/CI/observation evidence, all retained executables, absence of cache users/compiler processes and at least 3 GiB free space before a single cache rename. R34 contributes rebuildable cache only; source is copied from accepted R24 and the frozen R35 patch is applied. R34's C8 rejection remains rejection, and its lifecycle materializer and lifecycle run were never started.
 
@@ -27,3 +27,12 @@ All original launch responses, unavailable-native errors, reconciliation termina
 ## Subsequent gates
 
 exact-ci-preparation/ preserves the original commands, nextest 0.9.137, full test inventory, auditor, canonical workflow and guard-before-effects behavior. Actual qualification job/count/source-map/receipt pins remain null until the successful first qualification closes; the sealer cannot substitute predicted results. The original six-host ABBA throughput, latency, CPU, memory, boundary/recovery and normal lifecycle gates are still required before adoption. No threshold is relaxed and no measurement is repeated to reverse a rejection.
+
+
+## Prepared measurement control and optimization headroom
+
+parent-preparation/ retains the reviewed original normal observation/lifecycle protocol with fresh h35 namespaces and a binder for actual R35 qualification and closed R34 cache-owner evidence. The parent package is 34,133 bytes (SHA256 `3788a8595ff5e5e08e7757546d176fb96385d493b26cd4b1722c610b94e76715`). It contains no new measurement or acceptance result. The original installation logic derives two lifecycle-script roots and their manifest from R29; future archive pins must come from the actual R35 installation receipt.
+
+qualification-archive-template-01/ is also unsealed. Its fixed 54 inputs are the 39 qualification-preparation files and 15 small installation originals; actual terminal/results/counts remain null. It retains bounded collection and zero-extraction verification, and distinguishes unknown installation state from actual first qualification.
+
+The preserved ../r24-headroom-review/ reports distinguish two remaining static allocation opportunities from measured runtime benefit. Prior component evidence gives no basis for assuming that a few microseconds per call would move the observed throughput plateau. Reducing per-request SSH/Python process creation is a structural direction requiring explicit framing, freshness, deadlines and process-custody design; no such implementation or benefit is claimed here. The roughly 20 ms/call reference is controller CPU only, excluding SSH-child and remote Python CPU. All estimates and historical limits are identified in the report.
