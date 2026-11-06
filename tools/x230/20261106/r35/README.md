@@ -1,38 +1,39 @@
-# R35: read JSON allocation and observation command ownership
+# R35: qualified allocation candidate; original CI and performance acceptance pending
 
-R35 is a candidate based directly on accepted R24 `baab4def80be7af015b2e7a594cb302f66c4130e`. **The first complete x230 qualification is in progress; there is no completed qualification, CI, performance or adoption result yet. R24 remains accepted.**
+R35 starts from accepted R24 commit `baab4def80be7af015b2e7a594cb302f66c4130e`. It moves the legacy direct-read JSON allocation into the branch that consumes it and transfers ownership of the observation command instead of cloning it. Exactly three compiler input paths differ from R24. No cancellation reserve, concurrency threshold, transport authority check, cleanup rule, or acceptance threshold was changed.
 
-## Exact source change
+## Actual first qualification
 
-The same 220 compiler-input paths are retained, with exactly three changed files. `read_job` constructs its original seven-field legacy JSON only in the branch that consumes it. The observation pool transfers its already-owned command String at the original consumption point, using `std::mem::take`; two existing test callers receive the required mutable-reference adaptation. There are no new test cases or assertion changes, no dependency/profile change and no capacity-policy change.
+The original first qualification job `1a1af619097-fc05-6813` completed successfully. All eight original stages returned zero: format, fmt-check, harness tests, Clippy, test build, isolated tests, isolated-test audit, and release. Native terminal publication and both output streams are complete: 1,109 stdout bytes and zero stderr bytes. No automatic retry occurred.
 
-The JSON adjustment is the exact previously published R26 selected delta, isolated here on R24. Earlier combined-candidate results do not isolate its effect. The full frozen candidate and historical/independent review are in ../r35-candidate/. The original source commit is `d77190730651114c41837228a2180b412713cee3`; no R34 reserve implementation is included.
+| Result | Actual count |
+|---|---:|
+| Passed | 1,645 |
+| Failed | 0 |
+| Ignored | 34 |
+| Selected | 1,679 |
+| Retries | 0 |
 
-## First actual qualification
+The complete tested source map contains 220 compiler inputs, including 17 embedded Python files; all 19 original harness files are unchanged. The map SHA-256 is `87f085a95a1c1925ecc444b46c996a0aec399c74ce7d0c32afff572e24055313`. Rustfmt changed the pool execution-chain layout and the existing test fixture closure layout, including an optional trailing comma. This commit carries the actual formatted source that was tested; the original candidate package is preserved unchanged.
 
-The sealed preparation contains 39 files / 1,383,630 expanded bytes. Its 354,738-byte package SHA256 is `7303e1ded7ac4aab5f02c5240b1e6211bbaf7ca8cd7ebe19d686546842366dba`. Independent static review checked every package member, the unchanged 19-file original harness, full 220-path source map including embedded Python, exact three-file overlay and the original eight-stage commands with jobs=2 and no automatic retry.
+| Retained program | Bytes | SHA-256 |
+|---|---:|---|
+| hepta-runtime | 14,373,416 | `416662310fef6ca6d68907658bb1b882584d1e431bf4ed4263f62984495d8251` |
+| hepta-runtime-jobctl | 739,016 | `61c90260057a405626a24a36ad43303c632f72d2d97929296acdffd748b79d62` |
+| native_process_driver | 2,896,240 | `31d90610e618041faa5f562c029e496afc39c603fbe3a51d740e4eec3aacd54e` |
 
-The first actual qualification job is `1a1af619097-fc05-6813`, using the exact sealed argv. At this progress milestone, format, fmt-check, harness-tests, Clippy and test-build have returned zero, and isolated-tests is running. Future test counts, formatted source custody and retained program hashes will be bound to actual completed original reports; no count or success is predicted here.
+Original qualification report, preparation, map, summary, full audit, raw native terminal/read and postflight records are in [qualification-originals-01](qualification-originals-01/). The actual postflight job `1a1af7ee913-fc05-690e` succeeded after rechecking all 220 input paths, all 19 harnesses, and all three retained ELF files. It also preserved the 14 small installation originals and the two original qualification native records without overwriting existing evidence. The sealed input changes only the previously reviewed template's payload assignment.
 
-The preparer revalidates the original closed R34 qualification/CI/observation evidence, all retained executables, absence of cache users/compiler processes and at least 3 GiB free space before a single cache rename. R34 contributes rebuildable cache only; source is copied from accepted R24 and the frozen R35 patch is applied. R34's C8 rejection remains rejection, and its lifecycle materializer and lifecycle run were never started.
+## Measurement preparation and current limits
 
-## Installation history kept separate from qualification
+The original parent/normal-observation/lifecycle tools were installed once by job `1a1af801235-fc05-6921`, with complete successful native output and zero workloads started. The installation receipt and actual generated examples are preserved in [parent-installed-originals-01](parent-installed-originals-01/). Exact original CI tools are being sealed from this completed qualification; no CI or performance result is claimed in this checkpoint.
 
-The initial installation request `1a1af5e240e-fc05-67f8` returned launch_unknown. Its original status/read errors reported the durable job directory absent; no successful or failed native terminal is fabricated. A separate read-only reconciliation `1a1af5f2833-fc05-6802` observed the new root and original job directory absent, and the original unit not found/inactive with MainPID=0. The cause of the transport failure is not established.
+Qualification success is not performance acceptance. The six-host normal ABBA, boundary/recovery checks, and gated lifecycle ABBA have not run for R35. The original C1/C8/C16 throughput, p95, controller-CPU and RSS thresholds remain unchanged. R24 remains the accepted runtime. R34 was rejected on its first C8 throughput gate and is not a source baseline for this candidate.
 
-The identical frozen package was then delivered through six bounded binary-upload chunks. Commit verified its total size and SHA256 before making the destination visible. A small staged installer `1a1af611834-fc05-680f` completed with exit 0 and validated all 39 files. Before installation, free space was 6,835,855,360 bytes. That installer did not start qualification, materialize source or move/delete the cache. Only then was the first qualification launched.
+## Preserved provenance
 
-All original launch responses, unavailable-native errors, reconciliation terminal/read streams, upload responses, staged-install terminal/read streams, exact scripts and installation receipt are retained in installation-originals-01/. Installation recovery is not a qualification retry.
+The first large-inline installation attempt has an unresolved `launch_unknown` result, with original error texts and a separate read-only reconciliation. It has no invented native terminal status or exit code. A separate bounded staged upload and installer succeeded before the original qualification was launched once. See [installation-originals-01](installation-originals-01/) and the earlier sealed preparation records. These installation events are not test retries.
 
-## Subsequent gates
+The original immutable candidate input, patch and history-overlap review remain available alongside the actual tested source. In particular, the legacy-read allocation change overlaps the earlier R26 candidate; R35 does not claim it as a newly discovered optimization.
 
-exact-ci-preparation/ preserves the original commands, nextest 0.9.137, full test inventory, auditor, canonical workflow and guard-before-effects behavior. Actual qualification job/count/source-map/receipt pins remain null until the successful first qualification closes; the sealer cannot substitute predicted results. The original six-host ABBA throughput, latency, CPU, memory, boundary/recovery and normal lifecycle gates are still required before adoption. No threshold is relaxed and no measurement is repeated to reverse a rejection.
-
-
-## Prepared measurement control and optimization headroom
-
-parent-preparation/ retains the reviewed original normal observation/lifecycle protocol with fresh h35 namespaces and a binder for actual R35 qualification and closed R34 cache-owner evidence. The parent package is 34,133 bytes (SHA256 `3788a8595ff5e5e08e7757546d176fb96385d493b26cd4b1722c610b94e76715`). It contains no new measurement or acceptance result. The original installation logic derives two lifecycle-script roots and their manifest from R29; future archive pins must come from the actual R35 installation receipt.
-
-qualification-archive-template-01/ is also unsealed. Its fixed 54 inputs are the 39 qualification-preparation files and 15 small installation originals; actual terminal/results/counts remain null. It retains bounded collection and zero-extraction verification, and distinguishes unknown installation state from actual first qualification.
-
-The preserved ../r24-headroom-review/ reports distinguish two remaining static allocation opportunities from measured runtime benefit. Prior component evidence gives no basis for assuming that a few microseconds per call would move the observed throughput plateau. Reducing per-request SSH/Python process creation is a structural direction requiring explicit framing, freshness, deadlines and process-custody design; no such implementation or benefit is claimed here. The roughly 20 ms/call reference is controller CPU only, excluding SSH-child and remote Python CPU. All estimates and historical limits are identified in the report.
+The separate [R24 phase-cost diagnostic plan](../r24-headroom-review/diagnostic-plan-01/README.md) is a static proposal. It contains no measurement result or accepted runtime change. Its large-stdin appendix does not attribute the unresolved installation event to an argv limit.

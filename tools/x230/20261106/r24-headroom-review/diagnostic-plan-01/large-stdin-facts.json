@@ -1,0 +1,76 @@
+{
+  "actual_installed_controller": {
+    "backend": null,
+    "elf_sha256": null,
+    "source_map": null,
+    "version": null
+  },
+  "arg_max_probes": 0,
+  "conclusions_not_supported": [
+    "The installed controller is R24.",
+    "The reported failure was caused by argv/ARG_MAX.",
+    "A 64KiB pipe size is an API stdin ceiling.",
+    "The alternative upload success establishes a causal size threshold.",
+    "Unit-not-found at one observation proves it never existed.",
+    "The failure cause can be recovered from launch_unknown alone."
+  ],
+  "evidence_level": "parent-reported incident plus accepted R24 source review; no original incident receipt read by this reviewer",
+  "executed": false,
+  "minimal_remaining_evidence": [
+    "Installed controller build/ELF identity and source transport version at the original attempt.",
+    "Original identity/key and backend plus raw stdin/serialized payload/command lengths and hashes.",
+    "Original error chain or already-existing logs and transport elapsed/deadline, if preserved.",
+    "Original identity-bound remote artifact/unit observations with observation times."
+  ],
+  "original_incident_receipts": {
+    "job_id": null,
+    "native_sha256": null,
+    "request_sha256": null,
+    "underlying_error": null
+  },
+  "r24_static_findings": {
+    "command_growth_from_stdin": false,
+    "deadline_covers": [
+      "JSON command/payload preparation after deadline creation",
+      "direct admission",
+      "SSH spawn",
+      "pipe IO",
+      "remote execution/ACK",
+      "original local child wait"
+    ],
+    "direct_input_64k_limit_found": false,
+    "fixed_helper_code_in_command_argv": true,
+    "fixed_runner_code_in_systemd_or_detached_argv": true,
+    "launch_unknown_retains_underlying_error_chain": false,
+    "no_automatic_retry": true,
+    "observation_64k_limit_applies_to_start": false,
+    "output_capture_limit_bytes": 8388608,
+    "python_and_jobctl_transport_deadline_seconds": 20,
+    "remote_stdin_storage": "stdin.bin, synced; workload receives file handle",
+    "request_payload_encoding": "serde_json::to_vec; JSON string escaping",
+    "stdin_limit_is_utf8_bytes": 1048576,
+    "transport_base64_applied_to_stdin": false,
+    "user_stdin_in_ssh_command_argv": false
+  },
+  "remote_calls": 0,
+  "reported": {
+    "alternate_installer_result": "succeeded",
+    "alternate_installer_stdin_bytes": 5074,
+    "alternate_transport": "binary_upload six chunks described by parent as 6x64KiB, then commit",
+    "api_declared_stdin_max_bytes": 1048576,
+    "embedded_tar_base64_bytes": 354738,
+    "host": "x230",
+    "remote_jobdir": "absent",
+    "result": "launch_unknown",
+    "root": "absent",
+    "stdin_bytes": 477316,
+    "systemd": {
+      "active_state": "inactive",
+      "load_state": "not-found",
+      "main_pid": 0
+    }
+  },
+  "schema": "hepta-r24-large-stdin-static-review/v1",
+  "source_patch_written": false,
+  "status": "cause-unlocated"
+}

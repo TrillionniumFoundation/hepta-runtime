@@ -1381,7 +1381,10 @@ impl Core {
 		initial: OwnedSemaphorePermit,
 		global: Arc<Semaphore>,
 	) {
-		let result = self.clone().execute_inner(&mut request, initial, global).await;
+		let result = self
+			.clone()
+			.execute_inner(&mut request, initial, global)
+			.await;
 		let _ = request.reply.send(result);
 	}
 	async fn admission_profile(

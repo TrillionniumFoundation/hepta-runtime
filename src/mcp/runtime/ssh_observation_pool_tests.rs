@@ -2550,10 +2550,9 @@ async fn isolated_helper() {
 				let permit = permits.clone().acquire_owned().await.unwrap();
 				let task_core = core.clone();
 				let global = permits.clone();
-				let task =
-					tokio::spawn(
-						async move { task_core.execute_inner(&mut request, permit, global).await },
-					);
+				let task = tokio::spawn(async move {
+					task_core.execute_inner(&mut request, permit, global).await
+				});
 				timeout(Duration::from_secs(1), agent_control.entered.notified())
 					.await
 					.unwrap();
