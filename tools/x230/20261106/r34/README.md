@@ -198,17 +198,31 @@ absent. The lifecycle materializer was not invoked; there is no fabricated
 failed-materializer receipt. The cache was neither moved nor deleted by this
 postflight, and no test, benchmark or auditor was reexecuted.
 
-The complete bounded observation archive is being assembled from the preserved
-originals. Its publication remains pending at this result milestone. The source
-of the unexecuted capacity component is retained as preparation only.
+The complete bounded observation archive is published in observation-results-02/.
+The source of the unexecuted capacity component is retained as preparation only.
 
 
 ## Observation archive attempt 01: packaging failure preserved
 
 The first bounded observation collector, job `1a1af44cd02-fc05-6739`, failed with exit 1 and `frozen original input differs` before creating an archive, manifest or compact result. Its original frozen source, bindings and static review remain under observation-archive-sealed-01/; the native failure and subsequent read-only diagnostic remain under observation-archive-failed-01/.
 
-The stable diagnostic job `1a1af47b4a8-fc05-674c` checked all 99 fixed identities: 96 matched and exactly three lifecycle-tool pins did not. The collector had inherited the R33 hashes for the two lifecycle scripts whose root paths the original R34 installer rewrote, and for the resulting lifecycle manifest. All three actual R34 hashes exactly match the original 26,390-byte parent-tools-install receipt (SHA256 `b783a85e4b41e5202305b7739e63eace75c71d4ea65f14fcbe7d05e5ceef30a2`) and two independent reconstructions from preserved older source bytes. This is a collector prebinding error; no original measurement was altered or repeated. A separately reviewed collector 02 and separate output namespace will preserve this failed first archive attempt.
+The stable diagnostic job `1a1af47b4a8-fc05-674c` checked all 99 fixed identities: 96 matched and exactly three lifecycle-tool pins did not. The collector had inherited the R33 hashes for the two lifecycle scripts whose root paths the original R34 installer rewrote, and for the resulting lifecycle manifest. All three actual R34 hashes exactly match the original 26,390-byte parent-tools-install receipt (SHA256 `b783a85e4b41e5202305b7739e63eace75c71d4ea65f14fcbe7d05e5ceef30a2`) and two independent reconstructions from preserved older source bytes. This is a collector prebinding error; no original measurement was altered or repeated. A separately reviewed collector 02 and its separate output namespace preserve this failed first archive attempt in the completed archive described below.
 
 ## Unexecuted capacity preparation 02
 
 capacity-component/implementation-02/ retains 40 frozen source/preparation files (572,177 bytes), with its independent review alongside. It is unformatted, uncompiled and unexecuted. R34's rejected observation prerequisite ended its execution chain: no capacity build, cell or normal lifecycle run followed. Actual inputs remain unsealed and the external holder's final closure procedure is not implemented. These materials establish preparation only, with no capacity result, throughput benefit or adoption claim.
+
+
+## Complete original observation evidence: archive 02
+
+Collector job `1a1af5208bf-fc05-67a0` completed once with exit 0, complete durable and synced stdout/stderr, no retry, timeout, cancellation or truncation. Its archive preserves **4,165 files / 30,617,958 selected bytes**, including the original parent stages, native per-call evidence, boundary and recovery records, unchanged monitor and its original audit, original holder report/terminal streams, postflight, original archive failure and stable pin diagnostic. No test, measurement or original auditor was rerun to create it.
+
+| Artifact | Bytes | SHA256 |
+|---|---:|---|
+| observation-results-02/observation-evidence-02.tar.gz | 2,988,567 | `0673ccf701866ee7de17e18bc56f7005b5d75670352ceb9e7ab5ab1344b64eef` |
+| observation-results-02/observation-evidence-02.manifest.json | 1,077,406 | `574fa09ca1a04d3cb3c3d45329abc8edf491a966080f930982bf8bad782d63b0` |
+| observation-results-02/observation-evidence-02.compact.json | 38,108 | `a1f3b715c5d9980ef1f4615cb8679efa5839aa55d341e125e4717e916c85dfdf` |
+
+Transfer verified all 46 archive chunks and 17 manifest chunks against fixed source versions, per-chunk and complete SHA256, and exact Git blob identities. The original frozen collector then verified every archive member and reconstructed the summary locally with **zero extraction**. Manifest and compact sidecars match the archive; receipt binding errors are empty. The local verification and original collector native/read receipts are retained alongside the archive.
+
+This evidence preserves workflow success separately from performance rejection: the original 12 observation cells contain 2,304 successful measured calls; C8 remains below the unchanged throughput threshold. All 12 recorded standard shutdowns were clean; the original recovery's intentional crash remains separately recorded. Neither normal lifecycle ABBA nor the separate saturated capacity component ran. The complete Mac holder report retains its log identities, while the separate Mac log bodies are not copied into this archive. Compiler monitoring remains 1 Hz sampled evidence, with no whole-machine-idle or causal-performance claim. R24 remains accepted.
