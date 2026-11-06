@@ -1,0 +1,84 @@
+{
+  "schema": "hepta-d2-c1-archive-operator-plan/v1",
+  "sealed": false,
+  "root": "/home/qian/hepta-runtime-validation-cost-20261106-d2",
+  "local_originals_mirror": "NEW_LOCAL_DIRECTORY_WITH_EXACT_ROOT_RELATIVE_PATHS",
+  "actual_holder_job_id": null,
+  "core_relative_paths": [
+    "c1-holder-native-01.json",
+    "c1-holder-report-01.json",
+    "c1-holder-start-01.json",
+    "c1-parent-install-01.json",
+    "c1-campaign-01/report.json",
+    "c1-campaign-01/summary.json",
+    "c1-campaign-01/source-inputs.json",
+    "c1-campaign-01/baseline-source-inputs.json",
+    "c1-campaign-01/compiler-monitor.json",
+    "c1-campaign-01/compiler-monitor.audit.json",
+    "c1-observation-01/report.json",
+    "c1-observation-01/independent-summary.json",
+    "c1-adapter-evidence-01/adapter-report.json",
+    "c1-campaign-inputs-01.json",
+    "c1-prerequisites-01.json",
+    "c1-tools-01/d2_campaign.py",
+    "c1-tools-01/run_c1_phase_cost.py"
+  ],
+  "native_read_pages": "c1-holder-native-read-01-000.json; contiguous subsequent pages 001..015 if actually needed; preserve each original response byte-for-byte",
+  "required_in_every_capture": [
+    "c1-holder-native-01.json",
+    "all actual stored native pages",
+    "c1-campaign-inputs-01.json",
+    "c1-prerequisites-01.json",
+    "c1-tools-01/d2_campaign.py",
+    "c1-tools-01/run_c1_phase_cost.py"
+  ],
+  "optional_absent_result_semantics": "Every absent original result path is encoded as null and must remain absent during collection. An absent success summary or auditor result is never invented. Successful captures require the original complete core except optional start receipt.",
+  "runtime_pin_scope": "The original four already installed runtime sources/inputs are mandatory real bytes. Their identities are sealed from the local mirror and reconciled against all nineteen original Linux installation receipt members.",
+  "holder_log_copy": {
+    "original_directory": "/Users/qianqi/work/hepta-runtime-d2-c1-holder-01",
+    "original_report_name": "report.json",
+    "copied_report": "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-holder-report-01.json",
+    "all_original_log_files_destination": "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-holder-originals-01",
+    "copy_policy": "Use the complete actual holder report.log_files list and preserve exact original bytes; copying is done only by root after the original holder terminates."
+  },
+  "local_seal_argv": [
+    "python3",
+    "-B",
+    "seal_c1_archive.py",
+    "--template",
+    "archive_d2_c1.py",
+    "--originals",
+    "ACTUAL_LOCAL_MIRROR",
+    "--holder-job-id",
+    "ACTUAL_ORIGINAL_HOLDER_JOB_ID",
+    "--output",
+    "NEW_LOCAL_SEALED_DIRECTORY"
+  ],
+  "future_collector_destination": "/home/qian/hepta-runtime-validation-cost-20261106-d2/archive_d2_c1_01.py",
+  "future_single_create_argv": [
+    "/usr/bin/python3",
+    "-B",
+    "/home/qian/hepta-runtime-validation-cost-20261106-d2/archive_d2_c1_01.py",
+    "--kind",
+    "c1"
+  ],
+  "future_output_paths": [
+    "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-evidence-01.tar.gz",
+    "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-evidence-01.manifest.json",
+    "/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-evidence-01.compact.json"
+  ],
+  "future_local_verify_argv": [
+    "python3",
+    "-B",
+    "EXACT_SEALED_COLLECTOR_COPY",
+    "--verify",
+    "EXACT_DOWNLOADED_c1-evidence-01.tar.gz",
+    "--expected-sha256",
+    "ACTUAL_ORIGINAL_REMOTE_ARCHIVE_SHA256"
+  ],
+  "future_archive_job_id": null,
+  "future_archive_result": null,
+  "host_requests_by_author": 0,
+  "sealer_or_collector_executions_by_author": 0,
+  "original_parser_or_auditor_reexecutions": 0
+}
