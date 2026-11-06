@@ -4568,9 +4568,9 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 		"grace_seconds": params.grace_seconds.unwrap_or(10).min(30),
 	});
 	let remote = if record.system_jobctl {
-		run_jobctl(host, &json!({"op":"cancel","job_id":record.id})).await
+		super::ssh::run_jobctl_cancel(host, &record.id).await
 	} else {
-		run_python_json(
+		super::ssh::run_job_cancel_python_json(
 			host,
 			&bound_remote_code(CANCEL_CODE)?,
 			&request,

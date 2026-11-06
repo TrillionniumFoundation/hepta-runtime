@@ -1,0 +1,119 @@
+{
+  "correction": {
+    "automatic_retry": false,
+    "changes": [
+      {
+        "difference_ns_old_minus_original": 35,
+        "old_supplied_decimal": "1793930603038937300",
+        "original_exact_decimal": "1793930603038937265",
+        "other_fixed_fields_identical": true,
+        "path": "debug/deps/hepta_runtime-1b8b761b89392e3b"
+      },
+      {
+        "difference_ns_old_minus_original": -124,
+        "old_supplied_decimal": "1793930262097573600",
+        "original_exact_decimal": "1793930262097573724",
+        "other_fixed_fields_identical": true,
+        "path": "debug/deps/libhepta_runtime-564505b54e9d81cd.rlib"
+      }
+    ],
+    "original_inventory": {
+      "bytes": 69145,
+      "path": "cache-prune-tools-02/originals/cache-file-inventory-original-01.json",
+      "sha256": "75d0abe906ba10caf3d73f4c9e896bc6f41ebc538ecd1fb37a854d096755c936"
+    },
+    "reason": "Root parsed nanosecond JSON integers through JavaScript Number; the resulting decimal values differed from the original native text. The first attempt rejected the wrong pins before any deletion.",
+    "representation": "canonical decimal string compared exactly against str(os.stat mtime_ns); no tolerance or rounding",
+    "same_failed_job_restarted": false,
+    "thresholds_or_source_changed": false
+  },
+  "new_plan": {
+    "bytes": 7307,
+    "path": "plan.json",
+    "sha256": "1179668edde634ffba8307ca35c129652d9df15c0743c76b5bdc4e6fe8f7d62b"
+  },
+  "new_tool": {
+    "bytes": 20299,
+    "path": "prune_cache.py",
+    "sha256": "fe09125bd509a73b67b5380857f5ff61a5c69a89d592afcfa1172121418588f5"
+  },
+  "old_tool": {
+    "bytes": 20249,
+    "path": "prune-01/prune_cache.py",
+    "sha256": "96f60f4f1b048c080b36c0bc7e8103af918de6ccf0e096972ea96073e8fd397b"
+  },
+  "prior_attempt": {
+    "before_after_receipts": {
+      "cache_after": {
+        "bytes": 1645029,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r34/cache-prune-01/cache-after.json",
+        "sha256": "9fa4908281b0dcc03921272a7e63a0871f831c6daf3e0edb2377c07488255154"
+      },
+      "cache_before": {
+        "bytes": 1645029,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r34/cache-prune-01/cache-before.json",
+        "sha256": "9fa4908281b0dcc03921272a7e63a0871f831c6daf3e0edb2377c07488255154"
+      },
+      "owner_after": {
+        "bytes": 5710,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r34/cache-prune-01/owner-after.json",
+        "sha256": "6d994f917481efc3e7cbae0fed2c57ab85492b4d0fd9b47660939a846dd32866"
+      },
+      "owner_before": {
+        "bytes": 5710,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r34/cache-prune-01/owner-before.json",
+        "sha256": "6d994f917481efc3e7cbae0fed2c57ab85492b4d0fd9b47660939a846dd32866"
+      }
+    },
+    "deleted": 0,
+    "error": "RuntimeError: candidate fixed stat differs: hepta_runtime-1b8b761b89392e3b",
+    "exit_code": 1,
+    "job_id": "1a1aeeea99f-fc05-6440",
+    "originals": {
+      "cache-file-inventory-original-01.json": {
+        "bytes": 69145,
+        "path": "cache-prune-tools-02/originals/cache-file-inventory-original-01.json",
+        "sha256": "75d0abe906ba10caf3d73f4c9e896bc6f41ebc538ecd1fb37a854d096755c936"
+      },
+      "native-read-original-01.json": {
+        "bytes": 1628,
+        "path": "cache-prune-tools-02/originals/native-read-original-01.json",
+        "sha256": "7afa521730f4cfdaeea8e6690cdab514da673aa7325708381755843d3328afb4"
+      },
+      "native-terminal-original-01.json": {
+        "bytes": 726,
+        "path": "cache-prune-tools-02/originals/native-terminal-original-01.json",
+        "sha256": "1f49fa913a28d26b2488fa5deff9cf480f463765f726f2e21c1955668347d15b"
+      },
+      "report-original-01.json": {
+        "bytes": 2200,
+        "path": "cache-prune-tools-02/originals/report-original-01.json",
+        "sha256": "30d5097ccf5ca12e118cd1272f80983b7e829f6659b208e1302a24698aa1459e"
+      }
+    },
+    "prior_originals_unchanged": true,
+    "prior_plan": {
+      "bytes": 3244,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r34/cache-prune-tools-01/plan.json",
+      "sha256": "0e372a560b119422d41ae29c5b0d2d8c4103cbd95b7f16f3dfe75b1c47d2d256"
+    },
+    "prior_tool": {
+      "bytes": 20249,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r34/cache-prune-tools-01/prune_cache.py",
+      "sha256": "96f60f4f1b048c080b36c0bc7e8103af918de6ccf0e096972ea96073e8fd397b"
+    },
+    "state": "failed"
+  },
+  "schema": "hepta-r34-cache-prune-input-precision-correction/v1",
+  "static_validation": {
+    "all_other_safety_and_deletion_logic_unchanged": true,
+    "helper_executed": false,
+    "mtime_comparison_is_exact": true,
+    "original_3_gib_gate_unchanged": true,
+    "pruner_executed": false,
+    "python_syntax_parsed": true,
+    "remote_calls": 0,
+    "same_two_paths_and_stat_values_except_corrected_mtime": true
+  },
+  "status": "prepared_not_executed"
+}

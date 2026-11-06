@@ -1,0 +1,94 @@
+{
+  "changed_identities": [
+    {
+      "independently_reconstructed_r34": {
+        "bytes": 14787,
+        "sha256": "3ae83b59414edd39f98f489ea0e60722bd59715e782a30b1f47a323460e48fff"
+      },
+      "inherited_r33": {
+        "bytes": 14787,
+        "sha256": "574c4eedf2688eb1786a60dcc1c96a9f2f61ffee46778ad457257f535fd31940"
+      },
+      "member": "lifecycle-tools-01/run_lifecycle_abba_01.py"
+    },
+    {
+      "independently_reconstructed_r34": {
+        "bytes": 30163,
+        "sha256": "e0f2f2bc9e3656da2d941936f572d24001a340c4ab6219de37991b998ef21a86"
+      },
+      "inherited_r33": {
+        "bytes": 30163,
+        "sha256": "ac4b39f797f4311e6b63393cd12dc799956f1eaf713fc269f6c9b995515f2141"
+      },
+      "member": "lifecycle-tools-01/run_six_host_cancel_recovery_timed.py"
+    },
+    {
+      "independently_reconstructed_r34": {
+        "bytes": 4066,
+        "sha256": "86522df4c3a9870bc877f208f774c4f7e8cafc9560df658dd8048b3700be1c40"
+      },
+      "inherited_r33": {
+        "bytes": 4066,
+        "sha256": "00100ba87ab41ac3fb415ca38957590a085d925086ac8ab607475c891326760d"
+      },
+      "member": "lifecycle-tools-01/lifecycle-tools-manifest-01.json"
+    }
+  ],
+  "created_utc": "2026-11-06T05:16:33.543370+00:00",
+  "failed_collector_source": {
+    "bytes": 59309,
+    "path": "/tmp/hepta-runtime-recovery-20261106/r34-observation-archive-template-01/sealed-01/archive_r34_observation.py",
+    "sha256": "dfe08662dd65995a0e27edc6c06bf4e1754a1fc936a81c10657f2ff4e8c1695b"
+  },
+  "finding": "The template inherited R33 pins for all lifecycle tools, while the original R34 installer explicitly rewrites the root constant in two scripts and canonicalizes their enclosing manifest. These three lifecycle pins were not reached by the normal observation parent/postflight identity recursion. The initial independent review verified six local originals and safety deltas, but did not discover this inherited-pin mismatch.",
+  "initial_review_preserved": {
+    "bytes": 6816,
+    "path": "/tmp/hepta-runtime-recovery-20261106/r34-observation-archive-review-01/independent-review-01.json",
+    "sha256": "16f687acfdb77b48da10546c762956c8e5160e128e050a7d83507fa970a94440"
+  },
+  "original_r33_27_members_rehashed_against_inherited_pins": true,
+  "original_r34_installer": {
+    "bytes": 10847,
+    "path": "/tmp/hepta-runtime-recovery-20261106/r34-observation-template-01/generated/install_measurement_tools.py",
+    "sha256": "2829fb71a294631ac0842758da0c92249596b555d44634d47e11647e380b0fff"
+  },
+  "parent_reported_failure": {
+    "archive_output_writes_reached": false,
+    "exit_code": 1,
+    "original_job": "1a1af44cd02-fc05-6739",
+    "source": "parent message; raw failure receipts not read by this diagnosis yet",
+    "state": "failed",
+    "stderr": "ValueError: frozen original input differs\n",
+    "stdout_bytes": 0
+  },
+  "pending_evidence": [
+    "Compare all three reconstructed identities with the original R34 installation receipt and fresh stable-read diagnostic; do not infer a live-file drift from the guard failure alone.",
+    "Retain failed archive attempt 01 and frozen tools/review. A corrected attempt must use a fresh archive revision and preserve all measurement/Q/CI bytes."
+  ],
+  "proof_method": "Read the already preserved original R33 archive with extractfile only; verify full archive SHA and all 27 tool members. In memory, replace the single R33 root constant with R34 in the installer-declared two scripts. Preserve all other bytes and manifest fields. Re-encode manifest with the exact existing canonical representation. No helper or collector entrypoint is executed.",
+  "reconstruction_source_archive": {
+    "bytes": 2969505,
+    "path": "/tmp/hepta-runtime-recovery-20261106/r33-observation-results-01/observation-evidence-01.tar.gz",
+    "sha256": "d1a8f18a2c1d84fbd4b152a965f8a83a2f3ccb066215baf7997d5d562ba33d2e"
+  },
+  "reviewer": "/root/audit_acceptance",
+  "schema": "hepta-r34-observation-archive-static-pin-diagnosis/v1",
+  "scope": {
+    "frozen_files_modified": false,
+    "guard_weakened": false,
+    "installer_collector_sealer_auditor_or_benchmark_execution": false,
+    "new_measurement_attempt": false,
+    "remote_calls": false,
+    "zero_extract": true
+  },
+  "source_locations": {
+    "materialized_lifecycle_scripts_and_manifest": "generated/install_measurement_tools.py:110-125",
+    "template_inheritance": "prepare_template.py:49-60"
+  },
+  "status": "local_reconstruction_complete_await_original_remote_install_and_diagnostic_comparison",
+  "template_generator": {
+    "bytes": 12267,
+    "path": "/tmp/hepta-runtime-recovery-20261106/r34-observation-archive-template-01/prepare_template.py",
+    "sha256": "ed44ec203701cb3b3e90ff0914503ef023444e96a2aaf7f2293e31935325d8ef"
+  }
+}
