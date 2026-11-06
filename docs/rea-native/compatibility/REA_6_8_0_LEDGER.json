@@ -22,8 +22,9 @@
   "runtime": {
     "baseline_commit": "d771f977246c6e3b7b73d6b4f3a26df000432dda",
     "discovery": "Rust source handler discovery, not live MCP tools/list",
-    "interface_count": 32,
+    "interface_count": 34,
     "interfaces": [
+      "rea_close_evidence_snapshot",
       "rea_compare_web_captures",
       "rea_export_evidence_bundle",
       "rea_get_evidence_bundle",
@@ -46,6 +47,7 @@
       "rea_model_session_query",
       "rea_model_session_read",
       "rea_read_asar_member",
+      "rea_read_evidence_bundle",
       "rea_read_model",
       "rea_read_preview",
       "rea_replay_web_entry",
@@ -197,7 +199,7 @@
         "kind": "rust_cli",
         "entrypoint": "hepta-runtime rea-static-worker",
         "source_presence": "PRESENT",
-        "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 (12.2) or explicit revision 3 (12.1.4) provides bounded functions/function/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open.",
+        "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open.",
         "upstream_tools": [],
         "upstream_parity": "NOT_ESTABLISHED"
       }
@@ -614,6 +616,16 @@
         "bytes": 5844
       },
       {
+        "path": "scripts/rea_elf_evidence_family_evidence.py",
+        "sha256": "c42f2a4c1b3f72124ca8e85b4178d890f3db74f0203fb99b4df664461fecfd01",
+        "bytes": 37467
+      },
+      {
+        "path": "scripts/rea_elf_evidence_family_qualification.py",
+        "sha256": "8cc1f88805370bce55ec5cd3bea890431cb55338ee3ad3f09a17736fbb3bfed6",
+        "bytes": 50131
+      },
+      {
         "path": "scripts/rea_evidence_import_fixtures.mjs",
         "sha256": "7bde7c4e0430ce4928b465df4fb9102e4a3c4983b15c3d7f551156a26e703e69",
         "bytes": 11155
@@ -675,8 +687,8 @@
       },
       {
         "path": "src/mcp/mod.rs",
-        "sha256": "ac3d762c799bcb61b4f8b10ffd8125cb1a2be53e562fe67fffe6fd4f4493d46d",
-        "bytes": 3249
+        "sha256": "099dae2c89e407f75090307a070aa32d04048abf62d212d66bea32603452526f",
+        "bytes": 3276
       },
       {
         "path": "src/mcp/rea.rs",
@@ -1005,8 +1017,13 @@
       },
       {
         "path": "src/mcp/rea_engine_ghidra.rs",
-        "sha256": "b6301b6e449e0fa7caa2630d9e39935937f3bf24c095ded579342d224c7a10c5",
-        "bytes": 15397
+        "sha256": "6ef6a3a68f3ac52160f6a21a0dfcb0045a91a65e333901a7a705a3adeb855cb6",
+        "bytes": 15711
+      },
+      {
+        "path": "src/mcp/rea_engine_ghidra_tests.rs",
+        "sha256": "02d04913daec9e1741f107125beaa5406429be9a02b0048d7bbd037fe4cee216",
+        "bytes": 2431
       },
       {
         "path": "src/mcp/rea_engine_job_owner.rs",
@@ -1015,8 +1032,13 @@
       },
       {
         "path": "src/mcp/rea_engine_profile.rs",
-        "sha256": "1f33c8e5628b2961106f4a0da310a07b4cf761c5c16782da7861448e0577b11a",
-        "bytes": 5006
+        "sha256": "e718a3d01edea59f194b06a264e579867e75046ae745c45e9b9421277778f6c5",
+        "bytes": 5900
+      },
+      {
+        "path": "src/mcp/rea_engine_profile_tests.rs",
+        "sha256": "947385d5420b7e9e31a8b2cb03afd2f6901168d28952097372f8944dd47cf8a9",
+        "bytes": 2849
       },
       {
         "path": "src/mcp/rea_engine_scratch.rs",
@@ -1077,6 +1099,16 @@
         "path": "src/mcp/rea_evidence_import_tests.rs",
         "sha256": "5ecf621c86d928d14e3d4c388123f3f4c94dd6ea02163d4f6c3148e601c53f80",
         "bytes": 12299
+      },
+      {
+        "path": "src/mcp/rea_evidence_readback.rs",
+        "sha256": "4b216450b8af13dca2d6244559c58ca11da74845d9e72b1e0d115f341057be4c",
+        "bytes": 11329
+      },
+      {
+        "path": "src/mcp/rea_evidence_readback_tests.rs",
+        "sha256": "91407ecf452beaa71d093d3baaff476f8a48a6a867609d64ed9f71625b085139",
+        "bytes": 8686
       },
       {
         "path": "src/mcp/rea_evidence_session.rs",
@@ -1154,23 +1186,43 @@
         "bytes": 19363
       },
       {
+        "path": "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "sha256": "25265dc7798a0ef6fe1a0c8aca1ea1d5db53a514c2f5fe2426aa05827730be69",
+        "bytes": 36552
+      },
+      {
         "path": "src/mcp/rea_ghidra_analysis_bridge.java",
         "sha256": "1b20b872258f26ba75ac463afd1c35a544f76efd3f0bcc05e29515eb940fdf21",
         "bytes": 19321
       },
       {
         "path": "src/mcp/rea_ghidra_contract.rs",
-        "sha256": "ff3c173732b61825a1effd1d7f89c3e0a158541d7a181efa4c1e3701eadc3c96",
-        "bytes": 9087
+        "sha256": "43b18def1850397db79d642a1927322d9967d2e496a051da3b8216e9b6c0cdd8",
+        "bytes": 11326
       },
       {
         "path": "src/mcp/rea_ghidra_contract_tests.rs",
-        "sha256": "8f6c55f4c706a1f493a0f98635a4745db3aeb46042a0f8bb9be3f7b07b5d6318",
-        "bytes": 4376
+        "sha256": "85f79dd6100d795268c4749cb17a32cedc78fde8d812de5e03663afdd801d63f",
+        "bytes": 5322
+      },
+      {
+        "path": "src/mcp/rea_ghidra_contract_v4.rs",
+        "sha256": "f5afad2c6321ed8e5c5215a02255fa2c4661e8b79cd818fc90b275835ad18510",
+        "bytes": 10186
+      },
+      {
+        "path": "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "sha256": "b4c08443f6d5db69271b8e2ed267b9a6e745e432fadfadf7e9a89692a75f8a1b",
+        "bytes": 12035
       },
       {
         "path": "src/mcp/rea_ghidra_inventory_1214_v3.java",
         "sha256": "2d5ee6195f3e080e8645e22da6f100c498809fe93eb6766ad10487d8dd326701",
+        "bytes": 8564
+      },
+      {
+        "path": "src/mcp/rea_ghidra_inventory_1214_v4.java",
+        "sha256": "a4d6d9d016152f292eb7f9b7f7ec038226323d73d239633a6e0beea823778c20",
         "bytes": 8564
       },
       {
@@ -1290,13 +1342,13 @@
       },
       {
         "path": "src/mcp/rea_provider.rs",
-        "sha256": "8c0984ac19432da103f12937b23ee876fb6015fe3a6cfee6f7f50bace6483663",
-        "bytes": 25220
+        "sha256": "6037d87459ae8ae8b7bb51742a8c889386c4b10d11b4bea2d64aa596ded6456c",
+        "bytes": 25307
       },
       {
         "path": "src/mcp/rea_provider_tests.rs",
-        "sha256": "2ce6412532cc917f436975ad5c9bc1a74374f7282af42dda53daf9bc102c7171",
-        "bytes": 30880
+        "sha256": "6e766f7ea7058d4783f5e9853027390b3375071ced4bc3e8e2ec023ca8ab853a",
+        "bytes": 35773
       },
       {
         "path": "src/mcp/rea_recorded_core_budget.rs",
@@ -1430,8 +1482,13 @@
       },
       {
         "path": "src/mcp/server.rs",
-        "sha256": "f817bdc993a41d739dc6fe1dbd4969d0ac2c386476c5bd8b42097580e7cdfd98",
-        "bytes": 162099
+        "sha256": "74dea01738989a45b959a18ddba7a94051468e737ed71652a66052c2fa38687a",
+        "bytes": 164127
+      },
+      {
+        "path": "src/mcp/server_tests.rs",
+        "sha256": "b403f3c06e858d74a3a6c467c29af9e35fd5cb2a430ffcefa7c8a20c131062da",
+        "bytes": 40062
       },
       {
         "path": "src/native_observation.rs",
@@ -1624,6 +1681,16 @@
         "bytes": 23414
       },
       {
+        "path": "tests/rea_elf_evidence_family_evidence_tests.py",
+        "sha256": "149243571ed67b2c9dd369c6cf6896d7dbb5b41a78f9e5b461593e5db0b56e4d",
+        "bytes": 28643
+      },
+      {
+        "path": "tests/rea_elf_evidence_family_qualification_tests.py",
+        "sha256": "5d279bc2c7a5b79d8dccf28bdeb6633425e825feb4cd222e8406f3c9359b256f",
+        "bytes": 7801
+      },
+      {
         "path": "tests/rea_engine_cleanup_assertions.py",
         "sha256": "fd5d02dbf8abc5d476d3abd0b9236db1127e2686a1aeb21f3e6c403a2ee20601",
         "bytes": 7033
@@ -1640,13 +1707,18 @@
       },
       {
         "path": "tests/rea_ghidra_analysis_external.py",
-        "sha256": "d8b352534f12571ed164571944fc949fd3f5ad78fa915bcd266eb975e58acaaa",
-        "bytes": 27399
+        "sha256": "96a6250061a0f4404946cb164941e58836cfdc54445b526c03f1b8121ae90127",
+        "bytes": 36991
       },
       {
         "path": "tests/rea_ghidra_external.py",
         "sha256": "62821709797e3a245e02504a2c2e51a6186fcc99cff982de4fee9add36618b46",
         "bytes": 13337
+      },
+      {
+        "path": "tests/rea_ghidra_v4_api.py",
+        "sha256": "5025552272c37049f51831b17ffd90f3ad5b6d783dd6b741bb3544f5cb33d104",
+        "bytes": 15284
       },
       {
         "path": "tests/rea_java_external.py",
@@ -1724,7 +1796,7 @@
         "bytes": 23260
       }
     ],
-    "source_manifest_sha256": "7c1c527574f3ff74ea3501ec1e42486f773e0e1f7b461fbce757d11e4dfd6b59"
+    "source_manifest_sha256": "c3ac1a7b1d19ad1fe77acdbaf5bc13c5409296e7458d3b63f45a89089b0da720"
   },
   "environment_observations_sha256": "4ace5e8f041a05d205825fb2b2a41769fcfdc91f60810072eb7a6c17a12f3e9c",
   "dependency_assessments": {
@@ -2318,12 +2390,12 @@
       "hard_missing_dependency": "NOT_ESTABLISHED"
     }
   },
-  "mapping_sha256": "e3ecc8ed4cf6641da184c51e5570f934eb405a3e89c917011f4a5c8c08fb3fb2",
+  "mapping_sha256": "dc72347e6285da318ab02e9344b1540b8d36f8aa00e651ccc210a93eafd6555d",
   "inputs_sha256": "d143681c5384d0cff75d72659cd36381eaff60ca5bf3fe45fb5290b3eccc6904",
   "summary": {
     "published_tools": 229,
     "families": 18,
-    "native_interfaces": 32,
+    "native_interfaces": 34,
     "implementation_counts": {
       "absent": 187,
       "partial_operation": 22,
@@ -4103,7 +4175,7 @@
         "rea_static_read",
         "rea_static_cancel"
       ],
-      "native_scope": "Ghidra revision 2 (12.2) or explicit revision 3 (12.1.4) functions scans at most 4096 analyzed internal functions and returns at most 128 with explicit omissions/completeness; fixed ELF analysis profile",
+      "native_scope": "Ghidra revisions 2 (12.2), 3 (12.1.4) and 4 (12.1.4) functions scan at most 4096 analyzed internal functions and return at most 128 with explicit omissions/completeness. Revision 4 separately scans at most 4096 external functions and returns at most 128 with distinct EXTERNAL identities and independent completeness fields. Complete original procedure-inventory qualification remains open. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
       "remaining_behavior": "Upstream selected-target/paging/query/result/Evidence semantics and broader provider/architecture coverage remain unimplemented or unqualified",
       "dependencies": [
         {
@@ -4709,7 +4781,7 @@
         "rea_static_read",
         "rea_static_cancel"
       ],
-      "native_scope": "Selected-body outgoing typed references are available; the runtime does not construct the upstream resolved callee-procedure list",
+      "native_scope": "Selected-body outgoing typed references are available; the runtime does not construct the upstream resolved callee-procedure list Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
       "remaining_behavior": "Resolve callee functions and preserve unresolved indirect calls, coverage and exact upstream contract",
       "dependencies": [
         {
@@ -4799,7 +4871,7 @@
         "rea_static_read",
         "rea_static_cancel"
       ],
-      "native_scope": "Selected-entry incoming typed references are available; the runtime does not construct the upstream resolved caller-procedure list",
+      "native_scope": "Selected-entry incoming typed references are available; the runtime does not construct the upstream resolved caller-procedure list Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
       "remaining_behavior": "Resolve caller functions and preserve unresolved call targets, coverage and exact upstream contract",
       "dependencies": [
         {
@@ -4889,7 +4961,7 @@
         "rea_static_read",
         "rea_static_cancel"
       ],
-      "native_scope": "Ghidra revision 2 (12.2) or explicit revision 3 (12.1.4) function returns bounded metadata for one exact canonical internal function entry",
+      "native_scope": "Ghidra revisions 2 (12.2) and 3 (12.1.4) return bounded metadata for one exact canonical internal function entry. Explicit revision 4 (12.1.4) also resolves an internal body address, preserves the requested address, and validates complete nonoverlapping body ranges containing both the request and resolved entry. External-address selectors and the complete original input/error contract are not supplied. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
       "remaining_behavior": "Upstream target/name/address selection, complete procedure properties, result schema and Evidence remain unqualified",
       "dependencies": [
         {
@@ -5321,7 +5393,7 @@
         "rea_static_read",
         "rea_static_cancel"
       ],
-      "native_scope": "Same bounded Ghidra selected-entry/body reference operation as xrefs; raw typed references retain from/to addresses and scan limits",
+      "native_scope": "Same bounded Ghidra resolved-entry/body reference operation as xrefs; raw typed references retain from/to addresses, address spaces and scan limits. Revision 4 supports complete-body containment while revisions 2/3 retain exact-entry selection. This does not supply the complete original reference contract. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
       "remaining_behavior": "Upstream complete procedure relationship model, target selection, pagination, resolved/unknown distinctions and Evidence remain unqualified",
       "dependencies": [
         {
@@ -5411,7 +5483,7 @@
         "rea_static_read",
         "rea_static_cancel"
       ],
-      "native_scope": "Ghidra revision 2 (12.2) or explicit revision 3 (12.1.4) native decompiler operates on one exact entry with a 15-second budget; bounds whole UTF-8 C to 1MiB and returns an at-most-8192-character preview plus whole/preview hashes, byte length and completeness",
+      "native_scope": "Ghidra revisions 2 (12.2) and 3 (12.1.4) decompile one exact internal entry; explicit revision 4 (12.1.4) also resolves a containing internal function through checked complete body ranges. The native decompiler has a 15-second budget, bounds whole UTF-8 C to 1 MiB, and returns an at-most-8192-character preview plus whole/preview hashes, byte length and completeness. This does not establish original decompiler/result equivalence. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
       "remaining_behavior": "Full upstream pseudocode/error/Evidence contract, retained complete large decompilation and broad semantic equivalence are not established; the 141-input owned-function result is finite evidence only",
       "dependencies": [
         {
@@ -6257,7 +6329,7 @@
         "rea_static_read",
         "rea_static_cancel"
       ],
-      "native_scope": "Ghidra revision 2 (12.2) or explicit revision 3 (12.1.4) xrefs observes incoming references to the exact selected function entry and outgoing references from its body; each direction scans at most 4096 and returns at most 128 with omissions",
+      "native_scope": "Ghidra revisions 2 (12.2), 3 (12.1.4) and 4 (12.1.4) observe incoming references to the selected function entry and outgoing references from its body; each direction scans at most 4096 and returns at most 128 with omissions. Revision 4 accepts a containing internal address but preserves the original request and explicitly resolves the entry through complete checked body ranges; incoming scope remains that resolved entry. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
       "remaining_behavior": "Arbitrary-address/upstream query coverage, resolved native relationship semantics, exact normalized result/Evidence and additional providers remain unqualified",
       "dependencies": [
         {
@@ -7193,7 +7265,7 @@
         "rea_static_read",
         "rea_static_cancel"
       ],
-      "native_scope": "Separate functions/function/xrefs/decompile operations provide bounded inputs to a future composed analysis",
+      "native_scope": "Separate functions/function/xrefs/decompile operations provide bounded inputs to a future composed analysis Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
       "remaining_behavior": "Implement upstream composed function analysis and authenticated cross-operation Evidence, defaults, unknowns and outcomes",
       "dependencies": [
         {

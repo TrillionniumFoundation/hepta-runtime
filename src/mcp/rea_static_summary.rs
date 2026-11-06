@@ -22,10 +22,12 @@ pub(crate) fn selected_fields(
 			.flatten()
 			.filter(|value| {
 				expected.is_some_and(|name| value["operation"] == name)
-					&& value["schema"] == "hepta.rea.ghidra-analysis.v1"
+					&& (value["schema"] == "hepta.rea.ghidra-analysis.v1"
+						|| (value["schema"] == "hepta.rea.ghidra-analysis.v2"
+							&& value["bridge_revision"] == 4))
 					&& value["analysis_completed"] == true
 			});
-		return json!({"schema":"hepta.rea.static-summary.v1","scope":"selected_ghidra_function_observations",
+		let mut summary = json!({"schema":"hepta.rea.static-summary.v1","scope":"selected_ghidra_function_observations",
 			"mapping_supported":observation.is_some(),"operation":operation,
 			"analysis_profile":observation.as_ref().map(|value| &value["analysis_profile"]),
 			"language_id":observation.as_ref().map(|value| &value["language_id"]),
@@ -38,6 +40,34 @@ pub(crate) fn selected_fields(
 			"rows_and_code_in_retained_stdout":true,"independent_binary_validation":false,"upstream_contract_equivalent":false,
 			"limitations":["Facts and C code are observations of the fixed restricted Ghidra analyzer/decompiler profile",
 				"Unreturned functions/references and truncated C remain explicitly unobserved; source equivalence is not established"]});
+		if let Some(value) =
+			observation.filter(|value| value["schema"] == "hepta.rea.ghidra-analysis.v2")
+		{
+			summary["schema"] = json!("hepta.rea.static-summary.v2");
+			for field in [
+				"function_resolution",
+				"function_inventory_scope",
+				"returned_external_functions",
+				"external_function_scan_complete",
+				"analysis_options_format",
+				"analysis_option_count",
+				"analysis_options_sha256",
+				"analysis_options_unchanged",
+				"no_return_repair_applied",
+				"decompilation_performed",
+				"decompilation_scope",
+				"auto_analysis_may_decompile",
+				"native_child_cleanup_scope",
+				"native_helper_observation_scope",
+				"native_child_cleanup_confirmed",
+				"observed_native_children",
+				"observed_native_decompiler_children",
+				"observed_explicit_decompiler_candidates",
+			] {
+				summary[field] = value[field].clone();
+			}
+		}
+		return summary;
 	}
 	if provider == StaticProvider::Ghidra {
 		let observation = backend_success

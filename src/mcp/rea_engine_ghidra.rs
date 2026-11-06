@@ -20,7 +20,8 @@ use tokio::time::Instant;
 use super::super::linux::{hash_runtime, memfile, open_artifact, snapshot, unchanged, Snapshot};
 use super::{pin, run_java, scratch, verify_runtime, JavaLaunch};
 use crate::mcp::rea_provider::engine_profile::{
-	validate_manifest, InstallationManifest, MAX_INSTALLATION_FILES, MAX_MANIFEST_BYTES,
+	installation_subtrees, validate_manifest, InstallationManifest, MAX_INSTALLATION_FILES,
+	MAX_MANIFEST_BYTES,
 };
 use crate::mcp::rea_provider::{
 	ghidra_contract, sha256, GhidraEngineProfile, StaticOperation, WorkerRequest,
@@ -36,22 +37,26 @@ struct InstalledFile {
 
 struct Installation {
 	root: String,
+	subtrees: &'static [&'static str],
 	files: Vec<InstalledFile>,
 	classpath: String,
 	total_bytes: u64,
 	_manifest: Snapshot,
 }
 
-async fn file_inventory(root: &str) -> Result<BTreeSet<String>> {
-	let base = Path::new(root).join("Ghidra");
-	if !tokio::fs::symlink_metadata(&base)
-		.await
-		.with_context(|| format!("inspect Ghidra installation root {}", base.display()))?
-		.is_dir()
-	{
-		bail!("Ghidra installation data root must be a real directory");
+async fn file_inventory(root: &str, subtrees: &[&str]) -> Result<BTreeSet<String>> {
+	let mut directories = Vec::new();
+	for subtree in subtrees {
+		let base = Path::new(root).join(subtree);
+		if !tokio::fs::symlink_metadata(&base)
+			.await
+			.with_context(|| format!("inspect Ghidra installation root {}", base.display()))?
+			.is_dir()
+		{
+			bail!("Ghidra installation data root must be a real directory");
+		}
+		directories.push(base);
 	}
-	let mut directories = vec![base];
 	let mut files = BTreeSet::new();
 	let mut entries = 0usize;
 	while let Some(directory) = directories.pop() {
@@ -162,8 +167,9 @@ async fn installation(
 	let manifest: InstallationManifest =
 		serde_json::from_slice(&bytes).context("Ghidra manifest is not a complete JSON record")?;
 	validate_manifest(&manifest, engine)?;
+	let subtrees = installation_subtrees(engine.bridge_revision);
 	let expected: BTreeSet<_> = manifest.files.keys().cloned().collect();
-	if file_inventory(&engine.installation_root).await? != expected {
+	if file_inventory(&engine.installation_root, subtrees).await? != expected {
 		bail!("Ghidra installation files differ from the pinned manifest");
 	}
 	let mut files = Vec::with_capacity(expected.len());
@@ -209,6 +215,7 @@ async fn installation(
 	}
 	Ok(Installation {
 		root: engine.installation_root.clone(),
+		subtrees,
 		files,
 		classpath,
 		total_bytes,
@@ -222,7 +229,7 @@ async fn verify_installation(installation: &Installation, deadline: Instant) -> 
 		.iter()
 		.map(|file| file.relative.clone())
 		.collect();
-	if file_inventory(&installation.root).await? != expected {
+	if file_inventory(&installation.root, installation.subtrees).await? != expected {
 		bail!("Ghidra installation inventory changed");
 	}
 	let root = installation.root.clone();
@@ -462,3 +469,7 @@ pub(super) async fn analyze(input: WorkerRequest) -> Result<Value> {
 			.with_context(|| format!("Ghidra scratch cleanup incomplete: {retained_path}")),
 	}
 }
+
+#[cfg(test)]
+#[path = "rea_engine_ghidra_tests.rs"]
+mod tests;

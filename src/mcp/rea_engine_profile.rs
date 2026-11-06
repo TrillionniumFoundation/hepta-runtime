@@ -17,10 +17,29 @@ pub(crate) const GHIDRA_1214_RELEASE_SHA256: &str =
 pub(crate) const MAX_MANIFEST_BYTES: u64 = 8 * 1024 * 1024;
 pub(crate) const MAX_INSTALLATION_FILES: usize = 20_000;
 
+pub(crate) const GHIDRA_V4_GPL_REQUIRED: [(&str, &str); 2] = [
+	(
+		"GPL/DemanglerGnu/Module.manifest",
+		"ca76258f330d1096cb616df83a4213593a574c907d02eb47b0926ccc5359bd7b",
+	),
+	(
+		"GPL/DemanglerGnu/os/linux_x86_64/demangler_gnu_v2_41",
+		"0dfec5481a933e9cb2a7ef025040dd3a817d0085bc3bee166ce69ce7de759ad9",
+	),
+];
+
+pub(crate) fn installation_subtrees(revision: Option<u32>) -> &'static [&'static str] {
+	if revision == Some(4) {
+		&["Ghidra", "GPL"]
+	} else {
+		&["Ghidra"]
+	}
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct GhidraEngineProfile {
-	/// Absent and revision 2 retain Ghidra 12.2; revision 3 explicitly selects the fixed 12.1.4 release.
+	/// Absent and revision 2 retain Ghidra 12.2; revisions 3 and 4 select fixed 12.1.4.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub bridge_revision: Option<u32>,
 	pub java_home: String,
@@ -44,7 +63,7 @@ pub(crate) struct InstallationManifest {
 pub(crate) fn release_identity(revision: Option<u32>) -> Result<(&'static str, &'static str)> {
 	match revision {
 		None | Some(2) => Ok(("12.2", GHIDRA_RELEASE_SHA256)),
-		Some(3) => Ok(("12.1.4", GHIDRA_1214_RELEASE_SHA256)),
+		Some(3 | 4) => Ok(("12.1.4", GHIDRA_1214_RELEASE_SHA256)),
 		_ => bail!("Ghidra bridge revision does not select a fixed release"),
 	}
 }
@@ -137,8 +156,18 @@ pub(crate) fn validate_manifest(
 			bail!("Ghidra installation manifest is missing {required}");
 		}
 	}
+	if engine.bridge_revision == Some(4) {
+		for (required, expected) in GHIDRA_V4_GPL_REQUIRED {
+			if manifest.files.get(required).map(String::as_str) != Some(expected) {
+				bail!(
+					"Ghidra revision 4 manifest is missing or changes fixed GNU helper {required}"
+				);
+			}
+		}
+	}
 	for (relative, digest) in &manifest.files {
-		if !relative.starts_with("Ghidra/")
+		if !(relative.starts_with("Ghidra/")
+			|| (engine.bridge_revision == Some(4) && relative.starts_with("GPL/")))
 			|| relative.contains(':')
 			|| relative.contains('\\')
 			|| !absolute_normal_path(&format!("{}/{relative}", engine.installation_root))
@@ -149,3 +178,7 @@ pub(crate) fn validate_manifest(
 	}
 	Ok(())
 }
+
+#[cfg(test)]
+#[path = "rea_engine_profile_tests.rs"]
+mod tests;

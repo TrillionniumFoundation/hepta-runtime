@@ -24,6 +24,7 @@ import sys
 INDEX_PATH = "docs/rea-native/compatibility/REA_6_8_0_QUALIFICATIONS.json"
 INDEX_SCHEMA = "hepta.rea.operation-qualifications.v1"
 MAX_ARTIFACT_BYTES = 256 * 1024 * 1024
+PAGINATION_REQUIREMENT = "stable-pagination-and-complete-byte-readback"
 
 
 def _module(name):
@@ -75,7 +76,7 @@ def artifact_json(root, reference):
 
 def wire_index(raw):
     """Authenticate summaries against the original client wire, including IDs."""
-    sent, received, raw_sent = {}, {}, {}
+    sent, received, raw_sent, raw_received = {}, {}, {}, {}
     q.require(raw.endswith(b"\n"), "unterminated wire transcript")
     for line in raw.splitlines():
         item = q.parse_json(line)
@@ -102,9 +103,10 @@ def wire_index(raw):
         else:
             q.require("method" not in value and (("result" in value) != ("error" in value)),
                       "invalid server response")
+            raw_received[identifier] = text
         values[identifier] = value
     q.require(set(received) <= set(sent), "wire response has no original request")
-    return {"sent": sent, "received": received, "raw_sent": raw_sent}
+    return {"sent": sent, "received": received, "raw_sent": raw_sent, "raw_received": raw_received}
 
 
 def bind_call(wire, response, name, arguments, number_spelling=None, omit_arguments=False, argument_key_order=None):
@@ -138,6 +140,24 @@ def bind_tools(wire, rows):
     q.require(q.json_equal(collected, rows), "tool schema summary differs from its original tools/list wire")
 
 
+def response_comparisons(reference, native, reference_wire, native_wire):
+    """Keep parsed diagnostics separate from opaque MCP and exact frame facts.
+
+    Request IDs correlate each response to its own request and need not match
+    across independently executed sessions. All other response members remain
+    significant. In particular, content[].text is an opaque JSON string here;
+    decoding embedded JSON is only a second, explicitly weaker observation.
+    """
+    left = {key: value for key, value in reference.items() if key != "id"}
+    right = {key: value for key, value in native.items() if key != "id"}
+    return {
+        "parsed_result_equal": q.json_equal(q.tool_value(reference), q.tool_value(native)),
+        "opaque_response_equal": q.json_equal(left, right),
+        "raw_response_frame_equal": (reference_wire["raw_received"][reference["id"]]
+                                     == native_wire["raw_received"][native["id"]]),
+    }
+
+
 def case_results(cases, observed, root, reference_wire, native_wire):
     expected_ids = [case["id"] for case in cases]
     q.require(isinstance(observed, list) and [item.get("id") for item in observed] == expected_ids,
@@ -150,16 +170,40 @@ def case_results(cases, observed, root, reference_wire, native_wire):
         options = (case.get("number_spelling"), case.get("omit_arguments", False), case.get("argument_key_order"))
         bind_call(reference_wire, left, "inspect_elf_notes", case["arguments"], *options)
         bind_call(native_wire, right, "rea_inspect_elf_notes", case["arguments"], *options)
+        comparison = {}
         try:
             if case["kind"] == "success":
                 record = q.evidence_value(left)
                 q.check_independent_facts(record, case)
                 retained.setdefault(record["evidence_id"], record)
+            comparison = response_comparisons(left, right, reference_wire, native_wire)
             q.compare_case(case, left, right)
-            results[case["id"]] = {"passed": True}
+            q.require(comparison["opaque_response_equal"], "opaque public MCP response differs from the frozen original")
+            results[case["id"]] = {**comparison, "passed": True}
         except (KeyError, TypeError, ValueError) as error:
-            results[case["id"]] = {"passed": False, "error": str(error)}
+            results[case["id"]] = {**comparison, "passed": False, "error": str(error)}
     return results, retained
+
+
+def retention_results(queries, observed, root, reference_wire, native_wire, retained):
+    """Replay the complete bundle/summary/filter cases; these are not pages."""
+    q.require(isinstance(observed, list) and [row.get("id") for row in observed]
+              == [query["id"] for query in queries], "retention query set differs")
+    results = {}
+    for query, row in zip(queries, observed, strict=True):
+        left, right = (artifact_json(root, row[label]) for label in ("reference", "native"))
+        bind_call(reference_wire, left, "get_evidence_bundle", query["arguments"])
+        bind_call(native_wire, right, "rea_get_evidence_bundle", query["arguments"])
+        comparison = {}
+        try:
+            comparison = response_comparisons(left, right, reference_wire, native_wire)
+            q.require(comparison["parsed_result_equal"], "retention responses differ")
+            q.require(comparison["opaque_response_equal"], "opaque retention responses differ")
+            q.check_retention_response(query, left, retained)
+            results[query["id"]] = {**comparison, "passed": True}
+        except (KeyError, TypeError, ValueError) as error:
+            results[query["id"]] = {**comparison, "passed": False, "error": str(error)}
+    return results
 
 
 def valid_owner(owner):
@@ -186,17 +230,28 @@ def owner_closed(observation):
 
 def derive_assessment(comparisons, registration, retention, cold, open_requirements):
     """Only independently recomputed facts can close a reviewed behavior gate."""
-    all_cases = bool(comparisons) and all(value["passed"] for value in comparisons.values())
+    def passed_comparison(value):
+        return all(value.get(field) is True for field in ("passed", "parsed_result_equal", "opaque_response_equal"))
+    all_cases = bool(comparisons) and all(passed_comparison(value) for value in comparisons.values())
     passed = ["source_package_boundary"]
-    if registration and all_cases:
+    if registration is True and all_cases:
         passed += ["contracts", "results", "evidence"]
-    if retention and cold and all_cases:
-        passed += ["retention_and_pagination"]
-    # These gates need actual owner cancellation/deadline and the full reviewed
-    # format corpus. They stay absent until their validators are implemented.
+    # v1 observes a full bundle, projections and an empty fresh session. None
+    # carries a cursor, page boundary or reconstructed record-byte stream. Do
+    # not discharge the combined gate from those narrower facts, even when a
+    # receipt claims PASS or an extension exists in the implementation.
+    outstanding = list(dict.fromkeys([*open_requirements, PAGINATION_REQUIREMENT]))
     return {"status": "OPEN", "passed_gates": sorted(passed),
-            "failed_checks": {name: value["error"] for name, value in comparisons.items() if not value["passed"]},
-            "unimplemented_required_observations": list(open_requirements)}
+            "observed_checks": {"schema_registration_equal": registration is True,
+                                "reviewed_case_results_equal": all_cases,
+                                "bundle_retention_equal": retention is True,
+                                "fresh_session_empty": cold is True,
+                                "stable_pagination_observed": False,
+                                "complete_byte_readback_observed": False},
+            "case_comparisons": comparisons,
+            "failed_checks": {name: value.get("error", "case did not independently pass")
+                              for name, value in comparisons.items() if not passed_comparison(value)},
+            "unimplemented_required_observations": outstanding}
 
 
 def build_binding(root, report, source):
@@ -304,19 +359,10 @@ def validate_report(repo, receipt_path, expected_sha256, snapshot=None):
     except ValueError:
         registration = False
     comparisons, retained = case_results(cases, report["cases"], root, wires["reference"], wires["native"])
-    retention = True
     queries = q.retention_queries(list(retained.values()))
-    observed = report["retention_cases"]
-    q.require([row["id"] for row in observed] == [query["id"] for query in queries], "retention query set differs")
-    for query, row in zip(queries, observed, strict=True):
-        left, right = (artifact_json(root, row[label]) for label in ("reference", "native"))
-        bind_call(wires["reference"], left, "get_evidence_bundle", query["arguments"])
-        bind_call(wires["native"], right, "rea_get_evidence_bundle", query["arguments"])
-        try:
-            q.require(q.json_equal(q.tool_value(left), q.tool_value(right)), "retention responses differ")
-            q.check_retention_response(query, left, list(retained.values()))
-        except (KeyError, TypeError, ValueError):
-            retention = False
+    retention_comparisons = retention_results(queries, report["retention_cases"], root,
+        wires["reference"], wires["native"], list(retained.values()))
+    retention = bool(retention_comparisons) and all(row["passed"] is True for row in retention_comparisons.values())
     cold = True
     q.require([row["producer"] for row in report["cold_sessions"]] == ["reference", "native"], "cold sessions are missing")
     for row in report["cold_sessions"]:
@@ -342,7 +388,7 @@ def validate_report(repo, receipt_path, expected_sha256, snapshot=None):
     assessment.update({"profile": q.PROFILE, "receipt": receipt_path.relative_to(repo).as_posix(),
                        "receipt_sha256": expected_sha256, "native_binary_sha256": report["native_before"]["sha256"],
                        "source_tree_sha256": before["tree_sha256"], "schema_equal": registration,
-                       "retention_equal": retention, "cold_session_empty": cold,
+                       "retention_equal": retention, "retention_comparisons": retention_comparisons, "cold_session_empty": cold,
                        "build_source_binding": built})
     return assessment
 

@@ -127,7 +127,8 @@ pub struct ReaStaticRequest {
 	pub artifact_path: String,
 	/// Required identity of the bytes to inspect. A mismatch prevents backend use.
 	pub artifact_sha256: String,
-	/// Exact internal Ghidra function entry, in canonical lowercase 0x hexadecimal.
+	/// Internal Ghidra address in canonical lowercase 0x hexadecimal. Revisions 2/3
+	/// require an exact function entry; revision 4 also resolves an address in its body.
 	/// Required only for function/decompile/xrefs. Absent fields preserve old request identities.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub function_address: Option<String>,

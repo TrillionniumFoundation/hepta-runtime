@@ -13,6 +13,7 @@ import shutil
 import signal
 import subprocess
 import time
+import zipfile
 from rea_java_external import Mcp, digest, private_write, set_fence
 from rea_engine_cleanup_assertions import (assert_owner_cleanup, signal_original_worker, wait_source_java,
                                            assert_original_processes_stopped, assert_original_group_membership)
@@ -24,6 +25,42 @@ RELEASES = {
     "12.1.4": ("ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db", 3,
                "rea_ghidra_inventory_1214_v3.java", "rea_ghidra_analysis_1214_v3.java"),
 }
+
+
+REQUIRED_V4_GPL = {
+    "GPL/DemanglerGnu/Module.manifest": "ca76258f330d1096cb616df83a4213593a574c907d02eb47b0926ccc5359bd7b",
+    "GPL/DemanglerGnu/os/linux_x86_64/demangler_gnu_v2_41": "0dfec5481a933e9cb2a7ef025040dd3a817d0085bc3bee166ce69ce7de759ad9"
+}
+
+
+def verify_v4_release_members(archive, installed, files, release_sha):
+    assert digest(archive) == release_sha
+    prefix = "ghidra_12.1.4_PUBLIC/"
+    with zipfile.ZipFile(archive) as source:
+        members = {}
+        for member in source.infolist():
+            if member.is_dir() or not member.filename.startswith(prefix):
+                continue
+            relative = member.filename[len(prefix):]
+            if not relative.startswith(("Ghidra/", "GPL/")):
+                continue
+            assert relative not in members, relative
+            members[relative] = member
+        assert set(members) == set(files), "release and installed two-subtree inventory differ"
+        total = 0
+        for name, expected in sorted(files.items()):
+            member = members[name]
+            assert member.file_size == (installed / name).stat().st_size
+            total += member.file_size
+            assert total <= 8 * 1024 * 1024 * 1024
+            result = hashlib.sha256()
+            with source.open(member) as stream:
+                for data in iter(lambda: stream.read(1024 * 1024), b""):
+                    result.update(data)
+            assert result.hexdigest() == expected, name
+    return {"schema": "hepta.rea.ghidra-release-members.v1", "subtrees": ["Ghidra", "GPL"],
+            "release_archive_sha256": release_sha, "file_count": len(files), "bytes": total,
+            "all_archive_members_equal": True, "required_gpl_members": REQUIRED_V4_GPL}
 
 
 def live_java(unit, mode, deadline):
@@ -81,12 +118,44 @@ def live_native_decompiler(unit, mode, deadline):
     raise TimeoutError("original job did not expose a live native decompiler child")
 
 
+
+def assert_revision_four_cleanup(value, selected_decompile):
+    assert value["decompilation_scope"] == "explicit_selected_function"
+    assert value["auto_analysis_may_decompile"] is True
+    assert value["native_child_cleanup_scope"] == "private_bridge_jvm_all_descendants"
+    assert value["native_helper_observation_scope"] == "live_descendants_at_phase_boundaries"
+    assert value["native_child_cleanup_confirmed"] is True
+    children = value["native_children"]
+    assert value["observed_native_children"] == len(children) <= 64
+    decompilers = sum(Path(child["command"]).name == "decompile" for child in children)
+    assert value["observed_native_decompiler_children"] == decompilers
+    assert not selected_decompile or decompilers > 0
+    assert value["observed_explicit_decompiler_candidates"] == sum(child["explicit_decompiler_candidate"] for child in children)
+    after = []
+    for child in children:
+        assert child["role_attribution"] == "phase_and_executable_inference"
+        assert child["exit_confirmed"] is True and child["final_state"] in ("absent", "identity_changed")
+        assert child["start_instant"] and str(int(child["start_ticks"])) == child["start_ticks"]
+        try:
+            raw = Path(f"/proc/{child['pid']}/stat").read_text()
+            fields = raw[raw.rfind(")") + 2:].split()
+            state = {"pid": child["pid"], "expected_start_ticks": child["start_ticks"],
+                     "current_start_ticks": fields[19], "state": fields[0]}
+            assert fields[19] != child["start_ticks"], state
+        except FileNotFoundError:
+            state = {"pid": child["pid"], "expected_start_ticks": child["start_ticks"], "absent": True}
+        after.append(state)
+    return after
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--runtime", type=Path, required=True)
     parser.add_argument("--java-home", type=Path, required=True)
     parser.add_argument("--ghidra-home", type=Path, required=True)
     parser.add_argument("--engine-version", choices=tuple(RELEASES), default="12.2")
+    parser.add_argument("--bridge-revision", type=int, choices=(2, 3, 4),
+                        help="explicit revision; 4 requires Ghidra 12.1.4 and adds containment/external inventory")
     parser.add_argument("--release-archive", type=Path,
                         help="original release ZIP; required for the explicit 12.1.4 profile")
     parser.add_argument("--fixture", type=Path,
@@ -100,6 +169,12 @@ def main():
     original_runtime, java_home, ghidra_home = (path.resolve(strict=True) for path in
                                                (args.runtime, args.java_home, args.ghidra_home))
     release_sha, revision, inventory_bridge, analysis_bridge = RELEASES[args.engine_version]
+    if args.bridge_revision == 4 and args.engine_version == "12.1.4":
+        revision = 4
+        inventory_bridge = "rea_ghidra_inventory_1214_v4.java"
+        analysis_bridge = "rea_ghidra_analysis_1214_v4.java"
+    elif args.bridge_revision is not None and args.bridge_revision != revision:
+        parser.error("bridge revision does not match the selected fixed Ghidra release")
     properties = (ghidra_home / "Ghidra/application.properties").read_text().splitlines()
     assert [line for line in properties if line.startswith("application.version=")] == [
         "application.version=" + args.engine_version]
@@ -139,10 +214,20 @@ def main():
     subprocess.run(["/usr/bin/cc", "-no-pie", "-O0", "-fno-inline", "-fno-stack-protector", str(cancellation_source), "-o", str(cancellation_artifact)],
                    check=True, capture_output=True, timeout=30)
     files = {}
-    for path in sorted((ghidra_home / "Ghidra").rglob("*")):
-        assert not path.is_symlink()
-        if path.is_file():
-            files[str(path.relative_to(ghidra_home))] = digest(path)
+    subtrees = ("Ghidra", "GPL") if revision == 4 else ("Ghidra",)
+    for subtree in subtrees:
+        directory = ghidra_home / subtree
+        assert directory.is_dir() and not directory.is_symlink()
+        for path in sorted(directory.rglob("*")):
+            assert not path.is_symlink()
+            if path.is_file():
+                files[str(path.relative_to(ghidra_home))] = digest(path)
+            else:
+                assert path.is_dir(), path
+    if revision == 4:
+        assert all(files.get(name) == expected for name, expected in REQUIRED_V4_GPL.items())
+        binding = verify_v4_release_members(args.release_archive, ghidra_home, files, release_sha)
+        private_write(root / "ghidra-release-members.json", binding)
     manifest = {"schema": "hepta.rea.ghidra-installation.v1", "engine_version": args.engine_version,
                 "release_archive_sha256": release_sha, "files": files}
     manifest_path = root / "ghidra-installation.json"
@@ -237,6 +322,15 @@ def main():
         observation = json.loads(completed["report"]["stdout"])
         assert completed["report"]["bridge_sha256"] == digest(Path(__file__).resolve().parents[1] / "src/mcp" / analysis_bridge)
         assert observation["bridge_revision"] == revision
+        assert observation["schema"] == ("hepta.rea.ghidra-analysis.v2" if revision == 4 else "hepta.rea.ghidra-analysis.v1")
+        if revision == 4:
+            assert observation["analysis_profile"] == "hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1"
+            assert observation["language_id"] == "x86:LE:64:default" and observation["compiler_spec_id"] == "gcc"
+            assert observation["analysis_options_sha256"] == "a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75"
+            assert observation["analysis_option_count"] == 146 and observation["analysis_options_unchanged"] is True
+            assert len(observation["enabled_analyzers"]) == 26 and len(observation["disabled_analyzers"]) == 4
+            assert observation["no_return_repair_applied"] is False
+            result.setdefault("native_helper_checks", {})["functions"] = assert_revision_four_cleanup(observation, False)
         assert observation["engine_version"] == args.engine_version
         assert observation["analysis_completed"] is True and observation["auto_analysis_performed"] is True
         assert observation["decompilation_performed"] is False
@@ -245,6 +339,14 @@ def main():
         assert entries[leaf]["name"] == "hepta_leaf" and entries[caller]["name"] == "hepta_caller", observation
         assert observation["instruction_count_after_analysis"] > 0
         assert observation["function_scan_complete"] is True
+        if revision == 4:
+            assert observation["function_inventory_scope"] == "internal_and_external_separate"
+            external = observation["external_functions"]
+            assert external and observation["external_function_scan_complete"] is True, observation
+            assert observation["scanned_external_functions"] == observation["returned_external_functions"] == len(external)
+            assert observation["omitted_external_functions_in_scan"] == 0
+            assert all(row["external"] is True and row["entry_address"].startswith("EXTERNAL:0x") for row in external)
+            result["checks"].append("separate_external_function_inventory_retains_address_space_and_complete_counts")
         assert completed["report"]["network_syscalls_denied"] is True
         private_write(root / "functions-result.json", completed)
         result["job_ids"]["functions"] = first["job"]["id"]
@@ -257,6 +359,8 @@ def main():
             private_write(root / f"{operation}-result.json", actual)
             assert actual["process_succeeded"] is True, actual
             value = json.loads(actual["report"]["stdout"])
+            if revision == 4:
+                result.setdefault("native_helper_checks", {})[operation] = assert_revision_four_cleanup(value, operation == "decompile")
             assert value["function"]["entry_address"] == leaf and value["function_address_requested"] == leaf, value
             assert value["source_sha256"] == original_hash and value["target_executed"] is False
             assert value["external_libraries_loaded"] is False and value["project_saved"] is False
@@ -278,20 +382,58 @@ def main():
         assert server.complete(selected) == decompilation
         result["checks"].append("controller_restart_returns_original_decompilation_without_relaunch")
         conflict = dict(selected, function_address=caller)
-        assert server.raw("rea_static_start", conflict).get("isError") is True
-        for bad in [dict(selected, function_address="0x0" + leaf[2:]),
+        conflict_response = server.raw("rea_static_start", conflict)
+        private_write(root / "same-key-conflict.json", {"request": conflict, "call_tool_result": conflict_response})
+        assert conflict_response.get("isError") is True
+        for index, bad in enumerate([dict(selected, function_address="0x0" + leaf[2:]),
                     {key: val for key, val in selected.items() if key != "function_address"},
-                    dict(normal, function_address=leaf), dict(selected, flags="caller-script")]:
-            assert server.raw("rea_static_start", bad).get("isError") is True, bad
+                    dict(normal, function_address=leaf), dict(selected, flags="caller-script")]):
+            rejected = server.raw("rea_static_start", bad)
+            private_write(root / f"invalid-selector-{index}.json", {"request": bad, "call_tool_result": rejected})
+            assert rejected.get("isError") is True, (bad, rejected)
         result["checks"].append("changed_content_same_key_and_invalid_or_extra_selectors_refused")
-        interior = request("owned-ghidra-interior", "decompile", address=hex(int(leaf, 16) + 1))
-        refused_start = server.call("rea_static_start", interior)
-        refused = server.complete(interior)
-        private_write(root / "interior-refusal.json", {"request": interior, "initial": refused_start, "result": refused})
-        assert refused["process_succeeded"] is False and refused["report"]["backend_success"] is False, refused
-        assert refused["report"]["summary"]["mapping_supported"] is False, refused
-        assert "exact internal analyzed function entry" in refused["report"]["stderr"], refused
-        result["checks"].append("interior_address_is_real_backend_failure_without_successful_facts")
+        if revision == 4:
+            interior_address = hex(int(leaf, 16) + 1)
+            for operation in ("function", "xrefs", "decompile"):
+                interior = request("owned-ghidra-interior-" + operation, operation, address=interior_address)
+                initial = server.call("rea_static_start", interior)
+                actual = server.complete(interior)
+                private_write(root / f"interior-{operation}.json", {"request": interior, "initial": initial, "result": actual})
+                assert actual["process_succeeded"] is True, actual
+                value = json.loads(actual["report"]["stdout"])
+                result.setdefault("native_helper_checks", {})["interior_" + operation] = assert_revision_four_cleanup(value, operation == "decompile")
+                assert value["function_address_requested"] == interior_address
+                assert value["function"]["entry_address"] == leaf and value["function_resolution"] == "containing"
+                assert value["function"]["body_ranges_complete"] is True
+                ranges = value["function"]["body_ranges"]
+                assert value["function"]["body_range_count"] == len(ranges)
+                assert any(int(row["min_address"], 16) <= int(interior_address, 16) <= int(row["max_address"], 16) for row in ranges)
+                if operation == "decompile":
+                    exact = json.loads(decompilation["report"]["stdout"])
+                    assert value["c_code"] == exact["c_code"] and value["c_code_sha256"] == exact["c_code_sha256"]
+                elif operation == "xrefs":
+                    exact = json.loads(json.loads((root / "xrefs-result.json").read_text())["report"]["stdout"])
+                    for field in ("incoming_references", "outgoing_references"):
+                        assert value[field] == exact[field], field
+                result["job_ids"]["interior_" + operation] = initial["job"]["id"]
+            result["checks"].append("interior_function_xrefs_and_decompile_resolve_exact_body_and_preserve_original_selector")
+            no_function = request("owned-ghidra-no-function", "function", address="0x0")
+            initial = server.call("rea_static_start", no_function)
+            actual = server.complete(no_function)
+            private_write(root / "no-function-refusal.json", {"request": no_function, "initial": initial, "result": actual})
+            assert actual["process_succeeded"] is False and actual["report"]["backend_success"] is False, actual
+            assert actual["report"]["summary"]["mapping_supported"] is False
+            assert "no containing internal analyzed function" in actual["report"]["stderr"]
+            result["checks"].append("unmapped_address_is_retained_backend_error_without_successful_facts")
+        else:
+            interior = request("owned-ghidra-interior", "decompile", address=hex(int(leaf, 16) + 1))
+            refused_start = server.call("rea_static_start", interior)
+            refused = server.complete(interior)
+            private_write(root / "interior-refusal.json", {"request": interior, "initial": refused_start, "result": refused})
+            assert refused["process_succeeded"] is False and refused["report"]["backend_success"] is False, refused
+            assert refused["report"]["summary"]["mapping_supported"] is False, refused
+            assert "exact internal analyzed function entry" in refused["report"]["stderr"], refused
+            result["checks"].append("interior_address_is_real_backend_failure_without_successful_facts")
         cancellation = request("owned-ghidra-live-decompiler-cancel", "decompile", cancellation_artifact, cancel_address)
         private_write(root / "cancel-request.json", cancellation)
         active = server.call("rea_static_start", cancellation)

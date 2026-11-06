@@ -2,7 +2,7 @@
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! Shared admission and observation checks for bounded Ghidra analysis.
-//! Legacy and revision 2 bridges retain their bytes; revision 3 selects the fixed Ghidra 12.1.4 engine.
+//! Historical bridge bytes are retained; revision 4 separately admits containment and externals.
 
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
@@ -11,12 +11,56 @@ use super::{is_sha256, sha256, ReaStaticRequest, StaticOperation, StaticProvider
 
 pub(crate) const ANALYSIS_PROFILE: &str = "hepta.ghidra.elf-functions.v1";
 pub(crate) const ANALYSIS_PROFILE_1214: &str = "hepta.ghidra.12.1.4.elf-functions.v1";
+pub(crate) const ANALYSIS_PROFILE_1214_V4: &str =
+	"hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1";
+
+#[path = "rea_ghidra_contract_v4.rs"]
+mod revision_four;
 pub(crate) const ANALYZERS: [&str; 4] = [
 	"Disassemble Entry Points",
 	"Function Start Search",
 	"Stack",
 	"Subroutine References",
 ];
+
+pub(crate) const ANALYZERS_1214_V4: [&str; 26] = [
+	"ASCII Strings",
+	"Apply Data Archives",
+	"Call Convention ID",
+	"Call-Fixup Installer",
+	"Create Address Tables",
+	"DWARF",
+	"Data Reference",
+	"Decompiler Switch Analysis",
+	"Demangler GNU",
+	"Disassemble Entry Points",
+	"ELF Scalar Operand References",
+	"Embedded Media",
+	"External Entry References",
+	"Function ID",
+	"Function Start Pre Search",
+	"Function Start Search",
+	"Function Start Search After Code",
+	"Function Start Search After Data",
+	"GCC Exception Handlers",
+	"Non-Returning Functions - Discovered",
+	"Non-Returning Functions - Known",
+	"Reference",
+	"Shared Return Calls",
+	"Stack",
+	"Subroutine References",
+	"x86 Constant Reference Analyzer",
+];
+pub(crate) const DISABLED_ANALYZERS_1214_V4: [&str; 4] = [
+	"Aggressive Instruction Finder",
+	"Condense Filler Bytes",
+	"Decompiler Parameter ID",
+	"Variadic Function Signature Override",
+];
+pub(crate) const OPTIONS_SHA256_1214_V4: &str =
+	"a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75";
+pub(crate) const OPTIONS_FORMAT_1214_V4: &str =
+	"hepta.ghidra.analysis-options.key-type-class-value.v1";
 
 pub(crate) fn operation_name(operation: StaticOperation) -> Result<&'static str> {
 	match operation {
@@ -43,6 +87,13 @@ pub(crate) fn bridge(operation: StaticOperation, revision: Option<u32>) -> Resul
 		(Some(3), operation) => {
 			operation_name(operation)?;
 			Ok(include_str!("rea_ghidra_analysis_1214_v3.java"))
+		}
+		(Some(4), StaticOperation::Inventory) => {
+			Ok(include_str!("rea_ghidra_inventory_1214_v4.java"))
+		}
+		(Some(4), operation) => {
+			operation_name(operation)?;
+			Ok(include_str!("rea_ghidra_analysis_1214_v4.java"))
 		}
 		_ => bail!("Ghidra operation requires an admitted bridge revision"),
 	}
@@ -154,15 +205,25 @@ pub(crate) fn validate_observation(
 		return Ok(());
 	}
 	validate_selection(input.profile.provider, &input.request)?;
-	let analysis_profile = if revision == Some(3) {
-		ANALYSIS_PROFILE_1214
-	} else {
-		ANALYSIS_PROFILE
+	let analysis_profile = match revision {
+		Some(4) => ANALYSIS_PROFILE_1214_V4,
+		Some(3) => ANALYSIS_PROFILE_1214,
+		_ => ANALYSIS_PROFILE,
 	};
-	if observation["schema"] != "hepta.rea.ghidra-analysis.v1"
+	let analysis_schema = if revision == Some(4) {
+		"hepta.rea.ghidra-analysis.v2"
+	} else {
+		"hepta.rea.ghidra-analysis.v1"
+	};
+	let analyzers: &[&str] = if revision == Some(4) {
+		&ANALYZERS_1214_V4
+	} else {
+		&ANALYZERS
+	};
+	if observation["schema"] != analysis_schema
 		|| observation["bridge_revision"].as_u64() != revision.map(u64::from)
 		|| observation["analysis_profile"] != analysis_profile
-		|| observation["enabled_analyzers"] != json!(ANALYZERS)
+		|| observation["enabled_analyzers"] != json!(analyzers)
 		|| observation["analysis_completed"] != true
 		|| observation["auto_analysis_performed"] != true
 		|| observation["decompilation_performed"] != (operation == StaticOperation::Decompile)
@@ -175,6 +236,13 @@ pub(crate) fn validate_observation(
 		|| observation["coverage"] != "partial"
 	{
 		bail!("Ghidra analysis identity, completion, selected address or coverage mismatch");
+	}
+	if revision == Some(4) {
+		revision_four::validate_analysis_options(observation)?;
+		revision_four::validate_native_cleanup(
+			observation,
+			operation == StaticOperation::Decompile,
+		)?;
 	}
 	if operation == StaticOperation::Functions {
 		counted_rows(observation, "functions", "returned_functions", 128)?;
@@ -197,6 +265,18 @@ pub(crate) fn validate_observation(
 		{
 			bail!("Ghidra function scan counts or completeness are inconsistent");
 		}
+		if revision == Some(4) {
+			revision_four::validate_functions(observation)?;
+		}
+	} else if revision == Some(4) {
+		revision_four::validate_selected(
+			observation,
+			input
+				.request
+				.function_address
+				.as_deref()
+				.context("selected address absent")?,
+		)?;
 	} else {
 		function_row(
 			&observation["function"],

@@ -41,6 +41,7 @@ pub mod rea_evidence;
 mod rea_evidence_export;
 mod rea_evidence_file;
 mod rea_evidence_import;
+mod rea_evidence_readback;
 mod rea_evidence_session;
 mod rea_evidence_source;
 pub mod rea_files;

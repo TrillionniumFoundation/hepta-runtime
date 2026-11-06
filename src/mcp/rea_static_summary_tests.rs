@@ -1,6 +1,7 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
+//! Selected-field summaries preserve versioned provider boundaries.
 
 use super::*;
 
@@ -66,4 +67,71 @@ fn bounded_note_mapping_reports_omitted_rows() {
 		MAX_OBSERVATIONS
 	);
 	assert_eq!(mapped["truncated"], true);
+}
+
+#[test]
+fn ghidra_revision_four_summary_preserves_requested_and_resolved_address() {
+	let value = json!({"schema":"hepta.rea.ghidra-analysis.v2","bridge_revision":4,
+		"operation":"function","analysis_completed":true,"function_address_requested":"0x401001",
+		"function":{"entry_address":"0x401000"},"function_resolution":"containing"});
+	let mapped = selected_fields(
+		StaticProvider::Ghidra,
+		StaticOperation::Function,
+		&value.to_string(),
+		true,
+	);
+	assert_eq!(mapped["schema"], "hepta.rea.static-summary.v2");
+	assert_eq!(mapped["mapping_supported"], true);
+	assert_eq!(mapped["function_address_requested"], "0x401001");
+	assert_eq!(mapped["function"]["entry_address"], "0x401000");
+	assert_eq!(mapped["function_resolution"], "containing");
+	assert_eq!(mapped["upstream_contract_equivalent"], false);
+	let mut mismatched = value;
+	mismatched["bridge_revision"] = json!(3);
+	let refused = selected_fields(
+		StaticProvider::Ghidra,
+		StaticOperation::Function,
+		&mismatched.to_string(),
+		true,
+	);
+	assert_eq!(refused["mapping_supported"], false);
+}
+
+#[test]
+fn ghidra_legacy_summary_does_not_gain_revision_four_fields() {
+	let value = json!({"schema":"hepta.rea.ghidra-analysis.v1","bridge_revision":3,
+		"operation":"functions","analysis_completed":true,"returned_functions":12});
+	let mapped = selected_fields(
+		StaticProvider::Ghidra,
+		StaticOperation::Functions,
+		&value.to_string(),
+		true,
+	);
+	assert_eq!(mapped["schema"], "hepta.rea.static-summary.v1");
+	assert!(mapped.get("returned_external_functions").is_none());
+	assert!(mapped.get("function_resolution").is_none());
+}
+
+#[test]
+fn default_profile_summary_does_not_claim_analysis_avoids_native_decompilation() {
+	let value = json!({"schema":"hepta.rea.ghidra-analysis.v2","bridge_revision":4,
+		"operation":"functions","analysis_completed":true,"decompilation_performed":false,
+		"decompilation_scope":"explicit_selected_function","auto_analysis_may_decompile":true,
+		"native_child_cleanup_scope":"private_bridge_jvm_all_descendants",
+		"native_helper_observation_scope":"live_descendants_at_phase_boundaries",
+		"observed_native_decompiler_children":1,"observed_explicit_decompiler_candidates":0});
+	let mapped = selected_fields(
+		StaticProvider::Ghidra,
+		StaticOperation::Functions,
+		&value.to_string(),
+		true,
+	);
+	assert_eq!(mapped["decompilation_performed"], false);
+	assert_eq!(mapped["decompilation_scope"], "explicit_selected_function");
+	assert_eq!(mapped["auto_analysis_may_decompile"], true);
+	assert_eq!(mapped["observed_native_decompiler_children"], 1);
+	assert_eq!(
+		mapped["native_helper_observation_scope"],
+		"live_descendants_at_phase_boundaries"
+	);
 }

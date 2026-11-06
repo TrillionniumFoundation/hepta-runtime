@@ -131,9 +131,35 @@ fn revision_three_has_separate_fixed_engine_bridges_without_legacy_rebinding() {
 		assert!(source.contains("report.put(\"bridge_revision\",3)"));
 		assert!(!source.contains("equals(\"12.2\")"));
 		assert_ne!(source, bridge(operation, Some(2)).unwrap());
-		assert!(bridge(operation, Some(4)).is_err());
+		assert!(bridge(operation, Some(5)).is_err());
 	}
 	assert!(bridge(StaticOperation::Sources, Some(3)).is_err());
+}
+
+#[test]
+fn revision_four_has_new_identity_and_preserves_revision_three_bytes() {
+	for (operation, digest) in [
+		(
+			StaticOperation::Inventory,
+			"2d5ee6195f3e080e8645e22da6f100c498809fe93eb6766ad10487d8dd326701",
+		),
+		(
+			StaticOperation::Decompile,
+			"c795e179be454b950db6f0ac60e221ed327d646e703aff46e9376d93661a5f4c",
+		),
+	] {
+		let old = bridge(operation, Some(3)).unwrap();
+		assert_eq!(sha256(old.as_bytes()), digest);
+		let current = bridge(operation, Some(4)).unwrap();
+		assert_ne!(current, old);
+		assert!(current.contains("report.put(\"bridge_revision\",4)"));
+		assert!(current.contains("equals(\"12.1.4\")"));
+	}
+	let current = bridge(StaticOperation::Decompile, Some(4)).unwrap();
+	assert!(current.contains("hepta.rea.ghidra-analysis.v2"));
+	assert!(current.contains("getFunctionContaining(requested)"));
+	assert!(current.contains("getAddressRanges(true)"));
+	assert!(bridge(StaticOperation::Sources, Some(4)).is_err());
 }
 
 #[test]

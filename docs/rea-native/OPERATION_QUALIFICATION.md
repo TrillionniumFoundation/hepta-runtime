@@ -37,10 +37,31 @@ The runner does not change `HOME` or reuse application state from another run.
 
 Each original request and response is retained in a bounded stdio transcript.
 Individual case files retain the complete response, including JSON-RPC errors,
-MCP `isError`, `structuredContent`, target-content provenance and text. JSON text
-is parsed before comparison so object-key insertion order and whitespace do not
-create a false difference. Non-JSON text is compared exactly. No provider,
-Evidence, null, error detail or location field is removed from comparison.
+MCP `isError`, `structuredContent`, target-content provenance and text. The
+consumer binds each case to its actual request and response before comparing
+it. It records three distinct observations; none may substitute for another:
+
+| Observation | Compared value | Qualification meaning |
+| --- | --- | --- |
+| `parsed_result_equal` | MCP result with JSON inside `content[].text` decoded; non-JSON text remains literal | Diagnostic value equality. Embedded JSON whitespace, member order and equivalent numeric spellings can agree here while the public string differs. |
+| `opaque_response_equal` | Every response member except the request-correlation `id`, including the complete CallToolResult or JSON-RPC error and each unchanged `content[].text` string | Required for the current consumer's result/Evidence comparisons. JSON object member order outside the string is immaterial; string contents and array order remain significant. |
+| `raw_response_frame_equal` | The exact retained newline-terminated response frame, including its ID, outer whitespace and JSON escape spelling | Separate byte-level observation. Independent sessions can use different IDs or serialize the same opaque result differently, so this is not silently required or claimed by the result gate. |
+
+All JSON comparisons distinguish booleans from numbers and reject non-finite
+numbers. Native `structuredContent` must still agree with its own decoded text;
+that internal consistency does not prove equality with the frozen original's
+opaque text. No provider, Evidence, null, error detail, location or unrecognized
+response member is discarded to make the responses agree.
+
+The historical producer's `comparison.full_envelope_equal` field used decoded
+JSON text. Its name does not establish opaque-string or frame equality. The
+consumer ignores that stored verdict and independently recomputes the three
+observations from the retained wires. Existing receipts and their digests stay
+unchanged; the stricter derived assessment is separate from the original
+receipt. Because producer and consumer source identities are pinned, an older
+receipt is historical evidence for its recorded source, not a reusable pass for
+a changed implementation or validator. A current qualification requires a new
+run from the integrated source tree.
 
 The independently encoded byte fixtures cover ELF32/ELF64, both byte orders,
 program/section tables and physical aliases, owner decoding, GNU records,
@@ -59,6 +80,29 @@ even when it uses the same native runtime configuration. This follows the
 frozen original's in-memory session ownership; it does not invent automatic
 cross-process persistence. The bundle tool's unrelated operations are not
 qualified by these checks.
+
+These v1 calls have no continuation cursor or page boundary. A complete bundle,
+summary/filter projections, duplicate retention and an empty fresh session do
+not prove stable pagination, exact record-byte reconstruction or retrieval of
+an oversized result. The consumer retains them as `bundle_retention_equal` and
+`fresh_session_empty` observations. It does not award the combined
+`retention_and_pagination` gate from those facts, and independently retains
+`stable-pagination-and-complete-byte-readback` as an open observation even if a
+receipt omits that requirement or claims a pagination pass.
+
+The native `rea_read_evidence_bundle` and `rea_close_evidence_snapshot` APIs
+use the separate `hepta.evidence-bundle-readback.v1` profile. Reads return hex
+byte chunks of a fixed bundle snapshot with the snapshot ID, total and chunk
+SHA-256, byte offsets and session ownership; close explicitly releases that
+snapshot. Their presence in `tools/list`, a successful unit test, or a
+handwritten continuation field cannot upgrade this frozen upstream profile.
+A reviewed extension run must bind its requests to actual retained chunks,
+follow returned `next_offset` values through `eof`, reconstruct the complete
+bundle, verify its byte count and digest, and independently compare every
+retained record with the original observation and export. Export/import in a
+new session is another explicit extension;
+starting empty is only the isolation precondition. Neither extension changes
+the frozen upstream tool inventory or the `0/229` qualification count by itself.
 
 Source snapshots and Linux inotify observations bind the producer, fixtures,
 tests and native source tree before and after execution. Package and binary
@@ -212,12 +256,15 @@ its previous inventory-only projection exactly.
 
 The initial runner and consumer deliberately leave active cancellation and
 deadline owner drainage, the complete overflow/compressed-name/independent
-producer corpus, and oversized-result retention open. Build receipt validation
-is implemented, but its requirement remains open for every run that has no
-independently accepted original build bundle. `qualification.json` reports
-those requirements, and the consumer derives them again from the retained
-evidence. Passing the implemented comparisons returns a successful comparison
-exit code but does not set `qualified` or close the operation. The remaining
+producer corpus, oversized-result retention, and stable pagination with complete
+byte readback open. Build receipt validation is implemented, but its requirement
+remains open for every run that has no independently accepted original build
+bundle. `qualification.json` preserves the producer's original requirement list;
+the consumer derives outstanding requirements from its reviewed profile and
+retained evidence, including the pagination requirement missing from older
+producer lists. Passing the producer's implemented parsed comparisons returns
+a successful comparison exit code but does not set `qualified`, certify opaque
+response equality, or close the operation. The remaining
 mechanisms must be implemented and the original and native operations rerun
 before this profile can become a complete operation qualification. Synthetic
 validator fixtures and negative controls test refusal behavior; they are not

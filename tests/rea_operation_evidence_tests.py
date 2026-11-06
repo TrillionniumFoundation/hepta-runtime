@@ -157,6 +157,134 @@ class OperationEvidenceTests(unittest.TestCase):
             self.assertEqual(assessment["status"], "OPEN")
             self.assertEqual(assessment["passed_gates"], ["source_package_boundary"])
 
+    def test_embedded_json_equivalence_cannot_claim_an_opaque_response_match(self):
+        original = '{"error":{"code":"invalid_request","retryable":false,"count":1}}'
+        variants = ('{ "error": { "code": "invalid_request", "retryable": false, "count": 1 } }',
+                    '{"error":{"count":1,"retryable":false,"code":"invalid_request"}}',
+                    '{"error":{"code":"invalid_request","retryable":false,"count":1.0}}')
+        for changed in variants:
+            with self.subTest(text=changed), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                cases = [{"id": "opaque-error", "kind": "error", "arguments": {}}]
+                left_raw, left = wire_pair({}, {"content": [{"type": "text", "text": original}], "isError": True})
+                right_raw, right = wire_pair({}, {"content": [{"type": "text", "text": changed}], "isError": True},
+                                             "rea_inspect_elf_notes")
+                # This historical producer field measures decoded JSON only.
+                self.assertTrue(q.compare_case(cases[0], left, right)["full_envelope_equal"])
+                row = {"id": "opaque-error", "passed": True, "status": "PASS",
+                       "comparison": {"full_envelope_equal": True, "opaque_response_equal": True},
+                       "reference": q.artifact_json(root, "left.json", left),
+                       "native": q.artifact_json(root, "right.json", right)}
+                before = {path.name: path.read_bytes() for path in root.iterdir()}
+                comparisons, _ = evidence.case_results(cases, [row], root,
+                    evidence.wire_index(left_raw), evidence.wire_index(right_raw))
+                result = comparisons["opaque-error"]
+                self.assertTrue(result["parsed_result_equal"])
+                self.assertFalse(result["opaque_response_equal"])
+                self.assertFalse(result["raw_response_frame_equal"])
+                self.assertFalse(result["passed"])
+                self.assertIn("opaque public MCP response differs", result["error"])
+                assessment = evidence.derive_assessment(comparisons, True, True, True, [])
+                self.assertNotIn("results", assessment["passed_gates"])
+                self.assertNotIn("evidence", assessment["passed_gates"])
+                self.assertEqual(before, {path.name: path.read_bytes() for path in root.iterdir()})
+
+    def test_transport_serialization_and_request_ids_are_separate_observations(self):
+        result = {"content": [{"type": "text", "text": '{"error":{"code":"bad"}}'}], "isError": True}
+        for native_id in (1, 7):
+            with self.subTest(native_id=native_id), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                cases = [{"id": "same-result", "kind": "error", "arguments": {}}]
+                left_raw, left = wire_pair({}, result)
+                right_raw, right = wire_pair({}, deepcopy(result), "rea_inspect_elf_notes", identifier=native_id)
+                lines = [json.loads(line) for line in right_raw.splitlines()]
+                lines[1]["wire_utf8"] = json.dumps(right, sort_keys=True, separators=(",", ":")) + "\n"
+                right_raw = b"".join(json.dumps(line).encode() + b"\n" for line in lines)
+                row = {"id": "same-result", "reference": q.artifact_json(root, "left.json", left),
+                       "native": q.artifact_json(root, "right.json", right)}
+                comparisons, _ = evidence.case_results(cases, [row], root,
+                    evidence.wire_index(left_raw), evidence.wire_index(right_raw))
+                compared = comparisons["same-result"]
+                self.assertTrue(compared["parsed_result_equal"])
+                self.assertTrue(compared["opaque_response_equal"])
+                self.assertFalse(compared["raw_response_frame_equal"])
+                self.assertTrue(compared["passed"])
+
+    def test_unknown_response_members_remain_significant(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cases = [{"id": "extra-member", "kind": "error", "arguments": {}}]
+            result = {"content": [{"type": "text", "text": '{"error":"bad"}'}], "isError": True}
+            left_raw, left = wire_pair({}, result)
+            right_raw, right = wire_pair({}, result, "rea_inspect_elf_notes")
+            right["extra"] = {"unreviewed": True}
+            lines = [json.loads(line) for line in right_raw.splitlines()]
+            lines[1]["wire_utf8"] = json.dumps(right) + "\n"
+            right_raw = b"".join(json.dumps(line).encode() + b"\n" for line in lines)
+            row = {"id": "extra-member", "reference": q.artifact_json(root, "left.json", left),
+                   "native": q.artifact_json(root, "right.json", right)}
+            comparisons, _ = evidence.case_results(cases, [row], root,
+                evidence.wire_index(left_raw), evidence.wire_index(right_raw))
+            self.assertTrue(comparisons["extra-member"]["parsed_result_equal"])
+            self.assertFalse(comparisons["extra-member"]["opaque_response_equal"])
+            self.assertFalse(comparisons["extra-member"]["passed"])
+
+    def test_bundle_retention_also_requires_opaque_text_equality(self):
+        payload = {"result": {name: [] for name in
+                   ("artifacts", "providers", "environments", "scenarios", "captures", "unknowns", "records")}}
+        original = json.dumps(payload, separators=(",", ":"))
+        for changed in (original, json.dumps(payload, indent=2)):
+            with self.subTest(text=changed), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                results = [{"content": [{"type": "text", "text": text}], "structuredContent": payload,
+                            "_meta": q.TARGET_META} for text in (original, changed)]
+                left_raw, left = wire_pair({}, results[0], "get_evidence_bundle")
+                right_raw, right = wire_pair({}, results[1], "rea_get_evidence_bundle")
+                row = {"id": "complete", "passed": True, "status": "PASS",
+                       "pagination": {"verified": True, "cursor": "invented"},
+                       "reference": q.artifact_json(root, "left.json", left),
+                       "native": q.artifact_json(root, "right.json", right)}
+                compared = evidence.retention_results([{"id": "complete", "arguments": {}}], [row], root,
+                    evidence.wire_index(left_raw), evidence.wire_index(right_raw), [])["complete"]
+                self.assertTrue(compared["parsed_result_equal"])
+                self.assertEqual(compared["opaque_response_equal"], changed == original)
+                self.assertEqual(compared["passed"], changed == original)
+                if changed != original:
+                    self.assertIn("opaque retention responses differ", compared["error"])
+
+    def test_bundle_and_cold_session_do_not_discharge_pagination(self):
+        compared = {"sample": {"passed": True, "parsed_result_equal": True, "opaque_response_equal": True,
+                               "raw_response_frame_equal": False}}
+        for outstanding in ([], q.UNIMPLEMENTED_REQUIREMENTS, [evidence.PAGINATION_REQUIREMENT]):
+            with self.subTest(outstanding=outstanding):
+                result = evidence.derive_assessment(compared, True, True, True, outstanding)
+                self.assertEqual(result["status"], "OPEN")
+                self.assertEqual(result["passed_gates"], ["contracts", "evidence", "results", "source_package_boundary"])
+                self.assertNotIn("retention_and_pagination", result["passed_gates"])
+                facts = result["observed_checks"]
+                self.assertTrue(facts["bundle_retention_equal"])
+                self.assertTrue(facts["fresh_session_empty"])
+                self.assertFalse(facts["stable_pagination_observed"])
+                self.assertFalse(facts["complete_byte_readback_observed"])
+                self.assertEqual(result["unimplemented_required_observations"].count(evidence.PAGINATION_REQUIREMENT), 1)
+
+    def test_pass_labels_and_truthy_numbers_cannot_replace_comparison_facts(self):
+        baseline = {"passed": True, "parsed_result_equal": True, "opaque_response_equal": True}
+        mutations = [{"passed": True}, {**baseline, "opaque_response_equal": False}]
+        for field in baseline:
+            for value in (1, "true", None):
+                mutations.append({**baseline, field: value})
+        for value in mutations:
+            with self.subTest(comparison=value):
+                result = evidence.derive_assessment({"sample": value}, True, True, True, [])
+                self.assertEqual(result["passed_gates"], ["source_package_boundary"])
+                self.assertIn("sample", result["failed_checks"])
+        result = evidence.derive_assessment({"sample": baseline}, 1, 1, 1, [])
+        self.assertEqual(result["passed_gates"], ["source_package_boundary"])
+        self.assertFalse(result["observed_checks"]["schema_registration_equal"])
+        self.assertFalse(result["observed_checks"]["bundle_retention_equal"])
+        self.assertFalse(result["observed_checks"]["fresh_session_empty"])
+
     def test_manual_cleanup_is_not_owner_completion(self):
         original = {"owner": OWNER, "returncode": 0, "forced_cleanup": [], "reader_stopped": True, "elapsed_seconds": 0.2,
                     "owner_pidfd_exited": True, "process_group_gone": True}

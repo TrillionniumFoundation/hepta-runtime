@@ -711,7 +711,7 @@ fn ghidra_1214_profile() -> ReaStaticProfile {
 
 #[test]
 fn ghidra_release_revision_and_archive_are_one_admission_identity() {
-	for revision in [None, Some(2), Some(3), Some(4)] {
+	for revision in [None, Some(2), Some(3), Some(4), Some(5)] {
 		for version in ["12.2", "12.1.4", "12.1.3"] {
 			for archive in [
 				engine_profile::GHIDRA_RELEASE_SHA256,
@@ -725,7 +725,7 @@ fn ghidra_release_revision_and_archive_are_one_admission_identity() {
 				let admitted = (matches!(revision, None | Some(2))
 					&& version == "12.2"
 					&& archive == engine_profile::GHIDRA_RELEASE_SHA256)
-					|| (revision == Some(3)
+					|| (matches!(revision, Some(3 | 4))
 						&& version == "12.1.4"
 						&& archive == engine_profile::GHIDRA_1214_RELEASE_SHA256);
 				assert_eq!(
@@ -822,6 +822,106 @@ fn ghidra_1214_analysis_rejects_rehashed_engine_and_bridge_substitution() {
 					json!(engine_profile::GHIDRA_RELEASE_SHA256)
 			}
 			5 => changed["native_child_cleanup_confirmed"] = json!(false),
+			_ => unreachable!(),
+		}
+		rebind_observation(&mut bad, &input, &changed);
+		assert!(validate_report(&bad, &input, 0).is_err(), "case {case}");
+	}
+}
+
+#[test]
+fn ghidra_revision_four_report_binds_original_selector_and_body_containment() {
+	let mut input = worker();
+	input.profile = ghidra_1214_profile();
+	input
+		.profile
+		.ghidra_engine
+		.as_mut()
+		.unwrap()
+		.bridge_revision = Some(4);
+	input
+		.profile
+		.allowed_operations
+		.push(StaticOperation::Decompile);
+	input.request.operation = StaticOperation::Decompile;
+	input.request.function_address = Some("0x401001".into());
+	input.request.profile_sha256 = sha256(&serde_json::to_vec(&input.profile).unwrap());
+	validate_worker_request(&input).unwrap();
+	let mut observation = analysis_observation(&input);
+	observation["schema"] = json!("hepta.rea.ghidra-analysis.v2");
+	observation["engine_version"] = json!("12.1.4");
+	observation["bridge_revision"] = json!(4);
+	observation["analysis_profile"] = json!(ghidra_contract::ANALYSIS_PROFILE_1214_V4);
+	observation["language_id"] = json!("x86:LE:64:default");
+	observation["compiler_spec_id"] = json!("gcc");
+	observation["enabled_analyzers"] = json!(ghidra_contract::ANALYZERS_1214_V4);
+	observation["disabled_analyzers"] = json!(ghidra_contract::DISABLED_ANALYZERS_1214_V4);
+	observation["disabled_analyzer_count"] = json!(4);
+	observation["disabled_analyzers_sha256"] = json!(sha256(
+		&serde_json::to_vec(&ghidra_contract::DISABLED_ANALYZERS_1214_V4).unwrap()
+	));
+	observation["analysis_options_format"] = json!(ghidra_contract::OPTIONS_FORMAT_1214_V4);
+	observation["analysis_option_count"] = json!(146);
+	observation["analysis_options_sha256"] = json!(ghidra_contract::OPTIONS_SHA256_1214_V4);
+	observation["analysis_options_unchanged"] = json!(true);
+	observation["no_return_repair_applied"] = json!(false);
+	let cleanup = json!({
+		"decompilation_scope":"explicit_selected_function","auto_analysis_may_decompile":true,
+		"native_child_cleanup_scope":"private_bridge_jvm_all_descendants",
+		"native_helper_observation_scope":"live_descendants_at_phase_boundaries",
+		"native_child_cleanup_confirmed":true,"observed_native_children":1,
+		"observed_native_decompiler_children":1,"observed_explicit_decompiler_candidates":0,
+		"native_children":[{"pid":42,"parent_pid":41,"start_ticks":"123",
+			"start_instant":"2026-11-06T12:00:00Z","command":"/pinned/decompile",
+			"first_observed_phase":"after_analysis",
+			"role_attribution":"phase_and_executable_inference","role":"auto_analysis_decompiler_candidate",
+			"explicit_decompiler_candidate":false,"state_before_cleanup":"S",
+			"term_sent":true,"kill_sent":false,"final_state":"absent","exit_confirmed":true,"failure":null}]
+	});
+	for (field, value) in cleanup.as_object().unwrap() {
+		observation[field] = value.clone();
+	}
+	observation["function_resolution"] = json!("containing");
+	observation["function"] = json!({"entry_address":"0x401000","external":false,"thunk":false,
+		"name":"owned","name_complete":true,"name_sha256":sha256(b"owned"),
+		"signature":"int owned(void)","signature_complete":true,"signature_sha256":sha256(b"int owned(void)"),
+		"body_min_address":"0x401000","body_max_address":"0x40100f","body_address_count":"16",
+		"body_ranges":[{"min_address":"0x401000","max_address":"0x40100f"}],
+		"body_range_count":1,"body_ranges_complete":true});
+	let mut value = report(&input);
+	value["subject"]["size_bytes"] = json!(64);
+	value["ghidra_engine"] = serde_json::to_value(&input.profile.ghidra_engine).unwrap();
+	value["bridge_sha256"] = json!(sha256(
+		ghidra_contract::bridge(StaticOperation::Decompile, Some(4))
+			.unwrap()
+			.as_bytes()
+	));
+	value["backend"]["snapshot"] = json!("verified_installed_inode");
+	value["installation_snapshot"] = json!("verified_installed_paths");
+	value["network_syscalls_denied"] = json!(true);
+	value["scratch"] = json!({"removed_after_operation":true});
+	rebind_observation(&mut value, &input, &observation);
+	validate_report(&value, &input, 0).unwrap();
+	assert_eq!(value["summary"]["function_address_requested"], "0x401001");
+	assert_eq!(value["summary"]["function"]["entry_address"], "0x401000");
+	for case in 0..8 {
+		let mut bad = value.clone();
+		let mut changed = observation.clone();
+		match case {
+			0 => changed["function_address_requested"] = json!("0x401000"),
+			1 => changed["function_resolution"] = json!("entry"),
+			2 => changed["schema"] = json!("hepta.rea.ghidra-analysis.v1"),
+			3 => changed["bridge_revision"] = json!(3),
+			4 => changed["analysis_profile"] = json!(ghidra_contract::ANALYSIS_PROFILE_1214),
+			5 => changed["function"]["body_ranges_complete"] = json!(false),
+			6 => {
+				bad["bridge_sha256"] = json!(sha256(
+					ghidra_contract::bridge(StaticOperation::Decompile, Some(3))
+						.unwrap()
+						.as_bytes()
+				))
+			}
+			7 => changed["function"]["body_ranges"][0]["max_address"] = json!("0x401000"),
 			_ => unreachable!(),
 		}
 		rebind_observation(&mut bad, &input, &changed);

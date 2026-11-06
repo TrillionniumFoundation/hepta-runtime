@@ -34,6 +34,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use super::fs;
+use super::rea_evidence_readback;
 use super::rea_source_map;
 use super::request_ctx;
 use super::runtime;
@@ -252,6 +253,8 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"rea_inspect_source_map",
 	"rea_inspect_elf_notes",
 	"rea_get_evidence_bundle",
+	"rea_read_evidence_bundle",
+	"rea_close_evidence_snapshot",
 	"rea_inspect_apk_signature_evidence",
 	"rea_inspect_analysis_view",
 	"rea_export_evidence_bundle",
@@ -347,6 +350,7 @@ pub struct OctofsServer {
 	view_cache: Arc<fs::delta::ViewCache>,
 	rea_session: Arc<rea_evidence_session::EvidenceSession>,
 	rea_exports: Arc<rea_evidence_export::ExportRegistry>,
+	rea_readbacks: Arc<rea_evidence_readback::ReadbackRegistry>,
 }
 
 impl OctofsServer {
@@ -378,6 +382,7 @@ impl OctofsServer {
 			view_cache,
 			rea_exports,
 			rea_session: Arc::new(rea_evidence_session::EvidenceSession::default()),
+			rea_readbacks: Arc::new(rea_evidence_readback::ReadbackRegistry::default()),
 		}
 	}
 
@@ -2019,6 +2024,44 @@ impl OctofsServer {
 			return Ok(error.wire());
 		}
 		Ok(self.rea_session.get_bundle(params))
+	}
+
+	#[tool(
+		title = "Read Complete Evidence Snapshot",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read complete canonical Evidence bundle bytes in stable pages. Native extension: omit snapshot_id only at offset zero to freeze the current session bundle; every continuation supplies the returned snapshot_id. Hex bytes and per-chunk/full SHA-256 permit exact reconstruction, including results too large for one response. Page length is 1..262144 bytes. Snapshots are session-only, at most 4 and 128 MiB combined, each at most 64 MiB; no silent eviction. Release completed snapshots with rea_close_evidence_snapshot. Original REA get/export/import behavior is unchanged."
+	)]
+	async fn rea_read_evidence_bundle(
+		&self,
+		Parameters(params): Parameters<rea_evidence_readback::ReadParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResult, ErrorData> {
+		Ok(self
+			.rea_readbacks
+			.read(params, &self.rea_session, context.ct.clone())
+			.await)
+	}
+
+	#[tool(
+		title = "Release Evidence Snapshot",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Release one complete-byte snapshot owned by this MCP session. Reports released:false when it is already absent. Evidence records remain available for get/export; only the snapshot cursor is removed. Reads already admitted may finish with their owned immutable bytes. A new session never inherits old snapshot handles."
+	)]
+	async fn rea_close_evidence_snapshot(
+		&self,
+		Parameters(params): Parameters<rea_evidence_readback::CloseParams>,
+	) -> Result<CallToolResult, ErrorData> {
+		Ok(self.rea_readbacks.close(params))
 	}
 
 	#[tool(

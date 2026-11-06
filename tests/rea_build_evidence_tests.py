@@ -410,7 +410,10 @@ class BuildEvidenceTests(unittest.TestCase):
         outstanding = [name for name in evidence.q.UNIMPLEMENTED_REQUIREMENTS if name != evidence.q.BUILD_REQUIREMENT]
         assessment = evidence.derive_assessment({"case": {"passed": True}}, True, True, True, outstanding)
         self.assertEqual(assessment["status"], "OPEN")
-        self.assertEqual(len(assessment["unimplemented_required_observations"]), 4)
+        self.assertEqual(set(assessment["unimplemented_required_observations"]),
+                         set(outstanding) | {evidence.PAGINATION_REQUIREMENT})
+        self.assertNotIn(evidence.q.BUILD_REQUIREMENT, assessment["unimplemented_required_observations"])
+        self.assertNotIn("retention_and_pagination", assessment["passed_gates"])
         self.assertNotIn("limits_and_cancellation", assessment["passed_gates"])
 
     def test_matrix_producer_observation_refuses_an_externally_executing_script(self):
