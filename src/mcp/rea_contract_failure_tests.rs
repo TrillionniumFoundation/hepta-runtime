@@ -8,13 +8,20 @@
 use super::*;
 use sha2::{Digest, Sha256};
 
+fn digest_hex(bytes: impl AsRef<[u8]>) -> String {
+	Sha256::digest(bytes)
+		.iter()
+		.map(|byte| format!("{byte:02x}"))
+		.collect()
+}
+
 const ORIGINAL: &[u8] = include_bytes!(
 	"../../tests/fixtures/rea_evidence_file/import-error-text-original-rea-6_8_0-679ccf.json"
 );
 const ORIGINAL_SHA256: &str = "b74ccf73b6399eaa757514d8eed343a251a60ea11855f30deebb554d581e4d23";
 
 fn original() -> Value {
-	assert_eq!(format!("{:x}", Sha256::digest(ORIGINAL)), ORIGINAL_SHA256);
+	assert_eq!(digest_hex(ORIGINAL), ORIGINAL_SHA256);
 	serde_json::from_slice(ORIGINAL).unwrap()
 }
 
@@ -67,10 +74,7 @@ fn original_import_error_fixture_preserves_source_and_response_bytes() {
 		);
 		assert_eq!(wire.last(), Some(&b'\n'));
 		assert_eq!(
-			format!(
-				"{:x}",
-				Sha256::digest(unhex(case["input_hex"].as_str().unwrap()))
-			),
+			digest_hex(unhex(case["input_hex"].as_str().unwrap())),
 			case["input_identity"]["sha256"].as_str().unwrap()
 		);
 		assert_eq!(case["arguments"]["path"], case["input_identity"]["path"]);
@@ -192,7 +196,7 @@ const ORIGINAL_118: &[u8] = include_bytes!(
 
 fn original_118() -> Value {
 	assert_eq!(
-		format!("{:x}", Sha256::digest(ORIGINAL_118)),
+		digest_hex(ORIGINAL_118),
 		"d15eb3fcc59d06c47e06f8efcc92978a7ef29aa679f808dda005fa078c434317"
 	);
 	serde_json::from_slice(ORIGINAL_118).unwrap()
@@ -315,11 +319,11 @@ fn original_118_error_fixture_binds_all_42_requests_and_responses() {
 		assert_eq!(request["id"], response["id"]);
 		assert_eq!(response["result"]["isError"], true);
 		assert_eq!(
-			format!("{:x}", Sha256::digest(&request_bytes)),
+			digest_hex(&request_bytes),
 			case["request_wire_record"]["raw_sha256"].as_str().unwrap()
 		);
 		assert_eq!(
-			format!("{:x}", Sha256::digest(&response_bytes)),
+			digest_hex(&response_bytes),
 			case["source_wire_record"]["raw_sha256"].as_str().unwrap()
 		);
 		match case["kind"].as_str().unwrap() {

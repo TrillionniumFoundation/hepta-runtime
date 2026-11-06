@@ -671,7 +671,7 @@ fn read_admitted(
 			.checked_mul(2)
 			.and_then(|bytes| bytes.checked_add(64))
 			.and_then(|bytes| observed.materialized.checked_add(bytes));
-		if !estimated.is_some_and(|bytes| bytes <= limits.max_materialized_bytes) {
+		if estimated.is_none_or(|bytes| bytes > limits.max_materialized_bytes) {
 			return Err(gap(
 				"native-json-materialization-budget",
 				json!({
