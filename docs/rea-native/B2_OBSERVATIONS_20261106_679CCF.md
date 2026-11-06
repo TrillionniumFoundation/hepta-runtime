@@ -1,5 +1,8 @@
 # Candidate B2 observations — 2026-11-06, 679ccf
 
+> The [C2 observation record](C2_OBSERVATIONS_20261106_679CCF.md) records the later frozen C2 candidate.
+> This document retains the B2 source, binary, execution records and failures.
+
 ## Decision and immutable candidate
 
 Full REA replacement, complete cost benefit and production qualification remain **HOLD / NO_GO**.

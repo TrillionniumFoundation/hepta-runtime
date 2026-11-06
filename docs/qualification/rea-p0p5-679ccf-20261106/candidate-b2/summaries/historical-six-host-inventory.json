@@ -1,0 +1,1477 @@
+{
+  "schema": "hepta.rea.provider-inventory-current.v1",
+  "generated_at_utc": "2026-11-05T23:44:40Z",
+  "candidate_source_reference": {
+    "root": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105",
+    "commit": "c25e4cef0610816bfd1263b69d3dd63e4114aa49",
+    "tree": "c6db025f5902570bd63520751cf84c57505eb6f4",
+    "scope": "prospective frozen candidate reference only; availability probes did not execute this candidate"
+  },
+  "scope": {
+    "read_only": true,
+    "full_disk_scan": false,
+    "licensed_applications_launched": false,
+    "software_installed": false,
+    "production_services_restarted": false,
+    "repository_written": false,
+    "path_commands": [
+      "idat",
+      "ida64",
+      "hopper",
+      "Hopper",
+      "frida",
+      "frida-ps",
+      "jadx",
+      "adb",
+      "gdb",
+      "lldb"
+    ],
+    "shallow_roots": [
+      "/opt",
+      "/Applications",
+      "operator Downloads",
+      "operator Applications"
+    ],
+    "shallow_max_depth": 2,
+    "additional_explicit_paths": "previously observed desktop Ghidra/JADX/JDK/Chrome installation paths only",
+    "metadata_hash_limit_bytes_per_file": 67108864,
+    "metadata_hash_limit_bytes_per_host": 134217728,
+    "negative_claim": "Not found means only absent from this PATH/name-filtered shallow check. It does not establish global absence, missing licenses, unusability, or lack of credentials.",
+    "e2e_qualified": false,
+    "debugger_attach_permissions_qualified": false,
+    "engine_errors_or_recovery_qualified": false
+  },
+  "collector": {
+    "sha256": "31b82fc343f60d1e4709458e82f499856da35a0419a8a86d3ce8ffe246ce77cb",
+    "language": "Python 3 standard library",
+    "template": "from pathlib import Path\nimport datetime, hashlib, json, os, plistlib, pwd, re, socket, stat, subprocess, sys, zipfile\nHOST = __HOST_JSON__\nIDENTITY_ONLY = __IDENTITY_ONLY__\nMAX_HASH_FILE = 64 * 1024 * 1024\nremaining_hash_bytes = 128 * 1024 * 1024\n\ndef sha(data): return hashlib.sha256(data).hexdigest()\ndef bounded_file(path, limit=65536):\n    with open(path, 'rb') as source:\n        data = source.read(limit + 1)\n    if len(data) > limit: raise ValueError('file exceeds fixed read budget')\n    return data\ndef version(value):\n    return dict(device=value.st_dev, inode=value.st_ino, size=value.st_size,\n                mode=oct(stat.S_IMODE(value.st_mode)), uid=value.st_uid, gid=value.st_gid,\n                mtime_ns=str(value.st_mtime_ns), ctime_ns=str(value.st_ctime_ns))\ndef metadata(path):\n    global remaining_hash_bytes\n    path=Path(path); row={'path':str(path)}\n    try:\n        original=path.lstat(); real=path.resolve(strict=True)\n        current=real.stat()\n        row.update(invocation_kind='symlink' if stat.S_ISLNK(original.st_mode) else 'direct',\n                   realpath=str(real), kind='file' if stat.S_ISREG(current.st_mode) else 'directory' if stat.S_ISDIR(current.st_mode) else 'other',\n                   version=version(current))\n        if stat.S_ISREG(current.st_mode):\n            if current.st_size <= MAX_HASH_FILE and current.st_size <= remaining_hash_bytes:\n                fd=os.open(real,os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW)\n                try:\n                    before=os.fstat(fd); hasher=hashlib.sha256(); total=0\n                    while True:\n                        block=os.read(fd,min(1024*1024,MAX_HASH_FILE+1-total))\n                        if not block:break\n                        total+=len(block); assert total<=MAX_HASH_FILE\n                        hasher.update(block)\n                    after=os.fstat(fd)\n                    stable=version(before)==version(after) and total==before.st_size\n                    remaining_hash_bytes-=total\n                    row['hash_stable']=stable\n                    if stable:row['sha256']=hasher.hexdigest()\n                finally:os.close(fd)\n            else:row['sha256_not_computed']='64 MiB per file / 128 MiB total bound'\n        if real.suffix.lower()=='.app' and real.is_dir():\n            plist=real/'Contents/Info.plist'\n            if plist.is_file():\n                info=plistlib.loads(bounded_file(plist))\n                row['bundle_version']={key:info[key] for key in ('CFBundleIdentifier','CFBundleShortVersionString','CFBundleVersion') if key in info}\n        if real.is_dir() and 'ghidra' in real.name.lower():\n            properties=real/'Ghidra/application.properties'\n            if properties.is_file():\n                data=bounded_file(properties)\n                row['application_properties_sha256']=sha(data)\n                row['application_properties']=[line for line in data.decode('utf-8').splitlines()\n                    if line.startswith(('application.name=','application.version=','application.release.name=','application.build.date='))]\n    except (OSError,ValueError,AssertionError) as error:\n        row['error']=dict(type=type(error).__name__,detail=str(error))\n    return row\n\nsystem=os.uname()\nidentity=dict(system=system.sysname,release=system.release,machine=system.machine,\n              effective_uid=os.geteuid(),operator_home=pwd.getpwuid(os.getuid()).pw_dir)\nif sys.platform=='darwin':\n    try:\n        run=subprocess.run(['/usr/sbin/ioreg','-rd1','-c','IOPlatformExpertDevice','-a'],capture_output=True,check=True,timeout=10)\n        assert len(run.stdout)<=65536\n        values=plistlib.loads(run.stdout)\n        uuids=[value['IOPlatformUUID'] for value in values if 'IOPlatformUUID' in value]\n        assert len(uuids)==1\n        identity['platform_uuid_sha256']=sha(uuids[0].strip().lower().encode('ascii'))\n        boot=subprocess.run(['/usr/sbin/sysctl','-n','kern.bootsessionuuid'],capture_output=True,text=True,check=True,timeout=5)\n        identity['boot_session_uuid']=boot.stdout.strip()\n    except Exception as error:identity['identity_error']=dict(type=type(error).__name__,detail=str(error))\nelse:\n    for name,path in (('machine_id_sha256','/etc/machine-id'),('boot_id','/proc/sys/kernel/random/boot_id')):\n        try:\n            data=bounded_file(path,256).strip()\n            identity[name]=sha(data.lower()) if name.endswith('sha256') else data.decode('ascii')\n        except Exception as error:identity[name+'_error']=dict(type=type(error).__name__,detail=str(error))\nresult=dict(schema='hepta.rea.provider-host-inventory.v1',configured_host=HOST,\n            observed_at_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),\n            identity=identity,read_only=True,licensed_applications_launched=False,\n            software_installed=False,production_services_restarted=False,\n            scope='identity only for alias deduplication' if IDENTITY_ONLY else 'bounded PATH and named shallow installation checks; absence is not a global installation or license claim')\nif not IDENTITY_ONLY:\n    names=('idat','ida64','hopper','Hopper','frida','frida-ps','jadx','adb','gdb','lldb')\n    tools={}\n    for name in names:\n        try:\n            run=subprocess.run(['/bin/sh','-c','command -v '+name],capture_output=True,text=True,timeout=5)\n            found=run.stdout.strip()\n            tools[name]=dict(found=run.returncode==0 and bool(found),lookup='command -v')\n            if tools[name]['found']:\n                tools[name]['file']=metadata(found)\n        except Exception as error:tools[name]=dict(error=type(error).__name__)\n    result['path_tools']=tools\n    home=Path(identity['operator_home'])\n    roots=[Path('/opt'),Path('/Applications'),home/'Downloads',home/'Applications']\n    match=re.compile(r'(^|[^a-z])(ida(?:64|t|t64|pro)?|hopper|ghidra|jadx|frida|android(?:[-_ ]?sdk)?|platform[-_ ]?tools|chrome|chromium|electron|gdb|lldb|google)([^a-z]|$)',re.I)\n    scans=[]\n    for root in roots:\n        row={'root':str(root),'max_depth':2,'max_entries_per_directory':2048,'matched':[],'truncated':False}\n        queue=[(root,0)]\n        while queue:\n            directory,depth=queue.pop(0)\n            try:\n                with os.scandir(directory) as entries:\n                    for count,entry in enumerate(entries):\n                        if count>=2048:row['truncated']=True;break\n                        if not match.search(entry.name):continue\n                        row['matched'].append(metadata(entry.path))\n                        if depth<1 and entry.is_dir(follow_symlinks=False) and not entry.name.lower().endswith('.app'):\n                            queue.append((Path(entry.path),depth+1))\n                        if len(row['matched'])>=96:\n                            row['truncated']=True;queue=[];break\n            except FileNotFoundError:\n                if directory==root:row['root_exists']=False\n            except OSError as error:row.setdefault('errors',[]).append(dict(path=str(directory),error=type(error).__name__))\n        scans.append(row)\n    result['shallow_installation_checks']=scans\n    if HOST=='desktop':\n        engine_root=Path('/home/qian-qi/work/hepta-rea-engines-20261103-r1')\n        paths=[engine_root/'ghidra/ghidra_12.2_PUBLIC',engine_root/'jadx/bin/jadx',\n               engine_root/'jadx/lib/jadx-1.5.6-all.jar',engine_root/'jdk25/jdk-25.0.5+8/release',\n               Path('/usr/lib/jvm/java-21-openjdk-amd64/release'),Path('/opt/google/chrome/chrome')]\n        result['previously_observed_explicit_engine_paths']=[metadata(path) for path in paths]\n        for path in (paths[3],paths[4]):\n            if path.is_file():\n                data=bounded_file(path)\n                result.setdefault('jdk_release_metadata',[]).append(dict(path=str(path),sha256=sha(data),\n                    properties=[line for line in data.decode().splitlines() if line.startswith(('JAVA_VERSION=','JAVA_RUNTIME_VERSION=','IMPLEMENTOR=','OS_ARCH='))]))\n        if paths[2].is_file():\n            try:\n                with zipfile.ZipFile(paths[2]) as archive:\n                    with archive.open('META-INF/MANIFEST.MF') as manifest:\n                        data=manifest.read(65537);assert len(data)<=65536\n                result['jadx_manifest_metadata']=dict(path=str(paths[2]),manifest_sha256=sha(data),\n                    version_lines=[line for line in data.decode().splitlines() if line.startswith(('Implementation-Version:','Specification-Version:','Main-Class:'))])\n            except Exception as error:result['jadx_manifest_metadata']=dict(error=type(error).__name__)\n    daemons=[]\n    if sys.platform=='darwin':\n        try:\n            found=subprocess.run(['/usr/bin/pgrep','-x','adb'],capture_output=True,text=True,timeout=5)\n            for text in found.stdout.splitlines()[:32]:\n                pid=int(text)\n                command=subprocess.run(['/bin/ps','-p',str(pid),'-o','command='],capture_output=True,text=True,timeout=5).stdout.strip()\n                argv=command.split()\n                if 'server' not in argv or not ('fork-server' in argv or 'nodaemon' in argv):continue\n                started=subprocess.run(['/bin/ps','-p',str(pid),'-o','lstart='],capture_output=True,text=True,timeout=5).stdout.strip()\n                daemons.append(dict(pid=pid,server_role_observed=True,start_time=started,\n                                    executable=argv[0] if argv else None))\n        except Exception as error:result['adb_daemon_inspection_error']=dict(type=type(error).__name__,detail=str(error))\n    else:\n        try:\n            with os.scandir('/proc') as entries:\n                for count,entry in enumerate(entries):\n                    if count>=65536:raise ValueError('proc entry bound exceeded')\n                    if not entry.name.isdigit():continue\n                    p=Path(entry.path)\n                    try:\n                        if bounded_file(p/'comm',256).strip()!=b'adb':continue\n                        argv=[x.decode('utf-8','replace') for x in bounded_file(p/'cmdline',32768).split(b'\\0') if x]\n                        if 'server' not in argv or not ('fork-server' in argv or 'nodaemon' in argv):continue\n                        fields=bounded_file(p/'stat',16384).decode().rsplit(')',1)[1].split()\n                        if fields[0] in ('Z','X'):continue\n                        daemons.append(dict(pid=int(entry.name),server_role_observed=True,start_ticks=int(fields[19]),\n                                            owner_uid=p.stat().st_uid,executable=os.readlink(p/'exe')))\n                    except (OSError,ValueError):continue\n        except Exception as error:result['adb_daemon_inspection_error']=dict(type=type(error).__name__,detail=str(error))\n    adb=dict(existing_daemons=daemons,client_invoked=False,daemon_started_or_restarted=False,\n             transport_selected=False,device_commands_sent=False,serials_recorded_as='sha256 only',\n             method='existing loopback ADB smart-socket host:version and host:devices-l only')\n    def adb_query(service):\n        request=service.encode('ascii')\n        def take(connection,n):\n            data=b''\n            while len(data)<n:\n                block=connection.recv(n-len(data))\n                if not block:raise EOFError('existing ADB server closed early')\n                data+=block\n            return data\n        with socket.create_connection(('127.0.0.1',5037),timeout=1.5) as connection:\n            connection.settimeout(1.5)\n            connection.sendall(('%04x'%len(request)).encode('ascii')+request)\n            status=take(connection,4)\n            if status not in (b'OKAY',b'FAIL'):raise ValueError('unexpected ADB status')\n            size=int(take(connection,4),16)\n            if size>65536:raise ValueError('ADB payload bound exceeded')\n            data=take(connection,size)\n            if status==b'FAIL':raise ValueError('existing ADB server refused read-only query')\n            return data\n    if not daemons:\n        adb.update(state='not_probed',reason='No existing adb server process was observed; no client was invoked.')\n    else:\n        try:\n            protocol=adb_query('host:version')\n            payload=adb_query('host:devices-l')\n            devices=[]\n            for line in payload.decode('utf-8').splitlines():\n                parts=line.split()\n                if len(parts)<2:raise ValueError('invalid existing-server device row')\n                item=dict(serial_sha256=sha(parts[0].encode()),state=parts[1])\n                for field in parts[2:]:\n                    key,sep,value=field.partition(':')\n                    if sep and key in ('product','model','device','transport_id','usb'):item[key]=value\n                devices.append(item)\n            adb.update(state='observed_existing_server',endpoint='127.0.0.1:5037',\n                       protocol_version_hex=protocol.decode('ascii'),devices=devices,device_count=len(devices),\n                       response_sha256=sha(payload),response_bytes=len(payload),\n                       evidence_scope='server-reported endpoints only; no device authentication or dynamic runtime qualification')\n        except Exception as error:\n            adb.update(state='not_probed',reason='Existing daemon observed but read-only default-port protocol observation did not complete',\n                       error=dict(type=type(error).__name__,detail=str(error)))\n    result['adb']=adb\nprint(json.dumps(result,separators=(',',':')),flush=True)\n",
+    "parameters": "__HOST_JSON__ = configured host; __IDENTITY_ONLY__ = True only for main alias",
+    "output_selection": "Only recognized installation-name candidates are retained; generic Android experiment-name hits are omitted with a count. Other user contents are not part of this report."
+  },
+  "physical_host_deduplication": {
+    "observed_unique_identity_count": 6,
+    "groups": [
+      {
+        "representative_host": "desktop",
+        "aliases": [
+          "desktop"
+        ],
+        "identity_kind": "machine-id SHA256",
+        "identity_sha256": "4aa975e602e314286bf831630a241bcb35e6a64a85a1918f561f2576a1c7a099",
+        "boot_identity": "14f92beb-43c6-4786-839e-b57307ae8048"
+      },
+      {
+        "representative_host": "x230",
+        "aliases": [
+          "x230"
+        ],
+        "identity_kind": "machine-id SHA256",
+        "identity_sha256": "46f76f2d2fb01cdaae9583f0b75184082240d03a68caf70b58461ca2f6f04388",
+        "boot_identity": "b19bd1b9-4dbe-4335-96cf-ed98d393efea"
+      },
+      {
+        "representative_host": "rog",
+        "aliases": [
+          "rog"
+        ],
+        "identity_kind": "machine-id SHA256",
+        "identity_sha256": "4b27935315b59cc166310d64679b81db4c33980e7e91d738ce2ef34ed5e3be69",
+        "boot_identity": "fcdd2477-a952-4ef2-9bdc-2237255080f1"
+      },
+      {
+        "representative_host": "ai395",
+        "aliases": [
+          "ai395"
+        ],
+        "identity_kind": "machine-id SHA256",
+        "identity_sha256": "5ab6247f968a79d0b30c7a8e206a6de4eecbc25157bac4739e6e40dc5f557cd7",
+        "boot_identity": "b1620269-aaef-43e7-bf47-bc6eb1c1a447"
+      },
+      {
+        "representative_host": "pocket4",
+        "aliases": [
+          "pocket4"
+        ],
+        "identity_kind": "machine-id SHA256",
+        "identity_sha256": "0d04655381fb4e20c8e35db11a0434de07f989c782f4d059443db54315a87694",
+        "boot_identity": "981ff371-cd72-4f81-9be3-a862111afdb1"
+      },
+      {
+        "representative_host": "mac",
+        "aliases": [
+          "mac",
+          "main"
+        ],
+        "identity_kind": "IOPlatformUUID (normalized lowercase) SHA256",
+        "identity_sha256": "623fbe3199ea9b831e3a0e3f69a51990babe5674c0890298e887ca950ec8bfd0",
+        "boot_identity": "092C3E38-E23C-4983-8ACD-7F850319D714"
+      }
+    ],
+    "interpretation": "configured hosts grouped by current host identity and boot identity; mac/main are one observed host"
+  },
+  "adb_read_only_method": {
+    "requests": [
+      "host:version",
+      "host:devices-l"
+    ],
+    "endpoint": "127.0.0.1:5037",
+    "guard": "only after an existing adb server-role process was observed",
+    "client_invoked": false,
+    "auto_start_or_restart_possible_through_this_collector": false,
+    "transport_selection": false,
+    "device_commands": false,
+    "serial_disclosure": "SHA256 only",
+    "protocol_source": "https://android.googlesource.com/platform/packages/modules/adb/+/HEAD/docs/dev/services.md",
+    "scope": "server-reported endpoints; no authentication or device behavior E2E qualification"
+  },
+  "summary": {
+    "host_inventory_completed": 6,
+    "alias_identity_completed": 1,
+    "all_durable_tasks_succeeded": true,
+    "actual_installed_engines_to_revalidate": {
+      "Ghidra": "desktop explicit installation metadata reports 12.2",
+      "JADX": "desktop explicit jadx launcher and jadx-1.5.6-all.jar present; no internal version claim from filename alone"
+    },
+    "existing_adb_server_hosts": [
+      "desktop",
+      "x230",
+      "pocket4",
+      "mac"
+    ],
+    "no_observed_adb_daemon_not_probed_hosts": [
+      "rog",
+      "ai395"
+    ],
+    "server_reported_endpoints": [
+      {
+        "host": "pocket4",
+        "serial_sha256": "41ad305f8562a6c47710afe71fabf30cb8692a71d3de1a47ca9949b669bcc6c1",
+        "state": "device",
+        "usb": "3-2",
+        "product": "leap_cn",
+        "model": "XT2551_3",
+        "device": "leap",
+        "transport_id": "23"
+      },
+      {
+        "host": "mac",
+        "serial_sha256": "5e6f2505624f8523ae5b41212f78d7d54e122baab2f14e0e12d474e4f523632e",
+        "state": "device",
+        "product": "sdk_gphone64_arm64",
+        "model": "sdk_gphone64_arm64",
+        "device": "emu64a",
+        "transport_id": "18"
+      }
+    ],
+    "distinct_serial_hash_count": 2,
+    "debugger_path_found_on": [
+      "desktop",
+      "x230",
+      "rog",
+      "ai395",
+      "pocket4",
+      "mac"
+    ]
+  },
+  "observations": [
+    {
+      "configured_host": "desktop",
+      "role": "bounded provider availability observation",
+      "durable_task": {
+        "job_id": "1a1ae110dbe-fc05-5d17",
+        "launch_state": "launched",
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_complete": true
+      },
+      "observation": {
+        "schema": "hepta.rea.provider-host-inventory.v1",
+        "configured_host": "desktop",
+        "observed_at_utc": "2026-11-05T23:35:22.399168+00:00",
+        "identity": {
+          "system": "Linux",
+          "release": "7.0.0-38-generic",
+          "machine": "x86_64",
+          "effective_uid": 1000,
+          "operator_home": "/home/qian-qi",
+          "machine_id_sha256": "4aa975e602e314286bf831630a241bcb35e6a64a85a1918f561f2576a1c7a099",
+          "boot_id": "14f92beb-43c6-4786-839e-b57307ae8048"
+        },
+        "read_only": true,
+        "licensed_applications_launched": false,
+        "software_installed": false,
+        "production_services_restarted": false,
+        "scope": "bounded PATH and named shallow installation checks; absence is not a global installation or license claim",
+        "path_tools": {
+          "idat": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "ida64": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "hopper": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "Hopper": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "frida": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "frida-ps": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "jadx": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "adb": {
+            "found": true,
+            "lookup": "command -v",
+            "file": {
+              "path": "/opt/android-sdk/platform-tools/adb",
+              "invocation_kind": "direct",
+              "realpath": "/opt/android-sdk/platform-tools/adb",
+              "kind": "file",
+              "version": {
+                "device": 2050,
+                "inode": 11541907,
+                "size": 11150112,
+                "mode": "0o755",
+                "uid": 0,
+                "gid": 0,
+                "mtime_ns": "1778750281328888946",
+                "ctime_ns": "1788382437116254632"
+              },
+              "hash_stable": true,
+              "sha256": "00108217733707a40debfc92c86d4232fd6e68870be5966515d74c071193ea90"
+            }
+          },
+          "gdb": {
+            "found": true,
+            "lookup": "command -v",
+            "file": {
+              "path": "/usr/bin/gdb",
+              "invocation_kind": "direct",
+              "realpath": "/usr/bin/gdb",
+              "kind": "file",
+              "version": {
+                "device": 2050,
+                "inode": 36438797,
+                "size": 8920528,
+                "mode": "0o755",
+                "uid": 0,
+                "gid": 0,
+                "mtime_ns": "1770256708000000000",
+                "ctime_ns": "1777689905850805187"
+              },
+              "hash_stable": true,
+              "sha256": "3832cc070ae1716e322105d3b39fb398695e5f031c9d39224cf227a8c2b889f6"
+            }
+          },
+          "lldb": {
+            "found": false,
+            "lookup": "command -v"
+          }
+        },
+        "shallow_installation_checks": [
+          {
+            "root": "/opt",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [
+              {
+                "path": "/opt/google",
+                "invocation_kind": "direct",
+                "realpath": "/opt/google",
+                "kind": "directory",
+                "version": {
+                  "device": 2050,
+                  "inode": 53872345,
+                  "size": 4096,
+                  "mode": "0o755",
+                  "uid": 0,
+                  "gid": 0,
+                  "mtime_ns": "1775989099194842509",
+                  "ctime_ns": "1775989099194842509"
+                }
+              },
+              {
+                "path": "/opt/android-sdk",
+                "invocation_kind": "direct",
+                "realpath": "/opt/android-sdk",
+                "kind": "directory",
+                "version": {
+                  "device": 2050,
+                  "inode": 11404248,
+                  "size": 4096,
+                  "mode": "0o755",
+                  "uid": 0,
+                  "gid": 0,
+                  "mtime_ns": "1780546957401968324",
+                  "ctime_ns": "1788382437116254632"
+                }
+              },
+              {
+                "path": "/opt/google/chrome",
+                "invocation_kind": "direct",
+                "realpath": "/opt/google/chrome",
+                "kind": "directory",
+                "version": {
+                  "device": 2050,
+                  "inode": 53872346,
+                  "size": 4096,
+                  "mode": "0o755",
+                  "uid": 0,
+                  "gid": 0,
+                  "mtime_ns": "1793551816681553252",
+                  "ctime_ns": "1793551816681553252"
+                }
+              },
+              {
+                "path": "/opt/android-sdk/platform-tools",
+                "invocation_kind": "direct",
+                "realpath": "/opt/android-sdk/platform-tools",
+                "kind": "directory",
+                "version": {
+                  "device": 2050,
+                  "inode": 11541905,
+                  "size": 4096,
+                  "mode": "0o755",
+                  "uid": 0,
+                  "gid": 0,
+                  "mtime_ns": "1778750281416876863",
+                  "ctime_ns": "1788382437116254632"
+                }
+              }
+            ],
+            "truncated": false
+          },
+          {
+            "root": "/Applications",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false,
+            "root_exists": false
+          },
+          {
+            "root": "/home/qian-qi/Downloads",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false
+          },
+          {
+            "root": "/home/qian-qi/Applications",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false,
+            "root_exists": false
+          }
+        ],
+        "previously_observed_explicit_engine_paths": [
+          {
+            "path": "/home/qian-qi/work/hepta-rea-engines-20261103-r1/ghidra/ghidra_12.2_PUBLIC",
+            "invocation_kind": "direct",
+            "realpath": "/home/qian-qi/work/hepta-rea-engines-20261103-r1/ghidra/ghidra_12.2_PUBLIC",
+            "kind": "directory",
+            "version": {
+              "device": 2050,
+              "inode": 55864947,
+              "size": 4096,
+              "mode": "0o555",
+              "uid": 1000,
+              "gid": 1000,
+              "mtime_ns": "1793707127148229528",
+              "ctime_ns": "1793707930712837924"
+            },
+            "application_properties_sha256": "3d8aff241a806927a484bd932d6dfdaa753723826b6fdab9a994e2552c76d7f3",
+            "application_properties": [
+              "application.build.date=2026-Oct-16 1220 UTC",
+              "application.name=Ghidra",
+              "application.release.name=PUBLIC",
+              "application.version=12.2"
+            ]
+          },
+          {
+            "path": "/home/qian-qi/work/hepta-rea-engines-20261103-r1/jadx/bin/jadx",
+            "invocation_kind": "direct",
+            "realpath": "/home/qian-qi/work/hepta-rea-engines-20261103-r1/jadx/bin/jadx",
+            "kind": "file",
+            "version": {
+              "device": 2050,
+              "inode": 53250761,
+              "size": 5849,
+              "mode": "0o755",
+              "uid": 1000,
+              "gid": 1000,
+              "mtime_ns": "1793701628413770395",
+              "ctime_ns": "1793701628825826182"
+            },
+            "hash_stable": true,
+            "sha256": "6b732b576bf8dc554278beb94ce006f9549ac898eff975d83548f87244961f13"
+          },
+          {
+            "path": "/home/qian-qi/work/hepta-rea-engines-20261103-r1/jadx/lib/jadx-1.5.6-all.jar",
+            "invocation_kind": "direct",
+            "realpath": "/home/qian-qi/work/hepta-rea-engines-20261103-r1/jadx/lib/jadx-1.5.6-all.jar",
+            "kind": "file",
+            "version": {
+              "device": 2050,
+              "inode": 53250767,
+              "size": 78227367,
+              "mode": "0o600",
+              "uid": 1000,
+              "gid": 1000,
+              "mtime_ns": "1793701628825826182",
+              "ctime_ns": "1793701628825826182"
+            },
+            "sha256_not_computed": "64 MiB per file / 128 MiB total bound"
+          },
+          {
+            "path": "/home/qian-qi/work/hepta-rea-engines-20261103-r1/jdk25/jdk-25.0.5+8/release",
+            "invocation_kind": "direct",
+            "realpath": "/home/qian-qi/work/hepta-rea-engines-20261103-r1/jdk25/jdk-25.0.5+8/release",
+            "kind": "file",
+            "version": {
+              "device": 2050,
+              "inode": 59516660,
+              "size": 1604,
+              "mode": "0o644",
+              "uid": 1000,
+              "gid": 1000,
+              "mtime_ns": "1792598437000000000",
+              "ctime_ns": "1793707029351423771"
+            },
+            "hash_stable": true,
+            "sha256": "8545053a54a73969a65db2c8157f40f89bcdcf7526ae90a7ce9b3061c01bc34a"
+          },
+          {
+            "path": "/usr/lib/jvm/java-21-openjdk-amd64/release",
+            "invocation_kind": "direct",
+            "realpath": "/usr/lib/jvm/java-21-openjdk-amd64/release",
+            "kind": "file",
+            "version": {
+              "device": 2050,
+              "inode": 37232953,
+              "size": 1212,
+              "mode": "0o644",
+              "uid": 0,
+              "gid": 0,
+              "mtime_ns": "1788502442000000000",
+              "ctime_ns": "1790115566684950562"
+            },
+            "hash_stable": true,
+            "sha256": "b9e13ce6cefa91fdda9f7fe0ac88ddd34dc8b3c37c791667a579d16b1dae702d"
+          },
+          {
+            "path": "/opt/google/chrome/chrome",
+            "invocation_kind": "direct",
+            "realpath": "/opt/google/chrome/chrome",
+            "kind": "file",
+            "version": {
+              "device": 2050,
+              "inode": 53915038,
+              "size": 302792008,
+              "mode": "0o755",
+              "uid": 0,
+              "gid": 0,
+              "mtime_ns": "1793218802000000000",
+              "ctime_ns": "1793551816628554742"
+            },
+            "sha256_not_computed": "64 MiB per file / 128 MiB total bound"
+          }
+        ],
+        "jdk_release_metadata": [
+          {
+            "path": "/home/qian-qi/work/hepta-rea-engines-20261103-r1/jdk25/jdk-25.0.5+8/release",
+            "sha256": "8545053a54a73969a65db2c8157f40f89bcdcf7526ae90a7ce9b3061c01bc34a",
+            "properties": [
+              "IMPLEMENTOR=\"Eclipse Adoptium\"",
+              "JAVA_RUNTIME_VERSION=\"25.0.5+8-LTS\"",
+              "JAVA_VERSION=\"25.0.5\"",
+              "OS_ARCH=\"x86_64\""
+            ]
+          },
+          {
+            "path": "/usr/lib/jvm/java-21-openjdk-amd64/release",
+            "sha256": "b9e13ce6cefa91fdda9f7fe0ac88ddd34dc8b3c37c791667a579d16b1dae702d",
+            "properties": [
+              "IMPLEMENTOR=\"Ubuntu\"",
+              "JAVA_RUNTIME_VERSION=\"21.0.12.1+1-1-24.04.4-Ubuntu\"",
+              "JAVA_VERSION=\"21.0.12.1\"",
+              "OS_ARCH=\"x86_64\""
+            ]
+          }
+        ],
+        "jadx_manifest_metadata": {
+          "path": "/home/qian-qi/work/hepta-rea-engines-20261103-r1/jadx/lib/jadx-1.5.6-all.jar",
+          "manifest_sha256": "0d70d512f2e5fb758b9628c304eac5b2cb0ed184ef85ee38a5e40a6e7a9749a5",
+          "version_lines": [
+            "Main-Class: jadx.gui.JadxGUI"
+          ]
+        },
+        "adb": {
+          "existing_daemons": [
+            {
+              "pid": 1677525,
+              "server_role_observed": true,
+              "start_ticks": 8420724,
+              "owner_uid": 1000,
+              "executable": "/opt/android-sdk/platform-tools/adb"
+            }
+          ],
+          "client_invoked": false,
+          "daemon_started_or_restarted": false,
+          "transport_selected": false,
+          "device_commands_sent": false,
+          "serials_recorded_as": "sha256 only",
+          "method": "existing loopback ADB smart-socket host:version and host:devices-l only",
+          "state": "observed_existing_server",
+          "endpoint": "127.0.0.1:5037",
+          "protocol_version_hex": "0029",
+          "devices": [],
+          "device_count": 0,
+          "response_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "response_bytes": 0,
+          "evidence_scope": "server-reported endpoints only; no device authentication or dynamic runtime qualification"
+        }
+      }
+    },
+    {
+      "configured_host": "x230",
+      "role": "bounded provider availability observation",
+      "durable_task": {
+        "job_id": "1a1ae115500-fc05-5d1a",
+        "launch_state": "launched",
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_complete": true
+      },
+      "observation": {
+        "schema": "hepta.rea.provider-host-inventory.v1",
+        "configured_host": "x230",
+        "observed_at_utc": "2026-11-05T23:35:37.890921+00:00",
+        "identity": {
+          "system": "Linux",
+          "release": "6.8.0-142-generic",
+          "machine": "x86_64",
+          "effective_uid": 1000,
+          "operator_home": "/home/qian",
+          "machine_id_sha256": "46f76f2d2fb01cdaae9583f0b75184082240d03a68caf70b58461ca2f6f04388",
+          "boot_id": "b19bd1b9-4dbe-4335-96cf-ed98d393efea"
+        },
+        "read_only": true,
+        "licensed_applications_launched": false,
+        "software_installed": false,
+        "production_services_restarted": false,
+        "scope": "bounded PATH and named shallow installation checks; absence is not a global installation or license claim",
+        "path_tools": {
+          "idat": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "ida64": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "hopper": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "Hopper": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "frida": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "frida-ps": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "jadx": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "adb": {
+            "found": true,
+            "lookup": "command -v",
+            "file": {
+              "path": "/usr/bin/adb",
+              "invocation_kind": "symlink",
+              "realpath": "/usr/lib/android-sdk/platform-tools/adb",
+              "kind": "file",
+              "version": {
+                "device": 2053,
+                "inode": 786682,
+                "size": 685888,
+                "mode": "0o755",
+                "uid": 0,
+                "gid": 0,
+                "mtime_ns": "1711906709000000000",
+                "ctime_ns": "1778671495307548168"
+              },
+              "hash_stable": true,
+              "sha256": "7890a8f930531ce680a140850334f927bf2aabfa8b73ac28a7242f658672413f"
+            }
+          },
+          "gdb": {
+            "found": true,
+            "lookup": "command -v",
+            "file": {
+              "path": "/usr/bin/gdb",
+              "invocation_kind": "direct",
+              "realpath": "/usr/bin/gdb",
+              "kind": "file",
+              "version": {
+                "device": 2053,
+                "inode": 657799,
+                "size": 8920528,
+                "mode": "0o755",
+                "uid": 0,
+                "gid": 0,
+                "mtime_ns": "1770256708000000000",
+                "ctime_ns": "1775782766176548815"
+              },
+              "hash_stable": true,
+              "sha256": "3832cc070ae1716e322105d3b39fb398695e5f031c9d39224cf227a8c2b889f6"
+            }
+          },
+          "lldb": {
+            "found": false,
+            "lookup": "command -v"
+          }
+        },
+        "shallow_installation_checks": [
+          {
+            "root": "/opt",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [
+              {
+                "path": "/opt/google",
+                "invocation_kind": "direct",
+                "realpath": "/opt/google",
+                "kind": "directory",
+                "version": {
+                  "device": 2053,
+                  "inode": 8388610,
+                  "size": 4096,
+                  "mode": "0o755",
+                  "uid": 0,
+                  "gid": 0,
+                  "mtime_ns": "1773549101774701384",
+                  "ctime_ns": "1773549101774701384"
+                }
+              },
+              {
+                "path": "/opt/google/chrome",
+                "invocation_kind": "direct",
+                "realpath": "/opt/google/chrome",
+                "kind": "directory",
+                "version": {
+                  "device": 2053,
+                  "inode": 8388611,
+                  "size": 4096,
+                  "mode": "0o755",
+                  "uid": 0,
+                  "gid": 0,
+                  "mtime_ns": "1790321293361856837",
+                  "ctime_ns": "1790321293361856837"
+                }
+              }
+            ],
+            "truncated": false
+          },
+          {
+            "root": "/Applications",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false,
+            "root_exists": false
+          },
+          {
+            "root": "/home/qian/Downloads",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false,
+            "root_exists": false
+          },
+          {
+            "root": "/home/qian/Applications",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false,
+            "root_exists": false
+          }
+        ],
+        "adb": {
+          "existing_daemons": [
+            {
+              "pid": 1433828,
+              "server_role_observed": true,
+              "start_ticks": 24123612,
+              "owner_uid": 1000,
+              "executable": "/usr/lib/android-sdk/platform-tools/adb"
+            }
+          ],
+          "client_invoked": false,
+          "daemon_started_or_restarted": false,
+          "transport_selected": false,
+          "device_commands_sent": false,
+          "serials_recorded_as": "sha256 only",
+          "method": "existing loopback ADB smart-socket host:version and host:devices-l only",
+          "state": "observed_existing_server",
+          "endpoint": "127.0.0.1:5037",
+          "protocol_version_hex": "0029",
+          "devices": [],
+          "device_count": 0,
+          "response_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "response_bytes": 0,
+          "evidence_scope": "server-reported endpoints only; no device authentication or dynamic runtime qualification"
+        }
+      }
+    },
+    {
+      "configured_host": "rog",
+      "role": "bounded provider availability observation",
+      "durable_task": {
+        "job_id": "1a1ae1217dc-fc05-5d22",
+        "launch_state": "launched",
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_complete": true
+      },
+      "observation": {
+        "schema": "hepta.rea.provider-host-inventory.v1",
+        "configured_host": "rog",
+        "observed_at_utc": "2026-11-05T23:36:30.126125+00:00",
+        "identity": {
+          "system": "Linux",
+          "release": "7.0.0-42-generic",
+          "machine": "x86_64",
+          "effective_uid": 1000,
+          "operator_home": "/home/qian-qi",
+          "machine_id_sha256": "4b27935315b59cc166310d64679b81db4c33980e7e91d738ce2ef34ed5e3be69",
+          "boot_id": "fcdd2477-a952-4ef2-9bdc-2237255080f1"
+        },
+        "read_only": true,
+        "licensed_applications_launched": false,
+        "software_installed": false,
+        "production_services_restarted": false,
+        "scope": "bounded PATH and named shallow installation checks; absence is not a global installation or license claim",
+        "path_tools": {
+          "idat": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "ida64": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "hopper": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "Hopper": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "frida": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "frida-ps": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "jadx": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "adb": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "gdb": {
+            "found": true,
+            "lookup": "command -v",
+            "file": {
+              "path": "/usr/bin/gdb",
+              "invocation_kind": "direct",
+              "realpath": "/usr/bin/gdb",
+              "kind": "file",
+              "version": {
+                "device": 66306,
+                "inode": 17182418,
+                "size": 10894536,
+                "mode": "0o755",
+                "uid": 0,
+                "gid": 0,
+                "mtime_ns": "1769740425000000000",
+                "ctime_ns": "1791091603195938476"
+              },
+              "hash_stable": true,
+              "sha256": "e5272927fc1b40345748dfa4133ec2a50caeb5f209a44099dd2c48679911c59c"
+            }
+          },
+          "lldb": {
+            "found": false,
+            "lookup": "command -v"
+          }
+        },
+        "shallow_installation_checks": [
+          {
+            "root": "/opt",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [
+              {
+                "path": "/opt/google",
+                "invocation_kind": "direct",
+                "realpath": "/opt/google",
+                "kind": "directory",
+                "version": {
+                  "device": 66306,
+                  "inode": 51904514,
+                  "size": 4096,
+                  "mode": "0o755",
+                  "uid": 0,
+                  "gid": 0,
+                  "mtime_ns": "1776916637565052627",
+                  "ctime_ns": "1776916637565052627"
+                }
+              },
+              {
+                "path": "/opt/google/chrome",
+                "invocation_kind": "direct",
+                "realpath": "/opt/google/chrome",
+                "kind": "directory",
+                "version": {
+                  "device": 66306,
+                  "inode": 51904515,
+                  "size": 4096,
+                  "mode": "0o755",
+                  "uid": 0,
+                  "gid": 0,
+                  "mtime_ns": "1790465430086862945",
+                  "ctime_ns": "1790465430086862945"
+                }
+              }
+            ],
+            "truncated": false
+          },
+          {
+            "root": "/Applications",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false,
+            "root_exists": false
+          },
+          {
+            "root": "/home/qian-qi/Downloads",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false
+          },
+          {
+            "root": "/home/qian-qi/Applications",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false,
+            "root_exists": false
+          }
+        ],
+        "adb": {
+          "existing_daemons": [],
+          "client_invoked": false,
+          "daemon_started_or_restarted": false,
+          "transport_selected": false,
+          "device_commands_sent": false,
+          "serials_recorded_as": "sha256 only",
+          "method": "existing loopback ADB smart-socket host:version and host:devices-l only",
+          "state": "not_probed",
+          "reason": "No existing adb server process was observed; no client was invoked."
+        }
+      }
+    },
+    {
+      "configured_host": "ai395",
+      "role": "bounded provider availability observation",
+      "durable_task": {
+        "job_id": "1a1ae12be41-fc05-5d25",
+        "launch_state": "launched",
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_complete": true
+      },
+      "observation": {
+        "schema": "hepta.rea.provider-host-inventory.v1",
+        "configured_host": "ai395",
+        "observed_at_utc": "2026-11-05T23:37:07.429829+00:00",
+        "identity": {
+          "system": "Linux",
+          "release": "7.0.0-38-generic",
+          "machine": "x86_64",
+          "effective_uid": 1000,
+          "operator_home": "/home/qq",
+          "machine_id_sha256": "5ab6247f968a79d0b30c7a8e206a6de4eecbc25157bac4739e6e40dc5f557cd7",
+          "boot_id": "b1620269-aaef-43e7-bf47-bc6eb1c1a447"
+        },
+        "read_only": true,
+        "licensed_applications_launched": false,
+        "software_installed": false,
+        "production_services_restarted": false,
+        "scope": "bounded PATH and named shallow installation checks; absence is not a global installation or license claim",
+        "path_tools": {
+          "idat": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "ida64": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "hopper": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "Hopper": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "frida": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "frida-ps": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "jadx": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "adb": {
+            "found": true,
+            "lookup": "command -v",
+            "file": {
+              "path": "/usr/bin/adb",
+              "invocation_kind": "symlink",
+              "realpath": "/usr/lib/android-sdk/platform-tools/adb",
+              "kind": "file",
+              "version": {
+                "device": 66306,
+                "inode": 88473636,
+                "size": 716968,
+                "mode": "0o755",
+                "uid": 0,
+                "gid": 0,
+                "mtime_ns": "1770151071000000000",
+                "ctime_ns": "1791390715409443596"
+              },
+              "hash_stable": true,
+              "sha256": "05a1a4435e436230931acd8737fd68f31542d652731d3ca8c464cab7a42be226"
+            }
+          },
+          "gdb": {
+            "found": true,
+            "lookup": "command -v",
+            "file": {
+              "path": "/usr/bin/gdb",
+              "invocation_kind": "direct",
+              "realpath": "/usr/bin/gdb",
+              "kind": "file",
+              "version": {
+                "device": 66306,
+                "inode": 82191869,
+                "size": 10894536,
+                "mode": "0o755",
+                "uid": 0,
+                "gid": 0,
+                "mtime_ns": "1769740425000000000",
+                "ctime_ns": "1791032280842491655"
+              },
+              "hash_stable": true,
+              "sha256": "e5272927fc1b40345748dfa4133ec2a50caeb5f209a44099dd2c48679911c59c"
+            }
+          },
+          "lldb": {
+            "found": false,
+            "lookup": "command -v"
+          }
+        },
+        "shallow_installation_checks": [
+          {
+            "root": "/opt",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false
+          },
+          {
+            "root": "/Applications",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false,
+            "root_exists": false
+          },
+          {
+            "root": "/home/qq/Downloads",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false
+          },
+          {
+            "root": "/home/qq/Applications",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false,
+            "root_exists": false
+          }
+        ],
+        "adb": {
+          "existing_daemons": [],
+          "client_invoked": false,
+          "daemon_started_or_restarted": false,
+          "transport_selected": false,
+          "device_commands_sent": false,
+          "serials_recorded_as": "sha256 only",
+          "method": "existing loopback ADB smart-socket host:version and host:devices-l only",
+          "state": "not_probed",
+          "reason": "No existing adb server process was observed; no client was invoked."
+        }
+      }
+    },
+    {
+      "configured_host": "pocket4",
+      "role": "bounded provider availability observation",
+      "durable_task": {
+        "job_id": "1a1ae136442-fc05-5d29",
+        "launch_state": "launched",
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_complete": true
+      },
+      "observation": {
+        "schema": "hepta.rea.provider-host-inventory.v1",
+        "configured_host": "pocket4",
+        "observed_at_utc": "2026-11-05T23:37:50.242471+00:00",
+        "identity": {
+          "system": "Linux",
+          "release": "7.0.0-38-generic",
+          "machine": "x86_64",
+          "effective_uid": 1000,
+          "operator_home": "/home/alex",
+          "machine_id_sha256": "0d04655381fb4e20c8e35db11a0434de07f989c782f4d059443db54315a87694",
+          "boot_id": "981ff371-cd72-4f81-9be3-a862111afdb1"
+        },
+        "read_only": true,
+        "licensed_applications_launched": false,
+        "software_installed": false,
+        "production_services_restarted": false,
+        "scope": "bounded PATH and named shallow installation checks; absence is not a global installation or license claim",
+        "path_tools": {
+          "idat": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "ida64": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "hopper": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "Hopper": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "frida": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "frida-ps": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "jadx": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "adb": {
+            "found": true,
+            "lookup": "command -v",
+            "file": {
+              "path": "/home/alex/.local/bin/adb",
+              "invocation_kind": "symlink",
+              "realpath": "/home/alex/.local/share/android-platform-tools/adb",
+              "kind": "file",
+              "version": {
+                "device": 66306,
+                "inode": 36831266,
+                "size": 11150112,
+                "mode": "0o755",
+                "uid": 1000,
+                "gid": 1000,
+                "mtime_ns": "1791357992116959060",
+                "ctime_ns": "1791357992572998212"
+              },
+              "hash_stable": true,
+              "sha256": "00108217733707a40debfc92c86d4232fd6e68870be5966515d74c071193ea90"
+            }
+          },
+          "gdb": {
+            "found": true,
+            "lookup": "command -v",
+            "file": {
+              "path": "/usr/bin/gdb",
+              "invocation_kind": "direct",
+              "realpath": "/usr/bin/gdb",
+              "kind": "file",
+              "version": {
+                "device": 66306,
+                "inode": 108015387,
+                "size": 10894536,
+                "mode": "0o755",
+                "uid": 0,
+                "gid": 0,
+                "mtime_ns": "1769740425000000000",
+                "ctime_ns": "1791083811511207922"
+              },
+              "hash_stable": true,
+              "sha256": "e5272927fc1b40345748dfa4133ec2a50caeb5f209a44099dd2c48679911c59c"
+            }
+          },
+          "lldb": {
+            "found": false,
+            "lookup": "command -v"
+          }
+        },
+        "shallow_installation_checks": [
+          {
+            "root": "/opt",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false,
+            "errors": [
+              {
+                "path": "/opt/p4-owner16-init-log-android-20261105-build-01",
+                "error": "PermissionError"
+              }
+            ],
+            "omitted_non_installation_name_hits": 9
+          },
+          {
+            "root": "/Applications",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false,
+            "root_exists": false
+          },
+          {
+            "root": "/home/alex/Downloads",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false
+          },
+          {
+            "root": "/home/alex/Applications",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false,
+            "root_exists": false
+          }
+        ],
+        "adb": {
+          "existing_daemons": [
+            {
+              "pid": 39400,
+              "server_role_observed": true,
+              "start_ticks": 57423,
+              "owner_uid": 1000,
+              "executable": "/usr/lib/android-sdk/platform-tools/adb"
+            },
+            {
+              "pid": 456268,
+              "server_role_observed": true,
+              "start_ticks": 22213529,
+              "owner_uid": 1000,
+              "executable": "/usr/lib/android-sdk/platform-tools/adb"
+            }
+          ],
+          "client_invoked": false,
+          "daemon_started_or_restarted": false,
+          "transport_selected": false,
+          "device_commands_sent": false,
+          "serials_recorded_as": "sha256 only",
+          "method": "existing loopback ADB smart-socket host:version and host:devices-l only",
+          "state": "observed_existing_server",
+          "endpoint": "127.0.0.1:5037",
+          "protocol_version_hex": "0029",
+          "devices": [
+            {
+              "serial_sha256": "41ad305f8562a6c47710afe71fabf30cb8692a71d3de1a47ca9949b669bcc6c1",
+              "state": "device",
+              "usb": "3-2",
+              "product": "leap_cn",
+              "model": "XT2551_3",
+              "device": "leap",
+              "transport_id": "23"
+            }
+          ],
+          "device_count": 1,
+          "response_sha256": "d193332ba98e99e4433154dc8939726f5621fa351d3b9929672898ff9bd0efda",
+          "response_bytes": 97,
+          "evidence_scope": "server-reported endpoints only; no device authentication or dynamic runtime qualification"
+        }
+      }
+    },
+    {
+      "configured_host": "mac",
+      "role": "bounded provider availability observation",
+      "durable_task": {
+        "job_id": "1a1ae138399-fc05-5d2b",
+        "launch_state": "launched",
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_complete": true
+      },
+      "observation": {
+        "schema": "hepta.rea.provider-host-inventory.v1",
+        "configured_host": "mac",
+        "observed_at_utc": "2026-11-05T23:38:01.635403+00:00",
+        "identity": {
+          "system": "Darwin",
+          "release": "25.6.0",
+          "machine": "arm64",
+          "effective_uid": 501,
+          "operator_home": "/Users/qianqi",
+          "platform_uuid_sha256": "623fbe3199ea9b831e3a0e3f69a51990babe5674c0890298e887ca950ec8bfd0",
+          "boot_session_uuid": "092C3E38-E23C-4983-8ACD-7F850319D714"
+        },
+        "read_only": true,
+        "licensed_applications_launched": false,
+        "software_installed": false,
+        "production_services_restarted": false,
+        "scope": "bounded PATH and named shallow installation checks; absence is not a global installation or license claim",
+        "path_tools": {
+          "idat": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "ida64": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "hopper": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "Hopper": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "frida": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "frida-ps": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "jadx": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "adb": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "gdb": {
+            "found": false,
+            "lookup": "command -v"
+          },
+          "lldb": {
+            "found": true,
+            "lookup": "command -v",
+            "file": {
+              "path": "/usr/bin/lldb",
+              "invocation_kind": "direct",
+              "realpath": "/usr/bin/lldb",
+              "kind": "file",
+              "version": {
+                "device": 16777233,
+                "inode": 1152921500312571500,
+                "size": 118640,
+                "mode": "0o755",
+                "uid": 0,
+                "gid": 0,
+                "mtime_ns": "1786589515000000000",
+                "ctime_ns": "1786589515000000000"
+              },
+              "hash_stable": true,
+              "sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9"
+            }
+          }
+        },
+        "shallow_installation_checks": [
+          {
+            "root": "/opt",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false
+          },
+          {
+            "root": "/Applications",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [
+              {
+                "path": "/Applications/Google Chrome.app",
+                "invocation_kind": "direct",
+                "realpath": "/Applications/Google Chrome.app",
+                "kind": "directory",
+                "version": {
+                  "device": 16777233,
+                  "inode": 8634942,
+                  "size": 96,
+                  "mode": "0o755",
+                  "uid": 0,
+                  "gid": 0,
+                  "mtime_ns": "1793669404000000000",
+                  "ctime_ns": "1793669409502163491"
+                },
+                "bundle_version": {
+                  "CFBundleIdentifier": "com.google.Chrome",
+                  "CFBundleShortVersionString": "156.0.8078.80",
+                  "CFBundleVersion": "8078.80"
+                }
+              }
+            ],
+            "truncated": false
+          },
+          {
+            "root": "/Users/qianqi/Downloads",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [],
+            "truncated": false
+          },
+          {
+            "root": "/Users/qianqi/Applications",
+            "max_depth": 2,
+            "max_entries_per_directory": 2048,
+            "matched": [
+              {
+                "path": "/Users/qianqi/Applications/Chrome Apps.localized",
+                "invocation_kind": "direct",
+                "realpath": "/Users/qianqi/Applications/Chrome Apps.localized",
+                "kind": "directory",
+                "version": {
+                  "device": 16777233,
+                  "inode": 7135615,
+                  "size": 160,
+                  "mode": "0o700",
+                  "uid": 501,
+                  "gid": 20,
+                  "mtime_ns": "1793097738858046898",
+                  "ctime_ns": "1793097738858046898"
+                }
+              }
+            ],
+            "truncated": false
+          }
+        ],
+        "adb": {
+          "existing_daemons": [
+            {
+              "pid": 60735,
+              "server_role_observed": true,
+              "start_time": "Sun Oct 11 01:46:07 2026",
+              "executable": "adb"
+            }
+          ],
+          "client_invoked": false,
+          "daemon_started_or_restarted": false,
+          "transport_selected": false,
+          "device_commands_sent": false,
+          "serials_recorded_as": "sha256 only",
+          "method": "existing loopback ADB smart-socket host:version and host:devices-l only",
+          "state": "observed_existing_server",
+          "endpoint": "127.0.0.1:5037",
+          "protocol_version_hex": "0029",
+          "devices": [
+            {
+              "serial_sha256": "5e6f2505624f8523ae5b41212f78d7d54e122baab2f14e0e12d474e4f523632e",
+              "state": "device",
+              "product": "sdk_gphone64_arm64",
+              "model": "sdk_gphone64_arm64",
+              "device": "emu64a",
+              "transport_id": "18"
+            }
+          ],
+          "device_count": 1,
+          "response_sha256": "5dedb7f44476e312a4e904bd2106596917ae11ddabf7dc8356f8c08837f370a1",
+          "response_bytes": 112,
+          "evidence_scope": "server-reported endpoints only; no device authentication or dynamic runtime qualification"
+        }
+      }
+    },
+    {
+      "configured_host": "main",
+      "role": "identity-only alias de-duplication",
+      "durable_task": {
+        "job_id": "1a1ae142d15-fc05-5d33",
+        "launch_state": "launched",
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_complete": true
+      },
+      "observation": {
+        "schema": "hepta.rea.provider-host-inventory.v1",
+        "configured_host": "main",
+        "observed_at_utc": "2026-11-05T23:38:40.515677+00:00",
+        "identity": {
+          "system": "Darwin",
+          "release": "25.6.0",
+          "machine": "arm64",
+          "effective_uid": 501,
+          "operator_home": "/Users/qianqi",
+          "platform_uuid_sha256": "623fbe3199ea9b831e3a0e3f69a51990babe5674c0890298e887ca950ec8bfd0",
+          "boot_session_uuid": "092C3E38-E23C-4983-8ACD-7F850319D714"
+        },
+        "read_only": true,
+        "licensed_applications_launched": false,
+        "software_installed": false,
+        "production_services_restarted": false,
+        "scope": "identity only for alias deduplication"
+      }
+    }
+  ]
+}
