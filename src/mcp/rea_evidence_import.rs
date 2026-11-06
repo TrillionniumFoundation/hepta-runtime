@@ -57,7 +57,53 @@ pub(super) fn output_schema() -> Arc<JsonObject> {
 }
 
 pub(super) fn error_result(error: Failure) -> CallToolResult {
-	error.wire()
+	error.wire_with_order(&ImportFailureOrder)
+}
+
+/// Frozen public import failures use the analysis-error projector's envelope
+/// and the input/read/bundle producers' diagnostic order. The provenance and
+/// exact original MCP text are retained in rea_evidence_import_errors.json.
+/// This resolver is deliberately local to import: arbitrary Provider details
+/// and native-only extension payloads have no established upstream order.
+struct ImportFailureOrder;
+impl ObjectOrder for ImportFailureOrder {
+	fn keys<'a>(
+		&self,
+		path: &[PathComponent<'_>],
+		object: &'a Map<String, Value>,
+	) -> anyhow::Result<Vec<&'a str>> {
+		use PathComponent::{Index, Key};
+		let order: &[&str] = match path {
+			[Key("error")] => &[
+				"code",
+				"category",
+				"message",
+				"retryable",
+				"remediation",
+				"recovery",
+				"details",
+			],
+			[Key("error"), Key("remediation")] => &["action"],
+			[Key("error"), Key("recovery")] => &["kind", "operation"],
+			[Key("error"), Key("details")] if object.contains_key("issues") => {
+				&["operation", "issues"]
+			}
+			[Key("error"), Key("details")]
+				if object.get("operation").and_then(Value::as_str) == Some("read") =>
+			{
+				&["operation", "reason", "boundary", "path", "content_issues"]
+			}
+			[Key("error"), Key("details")] => &["reason"],
+			[Key("error"), Key("details"), Key("issues"), Index(_)] => &[
+				"path", "reason", "message", "expected", "minimum", "maximum",
+			],
+			[Key("error"), Key("details"), Key("content_issues"), Index(_)] => {
+				&["path", "reason", "expected", "message"]
+			}
+			_ => anyhow::bail!("No original Evidence import failure order for this object"),
+		};
+		rea_response_encoding::declared_keys(object, order)
+	}
 }
 
 fn active(cancellation: &CancellationToken) -> Result<(), Failure> {

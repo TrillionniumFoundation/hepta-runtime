@@ -17,6 +17,9 @@ import rea_operation_evidence as evidence
 q = evidence.q
 
 
+OWNER = {"pid": 1234, "parent_pid": 1200, "process_group": 1234, "start_time_ticks": 91}
+
+
 def wire_pair(arguments, result, name="inspect_elf_notes", identifier=1, raw_arguments=None):
     request = {"jsonrpc": "2.0", "id": identifier, "method": "tools/call",
                "params": {"name": name, "arguments": arguments}}
@@ -60,6 +63,39 @@ class OperationEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "absent from the original wire"):
             evidence.bind_call(wire, changed, "inspect_elf_notes", arguments)
 
+    def test_rehashing_wire_or_response_cannot_hide_a_boolean_number_change(self):
+        arguments = {"path": "/tmp/fixture"}
+        result = {"content": [{"type": "text", "text": '{"error":{"retryable":false}}'}],
+                  "structuredContent": {"error": {"retryable": False}}, "isError": True}
+        raw, response = wire_pair(arguments, result)
+        evidence.bind_call(evidence.wire_index(raw), response, "inspect_elf_notes", arguments)
+        changed = deepcopy(response)
+        changed["result"]["structuredContent"]["error"]["retryable"] = 0
+        changed_raw, _ = wire_pair(arguments, changed["result"])
+        for target in ("wire", "response"):
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                paths = {"wire": root / "wire.jsonl", "response": root / "response.json"}
+                paths["wire"].write_bytes(raw)
+                paths["response"].write_bytes(q.json_bytes(response))
+                old_hash = q.file_hash(paths[target])
+                paths[target].write_bytes(changed_raw if target == "wire" else q.json_bytes(changed))
+                refs = {name: q.artifact_reference(path, root) for name, path in paths.items()}
+                self.assertNotEqual(refs[target]["sha256"], old_hash)
+                # Both new hashes/sizes are valid. Original-wire binding is a
+                # separate requirement and must still reject the type change.
+                retained_wire = evidence.wire_index(evidence.read_artifact(root, refs["wire"]))
+                retained_response = evidence.artifact_json(root, refs["response"])
+                with self.assertRaisesRegex(ValueError, "absent from the original wire"):
+                    evidence.bind_call(retained_wire, retained_response, "inspect_elf_notes", arguments)
+
+    def test_actual_request_cannot_replace_a_number_with_a_boolean(self):
+        for expected, actual in ((1, True), (0, False), (1.0, True), (True, 1)):
+            with self.subTest(expected=expected, actual=actual):
+                raw, response = wire_pair({"max_entries": actual}, {"content": []})
+                with self.assertRaisesRegex(ValueError, "actual public MCP request"):
+                    evidence.bind_call(evidence.wire_index(raw), response, "inspect_elf_notes", {"max_entries": expected})
+
     def test_duplicate_response_and_unmatched_response_are_refused(self):
         raw, _ = wire_pair({}, {"content": []})
         with self.assertRaisesRegex(ValueError, "duplicate"):
@@ -79,8 +115,9 @@ class OperationEvidenceTests(unittest.TestCase):
         rows = [{"name": "inspect_elf_notes", "inputSchema": {"additionalProperties": False}}]
         wire = {"sent": {1: {"method": "tools/list"}}, "received": {1: {"result": {"tools": rows}}}}
         evidence.bind_tools(wire, rows)
-        with self.assertRaisesRegex(ValueError, "original tools/list"):
-            evidence.bind_tools(wire, [{"name": "inspect_elf_notes", "inputSchema": {"additionalProperties": True}}])
+        for changed in (True, 0):
+            with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, "original tools/list"):
+                evidence.bind_tools(wire, [{"name": "inspect_elf_notes", "inputSchema": {"additionalProperties": changed}}])
 
     def test_missing_or_duplicated_cases_are_not_qualified(self):
         cases = [{"id": "boundary", "kind": "error", "arguments": {}}]
@@ -101,14 +138,70 @@ class OperationEvidenceTests(unittest.TestCase):
             self.assertFalse(result["boundary"]["passed"])
             self.assertEqual(retained, {})
 
+    def test_replayed_boolean_number_difference_does_not_close_a_behavior_gate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cases = [{"id": "typed-error", "kind": "error", "arguments": {}}]
+            results = [{"content": [{"type": "text", "text": json.dumps({"error": {"retryable": value}})}],
+                        "isError": True} for value in (False, 0)]
+            left_raw, left = wire_pair({}, results[0])
+            right_raw, right = wire_pair({}, results[1], "rea_inspect_elf_notes")
+            row = {"id": "typed-error", "status": "PASS", "comparison": {"full_envelope_equal": True},
+                   "reference": q.artifact_json(root, "left.json", left), "native": q.artifact_json(root, "right.json", right)}
+            comparisons, retained = evidence.case_results(cases, [row], root,
+                evidence.wire_index(left_raw), evidence.wire_index(right_raw))
+            self.assertFalse(comparisons["typed-error"]["passed"])
+            self.assertIn("full public MCP result differs", comparisons["typed-error"]["error"])
+            self.assertEqual(retained, {})
+            assessment = evidence.derive_assessment(comparisons, True, True, True, q.UNIMPLEMENTED_REQUIREMENTS)
+            self.assertEqual(assessment["status"], "OPEN")
+            self.assertEqual(assessment["passed_gates"], ["source_package_boundary"])
+
     def test_manual_cleanup_is_not_owner_completion(self):
-        original = {"returncode": 0, "forced_cleanup": [], "reader_stopped": True, "elapsed_seconds": 0.2,
+        original = {"owner": OWNER, "returncode": 0, "forced_cleanup": [], "reader_stopped": True, "elapsed_seconds": 0.2,
                     "owner_pidfd_exited": True, "process_group_gone": True}
         self.assertTrue(evidence.owner_closed(original))
         for changes in ({"forced_cleanup": ["SIGTERM"]}, {"returncode": -9},
                         {"reader_stopped": False}, {"elapsed_seconds": q.EOF_SECONDS + 2},
                         {"owner_pidfd_exited": False}, {"process_group_gone": False}):
             self.assertFalse(evidence.owner_closed({**original, **changes}))
+
+    def test_owner_completion_rejects_boolean_integer_and_nonfinite_metadata(self):
+        original = {"owner": OWNER, "returncode": 0, "forced_cleanup": [], "reader_stopped": True,
+                    "elapsed_seconds": 0.2, "owner_pidfd_exited": True, "process_group_gone": True}
+        for field, values in (("returncode", (False, True, 0.0, None, "0")),
+                              ("elapsed_seconds", (False, True, float("nan"), float("inf"), float("-inf"),
+                                                   -1, 10 ** 400, None, "0.2")),
+                              ("reader_stopped", (1,)), ("owner_pidfd_exited", (1,)), ("process_group_gone", (1,))):
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    self.assertFalse(evidence.owner_closed({**original, field: value}))
+        for elapsed in (0, 1, 1.0):
+            self.assertTrue(evidence.owner_closed({**original, "elapsed_seconds": elapsed}))
+        for owner in (None, {**OWNER, "extra": True}, {**OWNER, "process_group": 9999}):
+            with self.subTest(owner=owner):
+                self.assertFalse(evidence.owner_closed({**original, "owner": owner}))
+        for field in OWNER:
+            for value in (True, False, float(OWNER[field]), 0, -1, str(OWNER[field])):
+                with self.subTest(field=field, value=value):
+                    self.assertFalse(evidence.owner_closed({**original, "owner": {**OWNER, field: value}}))
+
+    def test_launch_and_close_owner_binding_rejects_numeric_type_changes(self):
+        launch, close = {"pid": OWNER["pid"], "owner": OWNER}, {"owner": OWNER}
+        evidence.bind_owner(launch, close)
+        for value in (True, float(OWNER["pid"]), str(OWNER["pid"])):
+            with self.subTest(pid=value), self.assertRaisesRegex(ValueError, "owner identity"):
+                evidence.bind_owner({**launch, "pid": value}, close)
+        for target in ("launch", "close"):
+            for field in OWNER:
+                modified_launch, modified_close = deepcopy(launch), deepcopy(close)
+                selected = modified_launch if target == "launch" else modified_close
+                selected["owner"][field] = float(OWNER[field])
+                with self.subTest(target=target, field=field), self.assertRaisesRegex(ValueError, "owner identity"):
+                    evidence.bind_owner(modified_launch, modified_close)
+        boolean_owner = {key: True for key in OWNER}
+        with self.assertRaisesRegex(ValueError, "owner identity"):
+            evidence.bind_owner({"pid": True, "owner": boolean_owner}, {"owner": boolean_owner})
 
     def test_finite_success_stays_open_when_profile_requirements_are_unimplemented(self):
         result = evidence.derive_assessment({"sample": {"passed": True}}, True, True, True,

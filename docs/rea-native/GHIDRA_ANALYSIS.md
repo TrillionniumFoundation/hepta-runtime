@@ -1,6 +1,6 @@
 # Bounded Ghidra function analysis
 
-This extends the Rust static-provider contract and worker, using the existing durable job owner, with real Ghidra function discovery, selected-function inspection, cross-references and native decompilation. It requires an explicitly configured Ghidra 12.2 installation and Java 25. Ghidra's Java/native engine remains an external dependency; this is not a Rust rewrite of the decompiler. In the qualified operator deployment, the existing Python 3 launcher and durable runner start the Rust `rea-static-worker`, which invokes the fixed Java bridge and installed Ghidra native engine.
+This extends the Rust static-provider contract and worker, using the existing durable job owner, with real Ghidra function discovery, selected-function inspection, cross-references and native decompilation. It requires an explicitly configured, revision-bound Ghidra installation and Java 25. Legacy and revision 2 profiles use Ghidra 12.2; revision 3 separately admits the fixed 12.1.4 distribution used for the original REA comparison. Ghidra's Java/native engine remains an external dependency; this is not a Rust rewrite of the decompiler. In the previously qualified 12.2 operator deployment, the existing Python 3 launcher and durable runner start the Rust `rea-static-worker`, which invokes the fixed Java bridge and installed Ghidra native engine. That historical qualification does not transfer to revision 3 or to a newly built runtime.
 
 The existing MCP surfaces remain `rea_static_profiles`, `rea_static_start`, `rea_static_status`, `rea_static_read` and `rea_static_cancel`. There is no second task registry, background service or recovery handle. The complete original request identifies the existing durable job after replay, cancellation or a controller restart.
 
@@ -8,17 +8,20 @@ The existing MCP surfaces remain `rea_static_profiles`, `rea_static_start`, `rea
 
 `GhidraEngineProfile.bridge_revision` is optional in serialized profiles:
 
-| Value | Bridge | Admitted operations |
-| --- | --- | --- |
-| Absent | Original `rea_ghidra_bridge.java`, unchanged bytes | `inventory` only |
-| `2` | Repaired `rea_ghidra_inventory_v2.java` or `rea_ghidra_analysis_bridge.java` | Explicitly allowed `inventory`, `functions`, `function`, `xrefs`, `decompile` |
-| Any other explicit value | Refused | None |
+| Value | Engine | Bridge | Admitted operations |
+| --- | --- | --- | --- |
+| Absent | 12.2 | Original `rea_ghidra_bridge.java`, unchanged bytes | `inventory` only |
+| `2` | 12.2 | Repaired `rea_ghidra_inventory_v2.java` or `rea_ghidra_analysis_bridge.java` | Explicitly allowed `inventory`, `functions`, `function`, `xrefs`, `decompile` |
+| `3` | 12.1.4 | Separate `rea_ghidra_inventory_1214_v3.java` or `rea_ghidra_analysis_1214_v3.java` | The same explicit operation selection, with independently bound engine and bridge identities |
+| Any other explicit value | Refused | None | None |
 
 Absent new fields remain absent when serialized. Existing request/profile identities are therefore preserved. Revision 2 changes the profile hash and selects a different bridge hash. The returned report includes the admitted engine profile and exact embedded bridge SHA-256; a new bridge is never interpreted as the old bridge.
 
+Revision 3 requires engine version `12.1.4` and release ZIP SHA-256 `ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db`. Legacy and revision 2 still require version `12.2` and SHA-256 `2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67`. Cross-version or cross-revision results are rejected even when a caller recomputes their report digest. Installation manifests, source bytes, Java runtime files and cleanup observations retain their existing validation requirements. Adding a profile does not establish original REA result or lifecycle equivalence.
+
 The original byte-array importer has a real Ghidra 12.2 failure on a dynamically linked ELF: the anonymous byte provider has a null name, and Ghidra's library-name comparator dereferences it even when target-library loading is disabled. Revision 2 passes a fixed named `ByteArrayProvider("hepta-owned-input", bytes)`. No user path or library name is substituted. It retains disabled target-library loading and project linking.
 
-The legacy bridge remains solely to preserve its explicit historical identity and existing receipts. New profiles should use revision 2. Updating a profile does not authorize replaying an uncertain old request as a different job; retain the original profile, request and key for observation of the original job.
+The legacy bridge remains solely to preserve its explicit historical identity and existing receipts. New profiles must explicitly choose the revision matching their fixed installation. Updating a profile does not authorize replaying an uncertain old request as a different job; retain the original profile, request and key for observation of the original job.
 
 ## Fixed operations
 
@@ -36,7 +39,7 @@ The artifact must be owned, inside the profile's input roots, and match the supp
 
 ## Analysis and resource boundaries
 
-The analysis profile is `hepta.ghidra.elf-functions.v1`. Exactly four recognized analyzers are enabled:
+The revision 2 analysis profile is `hepta.ghidra.elf-functions.v1`; revision 3 uses `hepta.ghidra.12.1.4.elf-functions.v1`. Exactly four recognized analyzers are enabled:
 
 - Disassemble Entry Points
 - Function Start Search
@@ -75,5 +78,7 @@ python3 tests/rea_ghidra_analysis_external.py \
 ```
 
 The harness requires a fresh directory. It preserves qualification results and raw original jobs rather than replacing a failed receipt. The checked-in evidence index is [qualification](../qualification/rea-ghidra-analysis-20261104-r1/README.md). Exact source/binary hashes and commands distinguish standalone Java API preflights, real-provider execution and finite C differential tests.
+
+For the 12.1.4 comparison, select `--engine-version 12.1.4`, its matching `--ghidra-home`, and the mandatory `--release-archive /absolute/original-release.zip`. To reuse the exact original-provider input, supply both `--fixture /absolute/original-owned.elf` and `--fixture-sha256 <64-hex-digest>`; the harness verifies and copies those bytes instead of recompiling the main fixture. The cancellation fixture remains separately authored and identified. Original REA and native results, analyzer differences, errors and cancellation observations require separate paired evidence; the harness's finite native checks alone cannot establish parity.
 
 Implementation files are `src/mcp/rea_ghidra_contract.rs`, `rea_engine_profile.rs`, `rea_engine_ghidra.rs`, `rea_provider.rs`, `rea_static_summary.rs`, and the explicitly versioned Java bridges. Contract regressions live in `rea_ghidra_contract_tests.rs`, `rea_provider_tests.rs` and `rea_static_tests.rs`.

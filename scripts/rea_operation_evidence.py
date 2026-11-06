@@ -109,13 +109,13 @@ def wire_index(raw):
 
 def bind_call(wire, response, name, arguments, number_spelling=None, omit_arguments=False, argument_key_order=None):
     identifier = response.get("id")
-    q.require(type(identifier) is int and wire["received"].get(identifier) == response,
+    q.require(type(identifier) is int and q.json_equal(wire["received"].get(identifier), response),
               "case response is absent from the original wire")
     params = {"name": name}
     if not omit_arguments:
         params["arguments"] = arguments
     expected = {"jsonrpc": "2.0", "id": identifier, "method": "tools/call", "params": params}
-    q.require(wire["sent"].get(identifier) == expected, "case input differs from its actual public MCP request")
+    q.require(q.json_equal(wire["sent"].get(identifier), expected), "case input differs from its actual public MCP request")
     if number_spelling:
         field, spelling = number_spelling
         raw = wire["raw_sent"][identifier]
@@ -135,7 +135,7 @@ def bind_tools(wire, rows):
         q.require("result" in response and isinstance(response["result"].get("tools"), list),
                   "tools/list is incomplete in the original wire")
         collected.extend(response["result"]["tools"])
-    q.require(collected == rows, "tool schema summary differs from its original tools/list wire")
+    q.require(q.json_equal(collected, rows), "tool schema summary differs from its original tools/list wire")
 
 
 def case_results(cases, observed, root, reference_wire, native_wire):
@@ -162,11 +162,25 @@ def case_results(cases, observed, root, reference_wire, native_wire):
     return results, retained
 
 
+def valid_owner(owner):
+    return (isinstance(owner, dict) and set(owner) == {"pid", "parent_pid", "process_group", "start_time_ticks"}
+            and all(type(value) is int and value > 0 for value in owner.values())
+            and owner["process_group"] == owner["pid"])
+
+
+def bind_owner(launch, close):
+    owner = launch.get("owner")
+    q.require(valid_owner(owner) and type(launch.get("pid")) is int and launch["pid"] == owner["pid"]
+              and valid_owner(close.get("owner")) and q.json_equal(close["owner"], owner),
+              "MCP owner identity was not retained")
+
+
 def owner_closed(observation):
-    return (isinstance(observation, dict) and observation.get("returncode") == 0
+    return (isinstance(observation, dict) and type(observation.get("returncode")) is int
+            and observation["returncode"] == 0 and valid_owner(observation.get("owner"))
             and observation.get("forced_cleanup") == [] and observation.get("reader_stopped") is True
             and observation.get("owner_pidfd_exited") is True and observation.get("process_group_gone") is True
-            and isinstance(observation.get("elapsed_seconds"), (float, int))
+            and q.finite_number(observation.get("elapsed_seconds"))
             and 0 <= observation["elapsed_seconds"] <= q.EOF_SECONDS + 1.0)
 
 
@@ -194,7 +208,7 @@ def build_binding(root, report, source):
         if report.get("build_summary") is not None:
             read_artifact(root, report["build_summary"], q.MAX_WIRE_BYTES)
         return None
-    q.require(isinstance(bundle, dict) and report.get("build_summary") == bundle.get("summary"),
+    q.require(isinstance(bundle, dict) and q.json_equal(report.get("build_summary"), bundle.get("summary")),
               "build summary differs from the retained original build bundle")
     return _module("rea_build_evidence").validate_bundle(root, bundle, source, report["native_before"])
 
@@ -212,42 +226,44 @@ def validate_report(repo, receipt_path, expected_sha256, snapshot=None):
     fixture_root = Path(report["workspace"])
     q.require(fixture_root.is_absolute(), "fixture workspace was not absolute")
     fixtures, cases = q.fixture_cases(fixture_root, write=False)
-    q.require(artifact_json(root, report["case_manifest"]) == {"profile": q.PROFILE, "fixtures": fixtures, "cases": cases},
+    q.require(q.json_equal(artifact_json(root, report["case_manifest"]), {"profile": q.PROFILE, "fixtures": fixtures, "cases": cases}),
               "case manifest differs from the reviewed independent encodings")
     bindings = report.get("producer_files")
     q.require(isinstance(bindings, list) and [item["path"] for item in bindings] == list(q.PRODUCER_FILES),
               "producer source bindings are incomplete")
     for item in bindings:
         read_artifact(repo, item)
-    q.require(report.get("producer_files_after") == bindings, "actual producer files changed during execution")
+    q.require(q.json_equal(report.get("producer_files_after"), bindings), "actual producer files changed during execution")
     executed = report.get("producer_execution_files")
     expected_scripts = [item for item in bindings if item["path"].startswith("scripts/")]
     q.require(isinstance(executed, list) and [item["repository_path"] for item in executed]
               == [item["path"] for item in expected_scripts], "actual executing profile source is not bound")
     for actual, selected in zip(executed, expected_scripts, strict=True):
-        q.require(actual["sha256"] == selected["sha256"] and actual["bytes"] == selected["bytes"],
+        q.require(actual["sha256"] == selected["sha256"] and q.json_equal(actual["bytes"], selected["bytes"]),
                   "a different runner was executed than the selected source tree")
     before = artifact_json(root, report["source_before"])
     after = artifact_json(root, report["source_after"])
-    q.require(before == after and before["tree_sha256"] == q.digest(before["files"]),
+    q.require(q.json_equal(before, after) and before["tree_sha256"] == q.digest(before["files"]),
               "source inventory changed or was tampered with")
     matrix = _module("rea_full_qualification")
     current = matrix.Selection(Path(repo), root / "unused-target", root).snapshot()
-    q.require(current == before, "qualification was produced by a different source/fixture/profile tree")
+    q.require(q.json_equal(current, before), "qualification was produced by a different source/fixture/profile tree")
     monitor = artifact_json(root, report["source_monitor"])
-    q.require(monitor["event_count"] == 0 and monitor["errors"] == [] and monitor["retained_events"] == []
+    q.require(type(monitor["event_count"]) is int and monitor["event_count"] == 0
+              and monitor["errors"] == [] and monitor["retained_events"] == []
               and monitor["events_truncated"] is False, "source changed or monitor coverage was lost")
     if report["execution"]["producer_repo"] != report["execution"]["repo"]:
         monitor = artifact_json(root, report["producer_source_monitor"])
-        q.require(monitor["event_count"] == 0 and monitor["errors"] == [] and monitor["retained_events"] == []
+        q.require(type(monitor["event_count"]) is int and monitor["event_count"] == 0
+                  and monitor["errors"] == [] and monitor["retained_events"] == []
                   and monitor["events_truncated"] is False, "actual producer changed or its monitor coverage was lost")
     reference = report["reference_before"]
-    q.require(reference == report["reference_after"], "reference package changed during execution")
+    q.require(q.json_equal(reference, report["reference_after"]), "reference package changed during execution")
     for key, expected in {"name": "rea-agents", "version": "6.8.0", "file_count": 2398,
                           "tarball_sha256": q.PACKAGE_SHA256, "files_sha256": q.PACKAGE_FILES_SHA256,
                           "catalog_sha256": q.CATALOG_SHA256, "git_source_commit": q.REFERENCE_COMMIT}.items():
-        q.require(reference.get(key) == expected, "unfrozen npm identity: " + key)
-    q.require(report["node_version"] == "v22.23.4" and report["native_before"] == report["native_after"],
+        q.require(q.json_equal(reference.get(key), expected), "unfrozen npm identity: " + key)
+    q.require(report["node_version"] == "v22.23.4" and q.json_equal(report["native_before"], report["native_after"]),
               "runtime identity changed or is outside the reviewed profile")
     q.require(re.fullmatch(r"[0-9a-f]{64}", report["native_before"]["sha256"]) is not None,
               "native binary digest is absent")
@@ -268,9 +284,9 @@ def validate_report(repo, receipt_path, expected_sha256, snapshot=None):
             q.require(argv[:3] == [report["native_before"]["path"], "mcp", "--runtime-config"]
                       and len(argv) == 4, "the native public MCP entry point was not used")
         close = artifact_json(root, report[label + "_close_artifact"])
-        q.require(close["owner"] == launch["owner"] and launch["owner"]["pid"] == launch["pid"]
-                  and launch["owner"]["process_group"] == launch["pid"], "MCP owner identity was not retained")
-        q.require(close == report[label + "_close"] and owner_closed(close), "MCP owner needed forced cleanup")
+        bind_owner(launch, close)
+        q.require(q.json_equal(close, report[label + "_close"]) and owner_closed(close)
+                  and owner_closed(report[label + "_close"]), "MCP owner needed forced cleanup")
     original_tools = artifact_json(root, report["reference_tools"])
     native_tools = artifact_json(root, report["native_tools"])
     q.require(len(original_tools) == 229, "frozen original MCP inventory size differs")
@@ -297,7 +313,7 @@ def validate_report(repo, receipt_path, expected_sha256, snapshot=None):
         bind_call(wires["reference"], left, "get_evidence_bundle", query["arguments"])
         bind_call(wires["native"], right, "rea_get_evidence_bundle", query["arguments"])
         try:
-            q.require(q.tool_value(left) == q.tool_value(right), "retention responses differ")
+            q.require(q.json_equal(q.tool_value(left), q.tool_value(right)), "retention responses differ")
             q.check_retention_response(query, left, list(retained.values()))
         except (KeyError, TypeError, ValueError):
             retention = False
@@ -306,17 +322,18 @@ def validate_report(repo, receipt_path, expected_sha256, snapshot=None):
     for row in report["cold_sessions"]:
         launch = artifact_json(root, row["launch"])
         original = launches[row["producer"]]
-        q.require(all(launch[field] == original[field] for field in ("argv", "cwd", "environment"))
-                  and launch["owner"] != original["owner"], "cold session is not a new owner under the same profile")
+        q.require(all(q.json_equal(launch[field], original[field]) for field in ("argv", "cwd", "environment"))
+                  and not q.json_equal(launch["owner"], original["owner"]), "cold session is not a new owner under the same profile")
         wire = wire_index(read_artifact(root, row["wire"]))
         value = artifact_json(root, row["response"])
         tool = "get_evidence_bundle" if row["producer"] == "reference" else "rea_get_evidence_bundle"
         bind_call(wire, value, tool, {})
         close = artifact_json(root, row["close_artifact"])
-        q.require(close == row["close"] and close["owner"] == launch["owner"], "cold owner close summary differs")
+        bind_owner(launch, close)
+        q.require(q.json_equal(close, row["close"]), "cold owner close summary differs")
         try:
             q.check_retention_response({"id": "complete", "arguments": {}}, value, [])
-            q.require(owner_closed(close), "cold owner needed forced cleanup")
+            q.require(owner_closed(close) and owner_closed(row["close"]), "cold owner needed forced cleanup")
         except (KeyError, TypeError, ValueError):
             cold = False
     outstanding = [name for name in q.UNIMPLEMENTED_REQUIREMENTS

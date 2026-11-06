@@ -46,9 +46,55 @@ class OperationQualificationTests(unittest.TestCase):
                 self.assertFalse(output.exists())
 
     def test_duplicate_members_and_nonfinite_numbers_fail_closed(self):
-        for raw in (b'{"x":1,"x":2}', b'NaN', b'1e400', b'-Infinity'):
+        for raw in (b'{"x":1,"x":2}', b'NaN', b'1e400', b'Infinity', b'-Infinity'):
             with self.subTest(raw=raw), self.assertRaises(q.QualificationError):
                 q.parse_json(raw)
+
+    def test_json_equality_distinguishes_every_kind_and_nested_boolean_numbers(self):
+        values = [None, False, 0, "0", [], {}]
+        for left_index, left in enumerate(values):
+            for right_index, right in enumerate(values):
+                with self.subTest(left=left, right=right):
+                    self.assertEqual(q.json_equal(left, right), left_index == right_index)
+        for left, right in ((False, 0), (False, 0.0), (True, 1), (True, 1.0)):
+            with self.subTest(left=left, right=right):
+                self.assertFalse(q.json_equal({"nested": [{"value": left}]}, {"nested": [{"value": right}]}))
+                self.assertFalse(q.json_equal([right], [left]))
+        self.assertFalse(q.json_equal({}, {"omitted": None}))
+        self.assertFalse(q.json_equal([1, 2], [2, 1]))
+        self.assertTrue(q.json_equal({"a": [1, False], "b": None}, {"b": None, "a": [1, False]}))
+
+    def test_numeric_equality_preserves_reviewed_spellings_without_rounding_integers(self):
+        for left, right in ((1, 1.0), (1, q.parse_json(b'1e0')), (0, -0.0),
+                            (10 ** 400, 10 ** 400), (9007199254740992, 9007199254740992.0)):
+            with self.subTest(left=left, right=right):
+                self.assertTrue(q.json_equal({"value": left}, {"value": right}))
+        self.assertFalse(q.json_equal(9007199254740993, float(9007199254740993)))
+        self.assertFalse(q.json_equal(10 ** 400, 10 ** 400 + 1))
+
+    def test_nonfinite_and_non_json_values_cannot_compare_equal(self):
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=value):
+                self.assertFalse(q.finite_number(value))
+                self.assertFalse(q.json_equal(value, value))
+                self.assertFalse(q.json_equal({"nested": [value]}, {"nested": [value]}))
+        for value in ((1,), {1: "numeric key"}, {True: "boolean key"}, {1}, b"text"):
+            with self.subTest(value=value):
+                self.assertFalse(q.json_equal(value, value))
+        self.assertFalse(q.finite_number(True))
+        self.assertFalse(q.finite_number(False))
+
+    def test_raw_request_cannot_replace_numeric_argument_with_boolean(self):
+        client = q.Mcp.__new__(q.Mcp)
+        client.process, client._log = mock.Mock(), mock.Mock()
+        params = {"name": "inspect_elf_notes", "arguments": {"max_entries": 1}}
+        raw = b'{"name":"inspect_elf_notes","arguments":{"max_entries":true}}'
+        with self.assertRaisesRegex(q.QualificationError, "parsed facts"):
+            client.send("tools/call", params, 1, raw)
+        client.process.stdin.write.assert_not_called()
+        client._log.assert_not_called()
+        client.send("tools/call", params, 1, raw.replace(b'true', b'1e0'))
+        self.assertIn(b'"max_entries":1e0', client.process.stdin.write.call_args.args[0])
 
     def test_text_json_key_order_is_not_a_behavior_difference(self):
         left = {"id": 1, "result": {"content": [{"type": "text", "text": '{"b":2,"a":1}'}],
@@ -71,6 +117,39 @@ class OperationQualificationTests(unittest.TestCase):
             q.tool_value({"result": {"content": [{"type": "text", "text": '{"x":1}'}],
                                      "structuredContent": {"x": 2}}})
 
+    def test_structured_content_cannot_change_boolean_number_types(self):
+        for text, structured in ((False, 0), (True, 1), (1, True), (0.0, False)):
+            with self.subTest(text=text, structured=structured), \
+                    self.assertRaisesRegex(q.QualificationError, "disagreement"):
+                q.tool_value({"result": {"content": [{"type": "text", "text": json.dumps({"nested": [text]})}],
+                                         "structuredContent": {"nested": [structured]}}})
+
+    def test_complete_result_rejects_numeric_retryable_and_error_flags(self):
+        def response(retryable=False, is_error=True):
+            return {"result": {"isError": is_error, "content": [{"type": "text", "text": json.dumps(
+                {"error": {"code": "invalid_request", "retryable": retryable}})}]}}
+        for changed in (response(retryable=0), response(is_error=1)):
+            with self.subTest(changed=changed), \
+                    self.assertRaisesRegex(q.QualificationError, "full public MCP result differs"):
+                q.compare_case({"kind": "error"}, response(), changed)
+
+    def test_evidence_provenance_requires_a_boolean_untrusted_flag(self):
+        response = {"result": {"content": [{"type": "text", "text": "{}"}], "structuredContent": {},
+                               "_meta": {"provenance": {"untrusted_content": 1, "source": "analysis_target"}}}}
+        with self.assertRaisesRegex(q.QualificationError, "target provenance"):
+            q.evidence_value(response)
+
+    def test_summary_counts_cannot_be_booleans(self):
+        payload = {"kind": "evidence-bundle-summary", "filters": {}, "total_retained_records": 0,
+                   "matching_records": 0, "unknown_revisions": 0, "records": []}
+        query = {"arguments": {"detail": "summary"}}
+        for field in ("total_retained_records", "matching_records", "unknown_revisions"):
+            with self.subTest(field=field), self.assertRaisesRegex(q.QualificationError, "summary/filter projection"):
+                structured = {"result": {**payload, field: False}}
+                response = {"result": {"content": [{"type": "text", "text": json.dumps(structured)}],
+                                       "structuredContent": structured, "_meta": q.TARGET_META}}
+                q.check_retention_response(query, response, [])
+
     def test_non_json_text_is_compared_exactly(self):
         left = {"result": {"content": [{"type": "text", "text": 'not JSON'}]}}
         right = {"result": {"content": [{"type": "text", "text": 'different text'}]}}
@@ -88,6 +167,17 @@ class OperationQualificationTests(unittest.TestCase):
             q.compare_registration(rows, native)
         with self.assertRaisesRegex(q.QualificationError, "missing public MCP"):
             q.compare_registration(rows, native[1:])
+
+    def test_schema_keywords_and_annotations_cannot_change_boolean_number_types(self):
+        rows = [{"name": name, "inputSchema": {"type": "object", "additionalProperties": False},
+                 "outputSchema": {"type": "object"}, "annotations": {"readOnlyHint": True}}
+                for name in ("inspect_elf_notes", "get_evidence_bundle")]
+        for field, keyword, replacement in (("inputSchema", "additionalProperties", 0),
+                                            ("annotations", "readOnlyHint", 1)):
+            native = [{**deepcopy(row), "name": "rea_" + row["name"]} for row in rows]
+            native[0][field][keyword] = replacement
+            with self.subTest(field=field), self.assertRaisesRegex(q.QualificationError, field):
+                q.compare_registration(rows, native)
 
     def test_elf_fixture_bytes_have_independent_endianness_and_alias_facts(self):
         for bits in (32, 64):

@@ -2,7 +2,7 @@
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! Shared admission and observation checks for bounded Ghidra analysis.
-//! Legacy inventory keeps its original bridge; revision 2 has a distinct profile and source identity.
+//! Legacy and revision 2 bridges retain their bytes; revision 3 selects the fixed Ghidra 12.1.4 engine.
 
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use super::{is_sha256, sha256, ReaStaticRequest, StaticOperation, StaticProvider, WorkerRequest};
 
 pub(crate) const ANALYSIS_PROFILE: &str = "hepta.ghidra.elf-functions.v1";
+pub(crate) const ANALYSIS_PROFILE_1214: &str = "hepta.ghidra.12.1.4.elf-functions.v1";
 pub(crate) const ANALYZERS: [&str; 4] = [
 	"Disassemble Entry Points",
 	"Function Start Search",
@@ -35,6 +36,13 @@ pub(crate) fn bridge(operation: StaticOperation, revision: Option<u32>) -> Resul
 		(Some(2), operation) => {
 			operation_name(operation)?;
 			Ok(include_str!("rea_ghidra_analysis_bridge.java"))
+		}
+		(Some(3), StaticOperation::Inventory) => {
+			Ok(include_str!("rea_ghidra_inventory_1214_v3.java"))
+		}
+		(Some(3), operation) => {
+			operation_name(operation)?;
+			Ok(include_str!("rea_ghidra_analysis_1214_v3.java"))
 		}
 		_ => bail!("Ghidra operation requires an admitted bridge revision"),
 	}
@@ -106,14 +114,17 @@ pub(crate) fn validate_observation(
 ) -> Result<()> {
 	let operation = input.request.operation;
 	let name = operation_name(operation)?;
-	let revision = input
+	let engine = input
 		.profile
 		.ghidra_engine
 		.as_ref()
-		.context("Ghidra installation identity absent")?
-		.bridge_revision;
+		.context("Ghidra installation identity absent")?;
+	let revision = engine.bridge_revision;
+	let (version, release_sha256) = super::engine_profile::release_identity(revision)?;
 	bridge(operation, revision)?;
-	if observation["engine_version"] != "12.2"
+	if engine.engine_version != version
+		|| engine.release_archive_sha256 != release_sha256
+		|| observation["engine_version"] != version
 		|| observation["operation"] != name
 		|| observation["target_executed"] != false
 		|| observation["external_libraries_loaded"] != false
@@ -122,17 +133,17 @@ pub(crate) fn validate_observation(
 		bail!("Ghidra observation does not match its admitted fixed semantics");
 	}
 	if operation == StaticOperation::Inventory {
-		let schema = if revision == Some(2) {
+		let schema = if revision.is_some() {
 			"hepta.rea.ghidra-observation.v2"
 		} else {
 			"hepta.rea.ghidra-observation.v1"
 		};
-		if revision == Some(2)
-			&& (observation["bridge_revision"] != 2
+		if revision.is_some()
+			&& (observation["bridge_revision"].as_u64() != revision.map(u64::from)
 				|| observation["source_sha256"] != input.request.artifact_sha256
 				|| observation["source_bytes"].as_u64() != Some(source_bytes))
 		{
-			bail!("Ghidra revision 2 inventory source identity mismatch");
+			bail!("Ghidra inventory bridge or source identity mismatch");
 		}
 		if observation["schema"] != schema
 			|| observation["auto_analysis_performed"] != false
@@ -143,9 +154,14 @@ pub(crate) fn validate_observation(
 		return Ok(());
 	}
 	validate_selection(input.profile.provider, &input.request)?;
+	let analysis_profile = if revision == Some(3) {
+		ANALYSIS_PROFILE_1214
+	} else {
+		ANALYSIS_PROFILE
+	};
 	if observation["schema"] != "hepta.rea.ghidra-analysis.v1"
-		|| observation["bridge_revision"] != 2
-		|| observation["analysis_profile"] != ANALYSIS_PROFILE
+		|| observation["bridge_revision"].as_u64() != revision.map(u64::from)
+		|| observation["analysis_profile"] != analysis_profile
 		|| observation["enabled_analyzers"] != json!(ANALYZERS)
 		|| observation["analysis_completed"] != true
 		|| observation["auto_analysis_performed"] != true

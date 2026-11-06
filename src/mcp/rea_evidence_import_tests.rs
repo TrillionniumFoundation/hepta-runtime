@@ -18,6 +18,54 @@ fn payload(result: &CallToolResult) -> Value {
 	serde_json::from_str(&result.content[0].as_text().unwrap().text).unwrap()
 }
 
+#[test]
+fn original_public_import_error_objects_match_without_reparsing_text() {
+	let fixture: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_evidence_import_errors.json"
+	))
+	.unwrap();
+	let cases = fixture["cases"].as_array().unwrap();
+	assert_eq!(cases.len(), 38);
+	for case in cases {
+		let text = case["original_text"].as_str().unwrap();
+		let original: Value = serde_json::from_str(text).unwrap();
+		let result = error_result(Failure(original["error"].clone()));
+		assert_eq!(
+			serde_json::to_value(result).unwrap(),
+			case["original_result"],
+			"{}",
+			case["id"]
+		);
+	}
+}
+
+#[test]
+fn native_extension_errors_keep_complete_diagnostics_without_guessed_order() {
+	let failure = profile_gap("unpaired UTF-16 surrogate", json!({"offset":7}));
+	let original = serde_json::to_value(failure.clone().wire()).unwrap();
+	assert_eq!(
+		serde_json::to_value(error_result(failure)).unwrap(),
+		original
+	);
+	let failure = Failure::schema_exception("Cannot convert object to primitive value");
+	let original = serde_json::to_value(failure.clone().wire()).unwrap();
+	assert_eq!(
+		serde_json::to_value(error_result(failure)).unwrap(),
+		original
+	);
+}
+
+#[test]
+fn unrecognized_import_error_detail_does_not_publish_a_partial_text_prefix() {
+	let mut failure = Failure::integrity("retained primary failure");
+	failure.0["details"]["native_diagnostic"] = json!({"z":1,"a":2});
+	let original = serde_json::to_value(failure.clone().wire()).unwrap();
+	assert_eq!(
+		serde_json::to_value(error_result(failure)).unwrap(),
+		original
+	);
+}
+
 async fn call(
 	path: &std::path::Path,
 	root: &std::path::Path,

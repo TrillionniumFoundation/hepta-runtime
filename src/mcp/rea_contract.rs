@@ -146,10 +146,44 @@ impl Failure {
 	}
 
 	pub(super) fn wire(self) -> CallToolResult {
-		let text = match self.0 {
+		self.wire_text(None)
+	}
+
+	/// Use an independently established producer order for this error profile.
+	/// Native extension failures may contain objects outside that profile. Keep
+	/// their existing complete diagnostic instead of dropping the primary error
+	/// or inventing an upstream order for fields the resolver cannot establish.
+	pub(super) fn wire_with_order(
+		self,
+		order: &dyn super::rea_response_encoding::ObjectOrder,
+	) -> CallToolResult {
+		use super::rea_response_encoding::{write_json_view, JsonView};
+		let text = {
+			// Drop an incomplete encoding before the fallback allocates its text.
+			let mut bytes = Vec::new();
+			let fields = [("error", JsonView::Value(&self.0))];
+			if self.0.is_object()
+				&& write_json_view(
+					JsonView::Object(&fields),
+					order,
+					super::rea_evidence::canonical_js_number,
+					&mut bytes,
+				)
+				.is_ok()
+			{
+				String::from_utf8(bytes).ok()
+			} else {
+				None
+			}
+		};
+		self.wire_text(text)
+	}
+
+	fn wire_text(self, ordered_text: Option<String>) -> CallToolResult {
+		let text = ordered_text.unwrap_or_else(|| match self.0 {
 			Value::String(message) => message,
 			value => json!({"error":value}).to_string(),
-		};
+		});
 		let mut result = CallToolResult::error(vec![ContentBlock::text(text)]);
 		result.meta = Some(target_meta());
 		result

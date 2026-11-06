@@ -67,10 +67,11 @@ class Session:
         report["sessions"][label+"/"+scenario]=self.state
     def observe(self,name,operation,arguments,response):
         value=q.tool_value(response)
-        row={"id":name,"operation":operation,"arguments":arguments,"value":value,"orders":orders(value)}
+        row={"id":name,"operation":operation,"arguments":arguments,"value":value,
+             "orders":orders(value),"response":response}
         self.rows.append(row)
         path=self.output/f"call-{len(self.rows):03d}-{name}.json"
-        q.write_json(path,{**row,"response":response})
+        q.write_json(path,row)
         self.state["rows"].append({"id":name,"path":str(path),"sha256":q.file_hash(path)})
         return value
     def call(self,name,operation,arguments):
@@ -88,6 +89,36 @@ class Session:
 def counts(value, imported, unknowns, total):
     q.require(payload(value)=={"imported":imported,"unknowns_added":unknowns,"total":total},"import counters differ from independently selected candidate")
     q.require(value.get("_meta")==q.TARGET_META,"public import lost original untrusted target-content provenance")
+
+
+def compare_observation(old, new):
+    """Keep payload semantics and the unparsed CallToolResult as separate gates.
+
+    content.text is part of the public result. Parsing that string before the
+    only comparison used to hide error-producer key-order differences. A
+    cancellation notification has no response and remains a lifecycle fact;
+    it must never be counted as an equal fabricated CallToolResult.
+    """
+    q.require(not a.differences(old['arguments'],new['arguments']),
+              "producers received different inputs")
+    semantic=a.differences(old['value'],new['value'])+a.differences(old['orders'],new['orders'],'$/orders')
+    lifecycle=old.get('kind')=='observed-protocol-lifecycle'
+    q.require(lifecycle==(new.get('kind')=='observed-protocol-lifecycle'),
+              "producer observation kinds differ")
+    if lifecycle:
+        q.require('response' not in old and 'response' not in new,
+                  "suppressed response must not be invented")
+        full=None
+    else:
+        q.require('response' in old and 'response' in new,
+                  "original public response is missing")
+        q.require('result' in old['response'] and 'result' in new['response'],
+                  "public tool response was replaced by an RPC error")
+        full=a.differences(old['response']['result'],new['response']['result'],'$/CallToolResult')
+    differences=semantic+(full or [])
+    return {'status':'FAIL' if differences else 'PASS','differences':differences,
+            'parsed_value_status':'FAIL' if semantic else 'PASS',
+            'complete_call_tool_result_status':None if full is None else ('FAIL' if full else 'PASS')}
 
 
 def check_bundle(bundle, records, revisions):
@@ -362,9 +393,7 @@ def main(argv=None):
             left,right=sessions[('reference',scenario)],sessions[('native',scenario)]
             q.require([r['id'] for r in left.rows]==[r['id'] for r in right.rows],"producer request sequence differs")
             for old,new in zip(left.rows,right.rows):
-                q.require(old['arguments']==new['arguments'],"producers received different inputs")
-                differences=a.differences(old['value'],new['value'])+a.differences(old['orders'],new['orders'],'$/orders')
-                report['comparisons'].append({'id':scenario+'/'+old['id'],'status':'FAIL' if differences else 'PASS','differences':differences})
+                report['comparisons'].append({'id':scenario+'/'+old['id'],**compare_observation(old,new)})
         for key in ('inputSchema','outputSchema','annotations'):
             differences=a.differences(sessions[('reference','main')].state['contract'][key],sessions[('native','main')].state['contract'][key])
             report['comparisons'].append({'id':'contract/'+key,'status':'FAIL' if differences else 'PASS','differences':differences})
@@ -391,6 +420,10 @@ def main(argv=None):
     observed={label+'/'+scenario:len(session.rows) for (label,scenario),session in sessions.items()}
     report['finite_status']='PASS' if not report['errors'] and observed==expected and len(report['comparisons'])==118 and passed==118 else 'FAIL'
     report['counts']={key:len(session.rows) for key,session in ((label+'/'+scenario,s) for (label,scenario),s in sessions.items())}
+    full=[x for x in report['comparisons'] if x.get('complete_call_tool_result_status') is not None]
+    report['complete_call_tool_results']={'compared':len(full),
+        'matched':sum(x['complete_call_tool_result_status']=='PASS' for x in full),
+        'raw_jsonrpc_bytes':'Not inferred from object equality; retained wire requires a separate comparison.'}
     q.write_json(out/'qualification.json',report)
     print(json.dumps({'finite_status':report['finite_status'],'qualified':False,'passed':passed,'comparisons':len(report['comparisons']),'errors':report['errors'],'receipt':q.identity(out/'qualification.json')}))
     return 0 if report['finite_status']=='PASS' else 1

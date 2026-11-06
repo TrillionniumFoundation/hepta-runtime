@@ -12,13 +12,15 @@ use super::{absolute_normal_path, is_sha256, ReaStaticProfile};
 
 pub(crate) const GHIDRA_RELEASE_SHA256: &str =
 	"2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67";
+pub(crate) const GHIDRA_1214_RELEASE_SHA256: &str =
+	"ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db";
 pub(crate) const MAX_MANIFEST_BYTES: u64 = 8 * 1024 * 1024;
 pub(crate) const MAX_INSTALLATION_FILES: usize = 20_000;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct GhidraEngineProfile {
-	/// Absent preserves the original import-only bridge; revision 2 admits the repaired importer and bounded analysis.
+	/// Absent and revision 2 retain Ghidra 12.2; revision 3 explicitly selects the fixed 12.1.4 release.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub bridge_revision: Option<u32>,
 	pub java_home: String,
@@ -37,6 +39,14 @@ pub(crate) struct InstallationManifest {
 	pub engine_version: String,
 	pub release_archive_sha256: String,
 	pub files: BTreeMap<String, String>,
+}
+
+pub(crate) fn release_identity(revision: Option<u32>) -> Result<(&'static str, &'static str)> {
+	match revision {
+		None | Some(2) => Ok(("12.2", GHIDRA_RELEASE_SHA256)),
+		Some(3) => Ok(("12.1.4", GHIDRA_1214_RELEASE_SHA256)),
+		_ => bail!("Ghidra bridge revision does not select a fixed release"),
+	}
 }
 
 pub(crate) fn policy_paths(engine: &GhidraEngineProfile) -> Vec<String> {
@@ -59,27 +69,27 @@ pub(crate) fn validate_ghidra(profile: &ReaStaticProfile) -> Result<()> {
 		.ghidra_engine
 		.as_ref()
 		.context("Ghidra profile requires its installation manifest")?;
-	if !matches!(engine.bridge_revision, None | Some(2))
-		|| (engine.bridge_revision.is_none()
-			&& profile
-				.allowed_operations
-				.iter()
-				.any(|operation| *operation != super::StaticOperation::Inventory))
+	let (version, release_sha256) = release_identity(engine.bridge_revision)?;
+	if (engine.bridge_revision.is_none()
+		&& profile
+			.allowed_operations
+			.iter()
+			.any(|operation| *operation != super::StaticOperation::Inventory))
 		|| profile.java_engine.is_some()
 		|| !absolute_normal_path(&engine.java_home)
 		|| !absolute_normal_path(&engine.installation_root)
 		|| engine.installation_root.contains(':')
 		|| !absolute_normal_path(&engine.manifest_path)
 		|| !is_sha256(&engine.manifest_sha256)
-		|| engine.engine_version != "12.2"
-		|| engine.release_archive_sha256 != GHIDRA_RELEASE_SHA256
+		|| engine.engine_version != version
+		|| engine.release_archive_sha256 != release_sha256
 		|| profile.backend_executable != format!("{}/bin/java", engine.java_home)
 		|| profile.max_artifact_bytes > 8 * 1024 * 1024
 		|| profile.max_output_bytes < 2048
 		|| profile.memory_max_bytes < 1024 * 1024 * 1024
 		|| engine.runtime_files.len() > 16
 	{
-		bail!("Ghidra profile requires the fixed 12.2 distribution, Java 25 and bounded engine resources and an explicit revision 2 for analysis");
+		bail!("Ghidra profile requires its revision-bound fixed distribution, Java 25 and bounded engine resources and an explicit analysis bridge revision");
 	}
 	for name in [
 		"release",

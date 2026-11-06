@@ -86,6 +86,34 @@ def parse_json(raw):
                           QualificationError("non-finite JSON constant")))
 
 
+def finite_number(value):
+    # Do not coerce integers to float: large finite integers can overflow or
+    # round to a different value, and bool is an int subclass in Python.
+    return type(value) is int or (type(value) is float and math.isfinite(value))
+
+
+def json_equal(left, right):
+    """Compare finite JSON values without Python's boolean/number coercion.
+
+    As in rea_json_differential.diff, 1, 1.0 and 1e0 have the same numeric
+    value. Object order is immaterial; array order and every JSON kind remain
+    significant. This is semantic equality, not raw wire byte equality or
+    the RFC 8785 Evidence identifier algorithm.
+    """
+    if type(left) in (int, float) or type(right) in (int, float):
+        return finite_number(left) and finite_number(right) and left == right
+    if type(left) is not type(right):
+        return False
+    if left is None or type(left) in (bool, str):
+        return left == right
+    if type(left) is list:
+        return len(left) == len(right) and all(json_equal(a, b) for a, b in zip(left, right))
+    if type(left) is dict:
+        return (all(type(key) is str for key in left) and all(type(key) is str for key in right)
+                and left.keys() == right.keys() and all(json_equal(left[key], right[key]) for key in left))
+    return False
+
+
 def file_hash(path):
     h = hashlib.sha256()
     with open(path, "rb") as handle:
@@ -253,7 +281,7 @@ class Mcp:
             raw = json.dumps(value, ensure_ascii=True, separators=(",", ":"), allow_nan=False).encode() + b"\n"
         else:
             # Preserve reviewed JSON numeric spellings such as 1e0 and 1.0.
-            require(parse_json(raw_params) == params, "raw request parameters do not match their parsed facts")
+            require(json_equal(parse_json(raw_params), params), "raw request parameters do not match their parsed facts")
             raw = (b'{"jsonrpc":"2.0","id":' + str(request_id).encode()
                    + b',"method":' + json.dumps(method).encode() + b',"params":' + raw_params + b'}\n')
         self._log("sent", raw)
@@ -382,14 +410,14 @@ def tool_value(response):
         # string; never delete text to make an unequal response agree.
         text = content[0]["text"]
     if "structuredContent" in result:
-        require(result["structuredContent"] == text, "text/structuredContent disagreement")
+        require(json_equal(result["structuredContent"], text), "text/structuredContent disagreement")
     return {**result, "content": [{**content[0], "text": text}]}
 
 
 def evidence_value(response):
     normalized = tool_value(response)
     require("rpc_error" not in normalized and not normalized.get("isError", False), "expected successful Evidence")
-    require("structuredContent" in normalized and normalized.get("_meta") == TARGET_META,
+    require("structuredContent" in normalized and json_equal(normalized.get("_meta"), TARGET_META),
             "Evidence is missing structured content or target provenance")
     return normalized["structuredContent"]
 
@@ -580,7 +608,7 @@ def check_retention_response(query, response, records):
     if query["arguments"].get("detail", "complete") == "complete":
         require(set(payload) == {"artifacts", "providers", "environments", "scenarios", "captures", "unknowns", "records"},
                 "complete bundle does not have the seven original manifests")
-        require(payload["records"] == records, "retained set/order/content differs from completed observations")
+        require(json_equal(payload["records"], records), "retained set/order/content differs from completed observations")
         require(all(payload[key] == [] for key in ("environments", "scenarios", "captures", "unknowns")),
                 "notes-only session contains unrelated bundle metadata")
         return
@@ -590,28 +618,29 @@ def check_retention_response(query, response, records):
         facts = {"evidence_id": record["evidence_id"], "operation": record["operation"],
                  "target_sha256": record["subject"]["digest"]["sha256"],
                  "analysis_profile_digest": None, "procedure_address": None}
-        if not all(facts[key] == value for key, value in filters.items()):
+        if not all(json_equal(facts[key], value) for key, value in filters.items()):
             continue
         expected.append({key: record[key] for key in ("evidence_id", "subject", "provider", "operation", "confidence", "authority")}
                         | {"analysis_profile_digest": None, "retention": "complete-record",
                            "limitation_count": len(record["limitations"]),
                            "native_dossier": {"available": False, "reason": "different-operation"}})
-    require(payload == {"kind": "evidence-bundle-summary", "filters": filters,
+    require(json_equal(payload, {"kind": "evidence-bundle-summary", "filters": filters,
                         "total_retained_records": len(records), "matching_records": len(expected),
-                        "unknown_revisions": 0, "records": expected}, "independent summary/filter projection differs")
+                        "unknown_revisions": 0, "records": expected}), "independent summary/filter projection differs")
 
 
 def check_independent_facts(record, case):
     facts = case["facts"]
-    require(record["provider"] == PROVIDER and record["operation"] == "inspect_elf_notes", "provider/operation mismatch")
+    require(json_equal(record["provider"], PROVIDER) and record["operation"] == "inspect_elf_notes", "provider/operation mismatch")
     require(record["evidence_id"] == semantic_evidence_id(record), "semantic Evidence ID mismatch")
     require(record["relationship_coverage"] is None and record["raw_result"] is None,
             "unexpected notes relationship/raw result")
     value = record["normalized_result"]
-    require(value["artifact"] == {key: facts[key] for key in ("path", "sha256", "bytes")}, "artifact identity mismatch")
-    require(len(value["entries"]) == facts["entries"] and len(value["tables"]) == facts["tables"], "independent entry/table count mismatch")
-    require(value["coverage"] == {"status": "complete", "examined_tables": facts["tables"],
-                                  "examined_entries": facts["entries"]}, "coverage does not match independent facts")
+    require(json_equal(value["artifact"], {key: facts[key] for key in ("path", "sha256", "bytes")}), "artifact identity mismatch")
+    require(json_equal(len(value["entries"]), facts["entries"]) and json_equal(len(value["tables"]), facts["tables"]),
+            "independent entry/table count mismatch")
+    require(json_equal(value["coverage"], {"status": "complete", "examined_tables": facts["tables"],
+                                        "examined_entries": facts["entries"]}), "coverage does not match independent facts")
     for field in ("format", "byte_order"):
         if field in facts:
             require(value[field] == facts[field], "independent " + field + " mismatch")
@@ -622,12 +651,12 @@ def check_independent_facts(record, case):
         if "descriptor_hex" in facts:
             require(first["descriptor"]["hex"] == facts["descriptor_hex"], "independent descriptor mismatch")
     defaults = {"max_file_bytes": 67108864, "max_entries": 32, **case["arguments"]}
-    require(record["parameters"] == defaults, "defaulted operation parameters mismatch")
+    require(json_equal(record["parameters"], defaults), "defaulted operation parameters mismatch")
 
 
 def compare_case(case, reference, native):
     left, right = tool_value(reference), tool_value(native)
-    require(left == right, "full public MCP result differs from the frozen original")
+    require(json_equal(left, right), "full public MCP result differs from the frozen original")
     if case["kind"] == "success":
         check_independent_facts(evidence_value(reference), case)
     else:
@@ -644,7 +673,7 @@ def compare_registration(reference, native):
         # Only notes itself is being qualified. Bundle schemas describe the
         # original complete bundle, but the surrounding session tool is separate.
         for field in ("inputSchema", "outputSchema", "annotations"):
-            require(original[upstream].get(field) == replacement[downstream].get(field),
+            require(json_equal(original[upstream].get(field), replacement[downstream].get(field)),
                     upstream + ": full public " + field + " differs")
             checks.append({"tool": upstream, "field": field, "sha256": digest(original[upstream].get(field))})
     return checks
@@ -771,7 +800,7 @@ def main(argv=None):
                 right = native.call("rea_get_evidence_bundle", query["arguments"])
                 row["reference"] = artifact_json(output, "retention/" + query["id"] + ".reference.json", left)
                 row["native"] = artifact_json(output, "retention/" + query["id"] + ".native.json", right)
-                require(tool_value(left) == tool_value(right), "retained bundle/summary/filter responses differ")
+                require(json_equal(tool_value(left), tool_value(right)), "retained bundle/summary/filter responses differ")
                 check_retention_response(query, left, list(retained.values()))
                 row["status"] = "PASS"
             except Exception as error:
@@ -805,11 +834,11 @@ def main(argv=None):
         report["native_after"] = identity(args.binary)
         report["source_after"] = artifact_json(output, "source-after.json", selection.snapshot())
         report["producer_files_after"] = [{**identity(producer_repo / name), "path": name} for name in PRODUCER_FILES]
-        require(report["producer_files_after"] == report["producer_files"], "actual qualification producer changed during execution")
-        require(report["reference_before"] == report["reference_after"], "reference changed during execution")
-        require(report["native_before"] == report["native_after"], "native binary changed during execution")
-        require(parse_json((output / report["source_before"]["path"]).read_bytes()) ==
-                parse_json((output / report["source_after"]["path"]).read_bytes()), "source changed during execution")
+        require(json_equal(report["producer_files_after"], report["producer_files"]), "actual qualification producer changed during execution")
+        require(json_equal(report["reference_before"], report["reference_after"]), "reference changed during execution")
+        require(json_equal(report["native_before"], report["native_after"]), "native binary changed during execution")
+        require(json_equal(parse_json((output / report["source_before"]["path"]).read_bytes()),
+                           parse_json((output / report["source_after"]["path"]).read_bytes())), "source changed during execution")
         cold_closed = all(row["close"]["forced_cleanup"] == [] and row["close"]["returncode"] == 0
                           and row["close"]["reader_stopped"] and row["close"]["owner_pidfd_exited"]
                           and row["close"]["process_group_gone"] for row in report["cold_sessions"])

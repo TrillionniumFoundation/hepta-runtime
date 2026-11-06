@@ -99,6 +99,41 @@ fn old_request_serialization_and_inventory_bridge_are_unchanged() {
 		bridge(StaticOperation::Decompile, Some(2)).unwrap(),
 		bridge(StaticOperation::Inventory, None).unwrap()
 	);
+	assert_eq!(
+		sha256(
+			bridge(StaticOperation::Inventory, Some(2))
+				.unwrap()
+				.as_bytes()
+		),
+		"a4d166231a4eade27ae1e403b85718da9729c4d752822e9bf9a7ff7fe37878f4"
+	);
+	assert_eq!(
+		sha256(
+			bridge(StaticOperation::Decompile, Some(2))
+				.unwrap()
+				.as_bytes()
+		),
+		"1b20b872258f26ba75ac463afd1c35a544f76efd3f0bcc05e29515eb940fdf21"
+	);
+}
+
+#[test]
+fn revision_three_has_separate_fixed_engine_bridges_without_legacy_rebinding() {
+	for operation in [
+		StaticOperation::Inventory,
+		StaticOperation::Functions,
+		StaticOperation::Function,
+		StaticOperation::Decompile,
+		StaticOperation::Xrefs,
+	] {
+		let source = bridge(operation, Some(3)).unwrap();
+		assert!(source.contains("equals(\"12.1.4\")"));
+		assert!(source.contains("report.put(\"bridge_revision\",3)"));
+		assert!(!source.contains("equals(\"12.2\")"));
+		assert_ne!(source, bridge(operation, Some(2)).unwrap());
+		assert!(bridge(operation, Some(4)).is_err());
+	}
+	assert!(bridge(StaticOperation::Sources, Some(3)).is_err());
 }
 
 #[test]
