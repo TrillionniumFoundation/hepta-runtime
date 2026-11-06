@@ -34,6 +34,7 @@ pub(crate) fn fixture() -> SemanticReplayParams {
 }
 
 #[tokio::test]
+#[serial_test::serial(weight_semantic_worker)]
 async fn replay_binds_raw_envelope_and_retains_readonly_scope() {
 	let mut params = fixture();
 	params.request_json.push_str("\n ");
