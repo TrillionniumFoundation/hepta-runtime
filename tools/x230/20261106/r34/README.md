@@ -201,3 +201,14 @@ postflight, and no test, benchmark or auditor was reexecuted.
 The complete bounded observation archive is being assembled from the preserved
 originals. Its publication remains pending at this result milestone. The source
 of the unexecuted capacity component is retained as preparation only.
+
+
+## Observation archive attempt 01: packaging failure preserved
+
+The first bounded observation collector, job `1a1af44cd02-fc05-6739`, failed with exit 1 and `frozen original input differs` before creating an archive, manifest or compact result. Its original frozen source, bindings and static review remain under observation-archive-sealed-01/; the native failure and subsequent read-only diagnostic remain under observation-archive-failed-01/.
+
+The stable diagnostic job `1a1af47b4a8-fc05-674c` checked all 99 fixed identities: 96 matched and exactly three lifecycle-tool pins did not. The collector had inherited the R33 hashes for the two lifecycle scripts whose root paths the original R34 installer rewrote, and for the resulting lifecycle manifest. All three actual R34 hashes exactly match the original 26,390-byte parent-tools-install receipt (SHA256 `b783a85e4b41e5202305b7739e63eace75c71d4ea65f14fcbe7d05e5ceef30a2`) and two independent reconstructions from preserved older source bytes. This is a collector prebinding error; no original measurement was altered or repeated. A separately reviewed collector 02 and separate output namespace will preserve this failed first archive attempt.
+
+## Unexecuted capacity preparation 02
+
+capacity-component/implementation-02/ retains 40 frozen source/preparation files (572,177 bytes), with its independent review alongside. It is unformatted, uncompiled and unexecuted. R34's rejected observation prerequisite ended its execution chain: no capacity build, cell or normal lifecycle run followed. Actual inputs remain unsealed and the external holder's final closure procedure is not implemented. These materials establish preparation only, with no capacity result, throughput benefit or adoption claim.
