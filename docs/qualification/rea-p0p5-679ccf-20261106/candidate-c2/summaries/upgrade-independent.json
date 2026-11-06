@@ -1,0 +1,316 @@
+{
+  "schema": "hepta.rea.checkpoint-upgrade-independent.v1",
+  "status": "PASS",
+  "passed": true,
+  "qualified_profile": "Linux/private-authenticated-HTTP/checkpoint-v1/c25-B-c25-B",
+  "global_status": "HOLD/NO_GO",
+  "actual_producer": {
+    "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105/scripts/rea_evidence_checkpoint_upgrade.py",
+    "bytes": 82390,
+    "sha256": "615f0bbecdc30df2b48a9bf26b6546cf5f6218bc39a6c2cbbc8ec1fbe1715248"
+  },
+  "qualification": {
+    "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/candidate-c-r2/checkpoint-upgrade-r1/qualification.json",
+    "bytes": 49713,
+    "sha256": "65fd3b96563df7e53fa451adf65787dc8e931dad1fdbadbcd109ecad1ac496f1"
+  },
+  "original_outer": {
+    "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/candidate-c-r2/checkpoint-upgrade-r1-outer.json",
+    "bytes": 7141,
+    "sha256": "19b3bd816b483141bd836ab2faeebaffb7214a1d2e4e2a0282fb1ed78d3afb70"
+  },
+  "facts": [
+    {
+      "name": "original_outer_and_actual_repository_entrypoint",
+      "passed": true,
+      "job_id": "1a1b00d13aa-fc05-6dbf",
+      "stdout_bytes": 591,
+      "stderr_bytes": 0
+    },
+    {
+      "name": "all_220_saved_members_same_bytes_and_private_modes",
+      "passed": true,
+      "members": 220
+    },
+    {
+      "name": "both_builds_nine_matrix_and_four_original_gates",
+      "passed": true,
+      "builds": {
+        "old": {
+          "commit": "c25e4cef0610816bfd1263b69d3dd63e4114aa49",
+          "tree": "c6db025f5902570bd63520751cf84c57505eb6f4",
+          "runtime": {
+            "bytes": 50656984,
+            "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/hepta-runtime",
+            "sha256": "9cde66234030515651177e3d8ab113b2b6f674ee76196283c71874348a0b6c90"
+          },
+          "matrix_stages": [
+            "cargo-version",
+            "rustc-version",
+            "nextest-version",
+            "fmt-check",
+            "clippy-all-features",
+            "clippy-no-default-features",
+            "nextest-all-features",
+            "nextest-no-default-features",
+            "build-native-binary"
+          ],
+          "source_files": 1389,
+          "supplemental_actual_tests": 4,
+          "test_artifact_identity": {
+            "bytes": 95123728,
+            "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-target/debug/deps/hepta_runtime-bbb6bf56b2736576",
+            "sha256": "576f93386375a9c41591db4177076f79b631df92a9d17481c1a7f705445643e3"
+          },
+          "historical_test_binary_rehashed_now": false
+        },
+        "new": {
+          "commit": "249639e5ef33de444abb5c506cb089de31e20fce",
+          "tree": "51bac4e4095f35bae0149523f773a081f184bda4",
+          "runtime": {
+            "bytes": 51604432,
+            "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/candidate-c-r2/hepta-runtime",
+            "sha256": "c02d4b9ede2206cf8abb6603ca59fab05acb13e54a2d2be339a52140e9126ec4"
+          },
+          "matrix_stages": [
+            "cargo-version",
+            "rustc-version",
+            "nextest-version",
+            "fmt-check",
+            "clippy-all-features",
+            "clippy-no-default-features",
+            "nextest-all-features",
+            "nextest-no-default-features",
+            "build-native-binary"
+          ],
+          "source_files": 1455,
+          "supplemental_actual_tests": 4,
+          "test_artifact_identity": {
+            "bytes": 98541896,
+            "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-target/debug/deps/hepta_runtime-bbb6bf56b2736576",
+            "sha256": "a3769d9ca9453fc03a70f7d026ae4c5e559c3c47afeb122621ca6f04d8856191"
+          },
+          "historical_test_binary_rehashed_now": false
+        }
+      }
+    },
+    {
+      "name": "real_original_16_17_record_envelopes_and_18_unknown_fields",
+      "passed": true,
+      "jsonrpc_id": 28,
+      "record_root_fields": [
+        16,
+        17,
+        16
+      ],
+      "unknown_revisions": [
+        1,
+        2,
+        3
+      ],
+      "actual_reordered": false,
+      "historical_paths_substituted": false
+    },
+    {
+      "name": "all_17_raw_http_tool_calls_and_four_real_server_terminals",
+      "passed": true,
+      "phases": [
+        {
+          "phase": "01-old-initial",
+          "tools_calls": 3,
+          "http_requests": 6,
+          "readiness_failures": 0,
+          "catalog_count": 100
+        },
+        {
+          "phase": "02-new-checkpoint",
+          "tools_calls": 6,
+          "http_requests": 9,
+          "readiness_failures": 0,
+          "catalog_count": 103
+        },
+        {
+          "phase": "03-old-rollback",
+          "tools_calls": 3,
+          "http_requests": 6,
+          "readiness_failures": 0,
+          "catalog_count": 100
+        },
+        {
+          "phase": "04-new-explicit-resume",
+          "tools_calls": 5,
+          "http_requests": 8,
+          "readiness_failures": 0,
+          "catalog_count": 103
+        }
+      ],
+      "terminals": [
+        {
+          "phase": "01-old-initial",
+          "pid": 3386114,
+          "start_ticks": 103268200,
+          "process_group": 3386114,
+          "session_id": 3386114,
+          "executable": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/hepta-runtime",
+          "returncode": -9,
+          "wait_completed": true,
+          "pidfd_exited": true,
+          "process_group_gone": true,
+          "credential_absent": true
+        },
+        {
+          "phase": "02-new-checkpoint",
+          "pid": 3386127,
+          "start_ticks": 103268316,
+          "process_group": 3386127,
+          "session_id": 3386127,
+          "executable": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/candidate-c-r2/hepta-runtime",
+          "returncode": -9,
+          "wait_completed": true,
+          "pidfd_exited": true,
+          "process_group_gone": true,
+          "credential_absent": true
+        },
+        {
+          "phase": "03-old-rollback",
+          "pid": 3386175,
+          "start_ticks": 103268439,
+          "process_group": 3386175,
+          "session_id": 3386175,
+          "executable": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/hepta-runtime",
+          "returncode": -9,
+          "wait_completed": true,
+          "pidfd_exited": true,
+          "process_group_gone": true,
+          "credential_absent": true
+        },
+        {
+          "phase": "04-new-explicit-resume",
+          "pid": 3386189,
+          "start_ticks": 103268533,
+          "process_group": 3386189,
+          "session_id": 3386189,
+          "executable": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/candidate-c-r2/hepta-runtime",
+          "returncode": -9,
+          "wait_completed": true,
+          "pidfd_exited": true,
+          "process_group_gone": true,
+          "credential_absent": true
+        }
+      ],
+      "initialization_readiness_failures": [],
+      "automatic_retry": false,
+      "logical_phase_retries": 0
+    },
+    {
+      "name": "cold_empty_then_explicit_resume_and_exact_cross_stage_deliveries",
+      "passed": true,
+      "original_records": 3,
+      "unknown_revisions": 3,
+      "mixed_records": 5,
+      "checkpoint_id": "ecp1_872f3272382d266c15513d2bdbc9c51f8f4329e9aea0affac788183e0f5fd467",
+      "checkpoint_reused": true,
+      "unknown_history": [
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "name": "immutable_checkpoint_manifest_sidecar_and_deleted_sources",
+      "passed": true,
+      "files": {
+        "bundle.json": {
+          "bytes": 18194,
+          "sha256": "b4003bc8a581e7df1fef303ddda60c34e1f1fc5e6e3213c6f6223d10ed628847",
+          "dev": 2050,
+          "ino": 6951466,
+          "mode": 33152,
+          "uid": 1000,
+          "gid": 1000,
+          "nlink": 1,
+          "size": 18194,
+          "mtime_ns": 1793955017642308269,
+          "ctime_ns": 1793955017642308269
+        },
+        "manifest.json": {
+          "bytes": 570,
+          "sha256": "872f3272382d266c15513d2bdbc9c51f8f4329e9aea0affac788183e0f5fd467",
+          "dev": 2050,
+          "ino": 6951490,
+          "mode": 33152,
+          "uid": 1000,
+          "gid": 1000,
+          "nlink": 1,
+          "size": 570,
+          "mtime_ns": 1793955017645363341,
+          "ctime_ns": 1793955017645363341
+        },
+        "retention.json": {
+          "bytes": 2677,
+          "sha256": "68172a0ebfef1551756666e8eae211c77b19525306f0da3422df91ed580362c8",
+          "dev": 2050,
+          "ino": 6951477,
+          "mode": 33152,
+          "uid": 1000,
+          "gid": 1000,
+          "nlink": 1,
+          "size": 2677,
+          "mtime_ns": 1793955017644274387,
+          "ctime_ns": 1793955017644274387
+        }
+      },
+      "origins": {
+        "ev_5810a3664cf217d89212569e9461aeb4a307705dc158927c56dfb7056e357962": "unknown",
+        "ev_583f51058e2af868ca32702c7f92268207c0435e3de83e71d251a44ee5acc7bc": "unknown",
+        "ev_a3d58ed2ddd826dc42a4664b91ff06509411252909fa364a282e4f413a165313": "unknown",
+        "ev_0b89f2f5bf030af4218eddae0fca02536ef73c076877494bccaf092c6dc086bd": "apk-tool-derived",
+        "ev_81eb7c5ca06a5fd1794de7cc4ffd509f43f0cf211296a826666c6a119760170a": "native-tool"
+      },
+      "private_modes": true,
+      "current_namespace_identity_equal": true,
+      "deleted_input_paths": 3,
+      "credential_literal_not_recoverable_or_published": true
+    },
+    {
+      "name": "all_consumed_inputs_unchanged_on_final_descriptor_bound_recheck",
+      "passed": true,
+      "files": 1712
+    }
+  ],
+  "actual_tools_calls": 17,
+  "actual_server_terminals": 4,
+  "initialization_readiness_connection_refusals": 0,
+  "automatic_retry": false,
+  "logical_phase_retries": 0,
+  "payload_reruns": 0,
+  "read_only_git_commands": 3,
+  "actual_response_normalization": false,
+  "cross_version_calltoolresult_values_text_and_member_order": true,
+  "full_outer_jsonrpc_wire_equivalence": false,
+  "full_upgrade_qualified": false,
+  "full_rollback_qualified": false,
+  "production_qualified": false,
+  "cost_qualified": false,
+  "complete_rea_parity": false,
+  "credential_literal_recovered": false,
+  "scope_notes": [
+    "Only checkpoint-v1 on this Linux private authenticated HTTP A(c25)-C2(249639e5)-A-C2 combination.",
+    "The actual private HTTP whole Hepta catalogs were 100 for A and 103 for C2; this is not the REA-native ledger subset or an unobserved stdio catalog.",
+    "The actual C2 run had zero connection-refused readiness polls and zero logical phase/tool retries.",
+    "Historical original libtest artifacts are bound by retained compiler/output receipts; their overwritten target paths are not rehashed as historical binaries.",
+    "No deployment, release, general upgrade/rollback, all-operation parity, or cost conclusion."
+  ],
+  "started_unix_ns": 1793955914796756699,
+  "ended_unix_ns": 1793955918705651976,
+  "consumer": {
+    "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/consume_checkpoint_upgrade_c2_actual_r1.py",
+    "bytes": 35242,
+    "sha256": "dc533c7da4a05f4da6a5e5f444f2d261f97d9097e238e2e0e351e5565a17b081"
+  },
+  "consumed_inputs": {
+    "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/candidate-c-r2/checkpoint-upgrade-r1-independent-r1/consumed-inputs.json",
+    "bytes": 797031,
+    "sha256": "ffa699178ee57fc811a6ae8473808b259533ca385360e65813f4794c33e8ff77"
+  }
+}

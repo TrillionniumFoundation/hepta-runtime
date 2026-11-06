@@ -1,5 +1,8 @@
 # REA 6.8.0 native Rust integration — scoped P0-P5 register
 
+> Frozen C2 results: [Candidate C2 observations](C2_OBSERVATIONS_20261106_679CCF.md).
+> Complete replacement and production qualification remain HOLD / NO_GO, with 0/229 operations fully qualified.
+
 > This register preserves the original REA foundation qualification history.
 > Current #84 continuation routes and boundaries are documented in
 > [FULL_INTEGRATION.md](FULL_INTEGRATION.md) and [UNIFIED_RUNTIME.md](UNIFIED_RUNTIME.md).
