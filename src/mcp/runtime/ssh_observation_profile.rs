@@ -86,6 +86,8 @@ impl Stamp {
 #[derive(Clone)]
 struct PinnedFile {
 	path: PathBuf,
+	// Only immutable path syntax is shared. No descriptor or resolution is cached.
+	path_components: Arc<[std::ffi::CString]>,
 	stamp: Stamp,
 	digest: [u8; 32],
 	reference: Option<Arc<[u8]>>,
@@ -115,20 +117,20 @@ pub(super) fn absolute(path: &Path) -> Result<()> {
 pub(super) fn open_absolute(path: &Path, directory: bool) -> Result<File> {
 	absolute(path)?;
 	let mut current = File::open("/")?;
-	let parts: Vec<_> = path
+	let mut parts = path
 		.components()
 		.filter_map(|v| match v {
 			Component::Normal(v) => Some(v),
 			_ => None,
 		})
-		.collect();
-	for (index, part) in parts.iter().enumerate() {
+		.peekable();
+	while let Some(part) = parts.next() {
 		let name = std::ffi::CString::new(part.as_encoded_bytes())?;
 		let flags = libc::O_RDONLY
 			| libc::O_NOFOLLOW
 			| libc::O_NONBLOCK
 			| libc::O_CLOEXEC
-			| if index + 1 < parts.len() || directory {
+			| if parts.peek().is_some() || directory {
 				libc::O_DIRECTORY
 			} else {
 				0
@@ -152,12 +154,11 @@ pub(super) fn private_directory(path: &Path) -> Result<Stamp> {
 }
 
 fn checked_file(
-	path: &Path,
+	file: File,
 	maximum: usize,
 	private: bool,
 	executable: bool,
 ) -> Result<(File, Stamp)> {
-	let file = open_absolute(path, false)?;
 	let before = file.metadata()?;
 	if !before.is_file()
 		|| before.nlink() != 1
@@ -184,7 +185,7 @@ fn checked_file(
 }
 
 fn verify_read(
-	path: &Path,
+	reopen: impl FnOnce() -> Result<File>,
 	file: &File,
 	stamp: &Stamp,
 	length: usize,
@@ -193,7 +194,7 @@ fn verify_read(
 	if length as u64 != stamp.len
 		|| length > maximum
 		|| *stamp != Stamp::of(&file.metadata()?)
-		|| *stamp != Stamp::of(&open_absolute(path, false)?.metadata()?)
+		|| *stamp != Stamp::of(&reopen()?.metadata()?)
 	{
 		bail!("observation profile input changed");
 	}
@@ -206,12 +207,19 @@ fn read_file(
 	private: bool,
 	executable: bool,
 ) -> Result<(Stamp, Vec<u8>)> {
-	let (mut file, stamp) = checked_file(path, maximum, private, executable)?;
+	let (mut file, stamp) =
+		checked_file(open_absolute(path, false)?, maximum, private, executable)?;
 	let mut bytes = Vec::with_capacity(stamp.len as usize);
 	Read::by_ref(&mut file)
 		.take(maximum as u64 + 1)
 		.read_to_end(&mut bytes)?;
-	verify_read(path, &file, &stamp, bytes.len(), maximum)?;
+	verify_read(
+		|| open_absolute(path, false),
+		&file,
+		&stamp,
+		bytes.len(),
+		maximum,
+	)?;
 	Ok((stamp, bytes))
 }
 
@@ -255,9 +263,20 @@ impl PinnedFile {
 		if expected.is_some_and(|pin| hex_digest(pin).ok() != Some(digest)) {
 			bail!("observation profile byte pin mismatch");
 		}
+		// Cold reads and expected pins must succeed before retaining path syntax.
+		let path_components = path
+			.components()
+			.filter_map(|part| match part {
+				Component::Normal(part) => Some(part),
+				_ => None,
+			})
+			.map(|part| std::ffi::CString::new(part.as_encoded_bytes()))
+			.collect::<std::result::Result<Vec<_>, _>>()?
+			.into();
 		Ok((
 			Self {
 				path: path.to_owned(),
+				path_components,
 				stamp,
 				digest,
 				reference: None,
@@ -268,8 +287,35 @@ impl PinnedFile {
 			bytes,
 		))
 	}
+	fn open_path(&self) -> Result<File> {
+		// Start at a fresh root descriptor on every check. Cached names never
+		// stand in for resolving the current directories and final inode.
+		let mut current = File::open("/")?;
+		for (index, name) in self.path_components.iter().enumerate() {
+			let flags = libc::O_RDONLY
+				| libc::O_NOFOLLOW
+				| libc::O_NONBLOCK
+				| libc::O_CLOEXEC
+				| if index + 1 < self.path_components.len() {
+					libc::O_DIRECTORY
+				} else {
+					0
+				};
+			let fd = unsafe { libc::openat(current.as_raw_fd(), name.as_ptr(), flags) };
+			if fd < 0 {
+				return Err(std::io::Error::last_os_error().into());
+			}
+			current = unsafe { File::from_raw_fd(fd) };
+		}
+		Ok(current)
+	}
 	fn verify_identity(&self) -> Result<()> {
-		let (_, stamp) = checked_file(&self.path, self.maximum, self.private, self.executable)?;
+		let (_, stamp) = checked_file(
+			self.open_path()?,
+			self.maximum,
+			self.private,
+			self.executable,
+		)?;
 		if stamp != self.stamp {
 			bail!("observation profile changed after complete validation");
 		}
@@ -280,8 +326,12 @@ impl PinnedFile {
 	}
 	fn verify_checked(&self, check_current: &impl Fn() -> Result<()>) -> Result<()> {
 		check_current()?;
-		let (mut file, stamp) =
-			checked_file(&self.path, self.maximum, self.private, self.executable)?;
+		let (mut file, stamp) = checked_file(
+			self.open_path()?,
+			self.maximum,
+			self.private,
+			self.executable,
+		)?;
 		check_current()?;
 		if stamp != self.stamp {
 			bail!("observation profile changed");
@@ -319,7 +369,7 @@ impl PinnedFile {
 			check_current()?;
 		}
 		check_current()?;
-		verify_read(&self.path, &file, &stamp, length, self.maximum)?;
+		verify_read(|| self.open_path(), &file, &stamp, length, self.maximum)?;
 		check_current()?;
 		let content_matches = match &self.reference {
 			Some(reference) => matches_reference && length == reference.len(),

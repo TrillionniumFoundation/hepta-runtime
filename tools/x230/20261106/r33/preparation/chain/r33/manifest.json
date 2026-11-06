@@ -1,0 +1,153 @@
+{
+  "added_paths": [],
+  "baseline_compile_input_count": 220,
+  "baseline_compile_inputs": {
+    "bytes": 24156,
+    "path": "/workspace/scratch/84d692c73f59/review_optimization/r33_candidate/baseline-compile-inputs.json",
+    "sha256": "59c8d9a813b8ecabb7332dd6a7b896c1b8bdd022d7706070561aabf338c7ec6d"
+  },
+  "baseline_files": {
+    "src/mcp/runtime/ssh_observation_profile.rs": {
+      "bytes": 25079,
+      "path": "/workspace/scratch/84d692c73f59/review_optimization/r33_candidate/baseline-files/src/mcp/runtime/ssh_observation_profile.rs",
+      "sha256": "525d5b71600c53f1bedfcad89f9c1cfb590b80e38d5fb88bf0a00bf9b7b20d77"
+    },
+    "src/mcp/runtime/ssh_observation_profile_tests.rs": {
+      "bytes": 15273,
+      "path": "/workspace/scratch/84d692c73f59/review_optimization/r33_candidate/baseline-files/src/mcp/runtime/ssh_observation_profile_tests.rs",
+      "sha256": "1461b531322f4fa2371ea671e2fd0156b8fc03762ce4e83b906ca1debaf2887d"
+    }
+  },
+  "cancel_reserve_mixed_in": false,
+  "candidate_compile_input_count": 220,
+  "candidate_compile_inputs": {
+    "bytes": 24156,
+    "path": "/workspace/scratch/84d692c73f59/review_optimization/r33_candidate/candidate-compile-inputs.json",
+    "sha256": "ae2e2ab638d46ee4dc1276847f219174e81101317bb0ac4058a4317d64f0a591"
+  },
+  "candidate_patch": {
+    "bytes": 9507,
+    "path": "/workspace/scratch/84d692c73f59/review_optimization/r33_candidate/candidate.patch",
+    "sha256": "05472a554635d415bbafd4b2119c09d88696e90f4e0003cf81cfa8da9271b4d0"
+  },
+  "changed_files": {
+    "src/mcp/runtime/ssh_observation_profile.rs": {
+      "bytes": 26320,
+      "path": "/workspace/scratch/84d692c73f59/review_optimization/r33_candidate/source/src/mcp/runtime/ssh_observation_profile.rs",
+      "sha256": "8a8721585d9c5e06e8962a6d3a3f4d1976e694ce641d41254f5e693ae81e3007"
+    },
+    "src/mcp/runtime/ssh_observation_profile_tests.rs": {
+      "bytes": 19988,
+      "path": "/workspace/scratch/84d692c73f59/review_optimization/r33_candidate/source/src/mcp/runtime/ssh_observation_profile_tests.rs",
+      "sha256": "ac16d1168e353dfb33d02115492bf2eb6ea8d81d9dbf7513a2a2726ae876a52a"
+    }
+  },
+  "changed_paths": [
+    "src/mcp/runtime/ssh_observation_profile.rs",
+    "src/mcp/runtime/ssh_observation_profile_tests.rs"
+  ],
+  "construction_order": [
+    "export accepted R24 ancestor_commit",
+    "apply baseline-overlay.patch (R24 -> R32)",
+    "apply candidate.patch (R32 -> R33)",
+    "verify every candidate_compile_inputs digest"
+  ],
+  "diff_line_counts": {
+    "src/mcp/runtime/ssh_observation_profile.rs": {
+      "added_lines": 45,
+      "removed_lines": 9
+    },
+    "src/mcp/runtime/ssh_observation_profile_tests.rs": {
+      "added_lines": 120,
+      "removed_lines": 0
+    }
+  },
+  "independent_static_review": {
+    "agent": "/root/audit_acceptance",
+    "conclusion": "No blocking static type/lifetime, cold error order, final short-circuit, full fresh walk or owner/read-boundary issue identified",
+    "execution_claimed": false,
+    "reviewed_production_sha256": "8a8721585d9c5e06e8962a6d3a3f4d1976e694ce641d41254f5e693ae81e3007",
+    "reviewed_tests_sha256": "ac16d1168e353dfb33d02115492bf2eb6ea8d81d9dbf7513a2a2726ae876a52a"
+  },
+  "input_manifest": {
+    "bytes": 50729,
+    "path": "/workspace/scratch/84d692c73f59/review_optimization/r33_candidate/input.json",
+    "sha256": "46ff8e0cc8327fa97e346acd8afa8c6ab7ef2ffc40e8d2b75d221d4101d9b1f5"
+  },
+  "json_deferral_mixed_in": false,
+  "local_validation": {
+    "all_220_composite_baseline_hashes_checked": true,
+    "clippy_executed": false,
+    "component_executed": false,
+    "git_operations": 0,
+    "patch_generated_from_full_before_after_bytes": true,
+    "patch_program_or_git_apply_executed": false,
+    "remote_calls": 0,
+    "rust_build_executed": false,
+    "rust_tests_executed": false,
+    "rustfmt_executed": false,
+    "unchanged_regions_checked_as_bytes": true
+  },
+  "memory_scope": {
+    "excludes": [
+      "Arc fields/control blocks",
+      "allocator metadata/rounding",
+      "temporary construction Vec",
+      "existing PathBuf",
+      "other runtime allocations"
+    ],
+    "maximum_normal_components_per_path": 2048,
+    "maximum_valid_path_utf8_bytes": 4096,
+    "one_profile_fixed_pins": 6,
+    "rss_or_measured_allocation_claim": false,
+    "six_path_payload_plus_descriptors_estimate_bytes_at_16_bytes_per_cstring": 221184
+  },
+  "performance_claim": "Static removal of repeated fixed-path lexical scans and per-component CString construction only; no runtime throughput, latency, CPU, allocation-count, FD or RSS measurement claimed.",
+  "production_scope": [
+    "PinnedFile immutable Arc<[CString]> syntax cache built only after cold load and expected pin succeed",
+    "PinnedFile::open_path performs fresh root plus full no-follow openat walk every call",
+    "checked_file accepts a newly opened File; complete inode/capability checks unchanged",
+    "verify_read receives a FnOnce opener; final short-circuit reopen position unchanged",
+    "cold read_file retains original open_absolute; hot verify_identity/verify_checked use open_path"
+  ],
+  "r31_pidfd_mixed_in": false,
+  "removed_paths": [],
+  "review": {
+    "bytes": 9792,
+    "path": "/workspace/scratch/84d692c73f59/review_optimization/r33_candidate/R33_REVIEW.md",
+    "sha256": "7724d4eb0a01f1dac5c307ea4635248328f40a2ec738c95aeb7a6f0f1b5e5593"
+  },
+  "router_mixed_in": false,
+  "rust_test_source_functions_added": 3,
+  "schema": "hepta-r33-local-candidate/v1",
+  "source_baseline": {
+    "ancestor_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+    "baseline_overlay": {
+      "bytes": 2946,
+      "path": "/workspace/scratch/84d692c73f59/review_optimization/r33_candidate/baseline-overlay.patch",
+      "sha256": "f009b618afb5dd574ef9d0b1bf2d73ecd108e2882779a05862ebafee9bc5019a"
+    },
+    "baseline_overlay_source_manifest": {
+      "bytes": 4631,
+      "path": "/workspace/scratch/84d692c73f59/review_optimization/r32_candidate/manifest.json",
+      "sha256": "e1969d047545c70a857c733f3318b0c33140a3a8b6b0b85c2505f8457282985a"
+    },
+    "direct_patch_base": "R32 candidate profile.rs and profile_tests.rs plus accepted R24 remaining 218 inputs",
+    "direct_patch_base_is_accepted_commit": false,
+    "rebase_on_future_accepted_source_requires_new_freeze": true
+  },
+  "source_directory": "/workspace/scratch/84d692c73f59/review_optimization/r33_candidate/source",
+  "source_is_complete_checkout": false,
+  "source_layout": "complete two modified files; all other candidate compile inputs equal accepted R24",
+  "source_static_checks": {
+    "bytes": 1939,
+    "path": "/workspace/scratch/84d692c73f59/review_optimization/r33_candidate/source-static-checks.json",
+    "sha256": "07e95bf423ba707ea1cf1c016cce5f356d30bc9cdcab834da8e5e5137c13abe6"
+  },
+  "status": "FROZEN_LOCAL_CANDIDATE_NOT_COMPILED_RUN_QUALIFIED_MEASURED_OR_ADOPTED",
+  "test_functions_added": [
+    "cached_pins_reopen_live_ancestors_without_following_aliases",
+    "cached_pins_keep_final_reopen_and_read_error_precedence",
+    "pin_loading_keeps_path_io_and_inode_errors_before_expected_digest"
+  ]
+}
