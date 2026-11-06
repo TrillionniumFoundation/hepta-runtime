@@ -67,3 +67,34 @@ fn bounded_note_mapping_reports_omitted_rows() {
 	);
 	assert_eq!(mapped["truncated"], true);
 }
+
+#[test]
+fn ghidra_instruction_summary_keeps_complete_window_scope_and_failed_output_unknown() {
+	let fixture = include_str!("../../tests/fixtures/rea_ghidra_instructions/contract-window.json");
+	for success in [true, false] {
+		let mapped = selected_fields(
+			StaticProvider::Ghidra,
+			StaticOperation::Instructions,
+			fixture,
+			success,
+		);
+		assert_eq!(mapped["mapping_supported"], success);
+		assert_eq!(
+			mapped["complete_window_and_memory_bytes_in_retained_stdout"],
+			success
+		);
+		assert_eq!(
+			mapped["scope"],
+			"complete_selected_ghidra_instruction_window"
+		);
+		assert_eq!(mapped["upstream_contract_equivalent"], false);
+		assert_eq!(mapped["independent_binary_validation"], false);
+		if success {
+			assert_eq!(mapped["instruction_count"], 3);
+			assert_eq!(mapped["instructions_complete"], true);
+		} else {
+			assert!(mapped["instruction_count"].is_null());
+			assert!(mapped["instructions_complete"].is_null());
+		}
+	}
+}

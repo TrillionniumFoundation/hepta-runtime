@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Fixed ELF analysis over admitted bytes. No target execution or caller script.
 import java.io.*;
+import java.math.BigInteger;
 import java.nio.file.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -20,9 +21,15 @@ import ghidra.app.decompiler.DecompileResults;
 import ghidra.framework.options.Options;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressIterator;
+import ghidra.program.model.address.AddressRange;
+import ghidra.program.model.address.AddressRangeIterator;
+import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.FunctionIterator;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.listing.Instruction;
+import ghidra.program.model.listing.InstructionIterator;
+import ghidra.program.model.symbol.Symbol;
 import ghidra.program.model.symbol.Reference;
 import ghidra.program.model.symbol.ReferenceIterator;
 import ghidra.util.task.TimeoutTaskMonitor;
@@ -94,6 +101,183 @@ class HeptaGhidraAnalysis {
         row.put("body_max_address",address(function.getBody().getMaxAddress()));
         row.put("body_address_count",Long.toUnsignedString(function.getBody().getNumAddresses()));
         return row;
+    }
+
+
+    static final int INSTRUCTION_LIMIT=4096,INSTRUCTION_SECONDS=10;
+    static final List<String> INSTRUCTION_LIMITATIONS=List.of(
+        "Instruction text and ordering are Ghidra-specific representations.",
+        "The fast path does not invoke the decompiler or scan whole-program names and strings.",
+        "Completeness covers the selected function's observed Listing after the fixed restricted analyzer profile; it does not prove complete machine-code discovery.",
+        "The original provider's terminal-call and Borland SEH boundary heuristics are not reproduced by this bounded ELF adapter.",
+        "The byte rows describe Ghidra's initialized instruction memory, including loader adjustments; they are not file-offset mappings.");
+
+    static String completeInstructionText(String text,int maximum,String role) {
+        if(text==null || text.isEmpty() || text.indexOf('\0')>=0 ||
+            text.indexOf('\r')>=0 || text.indexOf('\n')>=0)
+            throw new IllegalStateException(role+" is empty or is not one complete text line");
+        for(int i=0;i<text.length();i++) {
+            char c=text.charAt(i);
+            if(Character.isHighSurrogate(c)) {
+                if(i+1==text.length() || !Character.isLowSurrogate(text.charAt(i+1)))
+                    throw new IllegalStateException(role+" contains an unpaired surrogate");
+                i++;
+            } else if(Character.isLowSurrogate(c))
+                throw new IllegalStateException(role+" contains an unpaired surrogate");
+        }
+        if(text.getBytes(StandardCharsets.UTF_8).length>maximum)
+            throw new IllegalStateException(role+" exceeds its complete-text byte budget");
+        return text;
+    }
+
+    static String instructionAddress(Program program,Address value) {
+        String offset="0x"+Long.toUnsignedString(value.getOffset(),16);
+        if(value.getAddressSpace().equals(program.getAddressFactory().getDefaultAddressSpace()))
+            return offset;
+        byte[] name=value.getAddressSpace().getName().getBytes(StandardCharsets.UTF_8);
+        StringBuilder encoded=new StringBuilder();
+        for(byte item:name) {
+            int b=item&255;
+            if((b>='a' && b<='z') || (b>='A' && b<='Z') || (b>='0' && b<='9') ||
+                b=='.' || b=='_' || b=='~' || b=='-')encoded.append((char)b);
+            else encoded.append(String.format(Locale.ROOT,"%%%02X",b));
+        }
+        if(encoded.length()==0 || encoded.length()>1024)
+            throw new IllegalStateException("instruction address-space name exceeds its budget");
+        return encoded+":"+offset;
+    }
+
+    static long instructionBodyCount(BigInteger value) {
+        if(value.signum()<0 || value.compareTo(BigInteger.valueOf(9007199254740991L))>0)
+            throw new IllegalStateException("complete function body exceeds exact JSON byte-count range");
+        return value.longValueExact();
+    }
+
+    static Map<String,Object> instructionBody(Program program,Function function,TimeoutTaskMonitor monitor)
+            throws Exception {
+        List<Map<String,Object>> ranges=new ArrayList<>();
+        BigInteger total=BigInteger.ZERO;
+        Address first=null,last=null;
+        AddressSpace space=null;
+        boolean multipleSpaces=false;
+        AddressRangeIterator iterator=function.getBody().getAddressRanges(true);
+        while(iterator.hasNext()) {
+            monitor.checkCancelled();
+            if(ranges.size()==INSTRUCTION_LIMIT)
+                throw new IllegalStateException("complete function body exceeds the fixed range budget");
+            AddressRange range=iterator.next();
+            Address begin=range.getMinAddress(),end=range.getMaxAddress();
+            if(begin.getAddressSpace().getAddressableUnitSize()!=1 ||
+                !begin.getAddressSpace().equals(end.getAddressSpace()))
+                throw new IllegalStateException("complete instruction body requires byte-addressed ranges");
+            Map<String,Object> row=new LinkedHashMap<>();
+            row.put("start",instructionAddress(program,begin));
+            row.put("end",instructionAddress(program,end));
+            ranges.add(row);
+            total=total.add(new BigInteger(Long.toUnsignedString(end.getOffset()))
+                .subtract(new BigInteger(Long.toUnsignedString(begin.getOffset()))).add(BigInteger.ONE));
+            if(first==null) { first=begin;space=begin.getAddressSpace(); }
+            else if(!space.equals(begin.getAddressSpace()))multipleSpaces=true;
+            last=end;
+        }
+        BigInteger span=first==null?BigInteger.ZERO:
+            new BigInteger(Long.toUnsignedString(last.getOffset()))
+                .subtract(new BigInteger(Long.toUnsignedString(first.getOffset()))).add(BigInteger.ONE);
+        Map<String,Object> body=new LinkedHashMap<>();
+        body.put("available",true);
+        body.put("provenance","ghidra-function-body-address-set");
+        body.put("ranges",ranges);
+        body.put("total_bytes",instructionBodyCount(total));
+        body.put("span_bytes",multipleSpaces?null:instructionBodyCount(span));
+        body.put("non_contiguous",ranges.size()>1);
+        body.put("contains_entry",function.getBody().contains(function.getEntryPoint()));
+        if(!function.getBody().contains(function.getEntryPoint()))
+            throw new IllegalStateException("selected internal function body omits its entry");
+        return body;
+    }
+
+    static Map<String,Object> instructionProcedure(Program program,Function function,TimeoutTaskMonitor monitor)
+            throws Exception {
+        Symbol symbol=function.getSymbol();
+        String name=symbol==null?function.getName():symbol.getName(true);
+        Map<String,Object> metadata=null;
+        if(symbol!=null) {
+            String type=symbol.getSymbolType().toString().toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+","_").replaceAll("^_+|_+$","");
+            metadata=new LinkedHashMap<>();
+            metadata.put("primary",symbol.isPrimary());
+            metadata.put("dynamic",symbol.isDynamic());
+            metadata.put("external",symbol.isExternal());
+            metadata.put("type",type.isEmpty()?"unknown":completeInstructionText(type,128,"symbol type"));
+            metadata.put("source",symbol.getSource().name().toLowerCase(Locale.ROOT));
+        }
+        Function target=function.isThunk()?function.getThunkedFunction(false):null;
+        Map<String,Object> classification=new LinkedHashMap<>();
+        classification.put("external",function.isExternal());
+        classification.put("thunk",function.isThunk());
+        classification.put("thunk_target",target==null?null:instructionAddress(program,target.getEntryPoint()));
+        classification.put("provenance","ghidra-function-manager");
+        Map<String,Object> result=new LinkedHashMap<>();
+        result.put("address",instructionAddress(program,function.getEntryPoint()));
+        result.put("name",completeInstructionText(name,1024,"complete procedure name"));
+        result.put("symbol",metadata);
+        result.put("classification",classification);
+        result.put("body",instructionBody(program,function,monitor));
+        return result;
+    }
+
+    static void instructions(Program program,Function function,Map<String,Object> report) throws Exception {
+        TimeoutTaskMonitor monitor=TimeoutTaskMonitor.timeoutIn(INSTRUCTION_SECONDS,TimeUnit.SECONDS);
+        try {
+            Map<String,Object> procedure=instructionProcedure(program,function,monitor);
+            InstructionIterator iterator=program.getListing().getInstructions(function.getBody(),true);
+            List<String> lines=new ArrayList<>();
+            List<Map<String,Object>> bytes=new ArrayList<>();
+            long textBytes=0;
+            while(iterator.hasNext()) {
+                monitor.checkCancelled();
+                if(lines.size()==INSTRUCTION_LIMIT)
+                    throw new IllegalStateException("complete function instruction list exceeds the fixed instruction budget");
+                Instruction instruction=iterator.next();
+                if(!function.getBody().contains(instruction.getMinAddress(),instruction.getMaxAddress()))
+                    throw new IllegalStateException("instruction extends outside the selected complete function body");
+                String at=instructionAddress(program,instruction.getAddress());
+                StringBuilder line=new StringBuilder(at).append(": ").append(instruction.getMnemonicString());
+                for(int index=0;index<instruction.getNumOperands();index++)
+                    line.append(index==0?" ":", ").append(instruction.getDefaultOperandRepresentation(index));
+                String rendered=completeInstructionText(line.toString(),4096,"complete Listing line");
+                textBytes+=rendered.getBytes(StandardCharsets.UTF_8).length+(lines.isEmpty()?0:1);
+                if(textBytes>65536)
+                    throw new IllegalStateException("complete instruction text exceeds the fixed byte budget");
+                byte[] encoded=instruction.getBytes();
+                if(encoded.length==0 || encoded.length>1024 || encoded.length!=instruction.getLength())
+                    throw new IllegalStateException("instruction memory bytes disagree with its bounded length");
+                Map<String,Object> row=new LinkedHashMap<>();
+                row.put("address",at);
+                row.put("length",encoded.length);
+                row.put("bytes_hex",HexFormat.of().formatHex(encoded));
+                lines.add(rendered);bytes.add(row);
+            }
+            monitor.checkCancelled();
+            Map<String,Object> window=new LinkedHashMap<>();
+            window.put("procedure",procedure);
+            window.put("instructions",lines);
+            window.put("limitations",INSTRUCTION_LIMITATIONS);
+            report.put("upstream_operation","read_function_instructions");
+            report.put("instruction_provenance","ghidra-listing");
+            report.put("instruction_scope","selected_function_body_address_set");
+            report.put("instruction_window",window);
+            report.put("instruction_bytes",bytes);
+            report.put("instruction_count",lines.size());
+            report.put("instructions_complete",true);
+            report.put("omitted_instructions",0);
+            report.put("instruction_text_sha256",digest(String.join("\n",lines)));
+            report.put("instruction_text_utf8_bytes",textBytes);
+            report.put("instruction_timeout_seconds",INSTRUCTION_SECONDS);
+            report.put("decompiler_invoked",false);
+        } finally {
+            monitor.cancel();
+        }
     }
 
     static Map<String,Object> referenceRow(Reference reference) {
@@ -251,6 +435,8 @@ class HeptaGhidraAnalysis {
             String encoded=json(report);
             if(encoded.getBytes(StandardCharsets.UTF_8).length+1<=budget)return encoded;
             String operation=(String)report.get("operation");
+            if(operation.equals("instructions"))
+                throw new IllegalStateException("complete instruction window exceeds response budget");
             if(operation.equals("functions")) {
                 List<?> rows=(List<?>)report.get("functions");
                 if(rows.isEmpty())throw new IllegalStateException("analysis summary exceeds response budget");
@@ -283,7 +469,7 @@ class HeptaGhidraAnalysis {
         int budget=Integer.parseInt(input[2]);
         String operation=input[3],selected=input[4];
         if(budget<2048 || budget>65536)throw new IllegalArgumentException("invalid response budget");
-        if(!List.of("functions","function","decompile","xrefs").contains(operation))
+        if(!List.of("functions","function","decompile","xrefs","instructions").contains(operation))
             throw new IllegalArgumentException("unsupported fixed analysis operation");
         if(operation.equals("functions")?!selected.equals("-"):!validAddress(selected))
             throw new IllegalArgumentException("one exact canonical function entry is required for this operation");
@@ -334,6 +520,7 @@ class HeptaGhidraAnalysis {
                 report.put("function",functionRow(function));
                 if(operation.equals("xrefs"))xrefs(program,function,report);
                 if(operation.equals("decompile"))decompile(program,function,report);
+                if(operation.equals("instructions"))instructions(program,function,report);
             }
             result.println(fit(report,budget));
         }

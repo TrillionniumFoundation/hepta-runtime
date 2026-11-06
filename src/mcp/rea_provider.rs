@@ -57,6 +57,8 @@ pub enum StaticOperation {
 	Function,
 	Decompile,
 	Xrefs,
+	/// Complete selected-function Ghidra Listing; refuses over-budget windows instead of truncating them.
+	Instructions,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -128,7 +130,7 @@ pub struct ReaStaticRequest {
 	/// Required identity of the bytes to inspect. A mismatch prevents backend use.
 	pub artifact_sha256: String,
 	/// Exact internal Ghidra function entry, in canonical lowercase 0x hexadecimal.
-	/// Required only for function/decompile/xrefs. Absent fields preserve old request identities.
+	/// Required only for function/decompile/xrefs/instructions. Absent fields preserve old request identities.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub function_address: Option<String>,
 }
@@ -199,11 +201,12 @@ impl StaticProvider {
 					| StaticOperation::Function
 					| StaticOperation::Decompile
 					| StaticOperation::Xrefs
+					| StaticOperation::Instructions
 			),
 		}
 	}
 
-	/// No caller-controlled flags, output paths, plugins, scripts or disassembly.
+	/// No caller-controlled flags, output paths, plugins or scripts; GNU backends never disassemble.
 	pub(crate) fn arguments(
 		self,
 		operation: StaticOperation,

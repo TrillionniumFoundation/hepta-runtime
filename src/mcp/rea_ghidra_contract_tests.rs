@@ -49,6 +49,7 @@ fn only_selected_ghidra_operations_admit_one_address() {
 		StaticOperation::Function,
 		StaticOperation::Decompile,
 		StaticOperation::Xrefs,
+		StaticOperation::Instructions,
 	] {
 		validate_selection(
 			StaticProvider::Ghidra,
@@ -112,4 +113,27 @@ fn bounded_function_rows_require_internal_selected_entry() {
 	let mut bad = row;
 	bad["entry_address"] = json!("0x0401000");
 	assert!(function_row(&bad, None).is_err());
+}
+
+#[test]
+fn instructions_are_an_explicit_ghidra_only_operation_with_a_selected_entry() {
+	assert_eq!(
+		operation_name(StaticOperation::Instructions).unwrap(),
+		"instructions"
+	);
+	assert!(StaticProvider::Ghidra.supports(StaticOperation::Instructions));
+	for provider in [
+		StaticProvider::GnuReadelf,
+		StaticProvider::GnuObjdump,
+		StaticProvider::Jadx,
+	] {
+		assert!(!provider.supports(StaticOperation::Instructions));
+	}
+	assert!(bridge(StaticOperation::Instructions, None).is_err());
+	assert!(bridge(StaticOperation::Instructions, Some(2)).is_ok());
+	assert_eq!(
+		serde_json::to_value(request(StaticOperation::Instructions, Some("0x1000"))).unwrap()
+			["operation"],
+		"instructions"
+	);
 }

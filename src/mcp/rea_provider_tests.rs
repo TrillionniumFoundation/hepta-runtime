@@ -698,3 +698,62 @@ fn ghidra_inventory_v2_binds_repaired_bridge_and_captured_source() {
 		.bridge_revision = None;
 	assert!(ghidra_contract::validate_observation(&value, &input, 64).is_err());
 }
+
+#[test]
+fn ghidra_instruction_report_checks_complete_window_after_all_outer_hashes_are_resealed() {
+	let mut input = worker();
+	input.profile = ghidra_profile();
+	input
+		.profile
+		.ghidra_engine
+		.as_mut()
+		.unwrap()
+		.bridge_revision = Some(2);
+	input
+		.profile
+		.allowed_operations
+		.push(StaticOperation::Instructions);
+	input.request.operation = StaticOperation::Instructions;
+	input.request.function_address = Some("0x1000".into());
+	input.request.profile_sha256 = sha256(&serde_json::to_vec(&input.profile).unwrap());
+	let mut observation: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_ghidra_instructions/contract-window.json"
+	))
+	.unwrap();
+	observation["source_sha256"] = json!(input.request.artifact_sha256);
+	let mut value = report(&input);
+	value["subject"]["size_bytes"] = json!(64);
+	value["ghidra_engine"] = serde_json::to_value(&input.profile.ghidra_engine).unwrap();
+	value["bridge_sha256"] = json!(sha256(
+		ghidra_contract::bridge(StaticOperation::Instructions, Some(2))
+			.unwrap()
+			.as_bytes()
+	));
+	value["backend"]["snapshot"] = json!("verified_installed_inode");
+	value["installation_snapshot"] = json!("verified_installed_paths");
+	value["network_syscalls_denied"] = json!(true);
+	value["scratch"] = json!({"removed_after_operation":true});
+	rebind_observation(&mut value, &input, &observation);
+	validate_report(&value, &input, 0).unwrap();
+	for (pointer, replacement) in [
+		("/instructions_complete", json!(false)),
+		("/omitted_instructions", json!(1)),
+		("/instruction_count", json!(2)),
+		("/instruction_bytes/0/address", json!("0x1001")),
+		("/instruction_window/procedure/body/span_bytes", json!(7)),
+		(
+			"/instruction_window/procedure/body/ranges/1/start",
+			json!("0x1006"),
+		),
+		("/function_address_requested", json!("0x1001")),
+		("/source_sha256", json!("0".repeat(64))),
+		("/enabled_analyzers", json!(["Caller Script"])),
+		("/decompiler_invoked", json!(true)),
+	] {
+		let mut changed = observation.clone();
+		*changed.pointer_mut(pointer).unwrap() = replacement;
+		let mut bad = value.clone();
+		rebind_observation(&mut bad, &input, &changed);
+		assert!(validate_report(&bad, &input, 0).is_err(), "{pointer}");
+	}
+}

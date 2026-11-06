@@ -15,6 +15,35 @@ pub(crate) fn selected_fields(
 	stdout: &str,
 	backend_success: bool,
 ) -> Value {
+	if provider == StaticProvider::Ghidra && operation == StaticOperation::Instructions {
+		let observation = backend_success
+			.then(|| serde_json::from_str::<Value>(stdout).ok())
+			.flatten()
+			.filter(|value| {
+				value["schema"] == "hepta.rea.ghidra-analysis.v1"
+					&& value["operation"] == "instructions"
+					&& value["analysis_completed"] == true
+					&& value["instructions_complete"] == true
+					&& value["decompiler_invoked"] == false
+			});
+		return json!({
+			"schema":"hepta.rea.static-summary.v1","scope":"complete_selected_ghidra_instruction_window",
+			"mapping_supported":observation.is_some(),"operation":operation,
+			"upstream_operation":"read_function_instructions",
+			"analysis_profile":observation.as_ref().map(|value|&value["analysis_profile"]),
+			"function_address_requested":observation.as_ref().map(|value|&value["function_address_requested"]),
+			"instruction_count":observation.as_ref().map(|value|&value["instruction_count"]),
+			"instructions_complete":observation.as_ref().map(|value|&value["instructions_complete"]),
+			"instruction_text_sha256":observation.as_ref().map(|value|&value["instruction_text_sha256"]),
+			"complete_window_and_memory_bytes_in_retained_stdout":observation.is_some(),
+			"independent_binary_validation":false,"upstream_contract_equivalent":false,
+			"limitations":[
+				"The returned Listing is complete only for the selected observed function under the fixed restricted analysis profile",
+				"Over-budget instruction lists fail; instruction memory bytes do not imply source file-offset mappings",
+				"Original provider boundary heuristics, full Evidence envelopes and full operation equivalence are not established"
+			]
+		});
+	}
 	if provider == StaticProvider::Ghidra && operation != StaticOperation::Inventory {
 		let expected = super::ghidra_contract::operation_name(operation).ok();
 		let observation = backend_success

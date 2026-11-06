@@ -9,6 +9,9 @@ use serde_json::{json, Value};
 
 use super::{is_sha256, sha256, ReaStaticRequest, StaticOperation, StaticProvider, WorkerRequest};
 
+#[path = "rea_ghidra_instructions.rs"]
+mod instruction_window;
+
 pub(crate) const ANALYSIS_PROFILE: &str = "hepta.ghidra.elf-functions.v1";
 pub(crate) const ANALYZERS: [&str; 4] = [
 	"Disassemble Entry Points",
@@ -24,6 +27,7 @@ pub(crate) fn operation_name(operation: StaticOperation) -> Result<&'static str>
 		StaticOperation::Function => Ok("function"),
 		StaticOperation::Decompile => Ok("decompile"),
 		StaticOperation::Xrefs => Ok("xrefs"),
+		StaticOperation::Instructions => Ok("instructions"),
 		_ => bail!("unsupported fixed Ghidra operation"),
 	}
 }
@@ -58,7 +62,10 @@ pub(crate) fn validate_selection(
 ) -> Result<()> {
 	let selected = matches!(
 		request.operation,
-		StaticOperation::Function | StaticOperation::Decompile | StaticOperation::Xrefs
+		StaticOperation::Function
+			| StaticOperation::Decompile
+			| StaticOperation::Xrefs
+			| StaticOperation::Instructions
 	);
 	if provider == StaticProvider::Ghidra && selected {
 		if !request
@@ -185,6 +192,16 @@ pub(crate) fn validate_observation(
 		function_row(
 			&observation["function"],
 			input.request.function_address.as_deref(),
+		)?;
+	}
+	if operation == StaticOperation::Instructions {
+		instruction_window::validate(
+			observation,
+			input
+				.request
+				.function_address
+				.as_deref()
+				.context("Ghidra instruction entry absent")?,
 		)?;
 	}
 	if operation == StaticOperation::Xrefs {
