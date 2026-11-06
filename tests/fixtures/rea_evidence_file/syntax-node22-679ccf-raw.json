@@ -1,0 +1,309 @@
+{
+  "schema": "hepta.node-json-syntax-reference.v1",
+  "node": "v22.23.4",
+  "node_path": "/usr/bin/node",
+  "node_sha256": "94efd062ed066c1a0b332e18249859c905e920eeada5df55d24c99b919629a90",
+  "cases": [
+    {
+      "input": "[1,]",
+      "utf16_length": 4,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token ']', \"[1,]\" is not valid JSON"
+    },
+    {
+      "input": "{\"a\":}",
+      "utf16_length": 6,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token '}', \"{\"a\":}\" is not valid JSON"
+    },
+    {
+      "input": "{\"a\" 1}",
+      "utf16_length": 7,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Expected ':' after property name in JSON at position 5 (line 1 column 6)"
+    },
+    {
+      "input": "{\"a\":1,}",
+      "utf16_length": 8,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Expected double-quoted property name in JSON at position 7 (line 1 column 8)"
+    },
+    {
+      "input": "{\"a\":1 \"b\":2}",
+      "utf16_length": 13,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Expected ',' or '}' after property value in JSON at position 7 (line 1 column 8)"
+    },
+    {
+      "input": "{a:1}",
+      "utf16_length": 5,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+    },
+    {
+      "input": "{]",
+      "utf16_length": 2,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+    },
+    {
+      "input": "{,}",
+      "utf16_length": 3,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+    },
+    {
+      "input": "{",
+      "utf16_length": 1,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+    },
+    {
+      "input": "[1 2]",
+      "utf16_length": 5,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Expected ',' or ']' after array element in JSON at position 3 (line 1 column 4)"
+    },
+    {
+      "input": "[1;2]",
+      "utf16_length": 5,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Expected ',' or ']' after array element in JSON at position 2 (line 1 column 3)"
+    },
+    {
+      "input": "[]x",
+      "utf16_length": 3,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected non-whitespace character after JSON at position 2 (line 1 column 3)"
+    },
+    {
+      "input": "true false",
+      "utf16_length": 10,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected non-whitespace character after JSON at position 5 (line 1 column 6)"
+    },
+    {
+      "input": "01",
+      "utf16_length": 2,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected number in JSON at position 1 (line 1 column 2)"
+    },
+    {
+      "input": "-x",
+      "utf16_length": 2,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "No number after minus sign in JSON at position 1 (line 1 column 2)"
+    },
+    {
+      "input": "- ",
+      "utf16_length": 2,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "No number after minus sign in JSON at position 1 (line 1 column 2)"
+    },
+    {
+      "input": "1.x",
+      "utf16_length": 3,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unterminated fractional number in JSON at position 2 (line 1 column 3)"
+    },
+    {
+      "input": "1e ",
+      "utf16_length": 3,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Exponent part is missing a number in JSON at position 2 (line 1 column 3)"
+    },
+    {
+      "input": "1e+ ",
+      "utf16_length": 4,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Exponent part is missing a number in JSON at position 3 (line 1 column 4)"
+    },
+    {
+      "input": "1e-x",
+      "utf16_length": 4,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Exponent part is missing a number in JSON at position 3 (line 1 column 4)"
+    },
+    {
+      "input": "\"\\q\"",
+      "utf16_length": 4,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Bad escaped character in JSON at position 2 (line 1 column 3)"
+    },
+    {
+      "input": "\"\\u0q00\"",
+      "utf16_length": 8,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Bad Unicode escape in JSON at position 4 (line 1 column 5)"
+    },
+    {
+      "input": "\"abc\n\"",
+      "utf16_length": 6,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Bad control character in string literal in JSON at position 4 (line 1 column 5)"
+    },
+    {
+      "input": "tru ",
+      "utf16_length": 4,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token ' ', \"tru \" is not valid JSON"
+    },
+    {
+      "input": "tRue",
+      "utf16_length": 4,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token 'R', \"tRue\" is not valid JSON"
+    },
+    {
+      "input": "nulx",
+      "utf16_length": 4,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token 'x', \"nulx\" is not valid JSON"
+    },
+    {
+      "input": "undefined",
+      "utf16_length": 9,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "\"undefined\" is not valid JSON"
+    },
+    {
+      "input": "NaN",
+      "utf16_length": 3,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "\"NaN\" is not valid JSON"
+    },
+    {
+      "input": "Infinity",
+      "utf16_length": 8,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "\"Infinity\" is not valid JSON"
+    },
+    {
+      "input": "[NaN]",
+      "utf16_length": 5,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token 'N', \"[NaN]\" is not valid JSON"
+    },
+    {
+      "input": "[undefined]",
+      "utf16_length": 11,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token 'u', \"[undefined]\" is not valid JSON"
+    },
+    {
+      "input": "[tru ]",
+      "utf16_length": 6,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token ' ', \"[tru ]\" is not valid JSON"
+    },
+    {
+      "input": "[trueX]",
+      "utf16_length": 7,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Expected ',' or ']' after array element in JSON at position 5 (line 1 column 6)"
+    },
+    {
+      "input": "\"\\uD800\"",
+      "utf16_length": 8,
+      "ok": true,
+      "value": "\ud800"
+    },
+    {
+      "input": "[1e400]",
+      "utf16_length": 7,
+      "ok": true,
+      "value": [
+        null
+      ]
+    },
+    {
+      "input": "[\"😀\",]",
+      "utf16_length": 7,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token ']', \"[\"😀\",]\" is not valid JSON"
+    },
+    {
+      "input": "{\r\n\"😀\":1,\r\n}",
+      "utf16_length": 13,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Expected double-quoted property name in JSON at position 12 (line 3 column 1)"
+    },
+    {
+      "input": "{\"é\"\r\n 1}",
+      "utf16_length": 9,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Expected ':' after property name in JSON at position 7 (line 2 column 2)"
+    },
+    {
+      "input": "[\"€\", \n @]",
+      "utf16_length": 10,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Unexpected token '@', \"[\"€\", \n @]\" is not valid JSON"
+    },
+    {
+      "input": "\"abc\\q\"",
+      "utf16_length": 7,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Bad escaped character in JSON at position 5 (line 1 column 6)"
+    },
+    {
+      "input": "\"\\u\"",
+      "utf16_length": 4,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Bad Unicode escape in JSON at position 3 (line 1 column 4)"
+    },
+    {
+      "input": "\"\\u123g\"",
+      "utf16_length": 8,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Bad Unicode escape in JSON at position 6 (line 1 column 7)"
+    },
+    {
+      "input": "\"ab\tcd\"",
+      "utf16_length": 7,
+      "ok": false,
+      "name": "SyntaxError",
+      "message": "Bad control character in string literal in JSON at position 3 (line 1 column 4)"
+    }
+  ]
+}

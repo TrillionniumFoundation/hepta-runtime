@@ -907,6 +907,8 @@ fn parse_reader<R: Read>(reader: R, expected: u64, state: Rc<RefCell<State>>) ->
 			// bounded observer reached physical EOF under the small-file profile.
 			// Complete root strings are rejected by each caller's object schema;
 			// they are never substituted, retained or treated as decoded values.
+			// IoRead can report EOF while filling a Unicode escape after an
+			// earlier invalid unit. Keep the observer\'s first syntax failure.
 			if (error.is_syntax() || error.is_eof()) && state.small && state.eof {
 				if let Some(message) = state.syntax_diagnostic.take() {
 					return Err(invalid_json(&message, false));

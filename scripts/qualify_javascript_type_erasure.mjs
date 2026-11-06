@@ -114,7 +114,7 @@ for (const [name, text] of sources) {
   const row = native?.rows?.length === 1 ? native.rows[0] : null;
   const observed = row && Object.fromEntries(Object.keys(expected).map(key => [key, row[key]]));
   const equal = processResult.status === 0 && !processResult.error && parseError === null
-    && native?.analysis_profile === "hepta.javascript-selected-source-graph.v3"
+    && native?.analysis_profile === "hepta.javascript-selected-source-graph.v4"
     && native?.javascript_executed === false && row?.runtime_resolution_proven === false
     && JSON.stringify(observed) === JSON.stringify(expected);
   const referenceControls = expected.type_only_scope === "declaration"

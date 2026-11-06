@@ -41,42 +41,46 @@
       "source_paths": [
         "src/mcp/rea_model_session.rs",
         "src/mcp/rea_model_session_store.rs",
-        "src/mcp/rea_model_session_index.rs"
+        "src/mcp/rea_model_session_index.rs",
+        "docs/rea-model-gguf-layout-validation.md"
       ],
       "tests": [
         "src/mcp/rea_model_session_tests.rs",
         "tests/rea_model_session_http.py"
       ],
-      "scope": "Immutable owner/policy-bound snapshot"
+      "scope": "Immutable owner/policy-bound snapshot under hepta.rea.model-directory-index.v2. A retained v1 index is not silently reused; an available original source must be reopened to create a v2 session. Stable and ambiguous GGUF layouts retain their separately documented validation boundaries."
     },
     "rea_model_session_query": {
       "source_paths": [
         "src/mcp/rea_model_session.rs",
-        "src/mcp/rea_model_session_index.rs"
+        "src/mcp/rea_model_session_index.rs",
+        "docs/rea-model-gguf-layout-validation.md"
       ],
       "tests": [
         "src/mcp/rea_model_session_tests.rs"
       ],
-      "scope": "Retained native directory/index query"
+      "scope": "Retained native v2 directory/index query. Legacy v1 session IDs are rejected without relabeling their stored validation proof; already opened v2 sessions remain usable alongside retained legacy directories."
     },
     "rea_model_session_read": {
       "source_paths": [
         "src/mcp/rea_model_session.rs",
-        "src/mcp/rea_model_session_store.rs"
+        "src/mcp/rea_model_session_store.rs",
+        "docs/rea-model-gguf-layout-validation.md"
       ],
       "tests": [
         "src/mcp/rea_model_session_tests.rs"
       ],
-      "scope": "Verified snapshot range read"
+      "scope": "Verified snapshot range read from a v2 session. Legacy v1 IDs require reopening the available original source; no automatic index migration or deletion is performed."
     },
     "rea_model_session_list": {
       "source_paths": [
-        "src/mcp/rea_model_session.rs"
+        "src/mcp/rea_model_session.rs",
+        "docs/rea-model-gguf-layout-validation.md"
       ],
       "tests": [
         "src/mcp/rea_model_session_tests.rs"
       ],
-      "scope": "Current owner's native model-session inventory"
+      "scope": "Current owner's native model-session inventory. Inventory remains fail-closed if any retained v1 directory is encountered, including legacy safetensors sessions; opening a new v2 session does not upgrade or remove old directories."
     },
     "rea_inspect_archive": {
       "source_paths": [
@@ -466,9 +470,11 @@
         "tests/rea_asar_external.rs",
         "tests/rea_asar_qualification.py",
         "tests/rea_javascript_cancellation_external.py",
-        "tests/rea_javascript_graph_external.rs"
+        "tests/rea_javascript_graph_external.rs",
+        "scripts/qualify_javascript_preload_wrappers.mjs",
+        "tests/fixtures/rea_javascript/preload-original-rea-6_8_0-679ccf.json"
       ],
-      "scope": "Bounded Oxc 0.144.0 native AST/lexical-scope inspection of selected plain-file or packed-ASAR JS/TS/JSX/TSX bytes; import/export, Electron callsite and IPC candidates. Graph profile hepta.javascript-selected-source-graph.v3 binds type_only_scope distinctions (declaration, named_specifiers, none) and deferred lexical Electron alias resolution; old v1 and v2 continuation IDs are refused even for unchanged source bytes. Type-only syntax alone does not prove TypeScript runtime dependency erasure. NON-REA report; no complete application graph or observed runtime behavior."
+      "scope": "Bounded Oxc 0.144.0 native AST/lexical-scope inspection of selected plain-file or packed-ASAR JS/TS/JSX/TSX bytes; import/export, Electron callsite and IPC candidates. Graph profile hepta.javascript-selected-source-graph.v4 binds type_only_scope distinctions (declaration, named_specifiers, none) deferred lexical Electron alias resolution, and transparent BrowserWindow option wrappers; old v1, v2 and v3 continuation IDs are refused even for unchanged source bytes. Type-only syntax alone does not prove TypeScript runtime dependency erasure. NON-REA report; no complete application graph or observed runtime behavior."
     },
     "rea_inspect_source_map": {
       "source_paths": [
@@ -649,7 +655,15 @@
         "src/mcp/rea_analysis_view_mcp_input_tests.rs",
         "src/mcp/rea_analysis_view_tests.rs",
         "src/mcp/rea_evidence_file_tests.rs",
-        "src/mcp/rea_evidence_source_tests.rs"
+        "src/mcp/rea_evidence_source_tests.rs",
+        "scripts/rea_json_differential.py",
+        "tests/fixtures/rea_evidence_file/json-corpus-v1.json",
+        "tests/fixtures/rea_evidence_file/syntax-reference-679ccf.json",
+        "tests/fixtures/rea_evidence_file/syntax-node22-679ccf-raw.json",
+        "tests/fixtures/rea_evidence_file/syntax-node22-boundaries-679ccf-raw.json",
+        "tests/fixtures/rea_evidence_file/partial-unicode-node22-679ccf-raw.json",
+        "tests/fixtures/rea_evidence_file/partial-unicode-node22-679ccf-receipt.json",
+        "tests/fixtures/rea_evidence_file/syntax-reference-r1.json"
       ],
       "scope": "Authenticated retained/inline/Linux evidence-file source resolution and APK summary/signing views; imported parents are borrowed and only derived records enter this session. Other valid upstream view kinds report an explicit capability gap. Bounded cancellation, file-descriptor and blocking-owner contracts are native-profile constraints."
     },
@@ -725,7 +739,15 @@
         "src/mcp/rea_evidence_source_process_tests.rs",
         "src/mcp/rea_evidence_source_tests.rs",
         "src/mcp/rea_mcp_input_tests.rs",
-        "src/mcp/rea_residual_unknown_tests.rs"
+        "src/mcp/rea_residual_unknown_tests.rs",
+        "scripts/rea_json_differential.py",
+        "tests/fixtures/rea_evidence_file/json-corpus-v1.json",
+        "tests/fixtures/rea_evidence_file/syntax-reference-679ccf.json",
+        "tests/fixtures/rea_evidence_file/syntax-node22-679ccf-raw.json",
+        "tests/fixtures/rea_evidence_file/syntax-node22-boundaries-679ccf-raw.json",
+        "tests/fixtures/rea_evidence_file/partial-unicode-node22-679ccf-raw.json",
+        "tests/fixtures/rea_evidence_file/partial-unicode-node22-679ccf-receipt.json",
+        "tests/fixtures/rea_evidence_file/syntax-reference-r1.json"
       ],
       "scope": "Frozen public import_evidence_bundle route authenticates complete records, residual-unknown revisions, all revision references and current-head dependency cycles, canonical manifests and process-capture normalized results before atomically merging into this session. Preserves original record-only reimport versus unknown-bearing metadata replacement, union conflict rollback and original schema-exception responses. Linux file admission has explicit native estimated materialization/token/depth budgets; the original 8 MiB parser threshold is not treated as a file-size limit. Public differential and cancellation evidence is bound separately to each tested binary; no complete cross-platform or multi-host replacement qualification is declared."
     }
@@ -2430,7 +2452,9 @@
       ],
       "tests": [
         "tests/rea_browser_capture_tests.py",
-        "tests/rea_browser_external.py"
+        "tests/rea_browser_external.py",
+        "tests/rea_browser_environment.py",
+        "tests/fixtures/rea_browser_env_observer.c"
       ],
       "scope": "Existing fixed local-resource before/after HAR capture via original process_start job; user resources fetched as data; no arbitrary-page DOM or general state replay",
       "upstream_tools": [
@@ -2469,7 +2493,9 @@
         "tests/rea_browser_external.py",
         "src/mcp/rea_browser_process_tests.rs",
         "tests/rea_browser_native_differential.py",
-        "tests/rea_browser_deadline_external.py"
+        "tests/rea_browser_deadline_external.py",
+        "tests/rea_browser_environment.py",
+        "tests/fixtures/rea_browser_env_observer.c"
       ],
       "scope": "Native Linux Rust CLI for fixed owned local-resource before/after HAR through an independent Chrome CDP pipe under the original durable job. Rust owns capture, fixtures, CDP and original Chrome child custody; the existing operator job owner still uses Python. HOME and XDG data/config/cache directories are owned beneath the private profile; custody is published before post-spawn verification, and unknown cleanup retains that profile. Listed 20261104 receipts belong to their historical binary identities and do not qualify this source combination; current capture/deadline qualification requires fresh identity-bound real execution. Resources are fetched as data. Arbitrary input-page DOM, process-level network isolation and general browser state replay remain open.",
       "upstream_tools": [

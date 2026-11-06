@@ -871,3 +871,296 @@ fn eof_diagnostics_do_not_change_the_large_file_parser_profile() {
 		})
 	));
 }
+
+#[test]
+fn frozen_remote_syntax_keeps_original_messages_and_root_type_upgrade() {
+	let reference: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_evidence_file/syntax-reference-679ccf.json"
+	))
+	.unwrap();
+	assert_eq!(
+		bytes_hash(include_bytes!(
+			"../../tests/fixtures/rea_evidence_file/syntax-node22-679ccf-raw.json"
+		)),
+		reference["source"]["node_raw_sha256"]
+	);
+	assert_eq!(
+		bytes_hash(include_bytes!(
+			"../../tests/fixtures/rea_evidence_file/syntax-node22-boundaries-679ccf-raw.json"
+		)),
+		reference["source"]["boundary_raw_sha256"]
+	);
+	assert_eq!(
+		reference["source"]["node_sha256"],
+		"94efd062ed066c1a0b332e18249859c905e920eeada5df55d24c99b919629a90"
+	);
+	let cases = reference["cases"].as_array().unwrap();
+	let original = reference["original_cases"].as_array().unwrap();
+	assert_eq!((cases.len(), original.len()), (77, 14));
+	let owned = temporary();
+	let mut exact = 0;
+	let mut gaps = 0;
+	let mut root_type_rejections = 0;
+	for case in cases.iter().chain(original) {
+		let name = case["id"].as_str().unwrap();
+		let input = case["input"].as_str().unwrap();
+		let expected = case.get("message").and_then(Value::as_str);
+		if let Some(digest) = case.get("input_sha256") {
+			assert_eq!(
+				bytes_hash(input.as_bytes()),
+				digest.as_str().unwrap(),
+				"{name}"
+			);
+			assert_eq!(case["json_diagnostic_matches_node"], true, "{name}");
+			assert_eq!(
+				case["original_mcp_error_code"],
+				"evidence_integrity_mismatch"
+			);
+			assert_eq!(case["original_mcp_error_category"], "execution_failure");
+		}
+		// The observer sees raw UTF-8 chunks, including every split inside a
+		// multibyte scalar. Only its owner authorizes a public diagnostic.
+		for split in 0..=input.len() {
+			let mut tracker = json_eof::Tracker::new();
+			tracker.accept(&input.as_bytes()[..split]);
+			tracker.accept(&input.as_bytes()[split..]);
+			assert_eq!(
+				tracker.finish().as_deref(),
+				expected,
+				"{name}, split {split}"
+			);
+		}
+		let path = owned.path().join(format!("{name}.json"));
+		std::fs::write(&path, input).unwrap();
+		let outcome = load(&path, owned.path(), NativeJsonLimits::default());
+		// Preserve the remote raw fixture's historical gap label. The union
+		// can prove only this complete root string's type; it never decodes
+		// or substitutes the unpaired escaped surrogate as a Rust value.
+		if name == "node-syntax-34" {
+			assert_eq!(case["native_value_profile_gap"], true);
+			assert!(
+				matches!(outcome, Err(FileReadError::RootString)),
+				"{name}: {outcome:?}"
+			);
+			root_type_rejections += 1;
+		} else if case["native_value_profile_gap"] == true
+			|| case["native_diagnostic_profile_gap"] == true
+		{
+			assert!(
+				matches!(outcome, Err(FileReadError::NativeProfileGap { .. })),
+				"{name}: {outcome:?}"
+			);
+			gaps += 1;
+		} else if case["json_parse_ok"] == true {
+			assert!(outcome.is_ok(), "{name}: {outcome:?}");
+			exact += 1;
+		} else {
+			match outcome {
+				Err(FileReadError::InvalidJson {
+					message,
+					user_message,
+				}) => {
+					assert_eq!(Some(message.as_str()), expected, "{name}");
+					assert!(user_message.is_none(), "{name}");
+				}
+				other => panic!("{name}: {other:?}"),
+			}
+			exact += 1;
+		}
+	}
+	assert_eq!((exact, gaps, root_type_rejections), (86, 4, 1));
+}
+
+#[test]
+fn syntax_context_survives_reader_boundaries_without_buffering_the_document() {
+	let owned = temporary();
+	let path = owned.path().join("syntax-context.json");
+	let input = format!("{}x{}", " ".repeat(CHUNK + 7), " ".repeat(CHUNK + 19));
+	std::fs::write(&path, &input).unwrap();
+	let expected = "Unexpected token 'x', ...\"          x         \"... is not valid JSON";
+	match load(&path, owned.path(), NativeJsonLimits::default()) {
+		Err(FileReadError::InvalidJson { message, .. }) => assert_eq!(message, expected),
+		other => panic!("expected complete bounded context: {other:?}"),
+	}
+	assert!(std::mem::size_of::<json_eof::Tracker>() < 4096);
+}
+
+#[test]
+fn syntax_drain_keeps_utf8_io_cancellation_and_budget_failures_authoritative() {
+	fn state(limits: NativeJsonLimits, stop: CancellationToken) -> Rc<RefCell<State>> {
+		Rc::new(RefCell::new(State::new(stop, limits, true)))
+	}
+	let mut late_utf8 = b"x".to_vec();
+	late_utf8.resize(CHUNK, b' ');
+	late_utf8.push(0xff);
+	let outcome = parse_reader(
+		io::Cursor::new(&late_utf8),
+		late_utf8.len() as u64,
+		state(NativeJsonLimits::default(), CancellationToken::new()),
+	);
+	assert!(
+		matches!(outcome, Err(FileReadError::InvalidJson { message, .. }) if message == UTF8_MESSAGE)
+	);
+
+	struct LateFailure {
+		input: io::Cursor<Vec<u8>>,
+		cancel: Option<CancellationToken>,
+	}
+	impl Read for LateFailure {
+		fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+			let count = self.input.read(out)?;
+			if count != 0 {
+				return Ok(count);
+			}
+			if let Some(stop) = &self.cancel {
+				stop.cancel();
+				Ok(0)
+			} else {
+				Err(io::Error::from_raw_os_error(libc::EIO))
+			}
+		}
+	}
+	for cancel in [false, true] {
+		let mut input = b"x".to_vec();
+		input.resize(CHUNK, b' ');
+		let stop = CancellationToken::new();
+		let outcome = parse_reader(
+			LateFailure {
+				input: io::Cursor::new(input),
+				cancel: cancel.then(|| stop.clone()),
+			},
+			CHUNK as u64,
+			state(NativeJsonLimits::default(), stop),
+		);
+		if cancel {
+			assert!(matches!(outcome, Err(FileReadError::Cancelled)));
+		} else {
+			assert!(matches!(
+				outcome,
+				Err(FileReadError::File {
+					reason: FileReason::Io,
+					errno: Some(libc::EIO),
+				})
+			));
+		}
+	}
+
+	let mut late_token = b"x".to_vec();
+	late_token.resize(CHUNK, b' ');
+	late_token.extend_from_slice(b"\"012345678901234567890123456789\"");
+	let outcome = parse_reader(
+		io::Cursor::new(&late_token),
+		late_token.len() as u64,
+		state(
+			NativeJsonLimits {
+				max_token_bytes: 16,
+				..Default::default()
+			},
+			CancellationToken::new(),
+		),
+	);
+	assert!(matches!(
+		outcome,
+		Err(FileReadError::NativeProfileGap {
+			feature: "native-json-token-budget",
+			..
+		})
+	));
+}
+
+#[test]
+fn partial_unicode_escapes_keep_first_syntax_error_when_serde_reports_eof() {
+	let raw = include_bytes!(
+		"../../tests/fixtures/rea_evidence_file/partial-unicode-node22-679ccf-raw.json"
+	);
+	let receipt: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_evidence_file/partial-unicode-node22-679ccf-receipt.json"
+	))
+	.unwrap();
+	let reference: Value = serde_json::from_slice(raw).unwrap();
+	assert_eq!(
+		bytes_hash(raw),
+		receipt["source"]["raw_sha256"].as_str().unwrap()
+	);
+	assert_eq!(
+		receipt["source"]["raw_byte_length"].as_u64(),
+		Some(raw.len() as u64)
+	);
+	assert_eq!(reference["reference"]["version"], "v22.23.4");
+	assert_eq!(
+		reference["reference"]["executable_sha256"],
+		"94efd062ed066c1a0b332e18249859c905e920eeada5df55d24c99b919629a90"
+	);
+	let terminal = &receipt["source"]["probe_process_status"];
+	assert_eq!(terminal["state"], "succeeded");
+	assert_eq!(terminal["exit_code"], 0);
+	assert_eq!(terminal["output_complete"], true);
+	assert_eq!(terminal["output_durable"], true);
+	assert_eq!(terminal["terminal_publication_confirmed"], true);
+	assert_eq!(terminal["log_truncated"]["stdout"], false);
+	assert_eq!(
+		terminal["log_bytes"]["stdout"]["stored"].as_u64(),
+		Some(raw.len() as u64)
+	);
+	assert_eq!(terminal["log_bytes"]["stderr"]["stored"], 0);
+	let cases = reference["cases"].as_array().unwrap();
+	assert_eq!(cases.len(), 6);
+	let owned = temporary();
+	let mut eof_cases = 0;
+	let mut syntax_cases = 0;
+	for case in cases {
+		let name = case["id"].as_str().unwrap();
+		let input = case["input"].as_str().unwrap();
+		let expected = case["message"].as_str().unwrap();
+		assert_eq!(case["json_parse_ok"], false, "{name}");
+		assert_eq!(case["error_name"], "SyntaxError", "{name}");
+		assert_eq!(
+			bytes_hash(input.as_bytes()),
+			case["input_sha256"].as_str().unwrap(),
+			"{name}"
+		);
+		assert_eq!(
+			json!(expected.encode_utf16().collect::<Vec<_>>()),
+			case["message_utf16"],
+			"{name}"
+		);
+
+		// Match the production IoRead backend: it reads four escape bytes
+		// before validating hex, so EOF can follow an earlier invalid unit.
+		let native_error =
+			serde_json::from_reader::<_, Value>(io::Cursor::new(input.as_bytes())).unwrap_err();
+		let category = if native_error.is_eof() {
+			eof_cases += 1;
+			"eof"
+		} else {
+			assert!(native_error.is_syntax(), "{name}: {native_error}");
+			syntax_cases += 1;
+			"syntax"
+		};
+		assert_eq!(case["native_reader_error_category"], category, "{name}");
+		for split in 0..=input.len() {
+			let mut tracker = json_eof::Tracker::new();
+			tracker.accept(&input.as_bytes()[..split]);
+			tracker.accept(&input.as_bytes()[split..]);
+			assert!(tracker.has_syntax_error(), "{name}, split {split}");
+			assert_eq!(
+				tracker.finish().as_deref(),
+				Some(expected),
+				"{name}, split {split}"
+			);
+		}
+		let path = owned.path().join(format!("partial-{name}.json"));
+		std::fs::write(&path, input).unwrap();
+		match load(&path, owned.path(), NativeJsonLimits::default()) {
+			Err(FileReadError::InvalidJson {
+				message,
+				user_message,
+			}) => {
+				assert_eq!(message, expected, "{name}");
+				assert!(user_message.is_none(), "{name}");
+			}
+			other => panic!("expected first Node syntax diagnostic for {name}: {other:?}"),
+		}
+	}
+	assert_eq!((eof_cases, syntax_cases), (5, 1));
+}

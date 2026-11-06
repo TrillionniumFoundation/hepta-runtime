@@ -312,7 +312,7 @@ fn repaired_alias_graph_refuses_captured_v2_identity() {
 	let first = graph::report(&selected).expect("current alias observations");
 	assert_eq!(
 		first["analysis_profile"],
-		"hepta.javascript-selected-source-graph.v3"
+		"hepta.javascript-selected-source-graph.v4"
 	);
 	assert_eq!(first["total_rows"], 1);
 	assert_eq!(first["rows"][0]["channel"], "later");
@@ -459,4 +459,129 @@ async fn cancelled_request_is_rejected_before_runtime_or_source_admission() {
 		.await
 		.expect_err("cancel before source admission");
 	assert_eq!(error.to_string(), "JavaScript AST inspection cancelled");
+}
+
+#[test]
+fn wrapped_browser_window_options_preserve_preload_declarations() {
+	let cases = [
+		(
+			JavascriptSyntax::Javascript,
+			r#"{webPreferences:{preload:"./preload.cjs"}}"#,
+		),
+		(
+			JavascriptSyntax::Javascript,
+			r#"(({webPreferences:{preload:"./preload.cjs"}}))"#,
+		),
+		(
+			JavascriptSyntax::Typescript,
+			r#"({webPreferences:{preload:"./preload.cjs"}} as const)"#,
+		),
+		(
+			JavascriptSyntax::Typescript,
+			r#"({webPreferences:{preload:"./preload.cjs"}} satisfies Record<string, unknown>)"#,
+		),
+		(
+			JavascriptSyntax::Typescript,
+			r#"(<Record<string, unknown>>{webPreferences:{preload:"./preload.cjs"}})"#,
+		),
+		(
+			JavascriptSyntax::Typescript,
+			r#"({webPreferences:{preload:"./preload.cjs"}}!)"#,
+		),
+		(
+			JavascriptSyntax::Javascript,
+			r#"({webPreferences:({preload:("./preload.cjs")})})"#,
+		),
+	];
+	for (syntax, options) in cases {
+		let mut selected_source = source(
+			"main.ts",
+			&format!(r#"import {{BrowserWindow}} from "electron"; new BrowserWindow({options});"#),
+		);
+		selected_source.syntax = syntax;
+		let inspected = graph::report(&request(
+			vec![selected_source],
+			JavascriptGraphCollection::ElectronCalls,
+		))
+		.expect("wrapped literal constructor options");
+		assert_eq!(inspected["total_rows"], 1, "{options}");
+		assert_eq!(
+			inspected["rows"][0]["preload_declaration_present"], true,
+			"{options}"
+		);
+		assert_eq!(
+			inspected["rows"][0]["literal_preload"], "./preload.cjs",
+			"{options}"
+		);
+		assert_eq!(inspected["counts"]["reported_unknowns"], 0, "{options}");
+		assert_eq!(inspected["javascript_executed"], false);
+	}
+}
+
+#[test]
+fn wrapped_constructor_options_keep_dynamic_preload_unknown_and_skip_spreads() {
+	let text = r#"
+		import {BrowserWindow} from "electron";
+		new BrowserWindow(({webPreferences:{preload:getPath()}}));
+		new BrowserWindow((options));
+		new BrowserWindow(...[{webPreferences:{preload:"spread-not-selected"}}]);
+		function local(BrowserWindow) {
+			new BrowserWindow(({webPreferences:{preload:"shadow-not-electron"}}));
+		}
+	"#;
+	let inspected = graph::report(&request(
+		vec![source("main.js", text)],
+		JavascriptGraphCollection::ElectronCalls,
+	))
+	.expect("dynamic constructor options");
+	assert_eq!(inspected["total_rows"], 3);
+	assert_eq!(inspected["rows"][0]["preload_declaration_present"], true);
+	assert!(inspected["rows"][0]["literal_preload"].is_null());
+	for index in [1, 2] {
+		assert_eq!(
+			inspected["rows"][index]["preload_declaration_present"],
+			false
+		);
+		assert!(inspected["rows"][index]["literal_preload"].is_null());
+	}
+	let unknowns = graph::report(&request(
+		vec![source("main.js", text)],
+		JavascriptGraphCollection::Unknowns,
+	))
+	.expect("dynamic preload remains unknown");
+	assert_eq!(unknowns["total_rows"], 1);
+	assert_eq!(unknowns["rows"][0]["kind"], "dynamic_preload_path");
+}
+
+#[test]
+fn repaired_preload_observations_refuse_v3_graph_identity() {
+	let mut selected = request(
+		vec![source(
+			"main.js",
+			r#"
+		import {BrowserWindow} from "electron";
+		new BrowserWindow(({webPreferences:{preload:"./preload.cjs"}}));
+	"#,
+		)],
+		JavascriptGraphCollection::ElectronCalls,
+	);
+	let old_v3 = sha256(
+		&serde_json::to_vec(&json!({
+			"profile":"hepta.javascript-selected-source-graph.v3",
+			"parser":{"name":"oxc", "version":PARSER_VERSION},
+			"sources":source_identities(&selected)
+		}))
+		.expect("v3 identity serialization"),
+	);
+	let first = graph::report(&selected).expect("current preload observations");
+	assert_eq!(
+		first["analysis_profile"],
+		"hepta.javascript-selected-source-graph.v4"
+	);
+	assert_ne!(first["graph_sha256"], old_v3);
+	selected.expected_graph_sha256 = Some(old_v3);
+	assert!(graph::report(&selected)
+		.unwrap_err()
+		.to_string()
+		.contains("source set changed"));
 }

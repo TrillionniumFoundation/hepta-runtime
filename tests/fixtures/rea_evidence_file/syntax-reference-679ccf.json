@@ -1,0 +1,800 @@
+{
+  "schema": "hepta.frozen-json-syntax-reference.v1",
+  "source": {
+    "kind": "actual Node JSON.parse observation plus original published REA MCP",
+    "node": "v22.23.4",
+    "node_path": "/usr/bin/node",
+    "node_sha256": "94efd062ed066c1a0b332e18249859c905e920eeada5df55d24c99b919629a90",
+    "node_job_id": "1a1adf3366c-fc05-5c09",
+    "node_raw_file": "syntax-node22-679ccf-raw.json",
+    "node_raw_sha256": "e7b9e4700f0f501e92a11cabdf732caad5d37f6341b1988b4dc80974ea4b0cd8",
+    "npm_tarball_sha256": "8d542ec76a9cb350584b60a6c9c088706ff812d5bb5b094c20c95b6dc25698bb",
+    "original_corpus_sha256": "289d512884e2ee47fa784ad6f70d76813da1e2f54b84a9b35522320b63f0b4fb",
+    "v8_source": "https://github.com/nodejs/node/blob/v22.23.4/deps/v8/src/json/json-parser.cc",
+    "v8_source_git_blob": "7bd445f94b2d5529b29872c249edafb9c08197a2",
+    "boundary_job_id": "1a1adfbf701-fc05-5c5d",
+    "boundary_raw_file": "syntax-node22-boundaries-679ccf-raw.json",
+    "boundary_raw_sha256": "fa7d1a353d457b379589133274664c37119a912604dc1091740be8c236dedec7"
+  },
+  "cases": [
+    {
+      "id": "node-syntax-01",
+      "input": "[1,]",
+      "json_parse_ok": false,
+      "message": "Unexpected token ']', \"[1,]\" is not valid JSON"
+    },
+    {
+      "id": "node-syntax-02",
+      "input": "{\"a\":}",
+      "json_parse_ok": false,
+      "message": "Unexpected token '}', \"{\"a\":}\" is not valid JSON"
+    },
+    {
+      "id": "node-syntax-03",
+      "input": "{\"a\" 1}",
+      "json_parse_ok": false,
+      "message": "Expected ':' after property name in JSON at position 5 (line 1 column 6)"
+    },
+    {
+      "id": "node-syntax-04",
+      "input": "{\"a\":1,}",
+      "json_parse_ok": false,
+      "message": "Expected double-quoted property name in JSON at position 7 (line 1 column 8)"
+    },
+    {
+      "id": "node-syntax-05",
+      "input": "{\"a\":1 \"b\":2}",
+      "json_parse_ok": false,
+      "message": "Expected ',' or '}' after property value in JSON at position 7 (line 1 column 8)"
+    },
+    {
+      "id": "node-syntax-06",
+      "input": "{a:1}",
+      "json_parse_ok": false,
+      "message": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+    },
+    {
+      "id": "node-syntax-07",
+      "input": "{]",
+      "json_parse_ok": false,
+      "message": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+    },
+    {
+      "id": "node-syntax-08",
+      "input": "{,}",
+      "json_parse_ok": false,
+      "message": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+    },
+    {
+      "id": "node-syntax-09",
+      "input": "{",
+      "json_parse_ok": false,
+      "message": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+    },
+    {
+      "id": "node-syntax-10",
+      "input": "[1 2]",
+      "json_parse_ok": false,
+      "message": "Expected ',' or ']' after array element in JSON at position 3 (line 1 column 4)"
+    },
+    {
+      "id": "node-syntax-11",
+      "input": "[1;2]",
+      "json_parse_ok": false,
+      "message": "Expected ',' or ']' after array element in JSON at position 2 (line 1 column 3)"
+    },
+    {
+      "id": "node-syntax-12",
+      "input": "[]x",
+      "json_parse_ok": false,
+      "message": "Unexpected non-whitespace character after JSON at position 2 (line 1 column 3)"
+    },
+    {
+      "id": "node-syntax-13",
+      "input": "true false",
+      "json_parse_ok": false,
+      "message": "Unexpected non-whitespace character after JSON at position 5 (line 1 column 6)"
+    },
+    {
+      "id": "node-syntax-14",
+      "input": "01",
+      "json_parse_ok": false,
+      "message": "Unexpected number in JSON at position 1 (line 1 column 2)"
+    },
+    {
+      "id": "node-syntax-15",
+      "input": "-x",
+      "json_parse_ok": false,
+      "message": "No number after minus sign in JSON at position 1 (line 1 column 2)"
+    },
+    {
+      "id": "node-syntax-16",
+      "input": "- ",
+      "json_parse_ok": false,
+      "message": "No number after minus sign in JSON at position 1 (line 1 column 2)"
+    },
+    {
+      "id": "node-syntax-17",
+      "input": "1.x",
+      "json_parse_ok": false,
+      "message": "Unterminated fractional number in JSON at position 2 (line 1 column 3)"
+    },
+    {
+      "id": "node-syntax-18",
+      "input": "1e ",
+      "json_parse_ok": false,
+      "message": "Exponent part is missing a number in JSON at position 2 (line 1 column 3)"
+    },
+    {
+      "id": "node-syntax-19",
+      "input": "1e+ ",
+      "json_parse_ok": false,
+      "message": "Exponent part is missing a number in JSON at position 3 (line 1 column 4)"
+    },
+    {
+      "id": "node-syntax-20",
+      "input": "1e-x",
+      "json_parse_ok": false,
+      "message": "Exponent part is missing a number in JSON at position 3 (line 1 column 4)"
+    },
+    {
+      "id": "node-syntax-21",
+      "input": "\"\\q\"",
+      "json_parse_ok": false,
+      "message": "Bad escaped character in JSON at position 2 (line 1 column 3)"
+    },
+    {
+      "id": "node-syntax-22",
+      "input": "\"\\u0q00\"",
+      "json_parse_ok": false,
+      "message": "Bad Unicode escape in JSON at position 4 (line 1 column 5)"
+    },
+    {
+      "id": "node-syntax-23",
+      "input": "\"abc\n\"",
+      "json_parse_ok": false,
+      "message": "Bad control character in string literal in JSON at position 4 (line 1 column 5)"
+    },
+    {
+      "id": "node-syntax-24",
+      "input": "tru ",
+      "json_parse_ok": false,
+      "message": "Unexpected token ' ', \"tru \" is not valid JSON"
+    },
+    {
+      "id": "node-syntax-25",
+      "input": "tRue",
+      "json_parse_ok": false,
+      "message": "Unexpected token 'R', \"tRue\" is not valid JSON"
+    },
+    {
+      "id": "node-syntax-26",
+      "input": "nulx",
+      "json_parse_ok": false,
+      "message": "Unexpected token 'x', \"nulx\" is not valid JSON"
+    },
+    {
+      "id": "node-syntax-27",
+      "input": "undefined",
+      "json_parse_ok": false,
+      "message": "\"undefined\" is not valid JSON"
+    },
+    {
+      "id": "node-syntax-28",
+      "input": "NaN",
+      "json_parse_ok": false,
+      "message": "\"NaN\" is not valid JSON"
+    },
+    {
+      "id": "node-syntax-29",
+      "input": "Infinity",
+      "json_parse_ok": false,
+      "message": "\"Infinity\" is not valid JSON"
+    },
+    {
+      "id": "node-syntax-30",
+      "input": "[NaN]",
+      "json_parse_ok": false,
+      "message": "Unexpected token 'N', \"[NaN]\" is not valid JSON"
+    },
+    {
+      "id": "node-syntax-31",
+      "input": "[undefined]",
+      "json_parse_ok": false,
+      "message": "Unexpected token 'u', \"[undefined]\" is not valid JSON"
+    },
+    {
+      "id": "node-syntax-32",
+      "input": "[tru ]",
+      "json_parse_ok": false,
+      "message": "Unexpected token ' ', \"[tru ]\" is not valid JSON"
+    },
+    {
+      "id": "node-syntax-33",
+      "input": "[trueX]",
+      "json_parse_ok": false,
+      "message": "Expected ',' or ']' after array element in JSON at position 5 (line 1 column 6)"
+    },
+    {
+      "id": "node-syntax-34",
+      "input": "\"\\uD800\"",
+      "json_parse_ok": true,
+      "native_value_profile_gap": true
+    },
+    {
+      "id": "node-syntax-35",
+      "input": "[1e400]",
+      "json_parse_ok": true,
+      "native_value_profile_gap": true
+    },
+    {
+      "id": "node-syntax-36",
+      "input": "[\"😀\",]",
+      "json_parse_ok": false,
+      "message": "Unexpected token ']', \"[\"😀\",]\" is not valid JSON"
+    },
+    {
+      "id": "node-syntax-37",
+      "input": "{\r\n\"😀\":1,\r\n}",
+      "json_parse_ok": false,
+      "message": "Expected double-quoted property name in JSON at position 12 (line 3 column 1)"
+    },
+    {
+      "id": "node-syntax-38",
+      "input": "{\"é\"\r\n 1}",
+      "json_parse_ok": false,
+      "message": "Expected ':' after property name in JSON at position 7 (line 2 column 2)"
+    },
+    {
+      "id": "node-syntax-39",
+      "input": "[\"€\", \n @]",
+      "json_parse_ok": false,
+      "message": "Unexpected token '@', \"[\"€\", \n @]\" is not valid JSON"
+    },
+    {
+      "id": "node-syntax-40",
+      "input": "\"abc\\q\"",
+      "json_parse_ok": false,
+      "message": "Bad escaped character in JSON at position 5 (line 1 column 6)"
+    },
+    {
+      "id": "node-syntax-41",
+      "input": "\"\\u\"",
+      "json_parse_ok": false,
+      "message": "Bad Unicode escape in JSON at position 3 (line 1 column 4)"
+    },
+    {
+      "id": "node-syntax-42",
+      "input": "\"\\u123g\"",
+      "json_parse_ok": false,
+      "message": "Bad Unicode escape in JSON at position 6 (line 1 column 7)"
+    },
+    {
+      "id": "node-syntax-43",
+      "input": "\"ab\tcd\"",
+      "json_parse_ok": false,
+      "message": "Bad control character in string literal in JSON at position 3 (line 1 column 4)"
+    },
+    {
+      "id": "node-boundary-01",
+      "input": "x                   ",
+      "json_parse_ok": false,
+      "message": "Unexpected token 'x', \"x                   \" is not valid JSON"
+    },
+    {
+      "id": "node-boundary-02",
+      "input": "x                    ",
+      "json_parse_ok": false,
+      "message": "Unexpected token 'x', \"x         \"... is not valid JSON"
+    },
+    {
+      "id": "node-boundary-03",
+      "input": "         x           ",
+      "json_parse_ok": false,
+      "message": "Unexpected token 'x', \"         x         \"... is not valid JSON"
+    },
+    {
+      "id": "node-boundary-04",
+      "input": "          x          ",
+      "json_parse_ok": false,
+      "message": "Unexpected token 'x', ...\"          x         \"... is not valid JSON"
+    },
+    {
+      "id": "node-boundary-05",
+      "input": "           x         ",
+      "json_parse_ok": false,
+      "message": "Unexpected token 'x', ...\"          x         \" is not valid JSON"
+    },
+    {
+      "id": "node-boundary-06",
+      "input": "[\"0123456789012345678901234\",]",
+      "json_parse_ok": false,
+      "message": "Unexpected token ']', ...\"78901234\",]\" is not valid JSON"
+    },
+    {
+      "id": "node-boundary-07",
+      "input": "[\"0123456789012345678901234\", x, \"later-bad\"]",
+      "json_parse_ok": false,
+      "message": "Unexpected token 'x', ...\"8901234\", x, \"later-\"... is not valid JSON"
+    },
+    {
+      "id": "node-boundary-08",
+      "input": "{\"a\" 1,\"bad\":]}",
+      "json_parse_ok": false,
+      "message": "Expected ':' after property name in JSON at position 5 (line 1 column 6)"
+    },
+    {
+      "id": "node-boundary-09",
+      "input": "[tru1]",
+      "json_parse_ok": false,
+      "message": "Unexpected number in JSON at position 4 (line 1 column 5)"
+    },
+    {
+      "id": "node-boundary-10",
+      "input": "[tru\"]",
+      "json_parse_ok": false,
+      "message": "Unexpected string in JSON at position 4 (line 1 column 5)"
+    },
+    {
+      "id": "node-boundary-11",
+      "input": "[tru-]",
+      "json_parse_ok": false,
+      "message": "Unexpected number in JSON at position 4 (line 1 column 5)"
+    },
+    {
+      "id": "node-boundary-12",
+      "input": "[fals1]",
+      "json_parse_ok": false,
+      "message": "Unexpected number in JSON at position 5 (line 1 column 6)"
+    },
+    {
+      "id": "node-boundary-13",
+      "input": "[nul0]",
+      "json_parse_ok": false,
+      "message": "Unexpected number in JSON at position 4 (line 1 column 5)"
+    },
+    {
+      "id": "node-boundary-14",
+      "input": "\"\\é\"",
+      "json_parse_ok": false,
+      "message": "Bad escaped character in JSON at position 2 (line 1 column 3)"
+    },
+    {
+      "id": "node-boundary-15",
+      "input": "\"\\€\"",
+      "json_parse_ok": false,
+      "message": "Unexpected token '€', \"\"\\€\"\" is not valid JSON"
+    },
+    {
+      "id": "node-boundary-16",
+      "input": "\"\\😀\"",
+      "json_parse_ok": false,
+      "native_diagnostic_profile_gap": true,
+      "message_utf16": [
+        85,
+        110,
+        101,
+        120,
+        112,
+        101,
+        99,
+        116,
+        101,
+        100,
+        32,
+        116,
+        111,
+        107,
+        101,
+        110,
+        32,
+        39,
+        55357,
+        39,
+        44,
+        32,
+        34,
+        34,
+        92,
+        55357,
+        56832,
+        34,
+        34,
+        32,
+        105,
+        115,
+        32,
+        110,
+        111,
+        116,
+        32,
+        118,
+        97,
+        108,
+        105,
+        100,
+        32,
+        74,
+        83,
+        79,
+        78
+      ]
+    },
+    {
+      "id": "node-boundary-17",
+      "input": "😀",
+      "json_parse_ok": false,
+      "native_diagnostic_profile_gap": true,
+      "message_utf16": [
+        85,
+        110,
+        101,
+        120,
+        112,
+        101,
+        99,
+        116,
+        101,
+        100,
+        32,
+        116,
+        111,
+        107,
+        101,
+        110,
+        32,
+        39,
+        55357,
+        39,
+        44,
+        32,
+        34,
+        55357,
+        56832,
+        34,
+        32,
+        105,
+        115,
+        32,
+        110,
+        111,
+        116,
+        32,
+        118,
+        97,
+        108,
+        105,
+        100,
+        32,
+        74,
+        83,
+        79,
+        78
+      ]
+    },
+    {
+      "id": "node-boundary-18",
+      "input": "€",
+      "json_parse_ok": false,
+      "message": "Unexpected token '€', \"€\" is not valid JSON"
+    },
+    {
+      "id": "node-boundary-19",
+      "input": "' '",
+      "json_parse_ok": false,
+      "message": "Unexpected token ''', \"' '\" is not valid JSON"
+    },
+    {
+      "id": "node-boundary-20",
+      "input": "[\r\n 1,\r\n ]",
+      "json_parse_ok": false,
+      "message": "Unexpected token ']', \"[\r\n 1,\r\n ]\" is not valid JSON"
+    },
+    {
+      "id": "node-boundary-21",
+      "input": "{\r\"😀\":1,\r }",
+      "json_parse_ok": false,
+      "message": "Expected double-quoted property name in JSON at position 11 (line 3 column 2)"
+    },
+    {
+      "id": "node-boundary-22",
+      "input": "\"abc\r\n\"",
+      "json_parse_ok": false,
+      "message": "Bad control character in string literal in JSON at position 4 (line 1 column 5)"
+    },
+    {
+      "id": "node-boundary-23",
+      "input": "          é            ",
+      "json_parse_ok": false,
+      "message": "Unexpected token 'é', ...\"          é         \"... is not valid JSON"
+    },
+    {
+      "id": "node-boundary-24",
+      "input": "[\"😀😀😀😀😀😀😀😀😀😀\",]",
+      "json_parse_ok": false,
+      "message": "Unexpected token ']', ...\"😀😀😀😀\",]\" is not valid JSON"
+    },
+    {
+      "id": "node-boundary-25",
+      "input": "[\"😀😀😀😀😀😀😀😀😀😀\", x]",
+      "json_parse_ok": false,
+      "native_diagnostic_profile_gap": true,
+      "message_utf16": [
+        85,
+        110,
+        101,
+        120,
+        112,
+        101,
+        99,
+        116,
+        101,
+        100,
+        32,
+        116,
+        111,
+        107,
+        101,
+        110,
+        32,
+        39,
+        120,
+        39,
+        44,
+        32,
+        46,
+        46,
+        46,
+        34,
+        56832,
+        55357,
+        56832,
+        55357,
+        56832,
+        55357,
+        56832,
+        34,
+        44,
+        32,
+        120,
+        93,
+        34,
+        32,
+        105,
+        115,
+        32,
+        110,
+        111,
+        116,
+        32,
+        118,
+        97,
+        108,
+        105,
+        100,
+        32,
+        74,
+        83,
+        79,
+        78
+      ]
+    },
+    {
+      "id": "node-boundary-26",
+      "input": "true",
+      "json_parse_ok": true
+    },
+    {
+      "id": "node-boundary-27",
+      "input": "false",
+      "json_parse_ok": true
+    },
+    {
+      "id": "node-boundary-28",
+      "input": "null",
+      "json_parse_ok": true
+    },
+    {
+      "id": "node-boundary-29",
+      "input": "-0",
+      "json_parse_ok": true
+    },
+    {
+      "id": "node-boundary-30",
+      "input": "1.25e+3",
+      "json_parse_ok": true
+    },
+    {
+      "id": "node-boundary-31",
+      "input": "{\"x\":\"😀\",\"y\":[1,true,null]}",
+      "json_parse_ok": true
+    },
+    {
+      "id": "node-boundary-32",
+      "input": "[0.01]",
+      "json_parse_ok": true
+    },
+    {
+      "id": "node-boundary-33",
+      "input": "[1e400,]",
+      "json_parse_ok": false,
+      "message": "Unexpected token ']', \"[1e400,]\" is not valid JSON"
+    },
+    {
+      "id": "node-boundary-34",
+      "input": "[\"\\uD800\",]",
+      "json_parse_ok": false,
+      "message": "Unexpected token ']', \"[\"\\uD800\",]\" is not valid JSON"
+    }
+  ],
+  "original_cases": [
+    {
+      "id": "non-eof-control-01",
+      "input": "x",
+      "input_sha256": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
+      "original_record_sha256": "6fbfd0209b831c87a93eef5f2a985f332d1118d4bea07c6a1f161b2ce454c807",
+      "original_record_path": "/home/qian-qi/work/hepta-rea-json-eof-173861-20261105-evidence/oracle-reference-r4/non-eof-control-01.json",
+      "json_parse_ok": false,
+      "message": "Unexpected token 'x', \"x\" is not valid JSON",
+      "original_mcp_error_code": "evidence_integrity_mismatch",
+      "original_mcp_error_category": "execution_failure",
+      "json_diagnostic_matches_node": true
+    },
+    {
+      "id": "non-eof-control-02",
+      "input": "[1,]",
+      "input_sha256": "886ad6246ed150b2930495926ba07d579307bc7fecaf4b391650dca8bae7bc66",
+      "original_record_sha256": "476cea857dc3ccbcdd94bec8d651fe6960672ed8a3afa07e059f65c4fb9f4db5",
+      "original_record_path": "/home/qian-qi/work/hepta-rea-json-eof-173861-20261105-evidence/oracle-reference-r4/non-eof-control-02.json",
+      "json_parse_ok": false,
+      "message": "Unexpected token ']', \"[1,]\" is not valid JSON",
+      "original_mcp_error_code": "evidence_integrity_mismatch",
+      "original_mcp_error_category": "execution_failure",
+      "json_diagnostic_matches_node": true
+    },
+    {
+      "id": "non-eof-control-03",
+      "input": "{\"a\":1,}",
+      "input_sha256": "aa99a5ce3eb0dd8355f0bfb15376ea1d862ad75d0d278af1f8c280ca8c02c640",
+      "original_record_sha256": "5f24ae21c5cdc39d7c9b44bc5ab4d98f66708a79134867fa7f3c4fbf0506fad8",
+      "original_record_path": "/home/qian-qi/work/hepta-rea-json-eof-173861-20261105-evidence/oracle-reference-r4/non-eof-control-03.json",
+      "json_parse_ok": false,
+      "message": "Expected double-quoted property name in JSON at position 7 (line 1 column 8)",
+      "original_mcp_error_code": "evidence_integrity_mismatch",
+      "original_mcp_error_category": "execution_failure",
+      "json_diagnostic_matches_node": true
+    },
+    {
+      "id": "non-eof-control-04",
+      "input": "{\"a\" 1}",
+      "input_sha256": "767ee938616b3ef0c272d90d58a86d091f76789ba877e30c18514a88a5fdb752",
+      "original_record_sha256": "36c365e7943d9bd37839f3a09fbb4c383a7caa943ab844605512c23887e01053",
+      "original_record_path": "/home/qian-qi/work/hepta-rea-json-eof-173861-20261105-evidence/oracle-reference-r4/non-eof-control-04.json",
+      "json_parse_ok": false,
+      "message": "Expected ':' after property name in JSON at position 5 (line 1 column 6)",
+      "original_mcp_error_code": "evidence_integrity_mismatch",
+      "original_mcp_error_category": "execution_failure",
+      "json_diagnostic_matches_node": true
+    },
+    {
+      "id": "non-eof-control-05",
+      "input": "[1 2]",
+      "input_sha256": "9f901106b754d3b187811f5628437ca2076a61e68f2ac1696c4df25dd3c9852c",
+      "original_record_sha256": "fb9be458af19e862bb2152d29b92e2ea7e58a6b8a52873bdb9e79b4b5c4335f6",
+      "original_record_path": "/home/qian-qi/work/hepta-rea-json-eof-173861-20261105-evidence/oracle-reference-r4/non-eof-control-05.json",
+      "json_parse_ok": false,
+      "message": "Expected ',' or ']' after array element in JSON at position 3 (line 1 column 4)",
+      "original_mcp_error_code": "evidence_integrity_mismatch",
+      "original_mcp_error_category": "execution_failure",
+      "json_diagnostic_matches_node": true
+    },
+    {
+      "id": "non-eof-control-06",
+      "input": "01",
+      "input_sha256": "938db8c9f82c8cb58d3f3ef4fd250036a48d26a712753d2fde5abd03a85cabf4",
+      "original_record_sha256": "65110a908ce8b79f64a20af73581ca495f49367d8812c31ba326de9a2d8a9123",
+      "original_record_path": "/home/qian-qi/work/hepta-rea-json-eof-173861-20261105-evidence/oracle-reference-r4/non-eof-control-06.json",
+      "json_parse_ok": false,
+      "message": "Unexpected number in JSON at position 1 (line 1 column 2)",
+      "original_mcp_error_code": "evidence_integrity_mismatch",
+      "original_mcp_error_category": "execution_failure",
+      "json_diagnostic_matches_node": true
+    },
+    {
+      "id": "non-eof-control-07",
+      "input": "1e+x",
+      "input_sha256": "76f6286c87698952e904b4ba06c3b6884c32fb60236923210bc0afed7d25b84e",
+      "original_record_sha256": "55e586f4618fb6f8b60af8dc2aeccf41a3352a065ed2f56263faf36712f8e27b",
+      "original_record_path": "/home/qian-qi/work/hepta-rea-json-eof-173861-20261105-evidence/oracle-reference-r4/non-eof-control-07.json",
+      "json_parse_ok": false,
+      "message": "Exponent part is missing a number in JSON at position 3 (line 1 column 4)",
+      "original_mcp_error_code": "evidence_integrity_mismatch",
+      "original_mcp_error_category": "execution_failure",
+      "json_diagnostic_matches_node": true
+    },
+    {
+      "id": "non-eof-control-08",
+      "input": "truX",
+      "input_sha256": "15e2e3f93345b095de20ad6c66b06f0411961fb25986a5123d2b2f7efe7964d9",
+      "original_record_sha256": "9e6b3f2525af5faeb646ec7ecdaec4e75508b01bff63a04d0dbc355b970f6c1f",
+      "original_record_path": "/home/qian-qi/work/hepta-rea-json-eof-173861-20261105-evidence/oracle-reference-r4/non-eof-control-08.json",
+      "json_parse_ok": false,
+      "message": "Unexpected token 'X', \"truX\" is not valid JSON",
+      "original_mcp_error_code": "evidence_integrity_mismatch",
+      "original_mcp_error_category": "execution_failure",
+      "json_diagnostic_matches_node": true
+    },
+    {
+      "id": "non-eof-control-09",
+      "input": "\"\\q\"",
+      "input_sha256": "722cd80a90dd9305fea073dd4dfeeace433b327fccf462fcf466cd13551c6aa9",
+      "original_record_sha256": "d63bc0acf81297c13900b2eec6e911c5f54a7dca8c427dd3df30a132be3ce9aa",
+      "original_record_path": "/home/qian-qi/work/hepta-rea-json-eof-173861-20261105-evidence/oracle-reference-r4/non-eof-control-09.json",
+      "json_parse_ok": false,
+      "message": "Bad escaped character in JSON at position 2 (line 1 column 3)",
+      "original_mcp_error_code": "evidence_integrity_mismatch",
+      "original_mcp_error_category": "execution_failure",
+      "json_diagnostic_matches_node": true
+    },
+    {
+      "id": "non-eof-control-10",
+      "input": "\"\\u0x00\"",
+      "input_sha256": "715db9828cef050c17bc65bba006f2768d9321785daec39597cae68f87db8dc4",
+      "original_record_sha256": "3c599af47d514ff98339024daa2aec8af465217bb9599b6a017b4fdde02e83a1",
+      "original_record_path": "/home/qian-qi/work/hepta-rea-json-eof-173861-20261105-evidence/oracle-reference-r4/non-eof-control-10.json",
+      "json_parse_ok": false,
+      "message": "Bad Unicode escape in JSON at position 4 (line 1 column 5)",
+      "original_mcp_error_code": "evidence_integrity_mismatch",
+      "original_mcp_error_category": "execution_failure",
+      "json_diagnostic_matches_node": true
+    },
+    {
+      "id": "non-eof-control-11",
+      "input": "\"a\nb\"",
+      "input_sha256": "422b6e380acaa9ba096e424e88ae518cc55b4d8200909533189438a3002954bb",
+      "original_record_sha256": "541e6c82fe6773279e7d551d401847703d8275338b7cc359a51aa0d1d2e56966",
+      "original_record_path": "/home/qian-qi/work/hepta-rea-json-eof-173861-20261105-evidence/oracle-reference-r4/non-eof-control-11.json",
+      "json_parse_ok": false,
+      "message": "Bad control character in string literal in JSON at position 2 (line 1 column 3)",
+      "original_mcp_error_code": "evidence_integrity_mismatch",
+      "original_mcp_error_category": "execution_failure",
+      "json_diagnostic_matches_node": true
+    },
+    {
+      "id": "non-eof-control-12",
+      "input": "{}x",
+      "input_sha256": "82985617ce795510ad965737efe6b5a76411b26a6d7453ff4ba680e856377bc8",
+      "original_record_sha256": "17c8e676ecd1b8e91bf489d08bd6af67dbed86876e7475e6f4657cdfd76bc1e7",
+      "original_record_path": "/home/qian-qi/work/hepta-rea-json-eof-173861-20261105-evidence/oracle-reference-r4/non-eof-control-12.json",
+      "json_parse_ok": false,
+      "message": "Unexpected non-whitespace character after JSON at position 2 (line 1 column 3)",
+      "original_mcp_error_code": "evidence_integrity_mismatch",
+      "original_mcp_error_category": "execution_failure",
+      "json_diagnostic_matches_node": true
+    },
+    {
+      "id": "non-eof-control-13",
+      "input": "{\"😀\":}",
+      "input_sha256": "79b27c07d5587389757d2a45f296481c232e34caf9e91a33a5d2273fcd76d98c",
+      "original_record_sha256": "9a1af12682c08e1b42bb82f2c912a144d4a8d6d966987df1d26987ddd2f8d47f",
+      "original_record_path": "/home/qian-qi/work/hepta-rea-json-eof-173861-20261105-evidence/oracle-reference-r4/non-eof-control-13.json",
+      "json_parse_ok": false,
+      "message": "Unexpected token '}', \"{\"😀\":}\" is not valid JSON",
+      "original_mcp_error_code": "evidence_integrity_mismatch",
+      "original_mcp_error_category": "execution_failure",
+      "json_diagnostic_matches_node": true
+    },
+    {
+      "id": "non-eof-control-14",
+      "input": "[\"😀\",]",
+      "input_sha256": "ff0c65866de64580b17597fc27c4e29bfe9e881fed055b5c81746084681bfd32",
+      "original_record_sha256": "9e938e8e3e36ab3a70252ecdb53a064ea2250c881c1318348a75d8da799975d6",
+      "original_record_path": "/home/qian-qi/work/hepta-rea-json-eof-173861-20261105-evidence/oracle-reference-r4/non-eof-control-14.json",
+      "json_parse_ok": false,
+      "message": "Unexpected token ']', \"[\"😀\",]\" is not valid JSON",
+      "original_mcp_error_code": "evidence_integrity_mismatch",
+      "original_mcp_error_category": "execution_failure",
+      "json_diagnostic_matches_node": true
+    }
+  ]
+}

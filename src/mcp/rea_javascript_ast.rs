@@ -677,6 +677,7 @@ impl<'a> Visit<'a> for Observations<'_> {
 				.arguments
 				.first()
 				.and_then(Argument::as_expression)
+				.map(Expression::get_inner_expression)
 			{
 				for property in &options.properties {
 					if let ObjectPropertyKind::ObjectProperty(property) = property {
