@@ -1,7 +1,8 @@
 # R34: bounded direct SSH capacity for existing-job cancellation
 
-**Status: candidate under its first complete x230 qualification. It is not adopted.
-Accepted runtime remains R24.**
+**Status: first complete x230 qualification passed: 1653 passed, 0 failed,
+34 ignored, 1687 selected, 0 retries. Exact native CI is running.
+R34 is not adopted; accepted runtime remains R24.**
 
 The initial source commit is `5d0b180b832e7f2a8120078231e97ef9e702608a`,
 independently based on accepted R24 `baab4def80be7af015b2e7a594cb302f66c4130e`.
@@ -37,12 +38,34 @@ Original native job: **`1a1aef7882f-fc05-6499`**, started once with a two-hour
 outer timeout and no automatic retry. The 19 original qualification tools,
 eight stages and `jobs=2` remain unchanged.
 
-The published interim native read records successful format, format-check,
-harness-test and Clippy stages, followed by the start of the complete test
-build. It is not a terminal qualification result. Final source-map identity,
-test counts, release program hashes and the original terminal remain pending.
-Eight new sibling tests are included in the candidate; this statement does
-not predeclare their results.
+All eight original stages closed with exit code 0. The unfiltered isolated
+inventory reports **1653 passed, 0 failed, 34 ignored, 1687 selected and 0 retries**;
+the original independent auditor reports success with no errors and 1653 executed
+cases. The native terminal is succeeded/0 with complete, durable, synced and
+untruncated 1108-byte stdout and empty stderr. This was the first qualification
+execution, with no automatic retry.
+
+The actual final source map contains the same 220 paths. Exactly the original four
+candidate paths differ from R24; 216 are unchanged. Formatting changed only the
+candidate test file, which is now published at src/mcp/runtime/ssh_direct_tests.rs
+with SHA256 `b3ad50032291f32eb4492ca09d3198937b0dcda4eb9abc228d91d2f5b0b847c6`.
+The three production source files remain identical to the initial R34 candidate.
+Postflight re-read the complete 220-file map, 19 original harness files and all
+three retained release binaries and confirmed their qualified identities.
+
+| Retained program | Bytes | SHA256 |
+|---|---:|---|
+| hepta-runtime | 14,379,112 | `85211f3d60844554c778fbe460d455320425aa43b5525bf8786b3cc51a992c30` |
+| hepta-runtime-jobctl | 739,016 | `61c90260057a405626a24a36ad43303c632f72d2d97929296acdffd748b79d62` |
+| native_process_driver | 2,903,568 | `d6f7ca735830a17fd7d243fd6bb0b3b2b70e94bd931c19ecce1e706a0d1926b4` |
+
+Original report, map, summary, complete native streams and postflight are under
+qualification-01/. The earlier interim read remains historical evidence.
+The full bounded qualification archive was created once by native job
+`1a1af1c9f22-fc05-65e1`: 3,307,677 bytes, SHA256
+`488f38422ffca19dc28ecc986fda5218cff090fe8a906053a217eee8e741cb1b`.
+Its immutable transfer and local zero-extraction verification are still in progress;
+this source milestone does not claim that the archive has already been published.
 
 The sealed 30-file installation package is 265,304 bytes, SHA256
 `16d21b200f3e871f58ad30d6ea130d342c467963d432a93bf362fed4748998e4`.
@@ -90,8 +113,11 @@ cache-prune-02/.
 
 ## Remaining acceptance work
 
-Exact native CI must use the final qualified source and original all-target,
-all-feature commands, inventory reconciliation and zero test retries. The
+The original exact native CI is running as job `1a1af1ebf1d-fc05-65f2`, bound to
+the final qualified source and original all-target/all-feature commands, pinned
+nextest 0.9.137, full inventory reconciliation, one test thread and zero retries.
+Its result is pending. This is a native x230 reproduction, not a hosted GitHub
+Actions result. The
 original six-host observation, boundary, recovery and normal lifecycle gates
 remain separate from compilation and static review.
 
@@ -99,11 +125,12 @@ Saturated direct cancellation requires a distinct same-process component using
 the actual shared production DIRECT owner: eight ordinary requests held across
 six hosts before dispatching the existing-job cancellation. Existing-job
 cancellations alone cannot establish global-eight saturation because the
-upstream publication limit is eight. The component's crate, lock/profile,
-source identities, workload, ready barrier, raw counters and cleanup need their
-own reviewed frozen inputs and actual execution. No saturated result is claimed
+upstream publication limit is eight. The component's implementation-01 source package and independent static review
+are now published under capacity-component/. It is explicitly unformatted,
+uncompiled and unexecuted. A new formatted revision, actual offline A/B builds,
+retained ELF identities and the complete outer eight-cell campaign remain required. No saturated result is claimed
 by this preparation or by a normal six-host recovery canary.
 
-The experimental branch is published for review. Adoption awaits completed
-qualification, exact CI, unchanged original performance gates and appropriately
+The experimental branch is published for review. Adoption awaits successful
+exact CI, unchanged original performance gates and appropriately
 scoped cancellation-capacity evidence.
