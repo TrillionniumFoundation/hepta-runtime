@@ -76,6 +76,13 @@ fn unowned_missing_malformed_or_nonlookup_pin_is_refused_before_eviction() {
 	for _ in 1..MAX_OWNER {
 		completed(root.path(), &owner);
 	}
+	let other_id = completed(root.path(), &other);
+	let (directory, before) = {
+		let _guard = store_lock().unwrap();
+		let directory = open_store(root.path()).unwrap();
+		let before = entries(&directory).unwrap();
+		(directory, before)
+	};
 	for (who, tool, target) in [
 		(&other, "request_result", id.as_str()),
 		(&owner, "request_result", "x"),
@@ -83,8 +90,31 @@ fn unowned_missing_malformed_or_nonlookup_pin_is_refused_before_eviction() {
 		(&owner, "host_list", id.as_str()),
 	] {
 		assert!(begin_with_read_at(root.path(), who, tool, Some(target)).is_err());
+		let _guard = store_lock().unwrap();
+		assert!(!read_pins().unwrap().contains_key(&id));
+		// A refused admission leaves every owner's records intact and its
+		// snapshot reusable, without evicting or rebinding a row.
+		let (recovered, _) = hot_snapshot(root.path(), &directory).unwrap();
+		assert!(recovered == before);
+		assert!(hot_snapshot_cached(&directory).unwrap());
 	}
 	assert!(observation_at(root.path(), &owner, &id).is_ok());
+	assert!(!is_active(&id).unwrap());
+	assert!(observation_at(root.path(), &other, &id).is_err());
+	assert!(observation_at(root.path(), &owner, &other_id).is_err());
+	let lookup = begin_with_read_at(root.path(), &owner, "request_result", Some(&id)).unwrap();
+	assert!(is_active(&id).unwrap());
+	assert_eq!(
+		observation_at(root.path(), &owner, &id).unwrap().state,
+		"completed"
+	);
+	assert_eq!(
+		observation_at(root.path(), &other, &other_id)
+			.unwrap()
+			.state,
+		"completed"
+	);
+	finish_sync(lookup, AuditCompletion::Completed).unwrap();
 	assert!(!is_active(&id).unwrap());
 }
 

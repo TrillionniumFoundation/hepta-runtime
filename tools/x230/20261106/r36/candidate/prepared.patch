@@ -1,0 +1,102 @@
+diff --git a/src/mcp/runtime/request_audit.rs b/src/mcp/runtime/request_audit.rs
+index d904f55..3a1f9fe 100644
+--- a/src/mcp/runtime/request_audit.rs
++++ b/src/mcp/runtime/request_audit.rs
+@@ -1646,7 +1646,7 @@ fn begin_with_read_at(
+ 			(a.accepted_unix_ms, &a.request_id).cmp(&(b.accepted_unix_ms, &b.request_id))
+ 		});
+ 	}
+-	cache_hot(&directory, &records)?;
++	cache_hot_owned(&directory, records)?;
+ 	let active = Arc::new(AtomicBool::new(true));
+ 	active_registry()?.insert(record.request_id.clone(), Arc::downgrade(&active));
+ 	Ok(RequestTicket {
+@@ -1843,7 +1843,7 @@ fn begin_reserved_record_at(root: &Path, identity: RequestIdentity) -> Result<Re
+ 			(a.accepted_unix_ms, &a.request_id).cmp(&(b.accepted_unix_ms, &b.request_id))
+ 		});
+ 	}
+-	cache_hot(&directory, &records)?;
++	cache_hot_owned(&directory, records)?;
+ 	let active = Arc::new(AtomicBool::new(true));
+ 	active_registry()?.insert(record.request_id.clone(), Arc::downgrade(&active));
+ 	Ok(RequestTicket {
+diff --git a/src/mcp/runtime/request_audit_lookup_tests.rs b/src/mcp/runtime/request_audit_lookup_tests.rs
+index 5822363..8663cc8 100644
+--- a/src/mcp/runtime/request_audit_lookup_tests.rs
++++ b/src/mcp/runtime/request_audit_lookup_tests.rs
+@@ -76,6 +76,13 @@ fn unowned_missing_malformed_or_nonlookup_pin_is_refused_before_eviction() {
+ 	for _ in 1..MAX_OWNER {
+ 		completed(root.path(), &owner);
+ 	}
++	let other_id = completed(root.path(), &other);
++	let (directory, before) = {
++		let _guard = store_lock().unwrap();
++		let directory = open_store(root.path()).unwrap();
++		let before = entries(&directory).unwrap();
++		(directory, before)
++	};
+ 	for (who, tool, target) in [
+ 		(&other, "request_result", id.as_str()),
+ 		(&owner, "request_result", "x"),
+@@ -83,9 +90,30 @@ fn unowned_missing_malformed_or_nonlookup_pin_is_refused_before_eviction() {
+ 		(&owner, "host_list", id.as_str()),
+ 	] {
+ 		assert!(begin_with_read_at(root.path(), who, tool, Some(target)).is_err());
++		let _guard = store_lock().unwrap();
++		assert!(!read_pins().unwrap().contains_key(&id));
++		// A refused admission leaves every owner's records intact and its
++		// snapshot reusable, without evicting or rebinding a row.
++		let (recovered, _) = hot_snapshot(root.path(), &directory).unwrap();
++		assert!(recovered == before);
++		assert!(hot_snapshot_cached(&directory).unwrap());
+ 	}
+ 	assert!(observation_at(root.path(), &owner, &id).is_ok());
+ 	assert!(!is_active(&id).unwrap());
++	assert!(observation_at(root.path(), &other, &id).is_err());
++	assert!(observation_at(root.path(), &owner, &other_id).is_err());
++	let lookup = begin_with_read_at(root.path(), &owner, "request_result", Some(&id)).unwrap();
++	assert!(is_active(&id).unwrap());
++	assert_eq!(
++		observation_at(root.path(), &owner, &id).unwrap().state,
++		"completed"
++	);
++	assert_eq!(
++		observation_at(root.path(), &other, &other_id).unwrap().state,
++		"completed"
++	);
++	finish_sync(lookup, AuditCompletion::Completed).unwrap();
++	assert!(!is_active(&id).unwrap());
+ }
+ 
+ #[test]
+diff --git a/src/mcp/runtime/request_audit_tests.rs b/src/mcp/runtime/request_audit_tests.rs
+index dd97a64..6933b14 100644
+--- a/src/mcp/runtime/request_audit_tests.rs
++++ b/src/mcp/runtime/request_audit_tests.rs
+@@ -925,11 +925,26 @@ fn reserved_archived_identity_cannot_redispatch_after_hot_eviction() {
+ 		let filename = format!("{}.json", identity.request_id);
+ 		assert!(!temporary.path().join(STORE_NAME).join(&filename).exists());
+ 		let archived = std::fs::read(temporary.path().join(ARCHIVE_NAME).join(&filename)).unwrap();
++		let (directory, before) = {
++			let _guard = store_lock().unwrap();
++			let directory = open_store(temporary.path()).unwrap();
++			let before = entries(&directory).unwrap();
++			(directory, before)
++		};
+ 		let error = match begin(identity) {
+ 			Err(error) => error.to_string(),
+ 			Ok(_) => panic!("archived reserved identity must not acquire another dispatch ticket"),
+ 		};
+ 		assert!(error.contains("already archived"));
++		{
++			let _guard = store_lock().unwrap();
++			let (recovered, _) = hot_snapshot(temporary.path(), &directory).unwrap();
++			assert!(recovered == before);
++			assert!(hot_snapshot_cached(&directory).unwrap());
++		}
++		// Refusing an old reservation must not strand the next distinct identity.
++		let next = begin(reserved_identity(tool)).unwrap();
++		finish_sync(next, AuditCompletion::Completed).unwrap();
+ 		assert!(!temporary.path().join(STORE_NAME).join(&filename).exists());
+ 		assert_eq!(
+ 			archived,

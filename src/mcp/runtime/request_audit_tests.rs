@@ -925,11 +925,26 @@ fn reserved_archived_identity_cannot_redispatch_after_hot_eviction() {
 		let filename = format!("{}.json", identity.request_id);
 		assert!(!temporary.path().join(STORE_NAME).join(&filename).exists());
 		let archived = std::fs::read(temporary.path().join(ARCHIVE_NAME).join(&filename)).unwrap();
+		let (directory, before) = {
+			let _guard = store_lock().unwrap();
+			let directory = open_store(temporary.path()).unwrap();
+			let before = entries(&directory).unwrap();
+			(directory, before)
+		};
 		let error = match begin(identity) {
 			Err(error) => error.to_string(),
 			Ok(_) => panic!("archived reserved identity must not acquire another dispatch ticket"),
 		};
 		assert!(error.contains("already archived"));
+		{
+			let _guard = store_lock().unwrap();
+			let (recovered, _) = hot_snapshot(temporary.path(), &directory).unwrap();
+			assert!(recovered == before);
+			assert!(hot_snapshot_cached(&directory).unwrap());
+		}
+		// Refusing an old reservation must not strand the next distinct identity.
+		let next = begin(reserved_identity(tool)).unwrap();
+		finish_sync(next, AuditCompletion::Completed).unwrap();
 		assert!(!temporary.path().join(STORE_NAME).join(&filename).exists());
 		assert_eq!(
 			archived,
