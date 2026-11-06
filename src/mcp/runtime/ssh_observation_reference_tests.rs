@@ -94,7 +94,10 @@ fn shared_verification_buffer_ignores_stale_tail_across_modes_and_lengths() {
 			let fresh = observed_verify(pin, |_| Ok(()));
 			assert!(fresh.0.is_ok());
 			let shared = observed_verify_buffer(pin, &mut buffer, |_| Ok(()));
-			assert_eq!(shared, fresh, "file {index}, reference first: {reference_first}");
+			assert_eq!(
+				shared, fresh,
+				"file {index}, reference first: {reference_first}"
+			);
 		}
 	}
 }
@@ -104,7 +107,9 @@ fn shared_verification_buffer_keeps_mismatch_cancellation_precedence() {
 	let seed = vec![91; VERIFY_BUFFER_BYTES * 2 + 5];
 	let (_seed_root, seed_sha, _) = pin_pair(&seed, seed.len());
 	let mut buffer = None;
-	observed_verify_buffer(&seed_sha, &mut buffer, |_| Ok(())).0.unwrap();
+	observed_verify_buffer(&seed_sha, &mut buffer, |_| Ok(()))
+		.0
+		.unwrap();
 
 	let mut bytes = vec![43; VERIFY_BUFFER_BYTES + 7];
 	let (_root, mut sha, mut reference) = pin_pair(&bytes, bytes.len());
