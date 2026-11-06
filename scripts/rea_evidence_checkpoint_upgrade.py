@@ -61,6 +61,12 @@ UNKNOWN_KEYS = [
     "relationships", "resolution", "mutation_evidence_ids",
 ]
 BUNDLE_KEYS = ["artifacts", "providers", "environments", "scenarios", "captures", "unknowns", "records"]
+EVIDENCE_KEYS = [
+    "evidence_id", "subject", "provider", "analysis_profile", "predicate_type",
+    "operation", "parameters", "raw_result", "normalized_result", "confidence",
+    "authority", "environment", "limitations", "relationship_coverage",
+    "locations", "evidence_links",
+]
 CHECKPOINT_TOOLS = {
     "rea_evidence_session_checkpoint", "rea_evidence_session_resume", "rea_evidence_session_list",
 }
@@ -672,6 +678,22 @@ def tool_json(reply, compatibility=False):
 
 
 
+def evidence_json(reply, operation):
+    """Decode the original direct Evidence body, never a {result} receipt."""
+    body = tool_json(reply)
+    require(list(body) == EVIDENCE_KEYS, "direct Evidence member set/order differs")
+    require(body["operation"] == operation, "direct Evidence operation differs")
+    require(isinstance(body["evidence_id"], str)
+            and re.fullmatch(r"ev_[0-9a-f]{64}", body["evidence_id"]),
+            "direct Evidence identity differs")
+    require(reply.get("structuredContent") == body, "Evidence text and structured values differ")
+    require(orders(reply["structuredContent"]) == orders(body),
+            "Evidence text and structured object order differ")
+    require(reply.get("_meta") == {"provenance": {"untrusted_content": True, "source": "analysis_target"}},
+            "Evidence target-content provenance differs")
+    return body
+
+
 def consume_original_public_order(path, output):
     """Derive the public Unknown order from a pinned original MCP text body."""
     raw = pinned(path, ORIGINAL_PUBLIC_ORDER["sha256"])
@@ -986,7 +1008,7 @@ def main():
             same_delivery(a1["imported"], imported, "old/new original import")
             same_delivery(a1["bundle"], original, "old/new original complete bundle")
             derived_reply = p.call("native-apk-view", "rea_inspect_apk_signature_evidence", {"path": str(apk)})
-            derived = tool_json(derived_reply, True)
+            derived = evidence_json(derived_reply, "inspect_analysis_view")
             require(derived["operation"] == "inspect_analysis_view", "native APK summary did not produce analysis-view Evidence")
             mixed_reply = get_bundle(p, "mixed-bundle")
             mixed = tool_json(mixed_reply, True)
