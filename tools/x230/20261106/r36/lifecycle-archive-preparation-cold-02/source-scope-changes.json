@@ -1,0 +1,43 @@
+{
+  "schema": "hepta-r36-evidence-scope-adaptation/v1",
+  "original_policy": {
+    "git_blob": "6353ec3247fe0d54d08f7f5fcc19ad1405ca21f4",
+    "bytes": 12151,
+    "sha256": "577a1a04da9768a0a68b101f581d65b7f53183155131d072a066f1e9dc366a58"
+  },
+  "new_policy": {
+    "git_blob": "bb58ae6b8e098ea6c11b109b2dedf88bd3f5aa58",
+    "bytes": 12645,
+    "sha256": "400f7a2ed370a61a44ec71162fabfc4c0ebe142c31e8d842285e7a34f6f1e012"
+  },
+  "literal_replacements": [
+    {
+      "before": "HOLDERS = ('hepta-runtime-r36-validation-scratch-cold-02-observation-holder-02',)",
+      "after": "HOLDERS = ('hepta-runtime-r36-validation-scratch-cold-02-lifecycle-holder-01',)"
+    },
+    {
+      "before": "CAPTURE_TOOLS = 'evidence-tools-02'",
+      "after": "CAPTURE_TOOLS = 'evidence-tools-03'"
+    },
+    {
+      "before": "    'supplement-tools-01', 'async-read-abba-01',",
+      "after": "    'supplement-tools-01', 'async-read-abba-01',\n    'holder-inputs-03', 'evidence-tools-03', 'evidence-export-02',\n    'lifecycle-observation02-tools-01',"
+    },
+    {
+      "before": "    'holder_copy_manifest_02_metadata': ('holder-inputs-02', 'manifest.json', 'observed'),",
+      "after": "    'holder_copy_manifest_02_metadata': ('holder-inputs-02', 'manifest.json', 'observed'),\n    'holder_copy_manifest_03_metadata': ('holder-inputs-03', 'manifest.json', 'observed'),"
+    },
+    {
+      "before": "    prefix = 'r36/holder-inputs-02/'",
+      "after": "    prefix = 'r36/holder-inputs-03/'"
+    },
+    {
+      "before": "    if stat.S_ISREG(mode) and name.endswith(('.tar', '.tar.gz', '.tar.xz', '.tgz', '.txz', '.zip', '.7z')):",
+      "after": "    if (member.startswith('r36/evidence-export-02/') and member not in {\n            'r36/evidence-export-02/export-report.json',\n            'r36/evidence-export-02/verification-02.json'}):\n        return 'outside-exact-prior-export-and-verification-receipts; metadata only, descendants not read'\n    if stat.S_ISREG(mode) and name.endswith(('.tar', '.tar.gz', '.tar.xz', '.tgz', '.txz', '.zip', '.7z')):"
+    }
+  ],
+  "inverse_restores_original_bytes": true,
+  "four_core_sources_unchanged": true,
+  "target_entrypoints_executed": 0,
+  "workload_or_auditor_replayed": false
+}
