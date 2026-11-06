@@ -1,0 +1,68 @@
+diff --git a/src/mcp/runtime/ssh_observation_profile.rs b/src/mcp/runtime/ssh_observation_profile.rs
+index 2d7e0bca2dece84e670e5067ac3381e618521acd..a9cf676711b1ebb90af899def4620007968f1ad2 100644
+--- a/src/mcp/runtime/ssh_observation_profile.rs
++++ b/src/mcp/runtime/ssh_observation_profile.rs
+@@ -279,13 +279,13 @@
+ 		self.verify_checked(&|| Ok(()))
+ 	}
+ 	fn verify_checked(&self, check_current: &impl Fn() -> Result<()>) -> Result<()> {
+-		let mut buffer = [0; VERIFY_BUFFER_BYTES];
++		let mut buffer = None;
+ 		self.verify_checked_with_buffer(check_current, &mut buffer)
+ 	}
+ 	fn verify_checked_with_buffer(
+ 		&self,
+ 		check_current: &impl Fn() -> Result<()>,
+-		buffer: &mut [u8; VERIFY_BUFFER_BYTES],
++		buffer: &mut Option<[u8; VERIFY_BUFFER_BYTES]>,
+ 	) -> Result<()> {
+ 		check_current()?;
+ 		let (mut file, stamp) =
+@@ -302,6 +302,7 @@
+ 			.is_none()
+ 			.then(|| ring::digest::Context::new(&ring::digest::SHA256));
+ 		let mut matches_reference = true;
++		let buffer = buffer.get_or_insert_with(|| [0; VERIFY_BUFFER_BYTES]);
+ 		let mut length = 0usize;
+ 		let mut reader = Read::by_ref(&mut file).take(self.maximum as u64 + 1);
+ 		loop {
+@@ -821,7 +822,7 @@
+ 		check_current: &impl Fn() -> Result<()>,
+ 	) -> Result<()> {
+ 		// Each synchronous sweep owns its scratch; worker and owner never share it.
+-		let mut buffer = [0; VERIFY_BUFFER_BYTES];
++		let mut buffer = None;
+ 		for file in &self.files {
+ 			check_current()?;
+ 			file.verify_checked_with_buffer(check_current, &mut buffer)?;
+diff --git a/src/mcp/runtime/ssh_observation_reference_tests.rs b/src/mcp/runtime/ssh_observation_reference_tests.rs
+index fd832644563b6c4f78b7a06c3bbfcbeb9d2f43a1..2470cc09b9f649922fb22f7059e5b29af4943fd0 100644
+--- a/src/mcp/runtime/ssh_observation_reference_tests.rs
++++ b/src/mcp/runtime/ssh_observation_reference_tests.rs
+@@ -53,7 +53,7 @@
+ 
+ fn observed_verify_buffer(
+ 	pin: &PinnedFile,
+-	buffer: &mut [u8; VERIFY_BUFFER_BYTES],
++	buffer: &mut Option<[u8; VERIFY_BUFFER_BYTES]>,
+ 	check: impl Fn(usize) -> Result<()>,
+ ) -> (std::result::Result<(), String>, usize) {
+ 	let calls = Cell::new(0);
+@@ -84,7 +84,7 @@
+ 	.collect();
+ 	for reference_first in [false, true] {
+ 		// Keep the preceding file's tail, including across empty reads.
+-		let mut buffer = [0xa5; VERIFY_BUFFER_BYTES];
++		let mut buffer = None;
+ 		for (index, (_root, sha, reference)) in fixtures.iter().enumerate() {
+ 			let pin = if (index % 2 == 0) == reference_first {
+ 				reference
+@@ -103,7 +103,7 @@
+ fn shared_verification_buffer_keeps_mismatch_cancellation_precedence() {
+ 	let seed = vec![91; VERIFY_BUFFER_BYTES * 2 + 5];
+ 	let (_seed_root, seed_sha, _) = pin_pair(&seed, seed.len());
+-	let mut buffer = [0xa5; VERIFY_BUFFER_BYTES];
++	let mut buffer = None;
+ 	observed_verify_buffer(&seed_sha, &mut buffer, |_| Ok(())).0.unwrap();
+ 
+ 	let mut bytes = vec![43; VERIFY_BUFFER_BYTES + 7];

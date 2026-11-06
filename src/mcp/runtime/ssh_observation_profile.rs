@@ -242,6 +242,11 @@ fn bounded_executable_reference(bytes: Vec<u8>, remaining: &mut usize) -> Option
 	Some(bytes.into())
 }
 
+// Keep the large array construction deferred until a checked read needs it.
+fn new_verify_buffer() -> [u8; VERIFY_BUFFER_BYTES] {
+	[0; VERIFY_BUFFER_BYTES]
+}
+
 impl PinnedFile {
 	fn load(
 		path: &Path,
@@ -279,6 +284,14 @@ impl PinnedFile {
 		self.verify_checked(&|| Ok(()))
 	}
 	fn verify_checked(&self, check_current: &impl Fn() -> Result<()>) -> Result<()> {
+		let mut buffer = None;
+		self.verify_checked_with_buffer(check_current, &mut buffer)
+	}
+	fn verify_checked_with_buffer(
+		&self,
+		check_current: &impl Fn() -> Result<()>,
+		buffer: &mut Option<[u8; VERIFY_BUFFER_BYTES]>,
+	) -> Result<()> {
 		check_current()?;
 		let (mut file, stamp) =
 			checked_file(&self.path, self.maximum, self.private, self.executable)?;
@@ -289,14 +302,17 @@ impl PinnedFile {
 		// Every check still reads every byte. Only the fixed public executables can
 		// use a bounded startup-pin-verified reference instead of rehashing.
 		// The same descriptor and path stamps still fence the complete read.
-		let mut hash = ring::digest::Context::new(&ring::digest::SHA256);
+		let mut hash = self
+			.reference
+			.is_none()
+			.then(|| ring::digest::Context::new(&ring::digest::SHA256));
 		let mut matches_reference = true;
-		let mut buffer = [0; VERIFY_BUFFER_BYTES];
+		let buffer = buffer.get_or_insert_with(new_verify_buffer);
 		let mut length = 0usize;
 		let mut reader = Read::by_ref(&mut file).take(self.maximum as u64 + 1);
 		loop {
 			check_current()?;
-			let count = match Read::read(&mut reader, &mut buffer) {
+			let count = match Read::read(&mut reader, &mut buffer[..]) {
 				Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {
 					check_current()?;
 					continue;
@@ -313,7 +329,7 @@ impl PinnedFile {
 				// original final descriptor/path checks still have to run.
 				matches_reference &=
 					reference.get(length - count..length) == Some(&buffer[..count]);
-			} else {
+			} else if let Some(hash) = &mut hash {
 				hash.update(&buffer[..count]);
 			}
 			check_current()?;
@@ -323,7 +339,7 @@ impl PinnedFile {
 		check_current()?;
 		let content_matches = match &self.reference {
 			Some(reference) => matches_reference && length == reference.len(),
-			None => hash.finish().as_ref() == self.digest,
+			None => hash.is_some_and(|hash| hash.finish().as_ref() == self.digest),
 		};
 		if !content_matches {
 			bail!("observation profile changed");
@@ -810,15 +826,19 @@ impl Profile {
 		&self,
 		check_current: &impl Fn() -> Result<()>,
 	) -> Result<()> {
+		// Each synchronous sweep owns its scratch; worker and owner never share it.
+		let mut buffer = None;
 		for file in &self.files {
 			check_current()?;
-			file.verify_checked(check_current)?;
+			file.verify_checked_with_buffer(check_current, &mut buffer)?;
 			check_current()?;
 		}
 		check_current()?;
 		self.shell.verify_resolution()?;
 		check_current()?;
-		self.shell.target.verify_checked(check_current)?;
+		self.shell
+			.target
+			.verify_checked_with_buffer(check_current, &mut buffer)?;
 		check_current()?;
 		self.verify_policy()?;
 		check_current()

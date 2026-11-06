@@ -1,0 +1,71 @@
+{
+  "schema": "hepta-r36-static-source-review/v1",
+  "revision": "lazy-scratch-draft-02",
+  "scope": "Author source-byte/dataflow review only; no Rust parser, formatter, compiler, tests, benchmark, host or production execution.",
+  "baseline_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "baseline_map_count": 220,
+  "candidate_map_count": 220,
+  "changed_paths": [
+    "src/mcp/runtime/ssh_observation_profile.rs",
+    "src/mcp/runtime/ssh_observation_reference_tests.rs"
+  ],
+  "added_paths": [],
+  "removed_paths": [],
+  "exact_inverse_to_entire_accepted_production_source": true,
+  "exact_removal_of_added_fixture_block_restores_all_accepted_tests": true,
+  "helper_lexical_check_current_statements": {
+    "baseline": 9,
+    "candidate": 9
+  },
+  "first_buffer_construction_still_after": [
+    "initial check_current",
+    "checked_file success",
+    "post-open check_current",
+    "fixed stamp comparison",
+    "conditional hash context construction",
+    "matches_reference initialization"
+  ],
+  "lazy_buffer": "Each synchronous sweep or standalone wrapper owns Option<[u8;16384]>, initially None. Only get_or_insert_with at the original buffer-initialization site constructs the array; subsequent files borrow the same already-initialized array. No cross-await/thread/request/global or worker-to-owner sharing.",
+  "hash": "reference Some => hash None, reference None => hash Some, fixed by immutable self. No unwrap/expect/panic/new reachable early return. Empty SHA still finishes a fresh Context after the complete original final fence.",
+  "read_and_error_order": "Read::take maximum+1; full fixed-length mutable slice; only buffer[..count] consumed; Interrupted/EOF/callback positions unchanged; non-short-circuit &= preserved; verify_read and every old error branch remain in original sequence.",
+  "unchanged_by_whole_source_inverse": [
+    "open_absolute",
+    "checked_file",
+    "verify_read",
+    "PinnedFile::load",
+    "PinnedFile::verify_identity",
+    "PinnedShell",
+    "Profile::verify_files",
+    "Profile::verify_boundaries",
+    "Profile::verify_policy",
+    "reference budget and pins"
+  ],
+  "scope_exclusions": [
+    "No D1/D2 instrumentation",
+    "No R31 pidfd",
+    "No R33 cached path components",
+    "No R34 reserve",
+    "No R35 JSON/command move",
+    "No Cargo or pool/validation/child/registry changes"
+  ],
+  "new_test_functions": [
+    "shared_verification_buffer_ignores_stale_tail_across_modes_and_lengths",
+    "shared_verification_buffer_keeps_mismatch_cancellation_precedence"
+  ],
+  "prior_draft": {
+    "catalog_git_blob": "6222cee18e3a2f1152371fc63530d450724e2fd0",
+    "status": "preserved without overwrite; eager zero-init ordering was not selected for continuation"
+  },
+  "risks": [
+    "Compiler may already remove redundant initialization",
+    "Option state/array copying/inlining/stack layout may offset gains",
+    "No machine-code evidence of fewer writes or allocations",
+    "No measured CPU/throughput/RSS or cancellation-latency claim"
+  ],
+  "rustfmt": null,
+  "rust_build": null,
+  "rust_tests": null,
+  "qualification": null,
+  "performance": null,
+  "adopted": false
+}

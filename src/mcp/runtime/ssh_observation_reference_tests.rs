@@ -51,6 +51,88 @@ fn observed_verify(
 	(result, calls.get())
 }
 
+fn observed_verify_buffer(
+	pin: &PinnedFile,
+	buffer: &mut Option<[u8; VERIFY_BUFFER_BYTES]>,
+	check: impl Fn(usize) -> Result<()>,
+) -> (std::result::Result<(), String>, usize) {
+	let calls = Cell::new(0);
+	let result = pin
+		.verify_checked_with_buffer(
+			&|| {
+				calls.set(calls.get() + 1);
+				check(calls.get())
+			},
+			buffer,
+		)
+		.map_err(|error| error.to_string());
+	(result, calls.get())
+}
+
+#[test]
+fn shared_verification_buffer_ignores_stale_tail_across_modes_and_lengths() {
+	let fixtures: Vec<_> = [
+		vec![37; VERIFY_BUFFER_BYTES * 3 + 7],
+		vec![61; 13],
+		Vec::new(),
+		vec![67; VERIFY_BUFFER_BYTES + 1],
+		vec![71; 1],
+		Vec::new(),
+	]
+	.into_iter()
+	.map(|bytes| pin_pair(&bytes, bytes.len()))
+	.collect();
+	for reference_first in [false, true] {
+		// Keep the preceding file's tail, including across empty reads.
+		let mut buffer = None;
+		for (index, (_root, sha, reference)) in fixtures.iter().enumerate() {
+			let pin = if (index % 2 == 0) == reference_first {
+				reference
+			} else {
+				sha
+			};
+			let fresh = observed_verify(pin, |_| Ok(()));
+			assert!(fresh.0.is_ok());
+			let shared = observed_verify_buffer(pin, &mut buffer, |_| Ok(()));
+			assert_eq!(shared, fresh, "file {index}, reference first: {reference_first}");
+		}
+	}
+}
+
+#[test]
+fn shared_verification_buffer_keeps_mismatch_cancellation_precedence() {
+	let seed = vec![91; VERIFY_BUFFER_BYTES * 2 + 5];
+	let (_seed_root, seed_sha, _) = pin_pair(&seed, seed.len());
+	let mut buffer = None;
+	observed_verify_buffer(&seed_sha, &mut buffer, |_| Ok(())).0.unwrap();
+
+	let mut bytes = vec![43; VERIFY_BUFFER_BYTES + 7];
+	let (_root, mut sha, mut reference) = pin_pair(&bytes, bytes.len());
+	let (accepted, complete_checks) = observed_verify(&sha, |_| Ok(()));
+	accepted.unwrap();
+	bytes[0] ^= 1;
+	std::fs::write(&sha.path, &bytes).unwrap();
+	rebase_stamp(&mut sha);
+	rebase_stamp(&mut reference);
+	for pin in [&sha, &reference] {
+		let fresh = observed_verify(pin, |_| Ok(()));
+		let shared = observed_verify_buffer(pin, &mut buffer, |_| Ok(()));
+		assert_eq!(shared, fresh);
+		assert_eq!(shared.0.unwrap_err(), "observation profile changed");
+		assert_eq!(shared.1 + 1, complete_checks);
+		for cancel_at in 1..complete_checks {
+			let (result, calls) = observed_verify_buffer(pin, &mut buffer, |index| {
+				if index == cancel_at {
+					bail!("injected validation cancellation");
+				}
+				Ok(())
+			});
+			assert_eq!(result.unwrap_err(), "injected validation cancellation");
+			assert_eq!(calls, cancel_at);
+		}
+	}
+}
+
 #[test]
 fn reference_and_sha_agree_on_first_last_and_multi_chunk_changes() {
 	for length in [

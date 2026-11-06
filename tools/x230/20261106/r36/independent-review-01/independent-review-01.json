@@ -1,0 +1,256 @@
+{
+  "schema": "hepta-r36-source-independent-review/v1",
+  "conclusion": "no_remaining_static_blocking_issue_in_lazy_draft03",
+  "reviewer": "/root/audit_acceptance",
+  "accepted_base_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "reviewed_final": {
+    "profile": {
+      "path": "src/mcp/runtime/ssh_observation_profile.rs",
+      "bytes": 25779,
+      "sha256": "eb7d677f2ca713d4719668202d7808925785f259aa15d6494ae8ec30fed17a3a",
+      "git_blob": "a68cdc86cd3eed479d21028cdb4a13157376b4f7"
+    },
+    "tests": {
+      "path": "src/mcp/runtime/ssh_observation_reference_tests.rs",
+      "bytes": 17221,
+      "sha256": "79d8d7e369e84bb853ab75930fc6a74a44bd519dc1be2f10bb7bba3b0b175dc0",
+      "git_blob": "2470cc09b9f649922fb22f7059e5b29af4943fd0"
+    },
+    "candidate_patch": {
+      "bytes": 6384,
+      "sha256": "fc0d76fda9d8fb921443f6031a80a1bff3dd765284fc54bd08055c613abb04d0",
+      "git_blob": "273f9f72dd2e8da9d26cad55403cc09694bc96c3"
+    },
+    "draft02_to_draft03_patch": {
+      "bytes": 937,
+      "sha256": "66c96ee765a23c5d7a926a0ca9c8fb73baaf088ced6d522a0638134e0ab685e0",
+      "git_blob": "18b8acc3b37ffcb2fb3152fcdfed234776ad3394"
+    }
+  },
+  "immutable_scope": "Accepted R24 profile and reference-test files only; no D1/D2 instrumentation, path-component cache, routing, reserve, JSON or pool ownership change.",
+  "independent_static_proofs": {
+    "draft02_R24_equivalence": {
+      "actual_patch_replayed_in_memory": {
+        "src/mcp/runtime/ssh_observation_profile.rs": true,
+        "src/mcp/runtime/ssh_observation_reference_tests.rs": true
+      },
+      "all_existing_tests_exact_after_removing_inserted_block": true,
+      "identities": {
+        "src/mcp/runtime/ssh_observation_profile.rs": {
+          "baseline": {
+            "bytes": 25093,
+            "git_blob": "b3cca3455cd695c6a3570ff768d5dd97ef8c7ad4",
+            "sha256": "a62169343c2a08c38d69925f33fdc7551cf4be7b4b7f50cf89683f652a8f853a"
+          },
+          "candidate": {
+            "bytes": 25629,
+            "git_blob": "a9cf676711b1ebb90af899def4620007968f1ad2",
+            "sha256": "64dd419ca3bb1e5505f3863ed9f40b17d39f160837f581eff6475a3e4c97737c"
+          }
+        },
+        "src/mcp/runtime/ssh_observation_reference_tests.rs": {
+          "baseline": {
+            "bytes": 14709,
+            "git_blob": "0408cab5c24343db35f44569d25f7dee4da6714a",
+            "sha256": "00f205e2e5f2359bc2f3272f01d84a0d0d8388645f35db006caefc40342f1524"
+          },
+          "candidate": {
+            "bytes": 17221,
+            "git_blob": "2470cc09b9f649922fb22f7059e5b29af4943fd0",
+            "sha256": "79d8d7e369e84bb853ab75930fc6a74a44bd519dc1be2f10bb7bba3b0b175dc0"
+          }
+        }
+      },
+      "maps": {
+        "after": 220,
+        "before": 220,
+        "changed_paths": [
+          "src/mcp/runtime/ssh_observation_profile.rs",
+          "src/mcp/runtime/ssh_observation_reference_tests.rs"
+        ],
+        "new_paths": []
+      },
+      "new_tests": 2,
+      "no_await_or_unsafe_in_changed_validation_body": true,
+      "passed": true,
+      "patch_hunks": {
+        "src/mcp/runtime/ssh_observation_profile.rs": 5,
+        "src/mcp/runtime/ssh_observation_reference_tests.rs": 1
+      },
+      "pinned_file_check_current_statements": 9,
+      "profile_exact_reverse_transformations": 9,
+      "runtime_or_tests_executed": false,
+      "schema": "hepta-r36-lazy-independent-static-metadata/v1"
+    },
+    "final_named_constructor_delta": {
+      "passed": true,
+      "exact_two_replacements": true,
+      "helper_and_single_call_only": true,
+      "old_draft02_reconstructed_exactly": true,
+      "lint_suppression_added": false,
+      "constructor_call_remains_at_original_buffer_initialization_point": true
+    },
+    "final_patch": {
+      "passed": true,
+      "actual_R24_to_draft03_patch_replayed_in_memory": {
+        "src/mcp/runtime/ssh_observation_profile.rs": {
+          "hunks": 6,
+          "bytes": 25779,
+          "sha256": "eb7d677f2ca713d4719668202d7808925785f259aa15d6494ae8ec30fed17a3a"
+        },
+        "src/mcp/runtime/ssh_observation_reference_tests.rs": {
+          "hunks": 1,
+          "bytes": 17221,
+          "sha256": "79d8d7e369e84bb853ab75930fc6a74a44bd519dc1be2f10bb7bba3b0b175dc0"
+        }
+      },
+      "writes_to_candidate": false,
+      "target_execution": false
+    },
+    "final_map": {
+      "before_count": 220,
+      "after_count": 220,
+      "changed_paths": [
+        "src/mcp/runtime/ssh_observation_profile.rs",
+        "src/mcp/runtime/ssh_observation_reference_tests.rs"
+      ],
+      "new_paths": [],
+      "baseline_map_unchanged_from_draft02": true,
+      "tests_byte_identical_to_draft02": true
+    },
+    "source_body_execution": false
+  },
+  "semantic_findings": [
+    {
+      "function": "PinnedFile::verify_checked / verify_checked_with_buffer",
+      "conclusion": "The standalone wrapper and Profile sweep create only None. The actual array constructor is reached only after original check_current, fresh checked_file, second check_current and original stamp equality. No array is constructed on those early error paths at Rust source-semantics level.",
+      "lines_in_final_draft03": [
+        286,
+        310
+      ]
+    },
+    {
+      "function": "PinnedFile::verify_checked_with_buffer",
+      "conclusion": "Hash Context Some exists exactly when immutable self.reference is None. The reference and hash branches use the same immutable predicate throughout; Option borrowing ends before is_some_and consumes Context. No unwrap, unchecked access, new panic branch or fallible acceptance path is introduced.",
+      "lines_in_final_draft03": [
+        305,
+        342
+      ]
+    },
+    {
+      "function": "PinnedFile::verify_checked_with_buffer",
+      "conclusion": "All nine check_current statements retain original positions. max+1 bounded reader, Interrupted callback and retry, error propagation, EOF callback, length accounting, non-short-circuit reference mismatch, complete verify_read, content error and final success callback remain in original order.",
+      "lines_in_final_draft03": [
+        312,
+        348
+      ]
+    },
+    {
+      "function": "read buffer",
+      "conclusion": "Concrete File/Take reader receives the entire same 16KiB slice. Only [..count] is ever compared or hashed. Per-file length and matches_reference are reset. Stale suffix bytes, empty reads and bytes left after errors are never accepted as new file content.",
+      "lines_in_final_draft03": [
+        315,
+        333
+      ]
+    },
+    {
+      "function": "Profile::verify_files_checked",
+      "conclusion": "One exclusively borrowed Option scratch belongs to one synchronous sweep, reused sequentially for five files and shell target. A fresh invocation has its own local; no global, shared field, request-persistent buffer, cross-thread borrow or await is added.",
+      "lines_in_final_draft03": [
+        825,
+        844
+      ]
+    },
+    {
+      "function": "unchanged authority fences",
+      "conclusion": "open_absolute, checked_file, verify_read, fixed shell resolution, policy, verify_files, verify_identity and verify_boundaries are part of the exact reverse-byte proof. Fresh component-wise opens, regular-file/owner/mode/capability/bound rules, descriptor/path stamps and worker/owner boundary behavior remain unchanged."
+    }
+  ],
+  "tests": [
+    {
+      "function": "shared_verification_buffer_ignores_stale_tail_across_modes_and_lengths",
+      "assessment": "Six real private fixtures with 3N+7,13,0,N+1,1,0 bytes; both alternating SHA/reference orders. Each shared invocation is compared with a fresh wrapper for result and callback count. Fixtures retain their TempDir ownership until after all calls.",
+      "lines_in_final_draft03": [
+        73,
+        100
+      ]
+    },
+    {
+      "function": "shared_verification_buffer_keeps_mismatch_cancellation_precedence",
+      "assessment": "Seeds a previously used buffer, rebases only test stamps after first-byte mismatch, compares fresh/shared mismatch results and checks the same callback count; every pre-success cancellation index must retain cancellation precedence for both SHA and reference modes.",
+      "lines_in_final_draft03": [
+        103,
+        134
+      ]
+    }
+  ],
+  "rust_static_assessment": "Array/Option and closure types infer from explicit helper parameter; mutable borrows are sequential and Context consumption is after the last loop borrow. No evident type/lifetime issue found. No compiler or Clippy execution is claimed.",
+  "resolved_preparation_finding": {
+    "status": "resolved_by_exact_draft03_source_delta",
+    "observed_kind": "Static inspection of exact Rust 1.95.0 Clippy source; not an executed Clippy or qualification failure.",
+    "draft02_expression": "buffer.get_or_insert_with(|| [0; VERIFY_BUFFER_BYTES])",
+    "finding_git_blob": "832e9382912aeff847fbcc77be50899d014cc032",
+    "finding_bytes": 2757,
+    "finding_sha256": "aa4066f9766f2572c7d4232e9bbdb3402d7cef62c1540a0453749abc5d5f4e15",
+    "default_lint": "clippy::unnecessary_lazy_evaluations",
+    "fix": "A private new_verify_buffer() function returns the original initialized 16KiB array. The same original initialization statement now calls get_or_insert_with(new_verify_buffer). The checker only matches an ExprKind::Closure argument, so this named function item does not enter the diagnosed lint branch.",
+    "no_lint_allow_or_expected_attribute": true,
+    "no_earlier_array_construction": true,
+    "no_added_unsafe_unwrap_or_callback": true,
+    "official_sources": [
+      {
+        "repository": "rust-lang/rust-clippy",
+        "ref": "rust-1.95.0",
+        "path": "unnecessary_lazy_eval.rs",
+        "url": "https://github.com/rust-lang/rust-clippy/blob/rust-1.95.0/clippy_lints/src/methods/unnecessary_lazy_eval.rs",
+        "git_blob": "2869547650f31a918dbb7a3badb190fd211bd507",
+        "bytes": 3289,
+        "sha256": "bcea3f307ecc4fb29c2a30bc604f7c146c9750fd720cebc4c521ba5fdf3bf3cf"
+      },
+      {
+        "repository": "rust-lang/rust-clippy",
+        "ref": "rust-1.95.0",
+        "path": "eager_or_lazy.rs",
+        "url": "https://github.com/rust-lang/rust-clippy/blob/rust-1.95.0/clippy_utils/src/eager_or_lazy.rs",
+        "git_blob": "d184744162e4e9b1343bb99d44f482bb68c90dc2",
+        "bytes": 14241,
+        "sha256": "264c95a57f04699db95c4e4ce2388a5f39009b16e357b344c32b31fd8338fb36"
+      },
+      {
+        "repository": "rust-lang/rust-clippy",
+        "ref": "rust-1.95.0",
+        "path": "mod.rs",
+        "url": "https://github.com/rust-lang/rust-clippy/blob/rust-1.95.0/clippy_lints/src/methods/mod.rs",
+        "git_blob": "74db7ae03ba0b30c89235c6a96dd6e15fd8ff020",
+        "bytes": 197203,
+        "sha256": "7524d3836843e4daca16d9e6a57c0c4957e37e10654e595a5cbaf09ae8c0b706"
+      }
+    ]
+  },
+  "original_checks_preserved": [
+    "fresh absolute component-by-component open for each initial and final path observation",
+    "regular file, link count, byte bound, ownership, permissions and executable capability validation",
+    "all nine per-file cancellation/deadline callback statements, including Interrupted and EOF handling",
+    "full-content read even after reference mismatch",
+    "final length, descriptor stamp and fresh-path stamp before content acceptance",
+    "worker and owner full validation plus owner boundary checks",
+    "shell resolution, runtime policy and host-lifecycle logic"
+  ],
+  "remaining_evaluation_limits": [
+    "Runtime safety and gate success still require the original qualification; these fixture tests were not executed.",
+    "Generated initialization/copy behavior, Option discriminant/stack cost and named constructor inlining are compiler-dependent and unmeasured.",
+    "No throughput, latency, CPU, RSS, lifecycle acceptance or new optimized production release is established by this static review.",
+    "The tests compare the new fresh-wrapper and shared-buffer paths; equivalence to accepted R24 is additionally supported by the independent complete source reverse transform, not by a claimed dual-binary runtime experiment."
+  ],
+  "activity": {
+    "local_operations": "Read-only source/JSON/hash comparison, pure in-memory patch replay, static review artifact creation.",
+    "git_operations": "Read exact candidate and primary Clippy source objects; create independent review blobs only.",
+    "rustfmt_runs": 0,
+    "cargo_runs": 0,
+    "tests_executed": 0,
+    "host_calls": 0,
+    "production_or_candidate_files_modified": 0,
+    "reference_or_gate_changes": 0,
+    "performance_acceptance_claim": false
+  }
+}

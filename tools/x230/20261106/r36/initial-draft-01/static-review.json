@@ -1,0 +1,34 @@
+{
+  "schema": "hepta-r36-static-source-review/v1",
+  "scope": "Author static source-byte inspection only; no Rust parsing, compilation, formatting, runtime test, host action or performance result.",
+  "baseline_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "baseline_map_count": 220,
+  "candidate_map_count": 220,
+  "changed_paths": [
+    "src/mcp/runtime/ssh_observation_profile.rs",
+    "src/mcp/runtime/ssh_observation_reference_tests.rs"
+  ],
+  "added_paths": [],
+  "removed_paths": [],
+  "inverse_of_eight_explicit_production_edits_equals_accepted_original": true,
+  "removal_of_added_test_block_equals_all_original_tests": true,
+  "pinned_file_check_current_statements": {
+    "baseline": 9,
+    "candidate": 9
+  },
+  "hash_state_invariant": "reference Some implies hash None; reference None implies hash Some. self is immutable for the whole call; Context initialization is infallible and no unwrap/expect or new reachable early return is added.",
+  "buffer_invariant": "The fixed initialized [u8;16384] is borrowed mutably for one synchronous verify only; one Profile::verify_files_checked call owns it across six sequential file reads. No cross-await/thread/global or worker-to-owner state transfer.",
+  "initialization_order_delta": "Pure local scratch zero-initialization moves to wrapper/sweep entry before the first existing check_current. All existing check_current statements and their order relative to fallible file/read/final/content operations are unchanged. Already-expired calls may pay this initialization before rejection; no timing neutrality claim.",
+  "preserved": "fresh open flags/path semantics, reference budget/content pins, maximum+1 Take, count-limited buffer use, non-short-circuit mismatch comparison, Interrupted branch, EOF, all existing error strings, verify_read and policy/shell/boundary order; pool/validation/cancellation/registry code untouched.",
+  "tests_added": [
+    "shared_verification_buffer_ignores_stale_tail_across_modes_and_lengths",
+    "shared_verification_buffer_keeps_mismatch_cancellation_precedence"
+  ],
+  "rust_build": null,
+  "rustfmt": null,
+  "rust_tests": null,
+  "host_execution": null,
+  "performance": null,
+  "adopted": false,
+  "assembly_note": "One oversized local metadata writer was rejected before process creation with E2BIG. Small create-only writers then saved exact source bytes and generated the diff. No Rust/test/host process was started."
+}
