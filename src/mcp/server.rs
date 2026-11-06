@@ -2421,9 +2421,11 @@ impl ServerHandler for OctofsServer {
 		request: CallToolRequestParams,
 		context: RequestContext<RoleServer>,
 	) -> Result<CallToolResponse, ErrorData> {
+		crate::mcp::runtime::phase_cost_request!(request.name.as_ref(),
+			request.arguments.as_ref().and_then(|value| value.get("host")).and_then(serde_json::Value::as_str), {
 		use runtime::request_audit::AuditCompletion;
 		let cancelled = context.ct.clone();
-		let router = Self::tool_router();
+		let router = crate::mcp::runtime::phase_cost_sync!(RouterBuild, { Self::tool_router() });
 		let enabled = runtime::config::maybe_runtime_config().is_some();
 		let known = router.get(request.name.as_ref());
 		let visible = known.is_some()
@@ -2454,7 +2456,7 @@ impl ServerHandler for OctofsServer {
 					)
 				})?;
 			Some(
-				runtime::request_audit::begin_with_read(
+				crate::mcp::runtime::phase_cost_future!(NativeAuditBegin, runtime::request_audit::begin_with_read(
 					scope.owner(),
 					canonical,
 					if matches!(canonical, "request_status" | "request_result") {
@@ -2479,7 +2481,7 @@ impl ServerHandler for OctofsServer {
 					} else {
 						None
 					},
-				)
+				))
 				.await
 				.map_err(|_| {
 					ErrorData::internal_error("request audit unavailable; dispatch refused", None)
@@ -2488,6 +2490,10 @@ impl ServerHandler for OctofsServer {
 		} else {
 			None
 		};
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		if let Some(ticket) = ticket.as_ref() {
+			crate::mcp::runtime::phase_cost::bind_native_id(ticket.request_id());
+		}
 		let result_intent = if let Some(ticket) = ticket
 			.as_ref()
 			.filter(|t| runtime::request_results::eligible(&t.identity().tool_name))
@@ -2551,7 +2557,7 @@ impl ServerHandler for OctofsServer {
 			} else {
 				"not_retained_policy"
 			};
-			let audit_durable = runtime::request_audit::finish(ticket, completion)
+			let audit_durable = crate::mcp::runtime::phase_cost_future!(NativeAuditFinish, runtime::request_audit::finish(ticket, completion))
 				.await
 				.is_ok();
 			if !audit_durable {
@@ -2562,7 +2568,8 @@ impl ServerHandler for OctofsServer {
 			}
 		}
 		result
-	}
+		})
+}
 
 	fn get_info(&self) -> ServerConfig {
 		ServerConfig::new(

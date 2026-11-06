@@ -72,6 +72,13 @@ async fn main() -> Result<()> {
 			// Set the session root directory for all tool calls
 			mcp::set_session_root_directory(working_directory.clone());
 
+			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+			let phase_cost = mcp::runtime::phase_cost::start_from_env(
+				runtime_enabled,
+				runtime_observation_pool_profile.is_some(),
+				bind.is_none(),
+			)?;
+
 			let direct_transport = if runtime_enabled {
 				Some(mcp::runtime::ssh::start_direct_transport()?)
 			} else {
@@ -118,9 +125,17 @@ async fn main() -> Result<()> {
 			};
 			let (direct_cleanup, observation_cleanup) =
 				tokio::join!(direct_cleanup, observation_cleanup);
+			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+			let phase_cost_result = if let Some(trace) = phase_cost {
+				trace.finish(direct_cleanup.is_ok() && observation_cleanup.is_ok(), transport.is_ok())
+			} else {
+				Ok(())
+			};
 			direct_cleanup?;
 			observation_cleanup?;
 			transport?;
+			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+			phase_cost_result?;
 		}
 	}
 

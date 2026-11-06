@@ -258,6 +258,7 @@ fn parse_file_observation(
 }
 
 fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Duration, bool)> {
+	crate::mcp::runtime::phase_cost_sync!(PrepareObservation, {
 	use serde_json::json;
 	let fields: &[&str] = match &value {
 		JobObservation::PythonStatus {
@@ -341,6 +342,7 @@ fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Du
 	}
 	validate_observation_bytes(&command, &bytes)?;
 	Ok((command, bytes, timeout, system))
+	})
 }
 
 pub(super) async fn run_job_observation(
@@ -365,13 +367,13 @@ pub(super) async fn run_job_observation(
 			String::from_utf8_lossy(&output.stderr).trim()
 		);
 	}
-	serde_json::from_slice(&output.stdout).map_err(|error| {
+	crate::mcp::runtime::phase_cost_sync!(DecodeObservation, { serde_json::from_slice(&output.stdout).map_err(|error| {
 		anyhow!(
 			"remote helper on {} returned invalid JSON: {error}; output={}",
 			host.ssh_target,
 			String::from_utf8_lossy(&output.stdout)
 		)
-	})
+	}) })
 }
 
 async fn capture_observation(

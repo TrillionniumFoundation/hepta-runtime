@@ -87,6 +87,8 @@ async fn request_phase(core: &Arc<Core>, control: &Arc<AgentControl>, prelease: 
 	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
 	let (reply, receive) = oneshot::channel();
 	let request = Request {
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
 		host: "fixture".into(),
 		command: "NEVER_DISPATCH".into(),
 		input: vec![],

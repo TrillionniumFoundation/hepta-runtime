@@ -53,6 +53,8 @@ async fn slow_retirement(core: &Arc<Core>) {
 	let (reply, receive) = oneshot::channel();
 	sender
 		.send(Request {
+			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+			diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
 			host: "cold".into(),
 			command: "controlled-dispatch".into(),
 			input: vec![],
@@ -256,6 +258,8 @@ async fn idle_rearm(core: &Arc<Core>) {
 	let (reply, response) = oneshot::channel();
 	sender
 		.send(Request {
+			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+			diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
 			host: "fixture".into(),
 			command: "background-after-idle".into(),
 			input: vec![],
@@ -356,6 +360,8 @@ async fn idle_pending_cancellation(core: &Arc<Core>) {
 	let (reply, response) = oneshot::channel();
 	sender
 		.send(Request {
+			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+			diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
 			host: "fixture".into(),
 			command: "cancel-before-capacity".into(),
 			input: vec![],
