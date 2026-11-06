@@ -916,9 +916,7 @@ async fn full_ordinary_work_keeps_cancel_to_one_extra_child_and_eight_reserve_id
 	// First establish all eight actual children. Only then add same-target
 	// waiters, so scheduler order cannot choose different ready slot identities.
 	until(|| (0..8).all(|slot| fixture.ready(slot).exists())).await;
-	ordinary.extend(
-		(8..16).map(|slot| (slot, submit(&owner, &fixture, "target-0", slot))),
-	);
+	ordinary.extend((8..16).map(|slot| (slot, submit(&owner, &fixture, "target-0", slot))));
 	until(|| owner.0.admission.available_permits() == 0).await;
 	let refused = owner
 		.0
@@ -939,8 +937,7 @@ async fn full_ordinary_work_keeps_cancel_to_one_extra_child_and_eight_reserve_id
 	until(|| {
 		(32..40)
 			.filter(|slot| fixture.ready(*slot).exists())
-			.count()
-			== 1
+			.count() == 1
 			&& owner.0.cancel_admission.available_permits() == 0
 	})
 	.await;
@@ -959,7 +956,9 @@ async fn full_ordinary_work_keeps_cancel_to_one_extra_child_and_eight_reserve_id
 		)
 		.await
 		.unwrap_err();
-	assert!(refused.to_string().contains("cancellation reserve admitted capacity exhausted"));
+	assert!(refused
+		.to_string()
+		.contains("cancellation reserve admitted capacity exhausted"));
 	assert!(!fixture.ready(100).exists());
 	for slot in (0..16).chain(32..40) {
 		fixture.release(slot);
@@ -1002,7 +1001,11 @@ async fn original_owner_queue_can_hold_eight_ordinary_and_one_reserved_ready_req
 	}
 	ready.push((
 		"target-0".into(),
-		owner.0.acquire_job_cancel("target-0", deadline).await.unwrap(),
+		owner
+			.0
+			.acquire_job_cancel("target-0", deadline)
+			.await
+			.unwrap(),
 	));
 	assert_eq!(owner.0.global.available_permits(), 0);
 	assert_eq!(owner.0.cancel_global.available_permits(), 0);
