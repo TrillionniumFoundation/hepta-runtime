@@ -1,0 +1,82 @@
+{
+  "schema": "hepta.rea.ghidra-evidence-production-source.v1",
+  "source_commit": "fe3223cabbd2a8f1aa75a4ab57507bdb72291242",
+  "utc": "2026-11-06T20:42:25.521174+00:00",
+  "runtime_or_engine_started": false,
+  "scope": "Exact frozen source excerpts only. Actual same-controller Evidence contents are a separate observation and remain unfilled until execution.",
+  "files": [
+    {
+      "path": "src/mcp/server.rs",
+      "bytes": 164240,
+      "sha256": "bcc63feb9c61452326d099df2ea1a3329fea20d623aed56bedda10e67a12a8e1",
+      "selected_git_blob_exact": true,
+      "sections": [
+        {
+          "name": "static_read",
+          "start_line": 2350,
+          "end_line": 2357,
+          "text": "\tasync fn rea_static_read(\n\t\t&self,\n\t\tParameters(params): Parameters<rea_provider::ReaStaticRequest>,\n\t) -> Result<String, String> {\n\t\trea_provider::read(params)\n\t\t\t.await\n\t\t\t.map_err(|error| error.to_string())\n\t}\n",
+          "sha256": "d62e06a6d2aa17381071224117117b58a168c30d4698b3c4aecc8bf097c9dc68"
+        },
+        {
+          "name": "static_start",
+          "start_line": 2309,
+          "end_line": 2319,
+          "text": "\tasync fn rea_static_start(\n\t\t&self,\n\t\tParameters(params): Parameters<rea_provider::ReaStaticRequest>,\n\t) -> Result<String, String> {\n\t\tlet _owner_admission = runtime::effect_owner_fence::admit_new_effect()\n\t\t\t.await\n\t\t\t.map_err(|error| error.to_string())?;\n\t\trea_provider::start(params)\n\t\t\t.await\n\t\t\t.map_err(|error| error.to_string())\n\t}\n",
+          "sha256": "452fa78ec0396c3a71ec04f7188df03703041d2a2ec7e154839ff4f9ffcb6661"
+        },
+        {
+          "name": "get_bundle",
+          "start_line": 2008,
+          "end_line": 2027,
+          "text": "\tasync fn rea_get_evidence_bundle(\n\t\t&self,\n\t\tParameters(params): Parameters<serde_json::Value>,\n\t\tcontext: RequestContext<RoleServer>,\n\t) -> Result<CallToolResult, ErrorData> {\n\t\tlet raw = context\n\t\t\t.extensions\n\t\t\t.get::<rea_mcp_transport::ReaRawArguments>();\n\t\tif let Some(error) = raw.and_then(|raw| raw.protocol_error()) {\n\t\t\treturn Err(error);\n\t\t}\n\t\tif let Err(error) = rea_mcp_input::bundle_ordered(\n\t\t\t&params,\n\t\t\traw.and_then(|raw| raw.object_keys(&[])),\n\t\t\traw.and_then(|raw| raw.object_keys(&[\"filters\"])),\n\t\t) {\n\t\t\treturn Ok(error.wire());\n\t\t}\n\t\tOk(self.rea_session.get_bundle(params))\n\t}\n",
+          "sha256": "5b6132398cd0571da61f723e2050c8ecd2a1a7b9667cb529caa2c48a69e58c57"
+        },
+        {
+          "name": "inspect_elf_notes",
+          "start_line": 1734,
+          "end_line": 1759,
+          "text": "\tasync fn rea_inspect_elf_notes(\n\t\t&self,\n\t\tParameters(params): Parameters<serde_json::Value>,\n\t\tcontext: RequestContext<RoleServer>,\n\t) -> Result<CallToolResult, ErrorData> {\n\t\tlet raw = context\n\t\t\t.extensions\n\t\t\t.get::<rea_mcp_transport::ReaRawArguments>();\n\t\tif let Some(error) = raw.and_then(|raw| raw.protocol_error()) {\n\t\t\treturn Err(error);\n\t\t}\n\t\tif let Err(error) =\n\t\t\trea_mcp_input::elf_ordered(&params, raw.and_then(|raw| raw.object_keys(&[])))\n\t\t{\n\t\t\treturn Ok(error.wire());\n\t\t}\n\t\tlet admission = match runtime::effect_owner_fence::admit_new_effect().await {\n\t\t\tOk(permit) => Arc::new(permit),\n\t\t\tErr(error) => {\n\t\t\t\treturn Ok(\n\t\t\t\t\trea_contract::Failure::output(\"inspect_elf_notes\", error.to_string()).wire(),\n\t\t\t\t)\n\t\t\t}\n\t\t};\n\t\tOk(rea_elf_notes::inspect(params, &self.rea_session, context.ct.clone(), admission).await)\n\t}\n",
+          "sha256": "5d48af8c4b2e01b12cba6003056612470540b6640fee54c8e6b407c63fb80da3"
+        }
+      ]
+    },
+    {
+      "path": "src/mcp/rea_provider.rs",
+      "bytes": 25307,
+      "sha256": "6037d87459ae8ae8b7bb51742a8c889386c4b10d11b4bea2d64aa596ded6456c",
+      "selected_git_blob_exact": true,
+      "sections": [
+        {
+          "name": "provider_read",
+          "start_line": 516,
+          "end_line": 582,
+          "text": "pub async fn read(request: ReaStaticRequest) -> Result<String> {\n\tlet params = prepare_request(runtime_config()?, request)?;\n\tlet Some(output) = crate::native::observe_terminal_output(&params, MAX_RESULT_BYTES).await?\n\telse {\n\t\treturn Ok(serde_json::to_string(\n\t\t\t&json!({\"state\":\"pending_or_unknown\",\"complete\":false,\"observation_only\":true}),\n\t\t)?);\n\t};\n\tlet job = output.job_id().to_owned();\n\tlet exit_code = output.exit_code();\n\tlet outcome = output.outcome();\n\tlet state = match outcome {\n\t\tcrate::native::NativeJobOutcome::Succeeded => \"succeeded\",\n\t\tcrate::native::NativeJobOutcome::Failed => \"failed\",\n\t\tcrate::native::NativeJobOutcome::Cancelled => \"cancelled\",\n\t\tcrate::native::NativeJobOutcome::TimedOut => \"timed_out\",\n\t};\n\tlet process_succeeded = outcome == crate::native::NativeJobOutcome::Succeeded;\n\tlet scratch_cleanup = output.scratch_cleanup().cloned();\n\tlet cleanup_complete = scratch_cleanup.as_ref().map(|receipt| {\n\t\treceipt[\"state\"] == \"removed\"\n\t\t\t&& receipt[\"durable\"] == true\n\t\t\t&& receipt[\"worker_adopted\"] == true\n\t});\n\tlet (stdout, stderr) = output.into_streams();\n\tlet mut report_error = None;\n\tlet report = if stdout.is_empty() {\n\t\tif process_succeeded {\n\t\t\tbail!(\"successful static worker omitted its report\");\n\t\t}\n\t\tValue::Null\n\t} else {\n\t\tlet validated = (|| -> Result<Value> {\n\t\t\tlet report = serde_json::from_slice::<Value>(&stdout)\n\t\t\t\t.context(\"static worker output was not a complete JSON record\")?;\n\t\t\tlet worker: WorkerRequest = serde_json::from_str(\n\t\t\t\tparams\n\t\t\t\t\t.stdin\n\t\t\t\t\t.as_deref()\n\t\t\t\t\t.context(\"original static request absent\")?,\n\t\t\t)?;\n\t\t\tvalidate_report(&report, &worker, exit_code)?;\n\t\t\tif scratch_cleanup.is_some() != (report[\"scratch\"][\"cleanup_owner\"] == \"durable_job\") {\n\t\t\t\tbail!(\"static report and original owner disagree on scratch lifecycle\");\n\t\t\t}\n\t\t\tOk(report)\n\t\t})();\n\t\tmatch validated {\n\t\t\tOk(report) => report,\n\t\t\tErr(error) if !process_succeeded => {\n\t\t\t\t// Cancellation can interrupt the final JSON write. Keep the original\n\t\t\t\t// failed/cancelled output queryable without accepting a partial report.\n\t\t\t\treport_error = Some(format!(\"{error:#}\"));\n\t\t\t\tValue::Null\n\t\t\t}\n\t\t\tErr(error) => return Err(error),\n\t\t}\n\t};\n\tOk(serde_json::to_string(&json!({\n\t\t\"job_id\":job,\"state\":state,\"exit_code\":exit_code,\"process_succeeded\":process_succeeded,\n\t\t\"complete\":true,\"observation_only\":true,\"report\":report,\n\t\t\"scratch_cleanup\":scratch_cleanup,\"cleanup_complete\":cleanup_complete,\n\t\t\"worker_stdout\":report_error.as_ref().map(|_| String::from_utf8_lossy(&stdout)),\n\t\t\"report_error\":report_error,\n\t\t\"worker_stderr\":String::from_utf8_lossy(&stderr),\"rea_evidence_compatible\":false\n\t}))?)\n}\n",
+          "sha256": "7a784774600a78129a38a1e6df30f81123d083764d5cd4995f1a1a6bed49f0b6"
+        }
+      ]
+    },
+    {
+      "path": "src/mcp/rea_evidence_session.rs",
+      "bytes": 21598,
+      "sha256": "f5bee5498f2ce762fffc83955f018486af77c2880779945ba1c9522dfa4566b4",
+      "selected_git_blob_exact": true,
+      "sections": [
+        {
+          "name": "session_record_with_origin",
+          "start_line": 141,
+          "end_line": 147,
+          "text": "\tpub(super) fn record_with_origin(\n\t\t&self,\n\t\tevidence: Value,\n\t\torigin: RecordOrigin,\n\t) -> Result<RetainedRecord, Failure> {\n\t\tself.record_checked(evidence, origin, || Ok(()))\n\t}\n",
+          "sha256": "378e7171e03d8c0a3b12b741a5aba8e3f4e763f46bf144d0a4430c9a1301fb92"
+        },
+        {
+          "name": "session_get_bundle",
+          "start_line": 310,
+          "end_line": 402,
+          "text": "\tpub(super) fn get_bundle(&self, raw: Value) -> CallToolResult {\n\t\tif let Err(error) = super::rea_mcp_input::bundle(&raw) {\n\t\t\treturn error.wire();\n\t\t}\n\t\tlet options = match BundleOptions::parse(&raw) {\n\t\t\tOk(value) => value,\n\t\t\tErr(error) => return error.wire(),\n\t\t};\n\t\tlet registry = match self.state.lock() {\n\t\t\tOk(records) => records,\n\t\t\tErr(_) => return Failure::integrity(\"Evidence session registry is unavailable\").wire(),\n\t\t};\n\t\t// Clone only Arc handles while holding the mutex. Response measurement\n\t\t// and encoding run against an immutable selection after releasing it.\n\t\tlet selected_origins: Vec<RecordOrigin> = registry\n\t\t\t.records\n\t\t\t.values()\n\t\t\t.map(|entry| entry.origin)\n\t\t\t.collect();\n\t\tlet selected_import_orders = registry\n\t\t\t.records\n\t\t\t.values()\n\t\t\t.map(|entry| entry.imported_order.clone())\n\t\t\t.collect::<Vec<_>>();\n\t\tlet unknowns = registry.unknowns.clone();\n\t\tlet records: BTreeMap<String, Arc<Value>> = registry\n\t\t\t.records\n\t\t\t.iter()\n\t\t\t.map(|(id, entry)| (id.clone(), Arc::clone(&entry.evidence)))\n\t\t\t.collect();\n\t\tdrop(registry);\n\t\tif options.summary {\n\t\t\tlet value = summarize(&records, &options.filters, unknowns.len());\n\t\t\tdrop(records);\n\t\t\trea_contract::success(\"get_evidence_bundle\", json!({\"result\":value}), None)\n\t\t} else {\n\t\t\t// The view borrows payloads. Serialization checks the transport\n\t\t\t// bound before constructing a second owned JSON representation.\n\t\t\t#[derive(serde::Serialize)]\n\t\t\tstruct ResultView<'a> {\n\t\t\t\tresult: BundleView<'a>,\n\t\t\t}\n\t\t\tlet complete = ResultView {\n\t\t\t\tresult: bundle(&records, &unknowns),\n\t\t\t};\n\t\t\tlet view = &complete.result;\n\t\t\tlet artifacts: Vec<&Value> = view.artifacts.iter().collect();\n\t\t\tlet providers: Vec<&Value> = view.providers.iter().collect();\n\t\t\tlet environments: Vec<&Value> = view.environments.iter().collect();\n\t\t\tlet scenarios: Vec<&Value> = view.scenarios.iter().collect();\n\t\t\tlet captures: Vec<&Value> = view.captures.iter().collect();\n\t\t\tlet unknowns: Vec<&Value> = view.unknowns.clone();\n\t\t\tlet fields = [\n\t\t\t\t(\"artifacts\", JsonView::Values(&artifacts)),\n\t\t\t\t(\"providers\", JsonView::Values(&providers)),\n\t\t\t\t(\"environments\", JsonView::Values(&environments)),\n\t\t\t\t(\"scenarios\", JsonView::Values(&scenarios)),\n\t\t\t\t(\"captures\", JsonView::Values(&captures)),\n\t\t\t\t(\"unknowns\", JsonView::Values(&unknowns)),\n\t\t\t\t(\"records\", JsonView::Values(&view.records)),\n\t\t\t];\n\t\t\tlet result = [(\"result\", JsonView::Object(&fields))];\n\t\t\tlet order = match BundleOrder::with_imports(\n\t\t\t\t&view.records,\n\t\t\t\t&selected_origins,\n\t\t\t\t&selected_import_orders,\n\t\t\t\t&view.unknowns,\n\t\t\t) {\n\t\t\t\tOk(order) => order,\n\t\t\t\tErr(error) => {\n\t\t\t\t\treturn Failure::output(\"get_evidence_bundle\", error.to_string()).wire()\n\t\t\t\t}\n\t\t\t};\n\t\t\t// Generic records without recorded producer provenance have no known\n\t\t\t// source order. Their Fits size is order independent; overflow never fabricates\n\t\t\t// a source order. Production producers always supply an explicit origin.\n\t\t\tlet known = selected_origins\n\t\t\t\t.iter()\n\t\t\t\t.zip(&selected_import_orders)\n\t\t\t\t.all(|(origin, order)| *origin != RecordOrigin::Unknown || order.is_some());\n\t\t\tlet original_order: Option<&dyn super::rea_response_encoding::ObjectOrder> =\n\t\t\t\tknown.then_some(&order);\n\t\t\trea_contract::deliver_view(\n\t\t\t\t\"get_evidence_bundle\",\n\t\t\t\tJsonView::Object(&result),\n\t\t\t\toriginal_order,\n\t\t\t\tNone,\n\t\t\t\tfalse,\n\t\t\t\ttrue,\n\t\t\t\t|| serde_json::to_value(&complete),\n\t\t\t)\n\t\t}\n\t}\n",
+          "sha256": "496c15eb3225c432390afc5ca9a559c21734534a1ba5189c260d82aea87316ce"
+        }
+      ]
+    }
+  ]
+}

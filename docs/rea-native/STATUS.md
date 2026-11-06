@@ -1,5 +1,30 @@
 # REA 6.8.0 native Rust integration — scoped P0-P5 register
 
+## 2026-11-06 ELF Evidence and fixed Ghidra continuation
+
+The latest finite continuation is documented in
+[ELF Evidence and fixed Ghidra family continuation](../qualification/rea-family-20261106-r1/README.md).
+Its binary-producing source is `fe3223cabbd2a8f1aa75a4ab57507bdb72291242`,
+with selected execution-input tree
+`1a83f83cf62bf3d96e50c944722977b6971ffe686aecd131cab5e728dd802424`.
+Later proof-only commits preserve that build identity.
+
+The continuation adds Rust-owned immutable complete-byte Evidence snapshots,
+explicit release, real export/import and oversized-result follow-up evidence,
+and fixed-profile Ghidra reference filtering, address formatting and bounded
+scan accounting. Original failed attempts, full opaque responses, controller
+lifecycles and independent artifact replays are retained. Actual final results
+and their limits are in the dated report; this register does not substitute a
+build pass for per-operation qualification.
+
+The catalog remains **0 qualified / 229 OPEN** (187 absent, 22 partial-operation
+mappings and 20 related facilities). The 34 native interfaces, including the two
+new Evidence readback methods, are a separate inventory. The exercised fixed
+Ghidra Provider requires a Linux controller and an executable Linux host.
+
+## Historical foundation register
+
+
 > This register preserves the original REA foundation qualification history.
 > Current #84 continuation routes and boundaries are documented in
 > [FULL_INTEGRATION.md](FULL_INTEGRATION.md) and [UNIFIED_RUNTIME.md](UNIFIED_RUNTIME.md).
