@@ -1,0 +1,135 @@
+{
+  "actual_exact_ci": null,
+  "actual_normal_lifecycle": null,
+  "actual_observation": null,
+  "actual_qualification": null,
+  "argv_templates": {
+    "install_measurement_tools": [
+      "/usr/bin/python3",
+      "-B",
+      "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/install_measurement_tools.py",
+      "--bundle-sha256",
+      null
+    ],
+    "lifecycle_holder_after_observation_gate": [
+      "/usr/bin/python3",
+      "-B",
+      "-u",
+      "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01/held_agent_campaign_02.py",
+      "--remote-script",
+      "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01/r36_lifecycle_campaign.py",
+      "--out",
+      "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-lifecycle-holder-01",
+      "--timeout-seconds",
+      "3600"
+    ],
+    "materialize_lifecycle_after_observation_gate": [
+      "/usr/bin/python3",
+      "-B",
+      "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/prepare_lifecycle_inputs.py",
+      "--example-sha256",
+      null,
+      "--preparer-sha256",
+      "8d675039098f16524549830092f4a4fcb08b973a24d240ab2612b33b33b02c04"
+    ],
+    "materialize_observation": [
+      "/usr/bin/python3",
+      "-B",
+      "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01/prepare_campaign_inputs.py",
+      "--example-sha256",
+      null,
+      "--preparer-sha256",
+      "6bda3bb790d0a015d3a3b31e10ba168b147df431781b03af94f876b829cd0209",
+      "--preparation-sha256",
+      null,
+      "--qualification-terminal-sha256",
+      null,
+      "--qualification-job-id",
+      null
+    ],
+    "observation_holder": [
+      "/usr/bin/python3",
+      "-B",
+      "-u",
+      "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01/held_agent_campaign_02.py",
+      "--remote-script",
+      "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01/r36_campaign.py",
+      "--out",
+      "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-observation-holder-01",
+      "--timeout-seconds",
+      "3600"
+    ]
+  },
+  "deployment": {
+    "example_jsons": "Review examples only. The original installer creates actual templates with derived lifecycle hashes.",
+    "mac": "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01",
+    "private_profile_body": "Never included; existing D1 seed is hash-bound and read under the unchanged original helper guards.",
+    "x230/tools-01": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/tools-01"
+  },
+  "execution_policy": "Root owns every host call and formal lock. No operation has been launched by this package.",
+  "lifecycle_threshold_source": "Unchanged 27-file lifecycle tools, original analyze_lifecycle_gates.py including its CPU tick tolerance.",
+  "mac_parent_directory": "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-parent-01",
+  "measurement_results": null,
+  "normal_lifecycle_original_tool_tests": 14,
+  "normal_lifecycle_required_comparisons": [
+    "all_operations",
+    "launch",
+    "concurrent_cancel"
+  ],
+  "planned_observation": {
+    "arena_max": 1,
+    "boundary_bursts": 2,
+    "boundary_concurrency": 32,
+    "calls_per_concurrency_per_round": 192,
+    "concurrency": [
+      1,
+      8,
+      16
+    ],
+    "hosts": 6,
+    "order": "ABBA",
+    "planned_measured_calls": 2304,
+    "planned_preflight_and_restart_calls": 72,
+    "planned_total_calls": 2664,
+    "planned_warmup_calls": 288,
+    "quiet_seconds": 90,
+    "recovery_hosts": 6,
+    "warmups_per_concurrency_per_round": 24,
+    "workers": 2
+  },
+  "private_namespaces": {
+    "normal_lifecycle_prefix": "/home/qian/s36lc1",
+    "observation": [
+      "/home/qian/hs36n01",
+      "/home/qian/hs36b01",
+      "/home/qian/hs36c01"
+    ],
+    "recovery": "/home/qian/hepta-runtime-optimization-20261104-r16/s36-cancel-recovery-01"
+  },
+  "runtime_root": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02",
+  "schema": "hepta-r36-scratch-full-acceptance-operator-plan/v1",
+  "sealed": false,
+  "sequence": [
+    "actual original eight-stage qualification",
+    "seal reviewed parent static inputs from original local receipts",
+    "create-only deploy sealed tools and seven recovered fixture inputs; run original tool installer once",
+    "original exact Rust CI using the sealed parent binder; preserve original native terminal/read/report/plan/audit/logs",
+    "original observation materializer after completed qualification and exact CI",
+    "original Mac held-agent observation parent",
+    "only if the original observation gate passes: original lifecycle materializer and original Mac lifecycle parent",
+    "archive original outputs and decide only from original required gates; no selective rerun"
+  ],
+  "source_baseline_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "source_changed_paths": [
+    "src/mcp/runtime/ssh_observation_profile.rs",
+    "src/mcp/runtime/ssh_observation_reference_tests.rs"
+  ],
+  "thresholds": {
+    "controller_cpu_b_over_a_max": 1.1,
+    "controller_rss_b_over_a_max": 1.05,
+    "controller_rss_extra_kib_max": 512,
+    "p95_b_over_a_max": 1.1,
+    "primary_concurrency": 8,
+    "throughput_b_over_a_min": 0.95
+  }
+}
