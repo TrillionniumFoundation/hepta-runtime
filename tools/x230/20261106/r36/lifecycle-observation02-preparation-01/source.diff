@@ -1,0 +1,238 @@
+--- original/r36_lifecycle_campaign.py
++++ observation02/r36_lifecycle_campaign.py
+@@ -32,6 +32,7 @@
+ BASELINE_SHA = "bc14cab1e632d6cd703f6a0f65d1a8e513b4471c09a403186d72e989e3f74c13"
+ HEX = re.compile(r"[0-9a-f]{64}\Z")
+ CAMPAIGN_SECONDS = 3300
++OBSERVATION_RECONCILIATION = {'path': '/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/observation-summary-reconciliation-02.json', 'bytes': 3700, 'sha256': '7b8aaa538fc46bddf091b574bb9ef64246d2e453fec26fcf1ac4795f7a5bf11c'}
+ 
+ 
+ def need(value, reason):
+@@ -89,6 +90,133 @@
+         need(summary["schema"] == "hepta-r25-observation-gates/v1"
+              and all(summary[key] is True for key in ("evidence_verified","correctness_verified","observation_gate_passed"))
+              and summary["rejection_reasons"] == [], "independent observation gate did not pass")
++
++
++def reconciled_observation(parent, inputs, bind):
++    """Read the sealed original failure and the actual stage-7-only completion."""
++    need(inputs["observation_reconciliation"] == OBSERVATION_RECONCILIATION,
++         "only the sealed OBS02 stage-7 reconciliation is authorized")
++    identity, raw = bind(OBSERVATION_RECONCILIATION["path"], OBSERVATION_RECONCILIATION, retain=True)
++    reconciliation = json.loads(raw)
++    need(reconciliation["schema"] == "hepta-r36-observation-stage7-reconciliation/v1"
++         and reconciliation["attempt"] == "02", "different observation reconciliation")
++    files = reconciliation["files"]
++    retained = {label: bind(item["path"], item, retain=True)[1] for label, item in files.items()}
++    value = json.loads(retained["original_parent"])
++    summary = json.loads(retained["corrected_summary"])
++    need(files["original_parent"] == inputs["observation_campaign"]
++         and files["original_parent"]["path"] == str(ROOT / "campaign-02/report.json")
++         and value["schema"] == "hepta-r25-observation-campaign-control/v1"
++         and value["attempt"] == "02" and value["passed"] is False and value["observation_gate_passed"] is False
++         and "summary" not in value and value["finished_utc"] and value["automatic_retries"] == 0
++         and value["launcher_sha256"] == inputs["campaign_helpers"]["sha256"]
++         and value["input_receipt"]["path"] == str(ROOT / "campaign-inputs-02.json")
++         and all(value.get(key) is True for key in ("inputs_unchanged", "source_inputs_unchanged",
++             "baseline_source_inputs_unchanged", "baseline_enablement_verified", "measurement_attribution_valid"))
++         and value["quiescence"]["passed"] is True,
++         "original observation failure or qualified inputs differ")
++    names = ["native-observation", "native-audit", "native-boundary", "boundary-audit", "cancel-recovery", "recovery-audit"]
++    need([row["name"] for row in value["stages"]] == names + ["observation-summary"], "original seven stages differ")
++    parent.r36_owner_closed_stages(value["stages"][:6], names)
++    last = value["stages"][-1]
++    need(last["passed"] is False and last["returncode"] == 1 and last["timed_out"] is False
++         and all(last[key] is True for key in ("waited_and_reaped", "owned_process_absent", "owned_process_group_absent"))
++         and all(row["cleanup_signals"] == [] for row in value["stages"])
++         and last["output_bindings"] == [] and last["stderr"] == files["original_summary_stderr"]
++         and last["stdout"] == files["original_summary_stdout"] and retained["original_summary_stdout"] == b""
++         and retained["original_summary_stderr"].endswith(b"ValueError: historical six-machine topology differs\n")
++         and value["error"] == last["error"] == {"type": "RuntimeError", "reason":
++             "observation-summary returned nonzero; original output retained"},
++         "only the closed stage-7 topology identity failure can be reconciled")
++    change = reconciliation["source_change"]
++    before = ('TOPOLOGY_SHA = "' + change["before"] + '"').encode()
++    after = ('TOPOLOGY_SHA = "' + change["after"] + '"').encode()
++    need(change["constant"] == "TOPOLOGY_SHA" and change["after"] == parent.TOPOLOGY_SHA
++         and retained["original_summary_source"].count(before) == 1
++         and retained["original_summary_source"].replace(before, after) == retained["corrected_summary_source"]
++         and files["original_summary_source"]["path"] == last["argv"][2],
++         "summary correction changes more than the frozen topology identity")
++    need(summary["schema"] == "hepta-r25-observation-gates/v1"
++         and all(summary[key] is True for key in ("evidence_verified", "correctness_verified",
++             "performance_gates_passed", "observation_gate_passed"))
++         and summary["rejection_reasons"] == [] and summary["thresholds"] == value["thresholds"]
++         and summary["binary_sha256"] == {arm: value["binaries"][arm]["hepta-runtime"]["sha256"] for arm in ("A", "B")},
++         "corrected summary did not pass the unchanged original gates")
++    labels = ("native_report", "native_analysis", "boundary_report", "boundary_analysis", "lifecycle_report", "lifecycle_analysis")
++    for label, stage in zip(labels, value["stages"][:6]):
++        need(stage["output_bindings"] == [summary["evidence"][label]], "summary used different original stage evidence")
++        item = summary["evidence"][label]
++        bind(item["path"], item)
++    holder = json.loads(retained["original_holder"])
++    need(holder["passed"] is False and holder["remote_returncode"] == 1 and holder["automatic_ssh_retries"] == 0
++         and holder.get("foreground_timed_out", False) is False
++         and all(holder[key] is True for key in ("owned_agent_reaped", "owned_agent_directory_absent_after_context",
++             "owned_agent_socket_absent_after_context"))
++         and holder["remote_script_sha256"] == value["launcher_sha256"]
++         and holder["foreground_argv"][-4:] == ["--launcher-sha256", value["launcher_sha256"], "--inputs", value["input_receipt"]["path"]],
++         "original holder failed for another reason or its owned agent did not close")
++    terminal = json.loads(retained["original_terminal"])
++    parent.r36_owner_native_terminal(terminal, reconciliation["original_job_id"], state="failed", exit_code=1)
++    streams = parent.r36_owner_native_streams(json.loads(retained["original_read"]), terminal)
++    holder_lines = [json.loads(line) for line in streams["stdout"].splitlines()]
++    need(streams["stderr"] == b"" and len(holder_lines) == 2
++         and holder_lines[0] == {"phase": "owned_agent_ready", "identity_count": 5, "remote_script_sha256": value["launcher_sha256"]}
++         and holder_lines[1] == {"passed": False, "remote_returncode": 1, "owned_agent_reaped": True,
++             "report": "/Users/qianqi/work/hepta-runtime-r36-validation-scratch-cold-02-observation-holder-02/report.json"},
++         "original holder terminal/readback differs")
++    terminal = json.loads(retained["repair_terminal"])
++    parent.r36_owner_native_terminal(terminal, reconciliation["repair_job_id"])
++    streams = parent.r36_owner_native_streams(json.loads(retained["repair_read"]), terminal)
++    need(streams["stderr"] == b"" and json.loads(streams["stdout"]) == {"evidence_verified": True,
++         "observation_gate_passed": True, "rejection_reasons": [], "output": files["corrected_summary"]["path"]},
++         "corrected summary native terminal/readback differs")
++    start = json.loads(retained["repair_start"])
++    expected = list(last["argv"])
++    expected[2], expected[-1] = files["corrected_summary_source"]["path"], files["corrected_summary"]["path"]
++    need(start["audit_recorded"] is True and start["reused"] is False and start["launch"]["ok"] is True
++         and start["job"]["id"] == reconciliation["repair_job_id"] and start["job"]["launch_state"] == "launched"
++         and start["job"]["launch_error"] is None and start["job"]["cwd"] == str(ROOT)
++         and start["job"]["env_keys"] == [] and start["job"]["executable"] == expected[0]
++         and start["job"]["args"] == expected[1:], "repair reran other work or changed summary arguments")
++    proof = {"reconciliation": identity, "original_parent": files["original_parent"], "original_parent_passed": False,
++             "corrected_summary": files["corrected_summary"], "original_job_id": reconciliation["original_job_id"],
++             "repair_job_id": reconciliation["repair_job_id"], "source_change": change}
++    return files["original_parent"], value, files["corrected_summary"], summary, proof
++
++
++def verify_completed_observation_monitor(parent, observed, inputs, bind):
++    """Apply the original full monitor verification to the sealed OBS02 directory."""
++    expected_output = ROOT / "campaign-02"
++    need(observed["attempt"] == "02" and observed["input_receipt"]["path"] == str(ROOT / "campaign-inputs-02.json"),
++         "fixed OBS02 monitored input required")
++    COMPILER_MONITOR_LIMITS = parent.COMPILER_MONITOR_LIMITS
++    COMPILER_MONITOR_PATHS = parent.COMPILER_MONITOR_PATHS
++    bind_compiler_monitor_inputs = parent.bind_compiler_monitor_inputs
++    monitor_module = parent.monitor_module
++    need(observed.get("measurement_attribution_valid") is True,
++         "observation compiler monitoring did not authorize performance attribution")
++    monitor = observed["compiler_monitor"]
++    need(monitor["passed"] is True and monitor["monitor_sources_unchanged"] is True
++         and monitor["limits"] == COMPILER_MONITOR_LIMITS, "completed compiler monitor gate differs")
++    raw, proof = bind_compiler_monitor_inputs(inputs, bind)
++    need(monitor["sources"] == proof["sources"], "observation monitor source set differs")
++    need(monitor["ledger"]["path"] == str(expected_output / "compiler-monitor.json")
++         and monitor["independent_audit"]["path"] == str(expected_output / "compiler-monitor.audit.json"),
++         "completed compiler monitor evidence paths differ")
++    ledger_identity, ledger_raw = bind(monitor["ledger"]["path"], monitor["ledger"], retain=True,
++                                       maximum=16 * 1024 * 1024)
++    audit_identity, audit_raw = bind(monitor["independent_audit"]["path"], monitor["independent_audit"], retain=True)
++    ledger, audit = json.loads(ledger_raw), json.loads(audit_raw)
++    need(ledger["source_bindings"] == proof, "retained compiler ledger source binding differs")
++    validator = monitor_module("_r26_bound_prior_monitor_validator", raw["validator"], COMPILER_MONITOR_PATHS["validator"])
++    validation = validator.validate(ledger, COMPILER_MONITOR_LIMITS,
++        monitor["guarded_body_start_monotonic_ns"], monitor["guarded_body_end_monotonic_ns"])
++    need(validation["passed"] is True and audit == {
++        "schema": "hepta-r26-compiler-monitor-audit/v1", "ledger": ledger_identity,
++        "validator": proof["sources"]["validator"], "validation": validation,
++        "monitor_sources_unchanged": True, "source_recheck_errors": []}, "independent compiler monitor ledger verification failed")
++    return {"passed": True, "ledger": ledger_identity, "independent_audit": audit_identity,
++            "validator": proof["sources"]["validator"], "validation": validation}
+ 
+ 
+ def main():
+@@ -234,14 +362,9 @@
+         _, terminal_raw = bind(ROOT / "qualification-terminal-status-01.json", inputs["qualification_terminal_status"], retain=True)
+         terminal_qualification(json.loads(terminal_raw), inputs["qualification_terminal_status"]["job_id"])
+         report["qualification_original_job_terminal_verified"] = True
+-        observation_identity, observation_raw = bind(ROOT / "campaign-01/report.json", inputs["observation_campaign"], retain=True)
+-        observation = json.loads(observation_raw)
+-        completed_observation(observation)
+-        report["observation_compiler_monitor_gate"] = parent.verify_completed_compiler_monitor(
+-            observation, inputs, bind, ROOT / "campaign-01")
+-        _, summary_raw = bind(observation["summary"]["path"], observation["summary"], retain=True)
+-        observation_summary = json.loads(summary_raw)
+-        completed_observation(observation, observation_summary)
++        observation_identity, observation, summary_identity, observation_summary, reconciliation_proof = reconciled_observation(parent, inputs, bind)
++        report["observation_reconciliation"] = reconciliation_proof
++        report["observation_compiler_monitor_gate"] = verify_completed_observation_monitor(parent, observation, inputs, bind)
+         _, prior_input_raw = bind(observation["input_receipt"]["path"], observation["input_receipt"], retain=True)
+         prior_inputs = json.loads(prior_input_raw)
+         need(all(inputs[name] == prior_inputs[name] for name in ("qualification_preparation",
+--- original/prepare_lifecycle_inputs.py
++++ observation02/prepare_lifecycle_inputs.py
+@@ -18,11 +18,11 @@
+ 
+ sys.dont_write_bytecode = True
+ ROOT = Path("/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02")
+-EXAMPLE = ROOT / "lifecycle-inputs-01.example.json"
++EXAMPLE = ROOT / "lifecycle-inputs-01.observation02.example.json"
+ OUTPUT = ROOT / "lifecycle-inputs-01.json"
+-LAUNCHER = ROOT / "tools-01/r36_lifecycle_campaign.py"
++LAUNCHER = ROOT / "lifecycle-observation02-tools-01/r36_lifecycle_campaign.py"
+ HELPERS = ROOT / "tools-01/r36_campaign.py"
+-PREPARER = ROOT / "tools-01/prepare_lifecycle_inputs.py"
++PREPARER = ROOT / "lifecycle-observation02-tools-01/prepare_lifecycle_inputs.py"
+ HEX = re.compile(r"[0-9a-f]{64}\Z")
+ NAMES = ("hepta-runtime", "hepta-runtime-jobctl", "native_process_driver")
+ 
+@@ -73,7 +73,7 @@
+     paths = {"qualification_preparation": ROOT / "preparation.json",
+              "qualification_terminal_status": ROOT / "qualification-terminal-status-01.json",
+              "qualification_report": ROOT / "qualification-01/report.json",
+-             "observation_campaign": ROOT / "campaign-01/report.json"}
++             "observation_campaign": ROOT / "campaign-02/report.json"}
+     for label, path in paths.items():
+         row = value[label]
+         need(row["path"] == str(path) and row["bytes"] is None and row["sha256"] is None,
+@@ -113,15 +113,13 @@
+ 
+     terminal_identity, raw = bind(ROOT / "qualification-terminal-status-01.json", retain=True)
+     terminal_value = json.loads(raw)
+-    observation_identity, raw = bind(ROOT / "campaign-01/report.json", retain=True)
+-    observation = json.loads(raw)
+-    launcher.completed_observation(observation)
+-    monitor_binding = parent.verify_completed_compiler_monitor(observation, inputs, bind, ROOT / "campaign-01")
+-    _, raw = bind(observation["summary"]["path"], observation["summary"], retain=True)
+-    launcher.completed_observation(observation, json.loads(raw))
++    observation_expected, _ = bind(ROOT / "campaign-02/report.json", retain=True)
++    inputs["observation_campaign"] = observation_expected
++    observation_identity, observation, _, _, reconciliation_proof = launcher.reconciled_observation(parent, inputs, bind)
++    monitor_binding = launcher.verify_completed_observation_monitor(parent, observation, inputs, bind)
+     _, raw = bind(observation["input_receipt"]["path"], observation["input_receipt"], retain=True)
+     prior = json.loads(raw)
+-    need(prior["schema"] == "hepta-r25-campaign-inputs/v1" and prior["attempt"] == "01"
++    need(prior["schema"] == "hepta-r25-campaign-inputs/v1" and prior["attempt"] == "02"
+          and prior["launcher_sha256"] == helper_identity["sha256"],
+          "completed observation campaign used different reviewed helpers")
+     need(all(inputs[name] == prior[name] for name in ("qualification_launcher", "qualification_input", "candidate_patch")),
+@@ -186,6 +184,7 @@
+                   candidate_binaries={name: {key: binaries["B"][name][key] for key in ("bytes", "sha256")} for name in NAMES},
+                   materialization={"created_utc": parent.utc(), "example": example_identity, "preparer": own_identity,
+                                    "launcher": launcher_identity, "observation_compiler_monitor_gate": monitor_binding,
++                                   "observation_reconciliation": reconciliation_proof,
+                                    "monitor_started": False, "remote_effects": 0, "automatic_retries": 0})
+     parent.create(OUTPUT, parent.canonical(inputs))
+     print(json.dumps({"created": True, "input_receipt": parent.checked(OUTPUT),
+--- original/lifecycle-inputs-01.example.json
++++ observation02/lifecycle-inputs-01.observation02.example.json
+@@ -47,11 +47,16 @@
+       "sha256": "d2cd009adf1f35a394ffddcc8f8646cc0c1b856b78181ca321ea68f6468218b2"
+     }
+   },
+-  "launcher_sha256": "872a387c13f78365668d4626b02e29f7408c2cb37a76226eb4d96002026712e6",
++  "launcher_sha256": "1827204887f8ca3c98c35cef1c4e554e9bbf155b5a9957fec9dc3f024de949eb",
+   "observation_campaign": {
+     "bytes": null,
+-    "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/campaign-01/report.json",
++    "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/campaign-02/report.json",
+     "sha256": null
++  },
++  "observation_reconciliation": {
++    "bytes": 3700,
++    "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/observation-summary-reconciliation-02.json",
++    "sha256": "7b8aaa538fc46bddf091b574bb9ef64246d2e453fec26fcf1ac4795f7a5bf11c"
+   },
+   "qualification_input": {
+     "bytes": 4250,
