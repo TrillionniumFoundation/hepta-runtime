@@ -144,6 +144,10 @@ enum OrderNode {
 #[derive(Debug, Default)]
 pub(super) struct ObjectOrder(OrderNode);
 
+#[path = "rea_evidence_checkpoint_order.rs"]
+mod checkpoint_order;
+pub(super) use checkpoint_order::StoredObjectOrder;
+
 impl ObjectOrder {
 	/// Move the exact parser-owned record subtrees after bundle authentication.
 	/// They accompany immutable records through metadata replacement and export.
@@ -913,6 +917,23 @@ fn parse_reader<R: Read>(reader: R, expected: u64, state: Rc<RefCell<State>>) ->
 			))
 		}
 	}
+}
+
+/// Reuse the native materialization/token/depth fence for already captured
+/// private checkpoint bytes. Descriptor admission remains the store owner's job.
+pub(super) fn parse_checkpoint_json(
+	bytes: &[u8],
+	cancellation: &CancellationToken,
+) -> Result<(Value, ObjectOrder)> {
+	active(cancellation)?;
+	let state = Rc::new(RefCell::new(State::new(
+		cancellation.clone(),
+		NativeJsonLimits::default(),
+		bytes.len() as u64 <= NATIVE_JSON_THRESHOLD,
+	)));
+	let parsed = parse_reader(std::io::Cursor::new(bytes), bytes.len() as u64, state)?;
+	active(cancellation)?;
+	Ok((parsed.value, ObjectOrder(parsed.order)))
 }
 
 struct Seed {

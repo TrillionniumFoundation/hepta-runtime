@@ -29,6 +29,9 @@ const ENVELOPE_RESERVATION: usize = 1024;
 #[derive(Debug, Clone)]
 pub(super) struct Failure(pub Value);
 
+#[path = "rea_failure_order.rs"]
+mod failure_order;
+
 impl Failure {
 	/// Frozen Zod coercion exceptions are plain SDK error text, not a JSON
 	/// analysis failure. Only internal validators construct this representation.
@@ -146,9 +149,20 @@ impl Failure {
 	}
 
 	pub(super) fn wire(self) -> CallToolResult {
+		self.wire_with_text(None)
+	}
+
+	/// Only independently observed Evidence import error shapes have an
+	/// admitted original text order. Other errors retain the old projection.
+	pub(super) fn wire_import(self) -> CallToolResult {
+		let ordered = failure_order::import_text(&self.0);
+		self.wire_with_text(ordered)
+	}
+
+	fn wire_with_text(self, ordered: Option<String>) -> CallToolResult {
 		let text = match self.0 {
 			Value::String(message) => message,
-			value => json!({"error":value}).to_string(),
+			value => ordered.unwrap_or_else(|| json!({"error":value}).to_string()),
 		};
 		let mut result = CallToolResult::error(vec![ContentBlock::text(text)]);
 		result.meta = Some(target_meta());

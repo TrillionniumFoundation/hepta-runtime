@@ -33,7 +33,8 @@ use std::sync::{Arc, OnceLock};
 /// inline views and the direct analysis-view tool can have the same semantic
 /// identity but different parameters.view insertion order. Retention must keep
 /// the first record's origin; immediate delivery uses the current call's origin.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub(super) enum RecordOrigin {
 	NativeTool,
 	ApkToolDerived,

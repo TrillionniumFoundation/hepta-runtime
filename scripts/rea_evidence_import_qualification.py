@@ -4,9 +4,10 @@
 """Actual public REA/native import, complete history, atomic merge and recovery.
 
 Inputs are built by the pinned original domain constructors, then both actual
-MCP servers receive the same files and requests. Full replies, payload object
-order, complete canonical export bytes and failed-merge session snapshots are
-compared. This finite Linux profile never establishes complete replacement.
+MCP servers receive the same files and requests. Parsed replies, payload object
+order, exact JSON error text, complete canonical exports and failed-merge session
+snapshots are compared. Outer JSONRPC frame-byte equivalence is a separate gate.
+This finite Linux profile never establishes complete replacement.
 """
 from __future__ import annotations
 
@@ -33,7 +34,9 @@ OPEN_REQUIREMENTS = ["all-file-size-token-depth-and-platform-boundaries", "all-e
 
 
 def orders(value):
-    if value.get("isError") or "rpc_error" in value or "structuredContent" not in value:
+    # Application-error JSON is also a public text representation. It has no
+    # structuredContent, so the previous success-only gate silently omitted it.
+    if "rpc_error" in value:
         return []
     facts=[]
     def walk(item, path, representation):
@@ -42,9 +45,46 @@ def orders(value):
             for key, child in item.items(): walk(child,path+[key],representation)
         elif isinstance(item,list):
             for index,child in enumerate(item):walk(child,path+[index],representation)
+    if value.get("isError"):
+        content=value.get("content")
+        if isinstance(content,list) and len(content)==1 and isinstance(content[0],dict):
+            text=content[0].get("text")
+            if isinstance(text,(dict,list)):
+                walk(text,[],"error-text")
+        # Plain SDK exception text has no JSON member order. Its complete value
+        # remains compared by the existing parsed-value gate.
+        return facts
+    if "structuredContent" not in value:
+        return []
     walk(value["content"][0]["text"],[],"text")
     walk(value["structuredContent"],[],"structured")
     return facts
+
+
+def error_text_orders(value):
+    return [item for item in value if item["representation"]=="error-text"]
+
+
+def raw_error_text(response):
+    # Keep the original CallToolResult text before tool_value parses its JSON.
+    # Plain SDK exceptions and JSON-RPC errors have separate value semantics.
+    result=response.get("result")
+    if not isinstance(result,dict) or result.get("isError") is not True:
+        return None
+    content=result.get("content")
+    if not isinstance(content,list) or len(content)!=1 or not isinstance(content[0],dict):
+        return None
+    text=content[0].get("text")
+    if content[0].get("type")!="text" or not isinstance(text,str):
+        return None
+    try:
+        parsed=json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(parsed,(dict,list)):
+        return None
+    encoded=text.encode("utf-8")
+    return {"text":text,"utf8_bytes":len(encoded),"utf8_sha256":hashlib.sha256(encoded).hexdigest()}
 
 
 def error(value):
@@ -67,7 +107,7 @@ class Session:
         report["sessions"][label+"/"+scenario]=self.state
     def observe(self,name,operation,arguments,response):
         value=q.tool_value(response)
-        row={"id":name,"operation":operation,"arguments":arguments,"value":value,"orders":orders(value)}
+        row={"id":name,"operation":operation,"arguments":arguments,"value":value,"orders":orders(value),"raw_error_text":raw_error_text(response)}
         self.rows.append(row)
         path=self.output/f"call-{len(self.rows):03d}-{name}.json"
         q.write_json(path,{**row,"response":response})
@@ -363,8 +403,24 @@ def main(argv=None):
             q.require([r['id'] for r in left.rows]==[r['id'] for r in right.rows],"producer request sequence differs")
             for old,new in zip(left.rows,right.rows):
                 q.require(old['arguments']==new['arguments'],"producers received different inputs")
-                differences=a.differences(old['value'],new['value'])+a.differences(old['orders'],new['orders'],'$/orders')
-                report['comparisons'].append({'id':scenario+'/'+old['id'],'status':'FAIL' if differences else 'PASS','differences':differences})
+                value_differences=a.differences(old['value'],new['value'])
+                order_differences=a.differences(old['orders'],new['orders'],'$/orders')
+                old_error_order,new_error_order=error_text_orders(old['orders']),error_text_orders(new['orders'])
+                error_order_differences=a.differences(old_error_order,new_error_order,'$/error_text_orders')
+                error_order_applicable=bool(old_error_order or new_error_order)
+                old_raw,new_raw=old.get('raw_error_text'),new.get('raw_error_text')
+                raw_applicable=old_raw is not None or new_raw is not None
+                raw_differences=a.differences(old_raw,new_raw,'$/raw_error_text')
+                differences=value_differences+order_differences+raw_differences
+                report['comparisons'].append({'id':scenario+'/'+old['id'],'status':'FAIL' if differences else 'PASS','differences':differences,
+                    'raw_error_text_status':('FAIL' if raw_differences else 'PASS') if raw_applicable else 'NOT_APPLICABLE',
+                    'raw_error_text_differences':raw_differences,
+                    'raw_error_text_reference':old_raw,'raw_error_text_native':new_raw,
+                    'parsed_value_status':'FAIL' if value_differences else 'PASS',
+                    'object_order_status':'FAIL' if order_differences else 'PASS',
+                    'error_text_order':{'applicable':error_order_applicable,
+                        'status':('FAIL' if error_order_differences else 'PASS') if error_order_applicable else 'NOT_APPLICABLE',
+                        'differences':error_order_differences}})
         for key in ('inputSchema','outputSchema','annotations'):
             differences=a.differences(sessions[('reference','main')].state['contract'][key],sessions[('native','main')].state['contract'][key])
             report['comparisons'].append({'id':'contract/'+key,'status':'FAIL' if differences else 'PASS','differences':differences})
@@ -386,13 +442,29 @@ def main(argv=None):
             report['binary_after']=q.identity(args.binary);report['reference_after']=q.reference_package(args.reference_package,args.reference_tarball)
             q.require(report['binary_before']==report['binary_after'] and report['reference_before']==report['reference_after'],'producer identity changed')
         except Exception as exc:report['errors'].append({'type':type(exc).__name__,'message':str(exc)})
+    error_order_rows=[x for x in report['comparisons'] if x.get('error_text_order',{}).get('applicable')]
+    error_order_passed=sum(x['error_text_order']['status']=='PASS' for x in error_order_rows)
+    report['error_text_order_gate']={
+        'denominator':len(error_order_rows),'passed':error_order_passed,
+        'status':('PASS' if error_order_passed==len(error_order_rows) else 'FAIL') if error_order_rows else 'NO_CASES',
+        'failed_ids':[x['id'] for x in error_order_rows if x['error_text_order']['status']=='FAIL'],
+        'scope':'Exact object-member order in parsed application-error JSON text; plain SDK text and RPC errors retain their value comparisons. Full raw response frames are not qualified.',
+        'adds_comparison_rows':False}
+    raw_error_rows=[x for x in report['comparisons'] if x.get('raw_error_text_status') in ('PASS','FAIL')]
+    raw_error_passed=sum(x['raw_error_text_status']=='PASS' for x in raw_error_rows)
+    report['raw_error_text_gate']={
+        'denominator':len(raw_error_rows),'passed':raw_error_passed,
+        'status':('PASS' if raw_error_passed==len(raw_error_rows) else 'FAIL') if raw_error_rows else 'NO_CASES',
+        'failed_ids':[x['id'] for x in raw_error_rows if x['raw_error_text_status']=='FAIL'],
+        'scope':'Exact UTF8 bytes of original CallToolResult.content[0].text for JSON application errors, with byte counts and SHA256. Plain SDK text/RPC errors retain value comparisons; outer JSONRPC frames remain unqualified.',
+        'adds_comparison_rows':False}
     passed=sum(x['status']=='PASS' for x in report['comparisons'])
     expected={label+'/'+scenario:count for label in ('reference','native') for scenario,count in (('main',68),('cold',3),('union',4),('capture',7),('proto',11),('exception',8),('labels',6),('cancel',6))}
     observed={label+'/'+scenario:len(session.rows) for (label,scenario),session in sessions.items()}
-    report['finite_status']='PASS' if not report['errors'] and observed==expected and len(report['comparisons'])==118 and passed==118 else 'FAIL'
+    report['finite_status']='PASS' if not report['errors'] and observed==expected and len(report['comparisons'])==118 and passed==118 and report['error_text_order_gate']['status']=='PASS' and report['raw_error_text_gate']['status']=='PASS' else 'FAIL'
     report['counts']={key:len(session.rows) for key,session in ((label+'/'+scenario,s) for (label,scenario),s in sessions.items())}
     q.write_json(out/'qualification.json',report)
-    print(json.dumps({'finite_status':report['finite_status'],'qualified':False,'passed':passed,'comparisons':len(report['comparisons']),'errors':report['errors'],'receipt':q.identity(out/'qualification.json')}))
+    print(json.dumps({'finite_status':report['finite_status'],'qualified':False,'passed':passed,'comparisons':len(report['comparisons']),'errors':report['errors'],'error_text_order_gate':report['error_text_order_gate'],'raw_error_text_gate':report['raw_error_text_gate'],'receipt':q.identity(out/'qualification.json')}))
     return 0 if report['finite_status']=='PASS' else 1
 
 if __name__=='__main__':sys.exit(main())

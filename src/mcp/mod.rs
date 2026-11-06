@@ -37,6 +37,7 @@ mod rea_structured_wire;
 pub use rea_response_frame::ReaFramedService;
 pub mod rea_elf_notes;
 pub mod rea_evidence;
+mod rea_evidence_checkpoint;
 mod rea_evidence_export;
 mod rea_evidence_file;
 mod rea_evidence_import;

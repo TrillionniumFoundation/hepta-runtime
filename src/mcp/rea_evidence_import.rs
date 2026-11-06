@@ -57,7 +57,7 @@ pub(super) fn output_schema() -> Arc<JsonObject> {
 }
 
 pub(super) fn error_result(error: Failure) -> CallToolResult {
-	error.wire()
+	error.wire_import()
 }
 
 fn active(cancellation: &CancellationToken) -> Result<(), Failure> {
@@ -270,3 +270,7 @@ pub(super) async fn import(
 #[cfg(test)]
 #[path = "rea_evidence_import_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "rea_contract_failure_tests.rs"]
+mod failure_text_tests;

@@ -61,6 +61,19 @@ pub(super) struct EvidenceSnapshot {
 	unknowns: BTreeMap<(String, u64), Arc<Value>>,
 }
 
+/// Opaque complete retention state, including private response-order authority.
+pub(super) struct CheckpointSnapshot {
+	state: SessionState,
+}
+
+/// A fully authenticated checkpoint awaiting one empty-session publication.
+pub(super) struct CheckpointCandidate {
+	state: SessionState,
+}
+
+#[path = "rea_evidence_checkpoint_state.rs"]
+mod checkpoint;
+
 impl EvidenceSnapshot {
 	pub(super) fn record_count(&self) -> usize {
 		self.records.len()

@@ -34,6 +34,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use super::fs;
+use super::rea_evidence_checkpoint;
 use super::rea_source_map;
 use super::request_ctx;
 use super::runtime;
@@ -256,6 +257,9 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"rea_inspect_analysis_view",
 	"rea_export_evidence_bundle",
 	"rea_import_evidence_bundle",
+	"rea_evidence_session_checkpoint",
+	"rea_evidence_session_resume",
+	"rea_evidence_session_list",
 	"rea_model_session_open",
 	"rea_model_session_query",
 	"rea_model_session_read",
@@ -2037,6 +2041,104 @@ impl OctofsServer {
 		context: RequestContext<RoleServer>,
 	) -> Result<String, String> {
 		rea_source_map::inspect(params, context.ct.clone())
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Checkpoint Native Evidence Session",
+		description = "Save this session's complete Evidence, Unknown history and private response-order metadata as an immutable checkpoint. Requires a verified HTTP operator credential and Linux private storage. The checkpoint is bound to that credential and the unchanged runtime policy; stdio is refused. Repeating identical state returns the same checkpoint ID after validating the existing commit. New sessions remain empty, and later records require another explicit checkpoint. Maximum 2048 records, 8192 Unknown revisions, 128 MiB canonical bundle, 16 MiB retention sidecar, native parser budgets, 32 checkpoints/stages and 256 MiB total storage; oversize states fail before publication.",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		)
+	)]
+	async fn rea_evidence_session_checkpoint(
+		&self,
+		Parameters(_params): Parameters<rea_evidence_checkpoint::CheckpointParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		let admission = Arc::new(
+			runtime::effect_owner_fence::admit_new_effect()
+				.await
+				.map_err(|error| error.to_string())?,
+		);
+		rea_evidence_checkpoint::checkpoint(
+			Arc::clone(&self.rea_session),
+			scope,
+			context.ct.clone(),
+			admission,
+		)
+		.await
+		.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Resume Native Evidence Checkpoint",
+		description = "Explicitly restore a complete immutable Evidence checkpoint into this empty native session. Requires the same verified HTTP operator credential and unchanged runtime policy; stdio and nonempty sessions are refused. Reauthenticates the entire bundle, Unknown graph and complete retention sidecar before one atomic publication. Does not reopen original artifacts or rerun providers. New records after restore require another explicit checkpoint. Linux private storage only.",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = false,
+			open_world_hint = false
+		)
+	)]
+	async fn rea_evidence_session_resume(
+		&self,
+		Parameters(params): Parameters<rea_evidence_checkpoint::ResumeParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		let admission = Arc::new(
+			runtime::effect_owner_fence::admit_new_effect()
+				.await
+				.map_err(|error| error.to_string())?,
+		);
+		rea_evidence_checkpoint::resume(
+			params,
+			Arc::clone(&self.rea_session),
+			scope,
+			context.ct.clone(),
+			admission,
+		)
+		.await
+		.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "List Native Evidence Checkpoints",
+		description = "List complete checkpoints visible to the current verified HTTP operator credential and unchanged policy. Verifies every visible bundle and retention sidecar within the bounded private store. The first page returns catalog_sha256; offset greater than zero requires expected_catalog_sha256 and rejects a changed or damaged catalog. Limit 1..32. Incomplete staging is never listed. Listing preserves the current Evidence session. Stdio is refused; Linux private storage only.",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		)
+	)]
+	async fn rea_evidence_session_list(
+		&self,
+		Parameters(params): Parameters<rea_evidence_checkpoint::ListParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		let admission = Arc::new(
+			runtime::effect_owner_fence::admit_new_effect()
+				.await
+				.map_err(|error| error.to_string())?,
+		);
+		rea_evidence_checkpoint::list(params, scope, context.ct.clone(), admission)
 			.await
 			.map_err(|error| error.to_string())
 	}
