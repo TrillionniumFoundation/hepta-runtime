@@ -1,9 +1,7 @@
 # R34: bounded direct SSH capacity for existing-job cancellation
 
-**Status: first complete x230 qualification passed: 1653 passed, 0 failed,
-34 ignored, 1687 selected, 0 retries. The first exact native CI also passed
-with 1653 ordinary PASS results and no retries. Original six-host observation
-is running. R34 is not adopted; accepted runtime remains R24.**
+**Status: rejected by the original C8 throughput gate; R34 is not adopted.
+Full qualification and exact native CI passed. Accepted runtime remains R24.**
 
 The initial source commit is `5d0b180b832e7f2a8120078231e97ef9e702608a`,
 independently based on accepted R24 `baab4def80be7af015b2e7a594cb302f66c4130e`.
@@ -115,7 +113,7 @@ Its unchanged helper, original source/closure bindings, exact native originals,
 static reviews and execution catalog are retained under cache-prune-01/ and
 cache-prune-02/.
 
-## Remaining acceptance work
+## Exact CI and original six-host result
 
 The first original exact native CI job `1a1af1ebf1d-fc05-65f2` succeeded with
 **1653 ordinary PASS / 0 failed / 34 ignored / 1687 selected / 0 retries**.
@@ -142,11 +140,11 @@ The original tests and nextest auditor were not rerun to prepare either archive.
 
 The original observation input materializer succeeded once as
 `1a1af2cbada-fc05-666d`, creating no workload. The unchanged Mac holder and R34
-parents were installed once and reverified. Normal observation is now running
+parents were installed once and reverified. Normal observation closed
 as original Mac job `1a1af308953-fc05-6698` with original quiet90, compiler
-monitor, ABBA order and thresholds. Its result is pending. The
-original six-host observation, boundary, recovery and normal lifecycle gates
-remain separate from compilation and static review.
+monitor, ABBA order and thresholds. Native exit 0 and parent workflow closure
+are distinct from its rejected performance gate. The original six-host observation gate failed at C8. Normal lifecycle ABBA and
+the separate capacity proof were not started after this failed prerequisite.
 
 Saturated direct cancellation requires a distinct same-process component using
 the actual shared production DIRECT owner: eight ordinary requests held across
@@ -158,6 +156,48 @@ uncompiled and unexecuted. A new formatted revision, actual offline A/B builds,
 retained ELF identities and the complete outer eight-cell campaign remain required. No saturated result is claimed
 by this preparation or by a normal six-host recovery canary.
 
-The experimental branch is published for review. Adoption awaits successful
-exact CI, unchanged original performance gates and appropriately
-scoped cancellation-capacity evidence.
+The experimental branch retains the candidate and its rejection evidence. R34
+is not adopted, and no saturated-capacity benefit is claimed. Later optimization
+candidates must independently start from accepted R24.
+
+## Rejected first observation: original data
+
+| Concurrency | R24 calls/s | R34 calls/s | Throughput change | P95 change | CPU/call change | Throughput gate |
+|---|---:|---:|---:|---:|---:|---|
+| C1 | 7.616621 | 7.922035 | +4.0098% | +0.3397% | −10.8020% | pass |
+| C8 | 55.160128 | 51.333578 | **−6.9372%** | +8.7372% | +3.6735% | **fail** |
+| C16 | 55.492312 | 53.046655 | −4.4072% | +2.4113% | +3.0343% | pass |
+
+The C8 throughput ratio is **0.9306283429378647**, below the unchanged 0.95
+minimum. P95 and same-controller CPU gates pass independently at every level.
+Sampled controller RSS peaks are 18,788 KiB (A) and 18,544 KiB (B), a 244 KiB
+reduction; the unchanged combined RSS ceiling is 19,300 KiB and passes.
+
+The original audit verifies 2304 successful measured calls, 288 warmups and 72
+preflight/restart calls, 2664 total with zero failed calls. Capacity boundary
+results remain separate: 32 successes, 32 expected capacity refusals, zero other
+errors, and drain/recovery passed. The original recovery canary passed; it does
+not establish the unexecuted global-eight saturated cancellation proof.
+
+All seven original parent stages returned zero with actual child wait/reap and
+original process-group closure. Inputs, both source maps and retained program
+identities were unchanged. The original compiler monitor's independent audit
+passed 301 samples. Its scope is 1 Hz sampled observations; it does not rule out
+unsampled activity or prove the entire machine was idle. The Mac holder reaped
+its own agent and closed its temporary socket/directory.
+
+This is one finite six-host campaign. No measurement was repeated, no historical
+run or adjacent pair was selected to override the rejection, and no causal claim
+is inferred from the finite comparison.
+
+Original parent, summary, native holder/read/report, independent call/monitor
+audits and the postflight are in observation-results-01/. The postflight
+`1a1af3c8508-fc05-66fa` succeeded once, rechecked all 220 current compiler inputs
+(including embedded Python sources), and found all three normal lifecycle paths
+absent. The lifecycle materializer was not invoked; there is no fabricated
+failed-materializer receipt. The cache was neither moved nor deleted by this
+postflight, and no test, benchmark or auditor was reexecuted.
+
+The complete bounded observation archive is being assembled from the preserved
+originals. Its publication remains pending at this result milestone. The source
+of the unexecuted capacity component is retained as preparation only.
