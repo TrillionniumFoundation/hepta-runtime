@@ -26,6 +26,9 @@ use super::{
 	WorkerRequest, MAX_MAPPINGS, MAX_RESPONSE_BYTES, PROFILE,
 };
 
+#[path = "rea_source_map_content.rs"]
+mod content;
+
 const MAX_DECLARATIONS: usize = 16_384;
 const MAX_SECTIONS: usize = 256;
 const MAX_SECTION_DEPTH: usize = 8;
@@ -73,6 +76,7 @@ struct Source {
 	root: Option<String>,
 	content_sha256: Option<String>,
 	content_bytes: Option<usize>,
+	content_index: Option<content::LineIndex>,
 	ignored: bool,
 }
 
@@ -101,6 +105,7 @@ struct Decoded {
 	mappings: Vec<Mapping>,
 	sections: usize,
 	leaf_maps: usize,
+	embedded_lines: usize,
 }
 
 fn short_text(value: Option<&str>) -> Result<()> {
@@ -199,6 +204,9 @@ fn decode_leaf(map: RawMap, offset: Offset, section: &str, decoded: &mut Decoded
 	for (index, name) in sources.into_iter().enumerate() {
 		short_text(name.as_deref())?;
 		let source_content = content.get(index).and_then(Option::as_deref);
+		let content_index = source_content
+			.map(|text| content::LineIndex::from_text(text, &mut decoded.embedded_lines))
+			.transpose()?;
 		decoded.sources.push(Source {
 			section: section.to_owned(),
 			local_index: index,
@@ -206,6 +214,7 @@ fn decode_leaf(map: RawMap, offset: Offset, section: &str, decoded: &mut Decoded
 			root: map.source_root.clone(),
 			content_sha256: source_content.map(|s| sha256(s.as_bytes())),
 			content_bytes: source_content.map(str::len),
+			content_index,
 			ignored: ignored.contains(&index),
 		});
 	}
@@ -364,7 +373,9 @@ fn source_row(index: usize, source: &Source) -> Value {
 	json!({"index":index,"section_pointer":source.section,"local_index":source.local_index,
 		"source":source.name,"source_root":source.root,"ignored":source.ignored,
 		"embedded_content": {"present":source.content_sha256.is_some(),
-			"sha256":source.content_sha256,"bytes":source.content_bytes},
+			"sha256":source.content_sha256,"bytes":source.content_bytes,
+			"utf16_code_units":source.content_index.as_ref().map(content::LineIndex::utf16_units),
+			"line_count":source.content_index.as_ref().map(content::LineIndex::line_count)},
 		"source_opened":false,"url_resolved":false})
 }
 
@@ -372,11 +383,24 @@ fn mapping_row(mapping: &Mapping, decoded: &Decoded) -> Value {
 	let source = mapping.source.and_then(|i| decoded.sources.get(i));
 	let name = mapping.name.and_then(|i| decoded.names.get(i));
 	json!({"generated":{"line":mapping.line+1,"column":mapping.column},
-		"section_pointer":mapping.section,"mapped":mapping.source.is_some(),
-		"original": source.map(|s| json!({"source_index":mapping.source,"source":s.name,
+	"section_pointer":mapping.section,"mapped":mapping.source.is_some(),
+	"original": source.map(|s| {
+		let offset = s.content_index.as_ref().and_then(|index| {
+			index.offset(mapping.original_line?, mapping.original_column?)
+		});
+		let content_position = if s.content_index.is_none() {
+			"content-unavailable"
+		} else if offset.is_some() {
+			"verified-in-embedded-text"
+		} else {
+			"outside-embedded-text"
+		};
+		json!({"source_index":mapping.source,"source":s.name,
 			"source_root":s.root,"line":mapping.original_line.map(|v|v+1),
-			"column":mapping.original_column,"name_index":mapping.name,"name":name.map(|n|&n.value),
-			"ignored":s.ignored,"source_content_verified":false}))})
+			"column":mapping.original_column,"offset":offset,"content_position":content_position,
+			"name_index":mapping.name,"name":name.map(|n|&n.value),
+			"ignored":s.ignored,"source_content_verified":offset.is_some()})
+	})})
 }
 
 fn query_position(position: &GeneratedPosition, decoded: &Decoded) -> Result<Value> {
@@ -461,16 +485,19 @@ pub(super) fn report(request: &WorkerRequest) -> Result<Value> {
 	"version":3,"file":file,"indexed":indexed,
 	"counts":{"sources":decoded.sources.len(),"names":decoded.names.len(),
 		"mappings":decoded.mappings.len(),"sections":decoded.sections,"leaf_maps":decoded.leaf_maps,
+		"embedded_source_lines":decoded.embedded_lines,
 		"explicitly_unmapped":decoded.mappings.iter().filter(|m|m.source.is_none()).count()},
 	"collection":request.collection,"offset":request.offset,"total_rows":total,
 	"next_offset":(end<total).then_some(end),"rows":rows,"query":query,
 	"source_files_opened":0,"network_requests":0,"javascript_executed":false,
 	"coordinate_convention":{"lines":"one_based","columns":"zero_based",
-		"javascript_css_columns":"utf16_code_units","wasm_columns":"byte_offsets_on_one_line"},
+		"javascript_css_columns":"utf16_code_units","wasm_columns":"byte_offsets_on_one_line",
+		"embedded_original_offsets":"utf16_code_units"},
 	"coverage":"complete_decoding_of_admitted_mapping_declarations",
 	"limitations":[
-		"Mapping declarations are not proof that generated code corresponds to original source. No original or generated source is opened, executed, or semantically verified.",
-		"Source names and sourceRoot are preserved separately without URL resolution or network access. Embedded content hashes commit only the retained string bytes; absence and empty content remain distinct.",
+		"Mapping declarations are not proof that generated code corresponds to original source. Embedded position checks verify only UTF-16 coordinates in retained text, not source provenance or generated/original semantic correspondence.",
+		"Source names and sourceRoot are preserved separately without URL resolution or network access. Embedded content hashes commit only the retained string bytes; absence and empty content remain distinct. No original or generated source file is opened or executed.",
+		"Embedded UTF-16 offsets count CRLF, lone CR, LF, U+2028 and U+2029 line breaks, accept line ends and positions inside valid surrogate pairs, and never use UTF-8 byte offsets. The whole map admits at most 1000000 embedded source lines; overflow refuses the complete report.",
 		"Queries select the greatest recorded generated position at or before the request across lines, preserve all coincident records, and never interpolate original columns or infer code spans.",
 		"Only embedded indexed sections are supported. External section URLs, mixed regular/index fields, invalid indexes, unordered/overlapping recorded sections and resource overflow are errors.",
 		"Unknown extension properties are ignored. VLQ encodings are limited to seven digits/32 value bits; coordinates must fit the bounded unsigned range. This is a native declaration report, not upstream REA Evidence."

@@ -34,7 +34,7 @@ pub(super) const MAX_MAP_BYTES: usize = 8 * 1024 * 1024;
 pub(super) const MAX_REQUEST_BYTES: usize = 64 * 1024 * 1024;
 pub(super) const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 pub(super) const MAX_MAPPINGS: usize = 200_000;
-pub(super) const PROFILE: &str = "hepta.source-map-declarations.v1";
+pub(super) const PROFILE: &str = "hepta.source-map-declarations.v2";
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]

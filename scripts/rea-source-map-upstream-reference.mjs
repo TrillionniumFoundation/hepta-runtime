@@ -30,12 +30,14 @@ const native=(text,overrides={})=>{
 const nativeMatch=row=>row.mapped?{
  mapped:true,source_index:row.original.source_index,source:row.original.source,
  root:row.original.source_root,line:row.original.line,column:row.original.column,
+ offset:row.original.offset,content_position:row.original.content_position,
  name:row.original.name,ignored:row.original.ignored,
  section:Array.from(row.section_pointer.matchAll(/\/sections\/(\d+)\/map/g),m=>Number(m[1])),
 }:{mapped:false};
 const upstreamMatch=row=>row.state==='mapped'?{
  mapped:true,source_index:row.flattened_source_index,source:row.reported_source,
  root:row.reported_source_root,line:row.original_position.line,column:row.original_position.column,
+ offset:row.original_position.offset,content_position:row.original_position.content_position,
  name:row.name,ignored:row.ignored,section:row.section_path,
 }:{mapped:false};
 const fixtures=fs.readdirSync(fixtureDirectory).filter(name=>name.endsWith('.map')).sort();
@@ -83,7 +85,7 @@ for(const filename of fixtures) {
   queries++;
  }
  results.push({fixture:filename,map_sha256:sha(Buffer.from(text)),queries:records.length,
-  point_projection_equal:true,embedded_content_identity_equal:true});
+  point_projection_equal:true,embedded_content_identity_equal:true,embedded_content_positions_equal:true});
 }
 const receipt={schema:'hepta.rea.source-map-upstream-point-differential.v1',status:'pass',
  upstream:{name:'rea-agents',version:'6.8.0',package_json_sha256:sha(packageBytes),
@@ -91,6 +93,6 @@ const receipt={schema:'hepta.rea.source-map-upstream-point-differential.v1',stat
  runtime:{sha256:sha(fs.readFileSync(runtime)),bytes:fs.statSync(runtime).size},
  script_sha256:sha(fs.readFileSync(new URL(import.meta.url))),node:process.version,
  fixture_count:results.length,position_queries:queries,results,
- scope:'Actual REA point selection across lines, coincident records, source/name/section declarations and embedded-content identities on finite fixtures. URL resolution, content offset verification, browser acquisition, Evidence envelopes and full REA tools are not qualified.'};
+ scope:'Actual REA point selection across lines, coincident records, source/name/section declarations and embedded-content identities and exact original UTF-16 offsets/three content-position states on finite fixtures. URL resolution, browser acquisition, Evidence envelopes and full REA tools are not qualified.'};
 fs.writeFileSync(path.join(outputDirectory,'qualification.json'),JSON.stringify(receipt,null,2)+'\n',{flag:'wx'});
 console.log(JSON.stringify(receipt));
