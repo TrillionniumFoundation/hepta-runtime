@@ -1,6 +1,6 @@
 # R30: shared MCP tool router on accepted R24
 
-**Status: qualified experimental candidate; six-host performance acceptance is pending.**
+**Status: qualification passed; original six-host observation failed; candidate not adopted.**
 
 R30 isolates the fixed, unfiltered `ToolRouter` cache from the cumulative R29
 candidate. Its source baseline is accepted R24
@@ -46,7 +46,7 @@ The tested runtime binary SHA256 is
 The unchanged jobctl SHA256 is
 `61c90260057a405626a24a36ad43303c632f72d2d97929296acdffd748b79d62`.
 
-## Source custody and pending measurements
+## Source custody
 
 [candidate.patch](candidate.patch) is the original **pre-format** input applied
 to R24. [input.json](input.json) freezes that input and its baseline. The
@@ -55,10 +55,68 @@ qualifier applied Rust formatting before testing;
 source. All 220 hashes were compared with this publication checkout and matched.
 [prepare_qualify.py](prepare_qualify.py) is the actual launcher used on x230.
 
-The next gates use the existing frozen six-host topology and ABBA order, with
-concurrency 1, 8 and 16, followed by normal lifecycle ABBA if observation passes.
-Throughput, p95 latency, controller CPU and RSS retain the original thresholds.
-No throughput or memory improvement is claimed before those measurements close.
-Saturated cancellation capacity is an open, separate question; R30 adds no
-reserve-capacity mechanism. No running production service is changed by this
-candidate publication.
+## Original six-host observation: rejected
+
+The original frozen six-host ABBA observation completed all four rounds at
+concurrency 1, 8 and 16. It retained **2,303 successes out of 2,304 measured
+calls**. In round 2, candidate B at concurrency 1, one `process_status` request
+for `rog` (request ID 72) returned `observation transport deadline; no automatic
+retry` after **10,010.97226 ms**. That cell passed 191 of 192 calls; the other
+11 cells passed 192 of 192.
+
+The observation child and its parent exited 1. The native audit, boundary,
+cancellation-recovery and observation-summary stages were not reached, and
+normal lifecycle ABBA was not started. No benchmark was repeated to replace
+this failure. The original throughput, p95, CPU and RSS thresholds remain
+unchanged; passing isolated tests does not establish performance acceptance.
+
+All four normal controller shutdowns and all four restart shutdowns completed.
+The compiler-monitor audit passed with 281 samples, and the frozen source,
+binaries and topology remained unchanged. This evidence does not establish
+whether the router change caused the timeout or whether an environmental issue
+caused it. The failed sample remains part of the result.
+
+R24 remains the accepted baseline. The separate R31 candidate starts from R24
+and excludes this router change. Saturated cancellation capacity remains
+unverified by these runs.
+
+## Reproducible evidence
+
+[FAILURE.md](FAILURE.md) records the original failure and report identities.
+[DEADLINE_REVIEW.md](DEADLINE_REVIEW.md) explains the total-deadline boundary
+and why the retained failure does not identify its internal stage.
+[qualification-evidence-01.tar.gz](qualification-evidence-01.tar.gz) contains
+the qualification reports, raw stage logs, isolated test records and independent
+audit, with a SHA256 manifest. Its archive SHA256 is
+`3756716c9afdcb30c55b3d55b6e1a33b087a8236d6f33b8d7c8c69771064b304`.
+The archive verifier recomputes the 1647/0/34 test counts without extracting or
+executing archived files.
+
+[observation-evidence-02.tar.gz](observation-evidence-02.tar.gz) preserves all
+26,094,122 selected bytes of the original observation evidence in a 2,297,281-byte
+archive. Its SHA256 is
+`2dec641992e76f280b942c8f1a5dafd873ffc90f8ffce2eb3afc195bc5a7cfb2`.
+[observation-compact.json](observation-compact.json) is recomputed from the raw
+round/cell/call records, and includes the complete failed request. The original
+[failed native terminal](observation-native.json) and [parent report](observation-parent.json)
+are also readable separately.
+
+The `parent-runner` directory preserves the five exact measurement parent and
+materializer scripts plus their sealed bundle manifest. The original
+`archive_r30_evidence.py` is retained even though its 16 MiB selected-input limit
+was too small for the 26,094,122 bytes of observation receipts. That archive
+packaging failure did not run or repeat any benchmark. The separate revision
+for the observation archive only changes bounded packaging capacity; original
+reports and samples remain intact.
+
+Profile/credential configuration and ELF/test executables are excluded from
+published raw archives and listed in their manifests. The host-local Mac
+holder stdout/stderr remains on the Mac; its authoritative failed native
+terminal receipt is retained with the observation evidence.
+
+## Publication CI
+
+For source commit `dbedaf9be0bbb65812fa9dbfcd9d7c0fb13f1ffd`, GitHub Actions
+push run `42128006116` and pull-request run `42128073872` were both still queued
+at 2026-11-05 23:59 UTC. They are not reported as green. The completed x230
+eight-stage qualification is documented independently above.
