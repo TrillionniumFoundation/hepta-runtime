@@ -1,8 +1,9 @@
 # R34: bounded direct SSH capacity for existing-job cancellation
 
 **Status: first complete x230 qualification passed: 1653 passed, 0 failed,
-34 ignored, 1687 selected, 0 retries. Exact native CI is running.
-R34 is not adopted; accepted runtime remains R24.**
+34 ignored, 1687 selected, 0 retries. The first exact native CI also passed
+with 1653 ordinary PASS results and no retries. Original six-host observation
+is running. R34 is not adopted; accepted runtime remains R24.**
 
 The initial source commit is `5d0b180b832e7f2a8120078231e97ef9e702608a`,
 independently based on accepted R24 `baab4def80be7af015b2e7a594cb302f66c4130e`.
@@ -64,8 +65,11 @@ qualification-01/. The earlier interim read remains historical evidence.
 The full bounded qualification archive was created once by native job
 `1a1af1c9f22-fc05-65e1`: 3,307,677 bytes, SHA256
 `488f38422ffca19dc28ecc986fda5218cff090fe8a906053a217eee8e741cb1b`.
-Its immutable transfer and local zero-extraction verification are still in progress;
-this source milestone does not claim that the archive has already been published.
+Its complete 51-chunk immutable transfer and local zero-extraction verification
+both passed: **3654 files / 18,310,016 selected bytes / 0 extracted**. The full
+archive, manifest, compact summary, transfer identities and verification are now
+published under qualification-01/. The manifest is 648,209 bytes with SHA256
+`1b0d379b32f7de16f525b46452e449ee1f1173aa9033048b58755c95c7c565b6`.
 
 The sealed 30-file installation package is 265,304 bytes, SHA256
 `16d21b200f3e871f58ad30d6ea130d342c467963d432a93bf362fed4748998e4`.
@@ -113,11 +117,34 @@ cache-prune-02/.
 
 ## Remaining acceptance work
 
-The original exact native CI is running as job `1a1af1ebf1d-fc05-65f2`, bound to
-the final qualified source and original all-target/all-feature commands, pinned
-nextest 0.9.137, full inventory reconciliation, one test thread and zero retries.
-Its result is pending. This is a native x230 reproduction, not a hosted GitHub
-Actions result. The
+The first original exact native CI job `1a1af1ebf1d-fc05-65f2` succeeded with
+**1653 ordinary PASS / 0 failed / 34 ignored / 1687 selected / 0 retries**.
+All six version/check/list/run stages passed. The exact unfiltered case inventory
+and ignored set match the qualification; the final source map still matches
+all 220 qualified inputs. Every original child was waited and reaped, original
+process groups were absent, and the report records no service modification.
+Native output is complete/durable/synced/untruncated: 1541 stdout bytes, empty stderr.
+
+The original all-target/all-feature commands, pinned nextest 0.9.137, one test
+thread, no fail-fast and zero retries were preserved. This is native x230
+execution using the explicit offline cache, not a hosted GitHub Actions result.
+The original report is 14,129 bytes, SHA256
+`f9be0abb116e162cba37b610701ad8474e52bd057159d68349ebae08bd970337`.
+
+The complete CI archive was created once by job `1a1af2d4429-fc05-6676`:
+320,213 bytes, SHA256
+`9431da8651cfa3e43fe83a1ec3de3f2f85165e20316f2fd8142bacba004abd73`.
+Immutable transfer and the original bounded local verifier passed: **34 files /
+2,045,291 selected bytes / 0 binding errors / 0 extracted**. Full stage logs,
+structured inventory, plan, tools, qualification references, native streams and
+the original nextest audit are retained in exact-ci-results-01/ and its archive.
+The original tests and nextest auditor were not rerun to prepare either archive.
+
+The original observation input materializer succeeded once as
+`1a1af2cbada-fc05-666d`, creating no workload. The unchanged Mac holder and R34
+parents were installed once and reverified. Normal observation is now running
+as original Mac job `1a1af308953-fc05-6698` with original quiet90, compiler
+monitor, ABBA order and thresholds. Its result is pending. The
 original six-host observation, boundary, recovery and normal lifecycle gates
 remain separate from compilation and static review.
 
