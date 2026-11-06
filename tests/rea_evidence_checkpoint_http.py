@@ -125,10 +125,11 @@ def main(binary, tests_path):
                 raise AssertionError("wrong HTTP token initialized a session")
             imported = server.client.call("rea_import_evidence_bundle", {"path": str(source)})
             assert imported["result"] == {"imported": 3, "unknowns_added": 3, "total": 3}
-            # The direct APK tool inserts its own kind discriminator; the
-            # generic analysis-view route below requires that discriminator.
+            # The direct APK tool requires summary delivery for a selected
+            # view and inserts its discriminator; the generic route below
+            # requires that discriminator. Both return complete view Evidence.
             direct = server.client.call("rea_inspect_apk_signature_evidence", {
-                "path": str(apk), "detail": "complete",
+                "path": str(apk), "detail": "summary",
                 "view": {"collection": "signers"}})
             assert direct["operation"] == "inspect_analysis_view"
             parent_id = direct["normalized_result"]["parent_evidence_id"]
