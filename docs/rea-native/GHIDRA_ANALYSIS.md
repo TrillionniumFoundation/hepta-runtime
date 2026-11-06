@@ -31,7 +31,7 @@ The legacy bridge remains solely to preserve its explicit historical identity an
 | `inventory` | Captured ELF | Memory/imported-symbol inventory without automatic analysis or decompilation. Revision 2 also binds observation source SHA-256 and size. |
 | `functions` | Captured ELF | Fixed analysis; at most 4,096 internal functions scanned and 128 rows returned, with scan completeness and omitted counts. |
 | `function` | Exact entry in revisions 2/3; entry or containing-body address in revision 4 | Entry, qualified name/prototype, body bounds/size and thunk metadata after fixed analysis. |
-| `xrefs` | Exact entry in revisions 2/3; entry or containing-body address in revision 4 | Incoming references to that entry; outgoing references from the selected function body. Each direction scans at most 4,096 references and returns at most 128 rows, with scope/completeness/omission fields. |
+| `xrefs` | Exact entry in revisions 2/3; entry or containing-body address in revision 4 | Revisions 2/3 retain incoming entry references and outgoing body references. Revision 4 observes both directions over the exact body plus entry, filters synthetic entry points, deduplicates and sorts. Each direction scans at most 4,096 raw references and returns at most 128 rows with explicit accounting. |
 | `decompile` | Exact entry in revisions 2/3; entry or containing-body address in revision 4 | Real `DecompInterface` native decompilation; completion status, bounded C preview, full C length/digest and preview digest/completeness. Native child cleanup must be confirmed. |
 
 The optional request field `function_address` is required for `function`, `xrefs` and `decompile`, and refused elsewhere. It is canonical lowercase hexadecimal such as `0x401106`: no uppercase, leading zeroes, symbol name, range, space prefix, expression or script. Revisions 2 and 3 retain their exact internal-entry requirement and their original bridge bytes. If those revisions do not find an exact internal entry, the real backend fails and no successful mapped facts are returned.
@@ -67,9 +67,74 @@ Revision 4 adds body selectors, explicit external inventory and a separately
 identified default-analyzer profile. A finite Java diagnostic on the fixed
 owned input recovered 13 internal plus 2 external functions and matched the
 original npm run's 15 rows by address, name, external/thunk flags, thunk target
-and symbol source. Complete Evidence, original error schemas, other original
-address forms and paired cancellation remain separate qualification gates.
+and symbol source. That diagnostic projection is separate from the runtime
+inventory: the C9 real MCP comparison matched 15 rows on the four common fields
+address, name, external and thunk; runtime rows do not include symbol metadata
+or thunk targets. Complete Evidence, original error schemas, other original
+address forms and lifecycle equivalence remain separate qualification gates.
 New summaries use `hepta.rea.static-summary.v2`; historical summary shapes remain unchanged.
+
+## Revision 4 reference observations
+
+Both directions use the selected function's exact body address set plus its
+entry. Incoming references enumerate Ghidra's reference destinations in that
+set; outgoing references enumerate its reference sources. This includes
+instruction interiors and embedded data without treating gaps between body
+ranges as owned addresses. The scopes are explicitly
+`selected_function_body_and_entry`. Revisions 2/3 keep their previous bytes,
+traversal and output semantics.
+
+Within each direction, every encountered raw reference consumes the fixed
+4,096-reference scan limit. `Reference.isEntryPointReference()` excludes
+synthetic entry-point references. Remaining references are deduplicated by
+from address, to address, `RefType.getName()`, operand index and primary flag,
+keeping the first observed member. The unique scanned references are sorted
+using Ghidra's actual address comparators, then type name, operand and primary
+flag; at most 128 rows are selected before the total response byte budget is
+applied. Encoded address strings are not a substitute for Ghidra address-space
+ordering. A truncated scan is sorted only within its observed raw prefix.
+
+Reference endpoints use lowercase unsigned 64-bit offsets. Addresses in the
+fixed program's default `ram` space use `0x...`; other spaces use their UTF-8
+name with uppercase percent encoding followed by `:0x...`. ASCII letters,
+digits, `.`, `_`, `~` and `-` remain unescaped. Thus a stack offset of -12 is
+`stack:0xfffffffffffffff4`, not a display label or signed number. The Rust
+consumer recomputes the prefix from `from_space` / `to_space`, rejects
+noncanonical aliases and requires each owned endpoint to be in an exact
+reported range or the entry. This representation applies to returned
+reference endpoints; the request selector remains memory-only canonical hex.
+
+Each direction retains distinct counts:
+
+| Field role | Meaning |
+| --- | --- |
+| `scanned_*_references` | Every raw reference visited, including later exclusions |
+| `filtered_*_entry_point_references` | Synthetic entry-point references excluded by the predicate |
+| `duplicate_*_references_in_scan` | Repeated five-field identities after filtering |
+| `unique_*_references_in_scan` | Unique non-synthetic references in the bounded scan |
+| `returned_*_references` | Rows actually included after row and byte limits |
+| `budget_omitted_*_references` | Unique scanned references removed only by output limits |
+| `omitted_*_references_in_scan` | Historical total `scanned - returned`, including filtering and deduplication |
+
+The checked identities are `scanned = filtered + duplicate + unique` and
+`unique = returned + budget_omitted`. Incomplete traversal requires exactly
+4,096 raw observations; an exactly exhausted 4,096-reference input can still
+be complete. Byte-budget reduction changes only returned rows and the two
+omission totals, never scan completeness or the raw/filter/duplicate/unique
+facts. Revision-4 selected summaries preserve all these counts and explain
+that total omissions do not all mean output truncation.
+
+The regression oracle `tests/fixtures/rea_ghidra_1214_owned_xrefs.json` derives
+ordered six-field projections from four authenticated original npm MCP
+Evidence objects for the exact owned ELF SHA-256
+`ec301f409d22314b43b4392fa80ada28213cd75ca77c6cbbbbfe1454555dd64a`.
+Entry and interior requests both returned three incoming and two outgoing
+references. The C9 native bridge retained a fourth synthetic incoming row and
+used a noncanonical stack display address; those original failures remain
+historical evidence. The updated harness compares the declared projection
+only when the exact input identity matches. It does not equate the original's
+nested procedure identities, extended kind metadata, provenance or complete
+Evidence with the bounded native report.
 
 ## Revision 4 fixed default options
 

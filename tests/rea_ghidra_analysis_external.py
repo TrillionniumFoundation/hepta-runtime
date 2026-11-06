@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Real bounded Ghidra analysis/decompilation through the original durable owner."""
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import re
 import json
@@ -14,7 +15,8 @@ import signal
 import subprocess
 import time
 import zipfile
-from rea_java_external import Mcp, digest, private_write, set_fence
+from rea_java_external import digest, private_write, set_fence
+from rea_ghidra_mcp_client import Mcp
 from rea_engine_cleanup_assertions import (assert_owner_cleanup, signal_original_worker, wait_source_java,
                                            assert_original_processes_stopped, assert_original_group_membership)
 from rea_java_kernel_probe import java_observation, process_identity, run_observed_worker
@@ -31,6 +33,239 @@ REQUIRED_V4_GPL = {
     "GPL/DemanglerGnu/Module.manifest": "ca76258f330d1096cb616df83a4213593a574c907d02eb47b0926ccc5359bd7b",
     "GPL/DemanglerGnu/os/linux_x86_64/demangler_gnu_v2_41": "0dfec5481a933e9cb2a7ef025040dd3a817d0085bc3bee166ce69ce7de759ad9"
 }
+
+
+def close_controller(server, result, phase):
+    """Retain each original close receipt once; no forced close can pass."""
+    error = None
+    try:
+        receipt = server.close()
+    except BaseException as original:
+        error = original
+        receipt = getattr(server, "close_record", None)
+    if not isinstance(receipt, dict):
+        receipt = {"schema": "hepta.rea.ghidra-controller-close-exception.v1",
+                   "session_id": getattr(server, "session_id", None),
+                   "capture_root": str(getattr(server, "capture_root", "")),
+                   "normal_close": False, "qualified": False,
+                   "close_error": repr(error) if error is not None else "missing close receipt"}
+    sessions = result.setdefault("controller_sessions", [])
+    previous = next((item for item in sessions
+                     if receipt.get("session_id") is not None
+                     and item["session_id"] == receipt["session_id"]), None)
+    if previous is None:
+        sessions.append({"session_id": receipt.get("session_id"),
+                         "phases": [phase], "normal_close": receipt.get("normal_close") is True,
+                         "receipt": receipt})
+    else:
+        if phase not in previous["phases"]:
+            previous["phases"].append(phase)
+        assert previous["receipt"] == receipt, "idempotent controller close receipt changed"
+    if error is not None:
+        result["qualified"] = False
+        raise error
+    if receipt.get("normal_close") is not True:
+        result["qualified"] = False
+        raise AssertionError("controller did not close normally: " + str(receipt.get("session_id")))
+    return receipt
+
+
+def open_controller(runtime, root, result, phase):
+    """Keep a failed constructor's own cleanup receipt reachable by the harness."""
+    server = Mcp.__new__(Mcp)
+    try:
+        Mcp.__init__(server, runtime, root)
+    except BaseException as original:
+        try:
+            close_controller(server, result, phase + "-initialization-failed")
+        except BaseException as secondary:
+            original.add_note("controller initialization close: " + repr(secondary))
+        raise
+    return server
+
+
+def finalize_qualification(root, result, server, primary_error):
+    """A failed final close downgrades the run without hiding its primary error."""
+    secondary_errors = []
+    if server is not None:
+        try:
+            close_controller(server, result, "final")
+        except BaseException as error:
+            result["qualified"] = False
+            result["final_controller_close_failure"] = repr(error)
+            secondary_errors.append(error)
+    if primary_error is not None:
+        result["qualified"] = False
+    if result.get("qualified") is True and "expected_controller_sessions" in result:
+        try:
+            sessions = result["controller_sessions"]
+            assert len(sessions) == result["expected_controller_sessions"]
+            assert all(item["normal_close"] is True for item in sessions)
+            assert len({item["session_id"] for item in sessions}) == len(sessions)
+            result["checks"].append("all_original_controller_sessions_closed_normally")
+        except BaseException as error:
+            result["qualified"] = False
+            result["controller_session_accounting_failure"] = repr(error)
+            secondary_errors.append(error)
+    try:
+        private_write(root / "qualification.json", result)
+    except BaseException as error:
+        result["qualified"] = False
+        result["qualification_receipt_failure"] = repr(error)
+        secondary_errors.append(error)
+    try:
+        print("REA_GHIDRA_ANALYSIS_QUALIFICATION " + json.dumps(result, separators=(",", ":")), flush=True)
+    except BaseException as error:
+        secondary_errors.append(error)
+    if primary_error is not None:
+        for error in secondary_errors:
+            primary_error.add_note("Ghidra qualification finalization: " + repr(error))
+    elif secondary_errors:
+        raise secondary_errors[0]
+
+
+def capture_native_evidence(server, root, phase):
+    """Capture actual same-controller Evidence; an engine report is not a bundle."""
+    observation = {"schema": "hepta.rea.ghidra-native-evidence-observation.v1",
+                   "phase": phase, "session_id": server.session_id,
+                   "capture_root": str(server.capture_root),
+                   "owner": getattr(getattr(server, "_client", None), "owner", None),
+                   "request": {"name": "rea_get_evidence_bundle", "arguments": {}},
+                   "started_at_utc": datetime.now(timezone.utc).isoformat(),
+                   "qualified": False, "record_count": None, "unknown_count": None,
+                   "artifacts": {}}
+
+    def save(kind, value):
+        path = root / ("native-evidence-" + phase + "-" + kind + ".json")
+        private_write(path, value)
+        observation["artifacts"][kind] = {"path": path.name, "bytes": path.stat().st_size,
+                                           "sha256": digest(path)}
+
+    primary_error = None
+    try:
+        response = server.raw("rea_get_evidence_bundle", {})
+        save("call-tool-result", response)
+        observation["status"] = "CAPTURED_INCOMPATIBLE_RESULT"
+        if response.get("isError") is True:
+            observation["status"] = "CAPTURED_TOOL_ERROR"
+        else:
+            content = response.get("content")
+            if (isinstance(content, list) and len(content) == 1
+                    and content[0].get("type") == "text" and isinstance(content[0].get("text"), str)):
+                text = content[0]["text"]
+                observation["opaque_text_sha256"] = hashlib.sha256(text.encode()).hexdigest()
+                try:
+                    payload = json.loads(text)
+                except (ValueError, TypeError) as error:
+                    observation["parse_error"] = repr(error)
+                else:
+                    save("parsed-result", payload)
+                    structured_equal = ("structuredContent" in response and response["structuredContent"] == payload)
+                    observation["structured_content_equal"] = structured_equal
+                    bundle = payload.get("result") if isinstance(payload, dict) else None
+                    keys = {"artifacts", "providers", "environments", "scenarios", "captures", "unknowns", "records"}
+                    if isinstance(bundle, dict):
+                        save("bundle", bundle)
+                        for field, count in (("records", "record_count"), ("unknowns", "unknown_count")):
+                            if isinstance(bundle.get(field), list):
+                                observation[count] = len(bundle[field])
+                    if (structured_equal and isinstance(bundle, dict) and set(bundle) == keys
+                            and all(isinstance(bundle[key], list) for key in keys)):
+                        observation["status"] = "CAPTURED_COMPLETE_BUNDLE"
+                        observation["manifest_counts"] = {key: len(bundle[key]) for key in sorted(keys)}
+    except BaseException as error:
+        primary_error = error
+        observation["status"] = "CAPTURE_FAILED"
+        observation["capture_error"] = repr(error)
+        raise
+    finally:
+        observation["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
+        try:
+            private_write(root / ("native-evidence-" + phase + "-observation.json"), observation)
+        except BaseException as secondary:
+            if primary_error is None:
+                raise
+            primary_error.add_note("Evidence observation finalization: " + repr(secondary))
+    return observation
+
+
+def assess_native_evidence(before, after):
+    assert before["session_id"] == after["session_id"], "Evidence samples came from different controllers"
+    assert isinstance(before["owner"], dict) and before["owner"], "Evidence owner identity was not captured"
+    assert before["owner"] == after["owner"], "Evidence samples came from different original owners"
+    if before["status"] != "CAPTURED_COMPLETE_BUNDLE" or after["status"] != "CAPTURED_COMPLETE_BUNDLE":
+        status = "DIFF_INCOMPATIBLE_NATIVE_BUNDLE"
+    elif after["record_count"] == 0:
+        status = "DIFF_EMPTY_NATIVE_BUNDLE_AFTER_PROVIDER_ANALYSIS"
+    else:
+        status = "OPEN_FULL_EVIDENCE_COMPARISON"
+    return {"status": status, "qualified": False, "same_controller": True,
+            "session_id": after["session_id"], "before_record_count": before["record_count"],
+            "after_record_count": after["record_count"], "after_unknown_count": after["unknown_count"],
+            "scope": "actual native bundle before and after Provider operations; no engine-report substitution"}
+
+
+def assert_revision_four_xrefs(value):
+    for field, expected in {
+        "incoming_scope": "selected_function_body_and_entry",
+        "outgoing_scope": "selected_function_body_and_entry",
+        "reference_default_address_space": "ram",
+        "reference_address_format": "default-space-hex-or-utf8-space-unsigned64.v1",
+        "reference_filter": "exclude-isEntryPointReference",
+        "reference_deduplication": "from,to,type,operand,primary",
+        "reference_order": "ghidra-address-from-to-type-operand-primary",
+        "reference_scan_accounting": "raw-includes-entrypoint-filter-and-duplicates.v1",
+    }.items():
+        assert value[field] == expected, (field, value.get(field))
+    counters = {}
+    for prefix in ("incoming", "outgoing"):
+        rows = value[prefix + "_references"]
+        raw = value["scanned_" + prefix + "_references"]
+        returned = value["returned_" + prefix + "_references"]
+        filtered = value["filtered_" + prefix + "_entry_point_references"]
+        duplicate = value["duplicate_" + prefix + "_references_in_scan"]
+        unique = value["unique_" + prefix + "_references_in_scan"]
+        budget = value["budget_omitted_" + prefix + "_references"]
+        omitted = value["omitted_" + prefix + "_references_in_scan"]
+        assert all(type(item) is int and item >= 0 for item in (raw, returned, filtered, duplicate, unique, budget, omitted))
+        assert raw <= 4096 and returned == len(rows) <= 128
+        assert raw == filtered + duplicate + unique and unique == returned + budget
+        assert omitted == raw - returned == filtered + duplicate + budget
+        assert all(row["entry_point_reference"] is False for row in rows)
+        assert all(type(row["call"]) is bool and type(row["primary"]) is bool for row in rows)
+        assert type(value[prefix + "_scan_complete"]) is bool
+        keys = [(row["from_address"], row["to_address"], row["reference_type"],
+                 row["operand_index"], row["primary"]) for row in rows]
+        assert len(keys) == len(set(keys)), "returned xrefs contain duplicate original identities"
+        counters[prefix] = {"raw": raw, "returned": returned, "filtered": filtered,
+                            "duplicates": duplicate, "unique": unique, "budget_omitted": budget,
+                            "omitted": omitted, "scan_complete": value[prefix + "_scan_complete"]}
+    return counters
+
+
+def assert_owned_xref_oracle(value, counters, oracle, selector):
+    """Compare the declared ordered six fields; retain all other fields elsewhere."""
+    assert value["source_sha256"] == oracle["artifact_sha256"]
+    assert value["function"]["entry_address"] == oracle["selected_entry"]
+    assert value["function"]["body_ranges"] == oracle["selected_body_ranges"]
+    case = oracle["cases"][selector]
+    assert value["function_address_requested"] == case["requested_address"]
+    fields = oracle["projection_fields"]
+    assert fields == ["from_address", "to_address", "reference_type", "operand_index", "call", "primary"]
+    checks = {}
+    for direction in ("incoming", "outgoing"):
+        rows = [{field: row[field] for field in fields} for row in value[direction + "_references"]]
+        assert rows == case[direction]["rows"], (selector, direction, rows, case[direction]["rows"])
+        actual = counters[direction]
+        expected = oracle["native_count_expectations"][direction]
+        assert actual == {"raw": expected["scanned"], "returned": expected["returned"],
+                          "filtered": expected["filtered_entry_point"], "duplicates": expected["duplicate"],
+                          "unique": expected["unique"], "budget_omitted": expected["budget_omitted"],
+                          "omitted": expected["omitted"], "scan_complete": expected["scan_complete"]}
+        checks[direction] = {"rows": len(rows), "fields": len(fields), "ordered_projection_equal": True,
+                             "fixed_fixture_accounting_equal": True, "original_source": case[direction]["source"]}
+    return {"selector": selector, "scope": "ordered_six_field_projection_only",
+            "full_evidence_equivalent": False, "directions": checks}
 
 
 def verify_v4_release_members(archive, installed, files, release_sha):
@@ -279,14 +514,30 @@ def main():
               "original_fixture_sha256": args.fixture_sha256,
               "execution_mode": args.execution_mode, "isolated_host_qualification": args.execution_mode == "isolated",
               "targets_run_by_provider": 0, "rea_full_parity": False, "checks": [],
+              "qualification_scope": "fixed_provider_finite_analysis_and_owner_lifecycle",
+              "full_evidence_qualified": False, "controller_sessions": [], "expected_controller_sessions": 5,
+              "native_evidence_observations": [],
               "independent_symbol_entries": {"hepta_leaf": leaf, "hepta_caller": caller},
               "independent_call_sites": expected_call_sites, "job_ids": {}}
     server = None
+    primary_error = None
     original_hash = digest(artifact)
+    xref_oracle = None
+    if revision == 4:
+        oracle_path = Path(__file__).resolve().parent / "fixtures/rea_ghidra_1214_owned_xrefs.json"
+        oracle = json.loads(oracle_path.read_bytes())
+        applies = original_hash == oracle["artifact_sha256"]
+        result["xref_oracle"] = {"path": str(oracle_path), "bytes": oracle_path.stat().st_size,
+                                  "sha256": digest(oracle_path), "artifact_matches": applies,
+                                  "scope": "ordered_six_field_projection_only"}
+        if applies:
+            xref_oracle = oracle
     try:
-        server = Mcp(runtime, root)
+        server = open_controller(runtime, root, result, "start")
         admitted_profiles = {item["profile"]: item for item in server.call("rea_static_profiles", {})["profiles"]}
         admitted = admitted_profiles["owned_ghidra"]
+        before_evidence = capture_native_evidence(server, root, "before-provider")
+        result["native_evidence_observations"].append(before_evidence)
         def request(key, operation, path=artifact, address=None):
             value = {"profile": "owned_ghidra", "profile_sha256": admitted["profile_sha256"],
                      "idempotency_key": key, "operation": operation, "artifact_path": str(path),
@@ -365,6 +616,11 @@ def main():
             assert value["source_sha256"] == original_hash and value["target_executed"] is False
             assert value["external_libraries_loaded"] is False and value["project_saved"] is False
             if operation == "xrefs":
+                if revision == 4:
+                    result.setdefault("xref_accounting", {})["entry"] = assert_revision_four_xrefs(value)
+                    if xref_oracle is not None:
+                        result.setdefault("xref_original_projection", {})["entry"] = assert_owned_xref_oracle(
+                            value, result["xref_accounting"]["entry"], xref_oracle, "entry")
                 observed = {row["from_address"] for row in value["incoming_references"] if row["call"]}
                 assert set(expected_call_sites).issubset(observed), (expected_call_sites, value)
                 result["checks"].append("analyzed_incoming_call_xrefs_match_independent_gnu_objdump")
@@ -376,8 +632,11 @@ def main():
                 assert "hepta_leaf" in value["c_code"] and "7" in value["c_code"], value
                 decompilation = actual
                 result["checks"].append("actual_native_decompiler_selected_function_complete_c_digest_and_child_cleanup")
-        server.close()
-        server = Mcp(runtime, root)
+        after_evidence = capture_native_evidence(server, root, "after-provider")
+        result["native_evidence_observations"].append(after_evidence)
+        result["native_evidence_assessment"] = assess_native_evidence(before_evidence, after_evidence)
+        close_controller(server, result, "before-completed-job-restart")
+        server = open_controller(runtime, root, result, "completed-job-restart")
         assert server.call("rea_static_start", selected)["job"]["id"] == result["job_ids"]["decompile"]
         assert server.complete(selected) == decompilation
         result["checks"].append("controller_restart_returns_original_decompilation_without_relaunch")
@@ -412,11 +671,18 @@ def main():
                     exact = json.loads(decompilation["report"]["stdout"])
                     assert value["c_code"] == exact["c_code"] and value["c_code_sha256"] == exact["c_code_sha256"]
                 elif operation == "xrefs":
+                    result.setdefault("xref_accounting", {})["interior"] = assert_revision_four_xrefs(value)
+                    if xref_oracle is not None:
+                        result.setdefault("xref_original_projection", {})["interior"] = assert_owned_xref_oracle(
+                            value, result["xref_accounting"]["interior"], xref_oracle, "interior")
                     exact = json.loads(json.loads((root / "xrefs-result.json").read_text())["report"]["stdout"])
                     for field in ("incoming_references", "outgoing_references"):
                         assert value[field] == exact[field], field
                 result["job_ids"]["interior_" + operation] = initial["job"]["id"]
             result["checks"].append("interior_function_xrefs_and_decompile_resolve_exact_body_and_preserve_original_selector")
+            if xref_oracle is not None:
+                assert set(result["xref_original_projection"]) == {"entry", "interior"}
+                result["checks"].append("fixed_owned_reference_rows_and_accounting_match_original_projection")
             no_function = request("owned-ghidra-no-function", "function", address="0x0")
             initial = server.call("rea_static_start", no_function)
             actual = server.complete(no_function)
@@ -465,8 +731,8 @@ def main():
         result["checks"].append("frozen_original_owner_cancel_during_real_native_decompilation_and_no_relaunch")
         assert digest(artifact) == original_hash and digest(cancellation_artifact) == cancellation["artifact_sha256"]
         result["cancel_scratch_cleanup"] = assert_owner_cleanup(terminal_output, terminal, active["job"], root)
-        server.close()
-        server = Mcp(runtime, root)
+        close_controller(server, result, "before-cancelled-job-restart")
+        server = open_controller(runtime, root, result, "cancelled-job-restart")
         assert server.complete(cancellation) == terminal_output
         assert_owner_cleanup(server.complete(cancellation), server.call("rea_static_status", cancellation), active["job"], root)
         result["checks"].append("cancelled_scratch_cleaned_by_original_owner_and_receipt_survives_controller_restart")
@@ -481,8 +747,8 @@ def main():
         assert crashed_output["process_succeeded"] is False and crashed_terminal["status"]["state"] == "failed"
         crashed_cleanup = assert_owner_cleanup(crashed_output, crashed_terminal, crashed_start["job"], root)
         stopped = assert_original_processes_stopped(crashed_native["owned_processes"] + [killed])
-        server.close()
-        server = Mcp(runtime, root)
+        close_controller(server, result, "before-crashed-job-restart")
+        server = open_controller(runtime, root, result, "crashed-job-restart")
         assert server.complete(crashed_request) == crashed_output
         replay_crashed = server.call("rea_static_start", crashed_request)
         assert replay_crashed["job"]["id"] == crashed_start["job"]["id"] and replay_crashed["reused"] is True
@@ -501,8 +767,8 @@ def main():
         # Freeze only this original worker so its in-process deadline cannot
         # win the race. The existing durable owner's 25-second timeout and
         # original-group escalation must terminate it without a harness kill.
-        server.close()
-        server = Mcp(runtime, root)
+        close_controller(server, result, "before-active-timeout-job-restart")
+        server = open_controller(runtime, root, result, "active-timeout-job-restart")
         assert server.call("rea_static_status", timeout_request)["job"]["id"] == timeout_start["job"]["id"]
         timeout_output = server.complete(timeout_request)
         timeout_terminal = server.call("rea_static_status", timeout_request)
@@ -518,15 +784,13 @@ def main():
         result["timeout_scratch_cleanup"] = timeout_cleanup
         result["checks"].append("live_java_stopped_worker_original_owner_timeout_cleanup_and_restart_readback")
         result["qualified"] = True
-    except Exception as error:
+    except BaseException as error:
+        primary_error = error
         result["qualified"] = False
         result["failure"] = repr(error)
         raise
     finally:
-        if server is not None:
-            server.close()
-        private_write(root / "qualification.json", result)
-        print("REA_GHIDRA_ANALYSIS_QUALIFICATION " + json.dumps(result, separators=(",", ":")), flush=True)
+        finalize_qualification(root, result, server, primary_error)
 
 
 if __name__ == "__main__":

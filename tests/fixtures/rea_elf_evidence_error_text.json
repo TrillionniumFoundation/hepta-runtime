@@ -1,0 +1,314 @@
+{
+  "schema": "hepta.rea.original-elf-evidence-error-text.v1",
+  "reference": "rea-agents@6.8.0",
+  "reference_archive_sha256": "8d542ec76a9cb350584b60a6c9c088706ff812d5bb5b094c20c95b6dc25698bb",
+  "source_receipt_sha256": "f9507225345b65491cfb05f3a280eae2a9c04278b28d624035955efac24a1047",
+  "source_diagnostics_sha256": "6827675a543111e5620a85a20a9f2c5862c77b2a9c1debda25426e0a0ef71d6a",
+  "scope": "Ten actual original MCP error texts from the finite ELF/Evidence family, retained unchanged; no new execution or operation qualification.",
+  "source_files": [
+    {
+      "path": "dist/domain/analysisErrorProjection.js",
+      "sha256": "4f3764b944db8893cf048e84afab9f505041073c134076fa365eec22ed3b45f4"
+    },
+    {
+      "path": "dist/native/elf/ElfNotesProvider.js",
+      "sha256": "ab788c76e5b68bb955baff26c921cefb70e878d881f9a4b055960bba73ce3616"
+    },
+    {
+      "path": "dist/server/ToolResultDelivery.js",
+      "sha256": "b09e2de032f7e8a6beff3de428c99d3a54035993e1c0c0d10dfbfeabbf8d237f"
+    }
+  ],
+  "cases": [
+    {
+      "id": "producer/corrupt-elf",
+      "original_call_artifact": {
+        "encoding": "gzip-original-bytes",
+        "gzip_bytes": 708,
+        "gzip_sha256": "8fb492e836a47c78e075c79b12e62806f34c09755807b722d5c5a24904ace874",
+        "path": "reference-producer/call-09-corrupt-elf.json.gz",
+        "raw_bytes": 1343,
+        "raw_sha256": "e97c494712b5c85ee18e7cf7c481e384e6db50fcf05c6f149623aff6a9ccbc3a"
+      },
+      "original_text_utf8_bytes": 610,
+      "original_text_utf8_sha256": "3d749a305173bdd89885573dd9e445097d136e3347cecace00fb1c4595e5d587",
+      "original_text": "{\"error\":{\"code\":\"invalid_request\",\"category\":\"invalid_input\",\"message\":\"Analysis input is invalid. Check the arguments and try again.\",\"retryable\":false,\"remediation\":{\"action\":\"Read the declared input schema or CLI usage for inspect_elf_notes; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call.\"},\"recovery\":{\"kind\":\"inspect_input_contract\",\"operation\":\"inspect_elf_notes\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"issues\":[{\"path\":[\"path\"],\"reason\":\"invalid_format\",\"message\":\"ELF range 120 + 36 leaves the artifact.\"}]}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"invalid_request\",\"category\":\"invalid_input\",\"message\":\"Analysis input is invalid. Check the arguments and try again.\",\"retryable\":false,\"remediation\":{\"action\":\"Read the declared input schema or CLI usage for inspect_elf_notes; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call.\"},\"recovery\":{\"kind\":\"inspect_input_contract\",\"operation\":\"inspect_elf_notes\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"issues\":[{\"path\":[\"path\"],\"reason\":\"invalid_format\",\"message\":\"ELF range 120 + 36 leaves the artifact.\"}]}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    {
+      "id": "producer/file-budget",
+      "original_call_artifact": {
+        "encoding": "gzip-original-bytes",
+        "gzip_bytes": 614,
+        "gzip_sha256": "20b3e1eeea13cc59f57b0162ee4fcf105b64ba2981359161b6354264d5b8e5d9",
+        "path": "reference-producer/call-10-file-budget.json.gz",
+        "raw_bytes": 1404,
+        "raw_sha256": "e172d7630ad49a6a247d18c353010647c5b2a37cb11e7f7646b4901eabe90765"
+      },
+      "original_text_utf8_bytes": 657,
+      "original_text_utf8_sha256": "b847b4a35fa402db64c920e87abd68861f799b7f0f89ae1f776934db7c062849",
+      "original_text": "{\"error\":{\"code\":\"resource_constraint\",\"category\":\"resource_constraint\",\"message\":\"Selected artifact exceeds 64 bytes: /home/qian-qi/work/hepta-rea-family-ecb0b9d61c75-20261106-evidence/elf-family-r1/workspace/small.elf\",\"retryable\":false,\"remediation\":{\"action\":\"Raise max_file_bytes above 64 bytes or select a smaller artifact; the limit is the caller-selected input read budget.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"resource\":\"file-size\",\"reason\":\"Selected artifact exceeds 64 bytes: /home/qian-qi/work/hepta-rea-family-ecb0b9d61c75-20261106-evidence/elf-family-r1/workspace/small.elf\",\"reported_limits\":{\"max_file_bytes\":64,\"max_entries\":32}}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"resource_constraint\",\"category\":\"resource_constraint\",\"message\":\"Selected artifact exceeds 64 bytes: /home/qian-qi/work/hepta-rea-family-ecb0b9d61c75-20261106-evidence/elf-family-r1/workspace/small.elf\",\"retryable\":false,\"remediation\":{\"action\":\"Raise max_file_bytes above 64 bytes or select a smaller artifact; the limit is the caller-selected input read budget.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"resource\":\"file-size\",\"reason\":\"Selected artifact exceeds 64 bytes: /home/qian-qi/work/hepta-rea-family-ecb0b9d61c75-20261106-evidence/elf-family-r1/workspace/small.elf\",\"reported_limits\":{\"max_file_bytes\":64,\"max_entries\":32}}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    {
+      "id": "producer/entry-budget",
+      "original_call_artifact": {
+        "encoding": "gzip-original-bytes",
+        "gzip_bytes": 615,
+        "gzip_sha256": "d80aaef24fbd910636bf5e9089aac17e06bd44b13d3496b219cf4aec09c6572a",
+        "path": "reference-producer/call-11-entry-budget.json.gz",
+        "raw_bytes": 1211,
+        "raw_sha256": "a65f66bd1113f570312fe6ce2f2f2eb141b2a1e9e50bc27f8df7536c430ce52a"
+      },
+      "original_text_utf8_bytes": 463,
+      "original_text_utf8_sha256": "62af3272f00b4a0cd52dacf547165ea5221cb92ac2883b348b3569b76b45cd82",
+      "original_text": "{\"error\":{\"code\":\"resource_constraint\",\"category\":\"resource_constraint\",\"message\":\"ELF note tables exceed the 1-entry budget.\",\"retryable\":false,\"remediation\":{\"action\":\"Raise max_entries above 1 or select a smaller artifact; the limit is the caller-selected note entry budget.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"resource\":\"capacity\",\"reason\":\"ELF note tables exceed the 1-entry budget.\",\"reported_limits\":{\"max_file_bytes\":67108864,\"max_entries\":1}}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"resource_constraint\",\"category\":\"resource_constraint\",\"message\":\"ELF note tables exceed the 1-entry budget.\",\"retryable\":false,\"remediation\":{\"action\":\"Raise max_entries above 1 or select a smaller artifact; the limit is the caller-selected note entry budget.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"resource\":\"capacity\",\"reason\":\"ELF note tables exceed the 1-entry budget.\",\"reported_limits\":{\"max_file_bytes\":67108864,\"max_entries\":1}}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    {
+      "id": "producer/missing-elf",
+      "original_call_artifact": {
+        "encoding": "gzip-original-bytes",
+        "gzip_bytes": 728,
+        "gzip_sha256": "6d49899d58ff715d38e6f3b01f414f0ad9af532b5ef05b7d55c31112e9756427",
+        "path": "reference-producer/call-12-missing-elf.json.gz",
+        "raw_bytes": 1451,
+        "raw_sha256": "b8c3bf36dc83be1f0ca36e47d9b92c7c2c82b5fd9db81a3e447e5b1765b5e289"
+      },
+      "original_text_utf8_bytes": 719,
+      "original_text_utf8_sha256": "583dcf67b99a2da336abb2282375e2139ac3a66d0730048b2e619f1e354f695b",
+      "original_text": "{\"error\":{\"code\":\"invalid_request\",\"category\":\"invalid_input\",\"message\":\"Analysis input is invalid. Check the arguments and try again.\",\"retryable\":false,\"remediation\":{\"action\":\"Read the declared input schema or CLI usage for inspect_elf_notes; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call.\"},\"recovery\":{\"kind\":\"inspect_input_contract\",\"operation\":\"inspect_elf_notes\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"issues\":[{\"path\":[\"path\"],\"reason\":\"invalid_value\",\"message\":\"Selected ELF image could not be read (ENOENT): /home/qian-qi/work/hepta-rea-family-ecb0b9d61c75-20261106-evidence/elf-family-r1/workspace/absent.elf.\"}]}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"invalid_request\",\"category\":\"invalid_input\",\"message\":\"Analysis input is invalid. Check the arguments and try again.\",\"retryable\":false,\"remediation\":{\"action\":\"Read the declared input schema or CLI usage for inspect_elf_notes; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call.\"},\"recovery\":{\"kind\":\"inspect_input_contract\",\"operation\":\"inspect_elf_notes\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"issues\":[{\"path\":[\"path\"],\"reason\":\"invalid_value\",\"message\":\"Selected ELF image could not be read (ENOENT): /home/qian-qi/work/hepta-rea-family-ecb0b9d61c75-20261106-evidence/elf-family-r1/workspace/absent.elf.\"}]}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    {
+      "id": "producer/invalid-limit",
+      "original_call_artifact": {
+        "encoding": "gzip-original-bytes",
+        "gzip_bytes": 730,
+        "gzip_sha256": "630461372e0069767aef0065ec8581bae35e749b7de3182b673b776305030ed9",
+        "path": "reference-producer/call-13-invalid-limit.json.gz",
+        "raw_bytes": 1407,
+        "raw_sha256": "3f17f7a140ac0c6ca1daa5b19db94dcd028bebeb03397d6cb1b6417975e70184"
+      },
+      "original_text_utf8_bytes": 650,
+      "original_text_utf8_sha256": "71c5066297bbdfad4205fdb884647457984e9944a8e300c09e7d4dd0c7d441d3",
+      "original_text": "{\"error\":{\"code\":\"invalid_request\",\"category\":\"invalid_input\",\"message\":\"The arguments for MCP tool inspect_elf_notes do not match its advertised input schema.\",\"retryable\":false,\"remediation\":{\"action\":\"Read the declared input schema or CLI usage for inspect_elf_notes; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call.\"},\"recovery\":{\"kind\":\"inspect_input_contract\",\"operation\":\"inspect_elf_notes\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"issues\":[{\"path\":[],\"reason\":\"invalid_value\",\"message\":\"max_entries: Invalid input: expected number, received boolean\"}]}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"invalid_request\",\"category\":\"invalid_input\",\"message\":\"The arguments for MCP tool inspect_elf_notes do not match its advertised input schema.\",\"retryable\":false,\"remediation\":{\"action\":\"Read the declared input schema or CLI usage for inspect_elf_notes; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call.\"},\"recovery\":{\"kind\":\"inspect_input_contract\",\"operation\":\"inspect_elf_notes\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"issues\":[{\"path\":[],\"reason\":\"invalid_value\",\"message\":\"max_entries: Invalid input: expected number, received boolean\"}]}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    {
+      "id": "producer/body-overflow",
+      "original_call_artifact": {
+        "encoding": "gzip-original-bytes",
+        "gzip_bytes": 1036,
+        "gzip_sha256": "a34a81f6c5a0128e5f4ac62164bc1cbe4c71b5994175ee9c9703e4e1f40ccead",
+        "path": "reference-producer/call-16-body-overflow.json.gz",
+        "raw_bytes": 3119,
+        "raw_sha256": "168f831f076d262af869edf94a9808648f414ab6d437b8bbc40d0623897900f0"
+      },
+      "original_text_utf8_bytes": 2365,
+      "original_text_utf8_sha256": "683f474a4945bf7bc179807f10c93dcb9d564390aeb58942048e885747fcf842",
+      "original_text": "{\"error\":{\"code\":\"resource_constraint\",\"category\":\"resource_constraint\",\"message\":\"The operation completed, but its complete MCP response exceeds the stdio response budget. The analysis result was not truncated. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit. Export retained evidence to consume the complete analysis, or use complete CLI JSON output.\",\"retryable\":false,\"remediation\":{\"action\":\"Export retained evidence to consume the complete analysis, or use complete CLI JSON output. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"resource\":\"transport\",\"reason\":\"The operation completed, but its complete MCP response exceeds the stdio response budget. The analysis result was not truncated. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit. Export retained evidence to consume the complete analysis, or use complete CLI JSON output.\",\"reported_limits\":{\"boundary\":\"mcp-response\",\"default_receive_buffer_bytes\":10485760,\"result_budget_bytes\":10484736,\"max_string_code_units\":536869864,\"response_bytes_at_least\":10603840,\"response_code_units_at_least\":10603840,\"constraint\":\"receive-buffer\",\"evidence_id\":\"ev_e194f133df30756a3a75c8baf8e62a4cf13a86e5780c92ac60ec3d183d68b6f9\",\"evidence_reference\":{\"kind\":\"retained-evidence\",\"evidence_id\":\"ev_e194f133df30756a3a75c8baf8e62a4cf13a86e5780c92ac60ec3d183d68b6f9\"}}}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"resource_constraint\",\"category\":\"resource_constraint\",\"message\":\"The operation completed, but its complete MCP response exceeds the stdio response budget. The analysis result was not truncated. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit. Export retained evidence to consume the complete analysis, or use complete CLI JSON output.\",\"retryable\":false,\"remediation\":{\"action\":\"Export retained evidence to consume the complete analysis, or use complete CLI JSON output. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit.\"},\"details\":{\"operation\":\"inspect_elf_notes\",\"resource\":\"transport\",\"reason\":\"The operation completed, but its complete MCP response exceeds the stdio response budget. The analysis result was not truncated. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit. Export retained evidence to consume the complete analysis, or use complete CLI JSON output.\",\"reported_limits\":{\"boundary\":\"mcp-response\",\"default_receive_buffer_bytes\":10485760,\"result_budget_bytes\":10484736,\"max_string_code_units\":536869864,\"response_bytes_at_least\":10603840,\"response_code_units_at_least\":10603840,\"constraint\":\"receive-buffer\",\"evidence_id\":\"ev_e194f133df30756a3a75c8baf8e62a4cf13a86e5780c92ac60ec3d183d68b6f9\",\"evidence_reference\":{\"kind\":\"retained-evidence\",\"evidence_id\":\"ev_e194f133df30756a3a75c8baf8e62a4cf13a86e5780c92ac60ec3d183d68b6f9\"}}}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    {
+      "id": "producer/bundle-overflow",
+      "original_call_artifact": {
+        "encoding": "gzip-original-bytes",
+        "gzip_bytes": 1008,
+        "gzip_sha256": "2f84af4d78bc1c9c3aa2611ee5912dfe47786b9e8b6af84285ccd7389fe71595",
+        "path": "reference-producer/call-18-bundle-overflow.json.gz",
+        "raw_bytes": 3495,
+        "raw_sha256": "0b6fbf9051f3d69aba9f9b5f46bcb4137fdcf6c453813f45977d6d0b82a25443"
+      },
+      "original_text_utf8_bytes": 2872,
+      "original_text_utf8_sha256": "2f91c0a914a240f18d8a939dd70f1038a9ded796bab9fcf7884961c640e77ec7",
+      "original_text": "{\"error\":{\"code\":\"resource_constraint\",\"category\":\"resource_constraint\",\"message\":\"The operation completed, but its complete MCP response exceeds the stdio response budget. The analysis result was not truncated. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit. Discover retained records with get_evidence_bundle and detail: summary, then inspect compatible records through inspect_analysis_view using an exact Evidence reference. Export complete retained session evidence through export_evidence_bundle to a caller-selected path, or use complete CLI JSON output. The connection remains usable.\",\"retryable\":false,\"remediation\":{\"action\":\"Discover retained records with get_evidence_bundle and detail: summary, then inspect compatible records through inspect_analysis_view using an exact Evidence reference. Export complete retained session evidence through export_evidence_bundle to a caller-selected path, or use complete CLI JSON output. The connection remains usable. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit.\"},\"details\":{\"operation\":\"get_evidence_bundle\",\"resource\":\"transport\",\"reason\":\"The operation completed, but its complete MCP response exceeds the stdio response budget. The analysis result was not truncated. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit. Discover retained records with get_evidence_bundle and detail: summary, then inspect compatible records through inspect_analysis_view using an exact Evidence reference. Export complete retained session evidence through export_evidence_bundle to a caller-selected path, or use complete CLI JSON output. The connection remains usable.\",\"reported_limits\":{\"boundary\":\"mcp-response\",\"default_receive_buffer_bytes\":10485760,\"result_budget_bytes\":10484736,\"max_string_code_units\":536869864,\"response_bytes_at_least\":10605666,\"response_code_units_at_least\":10605666,\"constraint\":\"receive-buffer\"}}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"resource_constraint\",\"category\":\"resource_constraint\",\"message\":\"The operation completed, but its complete MCP response exceeds the stdio response budget. The analysis result was not truncated. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit. Discover retained records with get_evidence_bundle and detail: summary, then inspect compatible records through inspect_analysis_view using an exact Evidence reference. Export complete retained session evidence through export_evidence_bundle to a caller-selected path, or use complete CLI JSON output. The connection remains usable.\",\"retryable\":false,\"remediation\":{\"action\":\"Discover retained records with get_evidence_bundle and detail: summary, then inspect compatible records through inspect_analysis_view using an exact Evidence reference. Export complete retained session evidence through export_evidence_bundle to a caller-selected path, or use complete CLI JSON output. The connection remains usable. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit.\"},\"details\":{\"operation\":\"get_evidence_bundle\",\"resource\":\"transport\",\"reason\":\"The operation completed, but its complete MCP response exceeds the stdio response budget. The analysis result was not truncated. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit. Discover retained records with get_evidence_bundle and detail: summary, then inspect compatible records through inspect_analysis_view using an exact Evidence reference. Export complete retained session evidence through export_evidence_bundle to a caller-selected path, or use complete CLI JSON output. The connection remains usable.\",\"reported_limits\":{\"boundary\":\"mcp-response\",\"default_receive_buffer_bytes\":10485760,\"result_budget_bytes\":10484736,\"max_string_code_units\":536869864,\"response_bytes_at_least\":10605666,\"response_code_units_at_least\":10605666,\"constraint\":\"receive-buffer\"}}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    {
+      "id": "producer/elf-view-unsupported",
+      "original_call_artifact": {
+        "encoding": "gzip-original-bytes",
+        "gzip_bytes": 771,
+        "gzip_sha256": "a7fc131743f1110a5ec511f38fd35acf91513570bd522c01054e2f9a271baaa2",
+        "path": "reference-producer/call-19-elf-view-unsupported.json.gz",
+        "raw_bytes": 1920,
+        "raw_sha256": "5864c025381066b6ff2a0db849b32c2f24a3915f87c072cf6fe8469e15671b36"
+      },
+      "original_text_utf8_bytes": 1105,
+      "original_text_utf8_sha256": "9d16b1624fdc8cdbc27148f0238fad5b415d35b52768f7bf12b0859b57519fce",
+      "original_text": "{\"error\":{\"code\":\"unsupported_target\",\"category\":\"unsupported_target\",\"message\":\"Unsupported target for inspect_analysis_view at /home/qian-qi/work/hepta-rea-family-ecb0b9d61c75-20261106-evidence/elf-family-r1/workspace/overflow.elf: Parent Evidence operation \\\"inspect_elf_notes\\\" does not support analysis views. Use completed Evidence from a supported parent operation with a compatible view. For a summary receipt, use its normalized_result.parent_evidence_id rather than the receipt's own evidence_id.\",\"retryable\":false,\"remediation\":{\"action\":\"Select a target supported by this operation or choose an operation supporting the reported target format.\"},\"details\":{\"operation\":\"inspect_analysis_view\",\"path\":\"/home/qian-qi/work/hepta-rea-family-ecb0b9d61c75-20261106-evidence/elf-family-r1/workspace/overflow.elf\",\"reason\":\"Parent Evidence operation \\\"inspect_elf_notes\\\" does not support analysis views. Use completed Evidence from a supported parent operation with a compatible view. For a summary receipt, use its normalized_result.parent_evidence_id rather than the receipt's own evidence_id.\"}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"unsupported_target\",\"category\":\"unsupported_target\",\"message\":\"Unsupported target for inspect_analysis_view at /home/qian-qi/work/hepta-rea-family-ecb0b9d61c75-20261106-evidence/elf-family-r1/workspace/overflow.elf: Parent Evidence operation \\\"inspect_elf_notes\\\" does not support analysis views. Use completed Evidence from a supported parent operation with a compatible view. For a summary receipt, use its normalized_result.parent_evidence_id rather than the receipt's own evidence_id.\",\"retryable\":false,\"remediation\":{\"action\":\"Select a target supported by this operation or choose an operation supporting the reported target format.\"},\"details\":{\"operation\":\"inspect_analysis_view\",\"path\":\"/home/qian-qi/work/hepta-rea-family-ecb0b9d61c75-20261106-evidence/elf-family-r1/workspace/overflow.elf\",\"reason\":\"Parent Evidence operation \\\"inspect_elf_notes\\\" does not support analysis views. Use completed Evidence from a supported parent operation with a compatible view. For a summary receipt, use its normalized_result.parent_evidence_id rather than the receipt's own evidence_id.\"}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    {
+      "id": "restore/bundle-overflow",
+      "original_call_artifact": {
+        "encoding": "gzip-original-bytes",
+        "gzip_bytes": 1007,
+        "gzip_sha256": "76cd530df39e358c1c9a0a18ab2d51edf9590a3562cd7b162c35c8b36613bcb8",
+        "path": "reference-restore/call-06-bundle-overflow.json.gz",
+        "raw_bytes": 3493,
+        "raw_sha256": "923590e267bd0b9e0c9aab8efdac2eb32f0a83cafc671902e70a9555119fd3b7"
+      },
+      "original_text_utf8_bytes": 2872,
+      "original_text_utf8_sha256": "f3f60f78fefbc90114cfee00be1bcf2ef1356e3043e053dc40bc1e01f03dd0f5",
+      "original_text": "{\"error\":{\"code\":\"resource_constraint\",\"category\":\"resource_constraint\",\"message\":\"The operation completed, but its complete MCP response exceeds the stdio response budget. The analysis result was not truncated. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit. Discover retained records with get_evidence_bundle and detail: summary, then inspect compatible records through inspect_analysis_view using an exact Evidence reference. Export complete retained session evidence through export_evidence_bundle to a caller-selected path, or use complete CLI JSON output. The connection remains usable.\",\"retryable\":false,\"remediation\":{\"action\":\"Discover retained records with get_evidence_bundle and detail: summary, then inspect compatible records through inspect_analysis_view using an exact Evidence reference. Export complete retained session evidence through export_evidence_bundle to a caller-selected path, or use complete CLI JSON output. The connection remains usable. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit.\"},\"details\":{\"operation\":\"get_evidence_bundle\",\"resource\":\"transport\",\"reason\":\"The operation completed, but its complete MCP response exceeds the stdio response budget. The analysis result was not truncated. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit. Discover retained records with get_evidence_bundle and detail: summary, then inspect compatible records through inspect_analysis_view using an exact Evidence reference. Export complete retained session evidence through export_evidence_bundle to a caller-selected path, or use complete CLI JSON output. The connection remains usable.\",\"reported_limits\":{\"boundary\":\"mcp-response\",\"default_receive_buffer_bytes\":10485760,\"result_budget_bytes\":10484736,\"max_string_code_units\":536869864,\"response_bytes_at_least\":10605090,\"response_code_units_at_least\":10605090,\"constraint\":\"receive-buffer\"}}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"resource_constraint\",\"category\":\"resource_constraint\",\"message\":\"The operation completed, but its complete MCP response exceeds the stdio response budget. The analysis result was not truncated. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit. Discover retained records with get_evidence_bundle and detail: summary, then inspect compatible records through inspect_analysis_view using an exact Evidence reference. Export complete retained session evidence through export_evidence_bundle to a caller-selected path, or use complete CLI JSON output. The connection remains usable.\",\"retryable\":false,\"remediation\":{\"action\":\"Discover retained records with get_evidence_bundle and detail: summary, then inspect compatible records through inspect_analysis_view using an exact Evidence reference. Export complete retained session evidence through export_evidence_bundle to a caller-selected path, or use complete CLI JSON output. The connection remains usable. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit.\"},\"details\":{\"operation\":\"get_evidence_bundle\",\"resource\":\"transport\",\"reason\":\"The operation completed, but its complete MCP response exceeds the stdio response budget. The analysis result was not truncated. The effective REA_MCP_MAX_RESPONSE_BYTES value is 10485760 bytes (floor 10485760 bytes, 10 MiB). A change requires restarting the REA process and a matching client receive buffer. It does not raise REA's reserved single-string limit of 536869864 UTF-16 code units or Node's single-string ceiling of 536870888 UTF-16 code units. This release has no runtime override for either limit. Discover retained records with get_evidence_bundle and detail: summary, then inspect compatible records through inspect_analysis_view using an exact Evidence reference. Export complete retained session evidence through export_evidence_bundle to a caller-selected path, or use complete CLI JSON output. The connection remains usable.\",\"reported_limits\":{\"boundary\":\"mcp-response\",\"default_receive_buffer_bytes\":10485760,\"result_budget_bytes\":10484736,\"max_string_code_units\":536869864,\"response_bytes_at_least\":10605090,\"response_code_units_at_least\":10605090,\"constraint\":\"receive-buffer\"}}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    {
+      "id": "restore/elf-view-unsupported",
+      "original_call_artifact": {
+        "encoding": "gzip-original-bytes",
+        "gzip_bytes": 771,
+        "gzip_sha256": "5fd6a5cd7e306543948f01fa9f5be58193fcbe679c8f3e7b9bdfb985332ff884",
+        "path": "reference-restore/call-07-elf-view-unsupported.json.gz",
+        "raw_bytes": 1919,
+        "raw_sha256": "2cbf7950692535ba6d79a67bbc869ed97caf0b3587e43b0a6a94768a117cf8db"
+      },
+      "original_text_utf8_bytes": 1105,
+      "original_text_utf8_sha256": "9d16b1624fdc8cdbc27148f0238fad5b415d35b52768f7bf12b0859b57519fce",
+      "original_text": "{\"error\":{\"code\":\"unsupported_target\",\"category\":\"unsupported_target\",\"message\":\"Unsupported target for inspect_analysis_view at /home/qian-qi/work/hepta-rea-family-ecb0b9d61c75-20261106-evidence/elf-family-r1/workspace/overflow.elf: Parent Evidence operation \\\"inspect_elf_notes\\\" does not support analysis views. Use completed Evidence from a supported parent operation with a compatible view. For a summary receipt, use its normalized_result.parent_evidence_id rather than the receipt's own evidence_id.\",\"retryable\":false,\"remediation\":{\"action\":\"Select a target supported by this operation or choose an operation supporting the reported target format.\"},\"details\":{\"operation\":\"inspect_analysis_view\",\"path\":\"/home/qian-qi/work/hepta-rea-family-ecb0b9d61c75-20261106-evidence/elf-family-r1/workspace/overflow.elf\",\"reason\":\"Parent Evidence operation \\\"inspect_elf_notes\\\" does not support analysis views. Use completed Evidence from a supported parent operation with a compatible view. For a summary receipt, use its normalized_result.parent_evidence_id rather than the receipt's own evidence_id.\"}}}",
+      "original_result": {
+        "_meta": {
+          "provenance": {
+            "source": "analysis_target",
+            "untrusted_content": true
+          }
+        },
+        "content": [
+          {
+            "text": "{\"error\":{\"code\":\"unsupported_target\",\"category\":\"unsupported_target\",\"message\":\"Unsupported target for inspect_analysis_view at /home/qian-qi/work/hepta-rea-family-ecb0b9d61c75-20261106-evidence/elf-family-r1/workspace/overflow.elf: Parent Evidence operation \\\"inspect_elf_notes\\\" does not support analysis views. Use completed Evidence from a supported parent operation with a compatible view. For a summary receipt, use its normalized_result.parent_evidence_id rather than the receipt's own evidence_id.\",\"retryable\":false,\"remediation\":{\"action\":\"Select a target supported by this operation or choose an operation supporting the reported target format.\"},\"details\":{\"operation\":\"inspect_analysis_view\",\"path\":\"/home/qian-qi/work/hepta-rea-family-ecb0b9d61c75-20261106-evidence/elf-family-r1/workspace/overflow.elf\",\"reason\":\"Parent Evidence operation \\\"inspect_elf_notes\\\" does not support analysis views. Use completed Evidence from a supported parent operation with a compatible view. For a summary receipt, use its normalized_result.parent_evidence_id rather than the receipt's own evidence_id.\"}}}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    }
+  ]
+}

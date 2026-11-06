@@ -23,6 +23,9 @@ use serde_json::{json, Map, Value};
 use std::io::{self, Write};
 use std::sync::{Arc, OnceLock};
 
+#[path = "rea_contract_error_order.rs"]
+mod error_order;
+
 pub(super) const RESPONSE_BYTES: usize = 10 * 1024 * 1024;
 const ENVELOPE_RESERVATION: usize = 1024;
 
@@ -146,7 +149,10 @@ impl Failure {
 	}
 
 	pub(super) fn wire(self) -> CallToolResult {
-		self.wire_text(None)
+		match error_order::ElfEvidenceFailureOrder::for_failure(&self.0) {
+			Some(order) => self.wire_with_order(&order),
+			None => self.wire_text(None),
+		}
 	}
 
 	/// Use an independently established producer order for this error profile.
@@ -621,3 +627,7 @@ pub(super) fn view_output_schema() -> Arc<JsonObject> {
 		})
 		.clone()
 }
+
+#[cfg(test)]
+#[path = "rea_contract_tests.rs"]
+mod tests;

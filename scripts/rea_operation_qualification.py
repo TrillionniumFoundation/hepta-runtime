@@ -227,25 +227,150 @@ class Mcp:
 
     def __init__(self, argv, directory, environment, output):
         self.output = Path(output)
-        self.output.mkdir()
-        self.stderr = (self.output / "stderr.log").open("xb")
-        self.wire = (self.output / "wire.jsonl").open("xb")
-        self.lock = threading.Lock()
-        self.responses = queue.Queue()
-        self.pending = {}
-        self.next_id = 1
+        self.stderr = self.wire = self.process = self.reader = self.pidfd = self.owner = None
         self.closed = False
-        self.received_bytes = 0
-        self.process = subprocess.Popen(argv, cwd=directory, env=environment,
-                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                        stderr=self.stderr, start_new_session=True)
-        self.pidfd = os.pidfd_open(self.process.pid)
-        self.owner = process_identity(self.process.pid)
-        self.started = time.monotonic()
-        self.reader = threading.Thread(target=self._read, daemon=True)
-        self.reader.start()
-        write_json(self.output / "launch.json", {"argv": argv, "cwd": str(directory),
-                   "environment": environment, "pid": self.process.pid, "owner": self.owner})
+        created_output = False
+        try:
+            self.output.mkdir()
+            created_output = True
+            self.stderr = (self.output / "stderr.log").open("xb")
+            self.wire = (self.output / "wire.jsonl").open("xb")
+            self.lock = threading.Lock()
+            self.responses = queue.Queue()
+            self.pending = {}
+            self.next_id = 1
+            self.received_bytes = 0
+            self.process = subprocess.Popen(argv, cwd=directory, env=environment,
+                                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                            stderr=self.stderr, start_new_session=True)
+            self.pidfd = os.pidfd_open(self.process.pid)
+            self.owner = process_identity(self.process.pid)
+            self.started = time.monotonic()
+            self.reader = threading.Thread(target=self._read, daemon=True)
+            self.reader.start()
+            write_json(self.output / "launch.json", {"argv": argv, "cwd": str(directory),
+                       "environment": environment, "pid": self.process.pid, "owner": self.owner})
+        except BaseException as original:
+            try:
+                self._abort_initialization(original, created_output)
+            except BaseException as secondary:
+                # Cleanup diagnostics must never replace the original failure.
+                try:
+                    original.add_note("MCP initialization cleanup failed: " + repr(secondary))
+                except BaseException:
+                    pass
+            raise
+
+    def _abort_initialization(self, original, created_output):
+        self.closed = True
+        observation = {"schema": "hepta.rea.mcp-initialization-failure.v1",
+                       "construction_succeeded": False, "qualification_claimed": False,
+                       "original_failure": {"type": type(original).__name__, "message": str(original)},
+                       "forced_cleanup": [], "cleanup_errors": [], "cleanup_complete": False,
+                       "owner": self.owner, "owner_pidfd_exited": None, "process_group_gone": None}
+        # This distinct failure schema has no normal-close returncode field.
+        # A caller retaining __new__ may safely close again, but cannot use it
+        # as the normal owner-close proof required by an operation consumer.
+        self.close_observation = observation
+        def attempt(stage, action):
+            try:
+                return action()
+            except BaseException as error:
+                observation["cleanup_errors"].append({"stage": stage, "error": repr(error)})
+                return None
+        process = self.process
+        if process is not None:
+            observation["popen_child"] = {"pid": process.pid, "parent_pid": os.getpid(),
+                                          "ownership": "original-Popen-direct-child",
+                                          "start_new_session": True}
+            if process.stdin is not None:
+                attempt("stdin-close", process.stdin.close)
+            def wait(seconds):
+                try:
+                    process.wait(timeout=seconds)
+                except subprocess.TimeoutExpired:
+                    pass
+                except BaseException as error:
+                    observation["cleanup_errors"].append({"stage": "direct-child-wait", "error": repr(error)})
+            wait(EOF_SECONDS)
+            # Popen retains direct-child wait ownership even when a pidfd or
+            # /proc sample could not be obtained. Do not guess descendant PIDs.
+            for name, action in (("SIGTERM-direct-child", process.terminate),
+                                 ("SIGKILL-direct-child", process.kill)):
+                if process.returncode is not None:
+                    break
+                observation["forced_cleanup"].append(name)
+                attempt(name, action)
+                wait(2)
+            observation["direct_child_returncode"] = process.returncode
+            observation["process_group_gone"] = attempt(
+                "process-group-observation", lambda: not process_group_exists(process.pid))
+            if observation["process_group_gone"] is False:
+                observation["cleanup_errors"].append({"stage": "process-group-observation",
+                    "error": "Owned process group remains; unverified descendants were not signalled."})
+        reader = self.reader
+        if reader is not None and reader.ident is not None:
+            attempt("reader-join", lambda: reader.join(timeout=2))
+        observation["reader_stopped"] = reader is None or not reader.is_alive()
+        if self.pidfd is not None:
+            observation["owner_pidfd_exited"] = attempt(
+                "pidfd-observation", lambda: bool(select.select([self.pidfd], [], [], 0)[0]))
+            attempt("pidfd-close", lambda: os.close(self.pidfd))
+        # Existing callers wrapping __new__/__init__ use hasattr before close.
+        # Neither a closed integer nor None may remain for a second os.close.
+        del self.pidfd
+        streams = (("stdout", getattr(process, "stdout", None)), ("stderr", self.stderr), ("wire", self.wire))
+        for name, stream in streams:
+            if stream is not None and not stream.closed:
+                if name in {"stdout", "wire"} and not observation["reader_stopped"]:
+                    # BufferedReader.close can wait indefinitely for readline's
+                    # lock when an unobserved child still holds the pipe open.
+                    observation["cleanup_errors"].append({"stage": name + "-close", "error": "Reader is still alive."})
+                else:
+                    attempt(name + "-close", stream.close)
+            observation[name + "_closed"] = stream is None or stream.closed
+        observation["stdin_closed"] = process is None or process.stdin is None or process.stdin.closed
+        observation["cleanup_complete"] = (
+            not observation["cleanup_errors"] and observation["reader_stopped"]
+            and all(observation[name + "_closed"] for name in ("stdin", "stdout", "stderr", "wire"))
+            and (process is None or (process.returncode is not None and observation["process_group_gone"] is True)))
+        if created_output:
+            try:
+                # Do not call a possibly failing/mocked launch writer again.
+                with (self.output / "initialization-failure.json").open("xb") as handle:
+                    handle.write(json_bytes(observation))
+            except BaseException as error:
+                observation["cleanup_errors"].append({"stage": "failure-receipt-write", "error": repr(error)})
+                observation["cleanup_complete"] = False
+                # Some producers retain only str(original), so exception notes
+                # alone would lose this observation on a full/unwritable disk.
+                fallback = {"schema": observation["schema"], "construction_succeeded": False,
+                            "qualification_claimed": False, "cleanup_complete": False,
+                            "diagnostic_file_write_failed": True,
+                            "original_failure_type": type(original).__name__[:80],
+                            "original_failure_message": str(original)[:160],
+                            "diagnostic_error_type": type(error).__name__[:80],
+                            "diagnostic_error_message": str(error)[:160],
+                            "popen_child_pid": None if process is None else process.pid,
+                            "direct_child_returncode": observation.get("direct_child_returncode"),
+                            "reader_stopped": observation["reader_stopped"],
+                            "process_group_gone": observation["process_group_gone"],
+                            "forced_cleanup": observation["forced_cleanup"],
+                            "cleanup_error_count": len(observation["cleanup_errors"]),
+                            "streams_closed": {name: observation[name + "_closed"]
+                                               for name in ("stdin", "stdout", "stderr", "wire")}}
+                raw = (json.dumps(fallback, ensure_ascii=True, sort_keys=True) + "\n").encode()
+                # The fixed projection above is below this bound even for
+                # fully escaped messages. Never emit an unbounded traceback.
+                if len(raw) <= 8192:
+                    for offset in range(0, len(raw), 4096):
+                        block = raw[offset:offset + 4096]
+                        written = attempt("diagnostic-stderr-write", lambda: os.write(2, block))
+                        if written != len(block):
+                            observation["cleanup_errors"].append({"stage": "diagnostic-stderr-write",
+                                "error": "Bounded fallback was not completely written."})
+                            break
+        original.add_note("MCP initialization cleanup: " + json.dumps(observation, sort_keys=True))
 
     def _log(self, direction, raw):
         item = {"direction": direction, "monotonic_ns": time.monotonic_ns(),

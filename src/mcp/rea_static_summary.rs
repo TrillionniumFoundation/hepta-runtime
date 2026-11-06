@@ -66,6 +66,37 @@ pub(crate) fn selected_fields(
 			] {
 				summary[field] = value[field].clone();
 			}
+			if operation == StaticOperation::Xrefs {
+				for field in [
+					"incoming_scope",
+					"outgoing_scope",
+					"reference_default_address_space",
+					"reference_address_format",
+					"reference_filter",
+					"reference_deduplication",
+					"reference_order",
+					"reference_scan_accounting",
+				] {
+					summary[field] = value[field].clone();
+				}
+				for direction in ["incoming", "outgoing"] {
+					for field in [
+						format!("scanned_{direction}_references"),
+						format!("filtered_{direction}_entry_point_references"),
+						format!("duplicate_{direction}_references_in_scan"),
+						format!("unique_{direction}_references_in_scan"),
+						format!("returned_{direction}_references"),
+						format!("omitted_{direction}_references_in_scan"),
+						format!("budget_omitted_{direction}_references"),
+						format!("{direction}_scan_complete"),
+					] {
+						summary[&field] = value[&field].clone();
+					}
+				}
+				if let Some(limitations) = summary["limitations"].as_array_mut() {
+					limitations.push(json!("Reference omitted totals include synthetic entry-point filtering, duplicate references and output budgets; budget_omitted counts only unique scanned references omitted by row/byte limits"));
+				}
+			}
 		}
 		return summary;
 	}

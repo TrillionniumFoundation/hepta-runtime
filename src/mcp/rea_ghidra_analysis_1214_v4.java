@@ -20,6 +20,7 @@ import ghidra.app.decompiler.DecompileResults;
 import ghidra.framework.options.Options;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressIterator;
+import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.FunctionIterator;
 import ghidra.program.model.listing.Program;
@@ -169,18 +170,110 @@ class HeptaGhidraAnalysis1214V4 {
         row.put("body_ranges_complete",true);
     }
 
-    static Map<String,Object> referenceRow(Reference reference) {
+    static String encodedAddressSpace(String value) {
+        StringBuilder result=new StringBuilder();
+        for(byte item:value.getBytes(StandardCharsets.UTF_8)) {
+            int unsigned=Byte.toUnsignedInt(item);
+            if((unsigned>='A' && unsigned<='Z') || (unsigned>='a' && unsigned<='z') ||
+                    (unsigned>='0' && unsigned<='9') || unsigned=='.' || unsigned=='_' ||
+                    unsigned=='~' || unsigned=='-')result.append((char)unsigned);
+            else {
+                result.append('%');
+                result.append(Character.toUpperCase(Character.forDigit(unsigned>>>4,16)));
+                result.append(Character.toUpperCase(Character.forDigit(unsigned&15,16)));
+            }
+        }
+        return result.toString();
+    }
+
+    static String referenceAddress(Program program,Address value) {
+        String offset="0x"+Long.toUnsignedString(value.getOffset(),16);
+        return value.getAddressSpace().equals(program.getAddressFactory().getDefaultAddressSpace())
+            ? offset : encodedAddressSpace(value.getAddressSpace().getName())+":"+offset;
+    }
+
+    static Map<String,Object> referenceRow(Program program,Reference reference) {
         Map<String,Object> row=new LinkedHashMap<>();
-        row.put("from_address",address(reference.getFromAddress()));
-        row.put("to_address",address(reference.getToAddress()));
+        row.put("from_address",referenceAddress(program,reference.getFromAddress()));
+        row.put("to_address",referenceAddress(program,reference.getToAddress()));
         row.put("from_space",reference.getFromAddress().getAddressSpace().getName());
         row.put("to_space",reference.getToAddress().getAddressSpace().getName());
-        row.put("reference_type",reference.getReferenceType().toString());
+        row.put("reference_type",reference.getReferenceType().getName());
         row.put("source_type",reference.getSource().toString());
         row.put("operand_index",reference.getOperandIndex());
         row.put("call",reference.getReferenceType().isCall());
         row.put("primary",reference.isPrimary());
+        row.put("entry_point_reference",reference.isEntryPointReference());
         return row;
+    }
+
+    static final Comparator<Reference> REFERENCE_ORDER=Comparator.comparing(Reference::getFromAddress)
+        .thenComparing(Reference::getToAddress)
+        .thenComparing(reference->reference.getReferenceType().getName())
+        .thenComparingInt(Reference::getOperandIndex)
+        .thenComparing(Reference::isPrimary);
+
+    static final class ReferenceScan {
+        final Program program;
+        final Map<String,Reference> unique=new TreeMap<>();
+        int raw,filtered,duplicates;
+        boolean complete=true;
+        ReferenceScan(Program program) { this.program=program; }
+        void observe(Reference reference) {
+            if(raw==SCAN_LIMIT)throw new IllegalStateException("reference raw scan budget exceeded");
+            raw++;
+            // Filtering and deduplication never extend the fixed raw traversal budget.
+            if(reference.isEntryPointReference()) { filtered++;return; }
+            String key=referenceAddress(program,reference.getFromAddress())+"\u0000"+
+                referenceAddress(program,reference.getToAddress())+"\u0000"+
+                reference.getReferenceType().getName()+"\u0000"+
+                reference.getOperandIndex()+"\u0000"+reference.isPrimary();
+            if(unique.putIfAbsent(key,reference)!=null)duplicates++;
+        }
+        void report(String direction,Map<String,Object> report) {
+            List<Reference> sorted=new ArrayList<>(unique.values());
+            // Ghidra Address ordering includes address-space semantics, not encoded text ordering.
+            sorted.sort(REFERENCE_ORDER);
+            List<Map<String,Object>> rows=new ArrayList<>();
+            for(int index=0;index<Math.min(ROW_LIMIT,sorted.size());index++)
+                rows.add(referenceRow(program,sorted.get(index)));
+            report.put(direction+"_references",rows);
+            report.put("scanned_"+direction+"_references",raw);
+            report.put("filtered_"+direction+"_entry_point_references",filtered);
+            report.put("duplicate_"+direction+"_references_in_scan",duplicates);
+            report.put("unique_"+direction+"_references_in_scan",unique.size());
+            report.put("returned_"+direction+"_references",rows.size());
+            report.put("budget_omitted_"+direction+"_references",unique.size()-rows.size());
+            // This historical total includes synthetic filtering, deduplication and output limits.
+            report.put("omitted_"+direction+"_references_in_scan",raw-rows.size());
+            report.put(direction+"_scan_complete",complete);
+        }
+    }
+
+    static ReferenceScan scanReferences(Program program,Function function,boolean outgoing) {
+        AddressSet scope=new AddressSet(function.getBody());
+        scope.add(function.getEntryPoint());
+        var manager=program.getReferenceManager();
+        AddressIterator addresses=outgoing ? manager.getReferenceSourceIterator(scope,true)
+            : manager.getReferenceDestinationIterator(scope,true);
+        ReferenceScan scan=new ReferenceScan(program);
+        while(addresses.hasNext()) {
+            Address at=addresses.next();
+            if(outgoing) {
+                Reference[] references=manager.getReferencesFrom(at);
+                for(int index=0;index<references.length;index++) {
+                    if(scan.raw==SCAN_LIMIT) { scan.complete=false;return scan; }
+                    scan.observe(references[index]);
+                }
+            } else {
+                ReferenceIterator references=manager.getReferencesTo(at);
+                while(references.hasNext()) {
+                    if(scan.raw==SCAN_LIMIT) { scan.complete=false;return scan; }
+                    scan.observe(references.next());
+                }
+            }
+        }
+        return scan;
     }
 
 
@@ -294,36 +387,16 @@ class HeptaGhidraAnalysis1214V4 {
     }
 
     static void xrefs(Program program,Function function,Map<String,Object> report) {
-        List<Map<String,Object>> incoming=new ArrayList<>(),outgoing=new ArrayList<>();
-        ReferenceIterator incomingIterator=program.getReferenceManager().getReferencesTo(function.getEntryPoint());
-        int scannedIn=0,scannedOut=0;
-        while(incomingIterator.hasNext() && scannedIn<SCAN_LIMIT) {
-            Reference reference=incomingIterator.next();
-            scannedIn++;
-            if(incoming.size()<ROW_LIMIT)incoming.add(referenceRow(reference));
-        }
-        boolean incomingComplete=!incomingIterator.hasNext(),outgoingComplete=true;
-        AddressIterator sources=program.getReferenceManager().getReferenceSourceIterator(function.getBody(),true);
-        outer: while(sources.hasNext()) {
-            Address source=sources.next();
-            for(Reference reference:program.getReferenceManager().getReferencesFrom(source)) {
-                if(scannedOut==SCAN_LIMIT) { outgoingComplete=false;break outer; }
-                scannedOut++;
-                if(outgoing.size()<ROW_LIMIT)outgoing.add(referenceRow(reference));
-            }
-        }
-        report.put("incoming_scope","exact_function_entry");
-        report.put("outgoing_scope","selected_function_body");
-        report.put("incoming_references",incoming);
-        report.put("outgoing_references",outgoing);
-        report.put("scanned_incoming_references",scannedIn);
-        report.put("scanned_outgoing_references",scannedOut);
-        report.put("returned_incoming_references",incoming.size());
-        report.put("returned_outgoing_references",outgoing.size());
-        report.put("omitted_incoming_references_in_scan",scannedIn-incoming.size());
-        report.put("omitted_outgoing_references_in_scan",scannedOut-outgoing.size());
-        report.put("incoming_scan_complete",incomingComplete);
-        report.put("outgoing_scan_complete",outgoingComplete);
+        report.put("incoming_scope","selected_function_body_and_entry");
+        report.put("outgoing_scope","selected_function_body_and_entry");
+        report.put("reference_default_address_space",program.getAddressFactory().getDefaultAddressSpace().getName());
+        report.put("reference_address_format","default-space-hex-or-utf8-space-unsigned64.v1");
+        report.put("reference_filter","exclude-isEntryPointReference");
+        report.put("reference_deduplication","from,to,type,operand,primary");
+        report.put("reference_order","ghidra-address-from-to-type-operand-primary");
+        report.put("reference_scan_accounting","raw-includes-entrypoint-filter-and-duplicates.v1");
+        scanReferences(program,function,false).report("incoming",report);
+        scanReferences(program,function,true).report("outgoing",report);
     }
 
 
@@ -565,6 +638,8 @@ class HeptaGhidraAnalysis1214V4 {
                 report.put("returned_outgoing_references",outgoing.size());
                 report.put("omitted_incoming_references_in_scan",(Integer)report.get("scanned_incoming_references")-incoming.size());
                 report.put("omitted_outgoing_references_in_scan",(Integer)report.get("scanned_outgoing_references")-outgoing.size());
+                report.put("budget_omitted_incoming_references",(Integer)report.get("unique_incoming_references_in_scan")-incoming.size());
+                report.put("budget_omitted_outgoing_references",(Integer)report.get("unique_outgoing_references_in_scan")-outgoing.size());
             } else if(operation.equals("decompile")) {
                 String code=(String)report.get("c_code");
                 if(code.isEmpty())throw new IllegalStateException("analysis summary exceeds response budget");

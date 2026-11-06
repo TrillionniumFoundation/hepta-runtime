@@ -135,3 +135,75 @@ fn default_profile_summary_does_not_claim_analysis_avoids_native_decompilation()
 		"live_descendants_at_phase_boundaries"
 	);
 }
+
+#[test]
+fn revision_four_reference_summary_distinguishes_filtering_from_output_limits() {
+	let mut value = json!({"schema":"hepta.rea.ghidra-analysis.v2","bridge_revision":4,
+		"operation":"xrefs","analysis_completed":true,
+		"incoming_scope":"selected_function_body_and_entry",
+		"outgoing_scope":"selected_function_body_and_entry",
+		"reference_scan_accounting":"raw-includes-entrypoint-filter-and-duplicates.v1",
+		"reference_filter":"exclude-isEntryPointReference",
+		"scanned_incoming_references":4,"filtered_incoming_entry_point_references":1,
+		"duplicate_incoming_references_in_scan":0,"unique_incoming_references_in_scan":3,
+		"returned_incoming_references":1,"budget_omitted_incoming_references":2,
+		"omitted_incoming_references_in_scan":3,"incoming_scan_complete":true,
+		"scanned_outgoing_references":2,"filtered_outgoing_entry_point_references":0,
+		"duplicate_outgoing_references_in_scan":0,"unique_outgoing_references_in_scan":2,
+		"returned_outgoing_references":2,"budget_omitted_outgoing_references":0,
+		"omitted_outgoing_references_in_scan":0,"outgoing_scan_complete":true});
+	let mapped = selected_fields(
+		StaticProvider::Ghidra,
+		StaticOperation::Xrefs,
+		&value.to_string(),
+		true,
+	);
+	assert_eq!(mapped["schema"], "hepta.rea.static-summary.v2");
+	for field in [
+		"incoming_scope",
+		"outgoing_scope",
+		"reference_scan_accounting",
+		"reference_filter",
+		"scanned_incoming_references",
+		"filtered_incoming_entry_point_references",
+		"duplicate_incoming_references_in_scan",
+		"unique_incoming_references_in_scan",
+		"returned_incoming_references",
+		"budget_omitted_incoming_references",
+		"omitted_incoming_references_in_scan",
+		"incoming_scan_complete",
+		"scanned_outgoing_references",
+		"filtered_outgoing_entry_point_references",
+		"duplicate_outgoing_references_in_scan",
+		"unique_outgoing_references_in_scan",
+		"returned_outgoing_references",
+		"budget_omitted_outgoing_references",
+		"omitted_outgoing_references_in_scan",
+		"outgoing_scan_complete",
+	] {
+		assert_eq!(mapped[field], value[field], "{field}");
+	}
+	assert!(mapped["limitations"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.any(|item| item
+			.as_str()
+			.unwrap()
+			.contains("budget_omitted counts only unique")));
+	assert_eq!(mapped["upstream_contract_equivalent"], false);
+	assert!(mapped.get("incoming_references").is_none());
+	for revision in [2, 3] {
+		value["schema"] = json!("hepta.rea.ghidra-analysis.v1");
+		value["bridge_revision"] = json!(revision);
+		let legacy = selected_fields(
+			StaticProvider::Ghidra,
+			StaticOperation::Xrefs,
+			&value.to_string(),
+			true,
+		);
+		assert_eq!(legacy["schema"], "hepta.rea.static-summary.v1");
+		assert!(legacy.get("reference_scan_accounting").is_none());
+		assert!(legacy.get("budget_omitted_incoming_references").is_none());
+	}
+}

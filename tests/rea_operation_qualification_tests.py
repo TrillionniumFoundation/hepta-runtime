@@ -4,15 +4,19 @@
 """Refusal and wire-integrity checks; fake MCPs never qualify an operation."""
 
 from copy import deepcopy
-from contextlib import redirect_stdout
+from contextlib import ExitStack, redirect_stdout
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
+import signal
 import struct
+import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -267,6 +271,212 @@ class OperationQualificationTests(unittest.TestCase):
                 (package / "extra.js").symlink_to(package / "package.json")
                 with self.assertRaisesRegex(q.QualificationError, "symlink"):
                     q.reference_package(package, archive)
+
+
+@unittest.skipUnless(sys.platform.startswith("linux") and hasattr(os, "pidfd_open"),
+                     "owned pipe-child cleanup requires Linux pidfds")
+class McpInitializationCleanupTests(unittest.TestCase):
+    """Real private pipe children verify cleanup, never operation qualification."""
+
+    def exercise_failure(self, stage, *, stubborn=False, receipt_failure=False,
+                         group_unknown=False, error_type=RuntimeError):
+        before_fds = set(os.listdir("/proc/self/fd"))
+        failure = error_type("injected " + stage)
+        real_popen, real_start = subprocess.Popen, q.threading.Thread.start
+        real_identity, real_open = q.process_identity, Path.open
+        real_kill, real_killpg = os.kill, os.killpg
+        children, identities, pidfds = [], [], []
+        real_pidfd_open = os.pidfd_open
+        client = q.Mcp.__new__(q.Mcp)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "owner"
+            def launch(*args, **kwargs):
+                process = real_popen(*args, **kwargs)
+                children.append(process)
+                identities.append(real_identity(process.pid))
+                self.assertEqual(identities[-1]["parent_pid"], os.getpid())
+                self.assertEqual(identities[-1]["process_group"], process.pid)
+                if stubborn:
+                    deadline = time.monotonic() + 3
+                    while b"READY\n" not in (output / "stderr.log").read_bytes():
+                        if time.monotonic() >= deadline or process.poll() is not None:
+                            self.fail("private child did not install its signal handler")
+                        time.sleep(0.005)
+                return process
+            def open_pidfd(pid):
+                if stage == "pidfd-open":
+                    raise failure
+                fd = real_pidfd_open(pid)
+                pidfds.append(fd)
+                return fd
+            def start_reader(reader):
+                if stage == "reader-start-before":
+                    raise failure
+                real_start(reader)
+                if stage == "reader-start-after":
+                    raise failure
+            def open_file(path, *args, **kwargs):
+                if receipt_failure and path.name == "initialization-failure.json":
+                    raise OSError("injected diagnostic disk failure")
+                return real_open(path, *args, **kwargs)
+            child = ("import signal,sys,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+                     "print('READY',file=sys.stderr,flush=True); time.sleep(30)" if stubborn
+                     else "import sys; sys.stdin.buffer.read()")
+            try:
+                with ExitStack() as patches:
+                    patches.enter_context(mock.patch.object(q.subprocess, "Popen", side_effect=launch))
+                    patches.enter_context(mock.patch.object(q.os, "pidfd_open", side_effect=open_pidfd))
+                    patches.enter_context(mock.patch.object(q.threading.Thread, "start", new=start_reader))
+                    patches.enter_context(mock.patch.object(Path, "open", new=open_file))
+                    sent = patches.enter_context(mock.patch.object(q.os, "kill", wraps=real_kill))
+                    groups = patches.enter_context(mock.patch.object(q.os, "killpg", wraps=real_killpg))
+                    if stage == "owner-identity":
+                        patches.enter_context(mock.patch.object(q, "process_identity", side_effect=failure))
+                    if stage == "launch-write":
+                        writer = patches.enter_context(mock.patch.object(q, "write_json", side_effect=failure))
+                    if stubborn:
+                        patches.enter_context(mock.patch.object(q, "EOF_SECONDS", 0.05))
+                    if group_unknown:
+                        patches.enter_context(mock.patch.object(q, "process_group_exists", return_value=True))
+                    with self.assertRaises(error_type) as raised:
+                        q.Mcp.__init__(client, [sys.executable, "-I", "-S", "-u", "-c", child],
+                                       root, {}, output)
+                    self.assertIs(raised.exception, failure)
+                    if stage == "launch-write":
+                        self.assertEqual(writer.call_count, 1)
+                observation = client.close_observation
+                self.assertIs(client.close(), observation)
+                self.assertFalse(observation["construction_succeeded"])
+                self.assertFalse(observation["qualification_claimed"])
+                self.assertNotIn("returncode", observation)  # cannot pass a normal-close consumer
+                self.assertEqual(observation["original_failure"]["message"], str(failure))
+                self.assertTrue(failure.__notes__)
+                self.assertEqual(len(children), 1)
+                self.assertIs(client.process, children[0])
+                self.assertEqual(observation["popen_child"]["pid"], children[0].pid)
+                self.assertIsNotNone(children[0].returncode)
+                self.assertFalse(Path("/proc", str(children[0].pid)).exists())
+                with self.assertRaises(ChildProcessError):
+                    os.waitpid(children[0].pid, os.WNOHANG)
+                self.assertTrue(observation["reader_stopped"])
+                self.assertTrue(client.reader is None or not client.reader.is_alive())
+                self.assertTrue(all(observation[name + "_closed"] for name in ("stdin", "stdout", "stderr", "wire")))
+                self.assertFalse(hasattr(client, "pidfd"))  # compatible with guarded_client's hasattr/os.close
+                for fd in pidfds:
+                    with self.assertRaises(OSError):
+                        os.fstat(fd)
+                if stage in {"pidfd-open", "owner-identity"}:
+                    self.assertIsNone(observation["owner"])
+                else:
+                    self.assertEqual(observation["owner"], identities[0])
+                if stage == "pidfd-open":
+                    self.assertIsNone(observation["owner_pidfd_exited"])
+                else:
+                    self.assertTrue(observation["owner_pidfd_exited"])
+                self.assertEqual(observation["cleanup_complete"], not (receipt_failure or group_unknown))
+                self.assertEqual(observation["forced_cleanup"],
+                                 ["SIGTERM-direct-child", "SIGKILL-direct-child"] if stubborn else [])
+                self.assertEqual([call.args for call in sent.call_args_list],
+                                 [(children[0].pid, signal.SIGTERM), (children[0].pid, signal.SIGKILL)]
+                                 if stubborn else [])
+                self.assertTrue(all(call.args == (children[0].pid, 0) for call in groups.call_args_list))
+                if stubborn:
+                    self.assertEqual(children[0].returncode, -signal.SIGKILL)
+                if receipt_failure:
+                    self.assertFalse((output / "initialization-failure.json").exists())
+                    self.assertTrue(any(row["stage"] == "failure-receipt-write" for row in observation["cleanup_errors"]))
+                else:
+                    self.assertEqual(json.loads((output / "initialization-failure.json").read_bytes()), observation)
+                result = deepcopy(observation)
+            finally:
+                # A regression must fail its assertions without leaking a test
+                # child into another test or leaving a blocked reader behind.
+                for process in children:
+                    if process.poll() is None:
+                        process.kill()
+                    process.wait(timeout=3)
+                    for stream in (process.stdin, process.stdout):
+                        if stream is not None and not stream.closed:
+                            stream.close()
+                reader = getattr(client, "reader", None)
+                if reader is not None and reader.ident is not None:
+                    reader.join(timeout=3)
+                for name in ("stderr", "wire"):
+                    stream = getattr(client, name, None)
+                    if stream is not None and not stream.closed:
+                        stream.close()
+                if isinstance(getattr(client, "pidfd", None), int):
+                    try:
+                        os.close(client.pidfd)
+                    except OSError:
+                        pass
+        self.assertEqual(set(os.listdir("/proc/self/fd")), before_fds)
+        return result
+
+    def test_pidfd_open_failure_reaps_original_child_without_fabricating_identity(self):
+        self.exercise_failure("pidfd-open")
+
+    def test_owner_identity_failure_closes_already_open_pidfd(self):
+        self.exercise_failure("owner-identity")
+
+    def test_reader_start_failure_before_start_does_not_join_unstarted_thread(self):
+        self.exercise_failure("reader-start-before")
+
+    def test_reader_start_failure_after_real_start_drains_reader(self):
+        self.exercise_failure("reader-start-after")
+
+    def test_launch_write_failure_uses_independent_failure_receipt(self):
+        self.exercise_failure("launch-write")
+
+    def test_baseexception_during_construction_also_closes_owned_resources(self):
+        self.exercise_failure("pidfd-open", error_type=KeyboardInterrupt)
+
+    def test_uncooperative_owned_child_is_killed_and_never_reported_as_normal_close(self):
+        self.exercise_failure("pidfd-open", stubborn=True)
+
+    def test_incomplete_group_observation_stays_explicitly_failed(self):
+        result = self.exercise_failure("launch-write", group_unknown=True)
+        self.assertFalse(result["process_group_gone"])
+        self.assertTrue(result["cleanup_errors"])
+
+    def test_unwritable_failure_receipt_emits_bounded_real_stderr_fallback(self):
+        read_fd, write_fd = os.pipe()
+        saved_stderr = os.dup(2)
+        try:
+            os.dup2(write_fd, 2)
+            result = self.exercise_failure("launch-write", receipt_failure=True)
+        finally:
+            os.dup2(saved_stderr, 2)
+            os.close(saved_stderr)
+            os.close(write_fd)
+        try:
+            raw = os.read(read_fd, 8193)
+        finally:
+            os.close(read_fd)
+        self.assertGreater(len(raw), 0)
+        self.assertLessEqual(len(raw), 8192)
+        fallback = json.loads(raw)
+        self.assertTrue(fallback["diagnostic_file_write_failed"])
+        self.assertFalse(fallback["construction_succeeded"])
+        self.assertFalse(fallback["qualification_claimed"])
+        self.assertFalse(fallback["cleanup_complete"])
+        self.assertEqual(fallback["popen_child_pid"], result["popen_child"]["pid"])
+        self.assertTrue(fallback["reader_stopped"])
+        self.assertTrue(all(fallback["streams_closed"].values()))
+
+    def test_successful_constructor_keeps_normal_close_format(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            client = q.Mcp([sys.executable, "-I", "-S", "-c", "import sys; sys.stdin.buffer.read()"],
+                           root, {}, root / "success")
+            result = client.close()
+            self.assertEqual(set(result), {"returncode", "elapsed_seconds", "forced_cleanup", "reader_stopped",
+                                          "owner", "owner_pidfd_exited", "process_group_gone"})
+            self.assertEqual(result["returncode"], 0)
+            self.assertEqual(result["forced_cleanup"], [])
+            self.assertTrue(result["reader_stopped"] and result["owner_pidfd_exited"] and result["process_group_gone"])
+            self.assertFalse((root / "success" / "initialization-failure.json").exists())
 
 
 if __name__ == "__main__":

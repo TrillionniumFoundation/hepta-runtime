@@ -1,7 +1,7 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! Revision 4 checks for exact body containment and explicitly separated external functions.
+//! Revision 4 checks for exact body membership, reference accounting and external functions.
 
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
@@ -286,6 +286,166 @@ pub(super) fn validate_functions(observation: &Value) -> Result<()> {
 		{
 			bail!("Ghidra function inventory counts or completeness are inconsistent");
 		}
+	}
+	Ok(())
+}
+
+fn encoded_reference_space(space: &str) -> String {
+	const HEX: &[u8; 16] = b"0123456789ABCDEF";
+	let mut encoded = String::new();
+	for byte in space.bytes() {
+		if byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'~' | b'-') {
+			encoded.push(char::from(byte));
+		} else {
+			encoded.push('%');
+			encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+			encoded.push(char::from(HEX[usize::from(byte & 15)]));
+		}
+	}
+	encoded
+}
+
+fn reference_endpoint<'a>(
+	row: &'a Value,
+	address_field: &str,
+	space_field: &str,
+) -> Result<(&'a str, &'a str, u64)> {
+	let address = row[address_field]
+		.as_str()
+		.context("Ghidra reference address absent")?;
+	let space = row[space_field]
+		.as_str()
+		.filter(|value| !value.is_empty())
+		.context("Ghidra reference address space absent")?;
+	let value = if space == "ram" {
+		address
+	} else {
+		let prefix = format!("{}:", encoded_reference_space(space));
+		address
+			.strip_prefix(&prefix)
+			.context("Ghidra reference space prefix is not its canonical UTF-8 encoding")?
+	};
+	Ok((address, space, offset(value)?))
+}
+
+fn reference_in_selected_scope(observation: &Value, address: u64) -> Result<bool> {
+	let function = &observation["function"];
+	if address == observed_offset(&function["entry_address"])? {
+		return Ok(true);
+	}
+	for range in function["body_ranges"]
+		.as_array()
+		.context("Ghidra reference body ranges absent")?
+	{
+		if observed_offset(&range["min_address"])? <= address
+			&& address <= observed_offset(&range["max_address"])?
+		{
+			return Ok(true);
+		}
+	}
+	Ok(false)
+}
+
+pub(super) fn validate_xrefs(observation: &Value) -> Result<()> {
+	for (field, expected) in [
+		("incoming_scope", "selected_function_body_and_entry"),
+		("outgoing_scope", "selected_function_body_and_entry"),
+		("reference_default_address_space", "ram"),
+		(
+			"reference_address_format",
+			"default-space-hex-or-utf8-space-unsigned64.v1",
+		),
+		("reference_filter", "exclude-isEntryPointReference"),
+		("reference_deduplication", "from,to,type,operand,primary"),
+		(
+			"reference_order",
+			"ghidra-address-from-to-type-operand-primary",
+		),
+		(
+			"reference_scan_accounting",
+			"raw-includes-entrypoint-filter-and-duplicates.v1",
+		),
+	] {
+		if observation[field] != expected {
+			bail!("Ghidra revision 4 reference scope or encoding is inconsistent");
+		}
+	}
+	for direction in ["incoming", "outgoing"] {
+		let rows_field = format!("{direction}_references");
+		counted_rows(
+			observation,
+			&rows_field,
+			&format!("returned_{direction}_references"),
+			128,
+		)?;
+		let rows = observation[&rows_field]
+			.as_array()
+			.context("Ghidra reference rows absent")?;
+		let count = |field: &str| -> Result<u64> {
+			observation[field]
+				.as_u64()
+				.context("Ghidra reference accounting requires unsigned integer counts")
+		};
+		let raw = count(&format!("scanned_{direction}_references"))?;
+		let filtered = count(&format!("filtered_{direction}_entry_point_references"))?;
+		let duplicate = count(&format!("duplicate_{direction}_references_in_scan"))?;
+		let unique = count(&format!("unique_{direction}_references_in_scan"))?;
+		let omitted = count(&format!("omitted_{direction}_references_in_scan"))?;
+		let budget_omitted = count(&format!("budget_omitted_{direction}_references"))?;
+		let returned = rows.len() as u64;
+		let complete = observation[format!("{direction}_scan_complete")]
+			.as_bool()
+			.context("Ghidra reference scan completeness absent")?;
+		if raw > 4096
+			|| filtered > raw
+			|| duplicate > raw
+			|| unique > raw
+			|| (duplicate != 0 && unique == 0)
+			|| filtered
+				.checked_add(duplicate)
+				.and_then(|sum| sum.checked_add(unique))
+				!= Some(raw)
+			|| returned.checked_add(budget_omitted) != Some(unique)
+			|| raw.checked_sub(returned) != Some(omitted)
+			|| (!complete && raw != 4096)
+		{
+			bail!("Ghidra raw, filtered, duplicate, unique or budget reference counts disagree");
+		}
+		let mut identities = BTreeSet::new();
+		for row in rows {
+			let (from, from_space, from_offset) =
+				reference_endpoint(row, "from_address", "from_space")?;
+			let (to, to_space, to_offset) = reference_endpoint(row, "to_address", "to_space")?;
+			let kind = row["reference_type"]
+				.as_str()
+				.filter(|value| !value.is_empty())
+				.context("Ghidra reference type name absent")?;
+			let operand = i32::try_from(
+				row["operand_index"]
+					.as_i64()
+					.context("Ghidra reference operand absent")?,
+			)
+			.context("Ghidra reference operand exceeds the Java integer range")?;
+			let primary = row["primary"]
+				.as_bool()
+				.context("Ghidra reference primary flag absent")?;
+			let (owned_space, owned_offset) = if direction == "incoming" {
+				(to_space, to_offset)
+			} else {
+				(from_space, from_offset)
+			};
+			if row["entry_point_reference"] != false
+				|| !row["call"].is_boolean()
+				|| row["source_type"].as_str().is_none_or(str::is_empty)
+				|| owned_space != "ram"
+				|| !reference_in_selected_scope(observation, owned_offset)?
+				|| !identities.insert((from, to, kind, operand, primary))
+			{
+				bail!("Ghidra reference is synthetic, duplicated or outside the selected body and entry");
+			}
+		}
+		// Ordering uses Ghidra Address.compareTo, including its address-space semantics.
+		// The fixed engine oracle checks that order; encoded names cannot reconstruct it here.
 	}
 	Ok(())
 }

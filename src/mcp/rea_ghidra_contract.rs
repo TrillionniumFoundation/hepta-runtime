@@ -308,6 +308,9 @@ pub(crate) fn validate_observation(
 				bail!("Ghidra cross-reference counts or completeness are inconsistent");
 			}
 		}
+		if revision == Some(4) {
+			revision_four::validate_xrefs(observation)?;
+		}
 	}
 	if operation == StaticOperation::Decompile {
 		let code = observation["c_code"]

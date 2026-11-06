@@ -2304,7 +2304,7 @@ impl OctofsServer {
 			idempotent_hint = true,
 			open_world_hint = false
 		),
-		description = "Admit one fixed GNU readelf/objdump operation, JADX classes/sources operation, or versioned Ghidra ELF inventory/function analysis through the existing durable job owner. Ghidra revision 2 allows functions, function, decompile and xrefs; selected operations require one canonical function entry address. Requires exact profile and artifact SHA-256 identities. Preserve the complete request and idempotency key after uncertainty. Reads owned build artifacts without executing them. Analysis, decompilation, output and resource use are bounded; results are partial engine observations."
+		description = "Admit one fixed GNU readelf/objdump operation, JADX classes/sources operation, or versioned Ghidra ELF inventory/function analysis through the existing durable job owner. Ghidra revisions 2/3/4 admit functions, function, decompile and xrefs. Selected operations require a canonical lowercase memory address: revisions 2/3 require an exact function entry, while revision 4 also resolves an address in a function body. Requires exact profile and artifact SHA-256 identities. Preserve the complete request and idempotency key after uncertainty. Reads owned build artifacts without executing them. Analysis, decompilation, output and resource use are bounded; results are partial engine observations."
 	)]
 	async fn rea_static_start(
 		&self,
