@@ -523,7 +523,8 @@ fn generator_noise_is_stripped_but_parameters_named_like_it_survive() {
 /// The served tool list carries no generator noise and keeps every parameter.
 #[tokio::test(flavor = "multi_thread")]
 async fn served_tool_schemas_carry_no_generator_noise() {
-	let (client, _server_task, _unsolicited) = connect_legacy().await;
+	let raw_before = serde_json::to_value(OctofsServer::cached_tool_router().list_all()).unwrap();
+	let (client, server_task, _unsolicited) = connect_legacy().await;
 	let tools = client.list_tools(None).await.expect("list tools");
 	assert_eq!(tools.tools.len(), 10);
 	for name in [
@@ -569,6 +570,39 @@ async fn served_tool_schemas_carry_no_generator_noise() {
 	] {
 		assert!(properties.contains_key(name), "view keeps `{name}`");
 	}
+	let repeated = client
+		.list_tools(None)
+		.await
+		.expect("repeat legacy tool list");
+	assert_eq!(tools.tools, repeated.tools);
+	assert_eq!(repeated.ttl_ms, None);
+	assert_eq!(repeated.cache_scope, None);
+	let (modern, modern_task, _) = connect().await;
+	let modern_tools = modern.list_tools(None).await.expect("modern tool list");
+	assert_eq!(tools.tools, modern_tools.tools);
+	assert_eq!(modern_tools.ttl_ms, Some(0));
+	assert_eq!(modern_tools.cache_scope, Some(CacheScope::Public));
+	assert_eq!(
+		serde_json::to_value(OctofsServer::cached_tool_router().list_all()).unwrap(),
+		raw_before,
+		"response schema sanitization must not mutate shared definitions"
+	);
+	close_test_connection(client, server_task).await;
+	close_test_connection(modern, modern_task).await;
+}
+
+async fn close_test_connection(
+	client: RunningService<RoleClient, RecordingClient>,
+	server_task: tokio::task::JoinHandle<()>,
+) {
+	tokio::time::timeout(Duration::from_secs(5), client.cancel())
+		.await
+		.expect("client teardown within 5s")
+		.expect("cancel client");
+	tokio::time::timeout(Duration::from_secs(5), server_task)
+		.await
+		.expect("server teardown within 5s")
+		.expect("server task completed");
 }
 
 async fn call_runtime_tool_text(
@@ -592,6 +626,224 @@ async fn call_runtime_tool_text(
 		})
 		.unwrap_or_default();
 	(result.is_error == Some(true), text)
+}
+
+/// Sharing definitions must not share the receiver's workdir, view history, or lifetime.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cached_router_keeps_mcp_sessions_and_teardown_independent() {
+	async fn connect_instance(
+		instance: OctofsServer,
+	) -> (
+		RunningService<RoleClient, RecordingClient>,
+		tokio::task::JoinHandle<()>,
+	) {
+		let (client_io, server_io) = tokio::io::duplex(4096);
+		let server_task = tokio::spawn(async move {
+			let server = instance
+				.serve(server_io)
+				.await
+				.expect("serve isolated instance");
+			server.waiting().await.expect("isolated connection closed");
+		});
+		let client = tokio::time::timeout(
+			Duration::from_secs(5),
+			RecordingClient {
+				unsolicited: Arc::new(Mutex::new(Vec::new())),
+				channel: Arc::new(Mutex::new(Vec::new())),
+				protocol_version: ProtocolVersion::V_2026_07_28,
+			}
+			.serve_with_lifecycle(
+				client_io,
+				ClientLifecycleMode::Auto {
+					preferred_versions: vec![ProtocolVersion::V_2026_07_28],
+					legacy_version: None,
+				},
+			),
+		)
+		.await
+		.expect("isolated handshake within 5s")
+		.expect("serve isolated client");
+		(client, server_task)
+	}
+
+	let root_a = tempfile::tempdir().unwrap();
+	let root_b = tempfile::tempdir().unwrap();
+	let path_a = root_a.path().canonicalize().unwrap();
+	let path_b = root_b.path().canonicalize().unwrap();
+	tokio::fs::create_dir(path_a.join("nested")).await.unwrap();
+	for (path, contents) in [
+		(path_a.join("marker.txt"), "root_a_only\n"),
+		(path_b.join("marker.txt"), "root_b_only\n"),
+		(path_a.join("nested/marker.txt"), "nested_a_only\n"),
+		(path_a.join("shared.txt"), "shared_cache_fixture\n"),
+	] {
+		tokio::fs::write(path, contents).await.unwrap();
+	}
+	let instance_a = OctofsServer::with_root(path_a.clone());
+	let instance_b = OctofsServer::with_root(path_b);
+	let workdir_a = Arc::downgrade(&instance_a.workdir);
+	let workdir_b = Arc::downgrade(&instance_b.workdir);
+	let cache_a = Arc::downgrade(&instance_a.view_cache);
+	let cache_b = Arc::downgrade(&instance_b.view_cache);
+	let ((client_a, server_a), (client_b, server_b)) =
+		tokio::join!(connect_instance(instance_a), connect_instance(instance_b));
+	let ((failed_a, text_a), (failed_b, text_b)) = tokio::join!(
+		call_runtime_tool_text(&client_a, "view", json!({"path":"marker.txt","full":true})),
+		call_runtime_tool_text(&client_b, "view", json!({"path":"marker.txt","full":true})),
+	);
+	assert!(!failed_a && text_a.contains("root_a_only") && !text_a.contains("root_b_only"));
+	assert!(!failed_b && text_b.contains("root_b_only") && !text_b.contains("root_a_only"));
+
+	let (failed, text) =
+		call_runtime_tool_text(&client_a, "workdir", json!({"path":"nested"})).await;
+	assert!(!failed, "{text}");
+	let ((failed_a, text_a), (failed_b, text_b)) = tokio::join!(
+		call_runtime_tool_text(&client_a, "view", json!({"path":"marker.txt","full":true})),
+		call_runtime_tool_text(&client_b, "view", json!({"path":"marker.txt","full":true})),
+	);
+	assert!(!failed_a && text_a.contains("nested_a_only"));
+	assert!(!failed_b && text_b.contains("root_b_only") && !text_b.contains("nested_a_only"));
+	let (failed, text) = call_runtime_tool_text(&client_a, "workdir", json!({"reset":true})).await;
+	assert!(!failed, "{text}");
+	let (failed, text) =
+		call_runtime_tool_text(&client_a, "view", json!({"path":"marker.txt","full":true})).await;
+	assert!(!failed && text.contains("root_a_only"), "{text}");
+
+	let shared = path_a.join("shared.txt");
+	let (failed, text) = call_runtime_tool_text(&client_a, "view", json!({"path":shared})).await;
+	assert!(!failed && text.contains("shared_cache_fixture"), "{text}");
+	let (failed, text) = call_runtime_tool_text(&client_a, "view", json!({"path":shared})).await;
+	assert!(
+		!failed && text.contains("unchanged since you last viewed"),
+		"{text}"
+	);
+	let (failed, text) = call_runtime_tool_text(&client_b, "view", json!({"path":shared})).await;
+	assert!(!failed && text.contains("shared_cache_fixture"), "{text}");
+	assert!(!text.contains("unchanged since you last viewed"));
+
+	close_test_connection(client_a, server_a).await;
+	assert!(
+		workdir_a.upgrade().is_none(),
+		"router must not retain session A workdir"
+	);
+	assert!(
+		cache_a.upgrade().is_none(),
+		"router must not retain session A cache"
+	);
+	assert!(workdir_b.upgrade().is_some() && cache_b.upgrade().is_some());
+	let (failed, text) =
+		call_runtime_tool_text(&client_b, "view", json!({"path":"marker.txt","full":true})).await;
+	assert!(!failed && text.contains("root_b_only"), "{text}");
+	close_test_connection(client_b, server_b).await;
+	assert!(
+		workdir_b.upgrade().is_none(),
+		"router must not retain session B workdir"
+	);
+	assert!(
+		cache_b.upgrade().is_none(),
+		"router must not retain session B cache"
+	);
+}
+
+/// Runtime configuration is process-global, so perform its transition in a child process.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn cached_router_rechecks_runtime_tool_visibility() {
+	const CHILD: &str = "HEPTA_SHARED_TOOL_ROUTER_CONFIG_TEST_CHILD";
+	if std::env::var_os(CHILD).is_none() {
+		let output = tokio::process::Command::new(std::env::current_exe().unwrap())
+			.args([
+				"mcp::server::server_tests::cached_router_rechecks_runtime_tool_visibility",
+				"--exact",
+				"--test-threads=1",
+			])
+			.env(CHILD, "1")
+			.output()
+			.await
+			.unwrap();
+		assert!(
+			output.status.success(),
+			"{}\n{}",
+			String::from_utf8_lossy(&output.stdout),
+			String::from_utf8_lossy(&output.stderr)
+		);
+		return;
+	}
+	let raw_before = serde_json::to_value(OctofsServer::cached_tool_router().list_all()).unwrap();
+	let (client, server_task, _) = connect_legacy().await;
+	let before = client.list_tools(None).await.expect("filesystem tool list");
+	assert!(before.tools.iter().any(|tool| tool.name == "shell"));
+	assert!(!before.tools.iter().any(|tool| tool.name == "host_list"));
+	assert!(client
+		.call_tool(CallToolRequestParams::new("host_list"))
+		.await
+		.is_err());
+
+	let root = tempfile::Builder::new()
+		.tempdir_in(std::env::temp_dir().canonicalize().unwrap())
+		.unwrap();
+	let state = root.path().join("state");
+	tokio::fs::create_dir(&state).await.unwrap();
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		tokio::fs::set_permissions(&state, std::fs::Permissions::from_mode(0o700))
+			.await
+			.unwrap();
+	}
+	let config_path = root.path().join("runtime.json");
+	tokio::fs::write(
+		&config_path,
+		serde_json::to_vec(&json!({
+			"state_dir":state,
+			"hosts":{"fixture":{
+				"ssh_target":"never-connect.invalid",
+				"platform":"linux",
+				"remote_state_dir":"/never-launch",
+				"allow_execute":false,
+				"allow_pty":false,
+				"allow_write":false
+			}}
+		}))
+		.unwrap(),
+	)
+	.await
+	.unwrap();
+	let config = crate::mcp::runtime::RuntimeConfig::load(&config_path).unwrap();
+	crate::mcp::runtime::init_runtime(config).unwrap();
+
+	let after = client
+		.list_tools(None)
+		.await
+		.expect("runtime tool list in existing session");
+	assert!(!after.tools.iter().any(|tool| tool.name == "shell"));
+	assert!(after.tools.iter().any(|tool| tool.name == "host_list"));
+	assert_eq!(after.ttl_ms, None);
+	assert_eq!(after.cache_scope, None);
+	let (failed, text) = call_runtime_tool_text(&client, "host_list", json!({})).await;
+	assert!(!failed && text.contains("fixture"), "{text}");
+	assert!(client
+		.call_tool(
+			CallToolRequestParams::new("shell")
+				.with_arguments(json!({"command":"true"}).as_object().unwrap().clone(),)
+		)
+		.await
+		.is_err());
+
+	let (modern, modern_task, _) = connect().await;
+	let fresh = modern
+		.list_tools(None)
+		.await
+		.expect("runtime tool list in fresh session");
+	assert_eq!(after.tools, fresh.tools);
+	assert_eq!(fresh.ttl_ms, Some(0));
+	assert_eq!(fresh.cache_scope, Some(CacheScope::Public));
+	assert_eq!(
+		serde_json::to_value(OctofsServer::cached_tool_router().list_all()).unwrap(),
+		raw_before,
+		"runtime visibility and schema responses must not alter cached definitions"
+	);
+	close_test_connection(client, server_task).await;
+	close_test_connection(modern, modern_task).await;
 }
 
 /// Destructive remote integration test. It is ignored by default and must run
