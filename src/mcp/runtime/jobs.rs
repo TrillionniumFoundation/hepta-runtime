@@ -4460,15 +4460,6 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 	};
 	let record = check_ref_async(&reference).await?;
 	let host = runtime_config()?.host(&record.host)?;
-	let request = json!({
-		"job_id": record.id,
-		"job_dir": record.remote_job_dir,
-		"request_digest": record.request_digest,
-		"unit": record.unit,
-		"stdout_offset": params.stdout_offset.unwrap_or(0),
-		"stderr_offset": params.stderr_offset.unwrap_or(0),
-		"limit": params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),
-	});
 	let output: Value = if super::ssh::observation_pool_requested() {
 		use super::ssh::{run_job_observation, JobObservation};
 		let observation = if record.system_jobctl {
@@ -4497,6 +4488,15 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 		run_jobctl(host, &json!({"op":"read","job_id":record.id,
             "stdout_offset":params.stdout_offset.unwrap_or(0),"stderr_offset":params.stderr_offset.unwrap_or(0),"limit":params.limit.unwrap_or(16384)})).await?
 	} else {
+		let request = json!({
+			"job_id": record.id,
+			"job_dir": record.remote_job_dir,
+			"request_digest": record.request_digest,
+			"unit": record.unit,
+			"stdout_offset": params.stdout_offset.unwrap_or(0),
+			"stderr_offset": params.stderr_offset.unwrap_or(0),
+			"limit": params.limit.unwrap_or(65_536).min(MAX_LOG_READ_BYTES),
+		});
 		run_python_json(
 			host,
 			&bound_remote_code(READ_CODE)?,

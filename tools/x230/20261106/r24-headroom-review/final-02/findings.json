@@ -1,0 +1,176 @@
+{
+  "baseline_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "cpu_budget": {
+    "baseline_controller_cpu_us_per_call_assumption": 20000,
+    "expected_argv_measured_realloc_count": null,
+    "expected_argv_point_estimate": null,
+    "linear_allocation_only_scenario_saved_us": 3.3737986909090907,
+    "linear_scenario_percent": 0.016868993454545452,
+    "model_limit": "This assigns all R27 savings linearly to allocation count only as a planning illustration; it is not a measured forecast, upper bound, allocator unit price or confidence interval.",
+    "new_CPU_performance_result": null,
+    "option_temporary_string_source_calls": 60,
+    "scenarios": [
+      {
+        "hypothetical_saved_cpu_us_per_call": 1,
+        "percent_of_20000us": 0.005
+      },
+      {
+        "hypothetical_saved_cpu_us_per_call": 3.3737986909090907,
+        "percent_of_20000us": 0.016868993454545452
+      },
+      {
+        "hypothetical_saved_cpu_us_per_call": 10,
+        "percent_of_20000us": 0.05
+      },
+      {
+        "hypothetical_saved_cpu_us_per_call": 50,
+        "percent_of_20000us": 0.25
+      },
+      {
+        "hypothetical_saved_cpu_us_per_call": 200,
+        "percent_of_20000us": 1.0
+      }
+    ],
+    "source": "Parent-provided approximate historical R24 controller CPU/call; exact measured R27 ratio is separately retained in prior original README."
+  },
+  "metric_scope": {
+    "benchmark_lines": [
+      502,
+      514
+    ],
+    "counter": "same controller PID/start-ticks /proc/<pid>/stat utime+stime delta",
+    "historical_55rps_times_20ms_cpu_seconds_per_second": 1.1,
+    "includes_controller_threads": true,
+    "includes_remote_helper_CPU": false,
+    "includes_ssh_child_CPU": false,
+    "sampled_tree_cpu_is_performance_numerator": false,
+    "short_lived_or_reparented_child_coverage_complete": false,
+    "that_arithmetic_proves_a_specific_bottleneck": false,
+    "tree_sample_interval_ms": 100
+  },
+  "metric_source_files": [
+    {
+      "bytes": 37006,
+      "path": "reference/original-benchmark.py",
+      "sha256": "4d96f0bf2da2562e788f48be7c37589ab3a513be5f9d8b2d741afe5c08ea9eed"
+    },
+    {
+      "bytes": 12382,
+      "path": "reference/observation_resources.py",
+      "sha256": "f3402d51cb37b2fe20f4351b3a81ec5990a9fdaff93a846d21c07ccd557cb894"
+    }
+  ],
+  "minimum_next_evidence": [
+    "Separate wall/controller-self-CPU across profile validation, agent, queues, spawn/postexec, I/O, response verification, JSON and audit; keep original protocol/gates/zero-retry/custody.",
+    "Treat existing sampled descendant CPU as incomplete diagnostics and remote CPU as outside the controller numerator.",
+    "If retained verification/sync work dominates controller CPU, do not predict a throughput shift from remote helper startup reduction alone."
+  ],
+  "new_original_sources": [
+    {
+      "bytes": 6934,
+      "git_blob": "f4fc1a97ebf6658b2858a2cb52d8e7e9eaeb0e3f",
+      "path": "sources/src/mcp/runtime/stream.rs",
+      "sha256": "4fb9eed4b96291fd2b338950054dd5436b2ab5aa104de2833366814c2d211d4f",
+      "source_path": "src/mcp/runtime/stream.rs"
+    },
+    {
+      "bytes": 26431,
+      "git_blob": "c8a6b5ee5d54c26f5d2c06a5c06e840ead397e2f",
+      "path": "sources/src/mcp/runtime/stream_broker.py",
+      "sha256": "449a7b71de89de207c06e90a61b81194a0f5141cd19b09691d05596d10b1d15a",
+      "source_path": "src/mcp/runtime/stream_broker.py"
+    },
+    {
+      "bytes": 4485,
+      "git_blob": "95c3494d381dd25c8281c4881e44d3e6d49ac6fd",
+      "path": "sources/src/mcp/runtime/multi_read.rs",
+      "sha256": "c0728d40232f18ce6783098cff5a1897f78a4b22f5be0f3c6fec40916455deea",
+      "source_path": "src/mcp/runtime/multi_read.rs"
+    },
+    {
+      "bytes": 4817,
+      "git_blob": "ed5085977b19e3dce417ebfbfe18e23f2e7eea0d",
+      "path": "sources/src/mcp/runtime/multi_read_host.py",
+      "sha256": "6f83b3e1031642e9981310916181858941dec51bb1696a79087beeb60a6e3eb5",
+      "source_path": "src/mcp/runtime/multi_read_host.py"
+    }
+  ],
+  "prior_static_report_unchanged": [
+    {
+      "bytes": 11602,
+      "path": "../r24-next-hotspots-review-01/README.md",
+      "sha256": "e79a0ede08d04cdcfc908379dab0132e841b1efc450f20d9d36801ca26058d98"
+    },
+    {
+      "bytes": 11192,
+      "path": "../r24-next-hotspots-review-01/findings.json",
+      "sha256": "04e771d1109ad63849b1df44bc738af264375dae0bc1c42c30812d3323876e04"
+    },
+    {
+      "bytes": 2063,
+      "path": "../r24-next-hotspots-review-01/manifest.json",
+      "sha256": "0c2d5380f8f9b3e8fe27d805bff1ff609d957d57e95c016a1a4ac48686078a71"
+    }
+  ],
+  "r27_component_reference": {
+    "actual_ordinary_mix_savings_us": 0.61852976,
+    "adopted": false,
+    "bytes": 4983,
+    "full_runtime_qualification_run": false,
+    "git_blob": "9bb7ee5cbf82aaed4fb5c4863c509c03a3d913ae",
+    "mean_allocations_removed": 11,
+    "path": "history/r27-component-README.md",
+    "sha256": "e87c17273ae1901757d84a2cad6127af3fc1a7be98fe616a5b659591dcf009d1",
+    "six_host_acceptance_run": false,
+    "uses_same_static_command_stub": true
+  },
+  "recommendation": "Record the two micro-candidates; do not open another full qualification solely for them without material absolute-cost evidence. Keep R35 on its already planned original qualification. Investigate persistent observation framing only as a separate structural project after phase-cost attribution.",
+  "schema": "hepta-r24-hotspots-cpu-and-structural-review/v2",
+  "scope": {
+    "Cargo_executed": false,
+    "Rust_or_formatter_executed": false,
+    "adopted": false,
+    "fixtures_or_benchmarks_executed": false,
+    "frozen_packages_modified": false,
+    "git_refs_modified": false,
+    "new_runtime_performance_evidence": null,
+    "runtime_patch_created": false,
+    "x230_or_Mac_API_calls": 0
+  },
+  "structural_direction": {
+    "E_measured": null,
+    "F_measured": null,
+    "amortization_model": "For one explicitly defined metric, potential savings = F*(1-1/k)-E; fixed worker startup cost F, requests per generation k, added per-request framing cost E.",
+    "batch_alternative": "A new same-host job batch can amortize startup, but must specify each item identity/deadline/audit/output/partial-failure contract. It does not improve callers that still issue single requests; internal microbatch also needs fairness and per-logical-request admission proofs.",
+    "controller_CPU_improvement_established": false,
+    "current_process_path": [
+      "execute_inner builds Mode::Slave argv per request",
+      "captured constructs Command",
+      "spawn creates one local /usr/bin/ssh child",
+      "fixed remote python3 -c helper per Python status/read"
+    ],
+    "existing_related_not_drop_in": [
+      {
+        "facts": "Controller-local cooperative FD handoff broker; daemon intentionally independent of MCP lifetime; Rust invoke still creates Python per call. Not a cross-host durable-job observation protocol.",
+        "module": "stream.rs / stream_broker.py"
+      },
+      {
+        "facts": "Explicit same-host 1..16 file batch with per-file checks/shared byte ceiling and no cross-file atomic snapshot; uses one run_python_json for a batch. Not a job status/read batch.",
+        "module": "multi_read.rs / multi_read_host.py"
+      }
+    ],
+    "historical_scope": "No such worker protocol found in inspected current observation path and retained R25-R35 relevant patches/pool snapshots. This is not a claim about every unpublished implementation.",
+    "id": "bounded_persistent_readonly_observation_worker",
+    "implemented_here": false,
+    "required_contracts": [
+      "bounded request/response framing replaces per-operation EOF",
+      "worker generation + per-request correlation + complete original job binding",
+      "original absolute deadlines, cancel fences, no automatic retry and no late-response reassignment",
+      "separate bounded worker process custody and logical request/output leases; no early release before original child reap",
+      "every-request fresh policy/agent/socket/peer/remote metadata/owner checks retained",
+      "remote worker EOF/controller-loss/idle/total TTL behavior and original cleanup/reap proof",
+      "unknown frame, output or cleanup never counted as success"
+    ],
+    "scope_if_designed": "Initially fixed PythonStatus/PythonRead only; no raw commands, starts, cancellation or privileged jobctl broadening."
+  }
+}
