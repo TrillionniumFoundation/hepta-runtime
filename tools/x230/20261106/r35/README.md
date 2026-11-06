@@ -1,4 +1,4 @@
-# R35: qualification and original CI passed; first performance campaign running
+# R35: qualification, original CI and observation gates passed; normal lifecycle pending
 
 R35 starts from accepted R24 commit `baab4def80be7af015b2e7a594cb302f66c4130e`. It moves the legacy direct-read JSON allocation into the branch that consumes it and transfers ownership of the observation command instead of cloning it. Exactly three compiler input paths differ from R24. No cancellation reserve, concurrency threshold, transport authority check, cleanup rule, or acceptance threshold was changed.
 
@@ -28,7 +28,7 @@ Original qualification report, preparation, map, summary, full audit, raw native
 
 The original parent/normal-observation/lifecycle tools were installed once by job `1a1af801235-fc05-6921`, with complete successful native output and zero workloads started. The installation receipt and actual generated examples are preserved in [parent-installed-originals-01](parent-installed-originals-01/). The first exact original Rust CI job `1a1af88c330-fc05-696f` completed on x230 with all six original stages returning zero. Its complete 1,541/0-byte native streams, full 1,679-case inventory and original independent audit agree: 1,645 plain PASS, zero failed, 34 ignored and zero retries. All owned children and process groups were closed; source inputs stayed unchanged. This is the original workflow-equivalent Rust CI executed on x230; hosted GitHub Actions execution is not claimed.
 
-Qualification success is not performance acceptance. The first six-host normal ABBA plus boundary/recovery campaign is running under the unchanged Mac holder job `1a1af9bb312-fc05-6a14`. The original 90-second quiet period, fixed ABBA order, C1/C8/C16 workload and acceptance gates remain in force. No outcome is inferred while that job is running. The normal lifecycle materializer and holder have not been invoked; they remain gated on the actual normal-observation result. The original C1/C8/C16 throughput, p95, controller-CPU and RSS thresholds remain unchanged. R24 remains the accepted runtime. R34 was rejected on its first C8 throughput gate and is not a source baseline for this candidate.
+Qualification success is not performance acceptance. The first six-host normal ABBA plus boundary/recovery campaign completed under the unchanged Mac holder job `1a1af9bb312-fc05-6a14`. All seven original parent stages returned zero, all observation nonregression gates passed, and no automatic retry occurred. The original 90-second quiet period, fixed ABBA order, C1/C8/C16 workload and acceptance gates were preserved. The holder closed its foreground process and reaped its owned SSH agent; both its socket and owned directory were absent afterward. The normal lifecycle materializer and holder have not been invoked; they remain gated on the actual normal-observation result. The original C1/C8/C16 throughput, p95, controller-CPU and RSS thresholds remain unchanged. R24 remains the accepted runtime. R34 was rejected on its first C8 throughput gate and is not a source baseline for this candidate.
 
 ## Preserved provenance
 
@@ -50,3 +50,23 @@ Both archives were collected once after their original jobs closed. Each transfe
 The complete artifacts and original collection receipts are in [qualification-results-01](qualification-results-01/) and [exact-ci-results-01](exact-ci-results-01/). Exact-CI collection has zero receipt-binding errors. Full plans, reports, original nextest output, selected tool inputs and both original native streams remain available. The qualification archive records the excluded historical large-stdin source identity and prior cache-owner references explicitly; those original bodies remain in their separately published provenance records.
 
 The create-only Mac launcher installation succeeded once as `1a1af93b3b9-fc05-69ca`; all five package members matched their sealed identities. Observation inputs were materialized once as `1a1af949683-fc05-69d5`, with zero workloads started. Actual input SHA-256 is `eec0348217f6c679d1f965004f1bd8ecded2886fc1c654d45a9ad6ea700391e4`. The launcher bundle retains its at-creation CI-pending snapshot; a separate original-receipt closure note binds the completed CI without rewriting that history.
+
+## First normal-observation result
+
+This finite campaign passes the original nonregression gates. It does not establish a consistent throughput improvement, a statistical confidence claim, or final candidate adoption. R24 remains accepted while the gated original normal lifecycle ABBA is pending.
+
+| Concurrency | R24 calls/s | R35 calls/s | Throughput change | P95 change | Controller CPU/call change | P99 change (diagnostic) |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 7.729945 | 7.845292 | +1.49% | +1.98% | +1.27% | +13.07% |
+| 8 | 54.868183 | 53.410216 | -2.66% | +2.80% | +0.54% | +2.07% |
+| 16 | 55.257313 | 55.413634 | +0.28% | -0.83% | +1.19% | -6.04% |
+
+Controller sampled peak RSS was **18,908 KiB for R24 and 18,592 KiB for R35**, a reduction of 316 KiB. The original candidate ceiling was 19,420 KiB. RSS is a 100 ms sampled process peak, not an exact allocation bound or total cluster memory. Controller CPU excludes the harness and remote processes.
+
+The boundary test reported 32 successful admissions, 32 capacity refusals and zero other errors; drain and recovery passed. The original six-host cancellation/recovery correctness canary passed. It is separate from the still-pending normal lifecycle ABBA. The independent compiler monitor validated 301 observations at 1 Hz with zero validation errors; this sampling does not rule out activity between observations.
+
+The completed original report, gate summary, independent native audit, compiler-monitor audit, original Mac holder report and complete raw native terminal/read are preserved in [observation-originals-01](observation-originals-01/). The first workflow ran from 2026-11-06 06:46:19 UTC to 06:51:19 UTC. Complete bounded observation collection and postflight precede the normal lifecycle materialization.
+
+### Preparation executor interruption
+
+The local preparation executor became unavailable after the completed observation result had been retrieved. It did not restart the measurement or alter the measured source. Already published source, qualification, CI and launcher packages remain immutable; the original observation files remain on x230 and Mac, and these original receipt bytes are now published directly. Any unfinished preparation recovery is recorded explicitly, with original-byte identity required before calling a recovered artifact identical.
