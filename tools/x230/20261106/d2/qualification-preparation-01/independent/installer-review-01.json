@@ -1,0 +1,77 @@
+{
+  "schema": "hepta-d2-qualification-installer-independent-review/v1",
+  "reviewer": "evidence_review",
+  "recorded_date": "2026-11-06",
+  "conclusion": "no_blocking_issue_found_in_narrow_static_transport_review",
+  "source_and_input_review": {
+    "bytes": 7179,
+    "sha256": "142f51e3dd0ca8550590943a3f9d583b3a30b84339546e1e8370ae29735a2fb8",
+    "git_blob": "6efed1b8362c1e79d0902be28ce91bac41ef8a86"
+  },
+  "installer": {
+    "bytes": 6702,
+    "sha256": "678e4b6b8214fe25eec76ff66aad36449927f1a0fb7808f48b30faff166e6ef2",
+    "git_blob": "8a0f776767c820e80af854d8e15449b477acfd90"
+  },
+  "original_d1_installer": {
+    "bytes": 6110,
+    "sha256": "205f2a314c1aaed91dd5eeb86c356aef882d1cfb559fbfea0b339277e775edcf",
+    "git_blob": "120fd2e5e8fe7cb06853190bbbb57d188c9b696b"
+  },
+  "deployment_manifest": {
+    "bytes": 2521,
+    "sha256": "1c5bf4ab0cba19413c024b5a063407f9fe366c8fac7473d490261d12aabfeaf6",
+    "git_blob": "d0a3ff11a4587f1703a31c1c19374f7be4ba9e18"
+  },
+  "transport_archive": {
+    "bytes": 242726,
+    "sha256": "61532203353b3190be627aaa21456d16be13e0b437873760ee97fe1063deed2e",
+    "independently_downloaded_or_decompressed_in_this_review": false
+  },
+  "independently_executed_metadata_checks": {
+    "identity_helper_byte_equal": true,
+    "archive_reader_byte_equal": true,
+    "exact_fourteen_member_map": true,
+    "payload_sum": true,
+    "total_with_manifest": true,
+    "bound_unchanged": true,
+    "no_target_execution_import": true,
+    "root_empty_guard": true,
+    "exclusive_claim": true,
+    "exclusive_payload": true,
+    "no_extractall": true
+  },
+  "read_scope": [
+    "Entire exact installer and original D1 installer read from Git with independent byte length, SHA256 and Git-blob identity checks.",
+    "The identity and stable pinned_archive helpers are byte-for-byte equal to the original D1 installer.",
+    "The exact fixed 14-member manifest map equals the eight independently frozen candidate members, the recovered preparer, two sealed inputs and three unchanged original auditor sidecars.",
+    "Compressed input is fixed at 242,726 bytes and a full SHA256; expansion remains bounded at 4 MiB, members below 64, each file at most 1 MiB. Tar contents are read into memory and never filesystem-extracted.",
+    "Exact archive/manifest/member checks complete before any installation write. The already-created root is required to be canonical, user-owned and empty, and emptiness is checked again before the exclusive installation-started claim.",
+    "Payload files use O_EXCL and O_NOFOLLOW at mode 0600, with flush/fsync and byte-for-byte readback. A partial attempt is preserved; there is no cleanup, retry or overwrite.",
+    "No qualifier, compiler, test, auditor, cache move/delete, host operation or target code import exists in this installer."
+  ],
+  "counts": {
+    "manifest_entries": 14,
+    "archive_members_including_manifest": 15,
+    "payload_bytes_excluding_manifest": 227215,
+    "manifest_bytes": 2521,
+    "all_member_bytes": 229736
+  },
+  "operator_contract": {
+    "root": "/home/qian/hepta-runtime-validation-cost-20261106-d2",
+    "preexisting_directory": "Root has separately reported this private 0700 directory was created; installer verifies canonical path, ownership and emptiness.",
+    "staging": "Archive and installer must remain outside ROOT so upload artifacts cannot occupy the required empty target.",
+    "first_claim": "installation-started-01.json",
+    "completion_receipt": "installation-01.json",
+    "automatic_retries": 0,
+    "qualification_started_by_installer": false
+  },
+  "execution_boundary": {
+    "installer_or_target_executed": false,
+    "host_calls": false,
+    "cargo_or_workload_executed": false,
+    "tar_member_bodies_rehashed_in_this_review": false,
+    "git_refs_modified": false,
+    "note": "This addendum checks exact installer code and manifest bindings. It does not substitute for root's independent full staged-archive byte/member verification or actual installation receipt."
+  }
+}
