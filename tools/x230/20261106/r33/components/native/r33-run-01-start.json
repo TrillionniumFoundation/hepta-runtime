@@ -1,0 +1,34 @@
+{
+  "audit_recorded": true,
+  "job": {
+    "args": [
+      "-B",
+      "-c",
+      "import json,pathlib,hashlib,os,sys\nroot=pathlib.Path(\"/home/qian/hepta-runtime-r33-allocation-component-20261106\")\nreport_path=root/\"build-01/build-report.json\"\nraw=report_path.read_bytes();report=json.loads(raw)\nassert report[\"passed\"] is True and report[\"component_executed\"] is False and report[\"automatic_retries\"]==0\nmanifest=root/\"component/package-manifest.json\"\nassert hashlib.sha256(manifest.read_bytes()).hexdigest()==\"e2540903f9286b6fe81d269cacddf2acd2d1b818c6a771cb6fd84648b94e6dd7\"\nfor name,pin in json.loads(manifest.read_bytes())[\"files\"].items():\n data=(root/\"component\"/name).read_bytes()\n assert len(data)==pin[\"bytes\"] and hashlib.sha256(data).hexdigest()==pin[\"sha256\"]\nbinary=root/\"build-01/target/release/hepta-r33-pinned-path-component\"\nactual=binary.read_bytes()\nassert report[\"binary\"][\"path\"]==str(binary) and report[\"binary\"][\"bytes\"]==len(actual) and report[\"binary\"][\"sha256\"]==hashlib.sha256(actual).hexdigest()\noutput=root/\"run-01.jsonl\";assert not os.path.lexists(output)\nprint(json.dumps({\"phase\":\"execute_frozen_allocation_component\",\"build_report_sha256\":hashlib.sha256(raw).hexdigest(),\"binary\":report[\"binary\"],\"automatic_retries\":0,\"timing_measurement\":False}),flush=True)\nos.execv(str(binary),[str(binary),str(output)])\n"
+    ],
+    "created_unix_ms": 1793928795744,
+    "cwd": "/home/qian",
+    "env_keys": [],
+    "executable": "/usr/bin/python3",
+    "execution_mode": "operator",
+    "host": "x230",
+    "id": "1a1ae7d1660-fc05-5fd8",
+    "idempotency_key": "x230-r33-allocation-component-run-20261106-01",
+    "launch_error": null,
+    "launch_state": "launched",
+    "remote_job_dir": "/home/qian/.local/state/hepta-runtime-mac-worker/jobs/1a1ae7d1660-fc05-5fd8",
+    "request_digest": "fd74ced1b1d0413f131dcfb181dbe789f4107adf2392c091b60375498dccde16",
+    "request_fingerprint": 18263449788920906047,
+    "ssh_target": "x230-ts",
+    "system_jobctl": false,
+    "unit": "hepta-runtime-job-1a1ae7d1660-fc05-5fd8"
+  },
+  "launch": {
+    "backend": "systemd",
+    "launcher_pid": null,
+    "ok": true,
+    "unit": "hepta-runtime-job-1a1ae7d1660-fc05-5fd8"
+  },
+  "local_record_pending": false,
+  "reused": false
+}

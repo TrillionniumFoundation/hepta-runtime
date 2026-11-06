@@ -1,0 +1,2199 @@
+{
+  "adoption_scope": "accepted R24 plus peekable traversal and immutable CString path components only",
+  "agent_identity": {
+    "identity_frame_sha256": "635c4592f1aa9fc22b0eb8b44e104acbdfa3d24f7876629550dcce55e9392219",
+    "peer": [
+      3920106,
+      1000,
+      1000
+    ],
+    "socket_identity": [
+      2053,
+      9211159,
+      1000,
+      49661,
+      1,
+      0,
+      1793934051999342771,
+      1793934051999342771
+    ]
+  },
+  "attempt": "01",
+  "automatic_retries": 0,
+  "baseline_campaign_report": {
+    "bytes": 100033,
+    "path": "/home/qian/hepta-runtime-optimization-20261105-r24/campaign-01/report.json",
+    "sha256": "066952f12414e8f7291e21e58a77d53d4cd712104557bd6bdfdd7c383f9f1e2a"
+  },
+  "baseline_enablement_verified": true,
+  "baseline_publication_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "baseline_publication_readback": {
+    "bytes": 1022,
+    "path": "/home/qian/hepta-runtime-optimization-20261105-r24/final-publication-readback.json",
+    "sha256": "38866c01fac54133c8a88e25bee90ea4a551e7273614f493bf44522a8273d3ca"
+  },
+  "baseline_source_inputs": {
+    "bytes": 34902,
+    "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/baseline-source-inputs.json",
+    "sha256": "db2896451a01108553c3b5fdb44322ba72ba16a61274f344437ddf129d63a33b"
+  },
+  "baseline_source_inputs_sha256": "e449e138216242c89b2ceff69babafe658411a42c73df0c66b222899540bdff7",
+  "baseline_source_inputs_unchanged": true,
+  "binaries": {
+    "A": {
+      "hepta-runtime": {
+        "bytes": 14373416,
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/hepta-runtime",
+        "sha256": "bc14cab1e632d6cd703f6a0f65d1a8e513b4471c09a403186d72e989e3f74c13"
+      },
+      "hepta-runtime-jobctl": {
+        "bytes": 739016,
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/hepta-runtime-jobctl",
+        "sha256": "61c90260057a405626a24a36ad43303c632f72d2d97929296acdffd748b79d62"
+      },
+      "native_process_driver": {
+        "bytes": 2896456,
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/native_process_driver",
+        "sha256": "51165c1e38409248f5fdb7da2036ebe5e05eec7576035e95bd4b8e2a5c675530"
+      }
+    },
+    "B": {
+      "hepta-runtime": {
+        "bytes": 14377384,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/hepta-runtime",
+        "sha256": "c55f2f8696e01b239e4948da19279d0a425ac2737d8142b58153da8091d45204"
+      },
+      "hepta-runtime-jobctl": {
+        "bytes": 739016,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/hepta-runtime-jobctl",
+        "sha256": "61c90260057a405626a24a36ad43303c632f72d2d97929296acdffd748b79d62"
+      },
+      "native_process_driver": {
+        "bytes": 2896456,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/native_process_driver",
+        "sha256": "51165c1e38409248f5fdb7da2036ebe5e05eec7576035e95bd4b8e2a5c675530"
+      }
+    }
+  },
+  "campaign_budget_seconds": 3300,
+  "candidate_preparation_gate": {
+    "adoption_scope": "accepted R24 plus peekable traversal and immutable CString path components only",
+    "baseline_full_source_inputs_sha256": "e449e138216242c89b2ceff69babafe658411a42c73df0c66b222899540bdff7",
+    "baseline_qualification": {
+      "bytes": 83365,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/report.json",
+      "sha256": "bf0c5814d28b163e4a90405026cd4d90e399370d1f910f8ac48cb580af1e4971"
+    },
+    "candidate_adopted": false,
+    "candidate_patch": {
+      "bytes": 11652,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/combined.patch",
+      "sha256": "a6ec7d9f3f75647eed0d421ba69de20cb504cf369c2dde4752ca19f1004133f5"
+    },
+    "changed_paths": [
+      "src/mcp/runtime/ssh_observation_profile.rs",
+      "src/mcp/runtime/ssh_observation_profile_tests.rs"
+    ],
+    "full_source_inputs_sha256": "e77749cbec0de76360973956116fe242ee8eb4f138b04a5e5cd3376877e2a03e",
+    "harness_files": 19,
+    "isolated_audit": {
+      "bytes": 1423409,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/isolated-tests.audit.json",
+      "sha256": "8704d8609754b10ce148e6e014dd99279b6bb95f88c4ff712191f69f9e58568e"
+    },
+    "isolated_summary": {
+      "bytes": 6878,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/isolated-tests/summary.json",
+      "sha256": "352f613378c8e16a5ef23a658ff2692819eefd130ec1ebf079f6672a110ca096"
+    },
+    "open_blockers": [
+      {
+        "id": "saturated-cancellation-capacity",
+        "reason": "R33 does not add cancellation reserve capacity; no saturated cancellation proof is claimed",
+        "scope": "not included in the R33 source change or normal lifecycle adoption",
+        "status": "open"
+      }
+    ],
+    "original_auditor_scope": "the unchanged qualifier audited the complete inventory and compressed case logs",
+    "original_job_id": "1a1ae8ce865-fc05-603f",
+    "passed": true,
+    "preparation": {
+      "bytes": 60636,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/preparation.json",
+      "sha256": "63ead27e4e2414be4daa840a5d8f20ce3e7f0f034fd71d66e4ec8b4e9da8c39b"
+    },
+    "qualification": {
+      "bytes": 83360,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/report.json",
+      "sha256": "00aed358a852cbdb9a54b9e97f6a63f66baf28b824dc4383ef900c8125d264a4"
+    },
+    "qualification_input": {
+      "bytes": 52436,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/input.json",
+      "sha256": "3753078ae1fa3dd7c9b2582d2d5a6e01335937b6651c5094314955e16b1af48d"
+    },
+    "qualification_launcher": {
+      "bytes": 25125,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/prepare_qualify.py",
+      "sha256": "c1e6ef1bf6d4a1c42a644a220ab00a5b14b95281e76e24f94526d367a07f351d"
+    },
+    "qualified_source_files": 220,
+    "saturated_cancellation_verified": false,
+    "selected_proposal": "peekable traversal and immutable CString path components on accepted R24",
+    "source_baseline_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+    "source_chain_and_cache_owner": {
+      "cache_owner_closed": true,
+      "cache_owner_closure_input": {
+        "bytes": 3918,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/cache-owner-closure-inputs.json",
+        "sha256": "d10e468c67c21691fd6cb77d080aa589430c30c61accb12482004d4b10cf0353"
+      },
+      "cache_owner_evidence": {
+        "exact_ci_native": {
+          "bytes": 731,
+          "path": "/home/qian/hepta-runtime-optimization-20261105-r31/rust-ci-native-02.json",
+          "sha256": "cb607f13cee99a31e1bc28e2792fad778ce1455c016dcc720780004f72c70ba2"
+        },
+        "exact_ci_report": {
+          "bytes": 14130,
+          "path": "/home/qian/hepta-runtime-optimization-20261105-r31/rust-ci-02/report.json",
+          "sha256": "26b5fee0d28798dc5fb6d383e38c365d914f1abedd3bc458e26ad5d9692deb7d"
+        },
+        "lifecycle_materializer_native": {
+          "bytes": 732,
+          "path": "/home/qian/hepta-runtime-optimization-20261105-r31/lifecycle-materialization-native-01.json",
+          "sha256": "c1c736016a9d30364091077486c9d061f94a4d5094bbd65b7ff871393bbe379b"
+        },
+        "lifecycle_materializer_read": {
+          "bytes": 6684,
+          "path": "/home/qian/hepta-runtime-optimization-20261105-r31/lifecycle-materialization-read-01.json",
+          "sha256": "34ce92c2b5532f3db7983a8e8889ed11cf0aedf36eb25f09a72986146cda3e7f"
+        },
+        "observation_native": {
+          "bytes": 729,
+          "path": "/home/qian/hepta-runtime-optimization-20261105-r31/observation-holder-native-02.json",
+          "sha256": "91d9f5cb0307e38d6bc4c2fe4d3f94b8b6e0671515fff7d0fb162a2743d34b2a"
+        },
+        "observation_parent": {
+          "bytes": 130426,
+          "path": "/home/qian/hepta-runtime-optimization-20261105-r31/campaign-02/report.json",
+          "sha256": "d52a34b1b5a5870f1676d1b060744834901bc7982ff967ec82fc492ee89321d1"
+        },
+        "observation_report": {
+          "bytes": 3559647,
+          "path": "/home/qian/hepta-runtime-optimization-20261105-r31/campaign-02/native-observation/report.json",
+          "sha256": "e0c29c5be7967ddcc272955c810bd156b14e6b3491adfba82805ee5a7c2115cf"
+        },
+        "observation_summary": {
+          "bytes": 13619,
+          "path": "/home/qian/hepta-runtime-optimization-20261105-r31/campaign-02/summary.json",
+          "sha256": "a35f08d2ad7afa70bd3e1f806709a355643febff549eba52bbdab91dd74c0b30"
+        },
+        "qualification_native": {
+          "bytes": 732,
+          "path": "/home/qian/hepta-runtime-optimization-20261105-r31/qualification-terminal-status-01.json",
+          "sha256": "f9f6de27c19b015e072f8169e7155783102d9b2ef3bc6ff2d8705927c0016b4e"
+        },
+        "qualification_preparation": {
+          "bytes": 55575,
+          "path": "/home/qian/hepta-runtime-optimization-20261105-r31/preparation-02.json",
+          "sha256": "77bdf6f1b008b65dfbedcac24b7ea3026e3946ad4fbff68ca96e5980b660d003"
+        },
+        "qualification_report": {
+          "bytes": 84072,
+          "path": "/home/qian/hepta-runtime-optimization-20261105-r31/qualification-01/report.json",
+          "sha256": "489e62778972d9a8f4b2908c205b23791a968dbf21dc2bdb995350f29305c5a9"
+        }
+      },
+      "current_machine_idle_claimed": false,
+      "original_auditors_reexecuted": false,
+      "original_chain_inputs": {
+        "r32/candidate.patch": {
+          "bytes": 2946,
+          "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain/r32/candidate.patch",
+          "sha256": "f009b618afb5dd574ef9d0b1bf2d73ecd108e2882779a05862ebafee9bc5019a"
+        },
+        "r32/input.json": {
+          "bytes": 49713,
+          "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain/r32/input.json",
+          "sha256": "ed47cc74d4189fa0941192846f2ce4e8e2103954c4a3b4636fd1aab69a774a00"
+        },
+        "r32/manifest.json": {
+          "bytes": 4631,
+          "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain/r32/manifest.json",
+          "sha256": "e1969d047545c70a857c733f3318b0c33140a3a8b6b0b85c2505f8457282985a"
+        },
+        "r33/baseline-overlay.patch": {
+          "bytes": 2946,
+          "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain/r33/baseline-overlay.patch",
+          "sha256": "f009b618afb5dd574ef9d0b1bf2d73ecd108e2882779a05862ebafee9bc5019a"
+        },
+        "r33/candidate.patch": {
+          "bytes": 9507,
+          "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain/r33/candidate.patch",
+          "sha256": "05472a554635d415bbafd4b2119c09d88696e90f4e0003cf81cfa8da9271b4d0"
+        },
+        "r33/input.json": {
+          "bytes": 50729,
+          "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain/r33/input.json",
+          "sha256": "46ff8e0cc8327fa97e346acd8afa8c6ab7ef2ffc40e8d2b75d221d4101d9b1f5"
+        },
+        "r33/manifest.json": {
+          "bytes": 7100,
+          "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain/r33/manifest.json",
+          "sha256": "4da10500f9108f484c4415ec726776685f61bfc73eccf7a12b23fed3f7ab53d5"
+        }
+      },
+      "r31_adoption_claimed": false,
+      "r31_lifecycle_abba_executed": false,
+      "r31_observation_performance_passed": false,
+      "source_chain": {
+        "bytes": 2776,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain-proof.json",
+        "sha256": "c93aa390e8f6f2d9d4175f4dd8ed1474a94e8f2d7466b1b19d3f9bc304810b32"
+      }
+    },
+    "source_map": {
+      "bytes": 24156,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/source-map.json",
+      "sha256": "b3260c858e507f3661da233a9d05fec80399b48ba12fdce250ad29eeca0ba09e"
+    },
+    "stages": [
+      "format",
+      "fmt-check",
+      "harness-tests",
+      "clippy",
+      "test-build",
+      "isolated-tests",
+      "audit-isolated-tests",
+      "release"
+    ],
+    "terminal": {
+      "bytes": 731,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-terminal-status-01.json",
+      "sha256": "d342cfc8c9976544f76e7f650ee8108d141a448bfbc7c47880d073e2987ad6f4"
+    },
+    "tests": {
+      "failed": 0,
+      "ignored": 34,
+      "passed": 1649,
+      "retries": 0,
+      "selected": 1683
+    }
+  },
+  "candidate_release": "R33",
+  "compiler_monitor": {
+    "guarded_body_end_monotonic_ns": 2636407646399368,
+    "guarded_body_start_monotonic_ns": 2636113374030003,
+    "independent_audit": {
+      "bytes": 841,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/compiler-monitor.audit.json",
+      "sha256": "aada6885a0022aac728e982ffc07deb7972fad4abdb317dd7727b04b94b11190"
+    },
+    "ledger": {
+      "bytes": 194925,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/compiler-monitor.json",
+      "sha256": "9da98aef8b6283f79824d5ab2ca733fd25e9540f5680819b37b143118c996c5e"
+    },
+    "limits": {
+      "join_timeout_seconds": 10.0,
+      "maximum_compiler_records": 8192,
+      "maximum_cpu_seconds_per_wall_second": 0.02,
+      "maximum_duration_ns": 3600000000000,
+      "maximum_error_records": 64,
+      "maximum_lateness_ns": 750000000,
+      "maximum_process_directories_per_scan": 16384,
+      "maximum_samples": 3603,
+      "maximum_scan_ns": 500000000,
+      "maximum_serialized_sample_bytes": 8388608,
+      "maximum_start_gap_ns": 2000000000,
+      "period_ns": 1000000000,
+      "ready_timeout_seconds": 5.0
+    },
+    "monitor_sources_unchanged": true,
+    "passed": true,
+    "sources": {
+      "module": {
+        "bytes": 12510,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/tools-01/compiler_monitor.py",
+        "sha256": "afb514362a9d8dd573b806f0dc87df16bd3a906e4574d10d91bf483b2e76cdcf"
+      },
+      "policy": {
+        "bytes": 1001,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/tools-01/compiler-monitor-policy-01.json",
+        "sha256": "ddb2e03d4a1a1610466a5dc2d1a544f554ad12fc31412483101b48a235402368"
+      },
+      "reader": {
+        "bytes": 6243,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/tools-01/compiler_state.py",
+        "sha256": "9da718654db04a646e081d2d719a2d6d4655ffe337bc0e3f906e736e4d77a251"
+      },
+      "validator": {
+        "bytes": 7055,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/tools-01/validate_compiler_monitor.py",
+        "sha256": "d2cd009adf1f35a394ffddcc8f8646cc0c1b856b78181ca321ea68f6468218b2"
+      }
+    }
+  },
+  "compiler_monitor_scope": "before prerequisite body and quiescence through original child cleanup and final source checks",
+  "correctness_stages_completed": true,
+  "final_candidate_adoption_requires": [
+    "normal lifecycle ABBA nonregression",
+    "qualified source",
+    "complete resource evidence"
+  ],
+  "finished_utc": "2026-11-06T03:05:46.427701+00:00",
+  "input_bindings": [
+    {
+      "bytes": 12510,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/tools-01/compiler_monitor.py",
+      "sha256": "afb514362a9d8dd573b806f0dc87df16bd3a906e4574d10d91bf483b2e76cdcf"
+    },
+    {
+      "bytes": 6243,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/tools-01/compiler_state.py",
+      "sha256": "9da718654db04a646e081d2d719a2d6d4655ffe337bc0e3f906e736e4d77a251"
+    },
+    {
+      "bytes": 7055,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/tools-01/validate_compiler_monitor.py",
+      "sha256": "d2cd009adf1f35a394ffddcc8f8646cc0c1b856b78181ca321ea68f6468218b2"
+    },
+    {
+      "bytes": 1001,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/tools-01/compiler-monitor-policy-01.json",
+      "sha256": "ddb2e03d4a1a1610466a5dc2d1a544f554ad12fc31412483101b48a235402368"
+    },
+    {
+      "bytes": 25125,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/prepare_qualify.py",
+      "sha256": "c1e6ef1bf6d4a1c42a644a220ab00a5b14b95281e76e24f94526d367a07f351d"
+    },
+    {
+      "bytes": 52436,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/input.json",
+      "sha256": "3753078ae1fa3dd7c9b2582d2d5a6e01335937b6651c5094314955e16b1af48d"
+    },
+    {
+      "bytes": 11652,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/combined.patch",
+      "sha256": "a6ec7d9f3f75647eed0d421ba69de20cb504cf369c2dde4752ca19f1004133f5"
+    },
+    {
+      "bytes": 60636,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/preparation.json",
+      "sha256": "63ead27e4e2414be4daa840a5d8f20ce3e7f0f034fd71d66e4ec8b4e9da8c39b"
+    },
+    {
+      "bytes": 731,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-terminal-status-01.json",
+      "sha256": "d342cfc8c9976544f76e7f650ee8108d141a448bfbc7c47880d073e2987ad6f4"
+    },
+    {
+      "bytes": 83360,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/report.json",
+      "sha256": "00aed358a852cbdb9a54b9e97f6a63f66baf28b824dc4383ef900c8125d264a4"
+    },
+    {
+      "bytes": 83365,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/report.json",
+      "sha256": "bf0c5814d28b163e4a90405026cd4d90e399370d1f910f8ac48cb580af1e4971"
+    },
+    {
+      "bytes": 24156,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/source-map.json",
+      "sha256": "b3260c858e507f3661da233a9d05fec80399b48ba12fdce250ad29eeca0ba09e"
+    },
+    {
+      "bytes": 6878,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/isolated-tests/summary.json",
+      "sha256": "352f613378c8e16a5ef23a658ff2692819eefd130ec1ebf079f6672a110ca096"
+    },
+    {
+      "bytes": 1423409,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/isolated-tests.audit.json",
+      "sha256": "8704d8609754b10ce148e6e014dd99279b6bb95f88c4ff712191f69f9e58568e"
+    },
+    {
+      "bytes": 2776,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain-proof.json",
+      "sha256": "c93aa390e8f6f2d9d4175f4dd8ed1474a94e8f2d7466b1b19d3f9bc304810b32"
+    },
+    {
+      "bytes": 2946,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain/r32/candidate.patch",
+      "sha256": "f009b618afb5dd574ef9d0b1bf2d73ecd108e2882779a05862ebafee9bc5019a"
+    },
+    {
+      "bytes": 49713,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain/r32/input.json",
+      "sha256": "ed47cc74d4189fa0941192846f2ce4e8e2103954c4a3b4636fd1aab69a774a00"
+    },
+    {
+      "bytes": 4631,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain/r32/manifest.json",
+      "sha256": "e1969d047545c70a857c733f3318b0c33140a3a8b6b0b85c2505f8457282985a"
+    },
+    {
+      "bytes": 2946,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain/r33/baseline-overlay.patch",
+      "sha256": "f009b618afb5dd574ef9d0b1bf2d73ecd108e2882779a05862ebafee9bc5019a"
+    },
+    {
+      "bytes": 9507,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain/r33/candidate.patch",
+      "sha256": "05472a554635d415bbafd4b2119c09d88696e90f4e0003cf81cfa8da9271b4d0"
+    },
+    {
+      "bytes": 50729,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain/r33/input.json",
+      "sha256": "46ff8e0cc8327fa97e346acd8afa8c6ab7ef2ffc40e8d2b75d221d4101d9b1f5"
+    },
+    {
+      "bytes": 7100,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/chain/r33/manifest.json",
+      "sha256": "4da10500f9108f484c4415ec726776685f61bfc73eccf7a12b23fed3f7ab53d5"
+    },
+    {
+      "bytes": 3918,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/cache-owner-closure-inputs.json",
+      "sha256": "d10e468c67c21691fd6cb77d080aa589430c30c61accb12482004d4b10cf0353"
+    },
+    {
+      "bytes": 731,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/rust-ci-native-02.json",
+      "sha256": "cb607f13cee99a31e1bc28e2792fad778ce1455c016dcc720780004f72c70ba2"
+    },
+    {
+      "bytes": 14130,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/rust-ci-02/report.json",
+      "sha256": "26b5fee0d28798dc5fb6d383e38c365d914f1abedd3bc458e26ad5d9692deb7d"
+    },
+    {
+      "bytes": 732,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/lifecycle-materialization-native-01.json",
+      "sha256": "c1c736016a9d30364091077486c9d061f94a4d5094bbd65b7ff871393bbe379b"
+    },
+    {
+      "bytes": 6684,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/lifecycle-materialization-read-01.json",
+      "sha256": "34ce92c2b5532f3db7983a8e8889ed11cf0aedf36eb25f09a72986146cda3e7f"
+    },
+    {
+      "bytes": 729,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/observation-holder-native-02.json",
+      "sha256": "91d9f5cb0307e38d6bc4c2fe4d3f94b8b6e0671515fff7d0fb162a2743d34b2a"
+    },
+    {
+      "bytes": 130426,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/campaign-02/report.json",
+      "sha256": "d52a34b1b5a5870f1676d1b060744834901bc7982ff967ec82fc492ee89321d1"
+    },
+    {
+      "bytes": 3559647,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/campaign-02/native-observation/report.json",
+      "sha256": "e0c29c5be7967ddcc272955c810bd156b14e6b3491adfba82805ee5a7c2115cf"
+    },
+    {
+      "bytes": 13619,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/campaign-02/summary.json",
+      "sha256": "a35f08d2ad7afa70bd3e1f806709a355643febff549eba52bbdab91dd74c0b30"
+    },
+    {
+      "bytes": 732,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/qualification-terminal-status-01.json",
+      "sha256": "f9f6de27c19b015e072f8169e7155783102d9b2ef3bc6ff2d8705927c0016b4e"
+    },
+    {
+      "bytes": 55575,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/preparation-02.json",
+      "sha256": "77bdf6f1b008b65dfbedcac24b7ea3026e3946ad4fbff68ca96e5980b660d003"
+    },
+    {
+      "bytes": 84072,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/qualification-01/report.json",
+      "sha256": "489e62778972d9a8f4b2908c205b23791a968dbf21dc2bdb995350f29305c5a9"
+    },
+    {
+      "bytes": 17433,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/audit_isolated_tests.py",
+      "sha256": "736b2dcc85fbd5214b855813b6c1f0ceed3dedc1cc0957e709a9ee6cb0110c40"
+    },
+    {
+      "bytes": 12740,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/audit_isolated_tests_tests.py",
+      "sha256": "00901b875e6642d79353954ae5bd78aff9d4f0e2a2a2ea28c5416b11bad19207"
+    },
+    {
+      "bytes": 26398,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/forwarded_validation_lease.py",
+      "sha256": "61d80c44029971e634d3645fb1b7a4e3e211affffafb16909a57174c604ce85d"
+    },
+    {
+      "bytes": 10589,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/forwarded_validation_lease_tests.py",
+      "sha256": "e7113c43849f5d2fb66a4e6466f5fbc8d60ae93e787b5c17e61957a499660090"
+    },
+    {
+      "bytes": 50581,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/pinned_native_protocol.py",
+      "sha256": "2a88c03591908b1054b492d2d717027cb180d176c78eed4de280d7a6a193e956"
+    },
+    {
+      "bytes": 18832,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/pinned_resource_sampler.py",
+      "sha256": "a9554e63416504428439a6cf3fe1f5b8ede090c2ef856bda3f1add413d06d40a"
+    },
+    {
+      "bytes": 7661,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/qualify.py",
+      "sha256": "95717717fd5421f2e31dbce24e2f8821696f57d779ce93e988ed66764159552d"
+    },
+    {
+      "bytes": 14515,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/run_extended_file_soak.py",
+      "sha256": "30c3ed04a24d718a9cf777fbf5c01b7f77aba2af3fd0b58276b6f4bc0fe82a14"
+    },
+    {
+      "bytes": 4848,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/run_extended_file_soak_tests.py",
+      "sha256": "86c8169852af9190cd3a33aef4e8395cece7865f73aa17ebe7090c11659f9821"
+    },
+    {
+      "bytes": 9355,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/run_isolated_tests.py",
+      "sha256": "9e1439b27e630aa8a00aa34f02248800dd929314fa0041532294df106f189c62"
+    },
+    {
+      "bytes": 30027,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/run_native_validation.py",
+      "sha256": "309afefe719d63e52377930db5d997b3ac3c244873fbb83055e9950b956903f6"
+    },
+    {
+      "bytes": 5200,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/run_native_validation_tests.py",
+      "sha256": "8ca4b7e72dcb79dcd169bd236332248cf4bd1f1f8a6c60bc2255f11a067844b9"
+    },
+    {
+      "bytes": 7371,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/run_registry_abba.py",
+      "sha256": "2ef81f36a3b11f244e53068a8f039d57e7056e19d7e03973850d839caae159c3"
+    },
+    {
+      "bytes": 28348,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/run_registry_cohort_abba.py",
+      "sha256": "637f5ef973ff58c3dbad62ef14a3fce27d75337e090811992e38b5b57d489cea"
+    },
+    {
+      "bytes": 13345,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/run_registry_cohort_abba_tests.py",
+      "sha256": "1384b672b959f483beb181a45d9d075c5cc21b374a818fc29f27d62d81e82298"
+    },
+    {
+      "bytes": 10357,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/run_registry_microbench_abba.py",
+      "sha256": "268bc954ebe0366c602402b938c0d1986a7d34ba1309bff3ba398281ca947d21"
+    },
+    {
+      "bytes": 3435,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/run_registry_microbench_abba_tests.py",
+      "sha256": "922428cc053ed1de58fa07c23d1b188e2a6f77cc039f3fa0d8ae7fe4415de94b"
+    },
+    {
+      "bytes": 27032,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/run_reuse_throughput.py",
+      "sha256": "e0ba8cd46b9f88844bf0dadafcfc605b5c05cd0b734f7f3cb5ca5fb04603de5a"
+    },
+    {
+      "bytes": 30878,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/source/tools/x230/20261028/x230_observation_benchmark.py",
+      "sha256": "0c4a06ed1613039d703bb575a8440c9030eac2dc51fcc2c96e96fc90a609da3e"
+    },
+    {
+      "bytes": 0,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/format.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/format.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/fmt-check.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/fmt-check.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/harness-tests.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 9518,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/harness-tests.stderr",
+      "sha256": "c5c1e46ce0205e1b8c6bfc058bb7045e43c10ba39e9ed9a3cbdc605dc0b33d81"
+    },
+    {
+      "bytes": 0,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/clippy.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 165,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/clippy.stderr",
+      "sha256": "5106909f1de7c202e4cf4222b4d3706c58758fcaf7585fa22cf1467559b4f7eb"
+    },
+    {
+      "bytes": 269935,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/cargo-no-run.jsonl",
+      "sha256": "c6da9de737349b5baa221d2d91f64f14ff4813ceec1aeca5788824d4d47cae80"
+    },
+    {
+      "bytes": 167,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/test-build.stderr",
+      "sha256": "3b3c085fbcd8743b7614ed32038f9be9fd3f72762ae7cc4ad55e13a6208a1bab"
+    },
+    {
+      "bytes": 4244,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/isolated-tests.stdout",
+      "sha256": "fecd011f8f883de6620b75eaa7665801128922f07c899fc3ebbff095745faffa"
+    },
+    {
+      "bytes": 0,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/isolated-tests.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 174,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/audit-isolated-tests.stdout",
+      "sha256": "b1ba8d698a0e842c69913228bd211eaf718f4321481b7587f751e2ef6fa67de3"
+    },
+    {
+      "bytes": 0,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/audit-isolated-tests.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/release.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 157,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/release.stderr",
+      "sha256": "927c20a9293fb9fd85c10ff91b96b1ee6bfbc017421798db6c13b7d4b2a043e7"
+    },
+    {
+      "bytes": 6878,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/isolated-tests/summary.json",
+      "sha256": "352f613378c8e16a5ef23a658ff2692819eefd130ec1ebf079f6672a110ca096"
+    },
+    {
+      "bytes": 282350,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/isolated-tests/cargo-artifacts.jsonl",
+      "sha256": "a4436070a4800e9277ccec33883cdf3294ccbdab7a671da177ea47d5a0319a1f"
+    },
+    {
+      "bytes": 24156,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/isolated-tests/source-manifest.input",
+      "sha256": "b3260c858e507f3661da233a9d05fec80399b48ba12fdce250ad29eeca0ba09e"
+    },
+    {
+      "bytes": 880316,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/isolated-tests/commands.jsonl",
+      "sha256": "407030c8d0acf3cb0d218d3d0d2382c1f69aecfd059788f967e0f29a955304ab"
+    },
+    {
+      "bytes": 2230216,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/isolated-tests/tests.jsonl",
+      "sha256": "de5e8ecad77ddbe4519086a2072e56ebeee44ad7991f1ddaef60b131b4de1f9c"
+    },
+    {
+      "bytes": 14373416,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/hepta-runtime",
+      "sha256": "bc14cab1e632d6cd703f6a0f65d1a8e513b4471c09a403186d72e989e3f74c13"
+    },
+    {
+      "bytes": 14377384,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/hepta-runtime",
+      "sha256": "c55f2f8696e01b239e4948da19279d0a425ac2737d8142b58153da8091d45204"
+    },
+    {
+      "bytes": 739016,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/hepta-runtime-jobctl",
+      "sha256": "61c90260057a405626a24a36ad43303c632f72d2d97929296acdffd748b79d62"
+    },
+    {
+      "bytes": 739016,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/hepta-runtime-jobctl",
+      "sha256": "61c90260057a405626a24a36ad43303c632f72d2d97929296acdffd748b79d62"
+    },
+    {
+      "bytes": 2896456,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/native_process_driver",
+      "sha256": "51165c1e38409248f5fdb7da2036ebe5e05eec7576035e95bd4b8e2a5c675530"
+    },
+    {
+      "bytes": 2896456,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/native_process_driver",
+      "sha256": "51165c1e38409248f5fdb7da2036ebe5e05eec7576035e95bd4b8e2a5c675530"
+    },
+    {
+      "bytes": 83365,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/report.json",
+      "sha256": "bf0c5814d28b163e4a90405026cd4d90e399370d1f910f8ac48cb580af1e4971"
+    },
+    {
+      "bytes": 83360,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/report.json",
+      "sha256": "00aed358a852cbdb9a54b9e97f6a63f66baf28b824dc4383ef900c8125d264a4"
+    },
+    {
+      "bytes": 100033,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/campaign-01/report.json",
+      "sha256": "066952f12414e8f7291e21e58a77d53d4cd712104557bd6bdfdd7c383f9f1e2a"
+    },
+    {
+      "bytes": 1022,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/final-publication-readback.json",
+      "sha256": "38866c01fac54133c8a88e25bee90ea4a551e7273614f493bf44522a8273d3ca"
+    },
+    {
+      "bytes": 13529,
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/campaign-01/summary.json",
+      "sha256": "5f0cf4538c5e4e7dff9f3f6a43e88f4fd4675f76640137908ec565daea285015"
+    },
+    {
+      "bytes": 836,
+      "path": "/home/qian/hepta-runtime-optimization-20261023/r11-native-observation-abba-20261103-02/profile/profile.json",
+      "sha256": "fe1e9551b5b8812ad6ed3da018c282b7261f7caeb2f49e4dcfefba7ff784ab08"
+    },
+    {
+      "bytes": 796,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/benchmark-topology.json",
+      "sha256": "8c0767d3318131a7d470d9cde8e327a59ce18adf022c8bc1b1d5a0fa9a865287"
+    },
+    {
+      "bytes": 5879,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/allocator_environment.py",
+      "sha256": "f5c8e879c540b3f7cb1b7d3a7a0f5002c2f40c1a87963174b0b00470fa3a4525"
+    },
+    {
+      "bytes": 6709,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/allocator_environment_audit.py",
+      "sha256": "4b082ce343ae3943e3098baa58af2f5def7198881b9c087d63d88360e9763727"
+    },
+    {
+      "bytes": 8708,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/analyze_native_observation.py",
+      "sha256": "cc7f6884d581cd1ced430437350e808de51931c50d12441797205501b20cae66"
+    },
+    {
+      "bytes": 17065,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/audit_native_evidence.py",
+      "sha256": "b69f6902d2de81eab41b21506f024c002d2f8264d60e86df6b1086623a77fd28"
+    },
+    {
+      "bytes": 12382,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/observation_resources.py",
+      "sha256": "f3402d51cb37b2fe20f4351b3a81ec5990a9fdaff93a846d21c07ccd557cb894"
+    },
+    {
+      "bytes": 7892,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/owned_ssh_interruption.py",
+      "sha256": "1989c57f0b944afae1ed759d6529b8f1cc26197e269e2c34c4fd49e43a32aa7b"
+    },
+    {
+      "bytes": 3279,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/run_native_observation.py",
+      "sha256": "7606648c99b2ff2bbf0bba58384e8cab609ac3899f838c0b80ba54d6288d20bb"
+    },
+    {
+      "bytes": 27847,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/run_six_host_cancel_recovery.py",
+      "sha256": "698eb7801cde3f2bd5ff202412c0833fc218fd7e912c3c949d2b37fde7a56a12"
+    },
+    {
+      "bytes": 13286,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/test_native_harness.py",
+      "sha256": "2b450175b9e6122248ac1bcb51860aa8a6d3eff55f6ac8c877c0a905e3dd7d00"
+    },
+    {
+      "bytes": 16634,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/verify_cancel_recovery.py",
+      "sha256": "0116652a0b489dc462f005e01d7c943feda9ba784563d7317c92bb5beb9a701c"
+    },
+    {
+      "bytes": 37006,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/x230_observation_benchmark.py",
+      "sha256": "4d96f0bf2da2562e788f48be7c37589ab3a513be5f9d8b2d741afe5c08ea9eed"
+    },
+    {
+      "bytes": 47298,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/x230_six_running_recovery_canary.py",
+      "sha256": "6219bc556b0ac6d142bd4c731466b959e8a410f0b4b55f3d8b303f8fdbfbaaf4"
+    },
+    {
+      "bytes": 18477,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/boundary-tools/run_native_boundary.py",
+      "sha256": "2af83ebba8b7ea5550e7549da795556eb8328622bcfbf563019654e202a53329"
+    },
+    {
+      "bytes": 20260,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/boundary-tools/audit_native_boundary.py",
+      "sha256": "8ad8f6d97a5bd2e4850b02cd66fa5d2ac7d237ea0eef043daf9c88d3c9c152ee"
+    },
+    {
+      "bytes": 12621,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/boundary-tools/test_native_boundary.py",
+      "sha256": "cda0bbef1704c374b49cc3cf5ea7b9a873687e547eed5c927bed801cf15156bd"
+    },
+    {
+      "bytes": 1307,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/boundary-tools/harness-freeze.json",
+      "sha256": "77ea90d5d2f45ed4d724f087353a3c8e603abcd0a8bd1d4bceb31179bef174b1"
+    },
+    {
+      "bytes": 2210,
+      "path": "/home/qian/hepta-runtime-optimization-20261104-r16/boundary-tools/capacity-policy.json",
+      "sha256": "206d1a99abc328948d8df893daa77a862b25de878a8b97379090da7ce84393d3"
+    },
+    {
+      "bytes": 18477,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/boundary-tools-01/run_native_boundary.py",
+      "sha256": "2af83ebba8b7ea5550e7549da795556eb8328622bcfbf563019654e202a53329"
+    },
+    {
+      "bytes": 20260,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/boundary-tools-01/audit_native_boundary.py",
+      "sha256": "8ad8f6d97a5bd2e4850b02cd66fa5d2ac7d237ea0eef043daf9c88d3c9c152ee"
+    },
+    {
+      "bytes": 12621,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/boundary-tools-01/test_native_boundary.py",
+      "sha256": "cda0bbef1704c374b49cc3cf5ea7b9a873687e547eed5c927bed801cf15156bd"
+    },
+    {
+      "bytes": 1307,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/boundary-tools-01/harness-freeze.json",
+      "sha256": "77ea90d5d2f45ed4d724f087353a3c8e603abcd0a8bd1d4bceb31179bef174b1"
+    },
+    {
+      "bytes": 2210,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/boundary-tools-01/capacity-policy.json",
+      "sha256": "206d1a99abc328948d8df893daa77a862b25de878a8b97379090da7ce84393d3"
+    },
+    {
+      "bytes": 14456,
+      "path": "/home/qian/hepta-runtime-optimization-20261106-r33/tools-01/summarize_r25_campaign.py",
+      "sha256": "2418bad36fe4aef75d52c5a00c898ff93fef9bb4b6efb10028105143106a1864"
+    },
+    {
+      "bytes": 846888,
+      "path": "/usr/bin/ssh",
+      "sha256": "fc47ea24323fdd5687c5aefae6fd0060faabfa8f2944c6a68f6a442fbe0dd131"
+    },
+    {
+      "bytes": 880,
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01/1a16a4035ad-b1270-1.json",
+      "sha256": "a8982325aea4833461e2b6a76ca83f846b80b99a227298e97a0b279e2d9dfdb8"
+    },
+    {
+      "bytes": 877,
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01/1a16a403e55-b1270-2.json",
+      "sha256": "bbb8a86161837ff0f197b345c25bc66224e3404473dea2ac46d1f44f3af43609"
+    },
+    {
+      "bytes": 881,
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01/1a16a4046ac-b1270-3.json",
+      "sha256": "4badc323518a6db1567162a2d7ef5d1209aa88375aba201ec6f3aab34bec61a8"
+    },
+    {
+      "bytes": 890,
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01/1a16a40534e-b1270-4.json",
+      "sha256": "79e18b1a42d84f8024b692dfd98a9f06fa1d6886bf5dc230248cfbde674f011c"
+    },
+    {
+      "bytes": 877,
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01/1a16a405d21-b1270-5.json",
+      "sha256": "9c89c598f35f6bc94572852fcc03feed6e8c798ee34db5095bd3b48813562dc6"
+    },
+    {
+      "bytes": 878,
+      "path": "/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01/1a16a40671b-b1270-6.json",
+      "sha256": "5b737330fa5a75a458138e1848a044d2a77c062175d8eb9694a510ff20b53cde"
+    }
+  ],
+  "input_receipt": {
+    "bytes": 17098,
+    "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-inputs-01.json",
+    "sha256": "844af21a835a144e48897cb2a5447bf61afdc6fe315bf4a0b958e8d0fd783e37"
+  },
+  "inputs_unchanged": true,
+  "launcher_identity_origin": "Mac holder hashes the transmitted stdin bytes; this is not a remote self-hash",
+  "launcher_sha256": "414337596c5585ec18f0aaa6d38c9bc287724463fee2a385f5ccfcbec414b90c",
+  "lifecycle_raw_directory": "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01",
+  "lifecycle_scope": "one unchanged candidate C6 canary; six fresh bounded fixtures; no lifecycle performance ABBA claim",
+  "machine_final": {
+    "cpu_count": 4,
+    "disk_available_bytes": 2653388800,
+    "loadavg": [
+      1.8623046875,
+      1.18115234375,
+      0.76513671875
+    ],
+    "machine_settings_changed": false,
+    "monotonic_ns": 2636407677789239,
+    "utc": "2026-11-06T03:05:46.429829+00:00",
+    "values": {
+      "/proc/loadavg": "1.86 1.18 0.77 2/603 3927128\n",
+      "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          499560 kB\nMemAvailable:    5855044 kB\nBuffers:         2119928 kB\nCached:          1533024 kB\nSwapCached:       712520 kB\nActive:          1774580 kB\nInactive:        2934848 kB\nActive(anon):     929420 kB\nInactive(anon):   152868 kB\nActive(file):     845160 kB\nInactive(file):  2781980 kB\nUnevictable:       23524 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8346584 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              2116 kB\nWriteback:             0 kB\nAnonPages:       1068728 kB\nMapped:           127336 kB\nShmem:             25812 kB\nKReclaimable:    2109656 kB\nSlab:            2422192 kB\nSReclaimable:    2109656 kB\nSUnreclaim:       312536 kB\nKernelStack:        9680 kB\nPageTables:        25300 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6678604 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44676 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+      "/proc/sys/kernel/perf_event_paranoid": "4\n",
+      "/proc/uptime": "2636407.67 9010867.74\n",
+      "/sys/class/thermal/thermal_zone0/temp": "63000\n",
+      "/sys/class/thermal/thermal_zone1/temp": "64000\n",
+      "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "2064078\n",
+      "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "2351379\n",
+      "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1791211\n",
+      "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "2478502\n"
+    }
+  },
+  "machine_initial": {
+    "cpu_count": 4,
+    "disk_available_bytes": 2705522688,
+    "loadavg": [
+      0.40771484375,
+      0.41162109375,
+      0.4541015625
+    ],
+    "machine_settings_changed": false,
+    "monotonic_ns": 2636113376528469,
+    "utc": "2026-11-06T03:00:52.128567+00:00",
+    "values": {
+      "/proc/loadavg": "0.41 0.41 0.45 1/601 3920108\n",
+      "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          546872 kB\nMemAvailable:    6009712 kB\nBuffers:         1174164 kB\nCached:          2659488 kB\nSwapCached:       711492 kB\nActive:           998536 kB\nInactive:        3839584 kB\nActive(anon):     841100 kB\nInactive(anon):   189196 kB\nActive(file):     157436 kB\nInactive(file):  3650388 kB\nUnevictable:       18496 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8303536 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              2220 kB\nWriteback:             0 kB\nAnonPages:       1010564 kB\nMapped:           130120 kB\nShmem:             25772 kB\nKReclaimable:    1958504 kB\nSlab:            2266944 kB\nSReclaimable:    1958504 kB\nSUnreclaim:       308440 kB\nKernelStack:        9648 kB\nPageTables:        25256 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6663848 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44628 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+      "/proc/sys/kernel/perf_event_paranoid": "4\n",
+      "/proc/uptime": "2636113.37 9010059.02\n",
+      "/sys/class/thermal/thermal_zone0/temp": "47000\n",
+      "/sys/class/thermal/thermal_zone1/temp": "56000\n",
+      "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "3109636\n",
+      "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "2758556\n",
+      "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1200000\n",
+      "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "2342338\n"
+    }
+  },
+  "measurement_attribution_valid": true,
+  "observation_gate_passed": false,
+  "open_blockers": [
+    {
+      "id": "saturated-cancellation-capacity",
+      "reason": "R33 does not add cancellation reserve capacity; no saturated cancellation proof is claimed",
+      "scope": "not included in the R33 source change or normal lifecycle adoption",
+      "status": "open"
+    }
+  ],
+  "passed": true,
+  "production_services_modified": false,
+  "qualified_source_maps_match_current_inputs": {
+    "A": true,
+    "B": true
+  },
+  "quiescence": {
+    "checks": [
+      {
+        "compiler_processes": [],
+        "machine": {
+          "cpu_count": 4,
+          "disk_available_bytes": 2705326080,
+          "loadavg": [
+            0.40771484375,
+            0.41162109375,
+            0.4541015625
+          ],
+          "machine_settings_changed": false,
+          "monotonic_ns": 2636114312828433,
+          "utc": "2026-11-06T03:00:53.064864+00:00",
+          "values": {
+            "/proc/loadavg": "0.41 0.41 0.45 1/601 3920115\n",
+            "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          466148 kB\nMemAvailable:    5987340 kB\nBuffers:         1174284 kB\nCached:          2717644 kB\nSwapCached:       711492 kB\nActive:          1006584 kB\nInactive:        3897896 kB\nActive(anon):     849140 kB\nInactive(anon):   189196 kB\nActive(file):     157444 kB\nInactive(file):  3708700 kB\nUnevictable:       18496 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8303536 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              2240 kB\nWriteback:             0 kB\nAnonPages:       1018596 kB\nMapped:           130268 kB\nShmem:             25772 kB\nKReclaimable:    1958536 kB\nSlab:            2266960 kB\nSReclaimable:    1958536 kB\nSUnreclaim:       308424 kB\nKernelStack:        9664 kB\nPageTables:        25292 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6670948 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44644 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+            "/proc/sys/kernel/perf_event_paranoid": "4\n",
+            "/proc/uptime": "2636114.31 9010061.48\n",
+            "/sys/class/thermal/thermal_zone0/temp": "47000\n",
+            "/sys/class/thermal/thermal_zone1/temp": "57000\n",
+            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "2993334\n",
+            "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "2994179\n",
+            "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "3025746\n",
+            "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "3182930\n"
+          }
+        }
+      },
+      {
+        "compiler_processes": [],
+        "machine": {
+          "cpu_count": 4,
+          "disk_available_bytes": 2705321984,
+          "loadavg": [
+            0.31689453125,
+            0.39111328125,
+            0.44677734375
+          ],
+          "machine_settings_changed": false,
+          "monotonic_ns": 2636129322818816,
+          "utc": "2026-11-06T03:01:08.074858+00:00",
+          "values": {
+            "/proc/loadavg": "0.32 0.39 0.45 5/608 3920136\n",
+            "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          471272 kB\nMemAvailable:    5992596 kB\nBuffers:         1174284 kB\nCached:          2717796 kB\nSwapCached:       711520 kB\nActive:          1024052 kB\nInactive:        3897908 kB\nActive(anon):     866488 kB\nInactive(anon):   189196 kB\nActive(file):     157564 kB\nInactive(file):  3708712 kB\nUnevictable:       18520 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8303536 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:               136 kB\nWriteback:             0 kB\nAnonPages:       1035980 kB\nMapped:           133788 kB\nShmem:             25796 kB\nKReclaimable:    1958536 kB\nSlab:            2266964 kB\nSReclaimable:    1958536 kB\nSUnreclaim:       308428 kB\nKernelStack:        9712 kB\nPageTables:        25456 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6723372 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44696 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+            "/proc/sys/kernel/perf_event_paranoid": "4\n",
+            "/proc/uptime": "2636129.32 9010119.10\n",
+            "/sys/class/thermal/thermal_zone0/temp": "47000\n",
+            "/sys/class/thermal/thermal_zone1/temp": "56000\n",
+            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "2993079\n",
+            "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "2993226\n",
+            "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "2993101\n",
+            "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "2993088\n"
+          }
+        }
+      },
+      {
+        "compiler_processes": [],
+        "machine": {
+          "cpu_count": 4,
+          "disk_available_bytes": 2705309696,
+          "loadavg": [
+            0.3203125,
+            0.3876953125,
+            0.4453125
+          ],
+          "machine_settings_changed": false,
+          "monotonic_ns": 2636144337411223,
+          "utc": "2026-11-06T03:01:23.089448+00:00",
+          "values": {
+            "/proc/loadavg": "0.32 0.39 0.45 1/600 3920204\n",
+            "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          480064 kB\nMemAvailable:    6001524 kB\nBuffers:         1174396 kB\nCached:          2717820 kB\nSwapCached:       711532 kB\nActive:          1006628 kB\nInactive:        3898044 kB\nActive(anon):     849056 kB\nInactive(anon):   189196 kB\nActive(file):     157572 kB\nInactive(file):  3708848 kB\nUnevictable:       18520 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8303536 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:               364 kB\nWriteback:             0 kB\nAnonPages:       1018504 kB\nMapped:           130316 kB\nShmem:             25796 kB\nKReclaimable:    1958528 kB\nSlab:            2266968 kB\nSReclaimable:    1958528 kB\nSUnreclaim:       308440 kB\nKernelStack:        9648 kB\nPageTables:        25292 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6670908 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44660 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+            "/proc/sys/kernel/perf_event_paranoid": "4\n",
+            "/proc/uptime": "2636144.33 9010176.56\n",
+            "/sys/class/thermal/thermal_zone0/temp": "47000\n",
+            "/sys/class/thermal/thermal_zone1/temp": "51000\n",
+            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "1200000\n",
+            "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "2095151\n",
+            "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1200000\n",
+            "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "1200000\n"
+          }
+        }
+      },
+      {
+        "compiler_processes": [],
+        "machine": {
+          "cpu_count": 4,
+          "disk_available_bytes": 2705297408,
+          "loadavg": [
+            0.31689453125,
+            0.38427734375,
+            0.44384765625
+          ],
+          "machine_settings_changed": false,
+          "monotonic_ns": 2636159364766070,
+          "utc": "2026-11-06T03:01:38.116803+00:00",
+          "values": {
+            "/proc/loadavg": "0.32 0.38 0.44 1/600 3920226\n",
+            "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          479632 kB\nMemAvailable:    6001140 kB\nBuffers:         1174396 kB\nCached:          2717836 kB\nSwapCached:       711564 kB\nActive:          1006616 kB\nInactive:        3898060 kB\nActive(anon):     849044 kB\nInactive(anon):   189196 kB\nActive(file):     157572 kB\nInactive(file):  3708864 kB\nUnevictable:       18520 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8303536 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:               344 kB\nWriteback:             0 kB\nAnonPages:       1018500 kB\nMapped:           130324 kB\nShmem:             25796 kB\nKReclaimable:    1958560 kB\nSlab:            2267004 kB\nSReclaimable:    1958560 kB\nSUnreclaim:       308444 kB\nKernelStack:        9648 kB\nPageTables:        25292 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6670896 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44644 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+            "/proc/sys/kernel/perf_event_paranoid": "4\n",
+            "/proc/uptime": "2636159.36 9010234.23\n",
+            "/sys/class/thermal/thermal_zone0/temp": "47000\n",
+            "/sys/class/thermal/thermal_zone1/temp": "50000\n",
+            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "1200000\n",
+            "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "1197239\n",
+            "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1197259\n",
+            "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "1197300\n"
+          }
+        }
+      },
+      {
+        "compiler_processes": [],
+        "machine": {
+          "cpu_count": 4,
+          "disk_available_bytes": 2705289216,
+          "loadavg": [
+            0.31396484375,
+            0.380859375,
+            0.4423828125
+          ],
+          "machine_settings_changed": false,
+          "monotonic_ns": 2636174399514831,
+          "utc": "2026-11-06T03:01:53.151553+00:00",
+          "values": {
+            "/proc/loadavg": "0.31 0.38 0.44 2/600 3920248\n",
+            "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          482900 kB\nMemAvailable:    6004416 kB\nBuffers:         1174404 kB\nCached:          2717840 kB\nSwapCached:       711572 kB\nActive:          1006604 kB\nInactive:        3898068 kB\nActive(anon):     849032 kB\nInactive(anon):   189196 kB\nActive(file):     157572 kB\nInactive(file):  3708872 kB\nUnevictable:       18520 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8303536 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:               212 kB\nWriteback:             0 kB\nAnonPages:       1018460 kB\nMapped:           130328 kB\nShmem:             25796 kB\nKReclaimable:    1958560 kB\nSlab:            2267004 kB\nSReclaimable:    1958560 kB\nSUnreclaim:       308444 kB\nKernelStack:        9648 kB\nPageTables:        25292 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6670832 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44628 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+            "/proc/sys/kernel/perf_event_paranoid": "4\n",
+            "/proc/uptime": "2636174.39 9010292.05\n",
+            "/sys/class/thermal/thermal_zone0/temp": "47000\n",
+            "/sys/class/thermal/thermal_zone1/temp": "51000\n",
+            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "1197262\n",
+            "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "1197206\n",
+            "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1197227\n",
+            "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "1197411\n"
+          }
+        }
+      },
+      {
+        "compiler_processes": [],
+        "machine": {
+          "cpu_count": 4,
+          "disk_available_bytes": 2705072128,
+          "loadavg": [
+            0.32421875,
+            0.37890625,
+            0.44091796875
+          ],
+          "machine_settings_changed": false,
+          "monotonic_ns": 2636189428975162,
+          "utc": "2026-11-06T03:02:08.181012+00:00",
+          "values": {
+            "/proc/loadavg": "0.32 0.38 0.44 1/600 3920429\n",
+            "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          480996 kB\nMemAvailable:    6003112 kB\nBuffers:         1174656 kB\nCached:          2718180 kB\nSwapCached:       711572 kB\nActive:          1006788 kB\nInactive:        3898536 kB\nActive(anon):     849088 kB\nInactive(anon):   189196 kB\nActive(file):     157700 kB\nInactive(file):  3709340 kB\nUnevictable:       18520 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8303536 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:               328 kB\nWriteback:             0 kB\nAnonPages:       1018532 kB\nMapped:           130344 kB\nShmem:             25796 kB\nKReclaimable:    1958564 kB\nSlab:            2267004 kB\nSReclaimable:    1958564 kB\nSUnreclaim:       308440 kB\nKernelStack:        9648 kB\nPageTables:        25292 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6670836 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44612 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+            "/proc/sys/kernel/perf_event_paranoid": "4\n",
+            "/proc/uptime": "2636189.42 9010348.59\n",
+            "/sys/class/thermal/thermal_zone0/temp": "47000\n",
+            "/sys/class/thermal/thermal_zone1/temp": "51000\n",
+            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "1197458\n",
+            "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "1197242\n",
+            "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1197239\n",
+            "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "1197277\n"
+          }
+        }
+      },
+      {
+        "compiler_processes": [],
+        "machine": {
+          "cpu_count": 4,
+          "disk_available_bytes": 2705059840,
+          "loadavg": [
+            0.33251953125,
+            0.376953125,
+            0.439453125
+          ],
+          "machine_settings_changed": false,
+          "monotonic_ns": 2636204322406736,
+          "utc": "2026-11-06T03:02:23.074442+00:00",
+          "values": {
+            "/proc/loadavg": "0.33 0.38 0.44 1/598 3920451\n",
+            "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          768104 kB\nMemAvailable:    6002276 kB\nBuffers:         1074508 kB\nCached:          2539908 kB\nSwapCached:       709576 kB\nActive:          1187944 kB\nInactive:        3431648 kB\nActive(anon):     875960 kB\nInactive(anon):   155036 kB\nActive(file):     311984 kB\nInactive(file):  3276612 kB\nUnevictable:       23508 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8303064 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:               152 kB\nWriteback:             0 kB\nAnonPages:       1017260 kB\nMapped:           124408 kB\nShmem:             25792 kB\nKReclaimable:    1949064 kB\nSlab:            2257148 kB\nSReclaimable:    1949064 kB\nSUnreclaim:       308084 kB\nKernelStack:        9616 kB\nPageTables:        25292 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6670896 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44596 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+            "/proc/sys/kernel/perf_event_paranoid": "4\n",
+            "/proc/uptime": "2636204.32 9010404.68\n",
+            "/sys/class/thermal/thermal_zone0/temp": "48000\n",
+            "/sys/class/thermal/thermal_zone1/temp": "51000\n",
+            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "1200000\n",
+            "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "1197239\n",
+            "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1197356\n",
+            "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "1197266\n"
+          }
+        }
+      }
+    ],
+    "end_monotonic_ns": 2636204330377130,
+    "passed": true,
+    "seconds_planned": 90,
+    "start_monotonic_ns": 2636114305645162
+  },
+  "recommended_holder_timeout_seconds": 3600,
+  "rejection_reasons": [
+    "C8 regression gate"
+  ],
+  "result_before_compiler_monitor": {
+    "observation_gate_passed": false,
+    "passed": true
+  },
+  "saturated_cancellation_verified": false,
+  "schema": "hepta-r25-observation-campaign-control/v1",
+  "socket_directories": {
+    "boundary": "/home/qian/h33b01",
+    "lifecycle": "/home/qian/h33c01",
+    "native": "/home/qian/h33n01"
+  },
+  "source_inputs": {
+    "bytes": 34902,
+    "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/source-inputs.json",
+    "sha256": "cd421a95e49a10440043d701f97b0fb907ad59bec88388431f934232499e6f8b"
+  },
+  "source_inputs_sha256": "e77749cbec0de76360973956116fe242ee8eb4f138b04a5e5cd3376877e2a03e",
+  "source_inputs_unchanged": true,
+  "stage_plan": [
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/run_native_observation.py",
+        "--baseline",
+        "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/hepta-runtime",
+        "--candidate",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/hepta-runtime",
+        "--arena-max",
+        "1",
+        "--profile-template",
+        "/home/qian/hepta-runtime-optimization-20261023/r11-native-observation-abba-20261103-02/profile/profile.json",
+        "--topology",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/benchmark-topology.json",
+        "--frozen-jobs",
+        "/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01",
+        "--socket-parent",
+        "/home/qian/h33n01",
+        "--out",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation",
+        "--calls",
+        "192",
+        "--concurrency",
+        "1",
+        "8",
+        "16",
+        "--workers",
+        "2",
+        "--order",
+        "ABBA",
+        "--warmup-calls",
+        "24"
+      ],
+      "name": "native-observation",
+      "outputs": [
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation/report.json"
+      ],
+      "timeout_seconds": 1800
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/analyze_native_observation.py",
+        "--report",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation/report.json",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation/independent-summary.json"
+      ],
+      "name": "native-audit",
+      "outputs": [
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation/independent-summary.json"
+      ],
+      "timeout_seconds": 180
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/boundary-tools-01/run_native_boundary.py",
+        "--binary",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/hepta-runtime",
+        "--profile-template",
+        "/home/qian/hepta-runtime-optimization-20261023/r11-native-observation-abba-20261103-02/profile/profile.json",
+        "--topology",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/benchmark-topology.json",
+        "--frozen-jobs",
+        "/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01",
+        "--socket-parent",
+        "/home/qian/h33b01",
+        "--out",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary",
+        "--bursts",
+        "2",
+        "--harness-root",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools"
+      ],
+      "name": "native-boundary",
+      "outputs": [
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary/report.json"
+      ],
+      "timeout_seconds": 600
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/boundary-tools-01/audit_native_boundary.py",
+        "--report",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary/report.json",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary/independent-summary.json",
+        "--harness-root",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools"
+      ],
+      "name": "boundary-audit",
+      "outputs": [
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary/independent-summary.json"
+      ],
+      "timeout_seconds": 180
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/run_six_host_cancel_recovery.py",
+        "--candidate",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/hepta-runtime",
+        "--profile-template",
+        "/home/qian/hepta-runtime-optimization-20261023/r11-native-observation-abba-20261103-02/profile/profile.json",
+        "--topology",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/benchmark-topology.json",
+        "--frozen-jobs",
+        "/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01",
+        "--socket-parent",
+        "/home/qian/h33c01",
+        "--out",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01",
+        "--workers",
+        "2",
+        "--candidate-arena-max",
+        "1",
+        "--interrupt-host",
+        "rog"
+      ],
+      "name": "cancel-recovery",
+      "outputs": [
+        "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01/report.json"
+      ],
+      "timeout_seconds": 600
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/verify_cancel_recovery.py",
+        "--report",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01/report.json",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01/independent-summary.json"
+      ],
+      "name": "recovery-audit",
+      "outputs": [
+        "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01/independent-summary.json"
+      ],
+      "timeout_seconds": 180
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/tools-01/summarize_r25_campaign.py",
+        "--native-report",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation/report.json",
+        "--native-analysis",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation/independent-summary.json",
+        "--boundary-report",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary/report.json",
+        "--boundary-analysis",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary/independent-summary.json",
+        "--lifecycle-report",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01/report.json",
+        "--lifecycle-analysis",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01/independent-summary.json",
+        "--expected-baseline-sha256",
+        "bc14cab1e632d6cd703f6a0f65d1a8e513b4471c09a403186d72e989e3f74c13",
+        "--expected-candidate-sha256",
+        "c55f2f8696e01b239e4948da19279d0a425ac2737d8142b58153da8091d45204",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/summary.json"
+      ],
+      "name": "observation-summary",
+      "outputs": [
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/summary.json"
+      ],
+      "timeout_seconds": 180
+    }
+  ],
+  "stages": [
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/run_native_observation.py",
+        "--baseline",
+        "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/hepta-runtime",
+        "--candidate",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/hepta-runtime",
+        "--arena-max",
+        "1",
+        "--profile-template",
+        "/home/qian/hepta-runtime-optimization-20261023/r11-native-observation-abba-20261103-02/profile/profile.json",
+        "--topology",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/benchmark-topology.json",
+        "--frozen-jobs",
+        "/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01",
+        "--socket-parent",
+        "/home/qian/h33n01",
+        "--out",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation",
+        "--calls",
+        "192",
+        "--concurrency",
+        "1",
+        "8",
+        "16",
+        "--workers",
+        "2",
+        "--order",
+        "ABBA",
+        "--warmup-calls",
+        "24"
+      ],
+      "cleanup_scope": "owned stage process group only; independent controller sessions are proved by original reports/audits",
+      "cleanup_signals": [],
+      "effective_timeout_seconds": 1800,
+      "elapsed_seconds": 170.427497443,
+      "end_monotonic_ns": 2636375097190717,
+      "finished_utc": "2026-11-06T03:05:13.849170+00:00",
+      "identity": {
+        "pid": 3920452,
+        "process_group": 3920452,
+        "start_ticks": 263620467
+      },
+      "machine_after": {
+        "cpu_count": 4,
+        "disk_available_bytes": 2663059456,
+        "loadavg": [
+          1.4873046875,
+          1.0576171875,
+          0.7099609375
+        ],
+        "machine_settings_changed": false,
+        "monotonic_ns": 2636375100414087,
+        "utc": "2026-11-06T03:05:13.852453+00:00",
+        "values": {
+          "/proc/loadavg": "1.49 1.06 0.71 1/602 3925412\n",
+          "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          505512 kB\nMemAvailable:    5837284 kB\nBuffers:         2114972 kB\nCached:          1516416 kB\nSwapCached:       710672 kB\nActive:          1770052 kB\nInactive:        2913812 kB\nActive(anon):     925420 kB\nInactive(anon):   152868 kB\nActive(file):     844632 kB\nInactive(file):  2760944 kB\nUnevictable:       23524 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8346328 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              1200 kB\nWriteback:             0 kB\nAnonPages:       1064684 kB\nMapped:           124624 kB\nShmem:             25812 kB\nKReclaimable:    2107508 kB\nSlab:            2419928 kB\nSReclaimable:    2107508 kB\nSUnreclaim:       312420 kB\nKernelStack:        9680 kB\nPageTables:        25300 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6673256 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44644 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+          "/proc/sys/kernel/perf_event_paranoid": "4\n",
+          "/proc/uptime": "2636375.09 9010791.40\n",
+          "/sys/class/thermal/thermal_zone0/temp": "62000\n",
+          "/sys/class/thermal/thermal_zone1/temp": "58000\n",
+          "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "1197274\n",
+          "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "1197233\n",
+          "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1198337\n",
+          "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "1197282\n"
+        }
+      },
+      "machine_before": {
+        "cpu_count": 4,
+        "disk_available_bytes": 2705051648,
+        "loadavg": [
+          0.33251953125,
+          0.376953125,
+          0.439453125
+        ],
+        "machine_settings_changed": false,
+        "monotonic_ns": 2636204671604564,
+        "utc": "2026-11-06T03:02:23.423648+00:00",
+        "values": {
+          "/proc/loadavg": "0.33 0.38 0.44 1/598 3920451\n",
+          "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          736100 kB\nMemAvailable:    5994000 kB\nBuffers:         1074636 kB\nCached:          2563496 kB\nSwapCached:       709576 kB\nActive:          1189992 kB\nInactive:        3455380 kB\nActive(anon):     878012 kB\nInactive(anon):   155036 kB\nActive(file):     311980 kB\nInactive(file):  3300344 kB\nUnevictable:       23508 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8303064 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:               168 kB\nWriteback:             0 kB\nAnonPages:       1019312 kB\nMapped:           124408 kB\nShmem:             25792 kB\nKReclaimable:    1949064 kB\nSlab:            2257148 kB\nSReclaimable:    1949064 kB\nSUnreclaim:       308084 kB\nKernelStack:        9616 kB\nPageTables:        25296 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6672960 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44596 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+          "/proc/sys/kernel/perf_event_paranoid": "4\n",
+          "/proc/uptime": "2636204.67 9010405.71\n",
+          "/sys/class/thermal/thermal_zone0/temp": "48000\n",
+          "/sys/class/thermal/thermal_zone1/temp": "58000\n",
+          "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "3076537\n",
+          "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "2714673\n",
+          "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1680787\n",
+          "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "1480636\n"
+        }
+      },
+      "name": "native-observation",
+      "output_bindings": [
+        {
+          "bytes": 3563463,
+          "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation/report.json",
+          "sha256": "29d78532dd7d6cfd7ea8f044f410e3dae419d9eb87691adfa277347ff91d7529"
+        }
+      ],
+      "outputs": [
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation/report.json"
+      ],
+      "owned_process_absent": true,
+      "owned_process_group_absent": true,
+      "passed": true,
+      "pid": 3920452,
+      "returncode": 0,
+      "start_monotonic_ns": 2636204669693274,
+      "started_utc": "2026-11-06T03:02:23.421728+00:00",
+      "stderr": {
+        "bytes": 0,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 640769,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation.stdout",
+        "sha256": "789ad6a6d8e1dffe557dc5942d0c9b66481691e7b449d15aa7cf7e201327869c"
+      },
+      "timeout_seconds": 1800,
+      "waited_and_reaped": true
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/analyze_native_observation.py",
+        "--report",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation/report.json",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation/independent-summary.json"
+      ],
+      "cleanup_scope": "owned stage process group only; independent controller sessions are proved by original reports/audits",
+      "cleanup_signals": [],
+      "effective_timeout_seconds": 180,
+      "elapsed_seconds": 1.078498988,
+      "end_monotonic_ns": 2636376387548962,
+      "finished_utc": "2026-11-06T03:05:15.139557+00:00",
+      "identity": {
+        "pid": 3925413,
+        "process_group": 3925413,
+        "start_ticks": 263637531
+      },
+      "machine_after": {
+        "cpu_count": 4,
+        "disk_available_bytes": 2662989824,
+        "loadavg": [
+          1.4873046875,
+          1.0576171875,
+          0.7099609375
+        ],
+        "machine_settings_changed": false,
+        "monotonic_ns": 2636376391464039,
+        "utc": "2026-11-06T03:05:15.143503+00:00",
+        "values": {
+          "/proc/loadavg": "1.49 1.06 0.71 1/602 3925413\n",
+          "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          475872 kB\nMemAvailable:    5807728 kB\nBuffers:         2114972 kB\nCached:          1516516 kB\nSwapCached:       710672 kB\nActive:          1769844 kB\nInactive:        2913912 kB\nActive(anon):     925212 kB\nInactive(anon):   152868 kB\nActive(file):     844632 kB\nInactive(file):  2761044 kB\nUnevictable:       23524 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8346328 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              1280 kB\nWriteback:             0 kB\nAnonPages:       1064472 kB\nMapped:           124624 kB\nShmem:             25812 kB\nKReclaimable:    2107492 kB\nSlab:            2419912 kB\nSReclaimable:    2107492 kB\nSUnreclaim:       312420 kB\nKernelStack:        9680 kB\nPageTables:        25300 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6673256 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44660 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+          "/proc/sys/kernel/perf_event_paranoid": "4\n",
+          "/proc/uptime": "2636376.39 9010795.24\n",
+          "/sys/class/thermal/thermal_zone0/temp": "61000\n",
+          "/sys/class/thermal/thermal_zone1/temp": "58000\n",
+          "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "1197236\n",
+          "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "1197224\n",
+          "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1197072\n",
+          "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "1197253\n"
+        }
+      },
+      "machine_before": {
+        "cpu_count": 4,
+        "disk_available_bytes": 2663055360,
+        "loadavg": [
+          1.4873046875,
+          1.0576171875,
+          0.7099609375
+        ],
+        "machine_settings_changed": false,
+        "monotonic_ns": 2636375310916263,
+        "utc": "2026-11-06T03:05:14.062960+00:00",
+        "values": {
+          "/proc/loadavg": "1.49 1.06 0.71 1/602 3925412\n",
+          "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          505512 kB\nMemAvailable:    5837272 kB\nBuffers:         2114972 kB\nCached:          1516420 kB\nSwapCached:       710672 kB\nActive:          1770052 kB\nInactive:        2913816 kB\nActive(anon):     925420 kB\nInactive(anon):   152868 kB\nActive(file):     844632 kB\nInactive(file):  2760948 kB\nUnevictable:       23524 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8346328 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              1208 kB\nWriteback:             0 kB\nAnonPages:       1064688 kB\nMapped:           124624 kB\nShmem:             25812 kB\nKReclaimable:    2107492 kB\nSlab:            2419912 kB\nSReclaimable:    2107492 kB\nSUnreclaim:       312420 kB\nKernelStack:        9680 kB\nPageTables:        25300 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6673256 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44644 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+          "/proc/sys/kernel/perf_event_paranoid": "4\n",
+          "/proc/uptime": "2636375.30 9010792.03\n",
+          "/sys/class/thermal/thermal_zone0/temp": "61000\n",
+          "/sys/class/thermal/thermal_zone1/temp": "65000\n",
+          "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "1200000\n",
+          "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "3184468\n",
+          "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "2993316\n",
+          "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "2993580\n"
+        }
+      },
+      "name": "native-audit",
+      "output_bindings": [
+        {
+          "bytes": 59413,
+          "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation/independent-summary.json",
+          "sha256": "5d5bcae3fc2a27ea514b9766caf6f96e7802662882655a1021694847b08d24cf"
+        }
+      ],
+      "outputs": [
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation/independent-summary.json"
+      ],
+      "owned_process_absent": true,
+      "owned_process_group_absent": true,
+      "passed": true,
+      "pid": 3925413,
+      "returncode": 0,
+      "start_monotonic_ns": 2636375309049974,
+      "started_utc": "2026-11-06T03:05:14.061078+00:00",
+      "stderr": {
+        "bytes": 0,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-audit.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 85,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-audit.stdout",
+        "sha256": "6d8ff1d4cdf6662fb0ad4b9c2a91657f0d8672691b6bc770356d0adacc36fc1a"
+      },
+      "timeout_seconds": 180,
+      "waited_and_reaped": true
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/boundary-tools-01/run_native_boundary.py",
+        "--binary",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/hepta-runtime",
+        "--profile-template",
+        "/home/qian/hepta-runtime-optimization-20261023/r11-native-observation-abba-20261103-02/profile/profile.json",
+        "--topology",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/benchmark-topology.json",
+        "--frozen-jobs",
+        "/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01",
+        "--socket-parent",
+        "/home/qian/h33b01",
+        "--out",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary",
+        "--bursts",
+        "2",
+        "--harness-root",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools"
+      ],
+      "cleanup_scope": "owned stage process group only; independent controller sessions are proved by original reports/audits",
+      "cleanup_signals": [],
+      "effective_timeout_seconds": 600,
+      "elapsed_seconds": 16.328706969,
+      "end_monotonic_ns": 2636392917135245,
+      "finished_utc": "2026-11-06T03:05:31.669034+00:00",
+      "identity": {
+        "pid": 3925414,
+        "process_group": 3925414,
+        "start_ticks": 263637659
+      },
+      "machine_after": {
+        "cpu_count": 4,
+        "disk_available_bytes": 2658451456,
+        "loadavg": [
+          1.28564453125,
+          1.037109375,
+          0.7119140625
+        ],
+        "machine_settings_changed": false,
+        "monotonic_ns": 2636392921082535,
+        "utc": "2026-11-06T03:05:31.673113+00:00",
+        "values": {
+          "/proc/loadavg": "1.29 1.04 0.71 1/602 3925954\n",
+          "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          513300 kB\nMemAvailable:    5851920 kB\nBuffers:         2117228 kB\nCached:          1519868 kB\nSwapCached:       711224 kB\nActive:          1770764 kB\nInactive:        2919516 kB\nActive(anon):     926132 kB\nInactive(anon):   152868 kB\nActive(file):     844632 kB\nInactive(file):  2766648 kB\nUnevictable:       23524 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8346328 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              2492 kB\nWriteback:             0 kB\nAnonPages:       1065376 kB\nMapped:           124652 kB\nShmem:             25812 kB\nKReclaimable:    2108652 kB\nSlab:            2421132 kB\nSReclaimable:    2108652 kB\nSUnreclaim:       312480 kB\nKernelStack:        9680 kB\nPageTables:        25300 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6673332 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44660 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+          "/proc/sys/kernel/perf_event_paranoid": "4\n",
+          "/proc/uptime": "2636392.91 9010843.45\n",
+          "/sys/class/thermal/thermal_zone0/temp": "56000\n",
+          "/sys/class/thermal/thermal_zone1/temp": "56000\n",
+          "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "1197408\n",
+          "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "1197224\n",
+          "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1197275\n",
+          "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "1197030\n"
+        }
+      },
+      "machine_before": {
+        "cpu_count": 4,
+        "disk_available_bytes": 2662985728,
+        "loadavg": [
+          1.4873046875,
+          1.0576171875,
+          0.7099609375
+        ],
+        "machine_settings_changed": false,
+        "monotonic_ns": 2636376590226083,
+        "utc": "2026-11-06T03:05:15.342271+00:00",
+        "values": {
+          "/proc/loadavg": "1.49 1.06 0.71 1/602 3925413\n",
+          "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          491520 kB\nMemAvailable:    5823376 kB\nBuffers:         2114972 kB\nCached:          1516516 kB\nSwapCached:       710672 kB\nActive:          1769844 kB\nInactive:        2913912 kB\nActive(anon):     925212 kB\nInactive(anon):   152868 kB\nActive(file):     844632 kB\nInactive(file):  2761044 kB\nUnevictable:       23524 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8346328 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              1280 kB\nWriteback:            84 kB\nAnonPages:       1064472 kB\nMapped:           124624 kB\nShmem:             25812 kB\nKReclaimable:    2107492 kB\nSlab:            2419912 kB\nSReclaimable:    2107492 kB\nSUnreclaim:       312420 kB\nKernelStack:        9680 kB\nPageTables:        25300 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6673256 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44660 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+          "/proc/sys/kernel/perf_event_paranoid": "4\n",
+          "/proc/uptime": "2636376.58 9010795.84\n",
+          "/sys/class/thermal/thermal_zone0/temp": "61000\n",
+          "/sys/class/thermal/thermal_zone1/temp": "63000\n",
+          "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "2991474\n",
+          "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "3184816\n",
+          "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "2993277\n",
+          "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "2992157\n"
+        }
+      },
+      "name": "native-boundary",
+      "output_bindings": [
+        {
+          "bytes": 366680,
+          "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary/report.json",
+          "sha256": "981c27033a4fbd8735b4999591473b53d311e75f25c43eac2dc2ea694a71e479"
+        }
+      ],
+      "outputs": [
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary/report.json"
+      ],
+      "owned_process_absent": true,
+      "owned_process_group_absent": true,
+      "passed": true,
+      "pid": 3925414,
+      "returncode": 0,
+      "start_monotonic_ns": 2636376588428276,
+      "started_utc": "2026-11-06T03:05:15.340467+00:00",
+      "stderr": {
+        "bytes": 0,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 206,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary.stdout",
+        "sha256": "0bd6935adb0d5cc5e9b8f88785078f4f613ff313c5ba4a8272f3c340b9cb6943"
+      },
+      "timeout_seconds": 600,
+      "waited_and_reaped": true
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/boundary-tools-01/audit_native_boundary.py",
+        "--report",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary/report.json",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary/independent-summary.json",
+        "--harness-root",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools"
+      ],
+      "cleanup_scope": "owned stage process group only; independent controller sessions are proved by original reports/audits",
+      "cleanup_signals": [],
+      "effective_timeout_seconds": 180,
+      "elapsed_seconds": 0.177825815,
+      "end_monotonic_ns": 2636393295214502,
+      "finished_utc": "2026-11-06T03:05:32.047236+00:00",
+      "identity": {
+        "pid": 3925955,
+        "process_group": 3925955,
+        "start_ticks": 263639312
+      },
+      "machine_after": {
+        "cpu_count": 4,
+        "disk_available_bytes": 2658435072,
+        "loadavg": [
+          1.28564453125,
+          1.037109375,
+          0.7119140625
+        ],
+        "machine_settings_changed": false,
+        "monotonic_ns": 2636393298889192,
+        "utc": "2026-11-06T03:05:32.050920+00:00",
+        "values": {
+          "/proc/loadavg": "1.29 1.04 0.71 1/602 3925955\n",
+          "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          517376 kB\nMemAvailable:    5856020 kB\nBuffers:         2117236 kB\nCached:          1519884 kB\nSwapCached:       711224 kB\nActive:          1770768 kB\nInactive:        2919540 kB\nActive(anon):     926136 kB\nInactive(anon):   152868 kB\nActive(file):     844632 kB\nInactive(file):  2766672 kB\nUnevictable:       23524 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8346328 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              2500 kB\nWriteback:             0 kB\nAnonPages:       1065376 kB\nMapped:           124652 kB\nShmem:             25812 kB\nKReclaimable:    2108652 kB\nSlab:            2421132 kB\nSReclaimable:    2108652 kB\nSUnreclaim:       312480 kB\nKernelStack:        9680 kB\nPageTables:        25300 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6673332 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44660 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+          "/proc/sys/kernel/perf_event_paranoid": "4\n",
+          "/proc/uptime": "2636393.29 9010844.58\n",
+          "/sys/class/thermal/thermal_zone0/temp": "56000\n",
+          "/sys/class/thermal/thermal_zone1/temp": "62000\n",
+          "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "1375487\n",
+          "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "1200000\n",
+          "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1197303\n",
+          "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "1696082\n"
+        }
+      },
+      "machine_before": {
+        "cpu_count": 4,
+        "disk_available_bytes": 2658451456,
+        "loadavg": [
+          1.28564453125,
+          1.037109375,
+          0.7119140625
+        ],
+        "machine_settings_changed": false,
+        "monotonic_ns": 2636393119303673,
+        "utc": "2026-11-06T03:05:31.871347+00:00",
+        "values": {
+          "/proc/loadavg": "1.29 1.04 0.71 1/602 3925954\n",
+          "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          528712 kB\nMemAvailable:    5867340 kB\nBuffers:         2117232 kB\nCached:          1519868 kB\nSwapCached:       711224 kB\nActive:          1770764 kB\nInactive:        2919524 kB\nActive(anon):     926132 kB\nInactive(anon):   152868 kB\nActive(file):     844632 kB\nInactive(file):  2766656 kB\nUnevictable:       23524 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8346328 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              2488 kB\nWriteback:             0 kB\nAnonPages:       1065376 kB\nMapped:           124652 kB\nShmem:             25812 kB\nKReclaimable:    2108652 kB\nSlab:            2421132 kB\nSReclaimable:    2108652 kB\nSUnreclaim:       312480 kB\nKernelStack:        9680 kB\nPageTables:        25300 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6673332 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44660 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+          "/proc/sys/kernel/perf_event_paranoid": "4\n",
+          "/proc/uptime": "2636393.11 9010844.04\n",
+          "/sys/class/thermal/thermal_zone0/temp": "56000\n",
+          "/sys/class/thermal/thermal_zone1/temp": "62000\n",
+          "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "2993013\n",
+          "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "2032111\n",
+          "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "2993152\n",
+          "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "3182578\n"
+        }
+      },
+      "name": "boundary-audit",
+      "output_bindings": [
+        {
+          "bytes": 4973,
+          "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary/independent-summary.json",
+          "sha256": "65a2abf4a7216c5f62000c36ca6799058d12c9736bb952bbc0f784330094ffca"
+        }
+      ],
+      "outputs": [
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary/independent-summary.json"
+      ],
+      "owned_process_absent": true,
+      "owned_process_group_absent": true,
+      "passed": true,
+      "pid": 3925955,
+      "returncode": 0,
+      "start_monotonic_ns": 2636393117388687,
+      "started_utc": "2026-11-06T03:05:31.869428+00:00",
+      "stderr": {
+        "bytes": 0,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/boundary-audit.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 141,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/boundary-audit.stdout",
+        "sha256": "56502823274246d52573854d3cebafd642a0876ec306c5191f3593650dbb1998"
+      },
+      "timeout_seconds": 180,
+      "waited_and_reaped": true
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/run_six_host_cancel_recovery.py",
+        "--candidate",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/qualification-01/hepta-runtime",
+        "--profile-template",
+        "/home/qian/hepta-runtime-optimization-20261023/r11-native-observation-abba-20261103-02/profile/profile.json",
+        "--topology",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/benchmark-topology.json",
+        "--frozen-jobs",
+        "/home/qian/hepta-runtime-optimization-20261023/a31-frozen-originals-r01",
+        "--socket-parent",
+        "/home/qian/h33c01",
+        "--out",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01",
+        "--workers",
+        "2",
+        "--candidate-arena-max",
+        "1",
+        "--interrupt-host",
+        "rog"
+      ],
+      "cleanup_scope": "owned stage process group only; independent controller sessions are proved by original reports/audits",
+      "cleanup_signals": [],
+      "effective_timeout_seconds": 600,
+      "elapsed_seconds": 12.414718959,
+      "end_monotonic_ns": 2636405944922242,
+      "finished_utc": "2026-11-06T03:05:44.696938+00:00",
+      "identity": {
+        "pid": 3925956,
+        "process_group": 3925956,
+        "start_ticks": 263639353
+      },
+      "machine_after": {
+        "cpu_count": 4,
+        "disk_available_bytes": 2653642752,
+        "loadavg": [
+          1.9375,
+          1.1845703125,
+          0.763671875
+        ],
+        "machine_settings_changed": false,
+        "monotonic_ns": 2636405949537189,
+        "utc": "2026-11-06T03:05:44.701558+00:00",
+        "values": {
+          "/proc/loadavg": "1.94 1.18 0.76 1/602 3927124\n",
+          "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          502088 kB\nMemAvailable:    5848672 kB\nBuffers:         2119892 kB\nCached:          1524192 kB\nSwapCached:       712520 kB\nActive:          1773020 kB\nInactive:        2925980 kB\nActive(anon):     927860 kB\nInactive(anon):   152868 kB\nActive(file):     845160 kB\nInactive(file):  2773112 kB\nUnevictable:       23524 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8346584 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              1980 kB\nWriteback:             0 kB\nAnonPages:       1066992 kB\nMapped:           124896 kB\nShmem:             25812 kB\nKReclaimable:    2109624 kB\nSlab:            2422148 kB\nSReclaimable:    2109624 kB\nSUnreclaim:       312524 kB\nKernelStack:        9696 kB\nPageTables:        25456 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6673484 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44692 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+          "/proc/sys/kernel/perf_event_paranoid": "4\n",
+          "/proc/uptime": "2636405.94 9010862.66\n",
+          "/sys/class/thermal/thermal_zone0/temp": "64000\n",
+          "/sys/class/thermal/thermal_zone1/temp": "60000\n",
+          "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "2993311\n",
+          "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "1197389\n",
+          "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1197235\n",
+          "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "1196560\n"
+        }
+      },
+      "machine_before": {
+        "cpu_count": 4,
+        "disk_available_bytes": 2658426880,
+        "loadavg": [
+          1.28564453125,
+          1.037109375,
+          0.7119140625
+        ],
+        "machine_settings_changed": false,
+        "monotonic_ns": 2636393531884005,
+        "utc": "2026-11-06T03:05:32.283930+00:00",
+        "values": {
+          "/proc/loadavg": "1.29 1.04 0.71 1/602 3925955\n",
+          "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          517376 kB\nMemAvailable:    5856024 kB\nBuffers:         2117236 kB\nCached:          1519888 kB\nSwapCached:       711224 kB\nActive:          1770768 kB\nInactive:        2919544 kB\nActive(anon):     926136 kB\nInactive(anon):   152868 kB\nActive(file):     844632 kB\nInactive(file):  2766676 kB\nUnevictable:       23524 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8346328 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              2500 kB\nWriteback:             0 kB\nAnonPages:       1065380 kB\nMapped:           124652 kB\nShmem:             25812 kB\nKReclaimable:    2108652 kB\nSlab:            2421132 kB\nSReclaimable:    2108652 kB\nSUnreclaim:       312480 kB\nKernelStack:        9680 kB\nPageTables:        25300 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6673332 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44660 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+          "/proc/sys/kernel/perf_event_paranoid": "4\n",
+          "/proc/uptime": "2636393.53 9010845.27\n",
+          "/sys/class/thermal/thermal_zone0/temp": "56000\n",
+          "/sys/class/thermal/thermal_zone1/temp": "60000\n",
+          "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "3183732\n",
+          "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "1197399\n",
+          "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "2993027\n",
+          "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "1200000\n"
+        }
+      },
+      "name": "cancel-recovery",
+      "output_bindings": [
+        {
+          "bytes": 565911,
+          "path": "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01/report.json",
+          "sha256": "f16e193df114eaa875e55e5d52041d03a22ed87ae7d8c1a6d0310fd8bf6a962a"
+        }
+      ],
+      "outputs": [
+        "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01/report.json"
+      ],
+      "owned_process_absent": true,
+      "owned_process_group_absent": true,
+      "passed": true,
+      "pid": 3925956,
+      "returncode": 0,
+      "start_monotonic_ns": 2636393530203283,
+      "started_utc": "2026-11-06T03:05:32.282242+00:00",
+      "stderr": {
+        "bytes": 0,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/cancel-recovery.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 131,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/cancel-recovery.stdout",
+        "sha256": "b1d04cea85788d0a0119522df90c9aee0140b310391ba805d12178235755da65"
+      },
+      "timeout_seconds": 600,
+      "waited_and_reaped": true
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/measurement-tools/verify_cancel_recovery.py",
+        "--report",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01/report.json",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01/independent-summary.json"
+      ],
+      "cleanup_scope": "owned stage process group only; independent controller sessions are proved by original reports/audits",
+      "cleanup_signals": [],
+      "effective_timeout_seconds": 180,
+      "elapsed_seconds": 0.178437391,
+      "end_monotonic_ns": 2636406370704385,
+      "finished_utc": "2026-11-06T03:05:45.122725+00:00",
+      "identity": {
+        "pid": 3927125,
+        "process_group": 3927125,
+        "start_ticks": 263640620
+      },
+      "machine_after": {
+        "cpu_count": 4,
+        "disk_available_bytes": 2653622272,
+        "loadavg": [
+          1.9375,
+          1.1845703125,
+          0.763671875
+        ],
+        "machine_settings_changed": false,
+        "monotonic_ns": 2636406377321491,
+        "utc": "2026-11-06T03:05:45.129354+00:00",
+        "values": {
+          "/proc/loadavg": "1.94 1.18 0.76 1/602 3927125\n",
+          "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          516280 kB\nMemAvailable:    5862920 kB\nBuffers:         2119892 kB\nCached:          1524216 kB\nSwapCached:       712520 kB\nActive:          1773008 kB\nInactive:        2926004 kB\nActive(anon):     927848 kB\nInactive(anon):   152868 kB\nActive(file):     845160 kB\nInactive(file):  2773136 kB\nUnevictable:       23524 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8346584 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              2016 kB\nWriteback:             0 kB\nAnonPages:       1066980 kB\nMapped:           124752 kB\nShmem:             25812 kB\nKReclaimable:    2109656 kB\nSlab:            2422184 kB\nSReclaimable:    2109656 kB\nSUnreclaim:       312528 kB\nKernelStack:        9680 kB\nPageTables:        25300 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6673484 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44676 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+          "/proc/sys/kernel/perf_event_paranoid": "4\n",
+          "/proc/uptime": "2636406.37 9010863.94\n",
+          "/sys/class/thermal/thermal_zone0/temp": "64000\n",
+          "/sys/class/thermal/thermal_zone1/temp": "63000\n",
+          "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "1197201\n",
+          "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "1197391\n",
+          "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1197321\n",
+          "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "1197268\n"
+        }
+      },
+      "machine_before": {
+        "cpu_count": 4,
+        "disk_available_bytes": 2653642752,
+        "loadavg": [
+          1.9375,
+          1.1845703125,
+          0.763671875
+        ],
+        "machine_settings_changed": false,
+        "monotonic_ns": 2636406194368095,
+        "utc": "2026-11-06T03:05:44.946412+00:00",
+        "values": {
+          "/proc/loadavg": "1.94 1.18 0.76 1/602 3927124\n",
+          "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          525608 kB\nMemAvailable:    5872196 kB\nBuffers:         2119892 kB\nCached:          1524196 kB\nSwapCached:       712520 kB\nActive:          1773008 kB\nInactive:        2925984 kB\nActive(anon):     927848 kB\nInactive(anon):   152868 kB\nActive(file):     845160 kB\nInactive(file):  2773116 kB\nUnevictable:       23524 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8346584 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              1988 kB\nWriteback:             0 kB\nAnonPages:       1066980 kB\nMapped:           124752 kB\nShmem:             25812 kB\nKReclaimable:    2109624 kB\nSlab:            2422148 kB\nSReclaimable:    2109624 kB\nSUnreclaim:       312524 kB\nKernelStack:        9680 kB\nPageTables:        25300 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6673484 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44676 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+          "/proc/sys/kernel/perf_event_paranoid": "4\n",
+          "/proc/uptime": "2636406.19 9010863.40\n",
+          "/sys/class/thermal/thermal_zone0/temp": "64000\n",
+          "/sys/class/thermal/thermal_zone1/temp": "59000\n",
+          "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "1996710\n",
+          "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "2994242\n",
+          "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "3180724\n",
+          "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "3129982\n"
+        }
+      },
+      "name": "recovery-audit",
+      "output_bindings": [
+        {
+          "bytes": 12186,
+          "path": "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01/independent-summary.json",
+          "sha256": "ca40e945347a987ab7545aff16b7f7f4f86f4860dedcbe90703bcca38cb6cb46"
+        }
+      ],
+      "outputs": [
+        "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01/independent-summary.json"
+      ],
+      "owned_process_absent": true,
+      "owned_process_group_absent": true,
+      "passed": true,
+      "pid": 3927125,
+      "returncode": 0,
+      "start_monotonic_ns": 2636406192266994,
+      "started_utc": "2026-11-06T03:05:44.944306+00:00",
+      "stderr": {
+        "bytes": 0,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/recovery-audit.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 107,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/recovery-audit.stdout",
+        "sha256": "06407c6d431b9140854e7caca32a5ae566a2485159cfd17665ddf64e1932cc38"
+      },
+      "timeout_seconds": 180,
+      "waited_and_reaped": true
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/tools-01/summarize_r25_campaign.py",
+        "--native-report",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation/report.json",
+        "--native-analysis",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-observation/independent-summary.json",
+        "--boundary-report",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary/report.json",
+        "--boundary-analysis",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/native-boundary/independent-summary.json",
+        "--lifecycle-report",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01/report.json",
+        "--lifecycle-analysis",
+        "/home/qian/hepta-runtime-optimization-20261104-r16/r33-cancel-recovery-01/independent-summary.json",
+        "--expected-baseline-sha256",
+        "bc14cab1e632d6cd703f6a0f65d1a8e513b4471c09a403186d72e989e3f74c13",
+        "--expected-candidate-sha256",
+        "c55f2f8696e01b239e4948da19279d0a425ac2737d8142b58153da8091d45204",
+        "--output",
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/summary.json"
+      ],
+      "cleanup_scope": "owned stage process group only; independent controller sessions are proved by original reports/audits",
+      "cleanup_signals": [],
+      "effective_timeout_seconds": 180,
+      "elapsed_seconds": 0.178808001,
+      "end_monotonic_ns": 2636406799502555,
+      "finished_utc": "2026-11-06T03:05:45.551520+00:00",
+      "identity": {
+        "pid": 3927126,
+        "process_group": 3927126,
+        "start_ticks": 263640662
+      },
+      "machine_after": {
+        "cpu_count": 4,
+        "disk_available_bytes": 2653593600,
+        "loadavg": [
+          1.9375,
+          1.1845703125,
+          0.763671875
+        ],
+        "machine_settings_changed": false,
+        "monotonic_ns": 2636406803619149,
+        "utc": "2026-11-06T03:05:45.555643+00:00",
+        "values": {
+          "/proc/loadavg": "1.94 1.18 0.76 3/602 3927126\n",
+          "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          499912 kB\nMemAvailable:    5846580 kB\nBuffers:         2119892 kB\nCached:          1524244 kB\nSwapCached:       712520 kB\nActive:          1773020 kB\nInactive:        2926032 kB\nActive(anon):     927860 kB\nInactive(anon):   152868 kB\nActive(file):     845160 kB\nInactive(file):  2773164 kB\nUnevictable:       23524 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8346584 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              2088 kB\nWriteback:             0 kB\nAnonPages:       1066992 kB\nMapped:           124752 kB\nShmem:             25812 kB\nKReclaimable:    2109656 kB\nSlab:            2422192 kB\nSReclaimable:    2109656 kB\nSUnreclaim:       312536 kB\nKernelStack:        9680 kB\nPageTables:        25300 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6673484 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44676 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+          "/proc/sys/kernel/perf_event_paranoid": "4\n",
+          "/proc/uptime": "2636406.80 9010865.21\n",
+          "/sys/class/thermal/thermal_zone0/temp": "63000\n",
+          "/sys/class/thermal/thermal_zone1/temp": "60000\n",
+          "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "1197263\n",
+          "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "1197231\n",
+          "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "1197269\n",
+          "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "1197027\n"
+        }
+      },
+      "machine_before": {
+        "cpu_count": 4,
+        "disk_available_bytes": 2653618176,
+        "loadavg": [
+          1.9375,
+          1.1845703125,
+          0.763671875
+        ],
+        "machine_settings_changed": false,
+        "monotonic_ns": 2636406622670035,
+        "utc": "2026-11-06T03:05:45.374713+00:00",
+        "values": {
+          "/proc/loadavg": "1.94 1.18 0.76 1/602 3927125\n",
+          "/proc/meminfo": "MemTotal:        7824912 kB\nMemFree:          516028 kB\nMemAvailable:    5862672 kB\nBuffers:         2119892 kB\nCached:          1524220 kB\nSwapCached:       712520 kB\nActive:          1773008 kB\nInactive:        2926008 kB\nActive(anon):     927848 kB\nInactive(anon):   152868 kB\nActive(file):     845160 kB\nInactive(file):  2773140 kB\nUnevictable:       23524 kB\nMlocked:              64 kB\nSwapTotal:      10485752 kB\nSwapFree:        8346584 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              2084 kB\nWriteback:             0 kB\nAnonPages:       1066992 kB\nMapped:           124752 kB\nShmem:             25812 kB\nKReclaimable:    2109656 kB\nSlab:            2422192 kB\nSReclaimable:    2109656 kB\nSUnreclaim:       312536 kB\nKernelStack:        9680 kB\nPageTables:        25300 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    14398208 kB\nCommitted_AS:    6673484 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       44676 kB\nVmallocChunk:          0 kB\nPercpu:             6896 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:     4096 kB\nShmemPmdMapped:        0 kB\nFileHugePages:         0 kB\nFilePmdMapped:         0 kB\nUnaccepted:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      334016 kB\nDirectMap2M:     7743488 kB\n",
+          "/proc/sys/kernel/perf_event_paranoid": "4\n",
+          "/proc/uptime": "2636406.62 9010864.66\n",
+          "/sys/class/thermal/thermal_zone0/temp": "63000\n",
+          "/sys/class/thermal/thermal_zone1/temp": "60000\n",
+          "/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq": "2993245\n",
+          "/sys/devices/system/cpu/cpu1/cpufreq/scaling_cur_freq": "3000077\n",
+          "/sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq": "3184044\n",
+          "/sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq": "2993168\n"
+        }
+      },
+      "name": "observation-summary",
+      "output_bindings": [
+        {
+          "bytes": 13509,
+          "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/summary.json",
+          "sha256": "8c2633a55d461802fbb9c5ed8c6b14b2e0715a70da9300a246e44e4351b80f1b"
+        }
+      ],
+      "outputs": [
+        "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/summary.json"
+      ],
+      "owned_process_absent": true,
+      "owned_process_group_absent": true,
+      "passed": true,
+      "pid": 3927126,
+      "returncode": 0,
+      "start_monotonic_ns": 2636406620694554,
+      "started_utc": "2026-11-06T03:05:45.372733+00:00",
+      "stderr": {
+        "bytes": 0,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/observation-summary.stderr",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 196,
+        "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/observation-summary.stdout",
+        "sha256": "f78fe95e8e2be3d6f40d7793fb352737b7c61c9354538df72bdd296923742641"
+      },
+      "timeout_seconds": 180,
+      "waited_and_reaped": true
+    }
+  ],
+  "started_utc": "2026-11-06T03:00:52.090847+00:00",
+  "summary": {
+    "bytes": 13509,
+    "path": "/home/qian/hepta-runtime-optimization-20261106-r33/campaign-01/summary.json",
+    "sha256": "8c2633a55d461802fbb9c5ed8c6b14b2e0715a70da9300a246e44e4351b80f1b"
+  },
+  "thresholds": {
+    "all_concurrency": [
+      1,
+      8,
+      16
+    ],
+    "cache_cap_evidence_scope": "source and qualification; RSS gate measures the actual process",
+    "controller_cpu_b_over_a_max": 1.1,
+    "controller_rss_b_over_a_max": 1.05,
+    "controller_rss_extra_kib_max": 512,
+    "p95_b_over_a_max": 1.1,
+    "primary_concurrency": 8,
+    "rss_aggregation": "maximum sampled controller RSS across all four native controllers per arm, including restarts",
+    "rss_combination": "both limits; B <= min(A + 512 KiB, A * 1.05)",
+    "ssh_cache_hard_cap_bytes": 2097152,
+    "ssh_cache_target": "/usr/bin/ssh",
+    "ssh_cache_target_bytes": 846888,
+    "throughput_b_over_a_min": 0.95
+  }
+}
