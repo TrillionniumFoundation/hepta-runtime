@@ -1,4 +1,4 @@
-# R35: qualification, original CI and observation gates passed; normal lifecycle pending
+# R35: rejected by original normal lifecycle cancellation-throughput gate
 
 R35 starts from accepted R24 commit `baab4def80be7af015b2e7a594cb302f66c4130e`. It moves the legacy direct-read JSON allocation into the branch that consumes it and transfers ownership of the observation command instead of cloning it. Exactly three compiler input paths differ from R24. No cancellation reserve, concurrency threshold, transport authority check, cleanup rule, or acceptance threshold was changed.
 
@@ -53,7 +53,7 @@ The create-only Mac launcher installation succeeded once as `1a1af93b3b9-fc05-69
 
 ## First normal-observation result
 
-This finite campaign passes the original nonregression gates. It does not establish a consistent throughput improvement, a statistical confidence claim, or final candidate adoption. R24 remains accepted while the gated original normal lifecycle ABBA is pending.
+This finite campaign passes the original nonregression gates. It does not establish a consistent throughput improvement, a statistical confidence claim, or final candidate adoption. R24 remains accepted. The subsequent first normal lifecycle ABBA rejected R35, as recorded below.
 
 | Concurrency | R24 calls/s | R35 calls/s | Throughput change | P95 change | Controller CPU/call change | P99 change (diagnostic) |
 |---|---:|---:|---:|---:|---:|---:|
@@ -63,10 +63,36 @@ This finite campaign passes the original nonregression gates. It does not establ
 
 Controller sampled peak RSS was **18,908 KiB for R24 and 18,592 KiB for R35**, a reduction of 316 KiB. The original candidate ceiling was 19,420 KiB. RSS is a 100 ms sampled process peak, not an exact allocation bound or total cluster memory. Controller CPU excludes the harness and remote processes.
 
-The boundary test reported 32 successful admissions, 32 capacity refusals and zero other errors; drain and recovery passed. The original six-host cancellation/recovery correctness canary passed. It is separate from the still-pending normal lifecycle ABBA. The independent compiler monitor validated 301 observations at 1 Hz with zero validation errors; this sampling does not rule out activity between observations.
+The boundary test reported 32 successful admissions, 32 capacity refusals and zero other errors; drain and recovery passed. The original six-host cancellation/recovery correctness canary passed. It is separate from the normal lifecycle ABBA result recorded below. The independent compiler monitor validated 301 observations at 1 Hz with zero validation errors; this sampling does not rule out activity between observations.
 
 The completed original report, gate summary, independent native audit, compiler-monitor audit, original Mac holder report and complete raw native terminal/read are preserved in [observation-originals-01](observation-originals-01/). The first workflow ran from 2026-11-06 06:46:19 UTC to 06:51:19 UTC. Complete bounded observation collection and postflight precede the normal lifecycle materialization.
 
 ### Preparation executor interruption
 
 The local preparation executor became unavailable after the completed observation result had been retrieved. It did not restart the measurement or alter the measured source. Already published source, qualification, CI and launcher packages remain immutable; the original observation files remain on x230 and Mac, and these original receipt bytes are now published directly. Any unfinished preparation recovery is recorded explicitly, with original-byte identity required before calling a recovered artifact identical.
+
+## Complete original observation archive and lifecycle launch
+
+The first observation evidence collector completed once with zero receipt-binding errors. Its complete `observation-evidence-01.tar.gz` is **3,077,414 bytes**, SHA-256 `941e03e20ddcab8baa6049b806e2b447242055abb2f72eefb2a6ed87a9a74b8c`. It retains **4,172 files / 31,238,250 selected bytes**. All 47 immutable transfer chunks and the full archive hash were verified. The same collector verified every selected member locally without extracting files, executing archived programs, or rerunning auditors or benchmarks.
+
+The archive, manifest, compact result and original archive terminal/read records are in [observation-originals-01](observation-originals-01/). Eight nonempty Mac holder log bodies are included separately; twelve empty logs are represented by their original report identities. The observation archive itself records that Mac log bodies are outside that archive. Its first historical postflight and archive snapshot correctly show normal lifecycle not yet started at their capture time; they are preserved unchanged.
+
+The postflight source was recovered with its original reviewed identity. The observation collector and sealer are explicitly recorded as new recovery revisions after the preparation executor interruption. Their static review, actual binding, deployment and zero-extraction verification records are included; no missing prior review body has been reconstructed as an original.
+
+The original lifecycle materializer completed once (`1a1afb8c456-fc05-6b1d`) with zero workloads or remote effects. The original normal lifecycle ABBA holder was then started once on Mac at **2026-11-06 07:31:24 UTC**, job `1a1afc4fb4a-fc05-6b7f`. Its input binds the same qualified R35 binaries and complete source inventory. The first attempt completed at **2026-11-06 07:33:52 UTC** with native exit 1 and complete durable logs (296 stdout bytes, zero stderr). During measurement the coordinator made no other target-host queries, file transfers, or builds and only polled this original holder. **R24 remains the accepted release.**
+
+## First normal lifecycle result: rejected
+
+The original normal lifecycle ABBA completed four rounds and all four independent correctness audits. The original fourteen lifecycle tool tests passed without failures, skips, or retries. The original performance analyzer then returned failure because the **required concurrent live-cancellation throughput ratio was 0.9293926468, below the unchanged 0.95 minimum**. R35 is therefore **not adopted**. The result will not be replaced by a rerun or by a less demanding gate.
+
+| Required comparison | R24 RPC/s | R35 RPC/s | Throughput change | P95 change | Result |
+|---|---:|---:|---:|---:|---|
+| All operations (60 calls per arm) | 6.614869 | 7.744640 | +17.08% | -12.31% | Pass |
+| Launch (12 calls per arm) | 4.746698 | 7.590582 | +59.91% | -47.21% | Pass |
+| Concurrent live cancel (12 calls per arm) | 6.879689 | 6.393932 | **-7.06%** | +6.85% | **Reject: throughput** |
+
+The aggregate improvement does not override the required cancellation gate. Controller CPU for the required groups passed the original declared tick-tolerance tests. The additional, non-adoption-required `cancel_after_terminal` CPU comparison failed (0.07 s versus a 0.06 s allowed value); it is retained in the original gates file. Sampled controller peak RSS was 17,588 KiB for R24 and 17,416 KiB for R35, within the unchanged 18,100 KiB limit. This finite C6 ABBA supports descriptive comparison only, not statistical significance, saturation capacity, or whole-cluster CPU claims.
+
+The parent returned failure after the original analyzer rejected the performance result. Both parent stages and every ABBA-owned stage were waited and reaped, with owned process groups absent. The Mac holder reaped its owned agent and removed its socket and directory. The independent compiler monitor validated 149 samples with no errors; this is a sampled check and does not prove absence between observations. Candidate and baseline source inputs remained unchanged and measurement attribution remained valid.
+
+The complete original parent, ABBA report, round index, summary, gates, four round audits, tool tests, monitor audit, Mac holder report and native terminal/read are in [lifecycle-originals-01](lifecycle-originals-01/). Collection of the complete lifecycle raw-log archive is in progress; its successful collection will not change this rejection. Further phase-cost diagnostic work starts from accepted R24 and is separate from this rejected candidate.

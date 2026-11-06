@@ -1,0 +1,468 @@
+{
+  "schema": "hepta-six-host-cancel-recovery-independent-verification/v2",
+  "verified": true,
+  "source_sha256": "8df9c91a71f85dfe1f73c7edce71567d6e0525f7845768532f8a33433fa76782",
+  "source_bytes": 568239,
+  "candidate_sha256": "416662310fef6ca6d68907658bb1b882584d1e431bf4ed4263f62984495d8251",
+  "allocator_environment_verification": {
+    "verified": true,
+    "controllers_with_live_environment": 3,
+    "configuration": {
+      "allocator_keys_cleared": [
+        "MALLOC_*",
+        "GLIBC_TUNABLES"
+      ],
+      "comparison_identity": "binary_sha256+allocator_environment",
+      "helper_sha256": "f5c8e879c540b3f7cb1b7d3a7a0f5002c2f40c1a87963174b0b00470fa3a4525",
+      "libc": "glibc 2.39",
+      "machine": "x86_64",
+      "parent_environment_modified": false,
+      "platform": "linux",
+      "same_binary_sha256": false,
+      "schema": "hepta-x230-child-allocator-run/v1",
+      "scope": "X230/glibc controller child; no service/global environment changes; remote workload environment not configured",
+      "variants": {
+        "candidate": {
+          "binary_sha256": "416662310fef6ca6d68907658bb1b882584d1e431bf4ed4263f62984495d8251",
+          "configuration_fingerprint": "6e30de0f0b78dc5acd601554506ec638c0f136dc3cfdffaa4651b2d25cfe97a9",
+          "environment": {
+            "MALLOC_ARENA_MAX": "1"
+          },
+          "environment_sha256": "9633e7fce5a406be429a537e2a90abd234e6ea6329a7c22b7019d521872f4eb9"
+        }
+      }
+    }
+  },
+  "topology_verification": {
+    "verified": true,
+    "alias_count": 6,
+    "physical_machine_groups": 6,
+    "manifest_sha256": "8c0767d3318131a7d470d9cde8e327a59ce18adf022c8bc1b1d5a0fa9a865287"
+  },
+  "raw_evidence": {
+    "transport": {
+      "frames_rehashed": 93,
+      "rpc_envelopes_independently_verified": 93,
+      "notifications_retained": 0
+    },
+    "resource_traces": [
+      {
+        "controller_directory": "first-controller",
+        "trace_records_recomputed": 36,
+        "process_generations": 35,
+        "sampled_cpu_seconds_by_scope": {
+          "controller": 0.58,
+          "mixed_descendants": 0.0,
+          "other_descendants": 0.0,
+          "ssh_descendants": 2.77,
+          "unknown_descendants": 0.0
+        },
+        "missing_observations": {
+          "identity_before:FileNotFoundError": 4,
+          "identity_before:ProcessLookupError": 4
+        }
+      },
+      {
+        "controller_directory": "after-crash-controller",
+        "trace_records_recomputed": 38,
+        "process_generations": 39,
+        "sampled_cpu_seconds_by_scope": {
+          "controller": 0.59,
+          "mixed_descendants": 0.0,
+          "other_descendants": 0.0,
+          "ssh_descendants": 3.8800000000000012,
+          "unknown_descendants": 0.0
+        },
+        "missing_observations": {
+          "identity_before:ProcessLookupError": 4,
+          "identity_before:FileNotFoundError": 2
+        }
+      },
+      {
+        "controller_directory": "after-cancel-controller",
+        "trace_records_recomputed": 28,
+        "process_generations": 27,
+        "sampled_cpu_seconds_by_scope": {
+          "controller": 0.36,
+          "mixed_descendants": 0.0,
+          "other_descendants": 0.0,
+          "ssh_descendants": 3.7800000000000007,
+          "unknown_descendants": 0.0
+        },
+        "missing_observations": {
+          "status:FileNotFoundError": 1,
+          "VmRSS:UnavailableStatusField": 1,
+          "VmHWM:UnavailableStatusField": 1,
+          "fd:FileNotFoundError": 1,
+          "executable:FileNotFoundError": 1,
+          "tasks:FileNotFoundError": 1,
+          "identity_after:FileNotFoundError": 1,
+          "identity_after:GenerationOrParentChanged": 1,
+          "identity_before:FileNotFoundError": 1,
+          "identity_before:ProcessLookupError": 1
+        }
+      }
+    ],
+    "canonical_native_replies_rehashed": 90,
+    "ssh_streams_rehashed": 72
+  },
+  "hosts": {
+    "ai395": {
+      "job_id": "1a1afc6a2e0-3e571c-2",
+      "launch_nonce": "8f9bdcf3b58cef641bf6f44e256d5f42",
+      "execution_count": 1,
+      "request_sha256": "d987b6090b49d64ec9d0c5efd90cf615c79d4f15696c30f7c17e54c3d6fcb8cf",
+      "exit_sha256": "333db7ea4efff92b822e5620b2bbed418e698c6cdb740db7caf27881f0b0a3d2",
+      "host_reported_name": "ai395",
+      "restart_terminal_bytes_unchanged": true
+    },
+    "mac": {
+      "job_id": "1a1afc6a2dc-3e571c-1",
+      "launch_nonce": "99a6537f81d16c8aa08433b3954dd43e",
+      "execution_count": 1,
+      "request_sha256": "e8879ad686b6df7f6970d4346d41fa223991c6c5ee33f7fe5a875a34b1fa9707",
+      "exit_sha256": "cdd402195c65aa32289c6acb028060c466afa6832be1a73490a5bce79cae99b8",
+      "host_reported_name": "MacBook-Pro.local",
+      "restart_terminal_bytes_unchanged": true
+    },
+    "main": {
+      "job_id": "1a1afc6a2e0-3e571c-3",
+      "launch_nonce": "c2c970440d2d6ee09bf795e7f7b06848",
+      "execution_count": 1,
+      "request_sha256": "7ebf20085c2f9e41da2a2defa833414264a5093bc7d9aa26ef28906d48bce2cc",
+      "exit_sha256": "53a19ea204ccd041e3e38d4135751fedf736381d07458323884c8aedbd9bf57c",
+      "host_reported_name": "qian-qi",
+      "restart_terminal_bytes_unchanged": true
+    },
+    "pocket4": {
+      "job_id": "1a1afc6a2e0-3e571c-5",
+      "launch_nonce": "ccc11a7e0feca99da49215813e05a2fc",
+      "execution_count": 1,
+      "request_sha256": "c4a525c202543270d1ca11e70bebd50b64bdd9520c19a5baf3a4b5526d252db8",
+      "exit_sha256": "1404fb54864e75f4d96faf6b134bfc95b7b5494456f74fd6e5cb239aea2253d5",
+      "host_reported_name": "alex-G1628-04",
+      "restart_terminal_bytes_unchanged": true
+    },
+    "rog": {
+      "job_id": "1a1afc6a2e0-3e571c-4",
+      "launch_nonce": "405cc23e7d4e95363197d4f6257a63fc",
+      "execution_count": 1,
+      "request_sha256": "e753ef00c9dcd3064b8960650a4d53d8c4e96c5ef80e794c4fe762ec43fb50bd",
+      "exit_sha256": "4ce8e69cccbc4a7c618f7fd7b84162f41204f8b5ece936d1c472c6d5d8af186e",
+      "host_reported_name": "qian-qi-ROG-Flow-Z13-GZ302EA-GZ302EA",
+      "restart_terminal_bytes_unchanged": true
+    },
+    "x230": {
+      "job_id": "1a1afc6a2e0-3e571c-6",
+      "launch_nonce": "5676a53f3ac2a2988d7c2d0cf6853f1c",
+      "execution_count": 1,
+      "request_sha256": "eadb202786b245a82a57b7dd22eced50be8870c607bdf4c2e36327de56db1080",
+      "exit_sha256": "0454531a34786d133c3f90e515a3e0acafd93e85379d5272c3b449b9cf0f414c",
+      "host_reported_name": "qian-ThinkPad-X230",
+      "restart_terminal_bytes_unchanged": true
+    }
+  },
+  "native_calls": 90,
+  "independent_ssh_calls": 36,
+  "new_starts": 6,
+  "same_key_lookups": 12,
+  "cancellations": 12,
+  "automatic_rpc_retries": 0,
+  "elapsed_seconds": 12.328011512756348,
+  "private_transport_interruption": {
+    "attempted": true,
+    "original_master": {
+      "argv_sha256": "f847d8ed090f276159abdcb0241f149e1d11ccb5c96c9ddcdbd1e44ec05069b6",
+      "birth_ticks": 265245519,
+      "control_path": "/home/qian/r35lc1-1-B/hp-o-4085532-18bcc2d23cac501c940004bcad07bb3d/m-23",
+      "control_socket": [
+        2053,
+        2372400,
+        1000,
+        49536,
+        1,
+        0,
+        1793950394513760216,
+        1793950394513760216
+      ],
+      "executable": [
+        2053,
+        658803
+      ],
+      "peer": [
+        4085668,
+        1000,
+        1000
+      ],
+      "pid": 4085668,
+      "ppid": 4085532,
+      "private_directories": [
+        [
+          "/home/qian/r35lc1-1-B",
+          2053,
+          2370185,
+          1000,
+          16832
+        ],
+        [
+          "/home/qian/r35lc1-1-B/hp-o-4085532-18bcc2d23cac501c940004bcad07bb3d",
+          2053,
+          2371911,
+          1000,
+          16832
+        ]
+      ],
+      "process_group": 4085532,
+      "session": 4085532,
+      "uids": [
+        1000,
+        1000,
+        1000,
+        1000
+      ]
+    },
+    "passed": true,
+    "replacement_master": {
+      "argv_sha256": "211380d6829dee0c3194953d517ae0255bd19833600b0a44bc98cf8c60a04673",
+      "birth_ticks": 265245677,
+      "control_path": "/home/qian/r35lc1-1-B/hp-o-4085532-18bcc2d23cac501c940004bcad07bb3d/m-55",
+      "control_socket": [
+        2053,
+        2388975,
+        1000,
+        49536,
+        1,
+        0,
+        1793950395867759697,
+        1793950395867759697
+      ],
+      "executable": [
+        2053,
+        658803
+      ],
+      "peer": [
+        4085805,
+        1000,
+        1000
+      ],
+      "pid": 4085805,
+      "ppid": 4085532,
+      "private_directories": [
+        [
+          "/home/qian/r35lc1-1-B",
+          2053,
+          2370185,
+          1000,
+          16832
+        ],
+        [
+          "/home/qian/r35lc1-1-B/hp-o-4085532-18bcc2d23cac501c940004bcad07bb3d",
+          2053,
+          2371911,
+          1000,
+          16832
+        ]
+      ],
+      "process_group": 4085532,
+      "session": 4085532,
+      "uids": [
+        1000,
+        1000,
+        1000,
+        1000
+      ]
+    },
+    "requested_host": "rog",
+    "signal_receipt": {
+      "controller_pid": 4085532,
+      "master_birth_ticks": 265245519,
+      "master_pid": 4085668,
+      "network_or_service_changes": false,
+      "pidfd_terminal_observed": true,
+      "signal": "SIGKILL",
+      "signal_sent": true,
+      "socket_removed_by_harness": false
+    }
+  },
+  "resource_errors_by_phase": {
+    "intentional_crash": [
+      {
+        "expected_exit_race": true,
+        "pid": 4085570,
+        "reason": "[Errno 2] No such file or directory: '/proc/4085570/stat'",
+        "stage": "identity_before",
+        "type": "FileNotFoundError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4085659,
+        "reason": "process ended",
+        "stage": "identity_before",
+        "type": "ProcessLookupError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4085658,
+        "reason": "process ended",
+        "stage": "identity_before",
+        "type": "ProcessLookupError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4085657,
+        "reason": "process ended",
+        "stage": "identity_before",
+        "type": "ProcessLookupError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4085803,
+        "reason": "[Errno 3] No such process",
+        "stage": "identity_before",
+        "type": "ProcessLookupError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4085532,
+        "reason": "[Errno 2] No such file or directory: '/proc/4085532/stat'",
+        "stage": "identity_before",
+        "type": "FileNotFoundError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4085532,
+        "reason": "[Errno 2] No such file or directory: '/proc/4085532/stat'",
+        "stage": "identity_before",
+        "type": "FileNotFoundError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4085532,
+        "reason": "[Errno 2] No such file or directory: '/proc/4085532/stat'",
+        "stage": "identity_before",
+        "type": "FileNotFoundError"
+      }
+    ],
+    "after_cancel_shutdown": [
+      {
+        "expected_exit_race": true,
+        "pid": 4085928,
+        "reason": "process ended",
+        "stage": "identity_before",
+        "type": "ProcessLookupError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4085927,
+        "reason": "process ended",
+        "stage": "identity_before",
+        "type": "ProcessLookupError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4085926,
+        "reason": "process ended",
+        "stage": "identity_before",
+        "type": "ProcessLookupError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4085925,
+        "reason": "process ended",
+        "stage": "identity_before",
+        "type": "ProcessLookupError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4085924,
+        "reason": "[Errno 2] No such file or directory: '/proc/4085924/stat'",
+        "stage": "identity_before",
+        "type": "FileNotFoundError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4086068,
+        "reason": "[Errno 2] No such file or directory: '/proc/4086068/stat'",
+        "stage": "identity_before",
+        "type": "FileNotFoundError"
+      }
+    ],
+    "shutdown": [
+      {
+        "expected_exit_race": true,
+        "pid": 4086401,
+        "reason": "[Errno 2] No such file or directory: '/proc/4086401/status'",
+        "stage": "status",
+        "type": "FileNotFoundError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4086401,
+        "stage": "VmRSS",
+        "type": "UnavailableStatusField"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4086401,
+        "stage": "VmHWM",
+        "type": "UnavailableStatusField"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4086401,
+        "reason": "[Errno 2] No such file or directory: '/proc/4086401/fd'",
+        "stage": "fd",
+        "type": "FileNotFoundError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4086401,
+        "reason": "[Errno 2] No such file or directory: '/proc/4086401/exe'",
+        "stage": "executable",
+        "type": "FileNotFoundError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4086401,
+        "reason": "[Errno 2] No such file or directory: '/proc/4086401/task'",
+        "stage": "tasks",
+        "type": "FileNotFoundError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4086401,
+        "reason": "[Errno 2] No such file or directory: '/proc/4086401/stat'",
+        "stage": "identity_after",
+        "type": "FileNotFoundError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4086401,
+        "stage": "identity_after",
+        "type": "GenerationOrParentChanged"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4086533,
+        "reason": "[Errno 2] No such file or directory: '/proc/4086533/stat'",
+        "stage": "identity_before",
+        "type": "FileNotFoundError"
+      },
+      {
+        "expected_exit_race": true,
+        "pid": 4086280,
+        "reason": "process ended",
+        "stage": "identity_before",
+        "type": "ProcessLookupError"
+      }
+    ]
+  },
+  "not_covered": [
+    "host reboot",
+    "physical power loss",
+    "WAN partition",
+    "production owner transfer",
+    "transactional exactly-once external effects"
+  ],
+  "macos_signal_identity": "best effort account/PID-start binding; no pidfd"
+}
