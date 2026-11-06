@@ -277,7 +277,7 @@ fn observer_proof_requires_the_entire_grammar_and_survives_every_split() {
 	}
 	let mut too_deep = vec![b'['; 123];
 	too_deep.extend_from_slice(br#""\uD800""#);
-	too_deep.extend(std::iter::repeat(b']').take(123));
+	too_deep.extend(std::iter::repeat_n(b']', 123));
 	let mut observer = json_eof::Tracker::new();
 	observer.accept(&too_deep);
 	assert!(!observer.complete_root_string());
