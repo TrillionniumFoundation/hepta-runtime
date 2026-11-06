@@ -1,0 +1,107 @@
+{
+  "schema": "hepta-r36-cold02-qualification-archive-staging-plan/v1",
+  "root": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02",
+  "repository": "TrillionniumFoundation/hepta-runtime",
+  "scope": "Exact original bytes for root-controlled create-only staging; no qualification, test or auditor replay.",
+  "collector": {
+    "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/archive-tools-01/archive_r36_qualification.py",
+    "git_blob": "ac2340d0ef41460b0a81ee3973b779d04d8eaaa5",
+    "bytes": 50036,
+    "sha256": "97d0bcde3ef6f8ebaae0e7d7649534c45e9ee0e4ee649413db05c284c45fdd6d"
+  },
+  "small_originals": [
+    {
+      "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/archive-inputs-01/install_qualification.py",
+      "git_blob": "f3af1dc3c639d8ee2537bb53e393643a1036c869",
+      "bytes": 6877,
+      "sha256": "9a6e88c70384b7b4677c5a641cc0deb9ff2b7ba6fcdc24157d2946126f57efa7",
+      "copy_original_bytes": true,
+      "append_newline": false
+    },
+    {
+      "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/archive-inputs-01/launch-command.json",
+      "git_blob": "a513147ad277b47c221e1e4f873141456dd5ce66",
+      "bytes": 638,
+      "sha256": "f356fe9a4f459d04ce6206171e8b1115f33a5fe50c26a81772af6b8a0eaaba35",
+      "copy_original_bytes": true,
+      "append_newline": false
+    },
+    {
+      "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/archive-inputs-01/installation-native-01.json",
+      "git_blob": "10a2e7ba13545158ea2cc2fa3fd9d8ef1a8676bd",
+      "bytes": 729,
+      "sha256": "2057c82f066c6fb70e1cf7e8aebdd2fe7da74f6b2f0721b1c1dcd42fea7ffaf8",
+      "copy_original_bytes": true,
+      "append_newline": false
+    },
+    {
+      "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/archive-inputs-01/installation-read-01.json",
+      "git_blob": "fad4c396d4f71de4dcb72374c0b95c2554b153df",
+      "bytes": 1097,
+      "sha256": "5f9444aa8013268cb395a2a45a1da65c8b694bb38b245342d2dbc6a8a68c9c46",
+      "copy_original_bytes": true,
+      "append_newline": false
+    },
+    {
+      "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/archive-inputs-01/installation-start-01.json",
+      "git_blob": "2a6ad14f050e18a8363322ed986f23917be4b47a",
+      "bytes": 1171,
+      "sha256": "932ca3d75fc4f4d538aa26abca38ce856344ad9cef41d93025050d1ee83d2849",
+      "copy_original_bytes": true,
+      "append_newline": false
+    },
+    {
+      "path": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/archive-inputs-01/qualification-start-01.json",
+      "git_blob": "e2bd7af3df7ee79f6ce6d9d152cf2bf5ee177dc6",
+      "bytes": 1344,
+      "sha256": "cfb4565d0cbecbb0a3bbf9ae3e0c7a63df52c6b0248a61b1234c4e3a1b87780c",
+      "copy_original_bytes": true,
+      "append_newline": false
+    }
+  ],
+  "existing_transport_copy": {
+    "source": "/home/qian/r36-validation-scratch-cold02-qualification-deployment-01.tar.gz",
+    "target": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/archive-inputs-01/deployment.tar.gz",
+    "git_blob": "e8f1ef886a695f96925402dd68ba542841825c1a",
+    "bytes": 301611,
+    "sha256": "213203755b444fab504cd6da03b3b0f5ce9089c7b62bf3b8734695428b96899d"
+  },
+  "already_present_original_paths": [
+    "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/installation-01.json",
+    "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/qualification-terminal-status-01.json",
+    "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/qualification-native-read-01.json"
+  ],
+  "native_create": {
+    "executable": "/usr/bin/python3",
+    "args": [
+      "-B",
+      "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/archive-tools-01/archive_r36_qualification.py",
+      "--kind",
+      "qualification"
+    ],
+    "cwd": "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02",
+    "env": {},
+    "timeout_seconds": 300,
+    "execution_owner": "root"
+  },
+  "outputs": [
+    "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/qualification-evidence-01.tar.gz",
+    "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/qualification-evidence-01.manifest.json",
+    "/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/qualification-evidence-01.compact.json"
+  ],
+  "local_verify": {
+    "executable": "python3",
+    "args": [
+      "-B",
+      "EXACT_SEALED_COLLECTOR",
+      "--verify",
+      "EXACT_DOWNLOADED_TAR_GZ",
+      "--expected-sha256",
+      "ACTUAL_COMPLETE_ARCHIVE_SHA256"
+    ],
+    "files_extracted": 0,
+    "archived_code_executed": false
+  },
+  "failure_policy": "Keep partial outputs and original native outcome; no overwrite, automatic retry, target replay or invented success.",
+  "archive_executed_by_this_agent": false
+}
