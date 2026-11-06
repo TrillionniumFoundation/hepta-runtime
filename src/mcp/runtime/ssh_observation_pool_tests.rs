@@ -989,7 +989,7 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 			old.active.store(1, Ordering::Release);
 			let request_cancel = CancellationToken::new();
 			let (reply, _) = oneshot::channel();
-			let request = Request {
+			let mut request = Request {
 				host: "fixture".into(),
 				command: "NEVER_DISPATCH".into(),
 				input: vec![],
@@ -1009,7 +1009,7 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 			let global = permits.clone();
 			let task =
 				tokio::spawn(
-					async move { task_core.execute_inner(&request, permit, global).await },
+					async move { task_core.execute_inner(&mut request, permit, global).await },
 				);
 			timeout(Duration::from_secs(3), async {
 				while old.accepting.load(Ordering::Acquire) {
@@ -2537,7 +2537,7 @@ async fn isolated_helper() {
 				agent_control.stall.store(true, Ordering::Release);
 				let cancel = CancellationToken::new();
 				let (reply, _) = oneshot::channel();
-				let request = Request {
+				let mut request = Request {
 					host: "fixture".into(),
 					command: "NEVER_DISPATCH".into(),
 					input: vec![],
@@ -2552,7 +2552,7 @@ async fn isolated_helper() {
 				let global = permits.clone();
 				let task =
 					tokio::spawn(
-						async move { task_core.execute_inner(&request, permit, global).await },
+						async move { task_core.execute_inner(&mut request, permit, global).await },
 					);
 				timeout(Duration::from_secs(1), agent_control.entered.notified())
 					.await

@@ -1,0 +1,152 @@
+{
+  "baseline_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "branch_snapshots": [
+    {
+      "command_lines": [
+        {
+          "line": 1384,
+          "text": "\t\tlet result = self.clone().execute_inner(&request, initial, global).await;"
+        },
+        {
+          "line": 1511,
+          "text": "\t\targs.push(request.command.clone());"
+        }
+      ],
+      "git_blob": "fe8096c1b6f0828d6745469b33ef92ea8b428bae",
+      "path": "src/mcp/runtime/ssh_observation_pool.rs",
+      "ref": "experiment/x230-r27-serializer-20261105"
+    },
+    {
+      "command_lines": [
+        {
+          "line": 1384,
+          "text": "\t\tlet result = self.clone().execute_inner(&request, initial, global).await;"
+        },
+        {
+          "line": 1511,
+          "text": "\t\targs.push(request.command.clone());"
+        }
+      ],
+      "git_blob": "fe8096c1b6f0828d6745469b33ef92ea8b428bae",
+      "path": "src/mcp/runtime/ssh_observation_pool.rs",
+      "ref": "experiment/x230-compiler-20261105"
+    },
+    {
+      "command_lines": [
+        {
+          "line": 1385,
+          "text": "\t\tlet result = self.clone().execute_inner(&request, initial, global).await;"
+        },
+        {
+          "line": 1512,
+          "text": "\t\targs.push(request.command.clone());"
+        }
+      ],
+      "git_blob": "cb719aee56d2ccf56fdd25f132d42ee2848236cb",
+      "path": "src/mcp/runtime/ssh_observation_pool.rs",
+      "ref": "experiment/x230-capacity12-20261105"
+    },
+    {
+      "command_lines": [
+        {
+          "line": 1384,
+          "text": "\t\tlet result = self.clone().execute_inner(&request, initial, global).await;"
+        },
+        {
+          "line": 1511,
+          "text": "\t\targs.push(request.command.clone());"
+        }
+      ],
+      "git_blob": "fe8096c1b6f0828d6745469b33ef92ea8b428bae",
+      "path": "src/mcp/runtime/ssh_observation_pool.rs",
+      "ref": "experiment/x230-router-cache-20261105"
+    }
+  ],
+  "conclusions": {
+    "branch_local_read_request": "Already published as the exact selected R25-to-R26 change; also present in R28 cumulative rejected patch. Reuse on R24 must be described as isolating an existing change, not a new discovery.",
+    "causality": "R26 combined observation passed and combined normal lifecycle was rejected, according to its original published README. Neither establishes the isolated performance effect of this read-only request-construction movement.",
+    "request_command_move": "Not present in checked R25/R26/R28 full patches or inspected R27 serializer/compiler/router-cache/capacity12 pool snapshots; those all retain the command clone. This is a bounded-history statement, not proof about every unpublished experiment."
+  },
+  "evidence_commit": "c039688312ceb09b3d26d1cdd50f9118eb11129f",
+  "original_files": [
+    {
+      "bytes": 27465,
+      "git_blob": "aa0d65595905c713271eeb3751d80fb3d5ddb3b1",
+      "path": "originals/r25-full.patch",
+      "sha256": "e1f0fd01ca3289ba87b35a46fcc27ba5ef229e65d4475afd28b724c5e3c61966"
+    },
+    {
+      "bytes": 1368,
+      "git_blob": "aca7b72bab2d2241ac9ecfa86c4f71395590abcf",
+      "path": "originals/r26-selected-change.patch",
+      "sha256": "f06843dd9ba9026ac240ab6761e1abc16b32bcd3dc771d6a2754ff5eeebcb94f"
+    },
+    {
+      "bytes": 29666,
+      "git_blob": "2e925b0e4c8c3d0f5465b98f175e8ae3d59d6b6b",
+      "path": "originals/r26-full.patch",
+      "sha256": "1253b7fe0e9a5948582ceb011eb5814fa889a26c0c8d237dbc652828fba534ad"
+    },
+    {
+      "bytes": 31533,
+      "git_blob": "16560be02b483eb5d4fe8588485702b9aa764cdf",
+      "path": "originals/r28-full.patch",
+      "sha256": "2655e1cbde509a2802015315bb1dd514671f83a852fe032a9073a9ee4329f446"
+    },
+    {
+      "bytes": 24452,
+      "git_blob": "5b0923f9ec9b41586b557d71e653d6f7c5faf0d3",
+      "path": "originals/r26-README.md",
+      "sha256": "cac449f7473cffcc45888506aab3ff0c042e77fd690207f76c510aba6f4abd05"
+    },
+    {
+      "bytes": 8033,
+      "git_blob": "e0eac947778c06210002d6815869060aa535f8b5",
+      "path": "originals/r28-README.md",
+      "sha256": "18837aa54f6edac75e3fd82a06c83d136691cef55c5cdd59692ed4e8aeb173bd"
+    },
+    {
+      "bytes": 63445,
+      "git_blob": "cb719aee56d2ccf56fdd25f132d42ee2848236cb",
+      "path": "originals/capacity12-pool.rs",
+      "sha256": "547169e952957ceea8a3a6d9ef35630529fd0e579f0eb9cea3f8a15b3e3c8add"
+    }
+  ],
+  "patch_changed_paths": {
+    "r25-full.patch": [
+      "src/mcp/runtime/jobs.rs",
+      "src/mcp/runtime/ssh.rs",
+      "src/mcp/runtime/ssh_direct.rs",
+      "src/mcp/runtime/ssh_direct_tests.rs",
+      "src/mcp/runtime/ssh_direct_cancellation_tests.rs"
+    ],
+    "r26-full.patch": [
+      "src/mcp/runtime/jobs.rs",
+      "src/mcp/runtime/ssh.rs",
+      "src/mcp/runtime/ssh_direct.rs",
+      "src/mcp/runtime/ssh_direct_cancellation_tests.rs",
+      "src/mcp/runtime/ssh_direct_tests.rs"
+    ],
+    "r28-full.patch": [
+      "src/mcp/runtime/jobs.rs",
+      "src/mcp/runtime/ssh.rs",
+      "src/mcp/runtime/ssh_direct.rs",
+      "src/mcp/runtime/ssh_direct_cancellation_tests.rs",
+      "src/mcp/runtime/ssh_direct_tests.rs",
+      "src/mcp/runtime/ssh_tests.rs"
+    ]
+  },
+  "schema": "hepta-r35-static-historical-overlap-review/v1",
+  "scope": {
+    "git_ref_changes": false,
+    "helper_or_test_execution": false,
+    "remote_host_calls": 0,
+    "rust_compilation": false,
+    "source_patches_applied": false
+  },
+  "unchanged_r24_pool": {
+    "bytes": 63329,
+    "git_blob": "fe8096c1b6f0828d6745469b33ef92ea8b428bae",
+    "sha256": "92592431b6f4f0d3561c039ed86d9129f3942fb677ba9a336f639003b16b71d9"
+  }
+}

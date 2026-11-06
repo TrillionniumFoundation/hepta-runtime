@@ -1377,11 +1377,11 @@ impl Core {
 	}
 	async fn execute(
 		self: Arc<Self>,
-		request: Request,
+		mut request: Request,
 		initial: OwnedSemaphorePermit,
 		global: Arc<Semaphore>,
 	) {
-		let result = self.clone().execute_inner(&request, initial, global).await;
+		let result = self.clone().execute_inner(&mut request, initial, global).await;
 		let _ = request.reply.send(result);
 	}
 	async fn admission_profile(
@@ -1421,7 +1421,7 @@ impl Core {
 	}
 	async fn execute_inner(
 		self: Arc<Self>,
-		request: &Request,
+		request: &mut Request,
 		initial: OwnedSemaphorePermit,
 		global: Arc<Semaphore>,
 	) -> Result<Captured> {
@@ -1508,7 +1508,7 @@ impl Core {
 		}
 		drop(stream);
 		let mut args = self.arguments(&request.host, Mode::Slave, &master.socket, false)?;
-		args.push(request.command.clone());
+		args.push(std::mem::take(&mut request.command));
 		let output = self
 			.captured(
 				args,
