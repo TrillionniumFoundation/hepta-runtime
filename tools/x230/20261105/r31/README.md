@@ -1,7 +1,7 @@
 # R31: pidfd readiness wait on accepted R24
 
-**Status: qualification passed; the first observation launcher failed before any
-measurement; corrected campaign 02 is running; candidate not yet adopted.**
+**Status: qualification and exact Rust CI passed; completed observation 02 failed
+the original C1 throughput gate. R31 is rejected and not adopted; R24 remains accepted.**
 
 R31 reduces the delay in observing an already-exiting supervisor during the
 Linux cancellation helper. The source baseline is accepted R24
@@ -107,27 +107,40 @@ results, fixture receipts, helper source, freeze, and native terminal.
 
 ## Formal performance gates
 
-The original Mac holder job `1a1ae37dda9-fc05-5e42` closed with exit 1. Its
-parent report has `stages: []`: the old parent retained the R30 socket-directory
-prefix and stopped before quiescence or any measurement. The owned temporary
-agent was reaped. [The complete original failure](preflight-failures/README.md)
-and its logs remain available; there is no performance sample to replace.
+The first Mac holder job `1a1ae37dda9-fc05-5e42` closed with exit 1 before
+quiescence or any measurement: the old parent retained the R30 socket prefix.
+The owned temporary agent was reaped. [The original failure](preflight-failures/README.md)
+and its complete logs remain preserved.
 
 The separately frozen [campaign 02 tools](parent-runner-02/README.md) use fresh
-R31 paths and bind the original failed report, native terminal and monitor. Their
-installation and actual-input materialization succeeded. The original attempt-02
-Mac holder is `1a1ae66710c-fc05-5f6e`; its measurement result is still pending. The qualified source,
-binaries, numerical gates, sample plan and cleanup protocol are unchanged.
+R31 namespaces and bind that earlier failed attempt. Original Mac holder
+`1a1ae66710c-fc05-5f6e` completed with exit 0 and complete durable output.
+All seven parent stages completed; all 2,304 measured calls succeeded. The
+parent's `passed=true` records execution/evidence completion. Its separate
+`observation_gate_passed=false` and independent summary reject adoption.
 
-The original six-host ABBA observation uses the existing frozen topology,
-concurrency 1/8/16, 192 measured calls per cell, warmup, 90-second quiescence,
-compiler monitor, and controller cleanup. Throughput, p95, controller CPU and
-RSS retain their original thresholds. Normal lifecycle ABBA starts only after
-all observation, boundary, cancellation-recovery and summary gates pass.
+C1 throughput was 7.974917871 → 7.574879420 calls/s: B/A
+**0.9498379221405816**, below the unchanged **0.95** floor. C8 and C16 throughput,
+all p95/CPU gates and the sampled controller RSS bound passed. No threshold was
+changed and no workload was replayed. [The complete rejection](OBSERVATION_REJECTED.md)
+records the matrix, cleanup, boundary and recovery results.
 
-No performance adoption is claimed in this qualification commit. Saturated
-cancellation capacity remains a separate open question; R31 adds no reserve
-capacity. GitHub Actions is tracked separately after publication.
+The original normal lifecycle materializer `1a1ae6ce842-fc05-5f8b` correctly
+refused to proceed because the observation performance prerequisite failed.
+It created no lifecycle inputs, parent output or ABBA output. No normal
+lifecycle performance or saturated cancellation capacity result is established.
+The favorable helper component remains a separate result.
+
+[Static path review](OBSERVATION_PATH_REVIEW.md) found no direct mechanism by
+which the changed cancellation code enters the timed status/read payload or
+adds full-file verification work. That finding does not explain away the C1
+result or attribute it to code, network or machine conditions.
+
+[The complete original observation archive](observation-evidence-01.tar.gz)
+retains both observation attempts, every measured call, resource and compiler
+samples, boundary/recovery outputs, original tools, holder receipts, and the
+downstream lifecycle refusal. Its manifest and compact sidecars preserve the
+failed gate separately from successful execution. R24 remains accepted.
 
 ## Supplemental exact CI and historical Python evidence
 
@@ -178,6 +191,7 @@ qualification stages, and the complete 222-input source map.
 | [component-evidence-01.tar.gz](component-evidence-01.tar.gz) | 262385 | `bf5446e7cda85580b6f32c8caaf7217dc56c7864dafbcb5ee0cddef16d093f74` |
 | [exact-ci-evidence-01.tar.gz](exact-ci-evidence-01.tar.gz) | 326815 | `2d2fd850b04e3e31374c0336f48f7e9d66f0589e4d04764e88a5b913444d6c91` |
 | [r31-native-originals-companion-01.tar.gz](r31-native-originals-companion-01.tar.gz) | 18855 | `451ad971ab9d1d05db6c0ee6a201edf8d6383134a2730b35f694ce239f1e379e` |
+| [observation-evidence-01.tar.gz](observation-evidence-01.tar.gz) | 3150234 | `b3e443d4a871b7d77f809d55b161be0e29ced8c722382a7a68bba66668a610d5` |
 
 The generated archives were read back with fixed file versions, checked chunk by chunk, and then
 verified against full archive and member hashes without extracting or executing
