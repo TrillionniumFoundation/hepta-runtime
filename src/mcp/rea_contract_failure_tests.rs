@@ -33,6 +33,20 @@ fn unhex(text: &str) -> Vec<u8> {
 		.collect()
 }
 
+// The captured public MCP peers negotiated 2025-11-25. The SDK server
+// normalizes complete responses for that protocol before transport serialization.
+// Keep the internal discriminator assertion and compare every resulting public
+// field, using that same SDK conversion rather than hand-filtering either value.
+fn legacy_public_result(result: &rmcp::model::CallToolResult) -> Value {
+	assert_eq!(
+		serde_json::to_value(result).unwrap()["resultType"],
+		"complete"
+	);
+	let mut response = rmcp::model::ServerResult::CallToolResult(result.clone());
+	response.strip_result_type_for_legacy_peer();
+	serde_json::to_value(response).unwrap()
+}
+
 fn expected_error(case: &Value) -> Value {
 	let response = &case["response"];
 	let text = response["result"]["content"][0]["text"].as_str().unwrap();
@@ -110,7 +124,7 @@ fn observed_import_failures_match_the_original_complete_tool_results() {
 		assert_eq!(actual.is_error, Some(true), "{}", case["id"]);
 		assert!(actual.structured_content.is_none(), "{}", case["id"]);
 		assert_eq!(
-			serde_json::to_value(&actual).unwrap(),
+			legacy_public_result(&actual),
 			case["response"]["result"],
 			"{}",
 			case["id"]
@@ -347,7 +361,7 @@ fn all_38_original_json_errors_and_four_sdk_exceptions_match_complete_text() {
 		let expected_text = expected["result"]["content"][0]["text"].as_str().unwrap();
 		assert_eq!(text.as_bytes(), expected_text.as_bytes(), "{}", case["id"]);
 		assert_eq!(
-			serde_json::to_value(&actual).unwrap(),
+			legacy_public_result(&actual),
 			expected["result"],
 			"{}",
 			case["id"]
