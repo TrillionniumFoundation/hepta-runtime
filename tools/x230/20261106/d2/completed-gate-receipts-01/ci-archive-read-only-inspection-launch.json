@@ -1,0 +1,34 @@
+{
+  "audit_recorded": true,
+  "job": {
+    "args": [
+      "-B",
+      "-c",
+      "import json,os,subprocess\nroot='/home/qian/hepta-runtime-validation-cost-20261106-d2'\njob='1a1b10c5cce-fc05-755c'\npaths=['/home/qian/.local/state/hepta-runtime-mac-worker/jobs/'+job,root+'/rust-ci-evidence-01.tar.gz',root+'/rust-ci-evidence-01.manifest.json',root+'/rust-ci-evidence-01.compact.json']\nresult={'kind':'ci_archive_launch_unknown_read_only_reconciliation','original_job':job,'paths':{}}\nfor path in paths:\n try:\n  s=os.lstat(path);result['paths'][path]={'exists':True,'mode':s.st_mode,'size':s.st_size,'mtime_ns':s.st_mtime_ns}\n except FileNotFoundError: result['paths'][path]={'exists':False}\np=subprocess.run(['/usr/bin/systemctl','--user','show','hepta-runtime-job-'+job,'--property=LoadState,ActiveState,SubState,InvocationID,MainPID'],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=20)\nresult['systemctl']={'exit_code':p.returncode,'stdout':p.stdout,'stderr':p.stderr}\nprint(json.dumps(result,sort_keys=True))\n"
+    ],
+    "created_unix_ms": 1793972481954,
+    "cwd": "/home/qian/hepta-runtime-validation-cost-20261106-d2",
+    "env_keys": [],
+    "executable": "/usr/bin/python3",
+    "execution_mode": "operator",
+    "host": "x230",
+    "id": "1a1b117afa2-fc05-75af",
+    "idempotency_key": "x230-d2-ci-archive-launch-unknown-inspection-20261106-01",
+    "launch_error": null,
+    "launch_state": "launched",
+    "remote_job_dir": "/home/qian/.local/state/hepta-runtime-mac-worker/jobs/1a1b117afa2-fc05-75af",
+    "request_digest": "c42d61e62c10c6e199638617bb52221b603c1a82f95fd7e0317a60a97c9f4166",
+    "request_fingerprint": 14136062446595524321,
+    "ssh_target": "x230-ts",
+    "system_jobctl": false,
+    "unit": "hepta-runtime-job-1a1b117afa2-fc05-75af"
+  },
+  "launch": {
+    "backend": "systemd",
+    "launcher_pid": null,
+    "ok": true,
+    "unit": "hepta-runtime-job-1a1b117afa2-fc05-75af"
+  },
+  "local_record_pending": false,
+  "reused": false
+}
