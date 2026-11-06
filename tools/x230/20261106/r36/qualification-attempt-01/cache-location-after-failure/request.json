@@ -1,0 +1,12 @@
+{
+  "host": "x230",
+  "executable": "/usr/bin/python3",
+  "args": [
+    "-B",
+    "-c",
+    "import os,json,stat,shutil\nfrom pathlib import Path\nroots=[Path('/home/qian/hepta-runtime-validation-cost-20261106-d2'),Path('/home/qian/hepta-runtime-validation-scratch-20261106-r36')]\nrows=[]\nfor root in roots:\n row={'root':str(root),'exists':os.path.lexists(root)}\n if root.is_dir() and not root.is_symlink():\n  row['children']=[]\n  for p in sorted(root.iterdir()):\n   s=p.lstat();v={'name':p.name,'mode':stat.S_IMODE(s.st_mode),'directory':stat.S_ISDIR(s.st_mode),'regular':stat.S_ISREG(s.st_mode),'bytes':s.st_size}\n   if v['directory'] and ('target' in p.name or 'cache' in p.name or p.name=='source'):\n    v['children']=[q.name for q in p.iterdir()][:100]\n    if p.name=='source':\n     v['target_children']={q.name:[x.name for x in q.iterdir()][:40] for q in p.iterdir() if q.is_dir() and not q.is_symlink() and ('target' in q.name or 'cache' in q.name)}\n   row['children'].append(v)\n rows.append(row)\ndisk=shutil.disk_usage('/home/qian')\nprint(json.dumps({'schema':'hepta-r36-cache-location-read-only/v1','roots':rows,'disk':{'total':disk.total,'used':disk.used,'free':disk.free},'cache_modified':False},sort_keys=True))\n"
+  ],
+  "cwd": "/home/qian",
+  "idempotency_key": "x230-r36-scratch-d2-cache-location-after-preparation-failure-20261106-01",
+  "timeout_seconds": 60
+}

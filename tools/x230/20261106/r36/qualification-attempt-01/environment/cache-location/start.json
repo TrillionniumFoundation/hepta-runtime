@@ -1,0 +1,34 @@
+{
+  "audit_recorded": true,
+  "job": {
+    "args": [
+      "-B",
+      "-c",
+      "import json,os,stat\nfrom pathlib import Path\nhome=Path('/home/qian')\npaths=[home/'.cargo',home/'.cache/cargo',home/'.local/share/cargo',home/'hepta-runtime-optimization-20261023/cargo-home-a32-a33-r02']\nfor root in sorted(home.iterdir()):\n if root.name.startswith(('hepta-runtime-optimization-','hepta-runtime-validation-','hepta-runtime-phase-cost-','hepta-runtime-cache')) and root.is_dir() and not root.is_symlink():\n  for q in root.iterdir():\n   if q.name.startswith('cargo-home') and q not in paths:paths.append(q)\nassert len(paths)<=128\nrows=[]\nfor p in paths:\n row={'path':str(p),'exists':os.path.lexists(p)}\n if row['exists']:\n  s=p.lstat();row.update({'uid':s.st_uid,'mode':stat.S_IMODE(s.st_mode),'direct_directory':stat.S_ISDIR(s.st_mode) and p.resolve()==p})\n  if row['direct_directory']:\n   row['layout']={}\n   for name in ('registry','registry/src','registry/cache','registry/index','git','git/db','git/checkouts','bin','config','config.toml'):\n    q=p/name\n    if os.path.lexists(q):\n     t=q.lstat();v={'directory':stat.S_ISDIR(t.st_mode),'regular':stat.S_ISREG(t.st_mode),'bytes':t.st_size,'mode':stat.S_IMODE(t.st_mode),'uid':t.st_uid}\n     if v['directory']:\n      children=list(q.iterdir());v['child_count']=len(children)\n      if name in ('registry/src','registry/cache','registry/index','git/db','git/checkouts'):v['children']=[{'name':x.name,'directory':x.is_dir(),'direct_child_count':sum(1 for _ in x.iterdir()) if x.is_dir() and not x.is_symlink() else None} for x in children[:16]]\n     row['layout'][name]=v\n rows.append(row)\nprint(json.dumps({'schema':'hepta-cargo-cache-location-read-only/v1','candidate_paths':rows,'private_configuration_bodies_read':False,'cache_modified':False},sort_keys=True))\n"
+    ],
+    "created_unix_ms": 1793982328299,
+    "cwd": "/home/qian",
+    "env_keys": [],
+    "executable": "/usr/bin/python3",
+    "execution_mode": "operator",
+    "host": "x230",
+    "id": "1a1b1adedeb-fc05-7a3e",
+    "idempotency_key": "x230-r36-scratch-cargo-cache-location-read-only-20261106-01",
+    "launch_error": null,
+    "launch_state": "launched",
+    "remote_job_dir": "/home/qian/.local/state/hepta-runtime-mac-worker/jobs/1a1b1adedeb-fc05-7a3e",
+    "request_digest": "30a5084a83ba01d72994cf3ea29277e0319360113134a2524a0c90711f46a5d4",
+    "request_fingerprint": 3505217001108406743,
+    "ssh_target": "x230-ts",
+    "system_jobctl": false,
+    "unit": "hepta-runtime-job-1a1b1adedeb-fc05-7a3e"
+  },
+  "launch": {
+    "backend": "systemd",
+    "launcher_pid": null,
+    "ok": true,
+    "unit": "hepta-runtime-job-1a1b1adedeb-fc05-7a3e"
+  },
+  "local_record_pending": false,
+  "reused": false
+}

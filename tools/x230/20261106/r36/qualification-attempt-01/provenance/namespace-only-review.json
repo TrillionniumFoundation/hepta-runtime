@@ -1,0 +1,86 @@
+{
+  "schema": "hepta-r36-validation-scratch-root-delta-review/v1",
+  "scope": "Exact text and JSON value comparison of immutable Git objects only; no target or host execution. This is a historical preparation delta, not permission to start qualification.",
+  "outcome": "No code delta blocker within the requested ROOT/pins change. Independently observed source still hardcodes the old CARGO_HOME; root reports its ancestor absent, so actual qualification must await a separately bound environment correction.",
+  "old_root": "/home/qian/hepta-runtime-optimization-20261106-r36",
+  "new_root": "/home/qian/hepta-runtime-validation-scratch-20261106-r36",
+  "identities": {
+    "old_preparer": {
+      "git_blob": "65b6b1cf13090e4fb5652cf4fd2f06c2e869c949",
+      "bytes": 40528,
+      "sha256": "4e26d0aaba73fdfe5a2d4782b2d109ca17cf4c1835266a69d393e61c24ebb3b3"
+    },
+    "new_preparer": {
+      "git_blob": "b732fea4c41d22246d88881c391fcad3904610c1",
+      "bytes": 40534,
+      "sha256": "5ad82d207f42083f5f6c02cc5796f298a110d3fe0512d8608e9e98728d4eec5f"
+    },
+    "old_installer": {
+      "git_blob": "269776214c85bc8f8f1fc8fc31913293fb4817d8",
+      "bytes": 6863,
+      "sha256": "c5bd10ce17732c268f398844a111f2abe06af20bacdcc5cd12650efca667a632"
+    },
+    "new_installer": {
+      "git_blob": "ad3123dcadc00224e0668f1805e85ba6eb320c9d",
+      "bytes": 6869,
+      "sha256": "c66e67a5889524187ce91a49cb7264cb3542050aab2eab6c335df4042e272211"
+    },
+    "old_input": {
+      "git_blob": "285c164e956bb51aff50f3caa4d27adcc64580e3",
+      "bytes": 4199,
+      "sha256": "fc1e3c3356de4893a948722910f3b9a083bd85bc290a8a38550da37eb3cc95ef"
+    },
+    "new_input": {
+      "git_blob": "ae5477d8dea9d5ffda33376310f315ca780c46d9",
+      "bytes": 4199,
+      "sha256": "98898b7d30fae8e79b38f0a21f5bfba5ec2be7e077c97c3adde09eeae9826777"
+    },
+    "old_closure": {
+      "git_blob": "506310129b92446b5645606059f72ea2f4bbcc42",
+      "bytes": 8206,
+      "sha256": "354747c363528bf85cdf18b540297bc720b862ed3fdbfcb3e3e262a19adb21c9"
+    },
+    "new_closure": {
+      "git_blob": "efa5f461f6604bb38a745cc22e7fef0573f29ce0",
+      "bytes": 8242,
+      "sha256": "e982c48e835b5daf900d3266b5378d2bccd1570faf6d5bf2d7463ac64c0c9218"
+    },
+    "old_manifest": {
+      "git_blob": "186b9cb811f46c7490151b258b9797682d791e45",
+      "bytes": 3687,
+      "sha256": "632cd0d61b30703d190da8241a72574fe60cf316a38738dcccaf7bb056a2ba55"
+    },
+    "new_manifest": {
+      "git_blob": "4c003a3eedbb8c34370b92dbd4a8a6457b02e2e3",
+      "bytes": 3693,
+      "sha256": "4edc87754d30c7fdcc4cade8cd3dc675784742cbaccd4aa029376383ee6dd6c3"
+    }
+  },
+  "checks": {
+    "preparer": "Exactly one ROOT string replacement (+6 bytes); inverse replacement equals the entire already-reviewed 65b6 source.",
+    "installer": "Compared with old 269776 actual installer, exactly four lines change: ROOT, ARCHIVE_SHA256, MANIFEST_SHA256, DEPLOYMENT_TOTAL_BYTES. Other 140 lines remain identical.",
+    "closure": "Only six destination paths for owner-closure-provenance sidecars change prefix. Entire source, job, count, outcome and pin content otherwise identical.",
+    "input": "Only owner_closure_input_sha256, preparation_tool.bytes and preparation_tool.sha256 change. Declared values match new source and closure full hashes.",
+    "deployment_manifest": "Only root, derived payload total and the three changed member identities change. The other 18 member rows are exactly equal; 21 payload members sum to 279498 bytes, plus the 3693-byte manifest gives 283191 bytes.",
+    "candidate": "The two Rust candidate members and original 8-gate preparer main logic are unaffected by this namespace delta.",
+    "archive_body": "Not independently downloaded or decompressed in this narrow review; archive identity is an installer constant, and root/author own the separate package verification.",
+    "actual_sealer": "The regenerated JS sealing function was not supplied or executed for this delta; final sealed input and closure were compared directly."
+  },
+  "environment_blocker": {
+    "source_constant": "CARGO_HOME = Path('/home/qian/hepta-runtime-optimization-20261023/cargo-home-a32-a33-r02')",
+    "use": "Original qualifier argv still includes --cargo-home str(CARGO_HOME).",
+    "known_from_root": "The 20261023 ancestor is absent. No installer/preparer/qualification was run from this new package at the time of the review.",
+    "next_action": "Wait for root's actual replacement-cache identity and review only the resulting environment path and derived pins; do not alter Rust source, offline/locked flags, tests or gates."
+  },
+  "old_candidate_disambiguation": {
+    "review_blob": "ac20596fcd6407e18c031c0cb9dd127af5d17597",
+    "old_candidate": "audit-cache / PR106 / source d3590733f6c301a91cb8f4fcc54ee5c3251a9530; rejected normal lifecycle",
+    "current_candidate": "validation-scratch / PR108; two validation-profile files, actual qualification/performance results still pending"
+  },
+  "limits": {
+    "target_execution": false,
+    "host_calls": 0,
+    "new_gate": false,
+    "ref_mutation": false
+  }
+}

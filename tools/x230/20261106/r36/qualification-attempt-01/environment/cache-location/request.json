@@ -1,0 +1,12 @@
+{
+  "host": "x230",
+  "executable": "/usr/bin/python3",
+  "args": [
+    "-B",
+    "-c",
+    "import json,os,stat\nfrom pathlib import Path\nhome=Path('/home/qian')\npaths=[home/'.cargo',home/'.cache/cargo',home/'.local/share/cargo',home/'hepta-runtime-optimization-20261023/cargo-home-a32-a33-r02']\nfor root in sorted(home.iterdir()):\n if root.name.startswith(('hepta-runtime-optimization-','hepta-runtime-validation-','hepta-runtime-phase-cost-','hepta-runtime-cache')) and root.is_dir() and not root.is_symlink():\n  for q in root.iterdir():\n   if q.name.startswith('cargo-home') and q not in paths:paths.append(q)\nassert len(paths)<=128\nrows=[]\nfor p in paths:\n row={'path':str(p),'exists':os.path.lexists(p)}\n if row['exists']:\n  s=p.lstat();row.update({'uid':s.st_uid,'mode':stat.S_IMODE(s.st_mode),'direct_directory':stat.S_ISDIR(s.st_mode) and p.resolve()==p})\n  if row['direct_directory']:\n   row['layout']={}\n   for name in ('registry','registry/src','registry/cache','registry/index','git','git/db','git/checkouts','bin','config','config.toml'):\n    q=p/name\n    if os.path.lexists(q):\n     t=q.lstat();v={'directory':stat.S_ISDIR(t.st_mode),'regular':stat.S_ISREG(t.st_mode),'bytes':t.st_size,'mode':stat.S_IMODE(t.st_mode),'uid':t.st_uid}\n     if v['directory']:\n      children=list(q.iterdir());v['child_count']=len(children)\n      if name in ('registry/src','registry/cache','registry/index','git/db','git/checkouts'):v['children']=[{'name':x.name,'directory':x.is_dir(),'direct_child_count':sum(1 for _ in x.iterdir()) if x.is_dir() and not x.is_symlink() else None} for x in children[:16]]\n     row['layout'][name]=v\n rows.append(row)\nprint(json.dumps({'schema':'hepta-cargo-cache-location-read-only/v1','candidate_paths':rows,'private_configuration_bodies_read':False,'cache_modified':False},sort_keys=True))\n"
+  ],
+  "cwd": "/home/qian",
+  "idempotency_key": "x230-r36-scratch-cargo-cache-location-read-only-20261106-01",
+  "timeout_seconds": 60
+}

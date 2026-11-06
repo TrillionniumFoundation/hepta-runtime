@@ -1,0 +1,25 @@
+diff --git a/src/mcp/runtime/ssh_observation_profile.rs b/src/mcp/runtime/ssh_observation_profile.rs
+index a9cf676711b1ebb90af899def4620007968f1ad2..a68cdc86cd3eed479d21028cdb4a13157376b4f7 100644
+--- a/src/mcp/runtime/ssh_observation_profile.rs
++++ b/src/mcp/runtime/ssh_observation_profile.rs
+@@ -242,6 +242,11 @@
+ 	Some(bytes.into())
+ }
+ 
++// Keep the large array construction deferred until a checked read needs it.
++fn new_verify_buffer() -> [u8; VERIFY_BUFFER_BYTES] {
++	[0; VERIFY_BUFFER_BYTES]
++}
++
+ impl PinnedFile {
+ 	fn load(
+ 		path: &Path,
+@@ -302,7 +307,7 @@
+ 			.is_none()
+ 			.then(|| ring::digest::Context::new(&ring::digest::SHA256));
+ 		let mut matches_reference = true;
+-		let buffer = buffer.get_or_insert_with(|| [0; VERIFY_BUFFER_BYTES]);
++		let buffer = buffer.get_or_insert_with(new_verify_buffer);
+ 		let mut length = 0usize;
+ 		let mut reader = Read::by_ref(&mut file).take(self.maximum as u64 + 1);
+ 		loop {
