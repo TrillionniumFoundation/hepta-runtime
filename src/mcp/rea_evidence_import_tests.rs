@@ -19,7 +19,7 @@ fn payload(result: &CallToolResult) -> Value {
 }
 
 #[test]
-fn original_public_import_error_objects_match_without_reparsing_text() {
+fn original_public_import_error_text_matches_without_reparsing() {
 	let fixture: Value = serde_json::from_str(include_str!(
 		"../../tests/fixtures/rea_evidence_import_errors.json"
 	))
@@ -30,9 +30,22 @@ fn original_public_import_error_objects_match_without_reparsing_text() {
 		let text = case["original_text"].as_str().unwrap();
 		let original: Value = serde_json::from_str(text).unwrap();
 		let result = error_result(Failure(original["error"].clone()));
+		// This is the encoder boundary, before the real SDK applies negotiated
+		// legacy resultType normalization. The public MCP differential compares
+		// the entire actually transmitted CallToolResult without that shortcut.
+		assert!(result
+			.result_type
+			.as_ref()
+			.is_some_and(|kind| kind.is_complete()));
+		assert_eq!(result.is_error, Some(true));
+		assert!(result.structured_content.is_none());
 		assert_eq!(
-			serde_json::to_value(result).unwrap(),
-			case["original_result"],
+			serde_json::to_value(&result.meta).unwrap(),
+			case["original_result"]["_meta"]
+		);
+		assert_eq!(
+			serde_json::to_value(&result.content).unwrap(),
+			case["original_result"]["content"],
 			"{}",
 			case["id"]
 		);
