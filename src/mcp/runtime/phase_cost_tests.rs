@@ -24,8 +24,14 @@ fn concurrent_slot_writers_preserve_every_original_once() {
 			});
 		}
 	});
-	let actual = slots.rows.iter().map(|value| *value.get().expect("original row")).collect::<BTreeSet<_>>();
-	let expected = (0..8usize).flat_map(|worker| (0..257usize).map(move |sample| (worker, sample))).collect::<BTreeSet<_>>();
+	let actual = slots
+		.rows
+		.iter()
+		.map(|value| *value.get().expect("original row"))
+		.collect::<BTreeSet<_>>();
+	let expected = (0..8usize)
+		.flat_map(|worker| (0..257usize).map(move |sample| (worker, sample)))
+		.collect::<BTreeSet<_>>();
 	assert_eq!(actual, expected);
 	assert_eq!(slots.next.load(Ordering::SeqCst), 2056);
 	assert_eq!(slots.dropped.load(Ordering::SeqCst), 0);
@@ -53,7 +59,14 @@ fn exhausted_slots_cannot_replace_retained_original_records() {
 	for value in 0..3usize {
 		assert_eq!(slots.rows[value].get(), Some(&value));
 	}
-	assert_eq!(slots.rows.iter().filter(|value| value.get().is_some()).count(), 7);
+	assert_eq!(
+		slots
+			.rows
+			.iter()
+			.filter(|value| value.get().is_some())
+			.count(),
+		7
+	);
 	assert_eq!(slots.next.load(Ordering::SeqCst), 67);
 	assert_eq!(slots.dropped.load(Ordering::SeqCst), 60);
 	assert!(slots.push(999).is_none());
@@ -87,10 +100,18 @@ fn output_byte_limit_preserves_partial_file_without_truncation_or_retry() {
 	use std::io::{Seek, SeekFrom};
 	let directory = tempfile::tempdir().unwrap();
 	let path = directory.path().join("bounded");
-	let mut file = std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(&path).unwrap();
+	let mut file = std::fs::OpenOptions::new()
+		.read(true)
+		.write(true)
+		.create_new(true)
+		.open(&path)
+		.unwrap();
 	file.set_len(OUTPUT_LIMIT - 2).unwrap();
 	file.seek(SeekFrom::End(0)).unwrap();
-	let mut writer = BoundedFile { file, written: OUTPUT_LIMIT - 2 };
+	let mut writer = BoundedFile {
+		file,
+		written: OUTPUT_LIMIT - 2,
+	};
 	assert_eq!(writer.write(b"x").unwrap(), 1);
 	assert!(writer.write(b"yz").is_err());
 	assert_eq!(writer.written, OUTPUT_LIMIT - 1);
@@ -131,12 +152,16 @@ async fn context_crosses_only_explicit_task_and_blocking_handoffs() {
 			let observed = with_context(handed, || current().0);
 			assert_eq!(current().0, None);
 			observed
-		}).await.unwrap();
+		})
+		.await
+		.unwrap();
 		assert_eq!(worker, Some(41));
 		in_context(TraceContext(Some(99)), async {
 			assert_eq!(current().0, Some(99));
-		}).await;
+		})
+		.await;
 		assert_eq!(current().0, Some(41));
-	}).await;
+	})
+	.await;
 	assert_eq!(current().0, None);
 }

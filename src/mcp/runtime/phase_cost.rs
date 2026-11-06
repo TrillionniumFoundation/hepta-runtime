@@ -86,11 +86,31 @@ pub(crate) enum Phase {
 #[derive(Clone, Copy, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub(crate) enum Detail {
-	DeadlineBudget { remaining_ns: Option<u64>, expired: bool },
-	MasterLease { generation: u64, child_id: u64, pid: u32, birth_ticks: Option<u64> },
-	ChildProof { child_id: u64, pid: u32, birth_ticks: Option<u64> },
-	ChildReaped { child_id: u64, pid: u32, birth_ticks: Option<u64> },
-	CaptureBytes { stdin: usize, stdout: usize, stderr: usize },
+	DeadlineBudget {
+		remaining_ns: Option<u64>,
+		expired: bool,
+	},
+	MasterLease {
+		generation: u64,
+		child_id: u64,
+		pid: u32,
+		birth_ticks: Option<u64>,
+	},
+	ChildProof {
+		child_id: u64,
+		pid: u32,
+		birth_ticks: Option<u64>,
+	},
+	ChildReaped {
+		child_id: u64,
+		pid: u32,
+		birth_ticks: Option<u64>,
+	},
+	CaptureBytes {
+		stdin: usize,
+		stdout: usize,
+		stderr: usize,
+	},
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize)]
@@ -138,14 +158,19 @@ struct Slots<T> {
 impl<T> Slots<T> {
 	fn new(capacity: usize) -> Self {
 		Self {
-			rows: std::iter::repeat_with(OnceLock::new).take(capacity).collect(),
+			rows: std::iter::repeat_with(OnceLock::new)
+				.take(capacity)
+				.collect(),
 			next: AtomicUsize::new(0),
 			dropped: AtomicUsize::new(0),
 		}
 	}
 
 	fn push(&self, value: T) -> Option<usize> {
-		let index = match self.next.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_add(1)) {
+		let index = match self
+			.next
+			.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_add(1))
+		{
 			Ok(index) => index,
 			Err(_) => {
 				self.dropped.fetch_add(1, Ordering::SeqCst);
@@ -211,7 +236,9 @@ impl TraceContext {
 			"process_read" => "process_read",
 			_ => return Self::default(),
 		};
-		let Some(recorder) = recorder() else { return Self::default() };
+		let Some(recorder) = recorder() else {
+			return Self::default();
+		};
 		if !enter(recorder) {
 			return Self::default();
 		}
@@ -239,16 +266,28 @@ pub(crate) fn with_context<T>(context: TraceContext, work: impl FnOnce() -> T) -
 }
 
 pub(crate) fn bind_native_id(id: &str) {
-	let (Some(recorder), Some(request)) = (recorder(), current().0) else { return };
+	let (Some(recorder), Some(request)) = (recorder(), current().0) else {
+		return;
+	};
 	if !enter(recorder) {
 		return;
 	}
-	let ok = if id.is_empty() || id.len() > NATIVE_ID_BYTES || !id.is_ascii() || id.bytes().any(|b| b.is_ascii_control()) {
+	let ok = if id.is_empty()
+		|| id.len() > NATIVE_ID_BYTES
+		|| !id.is_ascii()
+		|| id.bytes().any(|b| b.is_ascii_control())
+	{
 		false
 	} else if let Some(metadata) = recorder.requests.rows.get(request).and_then(OnceLock::get) {
 		let mut bytes = [0; NATIVE_ID_BYTES];
 		bytes[..id.len()].copy_from_slice(id.as_bytes());
-		metadata.native_id.set(NativeId { bytes, len: id.len() }).is_ok()
+		metadata
+			.native_id
+			.set(NativeId {
+				bytes,
+				len: id.len(),
+			})
+			.is_ok()
 	} else {
 		false
 	};
@@ -259,11 +298,20 @@ pub(crate) fn bind_native_id(id: &str) {
 }
 
 fn clock_ns(clock: libc::clockid_t) -> Option<u64> {
-	let mut stamp = libc::timespec { tv_sec: 0, tv_nsec: 0 };
-	if unsafe { libc::clock_gettime(clock, &mut stamp) } != 0 || stamp.tv_sec < 0 || !(0..1_000_000_000).contains(&stamp.tv_nsec) {
+	let mut stamp = libc::timespec {
+		tv_sec: 0,
+		tv_nsec: 0,
+	};
+	if unsafe { libc::clock_gettime(clock, &mut stamp) } != 0
+		|| stamp.tv_sec < 0
+		|| !(0..1_000_000_000).contains(&stamp.tv_nsec)
+	{
 		return None;
 	}
-	u64::try_from(stamp.tv_sec).ok()?.checked_mul(1_000_000_000)?.checked_add(u64::try_from(stamp.tv_nsec).ok()?)
+	u64::try_from(stamp.tv_sec)
+		.ok()?
+		.checked_mul(1_000_000_000)?
+		.checked_add(u64::try_from(stamp.tv_nsec).ok()?)
 }
 
 fn tid() -> u32 {
@@ -278,13 +326,24 @@ struct Span {
 
 impl Span {
 	fn start(phase: Phase, synchronous: bool) -> Option<Self> {
-		let (Some(recorder), Some(request)) = (recorder(), current().0) else { return None };
+		let (Some(recorder), Some(request)) = (recorder(), current().0) else {
+			return None;
+		};
 		if !enter(recorder) {
 			return None;
 		}
 		let wall = clock_ns(libc::CLOCK_MONOTONIC);
-		let cpu = if synchronous { clock_ns(libc::CLOCK_THREAD_CPUTIME_ID) } else { None };
-		let sequence = recorder.sequence.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| value.checked_add(1));
+		let cpu = if synchronous {
+			clock_ns(libc::CLOCK_THREAD_CPUTIME_ID)
+		} else {
+			None
+		};
+		let sequence =
+			recorder
+				.sequence
+				.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
+					value.checked_add(1)
+				});
 		let (Some(wall), Ok(span)) = (wall, sequence) else {
 			recorder.errors.fetch_add(1, Ordering::SeqCst);
 			recorder.active.fetch_sub(1, Ordering::SeqCst);
@@ -309,21 +368,34 @@ impl Span {
 				end_tid: thread,
 				thread_cpu_start_ns: cpu,
 				thread_cpu_end_ns: cpu,
-				parent_sync_span: if synchronous { SYNC_PARENT.with(Cell::get) } else { 0 },
+				parent_sync_span: if synchronous {
+					SYNC_PARENT.with(Cell::get)
+				} else {
+					0
+				},
 				detail: None,
 			}),
 		})
 	}
 
 	fn finish(&mut self, end: End) {
-		let Some(mut event) = self.event.take() else { return };
+		let Some(mut event) = self.event.take() else {
+			return;
+		};
 		event.end = end;
 		event.end_tid = tid();
 		let wall = clock_ns(libc::CLOCK_MONOTONIC);
-		let cpu = if event.thread_cpu_start_ns.is_some() { clock_ns(libc::CLOCK_THREAD_CPUTIME_ID) } else { None };
+		let cpu = if event.thread_cpu_start_ns.is_some() {
+			clock_ns(libc::CLOCK_THREAD_CPUTIME_ID)
+		} else {
+			None
+		};
 		if wall.is_none_or(|value| value < event.start_monotonic_ns)
-			|| (event.thread_cpu_start_ns.is_some() && (cpu.is_none() || event.start_tid != event.end_tid))
-			|| cpu.zip(event.thread_cpu_start_ns).is_some_and(|(end, start)| end < start)
+			|| (event.thread_cpu_start_ns.is_some()
+				&& (cpu.is_none() || event.start_tid != event.end_tid))
+			|| cpu
+				.zip(event.thread_cpu_start_ns)
+				.is_some_and(|(end, start)| end < start)
 		{
 			self.recorder.errors.fetch_add(1, Ordering::SeqCst);
 		}
@@ -373,7 +445,8 @@ pub(crate) async fn request_scope<F: Future>(context: TraceContext, future: F) -
 		}
 		finish_span(span);
 		value
-	}).await
+	})
+	.await
 }
 
 pub(crate) struct SyncSpan {
@@ -389,7 +462,12 @@ pub(crate) fn sync_span(phase: Phase) -> Option<SyncSpan> {
 	let id = event.span;
 	let previous = event.parent_sync_span;
 	SYNC_PARENT.with(|parent| parent.set(id));
-	Some(SyncSpan { span, previous, id, _not_send: PhantomData })
+	Some(SyncSpan {
+		span,
+		previous,
+		id,
+		_not_send: PhantomData,
+	})
 }
 
 impl Drop for SyncSpan {
@@ -430,7 +508,11 @@ struct BoundedFile {
 
 impl Write for BoundedFile {
 	fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-		if u64::try_from(bytes.len()).ok().and_then(|count| self.written.checked_add(count)).is_none_or(|end| end > OUTPUT_LIMIT) {
+		if u64::try_from(bytes.len())
+			.ok()
+			.and_then(|count| self.written.checked_add(count))
+			.is_none_or(|end| end > OUTPUT_LIMIT)
+		{
 			return Err(io::Error::other("diagnostic output limit reached"));
 		}
 		let count = self.file.write(bytes)?;
@@ -449,9 +531,21 @@ struct Output {
 	writer: Option<BufWriter<BoundedFile>>,
 }
 
-fn open_at(directory: &std::fs::File, name: &OsStr, flags: i32, mode: libc::mode_t) -> Result<std::fs::File> {
+fn open_at(
+	directory: &std::fs::File,
+	name: &OsStr,
+	flags: i32,
+	mode: libc::mode_t,
+) -> Result<std::fs::File> {
 	let name = CString::new(name.as_bytes())?;
-	let fd = unsafe { libc::openat(directory.as_raw_fd(), name.as_ptr(), flags | libc::O_CLOEXEC | libc::O_NOFOLLOW, mode) };
+	let fd = unsafe {
+		libc::openat(
+			directory.as_raw_fd(),
+			name.as_ptr(),
+			flags | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+			mode,
+		)
+	};
 	if fd < 0 {
 		return Err(io::Error::last_os_error()).context("diagnostic openat failed");
 	}
@@ -459,7 +553,10 @@ fn open_at(directory: &std::fs::File, name: &OsStr, flags: i32, mode: libc::mode
 }
 
 fn open_parent(path: &Path) -> Result<(std::fs::File, &OsStr)> {
-	if !path.is_absolute() || path.as_os_str().as_bytes().len() > 4096 || path.as_os_str().as_bytes().ends_with(b"/") {
+	if !path.is_absolute()
+		|| path.as_os_str().as_bytes().len() > 4096
+		|| path.as_os_str().as_bytes().ends_with(b"/")
+	{
 		bail!("diagnostic output must be a bounded absolute file path");
 	}
 	let mut parts = path.components();
@@ -467,64 +564,105 @@ fn open_parent(path: &Path) -> Result<(std::fs::File, &OsStr)> {
 		bail!("diagnostic output must start at the filesystem root");
 	}
 	let root = CString::new("/")?;
-	let fd = unsafe { libc::open(root.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC | libc::O_NOFOLLOW) };
+	let fd = unsafe {
+		libc::open(
+			root.as_ptr(),
+			libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC | libc::O_NOFOLLOW,
+		)
+	};
 	if fd < 0 {
 		return Err(io::Error::last_os_error()).context("diagnostic root open failed");
 	}
 	let mut parent = unsafe { std::fs::File::from_raw_fd(fd) };
 	let mut parts = parts.peekable();
 	while let Some(part) = parts.next() {
-		let Component::Normal(name) = part else { bail!("diagnostic path contains a non-normal component") };
+		let Component::Normal(name) = part else {
+			bail!("diagnostic path contains a non-normal component")
+		};
 		if parts.peek().is_none() {
 			let meta = parent.metadata()?;
-			if !meta.is_dir() || meta.uid() != unsafe { libc::geteuid() } || meta.mode() & 0o7777 != 0o700 {
+			if !meta.is_dir()
+				|| meta.uid() != unsafe { libc::geteuid() }
+				|| meta.mode() & 0o7777 != 0o700
+			{
 				bail!("diagnostic output parent must be owned mode 0700");
 			}
 			return Ok((parent, name));
 		}
-		parent = open_at(&parent, name, libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NONBLOCK, 0)?;
+		parent = open_at(
+			&parent,
+			name,
+			libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NONBLOCK,
+			0,
+		)?;
 	}
 	bail!("diagnostic output has no filename")
 }
 
 fn same_object(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
-	left.dev() == right.dev() && left.ino() == right.ino()
-		&& left.uid() == right.uid() && left.gid() == right.gid() && left.mode() == right.mode()
+	left.dev() == right.dev()
+		&& left.ino() == right.ino()
+		&& left.uid() == right.uid()
+		&& left.gid() == right.gid()
+		&& left.mode() == right.mode()
 }
 
 impl Output {
 	fn create(path: &Path) -> Result<Self> {
 		let (parent, name) = open_parent(path)?;
-		let file = open_at(&parent, name, libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NONBLOCK, 0o600)?;
+		let file = open_at(
+			&parent,
+			name,
+			libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NONBLOCK,
+			0o600,
+		)?;
 		let meta = file.metadata()?;
-		if !meta.is_file() || meta.uid() != unsafe { libc::geteuid() } || meta.nlink() != 1 || meta.mode() & 0o7777 != 0o600 || meta.size() != 0 {
+		if !meta.is_file()
+			|| meta.uid() != unsafe { libc::geteuid() }
+			|| meta.nlink() != 1
+			|| meta.mode() & 0o7777 != 0o600
+			|| meta.size() != 0
+		{
 			bail!("diagnostic output is not an empty owned private regular file");
 		}
 		Ok(Self {
 			path: path.to_owned(),
 			parent,
-			writer: Some(BufWriter::with_capacity(64 * 1024, BoundedFile { file, written: 0 })),
+			writer: Some(BufWriter::with_capacity(
+				64 * 1024,
+				BoundedFile { file, written: 0 },
+			)),
 		})
 	}
 
 	fn line<T: Serialize>(&mut self, value: &T) -> Result<()> {
-		let writer = self.writer.as_mut().context("diagnostic writer already closed")?;
+		let writer = self
+			.writer
+			.as_mut()
+			.context("diagnostic writer already closed")?;
 		serde_json::to_writer(&mut *writer, value)?;
 		writer.write_all(b"\n")?;
 		Ok(())
 	}
 
 	fn verify(&self) -> Result<()> {
-		let writer = self.writer.as_ref().context("diagnostic writer already closed")?.get_ref();
+		let writer = self
+			.writer
+			.as_ref()
+			.context("diagnostic writer already closed")?
+			.get_ref();
 		let (parent, name) = open_parent(&self.path)?;
 		let named = open_at(&parent, name, libc::O_RDONLY | libc::O_NONBLOCK, 0)?;
 		let held = writer.file.metadata()?;
 		let current = named.metadata()?;
 		if !same_object(&parent.metadata()?, &self.parent.metadata()?)
-			|| !same_object(&held, &current) || !held.is_file()
-			|| held.nlink() != 1 || current.nlink() != 1
+			|| !same_object(&held, &current)
+			|| !held.is_file()
+			|| held.nlink() != 1
+			|| current.nlink() != 1
 			|| held.mode() & 0o7777 != 0o600
-			|| held.size() != writer.written || current.size() != writer.written
+			|| held.size() != writer.written
+			|| current.size() != writer.written
 		{
 			bail!("diagnostic output binding changed");
 		}
@@ -533,7 +671,10 @@ impl Output {
 
 	fn sync(&mut self) -> Result<()> {
 		self.verify()?;
-		let writer = self.writer.as_mut().context("diagnostic writer already closed")?;
+		let writer = self
+			.writer
+			.as_mut()
+			.context("diagnostic writer already closed")?;
 		writer.flush()?;
 		writer.get_ref().file.sync_all()?;
 		self.parent.sync_all()?;
@@ -554,7 +695,9 @@ impl Drop for Output {
 fn bounded_text(path: &Path, limit: usize) -> Result<String> {
 	let mut file = std::fs::File::open(path)?;
 	let mut bytes = Vec::new();
-	std::io::Read::by_ref(&mut file).take((limit + 1) as u64).read_to_end(&mut bytes)?;
+	std::io::Read::by_ref(&mut file)
+		.take((limit + 1) as u64)
+		.read_to_end(&mut bytes)?;
 	if bytes.len() > limit {
 		bail!("diagnostic process identity exceeds bound");
 	}
@@ -562,7 +705,11 @@ fn bounded_text(path: &Path, limit: usize) -> Result<String> {
 }
 
 /// Opens the diagnostic sink before child startup. No request can enable it.
-pub fn start_from_env(runtime_enabled: bool, observation_profile: bool, stdio: bool) -> Result<Option<Guard>> {
+pub fn start_from_env(
+	runtime_enabled: bool,
+	observation_profile: bool,
+	stdio: bool,
+) -> Result<Option<Guard>> {
 	let Some(mode) = std::env::var_os(MODE_ENV) else {
 		if std::env::var_os(OUTPUT_ENV).is_some() || std::env::var_os(ELF_ENV).is_some() {
 			bail!("diagnostic output or ELF identity requires an explicit diagnostic mode");
@@ -582,10 +729,18 @@ pub fn start_from_env(runtime_enabled: bool, observation_profile: bool, stdio: b
 	}
 	let path = std::env::var_os(OUTPUT_ENV).context("diagnostic output is required")?;
 	let elf = std::env::var(ELF_ENV).context("diagnostic ELF SHA256 is required")?;
-	if elf.len() != 64 || !elf.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+	if elf.len() != 64
+		|| !elf
+			.bytes()
+			.all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+	{
 		bail!("diagnostic ELF SHA256 must be 64 lowercase hexadecimal digits");
 	}
-	let hosts = super::config::runtime_config()?.hosts.keys().cloned().collect::<Vec<_>>();
+	let hosts = super::config::runtime_config()?
+		.hosts
+		.keys()
+		.cloned()
+		.collect::<Vec<_>>();
 	if hosts.len() > 64 || hosts.iter().any(|name| name.len() > 128) {
 		bail!("diagnostic host table exceeds its explicit bound");
 	}
@@ -602,10 +757,18 @@ pub fn start_from_env(runtime_enabled: bool, observation_profile: bool, stdio: b
 		hosts,
 	};
 	let stat = bounded_text(Path::new("/proc/self/stat"), 8192)?;
-	let tail = stat.rsplit_once(") ").context("diagnostic /proc identity parse failed")?.1;
-	let start_ticks: u64 = tail.split_whitespace().nth(19).context("diagnostic birth identity missing")?.parse()?;
+	let tail = stat
+		.rsplit_once(") ")
+		.context("diagnostic /proc identity parse failed")?
+		.1;
+	let start_ticks: u64 = tail
+		.split_whitespace()
+		.nth(19)
+		.context("diagnostic birth identity missing")?
+		.parse()?;
 	let boot = bounded_text(Path::new("/proc/sys/kernel/random/boot_id"), 128)?;
-	let start_ns = clock_ns(libc::CLOCK_MONOTONIC).context("diagnostic monotonic clock unavailable")?;
+	let start_ns =
+		clock_ns(libc::CLOCK_MONOTONIC).context("diagnostic monotonic clock unavailable")?;
 	let mut output = Output::create(Path::new(&path))?;
 	output.line(&json!({
 		"type": "header", "schema": "hepta-phase-cost-trace/v1",
@@ -634,7 +797,9 @@ pub fn start_from_env(runtime_enabled: bool, observation_profile: bool, stdio: b
 	if RECORDER.set(recorder).is_err() {
 		bail!("diagnostic recorder publication raced another startup");
 	}
-	Ok(Some(Guard { output: Some(output) }))
+	Ok(Some(Guard {
+		output: Some(output),
+	}))
 }
 
 pub struct Guard {
@@ -642,8 +807,15 @@ pub struct Guard {
 }
 
 impl Guard {
-	fn close(&mut self, owners_joined: bool, transport_returned_ok: bool, early_drop: bool) -> Result<()> {
-		let Some(mut output) = self.output.take() else { return Ok(()) };
+	fn close(
+		&mut self,
+		owners_joined: bool,
+		transport_returned_ok: bool,
+		early_drop: bool,
+	) -> Result<()> {
+		let Some(mut output) = self.output.take() else {
+			return Ok(());
+		};
 		let recorder = RECORDER.get().context("diagnostic recorder missing")?;
 		recorder.accepting.store(false, Ordering::SeqCst);
 		let active = recorder.active.load(Ordering::SeqCst);
@@ -652,8 +824,14 @@ impl Guard {
 		for (slot, metadata) in recorder.requests.rows.iter().enumerate() {
 			if let Some(metadata) = metadata.get() {
 				requests += 1;
-				let native = metadata.native_id.get().map(|id| std::str::from_utf8(&id.bytes[..id.len])).transpose()?;
-				if native.is_some() { native_bound += 1; }
+				let native = metadata
+					.native_id
+					.get()
+					.map(|id| std::str::from_utf8(&id.bytes[..id.len]))
+					.transpose()?;
+				if native.is_some() {
+					native_bound += 1;
+				}
 				output.line(&json!({
 					"type": "request", "slot": slot, "operation": metadata.operation,
 					"host_index": metadata.host, "native_request_id": native
@@ -678,11 +856,18 @@ impl Guard {
 		let errors = recorder.errors.load(Ordering::SeqCst);
 		let abandoned = recorder.abandoned.load(Ordering::SeqCst);
 		let completed = recorder.completed_requests.load(Ordering::SeqCst);
-		let complete = active == 0 && errors == 0 && abandoned == 0
-			&& request_dropped == 0 && event_dropped == 0
-			&& request_reserved == requests && event_reserved == events
-			&& native_bound == requests && completed == requests
-			&& owners_joined && transport_returned_ok && !early_drop;
+		let complete = active == 0
+			&& errors == 0
+			&& abandoned == 0
+			&& request_dropped == 0
+			&& event_dropped == 0
+			&& request_reserved == requests
+			&& event_reserved == events
+			&& native_bound == requests
+			&& completed == requests
+			&& owners_joined
+			&& transport_returned_ok
+			&& !early_drop;
 		output.line(&json!({
 			"type": "footer", "schema": "hepta-phase-cost-trace/v1",
 			"end_monotonic_ns": end_ns,

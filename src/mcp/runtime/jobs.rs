@@ -2310,16 +2310,16 @@ fn prepare_audit_at(
 	outcome: &Value,
 ) -> Result<PreparedAudit> {
 	crate::mcp::runtime::phase_cost_sync!(AuditPrepare, {
-	let event = json!({
-		"at_unix_ms": now_ms(),
-		"action": action,
-		"host": host,
-		"subject": subject,
-		"outcome": outcome,
-	});
-	let mut line = serde_json::to_vec(&event)?;
-	line.push(b'\n');
-	Ok(PreparedAudit { path, line })
+		let event = json!({
+			"at_unix_ms": now_ms(),
+			"action": action,
+			"host": host,
+			"subject": subject,
+			"outcome": outcome,
+		});
+		let mut line = serde_json::to_vec(&event)?;
+		line.push(b'\n');
+		Ok(PreparedAudit { path, line })
 	})
 }
 
@@ -2345,17 +2345,21 @@ fn append_audit_with(
 	let preparation = prepared.path.parent().map_or(Ok(()), |parent| {
 		std::fs::create_dir_all(parent).map_err(anyhow::Error::from)
 	});
-	let mut readiness = crate::mcp::runtime::phase_cost_sync!(AuditMutex, { AUDIT_LOCK
-		.get_or_init(|| Mutex::new(None))
-		.lock()
-		.map_err(|_| anyhow::anyhow!("audit lock poisoned")) })?;
-	crate::mcp::runtime::phase_cost_sync!(AuditCritical, { append_audit_prepared_with(
-		prepared,
-		&mut readiness,
-		preparation,
-		synchronize,
-		|directory| Ok(directory.sync_all()?),
-	) })
+	let mut readiness = crate::mcp::runtime::phase_cost_sync!(AuditMutex, {
+		AUDIT_LOCK
+			.get_or_init(|| Mutex::new(None))
+			.lock()
+			.map_err(|_| anyhow::anyhow!("audit lock poisoned"))
+	})?;
+	crate::mcp::runtime::phase_cost_sync!(AuditCritical, {
+		append_audit_prepared_with(
+			prepared,
+			&mut readiness,
+			preparation,
+			synchronize,
+			|directory| Ok(directory.sync_all()?),
+		)
+	})
 }
 
 fn append_audit_prepared_with(
@@ -2482,15 +2486,17 @@ async fn run_observation_audit(
 	#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
 	let diagnostic_context = crate::mcp::runtime::phase_cost::current();
 	#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
-	let diagnostic_queue = crate::mcp::runtime::phase_cost::wall_span(crate::mcp::runtime::phase_cost::Phase::AuditBlockingQueue);
+	let diagnostic_queue = crate::mcp::runtime::phase_cost::wall_span(
+		crate::mcp::runtime::phase_cost::Phase::AuditBlockingQueue,
+	);
 	let result = tokio::task::spawn_blocking(move || {
 		crate::mcp::runtime::phase_cost_context!(diagnostic_context, {
-		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
-		crate::mcp::runtime::phase_cost::finish_span(diagnostic_queue);
-		// A cancelled waiter cannot release capacity while its blocking append
-		// still owns a file or waits for the shared audit synchronization lock.
-		let _permit = permit;
-		append(prepared)
+			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+			crate::mcp::runtime::phase_cost::finish_span(diagnostic_queue);
+			// A cancelled waiter cannot release capacity while its blocking append
+			// still owns a file or waits for the shared audit synchronization lock.
+			let _permit = permit;
+			append(prepared)
 		})
 	})
 	.await;
@@ -4428,7 +4434,9 @@ pub async fn start_job(params: ProcessStartParams) -> Result<String> {
 }
 
 pub async fn status_job(params: ProcessRefParams) -> Result<String> {
-	let record = crate::mcp::runtime::phase_cost_future!(CheckJobReference, check_ref_async(&params)).await?;
+	let record =
+		crate::mcp::runtime::phase_cost_future!(CheckJobReference, check_ref_async(&params))
+			.await?;
 	let status = status_observation(&record, 0).await?;
 	let completion = observation_completion_audit(
 		"process_status",
@@ -4437,9 +4445,14 @@ pub async fn status_job(params: ProcessRefParams) -> Result<String> {
 		&json!({"phase":"observation","ok":true}),
 	)
 	.await;
-	Ok(crate::mcp::runtime::phase_cost_sync!(EncodeObservation, { serde_json::to_string_pretty(
-		&retain_observation_after_audit(status, completion, &record.host, &record.id),
-	) })?)
+	Ok(crate::mcp::runtime::phase_cost_sync!(EncodeObservation, {
+		serde_json::to_string_pretty(&retain_observation_after_audit(
+			status,
+			completion,
+			&record.host,
+			&record.id,
+		))
+	})?)
 }
 
 pub async fn wait_job(params: ProcessWaitParams) -> Result<String> {
@@ -4467,7 +4480,9 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 		host: params.host.clone(),
 		job_id: params.job_id.clone(),
 	};
-	let record = crate::mcp::runtime::phase_cost_future!(CheckJobReference, check_ref_async(&reference)).await?;
+	let record =
+		crate::mcp::runtime::phase_cost_future!(CheckJobReference, check_ref_async(&reference))
+			.await?;
 	let host = runtime_config()?.host(&record.host)?;
 	let request = json!({
 		"job_id": record.id,
@@ -4521,9 +4536,14 @@ pub async fn read_job(params: ProcessReadParams) -> Result<String> {
 		&json!({"phase":"observation","ok": true}),
 	)
 	.await;
-	Ok(crate::mcp::runtime::phase_cost_sync!(EncodeObservation, { serde_json::to_string_pretty(
-		&retain_observation_after_audit(output, completion, &record.host, &record.id),
-	) })?)
+	Ok(crate::mcp::runtime::phase_cost_sync!(EncodeObservation, {
+		serde_json::to_string_pretty(&retain_observation_after_audit(
+			output,
+			completion,
+			&record.host,
+			&record.id,
+		))
+	})?)
 }
 
 fn retain_observation_after_audit(

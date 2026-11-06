@@ -259,89 +259,89 @@ fn parse_file_observation(
 
 fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Duration, bool)> {
 	crate::mcp::runtime::phase_cost_sync!(PrepareObservation, {
-	use serde_json::json;
-	let fields: &[&str] = match &value {
-		JobObservation::PythonStatus {
-			job_id,
-			job_dir,
-			unit,
-			request_digest,
-			..
-		} => &[job_id, job_dir, unit, request_digest],
-		JobObservation::PythonRead {
-			job_id,
-			job_dir,
-			unit,
-			request_digest,
-			..
-		} => &[job_id, job_dir, unit, request_digest],
-		JobObservation::SystemStatus { job_id } | JobObservation::SystemRead { job_id, .. } => {
-			&[job_id]
+		use serde_json::json;
+		let fields: &[&str] = match &value {
+			JobObservation::PythonStatus {
+				job_id,
+				job_dir,
+				unit,
+				request_digest,
+				..
+			} => &[job_id, job_dir, unit, request_digest],
+			JobObservation::PythonRead {
+				job_id,
+				job_dir,
+				unit,
+				request_digest,
+				..
+			} => &[job_id, job_dir, unit, request_digest],
+			JobObservation::SystemStatus { job_id } | JobObservation::SystemRead { job_id, .. } => {
+				&[job_id]
+			}
+		};
+		// Reject before json! clones or expands an oversized original string.
+		if fields
+			.iter()
+			.try_fold(0usize, |total, field| total.checked_add(field.len()))
+			.is_none_or(|bytes| bytes > MAX_OBSERVATION_BYTES)
+		{
+			bail!("observation_pool_payload_unsupported: original observation fields exceed64KiB; no fallback");
 		}
-	};
-	// Reject before json! clones or expands an oversized original string.
-	if fields
-		.iter()
-		.try_fold(0usize, |total, field| total.checked_add(field.len()))
-		.is_none_or(|bytes| bytes > MAX_OBSERVATION_BYTES)
-	{
-		bail!("observation_pool_payload_unsupported: original observation fields exceed64KiB; no fallback");
-	}
-	let (script, input, timeout, system) = match value {
-		JobObservation::PythonStatus {
-			job_id,
-			job_dir,
-			unit,
-			request_digest,
-			wait_seconds,
-		} => (
-			Some(ObservationScript::Status),
-			json!({"job_id":job_id,"job_dir":job_dir,"request_digest":request_digest,"unit":unit,"wait_seconds":wait_seconds.min(30)}),
-			Duration::from_secs(wait_seconds.min(30) + 10),
-			false,
-		),
-		JobObservation::PythonRead {
-			job_id,
-			job_dir,
-			unit,
-			request_digest,
-			stdout_offset,
-			stderr_offset,
-			limit,
-		} => (
-			Some(ObservationScript::Read),
-			json!({"job_id":job_id,"job_dir":job_dir,"request_digest":request_digest,"unit":unit,"stdout_offset":stdout_offset,"stderr_offset":stderr_offset,"limit":limit}),
-			Duration::from_secs(15),
-			false,
-		),
-		JobObservation::SystemStatus { job_id } => (
-			None,
-			json!({"op":"status","job_id":job_id}),
-			Duration::from_secs(20),
-			true,
-		),
-		JobObservation::SystemRead {
-			job_id,
-			stdout_offset,
-			stderr_offset,
-			limit,
-		} => (
-			None,
-			json!({"op":"read","job_id":job_id,"stdout_offset":stdout_offset,"stderr_offset":stderr_offset,"limit":limit}),
-			Duration::from_secs(20),
-			true,
-		),
-	};
-	let command = match script {
-		Some(script) => job_observation_command(script)?.to_owned(),
-		None => "sudo -n /usr/local/libexec/hepta-runtime-jobctl".to_owned(),
-	};
-	let mut bytes = serde_json::to_vec(&input)?;
-	if system {
-		bytes.push(b'\n');
-	}
-	validate_observation_bytes(&command, &bytes)?;
-	Ok((command, bytes, timeout, system))
+		let (script, input, timeout, system) = match value {
+			JobObservation::PythonStatus {
+				job_id,
+				job_dir,
+				unit,
+				request_digest,
+				wait_seconds,
+			} => (
+				Some(ObservationScript::Status),
+				json!({"job_id":job_id,"job_dir":job_dir,"request_digest":request_digest,"unit":unit,"wait_seconds":wait_seconds.min(30)}),
+				Duration::from_secs(wait_seconds.min(30) + 10),
+				false,
+			),
+			JobObservation::PythonRead {
+				job_id,
+				job_dir,
+				unit,
+				request_digest,
+				stdout_offset,
+				stderr_offset,
+				limit,
+			} => (
+				Some(ObservationScript::Read),
+				json!({"job_id":job_id,"job_dir":job_dir,"request_digest":request_digest,"unit":unit,"stdout_offset":stdout_offset,"stderr_offset":stderr_offset,"limit":limit}),
+				Duration::from_secs(15),
+				false,
+			),
+			JobObservation::SystemStatus { job_id } => (
+				None,
+				json!({"op":"status","job_id":job_id}),
+				Duration::from_secs(20),
+				true,
+			),
+			JobObservation::SystemRead {
+				job_id,
+				stdout_offset,
+				stderr_offset,
+				limit,
+			} => (
+				None,
+				json!({"op":"read","job_id":job_id,"stdout_offset":stdout_offset,"stderr_offset":stderr_offset,"limit":limit}),
+				Duration::from_secs(20),
+				true,
+			),
+		};
+		let command = match script {
+			Some(script) => job_observation_command(script)?.to_owned(),
+			None => "sudo -n /usr/local/libexec/hepta-runtime-jobctl".to_owned(),
+		};
+		let mut bytes = serde_json::to_vec(&input)?;
+		if system {
+			bytes.push(b'\n');
+		}
+		validate_observation_bytes(&command, &bytes)?;
+		Ok((command, bytes, timeout, system))
 	})
 }
 
@@ -367,13 +367,15 @@ pub(super) async fn run_job_observation(
 			String::from_utf8_lossy(&output.stderr).trim()
 		);
 	}
-	crate::mcp::runtime::phase_cost_sync!(DecodeObservation, { serde_json::from_slice(&output.stdout).map_err(|error| {
-		anyhow!(
-			"remote helper on {} returned invalid JSON: {error}; output={}",
-			host.ssh_target,
-			String::from_utf8_lossy(&output.stdout)
-		)
-	}) })
+	crate::mcp::runtime::phase_cost_sync!(DecodeObservation, {
+		serde_json::from_slice(&output.stdout).map_err(|error| {
+			anyhow!(
+				"remote helper on {} returned invalid JSON: {error}; output={}",
+				host.ssh_target,
+				String::from_utf8_lossy(&output.stdout)
+			)
+		})
+	})
 }
 
 async fn capture_observation(

@@ -127,7 +127,10 @@ async fn main() -> Result<()> {
 				tokio::join!(direct_cleanup, observation_cleanup);
 			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
 			let phase_cost_result = if let Some(trace) = phase_cost {
-				trace.finish(direct_cleanup.is_ok() && observation_cleanup.is_ok(), transport.is_ok())
+				trace.finish(
+					direct_cleanup.is_ok() && observation_cleanup.is_ok(),
+					transport.is_ok(),
+				)
 			} else {
 				Ok(())
 			};

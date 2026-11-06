@@ -2421,155 +2421,180 @@ impl ServerHandler for OctofsServer {
 		request: CallToolRequestParams,
 		context: RequestContext<RoleServer>,
 	) -> Result<CallToolResponse, ErrorData> {
-		crate::mcp::runtime::phase_cost_request!(request.name.as_ref(),
-			request.arguments.as_ref().and_then(|value| value.get("host")).and_then(serde_json::Value::as_str), {
-		use runtime::request_audit::AuditCompletion;
-		let cancelled = context.ct.clone();
-		let router = crate::mcp::runtime::phase_cost_sync!(RouterBuild, { Self::tool_router() });
-		let enabled = runtime::config::maybe_runtime_config().is_some();
-		let known = router.get(request.name.as_ref());
-		let visible = known.is_some()
-			&& if enabled {
-				request.name.as_ref() != "shell"
-			} else {
-				!RUNTIME_TOOL_NAMES.contains(&request.name.as_ref())
-			};
-		let readonly = known
-			.and_then(|tool| tool.annotations.as_ref())
-			.and_then(|hints| hints.read_only_hint)
-			== Some(true);
-		let canonical = known.map_or("_unknown_tool", |tool| tool.name.as_ref());
-		// Observation must not change its own totals or keep invalidating the
-		// archive index. Only exact canonical metadata routes omit admission.
-		let metadata_observer = matches!(
-			canonical,
-			"request_history" | "request_archive" | "usage_stats"
-		);
-		let ticket = if enabled && !metadata_observer {
-			let scope = self
-				.owner_binding
-				.resolve(&context, self.search_owner.as_ref().as_deref())
-				.map_err(|_| {
-					ErrorData::internal_error(
-						"request authority unavailable; dispatch refused",
-						None,
-					)
-				})?;
-			Some(
-				crate::mcp::runtime::phase_cost_future!(NativeAuditBegin, runtime::request_audit::begin_with_read(
-					scope.owner(),
+		crate::mcp::runtime::phase_cost_request!(
+			request.name.as_ref(),
+			request
+				.arguments
+				.as_ref()
+				.and_then(|value| value.get("host"))
+				.and_then(serde_json::Value::as_str),
+			{
+				use runtime::request_audit::AuditCompletion;
+				let cancelled = context.ct.clone();
+				let router =
+					crate::mcp::runtime::phase_cost_sync!(RouterBuild, { Self::tool_router() });
+				let enabled = runtime::config::maybe_runtime_config().is_some();
+				let known = router.get(request.name.as_ref());
+				let visible = known.is_some()
+					&& if enabled {
+						request.name.as_ref() != "shell"
+					} else {
+						!RUNTIME_TOOL_NAMES.contains(&request.name.as_ref())
+					};
+				let readonly = known
+					.and_then(|tool| tool.annotations.as_ref())
+					.and_then(|hints| hints.read_only_hint)
+					== Some(true);
+				let canonical = known.map_or("_unknown_tool", |tool| tool.name.as_ref());
+				// Observation must not change its own totals or keep invalidating the
+				// archive index. Only exact canonical metadata routes omit admission.
+				let metadata_observer = matches!(
 					canonical,
-					if matches!(canonical, "request_status" | "request_result") {
-						match request
-							.arguments
-							.as_ref()
-							.and_then(|a| a.get("request_id"))
-							.and_then(serde_json::Value::as_str)
-						{
-							Some(id) => {
-								runtime::request_async::audit_read_target(scope.owner(), id)
-									.await
-									.map_err(|_| {
-										ErrorData::invalid_params(
+					"request_history" | "request_archive" | "usage_stats"
+				);
+				let ticket = if enabled && !metadata_observer {
+					let scope = self
+						.owner_binding
+						.resolve(&context, self.search_owner.as_ref().as_deref())
+						.map_err(|_| {
+							ErrorData::internal_error(
+								"request authority unavailable; dispatch refused",
+								None,
+							)
+						})?;
+					Some(
+						crate::mcp::runtime::phase_cost_future!(
+							NativeAuditBegin,
+							runtime::request_audit::begin_with_read(
+								scope.owner(),
+								canonical,
+								if matches!(canonical, "request_status" | "request_result") {
+									match request
+										.arguments
+										.as_ref()
+										.and_then(|a| a.get("request_id"))
+										.and_then(serde_json::Value::as_str)
+									{
+										Some(id) => runtime::request_async::audit_read_target(
+											scope.owner(),
+											id,
+										)
+										.await
+										.map_err(|_| {
+											ErrorData::invalid_params(
 											"request unavailable to this scope or current policy",
 											None,
 										)
-									})?
-							}
-							None => None,
-						}
-					} else {
-						None
-					},
-				))
-				.await
-				.map_err(|_| {
-					ErrorData::internal_error("request audit unavailable; dispatch refused", None)
-				})?,
-			)
-		} else {
-			None
-		};
-		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
-		if let Some(ticket) = ticket.as_ref() {
-			crate::mcp::runtime::phase_cost::bind_native_id(ticket.request_id());
-		}
-		let result_intent = if let Some(ticket) = ticket
-			.as_ref()
-			.filter(|t| runtime::request_results::eligible(&t.identity().tool_name))
-		{
-			match runtime::request_results::admit(ticket.identity()).await {
-				Ok(intent) => Some(intent),
-				Err(_) => {
-					let mut result = Err(ErrorData::internal_error(
-						"result admission unavailable; tool was not dispatched",
-						None,
-					));
-					runtime::request_results::attach_identity(&mut result, ticket.request_id());
-					runtime::request_results::attach_ack(
-						&mut result,
-						"durability_unknown_not_dispatched",
-						false,
-					);
-					return result;
-				}
-			}
-		} else {
-			None
-		};
-		let mut result = if visible {
-			let call = rmcp::handler::server::tool::ToolCallContext::new(self, request, context);
-			router.call(call).await
-		} else {
-			Err(ErrorData::invalid_params(
-				"tool not found in this runtime mode",
-				None,
-			))
-		};
-		if let Some(ticket) = ticket {
-			let id = ticket.request_id().to_owned();
-			let tool = ticket.identity().tool_name;
-			let expose_id = runtime::request_results::exposes_identity(&tool);
-			if expose_id {
-				runtime::request_results::attach_identity(&mut result, &id);
-				runtime::request_results::reserve_final_wire(&mut result, &tool, &id);
-			}
-			let completion = match &result {
-				_ if cancelled.is_cancelled() => AuditCompletion::Unknown,
-				Ok(CallToolResponse::Complete(value)) if !value.is_error.unwrap_or(false) => {
-					AuditCompletion::Completed
-				}
-				_ if !visible || readonly => AuditCompletion::Failed,
-				_ => AuditCompletion::Unknown,
-			};
-			let retained = if let Some(intent) = result_intent {
-				let response = match &result {
-					Ok(CallToolResponse::Complete(value))
-						if !cancelled.is_cancelled() && !value.is_error.unwrap_or(false) =>
-					{
-						Some(value.clone())
-					}
-					_ => None,
+										})?,
+										None => None,
+									}
+								} else {
+									None
+								},
+							)
+						)
+						.await
+						.map_err(|_| {
+							ErrorData::internal_error(
+								"request audit unavailable; dispatch refused",
+								None,
+							)
+						})?,
+					)
+				} else {
+					None
 				};
-				runtime::request_results::complete(intent, response)
+				#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+				if let Some(ticket) = ticket.as_ref() {
+					crate::mcp::runtime::phase_cost::bind_native_id(ticket.request_id());
+				}
+				let result_intent = if let Some(ticket) = ticket
+					.as_ref()
+					.filter(|t| runtime::request_results::eligible(&t.identity().tool_name))
+				{
+					match runtime::request_results::admit(ticket.identity()).await {
+						Ok(intent) => Some(intent),
+						Err(_) => {
+							let mut result = Err(ErrorData::internal_error(
+								"result admission unavailable; tool was not dispatched",
+								None,
+							));
+							runtime::request_results::attach_identity(
+								&mut result,
+								ticket.request_id(),
+							);
+							runtime::request_results::attach_ack(
+								&mut result,
+								"durability_unknown_not_dispatched",
+								false,
+							);
+							return result;
+						}
+					}
+				} else {
+					None
+				};
+				let mut result = if visible {
+					let call =
+						rmcp::handler::server::tool::ToolCallContext::new(self, request, context);
+					router.call(call).await
+				} else {
+					Err(ErrorData::invalid_params(
+						"tool not found in this runtime mode",
+						None,
+					))
+				};
+				if let Some(ticket) = ticket {
+					let id = ticket.request_id().to_owned();
+					let tool = ticket.identity().tool_name;
+					let expose_id = runtime::request_results::exposes_identity(&tool);
+					if expose_id {
+						runtime::request_results::attach_identity(&mut result, &id);
+						runtime::request_results::reserve_final_wire(&mut result, &tool, &id);
+					}
+					let completion = match &result {
+						_ if cancelled.is_cancelled() => AuditCompletion::Unknown,
+						Ok(CallToolResponse::Complete(value))
+							if !value.is_error.unwrap_or(false) =>
+						{
+							AuditCompletion::Completed
+						}
+						_ if !visible || readonly => AuditCompletion::Failed,
+						_ => AuditCompletion::Unknown,
+					};
+					let retained = if let Some(intent) = result_intent {
+						let response = match &result {
+							Ok(CallToolResponse::Complete(value))
+								if !cancelled.is_cancelled()
+									&& !value.is_error.unwrap_or(false) =>
+							{
+								Some(value.clone())
+							}
+							_ => None,
+						};
+						runtime::request_results::complete(intent, response)
+							.await
+							.unwrap_or("durability_unknown")
+					} else {
+						"not_retained_policy"
+					};
+					let audit_durable = crate::mcp::runtime::phase_cost_future!(
+						NativeAuditFinish,
+						runtime::request_audit::finish(ticket, completion)
+					)
 					.await
-					.unwrap_or("durability_unknown")
-			} else {
-				"not_retained_policy"
-			};
-			let audit_durable = crate::mcp::runtime::phase_cost_future!(NativeAuditFinish, runtime::request_audit::finish(ticket, completion))
-				.await
-				.is_ok();
-			if !audit_durable {
-				warn!("request audit completion unavailable; dispatch result preserved; no automatic retry");
+					.is_ok();
+					if !audit_durable {
+						warn!("request audit completion unavailable; dispatch result preserved; no automatic retry");
+					}
+					if expose_id {
+						runtime::request_results::attach_ack(&mut result, retained, audit_durable);
+					}
+				}
+				result
 			}
-			if expose_id {
-				runtime::request_results::attach_ack(&mut result, retained, audit_durable);
-			}
-		}
-		result
-		})
-}
+		)
+	}
 
 	fn get_info(&self) -> ServerConfig {
 		ServerConfig::new(

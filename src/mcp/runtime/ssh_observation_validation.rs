@@ -101,13 +101,15 @@ impl Workers {
 	where
 		F: FnOnce(&OwnerTicket) -> Result<()> + Send + 'static,
 	{
-		let permit = crate::mcp::runtime::phase_cost_wall!(ValidationPermit, { tokio::select! {
-			biased;
-			_ = stop.cancelled() => bail!("observation validation stopped before admission"),
-			value = timeout_at(deadline, self.permits.clone().acquire_owned()) => value
-				.context("observation validation capacity deadline")?
-				.context("observation validation capacity closed")?,
-		} });
+		let permit = crate::mcp::runtime::phase_cost_wall!(ValidationPermit, {
+			tokio::select! {
+				biased;
+				_ = stop.cancelled() => bail!("observation validation stopped before admission"),
+				value = timeout_at(deadline, self.permits.clone().acquire_owned()) => value
+					.context("observation validation capacity deadline")?
+					.context("observation validation capacity closed")?,
+			}
+		});
 		// Construct before spawn so even a discarded unstarted closure freezes
 		// admission. At most WORKERS closures are submitted; Tokio's otherwise
 		// unbounded blocking queue cannot accumulate validation work.
@@ -123,17 +125,19 @@ impl Workers {
 		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
 		let diagnostic_context = crate::mcp::runtime::phase_cost::current();
 		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
-		let diagnostic_queue = crate::mcp::runtime::phase_cost::wall_span(crate::mcp::runtime::phase_cost::Phase::ValidationBlockingQueue);
+		let diagnostic_queue = crate::mcp::runtime::phase_cost::wall_span(
+			crate::mcp::runtime::phase_cost::Phase::ValidationBlockingQueue,
+		);
 		let mut work = tokio::task::spawn_blocking(move || {
 			crate::mcp::runtime::phase_cost_context!(diagnostic_context, {
-			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
-			crate::mcp::runtime::phase_cost::finish_span(diagnostic_queue);
-			// Admission can precede execution in Tokio's blocking queue. Keep
-			// the original deadline and refuse stale work before opening files.
-			ticket.check_current()?;
-			check(&ticket)?;
-			ticket.check_current()?;
-			Ok::<_, anyhow::Error>(ticket)
+				#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+				crate::mcp::runtime::phase_cost::finish_span(diagnostic_queue);
+				// Admission can precede execution in Tokio's blocking queue. Keep
+				// the original deadline and refuse stale work before opening files.
+				ticket.check_current()?;
+				check(&ticket)?;
+				ticket.check_current()?;
+				Ok::<_, anyhow::Error>(ticket)
 			})
 		});
 		let result = tokio::select! {

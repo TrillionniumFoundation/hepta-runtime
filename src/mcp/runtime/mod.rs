@@ -27,11 +27,14 @@ macro_rules! phase_cost_future {
 		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
 		{
 			$crate::mcp::runtime::phase_cost::wall_future(
-				$crate::mcp::runtime::phase_cost::Phase::$phase, $future,
+				$crate::mcp::runtime::phase_cost::Phase::$phase,
+				$future,
 			)
 		}
 		#[cfg(not(all(feature = "phase-cost-diagnostics", target_os = "linux")))]
-		{ $future }
+		{
+			$future
+		}
 	}};
 }
 pub(crate) use phase_cost_future;
@@ -72,9 +75,13 @@ pub(crate) use phase_cost_request;
 macro_rules! phase_cost_context_future {
 	($context:expr, $future:expr) => {{
 		#[cfg(feature = "phase-cost-diagnostics")]
-		{ $crate::mcp::runtime::phase_cost::in_context($context, $future) }
+		{
+			$crate::mcp::runtime::phase_cost::in_context($context, $future)
+		}
 		#[cfg(not(feature = "phase-cost-diagnostics"))]
-		{ $future }
+		{
+			$future
+		}
 	}};
 }
 #[cfg(target_os = "linux")]
@@ -83,7 +90,9 @@ pub(crate) use phase_cost_context_future;
 macro_rules! phase_cost_context {
 	($context:expr, $body:block) => {{
 		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
-		{ $crate::mcp::runtime::phase_cost::with_context($context, || $body) }
+		{
+			$crate::mcp::runtime::phase_cost::with_context($context, || $body)
+		}
 		#[cfg(not(all(feature = "phase-cost-diagnostics", target_os = "linux")))]
 		$body
 	}};
