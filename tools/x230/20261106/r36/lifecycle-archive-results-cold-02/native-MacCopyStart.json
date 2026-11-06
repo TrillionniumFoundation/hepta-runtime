@@ -1,0 +1,36 @@
+{
+  "audit_recorded": true,
+  "job": {
+    "args": [
+      "-I",
+      "-B",
+      "-c",
+      "import os,json,hashlib,subprocess,stat,time\nfrom pathlib import Path\nroot=Path(\"/Users/qianqi/work/hepta-runtime-r36-cold02-normal-lifecycle-archive-transport-01\");root.mkdir(mode=0o700)\nassert root.resolve()==root and root.stat().st_uid==os.getuid()\nfiles=json.loads(\"[{\\\"source\\\":\\\"/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/evidence-export-03/r36-evidence-01.tar.xz\\\",\\\"name\\\":\\\"r36-evidence-01.tar.xz\\\",\\\"bytes\\\":4095108,\\\"sha256\\\":\\\"f172ac581d8fc53fa855f67b35926c1421c74a90287b43ece45596cc32665f04\\\"},{\\\"source\\\":\\\"/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/evidence-export-03/export-report.json\\\",\\\"name\\\":\\\"export-report.json\\\",\\\"bytes\\\":5524,\\\"sha256\\\":\\\"3acb4d5912ea097d04cd3c8515e06e9ad06cb354a21cbde09a116859ab9c4b5b\\\"},{\\\"source\\\":\\\"/home/qian/hepta-runtime-validation-scratch-20261106-r36-cold-02/evidence-export-03/verification-03.json\\\",\\\"name\\\":\\\"verification-03.json\\\",\\\"bytes\\\":4867,\\\"sha256\\\":\\\"ea5f980fd5cfb478e72196b167199c96f22d2caa4067f49e91824668fd89ba82\\\"}]\")\ncmd=['/usr/bin/scp','-q','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=10']+['x230-ts:'+f['source'] for f in files]+[str(root)]\nt=time.monotonic();p=subprocess.run(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=120)\nout={'schema':'hepta-r36-existing-ssh-original-byte-copy/v1','command':cmd,'returncode':p.returncode,'seconds':time.monotonic()-t,'stderr':p.stderr.decode(errors='replace')[-4000:],'source_modified':False,'workload_or_auditor_started':False,'files':[]}\nif p.returncode==0:\n for f in files:\n  path=root/f['name'];fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)\n  try:\n   st=os.fstat(fd);assert stat.S_ISREG(st.st_mode) and st.st_nlink==1 and st.st_size<=67108864\n   b=b''\n   while len(b)<=67108864:\n    z=os.read(fd,65536)\n    if not z:break\n    b+=z\n   end=os.fstat(fd);assert (st.st_ino,st.st_size,st.st_mtime_ns)==(end.st_ino,end.st_size,end.st_mtime_ns)\n  finally:os.close(fd)\n  sha=hashlib.sha256(b).hexdigest();assert len(b)==f.get('bytes',len(b)) and sha==f.get('sha256',sha)\n  out['files'].append({'path':str(path),'bytes':len(b),'sha256':sha,'verified':True})\nprint(json.dumps(out,sort_keys=True));raise SystemExit(p.returncode)\n"
+    ],
+    "created_unix_ms": 1793993137135,
+    "cwd": "/Users/qianqi/work",
+    "env_keys": [],
+    "executable": "/usr/bin/python3",
+    "execution_mode": "operator",
+    "host": "mac",
+    "id": "1a1b252dbef-fc05-7d88",
+    "idempotency_key": "mac-r36-cold02-normal-lifecycle-archive-byte-copy-20261106-01",
+    "launch_error": null,
+    "launch_state": "launched",
+    "remote_job_dir": "/Users/qianqi/.local/state/hepta-runtime-mac-worker/jobs/1a1b252dbef-fc05-7d88",
+    "request_digest": "da94b3f2cbe330f890a0f721c61c8dc4b98c6369714c4648cbe1304c149ca1a0",
+    "request_fingerprint": 15750411652205588728,
+    "ssh_target": "hepta-mac-local",
+    "system_jobctl": false,
+    "unit": "hepta-runtime-job-1a1b252dbef-fc05-7d88"
+  },
+  "launch": {
+    "backend": "detached",
+    "launcher_pid": 46690,
+    "ok": true,
+    "systemd_error": "systemd user units unavailable on this platform",
+    "unit": "hepta-runtime-job-1a1b252dbef-fc05-7d88"
+  },
+  "local_record_pending": false,
+  "reused": false
+}
