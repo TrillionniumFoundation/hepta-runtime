@@ -1646,7 +1646,7 @@ fn begin_with_read_at(
 			(a.accepted_unix_ms, &a.request_id).cmp(&(b.accepted_unix_ms, &b.request_id))
 		});
 	}
-	cache_hot(&directory, &records)?;
+	cache_hot_owned(&directory, records)?;
 	let active = Arc::new(AtomicBool::new(true));
 	active_registry()?.insert(record.request_id.clone(), Arc::downgrade(&active));
 	Ok(RequestTicket {
@@ -1843,7 +1843,7 @@ fn begin_reserved_record_at(root: &Path, identity: RequestIdentity) -> Result<Re
 			(a.accepted_unix_ms, &a.request_id).cmp(&(b.accepted_unix_ms, &b.request_id))
 		});
 	}
-	cache_hot(&directory, &records)?;
+	cache_hot_owned(&directory, records)?;
 	let active = Arc::new(AtomicBool::new(true));
 	active_registry()?.insert(record.request_id.clone(), Arc::downgrade(&active));
 	Ok(RequestTicket {
