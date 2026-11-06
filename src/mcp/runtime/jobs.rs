@@ -3728,11 +3728,15 @@ if not valid_owner(request, started, systemd=launch.get("backend") == "systemd")
 # original supervisor even if its PID or systemd unit name is later recycled.
 atomic_identity = sys.platform == "linux"
 fd = None
+poller = None
 try:
     if atomic_identity:
         if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
             raise SystemExit("atomic supervisor signalling unavailable; no cancellation submitted")
+        import math, select
         fd = os.pidfd_open(pid, 0)
+        poller = select.poll()
+        poller.register(fd, select.POLLIN)
     if process_identity(pid) != expected or process_uid(pid) != expected_uid:
         raise SystemExit("frozen supervisor identity or UID changed; no cancellation submitted")
     atomic("cancel-request.json", {"at_unix_ms": int(time.time() * 1000),
@@ -3746,10 +3750,33 @@ try:
         os.kill(pid, signal.SIGTERM)
     grace = max(0.0, min(float(q.get("grace_seconds", 10)), 30.0))
     deadline = time.monotonic() + grace
-    while time.monotonic() < deadline:
-        if read_json("exit.json") or process_identity(pid) != expected:
+    supervisor_exited = False
+    while supervisor_exited or time.monotonic() < deadline:
+        if read_json("exit.json") or process_identity(pid) != expected or supervisor_exited:
             break
-        time.sleep(.1)
+        if poller is None:
+            time.sleep(.1)
+            continue
+        # Keep the existing metadata cadence and the original grace deadline.
+        # The held pidfd can wake earlier when this exact supervisor exits.
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            events = poller.poll(min(100, math.ceil(remaining * 1000)))
+        except InterruptedError:
+            continue
+        if events:
+            if len(events) != 1:
+                raise RuntimeError("original supervisor wait invalid; cancellation outcome unknown")
+            ready_fd, mask = events[0]
+            terminal = select.POLLIN | select.POLLHUP
+            invalid = select.POLLERR | select.POLLNVAL
+            if ready_fd != fd or mask & invalid or mask & ~terminal or not mask & terminal:
+                raise RuntimeError("original supervisor wait invalid; cancellation outcome unknown")
+            # Recheck metadata/identity before the ACK, even at the deadline.
+            # Readiness is only supervisor exit, never authoritative job completion.
+            supervisor_exited = True
     # The original runner owns workload termination, escalation and output
     # drain. Never force-kill a potentially recycled child group from here.
     result = "stop_requested" if launch.get("backend") == "systemd" else "term_sent"
@@ -5207,6 +5234,10 @@ mod cancel_io_tests;
 #[cfg(test)]
 #[path = "jobs_cancel_read_tests.rs"]
 mod cancel_read_tests;
+
+#[cfg(all(test, unix))]
+#[path = "jobs_cancel_wait_tests.rs"]
+mod cancel_wait_tests;
 
 #[cfg(all(test, unix))]
 #[path = "jobs_registry_coalescing_tests.rs"]
