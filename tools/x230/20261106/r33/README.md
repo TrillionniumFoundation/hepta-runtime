@@ -1,13 +1,68 @@
-# R33: reuse immutable path components on accepted R24
+# R33: immutable path components, rejected by C8 throughput
 
-**Status: complete x230 qualification and exact native Rust CI passed.
-Six-host observation and normal lifecycle performance remain pending.
-This candidate is not yet adopted.**
+**Status: complete x230 qualification and exact native Rust CI passed, but the
+original six-host observation failed the C8 throughput gate. R33 is rejected
+and not adopted. Normal lifecycle ABBA did not start. Accepted runtime is R24.**
 
 R33 starts directly from accepted R24
 `baab4def80be7af015b2e7a594cb302f66c4130e`. It removes repeated path-component
 allocation while preserving fresh path resolution and complete file checks.
-The accepted version remains R24 until the original full performance gates pass.
+The accepted version remains R24; the original performance gate rejected R33.
+
+## Six-host observation: rejected
+
+Original Mac holder **`1a1aecd302a-fc05-6294`** completed with exit 0,
+complete durable logs, no retry, and its owned agent reaped. All seven parent
+workflow stages closed with their owned processes and process groups absent.
+The original parent workflow reports `passed=true`; the independent original
+**observation and performance gates are both false**. Their sole rejection is
+**`C8 regression gate`**.
+
+| Concurrency | R24 calls/s | R33 calls/s | Change | Throughput B/A |
+| --- | ---: | ---: | ---: | ---: |
+| C1 | 8.0443028088 | 8.5067439957 | +5.7487% | 1.0574867950 |
+| C8 | 50.1811833836 | 47.5921908807 | **−5.1593%** | **0.9484071054** |
+| C16 | 49.8356514307 | 49.0296253750 | −1.6174% | 0.9838263165 |
+
+C8 is below the unchanged 0.95 minimum. All original p95 and controller CPU
+gates passed. Controller RSS was 18,716 KiB for R24 and 18,888 KiB for R33
+(+172 KiB), below the original 19,228 KiB ceiling. Allocation component gains
+do not override this whole-runtime throughput rejection. Adjacent-pair results
+remain diagnostic only; this one original campaign establishes no causal
+explanation and was not replayed or pooled.
+
+The retained inventory has **2,304/2,304 successful measured calls**, 288 warmup
+calls and 72 preflight/restart calls, for 2,664 total and zero failed calls.
+Correctness, the 32-success/32-capacity-refusal boundary, and the six-host
+cancellation-recovery canary passed. The original monitor retained **296**
+1 Hz samples, all 295 scheduled slots through the guarded body end, no compiler
+records or monitor errors, and its independent audit passed. This is sampled
+evidence; it does not rule out activity between samples. All 12 recorded standard
+controller shutdowns were clean. The canary is separate from normal lifecycle
+ABBA and does not establish saturated cancellation capacity.
+
+The original lifecycle materializer **`1a1aed5c50a-fc05-6301`** refused with
+exit 1, empty stdout and 741 stderr bytes containing the original failed
+observation guard. The normal lifecycle input and both output namespaces were
+absent. Normal lifecycle ABBA did not run; its absence is not a passing result.
+
+[The complete observation archive](observation-evidence-01.tar.gz) preserves
+**4,163 selected original files / 30,210,056 bytes**. The compressed artifact is
+**2,969,505 bytes**, SHA-256
+`d1a8f18a2c1d84fbd4b152a965f8a83a2f3ccb066215baf7997d5d562ba33d2e`.
+Its 1,073,996-byte [manifest](observation-evidence-01.manifest.json) has SHA-256
+`3d4c3fa3b851706e1ea8129fc266faeeb134baa2deb1450b08585ea1bc4a292e`.
+The same sealed collector verified the downloaded archive locally with zero
+files extracted and no receipt-binding errors. Transfer used 46 contiguous
+immutable-version chunks, each independently hashed, followed by full SHA-256
+and Git blob verification. Archiving, transfer and local verification did not
+rerun the original workload or original auditors.
+
+The [original summary](observation-results-01/summary.json),
+[parent report](observation-results-01/parent-report.json),
+[compact](observation-evidence-01.compact.json), complete native originals,
+closed-owner postflight and transfer/verification records retain the false
+gates unchanged. **R33 is rejected and not adopted; accepted runtime remains R24.**
 
 ## Source and behavior
 
@@ -135,13 +190,13 @@ native build/run receipts and immutable transfer evidence. The
 controls and cold costs. It distinguishes the pre-format component source from
 the formatted published file and verifies the measured method slices explicitly.
 
-## Remaining gates and provenance
+## Original performance protocol and provenance
 
 The preserved parent and CI preparation packages retain their original
 pre-execution, unresolved status. Real completed qualification receipts now
 supply their input identities. Their templates alone do not establish execution.
 
-The subsequent original six-host ABBA observation retains concurrency 1/8/16,
+The completed original six-host ABBA observation retained concurrency 1/8/16,
 192 calls per cell, 24 warmup calls, two workers, 90-second quiescence and
 continuous compiler sampling. Throughput B/A must be at least 0.95; p95 and
 controller CPU ratios must be at most 1.10; sampled controller RSS must not
