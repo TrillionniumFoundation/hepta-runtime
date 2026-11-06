@@ -7,7 +7,7 @@
 //! This is not a generic error schema or a JSON-RPC frame rewrite. Other
 //! operations, unknown members and unobserved families keep their old projection.
 
-use super::super::rea_response_encoding::{self as encoding, JsonView, ObjectOrder, PathComponent};
+use super::super::rea_response_encoding::{self as encoding, ObjectOrder, PathComponent};
 use anyhow::{bail, Result};
 use serde_json::{Map, Value};
 
@@ -101,9 +101,9 @@ fn observed_family(error: &Value) -> Option<ImportFailure> {
 	}
 }
 
-struct ImportOrder(ImportFailure);
+pub(super) struct ImportFailureOrder(ImportFailure);
 
-impl ObjectOrder for ImportOrder {
+impl ObjectOrder for ImportFailureOrder {
 	fn keys<'a>(
 		&self,
 		path: &[PathComponent<'_>],
@@ -156,19 +156,10 @@ impl ObjectOrder for ImportOrder {
 	}
 }
 
-/// An observed operation/family and a complete key set are both required.
-/// Native profile/partial payloads, path-limit/I/O errors, richer input issues,
-/// and other operations remain outside this formatter.
-pub(super) fn import_text(error: &Value) -> Option<String> {
-	let family = observed_family(error)?;
-	let members = [("error", JsonView::Value(error))];
-	let mut bytes = Vec::new();
-	encoding::write_json_view(
-		JsonView::Object(&members),
-		&ImportOrder(family),
-		super::super::rea_evidence::canonical_js_number,
-		&mut bytes,
-	)
-	.ok()?;
-	String::from_utf8(bytes).ok()
+/// The original operation/family must be established before using its order.
+/// The shared encoder then requires every encountered object's complete key
+/// set; an unknown member discards the attempted encoding and preserves the
+/// previous complete diagnostic.
+pub(super) fn import_order(error: &Value) -> Option<ImportFailureOrder> {
+	observed_family(error).map(ImportFailureOrder)
 }

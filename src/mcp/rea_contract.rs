@@ -163,8 +163,40 @@ impl Failure {
 	/// Only independently observed Evidence import error shapes have an
 	/// admitted original text order. Other errors retain the old projection.
 	pub(super) fn wire_import(self) -> CallToolResult {
-		let ordered = failure_order::import_text(&self.0);
-		self.wire_with_text(ordered)
+		match failure_order::import_order(&self.0) {
+			Some(order) => self.wire_with_order(&order),
+			None => self.wire(),
+		}
+	}
+
+	/// Use an independently established producer order for this error profile.
+	/// Native extension failures may contain objects outside that profile. Keep
+	/// their existing complete diagnostic instead of dropping the primary error
+	/// or inventing an upstream order for fields the resolver cannot establish.
+	pub(super) fn wire_with_order(
+		self,
+		order: &dyn super::rea_response_encoding::ObjectOrder,
+	) -> CallToolResult {
+		use super::rea_response_encoding::{write_json_view, JsonView};
+		let text = {
+			// Drop an incomplete encoding before the fallback allocates its text.
+			let mut bytes = Vec::new();
+			let fields = [("error", JsonView::Value(&self.0))];
+			if self.0.is_object()
+				&& write_json_view(
+					JsonView::Object(&fields),
+					order,
+					super::rea_evidence::canonical_js_number,
+					&mut bytes,
+				)
+				.is_ok()
+			{
+				String::from_utf8(bytes).ok()
+			} else {
+				None
+			}
+		};
+		self.wire_with_text(text)
 	}
 
 	fn wire_with_text(self, ordered: Option<String>) -> CallToolResult {

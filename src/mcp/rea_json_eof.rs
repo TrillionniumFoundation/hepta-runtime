@@ -128,11 +128,30 @@ impl Tracker {
 	/// Each chunk has already passed the owner's incremental UTF-8 validator.
 	/// Decoding here preserves code-unit positions and context across any byte
 	/// split, including one in the middle of a supplementary character.
-	pub(super) fn accept(&mut self, bytes: &[u8]) {
-		for &byte in bytes {
+	pub(super) fn accept(&mut self, mut bytes: &[u8]) {
+		while let Some((&byte, remaining)) = bytes.split_first() {
 			if !self.valid_prefix {
 				return;
 			}
+			if self.utf8_remaining == 0
+				&& (self.error.is_some() || matches!(self.token, Token::None))
+				&& matches!(byte, b' ' | b'\t')
+			{
+				let count = bytes
+					.iter()
+					.position(|&byte| !matches!(byte, b' ' | b'\t'))
+					.unwrap_or(bytes.len());
+				if count >= CONTEXT {
+					self.accept_horizontal_whitespace(&bytes[..count]);
+				} else {
+					for &byte in &bytes[..count] {
+						self.accept_character(char::from(byte));
+					}
+				}
+				bytes = &bytes[count..];
+				continue;
+			}
+			bytes = remaining;
 			if self.utf8_remaining > 0 {
 				if !(0x80..=0xbf).contains(&byte) {
 					self.valid_prefix = false;
@@ -166,6 +185,37 @@ impl Tracker {
 				}
 			}
 		}
+	}
+
+	fn accept_horizontal_whitespace(&mut self, bytes: &[u8]) {
+		// Structural horizontal whitespace cannot change the grammar or line.
+		// Copy only the bounded diagnostic windows, instead of shifting the
+		// previous ten UTF-16 units once per padding byte. CR/LF and token
+		// contents still take the scalar path, including a number's terminator.
+		let first_count = (SHORT - self.first_len).min(bytes.len());
+		for &byte in &bytes[..first_count] {
+			self.first[self.first_len] = u16::from(byte);
+			self.first_len += 1;
+		}
+		if let Some(error) = &mut self.error {
+			let count = (error.context_limit - error.context_len).min(bytes.len());
+			for &byte in &bytes[..count] {
+				error.context[error.context_len] = u16::from(byte);
+				error.context_len += 1;
+			}
+		} else {
+			for (unit, &byte) in self
+				.previous
+				.iter_mut()
+				.zip(&bytes[bytes.len() - CONTEXT..])
+			{
+				*unit = u16::from(byte);
+			}
+			self.previous_len = CONTEXT;
+		}
+		self.position += bytes.len();
+		self.column += bytes.len();
+		self.previous_cr = false;
 	}
 
 	fn accept_character(&mut self, character: char) {

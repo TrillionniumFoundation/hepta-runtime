@@ -100,6 +100,44 @@ fn old_request_serialization_and_inventory_bridge_are_unchanged() {
 		bridge(StaticOperation::Decompile, Some(2)).unwrap(),
 		bridge(StaticOperation::Inventory, None).unwrap()
 	);
+	assert_eq!(
+		sha256(
+			bridge(StaticOperation::Inventory, Some(2))
+				.unwrap()
+				.as_bytes()
+		),
+		"a4d166231a4eade27ae1e403b85718da9729c4d752822e9bf9a7ff7fe37878f4"
+	);
+	// Retain the C2 instruction-capable bridge. The older 429 bridge hash
+	// remains historical evidence and does not identify this revision-2 source.
+	assert_eq!(
+		sha256(
+			bridge(StaticOperation::Decompile, Some(2))
+				.unwrap()
+				.as_bytes()
+		),
+		"b7eaf10c422e773006399bc6d200b21cc2e770d7a126354393c6c032f762a4e0"
+	);
+}
+
+#[test]
+fn revision_three_has_separate_fixed_engine_bridges_without_legacy_rebinding() {
+	for operation in [
+		StaticOperation::Inventory,
+		StaticOperation::Functions,
+		StaticOperation::Function,
+		StaticOperation::Decompile,
+		StaticOperation::Xrefs,
+	] {
+		let source = bridge(operation, Some(3)).unwrap();
+		assert!(source.contains("equals(\"12.1.4\")"));
+		assert!(source.contains("report.put(\"bridge_revision\",3)"));
+		assert!(!source.contains("equals(\"12.2\")"));
+		assert_ne!(source, bridge(operation, Some(2)).unwrap());
+		assert!(bridge(operation, Some(4)).is_err());
+	}
+	assert!(bridge(StaticOperation::Sources, Some(3)).is_err());
+	assert!(bridge(StaticOperation::Instructions, Some(3)).is_err());
 }
 
 #[test]

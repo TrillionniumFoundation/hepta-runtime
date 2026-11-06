@@ -106,11 +106,12 @@ class Session:
         self.state={"rows":[],"checks":[]}
         report["sessions"][label+"/"+scenario]=self.state
     def observe(self,name,operation,arguments,response):
+        raw=raw_error_text(response)
         value=q.tool_value(response)
-        row={"id":name,"operation":operation,"arguments":arguments,"value":value,"orders":orders(value),"raw_error_text":raw_error_text(response)}
+        row={"id":name,"operation":operation,"arguments":arguments,"value":value,"orders":orders(value),"raw_error_text":raw,"response":response}
         self.rows.append(row)
         path=self.output/f"call-{len(self.rows):03d}-{name}.json"
-        q.write_json(path,{**row,"response":response})
+        q.write_json(path,row)
         self.state["rows"].append({"id":name,"path":str(path),"sha256":q.file_hash(path)})
         return value
     def call(self,name,operation,arguments):
@@ -128,6 +129,50 @@ class Session:
 def counts(value, imported, unknowns, total):
     q.require(payload(value)=={"imported":imported,"unknowns_added":unknowns,"total":total},"import counters differ from independently selected candidate")
     q.require(value.get("_meta")==q.TARGET_META,"public import lost original untrusted target-content provenance")
+
+
+def compare_observation(old, new):
+    """Keep parsed values, original error bytes and the full result independent.
+
+    The original response remains unparsed for the complete CallToolResult gate.
+    JSON error member order and exact UTF-8 text retain their separate gates;
+    plain SDK exceptions remain full-result values without a JSON-order claim.
+    A cancellation notification has no fabricated response or result count.
+    """
+    q.require(not a.differences(old['arguments'],new['arguments']),
+              "producers received different inputs")
+    value_differences=a.differences(old['value'],new['value'])
+    order_differences=a.differences(old['orders'],new['orders'],'$/orders')
+    old_error_order,new_error_order=error_text_orders(old['orders']),error_text_orders(new['orders'])
+    error_order_differences=a.differences(old_error_order,new_error_order,'$/error_text_orders')
+    error_order_applicable=bool(old_error_order or new_error_order)
+    old_raw,new_raw=old.get('raw_error_text'),new.get('raw_error_text')
+    raw_applicable=old_raw is not None or new_raw is not None
+    raw_differences=a.differences(old_raw,new_raw,'$/raw_error_text')
+    lifecycle=old.get('kind')=='observed-protocol-lifecycle'
+    q.require(lifecycle==(new.get('kind')=='observed-protocol-lifecycle'),
+              "producer observation kinds differ")
+    if lifecycle:
+        q.require('response' not in old and 'response' not in new,
+                  "suppressed response must not be invented")
+        full=None
+    else:
+        q.require('response' in old and 'response' in new,
+                  "original public response is missing")
+        q.require('result' in old['response'] and 'result' in new['response'],
+                  "public tool response was replaced by an RPC error")
+        full=a.differences(old['response']['result'],new['response']['result'],'$/CallToolResult')
+    differences=value_differences+order_differences+raw_differences+(full or [])
+    return {'status':'FAIL' if differences else 'PASS','differences':differences,
+            'raw_error_text_status':('FAIL' if raw_differences else 'PASS') if raw_applicable else 'NOT_APPLICABLE',
+            'raw_error_text_differences':raw_differences,
+            'raw_error_text_reference':old_raw,'raw_error_text_native':new_raw,
+            'parsed_value_status':'FAIL' if value_differences else 'PASS',
+            'object_order_status':'FAIL' if order_differences else 'PASS',
+            'error_text_order':{'applicable':error_order_applicable,
+                'status':('FAIL' if error_order_differences else 'PASS') if error_order_applicable else 'NOT_APPLICABLE',
+                'differences':error_order_differences},
+            'complete_call_tool_result_status':None if full is None else ('FAIL' if full else 'PASS')}
 
 
 def check_bundle(bundle, records, revisions):
@@ -402,25 +447,7 @@ def main(argv=None):
             left,right=sessions[('reference',scenario)],sessions[('native',scenario)]
             q.require([r['id'] for r in left.rows]==[r['id'] for r in right.rows],"producer request sequence differs")
             for old,new in zip(left.rows,right.rows):
-                q.require(old['arguments']==new['arguments'],"producers received different inputs")
-                value_differences=a.differences(old['value'],new['value'])
-                order_differences=a.differences(old['orders'],new['orders'],'$/orders')
-                old_error_order,new_error_order=error_text_orders(old['orders']),error_text_orders(new['orders'])
-                error_order_differences=a.differences(old_error_order,new_error_order,'$/error_text_orders')
-                error_order_applicable=bool(old_error_order or new_error_order)
-                old_raw,new_raw=old.get('raw_error_text'),new.get('raw_error_text')
-                raw_applicable=old_raw is not None or new_raw is not None
-                raw_differences=a.differences(old_raw,new_raw,'$/raw_error_text')
-                differences=value_differences+order_differences+raw_differences
-                report['comparisons'].append({'id':scenario+'/'+old['id'],'status':'FAIL' if differences else 'PASS','differences':differences,
-                    'raw_error_text_status':('FAIL' if raw_differences else 'PASS') if raw_applicable else 'NOT_APPLICABLE',
-                    'raw_error_text_differences':raw_differences,
-                    'raw_error_text_reference':old_raw,'raw_error_text_native':new_raw,
-                    'parsed_value_status':'FAIL' if value_differences else 'PASS',
-                    'object_order_status':'FAIL' if order_differences else 'PASS',
-                    'error_text_order':{'applicable':error_order_applicable,
-                        'status':('FAIL' if error_order_differences else 'PASS') if error_order_applicable else 'NOT_APPLICABLE',
-                        'differences':error_order_differences}})
+                report['comparisons'].append({'id':scenario+'/'+old['id'],**compare_observation(old,new)})
         for key in ('inputSchema','outputSchema','annotations'):
             differences=a.differences(sessions[('reference','main')].state['contract'][key],sessions[('native','main')].state['contract'][key])
             report['comparisons'].append({'id':'contract/'+key,'status':'FAIL' if differences else 'PASS','differences':differences})
@@ -461,10 +488,14 @@ def main(argv=None):
     passed=sum(x['status']=='PASS' for x in report['comparisons'])
     expected={label+'/'+scenario:count for label in ('reference','native') for scenario,count in (('main',68),('cold',3),('union',4),('capture',7),('proto',11),('exception',8),('labels',6),('cancel',6))}
     observed={label+'/'+scenario:len(session.rows) for (label,scenario),session in sessions.items()}
-    report['finite_status']='PASS' if not report['errors'] and observed==expected and len(report['comparisons'])==118 and passed==118 and report['error_text_order_gate']['status']=='PASS' and report['raw_error_text_gate']['status']=='PASS' else 'FAIL'
+    full=[x for x in report['comparisons'] if x.get('complete_call_tool_result_status') is not None]
+    report['complete_call_tool_results']={'compared':len(full),
+        'matched':sum(x['complete_call_tool_result_status']=='PASS' for x in full),
+        'raw_jsonrpc_bytes':'Not inferred from object equality; retained wire requires a separate comparison.'}
+    report['finite_status']='PASS' if not report['errors'] and observed==expected and len(report['comparisons'])==118 and passed==118 and report['error_text_order_gate']['status']=='PASS' and report['raw_error_text_gate']['status']=='PASS' and report['complete_call_tool_results']['compared']==112 and report['complete_call_tool_results']['matched']==112 else 'FAIL'
     report['counts']={key:len(session.rows) for key,session in ((label+'/'+scenario,s) for (label,scenario),s in sessions.items())}
     q.write_json(out/'qualification.json',report)
-    print(json.dumps({'finite_status':report['finite_status'],'qualified':False,'passed':passed,'comparisons':len(report['comparisons']),'errors':report['errors'],'error_text_order_gate':report['error_text_order_gate'],'raw_error_text_gate':report['raw_error_text_gate'],'receipt':q.identity(out/'qualification.json')}))
+    print(json.dumps({'finite_status':report['finite_status'],'qualified':False,'passed':passed,'comparisons':len(report['comparisons']),'errors':report['errors'],'error_text_order_gate':report['error_text_order_gate'],'raw_error_text_gate':report['raw_error_text_gate'],'complete_call_tool_results':report['complete_call_tool_results'],'receipt':q.identity(out/'qualification.json')}))
     return 0 if report['finite_status']=='PASS' else 1
 
 if __name__=='__main__':sys.exit(main())

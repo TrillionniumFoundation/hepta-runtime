@@ -1165,3 +1165,115 @@ fn partial_unicode_escapes_keep_first_syntax_error_when_serde_reports_eof() {
 	}
 	assert_eq!((eof_cases, syntax_cases), (5, 1));
 }
+
+#[test]
+fn utf8_slice_scan_never_skips_pending_or_invalid_scalars() {
+	for input in [
+		b" \t\r\n".as_slice(),
+		"\"\u{00e9}\u{1f600}\u{10ffff}\" ".as_bytes(),
+	] {
+		for split in 0..=input.len() {
+			let mut decoder = Utf8::default();
+			assert!(decoder.accept_slice(&input[..split]));
+			assert!(decoder.accept_slice(&input[split..]));
+			assert_eq!(decoder.remaining, 0);
+		}
+	}
+	for input in [
+		b"\xc0\x80".as_slice(),
+		b"\xed\xa0\x80",
+		b"\xf4\x90\x80\x80",
+		b"\xe2 ",
+		b"\xf0\x9f\x98 ",
+		b" \x80",
+	] {
+		for split in 0..=input.len() {
+			let mut decoder = Utf8::default();
+			assert!(
+				!decoder.accept_slice(&input[..split]) || !decoder.accept_slice(&input[split..]),
+				"invalid scalar accepted at split {split}: {input:?}"
+			);
+		}
+	}
+	let mut decoder = Utf8::default();
+	assert!(decoder.accept_slice(b"\xf0\x9f\x98"));
+	assert_eq!(decoder.remaining, 1);
+	assert!(!decoder.accept_slice(&[b' '; CHUNK]));
+}
+
+#[test]
+fn token_padding_keeps_quoted_whitespace_and_non_json_controls_metered() {
+	let mut meter = TokenMeter::default();
+	assert!(meter.accept_slice(b"tru", 4));
+	assert!(meter.accept_slice(b"", 4));
+	assert_eq!(meter.count, 3);
+	assert!(meter.accept_slice(b" \t\r\n", 4));
+	assert_eq!(meter.count, 0);
+	assert!(!meter.accept_slice(b"false", 4));
+
+	let mut meter = TokenMeter::default();
+	assert!(meter.accept_slice(b"\"", 4));
+	assert!(!meter.accept_slice(b"    ", 4));
+	assert_eq!(meter.count, 5);
+	assert!(meter.quoted);
+
+	let mut meter = TokenMeter::default();
+	assert!(meter.accept_slice(b"\"a\\", 8));
+	assert!(meter.accept_slice(b"    ", 8));
+	assert!(meter.accept_slice(b"\"", 8));
+	assert!(!meter.quoted);
+	assert_eq!(meter.count, 8);
+	assert!(meter.accept_slice(&[b' '; CHUNK], 8));
+	assert_eq!(meter.count, 0);
+	for control in [b'\x0b', b'\x0c', b'\x1c'] {
+		assert!(!TokenMeter::default().accept_slice(&[control], 0));
+	}
+}
+
+#[test]
+fn long_padding_keeps_diagnostics_independent_of_physical_chunk_width() {
+	// The one-byte feed keeps every diagnostic transition on the scalar path.
+	// Larger feeds exercise bounded context windows around a long padding run,
+	// supplementary scalars, number terminators, CR/LF and earlier failures.
+	let mut cases = Vec::new();
+	for prefix in [
+		"",
+		"[",
+		"[1",
+		"{\"\u{1f600}\":1",
+		"\"\u{1f600}\"",
+		"tru",
+		"\"",
+		"x",
+	] {
+		for suffix in ["x", "\r\n", "\r \t\nx", "]"] {
+			cases.push(format!("{prefix}{}{suffix}", " \t".repeat(24)));
+		}
+	}
+	cases.push(format!(
+		"{}x{}",
+		" ".repeat(CHUNK + 7),
+		"\t".repeat(CHUNK + 19)
+	));
+	cases.push(format!(
+		"\r{}\n{{\"\u{1f600}\":1{}",
+		" ".repeat(CHUNK),
+		"\t".repeat(CHUNK)
+	));
+	for input in cases {
+		let mut scalar = json_eof::Tracker::new();
+		for byte in input.as_bytes().chunks(1) {
+			scalar.accept(byte);
+		}
+		let expected_root_string = scalar.complete_root_string();
+		let expected = scalar.finish();
+		for width in [7, 9, 10, 11, 19, 20, CHUNK] {
+			let mut tracker = json_eof::Tracker::new();
+			for chunk in input.as_bytes().chunks(width) {
+				tracker.accept(chunk);
+			}
+			assert_eq!(tracker.complete_root_string(), expected_root_string);
+			assert_eq!(tracker.finish(), expected, "chunk width {width}");
+		}
+	}
+}

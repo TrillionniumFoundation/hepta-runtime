@@ -757,3 +757,164 @@ fn ghidra_instruction_report_checks_complete_window_after_all_outer_hashes_are_r
 		assert!(validate_report(&bad, &input, 0).is_err(), "{pointer}");
 	}
 }
+
+fn ghidra_1214_profile() -> ReaStaticProfile {
+	let mut profile = ghidra_profile();
+	let engine = profile.ghidra_engine.as_mut().unwrap();
+	engine.bridge_revision = Some(3);
+	engine.engine_version = "12.1.4".into();
+	engine.installation_root = "/opt/ghidra/ghidra_12.1.4_PUBLIC".into();
+	engine.release_archive_sha256 = engine_profile::GHIDRA_1214_RELEASE_SHA256.into();
+	profile
+}
+
+#[test]
+fn ghidra_release_revision_and_archive_are_one_admission_identity() {
+	for revision in [None, Some(2), Some(3), Some(4)] {
+		for version in ["12.2", "12.1.4", "12.1.3"] {
+			for archive in [
+				engine_profile::GHIDRA_RELEASE_SHA256,
+				engine_profile::GHIDRA_1214_RELEASE_SHA256,
+			] {
+				let mut candidate = ghidra_profile();
+				let engine = candidate.ghidra_engine.as_mut().unwrap();
+				engine.bridge_revision = revision;
+				engine.engine_version = version.into();
+				engine.release_archive_sha256 = archive.into();
+				let admitted = (matches!(revision, None | Some(2))
+					&& version == "12.2"
+					&& archive == engine_profile::GHIDRA_RELEASE_SHA256)
+					|| (revision == Some(3)
+						&& version == "12.1.4"
+						&& archive == engine_profile::GHIDRA_1214_RELEASE_SHA256);
+				assert_eq!(
+					validate_profile(&candidate).is_ok(),
+					admitted,
+					"revision {revision:?}, version {version}, archive {archive}"
+				);
+			}
+		}
+	}
+	let selected = ghidra_1214_profile();
+	validate_profile(&selected).unwrap();
+	assert_ne!(
+		sha256(&serde_json::to_vec(&selected).unwrap()),
+		sha256(&serde_json::to_vec(&ghidra_profile()).unwrap())
+	);
+}
+
+#[test]
+fn ghidra_1214_inventory_rejects_cross_release_or_revision_observations() {
+	let mut input = worker();
+	input.profile = ghidra_1214_profile();
+	input.request.operation = StaticOperation::Inventory;
+	let value = json!({"schema":"hepta.rea.ghidra-observation.v2","bridge_revision":3,"engine_version":"12.1.4","operation":"inventory","target_executed":false,"auto_analysis_performed":false,"decompilation_performed":false,"external_libraries_loaded":false,"project_saved":false,"source_sha256":input.request.artifact_sha256,"source_bytes":64});
+	ghidra_contract::validate_observation(&value, &input, 64).unwrap();
+	for case in 0..5 {
+		let mut wrong = value.clone();
+		match case {
+			0 => wrong["engine_version"] = json!("12.2"),
+			1 => wrong["bridge_revision"] = json!(2),
+			2 => wrong["source_sha256"] = json!("0".repeat(64)),
+			3 => wrong["source_bytes"] = json!(65),
+			4 => wrong["auto_analysis_performed"] = json!(true),
+			_ => unreachable!(),
+		}
+		assert!(ghidra_contract::validate_observation(&wrong, &input, 64).is_err());
+	}
+	input.profile = ghidra_profile();
+	input
+		.profile
+		.ghidra_engine
+		.as_mut()
+		.unwrap()
+		.bridge_revision = Some(2);
+	assert!(ghidra_contract::validate_observation(&value, &input, 64).is_err());
+}
+
+#[test]
+fn ghidra_1214_analysis_rejects_rehashed_engine_and_bridge_substitution() {
+	let mut input = worker();
+	input.profile = ghidra_1214_profile();
+	input
+		.profile
+		.allowed_operations
+		.push(StaticOperation::Decompile);
+	input.request.operation = StaticOperation::Decompile;
+	input.request.function_address = Some("0x401000".into());
+	input.request.profile_sha256 = sha256(&serde_json::to_vec(&input.profile).unwrap());
+	validate_worker_request(&input).unwrap();
+	let mut observation = analysis_observation(&input);
+	observation["engine_version"] = json!("12.1.4");
+	observation["bridge_revision"] = json!(3);
+	observation["analysis_profile"] = json!(ghidra_contract::ANALYSIS_PROFILE_1214);
+	let mut value = report(&input);
+	value["subject"]["size_bytes"] = json!(64);
+	value["ghidra_engine"] = serde_json::to_value(&input.profile.ghidra_engine).unwrap();
+	value["bridge_sha256"] = json!(sha256(
+		ghidra_contract::bridge(StaticOperation::Decompile, Some(3))
+			.unwrap()
+			.as_bytes()
+	));
+	value["backend"]["snapshot"] = json!("verified_installed_inode");
+	value["installation_snapshot"] = json!("verified_installed_paths");
+	value["network_syscalls_denied"] = json!(true);
+	value["scratch"] = json!({"removed_after_operation":true});
+	rebind_observation(&mut value, &input, &observation);
+	validate_report(&value, &input, 0).unwrap();
+	for case in 0..6 {
+		let mut bad = value.clone();
+		let mut changed = observation.clone();
+		match case {
+			0 => changed["engine_version"] = json!("12.2"),
+			1 => changed["bridge_revision"] = json!(2),
+			2 => changed["analysis_profile"] = json!(ghidra_contract::ANALYSIS_PROFILE),
+			3 => {
+				bad["bridge_sha256"] = json!(sha256(
+					ghidra_contract::bridge(StaticOperation::Decompile, Some(2))
+						.unwrap()
+						.as_bytes()
+				))
+			}
+			4 => {
+				bad["ghidra_engine"]["release_archive_sha256"] =
+					json!(engine_profile::GHIDRA_RELEASE_SHA256)
+			}
+			5 => changed["native_child_cleanup_confirmed"] = json!(false),
+			_ => unreachable!(),
+		}
+		rebind_observation(&mut bad, &input, &changed);
+		assert!(validate_report(&bad, &input, 0).is_err(), "case {case}");
+	}
+}
+
+#[test]
+fn ghidra_revision_three_rejects_instruction_profiles_before_worker_admission() {
+	let mut input = worker();
+	input.profile = ghidra_1214_profile();
+	input
+		.profile
+		.allowed_operations
+		.push(StaticOperation::Instructions);
+	input.request.operation = StaticOperation::Instructions;
+	input.request.function_address = Some("0x401000".into());
+	input.request.profile_sha256 = sha256(&serde_json::to_vec(&input.profile).unwrap());
+	assert!(validate_profile(&input.profile).is_err());
+	assert!(validate_worker_request(&input).is_err());
+	assert!(ghidra_contract::bridge(StaticOperation::Instructions, Some(3)).is_err());
+
+	input.profile = ghidra_profile();
+	input
+		.profile
+		.ghidra_engine
+		.as_mut()
+		.unwrap()
+		.bridge_revision = Some(2);
+	input
+		.profile
+		.allowed_operations
+		.push(StaticOperation::Instructions);
+	input.request.profile_sha256 = sha256(&serde_json::to_vec(&input.profile).unwrap());
+	validate_profile(&input.profile).unwrap();
+	validate_worker_request(&input).unwrap();
+}

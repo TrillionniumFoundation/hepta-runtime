@@ -783,6 +783,15 @@ struct Utf8 {
 	high: u8,
 }
 impl Utf8 {
+	fn accept_slice(&mut self, bytes: &[u8]) -> bool {
+		// ASCII cannot complete a scalar split across reads. Only a clean
+		// decoder state may use the slice validator's ASCII scan.
+		if self.remaining == 0 && bytes.is_ascii() {
+			return true;
+		}
+		bytes.iter().all(|&byte| self.accept(byte))
+	}
+
 	fn accept(&mut self, byte: u8) -> bool {
 		if self.remaining > 0 {
 			if byte < self.low || byte > self.high {
@@ -843,6 +852,21 @@ struct TokenMeter {
 	count: usize,
 }
 impl TokenMeter {
+	fn accept_slice(&mut self, bytes: &[u8], maximum: usize) -> bool {
+		// Padding still crosses the same physical reads, cancellation and
+		// hash checks; it need not revisit token state for every separator.
+		if !self.quoted
+			&& !bytes.is_empty()
+			&& bytes
+				.iter()
+				.all(|&byte| matches!(byte, b' ' | b'\n' | b'\r' | b'\t'))
+		{
+			self.count = 0;
+			return true;
+		}
+		bytes.iter().all(|&byte| self.accept(byte, maximum))
+	}
+
 	fn accept(&mut self, byte: u8, maximum: usize) -> bool {
 		if self.quoted {
 			self.count = self.count.saturating_add(1);
@@ -933,21 +957,17 @@ impl<R: Read> Read for CheckedReader<R> {
 		if position.saturating_add(count as u64) > self.expected {
 			return Err(self.refuse(changed()));
 		}
-		for &byte in &output[..count] {
-			if !self.utf8.accept(byte) {
-				let small = self.state.borrow().small;
-				return Err(self.refuse(invalid_json(UTF8_MESSAGE, small)));
-			}
+		if !self.utf8.accept_slice(&output[..count]) {
+			let small = self.state.borrow().small;
+			return Err(self.refuse(invalid_json(UTF8_MESSAGE, small)));
 		}
 		if let Some(meter) = &mut self.meter {
 			let maximum = self.state.borrow().limits.max_token_bytes;
-			for &byte in &output[..count] {
-				if !meter.accept(byte, maximum) {
-					return Err(self.refuse(gap(
-						"native-json-token-budget",
-						json!({"max_token_bytes":maximum}),
-					)));
-				}
+			if !meter.accept_slice(&output[..count], maximum) {
+				return Err(self.refuse(gap(
+					"native-json-token-budget",
+					json!({"max_token_bytes":maximum}),
+				)));
 			}
 		}
 		if let Some(tracker) = &mut self.eof_tracker {

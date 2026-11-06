@@ -31,7 +31,7 @@ and paired pre-fix MCP evidence are recorded in the
 | Build artifacts | Bounded native ELF structures | ELF32/64, byte order, program/section tables, symbols, selected notes and build IDs |
 | GPU metadata | ELF machine, flags and bounded notes | Declarations only; no kernel execution, driver or hardware compatibility verdict |
 | Application packages | Checked ZIP plus fixed manifest decoding | APK binary XML and JAR main attributes, stored/deflate and CRC; no signature or installability verdict |
-| Mature engines | Optional JADX and Ghidra providers | JADX class/source observations; legacy Ghidra ELF inventory or explicit revision 2 inventory/function analysis/xrefs/decompilation, under the original job owner; partial coverage and no verified reconstructed-source claim |
+| Mature engines | Optional JADX and Ghidra providers | JADX class/source observations; legacy Ghidra ELF inventory or explicit revision 2 (12.2) inventory/function/instructions/xrefs/decompilation or revision 3 (12.1.4) inventory/function/xrefs/decompilation, under the original job owner; partial coverage and no verified reconstructed-source claim |
 | JS/Electron | package.json declarations and bounded native Oxc AST analysis | Explicit JS/TS sources, imports/exports, lexical bindings, Electron callsites and IPC candidates; no source execution, whole-application resolution or runtime-delivery proof |
 | Browser evidence | Existing durable process owner → native Rust private Chrome capture → saved HAR inspection, comparison and selected body replay | Bounded same-host owned HTTP-resource capture; saved-representation replay; no application-script execution or complete browser-state replay |
 | Weights | Existing native transport, patch/restore and F32 Linear | General model execution remains with its selected backend |
@@ -119,7 +119,7 @@ own residual scratch. The inspected program is never executed.
 Legacy Ghidra profiles omit `ghidra_engine.bridge_revision` and retain the
 original inventory bridge bytes and serialized identity. This route keeps
 automatic analysis disabled and returns bounded imported memory-block and symbol
-observations. Explicit revision `2` profiles can admit `inventory`, `functions`,
+observations. Revision `2` (12.2) additionally admits the bounded `instructions` operation; revision `3` (12.1.4) explicitly refuses it. Both explicit revisions can admit `inventory`, `functions`,
 `function`, `xrefs` and `decompile`; the analysis operations run a fixed, partial
 analyzer profile and the selected-function decompiler operation invokes Ghidra's
 native decompiler. Neither route executes the inspected program or saves a

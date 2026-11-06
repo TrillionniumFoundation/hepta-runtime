@@ -19,6 +19,11 @@ from rea_engine_cleanup_assertions import (assert_owner_cleanup, signal_original
 from rea_java_kernel_probe import java_observation, process_identity, run_observed_worker
 
 RELEASE_SHA = "2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67"
+RELEASES = {
+    "12.2": (RELEASE_SHA, 2, "rea_ghidra_inventory_v2.java", "rea_ghidra_analysis_bridge.java"),
+    "12.1.4": ("ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db", 3,
+               "rea_ghidra_inventory_1214_v3.java", "rea_ghidra_analysis_1214_v3.java"),
+}
 
 
 def live_java(unit, mode, deadline):
@@ -81,6 +86,12 @@ def main():
     parser.add_argument("--runtime", type=Path, required=True)
     parser.add_argument("--java-home", type=Path, required=True)
     parser.add_argument("--ghidra-home", type=Path, required=True)
+    parser.add_argument("--engine-version", choices=tuple(RELEASES), default="12.2")
+    parser.add_argument("--release-archive", type=Path,
+                        help="original release ZIP; required for the explicit 12.1.4 profile")
+    parser.add_argument("--fixture", type=Path,
+                        help="reuse the exact benign hepta_leaf/hepta_caller ELF used by the original provider")
+    parser.add_argument("--fixture-sha256")
     parser.add_argument("--workspace", type=Path, required=True)
     parser.add_argument("--execution-mode", choices=("operator", "isolated"), required=True)
     parser.add_argument("--allow-local-ssh", action="store_true")
@@ -88,6 +99,17 @@ def main():
     assert args.allow_local_ssh
     original_runtime, java_home, ghidra_home = (path.resolve(strict=True) for path in
                                                (args.runtime, args.java_home, args.ghidra_home))
+    release_sha, revision, inventory_bridge, analysis_bridge = RELEASES[args.engine_version]
+    properties = (ghidra_home / "Ghidra/application.properties").read_text().splitlines()
+    assert [line for line in properties if line.startswith("application.version=")] == [
+        "application.version=" + args.engine_version]
+    assert args.engine_version != "12.1.4" or args.release_archive is not None
+    if args.release_archive is not None:
+        assert digest(args.release_archive.resolve(strict=True)) == release_sha
+    assert (args.fixture is None) == (args.fixture_sha256 is None)
+    if args.fixture is not None:
+        assert re.fullmatch("[0-9a-f]{64}", args.fixture_sha256)
+        assert digest(args.fixture.resolve(strict=True)) == args.fixture_sha256
     root = args.workspace.absolute()
     root.mkdir(mode=0o700, exist_ok=False)
     root = root.resolve(strict=True)
@@ -101,8 +123,13 @@ def main():
     source = root / "owned.c"
     private_write(source, b"__attribute__((noinline)) int hepta_leaf(int value) { return value * 7 + 11; }\n__attribute__((noinline)) int hepta_caller(int value) { return hepta_leaf(value) + 5; }\nint main(int argc, char **argv) { return hepta_caller(argc); }\n")
     artifact = root / "owned.elf"
-    subprocess.run(["/usr/bin/cc", "-no-pie", "-O0", "-fno-inline", "-fno-stack-protector", str(source), "-o", str(artifact)],
-                   check=True, capture_output=True, timeout=30)
+    if args.fixture is None:
+        subprocess.run(["/usr/bin/cc", "-no-pie", "-O0", "-fno-inline", "-fno-stack-protector", str(source), "-o", str(artifact)],
+                       check=True, capture_output=True, timeout=30)
+    else:
+        shutil.copyfile(args.fixture, artifact)
+        artifact.chmod(0o500)
+        assert digest(artifact) == args.fixture_sha256
     cancellation_source = root / "owned_cancel.c"
     private_write(cancellation_source, (
         "__attribute__((noinline)) unsigned hepta_cancel(unsigned value) { unsigned result=value;\n" +
@@ -116,8 +143,8 @@ def main():
         assert not path.is_symlink()
         if path.is_file():
             files[str(path.relative_to(ghidra_home))] = digest(path)
-    manifest = {"schema": "hepta.rea.ghidra-installation.v1", "engine_version": "12.2",
-                "release_archive_sha256": RELEASE_SHA, "files": files}
+    manifest = {"schema": "hepta.rea.ghidra-installation.v1", "engine_version": args.engine_version,
+                "release_archive_sha256": release_sha, "files": files}
     manifest_path = root / "ghidra-installation.json"
     private_write(manifest_path, manifest)
     components = ["release", "lib/modules", "lib/server/libjvm.so", "lib/libjava.so",
@@ -132,9 +159,9 @@ def main():
                "working_directory": str(root), "input_roots": [str(root)], "allowed_operations": ["inventory", "functions", "function", "decompile", "xrefs"],
                "max_artifact_bytes": 8388608, "max_output_bytes": 65536, "timeout_seconds": 120,
                "memory_max_bytes": 1610612736,
-               "ghidra_engine": {"bridge_revision": 2, "java_home": str(java_home), "installation_root": str(ghidra_home),
+               "ghidra_engine": {"bridge_revision": revision, "java_home": str(java_home), "installation_root": str(ghidra_home),
                                  "manifest_path": str(manifest_path), "manifest_sha256": digest(manifest_path),
-                                 "engine_version": "12.2", "release_archive_sha256": RELEASE_SHA,
+                                 "engine_version": args.engine_version, "release_archive_sha256": release_sha,
                                  "runtime_files": {name: digest(java_home / name) for name in sorted(components)}}}
     config = {"state_dir": str(root / "controller-state"), "controller_workspace_roots": [str(root)],
               "hosts": {"local": {"ssh_target": "localhost", "platform": "linux", "execution_mode": args.execution_mode,
@@ -163,6 +190,8 @@ def main():
     result = {"schema": "hepta.rea.ghidra-analysis-qualification.v1", "workspace": str(root),
               "runtime_sha256": profile["runtime_sha256"], "backend_sha256": profile["backend_sha256"],
               "backend_version": version, "ghidra_engine": profile["ghidra_engine"],
+              "release_archive_verified": args.release_archive is not None,
+              "original_fixture_sha256": args.fixture_sha256,
               "execution_mode": args.execution_mode, "isolated_host_qualification": args.execution_mode == "isolated",
               "targets_run_by_provider": 0, "rea_full_parity": False, "checks": [],
               "independent_symbol_entries": {"hepta_leaf": leaf, "hepta_caller": caller},
@@ -192,11 +221,12 @@ def main():
         private_write(root / "inventory-v2-result.json", {"initial": inventory_start, "result": inventory_result})
         assert inventory_result["process_succeeded"] is True, inventory_result
         inventory_observation = json.loads(inventory_result["report"]["stdout"])
-        assert inventory_observation["schema"] == "hepta.rea.ghidra-observation.v2" and inventory_observation["bridge_revision"] == 2
+        assert inventory_observation["schema"] == "hepta.rea.ghidra-observation.v2" and inventory_observation["bridge_revision"] == revision
+        assert inventory_observation["engine_version"] == args.engine_version
         assert inventory_observation["auto_analysis_performed"] is False and inventory_observation["source_sha256"] == original_hash
-        assert inventory_result["report"]["bridge_sha256"] == digest(Path(__file__).resolve().parents[1] / "src/mcp/rea_ghidra_inventory_v2.java")
+        assert inventory_result["report"]["bridge_sha256"] == digest(Path(__file__).resolve().parents[1] / "src/mcp" / inventory_bridge)
         result["job_ids"]["inventory_v2"] = inventory_start["job"]["id"]
-        result["checks"].append("revision_two_named_byte_provider_repairs_dynamic_elf_import_with_distinct_profile_and_bridge")
+        result["checks"].append("explicit_revision_named_byte_provider_uses_pinned_engine_profile_and_bridge")
         first = server.call("rea_static_start", normal)
         private_write(root / "functions-initial-job.json", first)
         assert first["job"].get("launch_state") != "launch_unknown", first
@@ -205,8 +235,9 @@ def main():
         completed = server.complete(normal)
         assert completed["process_succeeded"] is True, completed
         observation = json.loads(completed["report"]["stdout"])
-        assert completed["report"]["bridge_sha256"] == digest(Path(__file__).resolve().parents[1] / "src/mcp/rea_ghidra_analysis_bridge.java")
-        assert observation["bridge_revision"] == 2
+        assert completed["report"]["bridge_sha256"] == digest(Path(__file__).resolve().parents[1] / "src/mcp" / analysis_bridge)
+        assert observation["bridge_revision"] == revision
+        assert observation["engine_version"] == args.engine_version
         assert observation["analysis_completed"] is True and observation["auto_analysis_performed"] is True
         assert observation["decompilation_performed"] is False
         assert observation["source_sha256"] == original_hash
