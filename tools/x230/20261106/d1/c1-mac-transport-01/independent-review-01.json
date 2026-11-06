@@ -1,0 +1,36 @@
+{
+  "schema": "hepta-d1-c1-mac-payload-importer-independent-review/v1",
+  "reviewer": "evidence_review",
+  "result": "no_blocking_issue_found_in_static_transport_scope",
+  "source": {
+    "git_blob": "bcaadb2cabce393182c465d84a04d052a5e26e74",
+    "bytes": 14918,
+    "sha256": "deb82a9c072729208c1dc6ba1a2a009ad2faa78ea08fdb9ebff3ec72ec8a850e"
+  },
+  "scope": [
+    "Complete importer source read",
+    "Independent local original bytes/SHA256, Python AST parsing, EXPECTED literal 23 names and 692705-byte sum",
+    "Fixed private Mac staging tree, five pre-existing owned 0700 directories, ancestor NOFOLLOW and dirfd identity checks",
+    "Fixed original archive bytes/SHA and bounded gzip read; manual canonical USTAR parser with fixed ordinary members, no links, no prefix/PAX extensions, exact names/sizes/SHA and padding",
+    "Every original payload is verified in memory and every target absent before first file write",
+    "O_EXCL, O_NOFOLLOW, mode0600, actual write completion, fsync, exact readback, complete final inventory and immutable archive/importer rereads",
+    "No archive extraction API, subprocess, shell, package imports, target installer or measurement execution"
+  ],
+  "archive_identity_from_author": {
+    "bytes": 174654,
+    "sha256": "efe412bd28dd0e2fa6935f57a699e3742eb91c2d064bb1861f7c63a9282ac760",
+    "file_count": 23,
+    "payload_bytes": 692705
+  },
+  "tar_body_independently_recomputed_by_this_review": false,
+  "tar_member_original_byte_comparison_scope": "Performed by author audit_acceptance; this review does not relabel that operation as its own.",
+  "target_functions_executed": 0,
+  "host_requests": 0,
+  "source_changes": 0,
+  "git_ref_changes": 0,
+  "limitations": [
+    "This is a static transport review, not a statement that installation or C1 has run.",
+    "The root caller separately binds the exact importer SHA before execution. Existing source and all original payload bytes remain unchanged.",
+    "A failure preserves any partial writes; this importer has no overwrite, deletion or automatic retry."
+  ]
+}

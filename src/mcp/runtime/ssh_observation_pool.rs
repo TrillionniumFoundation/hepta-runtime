@@ -80,6 +80,8 @@ async fn master_socket_readiness(socket: &Path, owned_pid: u32) -> Result<Option
 }
 
 struct Request {
+	#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+	diagnostic: crate::mcp::runtime::phase_cost::TraceContext,
 	host: String,
 	command: String,
 	input: Vec<u8>,
@@ -326,10 +328,14 @@ impl Proxy {
 		cancel: CancellationToken,
 		reply: oneshot::Sender<Result<Captured>>,
 	) -> Result<()> {
-		let admission = self.admission.clone().try_acquire_owned().map_err(|_| {
-			anyhow!("observation pool capacity unavailable; no fallback or automatic retry")
+		let admission = crate::mcp::runtime::phase_cost_sync!(LogicalAdmission, {
+			self.admission.clone().try_acquire_owned().map_err(|_| {
+				anyhow!("observation pool capacity unavailable; no fallback or automatic retry")
+			})
 		})?;
 		let request = Request {
+			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+			diagnostic: crate::mcp::runtime::phase_cost::current(),
 			host: host.to_owned(),
 			command,
 			input,
@@ -340,13 +346,15 @@ impl Proxy {
 		};
 		// A channel waiter already owns one of the same sixteen identities.
 		// Wait within its original deadline; do not enlarge the channel or retry.
-		let slot = tokio::select! {
-			value = timeout_at(deadline, self.sender.reserve()) => value
-				.context("observation queue admission deadline; no automatic retry")?
-				.context("observation queue closed; no fallback or automatic retry")?,
-			_ = request.cancel.cancelled() => bail!("observation cancelled before queue submission; no automatic retry"),
-			_ = self.stop.cancelled() => bail!("observation pool stopped before queue submission; no automatic retry"),
-		};
+		let slot = crate::mcp::runtime::phase_cost_wall!(QueueReservation, {
+			tokio::select! {
+				value = timeout_at(deadline, self.sender.reserve()) => value
+					.context("observation queue admission deadline; no automatic retry")?
+					.context("observation queue closed; no fallback or automatic retry")?,
+				_ = request.cancel.cancelled() => bail!("observation cancelled before queue submission; no automatic retry"),
+				_ = self.stop.cancelled() => bail!("observation pool stopped before queue submission; no automatic retry"),
+			}
+		});
 		// Capacity, shutdown and expiry may become ready together. Recheck after
 		// reservation and leave no await between these fences and the single send.
 		if !self.healthy.load(Ordering::Acquire)
@@ -356,6 +364,15 @@ impl Proxy {
 			|| self.sender.is_closed()
 		{
 			bail!("observation cancelled, expired or unavailable before queue submission; no automatic retry");
+		}
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		{
+			crate::mcp::runtime::phase_cost::mark(
+				crate::mcp::runtime::phase_cost::Phase::QueueSubmitted,
+			);
+			crate::mcp::runtime::phase_cost::deadline_budget(
+				deadline.checked_duration_since(Instant::now()),
+			);
 		}
 		slot.send(request);
 		Ok(())
@@ -461,24 +478,26 @@ struct ProcessIdentity {
 	argv: Vec<u8>,
 }
 fn process_identity(pid: u32) -> Result<ProcessIdentity> {
-	let root = PathBuf::from(format!("/proc/{pid}"));
-	let status = std::fs::read_to_string(root.join("stat"))?;
-	let tail = status
-		.rsplit_once(')')
-		.context("observation child stat unavailable")?
-		.1;
-	let birth = tail
-		.split_ascii_whitespace()
-		.nth(19)
-		.context("observation child birth unavailable")?
-		.parse()?;
-	let exe = std::fs::metadata(root.join("exe"))?;
-	Ok(ProcessIdentity {
-		birth,
-		uid: std::fs::metadata(&root)?.uid(),
-		dev: exe.dev(),
-		ino: exe.ino(),
-		argv: std::fs::read(root.join("cmdline"))?,
+	crate::mcp::runtime::phase_cost_sync!(ProcessIdentity, {
+		let root = PathBuf::from(format!("/proc/{pid}"));
+		let status = std::fs::read_to_string(root.join("stat"))?;
+		let tail = status
+			.rsplit_once(')')
+			.context("observation child stat unavailable")?
+			.1;
+		let birth = tail
+			.split_ascii_whitespace()
+			.nth(19)
+			.context("observation child birth unavailable")?
+			.parse()?;
+		let exe = std::fs::metadata(root.join("exe"))?;
+		Ok(ProcessIdentity {
+			birth,
+			uid: std::fs::metadata(&root)?.uid(),
+			dev: exe.dev(),
+			ino: exe.ino(),
+			argv: std::fs::read(root.join("cmdline"))?,
+		})
 	})
 }
 
@@ -686,23 +705,29 @@ impl Core {
 		let ticket = self
 			.validation
 			.run_retained(&self.stop, deadline, move |ticket| {
-				profile.verify_files_checked(&|| ticket.check_current())
+				crate::mcp::runtime::phase_cost_sync!(ValidationWorker, {
+					profile.verify_files_checked(&|| ticket.check_current())
+				})
 			})
 			.await?;
 		// A same-length change can retain every timestamp/metadata field. Keep
 		// the original permit through a second fresh complete read on the owner;
 		// metadata-only acceptance after the await is not content validation.
-		ticket.finish(|ticket| {
-			if unsafe { libc::syscall(libc::SYS_gettid) } != self.owner_tid {
-				bail!("observation file acceptance attempted outside its lifetime owner thread");
-			}
-			self.profile
-				.verify_files_checked(&|| ticket.check_current())?;
-			self.profile.verify_boundaries(&|| ticket.check_current())?;
-			if self.stop.is_cancelled() || Instant::now() >= deadline {
-				bail!("observation file validation cancelled or expired before acceptance");
-			}
-			Ok(())
+		crate::mcp::runtime::phase_cost_sync!(ValidationOwner, {
+			ticket.finish(|ticket| {
+				if unsafe { libc::syscall(libc::SYS_gettid) } != self.owner_tid {
+					bail!(
+						"observation file acceptance attempted outside its lifetime owner thread"
+					);
+				}
+				self.profile
+					.verify_files_checked(&|| ticket.check_current())?;
+				self.profile.verify_boundaries(&|| ticket.check_current())?;
+				if self.stop.is_cancelled() || Instant::now() >= deadline {
+					bail!("observation file validation cancelled or expired before acceptance");
+				}
+				Ok(())
+			})
 		})
 	}
 	async fn verify_profile_for(&self, deadline: Instant, scope: ProfileCheckScope) -> Result<()> {
@@ -710,7 +735,7 @@ impl Core {
 			self.verify_files(deadline).await?;
 			self.root.verify(&self.profile)?;
 			let agent = tokio::select! {
-				value = profile::agent_snapshot(&self.profile.agent, deadline.min(Instant::now() + Duration::from_secs(2))) => value?,
+				value = crate::mcp::runtime::phase_cost_future!(AgentSnapshot, profile::agent_snapshot(&self.profile.agent, deadline.min(Instant::now() + Duration::from_secs(2)))) => value?,
 				_ = self.stop.cancelled() => bail!("observation profile check stopped"),
 			};
 			if self.agent.get() != Some(&agent) {
@@ -739,92 +764,94 @@ impl Core {
 		socket: &Path,
 		effective: bool,
 	) -> Result<Vec<String>> {
-		let target = self
-			.profile
-			.hosts
-			.get(host)
-			.context("host is outside observation profile")?;
-		let mut args = vec![
-			"/usr/bin/ssh".to_owned(),
-			"-F".into(),
-			self.profile.config.to_string_lossy().into_owned(),
-		];
-		if effective {
-			args.push("-G".into());
-		}
-		args.push("-T".into());
-		let mut options: Vec<(String, String)> = vec![
-			("BatchMode", "yes"),
-			("ConnectTimeout", "8"),
-			("ConnectionAttempts", "1"),
-			("StrictHostKeyChecking", "yes"),
-			("ForwardAgent", "no"),
-			("ForwardX11", "no"),
-			("ClearAllForwardings", "yes"),
-			("PermitLocalCommand", "no"),
-			("RemoteCommand", "none"),
-			("ForkAfterAuthentication", "no"),
-			("ControlPersist", "no"),
-			("ProxyJump", "none"),
-			("ProxyUseFdpass", "no"),
-			("IdentityFile", "none"),
-			("CertificateFile", "none"),
-			("PreferredAuthentications", "publickey"),
-			("PubkeyAuthentication", "yes"),
-			("PasswordAuthentication", "no"),
-			("KbdInteractiveAuthentication", "no"),
-			("GSSAPIAuthentication", "no"),
-			("HostbasedAuthentication", "no"),
-			("PKCS11Provider", "none"),
-			("SecurityKeyProvider", "internal"),
-			("AddKeysToAgent", "no"),
-			("UpdateHostKeys", "no"),
-			("KnownHostsCommand", "none"),
-			("VerifyHostKeyDNS", "no"),
-			("CheckHostIP", "no"),
-			("CanonicalizeHostname", "no"),
-			("GlobalKnownHostsFile", "/dev/null"),
-		]
-		.into_iter()
-		.map(|(key, value)| (key.to_owned(), value.to_owned()))
-		.collect();
-		options.extend([
-			(
-				"IdentityAgent".into(),
-				self.profile.agent.to_string_lossy().into_owned(),
-			),
-			(
-				"UserKnownHostsFile".into(),
-				self.profile.known_hosts.to_string_lossy().into_owned(),
-			),
-			("ControlPath".into(), socket.to_string_lossy().into_owned()),
-			(
-				"ControlMaster".into(),
-				if matches!(mode, Mode::Master) {
-					"yes"
-				} else {
-					"no"
-				}
-				.into(),
-			),
-			(
-				"ProxyCommand".into(),
-				if matches!(mode, Mode::Slave) {
-					"/usr/bin/false"
-				} else {
-					"none"
-				}
-				.into(),
-			),
-		]);
-		for (key, value) in options {
-			args.extend(["-o".into(), format!("{key}={value}")]);
-		}
-		if matches!(mode, Mode::Master) {
-			args.extend(["-N".into(), "-n".into()]);
-		}
-		args.extend(["--".into(), target.clone()]);
-		Ok(args)
+		crate::mcp::runtime::phase_cost_sync!(Arguments, {
+			let target = self
+				.profile
+				.hosts
+				.get(host)
+				.context("host is outside observation profile")?;
+			let mut args = vec![
+				"/usr/bin/ssh".to_owned(),
+				"-F".into(),
+				self.profile.config.to_string_lossy().into_owned(),
+			];
+			if effective {
+				args.push("-G".into());
+			}
+			args.push("-T".into());
+			let mut options: Vec<(String, String)> = vec![
+				("BatchMode", "yes"),
+				("ConnectTimeout", "8"),
+				("ConnectionAttempts", "1"),
+				("StrictHostKeyChecking", "yes"),
+				("ForwardAgent", "no"),
+				("ForwardX11", "no"),
+				("ClearAllForwardings", "yes"),
+				("PermitLocalCommand", "no"),
+				("RemoteCommand", "none"),
+				("ForkAfterAuthentication", "no"),
+				("ControlPersist", "no"),
+				("ProxyJump", "none"),
+				("ProxyUseFdpass", "no"),
+				("IdentityFile", "none"),
+				("CertificateFile", "none"),
+				("PreferredAuthentications", "publickey"),
+				("PubkeyAuthentication", "yes"),
+				("PasswordAuthentication", "no"),
+				("KbdInteractiveAuthentication", "no"),
+				("GSSAPIAuthentication", "no"),
+				("HostbasedAuthentication", "no"),
+				("PKCS11Provider", "none"),
+				("SecurityKeyProvider", "internal"),
+				("AddKeysToAgent", "no"),
+				("UpdateHostKeys", "no"),
+				("KnownHostsCommand", "none"),
+				("VerifyHostKeyDNS", "no"),
+				("CheckHostIP", "no"),
+				("CanonicalizeHostname", "no"),
+				("GlobalKnownHostsFile", "/dev/null"),
+			]
+			.into_iter()
+			.map(|(key, value)| (key.to_owned(), value.to_owned()))
+			.collect();
+			options.extend([
+				(
+					"IdentityAgent".into(),
+					self.profile.agent.to_string_lossy().into_owned(),
+				),
+				(
+					"UserKnownHostsFile".into(),
+					self.profile.known_hosts.to_string_lossy().into_owned(),
+				),
+				("ControlPath".into(), socket.to_string_lossy().into_owned()),
+				(
+					"ControlMaster".into(),
+					if matches!(mode, Mode::Master) {
+						"yes"
+					} else {
+						"no"
+					}
+					.into(),
+				),
+				(
+					"ProxyCommand".into(),
+					if matches!(mode, Mode::Slave) {
+						"/usr/bin/false"
+					} else {
+						"none"
+					}
+					.into(),
+				),
+			]);
+			for (key, value) in options {
+				args.extend(["-o".into(), format!("{key}={value}")]);
+			}
+			if matches!(mode, Mode::Master) {
+				args.extend(["-N".into(), "-n".into()]);
+			}
+			args.extend(["--".into(), target.clone()]);
+			Ok(args)
+		})
 	}
 	fn command(&self, args: &[String]) -> Command {
 		let mut command = Command::new("/usr/bin/ssh");
@@ -867,21 +894,24 @@ impl Core {
 		if unsafe { libc::syscall(libc::SYS_gettid) } != self.owner_tid {
 			bail!("observation child spawn attempted outside its lifetime owner thread");
 		}
-		let expected = args
-			.iter()
-			.flat_map(|arg| arg.as_bytes().iter().copied().chain([0]))
-			.collect::<Vec<_>>();
-		let mut children = tokio::select! {
-			value = timeout_at(deadline, self.children.lock()) => value.context("observation child admission deadline")?,
-			_ = cancel.cancelled() => bail!("observation cancelled before child creation"),
-			_ = self.stop.cancelled() => bail!("observation pool stopped before child creation"),
-		};
+		let expected = crate::mcp::runtime::phase_cost_sync!(ExpectedArgv, {
+			args.iter()
+				.flat_map(|arg| arg.as_bytes().iter().copied().chain([0]))
+				.collect::<Vec<_>>()
+		});
+		let mut children = crate::mcp::runtime::phase_cost_wall!(ChildRegistry, {
+			tokio::select! {
+				value = timeout_at(deadline, self.children.lock()) => value.context("observation child admission deadline")?,
+				_ = cancel.cancelled() => bail!("observation cancelled before child creation"),
+				_ = self.stop.cancelled() => bail!("observation pool stopped before child creation"),
+			}
+		});
 		if cancel.is_cancelled() || self.stop.is_cancelled() || Instant::now() >= deadline {
 			bail!("observation cancelled or expired before child creation");
 		}
-		let child = command
-			.spawn()
-			.context("observation SSH spawn unavailable")?;
+		let child = crate::mcp::runtime::phase_cost_sync!(Spawn, {
+			command.spawn().context("observation SSH spawn unavailable")
+		})?;
 		let pid = child.id().unwrap_or(0);
 		let fd = if pid == 0 {
 			-1
@@ -925,14 +955,17 @@ impl Core {
 					&& value.uid == unsafe { libc::geteuid() }
 					&& (value.dev, value.ino) == self.profile.ssh_inode
 			}) {
-				match postspawn::wait_empty_argv(
-					&owned,
-					anchor,
-					&expected,
-					self.profile.ssh_inode,
-					deadline,
-					cancel,
-					&self.stop,
+				match crate::mcp::runtime::phase_cost_future!(
+					PostExecProof,
+					postspawn::wait_empty_argv(
+						&owned,
+						anchor,
+						&expected,
+						self.profile.ssh_inode,
+						deadline,
+						cancel,
+						&self.stop,
+					)
 				)
 				.await
 				{
@@ -966,6 +999,14 @@ impl Core {
 			bail!("observation SSH pidfd or post-exec identity refused; no fallback");
 		}
 		owned.approved.store(matches, Ordering::Release);
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		crate::mcp::runtime::phase_cost::annotate(
+			crate::mcp::runtime::phase_cost::Detail::ChildProof {
+				child_id: owned.id,
+				pid: owned.pid,
+				birth_ticks: owned.identity.get().map(|identity| identity.birth),
+			},
+		);
 		Ok(owned)
 	}
 
@@ -1009,8 +1050,10 @@ impl Core {
 			let stdout = pipes.1.context("observation SSH stdout unavailable")?;
 			let stderr = pipes.2.context("observation SSH stderr unavailable")?;
 			let io = async {
-				let write = async { stdin.write_all(input).await?; stdin.shutdown().await?; drop(stdin); Ok::<(), anyhow::Error>(()) };
-				let (_, stdout, stderr, status) = tokio::try_join!(write, super::read_bounded(stdout), super::read_bounded(stderr), owned.wait())?;
+				let write = crate::mcp::runtime::phase_cost_future!(StdinWrite, async { stdin.write_all(input).await?; stdin.shutdown().await?; drop(stdin); Ok::<(), anyhow::Error>(()) });
+				let (_, stdout, stderr, status) = tokio::try_join!(write, crate::mcp::runtime::phase_cost_future!(StdoutDrain, super::read_bounded(stdout)), crate::mcp::runtime::phase_cost_future!(StderrDrain, super::read_bounded(stderr)), crate::mcp::runtime::phase_cost_future!(ChildWait, owned.wait()))?;
+				#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+				crate::mcp::runtime::phase_cost::annotate(crate::mcp::runtime::phase_cost::Detail::CaptureBytes { stdin: input.len(), stdout: stdout.len(), stderr: stderr.len() });
 				Ok::<_, anyhow::Error>(Output { status, stdout, stderr })
 			};
 			tokio::select! {
@@ -1023,6 +1066,14 @@ impl Core {
 			self.stop_child(&owned, Duration::ZERO).await?;
 		}
 		self.release(&owned).await?;
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		crate::mcp::runtime::phase_cost::annotate(
+			crate::mcp::runtime::phase_cost::Detail::ChildReaped {
+				child_id: owned.id,
+				pid: owned.pid,
+				birth_ticks: owned.identity.get().map(|identity| identity.birth),
+			},
+		);
 		outcome
 	}
 	async fn effective(
@@ -1381,7 +1432,11 @@ impl Core {
 		initial: OwnedSemaphorePermit,
 		global: Arc<Semaphore>,
 	) {
-		let result = self.clone().execute_inner(&request, initial, global).await;
+		let result = crate::mcp::runtime::phase_cost_context_future!(
+			request.diagnostic,
+			self.clone().execute_inner(&request, initial, global)
+		)
+		.await;
 		let _ = request.reply.send(result);
 	}
 	async fn admission_profile(
@@ -1404,11 +1459,13 @@ impl Core {
 		request: &Request,
 		global: Arc<Semaphore>,
 	) -> Result<Arc<OwnedSemaphorePermit>> {
-		let permit = tokio::select! {
-			value = timeout_at(request.deadline, global.acquire_owned()) => value.context("observation global capacity deadline")??,
-			_ = request.cancel.cancelled() => bail!("observation request cancelled before global capacity"),
-			_ = self.stop.cancelled() => bail!("observation pool stopped before global capacity"),
-		};
+		let permit = crate::mcp::runtime::phase_cost_wall!(GlobalCapacity, {
+			tokio::select! {
+				value = timeout_at(request.deadline, global.acquire_owned()) => value.context("observation global capacity deadline")??,
+				_ = request.cancel.cancelled() => bail!("observation request cancelled before global capacity"),
+				_ = self.stop.cancelled() => bail!("observation pool stopped before global capacity"),
+			}
+		});
 		// A released permit and cancellation can become ready together. Never
 		// let select's choice bypass a failed supervisor's synchronous stop.
 		if self.stop.is_cancelled()
@@ -1425,16 +1482,26 @@ impl Core {
 		initial: OwnedSemaphorePermit,
 		global: Arc<Semaphore>,
 	) -> Result<Captured> {
-		self.admission_profile(request, initial).await?;
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		crate::mcp::runtime::phase_cost::mark(crate::mcp::runtime::phase_cost::Phase::OwnerExecute);
+		crate::mcp::runtime::phase_cost_future!(
+			AdmissionProfile,
+			self.admission_profile(request, initial)
+		)
+		.await?;
 		let (master, host, budget, _active) = loop {
-			let mut entry = self
-				.entry(&request.host, &request.cancel, request.deadline)
-				.await?;
-			let host = tokio::select! {
-				value = timeout_at(request.deadline, entry.permits.clone().acquire_owned()) => value.context("observation host capacity deadline")??,
-				_ = request.cancel.cancelled() => bail!("observation request cancelled before submission"),
-				_ = self.stop.cancelled() => bail!("observation pool stopped before submission"),
-			};
+			let mut entry = crate::mcp::runtime::phase_cost_future!(
+				MasterEntry,
+				self.entry(&request.host, &request.cancel, request.deadline)
+			)
+			.await?;
+			let host = crate::mcp::runtime::phase_cost_wall!(HostCapacity, {
+				tokio::select! {
+					value = timeout_at(request.deadline, entry.permits.clone().acquire_owned()) => value.context("observation host capacity deadline")??,
+					_ = request.cancel.cancelled() => bail!("observation request cancelled before submission"),
+					_ = self.stop.cancelled() => bail!("observation pool stopped before submission"),
+				}
+			});
 			let ready = async {
 				loop {
 					let current = { entry.ready.borrow().clone() };
@@ -1448,15 +1515,17 @@ impl Core {
 						.context("observation master initializer unavailable")?;
 				}
 			};
-			let master = tokio::select! {
-				value = timeout_at(request.deadline, ready) => value.context("observation master admission deadline")??,
-				_ = request.cancel.cancelled() => bail!("observation request cancelled before submission"),
-				_ = self.stop.cancelled() => bail!("observation pool stopped before submission"),
-			};
+			let master = crate::mcp::runtime::phase_cost_wall!(MasterReady, {
+				tokio::select! {
+					value = timeout_at(request.deadline, ready) => value.context("observation master admission deadline")??,
+					_ = request.cancel.cancelled() => bail!("observation request cancelled before submission"),
+					_ = self.stop.cancelled() => bail!("observation pool stopped before submission"),
+				}
+			});
 			let budget = self.request_budget(request, global.clone()).await?;
 			// Recheck immutable policy/credentials after queueing, before the lease.
 			tokio::select! {
-				value = self.verify_request_profile(request.deadline) => value?,
+				value = crate::mcp::runtime::phase_cost_future!(PreCaptureProfile, self.verify_request_profile(request.deadline)) => value?,
 				_ = request.cancel.cancelled() => bail!("observation cancelled before lease"),
 				_ = self.stop.cancelled() => bail!("observation pool stopped before lease"),
 			};
@@ -1474,7 +1543,22 @@ impl Core {
 				// The original Child may terminate before maintenance closes leases.
 				// Only that terminal proof can renew before any slave is created.
 				match master.owned.liveness().await? {
-					ChildLiveness::Live => break (master, host, budget, active),
+					ChildLiveness::Live => {
+						#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+						crate::mcp::runtime::phase_cost::annotate(
+							crate::mcp::runtime::phase_cost::Detail::MasterLease {
+								generation: entry.generation,
+								child_id: master.owned.id,
+								pid: master.owned.pid,
+								birth_ticks: master
+									.owned
+									.identity
+									.get()
+									.map(|identity| identity.birth),
+							},
+						);
+						break (master, host, budget, active);
+					}
 					ChildLiveness::Terminal => drop(active),
 				}
 			} else {
@@ -1497,8 +1581,13 @@ impl Core {
 			self.stop.cancel();
 			bail!("observation master socket replaced");
 		}
-		let stream = timeout_at(request.deadline, UnixStream::connect(&master.socket)).await??;
-		let peer = profile::peer(&stream)?;
+		let stream = crate::mcp::runtime::phase_cost_future!(
+			SocketConnect,
+			timeout_at(request.deadline, UnixStream::connect(&master.socket))
+		)
+		.await??;
+		let peer =
+			crate::mcp::runtime::phase_cost_sync!(SocketAndBoundary, { profile::peer(&stream) })?;
 		if peer.0 != master.owned.pid as i32
 			|| peer.1 != unsafe { libc::geteuid() }
 			|| profile::socket_stamp(&master.socket)? != master.stamp
@@ -1509,17 +1598,19 @@ impl Core {
 		drop(stream);
 		let mut args = self.arguments(&request.host, Mode::Slave, &master.socket, false)?;
 		args.push(request.command.clone());
-		let output = self
-			.captured(
+		let output = crate::mcp::runtime::phase_cost_future!(
+			Capture,
+			self.captured(
 				args,
 				&request.input,
 				request.deadline,
 				&request.cancel,
 				vec![budget.clone(), Arc::new(host), request.admission.clone()],
 			)
-			.await?;
+		)
+		.await?;
 		tokio::select! {
-			value = self.verify_request_profile(request.deadline) => value?,
+			value = crate::mcp::runtime::phase_cost_future!(PostCaptureProfile, self.verify_request_profile(request.deadline)) => value?,
 			_ = request.cancel.cancelled() => bail!("observation cancelled before response authority check"),
 			_ = self.stop.cancelled() => bail!("observation pool stopped before response authority check"),
 		};
@@ -1830,6 +1921,8 @@ impl Core {
 					let Some(request) = pending.pop_front() else {
 						continue;
 					};
+					#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+					crate::mcp::runtime::phase_cost::with_context(request.diagnostic, || crate::mcp::runtime::phase_cost::mark(crate::mcp::runtime::phase_cost::Phase::InitialCapacityGranted));
 					// Construct outside the async body: abort before its first poll
 					// and synchronous dispatcher panic must freeze admission too.
 					let guard = StopUnlessCompleted {
@@ -1849,6 +1942,8 @@ impl Core {
 						let _ = request.reply.send(Err(anyhow!("observation pending bound exceeded")));
 						break Err(anyhow!("observation pending bound exceeded"));
 					}
+					#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+					crate::mcp::runtime::phase_cost::with_context(request.diagnostic, || crate::mcp::runtime::phase_cost::mark(crate::mcp::runtime::phase_cost::Phase::QueueReceived));
 					pending.push_back(request);
 					// A capacity waiter can cancel before it starts any background
 					// work. Preserve the original bounded cancellation sweep.

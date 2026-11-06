@@ -1,0 +1,1725 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 66ea59e1729936f44815e5f211a878efbce09563..78594378532e71e43ca0f9f09e63a22887453764 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -26,6 +26,10 @@
+ name = "hepta-runtime"
+ path = "src/main.rs"
+ 
++[features]
++# Explicit opt-in diagnostic build; ordinary release enables no feature.
++phase-cost-diagnostics = []
++
+ # Enable static linking
+ [profile.release]
+ lto = true              # Enable Link Time Optimization
+diff --git a/src/main.rs b/src/main.rs
+index 2ef075e9f7659045300ba190e218f7fe32679a87..a445377117024f2726b55d66eaeae307750ca5a4 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -72,6 +72,13 @@
+ 			// Set the session root directory for all tool calls
+ 			mcp::set_session_root_directory(working_directory.clone());
+ 
++			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++			let phase_cost = mcp::runtime::phase_cost::start_from_env(
++				runtime_enabled,
++				runtime_observation_pool_profile.is_some(),
++				bind.is_none(),
++			)?;
++
+ 			let direct_transport = if runtime_enabled {
+ 				Some(mcp::runtime::ssh::start_direct_transport()?)
+ 			} else {
+@@ -118,9 +125,17 @@
+ 			};
+ 			let (direct_cleanup, observation_cleanup) =
+ 				tokio::join!(direct_cleanup, observation_cleanup);
++			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++			let phase_cost_result = if let Some(trace) = phase_cost {
++				trace.finish(direct_cleanup.is_ok() && observation_cleanup.is_ok(), transport.is_ok())
++			} else {
++				Ok(())
++			};
+ 			direct_cleanup?;
+ 			observation_cleanup?;
+ 			transport?;
++			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++			phase_cost_result?;
+ 		}
+ 	}
+ 
+diff --git a/src/mcp/runtime/jobs.rs b/src/mcp/runtime/jobs.rs
+index af9960abb23fcc2d8d44dde47badc6c99c3afd8e..5acff66d13a8984923ec0b053c41f40992f122cc 100644
+--- a/src/mcp/runtime/jobs.rs
++++ b/src/mcp/runtime/jobs.rs
+@@ -2309,6 +2309,7 @@
+ 	subject: &str,
+ 	outcome: &Value,
+ ) -> Result<PreparedAudit> {
++	crate::mcp::runtime::phase_cost_sync!(AuditPrepare, {
+ 	let event = json!({
+ 		"at_unix_ms": now_ms(),
+ 		"action": action,
+@@ -2319,6 +2320,7 @@
+ 	let mut line = serde_json::to_vec(&event)?;
+ 	line.push(b'\n');
+ 	Ok(PreparedAudit { path, line })
++	})
+ }
+ 
+ fn prepare_audit(
+@@ -2343,17 +2345,17 @@
+ 	let preparation = prepared.path.parent().map_or(Ok(()), |parent| {
+ 		std::fs::create_dir_all(parent).map_err(anyhow::Error::from)
+ 	});
+-	let mut readiness = AUDIT_LOCK
++	let mut readiness = crate::mcp::runtime::phase_cost_sync!(AuditMutex, { AUDIT_LOCK
+ 		.get_or_init(|| Mutex::new(None))
+ 		.lock()
+-		.map_err(|_| anyhow::anyhow!("audit lock poisoned"))?;
+-	append_audit_prepared_with(
++		.map_err(|_| anyhow::anyhow!("audit lock poisoned")) })?;
++	crate::mcp::runtime::phase_cost_sync!(AuditCritical, { append_audit_prepared_with(
+ 		prepared,
+ 		&mut readiness,
+ 		preparation,
+ 		synchronize,
+ 		|directory| Ok(directory.sync_all()?),
+-	)
++	) })
+ }
+ 
+ fn append_audit_prepared_with(
+@@ -2428,7 +2430,7 @@
+ 		// freshly opened matching binding cannot restore warm authorization.
+ 		AuditBinding::open(prepared.path, file)?
+ 	};
+-	binding.file.write_all(&prepared.line)?;
++	crate::mcp::runtime::phase_cost_sync!(AuditWrite, { binding.file.write_all(&prepared.line) })?;
+ 	// The existing per-event fdatasync remains mandatory on both paths.
+ 	synchronize_file(&binding.file)?;
+ 	if !warm {
+@@ -2456,7 +2458,7 @@
+ 
+ fn append_audit(prepared: PreparedAudit) -> Result<()> {
+ 	append_audit_with(prepared, |file| {
+-		file.sync_data()?;
++		crate::mcp::runtime::phase_cost_sync!(AuditSync, { file.sync_data() })?;
+ 		Ok(())
+ 	})
+ }
+@@ -2474,15 +2476,22 @@
+ 	slots: Arc<Semaphore>,
+ 	append: impl FnOnce(PreparedAudit) -> Result<()> + Send + 'static,
+ ) -> Result<()> {
+-	let permit = slots
+-		.acquire_owned()
++	let permit = crate::mcp::runtime::phase_cost_future!(AuditPermit, slots.acquire_owned())
+ 		.await
+ 		.map_err(|_| observation_audit_unavailable())?;
++	#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++	let diagnostic_context = crate::mcp::runtime::phase_cost::current();
++	#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++	let diagnostic_queue = crate::mcp::runtime::phase_cost::wall_span(crate::mcp::runtime::phase_cost::Phase::AuditBlockingQueue);
+ 	let result = tokio::task::spawn_blocking(move || {
++		crate::mcp::runtime::phase_cost_context!(diagnostic_context, {
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		crate::mcp::runtime::phase_cost::finish_span(diagnostic_queue);
+ 		// A cancelled waiter cannot release capacity while its blocking append
+ 		// still owns a file or waits for the shared audit synchronization lock.
+ 		let _permit = permit;
+ 		append(prepared)
++		})
+ 	})
+ 	.await;
+ 	match result {
+@@ -4419,7 +4428,7 @@
+ }
+ 
+ pub async fn status_job(params: ProcessRefParams) -> Result<String> {
+-	let record = check_ref_async(&params).await?;
++	let record = crate::mcp::runtime::phase_cost_future!(CheckJobReference, check_ref_async(&params)).await?;
+ 	let status = status_observation(&record, 0).await?;
+ 	let completion = observation_completion_audit(
+ 		"process_status",
+@@ -4428,9 +4437,9 @@
+ 		&json!({"phase":"observation","ok":true}),
+ 	)
+ 	.await;
+-	Ok(serde_json::to_string_pretty(
++	Ok(crate::mcp::runtime::phase_cost_sync!(EncodeObservation, { serde_json::to_string_pretty(
+ 		&retain_observation_after_audit(status, completion, &record.host, &record.id),
+-	)?)
++	) })?)
+ }
+ 
+ pub async fn wait_job(params: ProcessWaitParams) -> Result<String> {
+@@ -4458,7 +4467,7 @@
+ 		host: params.host.clone(),
+ 		job_id: params.job_id.clone(),
+ 	};
+-	let record = check_ref_async(&reference).await?;
++	let record = crate::mcp::runtime::phase_cost_future!(CheckJobReference, check_ref_async(&reference)).await?;
+ 	let host = runtime_config()?.host(&record.host)?;
+ 	let request = json!({
+ 		"job_id": record.id,
+@@ -4512,9 +4521,9 @@
+ 		&json!({"phase":"observation","ok": true}),
+ 	)
+ 	.await;
+-	Ok(serde_json::to_string_pretty(
++	Ok(crate::mcp::runtime::phase_cost_sync!(EncodeObservation, { serde_json::to_string_pretty(
+ 		&retain_observation_after_audit(output, completion, &record.host, &record.id),
+-	)?)
++	) })?)
+ }
+ 
+ fn retain_observation_after_audit(
+diff --git a/src/mcp/runtime/mod.rs b/src/mcp/runtime/mod.rs
+index 3c2a031f49f6130b949e4f35524e45403f0f6a05..1cb7addc71e428676f48624ae150d7a17916138c 100644
+--- a/src/mcp/runtime/mod.rs
++++ b/src/mcp/runtime/mod.rs
+@@ -4,6 +4,92 @@
+ //! Hepta Runtime: explicit multi-host execution, durable jobs, PTY sessions,
+ //! policy enforcement, and read-only host inspection.
+ 
++#[cfg(all(feature = "phase-cost-diagnostics", not(target_os = "linux")))]
++compile_error!("phase-cost-diagnostics is an explicitly Linux-only diagnostic build");
++#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++pub mod phase_cost;
++
++// Default builds erase each diagnostic wrapper to its original expression.
++// None of the default branches evaluate diagnostic inputs or inspect env.
++macro_rules! phase_cost_sync {
++	($phase:ident, $body:block) => {{
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		let _phase_cost_span = $crate::mcp::runtime::phase_cost::sync_span(
++			$crate::mcp::runtime::phase_cost::Phase::$phase,
++		);
++		$body
++	}};
++}
++pub(crate) use phase_cost_sync;
++
++macro_rules! phase_cost_future {
++	($phase:ident, $future:expr) => {{
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		{
++			$crate::mcp::runtime::phase_cost::wall_future(
++				$crate::mcp::runtime::phase_cost::Phase::$phase, $future,
++			)
++		}
++		#[cfg(not(all(feature = "phase-cost-diagnostics", target_os = "linux")))]
++		{ $future }
++	}};
++}
++pub(crate) use phase_cost_future;
++
++#[cfg(target_os = "linux")]
++macro_rules! phase_cost_wall {
++	($phase:ident, $body:block) => {{
++		#[cfg(feature = "phase-cost-diagnostics")]
++		{
++			let span = $crate::mcp::runtime::phase_cost::wall_span(
++				$crate::mcp::runtime::phase_cost::Phase::$phase,
++			);
++			let value = $body;
++			$crate::mcp::runtime::phase_cost::finish_span(span);
++			value
++		}
++		#[cfg(not(feature = "phase-cost-diagnostics"))]
++		$body
++	}};
++}
++#[cfg(target_os = "linux")]
++pub(crate) use phase_cost_wall;
++
++macro_rules! phase_cost_request {
++	($operation:expr, $host:expr, $body:block) => {{
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		{
++			let context = $crate::mcp::runtime::phase_cost::TraceContext::request($operation, $host);
++			$crate::mcp::runtime::phase_cost::request_scope(context, async move $body).await
++		}
++		#[cfg(not(all(feature = "phase-cost-diagnostics", target_os = "linux")))]
++		$body
++	}};
++}
++pub(crate) use phase_cost_request;
++
++#[cfg(target_os = "linux")]
++macro_rules! phase_cost_context_future {
++	($context:expr, $future:expr) => {{
++		#[cfg(feature = "phase-cost-diagnostics")]
++		{ $crate::mcp::runtime::phase_cost::in_context($context, $future) }
++		#[cfg(not(feature = "phase-cost-diagnostics"))]
++		{ $future }
++	}};
++}
++#[cfg(target_os = "linux")]
++pub(crate) use phase_cost_context_future;
++
++macro_rules! phase_cost_context {
++	($context:expr, $body:block) => {{
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		{ $crate::mcp::runtime::phase_cost::with_context($context, || $body) }
++		#[cfg(not(all(feature = "phase-cost-diagnostics", target_os = "linux")))]
++		$body
++	}};
++}
++pub(crate) use phase_cost_context;
++
+ pub mod binary;
+ pub mod caller_scope;
+ pub mod checkpoint;
+diff --git a/src/mcp/runtime/phase_cost.rs b/src/mcp/runtime/phase_cost.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d999be480fa8598ddce75c1c17ef1b68b0a0b65b
+--- /dev/null
++++ b/src/mcp/runtime/phase_cost.rs
+@@ -0,0 +1,723 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++//! Explicit Linux-only diagnostic capture; never an authority or cleanup owner.
++//!
++//! Synchronous CPU spans cannot be Send and must not contain an await.
++//! Async spans are wall time only. Inclusive nesting is preserved in raw rows.
++
++use anyhow::{bail, Context, Result};
++use serde::Serialize;
++use serde_json::json;
++use std::cell::Cell;
++use std::ffi::{CString, OsStr};
++use std::future::Future;
++use std::io::{self, BufWriter, Read, Write};
++use std::marker::PhantomData;
++use std::os::fd::{AsRawFd, FromRawFd};
++use std::os::unix::ffi::OsStrExt;
++use std::os::unix::fs::MetadataExt;
++use std::path::{Component, Path, PathBuf};
++use std::rc::Rc;
++use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
++use std::sync::OnceLock;
++use std::time::Duration;
++
++const EVENT_CAPACITY: usize = 32_768;
++const REQUEST_CAPACITY: usize = 2_048;
++const NATIVE_ID_BYTES: usize = 128;
++const OUTPUT_LIMIT: u64 = 32 * 1024 * 1024;
++const MODE_ENV: &str = "HEPTA_RUNTIME_PHASE_COST_MODE";
++const OUTPUT_ENV: &str = "HEPTA_RUNTIME_PHASE_COST_OUTPUT";
++const ELF_ENV: &str = "HEPTA_RUNTIME_PHASE_COST_ELF_SHA256";
++
++#[derive(Clone, Copy, Serialize)]
++#[serde(rename_all = "snake_case")]
++pub(crate) enum Phase {
++	Request,
++	RouterBuild,
++	NativeAuditBegin,
++	NativeAuditFinish,
++	CheckJobReference,
++	PrepareObservation,
++	DecodeObservation,
++	EncodeObservation,
++	LogicalAdmission,
++	QueueReservation,
++	QueueSubmitted,
++	QueueReceived,
++	InitialCapacityGranted,
++	OwnerExecute,
++	AdmissionProfile,
++	HostCapacity,
++	GlobalCapacity,
++	MasterEntry,
++	MasterReady,
++	PreCaptureProfile,
++	PostCaptureProfile,
++	ValidationPermit,
++	ValidationBlockingQueue,
++	ValidationWorker,
++	ValidationOwner,
++	AgentSnapshot,
++	SocketAndBoundary,
++	SocketConnect,
++	Arguments,
++	ExpectedArgv,
++	ChildRegistry,
++	Spawn,
++	PostExecProof,
++	ProcessIdentity,
++	Capture,
++	StdinWrite,
++	StdoutDrain,
++	StderrDrain,
++	ChildWait,
++	AuditPrepare,
++	AuditPermit,
++	AuditBlockingQueue,
++	AuditMutex,
++	AuditCritical,
++	AuditWrite,
++	AuditSync,
++	Binding,
++}
++
++#[derive(Clone, Copy, Serialize)]
++#[serde(tag = "kind", rename_all = "snake_case")]
++pub(crate) enum Detail {
++	DeadlineBudget { remaining_ns: Option<u64>, expired: bool },
++	MasterLease { generation: u64, child_id: u64, pid: u32, birth_ticks: Option<u64> },
++	ChildProof { child_id: u64, pid: u32, birth_ticks: Option<u64> },
++	ChildReaped { child_id: u64, pid: u32, birth_ticks: Option<u64> },
++	CaptureBytes { stdin: usize, stdout: usize, stderr: usize },
++}
++
++#[derive(Clone, Copy, PartialEq, Eq, Serialize)]
++#[serde(rename_all = "snake_case")]
++enum End {
++	BoundaryReached,
++	SynchronousScopeExit,
++	Abandoned,
++}
++
++#[derive(Serialize)]
++struct Event {
++	span: u64,
++	request: usize,
++	phase: Phase,
++	end: End,
++	start_monotonic_ns: u64,
++	end_monotonic_ns: u64,
++	start_tid: u32,
++	end_tid: u32,
++	thread_cpu_start_ns: Option<u64>,
++	thread_cpu_end_ns: Option<u64>,
++	parent_sync_span: u64,
++	#[serde(skip_serializing_if = "Option::is_none")]
++	detail: Option<Detail>,
++}
++
++struct NativeId {
++	bytes: [u8; NATIVE_ID_BYTES],
++	len: usize,
++}
++
++struct RequestMeta {
++	operation: &'static str,
++	host: Option<usize>,
++	native_id: OnceLock<NativeId>,
++}
++
++struct Slots<T> {
++	rows: Box<[OnceLock<T>]>,
++	next: AtomicUsize,
++	dropped: AtomicUsize,
++}
++
++impl<T> Slots<T> {
++	fn new(capacity: usize) -> Self {
++		Self {
++			rows: std::iter::repeat_with(OnceLock::new).take(capacity).collect(),
++			next: AtomicUsize::new(0),
++			dropped: AtomicUsize::new(0),
++		}
++	}
++
++	fn push(&self, value: T) -> Option<usize> {
++		let index = match self.next.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_add(1)) {
++			Ok(index) => index,
++			Err(_) => {
++				self.dropped.fetch_add(1, Ordering::SeqCst);
++				return None;
++			}
++		};
++		if let Some(slot) = self.rows.get(index) {
++			if slot.set(value).is_ok() {
++				return Some(index);
++			}
++		}
++		self.dropped.fetch_add(1, Ordering::SeqCst);
++		None
++	}
++}
++
++struct Recorder {
++	enabled: bool,
++	accepting: AtomicBool,
++	active: AtomicUsize,
++	sequence: AtomicU64,
++	errors: AtomicUsize,
++	abandoned: AtomicUsize,
++	completed_requests: AtomicUsize,
++	events: Slots<Event>,
++	requests: Slots<RequestMeta>,
++	hosts: Vec<String>,
++}
++
++static RECORDER: OnceLock<Recorder> = OnceLock::new();
++
++#[derive(Clone, Copy, Default)]
++pub(crate) struct TraceContext(Option<usize>);
++
++tokio::task_local! {
++	static CURRENT: TraceContext;
++}
++
++thread_local! {
++	static SYNC_PARENT: Cell<u64> = const { Cell::new(0) };
++}
++
++fn recorder() -> Option<&'static Recorder> {
++	RECORDER.get().filter(|recorder| recorder.enabled)
++}
++
++fn enter(recorder: &Recorder) -> bool {
++	if !recorder.accepting.load(Ordering::SeqCst) {
++		return false;
++	}
++	recorder.active.fetch_add(1, Ordering::SeqCst);
++	if !recorder.accepting.load(Ordering::SeqCst) {
++		recorder.active.fetch_sub(1, Ordering::SeqCst);
++		return false;
++	}
++	true
++}
++
++impl TraceContext {
++	pub(crate) fn request(operation: &str, host: Option<&str>) -> Self {
++		let operation = match operation {
++			"process_status" => "process_status",
++			"process_read" => "process_read",
++			_ => return Self::default(),
++		};
++		let Some(recorder) = recorder() else { return Self::default() };
++		if !enter(recorder) {
++			return Self::default();
++		}
++		let host = host.and_then(|name| recorder.hosts.iter().position(|alias| alias == name));
++		let index = recorder.requests.push(RequestMeta {
++			operation,
++			host,
++			native_id: OnceLock::new(),
++		});
++		recorder.active.fetch_sub(1, Ordering::SeqCst);
++		Self(index)
++	}
++}
++
++pub(crate) fn current() -> TraceContext {
++	CURRENT.try_with(|value| *value).unwrap_or_default()
++}
++
++pub(crate) async fn in_context<F: Future>(context: TraceContext, future: F) -> F::Output {
++	CURRENT.scope(context, future).await
++}
++
++pub(crate) fn with_context<T>(context: TraceContext, work: impl FnOnce() -> T) -> T {
++	CURRENT.sync_scope(context, work)
++}
++
++pub(crate) fn bind_native_id(id: &str) {
++	let (Some(recorder), Some(request)) = (recorder(), current().0) else { return };
++	if !enter(recorder) {
++		return;
++	}
++	let ok = if id.is_empty() || id.len() > NATIVE_ID_BYTES || !id.is_ascii() || id.bytes().any(|b| b.is_ascii_control()) {
++		false
++	} else if let Some(metadata) = recorder.requests.rows.get(request).and_then(OnceLock::get) {
++		let mut bytes = [0; NATIVE_ID_BYTES];
++		bytes[..id.len()].copy_from_slice(id.as_bytes());
++		metadata.native_id.set(NativeId { bytes, len: id.len() }).is_ok()
++	} else {
++		false
++	};
++	if !ok {
++		recorder.errors.fetch_add(1, Ordering::SeqCst);
++	}
++	recorder.active.fetch_sub(1, Ordering::SeqCst);
++}
++
++fn clock_ns(clock: libc::clockid_t) -> Option<u64> {
++	let mut stamp = libc::timespec { tv_sec: 0, tv_nsec: 0 };
++	if unsafe { libc::clock_gettime(clock, &mut stamp) } != 0 || stamp.tv_sec < 0 || !(0..1_000_000_000).contains(&stamp.tv_nsec) {
++		return None;
++	}
++	u64::try_from(stamp.tv_sec).ok()?.checked_mul(1_000_000_000)?.checked_add(u64::try_from(stamp.tv_nsec).ok()?)
++}
++
++fn tid() -> u32 {
++	// Linux exposes the calling thread identity; no new /proc inspection.
++	unsafe { libc::syscall(libc::SYS_gettid) as u32 }
++}
++
++struct Span {
++	recorder: &'static Recorder,
++	event: Option<Event>,
++}
++
++impl Span {
++	fn start(phase: Phase, synchronous: bool) -> Option<Self> {
++		let (Some(recorder), Some(request)) = (recorder(), current().0) else { return None };
++		if !enter(recorder) {
++			return None;
++		}
++		let wall = clock_ns(libc::CLOCK_MONOTONIC);
++		let cpu = if synchronous { clock_ns(libc::CLOCK_THREAD_CPUTIME_ID) } else { None };
++		let sequence = recorder.sequence.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| value.checked_add(1));
++		let (Some(wall), Ok(span)) = (wall, sequence) else {
++			recorder.errors.fetch_add(1, Ordering::SeqCst);
++			recorder.active.fetch_sub(1, Ordering::SeqCst);
++			return None;
++		};
++		if synchronous && cpu.is_none() {
++			recorder.errors.fetch_add(1, Ordering::SeqCst);
++			recorder.active.fetch_sub(1, Ordering::SeqCst);
++			return None;
++		}
++		let thread = tid();
++		Some(Self {
++			recorder,
++			event: Some(Event {
++				span,
++				request,
++				phase,
++				end: End::Abandoned,
++				start_monotonic_ns: wall,
++				end_monotonic_ns: wall,
++				start_tid: thread,
++				end_tid: thread,
++				thread_cpu_start_ns: cpu,
++				thread_cpu_end_ns: cpu,
++				parent_sync_span: if synchronous { SYNC_PARENT.with(Cell::get) } else { 0 },
++				detail: None,
++			}),
++		})
++	}
++
++	fn finish(&mut self, end: End) {
++		let Some(mut event) = self.event.take() else { return };
++		event.end = end;
++		event.end_tid = tid();
++		let wall = clock_ns(libc::CLOCK_MONOTONIC);
++		let cpu = if event.thread_cpu_start_ns.is_some() { clock_ns(libc::CLOCK_THREAD_CPUTIME_ID) } else { None };
++		if wall.is_none_or(|value| value < event.start_monotonic_ns)
++			|| (event.thread_cpu_start_ns.is_some() && (cpu.is_none() || event.start_tid != event.end_tid))
++			|| cpu.zip(event.thread_cpu_start_ns).is_some_and(|(end, start)| end < start)
++		{
++			self.recorder.errors.fetch_add(1, Ordering::SeqCst);
++		}
++		event.end_monotonic_ns = wall.unwrap_or(event.start_monotonic_ns);
++		event.thread_cpu_end_ns = cpu;
++		if end == End::Abandoned {
++			self.recorder.abandoned.fetch_add(1, Ordering::SeqCst);
++		}
++		self.recorder.events.push(event);
++		self.recorder.active.fetch_sub(1, Ordering::SeqCst);
++	}
++}
++
++impl Drop for Span {
++	fn drop(&mut self) {
++		self.finish(End::Abandoned);
++	}
++}
++
++pub(crate) struct WallSpan(Span);
++
++pub(crate) fn wall_span(phase: Phase) -> Option<WallSpan> {
++	Span::start(phase, false).map(WallSpan)
++}
++
++pub(crate) fn finish_span(span: Option<WallSpan>) {
++	if let Some(mut span) = span {
++		span.0.finish(End::BoundaryReached);
++	}
++}
++
++pub(crate) async fn wall_future<F: Future>(phase: Phase, future: F) -> F::Output {
++	let span = wall_span(phase);
++	let value = future.await;
++	finish_span(span);
++	value
++}
++
++pub(crate) async fn request_scope<F: Future>(context: TraceContext, future: F) -> F::Output {
++	in_context(context, async move {
++		let span = wall_span(Phase::Request);
++		let value = future.await;
++		if span.is_some() {
++			if let Some(recorder) = recorder() {
++				recorder.completed_requests.fetch_add(1, Ordering::SeqCst);
++			}
++		}
++		finish_span(span);
++		value
++	}).await
++}
++
++pub(crate) struct SyncSpan {
++	span: Span,
++	previous: u64,
++	id: u64,
++	_not_send: PhantomData<Rc<()>>,
++}
++
++pub(crate) fn sync_span(phase: Phase) -> Option<SyncSpan> {
++	let span = Span::start(phase, true)?;
++	let event = span.event.as_ref()?;
++	let id = event.span;
++	let previous = event.parent_sync_span;
++	SYNC_PARENT.with(|parent| parent.set(id));
++	Some(SyncSpan { span, previous, id, _not_send: PhantomData })
++}
++
++impl Drop for SyncSpan {
++	fn drop(&mut self) {
++		SYNC_PARENT.with(|parent| {
++			if parent.replace(self.previous) != self.id {
++				self.span.recorder.errors.fetch_add(1, Ordering::SeqCst);
++			}
++		});
++		self.span.finish(End::SynchronousScopeExit);
++	}
++}
++
++pub(crate) fn mark(phase: Phase) {
++	finish_span(wall_span(phase));
++}
++
++pub(crate) fn annotate(detail: Detail) {
++	if let Some(mut span) = wall_span(Phase::Binding) {
++		if let Some(event) = span.0.event.as_mut() {
++			event.detail = Some(detail);
++		}
++		finish_span(Some(span));
++	}
++}
++
++pub(crate) fn deadline_budget(remaining: Option<Duration>) {
++	annotate(Detail::DeadlineBudget {
++		remaining_ns: remaining.and_then(|value| u64::try_from(value.as_nanos()).ok()),
++		expired: remaining.is_none_or(|value| value.is_zero()),
++	});
++}
++
++struct BoundedFile {
++	file: std::fs::File,
++	written: u64,
++}
++
++impl Write for BoundedFile {
++	fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
++		if u64::try_from(bytes.len()).ok().and_then(|count| self.written.checked_add(count)).is_none_or(|end| end > OUTPUT_LIMIT) {
++			return Err(io::Error::other("diagnostic output limit reached"));
++		}
++		let count = self.file.write(bytes)?;
++		self.written += count as u64;
++		Ok(count)
++	}
++
++	fn flush(&mut self) -> io::Result<()> {
++		self.file.flush()
++	}
++}
++
++struct Output {
++	path: PathBuf,
++	parent: std::fs::File,
++	writer: Option<BufWriter<BoundedFile>>,
++}
++
++fn open_at(directory: &std::fs::File, name: &OsStr, flags: i32, mode: libc::mode_t) -> Result<std::fs::File> {
++	let name = CString::new(name.as_bytes())?;
++	let fd = unsafe { libc::openat(directory.as_raw_fd(), name.as_ptr(), flags | libc::O_CLOEXEC | libc::O_NOFOLLOW, mode) };
++	if fd < 0 {
++		return Err(io::Error::last_os_error()).context("diagnostic openat failed");
++	}
++	Ok(unsafe { std::fs::File::from_raw_fd(fd) })
++}
++
++fn open_parent(path: &Path) -> Result<(std::fs::File, &OsStr)> {
++	if !path.is_absolute() || path.as_os_str().as_bytes().len() > 4096 || path.as_os_str().as_bytes().ends_with(b"/") {
++		bail!("diagnostic output must be a bounded absolute file path");
++	}
++	let mut parts = path.components();
++	if parts.next() != Some(Component::RootDir) {
++		bail!("diagnostic output must start at the filesystem root");
++	}
++	let root = CString::new("/")?;
++	let fd = unsafe { libc::open(root.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC | libc::O_NOFOLLOW) };
++	if fd < 0 {
++		return Err(io::Error::last_os_error()).context("diagnostic root open failed");
++	}
++	let mut parent = unsafe { std::fs::File::from_raw_fd(fd) };
++	let mut parts = parts.peekable();
++	while let Some(part) = parts.next() {
++		let Component::Normal(name) = part else { bail!("diagnostic path contains a non-normal component") };
++		if parts.peek().is_none() {
++			let meta = parent.metadata()?;
++			if !meta.is_dir() || meta.uid() != unsafe { libc::geteuid() } || meta.mode() & 0o7777 != 0o700 {
++				bail!("diagnostic output parent must be owned mode 0700");
++			}
++			return Ok((parent, name));
++		}
++		parent = open_at(&parent, name, libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NONBLOCK, 0)?;
++	}
++	bail!("diagnostic output has no filename")
++}
++
++fn same_object(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
++	left.dev() == right.dev() && left.ino() == right.ino()
++		&& left.uid() == right.uid() && left.gid() == right.gid() && left.mode() == right.mode()
++}
++
++impl Output {
++	fn create(path: &Path) -> Result<Self> {
++		let (parent, name) = open_parent(path)?;
++		let file = open_at(&parent, name, libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NONBLOCK, 0o600)?;
++		let meta = file.metadata()?;
++		if !meta.is_file() || meta.uid() != unsafe { libc::geteuid() } || meta.nlink() != 1 || meta.mode() & 0o7777 != 0o600 || meta.size() != 0 {
++			bail!("diagnostic output is not an empty owned private regular file");
++		}
++		Ok(Self {
++			path: path.to_owned(),
++			parent,
++			writer: Some(BufWriter::with_capacity(64 * 1024, BoundedFile { file, written: 0 })),
++		})
++	}
++
++	fn line<T: Serialize>(&mut self, value: &T) -> Result<()> {
++		let writer = self.writer.as_mut().context("diagnostic writer already closed")?;
++		serde_json::to_writer(&mut *writer, value)?;
++		writer.write_all(b"\n")?;
++		Ok(())
++	}
++
++	fn verify(&self) -> Result<()> {
++		let writer = self.writer.as_ref().context("diagnostic writer already closed")?.get_ref();
++		let (parent, name) = open_parent(&self.path)?;
++		let named = open_at(&parent, name, libc::O_RDONLY | libc::O_NONBLOCK, 0)?;
++		let held = writer.file.metadata()?;
++		let current = named.metadata()?;
++		if !same_object(&parent.metadata()?, &self.parent.metadata()?)
++			|| !same_object(&held, &current) || !held.is_file()
++			|| held.nlink() != 1 || current.nlink() != 1
++			|| held.mode() & 0o7777 != 0o600
++			|| held.size() != writer.written || current.size() != writer.written
++		{
++			bail!("diagnostic output binding changed");
++		}
++		Ok(())
++	}
++
++	fn sync(&mut self) -> Result<()> {
++		self.verify()?;
++		let writer = self.writer.as_mut().context("diagnostic writer already closed")?;
++		writer.flush()?;
++		writer.get_ref().file.sync_all()?;
++		self.parent.sync_all()?;
++		self.verify()
++	}
++}
++
++impl Drop for Output {
++	fn drop(&mut self) {
++		// Never let BufWriter::drop retry a failed or unrequested write.
++		// Explicit sync is the only flush boundary; retained partial bytes stay.
++		if let Some(writer) = self.writer.take() {
++			let (_file, _buffer) = writer.into_parts();
++		}
++	}
++}
++
++fn bounded_text(path: &Path, limit: usize) -> Result<String> {
++	let mut file = std::fs::File::open(path)?;
++	let mut bytes = Vec::new();
++	std::io::Read::by_ref(&mut file).take((limit + 1) as u64).read_to_end(&mut bytes)?;
++	if bytes.len() > limit {
++		bail!("diagnostic process identity exceeds bound");
++	}
++	Ok(String::from_utf8(bytes)?)
++}
++
++/// Opens the diagnostic sink before child startup. No request can enable it.
++pub fn start_from_env(runtime_enabled: bool, observation_profile: bool, stdio: bool) -> Result<Option<Guard>> {
++	let Some(mode) = std::env::var_os(MODE_ENV) else {
++		if std::env::var_os(OUTPUT_ENV).is_some() || std::env::var_os(ELF_ENV).is_some() {
++			bail!("diagnostic output or ELF identity requires an explicit diagnostic mode");
++		}
++		return Ok(None);
++	};
++	let enabled = match mode.to_str() {
++		Some("on") => true,
++		Some("off") => false,
++		_ => bail!("diagnostic mode must be on or off"),
++	};
++	if !runtime_enabled || !observation_profile || !stdio {
++		bail!("phase diagnostics require explicit runtime, observation pool, and stdio");
++	}
++	if RECORDER.get().is_some() {
++		bail!("phase diagnostic startup may occur only once");
++	}
++	let path = std::env::var_os(OUTPUT_ENV).context("diagnostic output is required")?;
++	let elf = std::env::var(ELF_ENV).context("diagnostic ELF SHA256 is required")?;
++	if elf.len() != 64 || !elf.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
++		bail!("diagnostic ELF SHA256 must be 64 lowercase hexadecimal digits");
++	}
++	let hosts = super::config::runtime_config()?.hosts.keys().cloned().collect::<Vec<_>>();
++	if hosts.len() > 64 || hosts.iter().any(|name| name.len() > 128) {
++		bail!("diagnostic host table exceeds its explicit bound");
++	}
++	let recorder = Recorder {
++		enabled,
++		accepting: AtomicBool::new(true),
++		active: AtomicUsize::new(0),
++		sequence: AtomicU64::new(1),
++		errors: AtomicUsize::new(0),
++		abandoned: AtomicUsize::new(0),
++		completed_requests: AtomicUsize::new(0),
++		events: Slots::new(EVENT_CAPACITY),
++		requests: Slots::new(REQUEST_CAPACITY),
++		hosts,
++	};
++	let stat = bounded_text(Path::new("/proc/self/stat"), 8192)?;
++	let tail = stat.rsplit_once(") ").context("diagnostic /proc identity parse failed")?.1;
++	let start_ticks: u64 = tail.split_whitespace().nth(19).context("diagnostic birth identity missing")?.parse()?;
++	let boot = bounded_text(Path::new("/proc/sys/kernel/random/boot_id"), 128)?;
++	let start_ns = clock_ns(libc::CLOCK_MONOTONIC).context("diagnostic monotonic clock unavailable")?;
++	let mut output = Output::create(Path::new(&path))?;
++	output.line(&json!({
++		"type": "header", "schema": "hepta-phase-cost-trace/v1",
++		"preparation_revision": "recovery-02",
++		"mode": if enabled { "on" } else { "off" },
++		"pid": std::process::id(), "start_ticks": start_ticks, "boot_id": boot.trim(),
++		"start_monotonic_ns": start_ns, "wall_clock": "CLOCK_MONOTONIC",
++		"cpu_clock": "CLOCK_THREAD_CPUTIME_ID", "declared_elf_sha256": elf,
++		"elf_hash_verified_here": false, "host_aliases": recorder.hosts,
++		"event_capacity": EVENT_CAPACITY, "request_capacity": REQUEST_CAPACITY,
++		"event_slot_bytes": std::mem::size_of::<OnceLock<Event>>(),
++		"request_slot_bytes": std::mem::size_of::<OnceLock<RequestMeta>>(),
++		"logical_event_slot_bytes": EVENT_CAPACITY * std::mem::size_of::<OnceLock<Event>>(),
++		"logical_request_slot_bytes": REQUEST_CAPACITY * std::mem::size_of::<OnceLock<RequestMeta>>(),
++		"memory_accounting": "logical Rust slot sizes, excludes allocator/host table/RSS",
++		"output_limit": OUTPUT_LIMIT,
++		"operations": ["process_status", "process_read"],
++		"cpu_scope": "synchronous lexical spans only; inclusive nesting",
++		"wall_scope": "overlapping wall spans; never additive by default",
++		"background_unattributed": true, "ssh_child_cpu_measured": false,
++		"remote_cpu_measured": false, "pure_network_delay_measured": false,
++		"boundary_reached_is_effect_success": false,
++		"performance_acceptance_claim": false
++	}))?;
++	output.sync()?;
++	if RECORDER.set(recorder).is_err() {
++		bail!("diagnostic recorder publication raced another startup");
++	}
++	Ok(Some(Guard { output: Some(output) }))
++}
++
++pub struct Guard {
++	output: Option<Output>,
++}
++
++impl Guard {
++	fn close(&mut self, owners_joined: bool, transport_returned_ok: bool, early_drop: bool) -> Result<()> {
++		let Some(mut output) = self.output.take() else { return Ok(()) };
++		let recorder = RECORDER.get().context("diagnostic recorder missing")?;
++		recorder.accepting.store(false, Ordering::SeqCst);
++		let active = recorder.active.load(Ordering::SeqCst);
++		let mut requests = 0usize;
++		let mut native_bound = 0usize;
++		for (slot, metadata) in recorder.requests.rows.iter().enumerate() {
++			if let Some(metadata) = metadata.get() {
++				requests += 1;
++				let native = metadata.native_id.get().map(|id| std::str::from_utf8(&id.bytes[..id.len])).transpose()?;
++				if native.is_some() { native_bound += 1; }
++				output.line(&json!({
++					"type": "request", "slot": slot, "operation": metadata.operation,
++					"host_index": metadata.host, "native_request_id": native
++				}))?;
++			}
++		}
++		let mut events = 0usize;
++		for (slot, event) in recorder.events.rows.iter().enumerate() {
++			if let Some(event) = event.get() {
++				events += 1;
++				output.line(&json!({"type": "event", "slot": slot, "event": event}))?;
++			}
++		}
++		let request_reserved = recorder.requests.next.load(Ordering::SeqCst);
++		let event_reserved = recorder.events.next.load(Ordering::SeqCst);
++		let request_dropped = recorder.requests.dropped.load(Ordering::SeqCst);
++		let event_dropped = recorder.events.dropped.load(Ordering::SeqCst);
++		let end_ns = clock_ns(libc::CLOCK_MONOTONIC);
++		if end_ns.is_none() {
++			recorder.errors.fetch_add(1, Ordering::SeqCst);
++		}
++		let errors = recorder.errors.load(Ordering::SeqCst);
++		let abandoned = recorder.abandoned.load(Ordering::SeqCst);
++		let completed = recorder.completed_requests.load(Ordering::SeqCst);
++		let complete = active == 0 && errors == 0 && abandoned == 0
++			&& request_dropped == 0 && event_dropped == 0
++			&& request_reserved == requests && event_reserved == events
++			&& native_bound == requests && completed == requests
++			&& owners_joined && transport_returned_ok && !early_drop;
++		output.line(&json!({
++			"type": "footer", "schema": "hepta-phase-cost-trace/v1",
++			"end_monotonic_ns": end_ns,
++			"active_at_freeze": active, "request_rows": requests, "event_rows": events,
++			"request_reserved": request_reserved, "event_reserved": event_reserved,
++			"request_dropped": request_dropped, "event_dropped": event_dropped,
++			"errors": errors, "abandoned_spans": abandoned,
++			"native_ids_bound": native_bound, "completed_request_scopes": completed,
++			"owners_joined": owners_joined, "transport_returned_ok": transport_returned_ok,
++			"early_drop": early_drop,
++			"trace_window_complete": if recorder.enabled { Some(complete) } else { None },
++			"native_request_success_asserted": false,
++			"external_original_terminal_and_identity_required": true,
++			"late_work_after_freeze_is_not_accounted": true,
++			"performance_acceptance_claim": false
++		}))?;
++		output.sync()?;
++		if recorder.enabled && !complete {
++			bail!("phase diagnostic window incomplete; raw evidence retained");
++		}
++		Ok(())
++	}
++
++	pub fn finish(mut self, owners_joined: bool, transport_returned_ok: bool) -> Result<()> {
++		self.close(owners_joined, transport_returned_ok, false)
++	}
++}
++
++impl Drop for Guard {
++	fn drop(&mut self) {
++		// Never mask the original startup/transport error or become its cleanup.
++		let _ = self.close(false, false, true);
++	}
++}
++
++#[cfg(test)]
++#[path = "phase_cost_tests.rs"]
++mod phase_cost_tests;
+diff --git a/src/mcp/runtime/phase_cost_tests.rs b/src/mcp/runtime/phase_cost_tests.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..9172b1e0ec670fe265bb79a44a739dcc05f55194
+--- /dev/null
++++ b/src/mcp/runtime/phase_cost_tests.rs
+@@ -0,0 +1,142 @@
++// Copyright 2026 Muvon Un Limited
++// Copyright 2026 TrillionniumFoundation
++// SPDX-License-Identifier: Apache-2.0
++//! Contract tests for diagnostic custody only; no SSH/runtime fixture is started.
++
++use super::*;
++use std::collections::BTreeSet;
++use std::os::unix::fs::{symlink, PermissionsExt};
++use std::sync::Barrier;
++
++#[test]
++fn concurrent_slot_writers_preserve_every_original_once() {
++	let slots = Slots::new(8 * 257);
++	let start = Barrier::new(8);
++	std::thread::scope(|scope| {
++		for worker in 0..8usize {
++			let slots = &slots;
++			let start = &start;
++			scope.spawn(move || {
++				start.wait();
++				for sample in 0..257usize {
++					assert!(slots.push((worker, sample)).is_some());
++				}
++			});
++		}
++	});
++	let actual = slots.rows.iter().map(|value| *value.get().expect("original row")).collect::<BTreeSet<_>>();
++	let expected = (0..8usize).flat_map(|worker| (0..257usize).map(move |sample| (worker, sample))).collect::<BTreeSet<_>>();
++	assert_eq!(actual, expected);
++	assert_eq!(slots.next.load(Ordering::SeqCst), 2056);
++	assert_eq!(slots.dropped.load(Ordering::SeqCst), 0);
++}
++
++#[test]
++fn exhausted_slots_cannot_replace_retained_original_records() {
++	let slots = Slots::new(7);
++	for value in 0..3usize {
++		assert_eq!(slots.push(value), Some(value));
++	}
++	let start = Barrier::new(8);
++	std::thread::scope(|scope| {
++		for worker in 0..8usize {
++			let slots = &slots;
++			let start = &start;
++			scope.spawn(move || {
++				start.wait();
++				for sample in 0..8usize {
++					let _ = slots.push(100 + worker * 8 + sample);
++				}
++			});
++		}
++	});
++	for value in 0..3usize {
++		assert_eq!(slots.rows[value].get(), Some(&value));
++	}
++	assert_eq!(slots.rows.iter().filter(|value| value.get().is_some()).count(), 7);
++	assert_eq!(slots.next.load(Ordering::SeqCst), 67);
++	assert_eq!(slots.dropped.load(Ordering::SeqCst), 60);
++	assert!(slots.push(999).is_none());
++	assert_eq!(slots.dropped.load(Ordering::SeqCst), 61);
++}
++
++#[test]
++fn diagnostic_output_is_create_only_and_refuses_symlink_parent() {
++	let directory = tempfile::tempdir().unwrap();
++	std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
++	let existing = directory.path().join("existing.jsonl");
++	std::fs::write(&existing, b"original evidence\n").unwrap();
++	std::fs::set_permissions(&existing, std::fs::Permissions::from_mode(0o600)).unwrap();
++	assert!(Output::create(&existing).is_err());
++	assert_eq!(std::fs::read(&existing).unwrap(), b"original evidence\n");
++	let parent_alias = directory.path().join("alias");
++	symlink(directory.path(), &parent_alias).unwrap();
++	assert!(Output::create(&parent_alias.join("forbidden.jsonl")).is_err());
++	assert!(!directory.path().join("forbidden.jsonl").exists());
++	let path = directory.path().join("trace.jsonl");
++	let mut output = Output::create(&path).unwrap();
++	output.line(&json!({"sentinel": 42})).unwrap();
++	output.sync().unwrap();
++	drop(output);
++	assert_eq!(std::fs::read(&path).unwrap(), b"{\"sentinel\":42}\n");
++	assert!(Output::create(&path).is_err());
++}
++
++#[test]
++fn output_byte_limit_preserves_partial_file_without_truncation_or_retry() {
++	use std::io::{Seek, SeekFrom};
++	let directory = tempfile::tempdir().unwrap();
++	let path = directory.path().join("bounded");
++	let mut file = std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(&path).unwrap();
++	file.set_len(OUTPUT_LIMIT - 2).unwrap();
++	file.seek(SeekFrom::End(0)).unwrap();
++	let mut writer = BoundedFile { file, written: OUTPUT_LIMIT - 2 };
++	assert_eq!(writer.write(b"x").unwrap(), 1);
++	assert!(writer.write(b"yz").is_err());
++	assert_eq!(writer.written, OUTPUT_LIMIT - 1);
++	drop(writer);
++	let mut retained = std::fs::File::open(&path).unwrap();
++	assert_eq!(retained.metadata().unwrap().len(), OUTPUT_LIMIT - 1);
++	retained.seek(SeekFrom::End(-1)).unwrap();
++	let mut last = [0u8; 1];
++	retained.read_exact(&mut last).unwrap();
++	assert_eq!(last, *b"x");
++}
++
++#[test]
++fn dropping_an_unflushed_diagnostic_sink_does_not_submit_more_bytes() {
++	let directory = tempfile::tempdir().unwrap();
++	std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
++	let path = directory.path().join("unflushed.jsonl");
++	let mut output = Output::create(&path).unwrap();
++	output.line(&json!({"buffered": true})).unwrap();
++	assert_eq!(std::fs::metadata(&path).unwrap().len(), 0);
++	drop(output);
++	assert_eq!(std::fs::metadata(&path).unwrap().len(), 0);
++	assert_eq!(std::fs::read(&path).unwrap(), b"");
++}
++
++#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
++async fn context_crosses_only_explicit_task_and_blocking_handoffs() {
++	let request = TraceContext(Some(41));
++	in_context(request, async {
++		assert_eq!(current().0, Some(41));
++		tokio::task::yield_now().await;
++		assert_eq!(current().0, Some(41));
++		let unrelated = tokio::spawn(async { current().0 }).await.unwrap();
++		assert_eq!(unrelated, None);
++		let handed = current();
++		let worker = tokio::task::spawn_blocking(move || {
++			assert_eq!(current().0, None);
++			let observed = with_context(handed, || current().0);
++			assert_eq!(current().0, None);
++			observed
++		}).await.unwrap();
++		assert_eq!(worker, Some(41));
++		in_context(TraceContext(Some(99)), async {
++			assert_eq!(current().0, Some(99));
++		}).await;
++		assert_eq!(current().0, Some(41));
++	}).await;
++	assert_eq!(current().0, None);
++}
+diff --git a/src/mcp/runtime/ssh.rs b/src/mcp/runtime/ssh.rs
+index 0a1af036af2a8ad25066640421241894fe3ac29e..97cd31321245bd2f43b581ab952b2157319b46d7 100644
+--- a/src/mcp/runtime/ssh.rs
++++ b/src/mcp/runtime/ssh.rs
+@@ -258,6 +258,7 @@
+ }
+ 
+ fn prepare_observation(value: JobObservation<'_>) -> Result<(String, Vec<u8>, Duration, bool)> {
++	crate::mcp::runtime::phase_cost_sync!(PrepareObservation, {
+ 	use serde_json::json;
+ 	let fields: &[&str] = match &value {
+ 		JobObservation::PythonStatus {
+@@ -341,6 +342,7 @@
+ 	}
+ 	validate_observation_bytes(&command, &bytes)?;
+ 	Ok((command, bytes, timeout, system))
++	})
+ }
+ 
+ pub(super) async fn run_job_observation(
+@@ -365,13 +367,13 @@
+ 			String::from_utf8_lossy(&output.stderr).trim()
+ 		);
+ 	}
+-	serde_json::from_slice(&output.stdout).map_err(|error| {
++	crate::mcp::runtime::phase_cost_sync!(DecodeObservation, { serde_json::from_slice(&output.stdout).map_err(|error| {
+ 		anyhow!(
+ 			"remote helper on {} returned invalid JSON: {error}; output={}",
+ 			host.ssh_target,
+ 			String::from_utf8_lossy(&output.stdout)
+ 		)
+-	})
++	}) })
+ }
+ 
+ async fn capture_observation(
+diff --git a/src/mcp/runtime/ssh_observation_agent_timeout_tests.rs b/src/mcp/runtime/ssh_observation_agent_timeout_tests.rs
+index ebf0ef25a4a1d72df65dc4426ebdceac091993a9..c692ba13db4e2f3a3ffd308aee4cfebf0c7312e2 100644
+--- a/src/mcp/runtime/ssh_observation_agent_timeout_tests.rs
++++ b/src/mcp/runtime/ssh_observation_agent_timeout_tests.rs
+@@ -87,6 +87,8 @@
+ 	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
+ 	let (reply, receive) = oneshot::channel();
+ 	let request = Request {
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
+ 		host: "fixture".into(),
+ 		command: "NEVER_DISPATCH".into(),
+ 		input: vec![],
+diff --git a/src/mcp/runtime/ssh_observation_maintenance_tests.rs b/src/mcp/runtime/ssh_observation_maintenance_tests.rs
+index 0e48ff615fb7c64b0bd70a8613b50fc2bca0c587..302e5130f4889633343d529377a826706b91849f 100644
+--- a/src/mcp/runtime/ssh_observation_maintenance_tests.rs
++++ b/src/mcp/runtime/ssh_observation_maintenance_tests.rs
+@@ -53,6 +53,8 @@
+ 	let (reply, receive) = oneshot::channel();
+ 	sender
+ 		.send(Request {
++			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++			diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
+ 			host: "cold".into(),
+ 			command: "controlled-dispatch".into(),
+ 			input: vec![],
+@@ -256,6 +258,8 @@
+ 	let (reply, response) = oneshot::channel();
+ 	sender
+ 		.send(Request {
++			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++			diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
+ 			host: "fixture".into(),
+ 			command: "background-after-idle".into(),
+ 			input: vec![],
+@@ -356,6 +360,8 @@
+ 	let (reply, response) = oneshot::channel();
+ 	sender
+ 		.send(Request {
++			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++			diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
+ 			host: "fixture".into(),
+ 			command: "cancel-before-capacity".into(),
+ 			input: vec![],
+diff --git a/src/mcp/runtime/ssh_observation_pool.rs b/src/mcp/runtime/ssh_observation_pool.rs
+index fe8096c1b6f0828d6745469b33ef92ea8b428bae..c21738341795c573edabfd6c33672b881b1d91a0 100644
+--- a/src/mcp/runtime/ssh_observation_pool.rs
++++ b/src/mcp/runtime/ssh_observation_pool.rs
+@@ -80,6 +80,8 @@
+ }
+ 
+ struct Request {
++	#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++	diagnostic: crate::mcp::runtime::phase_cost::TraceContext,
+ 	host: String,
+ 	command: String,
+ 	input: Vec<u8>,
+@@ -326,10 +328,12 @@
+ 		cancel: CancellationToken,
+ 		reply: oneshot::Sender<Result<Captured>>,
+ 	) -> Result<()> {
+-		let admission = self.admission.clone().try_acquire_owned().map_err(|_| {
++		let admission = crate::mcp::runtime::phase_cost_sync!(LogicalAdmission, { self.admission.clone().try_acquire_owned().map_err(|_| {
+ 			anyhow!("observation pool capacity unavailable; no fallback or automatic retry")
+-		})?;
++		}) })?;
+ 		let request = Request {
++			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++			diagnostic: crate::mcp::runtime::phase_cost::current(),
+ 			host: host.to_owned(),
+ 			command,
+ 			input,
+@@ -340,13 +344,13 @@
+ 		};
+ 		// A channel waiter already owns one of the same sixteen identities.
+ 		// Wait within its original deadline; do not enlarge the channel or retry.
+-		let slot = tokio::select! {
++		let slot = crate::mcp::runtime::phase_cost_wall!(QueueReservation, { tokio::select! {
+ 			value = timeout_at(deadline, self.sender.reserve()) => value
+ 				.context("observation queue admission deadline; no automatic retry")?
+ 				.context("observation queue closed; no fallback or automatic retry")?,
+ 			_ = request.cancel.cancelled() => bail!("observation cancelled before queue submission; no automatic retry"),
+ 			_ = self.stop.cancelled() => bail!("observation pool stopped before queue submission; no automatic retry"),
+-		};
++		} });
+ 		// Capacity, shutdown and expiry may become ready together. Recheck after
+ 		// reservation and leave no await between these fences and the single send.
+ 		if !self.healthy.load(Ordering::Acquire)
+@@ -357,6 +361,11 @@
+ 		{
+ 			bail!("observation cancelled, expired or unavailable before queue submission; no automatic retry");
+ 		}
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		{
++			crate::mcp::runtime::phase_cost::mark(crate::mcp::runtime::phase_cost::Phase::QueueSubmitted);
++			crate::mcp::runtime::phase_cost::deadline_budget(deadline.checked_duration_since(Instant::now()));
++		}
+ 		slot.send(request);
+ 		Ok(())
+ 	}
+@@ -461,6 +470,7 @@
+ 	argv: Vec<u8>,
+ }
+ fn process_identity(pid: u32) -> Result<ProcessIdentity> {
++	crate::mcp::runtime::phase_cost_sync!(ProcessIdentity, {
+ 	let root = PathBuf::from(format!("/proc/{pid}"));
+ 	let status = std::fs::read_to_string(root.join("stat"))?;
+ 	let tail = status
+@@ -480,6 +490,7 @@
+ 		ino: exe.ino(),
+ 		argv: std::fs::read(root.join("cmdline"))?,
+ 	})
++	})
+ }
+ 
+ enum ChildLiveness {
+@@ -686,13 +697,13 @@
+ 		let ticket = self
+ 			.validation
+ 			.run_retained(&self.stop, deadline, move |ticket| {
+-				profile.verify_files_checked(&|| ticket.check_current())
++				crate::mcp::runtime::phase_cost_sync!(ValidationWorker, { profile.verify_files_checked(&|| ticket.check_current()) })
+ 			})
+ 			.await?;
+ 		// A same-length change can retain every timestamp/metadata field. Keep
+ 		// the original permit through a second fresh complete read on the owner;
+ 		// metadata-only acceptance after the await is not content validation.
+-		ticket.finish(|ticket| {
++		crate::mcp::runtime::phase_cost_sync!(ValidationOwner, { ticket.finish(|ticket| {
+ 			if unsafe { libc::syscall(libc::SYS_gettid) } != self.owner_tid {
+ 				bail!("observation file acceptance attempted outside its lifetime owner thread");
+ 			}
+@@ -703,14 +714,14 @@
+ 				bail!("observation file validation cancelled or expired before acceptance");
+ 			}
+ 			Ok(())
+-		})
++		}) })
+ 	}
+ 	async fn verify_profile_for(&self, deadline: Instant, scope: ProfileCheckScope) -> Result<()> {
+ 		let checked: Result<()> = async {
+ 			self.verify_files(deadline).await?;
+ 			self.root.verify(&self.profile)?;
+ 			let agent = tokio::select! {
+-				value = profile::agent_snapshot(&self.profile.agent, deadline.min(Instant::now() + Duration::from_secs(2))) => value?,
++				value = crate::mcp::runtime::phase_cost_future!(AgentSnapshot, profile::agent_snapshot(&self.profile.agent, deadline.min(Instant::now() + Duration::from_secs(2)))) => value?,
+ 				_ = self.stop.cancelled() => bail!("observation profile check stopped"),
+ 			};
+ 			if self.agent.get() != Some(&agent) {
+@@ -739,6 +750,7 @@
+ 		socket: &Path,
+ 		effective: bool,
+ 	) -> Result<Vec<String>> {
++		crate::mcp::runtime::phase_cost_sync!(Arguments, {
+ 		let target = self
+ 			.profile
+ 			.hosts
+@@ -825,7 +837,8 @@
+ 		}
+ 		args.extend(["--".into(), target.clone()]);
+ 		Ok(args)
+-	}
++		})
++}
+ 	fn command(&self, args: &[String]) -> Command {
+ 		let mut command = Command::new("/usr/bin/ssh");
+ 		command
+@@ -867,21 +880,21 @@
+ 		if unsafe { libc::syscall(libc::SYS_gettid) } != self.owner_tid {
+ 			bail!("observation child spawn attempted outside its lifetime owner thread");
+ 		}
+-		let expected = args
++		let expected = crate::mcp::runtime::phase_cost_sync!(ExpectedArgv, { args
+ 			.iter()
+ 			.flat_map(|arg| arg.as_bytes().iter().copied().chain([0]))
+-			.collect::<Vec<_>>();
+-		let mut children = tokio::select! {
++			.collect::<Vec<_>>() });
++		let mut children = crate::mcp::runtime::phase_cost_wall!(ChildRegistry, { tokio::select! {
+ 			value = timeout_at(deadline, self.children.lock()) => value.context("observation child admission deadline")?,
+ 			_ = cancel.cancelled() => bail!("observation cancelled before child creation"),
+ 			_ = self.stop.cancelled() => bail!("observation pool stopped before child creation"),
+-		};
++		} });
+ 		if cancel.is_cancelled() || self.stop.is_cancelled() || Instant::now() >= deadline {
+ 			bail!("observation cancelled or expired before child creation");
+ 		}
+-		let child = command
++		let child = crate::mcp::runtime::phase_cost_sync!(Spawn, { command
+ 			.spawn()
+-			.context("observation SSH spawn unavailable")?;
++			.context("observation SSH spawn unavailable") })?;
+ 		let pid = child.id().unwrap_or(0);
+ 		let fd = if pid == 0 {
+ 			-1
+@@ -925,7 +938,7 @@
+ 					&& value.uid == unsafe { libc::geteuid() }
+ 					&& (value.dev, value.ino) == self.profile.ssh_inode
+ 			}) {
+-				match postspawn::wait_empty_argv(
++				match crate::mcp::runtime::phase_cost_future!(PostExecProof, postspawn::wait_empty_argv(
+ 					&owned,
+ 					anchor,
+ 					&expected,
+@@ -933,7 +946,7 @@
+ 					deadline,
+ 					cancel,
+ 					&self.stop,
+-				)
++				))
+ 				.await
+ 				{
+ 					Ok(ready) => {
+@@ -966,6 +979,11 @@
+ 			bail!("observation SSH pidfd or post-exec identity refused; no fallback");
+ 		}
+ 		owned.approved.store(matches, Ordering::Release);
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		crate::mcp::runtime::phase_cost::annotate(crate::mcp::runtime::phase_cost::Detail::ChildProof {
++			child_id: owned.id, pid: owned.pid,
++			birth_ticks: owned.identity.get().map(|identity| identity.birth),
++		});
+ 		Ok(owned)
+ 	}
+ 
+@@ -1009,8 +1027,10 @@
+ 			let stdout = pipes.1.context("observation SSH stdout unavailable")?;
+ 			let stderr = pipes.2.context("observation SSH stderr unavailable")?;
+ 			let io = async {
+-				let write = async { stdin.write_all(input).await?; stdin.shutdown().await?; drop(stdin); Ok::<(), anyhow::Error>(()) };
+-				let (_, stdout, stderr, status) = tokio::try_join!(write, super::read_bounded(stdout), super::read_bounded(stderr), owned.wait())?;
++				let write = crate::mcp::runtime::phase_cost_future!(StdinWrite, async { stdin.write_all(input).await?; stdin.shutdown().await?; drop(stdin); Ok::<(), anyhow::Error>(()) });
++				let (_, stdout, stderr, status) = tokio::try_join!(write, crate::mcp::runtime::phase_cost_future!(StdoutDrain, super::read_bounded(stdout)), crate::mcp::runtime::phase_cost_future!(StderrDrain, super::read_bounded(stderr)), crate::mcp::runtime::phase_cost_future!(ChildWait, owned.wait()))?;
++				#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++				crate::mcp::runtime::phase_cost::annotate(crate::mcp::runtime::phase_cost::Detail::CaptureBytes { stdin: input.len(), stdout: stdout.len(), stderr: stderr.len() });
+ 				Ok::<_, anyhow::Error>(Output { status, stdout, stderr })
+ 			};
+ 			tokio::select! {
+@@ -1023,6 +1043,11 @@
+ 			self.stop_child(&owned, Duration::ZERO).await?;
+ 		}
+ 		self.release(&owned).await?;
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		crate::mcp::runtime::phase_cost::annotate(crate::mcp::runtime::phase_cost::Detail::ChildReaped {
++			child_id: owned.id, pid: owned.pid,
++			birth_ticks: owned.identity.get().map(|identity| identity.birth),
++		});
+ 		outcome
+ 	}
+ 	async fn effective(
+@@ -1381,7 +1406,7 @@
+ 		initial: OwnedSemaphorePermit,
+ 		global: Arc<Semaphore>,
+ 	) {
+-		let result = self.clone().execute_inner(&request, initial, global).await;
++		let result = crate::mcp::runtime::phase_cost_context_future!(request.diagnostic, self.clone().execute_inner(&request, initial, global)).await;
+ 		let _ = request.reply.send(result);
+ 	}
+ 	async fn admission_profile(
+@@ -1404,11 +1429,11 @@
+ 		request: &Request,
+ 		global: Arc<Semaphore>,
+ 	) -> Result<Arc<OwnedSemaphorePermit>> {
+-		let permit = tokio::select! {
++		let permit = crate::mcp::runtime::phase_cost_wall!(GlobalCapacity, { tokio::select! {
+ 			value = timeout_at(request.deadline, global.acquire_owned()) => value.context("observation global capacity deadline")??,
+ 			_ = request.cancel.cancelled() => bail!("observation request cancelled before global capacity"),
+ 			_ = self.stop.cancelled() => bail!("observation pool stopped before global capacity"),
+-		};
++		} });
+ 		// A released permit and cancellation can become ready together. Never
+ 		// let select's choice bypass a failed supervisor's synchronous stop.
+ 		if self.stop.is_cancelled()
+@@ -1425,16 +1450,17 @@
+ 		initial: OwnedSemaphorePermit,
+ 		global: Arc<Semaphore>,
+ 	) -> Result<Captured> {
+-		self.admission_profile(request, initial).await?;
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		crate::mcp::runtime::phase_cost::mark(crate::mcp::runtime::phase_cost::Phase::OwnerExecute);
++		crate::mcp::runtime::phase_cost_future!(AdmissionProfile, self.admission_profile(request, initial)).await?;
+ 		let (master, host, budget, _active) = loop {
+-			let mut entry = self
+-				.entry(&request.host, &request.cancel, request.deadline)
++			let mut entry = crate::mcp::runtime::phase_cost_future!(MasterEntry, self.entry(&request.host, &request.cancel, request.deadline))
+ 				.await?;
+-			let host = tokio::select! {
++			let host = crate::mcp::runtime::phase_cost_wall!(HostCapacity, { tokio::select! {
+ 				value = timeout_at(request.deadline, entry.permits.clone().acquire_owned()) => value.context("observation host capacity deadline")??,
+ 				_ = request.cancel.cancelled() => bail!("observation request cancelled before submission"),
+ 				_ = self.stop.cancelled() => bail!("observation pool stopped before submission"),
+-			};
++			} });
+ 			let ready = async {
+ 				loop {
+ 					let current = { entry.ready.borrow().clone() };
+@@ -1448,15 +1474,15 @@
+ 						.context("observation master initializer unavailable")?;
+ 				}
+ 			};
+-			let master = tokio::select! {
++			let master = crate::mcp::runtime::phase_cost_wall!(MasterReady, { tokio::select! {
+ 				value = timeout_at(request.deadline, ready) => value.context("observation master admission deadline")??,
+ 				_ = request.cancel.cancelled() => bail!("observation request cancelled before submission"),
+ 				_ = self.stop.cancelled() => bail!("observation pool stopped before submission"),
+-			};
++			} });
+ 			let budget = self.request_budget(request, global.clone()).await?;
+ 			// Recheck immutable policy/credentials after queueing, before the lease.
+ 			tokio::select! {
+-				value = self.verify_request_profile(request.deadline) => value?,
++				value = crate::mcp::runtime::phase_cost_future!(PreCaptureProfile, self.verify_request_profile(request.deadline)) => value?,
+ 				_ = request.cancel.cancelled() => bail!("observation cancelled before lease"),
+ 				_ = self.stop.cancelled() => bail!("observation pool stopped before lease"),
+ 			};
+@@ -1474,7 +1500,14 @@
+ 				// The original Child may terminate before maintenance closes leases.
+ 				// Only that terminal proof can renew before any slave is created.
+ 				match master.owned.liveness().await? {
+-					ChildLiveness::Live => break (master, host, budget, active),
++					ChildLiveness::Live => {
++						#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++						crate::mcp::runtime::phase_cost::annotate(crate::mcp::runtime::phase_cost::Detail::MasterLease {
++							generation: entry.generation, child_id: master.owned.id, pid: master.owned.pid,
++							birth_ticks: master.owned.identity.get().map(|identity| identity.birth),
++						});
++						break (master, host, budget, active)
++					},
+ 					ChildLiveness::Terminal => drop(active),
+ 				}
+ 			} else {
+@@ -1497,8 +1530,8 @@
+ 			self.stop.cancel();
+ 			bail!("observation master socket replaced");
+ 		}
+-		let stream = timeout_at(request.deadline, UnixStream::connect(&master.socket)).await??;
+-		let peer = profile::peer(&stream)?;
++		let stream = crate::mcp::runtime::phase_cost_future!(SocketConnect, timeout_at(request.deadline, UnixStream::connect(&master.socket))).await??;
++		let peer = crate::mcp::runtime::phase_cost_sync!(SocketAndBoundary, { profile::peer(&stream) })?;
+ 		if peer.0 != master.owned.pid as i32
+ 			|| peer.1 != unsafe { libc::geteuid() }
+ 			|| profile::socket_stamp(&master.socket)? != master.stamp
+@@ -1509,17 +1542,17 @@
+ 		drop(stream);
+ 		let mut args = self.arguments(&request.host, Mode::Slave, &master.socket, false)?;
+ 		args.push(request.command.clone());
+-		let output = self
++		let output = crate::mcp::runtime::phase_cost_future!(Capture, self
+ 			.captured(
+ 				args,
+ 				&request.input,
+ 				request.deadline,
+ 				&request.cancel,
+ 				vec![budget.clone(), Arc::new(host), request.admission.clone()],
+-			)
++			))
+ 			.await?;
+ 		tokio::select! {
+-			value = self.verify_request_profile(request.deadline) => value?,
++			value = crate::mcp::runtime::phase_cost_future!(PostCaptureProfile, self.verify_request_profile(request.deadline)) => value?,
+ 			_ = request.cancel.cancelled() => bail!("observation cancelled before response authority check"),
+ 			_ = self.stop.cancelled() => bail!("observation pool stopped before response authority check"),
+ 		};
+@@ -1830,6 +1863,8 @@
+ 					let Some(request) = pending.pop_front() else {
+ 						continue;
+ 					};
++					#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++					crate::mcp::runtime::phase_cost::with_context(request.diagnostic, || crate::mcp::runtime::phase_cost::mark(crate::mcp::runtime::phase_cost::Phase::InitialCapacityGranted));
+ 					// Construct outside the async body: abort before its first poll
+ 					// and synchronous dispatcher panic must freeze admission too.
+ 					let guard = StopUnlessCompleted {
+@@ -1849,6 +1884,8 @@
+ 						let _ = request.reply.send(Err(anyhow!("observation pending bound exceeded")));
+ 						break Err(anyhow!("observation pending bound exceeded"));
+ 					}
++					#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++					crate::mcp::runtime::phase_cost::with_context(request.diagnostic, || crate::mcp::runtime::phase_cost::mark(crate::mcp::runtime::phase_cost::Phase::QueueReceived));
+ 					pending.push_back(request);
+ 					// A capacity waiter can cancel before it starts any background
+ 					// work. Preserve the original bounded cancellation sweep.
+diff --git a/src/mcp/runtime/ssh_observation_pool_tests.rs b/src/mcp/runtime/ssh_observation_pool_tests.rs
+index 88d514a07e0c5a73aef31154fc7626978a16e2f6..6f177f4d81ff5eff27cdbcc1aae9439e89ccb998 100644
+--- a/src/mcp/runtime/ssh_observation_pool_tests.rs
++++ b/src/mcp/runtime/ssh_observation_pool_tests.rs
+@@ -990,6 +990,8 @@
+ 			let request_cancel = CancellationToken::new();
+ 			let (reply, _) = oneshot::channel();
+ 			let request = Request {
++				#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++				diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
+ 				host: "fixture".into(),
+ 				command: "NEVER_DISPATCH".into(),
+ 				input: vec![],
+@@ -1153,6 +1155,8 @@
+ 		let (reply, receive) = oneshot::channel();
+ 		let cancel = CancellationToken::new();
+ 		let request = Request {
++			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++			diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
+ 			host: "fixture".into(),
+ 			command: "NEVER_DISPATCH".into(),
+ 			input: vec![],
+@@ -1276,6 +1280,8 @@
+ 	let (reply, receive) = oneshot::channel();
+ 	let cancel = CancellationToken::new();
+ 	let request = Request {
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
+ 		host: host.into(),
+ 		command: command.into(),
+ 		input: vec![],
+@@ -1783,6 +1789,8 @@
+ 	let budget = Arc::new(permits.clone().try_acquire_owned().unwrap());
+ 	let (reply, _receive) = oneshot::channel();
+ 	let request = Request {
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
+ 		host: "fixture".into(),
+ 		command: "NEVER_EXECUTE".into(),
+ 		input: vec![],
+@@ -2538,6 +2546,8 @@
+ 				let cancel = CancellationToken::new();
+ 				let (reply, _) = oneshot::channel();
+ 				let request = Request {
++					#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++					diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
+ 					host: "fixture".into(),
+ 					command: "NEVER_DISPATCH".into(),
+ 					input: vec![],
+diff --git a/src/mcp/runtime/ssh_observation_validation.rs b/src/mcp/runtime/ssh_observation_validation.rs
+index ba7448234be22b7736e098c22e874e164fbe9a8d..199ca776d478e9361b438304ffe66f734a5ba18f 100644
+--- a/src/mcp/runtime/ssh_observation_validation.rs
++++ b/src/mcp/runtime/ssh_observation_validation.rs
+@@ -101,13 +101,13 @@
+ 	where
+ 		F: FnOnce(&OwnerTicket) -> Result<()> + Send + 'static,
+ 	{
+-		let permit = tokio::select! {
++		let permit = crate::mcp::runtime::phase_cost_wall!(ValidationPermit, { tokio::select! {
+ 			biased;
+ 			_ = stop.cancelled() => bail!("observation validation stopped before admission"),
+ 			value = timeout_at(deadline, self.permits.clone().acquire_owned()) => value
+ 				.context("observation validation capacity deadline")?
+ 				.context("observation validation capacity closed")?,
+-		};
++		} });
+ 		// Construct before spawn so even a discarded unstarted closure freezes
+ 		// admission. At most WORKERS closures are submitted; Tokio's otherwise
+ 		// unbounded blocking queue cannot accumulate validation work.
+@@ -120,13 +120,21 @@
+ 			deadline,
+ 		};
+ 		ticket.check_current()?;
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		let diagnostic_context = crate::mcp::runtime::phase_cost::current();
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		let diagnostic_queue = crate::mcp::runtime::phase_cost::wall_span(crate::mcp::runtime::phase_cost::Phase::ValidationBlockingQueue);
+ 		let mut work = tokio::task::spawn_blocking(move || {
++			crate::mcp::runtime::phase_cost_context!(diagnostic_context, {
++			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++			crate::mcp::runtime::phase_cost::finish_span(diagnostic_queue);
+ 			// Admission can precede execution in Tokio's blocking queue. Keep
+ 			// the original deadline and refuse stale work before opening files.
+ 			ticket.check_current()?;
+ 			check(&ticket)?;
+ 			ticket.check_current()?;
+ 			Ok::<_, anyhow::Error>(ticket)
++			})
+ 		});
+ 		let result = tokio::select! {
+ 			biased;
+diff --git a/src/mcp/server.rs b/src/mcp/server.rs
+index be169afd89d8500477b7b22bb54aa1bcc6a4e08b..5a591135ec1124c9e212440bec211cc40b771573 100644
+--- a/src/mcp/server.rs
++++ b/src/mcp/server.rs
+@@ -2421,9 +2421,11 @@
+ 		request: CallToolRequestParams,
+ 		context: RequestContext<RoleServer>,
+ 	) -> Result<CallToolResponse, ErrorData> {
++		crate::mcp::runtime::phase_cost_request!(request.name.as_ref(),
++			request.arguments.as_ref().and_then(|value| value.get("host")).and_then(serde_json::Value::as_str), {
+ 		use runtime::request_audit::AuditCompletion;
+ 		let cancelled = context.ct.clone();
+-		let router = Self::tool_router();
++		let router = crate::mcp::runtime::phase_cost_sync!(RouterBuild, { Self::tool_router() });
+ 		let enabled = runtime::config::maybe_runtime_config().is_some();
+ 		let known = router.get(request.name.as_ref());
+ 		let visible = known.is_some()
+@@ -2454,7 +2456,7 @@
+ 					)
+ 				})?;
+ 			Some(
+-				runtime::request_audit::begin_with_read(
++				crate::mcp::runtime::phase_cost_future!(NativeAuditBegin, runtime::request_audit::begin_with_read(
+ 					scope.owner(),
+ 					canonical,
+ 					if matches!(canonical, "request_status" | "request_result") {
+@@ -2479,7 +2481,7 @@
+ 					} else {
+ 						None
+ 					},
+-				)
++				))
+ 				.await
+ 				.map_err(|_| {
+ 					ErrorData::internal_error("request audit unavailable; dispatch refused", None)
+@@ -2488,6 +2490,10 @@
+ 		} else {
+ 			None
+ 		};
++		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
++		if let Some(ticket) = ticket.as_ref() {
++			crate::mcp::runtime::phase_cost::bind_native_id(ticket.request_id());
++		}
+ 		let result_intent = if let Some(ticket) = ticket
+ 			.as_ref()
+ 			.filter(|t| runtime::request_results::eligible(&t.identity().tool_name))
+@@ -2551,7 +2557,7 @@
+ 			} else {
+ 				"not_retained_policy"
+ 			};
+-			let audit_durable = runtime::request_audit::finish(ticket, completion)
++			let audit_durable = crate::mcp::runtime::phase_cost_future!(NativeAuditFinish, runtime::request_audit::finish(ticket, completion))
+ 				.await
+ 				.is_ok();
+ 			if !audit_durable {
+@@ -2562,7 +2568,8 @@
+ 			}
+ 		}
+ 		result
+-	}
++		})
++}
+ 
+ 	fn get_info(&self) -> ServerConfig {
+ 		ServerConfig::new(

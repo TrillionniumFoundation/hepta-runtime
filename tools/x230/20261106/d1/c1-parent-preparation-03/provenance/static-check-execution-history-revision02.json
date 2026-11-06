@@ -1,0 +1,42 @@
+{
+  "schema": "hepta-d1-c1-preparation-static-check-history/v1",
+  "scope": "Transcribed outcomes of local source/AST comparison programs. These are not native jobs or target workload attempts.",
+  "candidate_parent_unchanged_across_checks": {
+    "bytes": 42756,
+    "sha256": "671e9f06ff729987591db4ab67a1c33d1f25c9df9ede34a19abd44fab204c153"
+  },
+  "attempts": [
+    {
+      "program": "check_preparation_static.py",
+      "sha256": "376f64ced2d490037602bd65e88007d75f144c16d33539ce7ebc455906303803",
+      "exit_code": 1,
+      "output_created": false,
+      "reason": "Quiet-block extraction incorrectly extended to the following for-loop, including the original R35 workload_sockets mapping outside the copied 826-byte quiet block."
+    },
+    {
+      "program": "check_preparation_static_02.py",
+      "sha256": "5bda402de7c22dc5ece11fd52c5d3cdb6f2eb16e126fb1bbe1704570aa6d6aa8",
+      "exit_code": 1,
+      "output_created": false,
+      "reason": "After correcting the extraction boundary, ast.literal_eval rejected the unchanged arithmetic expression 8 * 1024 * 1024 in the original monitor limits. No target code was evaluated."
+    },
+    {
+      "program": "check_preparation_static_03.py",
+      "sha256": "40dfbeb3863171069584b7d824365e6fa280fe80eb17cf6c5574d4a2c351de7b",
+      "exit_code": 0,
+      "output": {
+        "path": "STATIC_CHECKS.json",
+        "bytes": 7976,
+        "sha256": "5e9ce12b7da2ce64194ae75c4d5c1835c7f759006fcfb0034b7d03695bfe23f3"
+      },
+      "correction": "Compare the original monitor-limits expression AST directly; do not evaluate target code. The quiet endpoint is the original cooling.passed assignment."
+    }
+  ],
+  "candidate_parent_adapter_binder_holder_monitor_sources_modified_to_pass_checks": false,
+  "earlier_checker_sources_preserved": true,
+  "target_imports": 0,
+  "target_functions_executed": 0,
+  "workloads_compilers_or_native_auditors_executed": 0,
+  "host_requests": 0,
+  "statement": "Only source-checker boundary/expression handling changed. The fixed original runtime protocol and future-result guards were not altered."
+}

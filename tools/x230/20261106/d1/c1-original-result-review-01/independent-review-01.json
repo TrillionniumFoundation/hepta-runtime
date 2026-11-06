@@ -1,0 +1,351 @@
+{
+  "conclusion": "The original C1 workload completed with 936 successful reported rows and eight normal closes; the adapter then failed its public native-request-ID assumption. The parent and holder remain failed.",
+  "execution": {
+    "candidate_adopted": false,
+    "host_calls": 0,
+    "original_parser_or_auditor_executed": false,
+    "original_reports_modified": false,
+    "source_or_thresholds_modified": false,
+    "target_programs_imported_or_executed": false,
+    "workload_replayed": false
+  },
+  "failure_mechanism": {
+    "adapter_false_assumption": "Every process_status/process_read reply contains result._meta.io.hepta.runtime/request-v8. Those two tools are not in the existing exposure set.",
+    "code_order": "The failing predicate precedes opening the first trace file and parser.summarize inside select_trace; trace_interpretation_started records an attempt, not completed parsing.",
+    "exposed_tool_set": [
+      "host_list",
+      "host_health",
+      "effective_config",
+      "request_status",
+      "request_result",
+      "request_start",
+      "request_cancel"
+    ],
+    "first_failing_controller": "round-0-A/first",
+    "first_request_jsonrpc_id": 2,
+    "first_request_tool": "process_read",
+    "raw_frame_bytes": 608,
+    "raw_frame_matches_original_proof_and_canonical_response_sha": true,
+    "raw_frame_offset": 641,
+    "raw_native_marker_present": false,
+    "raw_result_is_error": false,
+    "raw_result_keys": [
+      "content",
+      "isError"
+    ],
+    "request_results_source": {
+      "bytes": 47927,
+      "git_blob": "2b89dcef481fd204988cb10b362c3e28281dd253",
+      "path": "src/mcp/runtime/request_results.rs",
+      "sha256": "5090ea015457c77f7f37641e3dbdff3185eb9a24881974a60d5f396b8cdbf281"
+    },
+    "responsibility": "Adapter integration assumption and previous static review omission; not a production promise to expose that field.",
+    "source_sha_equals_actual_qualified_map": true
+  },
+  "independently_counted_original_rows": {
+    "is_original_native_auditor_result": false,
+    "measured": 768,
+    "preflight": 24,
+    "reported_automatic_retries": 0,
+    "reported_failed_rows": 0,
+    "restart": 48,
+    "total": 936,
+    "warmup": 96
+  },
+  "original_controller_closures": [
+    {
+      "arm": "A",
+      "birth_ticks": 266499852,
+      "exit_code": 0,
+      "observed_descendant_survivors": [],
+      "phase": "first",
+      "pid": 69978,
+      "reader_eof": true,
+      "reader_error": null,
+      "round": 0,
+      "sampler_error": null,
+      "shutdown_method": "stdin_eof",
+      "unmatched_responses": 0
+    },
+    {
+      "arm": "A",
+      "birth_ticks": 266502968,
+      "exit_code": 0,
+      "observed_descendant_survivors": [],
+      "phase": "restart",
+      "pid": 70433,
+      "reader_eof": true,
+      "reader_error": null,
+      "round": 0,
+      "sampler_error": null,
+      "shutdown_method": "stdin_eof",
+      "unmatched_responses": 0
+    },
+    {
+      "arm": "B",
+      "birth_ticks": 266503380,
+      "exit_code": 0,
+      "observed_descendant_survivors": [],
+      "phase": "first",
+      "pid": 70553,
+      "reader_eof": true,
+      "reader_error": null,
+      "round": 1,
+      "sampler_error": null,
+      "shutdown_method": "stdin_eof",
+      "unmatched_responses": 0
+    },
+    {
+      "arm": "B",
+      "birth_ticks": 266506445,
+      "exit_code": 0,
+      "observed_descendant_survivors": [],
+      "phase": "restart",
+      "pid": 71124,
+      "reader_eof": true,
+      "reader_error": null,
+      "round": 1,
+      "sampler_error": null,
+      "shutdown_method": "stdin_eof",
+      "unmatched_responses": 0
+    },
+    {
+      "arm": "B",
+      "birth_ticks": 266506821,
+      "exit_code": 0,
+      "observed_descendant_survivors": [],
+      "phase": "first",
+      "pid": 71235,
+      "reader_eof": true,
+      "reader_error": null,
+      "round": 2,
+      "sampler_error": null,
+      "shutdown_method": "stdin_eof",
+      "unmatched_responses": 0
+    },
+    {
+      "arm": "B",
+      "birth_ticks": 266509297,
+      "exit_code": 0,
+      "observed_descendant_survivors": [],
+      "phase": "restart",
+      "pid": 71696,
+      "reader_eof": true,
+      "reader_error": null,
+      "round": 2,
+      "sampler_error": null,
+      "shutdown_method": "stdin_eof",
+      "unmatched_responses": 0
+    },
+    {
+      "arm": "A",
+      "birth_ticks": 266509648,
+      "exit_code": 0,
+      "observed_descendant_survivors": [],
+      "phase": "first",
+      "pid": 71814,
+      "reader_eof": true,
+      "reader_error": null,
+      "round": 3,
+      "sampler_error": null,
+      "shutdown_method": "stdin_eof",
+      "unmatched_responses": 0
+    },
+    {
+      "arm": "A",
+      "birth_ticks": 266512153,
+      "exit_code": 0,
+      "observed_descendant_survivors": [],
+      "phase": "restart",
+      "pid": 72413,
+      "reader_eof": true,
+      "reader_error": null,
+      "round": 3,
+      "sampler_error": null,
+      "shutdown_method": "stdin_eof",
+      "unmatched_responses": 0
+    }
+  ],
+  "original_file_identities": {
+    "c1-adapter-evidence-01/adapter-report.json": {
+      "bytes": 14034,
+      "git_blob": "5296d37fb1e6dc7a6298f78c90dd925c95331972",
+      "sha256": "0f2c2c504e2768b879ab3a2cfa56e21d3b1d28b6f5d7fce4d446e4d3f6abc8e2"
+    },
+    "c1-campaign-01/baseline-source-inputs.json": {
+      "bytes": 34902,
+      "git_blob": "2ceefb1606c45eed1fe6130ac8a6f09beda8a502",
+      "sha256": "db2896451a01108553c3b5fdb44322ba72ba16a61274f344437ddf129d63a33b"
+    },
+    "c1-campaign-01/compiler-monitor.audit.json": {
+      "bytes": 841,
+      "git_blob": "c7b00b29a8bc4e471893ee3dff4708ce4d005ce7",
+      "sha256": "7ebab7b4764d5d09bf3595eb83aeff844bcf1d87f9b487fc9d80fd967748734d"
+    },
+    "c1-campaign-01/compiler-monitor.json": {
+      "bytes": 146894,
+      "git_blob": "8e08586a562afe395a5a4ab1795b9ef5868d3429",
+      "sha256": "878b32f236a32ae5ecee9fb970ec7a352b25d57b6f06f2111aee7577f28c9447"
+    },
+    "c1-campaign-01/native-observation.stdout": {
+      "bytes": 188432,
+      "git_blob": "b7186fc8459eec5addb7ffeb4752dc19f7adf7d3",
+      "sha256": "bc02516417f7f5ad113bccd56d23ebcf328597483e63521b038b036ac5f4a82d"
+    },
+    "c1-campaign-01/report.json": {
+      "bytes": 460195,
+      "git_blob": "63ac921ebdc3f102c77449efad9a758bf228f006",
+      "sha256": "9634d62d7bfd4ded40831306953f7c7cd69d105aedc3087755288069a0ea2990"
+    },
+    "c1-campaign-01/source-inputs.json": {
+      "bytes": 35206,
+      "git_blob": "9cf485bdee610a68a9470ba0182e08cf8097258b",
+      "sha256": "30ce8443e15c5661c2be4e128c4c221206a39c83a9e42aaa039fbb990183aadf"
+    },
+    "c1-holder-native-01.json": {
+      "bytes": 726,
+      "git_blob": "5c0af852df7b41a06662b7a28503474671353901",
+      "sha256": "48def293f67227758b9844fb5b3bba9e347d7789dce8079a4afb69dcd0fd49a1"
+    },
+    "c1-holder-native-read-01-000.json": {
+      "bytes": 1207,
+      "git_blob": "da9007f1712fc942c4dc8de04b25c79a423306d5",
+      "sha256": "ef6c717a16b892eb824696c24f0ff179f676c8ae015a6bc5c816bd5fe2e35a30"
+    },
+    "c1-holder-report-01.json": {
+      "bytes": 9216,
+      "git_blob": "b3c8e28e0b1ef31c679ad25ef9440c756dbd179f",
+      "sha256": "641ba56e43d76790cc77bb3df6ee60c510dc2538126b528d2727285ea7762b2c"
+    },
+    "c1-observation-01/report.json": {
+      "bytes": 1254435,
+      "git_blob": "1f95992d15998a07419de222057c66d02d150344",
+      "sha256": "58303fa9ccc4f9dcb9c4ca4587761ecfdb2f7789fc68446512d163a264667da9"
+    },
+    "first-off-original-response-frame.json": {
+      "bytes": 608,
+      "git_blob": "8901acebf9412c81d7ab69354d588c5c9f725ea5",
+      "sha256": "5b4219ebcd437771501975ea7f9692e2391e6fd76a6dab1982fc4226bbbdcd4b"
+    }
+  },
+  "original_guarded_environment": {
+    "actual_sample_count": 222,
+    "monitor_passed": true,
+    "monitor_validator_reexecuted": false,
+    "original_monitor_validation_passed": true,
+    "quiet_passed": true,
+    "quiet_planned_seconds": 90,
+    "quiet_recorded_seconds": 90.049477269,
+    "sampling_scope": "1 Hz sampled observations, with bounded schedule and cost; unsampled activity is not ruled out"
+  },
+  "original_job_id": "1a1b0849a11-fc05-7119",
+  "original_outcomes": {
+    "adapter_analysis_complete": false,
+    "adapter_error": [
+      {
+        "reason": "unique original native request identity missing",
+        "type": "ValueError"
+      }
+    ],
+    "completed_trace_bindings": 0,
+    "diagnostic_evidence_passed": false,
+    "holder_passed": false,
+    "holder_remote_returncode": 1,
+    "native_audit_stage_run": false,
+    "native_exit_code": 1,
+    "native_report_passed": true,
+    "native_state": "failed",
+    "native_stderr_bytes": 0,
+    "native_stdout_bytes": 288,
+    "native_streams_complete_durable_verified": true,
+    "original_wrapper_returncode": 0,
+    "owned_agent_directory_and_socket_absent": true,
+    "owned_agent_reaped": true,
+    "owned_agent_returncode": 2,
+    "parent_generic_independent_controller_cleanup_field_preserved": "unknown; stage-group absence is insufficient and no workload is retried",
+    "parent_passed": false,
+    "stage_wait_reap_process_and_group_absence": true
+  },
+  "permitted_further_offline_work": [
+    "Preserve the original failed parent, holder, adapter and unrun native-audit state; archive all available raw evidence without requiring pass.",
+    "Report independently counted original rows and raw timing/resource aggregates with their original scope, explicitly not an original auditor success or optimization adoption.",
+    "A separately named offline interpretation may correlate a complete request set only by the same controller PID/birth/boot, host/operation and a unique full trace-span-within-original-RPC interval bijection, with byte-bound original transport/index and trace inputs. Any ambiguous or unmatched request blocks that interpretation; never infer an on-wire native ID.",
+    "If separately authorized, the frozen native auditor can be run offline for the first time in a new output namespace; this cannot rewrite or retroactively pass the original parent stage."
+  ],
+  "remaining_limits": [
+    "Only the supplied first raw response frame has been independently matched to response bytes here; the complete eight transport/index bodies and raw trace files were not re-audited in this review.",
+    "Original holder forwarded log bodies have not been independently rehashed here; their reported identities remain in the original holder and forthcoming full archive.",
+    "No phase CPU numbers, successful trace interpretation, new performance gate, optimized-version gain, or statistical significance is claimed."
+  ],
+  "reviewer": "audit_acceptance",
+  "rounds": [
+    {
+      "arm": "A",
+      "controller_scoped_rpc_ids_unique": true,
+      "distinct_measured_host_operation_pairs": 12,
+      "measured_rows": 192,
+      "measured_rows_per_pair": 16,
+      "preflight_rows": 6,
+      "reported_passed": true,
+      "restart_rows": 12,
+      "round": 0,
+      "successful_measured_rows": 192,
+      "warmup_rows": 24
+    },
+    {
+      "arm": "B",
+      "controller_scoped_rpc_ids_unique": true,
+      "distinct_measured_host_operation_pairs": 12,
+      "measured_rows": 192,
+      "measured_rows_per_pair": 16,
+      "preflight_rows": 6,
+      "reported_passed": true,
+      "restart_rows": 12,
+      "round": 1,
+      "successful_measured_rows": 192,
+      "warmup_rows": 24
+    },
+    {
+      "arm": "B",
+      "controller_scoped_rpc_ids_unique": true,
+      "distinct_measured_host_operation_pairs": 12,
+      "measured_rows": 192,
+      "measured_rows_per_pair": 16,
+      "preflight_rows": 6,
+      "reported_passed": true,
+      "restart_rows": 12,
+      "round": 2,
+      "successful_measured_rows": 192,
+      "warmup_rows": 24
+    },
+    {
+      "arm": "A",
+      "controller_scoped_rpc_ids_unique": true,
+      "distinct_measured_host_operation_pairs": 12,
+      "measured_rows": 192,
+      "measured_rows_per_pair": 16,
+      "preflight_rows": 6,
+      "reported_passed": true,
+      "restart_rows": 12,
+      "round": 3,
+      "successful_measured_rows": 192,
+      "warmup_rows": 24
+    }
+  ],
+  "schema": "hepta-d1-c1-original-result-independent-review/v1",
+  "source_and_elf": {
+    "actual_source_maps_equal_qualified_maps": true,
+    "baseline_file_count": 220,
+    "feature_elf": {
+      "bytes": 14456088,
+      "path": "/home/qian/hepta-runtime-phase-cost-20261106-d1/qualification-01/hepta-runtime",
+      "sha256": "1d6f38950eefe34891827b5e0f71cb7b388ddbbb2f3fc339c3a0325e27ef11ad"
+    },
+    "live_elf_rehashed_by_this_local_review": false,
+    "native_binary_hashes_unchanged": true,
+    "native_fixture_and_topology_unchanged": true,
+    "parent_inputs_source_baseline_unchanged": true,
+    "same_feature_elf_in_both_arms": true,
+    "source_file_count": 222
+  }
+}

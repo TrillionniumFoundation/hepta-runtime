@@ -990,6 +990,8 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 			let request_cancel = CancellationToken::new();
 			let (reply, _) = oneshot::channel();
 			let request = Request {
+				#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+				diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
 				host: "fixture".into(),
 				command: "NEVER_DISPATCH".into(),
 				input: vec![],
@@ -1153,6 +1155,8 @@ async fn queued_admission_fixture(core: &Arc<Core>, kind: &str, agent: &Arc<Agen
 		let (reply, receive) = oneshot::channel();
 		let cancel = CancellationToken::new();
 		let request = Request {
+			#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+			diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
 			host: "fixture".into(),
 			command: "NEVER_DISPATCH".into(),
 			input: vec![],
@@ -1276,6 +1280,8 @@ fn enqueue_fair_request(
 	let (reply, receive) = oneshot::channel();
 	let cancel = CancellationToken::new();
 	let request = Request {
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
 		host: host.into(),
 		command: command.into(),
 		input: vec![],
@@ -1783,6 +1789,8 @@ async fn owned_admission_fixture(core: &Arc<Core>) {
 	let budget = Arc::new(permits.clone().try_acquire_owned().unwrap());
 	let (reply, _receive) = oneshot::channel();
 	let request = Request {
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
 		host: "fixture".into(),
 		command: "NEVER_EXECUTE".into(),
 		input: vec![],
@@ -2538,6 +2546,8 @@ async fn isolated_helper() {
 				let cancel = CancellationToken::new();
 				let (reply, _) = oneshot::channel();
 				let request = Request {
+					#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+					diagnostic: crate::mcp::runtime::phase_cost::TraceContext::default(),
 					host: "fixture".into(),
 					command: "NEVER_DISPATCH".into(),
 					input: vec![],

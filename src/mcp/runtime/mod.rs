@@ -4,6 +4,101 @@
 //! Hepta Runtime: explicit multi-host execution, durable jobs, PTY sessions,
 //! policy enforcement, and read-only host inspection.
 
+#[cfg(all(feature = "phase-cost-diagnostics", not(target_os = "linux")))]
+compile_error!("phase-cost-diagnostics is an explicitly Linux-only diagnostic build");
+#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+pub mod phase_cost;
+
+// Default builds erase each diagnostic wrapper to its original expression.
+// None of the default branches evaluate diagnostic inputs or inspect env.
+macro_rules! phase_cost_sync {
+	($phase:ident, $body:block) => {{
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		let _phase_cost_span = $crate::mcp::runtime::phase_cost::sync_span(
+			$crate::mcp::runtime::phase_cost::Phase::$phase,
+		);
+		$body
+	}};
+}
+pub(crate) use phase_cost_sync;
+
+macro_rules! phase_cost_future {
+	($phase:ident, $future:expr) => {{
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		{
+			$crate::mcp::runtime::phase_cost::wall_future(
+				$crate::mcp::runtime::phase_cost::Phase::$phase,
+				$future,
+			)
+		}
+		#[cfg(not(all(feature = "phase-cost-diagnostics", target_os = "linux")))]
+		{
+			$future
+		}
+	}};
+}
+pub(crate) use phase_cost_future;
+
+#[cfg(target_os = "linux")]
+macro_rules! phase_cost_wall {
+	($phase:ident, $body:block) => {{
+		#[cfg(feature = "phase-cost-diagnostics")]
+		{
+			let span = $crate::mcp::runtime::phase_cost::wall_span(
+				$crate::mcp::runtime::phase_cost::Phase::$phase,
+			);
+			let value = $body;
+			$crate::mcp::runtime::phase_cost::finish_span(span);
+			value
+		}
+		#[cfg(not(feature = "phase-cost-diagnostics"))]
+		$body
+	}};
+}
+#[cfg(target_os = "linux")]
+pub(crate) use phase_cost_wall;
+
+macro_rules! phase_cost_request {
+	($operation:expr, $host:expr, $body:block) => {{
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		{
+			let context = $crate::mcp::runtime::phase_cost::TraceContext::request($operation, $host);
+			$crate::mcp::runtime::phase_cost::request_scope(context, async move $body).await
+		}
+		#[cfg(not(all(feature = "phase-cost-diagnostics", target_os = "linux")))]
+		$body
+	}};
+}
+pub(crate) use phase_cost_request;
+
+#[cfg(target_os = "linux")]
+macro_rules! phase_cost_context_future {
+	($context:expr, $future:expr) => {{
+		#[cfg(feature = "phase-cost-diagnostics")]
+		{
+			$crate::mcp::runtime::phase_cost::in_context($context, $future)
+		}
+		#[cfg(not(feature = "phase-cost-diagnostics"))]
+		{
+			$future
+		}
+	}};
+}
+#[cfg(target_os = "linux")]
+pub(crate) use phase_cost_context_future;
+
+macro_rules! phase_cost_context {
+	($context:expr, $body:block) => {{
+		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
+		{
+			$crate::mcp::runtime::phase_cost::with_context($context, || $body)
+		}
+		#[cfg(not(all(feature = "phase-cost-diagnostics", target_os = "linux")))]
+		$body
+	}};
+}
+pub(crate) use phase_cost_context;
+
 pub mod binary;
 pub mod caller_scope;
 pub mod checkpoint;

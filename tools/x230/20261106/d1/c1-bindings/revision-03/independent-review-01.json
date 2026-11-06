@@ -1,0 +1,94 @@
+{
+  "schema": "hepta-d1-binder03-independent-review/v1",
+  "verdict": "No blocking issue found in the narrowly reviewed manifest and source-provenance correction.",
+  "reviewed": {
+    "new": {
+      "bytes": 58168,
+      "sha256": "623c8678fe2ed89dae7fb8cdf188e34e009e8d73fee10275f51b753fe3d41b98",
+      "git_blob": "90130e2a14125493fda72d727390ec062f0710f8"
+    },
+    "old": {
+      "bytes": 53934,
+      "sha256": "11875566eefa5532495d4411974faa2232a4339d3fd4ee1acae230c7394daba7",
+      "git_blob": "72e68a767f6656121758b5ded3beda0d834cb199"
+    }
+  },
+  "method": "Complete reading of the changed full-CI tail plus independent Python AST parsing and literal bytes reconstruction; no target import or function execution.",
+  "ast_delta": {
+    "bytes_constants_extracted_by_ast_literal_eval_only": [
+      "begin_marker",
+      "end_marker",
+      "new_manifest_block",
+      "new_return_line",
+      "old_binder_block",
+      "old_manifest_block",
+      "old_return_line"
+    ],
+    "changed_functions": [
+      "bind_d1_prerequisites"
+    ],
+    "generic_declared_byte_identical": true,
+    "host_requests": 0,
+    "inverse_source_equal_to_exact_original": true,
+    "new": {
+      "bytes": 58168,
+      "sha256": "623c8678fe2ed89dae7fb8cdf188e34e009e8d73fee10275f51b753fe3d41b98"
+    },
+    "old": {
+      "bytes": 53934,
+      "sha256": "11875566eefa5532495d4411974faa2232a4339d3fd4ee1acae230c7394daba7"
+    },
+    "passed": true,
+    "q_only_byte_identical": true,
+    "schema": "hepta-d1-binder03-independent-ast-delta/v1",
+    "target_functions_executed": 0,
+    "target_imports": 0,
+    "unchanged_function_count": 16
+  },
+  "findings": [
+    {
+      "area": "Fixed historical manifest",
+      "result": "The one actual R25 ci-gates manifest must exactly equal its known path,45857 bytes and bf0df5f7… SHA. Only this call uses direct stable bind; the general _declared function and all four allowed roots are byte-identical."
+    },
+    {
+      "area": "Original CI source identity",
+      "result": "The real CI module remains ROOT/rust-ci-prerequisites-01/d1_prerequisites.py,53934/118755. It is read with that complete pin and must remain in the original plan.input_bindings. The plan and original CI result are not edited."
+    },
+    {
+      "area": "Corrected consumer identity",
+      "result": "The actual executing __file__ is read at its real path under ROOT and must equal the canonical ROOT/full-prerequisites-03/d1_prerequisites.py bytes. It is not relabelled as the old module."
+    },
+    {
+      "area": "Narrow ancestry",
+      "result": "Independent AST literal extraction reproduced the old53934-byte raw source exactly by removing the marked provenance block and reversing only the fixed-manifest and added-return-field edits. No other existing function changed."
+    },
+    {
+      "area": "Reuse across aliases",
+      "result": "The returned qualification_binder remains the original CI identity. The added correction proof references the stable canonical corrected file; the actual executing alias is still recorded by bind. This keeps ordinary launch, ordinary verification and parent full-proof dictionaries comparable while retaining actual alias custody."
+    },
+    {
+      "area": "Unchanged qualification and CI gates",
+      "result": "All16 other functions, including Q-only and _declared, are byte-identical. No counts, stage commands, retry policy, owner cleanup, source scope or test/audit condition is relaxed."
+    }
+  ],
+  "caller_contracts": [
+    "Every caller must continue binding the reviewed corrected source bytes before import; the inverse check is provenance, not a substitute for the caller's trusted code pin.",
+    "Copied executing modules and the canonical corrected module must be byte-identical. The intended metadata seal must be staged beneath ROOT, as documented, so the explicit executing-path check holds.",
+    "New ordinary output/tool namespaces and the future C1 parent must use this corrected module explicitly. Earlier unsealed outer03/04 and the original failed ordinary attempt stay unchanged."
+  ],
+  "actual_ci_shapes_review": {
+    "git_blob": "cb6434c9a07cc7ee821b5ded232be84bb9a36213",
+    "metadata_comparisons": 51,
+    "additional_known_inevitable_schema_blockers": []
+  },
+  "raw_ast_receipt": {
+    "bytes": 832,
+    "sha256": "c0ae79bb6c24fc34d1548da47d04c78ab3569aa5bc7f4f531dbe1886fc8d1154"
+  },
+  "target_imports": 0,
+  "target_functions_executed": 0,
+  "host_requests": 0,
+  "compilers_tests_or_measurements": 0,
+  "ref_mutations": 0,
+  "runtime_binding_or_new_ordinary_success_claimed": false
+}

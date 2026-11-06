@@ -1,0 +1,15 @@
+{
+  "schema": "hepta-d1-root-predeployment-transport-verification/v1",
+  "transport_version": "04",
+  "host": "local-executor",
+  "original_failed_json_compared_to_root_native_bytes": true,
+  "tool_or_rust_source_changed": false,
+  "files_extracted": 0,
+  "execution": {
+    "chunk_id": "415d45",
+    "wall_time_seconds": 0.176570881,
+    "exit_code": 0,
+    "original_token_count": 334,
+    "output": "{\"files_extracted\": 0, \"manifest_sha256\": \"66bd8db53af0df75475a9b91d32944ffabd4622253bab5a090a91f270e65f7f5\", \"members\": 13, \"selected_bytes\": 121595, \"verbatim_failed_originals\": 3, \"verified\": true}\n--- undeployed03\n+++ corrected04\n@@ -18,9 +18,9 @@\n import tarfile\n \n ROOT = Path('/home/qian/hepta-runtime-phase-cost-20261106-d1')\n-ARCHIVE_BYTES = 32282\n-ARCHIVE_SHA256 = 'dae24aad7cec46bcfd428aa57fa9af3f6814d08724f8db1d50a9c72bbc2c7cca'\n-MANIFEST_SHA256 = 'd1449e44c0c200edfa7394aecf5fc7db7ae5b7fa07d2b22c3e6ef060a44c9d21'\n+ARCHIVE_BYTES = 32284\n+ARCHIVE_SHA256 = '5f427d50547636dc85a299198346de0e66683153be9a64081384628dc11c4cd9'\n+MANIFEST_SHA256 = '66bd8db53af0df75475a9b91d32944ffabd4622253bab5a090a91f270e65f7f5'\n MAX_EXPANDED = 1024 * 1024\n TARGETS = {\n     'ordinary-tools-02/launch_ordinary_02.py', 'ordinary-tools-02/qualify_ordinary_02.py',\n@@ -103,7 +103,7 @@\n             total += len(content)\n             assert total <= MAX_EXPANDED\n             members[row.name] = content\n-    assert set(members) == TARGETS and len(members) == 13 and total == 121598\n+    assert set(members) == TARGETS and len(members) == 13 and total == 121595\n     manifest_raw = members['ordinary-deployment-manifest-02.json']\n     assert hashlib.sha256(manifest_raw).hexdigest() == MANIFEST_SHA256\n     manifest = json.loads(manifest_raw)\n\n"
+  }
+}

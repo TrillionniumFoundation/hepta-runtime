@@ -1,0 +1,83 @@
+{
+  "schema": "hepta-d1-c1-adapter-preparation/v1",
+  "preparation_state": "unsealed_static_source_only",
+  "actual_qualification": null,
+  "actual_feature_elf": null,
+  "actual_formatted_source_map": null,
+  "actual_outer_native_job": null,
+  "actual_holder": null,
+  "actual_quiet_result": null,
+  "actual_monitor_result": null,
+  "actual_measurement": null,
+  "actual_outputs": null,
+  "root": "/home/qian/hepta-runtime-phase-cost-20261106-d1",
+  "baseline_source": "accepted R24 baab4def80be7af015b2e7a594cb302f66c4130e plus diagnostic feature only",
+  "matrix": {
+    "order": "ABBA",
+    "arms": {
+      "A": "off",
+      "B": "on"
+    },
+    "same_feature_enabled_elf": true,
+    "concurrency": [
+      1
+    ],
+    "calls_per_measured_cell": 192,
+    "balanced_warmup_per_cell": 24,
+    "tokio_workers": 2,
+    "arena_max": 1,
+    "first_controller_preflight_calls": 6,
+    "restart_controller_original_calls": 12,
+    "total_controller_launches": 8,
+    "planned_measured_calls": 768,
+    "planned_warmup_calls": 96,
+    "planned_preflight_calls": 24,
+    "planned_restart_calls": 48,
+    "planned_total_native_calls": 936
+  },
+  "planned_socket_parent": "/home/qian/hd1c01",
+  "context_rule": "one exact Controller.__init__ call for each preregistered ABBA first/restart slot",
+  "sidecar_name": "phase-cost.trace.jsonl",
+  "injected_environment": [
+    "HEPTA_RUNTIME_PHASE_COST_MODE",
+    "HEPTA_RUNTIME_PHASE_COST_OUTPUT",
+    "HEPTA_RUNTIME_PHASE_COST_ELF_SHA256"
+  ],
+  "unchanged_originals": [
+    "Controller",
+    "Controller.__init__",
+    "Controller.call",
+    "Controller.close",
+    "cell",
+    "benchmark main",
+    "wrapper main",
+    "raw transport capture",
+    "resource sampling"
+  ],
+  "owner_rule": "unchanged original direct Popen/wait/close; no new reaper or fd-exec entry",
+  "after_matrix_only": [
+    "trace open/hash",
+    "trace parse",
+    "native request join",
+    "interval selection",
+    "diagnostic summary formatting"
+  ],
+  "expected_qualified_source_count": 222,
+  "future_test_counts": null,
+  "native_auditor": "original read-only native auditor remains a separate required outer stage",
+  "outer_required": [
+    "actual complete original qualification and native terminal binding",
+    "same qualified feature ELF and final source map",
+    "original held-agent ownership",
+    "original 90-second quiet stage",
+    "original compiler monitor and final audit",
+    "original raw native transport audit",
+    "complete native outer job terminal/read and final owned-agent reap"
+  ],
+  "no_automatic_retries": true,
+  "no_failed_round_selection": true,
+  "original_error_behavior_preserved": true,
+  "c8_authorized": false,
+  "performance_acceptance_claim": false,
+  "boundary": "Adapter report is diagnostic binding only, not a native/audit/performance adoption verdict."
+}

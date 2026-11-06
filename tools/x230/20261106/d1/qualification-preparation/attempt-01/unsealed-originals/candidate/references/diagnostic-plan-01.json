@@ -1,0 +1,193 @@
+{
+  "acceptance_gates_changed": false,
+  "baseline_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "baseline_compile_input_count": 220,
+  "baseline_compile_inputs_sha256": "c3415beaf7697b3eb07a763ef24f424138de80af31acfd6c224cf682f3c67cbd",
+  "compiled": false,
+  "cpu_attribution_rules": [
+    "Thread CPU spans contain no await and retain the same PID/TID generation.",
+    "A current-thread async runtime can run another request while the measured task awaits.",
+    "Process CPU phase deltas at concurrency are not per-request CPU.",
+    "Leaf synchronous CPU buckets must not overlap; unmatched CPU remains unattributed.",
+    "No positive or negative residual is rounded away or filled with assumed values."
+  ],
+  "current_installed_controller_version_verified": false,
+  "decision": "Do not open another full eight-stage qualification solely for R27-scale microsecond allocation ideas without evidence of meaningful absolute cost.",
+  "executed": false,
+  "implementation_written": false,
+  "linked_side_review": "large-stdin-static-review.md",
+  "local_ssh_cpu": {
+    "actual_measurement": null,
+    "current_wait_exports_rusage": false,
+    "first_stage": "unavailable unless a complete exact original-child accounting source is separately established",
+    "no_second_reaper": true,
+    "per_request_or_pure_fork_from_aggregate": false,
+    "possible_future_aggregate": "platform-verified cumulative CPU of waited children with complete interval child ledger and no unclassified/master/probe contamination",
+    "sampled_100ms_descendant_counters_are_not_complete": true
+  },
+  "network": {
+    "controller_io_minus_remote_handler_is_pure_network": false,
+    "cross_host_monotonic_origins_comparable": false,
+    "extra_network_probe_in_initial_scope": false,
+    "residual_label": "unseparated transport/startup/queue/scheduling/network wait"
+  },
+  "original_controller_cpu_scope": {
+    "approximate_20_ms_per_call": "parent-provided approximate controller metric; no new measurement",
+    "approximate_55_rps": "parent-provided rough context; not a stage bottleneck proof",
+    "excludes": [
+      "SSH child CPU",
+      "remote helper CPU",
+      "harness sampler CPU"
+    ],
+    "includes": "controller process CPU across its threads",
+    "method": "same PID/start-ticks proc stat utime+stime before/after cell",
+    "sampled_tree_cpu_can_be_used_as_performance_numerator": false,
+    "sampled_tree_cpu_is_complete": false
+  },
+  "phases": [
+    {
+      "async_cpu_delta_forbidden": true,
+      "id": "prepare",
+      "source": [
+        "S2",
+        "S3"
+      ],
+      "synchronous_thread_cpu": true,
+      "wall": true
+    },
+    {
+      "cpu_is_not_wait": true,
+      "id": "admission_and_owner_queue",
+      "separate": [
+        "admission16",
+        "channel",
+        "global",
+        "host",
+        "master readiness"
+      ],
+      "source": [
+        "S1"
+      ],
+      "wall": true
+    },
+    {
+      "id": "profile_validation",
+      "security_checks_unchanged": true,
+      "separate": [
+        "validation semaphore wait",
+        "blocking queue delay",
+        "worker synchronous CPU/wall",
+        "owner synchronous CPU/wall",
+        "agent wait",
+        "boundary checks"
+      ],
+      "source": [
+        "S1",
+        "S4",
+        "S5"
+      ]
+    },
+    {
+      "id": "ssh_create",
+      "pure_fork_cost_claim": false,
+      "separate": [
+        "arguments CPU/wall",
+        "parent spawn CPU/wall",
+        "post-exec proof wall"
+      ],
+      "source": [
+        "S1"
+      ]
+    },
+    {
+      "id": "ssh_io_and_reap",
+      "separate": [
+        "stdin write/shutdown",
+        "stdout EOF",
+        "stderr EOF",
+        "original child wait"
+      ],
+      "source": [
+        "S1"
+      ],
+      "spans_overlap": true,
+      "sum_as_total_wall_forbidden": true
+    },
+    {
+      "id": "parse_audit_response",
+      "per_event_fdatasync_preserved": true,
+      "separate": [
+        "JSON parse/encode CPU",
+        "audit semaphore wait",
+        "blocking queue delay",
+        "mutex wait",
+        "critical section CPU/wall",
+        "write/sync CPU/wall"
+      ],
+      "source": [
+        "S2",
+        "S3"
+      ]
+    }
+  ],
+  "production_source_changed": false,
+  "prospective_sequence": {
+    "actual_binary": null,
+    "actual_job_ids": null,
+    "actual_results": null,
+    "actual_source_map": null,
+    "automatic_retry": false,
+    "event_capacity": "must be fixed before implementation/run; overflow is incomplete evidence",
+    "first_error_stops": true,
+    "initial_scope_excludes_C16": true,
+    "not_an_executable_entry_point": true,
+    "original_held_agent_quiet90_monitor": "reuse exact original controls if adopted for this separately scheduled diagnostic; no acceptance threshold changes",
+    "stage1": {
+      "calls_per_cell": 192,
+      "concurrency": 1,
+      "host_count": 6,
+      "operation_mix": "existing status/read sequence",
+      "order": [
+        "OFF1",
+        "ON1",
+        "ON2",
+        "OFF2"
+      ]
+    },
+    "stage2": {
+      "calls_per_cell": 192,
+      "concurrency": 8,
+      "condition": "a pre-frozen decision is needed to distinguish concurrency queue/synchronization; stage1 must close without error",
+      "order": [
+        "OFF1",
+        "ON1",
+        "ON2",
+        "OFF2"
+      ]
+    }
+  },
+  "remote_calls": 0,
+  "remote_helper_cpu": {
+    "actual_measurement": null,
+    "future_requires_separate_frozen_diagnostic_package": true,
+    "handler_entry_measurement_excludes_prior_interpreter_startup": true,
+    "initial_stage_included": false,
+    "original_response_bytes_and_eof_protocol_preserved": true,
+    "process_self_cpu_excludes_unaccounted_children": true
+  },
+  "schema": "hepta-r24-phase-cost-diagnostic-plan/v1",
+  "static_profile_validation_count": {
+    "cpu_cost_claim": false,
+    "fixed_file_verify_calls": 72,
+    "fixed_files_per_pass": 6,
+    "full_file_set_validation_passes_per_verify_files": 2,
+    "may_remove_checks": false,
+    "measured": false,
+    "physical_io_count_claim": false,
+    "scope": "ordinary warm successful request; no renewal/error; excludes lifecycle/background checks",
+    "total_file_set_validation_passes": 12,
+    "verify_files_per_profile_check": 2,
+    "verify_request_profile_calls": 3
+  },
+  "status": "static-design-only"
+}
