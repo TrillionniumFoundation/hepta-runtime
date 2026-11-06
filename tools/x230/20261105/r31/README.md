@@ -1,6 +1,7 @@
 # R31: pidfd readiness wait on accepted R24
 
-**Status: qualification passed; original six-host observation is running; candidate not yet adopted.**
+**Status: qualification passed; the first observation launcher failed before any
+measurement; corrected campaign 02 is running; candidate not yet adopted.**
 
 R31 reduces the delay in observing an already-exiting supervisor during the
 Linux cancellation helper. The source baseline is accepted R24
@@ -106,6 +107,18 @@ results, fixture receipts, helper source, freeze, and native terminal.
 
 ## Formal performance gates
 
+The original Mac holder job `1a1ae37dda9-fc05-5e42` closed with exit 1. Its
+parent report has `stages: []`: the old parent retained the R30 socket-directory
+prefix and stopped before quiescence or any measurement. The owned temporary
+agent was reaped. [The complete original failure](preflight-failures/README.md)
+and its logs remain available; there is no performance sample to replace.
+
+The separately frozen [campaign 02 tools](parent-runner-02/README.md) use fresh
+R31 paths and bind the original failed report, native terminal and monitor. Their
+installation and actual-input materialization succeeded. The original attempt-02
+Mac holder is `1a1ae66710c-fc05-5f6e`; its measurement result is still pending. The qualified source,
+binaries, numerical gates, sample plan and cleanup protocol are unchanged.
+
 The original six-host ABBA observation uses the existing frozen topology,
 concurrency 1/8/16, 192 measured calls per cell, warmup, 90-second quiescence,
 compiler monitor, and controller cleanup. Throughput, p95, controller CPU and
@@ -116,14 +129,57 @@ No performance adoption is claimed in this qualification commit. Saturated
 cancellation capacity remains a separate open question; R31 adds no reserve
 capacity. GitHub Actions is tracked separately after publication.
 
+## Supplemental exact CI and historical Python evidence
+
+[Exact Rust CI attempt 02](exact-ci/README.md) executes the published workflow's
+`cargo check --locked --all-targets --all-features`, complete nextest inventory,
+and nextest run with version 0.9.137, one test thread and zero retries. Its final
+outcome is recorded separately from the original eight-stage qualification.
+
+The original native job `1a1ae572e9e-fc05-5f26` passed, finishing at
+`2026-11-06T00:57:21.474789+00:00`. All six version/check/list/run stages returned
+zero. The exact inventory and raw nextest output reconcile to **1653 passed,
+0 failed, 34 ignored, 1687 selected, 0 retries**, with 1653 ordinary `PASS`
+statuses and no nonplain successes. Every owned process/group closed; the
+qualified compiler inputs remained unchanged. The original report, terminal and
+read response are under [exact-ci/results-02](exact-ci/results-02/).
+
+[exact-ci-evidence-01.tar.gz](exact-ci-evidence-01.tar.gz) retains the original
+plan, both tool versions, all stage logs and the preserved preflight failure.
+The archive's launch response timed out at the MCP transport layer; a read-only
+inventory/status/log reconciliation identified the original archive job
+`1a1ae627343-fc05-5f57` as succeeded. The start request was not replayed.
+
+The first CI planning attempt stopped before Cargo because the private source
+snapshot's workflow differs from the published workflow: it lacks the two later
+Python discovery commands. Attempt 02 preserves that original file, binds the
+published workflow by SHA256 and Git blob, and changes no qualified compiler
+input. The full preflight failure is retained with the observation failure.
+
+[The Python reuse proof](python-closure-reuse/README.md) checks all 85 historical
+Python dependency inputs and modes against fixed published R31 commit
+`c039688312ceb09b3d26d1cdd50f9118eb11129f`, together with the original successful
+18-command execution and complete raw logs. It is a same-input historical proof,
+not a new R31 Python execution or a claim about the whole private source tree.
+Neither this proof nor native exact-command execution marks hosted GitHub Actions
+or the prospective merge as passed.
+
+The [native originals companion](r31-native-originals-companion-01.tar.gz)
+adds the exact outer qualification, component and failed-preparation streams.
+Its [independent verification](native-originals-companion-verification-01.json)
+checks all 20 members, stream offsets and terminal byte counters, all eight
+qualification stages, and the complete 222-input source map.
+
 ## Verified raw evidence
 
 | Archive | Bytes | SHA256 |
 |---|---:|---|
 | [qualification-evidence-01.tar.gz](qualification-evidence-01.tar.gz) | 1251141 | `f802c5fed5e3b79773825a12cbe9c888570e3ea19f954009857350e93c8071d2` |
 | [component-evidence-01.tar.gz](component-evidence-01.tar.gz) | 262385 | `bf5446e7cda85580b6f32c8caaf7217dc56c7864dafbcb5ee0cddef16d093f74` |
+| [exact-ci-evidence-01.tar.gz](exact-ci-evidence-01.tar.gz) | 326815 | `2d2fd850b04e3e31374c0336f48f7e9d66f0589e4d04764e88a5b913444d6c91` |
+| [r31-native-originals-companion-01.tar.gz](r31-native-originals-companion-01.tar.gz) | 18855 | `451ad971ab9d1d05db6c0ee6a201edf8d6383134a2730b35f694ce239f1e379e` |
 
-Both were read back with fixed file versions, checked chunk by chunk, and then
+The generated archives were read back with fixed file versions, checked chunk by chunk, and then
 verified against full archive and member hashes without extracting or executing
 archived programs. Credentials and executables are excluded from the qualification
 archive. The `parent-runner` directory preserves the exact five measurement
