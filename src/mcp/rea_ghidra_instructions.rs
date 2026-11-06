@@ -268,12 +268,13 @@ pub(super) fn validate(observation: &Value, selected: &str) -> Result<()> {
 	}
 	let ranges = body(&procedure["body"], &coordinate(selected)?)?;
 	let complete_name = text(&procedure["name"], 1024, "Ghidra complete procedure name")?;
+	let expected_body_address_count = procedure["body"]["total_bytes"].to_string();
 	if observation["function"]["entry_address"] != selected
 		|| observation["function"]["external"] != false
 		|| observation["function"]["thunk"].as_bool() != Some(thunk)
 		|| observation["function"]["name_sha256"] != sha256(complete_name.as_bytes())
-		|| observation["function"]["body_address_count"]
-			!= procedure["body"]["total_bytes"].to_string()
+		|| observation["function"]["body_address_count"].as_str()
+			!= Some(expected_body_address_count.as_str())
 	{
 		bail!(
 			"Ghidra complete instruction procedure differs from the selected function observation"
