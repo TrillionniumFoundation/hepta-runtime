@@ -463,6 +463,28 @@ async fn run_capture_until(
 	stdin_data: &[u8],
 	deadline: tokio::time::Instant,
 ) -> Result<std::process::Output> {
+	run_capture_admitted_until(
+		host,
+		remote_command,
+		stdin_data,
+		deadline,
+		DirectAdmission::Ordinary,
+	)
+	.await
+}
+
+enum DirectAdmission {
+	Ordinary,
+	ExistingJobCancellation,
+}
+
+async fn run_capture_admitted_until(
+	host: &HostConfig,
+	remote_command: &str,
+	stdin_data: &[u8],
+	deadline: tokio::time::Instant,
+	admission: DirectAdmission,
+) -> Result<std::process::Output> {
 	let mut command = ssh_base(host);
 	command
 		.arg(remote_command)
@@ -470,7 +492,14 @@ async fn run_capture_until(
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
 		.kill_on_drop(true);
-	direct::capture(&host.ssh_target, command, stdin_data, deadline).await
+	match admission {
+		DirectAdmission::Ordinary => {
+			direct::capture(&host.ssh_target, command, stdin_data, deadline).await
+		}
+		DirectAdmission::ExistingJobCancellation => {
+			direct::capture_job_cancel(&host.ssh_target, command, stdin_data, deadline).await
+		}
+	}
 }
 
 pub async fn run_python_json<I, O>(
@@ -522,12 +551,54 @@ where
 	I: Serialize + ?Sized,
 	O: DeserializeOwned,
 {
+	run_python_json_admitted(
+		host,
+		interpreter,
+		code,
+		input,
+		timeout,
+		DirectAdmission::Ordinary,
+	)
+	.await
+}
+
+// Called only after jobs::cancel_job verifies the existing receipt and records intent.
+pub(super) async fn run_job_cancel_python_json(
+	host: &HostConfig,
+	code: &str,
+	input: &serde_json::Value,
+	timeout: Duration,
+) -> Result<serde_json::Value> {
+	run_python_json_admitted(
+		host,
+		"python3",
+		code,
+		input,
+		timeout,
+		DirectAdmission::ExistingJobCancellation,
+	)
+	.await
+}
+
+async fn run_python_json_admitted<I, O>(
+	host: &HostConfig,
+	interpreter: &str,
+	code: &str,
+	input: &I,
+	timeout: Duration,
+	admission: DirectAdmission,
+) -> Result<O>
+where
+	I: Serialize + ?Sized,
+	O: DeserializeOwned,
+{
 	let deadline = tokio::time::Instant::now()
 		.checked_add(timeout)
 		.context("SSH deadline exceeds the monotonic clock range")?;
 	let remote_command = python_json_command(interpreter, code)?;
 	let payload = serde_json::to_vec(input)?;
-	let output = run_capture_until(host, &remote_command, &payload, deadline).await?;
+	let output =
+		run_capture_admitted_until(host, &remote_command, &payload, deadline, admission).await?;
 	if !output.status.success() {
 		let stderr = String::from_utf8_lossy(&output.stderr);
 		let stdout = String::from_utf8_lossy(&output.stdout);
@@ -594,14 +665,35 @@ pub fn build_exec_command(
 /// Fixed no-argument capability; the administrator policy, not the caller, owns
 /// systemd properties, DynamicUser selection and protected paths.
 pub async fn run_jobctl(host: &HostConfig, input: &serde_json::Value) -> Result<serde_json::Value> {
+	run_jobctl_admitted(host, input, DirectAdmission::Ordinary).await
+}
+
+pub(super) async fn run_jobctl_cancel(
+	host: &HostConfig,
+	job_id: &str,
+) -> Result<serde_json::Value> {
+	run_jobctl_admitted(
+		host,
+		&serde_json::json!({"op":"cancel","job_id":job_id}),
+		DirectAdmission::ExistingJobCancellation,
+	)
+	.await
+}
+
+async fn run_jobctl_admitted(
+	host: &HostConfig,
+	input: &serde_json::Value,
+	admission: DirectAdmission,
+) -> Result<serde_json::Value> {
 	let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
 	let mut data = serde_json::to_vec(input)?;
 	data.push(b'\n');
-	let output = run_capture_until(
+	let output = run_capture_admitted_until(
 		host,
 		"sudo -n /usr/local/libexec/hepta-runtime-jobctl",
 		&data,
 		deadline,
+		admission,
 	)
 	.await?;
 	if !output.status.success() {

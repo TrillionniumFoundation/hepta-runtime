@@ -18,6 +18,10 @@ use tokio_util::sync::CancellationToken;
 const HOST_CONNECTIONS: usize = 2;
 const GLOBAL_CONNECTIONS: usize = 8;
 const MAX_ADMITTED: usize = 16;
+const CANCEL_CONNECTIONS: usize = 1;
+const MAX_CANCEL_ADMITTED: usize = 8;
+// Every queued request already owns one ordinary or cancellation global lease.
+const OWNER_QUEUE: usize = GLOBAL_CONNECTIONS + CANCEL_CONNECTIONS;
 const REAP: Duration = Duration::from_secs(3);
 static DIRECT: OnceLock<std::result::Result<Arc<Proxy>, String>> = OnceLock::new();
 static FROZEN: AtomicBool = AtomicBool::new(false);
@@ -67,7 +71,8 @@ impl Drop for StopOnDrop {
 
 struct Leases {
 	_admission: OwnedSemaphorePermit,
-	_host: OwnedSemaphorePermit,
+	// One reserved global child cannot add more than one child to any target.
+	_host: Option<OwnedSemaphorePermit>,
 	_global: OwnedSemaphorePermit,
 }
 
@@ -424,6 +429,8 @@ struct Proxy {
 	hosts: Mutex<BTreeMap<String, Weak<Semaphore>>>,
 	admission: Arc<Semaphore>,
 	global: Arc<Semaphore>,
+	cancel_admission: Arc<Semaphore>,
+	cancel_global: Arc<Semaphore>,
 	// The process-wide proxy retains quarantined original children and permits
 	// even if its owner thread exits with an error. No replacement owner is made.
 	core: Arc<Core>,
@@ -443,7 +450,7 @@ struct JoinReceipt {
 
 impl Proxy {
 	fn start() -> Result<Arc<Self>> {
-		let (sender, receiver) = mpsc::channel(GLOBAL_CONNECTIONS);
+		let (sender, receiver) = mpsc::channel(OWNER_QUEUE);
 		let core = Arc::new(Core {
 			stop: CancellationToken::new(),
 			accepting: Mutex::new(true),
@@ -457,6 +464,8 @@ impl Proxy {
 			hosts: Mutex::new(BTreeMap::new()),
 			admission: Arc::new(Semaphore::new(MAX_ADMITTED)),
 			global: Arc::new(Semaphore::new(GLOBAL_CONNECTIONS)),
+			cancel_admission: Arc::new(Semaphore::new(MAX_CANCEL_ADMITTED)),
+			cancel_global: Arc::new(Semaphore::new(CANCEL_CONNECTIONS)),
 			core: core.clone(),
 			join: Arc::new(JoinReceipt {
 				state: Mutex::new(JoinState {
@@ -543,7 +552,62 @@ impl Proxy {
 		};
 		Ok(Leases {
 			_admission: admission,
-			_host: host,
+			_host: Some(host),
+			_global: global,
+		})
+	}
+
+	fn try_ordinary_cancel(&self, target: &str, deadline: Instant) -> Result<Option<Leases>> {
+		fn available(slots: Arc<Semaphore>) -> Result<Option<OwnedSemaphorePermit>> {
+			match slots.try_acquire_owned() {
+				Ok(permit) => Ok(Some(permit)),
+				Err(tokio::sync::TryAcquireError::NoPermits) => Ok(None),
+				Err(tokio::sync::TryAcquireError::Closed) => {
+					bail!("direct SSH ordinary admission closed; no cancellation submitted")
+				}
+			}
+		}
+		self.core.active(deadline, &self.core.stop)?;
+		let Some(admission) = available(self.admission.clone())? else {
+			return Ok(None);
+		};
+		let Some(host) = available(self.target(target)?)? else {
+			return Ok(None);
+		};
+		let Some(global) = available(self.global.clone())? else {
+			return Ok(None);
+		};
+		self.core.active(deadline, &self.core.stop)?;
+		Ok(Some(Leases {
+			_admission: admission,
+			_host: Some(host),
+			_global: global,
+		}))
+	}
+
+	async fn acquire_job_cancel(&self, target: &str, deadline: Instant) -> Result<Leases> {
+		// Ordinary capacity wins only when all three leases are immediately free.
+		// Returning None drops every partial lease before any reserve await.
+		if let Some(leases) = self.try_ordinary_cancel(target, deadline)? {
+			return Ok(leases);
+		}
+		self.core.active(deadline, &self.core.stop)?;
+		let admission = self
+			.cancel_admission
+			.clone()
+			.try_acquire_owned()
+			.map_err(|_| anyhow!("direct SSH cancellation reserve admitted capacity exhausted; no child submitted; no automatic retry"))?;
+		let global = tokio::select! {
+			biased;
+			_ = self.core.stop.cancelled() => bail!("direct SSH cancellation admission stopped"),
+			value = timeout_at(deadline, self.cancel_global.clone().acquire_owned()) => value
+				.context("direct SSH cancellation reserve deadline; no child submitted")??,
+		};
+		// Expiry/stop and a returned reserve lease may become ready together.
+		self.core.active(deadline, &self.core.stop)?;
+		Ok(Leases {
+			_admission: admission,
+			_host: None,
 			_global: global,
 		})
 	}
@@ -556,6 +620,30 @@ impl Proxy {
 		deadline: Instant,
 	) -> Result<Output> {
 		let leases = self.acquire(target, deadline).await?;
+		self.capture_admitted(target, command, input, deadline, leases)
+			.await
+	}
+
+	async fn capture_job_cancel(
+		&self,
+		target: &str,
+		command: Command,
+		input: &[u8],
+		deadline: Instant,
+	) -> Result<Output> {
+		let leases = self.acquire_job_cancel(target, deadline).await?;
+		self.capture_admitted(target, command, input, deadline, leases)
+			.await
+	}
+
+	async fn capture_admitted(
+		&self,
+		target: &str,
+		command: Command,
+		input: &[u8],
+		deadline: Instant,
+		leases: Leases,
+	) -> Result<Output> {
 		let cancel = Cancellation::new();
 		let _cancel_on_drop = CancelOnDrop(cancel.clone());
 		self.core.active(deadline, &cancel.token)?;
@@ -688,6 +776,18 @@ pub(super) async fn capture(
 	deadline: Instant,
 ) -> Result<Output> {
 	shared()?.capture(target, command, input, deadline).await
+}
+
+// Only the existing-job cancellation entry points in ssh.rs select this path.
+pub(super) async fn capture_job_cancel(
+	target: &str,
+	command: Command,
+	input: &[u8],
+	deadline: Instant,
+) -> Result<Output> {
+	shared()?
+		.capture_job_cancel(target, command, input, deadline)
+		.await
 }
 
 #[cfg(all(test, unix))]
