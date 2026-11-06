@@ -1,0 +1,49 @@
+{
+  "actual_patch_identity": {
+    "bytes": 64987,
+    "git_blob": "3de16de910158951dc17bb8f52883b88dd832d5a",
+    "path": "/home/qian/hepta-runtime-phase-cost-20261106-d1/candidate/candidate.patch",
+    "sha256": "3940b39d5cdde7d4b76ba1e94f49ca461c6964b1edb2c2f44506fdf7c8a50523"
+  },
+  "actual_preparation": {
+    "bytes": 103083,
+    "path": "/tmp/hepta-runtime-recovery-20261106/d1-qualification-originals-01/preparation.json",
+    "sha256": "d76bc4ab72a3c579ee25e5c0381df391e78b6dd046a341b07e1343998829b27e"
+  },
+  "blocking_findings": [],
+  "compilers_tests_auditors_or_workloads_executed": 0,
+  "finding": "Original binder01 compared a three-field stable-reader identity with preparation.candidate_patch, whose producer intentionally preserves the additional git_blob field. The initial static review did not catch that extra key. Binder01 would reject before any CI/measurement stage; it is retained as history.",
+  "host_requests": 0,
+  "limitations": [
+    "This addendum corrects the initial review scope; it is not a successful on-host binder execution.",
+    "No actual native CI or diagnostic result is inferred from the preparation report. The later full foundation still requires real successful CI originals."
+  ],
+  "new_binder": {
+    "bytes": 53934,
+    "git_blob_sha": "72e68a767f6656121758b5ded3beda0d834cb199",
+    "sha256": "11875566eefa5532495d4411974faa2232a4339d3fd4ee1acae230c7394daba7"
+  },
+  "new_condition": "Retain the same original patch bytes, recompute SHA1 over the exact Git blob header and bytes, require the known frozen Git blob, then compare all four preparation fields exactly.",
+  "old_binder": {
+    "bytes": 53627,
+    "sha256": "f6f5562d898ea8bc5ca44ef032e44c5b84b68f421cc2e3cb8f96358b243645d0"
+  },
+  "old_review": {
+    "bytes": 5304,
+    "git_blob_sha": "deb8558f34e0bec41641576ecd03a42fa937302f",
+    "sha256": "6f96f1c7413a25076f61a625ee8afd23408ed00c9161b405772242552448f721"
+  },
+  "only_changed_function": "bind_d1_qualification",
+  "other_five_identity_objects_remain_three_fields": true,
+  "previous_files_overwritten": false,
+  "producer_evidence": "frozen_candidate returns relative_identity of the candidate manifest patch object; relative_identity returns {**value, path:absolute}, preserving git_blob.",
+  "qualification_owner_source_map_stage_and_ci_conditions_changed": false,
+  "qualified_source_patch_or_reports_modified": false,
+  "revision": "02",
+  "schema": "hepta-d1-prerequisite-independent-static-review-addendum/v1",
+  "scope": "Only the exact four-field patch identity correction and its actual producer/receipt source; no target function import or execution.",
+  "target_functions_executed": 0,
+  "target_imports": 0,
+  "unchanged_function_count": 16,
+  "whole_source_reverse_text_reconstruction_equal": true
+}
