@@ -1,0 +1,123 @@
+{
+  "schema": "hepta-d2-c1-recovery02-mac-transport-independent-review/v1",
+  "reviewer": "audit_acceptance",
+  "conclusion": "no_blocking_issue_in_the_fixed_transport_delta",
+  "exact_source": {
+    "git_blob": "dc48bdfd5df5ce7daf832c22ccb3cb01e3de3470",
+    "bytes": 15014,
+    "sha256": "c2fa1c88deb8ba446e76f1780bfa184a46d80cd588cd4a34086fbff92e16a1ac"
+  },
+  "reference": {
+    "git_blob": "8bf6bd5154826e6da2f4558587f1886a0624468b",
+    "bytes": 15014,
+    "sha256": "c1f59080befeba1b660ae7b6bb24ba1e2f4af083a2f60ce30ae37a785f255994"
+  },
+  "edit_ledger": {
+    "git_blob": "7965680432eaebf59982b59695cb4b68416993ed",
+    "bytes": 11251,
+    "sha256": "e0569cf79250570c042aee45f59a3527612e7f7ad8ad279049be531bdba43d2a"
+  },
+  "transport_manifest": {
+    "git_blob": "248a93c300a37e1cf1c37fd18a975cfdba32aa65",
+    "bytes": 6344,
+    "sha256": "c0e9c1abc420c9d747e2747c2d1c8d4dbb4291d09e415d2bc854fc5a3ddef6a5"
+  },
+  "actual_seal_manifest": {
+    "git_blob": "be4d62eef1e30e9f6c6798998b76b0258257415c",
+    "bytes": 325264,
+    "sha256": "a3009f021e4287d45d60099e613e4812ba04f17094b9a500ebe0c590cc7aaebe"
+  },
+  "scope": "The 10-block exact source delta, immutable 23-member identity map, fixed destinations and original safety behavior. The tar binary was not downloaded or reexpanded by this reviewer.",
+  "independent_verification": {
+    "whole_source_exact_10_edits": true,
+    "inverse_original_whole_source": true,
+    "original23_identity_map_matches_actual21_plus_seal_and_runtime_installer": true,
+    "member_count": 23,
+    "payload_bytes": 708990,
+    "archive_bytes": 737358,
+    "archive_sha256": "4a9d5af52aba5b030d8206fa0b03b1f5c60dfab5f90caf085ef69d79a80ed263",
+    "original_caps_unchanged": true,
+    "all_bounds_satisfied": true,
+    "AST_parse_only": true,
+    "unchanged_functions": [
+      "require",
+      "sha",
+      "stamp",
+      "directory_identity",
+      "read_regular",
+      "octal",
+      "check_directories",
+      "inventory"
+    ],
+    "changed_functions_only_total_literal": [
+      "parse_archive",
+      "main"
+    ],
+    "target_imports_or_entrypoints_executed": false,
+    "no_private_body_read": true,
+    "no_host_calls": true
+  },
+  "allowed_delta": [
+    "C1 recovery staging, external archive and external importer names use 02.",
+    "The actual archive length and SHA256 are changed to the declared deterministic archive.",
+    "The exact 23-member EXPECTED map is replaced with actual recovery02 identities.",
+    "The two fixed inventory directory declarations change c1-tools-01 to c1-tools-02.",
+    "The fixed payload-total guard and result literal change from 709014 to 708990."
+  ],
+  "source_reconstruction": "All 10 edits were independently applied with exact occurrence counts to reproduce the full new source; reversing them reproduces all original bytes.",
+  "original_behavior": {
+    "original_bounds": {
+      "archive": 1048576,
+      "file": 1048576,
+      "payload": 2097152,
+      "tar": 2162688
+    },
+    "precreated_private_staging_root": "/Users/qianqi/work/hepta-runtime-d2-c1-sealed-staging-02",
+    "exact_subdirectories": [
+      "x230",
+      "x230/c1-tools-02",
+      "x230/c1-tools-02/reference",
+      "mac"
+    ],
+    "archive_external_path": "/Users/qianqi/work/hepta-runtime-d2-c1-sealed-payloads-02.tar.gz",
+    "importer_external_path": "/Users/qianqi/work/hepta-runtime-d2-c1-importer-02.py",
+    "exact_inventory_no_extra_files_or_locks": true,
+    "protected_owned_parents_and_NOFOLLOW": true,
+    "all_archive_and_member_checks_before_payload_writes": true,
+    "create_only_O_EXCL_0600": true,
+    "whole_file_readback_and_fsync": true,
+    "delete_overwrite_or_retry": false,
+    "packaged_code_executed": false
+  },
+  "actual_manifest": {
+    "file_count": 23,
+    "total_payload_bytes": 708990,
+    "composition": "21 actual runtime payloads plus the actual seal-manifest.json and unchanged reviewed recovery runtime installer.",
+    "every_expected_member_equals_seal_plus_two_identity_map": true,
+    "archive": {
+      "bytes": 737358,
+      "sha256": "4a9d5af52aba5b030d8206fa0b03b1f5c60dfab5f90caf085ef69d79a80ed263",
+      "git_blob": "d0690bb0f5b677ed43d6fd30a39fa1e75650f8a8"
+    },
+    "uncompressed_tar_bytes": 737280,
+    "archive_below_original_one_MiB": true,
+    "all_member_sizes_below_original_one_MiB": true,
+    "payload_below_original_two_MiB": true,
+    "original_runtime_installer": {
+      "git_blob": "8bb8e677665d3b619b27a2bcac1f4bb93341b2d8",
+      "bytes": 12402,
+      "sha256": "005938492aad65ceb6de90b4f1318cf32b5e24105f99a252cbd3aaeea012d689"
+    },
+    "no_operator_argv_extra_member": true,
+    "no_private_configuration_body": true
+  },
+  "evidence_boundary": {
+    "own_AST_parse_and_function_slice_comparison": true,
+    "own_JSON_and_source_Git_SHA256_checks": true,
+    "own_binary_tar_member_check": false,
+    "binary_check_source": "Author reports standard deterministic USTAR/stored-DEFLATE production and exact 23-member byte roundtrip. This review independently confirms the expected identity map and bounds, not that binary claim.",
+    "host_state_checked": false,
+    "installer_or_importer_executed": false,
+    "new_workload_or_gate_introduced": false
+  }
+}
