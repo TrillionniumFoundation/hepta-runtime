@@ -218,6 +218,8 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		"rea_inspect_analysis_view",
 		"rea_import_evidence_bundle",
 		"rea_export_evidence_bundle",
+		"rea_evidence_session_checkpoint",
+		"rea_evidence_session_resume",
 		"rea_retain_preview",
 		"rea_model_session_open",
 		"rea_static_start",
@@ -353,7 +355,7 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		actual, expected,
 		"MCP mutation contract expanded without owner audit"
 	);
-	assert_eq!(actual.difference(&retained).count(), 41);
+	assert_eq!(actual.difference(&retained).count(), 43);
 	let jobs = include_str!("jobs.rs");
 	let pty = include_str!("pty.rs");
 	assert!(jobs
