@@ -30,7 +30,7 @@ use std::sync::{Arc, OnceLock};
 use tokio::sync::Semaphore;
 
 #[path = "weight_semantic/lib.rs"]
-mod core;
+pub(super) mod core;
 
 const MAX_RESULT_BYTES: usize = 1024 * 1024;
 const TARGET_CONTRACT: &[u8] = include_bytes!("weight_semantic/target_contract.json");
@@ -117,7 +117,7 @@ impl Write for BoundedResult {
 	}
 }
 
-fn encode_result(value: &impl Serialize) -> Result<String> {
+pub(super) fn encode_result(value: &impl Serialize) -> Result<String> {
 	let mut output = BoundedResult {
 		bytes: Vec::new(),
 		limit: MAX_RESULT_BYTES.min(crate::utils::truncation::MAX_RESULT_BYTES),
@@ -127,7 +127,7 @@ fn encode_result(value: &impl Serialize) -> Result<String> {
 	String::from_utf8(output.bytes).context("semantic replay JSON result is not UTF-8")
 }
 
-fn execute(params: &SemanticReplayParams) -> Result<String> {
+pub(super) fn admit_request(params: &SemanticReplayParams) -> Result<core::ReplayParams> {
 	ensure!(
 		!params.request_json.is_empty() && params.request_json.len() <= core::MAX_REQUEST_BYTES,
 		"semantic replay request_json must contain 1..2097152 UTF-8 bytes"
@@ -155,9 +155,13 @@ fn execute(params: &SemanticReplayParams) -> Result<String> {
 		"semantic replay target contract SHA256 mismatch"
 	);
 	// Hash and size admission precede the second, structured parsing allocation.
-	let request: core::ReplayParams = serde_json::from_str(&params.request_json)
-		.context("semantic replay request JSON is invalid")?;
+	serde_json::from_str(&params.request_json).context("semantic replay request JSON is invalid")
+}
+
+fn execute(params: &SemanticReplayParams) -> Result<String> {
+	let request = admit_request(params)?;
 	let replay = core::replay(&request).context("native semantic core rejected the request")?;
+	let core_source_sha256 = sha(include_bytes!("weight_semantic/lib.rs"));
 	ensure!(
 		replay.implementation_sha256 == core_source_sha256,
 		"semantic replay core implementation identity differs"
@@ -165,11 +169,11 @@ fn execute(params: &SemanticReplayParams) -> Result<String> {
 	encode_result(&SemanticReplayResult {
 		replay,
 		adapter_schema: "hepta.weight-semantic-replay.mcp.v1",
-		request_sha256,
+		request_sha256: params.expected_request_sha256.clone(),
 		request_bytes: params.request_json.len(),
 		core_source_sha256,
 		adapter_source_sha256: sha(include_bytes!("weight_semantic.rs")),
-		target_contract_sha256,
+		target_contract_sha256: params.expected_target_contract_sha256.clone(),
 		maximum_concurrent_workers: 1,
 		weights_modified: false,
 		independent_holdout_verified: false,
@@ -195,9 +199,16 @@ where
 	.context("native semantic replay worker failed")?
 }
 
-pub async fn replay(params: SemanticReplayParams) -> Result<String> {
+pub(super) async fn run_shared_worker<F>(work: F) -> Result<String>
+where
+	F: FnOnce() -> Result<String> + Send + 'static,
+{
 	let workers = WORKERS.get_or_init(|| Arc::new(Semaphore::new(1))).clone();
-	run_worker(workers, move || execute(&params)).await
+	run_worker(workers, work).await
+}
+
+pub async fn replay(params: SemanticReplayParams) -> Result<String> {
+	run_shared_worker(move || execute(&params)).await
 }
 
 #[cfg(test)]

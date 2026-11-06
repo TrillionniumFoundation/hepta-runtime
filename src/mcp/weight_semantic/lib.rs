@@ -951,7 +951,18 @@ impl Engine {
 }
 
 pub fn replay(params: &ReplayParams) -> Result<ReplayResult> {
+	replay_until(params, Instant::now() + Duration::from_secs(30))
+}
+
+/// The composite caller may have already spent part of its deadline in
+/// admission. Never renew that allowance when entering this numerical core.
+pub fn replay_until(params: &ReplayParams, outer_end: Instant) -> Result<ReplayResult> {
 	let start = Instant::now();
+	let end = outer_end.min(start + Duration::from_secs(30));
+	ensure!(
+		start < end,
+		"semantic replay deadline expired before admission"
+	);
 	ensure!(params.profile == PROFILE, "unsupported semantic profile");
 	ensure!(
 		params.checkpoint_json.len() <= MAX_CHECKPOINT_BYTES
@@ -980,7 +991,11 @@ pub fn replay(params: &ReplayParams) -> Result<ReplayResult> {
 	);
 	let model = serde_json::from_str(&params.checkpoint_json).context("checkpoint schema")?;
 	let public = serde_json::from_str(&params.public_json).context("public task schema")?;
-	let mut engine = Engine::new(model, public, start + Duration::from_secs(30))?;
+	ensure!(
+		Instant::now() < end,
+		"semantic replay deadline expired during admission"
+	);
+	let mut engine = Engine::new(model, public, end)?;
 	engine.collect_teacher_representatives()?;
 	let mut rows = Vec::with_capacity(params.traces.len());
 	for trace in &params.traces {

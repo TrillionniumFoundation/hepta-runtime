@@ -98,7 +98,7 @@ fn hex(data: impl AsRef<[u8]>) -> String {
 	data.as_ref().iter().map(|x| format!("{x:02x}")).collect()
 }
 
-fn bytes(text: &str, count: usize) -> Result<Vec<u8>> {
+pub(super) fn bytes(text: &str, count: usize) -> Result<Vec<u8>> {
 	if text.len() != 2 * count
 		|| !text
 			.bytes()
@@ -224,8 +224,15 @@ fn validate(params: &CertificateParams, end: Instant) -> Result<(Vec<u64>, Strin
 }
 
 fn solve(params: &CertificateParams) -> Result<Value> {
+	solve_until(params, Instant::now() + Duration::from_secs(30))
+}
+
+/// Internal composition entry. The caller must own its worker for the complete
+/// operation; an earlier outer deadline cannot be extended by this verifier.
+pub(super) fn solve_until(params: &CertificateParams, outer_end: Instant) -> Result<Value> {
 	let started = Instant::now();
-	let end = started + Duration::from_secs(30);
+	let end = outer_end.min(started + Duration::from_secs(30));
+	deadline(end)?;
 	let (center, request_sha256, request_bytes) = validate(params, end)?;
 	let center_bytes: Vec<u8> = center.iter().flat_map(|x| x.to_le_bytes()).collect();
 	let mut arithmetic = exact::Arithmetic::new(&center)?;

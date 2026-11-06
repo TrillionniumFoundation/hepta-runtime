@@ -12,6 +12,7 @@ Native artifact operations work without a resident Python model or Node REA proc
 - [Static providers and original-job lifecycle](docs/rea-native/STATIC_PROVIDERS.md)
 - [Exact native weight artifacts and restoration](docs/weight-runtime/NATIVE_ARTIFACTS.md)
 - [Native F32 Linear calculation and independent comparison](docs/weight-runtime/NATIVE_LINEAR.md)
+- [Native semantic replay joined to exact continuation certificates](docs/weight-semantic-certificate.md)
 
 Use the CI's isolated runner for the full runtime suite:
 `cargo nextest run --locked --all-targets --all-features --test-threads 1 --retries 0 --no-fail-fast`.

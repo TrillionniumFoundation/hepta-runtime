@@ -41,6 +41,7 @@ use super::runtime;
 use super::weight_bellman;
 use super::weight_certificate;
 use super::weight_semantic;
+use super::weight_semantic_certificate;
 use super::McpToolCall;
 use super::{
 	rea, rea_artifact_zip, rea_evidence, rea_model, rea_provider, rea_store, weight,
@@ -263,6 +264,7 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"weight_bellman_plan",
 	"weight_continuation_certificate",
 	"weight_semantic_replay",
+	"weight_semantic_certificate",
 	"weight_open",
 	"weight_call",
 	"weight_status",
@@ -1891,6 +1893,25 @@ impl OctofsServer {
 		Parameters(params): Parameters<weight_semantic::SemanticReplayParams>,
 	) -> Result<String, String> {
 		weight_semantic::replay(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Replay and Verify a Native Continuation Witness",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Execute the fixed native endpoint semantic core and join its causal states, hidden bytes, legal masks and first-maximum teacher targets directly to the exact continuation checker. One checkpoint and public schedule, 1..128 traces, 1..256 source-row/competitor/multiplier comparisons; every trace must be covered. Caller-supplied hidden vectors, Q scores, masks, targets and states are forbidden. Compiled join/adapter/core/contract/checker/arithmetic source identities are pinned, not the complete executable. One worker shared with semantic replay retains admission through parsing, replay, join, proof and bounded serialization, even after caller cancellation. The 30-second outer cooperative cutoff is passed to both semantic replay and the exact checker; neither phase renews it, and late serialized results are refused. This is not a hard wall-clock process kill. At most 3 MiB canonical request and 1 MiB result. Checks the original fixed 147-coefficient ball without witness search. No file/process access, model edit, external-source authentication, general First-Passage/Reset or NDU, independent holdout, task-value improvement or production eligibility."
+	)]
+	async fn weight_semantic_certificate(
+		&self,
+		Parameters(params): Parameters<weight_semantic_certificate::SemanticCertificateParams>,
+	) -> Result<String, String> {
+		weight_semantic_certificate::verify(params)
 			.await
 			.map_err(|error| error.to_string())
 	}

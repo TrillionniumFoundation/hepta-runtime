@@ -1317,4 +1317,71 @@ async fn runtime_weight_semantic_replay_and_rejections_over_real_mcp() {
 	)
 	.await;
 	assert!(!failed, "{text}");
+
+	let composite_tool = tools
+		.tools
+		.iter()
+		.find(|tool| tool.name == "weight_semantic_certificate")
+		.unwrap();
+	assert!(super::RUNTIME_TOOL_NAMES.contains(&"weight_semantic_certificate"));
+	assert_eq!(
+		composite_tool.annotations.as_ref().unwrap().read_only_hint,
+		Some(true)
+	);
+	assert_eq!(composite_tool.input_schema["additionalProperties"], false);
+	assert_eq!(
+		composite_tool.input_schema["properties"]
+			.as_object()
+			.unwrap()
+			.len(),
+		6
+	);
+	let composite =
+		serde_json::to_value(crate::mcp::weight_semantic_certificate::tests::fixture()).unwrap();
+	let (failed, text) =
+		call_runtime_tool_text(&client, "weight_semantic_certificate", composite.clone()).await;
+	assert!(!failed, "{text}");
+	let result: serde_json::Value = serde_json::from_str(&text).unwrap();
+	assert_eq!(
+		result["certificate"]["proof"]["verdict"],
+		"F64_NECESSARY_SYSTEM_INFEASIBLE"
+	);
+	assert_eq!(result["witness_semantics_reexecuted_and_joined"], true);
+	assert_eq!(result["production_eligible"], false);
+	let mut cases = Vec::new();
+	for name in [
+		"expected_join_source_sha256",
+		"expected_semantic_adapter_source_sha256",
+		"expected_certificate_source_sha256",
+		"expected_arithmetic_source_sha256",
+	] {
+		let mut invalid = composite.clone();
+		invalid[name] = json!("0".repeat(64));
+		cases.push((name, invalid));
+	}
+	let mut injected = composite.clone();
+	injected["witnesses"][0]["hidden_f64_le_hex"] = json!("00".repeat(392));
+	cases.push(("caller hidden injection", injected));
+	let mut illegal = composite.clone();
+	illegal["witnesses"][0]["competitor_action"] = json!(3);
+	cases.push(("illegal competitor", illegal));
+	for (name, arguments) in cases {
+		if let Ok(response) = client
+			.call_tool(
+				CallToolRequestParams::new("weight_semantic_certificate")
+					.with_arguments(arguments.as_object().unwrap().clone()),
+			)
+			.await
+		{
+			assert_eq!(
+				response.is_error,
+				Some(true),
+				"{name}: {:?}",
+				response.content
+			);
+		}
+	}
+	let (failed, text) =
+		call_runtime_tool_text(&client, "weight_semantic_certificate", composite).await;
+	assert!(!failed, "{text}");
 }
