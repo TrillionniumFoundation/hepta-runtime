@@ -17,7 +17,7 @@ Recovery02 的原 C1 诊断执行已成功闭合，936 次 native 调用均成�
 
 Recovery02 使用新的 C1 专属 02 namespace 和已核身份的 D1 私有派生 seed。拓扑只更换 seed SHA 字段，六份 frozen job 原字节保持；原 Q、exact CI、ordinary、postflight、源码与 feature ELF 继续使用已闭合的 01 原件。恢复来源与条件性内容等价证明见 [准备包](../c1-recovery-preparation-02/) 和 [独立审查](../c1-recovery-independent-review-02/)。私有 profile、ssh_config 与 known_hosts 正文不在本次发布中。
 
-## 完整归档：原 zero-extraction 验证已通过，整件回传仍在进行
+## 完整归档：原验证与整件字节校验均完成
 
 原 collector 已生成 `c1-evidence-02.tar.gz`：
 
@@ -27,9 +27,9 @@ Recovery02 使用新的 C1 专属 02 namespace 和已核身份的 D1 私有派�
 
 原 zero-extraction verifier 仅执行一次，原作业 `1a1b1b79ce0-fc05-7a74` 已 `succeeded`、exit 0；完整 durable 输出为 628 B stdout / 0 B stderr。原结果为 `verified=true`、`files_extracted=0`、1,645 files、79,575,406 selected B、8 raw traces、`receipt_binding_errors=[]`、`outcome=diagnostic_passed`，调用计数仍为 936/768/96/72/0。
 
-**本说明冻结时，完整归档仍在 immutable 回传；整件回传后的 SHA 与 Git blob 尚待 root 核定。** 上述原验证通过不等于已经完成本地整件回传验证，也不触发重跑原 verifier。
+完整归档已完成 immutable 回传与整件 SHA256 校验，并实际创建 Git blob `45e901116f8d1bbc43a83cce503aa895fe812b36`。回传使用已校验的原 x230 文件及一份经完整 SHA256 验证的 Mac 副本；两段超时读取单独恢复，成功字节继续保留。原 verifier 仍只执行一次。
 
-归档、manifest、compact 与原验证执行回执拟追加到本目录的 `archive/`。本次可提交的条目只包含已真实创建的 Git blobs；归档 Git 身份未到齐的条目暂不提交占位。完整归档保存原 report、raw trace、native 请求证据、原审计与监测/回收日志，下面的派生投影不代替这些原件。
+[完整归档](archive/c1-evidence-02.tar.gz)、[原 manifest](archive/c1-evidence-02.manifest.json)、[compact](archive/c1-evidence-02.compact.json) 与原验证执行回执均已发布到 `archive/`。完整归档保存原 report、raw trace、native 请求证据、原审计与监测/回收日志；派生投影与算术结果另行保留。
 
 ## 成本投影与可重复算术
 

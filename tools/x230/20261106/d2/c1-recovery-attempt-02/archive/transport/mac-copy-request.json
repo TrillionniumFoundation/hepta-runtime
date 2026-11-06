@@ -1,0 +1,12 @@
+{
+  "host": "mac",
+  "executable": "/usr/bin/python3",
+  "args": [
+    "-B",
+    "-c",
+    "import os,json,hashlib,subprocess,time,stat\nfrom pathlib import Path\nroot=Path('/Users/qianqi/work/hepta-runtime-d2-archive-transport-03')\nroot.mkdir(mode=0o700)\nassert root.resolve()==root and root.stat().st_uid==os.getuid()\ndest=root/'c1-evidence-02.tar.gz'\nassert not os.path.lexists(dest)\ncommand=['/usr/bin/scp','-q','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=10','x230-ts:/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-evidence-02.tar.gz',str(dest)]\nt=time.monotonic()\np=subprocess.run(command,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=120,check=False)\nout={'schema':'hepta-d2-existing-ssh-archive-copy/v1','source_host':'x230-ts','source_path':'/home/qian/hepta-runtime-validation-cost-20261106-d2/c1-evidence-02.tar.gz','destination':str(dest),'command':command,'returncode':p.returncode,'seconds':time.monotonic()-t,'stderr':p.stderr.decode(errors='replace')[-4000:],'source_modified':False,'workload_or_auditor_started':False}\nif p.returncode==0:\n fd=os.open(dest,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)\n try:\n  before=os.fstat(fd);assert stat.S_ISREG(before.st_mode) and before.st_nlink==1 and before.st_size==7340932\n  raw=b''\n  while len(raw)<=7340932:\n   part=os.read(fd,65536)\n   if not part:break\n   raw+=part\n  after=os.fstat(fd);assert (before.st_ino,before.st_size,before.st_mtime_ns)==(after.st_ino,after.st_size,after.st_mtime_ns)\n finally:os.close(fd)\n sha=hashlib.sha256(raw).hexdigest()\n assert len(raw)==7340932 and sha=='b67ff03f88aecd289a58c3774e9335bd55620fe1d35f41feb8feb09ccf299464'\n out.update({'bytes':len(raw),'sha256':sha,'verified':True,'mode':stat.S_IMODE(after.st_mode)})\nprint(json.dumps(out,sort_keys=True))\nraise SystemExit(p.returncode)\n"
+  ],
+  "cwd": "/Users/qianqi/work",
+  "idempotency_key": "mac-d2-full-archive-existing-ssh-byte-copy-20261106-03",
+  "timeout_seconds": 150
+}
