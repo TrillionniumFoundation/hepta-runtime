@@ -1,0 +1,245 @@
+{
+  "schema": "hepta-r31-qualification-compact/v1",
+  "qualified": true,
+  "qualification_gate": {
+    "passed": true,
+    "original_job_id": "1a1ae1c32b8-fc05-5d7a",
+    "preparation_recovery": {
+      "revision": 2,
+      "prior_failed_job_id": "1a1ae1597f5-fc05-5d3e",
+      "prior_qualification_started": false,
+      "opaque_system_helpers": [
+        {
+          "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/init.scope",
+          "classification": "observed non-build system helper",
+          "comm": "(sd-pam)",
+          "command": "(sd-pam) ",
+          "pid": 3766,
+          "start_ticks": "2211",
+          "uids": [
+            1000,
+            1000,
+            1000,
+            1000
+          ],
+          "unreadable_fields": [
+            "cwd",
+            "exe",
+            "fd"
+          ]
+        },
+        {
+          "cgroup": "0::/user.slice/user-1000.slice/session-57832.scope",
+          "classification": "observed non-build system helper",
+          "comm": "sshd",
+          "command": "sshd: qian@notty     ",
+          "pid": 494051,
+          "start_ticks": "198929192",
+          "uids": [
+            1000,
+            1000,
+            1000,
+            1000
+          ],
+          "unreadable_fields": [
+            "cwd",
+            "exe",
+            "fd"
+          ]
+        },
+        {
+          "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/gpg-agent.service",
+          "classification": "observed non-build system helper",
+          "comm": "gpg-agent",
+          "command": "/usr/bin/gpg-agent --supervised ",
+          "pid": 615056,
+          "start_ticks": "7596269",
+          "uids": [
+            1000,
+            1000,
+            1000,
+            1000
+          ],
+          "unreadable_fields": [
+            "cwd",
+            "exe",
+            "fd"
+          ]
+        },
+        {
+          "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/gcr-ssh-agent.service",
+          "classification": "observed non-build system helper",
+          "comm": "ssh-agent",
+          "command": "/usr/bin/ssh-agent -D -a /run/user/1000/gcr/.ssh ",
+          "pid": 3547817,
+          "start_ticks": "127655426",
+          "uids": [
+            1000,
+            1000,
+            1000,
+            1000
+          ],
+          "unreadable_fields": [
+            "cwd",
+            "exe",
+            "fd"
+          ]
+        }
+      ],
+      "process_visibility_scope": "all readable same-user cmdline/cwd/exe/fd plus global compiler names; exact known non-build system helpers recorded when proc access is denied",
+      "automatic_retry": false
+    },
+    "selected_proposal": "pidfd cancellation readiness wait on accepted R24",
+    "source_baseline_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+    "qualified_source_files": 222,
+    "harness_files": 19,
+    "changed_paths": [
+      "src/mcp/runtime/jobs.rs",
+      "src/mcp/runtime/jobs_cancel_wait_fixture.py",
+      "src/mcp/runtime/jobs_cancel_wait_tests.rs"
+    ],
+    "stages": [
+      "format",
+      "fmt-check",
+      "harness-tests",
+      "clippy",
+      "test-build",
+      "isolated-tests",
+      "audit-isolated-tests",
+      "release"
+    ],
+    "tests": {
+      "passed": 1653,
+      "failed": 0,
+      "ignored": 34,
+      "selected": 1687,
+      "retries": 0
+    },
+    "candidate_adopted": false,
+    "adoption_scope": "accepted R24 plus pidfd cancellation readiness wait only",
+    "saturated_cancellation_verified": false,
+    "open_blockers": [
+      {
+        "id": "saturated-cancellation-capacity",
+        "status": "open",
+        "scope": "not included in the R31 source change or normal lifecycle adoption",
+        "reason": "R31 does not add cancellation reserve capacity; no saturated cancellation proof is claimed"
+      }
+    ],
+    "failed_preparation_attempt_01": {
+      "preparation": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r31/preparation.json",
+        "bytes": 2276,
+        "sha256": "0f9ea821eeab65ebc555b9cb30f12188949454ce4d1ce4b3c5a8db8a1cd5f88c"
+      },
+      "native_terminal": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r31/preparation-attempt-01-native.json",
+        "bytes": 731,
+        "sha256": "7aab5349b443b7a46a0a161f69098316c71f2d20faa57e38b929caf2acef1068"
+      },
+      "job_id": "1a1ae1597f5-fc05-5d3e",
+      "qualification_started": false,
+      "cache_transferred": false
+    },
+    "previous_cache_owner_evidence": {
+      "qualification": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r30/qualification-01/report.json",
+        "bytes": 83365,
+        "sha256": "24cd58c6194ab94f1d5b7f33c409bd901a06ca5f39ad33d53aa0ec339dcb6a76"
+      },
+      "native_terminal": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r30/qualification-terminal-status-01.json",
+        "bytes": 732,
+        "sha256": "74a312bc03e765ac3883fac0f38c7c149ec2ec36870381c2c5452f052597e79a"
+      },
+      "failed_campaign": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r30/campaign-01/report.json",
+        "bytes": 73648,
+        "sha256": "43921389f13fd0760460b305ee02a642c410072376c34632109a7470d97cbeb0"
+      },
+      "failed_native_observation": {
+        "path": "/home/qian/hepta-runtime-optimization-20261105-r30/campaign-01/native-observation/report.json",
+        "bytes": 3567429,
+        "sha256": "3b7ced2475a579f4a6c9f9f61605a7e4756c31884ec8cb505e74da176e8a0f5c"
+      },
+      "cache_deletions": 0,
+      "previous_candidate_adopted": false
+    },
+    "preparation": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/preparation-02.json",
+      "bytes": 55575,
+      "sha256": "77bdf6f1b008b65dfbedcac24b7ea3026e3946ad4fbff68ca96e5980b660d003"
+    },
+    "terminal": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/qualification-terminal-status-01.json",
+      "bytes": 732,
+      "sha256": "f9f6de27c19b015e072f8169e7155783102d9b2ef3bc6ff2d8705927c0016b4e"
+    },
+    "qualification": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/qualification-01/report.json",
+      "bytes": 84072,
+      "sha256": "489e62778972d9a8f4b2908c205b23791a968dbf21dc2bdb995350f29305c5a9"
+    },
+    "qualification_launcher": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/prepare_qualify_v2.py",
+      "bytes": 13435,
+      "sha256": "65d891c7cc9fd56c10a1ce26cf55246987298a60c5946e388e4ebd1e6435db56"
+    },
+    "qualification_input": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/input.json",
+      "bytes": 50079,
+      "sha256": "b54654aa5ea0a414b860a215d6bf0caef73c3b03adccdf7da83fc7f336003383"
+    },
+    "candidate_patch": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/candidate.patch",
+      "bytes": 23863,
+      "sha256": "743701d44a9cef52c6cb04115bd8a8d7671c32e7fc0e52459c38ca63ff70ea21"
+    },
+    "baseline_qualification": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r24/qualification-01/report.json",
+      "bytes": 83365,
+      "sha256": "bf0c5814d28b163e4a90405026cd4d90e399370d1f910f8ac48cb580af1e4971"
+    },
+    "isolated_summary": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/qualification-01/isolated-tests/summary.json",
+      "bytes": 6878,
+      "sha256": "7e388326114b5be8abfc835cead435de0c597e8b2124442d4e293360937208d6"
+    },
+    "isolated_audit": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/qualification-01/isolated-tests.audit.json",
+      "bytes": 1426854,
+      "sha256": "c1ab01f10645b23d51926b5f4f65142b3da136cd538e86b93f3c55741a2c895f"
+    },
+    "source_map": {
+      "path": "/home/qian/hepta-runtime-optimization-20261105-r31/qualification-01/source-map.json",
+      "bytes": 24388,
+      "sha256": "a4c654bd8b5057fb6884c36172b198eedcfcddab8e2b291155a4e73146707a3f"
+    },
+    "full_source_inputs_sha256": "f565a7e993b84a2dc63dbe5767aca492f93048527add623d6f7080b88d7b5ddc",
+    "baseline_full_source_inputs_sha256": "e449e138216242c89b2ceff69babafe658411a42c73df0c66b222899540bdff7",
+    "original_auditor_scope": "the unchanged qualifier audited the complete inventory and compressed case logs"
+  },
+  "candidate_binaries": {
+    "hepta-runtime": {
+      "bytes": 14374760,
+      "sha256": "70767e3ef78ec8519b81d7f600b37d012965b3c1b96abaf6c47c8273c73ee450"
+    },
+    "hepta-runtime-jobctl": {
+      "bytes": 739016,
+      "sha256": "61c90260057a405626a24a36ad43303c632f72d2d97929296acdffd748b79d62"
+    },
+    "native_process_driver": {
+      "bytes": 2897736,
+      "sha256": "91bf604ee052492f3fc78e97a0249abfdbe8de5afc14210352cb1560fa5923a8"
+    }
+  },
+  "source_inputs_sha256": "f565a7e993b84a2dc63dbe5767aca492f93048527add623d6f7080b88d7b5ddc",
+  "baseline_commit": "baab4def80be7af015b2e7a594cb302f66c4130e",
+  "campaign_inputs": {
+    "path": "/home/qian/hepta-runtime-optimization-20261105-r31/campaign-inputs-01.json",
+    "bytes": 15870,
+    "sha256": "d9b18804f1e0ced459ef59af53d3245f24bf8bf416b74a9790d9a9280593bfe2"
+  },
+  "workloads_started": 0,
+  "automatic_retries": 0
+}
