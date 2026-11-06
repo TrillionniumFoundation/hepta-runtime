@@ -1,0 +1,108 @@
+{
+  "schema": "hepta-d2-c1-recovery-transport-edit-ledger/v1",
+  "reference": {
+    "git_blob": "b528256167ffb1e5bb278ad7aaba9982edd20838",
+    "bytes": 9443,
+    "sha256": "166f6f9df734065a6bc9fd1565da3c596de3c4d62c97b295309c87cd12b0af35"
+  },
+  "revised": {
+    "git_blob": "064965032c8763e551c68efc4d864877c964acd0",
+    "bytes": 11633,
+    "sha256": "9aaa51c013c768e030546952d90bea04ac5c321fdd4a9c610c6d4090c499ef6a"
+  },
+  "edits": [
+    {
+      "old": "\"\"\"Install the exact unsealed D1 C1 preparation once; execute no packaged code.\"\"\"",
+      "new": "\"\"\"Install exact D2 C1 recovery02 preparation and seven fixtures; execute no packaged code.\"\"\"",
+      "occurrences": 1
+    },
+    {
+      "old": "ROOT = Path(\"/home/qian/hepta-runtime-phase-cost-20261106-d1\")",
+      "new": "ROOT = Path(\"/home/qian/hepta-runtime-validation-cost-20261106-d2\")",
+      "occurrences": 1
+    },
+    {
+      "old": "DEST = ROOT / \"c1-parent-preparation-05\"",
+      "new": "DEST = ROOT / \"c1-parent-preparation-02\"\nFIXTURE_DEST = ROOT / \"c1-fixtures-02\"\nFIXTURE_NAMES = (\n    \"topology.json\",\n    \"jobs/1a16a4035ad-b1270-1.json\",\n    \"jobs/1a16a403e55-b1270-2.json\",\n    \"jobs/1a16a4046ac-b1270-3.json\",\n    \"jobs/1a16a40534e-b1270-4.json\",\n    \"jobs/1a16a405d21-b1270-5.json\",\n    \"jobs/1a16a40671b-b1270-6.json\",\n)",
+      "occurrences": 1
+    },
+    {
+      "old": "RECEIPT = ROOT / \"c1-preparation-install-05.json\"",
+      "new": "RECEIPT = ROOT / \"c1-preparation-install-02.json\"",
+      "occurrences": 1
+    },
+    {
+      "old": "ARCHIVE = ROOT / \"c1-parent-preparation-05.tar.gz\"",
+      "new": "ARCHIVE = Path(\"/home/qian/hepta-runtime-d2-c1-recovery-preparation-02.tar.gz\")",
+      "occurrences": 1
+    },
+    {
+      "old": "EXPECTED_MANIFEST = {\"bytes\": 13228, \"sha256\": \"40693bc863122eff6c554aa18e4c4394e9a6c17a90753b2761deaa920382c38e\"}",
+      "new": "EXPECTED_MANIFEST = {\"bytes\": 14499, \"sha256\": \"1fc96864278c7b1996aba3fba69bb3293d2c12d952d19bc0e8098fe5424dea90\"}",
+      "occurrences": 1
+    },
+    {
+      "old": "EXPECTED_MEMBERS = 43",
+      "new": "EXPECTED_MEMBERS = 55",
+      "occurrences": 1
+    },
+    {
+      "old": "EXPECTED_PAYLOAD_BYTES = 564059",
+      "new": "EXPECTED_PAYLOAD_BYTES = 568655",
+      "occurrences": 1
+    },
+    {
+      "old": "EXPECTED_ARCHIVE = {'bytes': 158613, 'sha256': 'ad6778f31e7b10caaad3913e8c6368cc09fa6ef6b34c411cdf54a15d8a4e2faf'}",
+      "new": "EXPECTED_ARCHIVE = {'bytes': 614468, 'sha256': '802d7eae498a4945b45b04eb3afa06b40bc3d1cb50f4ddc498406aac2ef50950'}",
+      "occurrences": 1
+    },
+    {
+      "old": "\"hepta-d1-c1-outer-preparation/v1\"",
+      "new": "\"hepta-d2-c1-outer-preparation/v1\"",
+      "occurrences": 1
+    },
+    {
+      "old": "manifest.get(\"revision\") == \"05\"",
+      "new": "manifest.get(\"revision\") == \"recovery-02\"",
+      "occurrences": 1
+    },
+    {
+      "old": "manifest.get(\"source_only\") is True",
+      "new": "manifest.get(\"source_package_only\") is True",
+      "occurrences": 1
+    },
+    {
+      "old": "    need(not os.path.lexists(DEST) and not os.path.lexists(RECEIPT),\n         \"source preparation or installation receipt already exists\")",
+      "new": "    fixture_members = {name: members[\"fixtures/\" + name] for name in FIXTURE_NAMES}\n    fixture_plan = json.loads(members[\"fixture-deployment.json\"])\n    fixture_rows = fixture_plan[\"files\"]\n    need(type(fixture_rows) is list and len(fixture_rows) == len(FIXTURE_NAMES) == 7\n         and {row[\"source\"] for row in fixture_rows} == {\"fixtures/\" + name for name in FIXTURE_NAMES},\n         \"fixed seven fixture source names differ\")\n    for name, raw in fixture_members.items():\n        matches = [row for row in fixture_rows if row[\"source\"] == \"fixtures/\" + name]\n        need(len(matches) == 1, \"one declared fixture destination required\")\n        row = matches[0]\n        need(row[\"destination\"] == str(FIXTURE_DEST / name)\n             and row[\"bytes\"] == len(raw) and row[\"sha256\"] == hashlib.sha256(raw).hexdigest(),\n             \"fixed fixture destination or original bytes differ\")\n    need(not os.path.lexists(DEST) and not os.path.lexists(FIXTURE_DEST)\n         and not os.path.lexists(RECEIPT),\n         \"source preparation, fixtures or installation receipt already exists\")",
+      "occurrences": 1
+    },
+    {
+      "old": "    created = [str(DEST)]",
+      "new": "    FIXTURE_DEST.mkdir(mode=0o700)\n    directory(FIXTURE_DEST, private=True)\n    sync_directory(ROOT)\n    fixture_jobs = FIXTURE_DEST / \"jobs\"\n    fixture_jobs.mkdir(mode=0o700)\n    directory(fixture_jobs, private=True)\n    sync_directory(FIXTURE_DEST)\n    created = [str(DEST), str(FIXTURE_DEST), str(fixture_jobs)]",
+      "occurrences": 1
+    },
+    {
+      "old": "    installed = [write_new(DEST / name, raw) for name, raw in sorted(members.items())]",
+      "new": "    installed = [write_new(DEST / name, raw) for name, raw in sorted(members.items())]\n    installed_fixtures = [write_new(FIXTURE_DEST / name, raw)\n                          for name, raw in sorted(fixture_members.items())]",
+      "occurrences": 1
+    },
+    {
+      "old": "\"schema\": \"hepta-d1-c1-source-preparation-install/v1\"",
+      "new": "\"schema\": \"hepta-d2-c1-source-preparation-install/v1\"",
+      "occurrences": 1
+    },
+    {
+      "old": "        \"files\": installed, \"file_count\": len(installed), \"payload_bytes\": total,",
+      "new": "        \"files\": installed, \"file_count\": len(installed), \"payload_bytes\": total,\n        \"fixture_destination\": str(FIXTURE_DEST), \"fixture_files\": installed_fixtures,\n        \"fixture_file_count\": len(installed_fixtures),\n        \"fixture_payload_bytes\": sum(len(raw) for raw in fixture_members.values()),\n        \"private_seed_or_configuration_written\": False,",
+      "occurrences": 1
+    },
+    {
+      "old": "                      \"payload_bytes\": total, \"source_sealed\": False,",
+      "new": "                      \"payload_bytes\": total, \"fixture_file_count\": len(installed_fixtures),\n                      \"fixture_payload_bytes\": sum(len(raw) for raw in fixture_members.values()),\n                      \"source_sealed\": False,",
+      "occurrences": 1
+    }
+  ],
+  "inverse_reconstruction_exact": true,
+  "eight_filesystem_helpers_and_cli_main_unchanged": true,
+  "fixture_write_scope": "Exactly7 publicly retained fixture files under new ROOT/c1-fixtures-02, in addition to55 new preparation files; no private config reads or writes."
+}

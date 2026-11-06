@@ -1,0 +1,119 @@
+{
+  "schema": "hepta-d2-c1-mac-transport-independent-review/v1",
+  "reviewer": "/root/audit_acceptance",
+  "conclusion": "no_blocking_issue_in_reviewed_transport_delta",
+  "source": {
+    "git_blob": "8bf6bd5154826e6da2f4558587f1886a0624468b",
+    "bytes": 15014,
+    "sha256": "c1f59080befeba1b660ae7b6bb24ba1e2f4af083a2f60ce30ae37a785f255994"
+  },
+  "reference": {
+    "git_blob": "bcaadb2cabce393182c465d84a04d052a5e26e74",
+    "bytes": 14918,
+    "sha256": "deb82a9c072729208c1dc6ba1a2a009ad2faa78ea08fdb9ebff3ec72ec8a850e"
+  },
+  "supporting_objects": {
+    "exact_change_ledger": {
+      "git_blob": "6b83a0cc823875f39042c186d60e0f055094aa5c",
+      "bytes": 10782,
+      "sha256": "c592124bd79743a1488e9592384d34cfe8f6033bdb57a2dc446ea0c94216658f"
+    },
+    "producer_static_check": {
+      "git_blob": "b985c0add3e9f9ef4d0c7f8d0ddc4f7678de8787",
+      "bytes": 658,
+      "sha256": "464a82f0b2ed3140ed8bae355b3e852bde11955849ad19020f58016373cc2551"
+    },
+    "transport_manifest": {
+      "git_blob": "cc3da5b130ec4e058a9848b1845ba89e87ca8d8b",
+      "bytes": 6171,
+      "sha256": "ad839aebb6a313e8910a1cd1903cb0ffe27e0b588fd5e820edcae90127f18e19"
+    },
+    "previously_reviewed_actual_seal_manifest": {
+      "git_blob": "1ed0f4a3f1b1256356258faf146f57bd2a5017af",
+      "bytes": 325264,
+      "sha256": "2f14f87be47957240dc54c99e64d98f346a44822b878936df05060950cd46b0d"
+    },
+    "independent_actual_seal_review_git": "2fd5efa2709c2e12676dd34c3458efbab17ba0bd"
+  },
+  "independent_findings": {
+    "passed": true,
+    "whole_source_exact_13_replacements": true,
+    "occurrences": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      2,
+      1,
+      1,
+      1,
+      2,
+      2,
+      1
+    ],
+    "byte_exact_helpers": [
+      "require",
+      "sha",
+      "stamp",
+      "directory_identity",
+      "read_regular",
+      "octal",
+      "check_directories"
+    ],
+    "parser_only_exact_total_literal": true,
+    "expected23_equal_actual21_plus_manifest_and_original_installer": true,
+    "payload_bytes": 709014,
+    "input_root": "/Users/qianqi/work",
+    "staging_root": "/Users/qianqi/work/hepta-runtime-d2-c1-sealed-staging-01",
+    "external_tar": "/Users/qianqi/work/hepta-runtime-d2-c1-sealed-payloads-01.tar.gz",
+    "external_importer": "/Users/qianqi/work/hepta-runtime-d2-c1-importer-01.py",
+    "input_fd": "checks[-1][0] captured immediately after ancestor traversal, before private-directory entries are appended; this is the already protected work directory descriptor",
+    "fixed_private_directory_count": 5,
+    "inventory_extra_allowance_removed": true,
+    "unchanged_caps": {
+      "archive": 1048576,
+      "file": 1048576,
+      "total": 2097152
+    },
+    "no_delete_overwrite_retry_or_target_execution": true,
+    "tar_binary_revalidated_by_this_review": false
+  },
+  "safety_effect": [
+    "All twenty-three declared member identities equal the actual seal manifest's twenty-one payload identities plus the unchanged original runtime installer and the exact seal-manifest body. Optional operator-argv.json is omitted; no original payload is altered.",
+    "Both fixed transport inputs are read using the work directory descriptor already opened and protected by the original no-symlink ancestor checks. The descriptor is captured before appending private-directory checks.",
+    "The root inventory no longer permits tar/importer entries. Before writes, all five private staging directories must contain only the pre-created directory skeleton; after writes only the exact member set is allowed. No lock file names or wildcard exceptions are present.",
+    "Archive SHA/length, bounded gzip, handwritten canonical USTAR parsing, all members and output absence are checked before the first O_EXCL write. Original mode0600, regular/nlink/owner checks, stable readback, file and directory fsync, final member hash pass and unchanged input checks remain intact.",
+    "No deletion, replacement, recursive cleanup, subprocess, runtime import, workload or benchmark namespace is introduced. A partial write failure retains evidence and prevents successful completion."
+  ],
+  "archive_identity_declared": {
+    "bytes": 174945,
+    "git_blob": "0019ef3fcd22b551a47d6a890f7bcd607d9c3bb8",
+    "name": "hepta-runtime-d2-c1-sealed-payloads-01.tar.gz",
+    "sha256": "523b4e1003eb1cd6f55764a64e4479fe9c4be37e706057fcecc0deed89d53565"
+  },
+  "original_installer": {
+    "bytes": 12402,
+    "sha256": "bd6e33588cb938a15ffc6ca68bed3f6e11c2df1a1e51da743202dd1a9941faba"
+  },
+  "validation_scope": {
+    "exact_source_bytes_independently_rehashed": true,
+    "all_thirteen_replacements_independently_replayed": true,
+    "seven_unchanged_functions_independently_compared": true,
+    "parser_total_literal_independently_compared": true,
+    "twenty_three_member_declarations_compared_to_actual_seal": true,
+    "target_imports": 0,
+    "target_executions": 0,
+    "host_calls": 0,
+    "ast_parse_by_this_review": false,
+    "producer_ast_parse_record_available": true,
+    "binary_tar_download_or_decompression_by_this_review": false,
+    "producer_binary_tar_integrity_receipt": {
+      "git_blob": "cc3da5b130ec4e058a9848b1845ba89e87ca8d8b",
+      "bytes": 6171,
+      "sha256": "ad839aebb6a313e8910a1cd1903cb0ffe27e0b588fd5e820edcae90127f18e19"
+    }
+  },
+  "limitations": "This is a source and exact identity-map delta review. It does not assert actual Mac installation success or future C1 results, and it does not claim to repeat the producer's binary tar member checks."
+}

@@ -1,0 +1,35 @@
+{
+  "audit_recorded": true,
+  "job": {
+    "args": [
+      "-B",
+      "-c",
+      "import base64,hashlib,json,os,stat,sys\nROOT='/home/qian/hepta-runtime-validation-cost-20261106-d2'\nLIMIT=1024*1024\ndef need(ok,msg):\n if not ok: raise RuntimeError(msg)\nraw=sys.stdin.buffer.read(LIMIT+1)\nneed(len(raw)<=LIMIT and hashlib.sha256(raw).hexdigest()==sys.argv[1],'copy packet identity')\ndoc=json.loads(raw)\nneed(doc['schema']=='hepta-original-holder-byte-copy/v1','packet schema')\nneed(doc['original_job_id']=='1a1b13e79b5-fc05-7739','original holder identity')\ntop={'c1-holder-native-01.json','c1-holder-native-read-01-000.json','c1-holder-start-01.json','c1-holder-report-01.json'}\npayload={}\nfor row in doc['files']:\n name=row['path']\n parts=name.split('/')\n need((len(parts)==1 and name in top) or (len(parts)==2 and parts[0]=='c1-holder-originals-01' and parts[1] not in {'','.','..'}),'copy destination')\n need(name not in payload and all('\\\\' not in x and '\\x00' not in x for x in parts),'duplicate/unsafe destination')\n data=base64.b64decode(row['data_base64'],validate=True)\n need(len(data)==row['bytes'] and len(data)<=65536 and hashlib.sha256(data).hexdigest()==row['sha256'],'original bytes differ')\n payload[name]=data\nneed(top<=payload.keys(),'native originals incomplete')\nreport=json.loads(payload['c1-holder-report-01.json'])\nexpected={'c1-holder-originals-01/'+p['file'] for p in report['log_files']}\nneed(set(payload)==top|expected and len(payload)==25,'exact original log inventory')\nfor p in report['log_files']:\n data=payload['c1-holder-originals-01/'+p['file']]\n need(len(data)==p['bytes'] and hashlib.sha256(data).hexdigest()==p['sha256'],'holder report log binding')\nflags=os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC\nrootfd=os.open(ROOT,flags)\ntry:\n st=os.fstat(rootfd)\n need(st.st_uid==os.geteuid() and stat.S_IMODE(st.st_mode)==0o700,'root owner/mode')\n for name in top|{'c1-holder-originals-01'}:\n  try: os.stat(name,dir_fd=rootfd,follow_symlinks=False)\n  except FileNotFoundError: continue\n  raise RuntimeError('create-only destination already exists: '+name)\n os.mkdir('c1-holder-originals-01',0o700,dir_fd=rootfd)\n logfd=os.open('c1-holder-originals-01',flags,dir_fd=rootfd)\n try:\n  for name,data in sorted(payload.items()):\n   parts=name.split('/'); parent=rootfd if len(parts)==1 else logfd; leaf=parts[-1]\n   fd=os.open(leaf,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,0o600,dir_fd=parent)\n   with os.fdopen(fd,'wb') as stream:\n    stream.write(data);stream.flush();os.fsync(stream.fileno())\n   rd=os.open(leaf,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC,dir_fd=parent)\n   with os.fdopen(rd,'rb') as stream:\n    observed=stream.read(len(data)+1);st=os.fstat(stream.fileno())\n   need(observed==data and stat.S_ISREG(st.st_mode) and st.st_nlink==1 and st.st_uid==os.geteuid() and stat.S_IMODE(st.st_mode)==0o600,'copy readback differs')\n  os.fsync(logfd);os.fsync(rootfd)\n finally: os.close(logfd)\nfinally: os.close(rootfd)\nprint(json.dumps({'copied_original_files':len(payload),'payload_bytes':sum(map(len,payload.values())),'packet_sha256':sys.argv[1],'original_holder_job_id':doc['original_job_id'],'runtime_or_workload_executed':False},sort_keys=True))\n",
+      "cb1446d6bb5e320a2b2fd34ac6dd1f6a2fdd9d71342f9f5fb2da8ee3279ea703"
+    ],
+    "created_unix_ms": 1793977158366,
+    "cwd": "/home/qian/hepta-runtime-validation-cost-20261106-d2",
+    "env_keys": [],
+    "executable": "/usr/bin/python3",
+    "execution_mode": "operator",
+    "host": "x230",
+    "id": "1a1b15f0ade-fc05-7818",
+    "idempotency_key": "x230-d2-c1-original-holder-byte-copy-first-20261106-01",
+    "launch_error": null,
+    "launch_state": "launched",
+    "remote_job_dir": "/home/qian/.local/state/hepta-runtime-mac-worker/jobs/1a1b15f0ade-fc05-7818",
+    "request_digest": "8f18d28787a34e8a50619c010e98a6a5cb8056ad7112984e021090e74ac83d1d",
+    "request_fingerprint": 10311222826402795146,
+    "ssh_target": "x230-ts",
+    "system_jobctl": false,
+    "unit": "hepta-runtime-job-1a1b15f0ade-fc05-7818"
+  },
+  "launch": {
+    "backend": "systemd",
+    "launcher_pid": null,
+    "ok": true,
+    "unit": "hepta-runtime-job-1a1b15f0ade-fc05-7818"
+  },
+  "local_record_pending": false,
+  "reused": false
+}
