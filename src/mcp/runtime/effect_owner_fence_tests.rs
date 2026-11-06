@@ -1,3 +1,4 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
@@ -218,6 +219,7 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		"rea_inspect_analysis_view",
 		"rea_import_evidence_bundle",
 		"rea_export_evidence_bundle",
+		"rea_close_evidence_snapshot",
 		"rea_retain_preview",
 		"rea_model_session_open",
 		"rea_static_start",
@@ -241,6 +243,8 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		"stream_handoff_write",
 		"stream_handoff_close",
 		"rea_static_cancel",
+		// Release already-owned session memory even when new effects are fenced.
+		"rea_close_evidence_snapshot",
 		"weight_close",
 		"workdir",
 	]

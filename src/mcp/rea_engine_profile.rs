@@ -168,6 +168,10 @@ pub(crate) fn validate_manifest(
 	for (relative, digest) in &manifest.files {
 		if !(relative.starts_with("Ghidra/")
 			|| (engine.bridge_revision == Some(4) && relative.starts_with("GPL/")))
+			|| (engine.bridge_revision == Some(4)
+				&& relative
+					.split('/')
+					.any(|part| matches!(part, "" | "." | "..")))
 			|| relative.contains(':')
 			|| relative.contains('\\')
 			|| !absolute_normal_path(&format!("{}/{relative}", engine.installation_root))

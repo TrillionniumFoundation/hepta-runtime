@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import select
+import shutil
 import stat
 import subprocess
 import sys
@@ -318,6 +319,212 @@ class ActualOwnedProcessTests(unittest.TestCase):
                     child.wait(timeout=5)
                 child.stdout.close()
                 child.stderr.close()
+
+
+class ArchiveRelocationTests(unittest.TestCase):
+    """Complete synthetic OPEN receipts check relocation, never execution success."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="rea-lifecycle-archive-")
+        self.addCleanup(self.temporary.cleanup)
+        self.base = Path(self.temporary.name)
+        self.repo, self.original = self.base / "source", self.base / "original-output"
+        self.root = self.original
+        self.root.mkdir()
+        checkout = Path(__file__).resolve().parents[1]
+        for name in evidence.PRODUCER_FILES:
+            target = self.repo / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(checkout / name, target)
+        from rea_full_qualification import Selection
+        source = Selection(self.repo, None, None).snapshot()
+        binary = {"path": BINARY, "bytes": 10, "sha256": "1" * 64}
+        node = {"path": "/selected/node", "bytes": 20, "sha256": "2" * 64}
+        reference = {"name": "rea-agents", "version": "6.8.0", "file_count": 2398,
+            "tarball_sha256": q.PACKAGE_SHA256, "files_sha256": q.PACKAGE_FILES_SHA256,
+            "catalog_sha256": q.CATALOG_SHA256, "git_source_commit": q.REFERENCE_COMMIT,
+            "package_root": "/selected/rea-agents"}
+        bindings = [q.artifact_reference(self.repo / name, self.repo) for name in evidence.PRODUCER_FILES]
+        self.fixtures = {name: {"path": str(self.original / "workspace" / (name + ".elf")),
+            "sha256": evidence.expected_fixture(size), "bytes": size, "dev": 8, "ino": 42 + index,
+            "mode": stat.S_IFREG | 0o600} for index, (name, size) in enumerate((
+                ("prime", len(q.elf(q.note()))), ("active", evidence.ACTIVE_BYTES), ("worker", evidence.WORKER_BYTES)))}
+        self.config = {"controller_workspace_roots": [str(self.original / "workspace")],
+            "state_dir": str(self.original / "state"), "hosts": {"never-connect": {
+                "ssh_target": "never-connect-invalid", "remote_state_dir": str(self.original / "unused-remote"),
+                "allow_execute": False, "allow_pty": False, "allow_write": False, "allow_job_network": False}}}
+        self.report = {"schema": evidence.SCHEMA, "profile": evidence.PROFILE, "operation": "inspect_elf_notes",
+            "errors": [], "producer_before": bindings, "producer_after": copy.deepcopy(bindings),
+            "source_before": self.put("source-before.json", source), "source_after": self.put("source-after.json", source),
+            "source_monitor": self.put("source-monitor.json", {"event_count": 0, "errors": [],
+                "retained_events": [], "events_truncated": False}),
+            "reference_before": reference, "reference_after": copy.deepcopy(reference),
+            "native_before": binary, "native_after": copy.deepcopy(binary),
+            "node_before": node, "node_after": copy.deepcopy(node), "node_version": "v22.23.4",
+            "binary_source_commit_declared": "3" * 40,
+            "binary_source_receipt": self.put("binary-source-receipt.json", {"binary": binary, "commit": "3" * 40}),
+            "config": self.put("runtime.json", self.config), "fixtures": self.put("fixtures.json", self.fixtures),
+            "fixtures_after": self.put("fixtures-after.json", self.fixtures), "sessions": [],
+            "unsupported": [{"producer": "reference", "scenario": "worker-deadline",
+                "reason": "frozen ElfNotesProvider parses in process; no independent parser pidfd deadline injection boundary"}]}
+        for index, (label, scenario) in enumerate(evidence.SESSION_ORDER):
+            prefix = label + "-" + scenario
+            owner = {"pid": 1234 + index, "parent_pid": 1200, "process_group": 1234 + index, "start_time_ticks": 91 + index}
+            close = {"owner": owner, "returncode": 0, "forced_cleanup": [], "reader_stopped": True,
+                     "owner_pidfd_exited": True, "process_group_gone": True, "elapsed_seconds": 0.1}
+            argv = ([node["path"], "/selected/rea-agents/scripts/rea.mjs", "mcp"] if label == "reference"
+                    else [BINARY, "mcp", "--runtime-config", str(self.original / "runtime.json")])
+            launch = {"pid": owner["pid"], "owner": owner, "argv": argv, "cwd": str(self.original / "workspace"),
+                      "environment": lifecycle.REFERENCE_ENVIRONMENT if label == "reference" else {}}
+            tool = "inspect_elf_notes" if label == "reference" else "rea_inspect_elf_notes"
+            arguments = {"path": self.fixtures["active"]["path"], "max_file_bytes": evidence.ACTIVE_BYTES}
+            request_value = {"jsonrpc": "2.0", "id": 4, "method": "tools/call",
+                             "params": {"name": tool, "arguments": arguments}}
+            trace = {"schema": "hepta.rea.lifecycle-trace.v1", "producer": label, "scenario": scenario,
+                "events": [{"event": "request", "when_ns": 2, "request_id": 4, "tool": tool,
+                            "arguments": arguments, "role": "active"},
+                           {"event": "unobserved", "when_ns": 3},
+                           {"event": "eof", "when_ns": 4, "owner": owner},
+                           {"event": "closed", "when_ns": 5, "observation": close}]}
+            self.report["sessions"].append({"producer": label, "scenario": scenario,
+                "trace": self.put(prefix + "/trace.json", trace),
+                "wire": self.put(prefix + "/wire.jsonl", wire([("sent", 1, request_value)])),
+                "launch": self.put(prefix + "/launch.json", launch), "close": self.put(prefix + "/close.json", close),
+                "stderr": self.put(prefix + "/stderr.log", b"")})
+        self.pin = self.put("qualification.json", self.report)["sha256"]
+
+    def put(self, name, value):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(value if isinstance(value, bytes) else q.json_bytes(value))
+        return q.artifact_reference(path, self.root)
+
+    def read(self, reference):
+        return json.loads((self.root / reference["path"]).read_bytes())
+
+    def validate(self, repin=False):
+        if repin:
+            self.pin = self.put("qualification.json", self.report)["sha256"]
+        return evidence.validate_lifecycle_receipt(self.repo, self.root / "qualification.json", self.pin)
+
+    def relocate(self):
+        destination = self.base / "relocated-archive"
+        shutil.copytree(self.root, destination)
+        shutil.rmtree(self.root)
+        self.root = destination
+
+    def test_unchanged_complete_receipt_replays_after_original_path_is_gone(self):
+        before = self.validate()
+        originals = {path.relative_to(self.root): path.read_bytes() for path in self.root.rglob("*") if path.is_file()}
+        self.relocate()
+        self.assertFalse(self.original.exists())
+        old_open, old_resolve, old_stat = Path.open, Path.resolve, Path.stat
+
+        def guard(function):
+            def checked(path, *args, **kwargs):
+                self.assertFalse(path.is_relative_to(self.original), "recorded execution path was used for filesystem access")
+                return function(path, *args, **kwargs)
+            return checked
+
+        with mock.patch.object(Path, "open", guard(old_open)), mock.patch.object(Path, "resolve", guard(old_resolve)), \
+                mock.patch.object(Path, "stat", guard(old_stat)):
+            after = self.validate()
+        self.assertEqual(before, after)
+        self.assertEqual(after["status"], "OPEN")
+        self.assertFalse(after["qualified"])
+        self.assertEqual({key: (self.root / key).read_bytes() for key in originals}, originals)
+
+    def test_recorded_paths_are_lexical_canonical_linux_metadata(self):
+        self.assertEqual(str(evidence.recorded_output_root(self.fixtures)), str(self.original))
+        paths = ("relative/workspace/prime.elf", "/owned/../workspace/prime.elf", "/owned//workspace/prime.elf",
+                 "/owned/./workspace/prime.elf", "//owned/workspace/prime.elf", "/owned/workspace/other.elf",
+                 "/owned/other/prime.elf", "/workspace/prime.elf", "/owned/\0/workspace/prime.elf", None)
+        for path in paths:
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                evidence.recorded_output_root({"prime": {"path": path}})
+
+    def test_rehashing_config_cannot_rebase_original_execution_to_archive(self):
+        self.relocate()
+        changed = copy.deepcopy(self.config)
+        changed["controller_workspace_roots"] = [str(self.root / "workspace")]
+        self.report["config"] = self.put("runtime.json", changed)
+        with self.assertRaises(ValueError):
+            self.validate(repin=True)
+
+    def test_rehashing_fixtures_cannot_change_the_recorded_workspace(self):
+        self.relocate()
+        changed = copy.deepcopy(self.fixtures)
+        for value in changed.values():
+            value["path"] = str(self.root / "workspace" / Path(value["path"]).name)
+        self.report["fixtures"] = self.put("fixtures.json", changed)
+        self.report["fixtures_after"] = self.put("fixtures-after.json", changed)
+        with self.assertRaises(ValueError):
+            self.validate(repin=True)
+
+    def test_original_launch_argv_and_cwd_remain_required_after_relocation(self):
+        self.relocate()
+        session = self.report["sessions"][1]
+        reference = copy.deepcopy(session["launch"])
+        original = self.read(reference)
+        for field in ("argv", "cwd"):
+            changed = copy.deepcopy(original)
+            if field == "argv":
+                changed[field][-1] = str(self.root / "runtime.json")
+            else:
+                changed[field] = str(self.root / "workspace")
+            session["launch"] = self.put(reference["path"], changed)
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.validate(repin=True)
+
+    def test_archive_references_cannot_follow_recorded_or_outside_paths(self):
+        self.relocate()
+        original = copy.deepcopy(self.report["config"])
+        for path in (str(self.original / "runtime.json"), "../runtime.json"):
+            self.report["config"] = {**original, "path": path}
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                self.validate(repin=True)
+        self.report["config"] = original
+        outside = self.base / "outside.json"
+        shutil.copyfile(self.root / original["path"], outside)
+        (self.root / original["path"]).unlink()
+        (self.root / original["path"]).symlink_to(outside)
+        with self.assertRaises(ValueError):
+            self.validate(repin=True)
+
+    def test_trace_rehash_does_not_override_the_original_wire_request(self):
+        self.relocate()
+        session = self.report["sessions"][0]
+        changed = self.read(session["trace"])
+        changed["events"][0]["arguments"]["path"] = str(self.root / "workspace/active.elf")
+        session["trace"] = self.put(session["trace"]["path"], changed)
+        with self.assertRaises(ValueError):
+            self.validate(repin=True)
+
+    def test_source_and_binary_identity_checks_remain_required(self):
+        self.relocate()
+        source_path = self.repo / evidence.PRODUCER_FILES[0]
+        original = source_path.read_bytes()
+        source_path.write_bytes(original + b"\n")
+        with self.assertRaises(ValueError):
+            self.validate()
+        source_path.write_bytes(original)
+        self.report["native_before"]["sha256"] = self.report["native_after"]["sha256"] = "4" * 64
+        with self.assertRaises(ValueError):
+            self.validate(repin=True)
+
+    def test_normal_owner_close_is_not_weakened_by_relocation_or_pass_labels(self):
+        self.relocate()
+        session = self.report["sessions"][1]
+        changed = self.read(session["close"])
+        changed["forced_cleanup"] = ["SIGKILL"]
+        session["close"] = self.put(session["close"]["path"], changed)
+        trace = self.read(session["trace"])
+        trace["events"][-1]["observation"] = changed
+        session["trace"] = self.put(session["trace"]["path"], trace)
+        self.report.update({"qualified": True, "status": "PASS"})
+        result = self.validate(repin=True)
+        self.assertEqual(result["status"], "FAILED")
+        self.assertFalse(result["qualified"])
 
 
 if __name__ == "__main__":

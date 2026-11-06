@@ -18,7 +18,7 @@ from functools import lru_cache
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import stat
 import sys
@@ -56,6 +56,20 @@ def need(value, message):
 
 def integer(value, minimum=0):
     return type(value) is int and value >= minimum
+
+
+def recorded_output_root(fixtures):
+    """Interpret original Linux execution paths as metadata, never filesystem input."""
+    q.require(isinstance(fixtures, dict) and isinstance(fixtures.get("prime"), dict),
+              "recorded prime fixture is missing")
+    value = fixtures.get("prime", {}).get("path")
+    q.require(isinstance(value, str) and value.startswith("/") and "\0" not in value
+              and all(part not in {"", ".", ".."} for part in value[1:].split("/")),
+              "recorded fixture path must be canonical and absolute")
+    path = PurePosixPath(value)
+    q.require(path.name == "prime.elf" and path.parent.name == "workspace"
+              and path.parent.parent != PurePosixPath("/"), "recorded fixture has no reviewed output/workspace layout")
+    return path.parent.parent
 
 
 def parse_stat(raw):
@@ -238,9 +252,10 @@ class Replay:
         self.owner = self.launch["owner"]
         q.require(self.owner["pid"] == self.launch["pid"] == self.owner["process_group"], "owner is not a fresh session")
         package = report["reference_before"]["package_root"]
+        recorded = recorded_output_root(fixtures)
         expected = ([report["node_before"]["path"], str(Path(package) / "scripts/rea.mjs"), "mcp"]
-                    if self.label == "reference" else [self.binary, "mcp", "--runtime-config", str(root / "runtime.json")])
-        q.require(self.launch["argv"] == expected and self.launch["cwd"] == str(root / "workspace"),
+                    if self.label == "reference" else [self.binary, "mcp", "--runtime-config", str(recorded / "runtime.json")])
+        q.require(self.launch["argv"] == expected and self.launch["cwd"] == str(recorded / "workspace"),
                   "trace did not launch the selected public MCP entry point")
         if self.label == "reference":
             q.require(self.launch["environment"] == {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8",
@@ -502,18 +517,19 @@ def validate_lifecycle_receipt(repo, receipt_path, expected_sha256):
         q.require(source_receipt["binary"] == report["native_before"], "original source receipt names a different binary")
         if source_receipt.get("commit") is not None:
             q.require(source_receipt["commit"] == declared, "declared binary revision differs from original receipt")
-    config = e.artifact_json(root, report["config"])
-    q.require(config == {"controller_workspace_roots": [str(root / "workspace")], "state_dir": str(root / "state"),
-        "hosts": {"never-connect": {"ssh_target": "never-connect-invalid", "remote_state_dir": str(root / "unused-remote"),
-            "allow_execute": False, "allow_pty": False, "allow_write": False, "allow_job_network": False}}},
-        "unreviewed runtime configuration")
     fixtures = e.artifact_json(root, report["fixtures"])
     q.require(fixtures == e.artifact_json(root, report["fixtures_after"]) and set(fixtures) == {"prime", "active", "worker"},
               "fixture identity changed or reviewed files are missing")
+    recorded = recorded_output_root(fixtures)
+    config = e.artifact_json(root, report["config"])
+    q.require(config == {"controller_workspace_roots": [str(recorded / "workspace")], "state_dir": str(recorded / "state"),
+        "hosts": {"never-connect": {"ssh_target": "never-connect-invalid", "remote_state_dir": str(recorded / "unused-remote"),
+            "allow_execute": False, "allow_pty": False, "allow_write": False, "allow_job_network": False}}},
+        "unreviewed runtime configuration")
     for name, size in (("prime", len(q.elf(q.note()))), ("active", ACTIVE_BYTES), ("worker", WORKER_BYTES)):
         value = fixtures[name]
         q.require(set(value) == {"path", "sha256", "bytes", "dev", "ino", "mode"}
-                  and value["path"] == str(root / "workspace" / (name + ".elf")) and value["bytes"] == size
+                  and value["path"] == str(recorded / "workspace" / (name + ".elf")) and value["bytes"] == size
                   and value["sha256"] == expected_fixture(size) and stat.S_ISREG(value["mode"])
                   and integer(value["dev"]) and integer(value["ino"], 1), "fixture differs from independent ELF encoding")
     rows = report.get("sessions")

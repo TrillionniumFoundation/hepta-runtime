@@ -30,9 +30,9 @@ The legacy bridge remains solely to preserve its explicit historical identity an
 | --- | --- | --- |
 | `inventory` | Captured ELF | Memory/imported-symbol inventory without automatic analysis or decompilation. Revision 2 also binds observation source SHA-256 and size. |
 | `functions` | Captured ELF | Fixed analysis; at most 4,096 internal functions scanned and 128 rows returned, with scan completeness and omitted counts. |
-| `function` | One exact internal entry | Entry, qualified name/prototype, body bounds/size and thunk metadata after fixed analysis. |
-| `xrefs` | One exact internal entry | Incoming references to that entry; outgoing references from the selected function body. Each direction scans at most 4,096 references and returns at most 128 rows, with scope/completeness/omission fields. |
-| `decompile` | One exact internal entry | Real `DecompInterface` native decompilation; completion status, bounded C preview, full C length/digest and preview digest/completeness. Native child cleanup must be confirmed. |
+| `function` | Exact entry in revisions 2/3; entry or containing-body address in revision 4 | Entry, qualified name/prototype, body bounds/size and thunk metadata after fixed analysis. |
+| `xrefs` | Exact entry in revisions 2/3; entry or containing-body address in revision 4 | Incoming references to that entry; outgoing references from the selected function body. Each direction scans at most 4,096 references and returns at most 128 rows, with scope/completeness/omission fields. |
+| `decompile` | Exact entry in revisions 2/3; entry or containing-body address in revision 4 | Real `DecompInterface` native decompilation; completion status, bounded C preview, full C length/digest and preview digest/completeness. Native child cleanup must be confirmed. |
 
 The optional request field `function_address` is required for `function`, `xrefs` and `decompile`, and refused elsewhere. It is canonical lowercase hexadecimal such as `0x401106`: no uppercase, leading zeroes, symbol name, range, space prefix, expression or script. Revisions 2 and 3 retain their exact internal-entry requirement and their original bridge bytes. If those revisions do not find an exact internal entry, the real backend fails and no successful mapped facts are returned.
 

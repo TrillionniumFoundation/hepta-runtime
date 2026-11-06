@@ -73,6 +73,11 @@ fn revision_four_gpl_paths_stay_inside_the_two_explicit_subtrees() {
 	for path in [
 		"GPL/../escape",
 		"GPL//file",
+		"GPL/./file",
+		"GPL/file/",
+		"Ghidra//file",
+		"Ghidra/./file",
+		"Ghidra/file/",
 		"GPL/file:stream",
 		"GPL/foo\\bar",
 		"support/helper",
