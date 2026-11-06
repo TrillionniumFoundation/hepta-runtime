@@ -305,13 +305,12 @@ impl PinnedFile {
 		let mut length = 0usize;
 		let mut reader = Read::by_ref(&mut file).take(self.maximum as u64 + 1);
 		#[cfg(all(feature = "phase-cost-diagnostics", target_os = "linux"))]
-		let diagnostic_file_read = crate::mcp::runtime::phase_cost::sync_span(
-			if self.reference.is_some() {
+		let diagnostic_file_read =
+			crate::mcp::runtime::phase_cost::sync_span(if self.reference.is_some() {
 				crate::mcp::runtime::phase_cost::Phase::FileReadReference
 			} else {
 				crate::mcp::runtime::phase_cost::Phase::FileReadHash
-			},
-		);
+			});
 		loop {
 			check_current()?;
 			let count = match Read::read(&mut reader, &mut buffer) {
