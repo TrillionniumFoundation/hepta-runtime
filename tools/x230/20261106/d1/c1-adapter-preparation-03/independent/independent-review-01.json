@@ -1,0 +1,108 @@
+{
+  "schema": "hepta-d1-c1-adapter-independent-static-review/v1",
+  "reviewer": "/root/evidence_review",
+  "conclusion": "no blocking issue found for the unsealed inner C1 adapter within the explicitly bounded scope",
+  "candidate": {
+    "path": "d1-c1-adapter-template-03/run_c1_phase_cost.py",
+    "bytes": 31131,
+    "sha256": "b49b95b00f67b33b05b726527ee5f63766fe568f7fed6d372f32417d3f811189",
+    "git_blob_sha": "1b55bf0634ec60855f7965223742ea10abf716d9",
+    "sealed": false,
+    "actual_execution": null
+  },
+  "previous_revision": {
+    "bytes": 31111,
+    "sha256": "156751e965a73f28bae25dbd008db5199a5c57a280c4dd30fb3e394a95c1b815",
+    "change": "Exactly four byte-string occurrences of outer_preflight replaced by outer_input_manifest; complete replacement equals revision 03.",
+    "all_other_source_bytes_unchanged": true
+  },
+  "verification_method": {
+    "full_source_static_read": true,
+    "python_ast_parse_only": true,
+    "five_reference_bodies_rehashed": true,
+    "original_driver_call_sites_read": true,
+    "target_module_imports": 0,
+    "target_entrypoint_or_helper_executions": 0,
+    "driver_or_parser_executions": 0,
+    "Rust_commands": 0,
+    "host_requests": 0,
+    "benchmark_runs": 0,
+    "Git_ref_changes": 0
+  },
+  "references": [
+    {
+      "path": "reference/run_native_observation.py",
+      "bytes": 3279,
+      "sha256": "7606648c99b2ff2bbf0bba58384e8cab609ac3899f838c0b80ba54d6288d20bb"
+    },
+    {
+      "path": "reference/x230_observation_benchmark.py",
+      "bytes": 37006,
+      "sha256": "4d96f0bf2da2562e788f48be7c37589ab3a513be5f9d8b2d741afe5c08ea9eed"
+    },
+    {
+      "path": "reference/allocator_environment.py",
+      "bytes": 5879,
+      "sha256": "f5c8e879c540b3f7cb1b7d3a7a0f5002c2f40c1a87963174b0b00470fa3a4525"
+    },
+    {
+      "path": "reference/observation_resources.py",
+      "bytes": 12382,
+      "sha256": "f3402d51cb37b2fe20f4351b3a81ec5990a9fdaff93a846d21c07ccd557cb894"
+    },
+    {
+      "path": "reference/summarize_trace.py",
+      "bytes": 15057,
+      "sha256": "f6e65c2e206d4aa90143a17893e5e57c158bca9f8eec5f74897b19c3596e32c5"
+    }
+  ],
+  "checks": [
+    "SPEC is None in the unsealed source. Input validation rejects an unsealed invocation before output creation or importing the original workload.",
+    "The sole workload adaptation is allocator.child_environment. Controller, Popen, call, cell, main and close are not replaced; the original wrapper's own existing capture behavior is retained.",
+    "The hook checks original Controller.__init__ and benchmark main code identities, thread and controller identity, fixed arguments, and eight preregistered round/first-or-restart slots, each consumed once.",
+    "Original allocator handling runs before exactly the three diagnostic environment variables are added. Ambient diagnostic variables are rejected, parent os.environ is not modified, and the original hook is restored in finally.",
+    "The original main creates the controller output directories and sets active before assignment completion in the order expected by the hook; the original Controller assigns binary/directory before invoking child_environment.",
+    "The future short socket parent is explicit and must be fresh/private as required by the original profile helper. No symlink or longer-path workaround is introduced.",
+    "Trace files are not opened or interpreted until the whole original wrapper returns successfully, its complete four-round report passes, and all eight original normal close receipts meet the required EOF/wait/reader/resource checks.",
+    "Trace metadata binds actual controller PID, process birth ticks, Linux boot, feature ELF identity and monotonic interval to the original startup receipts. The same future feature ELF is used for OFF and ON.",
+    "Transport raw bodies, frame offsets/hashes, original native request identifiers and canonical response hashes are cross-bound. Measured request sets are distinguished from preflight, warmup and restart using the original raw arrays and cell intervals.",
+    "OFF does not synthesize per-request trace or CPU measurements. ON request/event sets are checked exactly, and synchronous CPU interpretation remains within the original parser's same-thread nesting model.",
+    "The original report is not rewritten. New adapter outputs are create-only, bounded, and preserve the original stage failure rather than selecting successful rows or rounds.",
+    "The outer input manifest is only byte/hash-bound by this inner adapter. Its identity is not represented as proof that held-agent, quiet90, compiler monitoring or external native auditing have succeeded."
+  ],
+  "protocol_clarification": {
+    "path": "d1-c1-adapter-template-03/pre-execution-clarification-01.json",
+    "bytes": 3821,
+    "sha256": "7848ccc640e8d44fd042632eda69a93d2b24e07cabb65e83aeef683faeeb8704",
+    "git_blob_sha": "b44285c30da8bd8cc839f8c6ea699a0340d91de8",
+    "authority": "Root explicitly selected the original driver error and continuation semantics before diagnostic execution.",
+    "historical_document": {
+      "git_blob_sha": "75ab164686b65ecc6eae3f73b2add8219fb00716",
+      "bytes": 13323,
+      "sha256": "6aebae889a001e9c478dd5b788904b254e877db33b3349f52e1c4d9c9c87ea51",
+      "retained_unchanged": true,
+      "corrected_scope": "Its blanket advice to stop after the first error does not describe an individual unsuccessful measured call in the original fixed-count driver."
+    },
+    "independently_confirmed": "The original cell completes pool.map over its fixed count, and a false measured row need not abort the remaining original rounds. Exceptions, failed balanced warmup and original cleanup errors retain their original stopping behavior.",
+    "required_final_behavior": "Any unsuccessful measured call rejects the original whole stage. The adapter must not interpret a successful trace-cost result, retry, choose successful subsets, or expand to C8.",
+    "future_outer_seal_must_include_clarification": true,
+    "new_stop_hook_added": false
+  },
+  "limits": [
+    "This is static source preparation. No D1 qualified ELF, actual diagnostic count, trace, performance result or adoption is claimed.",
+    "The planned 936 native calls are a protocol dimension, not an actual execution receipt.",
+    "The original Controller has an existing constructor window after Popen and before the guarded initialization block. This adapter adds no reaper; a failure without complete owner receipts stays unresolved and blocks successful trace interpretation. Future outer owner/terminal closure remains required.",
+    "The adapter's raw outer_input_manifest pin does not independently validate the outer experiment. Original held-agent, quiet90, compiler monitor, native auditor and full owner closure must be supplied and checked by the separately sealed outer protocol.",
+    "Review did not execute target functions, exercise a live process, or establish host availability."
+  ],
+  "local_review_note": {
+    "initial_count_assertion": "A local source-comparison command initially assumed five rename occurrences from a prior message and stopped at that assertion.",
+    "corrected_observation": "Direct count and unified diff showed four occurrences, plus twenty bytes, and exact whole-source replacement equality. The implementer confirmed the message count was mistaken; the source and its existing STATIC_CHECKS did not depend on five.",
+    "target_or_workload_execution_occurred": false
+  },
+  "blocking_findings": [],
+  "required_before_execution": [
+    "Actual qualification and outer pins must be sealed from real receipts.",
+    "The outer protocol must include the reviewed clarification and its independent owner/quiet/monitor/auditor closure."
+  ]
+}
