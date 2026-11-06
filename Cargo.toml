@@ -41,9 +41,24 @@ opt-level = 3           # Prioritize runtime throughput and bounded cold-validat
 overflow-checks = false # Disable overflow checks in release mode
 
 [dependencies]
+
+# Native JS/TS AST + lexical binding analysis; all Oxc crates share one MSRV-compatible revision.
+oxc_allocator = "=0.144.0"
+oxc_ast = "=0.144.0"
+oxc_ast_visit = "=0.144.0"
+oxc_parser = "=0.144.0"
+oxc_semantic = "=0.144.0"
+oxc_span = "=0.144.0"
+oxc_syntax = "=0.144.0"
+crc32fast = "=1.5.2"
+flate2 = "=1.1.10"
+# Bounded, pure-Rust static certificate and ELF section-name decoders.
+x509-parser = { version = "=0.18.1", default-features = false }
+ruzstd = { version = "=0.9.1", default-features = false, features = ["std", "hash"] }
+zlib-rs = { version = "=0.6.8", default-features = false, features = ["std"] }
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "process", "fs", "sync", "signal", "io-std", "io-util", "net"] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
+serde_json = { version = "1.0.151", features = ["float_roundtrip", "raw_value"] }
 anyhow = "1.0.104"
 sha2 = "0.11"
 subtle = "2.6"
@@ -93,3 +108,8 @@ rpath = false
 [[bin]]
 name = "hepta-runtime-jobctl"
 path = "src/bin/jobctl.rs"
+
+# Preserve the frozen reader semantics while rejecting oversized Zstd blocks.
+# Upstream identity and the minimal pure-Rust fix are recorded under vendor/ruzstd.
+[patch.crates-io]
+ruzstd = { path = "vendor/ruzstd" }

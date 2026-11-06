@@ -1,0 +1,34 @@
+{
+  "audit_recorded": true,
+  "job": {
+    "args": [
+      "-u",
+      "-c",
+      "from pathlib import Path\nimport hashlib,json,os,stat,time\nsrc=Path(\"/home/qian-qi/work/hepta-rea-next-root-20261104-target/debug/hepta-runtime\")\ndst_dir=Path(\"/home/qian-qi/work/hepta-rea-js-cancellation-combined-debug-freeze-20261104-r1\")\nscript=Path(\"/home/qian-qi/hepta-runtime-rea-next-root-20261104-r1/tests/rea_javascript_cancellation_external.py\")\nexpected_script=\"7c7e504f2227846d6434ba1306454455aea1c3178799def379e5c37f1f54735d\"\nsha=lambda b:hashlib.sha256(b).hexdigest()\nif sha(script.read_bytes())!=expected_script:raise RuntimeError(\"fixed cancellation harness hash mismatch\")\ndst_dir.mkdir(mode=0o700)\ndst=dst_dir/\"hepta-runtime-combined-debug\"\nwith src.open(\"rb\") as f:\n    before=os.fstat(f.fileno())\n    if not stat.S_ISREG(before.st_mode):raise RuntimeError(\"source binary is not a regular file\")\n    before_hash=hashlib.file_digest(f,\"sha256\").hexdigest()\n    f.seek(0)\n    copied_hash=hashlib.sha256()\n    with dst.open(\"xb\") as out:\n        while True:\n            b=f.read(1048576)\n            if not b:break\n            copied_hash.update(b);out.write(b)\n        out.flush();os.fsync(out.fileno())\n    after=os.fstat(f.fileno())\n    f.seek(0);after_hash=hashlib.file_digest(f,\"sha256\").hexdigest()\n    final=os.fstat(f.fileno())\nidentity=lambda s:(s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns,s.st_ctime_ns)\nif identity(before)!=identity(after) or identity(before)!=identity(final):raise RuntimeError(\"source descriptor changed during private freeze\")\nif before_hash!=copied_hash.hexdigest() or before_hash!=after_hash:raise RuntimeError(\"source/copy hash mismatch\")\nwith dst.open(\"rb\") as f:dst_hash=hashlib.file_digest(f,\"sha256\").hexdigest()\nif dst_hash!=before_hash:raise RuntimeError(\"private binary hash mismatch\")\nos.chmod(dst,0o500)\ncurrent=src.stat()\ncurrent_hash=None\nwith src.open(\"rb\") as f:current_hash=hashlib.file_digest(f,\"sha256\").hexdigest()\nif identity(current)!=identity(before) or current_hash!=before_hash:raise RuntimeError(\"target path replaced before freeze completed\")\nrecord={\"schema\":\"hepta.rea.combined-debug-freeze.v1\",\"qualification_kind\":\"combined-debug-not-final-release\",\"source_binary\":str(src),\"private_binary\":str(dst),\"binary_bytes\":before.st_size,\"binary_sha256\":before_hash,\"source_before_sha256\":before_hash,\"copied_stream_sha256\":copied_hash.hexdigest(),\"source_after_sha256\":after_hash,\"target_path_after_sha256\":current_hash,\"source_identity\":list(identity(before)),\"harness_path\":str(script),\"harness_sha256\":expected_script,\"source_manifest_groups\":295,\"source_manifest_sha256\":\"4d2682eda938c49bdbbab45eed4117bbec0a2374477479246716fe749dbadacf\",\"verification_manifest_groups\":613,\"verification_manifest_sha256\":\"b783c4f05a5c7f614ee7150ecc66bb4fe25f1cfd8ed548723e405e4612b6baa4\",\"utc\":time.strftime(\"%Y-%m-%dT%H:%M:%SZ\",time.gmtime())}\ndata=(json.dumps(record,indent=2,sort_keys=True)+\"\\n\").encode()\nwith (dst_dir/\"freeze.json\").open(\"xb\") as f:f.write(data);f.flush();os.fsync(f.fileno())\nfd=os.open(dst_dir,os.O_RDONLY|os.O_DIRECTORY)\nos.fsync(fd);os.close(fd)\nprint(json.dumps(record,sort_keys=True))\nprint(json.dumps({\"freeze_json\":str(dst_dir/\"freeze.json\"),\"freeze_json_sha256\":sha(data)}))\n"
+    ],
+    "created_unix_ms": 1793777772364,
+    "cwd": "/home/qian-qi/work",
+    "env_keys": [],
+    "executable": "/usr/bin/python3",
+    "execution_mode": "operator",
+    "host": "desktop",
+    "id": "1a1a57ca74c-fc05-1e8e",
+    "idempotency_key": "rea-js-cancellation-combined-debug-freeze-20261104-r1",
+    "launch_error": null,
+    "launch_state": "launched",
+    "remote_job_dir": "/home/qian-qi/.local/state/hepta-runtime-mac-worker/jobs/1a1a57ca74c-fc05-1e8e",
+    "request_digest": "e76df0b6d374b8299670784f862fd487d1b331dc1924b6ed8d1b4d35661a96ba",
+    "request_fingerprint": 16676249663245170000,
+    "ssh_target": "desktop-ts",
+    "system_jobctl": false,
+    "unit": "hepta-runtime-job-1a1a57ca74c-fc05-1e8e"
+  },
+  "launch": {
+    "backend": "systemd",
+    "launcher_pid": null,
+    "ok": true,
+    "unit": "hepta-runtime-job-1a1a57ca74c-fc05-1e8e"
+  },
+  "local_record_pending": false,
+  "reused": false
+}

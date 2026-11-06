@@ -70,8 +70,66 @@ pub enum Commands {
 		#[arg(long, requires_all = ["runtime_config", "runtime_observation_pool_profile"])]
 		runtime_file_observation_pool: bool,
 	},
+	/// Internal, stdin-only REA analysis worker. Does not open any artifact path.
+	#[command(hide = true)]
+	ReaWorker {
+		/// Display-only path; bytes are provided on stdin, not read by this worker.
+		#[arg(long)]
+		selected_path: String,
+		/// Internal test proving syscall denials after worker input admission.
+		#[arg(long, hide = true)]
+		sandbox_probe: bool,
+	},
+	/// Internal model parser. Reads one admitted read-only regular-file descriptor.
+	#[command(hide = true)]
+	ReaModelWorker {
+		#[arg(long)]
+		request: String,
+	},
+	/// Internal pinned native transport for an existing weight worker job.
+	#[command(hide = true)]
+	WeightClient(hepta_runtime::mcp::weight_native::WeightClientArgs),
+	/// Internal pinned static-provider worker. Reads one structured request on stdin.
+	#[command(hide = true)]
+	ReaStaticWorker,
+	/// Internal bounded JS/TS AST parser over controller-admitted source bytes.
+	#[command(hide = true)]
+	ReaJavascriptWorker,
+	/// Internal bounded source-map parser over controller-admitted bytes.
+	#[command(hide = true)]
+	ReaSourceMapWorker,
+	/// Internal isolated ELF note parser.
+	#[command(hide = true)]
+	ReaElfNotesWorker,
+	/// Internal recorded-core decoder over one digest-bound captured stdin frame.
+	#[command(hide = true)]
+	ReaRecordedCoreWorker,
+	/// Internal bounded APK signature verifier over captured stdin bytes.
+	#[command(hide = true)]
+	ReaApkSignatureWorker,
+	/// Internal bounded static APK report over controller-admitted bytes.
+	#[command(hide = true)]
+	ReaApkStaticWorker,
+	/// Fixed local-resource capture under an existing durable process job (Linux).
+	ReaBrowserCapture(hepta_runtime::mcp::rea_browser::BrowserCaptureArgs),
+	/// Internal bounded ASAR parser over one admitted read-only descriptor.
+	#[command(hide = true)]
+	ReaAsarWorker {
+		#[arg(long)]
+		request: String,
+	},
+	/// Internal ZIP directory parser over one admitted read-only descriptor.
+	#[command(hide = true)]
+	ReaArchiveWorker {
+		#[arg(long)]
+		request: String,
+	},
 }
 
 #[cfg(test)]
 #[path = "cli_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "cli_recorded_core_tests.rs"]
+mod recorded_core_tests;

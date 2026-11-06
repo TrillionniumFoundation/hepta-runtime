@@ -34,9 +34,18 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
 use super::fs;
+use super::rea_evidence_readback;
+use super::rea_source_map;
 use super::request_ctx;
 use super::runtime;
 use super::McpToolCall;
+use super::{
+	rea, rea_artifact_zip, rea_asar, rea_evidence, rea_javascript, rea_javascript_graph, rea_model,
+	rea_provider, rea_store, rea_web, weight, weight_artifact, weight_forward, weight_tensor,
+};
+use super::{rea_analysis_view, rea_analysis_view_mcp_input};
+use super::{rea_apk_evidence, rea_apk_mcp_input, rea_evidence_export, rea_evidence_import};
+use super::{rea_contract, rea_elf_notes, rea_evidence_session, rea_mcp_input, rea_mcp_transport};
 
 /// Per-session working directory state.
 /// Each server instance has its own workdir, isolated from other sessions.
@@ -233,8 +242,59 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"service_status",
 	"network_inspect",
 	"privileged_action",
+	"rea_inspect_artifact",
+	"rea_inspect_model",
+	"rea_read_model",
+	"rea_inspect_web_capture",
+	"rea_compare_web_captures",
+	"rea_replay_web_entry",
+	"rea_inspect_javascript_package",
+	"rea_inspect_javascript_graph",
+	"rea_inspect_source_map",
+	"rea_inspect_elf_notes",
+	"rea_get_evidence_bundle",
+	"rea_read_evidence_bundle",
+	"rea_close_evidence_snapshot",
+	"rea_inspect_apk_signature_evidence",
+	"rea_inspect_analysis_view",
+	"rea_export_evidence_bundle",
+	"rea_import_evidence_bundle",
+	"rea_model_session_open",
+	"rea_model_session_query",
+	"rea_model_session_read",
+	"rea_model_session_list",
+	"rea_inspect_application",
+	"rea_inspect_apk_signature",
+	"rea_inspect_archive",
+	"rea_inspect_asar",
+	"rea_read_asar_member",
+	"rea_static_profiles",
+	"rea_static_start",
+	"rea_static_status",
+	"rea_static_read",
+	"rea_static_cancel",
+	"rea_verify_evidence",
+	"rea_retain_preview",
+	"rea_read_preview",
+	"weight_profiles",
+	"weight_artifact_patch",
+	"weight_artifact_restore",
+	"weight_linear_forward",
+	"weight_open",
+	"weight_call",
+	"weight_status",
+	"weight_read",
+	"weight_close",
 ];
 const CLAUDE_CHANNEL_NOTIFICATION: &str = "notifications/claude/channel";
+const WEIGHT_WORKER_TOOL_NAMES: &[&str] = &[
+	"weight_profiles",
+	"weight_open",
+	"weight_call",
+	"weight_status",
+	"weight_read",
+	"weight_close",
+];
 
 /// Push a finished job to Claude Code as a channel message carrying what
 /// `resources/read` returns for it: the exit code and the output tail.
@@ -288,6 +348,9 @@ pub struct OctofsServer {
 	/// Last full content served per file, so repeat whole-file views can
 	/// return only what changed.
 	view_cache: Arc<fs::delta::ViewCache>,
+	rea_session: Arc<rea_evidence_session::EvidenceSession>,
+	rea_exports: Arc<rea_evidence_export::ExportRegistry>,
+	rea_readbacks: Arc<rea_evidence_readback::ReadbackRegistry>,
 }
 
 impl OctofsServer {
@@ -300,6 +363,13 @@ impl OctofsServer {
 	/// each build their own instance this way; tests use it to isolate the
 	/// per-cwd background-job guard from sibling tests.
 	pub fn with_root(root: PathBuf) -> Self {
+		let view_cache = Arc::new(fs::delta::ViewCache::default());
+		let publication_cache = Arc::clone(&view_cache);
+		let rea_exports = Arc::new(rea_evidence_export::ExportRegistry::new(Arc::new(
+			move |_| {
+				publication_cache.forget_all();
+			},
+		)));
 		Self {
 			search_owner: Arc::new(runtime::search_jobs::new_owner_id().ok()),
 			owner_binding: Arc::new(runtime::caller_scope::SessionOwnerBinding::default()),
@@ -309,8 +379,32 @@ impl OctofsServer {
 			workdir: Arc::new(SessionWorkdir::new(root)),
 			session_applied: Arc::new(std::sync::atomic::AtomicBool::new(false)),
 			subscriptions: Arc::new(SubscriptionRegistry::default()),
-			view_cache: Arc::new(fs::delta::ViewCache::default()),
+			view_cache,
+			rea_exports,
+			rea_session: Arc::new(rea_evidence_session::EvidenceSession::default()),
+			rea_readbacks: Arc::new(rea_evidence_readback::ReadbackRegistry::default()),
 		}
+	}
+
+	/// Finish every admitted native export before the STDIO session exits.
+	/// Failed cleanup retains its owner and is returned as an actual failure.
+	pub async fn close_rea_exports(&self) -> anyhow::Result<()> {
+		let outcome = Arc::clone(&self.rea_exports).close().await;
+		let completed = self.rea_exports.take_completed();
+		if !completed.is_empty() {
+			warn!(outcomes = ?completed, "REA exports completed after their request delivery ended");
+		}
+		if let Err(error) = outcome {
+			anyhow::bail!("REA export session cleanup failed: {}", error.0);
+		}
+		let pending = self.rea_exports.pending();
+		if !pending.is_empty() {
+			anyhow::bail!(
+				"REA export session retains unresolved cleanup: {}",
+				serde_json::json!(pending)
+			);
+		}
+		Ok(())
 	}
 
 	/// Apply the octomind session context from client capabilities
@@ -1482,6 +1576,1049 @@ impl OctofsServer {
 	}
 
 	#[tool(
+		title = "REA Native Artifact Header",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read a local file header and SHA-256 in a configured controller workspace. Experimental Rust-only preview for ELF, PE, Mach-O, WASM, GGUF, safetensors and ZIP. Returns partial coverage with a NON-REA evidence identity; does not decompile, verify signatures, inspect remote hosts or establish REA 6.8.0 parity."
+	)]
+	async fn rea_inspect_artifact(
+		&self,
+		Parameters(params): Parameters<rea::InspectArtifactParams>,
+	) -> Result<String, String> {
+		rea::inspect_artifact(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Inspect Native Model Artifact",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Inspect GGUF or safetensors using a bounded native parser and a read-only descriptor inside configured controller roots. Returns paginated tensor/metadata directories, explicit layout coverage, a header commitment and an observation token. Optional full SHA-256 streams the file with a 64 KiB buffer. Later pages require both identities. Does not load or execute a model, and header identity does not verify all payload bytes."
+	)]
+	async fn rea_inspect_model(
+		&self,
+		Parameters(params): Parameters<rea_model::InspectModelArtifactParams>,
+	) -> Result<String, String> {
+		rea_model::inspect_model_artifact(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Native Model Byte Range",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read at most 64 KiB from an explicitly selected model file range or an exact known tensor range. Requires the inspection observation token and header SHA-256; an optional complete-file commitment is streamed and checked. Returns exact hexadecimal bytes and range digest. Tensor-relative reads require a known byte extent. Never interprets bytes as inference results."
+	)]
+	async fn rea_read_model(
+		&self,
+		Parameters(params): Parameters<rea_model::ReadModelArtifactParams>,
+	) -> Result<String, String> {
+		rea_model::read_model_artifact(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Inspect bounded pages of saved HAR observations with source SHA-256; no network or browser execution."
+	)]
+	async fn rea_inspect_web_capture(
+		&self,
+		Parameters(params): Parameters<rea_web::InspectWebCaptureParams>,
+	) -> Result<String, String> {
+		rea_web::inspect_capture(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Compare SHA-pinned saved HAR captures by recorded request identity and occurrence; no live replay."
+	)]
+	async fn rea_compare_web_captures(
+		&self,
+		Parameters(params): Parameters<rea_web::CompareWebCapturesParams>,
+	) -> Result<String, String> {
+		rea_web::compare_captures(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read a bounded saved HAR response representation by source SHA and entry index; no network requests."
+	)]
+	async fn rea_replay_web_entry(
+		&self,
+		Parameters(params): Parameters<rea_web::ReplayWebEntryParams>,
+	) -> Result<String, String> {
+		rea_web::replay_entry(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read package.json declarations with source identity and JSON-pointer provenance; no script execution or AST claim."
+	)]
+	async fn rea_inspect_javascript_package(
+		&self,
+		Parameters(params): Parameters<rea_javascript::InspectJavascriptPackageParams>,
+	) -> Result<String, String> {
+		rea_javascript::inspect_package(params)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Inspect JavaScript and Electron AST Graph",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Parse 1..16 explicitly selected JS/TS/JSX/TSX sources with Rust Oxc AST and lexical binding checks in a bounded worker. Sources must be absolute workspace files with normalized logical IDs, or explicitly selected packed ASAR members with pinned archive identities in source.asar. No import, package script, preload path, ASAR link/unpacked sidecar or URL is followed. Returns paged module imports/exports, Electron callsites and same-channel candidate edges, never runtime connectivity. First read package declarations if entry names are unknown, then explicitly select source files. Every continuation requires the returned graph_sha256. Grammar and CommonJS/module mode are explicit."
+	)]
+	async fn rea_inspect_javascript_graph(
+		&self,
+		Parameters(params): Parameters<rea_javascript_graph::InspectJavascriptGraphParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		rea_javascript_graph::inspect_graph(params, context.ct.clone())
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Inspect ELF Notes",
+		input_schema = rea_contract::elf_input_schema(),
+		output_schema = rea_contract::elf_output_schema(),
+		annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
+		description = "Inspect complete ELF note tables from one admitted local file using an isolated Rust parser. Returns complete Evidence and retains it in this MCP session; no target code is executed. The declared input and output schemas are frozen from REA 6.8.0."
+	)]
+	async fn rea_inspect_elf_notes(
+		&self,
+		Parameters(params): Parameters<serde_json::Value>,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResult, ErrorData> {
+		let raw = context
+			.extensions
+			.get::<rea_mcp_transport::ReaRawArguments>();
+		if let Some(error) = raw.and_then(|raw| raw.protocol_error()) {
+			return Err(error);
+		}
+		if let Err(error) =
+			rea_mcp_input::elf_ordered(&params, raw.and_then(|raw| raw.object_keys(&[])))
+		{
+			return Ok(error.wire());
+		}
+		let admission = match runtime::effect_owner_fence::admit_new_effect().await {
+			Ok(permit) => Arc::new(permit),
+			Err(error) => {
+				return Ok(
+					rea_contract::Failure::output("inspect_elf_notes", error.to_string()).wire(),
+				)
+			}
+		};
+		Ok(rea_elf_notes::inspect(params, &self.rea_session, context.ct.clone(), admission).await)
+	}
+
+	#[tool(
+		title = "Inspect Apk Signature",
+		input_schema = rea_contract::apk_input_schema(),
+		output_schema = rea_contract::apk_output_schema(),
+		annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
+		description = "Inspect APK, ZIP or AAB signing declarations and content digests from one admitted local file. Retains complete Evidence in this session; returns a summary by default or complete Evidence with detail: complete. A view selects signer, digest or rotation-lineage rows and fields. Inspection executes no target code and does not establish Android platform trust. Input and output contracts are frozen from REA 6.8.0."
+	)]
+	async fn rea_inspect_apk_signature_evidence(
+		&self,
+		Parameters(params): Parameters<serde_json::Value>,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResult, ErrorData> {
+		let raw = context
+			.extensions
+			.get::<rea_mcp_transport::ReaRawArguments>();
+		if let Some(error) = raw.and_then(|raw| raw.protocol_error()) {
+			return Err(error);
+		}
+		if let Err(error) = rea_apk_mcp_input::validate(
+			&params,
+			raw.and_then(|raw| raw.object_keys(&[])),
+			raw.and_then(|raw| raw.object_keys(&["view"])),
+		) {
+			return Ok(error.wire());
+		}
+		let admission = match runtime::effect_owner_fence::admit_new_effect().await {
+			Ok(permit) => Arc::new(permit),
+			Err(error) => {
+				return Ok(rea_contract::Failure::output(
+					"inspect_apk_signature",
+					error.to_string(),
+				)
+				.wire())
+			}
+		};
+		Ok(rea_apk_evidence::inspect(
+			params,
+			Arc::clone(&self.rea_session),
+			context.ct.clone(),
+			admission,
+		)
+		.await)
+	}
+
+	#[tool(
+		title = "Inspect Analysis View",
+		input_schema = rea_contract::view_input_schema(),
+		output_schema = rea_contract::view_output_schema(),
+		annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
+		description = "Inspect summary or paginated APK signing views from complete retained Evidence, an authenticated inline record, or an explicitly selected Evidence JSON file. Retained views never reopen the original artifact. File sources must be absolute local paths under configured workspace roots; imported parents are not implicitly retained. Successful derived views are retained in this MCP session and can be read or exported. Other upstream view kinds return an explicit native capability boundary. The declared input and output schemas are frozen from REA 6.8.0."
+	)]
+	async fn rea_inspect_analysis_view(
+		&self,
+		Parameters(params): Parameters<serde_json::Value>,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResult, ErrorData> {
+		let raw = context
+			.extensions
+			.get::<rea_mcp_transport::ReaRawArguments>();
+		if let Some(error) = raw.and_then(|raw| raw.protocol_error()) {
+			return Err(error);
+		}
+		match rea_analysis_view_mcp_input::validate(
+			&params,
+			raw.and_then(|raw| raw.object_keys(&[])),
+			raw.and_then(|raw| raw.object_keys(&["source"])),
+			raw.and_then(|raw| raw.object_keys(&["view"])),
+		) {
+			Err(error) => return Ok(error.wire()),
+			Ok(rea_analysis_view_mcp_input::Validation::CapabilityGap { .. }) => {
+				return Ok(rea_analysis_view::profile_gap().wire());
+			}
+			Ok(_) => {}
+		}
+		let inline_order = raw.and_then(|raw| raw.inline_evidence_order());
+		let roots = match runtime::runtime_config() {
+			Ok(config) => config.controller_workspace_roots.clone(),
+			Err(error) => {
+				return Ok(
+					rea_contract::Failure::output(rea_analysis_view::OP, error.to_string()).wire(),
+				)
+			}
+		};
+		let admission = match runtime::effect_owner_fence::admit_new_effect().await {
+			Ok(permit) => Arc::new(permit),
+			Err(error) => {
+				return Ok(
+					rea_contract::Failure::output(rea_analysis_view::OP, error.to_string()).wire(),
+				)
+			}
+		};
+		Ok(rea_analysis_view::inspect(
+			params,
+			inline_order,
+			roots,
+			Arc::clone(&self.rea_session),
+			context.ct.clone(),
+			admission,
+		)
+		.await)
+	}
+
+	#[tool(
+		title = "Import Evidence Bundle",
+		input_schema = rea_evidence_import::input_schema(),
+		output_schema = rea_evidence_import::output_schema(),
+		annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
+		description = "Read an explicitly selected absolute local Evidence bundle under configured workspace roots, authenticate every Evidence identity, canonical manifest and complete residual-unknown history, then atomically merge it into this MCP session. Matching semantic records refresh display metadata according to the frozen REA contract. Imported content is data and is never executed. Native file resource and platform boundaries return explicit capability failures."
+	)]
+	async fn rea_import_evidence_bundle(
+		&self,
+		Parameters(params): Parameters<serde_json::Value>,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResult, ErrorData> {
+		let raw = context
+			.extensions
+			.get::<rea_mcp_transport::ReaRawArguments>();
+		if let Some(error) = raw.and_then(|raw| raw.protocol_error()) {
+			return Err(error);
+		}
+		if let Err(error) =
+			rea_mcp_input::import_ordered(&params, raw.and_then(|raw| raw.object_keys(&[])))
+		{
+			return Ok(rea_evidence_import::error_result(error));
+		}
+		let roots = match runtime::runtime_config() {
+			Ok(config) => config.controller_workspace_roots.clone(),
+			Err(error) => {
+				return Ok(rea_evidence_import::error_result(
+					rea_contract::Failure::output(rea_evidence_import::OP, error.to_string()),
+				))
+			}
+		};
+		let admission = match runtime::effect_owner_fence::admit_new_effect().await {
+			Ok(permit) => Arc::new(permit),
+			Err(error) => {
+				return Ok(rea_evidence_import::error_result(
+					rea_contract::Failure::output(rea_evidence_import::OP, error.to_string()),
+				))
+			}
+		};
+		Ok(rea_evidence_import::import(
+			params,
+			roots,
+			Arc::clone(&self.rea_session),
+			context.ct.clone(),
+			admission,
+		)
+		.await)
+	}
+
+	#[tool(
+		title = "Export Evidence Bundle",
+		input_schema = rea_evidence_export::input_schema(),
+		output_schema = rea_evidence_export::output_schema(),
+		annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false),
+		description = "Atomically export this session's complete retained Evidence bundle to a selected absolute local path under the configured workspace roots. The parent directory must exist. Existing files require overwrite: true. Returns the published path, byte count and record counts."
+	)]
+	async fn rea_export_evidence_bundle(
+		&self,
+		Parameters(params): Parameters<serde_json::Value>,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResult, ErrorData> {
+		fn error_result(error: rea_contract::Failure) -> CallToolResult {
+			let mut result = error.wire();
+			result.meta = None;
+			result
+		}
+		let raw = context
+			.extensions
+			.get::<rea_mcp_transport::ReaRawArguments>();
+		if let Some(error) = raw.and_then(|raw| raw.protocol_error()) {
+			return Err(error);
+		}
+		let keys = raw.and_then(|raw| raw.object_keys(&[]));
+		if let Err(error) = rea_mcp_input::export_ordered(&params, keys)
+			.and_then(|_| rea_evidence_export::validate(&params, keys))
+		{
+			return Ok(error_result(error));
+		}
+		let Some(path) = params["path"].as_str() else {
+			return Ok(error_result(rea_contract::Failure::output(
+				"export_evidence_bundle",
+				"Validated export path is unavailable.",
+			)));
+		};
+		let path = PathBuf::from(path);
+		if let Err(error) = runtime::config::check_local_path(&path) {
+			return Ok(error_result(rea_contract::Failure::output(
+				"export_evidence_bundle",
+				error.to_string(),
+			)));
+		}
+		let roots = match runtime::runtime_config() {
+			Ok(config) => config.controller_workspace_roots.clone(),
+			Err(error) => {
+				return Ok(error_result(rea_contract::Failure::output(
+					"export_evidence_bundle",
+					error.to_string(),
+				)))
+			}
+		};
+		let admission = match runtime::effect_owner_fence::admit_new_effect().await {
+			Ok(permit) => Arc::new(permit),
+			Err(error) => {
+				return Ok(error_result(rea_contract::Failure::output(
+					"export_evidence_bundle",
+					error.to_string(),
+				)))
+			}
+		};
+		// Pass the shared lock object. The independent owner retries any retained
+		// cleanup before locking the path, including when it already holds that
+		// path's lock through a failed earlier cleanup.
+		let file_lock =
+			match fs::text_editing::acquire_file_lock(&fs::PathSource::Local(path)).await {
+				Ok(lock) => lock,
+				Err(error) => {
+					return Ok(error_result(rea_contract::Failure::output(
+						"export_evidence_bundle",
+						error.to_string(),
+					)))
+				}
+			};
+		let snapshot = match self.rea_session.snapshot() {
+			Ok(snapshot) => snapshot,
+			Err(error) => return Ok(error_result(error)),
+		};
+		Ok(rea_evidence_export::export(
+			params,
+			snapshot,
+			roots,
+			context.ct.clone(),
+			admission,
+			Arc::clone(&self.rea_exports),
+			file_lock,
+		)
+		.await)
+	}
+
+	#[tool(
+		title = "Read Session Evidence Bundle",
+		input_schema = rea_contract::bundle_input_schema(),
+		output_schema = rea_contract::bundle_output_schema(),
+		annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
+		description = "Read complete observations retained by this MCP session, or discover record metadata using detail: summary and exact filters. Complete bundles contain canonical manifests and complete records; a new session starts empty."
+	)]
+	async fn rea_get_evidence_bundle(
+		&self,
+		Parameters(params): Parameters<serde_json::Value>,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResult, ErrorData> {
+		let raw = context
+			.extensions
+			.get::<rea_mcp_transport::ReaRawArguments>();
+		if let Some(error) = raw.and_then(|raw| raw.protocol_error()) {
+			return Err(error);
+		}
+		if let Err(error) = rea_mcp_input::bundle_ordered(
+			&params,
+			raw.and_then(|raw| raw.object_keys(&[])),
+			raw.and_then(|raw| raw.object_keys(&["filters"])),
+		) {
+			return Ok(error.wire());
+		}
+		Ok(self.rea_session.get_bundle(params))
+	}
+
+	#[tool(
+		title = "Read Complete Evidence Snapshot",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read complete canonical Evidence bundle bytes in stable pages. Native extension: omit snapshot_id only at offset zero to freeze the current session bundle; every continuation supplies the returned snapshot_id. Hex bytes and per-chunk/full SHA-256 permit exact reconstruction, including results too large for one response. Page length is 1..262144 bytes. Snapshots are session-only, at most 4 and 128 MiB combined, each at most 64 MiB; no silent eviction. Release completed snapshots with rea_close_evidence_snapshot. Original REA get/export/import behavior is unchanged."
+	)]
+	async fn rea_read_evidence_bundle(
+		&self,
+		Parameters(params): Parameters<rea_evidence_readback::ReadParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<CallToolResult, ErrorData> {
+		Ok(self
+			.rea_readbacks
+			.read(params, &self.rea_session, context.ct.clone())
+			.await)
+	}
+
+	#[tool(
+		title = "Release Evidence Snapshot",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Release one complete-byte snapshot owned by this MCP session. Reports released:false when it is already absent. Evidence records remain available for get/export; only the snapshot cursor is removed. Reads already admitted may finish with their owned immutable bytes. A new session never inherits old snapshot handles."
+	)]
+	async fn rea_close_evidence_snapshot(
+		&self,
+		Parameters(params): Parameters<rea_evidence_readback::CloseParams>,
+	) -> Result<CallToolResult, ErrorData> {
+		Ok(self.rea_readbacks.close(params))
+	}
+
+	#[tool(
+		title = "Inspect Source Map Declarations",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Decode one explicitly selected source-map JSON file (at most 8 MiB) with bounded Rust VLQ and embedded-section parsing. Page sources, names and mappings, or query one-based generated lines and zero-based columns. JavaScript/CSS columns count UTF-16 code units, not UTF-8 bytes. Source names and sourceRoot are declarations; no URL, original file or generated code is followed or executed. Every continuation requires analysis_sha256. Queries preserve coincident mappings and do not interpolate original positions."
+	)]
+	async fn rea_inspect_source_map(
+		&self,
+		Parameters(params): Parameters<rea_source_map::InspectSourceMapParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		rea_source_map::inspect(params, context.ct.clone())
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "List Retained Native Model Sessions",
+		description = "List bounded retained model snapshot sessions admitted for the current authenticated owner and unchanged runtime policy. Reads manifests without reparsing the original model or rehashing payload data. Index pages and chunks are verified on access.",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		)
+	)]
+	async fn rea_model_session_list(
+		&self,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|error| error.to_string())?;
+		rea_model::session::list(scope.owner())
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Inspect Native Application Manifest",
+		description = "Read a fixed APK AndroidManifest.xml or JAR META-INF/MANIFEST.MF through the admitted file policy and existing checked ZIP directory. Verify bounded stored/deflate payload and CRC, then return paginated declarations. Does not execute, install, or authenticate the package.",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		)
+	)]
+	async fn rea_inspect_application(
+		&self,
+		Parameters(params): Parameters<crate::mcp::rea_application::InspectApplicationParams>,
+	) -> Result<String, String> {
+		crate::mcp::rea_application::inspect_application(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Verify Native APK Signature Records",
+		description = "Inspect one APK through confined descriptor admission and a bounded Rust worker. Verify v2/v3 RSA-PSS, RSA PKCS1 SHA-256/SHA-512 and ECDSA SHA-256 P-256/P-384 signatures, exact certificate public-key binding and APK chunked content digests. Maximum 128 MiB archive, 16 MiB signing block and 32 signers per scheme. Report unsupported algorithms and v1/v3.1/rotation/source-stamp/v4 coverage explicitly. Mathematical self-consistency never establishes trusted signer identity or Android installability. Optional expected_sha256 binds exact complete captured bytes. No code execution, package installation or network requests.",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		)
+	)]
+	async fn rea_inspect_apk_signature(
+		&self,
+		Parameters(params): Parameters<crate::mcp::rea_apk_signature::InspectApkSignatureParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		crate::mcp::rea_apk_signature::inspect_apk_signature(params, context.ct.clone())
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = false,
+			open_world_hint = false
+		),
+		description = "Owner-bound native immutable model snapshot open. Requires the same authenticated owner and current policy; query/read use retained snapshot data. Linux publication; bounded storage and reads."
+	)]
+	async fn rea_model_session_open(
+		&self,
+		Parameters(params): Parameters<rea_model::session::OpenModelSessionParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let owner_admission = std::sync::Arc::new(
+			runtime::effect_owner_fence::admit_new_effect()
+				.await
+				.map_err(|e| e.to_string())?,
+		);
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|e| e.to_string())?;
+		rea_model::session::open(params, scope.owner(), owner_admission)
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Owner-bound native immutable model snapshot query. Requires the same authenticated owner and current policy; query/read use retained snapshot data. Linux publication; bounded storage and reads."
+	)]
+	async fn rea_model_session_query(
+		&self,
+		Parameters(params): Parameters<rea_model::session::QueryModelSessionParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|e| e.to_string())?;
+		rea_model::session::query(params, scope.owner())
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Owner-bound native immutable model snapshot read. Requires the same authenticated owner and current policy; query/read use retained snapshot data. Linux publication; bounded storage and reads."
+	)]
+	async fn rea_model_session_read(
+		&self,
+		Parameters(params): Parameters<rea_model::session::ReadModelSessionParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		let scope = self
+			.owner_binding
+			.resolve(&context, self.search_owner.as_ref().as_deref())
+			.map_err(|e| e.to_string())?;
+		rea_model::session::read(params, scope.owner())
+			.await
+			.map_err(|e| e.to_string())
+	}
+
+	#[tool(
+		title = "Inspect Native Archive Directory",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read a bounded, paginated classic ZIP central directory through an isolated native descriptor parser. Indexes ZIP/JAR/APK entry names, manifest/DEX/native-library roles and validated local-header/data extents, with optional streamed full SHA-256 and pinned page identity. Does not decompress, verify content CRC or application signatures, or establish that an APK/JAR is runnable. Unsupported ZIP64 and multipart archives are explicitly refused."
+	)]
+	async fn rea_inspect_archive(
+		&self,
+		Parameters(params): Parameters<rea_artifact_zip::InspectArchiveParams>,
+	) -> Result<String, String> {
+		rea_artifact_zip::inspect_archive(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Inspect ASAR Archive",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Inspect an absolute workspace ASAR through a bounded Rust worker. Validates both Pickles, the complete UTF-8 header, exact integer/offset declarations, paths and nonoverlapping packed extents before paging a sorted inventory. Returns header SHA-256 and descriptor observation; every continuation requires both. Links and unpacked sidecars are declarations only, never followed. Indexing does not verify member payload integrity or authenticate the publisher. Select a packed member with rea_read_asar_member, or explicitly provide its archive identities in a JavaScript graph source."
+	)]
+	async fn rea_inspect_asar(
+		&self,
+		Parameters(params): Parameters<rea_asar::InspectAsarParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		rea_asar::inspect_asar(params, context.ct.clone())
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Selected ASAR Member",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read at most 65536 exact bytes of one explicitly selected packed regular ASAR member. Requires header digest and descriptor observation from rea_inspect_asar. The entire selected member, bounded to 64 MiB, is hashed and any declared SHA256 and block hashes must agree before returning bytes_hex plus range/member digests. No extraction or code execution occurs. Links, directories, unpacked files, changed identities, overlapping ranges and malformed declarations are refused. Self-declared integrity is consistency, not publisher authentication."
+	)]
+	async fn rea_read_asar_member(
+		&self,
+		Parameters(params): Parameters<rea_asar::ReadAsarMemberParams>,
+		context: RequestContext<RoleServer>,
+	) -> Result<String, String> {
+		rea_asar::read_member(params, context.ct.clone())
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Static Analysis Profiles",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "List configured static analyzers and their exact profile commitments. Profiles bind the host, runtime, backend executable SHA-256 and version, admitted artifact roots, fixed operations and resource budgets."
+	)]
+	async fn rea_static_profiles(
+		&self,
+		Parameters(_params): Parameters<runtime::inspect::HostListParams>,
+	) -> Result<String, String> {
+		rea_provider::profiles().map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Start Pinned Static Analysis",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Admit one fixed GNU readelf/objdump operation, JADX classes/sources operation, or versioned Ghidra ELF inventory/function analysis through the existing durable job owner. Ghidra revisions 2/3/4 admit functions, function, decompile and xrefs. Selected operations require a canonical lowercase memory address: revisions 2/3 require an exact function entry, while revision 4 also resolves an address in a function body. Requires exact profile and artifact SHA-256 identities. Preserve the complete request and idempotency key after uncertainty. Reads owned build artifacts without executing them. Analysis, decompilation, output and resource use are bounded; results are partial engine observations."
+	)]
+	async fn rea_static_start(
+		&self,
+		Parameters(params): Parameters<rea_provider::ReaStaticRequest>,
+	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+		rea_provider::start(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Observe Original Static Analysis",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Observe the original static analysis request through the native runtime facade. Requires its unchanged full request and pinned profile. This operation cannot create or relaunch a job."
+	)]
+	async fn rea_static_status(
+		&self,
+		Parameters(params): Parameters<rea_provider::ReaStaticRequest>,
+	) -> Result<String, String> {
+		rea_provider::status(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Verified Static Analysis Result",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read and validate the bounded terminal output of the original static analysis job, including pinned backend and input identities and complete output commitments. Incomplete, failed or changed results do not become successful analysis. Reading does not execute the provider."
+	)]
+	async fn rea_static_read(
+		&self,
+		Parameters(params): Parameters<rea_provider::ReaStaticRequest>,
+	) -> Result<String, String> {
+		rea_provider::read(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Cancel Original Static Analysis",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Request cancellation of the original static analysis job and its process group through the existing runtime owner. Requires the unchanged original request. Observe terminal status separately; cancellation never launches replacement work."
+	)]
+	async fn rea_static_cancel(
+		&self,
+		Parameters(params): Parameters<rea_provider::ReaStaticRequest>,
+	) -> Result<String, String> {
+		rea_provider::cancel(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "REA Evidence Digest Check (Limited)",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Verify a workspace-local REA Evidence JSON record semantic SHA-256 commitment for finite IEEE-754 JSON numbers and UTF-16 key ordering. Rejects duplicate JSON keys and mismatched hashes. Does not establish full REA Zod schema or provider parity."
+	)]
+	async fn rea_verify_evidence(
+		&self,
+		Parameters(params): Parameters<rea_evidence::VerifyEvidenceParams>,
+	) -> Result<String, String> {
+		rea_evidence::verify_evidence(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Retain Native REA Preview (Experimental)",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Inspect a workspace-confined local artifact with the isolated Rust worker and persist its explicitly NON-REA preview under the controller state directory. Uses exclusive atomic publication, full-record readback and stable native ID. Writes private controller state only; does not modify the source file or claim REA 6.8.0 parity."
+	)]
+	async fn rea_retain_preview(
+		&self,
+		Parameters(params): Parameters<rea_store::RetainPreviewParams>,
+	) -> Result<String, String> {
+		let owner_admission = std::sync::Arc::new(
+			runtime::effect_owner_fence::admit_new_effect()
+				.await
+				.map_err(|error| error.to_string())?,
+		);
+		rea_store::retain_preview(params, owner_admission)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Retained Native REA Preview",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read an exact previously retained Hepta REA native preview ID across controller restarts. Verifies the durable record SHA-256 and versioned native preview semantic identity, rejects damaged/unknown records, and does not re-open the original artifact. Does not authenticate records against a malicious controller state owner."
+	)]
+	async fn rea_read_preview(
+		&self,
+		Parameters(params): Parameters<rea_store::ReadPreviewParams>,
+	) -> Result<String, String> {
+		rea_store::read_preview(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Create Native Weight Patch Artifact",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Create a separate native safetensors artifact by applying 1 to 1024 exact F32/F16/BF16 element-byte replacements to one tensor. Requires the complete source SHA-256 and exact prior bytes. Streams at most 2 GiB with bounded buffers; source remains unchanged. Publishes the verified candidate and reverse-patch manifest together in private runtime storage. Exact no-ops preserve every source byte. Identical requests verify and reuse their artifact. No Python, inference, training or production activation."
+	)]
+	async fn weight_artifact_patch(
+		&self,
+		Parameters(params): Parameters<weight_tensor::PatchTensorParams>,
+	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+		weight_artifact::patch(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Restore Native Weight Artifact",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read a verified private native weight artifact by exact ID and apply its recorded reverse patch into a new artifact. The restored full SHA-256 must match the original parent commitment. Revalidates stored model and manifest identities and never overwrites the source or candidate. Requires no resident model worker."
+	)]
+	async fn weight_artifact_restore(
+		&self,
+		Parameters(params): Parameters<weight_artifact::RestoreParams>,
+	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+		weight_artifact::restore(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Native F32 Linear Forward",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Evaluate a bounded F32 Linear matrix from a complete-SHA-pinned safetensors file or a verified private artifact ID. Computes inputs times weight transpose with optional explicit bias in Rust, using finite F32 sequential accumulation. Pins the source descriptor and streams its complete identity while capturing only the selected tensor. At most 64 rows, 4096 dimensions, 1,048,576 weights and 16,777,216 multiply-add pairs. This is a single-layer CPU operation; it does not load an arbitrary model graph or train weights."
+	)]
+	async fn weight_linear_forward(
+		&self,
+		Parameters(params): Parameters<weight_forward::ForwardLinearParams>,
+	) -> Result<String, String> {
+		weight_forward::forward(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Weight Worker Profiles",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "List enabled administrator-owned model experiment profiles and resource ceilings. Profiles bind host, model read roots, worker code and isolated output storage. No profile grants production model promotion."
+	)]
+	async fn weight_profiles(
+		&self,
+		Parameters(_params): Parameters<runtime::inspect::HostListParams>,
+	) -> Result<String, String> {
+		weight::profiles().map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Open Weight Experiment Worker",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Start or recover an isolated resident model worker through the existing durable process owner. Select a configured profile and preserve the same idempotency key and parameters after timeouts. Returns an admitted original job, not completed inference. Read the open result with weight_read without request_id; use weight_status for lifecycle. Source models are read-only and candidate outputs remain isolated."
+	)]
+	async fn weight_open(
+		&self,
+		Parameters(params): Parameters<weight::WeightOpenParams>,
+	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+		weight::open(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Call Weight Experiment Worker",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Submit a typed inspect/probe/intervene/analyze/patch/seal/query request to an existing resident worker. The bounded client is an original durable job and uses the worker Unix socket. Reuse the same request_id after uncertainty; changed payloads conflict. Results and large-array artifact references arrive through weight_read with that request_id. No arbitrary code, executable choice or production activation."
+	)]
+	async fn weight_call(
+		&self,
+		Parameters(params): Parameters<weight::WeightCallParams>,
+	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect()
+			.await
+			.map_err(|error| error.to_string())?;
+		weight::call(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Weight Job Status",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Observe the original resident-worker or request job through its stored owner binding. Optional wait is bounded to 30 seconds and cannot restart a job. Process success and model quality are distinct; inspect the JSON worker result as well."
+	)]
+	async fn weight_status(
+		&self,
+		Parameters(params): Parameters<weight::WeightStatusParams>,
+	) -> Result<String, String> {
+		weight::status(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Read Weight Job Result",
+		annotations(
+			read_only_hint = true,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Read bounded original stdout/stderr using independent byte cursors. Omit request_id for the worker open response; supply it for a call. The worker emits JSON responses with artifact references, not full tensors. Continue with next_offset when needed. Reading never reruns inference or reopens source weights."
+	)]
+	async fn weight_read(
+		&self,
+		Parameters(params): Parameters<weight::WeightReadParams>,
+	) -> Result<String, String> {
+		weight::read(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Close Weight Experiment Worker",
+		annotations(
+			read_only_hint = false,
+			destructive_hint = false,
+			idempotent_hint = true,
+			open_world_hint = false
+		),
+		description = "Close a stored session to new calls and request cancellation of only its original resident worker through the existing process owner. Inspect weight_status for terminal confirmation. Candidate artifacts and all prior records remain available; this identity cannot be reused to relaunch."
+	)]
+	async fn weight_close(
+		&self,
+		Parameters(params): Parameters<weight::WeightCloseParams>,
+	) -> Result<String, String> {
+		weight::close(params)
+			.await
+			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
 		title = "Process Start",
 		annotations(
 			read_only_hint = false,
@@ -2606,6 +3743,18 @@ impl ServerHandler for OctofsServer {
 			.list_all()
 			.into_iter()
 			.filter(|tool| {
+				if tool.name.starts_with("rea_static_")
+					&& runtime::config::maybe_runtime_config()
+						.is_none_or(|c| c.rea_static_profiles.is_empty())
+				{
+					return false;
+				}
+				if WEIGHT_WORKER_TOOL_NAMES.contains(&tool.name.as_ref())
+					&& runtime::config::maybe_runtime_config()
+						.is_none_or(|c| c.weight_workers.is_empty())
+				{
+					return false;
+				}
 				if runtime_enabled {
 					tool.name.as_ref() != "shell"
 				} else {
@@ -2613,6 +3762,19 @@ impl ServerHandler for OctofsServer {
 				}
 			})
 			.map(|mut tool| {
+				// Frozen producer schemas are contracts, including nullable variants
+				// and schema-version metadata; they are not schemars generator noise.
+				if matches!(
+					tool.name.as_ref(),
+					"rea_inspect_elf_notes"
+						| "rea_get_evidence_bundle"
+						| "rea_inspect_apk_signature_evidence"
+						| "rea_inspect_analysis_view"
+						| "rea_export_evidence_bundle"
+						| "rea_import_evidence_bundle"
+				) {
+					return tool;
+				}
 				let mut schema = tool.input_schema.as_ref().clone();
 				for value in schema.values_mut() {
 					strip_null_variants(value);

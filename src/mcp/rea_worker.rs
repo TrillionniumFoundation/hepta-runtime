@@ -1,0 +1,318 @@
+// Copyright 2026 TrillionniumFoundation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Single-shot Rust parser worker. The controller admits file bytes through its
+//! configured workspace descriptor, then sends those bytes over stdin to this
+//! process. The child never receives the path to open or runtime credentials.
+//!
+//! Linux adds a process-thread-synchronized syscall denylist after stdin has
+//! been read. This is NOT a complete sandbox: UID, namespaces and other
+//! information-flow paths remain outside the current boundary.
+
+use anyhow::{anyhow, bail, Context, Result};
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::fmt::Write as _;
+use std::io::{Read, Write};
+use std::process::Stdio;
+use std::time::Duration;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
+use tokio::process::Command;
+
+const INPUT_BYTES: u64 = 32 * 1024 * 1024;
+const MAX_STDOUT_BYTES: usize = 256 * 1024;
+const MAX_STDERR_BYTES: usize = 64 * 1024;
+const WORKER_DEADLINE: Duration = Duration::from_secs(20);
+// The caller-selected source path is display-only metadata and must not be
+// exposed in procfs/ps by placing it in the child process argv.
+const REDACTED_WORKER_PATH: &str = "/__hepta_rea_controller_source__";
+
+#[cfg(unix)]
+fn apply_limits() -> Result<()> {
+	const MAX_ADDRESS_SPACE: libc::rlim_t = 512 * 1024 * 1024;
+	const MAX_CPU_SECONDS: libc::rlim_t = 12;
+	const MAX_OPEN_FILES: libc::rlim_t = 64;
+	let limits = [
+		(libc::RLIMIT_AS, MAX_ADDRESS_SPACE),
+		(libc::RLIMIT_CPU, MAX_CPU_SECONDS),
+		(libc::RLIMIT_NOFILE, MAX_OPEN_FILES),
+		(libc::RLIMIT_CORE, 0),
+		(libc::RLIMIT_FSIZE, MAX_STDOUT_BYTES as libc::rlim_t),
+	];
+	for (kind, allowed) in limits {
+		let rule = libc::rlimit {
+			rlim_cur: allowed,
+			rlim_max: allowed,
+		};
+		if unsafe { libc::setrlimit(kind, &rule) } != 0 {
+			return Err(std::io::Error::last_os_error())
+				.context("failed to establish Rust REA worker resource limits");
+		}
+	}
+	Ok(())
+}
+
+#[cfg(not(unix))]
+fn apply_limits() -> Result<()> {
+	bail!("native Rust REA worker is not qualified on non-Unix systems");
+}
+
+/// The only worker entrypoint. It never performs filesystem or remote reads.
+/// stdout is emitted only for a completed, successful analysis.
+pub fn serve_once(selected_path: &str, sandbox_probe: bool) -> Result<()> {
+	apply_limits()?;
+	let mut input = Vec::new();
+	std::io::stdin()
+		.lock()
+		.take(INPUT_BYTES + 1)
+		.read_to_end(&mut input)
+		.context("cannot read Rust REA worker input")?;
+	if input.len() as u64 > INPUT_BYTES {
+		bail!("REA worker input exceeds 32 MiB");
+	}
+	super::rea_seccomp::tighten_after_read()?;
+	if sandbox_probe {
+		super::rea_seccomp::verify_file_network_denial()?;
+		let mut stdout = std::io::stdout().lock();
+		stdout.write_all(b"{\"status\":\"file_and_network_syscalls_denied\"}\n")?;
+		stdout.flush()?;
+		return Ok(());
+	}
+	let report = super::rea::inspect_bytes(&input, selected_path)?;
+	let encoded = serde_json::to_vec(&report)?;
+	if encoded.len() > MAX_STDOUT_BYTES {
+		bail!("REA worker response exceeds 256 KiB");
+	}
+	let mut stdout = std::io::stdout().lock();
+	stdout.write_all(&encoded)?;
+	stdout.write_all(b"\n")?;
+	stdout.flush()?;
+	Ok(())
+}
+
+/// Consume a potentially hostile child output stream with a hard byte ceiling.
+///
+/// `wait_with_output` is intentionally avoided: it buffers unbounded stdout
+/// and stderr before its caller can enforce a post-hoc size check.
+async fn read_capped<R: AsyncRead + Unpin>(
+	reader: R,
+	max_bytes: usize,
+	stream: &str,
+) -> Result<Vec<u8>> {
+	let mut bytes = Vec::new();
+	reader
+		.take(max_bytes as u64 + 1)
+		.read_to_end(&mut bytes)
+		.await
+		.with_context(|| format!("cannot read REA worker {stream}"))?;
+	if bytes.len() > max_bytes {
+		bail!("REA worker {stream} exceeds {max_bytes} byte limit");
+	}
+	Ok(bytes)
+}
+
+/// Capture stdin/stdout/stderr concurrently so a child which writes before
+/// consuming its input cannot deadlock the controller. An over-limit output
+/// kills and reaps the child immediately rather than waiting for a timeout.
+async fn collect_child_output(
+	child: &mut tokio::process::Child,
+	input: Vec<u8>,
+) -> Result<(Vec<u8>, Vec<u8>, std::process::ExitStatus)> {
+	let mut stdin = child
+		.stdin
+		.take()
+		.ok_or_else(|| anyhow!("REA worker stdin unavailable"))?;
+	let stdout = child
+		.stdout
+		.take()
+		.ok_or_else(|| anyhow!("REA worker stdout unavailable"))?;
+	let stderr = child
+		.stderr
+		.take()
+		.ok_or_else(|| anyhow!("REA worker stderr unavailable"))?;
+	let result = tokio::try_join!(
+		async move {
+			stdin
+				.write_all(&input)
+				.await
+				.context("failed to supply REA worker bytes")?;
+			stdin
+				.shutdown()
+				.await
+				.context("failed to close REA worker stdin")?;
+			Ok::<(), anyhow::Error>(())
+		},
+		read_capped(stdout, MAX_STDOUT_BYTES, "stdout"),
+		read_capped(stderr, MAX_STDERR_BYTES, "stderr"),
+		async { child.wait().await.context("failed to wait for REA worker") }
+	);
+	match result {
+		Ok(((), stdout, stderr, status)) => Ok((stdout, stderr, status)),
+		Err(error) => {
+			// The reader exceeded its cap, an IO error occurred, or stdin broke.
+			// Do not leave an unbounded or unexpectedly hung parser alive.
+			let _ = child.kill().await;
+			Err(error)
+		}
+	}
+}
+
+/// Explicitly reap an expired parser, rather than depending on kill-on-drop
+/// alone. The latter signals the process but may leave its reaping asynchronous.
+async fn collect_with_deadline(
+	child: &mut tokio::process::Child,
+	input: Vec<u8>,
+	deadline: Duration,
+) -> Result<(Vec<u8>, Vec<u8>, std::process::ExitStatus)> {
+	match tokio::time::timeout(deadline, collect_child_output(child, input)).await {
+		Ok(result) => result,
+		Err(_) => {
+			let _ = child.kill().await;
+			bail!(
+				"Rust REA worker exceeded {} ms wall-clock deadline",
+				deadline.as_millis()
+			);
+		}
+	}
+}
+
+/// The worker receives a placeholder in argv; only the controller that
+/// admitted the bytes rebinds the genuine selected path. The native semantic
+/// ID deliberately excludes this display-only path.
+fn rebind_worker_path(record: &mut Value, selected_path: &str) -> Result<()> {
+	let subject = record
+		.get_mut("subject")
+		.and_then(Value::as_object_mut)
+		.ok_or_else(|| anyhow!("REA worker report omitted subject"))?;
+	if subject.get("local_path").and_then(Value::as_str) != Some(REDACTED_WORKER_PATH) {
+		bail!("REA worker returned an unexpected source path");
+	}
+	subject.insert(
+		"local_path".to_string(),
+		Value::String(selected_path.to_string()),
+	);
+	Ok(())
+}
+
+/// Verify that the *controller-admitted* bytes, not just a worker-supplied
+/// assertion, back the source identity and semantic commitment. This detects
+/// transport corruption and forged/mismatched records, but it cannot prove
+/// the parser's semantic classification without an independent oracle.
+fn verify_worker_report(
+	record: &Value,
+	source_digest: &[u8; 32],
+	source_len: usize,
+	selected_path: &str,
+) -> Result<()> {
+	super::rea_store::report_identity(record)
+		.context("untrusted worker preview identity invalid")?;
+	let map = record
+		.as_object()
+		.ok_or_else(|| anyhow!("REA worker preview must be object"))?;
+	const FIELDS: &[&str] = &[
+		"record_format",
+		"native_evidence_id",
+		"rea_evidence_compatible",
+		"upstream_reference",
+		"subject",
+		"operation",
+		"analysis_profile",
+		"normalized_result",
+		"coverage",
+		"limitations",
+	];
+	if map.len() != FIELDS.len() || FIELDS.iter().any(|field| !map.contains_key(*field)) {
+		bail!("REA worker returned unexpected preview members");
+	}
+	for (key, keys) in [
+		("subject", &["local_path", "sha256", "size_bytes"][..]),
+		(
+			"upstream_reference",
+			&["repository", "version", "source_commit"][..],
+		),
+		("coverage", &["scope", "status"][..]),
+		(
+			"normalized_result",
+			&[
+				"format",
+				"architecture",
+				"word_size_bits",
+				"byte_order",
+				"header_facts",
+			][..],
+		),
+	] {
+		let nested = record[key]
+			.as_object()
+			.ok_or_else(|| anyhow!("REA worker invalid {key}"))?;
+		if nested.len() != keys.len() || keys.iter().any(|field| !nested.contains_key(*field)) {
+			bail!("REA worker preview has unexpected {key} members");
+		}
+	}
+	if record["upstream_reference"]["repository"] != "morluto/rea" {
+		bail!("REA worker source repository mismatch");
+	}
+	let mut actual = String::with_capacity(64);
+	for byte in source_digest {
+		write!(&mut actual, "{byte:02x}")?;
+	}
+	if record["subject"]["sha256"].as_str() != Some(actual.as_str())
+		|| record["subject"]["size_bytes"].as_u64() != Some(source_len as u64)
+		|| record["subject"]["local_path"].as_str() != Some(selected_path)
+	{
+		bail!("REA worker preview is not bound to controller-admitted input bytes and path");
+	}
+	Ok(())
+}
+
+/// Run the shipped worker as a child of the current binary. This boundary
+/// contains parser aborts (the production profile uses panic = abort) and
+/// applies a deadline as well as independent worker rlimits.
+pub async fn inspect_isolated(input: Vec<u8>, selected_path: &str) -> Result<Value> {
+	if input.len() as u64 > INPUT_BYTES {
+		bail!("REA inspection file exceeds 32 MiB worker limit");
+	}
+	let input_size = input.len();
+	let input_digest: [u8; 32] = Sha256::digest(&input).into();
+	let selected_path = selected_path.to_owned();
+	let binary = std::env::current_exe().context("cannot locate Rust REA worker binary")?;
+	let mut command = Command::new(binary);
+	command
+		.arg("rea-worker")
+		.arg(format!("--selected-path={REDACTED_WORKER_PATH}"))
+		.env_clear()
+		.current_dir("/")
+		.stdin(Stdio::piped())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.kill_on_drop(true);
+	let mut child = command
+		.spawn()
+		.context("failed to spawn bounded Rust REA worker")?;
+	let (stdout, stderr, status) =
+		collect_with_deadline(&mut child, input, WORKER_DEADLINE).await?;
+	if !status.success() {
+		let diagnostic = String::from_utf8_lossy(&stderr);
+		bail!("Rust REA worker failed ({}): {}", status, diagnostic.trim());
+	}
+	let mut record: Value =
+		serde_json::from_slice(&stdout).context("Rust REA worker output is not JSON")?;
+	rebind_worker_path(&mut record, &selected_path)?;
+	verify_worker_report(&record, &input_digest, input_size, &selected_path)?;
+	Ok(record)
+}
+
+#[cfg(test)]
+#[path = "rea_worker_tests.rs"]
+mod rea_worker_tests;

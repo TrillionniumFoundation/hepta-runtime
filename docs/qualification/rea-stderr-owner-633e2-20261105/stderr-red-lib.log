@@ -1,0 +1,43 @@
+   Compiling hepta-runtime v0.1.0 (/home/qian-qi/work/hepta-rea-completion-633e2-20261105)
+    Finished `test` profile [optimized] target(s) in 4m 51s
+     Running unittests src/lib.rs (/home/qian-qi/work/hepta-rea-completion-633e2-target/debug/deps/hepta_runtime-2305b895849fde7e)
+
+running 4 tests
+test mcp::rea_worker_transport::tests::worker_stderr_cancellation_still_applies_after_child_exit ... FAILED
+test mcp::rea_worker_transport::tests::worker_stderr_open_writer_cannot_escape_the_provider_deadline ... FAILED
+test mcp::rea_worker_transport::tests::worker_stderr_overflow_terminates_before_the_provider_deadline ... FAILED
+test mcp::rea_worker_transport::tests::worker_stderr_request_abort_drains_owner_and_restores_capacity ... FAILED
+
+failures:
+
+---- mcp::rea_worker_transport::tests::worker_stderr_cancellation_still_applies_after_child_exit stdout ----
+
+thread 'mcp::rea_worker_transport::tests::worker_stderr_cancellation_still_applies_after_child_exit' (657758) panicked at src/mcp/rea_worker_transport_tests.rs:117:10:
+stderr ignored cancellation after the child exited: Elapsed(())
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- mcp::rea_worker_transport::tests::worker_stderr_open_writer_cannot_escape_the_provider_deadline stdout ----
+
+thread 'mcp::rea_worker_transport::tests::worker_stderr_open_writer_cannot_escape_the_provider_deadline' (657930) panicked at src/mcp/rea_worker_transport_tests.rs:87:26:
+stderr escaped the worker deadline: Elapsed(())
+
+---- mcp::rea_worker_transport::tests::worker_stderr_overflow_terminates_before_the_provider_deadline stdout ----
+
+thread 'mcp::rea_worker_transport::tests::worker_stderr_overflow_terminates_before_the_provider_deadline' (658119) panicked at src/mcp/rea_worker_transport_tests.rs:182:26:
+stderr overflow waited for the provider deadline: Elapsed(())
+
+---- mcp::rea_worker_transport::tests::worker_stderr_request_abort_drains_owner_and_restores_capacity stdout ----
+
+thread 'mcp::rea_worker_transport::tests::worker_stderr_request_abort_drains_owner_and_restores_capacity' (658237) panicked at src/mcp/rea_worker_transport_tests.rs:148:26:
+cancelled owner retained its worker slot: Elapsed(())
+
+
+failures:
+    mcp::rea_worker_transport::tests::worker_stderr_cancellation_still_applies_after_child_exit
+    mcp::rea_worker_transport::tests::worker_stderr_open_writer_cannot_escape_the_provider_deadline
+    mcp::rea_worker_transport::tests::worker_stderr_overflow_terminates_before_the_provider_deadline
+    mcp::rea_worker_transport::tests::worker_stderr_request_abort_drains_owner_and_restores_capacity
+
+test result: FAILED. 0 passed; 4 failed; 0 ignored; 0 measured; 2031 filtered out; finished in 8.02s
+
+error: test failed, to rerun pass `--lib`

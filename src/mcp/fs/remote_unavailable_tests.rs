@@ -38,7 +38,7 @@ async fn remote_operations_reject_both_schemes_without_touching_local_files() {
 	{
 		use crate::mcp::runtime::config::{check_remote_write, init_runtime, RuntimeConfig};
 		let config: RuntimeConfig = serde_json::from_value(serde_json::json!({
-			"state_dir": directory.path(),
+			"state_dir": directory.path().join("state"),
 			"hosts": {"registered": {
 				"ssh_target": "configured-peer.invalid",
 				"remote_state_dir": "/remote-unavailable-fixture"

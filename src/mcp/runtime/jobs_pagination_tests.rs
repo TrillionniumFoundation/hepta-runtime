@@ -48,6 +48,38 @@ fn private_inventory_reads_complete_serde_records_without_rewriting_source() {
 }
 
 #[test]
+fn private_inventory_handles_alternating_record_sizes_and_rejects_corrupt_tail() {
+	let root = fixture();
+	let mut expected = Vec::new();
+	let mut originals = Vec::new();
+	for (index, size) in [32768, 3, 8192, 65536, 1, 17].into_iter().enumerate() {
+		let path = write_record(root.path(), index + 1);
+		let mut value: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+		value["args"] = json!([format!("{}-{}", index, "x".repeat(size))]);
+		let bytes = serde_json::to_vec(&value).unwrap();
+		expected.push(serde_json::from_slice::<JobRecord>(&bytes).unwrap());
+		std::fs::write(&path, &bytes).unwrap();
+		originals.push((path, bytes));
+	}
+	let records = inventory_records_at(root.path(), InventoryLimits::default()).unwrap();
+	assert_eq!(
+		serde_json::to_vec(&records).unwrap(),
+		serde_json::to_vec(&expected).unwrap()
+	);
+	for (path, bytes) in &originals {
+		assert_eq!(std::fs::read(path).unwrap(), *bytes);
+	}
+	let (tail, _) = originals.last().unwrap();
+	std::fs::write(tail, b"{\"id\":").unwrap();
+	let error = inventory_records_at(root.path(), InventoryLimits::default())
+		.err()
+		.unwrap();
+	assert!(error
+		.to_string()
+		.contains("corrupt durable inventory metadata"));
+}
+
+#[test]
 fn private_inventory_rejects_symlink_hardlink_and_public_metadata() {
 	let root = fixture();
 	let path = write_record(root.path(), 1);

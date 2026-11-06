@@ -4,6 +4,164 @@
 //! Regression tests for config.
 use super::*;
 
+fn digest_fixture() -> RuntimeConfig {
+	serde_json::from_value(serde_json::json!({
+		"state_dir":"/synthetic/state",
+		"controller_workspace_roots":["/synthetic/workspace"],
+		"hosts":{"fixture":{
+			"ssh_target":"synthetic-alias",
+			"remote_state_dir":"/synthetic/remote",
+			"allowed_read_path_prefixes":["/synthetic/read", "/synthetic/中文'\""],
+			"privileged_actions":{"inspect":{
+				"executable":"/usr/bin/true", "fixed_args":["a b"], "allow_extra_args":true,
+				"extra_arg_patterns":["[a-z]+"], "timeout_seconds":17
+			}}
+		}}
+	}))
+	.unwrap()
+}
+
+#[test]
+fn disabled_analysis_extensions_preserve_the_existing_runtime_policy_identity() {
+	#[derive(serde::Serialize)]
+	struct BeforeAnalysisExtensions<'a> {
+		state_dir: &'a PathBuf,
+		controller_workspace_roots: &'a Vec<PathBuf>,
+		hosts: &'a BTreeMap<String, HostConfig>,
+	}
+	let config = digest_fixture();
+	let original = BeforeAnalysisExtensions {
+		state_dir: &config.state_dir,
+		controller_workspace_roots: &config.controller_workspace_roots,
+		hosts: &config.hosts,
+	};
+	assert_eq!(
+		serde_json::to_vec(&config).unwrap(),
+		serde_json::to_vec(&original).unwrap(),
+		"disabled analysis must not revoke existing native job observations"
+	);
+}
+
+#[test]
+fn installed_policy_digest_matches_full_json_and_never_reuses_another_config() {
+	use sha2::Digest;
+	let original = digest_fixture();
+	let installed = InstalledRuntimeConfig::new(original.clone());
+	assert!(installed.policy_digest.get().is_none());
+	let expected: [u8; 32] = sha2::Sha256::digest(serde_json::to_vec(&original).unwrap()).into();
+	assert_eq!(installed.policy_digest().unwrap(), expected);
+	let mut variants = Vec::new();
+	let mut changed = original.clone();
+	changed.state_dir = "/synthetic/other-state".into();
+	variants.push(changed);
+	let mut changed = original.clone();
+	changed
+		.controller_workspace_roots
+		.push("/other-root".into());
+	variants.push(changed);
+	let mut changed = original.clone();
+	changed.hosts.get_mut("fixture").unwrap().ssh_target = "other-alias".into();
+	variants.push(changed);
+	let mut changed = original.clone();
+	changed.hosts.get_mut("fixture").unwrap().execution_mode = ExecutionMode::Operator;
+	variants.push(changed);
+	let mut changed = original.clone();
+	changed
+		.hosts
+		.get_mut("fixture")
+		.unwrap()
+		.allowed_read_path_prefixes
+		.push("/another-read-root".into());
+	variants.push(changed);
+	let mut changed = original;
+	changed
+		.hosts
+		.get_mut("fixture")
+		.unwrap()
+		.privileged_actions
+		.get_mut("inspect")
+		.unwrap()
+		.timeout_seconds += 1;
+	variants.push(changed);
+	for value in variants {
+		let reference: [u8; 32] = sha2::Sha256::digest(serde_json::to_vec(&value).unwrap()).into();
+		assert_ne!(reference, expected);
+		let other = InstalledRuntimeConfig::new(value);
+		assert_eq!(other.policy_digest().unwrap(), reference);
+		assert_eq!(other.policy_digest().unwrap(), reference);
+		assert_eq!(installed.policy_digest().unwrap(), expected);
+	}
+}
+
+#[cfg(unix)]
+#[test]
+fn installed_policy_serialization_failure_stays_deferred_to_digest_requests() {
+	use std::os::unix::ffi::OsStringExt;
+	let mut config = digest_fixture();
+	config.state_dir = PathBuf::from(OsString::from_vec(b"/synthetic/non-utf8-\xff".to_vec()));
+	let expected = serde_json::to_vec(&config).unwrap_err().to_string();
+	let installed = InstalledRuntimeConfig::new(config.clone());
+	assert_eq!(installed.config.state_dir, config.state_dir);
+	assert!(installed.policy_digest.get().is_none());
+	for _ in 0..2 {
+		assert_eq!(installed.policy_digest().unwrap_err().to_string(), expected);
+	}
+	assert!(installed.policy_digest.get().unwrap().is_err());
+}
+
+#[test]
+fn installed_policy_digest_binds_normalized_config_and_rejects_reinstallation() {
+	let qualified = concat!(module_path!(), "::installed_policy_digest_child_probe");
+	let test_name = qualified.split_once("::").unwrap().1;
+	let output = std::process::Command::new(std::env::current_exe().unwrap())
+		.arg("--exact")
+		.arg(test_name)
+		.arg("--nocapture")
+		.env("HEPTA_POLICY_DIGEST_CHILD", "1")
+		.output()
+		.unwrap();
+	assert!(
+		output.status.success(),
+		"stdout: {} stderr: {}",
+		String::from_utf8_lossy(&output.stdout),
+		String::from_utf8_lossy(&output.stderr)
+	);
+	assert!(
+		String::from_utf8_lossy(&output.stdout).contains("installed-policy-digest-child-verified")
+	);
+}
+
+#[test]
+fn installed_policy_digest_child_probe() {
+	use sha2::Digest;
+	if std::env::var_os("HEPTA_POLICY_DIGEST_CHILD").is_none() {
+		return;
+	}
+	assert!(runtime_config().is_err());
+	assert!(runtime_policy_digest().is_err());
+	assert!(maybe_runtime_config().is_none());
+	let root = tempfile::tempdir().unwrap();
+	let mut config = digest_fixture();
+	config.state_dir = root.path().join("normalization/../state");
+	let unnormalized: [u8; 32] = sha2::Sha256::digest(serde_json::to_vec(&config).unwrap()).into();
+	init_runtime(config).unwrap();
+	let actual = runtime_config().unwrap();
+	assert_eq!(
+		actual.state_dir,
+		std::fs::canonicalize(root.path().join("state")).unwrap()
+	);
+	assert!(std::ptr::eq(actual, maybe_runtime_config().unwrap()));
+	let expected: [u8; 32] = sha2::Sha256::digest(serde_json::to_vec(actual).unwrap()).into();
+	assert_ne!(expected, unnormalized);
+	assert_eq!(runtime_policy_digest().unwrap(), expected);
+	let mut rejected = digest_fixture();
+	rejected.state_dir = root.path().join("rejected-second-state");
+	assert!(init_runtime(rejected).is_err());
+	assert!(std::ptr::eq(actual, runtime_config().unwrap()));
+	assert_eq!(runtime_policy_digest().unwrap(), expected);
+	println!("installed-policy-digest-child-verified");
+}
+
 #[test]
 fn names_are_strict() {
 	assert!(valid_name("rog-1.example"));
@@ -224,4 +382,138 @@ fn legacy_controller_lock_never_follows_symlink_or_hardlink() {
 	std::fs::hard_link(&target, &path).unwrap();
 	assert!(claim_controller_state_dir(dir.path()).is_err());
 	assert_eq!(std::fs::read(target).unwrap(), b"not a lock");
+}
+
+#[cfg(unix)]
+#[test]
+fn missing_controller_state_is_private_under_permissive_umasks() {
+	use std::os::unix::process::CommandExt;
+	let qualified = concat!(module_path!(), "::controller_state_umask_child_probe");
+	let test_name = qualified.split_once("::").unwrap().1;
+	for mask in [0o000, 0o022, 0o077] {
+		let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+		command
+			.arg("--exact")
+			.arg(test_name)
+			.arg("--nocapture")
+			.env("HEPTA_STATE_UMASK_CHILD", format!("{mask:03o}"));
+		// Only the post-fork child changes umask. This one async-signal-safe
+		// syscall cannot race other tests running in the parent process.
+		unsafe {
+			command.pre_exec(move || {
+				libc::umask(mask);
+				Ok(())
+			});
+		}
+		let output = command.output().unwrap();
+		assert!(
+			output.status.success(),
+			"umask {mask:03o}: stdout {} stderr {}",
+			String::from_utf8_lossy(&output.stdout),
+			String::from_utf8_lossy(&output.stderr)
+		);
+		assert!(String::from_utf8_lossy(&output.stdout)
+			.contains("controller-state-umask-child-verified"));
+	}
+}
+
+#[cfg(unix)]
+#[test]
+fn controller_state_umask_child_probe() {
+	use std::os::unix::fs::MetadataExt;
+	let Some(value) = std::env::var_os("HEPTA_STATE_UMASK_CHILD") else {
+		return;
+	};
+	let mask = u32::from_str_radix(value.to_str().unwrap(), 8).unwrap();
+	assert!([0o000, 0o022, 0o077].contains(&mask));
+	let root = tempfile::tempdir().unwrap();
+	let probe = root.path().join("ordinary-mkdir");
+	std::fs::create_dir(&probe).unwrap();
+	assert_eq!(
+		std::fs::metadata(&probe).unwrap().mode() & 0o7777,
+		0o777 & !mask,
+		"child must actually run with the requested umask"
+	);
+	let state = root.path().join("missing-parent/nested/state");
+	let mut config = digest_fixture();
+	config.state_dir = state.clone();
+	init_runtime(config).unwrap();
+	assert_eq!(
+		runtime_config().unwrap().state_dir,
+		std::fs::canonicalize(&state).unwrap()
+	);
+	for relative in [
+		"missing-parent",
+		"missing-parent/nested",
+		"missing-parent/nested/state",
+		"missing-parent/nested/state/jobs",
+		"missing-parent/nested/state/audit",
+	] {
+		let metadata = std::fs::metadata(root.path().join(relative)).unwrap();
+		assert_eq!(metadata.mode() & 0o7777, 0o700, "{relative}");
+		assert_eq!(metadata.uid(), unsafe { libc::geteuid() }, "{relative}");
+	}
+	assert_eq!(
+		std::fs::metadata(&probe).unwrap().mode() & 0o7777,
+		0o777 & !mask,
+		"an unrelated existing directory is not normalized"
+	);
+	println!("controller-state-umask-child-verified");
+}
+
+#[cfg(unix)]
+#[test]
+fn existing_nonprivate_state_is_rejected_before_locks_without_repair() {
+	use std::os::unix::fs::{MetadataExt, PermissionsExt};
+	let root = tempfile::tempdir().unwrap();
+	for mode in [0o755, 0o750, 0o770, 0o1700] {
+		let state = root.path().join(format!("existing-{mode:04o}"));
+		std::fs::create_dir(&state).unwrap();
+		let sentinel = state.join("untouched");
+		std::fs::write(&sentinel, b"preserve existing state").unwrap();
+		std::fs::set_permissions(&state, std::fs::Permissions::from_mode(mode)).unwrap();
+		let before = std::fs::metadata(&state).unwrap();
+		let mut config = digest_fixture();
+		config.state_dir = state.clone();
+		let error = init_runtime(config).unwrap_err();
+		assert!(error.to_string().contains("mode 0700"), "{error:#}");
+		let after = std::fs::metadata(&state).unwrap();
+		assert_eq!(after.mode(), before.mode());
+		assert_eq!(after.uid(), before.uid());
+		assert_eq!((after.dev(), after.ino()), (before.dev(), before.ino()));
+		assert_eq!(
+			(after.ctime(), after.ctime_nsec()),
+			(before.ctime(), before.ctime_nsec()),
+			"existing root must not be chmod'ed even temporarily"
+		);
+		assert_eq!(
+			std::fs::read(&sentinel).unwrap(),
+			b"preserve existing state"
+		);
+		assert_eq!(std::fs::read_dir(&state).unwrap().count(), 1);
+	}
+}
+
+#[cfg(unix)]
+#[test]
+fn controller_state_identity_requires_the_actual_filesystem_owner() {
+	use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+	let root = tempfile::tempdir().unwrap();
+	let state = root.path().join("private-state");
+	std::fs::DirBuilder::new()
+		.mode(0o700)
+		.create(&state)
+		.unwrap();
+	let metadata = std::fs::metadata(&state).unwrap();
+	assert_eq!(metadata.mode() & 0o7777, 0o700);
+	assert!(validate_controller_state_root(&metadata, metadata.uid()).is_ok());
+	// Exercise foreign-owner rejection against real metadata without
+	// privileged chown or modifying an actual foreign directory.
+	assert!(validate_controller_state_root(&metadata, metadata.uid().wrapping_add(1)).is_err());
+	let after = std::fs::metadata(&state).unwrap();
+	assert_eq!(
+		(after.uid(), after.mode()),
+		(metadata.uid(), metadata.mode())
+	);
+	assert_eq!(std::fs::read_dir(&state).unwrap().count(), 0);
 }

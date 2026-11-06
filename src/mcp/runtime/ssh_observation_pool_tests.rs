@@ -20,6 +20,9 @@ mod file_observations;
 #[path = "ssh_observation_maintenance_tests.rs"]
 mod maintenance;
 
+#[path = "ssh_observation_owner_custody_tests.rs"]
+mod owner_custody;
+
 // Direct lifecycle fixtures own a private admission; actor capacity fixtures
 // below instead share the actual sixteen-permit admission pool.
 fn test_admission() -> Arc<OwnedSemaphorePermit> {
@@ -38,6 +41,7 @@ fn proxy_admission_fixture() -> (Arc<Proxy>, mpsc::Receiver<Request>) {
 		stop: CancellationToken::new(),
 		healthy: AtomicBool::new(true),
 		thread: Mutex::new(None),
+		custody: Mutex::new(None),
 	});
 	(proxy, receiver)
 }
@@ -2282,6 +2286,8 @@ fn isolated_actual_ssh_guard_cancellation_and_ownership_fixtures() {
 	for kind in [
 		"off",
 		"startup",
+		"owner-custody-success",
+		"owner-custody-failure",
 		"missing",
 		"cancel",
 		"profile",
@@ -2368,6 +2374,8 @@ async fn isolated_helper() {
 	};
 	if kind == "external-peer" {
 		external_peer_helper(&path).await;
+	} else if kind.starts_with("owner-custody-") {
+		owner_custody::run(&path, kind == "owner-custody-failure").await;
 	} else if kind.starts_with("agent-startup-") {
 		agent_timeout::startup(&path, &agent_control, &kind).await;
 	} else if kind == "socket-parent-bound" {

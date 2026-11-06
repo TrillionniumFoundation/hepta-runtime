@@ -1,0 +1,333 @@
+{
+  "cases": [
+    {
+      "expected_browser_windows": 0,
+      "expected_ipc_calls": [
+        {
+          "api": "ipcRenderer",
+          "channel": "later",
+          "method": "send",
+          "role": "message_sender",
+          "span": {
+            "end": 95,
+            "start": 80,
+            "unit": "utf8_bytes"
+          }
+        }
+      ],
+      "id": "before.js",
+      "original_evidence_ids": [
+        "ev_b6fda5ae78fe23e3609332b434d0f48fef71bf7ac27377d0f222af10c2a382fe"
+      ],
+      "original_graph_coverage": {
+        "limits": [],
+        "omitted_count": 0,
+        "status": "complete",
+        "truncated": false
+      },
+      "original_raw_frame_sha256": "60f792ebe0211e8d115316762833c22a51927814a4b7622bb0a9c54a94911a48",
+      "original_response_sha256": "e7fa29a0d5127c7cf2c566257888f304a8325581aa975edbde8c73fd3a783d95",
+      "sha256": "844cf949875979df82ed1f41e4ffc84cd5a7867fa7f11aaa90881393dafb1209",
+      "source": "const {ipcRenderer}=require(\"electron\");\nfunction handler(){const r=ipcRenderer;r.send(\"later\");}\nhandler();"
+    },
+    {
+      "expected_browser_windows": 0,
+      "expected_ipc_calls": [
+        {
+          "api": "ipcRenderer",
+          "channel": "later",
+          "method": "send",
+          "role": "message_sender",
+          "span": {
+            "end": 54,
+            "start": 39,
+            "unit": "utf8_bytes"
+          }
+        }
+      ],
+      "id": "after.js",
+      "original_evidence_ids": [
+        "ev_8e40d2baf71098c5a4331e1849cb52c36dc31439173cb2d274ff2daa40f92b66"
+      ],
+      "original_graph_coverage": {
+        "limits": [],
+        "omitted_count": null,
+        "status": "partial",
+        "truncated": false
+      },
+      "original_raw_frame_sha256": "4f15b62cbe0c41777dd38d72ffa73063fc52a8a1af6e795018020c63ea69cedc",
+      "original_response_sha256": "cd0b720157baf67de463363be2dfeb8a37305fb6d286f62c8fc5ff4d80664fca",
+      "sha256": "f579856b744ce33c265d737f315fa41405b4683c50b9c828739166363eb93fe6",
+      "source": "function handler(){const r=ipcRenderer;r.send(\"later\");}\nconst {ipcRenderer}=require(\"electron\");\nhandler();"
+    },
+    {
+      "expected_browser_windows": 0,
+      "expected_ipc_calls": [],
+      "id": "mutated.js",
+      "original_evidence_ids": [
+        "ev_3467d1ba467846e928d20f0167041cfe7699d033ddfc0c866d188e3ea4607290"
+      ],
+      "original_graph_coverage": {
+        "limits": [],
+        "omitted_count": 0,
+        "status": "complete",
+        "truncated": false
+      },
+      "original_raw_frame_sha256": "3e12fac9d5dd17d4951c4417450078a7c62fd8bf3e90bc640837627709c618ca",
+      "original_response_sha256": "9f0e1bad4ac489abb26b2d37532c4ab7c2776045e3552e6c90dccde472db3e0d",
+      "sha256": "e40ddaacc5c6dfff629b7575f6eaaec3f4195e018bb660a6f9b4607008943fa6",
+      "source": "let {ipcRenderer}=require(\"electron\");\nfunction handler(){const r=ipcRenderer;r.send(\"later\");}\nipcRenderer={send(){}};\nhandler();"
+    },
+    {
+      "expected_browser_windows": 0,
+      "expected_ipc_calls": [
+        {
+          "api": "ipcRenderer",
+          "channel": "chain-before",
+          "method": "send",
+          "role": "message_sender",
+          "span": {
+            "end": 141,
+            "start": 119,
+            "unit": "utf8_bytes"
+          }
+        }
+      ],
+      "id": "chain-before.js",
+      "original_evidence_ids": [
+        "ev_dc0e35e4fbf325b6cb921aec18c3fdbb3a7d789b04c6d7223ea04876ce6cc78f"
+      ],
+      "original_graph_coverage": {
+        "limits": [],
+        "omitted_count": 0,
+        "status": "complete",
+        "truncated": false
+      },
+      "original_raw_frame_sha256": "ba54425419f728d54bddcba9ed89d3eb6b5415ea63f961975d182e76168ea39d",
+      "original_response_sha256": "a4aae84c7e09ff392c00bf0216228f25c3601e47b209b59acdf9b4e6d50a3c50",
+      "sha256": "5ce6d613caac6caf803de635f9b0c7074e3237ca8ae9016ff3c4013c30374f51",
+      "source": "const {ipcRenderer}=require(\"electron\");\nconst first=ipcRenderer;const second=first;\nfunction handler(){const r=second;r.send(\"chain-before\");}\nhandler();"
+    },
+    {
+      "expected_browser_windows": 0,
+      "expected_ipc_calls": [
+        {
+          "api": "ipcRenderer",
+          "channel": "chain-after",
+          "method": "send",
+          "role": "message_sender",
+          "span": {
+            "end": 72,
+            "start": 51,
+            "unit": "utf8_bytes"
+          }
+        }
+      ],
+      "id": "chain-after.js",
+      "original_evidence_ids": [
+        "ev_7060c4946e7c85a985c1d2096118fe38bd8eeb7e5c8b309b055960e30ffab1db"
+      ],
+      "original_graph_coverage": {
+        "limits": [],
+        "omitted_count": null,
+        "status": "partial",
+        "truncated": false
+      },
+      "original_raw_frame_sha256": "561bdc9d6fc46c7dd7fb10f3121ff78ac31cca2442deb3a67c0c20d3e72f8a10",
+      "original_response_sha256": "ece0a1982e701251cb21484c459be892b09a3a500f9458f5560f3973c6949720",
+      "sha256": "2b6392dbebb7a77fbc0854596b8d0fc540649f16550fedfa59064e9ec03ae878",
+      "source": "function handler(){function inner(){const r=middle;r.send(\"chain-after\");}const middle=ipcRenderer;inner();}\nconst {ipcRenderer}=require(\"electron\");\nhandler();"
+    },
+    {
+      "expected_browser_windows": 0,
+      "expected_ipc_calls": [],
+      "id": "shadow.js",
+      "original_evidence_ids": [
+        "ev_57ad12b5c91c23c732d8fe76d6a2b88405ebd47f696346c9e553b83d13f6c06b"
+      ],
+      "original_graph_coverage": {
+        "limits": [],
+        "omitted_count": 0,
+        "status": "complete",
+        "truncated": false
+      },
+      "original_raw_frame_sha256": "ad01d3035da18a5be2be87d9d89099f33a29b34d502d1b6f33f6b24497b01f0f",
+      "original_response_sha256": "05b030a6dc20545fedc4a8eeaf87ec06b65a1bdd1d078b160c472b3107db5345",
+      "sha256": "a10e496dda7dd189ec60d4b56b0966e776ef6597436caf58b76468afea63f23a",
+      "source": "const {ipcRenderer}=require(\"electron\");\nfunction handler(ipcRenderer){const r=ipcRenderer;r.send(\"shadow\");}\nhandler({send(){}});"
+    },
+    {
+      "expected_browser_windows": 0,
+      "expected_ipc_calls": [],
+      "id": "shadow-require.js",
+      "original_evidence_ids": [
+        "ev_3411004349bc9f73e25cfb2484e758abb13c105144243c97534025cfb21a3d35"
+      ],
+      "original_graph_coverage": {
+        "limits": [],
+        "omitted_count": null,
+        "status": "partial",
+        "truncated": false
+      },
+      "original_raw_frame_sha256": "a52275e910243ed6ab7256bb2d4160376be3fd7ab46b6cec3249941539c4d21c",
+      "original_response_sha256": "4eda2cfd9862a6c9ccf5d3d3446f5764ba96d5922b7b2f92caf66979cbd36d3e",
+      "sha256": "907a0e64790b466d3f738b924542ad27b4f36c0c440558190a086ea8072dafc7",
+      "source": "function handler(require){const {ipcRenderer}=require(\"electron\");const r=ipcRenderer;r.send(\"shadow-require\");}\nhandler(()=>({ipcRenderer:{send(){}}}));"
+    },
+    {
+      "expected_browser_windows": 0,
+      "expected_ipc_calls": [],
+      "id": "cycle.js",
+      "original_evidence_ids": [
+        "ev_284b880f1da7de0d2b509feac9264aef518b683c2c5f83ee32013c4dc14997b7"
+      ],
+      "original_graph_coverage": {
+        "limits": [],
+        "omitted_count": null,
+        "status": "partial",
+        "truncated": false
+      },
+      "original_raw_frame_sha256": "84c1d14783fc253f0d7c41b069cebea2a3a6f7d845365e9f96cfcdf42dc391d9",
+      "original_response_sha256": "a03d17edbc13c060849b8bf713e21f6f4d6d1069fcb9bd682ae4fb7d1dd5079c",
+      "sha256": "a63f5de5480cb1e12776d508eba2869faff10550ba73d5edaa1680cae0829160",
+      "source": "const {ipcRenderer}=require(\"electron\");\nfunction handler(){const left=right;const right=left;left.send(\"cycle\");}"
+    },
+    {
+      "expected_browser_windows": 0,
+      "expected_ipc_calls": [],
+      "id": "mutated-alias.js",
+      "original_evidence_ids": [
+        "ev_206f888554cf9c28058cf70bb327d90da778785e0c5f2ce57cacf9299a54afac"
+      ],
+      "original_graph_coverage": {
+        "limits": [],
+        "omitted_count": 0,
+        "status": "complete",
+        "truncated": false
+      },
+      "original_raw_frame_sha256": "a500cf5d3f101857d0f72c7943cfe426978077d08b135297ed91b405def73128",
+      "original_response_sha256": "829b4642ede7d30707a0b5238eee772317a6ced95a892e10464ee8734a768b71",
+      "sha256": "f9d411905bc77f11ebb85c7a0810431ddf10503eed545545bb6486e3af119398",
+      "source": "const {ipcRenderer}=require(\"electron\");\nfunction handler(){let r=ipcRenderer;r={send(){}};r.send(\"mutated-alias\");}\nhandler();"
+    },
+    {
+      "expected_browser_windows": 0,
+      "expected_ipc_calls": [
+        {
+          "api": "ipcRenderer",
+          "channel": "namespace-after",
+          "method": "send",
+          "role": "message_sender",
+          "span": {
+            "end": 91,
+            "start": 66,
+            "unit": "utf8_bytes"
+          }
+        }
+      ],
+      "id": "namespace-after.js",
+      "original_evidence_ids": [
+        "ev_8a083f9dc699e0fe443d209083410d6c8f68f55883633be2f9c9688492927167"
+      ],
+      "original_graph_coverage": {
+        "limits": [],
+        "omitted_count": null,
+        "status": "partial",
+        "truncated": false
+      },
+      "original_raw_frame_sha256": "c6dcddedece530a5c33430feff87a8fee3c1208198e186b705ba1ca02ddcd3fc",
+      "original_response_sha256": "420457ebb6b687e9b91fe9e2ab9d2ecd037a0e6390238e3ee7982a389aa0960d",
+      "sha256": "39a2be4581a537b8a7f40565c568e2c27c9e106056519eb55bb232dead19de5a",
+      "source": "function handler(){const alias=electron;const r=alias.ipcRenderer;r.send(\"namespace-after\");}\nconst electron=require(\"electron\");\nhandler();"
+    },
+    {
+      "expected_browser_windows": 0,
+      "expected_ipc_calls": [
+        {
+          "api": "ipcRenderer",
+          "channel": "destructure-after",
+          "method": "send",
+          "role": "message_sender",
+          "span": {
+            "end": 77,
+            "start": 50,
+            "unit": "utf8_bytes"
+          }
+        }
+      ],
+      "id": "destructure-after.js",
+      "original_evidence_ids": [
+        "ev_4bf70c9092e3111151a09530e3214208b4cf1023b27cd3e43b2ffee3d731e7f9"
+      ],
+      "original_graph_coverage": {
+        "limits": [],
+        "omitted_count": null,
+        "status": "partial",
+        "truncated": false
+      },
+      "original_raw_frame_sha256": "d45de6b96b5f138e33748740c84929d5c72e577f17655ff33374f98b68deeda8",
+      "original_response_sha256": "d76aac53fe2849c19c73f3d6e6fa6bdb94b17ab29e4b24d4b58d4a2405a2c767",
+      "sha256": "a10263594f3ec85218e1ed473b70d4ce97238c883f6d7c41c8cf453212e25090",
+      "source": "function handler(){const {ipcRenderer:r}=electron;r.send(\"destructure-after\");}\nconst electron=require(\"electron\");\nhandler();"
+    },
+    {
+      "expected_browser_windows": 1,
+      "expected_ipc_calls": [],
+      "id": "window-after.js",
+      "original_evidence_ids": [
+        "ev_5599534600d9abaf291d467c766c7a71fa579fead368dece0bbf5abe3439e746"
+      ],
+      "original_graph_coverage": {
+        "limits": [],
+        "omitted_count": 0,
+        "status": "complete",
+        "truncated": false
+      },
+      "original_raw_frame_sha256": "f577ab1176b947765767fb7cd17927cc7c7056182b63b30d8a116d8a4d6ed58a",
+      "original_response_sha256": "0daca2fa281fc2500e326a977e3c54ab3475d16f8f8afd3e32dce5cca2e1de1c",
+      "sha256": "11d210c640ed04648bb11a492f263acdf65cd239861205235abd207f336a085c",
+      "source": "function handler(){const W=BrowserWindow;const win=new W();const wc=win.webContents;wc.send(\"window-after\");}\nconst {BrowserWindow}=require(\"electron\");\nhandler();"
+    },
+    {
+      "expected_browser_windows": 0,
+      "expected_ipc_calls": [],
+      "id": "redeclared.js",
+      "original_evidence_ids": [
+        "ev_3d929e91015484c9cc962c6a103900fe6d487dfa8197a06257fb0b391a12e60f"
+      ],
+      "original_graph_coverage": {
+        "limits": [],
+        "omitted_count": 0,
+        "status": "complete",
+        "truncated": false
+      },
+      "original_raw_frame_sha256": "eef5aa06faea8af374b2ab9f9e342522bc39bcc97b7332511937d6ff5001ee7e",
+      "original_response_sha256": "89d4ebca3ca9dbc9b97de147662dfa39147c6e159b33bea2632c03de6905dbb6",
+      "sha256": "8e832f4dde6a26358b2c7d9cb931b919cafa8f76f3efca99e609802c1aee2670",
+      "source": "function handler(){const r=ipcRenderer;r.send(\"redeclared\");}\nvar {ipcRenderer}=require(\"electron\");\nvar ipcRenderer={send(){}};\nhandler();"
+    }
+  ],
+  "global_qualification": "HOLD/NO_GO",
+  "projection_scope": [
+    "Only the recorded literal renderer send observations and BrowserWindow constructor count are compared.",
+    "Source ranges are converted to UTF-8 byte positions only for these ASCII fixture texts.",
+    "Original Evidence and graph coverage remain in the raw receipts. This fixture is not full graph/schema/error/cancellation equality.",
+    "Original window-after reports one BrowserWindow and no IPC operation; constructed-object/WebContents aliases must not be newly inferred from this case.",
+    "Transitive dependencies and continuous source mutation monitoring remain outside this finite observation."
+  ],
+  "reference": {
+    "job_id": "1a1ac5a244b-fc05-53c7",
+    "launch_nonce": "9854c1b354aca2f9518f3389f205ce94",
+    "mcp_client_snapshot_sha256": "66df54155b35b18d6935cb4da82b17db70ce93c63d9f3c2395e07b72d64d54f7",
+    "node_sha256": "94efd062ed066c1a0b332e18249859c905e920eeada5df55d24c99b919629a90",
+    "node_version": "v22.23.4",
+    "npm_tarball_sha256": "8d542ec76a9cb350584b60a6c9c088706ff812d5bb5b094c20c95b6dc25698bb",
+    "observation_sha256": "ab8bb3fbd617e45862728ee77a89a16436ccba5e76ec54177d5cd60e3065e32f",
+    "package": "rea-agents",
+    "package_own_files_sha256": "7f06a93473f1f74139d710545850ebab47e2bc026909113b7d010740e922e4e0",
+    "source_set_sha256": "8f755e7eb7a2051fc95072818ce220ede58ae8993d21d3923472bd9cf1a21220",
+    "tool": "analyze_javascript_application",
+    "version": "6.8.0"
+  },
+  "schema": "hepta.rea.javascript-alias-reference.v1"
+}

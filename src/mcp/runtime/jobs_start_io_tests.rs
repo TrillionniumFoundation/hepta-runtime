@@ -319,8 +319,12 @@ fn failed_pending_intent_or_identity_never_reaches_effect_submission() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn pending_publication_saves_frozen_intent_before_recoverable_identity() {
-	let root = tempfile::tempdir().unwrap();
-	let audit_path = root.path().join("audit.jsonl");
+	let temporary_parent = tempfile::tempdir().unwrap();
+	let root = tempfile::tempdir_in(temporary_parent.path()).unwrap();
+	let unrelated = temporary_parent.path().join("unrelated-testcase");
+	// Both watched directories stay inside this fixture's private state.
+	std::fs::create_dir(root.path().join("audit")).unwrap();
+	let audit_path = root.path().join("audit/events.jsonl");
 	let record_path = root.path().join("original-start.json");
 	let prepared = prepared(&audit_path);
 	let original_line = prepared.line.clone();
@@ -337,9 +341,21 @@ async fn pending_publication_saves_frozen_intent_before_recoverable_identity() {
 					prepared,
 					&mut None,
 					Ok(()),
-					|file| Ok(file.sync_data()?),
+					|file| {
+						file.sync_data()?;
+						// A peer changes the shared temporary parent during publication.
+						#[cfg(unix)]
+						let parent = open_audit_directory(unrelated.parent().unwrap())?;
+						#[cfg(unix)]
+						let before = audit_directory_stamp(&parent)?;
+						std::fs::write(&unrelated, b"unrelated")?;
+						#[cfg(unix)]
+						assert_ne!(audit_directory_stamp(&parent)?, before);
+						Ok(())
+					},
 					|directory| Ok(directory.sync_all()?),
 				)
+				.inspect_err(|error| eprintln!("pending intent fixture append failed: {error:#}"))
 			},
 			|record| {
 				assert_eq!(std::fs::read(observed_audit_path)?, original_line);
@@ -352,6 +368,7 @@ async fn pending_publication_saves_frozen_intent_before_recoverable_identity() {
 	assert!(!record_path.exists());
 	drop(held);
 	writer.await.unwrap().unwrap();
+	assert!(temporary_parent.path().join("unrelated-testcase").is_file());
 	let saved = read_record_at(&record_path, "original-start").unwrap();
 	assert_eq!(saved.id, "original-start");
 	assert_eq!(saved.launch_state, "pending");

@@ -1,0 +1,207 @@
+{
+  "schema": "hepta.javascript-native-qualification.v1",
+  "status": "pass",
+  "host": "desktop",
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+  "base_head": "310add6db47bcfbed3545432eb528a72f5eb6dcd",
+  "scope": "Owned finite AST fixtures, isolated native worker and actual stdio MCP; not full REA parity or observed Electron runtime",
+  "steps": [
+    {
+      "name": "unit-tests-v6",
+      "command": [
+        "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/deps/hepta_runtime-5117db2dd88b186e",
+        "mcp::rea_javascript_graph::tests::",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 0.863,
+      "log_file": "unit-tests-v6.log",
+      "log_sha256": "b569246e7f2aa724a5efcfe0be0a7a238b7b029e91f8ae8c8c09adac3a06cdd2"
+    },
+    {
+      "name": "production-build-v6",
+      "command": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "build",
+        "--locked",
+        "--all-features",
+        "--bin",
+        "hepta-runtime",
+        "-j4"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 108.818,
+      "log_file": "production-build-v6.log",
+      "log_sha256": "ecd986586788baf68759b8be4eae7db9874d5bf81e278ce0f1de8db1ecd3a5de"
+    },
+    {
+      "name": "mcp-integration-v6",
+      "command": [
+        "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/deps/rea_javascript_graph_external-0185c18b66bf59d1",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 4.977,
+      "log_file": "mcp-integration-v6.log",
+      "log_sha256": "7fd27d8a2a9da3eaac525e7325cb0e7d68e70be64f905b817ba3f3323d44af55"
+    },
+    {
+      "name": "babel-final-v6",
+      "command": [
+        "/usr/bin/node",
+        "scripts/rea-javascript-ast-reference.mjs",
+        "tests/fixtures/rea_javascript",
+        "/home/qian-qi/work/hepta-rea-next-javascript-oracle-20261104",
+        "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/hepta-runtime",
+        "/home/qian-qi/work/hepta-rea-next-javascript-evidence-20261104-r1/reference-final-v6.json"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 2.671,
+      "log_file": "babel-final-v6.log",
+      "log_sha256": "c756f2a004622556caeb0e055a2ef4f7196163f3a06747331b3e1e9203ed82d4"
+    },
+    {
+      "name": "format-check-v6",
+      "command": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "fmt",
+        "--all",
+        "--check"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 2.871,
+      "log_file": "format-check-v6.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "clippy-v6",
+      "command": [
+        "/home/qian-qi/.cargo/bin/cargo",
+        "clippy",
+        "--locked",
+        "--all-features",
+        "--all-targets",
+        "-j4",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "duration_seconds": 79.927,
+      "log_file": "clippy-v6.log",
+      "log_sha256": "0a990c3ffdcf59ef4aec8b4b9b00fb058eadd5b73bc8f145bfb81ee46fac0d39"
+    }
+  ],
+  "source": {
+    "manifest_file": "source-prequalification-v6.json",
+    "manifest_file_sha256": "ca4a45451601a75164ca8a6494e86f2693d60b608ebf9f0fa1885e0f8958911c",
+    "entries": 8250,
+    "changed_paths_since_original_build": [
+      "docs/rea-native/JAVASCRIPT_AST.md",
+      "scripts/rea-javascript-ast-reference.mjs",
+      "src/mcp/rea_javascript_ast.rs",
+      "src/mcp/rea_javascript_graph_tests.rs",
+      "src/mcp/rea_javascript_graph_worker.rs",
+      "tests/fixtures/rea_javascript/manual-golden.json",
+      "tests/fixtures/rea_javascript/package.json",
+      "tests/fixtures/rea_javascript/reference.json",
+      "tests/rea_javascript_graph_external.rs"
+    ],
+    "production_changed_paths_since_original_build": [
+      "src/mcp/rea_javascript_ast.rs",
+      "src/mcp/rea_javascript_graph_worker.rs"
+    ],
+    "test_build_manifest_verified_before_execution": true,
+    "unchanged_after_qualification": true
+  },
+  "test_artifacts": [
+    {
+      "name": "hepta_runtime",
+      "executable": "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/deps/hepta_runtime-5117db2dd88b186e",
+      "sha256": "1e3302830ce6add886b8005a7f056bc3b1ecee826bfa89c009695bce7602e4a5"
+    },
+    {
+      "name": "rea_javascript_graph_external",
+      "executable": "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/deps/rea_javascript_graph_external-0185c18b66bf59d1",
+      "sha256": "301544acd99f31503a67f84f23732388b5a438dd3921d2432b51f9bf90a960db"
+    }
+  ],
+  "candidate": {
+    "path": "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/hepta-runtime",
+    "sha256": "c54b97b6cb9eb5b65e900f047e8aa565ed4dba562604a102f513097eab5beb42",
+    "profile": "dev optimized + debuginfo; all production features",
+    "original_worker_build_sha256": "786beaf13f80b98678ccde51b297cdf352c3878e55e263e9941a56f78e913219",
+    "unchanged_after_qualification": true
+  },
+  "mcp_test_selection_environment": {
+    "HEPTA_JS_AST_TEST_RUNTIME": "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/hepta-runtime",
+    "HEPTA_JS_AST_FIXTURE_DIR": "/home/qian-qi/hepta-runtime-rea-next-javascript-20261104-r1/tests/fixtures/rea_javascript"
+  },
+  "reference": {
+    "file": "reference-final-v6.json",
+    "sha256": "af99d06d1b4019460219d02f2c505b064bed10579bbd0fe6f3c1afb31a51a927",
+    "comparisons": {
+      "imports": {
+        "equal": true,
+        "expected_count": 17,
+        "actual_count": 17,
+        "missing": [],
+        "extra": []
+      },
+      "exports": {
+        "equal": true,
+        "expected_count": 16,
+        "actual_count": 16,
+        "missing": [],
+        "extra": []
+      },
+      "electron_calls": {
+        "equal": true,
+        "expected_count": 12,
+        "actual_count": 12,
+        "missing": [],
+        "extra": []
+      },
+      "ipc_edges": {
+        "equal": true,
+        "expected_count": 4,
+        "actual_count": 4,
+        "missing": [],
+        "extra": []
+      }
+    },
+    "manual_golden": {
+      "sha256": "d6ec76c812c7cd91305bb9815cf9ca79e8859f51df14cd506e152ced1afcd015",
+      "checks": {
+        "babel": {
+          "export_counts_match": true,
+          "corrected_export_observations_match": true,
+          "counts": {
+            "src/main.ts": 3,
+            "src/preload.cjs": 0,
+            "src/renderer.tsx": 1,
+            "src/dynamic.ts": 1,
+            "src/shadowing.cjs": 3,
+            "src/util.js": 3,
+            "src/types.ts": 2,
+            "src/barrel.ts": 3
+          }
+        },
+        "rust": {
+          "export_counts_match": true,
+          "corrected_export_observations_match": true,
+          "counts": {
+            "src/main.ts": 3,
+            "src/preload.cjs": 0,
+            "src/renderer.tsx": 1,
+            "src/dynamic.ts": 1,
+            "src/shadowing.cjs": 3,
+            "src/util.js": 3,
+            "src/types.ts": 2,
+            "src/barrel.ts": 3
+          }
+        }
+      }
+    }
+  }
+}

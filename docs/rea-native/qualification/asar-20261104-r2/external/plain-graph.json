@@ -1,0 +1,93 @@
+{
+  "collection": "ipc_edges",
+  "complete_application_graph": false,
+  "counts": {
+    "electron_calls": 2,
+    "exports": 2,
+    "imports": 4,
+    "ipc_candidate_edges": 1,
+    "reported_unknowns": 0,
+    "sources": 3
+  },
+  "coverage": "selected_ast_modules_and_lexical_electron_candidates",
+  "dependencies_opened": false,
+  "graph_sha256": "fcac4047b22138a132055e2c457e4236859b3626f7c2616836e4913441f5a867",
+  "identity_scope": "complete_selected_source_bytes_and_explicit_grammars",
+  "javascript_executed": false,
+  "limitations": [
+    "Only explicitly selected files or pinned packed ASAR members are admitted. Package declarations, imports, source maps, dependencies, preload paths and URLs are never followed or executed; unpacked ASAR sidecars and links are never followed.",
+    "Relative import links identify selected logical-path candidates, not Node, bundler or TypeScript module resolution. Type-only records are retained and are not runtime dependencies.",
+    "Electron receivers use lexical symbols from electron imports, unshadowed require calls and direct aliases. Reassigned bindings are excluded; property mutation, eval, factories, indirect calls and interprocedural dataflow are not resolved.",
+    "A matching literal channel and API role produces a candidate edge only. Branch reachability, process identity, window ownership, listener registration, sender validation, payload compatibility and runtime message delivery are unobserved.",
+    "Dynamic expressions remain unknown. Reported unknowns cover detected syntax patterns, not an exhaustive list of every unmodeled application behavior.",
+    "CommonJS assignments are syntactic observations; export replacement, alias mutation and final runtime module values are not evaluated. Preload declarations and contextBridge keys do not prove actual renderer exposure.",
+    "Source positions are UTF-8 byte offsets. Parser diagnostics, lone-surrogate strings and exceeded resource bounds refuse the inspection; recovered invalid ASTs are not promoted to valid graphs.",
+    "The source-set hash binds copied source bytes and grammars. It is not an atomic multi-file filesystem snapshot, a REA ev_ identity, or an assertion of runtime execution."
+  ],
+  "network_requests": 0,
+  "next_offset": null,
+  "offset": 0,
+  "parser": {
+    "name": "oxc",
+    "semantic_syntax_checks": true,
+    "version": "0.144.0"
+  },
+  "rea_evidence_compatible": false,
+  "record_format": "hepta.rea-javascript-graph.v1",
+  "rows": [
+    {
+      "channel": "fixture:get",
+      "from": "electron-call-1",
+      "process_pair_proven": false,
+      "receiver_role": "invoke_handler",
+      "relation": "same_channel_candidate",
+      "runtime_observed": false,
+      "sender_role": "invoke_sender",
+      "to": "electron-call-0"
+    }
+  ],
+  "source_statistics": [
+    {
+      "ast_nodes": 34,
+      "lexical_scopes": 2,
+      "source_id": "src/main.js",
+      "syntax_valid": true
+    },
+    {
+      "ast_nodes": 16,
+      "lexical_scopes": 1,
+      "source_id": "src/preload.cjs",
+      "syntax_valid": true
+    },
+    {
+      "ast_nodes": 6,
+      "lexical_scopes": 1,
+      "source_id": "src/util.js",
+      "syntax_valid": true
+    }
+  ],
+  "sources": [
+    {
+      "byte_length": 299,
+      "id": "src/main.js",
+      "module_kind": "module",
+      "sha256": "6027892c21426727221b4b194b8122da5919759522c476f15b7923e3bfd15de2",
+      "syntax": "javascript"
+    },
+    {
+      "byte_length": 78,
+      "id": "src/preload.cjs",
+      "module_kind": "commonjs",
+      "sha256": "b0b3bcf8e80585dfb8367b4a3e0530643b61ebd9d2629162f3e2cef36c7698cc",
+      "syntax": "javascript"
+    },
+    {
+      "byte_length": 24,
+      "id": "src/util.js",
+      "module_kind": "module",
+      "sha256": "dba5525f220c84140898e139c63711ff45edbeb3ee0c29ea13def12c97201106",
+      "syntax": "javascript"
+    }
+  ],
+  "total_rows": 1
+}

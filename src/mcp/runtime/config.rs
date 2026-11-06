@@ -10,7 +10,7 @@ use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 
-static RUNTIME_CONFIG: OnceLock<RuntimeConfig> = OnceLock::new();
+static RUNTIME_CONFIG: OnceLock<InstalledRuntimeConfig> = OnceLock::new();
 static CONTROLLER_OWNER: OnceLock<ControllerLocks> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -110,6 +110,47 @@ pub struct RuntimeConfig {
 	pub controller_workspace_roots: Vec<PathBuf>,
 	#[serde(default)]
 	pub hosts: BTreeMap<String, HostConfig>,
+	/// Named administrator-owned model workers; absent disables all weight tools.
+	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	pub weight_workers: BTreeMap<String, crate::mcp::weight_config::WeightWorkerProfile>,
+	/// Fixed read-only static analyzers, pinned by executable, version and SHA-256.
+	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	pub rea_static_profiles: BTreeMap<String, crate::mcp::rea_provider::ReaStaticProfile>,
+}
+
+// The installed value has no mutable accessor or interior-mutable policy fields.
+// Keep its derived digest beside that exact value; neither can be replaced by a
+// later installation. Laziness preserves startup without observation pooling,
+// including configurations whose normalized paths cannot be JSON serialized.
+struct InstalledRuntimeConfig {
+	config: RuntimeConfig,
+	#[cfg(any(target_os = "linux", test))]
+	policy_digest: OnceLock<std::result::Result<[u8; 32], serde_json::Error>>,
+}
+
+impl InstalledRuntimeConfig {
+	fn new(config: RuntimeConfig) -> Self {
+		Self {
+			config,
+			#[cfg(any(target_os = "linux", test))]
+			policy_digest: OnceLock::new(),
+		}
+	}
+
+	#[cfg(any(target_os = "linux", test))]
+	fn policy_digest(&self) -> Result<[u8; 32]> {
+		self.policy_digest
+			.get_or_init(|| {
+				let bytes = serde_json::to_vec(&self.config)?;
+				let mut digest = [0; 32];
+				digest
+					.copy_from_slice(ring::digest::digest(&ring::digest::SHA256, &bytes).as_ref());
+				Ok(digest)
+			})
+			.as_ref()
+			.copied()
+			.map_err(|error| anyhow!("{error}"))
+	}
 }
 
 fn default_state_dir() -> PathBuf {
@@ -241,6 +282,8 @@ impl RuntimeConfig {
 				}
 			}
 		}
+		crate::mcp::weight_config::validate_profiles(self)?;
+		crate::mcp::rea_provider::validate_profiles(self)?;
 		Ok(())
 	}
 
@@ -315,17 +358,40 @@ fn claim_controller_state_dir(state_dir: &Path) -> Result<ControllerLocks> {
 	})
 }
 
-pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
-	config.validate()?;
-	std::fs::create_dir_all(&config.state_dir)?;
-	config.state_dir = std::fs::canonicalize(&config.state_dir)?;
+#[cfg(unix)]
+fn validate_controller_state_root(metadata: &std::fs::Metadata, uid: u32) -> Result<()> {
+	use std::os::unix::fs::MetadataExt;
+	if !metadata.is_dir() || metadata.uid() != uid || metadata.mode() & 0o7777 != 0o700 {
+		bail!("controller state directory must be owned by the current user with mode 0700");
+	}
+	Ok(())
+}
+
+fn prepare_controller_state_dir(path: &Path) -> Result<PathBuf> {
+	let mut builder = std::fs::DirBuilder::new();
+	builder.recursive(true);
 	#[cfg(unix)]
 	{
-		use std::os::unix::fs::PermissionsExt;
-		if std::fs::metadata(&config.state_dir)?.permissions().mode() & 0o022 != 0 {
-			bail!("controller state directory must not be group/world writable");
-		}
+		use std::os::unix::fs::DirBuilderExt;
+		// Apply privacy in each mkdir, before any lock, audit file or observer
+		// can see the new directory. Existing directories are never repaired.
+		builder.mode(0o700);
 	}
+	builder.create(path).with_context(|| {
+		format!(
+			"cannot create controller state directory {}",
+			path.display()
+		)
+	})?;
+	let canonical = std::fs::canonicalize(path)?;
+	#[cfg(unix)]
+	validate_controller_state_root(&std::fs::metadata(&canonical)?, unsafe { libc::geteuid() })?;
+	Ok(canonical)
+}
+
+pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
+	config.validate()?;
+	config.state_dir = prepare_controller_state_dir(&config.state_dir)?;
 	let owner = claim_controller_state_dir(&config.state_dir)?;
 	// State files and the audit trail must not become readable by other
 	// local users under a permissive process umask. Never chmod a symlink.
@@ -342,7 +408,7 @@ pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
 		}
 	}
 	RUNTIME_CONFIG
-		.set(config)
+		.set(InstalledRuntimeConfig::new(config))
 		.map_err(|_| anyhow!("runtime config was already initialized"))?;
 	CONTROLLER_OWNER
 		.set(owner)
@@ -352,11 +418,20 @@ pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
 pub fn runtime_config() -> Result<&'static RuntimeConfig> {
 	RUNTIME_CONFIG
 		.get()
+		.map(|installed| &installed.config)
 		.ok_or_else(|| anyhow!("runtime tools are disabled; start with --runtime-config <file>"))
 }
 
 pub fn maybe_runtime_config() -> Option<&'static RuntimeConfig> {
-	RUNTIME_CONFIG.get()
+	RUNTIME_CONFIG.get().map(|installed| &installed.config)
+}
+
+#[cfg(any(target_os = "linux", test))]
+pub(super) fn runtime_policy_digest() -> Result<[u8; 32]> {
+	RUNTIME_CONFIG
+		.get()
+		.ok_or_else(|| anyhow!("runtime tools are disabled; start with --runtime-config <file>"))?
+		.policy_digest()
 }
 
 pub fn valid_name(value: &str) -> bool {

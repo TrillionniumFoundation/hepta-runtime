@@ -1,0 +1,125 @@
+    Checking typenum v1.20.1
+    Checking serde_core v1.0.229
+    Checking hybrid-array v0.4.15
+    Checking crypto-common v0.2.2
+    Checking block-buffer v0.12.1
+    Checking const-oid v0.10.2
+    Checking zmij v1.0.23
+    Checking digest v0.11.3
+    Checking memchr v2.8.3
+    Checking cpufeatures v0.3.1
+    Checking itoa v1.0.18
+    Checking cfg-if v1.0.5
+    Checking sha2 v0.11.0
+    Checking serde_json v1.0.151
+    Checking serde v1.0.229
+    Checking anyhow v1.0.104
+    Checking hepta-rea-residual-domain-harness v0.0.0 (/home/qian-qi/work/hepta-rea-residual-domain-ca464-20261105)
+error: this `if` statement can be collapsed
+   --> src/mcp/rea_residual_unknown.rs:266:2
+    |
+266 | /     if !validation.aborted_from(start) && validation.gap.is_none() {
+267 | |         if let Some(values) = map.get("dimensions").and_then(Value::as_array) {
+268 | |             if values
+269 | |                 .windows(2)
+...   |
+279 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#collapsible_if
+    = note: `-D clippy::collapsible-if` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::collapsible_if)]`
+help: collapse nested if block
+    |
+266 ~     if !validation.aborted_from(start) && validation.gap.is_none()
+267 ~         && let Some(values) = map.get("dimensions").and_then(Value::as_array) {
+268 |             if values
+...
+277 |             }
+278 ~         }
+    |
+
+error: this `if` statement can be collapsed
+   --> src/mcp/rea_residual_unknown.rs:267:3
+    |
+267 | /         if let Some(values) = map.get("dimensions").and_then(Value::as_array) {
+268 | |             if values
+269 | |                 .windows(2)
+270 | |                 .any(|pair| pair[0].as_str() >= pair[1].as_str())
+...   |
+278 | |         }
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#collapsible_if
+help: collapse nested if block
+    |
+267 ~         if let Some(values) = map.get("dimensions").and_then(Value::as_array)
+268 ~             && values
+269 |                 .windows(2)
+...
+276 |                 );
+277 ~             }
+    |
+
+error: this `if` statement can be collapsed
+   --> src/mcp/rea_evidence_source_process.rs:112:2
+    |
+112 | /     if let Some(positive) = minimum {
+113 | |         if number < 0.0 || (positive && number == 0.0) {
+114 | |             let bound = if positive { ">0" } else { ">=0" };
+115 | |             v.add(
+...   |
+122 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#collapsible_if
+help: collapse nested if block
+    |
+112 ~     if let Some(positive) = minimum
+113 ~         && (number < 0.0 || (positive && number == 0.0)) {
+114 |             let bound = if positive { ">0" } else { ">=0" };
+...
+120 |             );
+121 ~         }
+    |
+
+error: this `if` statement can be collapsed
+    --> src/mcp/rea_evidence_source.rs:1114:6
+     |
+1114 | /                     if field == "artifacts" {
+1115 | |                         if let Some(digest) = value.get_mut("digest") { strip_proto(digest); }
+1116 | |                     }
+     | |_____________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+1114 ~                     if field == "artifacts"
+1115 ~                         && let Some(digest) = value.get_mut("digest") { strip_proto(digest); }
+     |
+
+error: this `if` statement can be collapsed
+    --> src/mcp/rea_evidence_source.rs:1450:3
+     |
+1450 | /         if checked.is_ok() && validation.finish().is_ok() {
+1451 | |             if let SourceError::InvalidRecord { issues, .. } = shape_error {
+1452 | |                 return Err(ImportSourceError::SingleRecord {
+1453 | |                     evidence_id: checked_string(&value["evidence_id"])?.to_owned(), issues,
+...    |
+1456 | |         }
+     | |_________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#collapsible_if
+help: collapse nested if block
+     |
+1450 ~         if checked.is_ok() && validation.finish().is_ok()
+1451 ~             && let SourceError::InvalidRecord { issues, .. } = shape_error {
+1452 |                 return Err(ImportSourceError::SingleRecord {
+1453 |                     evidence_id: checked_string(&value["evidence_id"])?.to_owned(), issues,
+1454 |                 });
+1455 ~             }
+     |
+
+error: could not compile `hepta-rea-residual-domain-harness` (lib) due to 5 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `hepta-rea-residual-domain-harness` (lib test) due to 5 previous errors

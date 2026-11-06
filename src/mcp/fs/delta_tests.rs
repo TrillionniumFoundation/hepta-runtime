@@ -350,3 +350,19 @@ async fn outside_a_request_scope_views_are_always_full() {
 		assert_eq!(out, format!("{}|a\n{}|b", line_id(1, "a"), line_id(2, "b")));
 	}
 }
+
+#[test]
+fn owned_publication_invalidates_only_its_session_without_request_context() {
+	let selected = Arc::new(ViewCache::default());
+	let separate = ViewCache::default();
+	selected.set("/first".into(), "previous first".into());
+	selected.set("/second".into(), "previous second".into());
+	separate.set("/first".into(), "other session".into());
+	let owned = Arc::clone(&selected);
+	std::thread::spawn(move || owned.forget_all())
+		.join()
+		.unwrap();
+	assert!(selected.get("/first").is_none());
+	assert!(selected.get("/second").is_none());
+	assert_eq!(separate.get("/first").as_deref(), Some("other session"));
+}

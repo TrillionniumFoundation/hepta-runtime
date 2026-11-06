@@ -1,0 +1,8 @@
+{
+  "schema": "hepta.raw-byte-evidence.v1",
+  "source_path": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/shadowing.cjs",
+  "bytes": 439,
+  "sha256": "078d558eea51cddace73be0f349f9c139b9234cf2227da06922ae49fbfda56aa",
+  "encoding": "utf-8",
+  "text": "let mutable = require(\"electron\").ipcRenderer;\nmutable = { send() {} };\nmutable.send(\"reassigned-not-electron\");\nconst fake = require(\"electron-lookalike\");\nfake.ipcMain.handle(\"fake-module\", () => true);\nfunction shadowRequire(require) { require(\"shadowed-require\"); }\nexports.real = 1;\nmodule.exports.other = 2;\nexports[globalThis.exportName] = 3;\nfunction shadowExports(exports, module) {\n  exports.bad = 4;\n  module.exports.bad = 5;\n}\n"
+}

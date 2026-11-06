@@ -108,6 +108,9 @@ struct Proxy {
 	stop: CancellationToken,
 	healthy: AtomicBool,
 	thread: Mutex<Option<std::thread::JoinHandle<Result<()>>>>,
+	// The process-wide proxy outlives a failed owner thread. Quarantined
+	// original children and permits must not fall into implicit Drop cleanup.
+	custody: Mutex<Option<Arc<Core>>>,
 }
 
 /// Drop freezes admission even if startup or the surrounding transport fails.
@@ -163,7 +166,14 @@ pub(super) async fn start(path: &Path) -> Result<PoolGuard> {
 		stop: CancellationToken::new(),
 		healthy: AtomicBool::new(false),
 		thread: Mutex::new(None),
+		custody: Mutex::new(None),
 	});
+	let guard = PoolGuard(proxy.clone());
+	// Publish the sole lifetime owner before its thread can create children.
+	// A concurrent losing start must never create an unanchored quarantine.
+	if POOL.set(proxy.clone()).is_err() {
+		bail!("observation pool already requested");
+	}
 	let owner = proxy.clone();
 	let thread = std::thread::Builder::new()
 		.name("hepta-observation-ssh".into())
@@ -184,6 +194,12 @@ pub(super) async fn start(path: &Path) -> Result<PoolGuard> {
 				sequence: AtomicU64::new(1),
 				owner_tid: unsafe { libc::syscall(libc::SYS_gettid) },
 			});
+			// Register the lifetime ledger before initialization can spawn even
+			// an effective-profile probe. Errors and unwinds retain this owner.
+			*owner
+				.custody
+				.lock()
+				.map_err(|_| anyhow!("observation original custody unavailable"))? = Some(core.clone());
 			// Child ownership lives outside the fallible actor future. All spawning,
 			// pipe I/O and waiting occurs on this nonretiring current-thread runtime.
 			let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -207,6 +223,21 @@ pub(super) async fn start(path: &Path) -> Result<PoolGuard> {
 			// Early cleanup errors must not let detached validation outlive its
 			// authority owner. Retain the original cleanup/actor error precedence.
 			let cleanup = runtime.block_on(core.validation.finish_shutdown(cleanup));
+			if cleanup.is_ok() {
+				let mut custody = owner
+					.custody
+					.lock()
+					.map_err(|_| anyhow!("observation original custody unavailable"))?;
+				if !custody
+					.as_ref()
+					.is_some_and(|original| Arc::ptr_eq(original, &core))
+				{
+					bail!("observation original custody identity differs");
+				}
+				// Only confirmed child/socket cleanup and validation completion
+				// retire the ledger; successful shutdown retains no private root.
+				*custody = None;
+			}
 			match outcome {
 				Ok(result) => {
 					result?;
@@ -222,11 +253,6 @@ pub(super) async fn start(path: &Path) -> Result<PoolGuard> {
 		.thread
 		.lock()
 		.map_err(|_| anyhow!("observation pool thread unavailable"))? = Some(thread);
-	let guard = PoolGuard(proxy.clone());
-	if POOL.set(proxy).is_err() {
-		guard.shutdown().await?;
-		bail!("observation pool already requested");
-	}
 	match ready_rx.await {
 		Ok(Ok(())) => Ok(guard),
 		Ok(Err(error)) => {

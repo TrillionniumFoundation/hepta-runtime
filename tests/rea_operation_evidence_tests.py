@@ -1,0 +1,370 @@
+#!/usr/bin/env python3
+# Copyright 2026 TrillionniumFoundation
+# Licensed under the Apache License, Version 2.0.
+"""Negative tests for qualification receipt consumption, never parity fixtures."""
+
+from copy import deepcopy
+import hashlib
+import json
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import rea_operation_evidence as evidence
+q = evidence.q
+
+
+OWNER = {"pid": 1234, "parent_pid": 1200, "process_group": 1234, "start_time_ticks": 91}
+
+
+def wire_pair(arguments, result, name="inspect_elf_notes", identifier=1, raw_arguments=None):
+    request = {"jsonrpc": "2.0", "id": identifier, "method": "tools/call",
+               "params": {"name": name, "arguments": arguments}}
+    response = {"jsonrpc": "2.0", "id": identifier, "result": result}
+    request_raw = json.dumps(request)
+    if raw_arguments is not None:
+        request_raw = request_raw.replace(json.dumps(arguments), raw_arguments)
+    return b"".join(json.dumps({"direction": direction, "monotonic_ns": index,
+                                "wire_utf8": raw + "\n"}).encode() + b"\n"
+                    for index, (direction, raw) in enumerate((("sent", request_raw),
+                                                             ("received", json.dumps(response))), 1)), response
+
+
+class OperationEvidenceTests(unittest.TestCase):
+    def test_artifact_tamper_size_path_and_symlink_are_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "result.json"
+            path.write_bytes(b'{}\n')
+            reference = q.artifact_reference(path, root)
+            self.assertEqual(evidence.read_artifact(root, reference), b'{}\n')
+            path.write_bytes(b'[]\n')
+            with self.assertRaisesRegex(ValueError, "digest mismatch"):
+                evidence.read_artifact(root, reference)
+            for unsafe in ("../escape", "/absolute", "x\\y", "C:escape"):
+                with self.subTest(path=unsafe), self.assertRaises(ValueError):
+                    evidence.contained_path(root, unsafe)
+            (root / "link").symlink_to(path)
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                evidence.read_artifact(root, {**reference, "path": "link"})
+
+    def test_response_and_input_must_both_exist_on_original_wire(self):
+        arguments = {"path": "/tmp/fixture"}
+        raw, response = wire_pair(arguments, {"content": [{"type": "text", "text": "{}"}]})
+        wire = evidence.wire_index(raw)
+        evidence.bind_call(wire, response, "inspect_elf_notes", arguments)
+        with self.assertRaisesRegex(ValueError, "actual public MCP request"):
+            evidence.bind_call(wire, response, "inspect_elf_notes", {"path": "/tmp/other"})
+        changed = deepcopy(response)
+        changed["result"]["content"][0]["text"] = '{"invented":true}'
+        with self.assertRaisesRegex(ValueError, "absent from the original wire"):
+            evidence.bind_call(wire, changed, "inspect_elf_notes", arguments)
+
+    def test_rehashing_wire_or_response_cannot_hide_a_boolean_number_change(self):
+        arguments = {"path": "/tmp/fixture"}
+        result = {"content": [{"type": "text", "text": '{"error":{"retryable":false}}'}],
+                  "structuredContent": {"error": {"retryable": False}}, "isError": True}
+        raw, response = wire_pair(arguments, result)
+        evidence.bind_call(evidence.wire_index(raw), response, "inspect_elf_notes", arguments)
+        changed = deepcopy(response)
+        changed["result"]["structuredContent"]["error"]["retryable"] = 0
+        changed_raw, _ = wire_pair(arguments, changed["result"])
+        for target in ("wire", "response"):
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                paths = {"wire": root / "wire.jsonl", "response": root / "response.json"}
+                paths["wire"].write_bytes(raw)
+                paths["response"].write_bytes(q.json_bytes(response))
+                old_hash = q.file_hash(paths[target])
+                paths[target].write_bytes(changed_raw if target == "wire" else q.json_bytes(changed))
+                refs = {name: q.artifact_reference(path, root) for name, path in paths.items()}
+                self.assertNotEqual(refs[target]["sha256"], old_hash)
+                # Both new hashes/sizes are valid. Original-wire binding is a
+                # separate requirement and must still reject the type change.
+                retained_wire = evidence.wire_index(evidence.read_artifact(root, refs["wire"]))
+                retained_response = evidence.artifact_json(root, refs["response"])
+                with self.assertRaisesRegex(ValueError, "absent from the original wire"):
+                    evidence.bind_call(retained_wire, retained_response, "inspect_elf_notes", arguments)
+
+    def test_actual_request_cannot_replace_a_number_with_a_boolean(self):
+        for expected, actual in ((1, True), (0, False), (1.0, True), (True, 1)):
+            with self.subTest(expected=expected, actual=actual):
+                raw, response = wire_pair({"max_entries": actual}, {"content": []})
+                with self.assertRaisesRegex(ValueError, "actual public MCP request"):
+                    evidence.bind_call(evidence.wire_index(raw), response, "inspect_elf_notes", {"max_entries": expected})
+
+    def test_duplicate_response_and_unmatched_response_are_refused(self):
+        raw, _ = wire_pair({}, {"content": []})
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            evidence.wire_index(raw + raw.splitlines(keepends=True)[1])
+        with self.assertRaisesRegex(ValueError, "no original request"):
+            evidence.wire_index(raw.splitlines(keepends=True)[1])
+
+    def test_numeric_spellings_are_bound_to_actual_wire_bytes(self):
+        args = {"max_entries": 1}
+        raw, response = wire_pair(args, {"content": []}, raw_arguments='{"max_entries":1e0}')
+        wire = evidence.wire_index(raw)
+        evidence.bind_call(wire, response, "inspect_elf_notes", args, ["max_entries", "1e0"])
+        with self.assertRaisesRegex(ValueError, "not transmitted"):
+            evidence.bind_call(wire, response, "inspect_elf_notes", args, ["max_entries", "1.0"])
+
+    def test_schema_summary_cannot_replace_the_original_tools_list(self):
+        rows = [{"name": "inspect_elf_notes", "inputSchema": {"additionalProperties": False}}]
+        wire = {"sent": {1: {"method": "tools/list"}}, "received": {1: {"result": {"tools": rows}}}}
+        evidence.bind_tools(wire, rows)
+        for changed in (True, 0):
+            with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, "original tools/list"):
+                evidence.bind_tools(wire, [{"name": "inspect_elf_notes", "inputSchema": {"additionalProperties": changed}}])
+
+    def test_missing_or_duplicated_cases_are_not_qualified(self):
+        cases = [{"id": "boundary", "kind": "error", "arguments": {}}]
+        for observations in ([], [{"id": "invented"}], [{"id": "boundary"}, {"id": "boundary"}]):
+            with self.subTest(observations=observations), self.assertRaisesRegex(ValueError, "required case set"):
+                evidence.case_results(cases, observations, Path("/unused"), {}, {})
+
+    def test_handwritten_case_pass_does_not_override_different_outputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cases = [{"id": "boundary", "kind": "error", "arguments": {}}]
+            left_raw, left = wire_pair({}, {"content": [{"type": "text", "text": '{"error":{"code":"invalid_request"}}'}], "isError": True})
+            right_raw, right = wire_pair({}, {"content": [{"type": "text", "text": '{"error":{"code":"provider_failed"}}'}], "isError": True}, "rea_inspect_elf_notes")
+            row = {"id": "boundary", "status": "PASS", "comparison": {"full_envelope_equal": True},
+                   "reference": q.artifact_json(root, "left.json", left), "native": q.artifact_json(root, "right.json", right)}
+            result, retained = evidence.case_results(cases, [row], root,
+                evidence.wire_index(left_raw), evidence.wire_index(right_raw))
+            self.assertFalse(result["boundary"]["passed"])
+            self.assertEqual(retained, {})
+
+    def test_replayed_boolean_number_difference_does_not_close_a_behavior_gate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cases = [{"id": "typed-error", "kind": "error", "arguments": {}}]
+            results = [{"content": [{"type": "text", "text": json.dumps({"error": {"retryable": value}})}],
+                        "isError": True} for value in (False, 0)]
+            left_raw, left = wire_pair({}, results[0])
+            right_raw, right = wire_pair({}, results[1], "rea_inspect_elf_notes")
+            row = {"id": "typed-error", "status": "PASS", "comparison": {"full_envelope_equal": True},
+                   "reference": q.artifact_json(root, "left.json", left), "native": q.artifact_json(root, "right.json", right)}
+            comparisons, retained = evidence.case_results(cases, [row], root,
+                evidence.wire_index(left_raw), evidence.wire_index(right_raw))
+            self.assertFalse(comparisons["typed-error"]["passed"])
+            self.assertIn("full public MCP result differs", comparisons["typed-error"]["error"])
+            self.assertEqual(retained, {})
+            assessment = evidence.derive_assessment(comparisons, True, True, True, q.UNIMPLEMENTED_REQUIREMENTS)
+            self.assertEqual(assessment["status"], "OPEN")
+            self.assertEqual(assessment["passed_gates"], ["source_package_boundary"])
+
+    def test_embedded_json_equivalence_cannot_claim_an_opaque_response_match(self):
+        original = '{"error":{"code":"invalid_request","retryable":false,"count":1}}'
+        variants = ('{ "error": { "code": "invalid_request", "retryable": false, "count": 1 } }',
+                    '{"error":{"count":1,"retryable":false,"code":"invalid_request"}}',
+                    '{"error":{"code":"invalid_request","retryable":false,"count":1.0}}')
+        for changed in variants:
+            with self.subTest(text=changed), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                cases = [{"id": "opaque-error", "kind": "error", "arguments": {}}]
+                left_raw, left = wire_pair({}, {"content": [{"type": "text", "text": original}], "isError": True})
+                right_raw, right = wire_pair({}, {"content": [{"type": "text", "text": changed}], "isError": True},
+                                             "rea_inspect_elf_notes")
+                # This historical producer field measures decoded JSON only.
+                self.assertTrue(q.compare_case(cases[0], left, right)["full_envelope_equal"])
+                row = {"id": "opaque-error", "passed": True, "status": "PASS",
+                       "comparison": {"full_envelope_equal": True, "opaque_response_equal": True},
+                       "reference": q.artifact_json(root, "left.json", left),
+                       "native": q.artifact_json(root, "right.json", right)}
+                before = {path.name: path.read_bytes() for path in root.iterdir()}
+                comparisons, _ = evidence.case_results(cases, [row], root,
+                    evidence.wire_index(left_raw), evidence.wire_index(right_raw))
+                result = comparisons["opaque-error"]
+                self.assertTrue(result["parsed_result_equal"])
+                self.assertFalse(result["opaque_response_equal"])
+                self.assertFalse(result["raw_response_frame_equal"])
+                self.assertFalse(result["passed"])
+                self.assertIn("opaque public MCP response differs", result["error"])
+                assessment = evidence.derive_assessment(comparisons, True, True, True, [])
+                self.assertNotIn("results", assessment["passed_gates"])
+                self.assertNotIn("evidence", assessment["passed_gates"])
+                self.assertEqual(before, {path.name: path.read_bytes() for path in root.iterdir()})
+
+    def test_transport_serialization_and_request_ids_are_separate_observations(self):
+        result = {"content": [{"type": "text", "text": '{"error":{"code":"bad"}}'}], "isError": True}
+        for native_id in (1, 7):
+            with self.subTest(native_id=native_id), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                cases = [{"id": "same-result", "kind": "error", "arguments": {}}]
+                left_raw, left = wire_pair({}, result)
+                right_raw, right = wire_pair({}, deepcopy(result), "rea_inspect_elf_notes", identifier=native_id)
+                lines = [json.loads(line) for line in right_raw.splitlines()]
+                lines[1]["wire_utf8"] = json.dumps(right, sort_keys=True, separators=(",", ":")) + "\n"
+                right_raw = b"".join(json.dumps(line).encode() + b"\n" for line in lines)
+                row = {"id": "same-result", "reference": q.artifact_json(root, "left.json", left),
+                       "native": q.artifact_json(root, "right.json", right)}
+                comparisons, _ = evidence.case_results(cases, [row], root,
+                    evidence.wire_index(left_raw), evidence.wire_index(right_raw))
+                compared = comparisons["same-result"]
+                self.assertTrue(compared["parsed_result_equal"])
+                self.assertTrue(compared["opaque_response_equal"])
+                self.assertFalse(compared["raw_response_frame_equal"])
+                self.assertTrue(compared["passed"])
+
+    def test_unknown_response_members_remain_significant(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cases = [{"id": "extra-member", "kind": "error", "arguments": {}}]
+            result = {"content": [{"type": "text", "text": '{"error":"bad"}'}], "isError": True}
+            left_raw, left = wire_pair({}, result)
+            right_raw, right = wire_pair({}, result, "rea_inspect_elf_notes")
+            right["extra"] = {"unreviewed": True}
+            lines = [json.loads(line) for line in right_raw.splitlines()]
+            lines[1]["wire_utf8"] = json.dumps(right) + "\n"
+            right_raw = b"".join(json.dumps(line).encode() + b"\n" for line in lines)
+            row = {"id": "extra-member", "reference": q.artifact_json(root, "left.json", left),
+                   "native": q.artifact_json(root, "right.json", right)}
+            comparisons, _ = evidence.case_results(cases, [row], root,
+                evidence.wire_index(left_raw), evidence.wire_index(right_raw))
+            self.assertTrue(comparisons["extra-member"]["parsed_result_equal"])
+            self.assertFalse(comparisons["extra-member"]["opaque_response_equal"])
+            self.assertFalse(comparisons["extra-member"]["passed"])
+
+    def test_bundle_retention_also_requires_opaque_text_equality(self):
+        payload = {"result": {name: [] for name in
+                   ("artifacts", "providers", "environments", "scenarios", "captures", "unknowns", "records")}}
+        original = json.dumps(payload, separators=(",", ":"))
+        for changed in (original, json.dumps(payload, indent=2)):
+            with self.subTest(text=changed), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                results = [{"content": [{"type": "text", "text": text}], "structuredContent": payload,
+                            "_meta": q.TARGET_META} for text in (original, changed)]
+                left_raw, left = wire_pair({}, results[0], "get_evidence_bundle")
+                right_raw, right = wire_pair({}, results[1], "rea_get_evidence_bundle")
+                row = {"id": "complete", "passed": True, "status": "PASS",
+                       "pagination": {"verified": True, "cursor": "invented"},
+                       "reference": q.artifact_json(root, "left.json", left),
+                       "native": q.artifact_json(root, "right.json", right)}
+                compared = evidence.retention_results([{"id": "complete", "arguments": {}}], [row], root,
+                    evidence.wire_index(left_raw), evidence.wire_index(right_raw), [])["complete"]
+                self.assertTrue(compared["parsed_result_equal"])
+                self.assertEqual(compared["opaque_response_equal"], changed == original)
+                self.assertEqual(compared["passed"], changed == original)
+                if changed != original:
+                    self.assertIn("opaque retention responses differ", compared["error"])
+
+    def test_bundle_and_cold_session_do_not_discharge_pagination(self):
+        compared = {"sample": {"passed": True, "parsed_result_equal": True, "opaque_response_equal": True,
+                               "raw_response_frame_equal": False}}
+        for outstanding in ([], q.UNIMPLEMENTED_REQUIREMENTS, [evidence.PAGINATION_REQUIREMENT]):
+            with self.subTest(outstanding=outstanding):
+                result = evidence.derive_assessment(compared, True, True, True, outstanding)
+                self.assertEqual(result["status"], "OPEN")
+                self.assertEqual(result["passed_gates"], ["contracts", "evidence", "results", "source_package_boundary"])
+                self.assertNotIn("retention_and_pagination", result["passed_gates"])
+                facts = result["observed_checks"]
+                self.assertTrue(facts["bundle_retention_equal"])
+                self.assertTrue(facts["fresh_session_empty"])
+                self.assertFalse(facts["stable_pagination_observed"])
+                self.assertFalse(facts["complete_byte_readback_observed"])
+                self.assertEqual(result["unimplemented_required_observations"].count(evidence.PAGINATION_REQUIREMENT), 1)
+
+    def test_pass_labels_and_truthy_numbers_cannot_replace_comparison_facts(self):
+        baseline = {"passed": True, "parsed_result_equal": True, "opaque_response_equal": True}
+        mutations = [{"passed": True}, {**baseline, "opaque_response_equal": False}]
+        for field in baseline:
+            for value in (1, "true", None):
+                mutations.append({**baseline, field: value})
+        for value in mutations:
+            with self.subTest(comparison=value):
+                result = evidence.derive_assessment({"sample": value}, True, True, True, [])
+                self.assertEqual(result["passed_gates"], ["source_package_boundary"])
+                self.assertIn("sample", result["failed_checks"])
+        result = evidence.derive_assessment({"sample": baseline}, 1, 1, 1, [])
+        self.assertEqual(result["passed_gates"], ["source_package_boundary"])
+        self.assertFalse(result["observed_checks"]["schema_registration_equal"])
+        self.assertFalse(result["observed_checks"]["bundle_retention_equal"])
+        self.assertFalse(result["observed_checks"]["fresh_session_empty"])
+
+    def test_manual_cleanup_is_not_owner_completion(self):
+        original = {"owner": OWNER, "returncode": 0, "forced_cleanup": [], "reader_stopped": True, "elapsed_seconds": 0.2,
+                    "owner_pidfd_exited": True, "process_group_gone": True}
+        self.assertTrue(evidence.owner_closed(original))
+        for changes in ({"forced_cleanup": ["SIGTERM"]}, {"returncode": -9},
+                        {"reader_stopped": False}, {"elapsed_seconds": q.EOF_SECONDS + 2},
+                        {"owner_pidfd_exited": False}, {"process_group_gone": False}):
+            self.assertFalse(evidence.owner_closed({**original, **changes}))
+
+    def test_owner_completion_rejects_boolean_integer_and_nonfinite_metadata(self):
+        original = {"owner": OWNER, "returncode": 0, "forced_cleanup": [], "reader_stopped": True,
+                    "elapsed_seconds": 0.2, "owner_pidfd_exited": True, "process_group_gone": True}
+        for field, values in (("returncode", (False, True, 0.0, None, "0")),
+                              ("elapsed_seconds", (False, True, float("nan"), float("inf"), float("-inf"),
+                                                   -1, 10 ** 400, None, "0.2")),
+                              ("reader_stopped", (1,)), ("owner_pidfd_exited", (1,)), ("process_group_gone", (1,))):
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    self.assertFalse(evidence.owner_closed({**original, field: value}))
+        for elapsed in (0, 1, 1.0):
+            self.assertTrue(evidence.owner_closed({**original, "elapsed_seconds": elapsed}))
+        for owner in (None, {**OWNER, "extra": True}, {**OWNER, "process_group": 9999}):
+            with self.subTest(owner=owner):
+                self.assertFalse(evidence.owner_closed({**original, "owner": owner}))
+        for field in OWNER:
+            for value in (True, False, float(OWNER[field]), 0, -1, str(OWNER[field])):
+                with self.subTest(field=field, value=value):
+                    self.assertFalse(evidence.owner_closed({**original, "owner": {**OWNER, field: value}}))
+
+    def test_launch_and_close_owner_binding_rejects_numeric_type_changes(self):
+        launch, close = {"pid": OWNER["pid"], "owner": OWNER}, {"owner": OWNER}
+        evidence.bind_owner(launch, close)
+        for value in (True, float(OWNER["pid"]), str(OWNER["pid"])):
+            with self.subTest(pid=value), self.assertRaisesRegex(ValueError, "owner identity"):
+                evidence.bind_owner({**launch, "pid": value}, close)
+        for target in ("launch", "close"):
+            for field in OWNER:
+                modified_launch, modified_close = deepcopy(launch), deepcopy(close)
+                selected = modified_launch if target == "launch" else modified_close
+                selected["owner"][field] = float(OWNER[field])
+                with self.subTest(target=target, field=field), self.assertRaisesRegex(ValueError, "owner identity"):
+                    evidence.bind_owner(modified_launch, modified_close)
+        boolean_owner = {key: True for key in OWNER}
+        with self.assertRaisesRegex(ValueError, "owner identity"):
+            evidence.bind_owner({"pid": True, "owner": boolean_owner}, {"owner": boolean_owner})
+
+    def test_finite_success_stays_open_when_profile_requirements_are_unimplemented(self):
+        result = evidence.derive_assessment({"sample": {"passed": True}}, True, True, True,
+                                            q.UNIMPLEMENTED_REQUIREMENTS)
+        self.assertEqual(result["status"], "OPEN")
+        self.assertNotIn("limits_and_cancellation", result["passed_gates"])
+        self.assertNotIn("typed_outcomes", result["passed_gates"])
+        self.assertNotIn("format_architecture_corpus", result["passed_gates"])
+
+    def test_index_does_not_accept_pass_fields_or_unknown_profiles(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / evidence.INDEX_PATH
+            path.parent.mkdir(parents=True)
+            self.assertEqual(evidence.consume_index(root, [], {}), {})
+            path.write_text(json.dumps({"schema": evidence.INDEX_SCHEMA, "entries": [], "qualified": True}))
+            with self.assertRaisesRegex(ValueError, "handwritten PASS"):
+                evidence.consume_index(root, [], {})
+            path.write_text(json.dumps({"schema": evidence.INDEX_SCHEMA, "entries": [
+                {"operation": "inspect_elf_notes", "profile": "invented", "report": "r.json", "sha256": "0" * 64}]}))
+            with self.assertRaisesRegex(ValueError, "unknown or duplicate"):
+                evidence.consume_index(root, [{"upstream_tool": "inspect_elf_notes"}], {})
+
+    def test_partial_implementation_cannot_be_promoted_by_a_receipt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / evidence.INDEX_PATH
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps({"schema": evidence.INDEX_SCHEMA, "entries": [
+                {"operation": "inspect_elf_notes", "profile": q.PROFILE, "report": "r.json", "sha256": "0" * 64}]}))
+            mapping = {"family_defaults": {"native": {"implementation": "partial_operation"}}, "overrides": {}}
+            with mock.patch.object(evidence, "validate_report", return_value={"status": "QUALIFIED"}):
+                actual = evidence.consume_index(root, [{"upstream_tool": "inspect_elf_notes", "family": "native"}], mapping)
+            self.assertEqual(actual["inspect_elf_notes"]["status"], "OPEN")
+
+
+if __name__ == "__main__":
+    unittest.main()

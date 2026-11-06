@@ -1,0 +1,93 @@
+{
+  "schema": "hepta.rea.frozen-command-qualification.v1",
+  "root": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+  "baseline_commit": "ed74d9dbf04b97fad38112c2ac08127bf99b3590",
+  "runner_sha256": "f7f449dbcbd7705876c7cc953937411ad07d521117285db2159e646a1942dec1",
+  "started_unix_ms": 1793807994561,
+  "retry_count": 0,
+  "child_umask": "0022",
+  "commands": [
+    {
+      "name": "pins-before",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "-c",
+        "import json,sys,pathlib,hashlib,os,stat\nspec=json.loads(sys.argv[1]);phase=sys.argv[2];ev=pathlib.Path(spec[\"evidence\"])\nhashbytes=lambda b:hashlib.sha256(b).hexdigest()\nrows=[]\nfor row in spec[\"files\"]:\n p=pathlib.Path(row[\"path\"]);assert p.is_absolute() and not p.is_symlink(),str(p)\n assert stat.S_ISREG(p.stat().st_mode),str(p)\n b=p.read_bytes();assert len(b)==row[\"bytes\"] and hashbytes(b)==row[\"sha256\"],str(p)\n if \"version\" in row:assert json.loads(b)[\"version\"]==row[\"version\"]\n rows.append({**row,\"observed_bytes\":len(b),\"observed_sha256\":hashbytes(b)})\ninputs=json.loads((ev/\"inputs-before.json\").read_bytes())\nassert inputs[\"source\"][\"sha256\"]==spec[\"expected_source\"]\nassert inputs[\"verification\"][\"sha256\"]==spec[\"expected_verification\"]\nresult={\"schema\":\"hepta.javascript-final-release-gate-pins.v1\",\"phase\":phase,\"files\":rows,\"source_sha256\":inputs[\"source\"][\"sha256\"],\"verification_sha256\":inputs[\"verification\"][\"sha256\"]}\nif phase==\"after\":\n old=json.loads((ev/\"pins-before.json\").read_bytes())\n assert old[\"files\"]==result[\"files\"]\n ref=json.loads((ev/\"reference-final-release.json\").read_bytes())\n assert ref[\"status\"]==\"pass\"\n assert ref[\"candidate\"][\"executable_sha256\"]==rows[0][\"sha256\"]\n assert all(v[\"equal\"] for v in ref[\"comparisons\"].values())\n assert ref[\"manual_golden\"][\"sha256\"]==\"d6ec76c812c7cd91305bb9815cf9ca79e8859f51df14cd506e152ced1afcd015\"\n assert all(v[\"export_counts_match\"] and v[\"corrected_export_observations_match\"] for v in ref[\"manual_golden\"][\"checks\"].values())\n result[\"binary_and_gate_inputs_unchanged\"]=True\nwith (ev/(\"pins-\"+phase+\".json\")).open(\"x\") as f:json.dump(result,f,indent=2);f.write(\"\\n\");f.flush();os.fsync(f.fileno())\nprint(json.dumps({\"pins\":phase,\"files\":len(rows),\"binary_sha256\":rows[0][\"sha256\"],\"source_sha256\":result[\"source_sha256\"],\"verification_sha256\":result[\"verification_sha256\"]}))\n",
+        "{\"root\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2\",\"evidence\":\"/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/legacy-js\",\"expected_source\":\"c9299373b62b93f9229926aa4c904158cb5562a82392bdcb89ab248c46e466cb\",\"expected_verification\":\"455b490f167deaa4e520ab29d9982d36730ca57c3b3542ae615279185b74f216\",\"files\":[{\"path\":\"/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/frozen/hepta-runtime\",\"bytes\":18437864,\"sha256\":\"aa580409a73bc2e0927ead93d32634239051a39fc951c3c2a92d5a1dece8347a\",\"role\":\"candidate_runtime\"},{\"path\":\"/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/deps/rea_javascript_graph_external-0185c18b66bf59d1\",\"sha256\":\"301544acd99f31503a67f84f23732388b5a438dd3921d2432b51f9bf90a960db\",\"bytes\":12660656,\"mode\":\"0o700\",\"role\":\"fixed_test_executable\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/rea_javascript_graph_external.rs\",\"sha256\":\"0aeee9e333926fedc12d14e45fdfe994746270bad42e2647bc337276dada6514\",\"bytes\":10676,\"mode\":\"0o600\",\"role\":\"fixed_test_source\"},{\"path\":\"/home/qian-qi/work/hepta-rea-next-javascript-oracle-20261104/package-lock.json\",\"sha256\":\"803d86e1adca224ebfe81cf43767d8e7abfdacf5f53f785fe2881e0be5847c7a\",\"bytes\":8231,\"mode\":\"0o600\",\"role\":\"oracle_lock\"},{\"path\":\"/home/qian-qi/work/hepta-rea-next-javascript-oracle-20261104/package.json\",\"sha256\":\"21637a99db054a8180e2d0bdd9d222df21e77c2eaa0195b55bb5907b1f780b7a\",\"bytes\":89,\"mode\":\"0o600\",\"role\":\"oracle_package\"},{\"path\":\"/home/qian-qi/work/hepta-rea-next-javascript-oracle-20261104/node_modules/@babel/parser/package.json\",\"sha256\":\"aacf65a9c1533d54fde416a8c64b7ad76d802ab608290fbe42bea7fd27f1669a\",\"bytes\":1518,\"mode\":\"0o600\",\"version\":\"8.0.6\",\"role\":\"oracle_dependency_package\"},{\"path\":\"/home/qian-qi/work/hepta-rea-next-javascript-oracle-20261104/node_modules/@babel/traverse/package.json\",\"sha256\":\"60412ba5af294a4fbb8ed0fb9cf4fd937a80b5024a3c92fd401fc8bd3984bc8f\",\"bytes\":1240,\"mode\":\"0o600\",\"version\":\"8.0.6\",\"role\":\"oracle_dependency_package\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/barrel.ts\",\"sha256\":\"933a189fe15fd89dd2da2c8e545493a08ef90915eb4ae7b7f74341a1b9203a33\",\"bytes\":102,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/dynamic.ts\",\"sha256\":\"dd13687452aec4af7509e58704d03fafbc605bd9dccadca1cbb73dc13d99aa89\",\"bytes\":370,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/main.ts\",\"sha256\":\"b234b10d31dd5ca6e05f29c72e59f7376dbcf826a0a80af27aa784c63c4bfe84\",\"bytes\":671,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/manifest.json\",\"sha256\":\"54e9c5300b83041ab4debcbfd581575c03cfa639794a20b93df304c7c47743e4\",\"bytes\":819,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/manual-golden.json\",\"sha256\":\"d6ec76c812c7cd91305bb9815cf9ca79e8859f51df14cd506e152ced1afcd015\",\"bytes\":1032,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/package.json\",\"sha256\":\"95036b0ee2ad78dc33940577dda995057e63ce73a14ca98b51d4942ab5560dd6\",\"bytes\":281,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/preload.cjs\",\"sha256\":\"ec12c2121240c0c303c47c03eb59ce99426c2a80cf0a48f8979309a315278b44\",\"bytes\":578,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/reference.json\",\"sha256\":\"355ac456b38f1995b462a56c620f1dffb801f93f857439f1d73b4568825cebab\",\"bytes\":46487,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/renderer.tsx\",\"sha256\":\"5681ef03a71a5b6fa8bd1a2ffbaef49a29b4ee03d325822a2f61f292104ead04\",\"bytes\":353,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/shadowing.cjs\",\"sha256\":\"078d558eea51cddace73be0f349f9c139b9234cf2227da06922ae49fbfda56aa\",\"bytes\":439,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/types.ts\",\"sha256\":\"836c0cbb42aca6af5c5d75ed0df1c31a665aa5799d625309538eaa10f0d9ece8\",\"bytes\":84,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/util.js\",\"sha256\":\"92f9be1410544b52e185c7d7945b645c0a1efe31a89886e3e53de3e530b91cf7\",\"bytes\":92,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/scripts/rea-javascript-ast-reference.mjs\",\"sha256\":\"2287596907c24d362bae75a8103afcbf1499c070da6a7e9b09008264396bbcf9\",\"bytes\":19455,\"role\":\"fixed_reference_script\",\"mode\":\"0o600\"}]}",
+        "before"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "elapsed_seconds": 0.327,
+      "log": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/legacy-js/00-pins-before.log",
+      "log_sha256": "3e3e8623df5f6018895266f7a39b492885fa0f1ab929734e95a6a29e88d5e92e",
+      "log_bytes": 293
+    },
+    {
+      "name": "normal-mcp",
+      "argv": [
+        "/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/deps/rea_javascript_graph_external-0185c18b66bf59d1",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "elapsed_seconds": 1.594,
+      "log": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/legacy-js/01-normal-mcp.log",
+      "log_sha256": "ca3c481309e4c4c4da89f2e5387b8751fd9ca7f6ae018ca7b7f9fb629d080bc1",
+      "log_bytes": 202
+    },
+    {
+      "name": "babel-manual-golden",
+      "argv": [
+        "/usr/bin/node",
+        "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/scripts/rea-javascript-ast-reference.mjs",
+        "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript",
+        "/home/qian-qi/work/hepta-rea-next-javascript-oracle-20261104",
+        "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/frozen/hepta-runtime",
+        "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/legacy-js/reference-final-release.json"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "elapsed_seconds": 0.375,
+      "log": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/legacy-js/02-babel-manual-golden.log",
+      "log_sha256": "666457a593b0bc7a71e54ff29cb6f8f141d8e361aaaaf6c9884438dd629486bb",
+      "log_bytes": 1000
+    },
+    {
+      "name": "pins-after",
+      "argv": [
+        "/usr/bin/python3",
+        "-B",
+        "-c",
+        "import json,sys,pathlib,hashlib,os,stat\nspec=json.loads(sys.argv[1]);phase=sys.argv[2];ev=pathlib.Path(spec[\"evidence\"])\nhashbytes=lambda b:hashlib.sha256(b).hexdigest()\nrows=[]\nfor row in spec[\"files\"]:\n p=pathlib.Path(row[\"path\"]);assert p.is_absolute() and not p.is_symlink(),str(p)\n assert stat.S_ISREG(p.stat().st_mode),str(p)\n b=p.read_bytes();assert len(b)==row[\"bytes\"] and hashbytes(b)==row[\"sha256\"],str(p)\n if \"version\" in row:assert json.loads(b)[\"version\"]==row[\"version\"]\n rows.append({**row,\"observed_bytes\":len(b),\"observed_sha256\":hashbytes(b)})\ninputs=json.loads((ev/\"inputs-before.json\").read_bytes())\nassert inputs[\"source\"][\"sha256\"]==spec[\"expected_source\"]\nassert inputs[\"verification\"][\"sha256\"]==spec[\"expected_verification\"]\nresult={\"schema\":\"hepta.javascript-final-release-gate-pins.v1\",\"phase\":phase,\"files\":rows,\"source_sha256\":inputs[\"source\"][\"sha256\"],\"verification_sha256\":inputs[\"verification\"][\"sha256\"]}\nif phase==\"after\":\n old=json.loads((ev/\"pins-before.json\").read_bytes())\n assert old[\"files\"]==result[\"files\"]\n ref=json.loads((ev/\"reference-final-release.json\").read_bytes())\n assert ref[\"status\"]==\"pass\"\n assert ref[\"candidate\"][\"executable_sha256\"]==rows[0][\"sha256\"]\n assert all(v[\"equal\"] for v in ref[\"comparisons\"].values())\n assert ref[\"manual_golden\"][\"sha256\"]==\"d6ec76c812c7cd91305bb9815cf9ca79e8859f51df14cd506e152ced1afcd015\"\n assert all(v[\"export_counts_match\"] and v[\"corrected_export_observations_match\"] for v in ref[\"manual_golden\"][\"checks\"].values())\n result[\"binary_and_gate_inputs_unchanged\"]=True\nwith (ev/(\"pins-\"+phase+\".json\")).open(\"x\") as f:json.dump(result,f,indent=2);f.write(\"\\n\");f.flush();os.fsync(f.fileno())\nprint(json.dumps({\"pins\":phase,\"files\":len(rows),\"binary_sha256\":rows[0][\"sha256\"],\"source_sha256\":result[\"source_sha256\"],\"verification_sha256\":result[\"verification_sha256\"]}))\n",
+        "{\"root\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2\",\"evidence\":\"/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/legacy-js\",\"expected_source\":\"c9299373b62b93f9229926aa4c904158cb5562a82392bdcb89ab248c46e466cb\",\"expected_verification\":\"455b490f167deaa4e520ab29d9982d36730ca57c3b3542ae615279185b74f216\",\"files\":[{\"path\":\"/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/frozen/hepta-runtime\",\"bytes\":18437864,\"sha256\":\"aa580409a73bc2e0927ead93d32634239051a39fc951c3c2a92d5a1dece8347a\",\"role\":\"candidate_runtime\"},{\"path\":\"/home/qian-qi/work/hepta-rea-next-javascript-20261104-target/debug/deps/rea_javascript_graph_external-0185c18b66bf59d1\",\"sha256\":\"301544acd99f31503a67f84f23732388b5a438dd3921d2432b51f9bf90a960db\",\"bytes\":12660656,\"mode\":\"0o700\",\"role\":\"fixed_test_executable\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/rea_javascript_graph_external.rs\",\"sha256\":\"0aeee9e333926fedc12d14e45fdfe994746270bad42e2647bc337276dada6514\",\"bytes\":10676,\"mode\":\"0o600\",\"role\":\"fixed_test_source\"},{\"path\":\"/home/qian-qi/work/hepta-rea-next-javascript-oracle-20261104/package-lock.json\",\"sha256\":\"803d86e1adca224ebfe81cf43767d8e7abfdacf5f53f785fe2881e0be5847c7a\",\"bytes\":8231,\"mode\":\"0o600\",\"role\":\"oracle_lock\"},{\"path\":\"/home/qian-qi/work/hepta-rea-next-javascript-oracle-20261104/package.json\",\"sha256\":\"21637a99db054a8180e2d0bdd9d222df21e77c2eaa0195b55bb5907b1f780b7a\",\"bytes\":89,\"mode\":\"0o600\",\"role\":\"oracle_package\"},{\"path\":\"/home/qian-qi/work/hepta-rea-next-javascript-oracle-20261104/node_modules/@babel/parser/package.json\",\"sha256\":\"aacf65a9c1533d54fde416a8c64b7ad76d802ab608290fbe42bea7fd27f1669a\",\"bytes\":1518,\"mode\":\"0o600\",\"version\":\"8.0.6\",\"role\":\"oracle_dependency_package\"},{\"path\":\"/home/qian-qi/work/hepta-rea-next-javascript-oracle-20261104/node_modules/@babel/traverse/package.json\",\"sha256\":\"60412ba5af294a4fbb8ed0fb9cf4fd937a80b5024a3c92fd401fc8bd3984bc8f\",\"bytes\":1240,\"mode\":\"0o600\",\"version\":\"8.0.6\",\"role\":\"oracle_dependency_package\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/barrel.ts\",\"sha256\":\"933a189fe15fd89dd2da2c8e545493a08ef90915eb4ae7b7f74341a1b9203a33\",\"bytes\":102,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/dynamic.ts\",\"sha256\":\"dd13687452aec4af7509e58704d03fafbc605bd9dccadca1cbb73dc13d99aa89\",\"bytes\":370,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/main.ts\",\"sha256\":\"b234b10d31dd5ca6e05f29c72e59f7376dbcf826a0a80af27aa784c63c4bfe84\",\"bytes\":671,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/manifest.json\",\"sha256\":\"54e9c5300b83041ab4debcbfd581575c03cfa639794a20b93df304c7c47743e4\",\"bytes\":819,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/manual-golden.json\",\"sha256\":\"d6ec76c812c7cd91305bb9815cf9ca79e8859f51df14cd506e152ced1afcd015\",\"bytes\":1032,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/package.json\",\"sha256\":\"95036b0ee2ad78dc33940577dda995057e63ce73a14ca98b51d4942ab5560dd6\",\"bytes\":281,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/preload.cjs\",\"sha256\":\"ec12c2121240c0c303c47c03eb59ce99426c2a80cf0a48f8979309a315278b44\",\"bytes\":578,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/reference.json\",\"sha256\":\"355ac456b38f1995b462a56c620f1dffb801f93f857439f1d73b4568825cebab\",\"bytes\":46487,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/renderer.tsx\",\"sha256\":\"5681ef03a71a5b6fa8bd1a2ffbaef49a29b4ee03d325822a2f61f292104ead04\",\"bytes\":353,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/shadowing.cjs\",\"sha256\":\"078d558eea51cddace73be0f349f9c139b9234cf2227da06922ae49fbfda56aa\",\"bytes\":439,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/types.ts\",\"sha256\":\"836c0cbb42aca6af5c5d75ed0df1c31a665aa5799d625309538eaa10f0d9ece8\",\"bytes\":84,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/tests/fixtures/rea_javascript/util.js\",\"sha256\":\"92f9be1410544b52e185c7d7945b645c0a1efe31a89886e3e53de3e530b91cf7\",\"bytes\":92,\"mode\":\"0o600\",\"role\":\"owned_fixture\"},{\"path\":\"/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2/scripts/rea-javascript-ast-reference.mjs\",\"sha256\":\"2287596907c24d362bae75a8103afcbf1499c070da6a7e9b09008264396bbcf9\",\"bytes\":19455,\"role\":\"fixed_reference_script\",\"mode\":\"0o600\"}]}",
+        "after"
+      ],
+      "exit_code": 0,
+      "expected_exit_code": 0,
+      "elapsed_seconds": 0.293,
+      "log": "/home/qian-qi/work/hepta-rea-final-asar-js-20261104-r3-evidence/legacy-js/03-pins-after.log",
+      "log_sha256": "cfbfd38f09b9737ecc26d23cc20c32887cd9fbc5ec26daa8fc19219161898785",
+      "log_bytes": 292
+    }
+  ],
+  "qualified": true,
+  "inputs": {
+    "source": {
+      "count": 308,
+      "sha256": "c9299373b62b93f9229926aa4c904158cb5562a82392bdcb89ab248c46e466cb",
+      "after_sha256": "c9299373b62b93f9229926aa4c904158cb5562a82392bdcb89ab248c46e466cb",
+      "unchanged": true
+    },
+    "verification": {
+      "count": 645,
+      "sha256": "455b490f167deaa4e520ab29d9982d36730ca57c3b3542ae615279185b74f216",
+      "after_sha256": "455b490f167deaa4e520ab29d9982d36730ca57c3b3542ae615279185b74f216",
+      "unchanged": true
+    }
+  },
+  "source_and_verification_unchanged": true,
+  "finished_unix_ms": 1793807997446,
+  "error": null
+}

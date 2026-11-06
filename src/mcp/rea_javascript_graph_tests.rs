@@ -1,0 +1,587 @@
+// Copyright 2026 Muvon Un Limited
+// Copyright 2026 TrillionniumFoundation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! Real AST, symbol-shadowing, candidate-edge, immutable-page and admission
+//! regressions. Independent parser fixtures live in tests/fixtures/rea_javascript.
+
+use super::*;
+
+fn source(id: &str, text: &str) -> AdmittedSource {
+	AdmittedSource {
+		id: id.into(),
+		syntax: JavascriptSyntax::Javascript,
+		module_kind: JavascriptModuleKind::Module,
+		text: text.into(),
+	}
+}
+
+fn request(sources: Vec<AdmittedSource>, collection: JavascriptGraphCollection) -> WorkerRequest {
+	WorkerRequest {
+		sources,
+		expected_graph_sha256: None,
+		collection,
+		offset: 0,
+		limit: 256,
+	}
+}
+
+fn graph_sources() -> Vec<AdmittedSource> {
+	vec![
+		source(
+			"src/main.js",
+			r#"
+			import {ipcMain as main, BrowserWindow} from "electron";
+			import {value} from "./util";
+			export {value as forwarded} from "./util.js";
+			main.handle("fetch:π", () => value);
+			main.on("set", () => {});
+			const win = new BrowserWindow({webPreferences:{preload:"./preload.cjs"}});
+			win.webContents.send("status", value);
+			function shadow(main) { main.handle("must-not-link", () => {}); }
+		"#,
+		),
+		AdmittedSource {
+			module_kind: JavascriptModuleKind::Commonjs,
+			..source(
+				"src/preload.cjs",
+				r#"
+			const {ipcRenderer:r, contextBridge:bridge} = require("electron");
+			bridge.exposeInMainWorld("api", {load:() => r.invoke("fetch:π")});
+			r.send("set", 1); r.on("status", () => {});
+			function shadow(r) { r.invoke("must-not-link"); }
+			const decoy = 'ipcMain.handle("text-only", () => {})';
+			// ipcRenderer.send("comment-only")
+			function shadowRequire(require) { require("not-a-dependency"); }
+		"#,
+			)
+		},
+		source(
+			"src/util.js",
+			"export const value = 7; export default value;",
+		),
+		source("src/util.ts", "export const other = 8;"),
+	]
+}
+
+#[test]
+fn lexical_electron_calls_produce_only_role_compatible_candidate_edges() {
+	let inspected = graph::report(&request(
+		graph_sources(),
+		JavascriptGraphCollection::IpcEdges,
+	))
+	.expect("actual AST graph");
+	assert_eq!(inspected["counts"]["ipc_candidate_edges"], 3);
+	assert_eq!(inspected["counts"]["electron_calls"], 8);
+	assert_eq!(inspected["javascript_executed"], false);
+	assert_eq!(inspected["complete_application_graph"], false);
+	for row in inspected["rows"].as_array().expect("edges") {
+		assert_eq!(row["process_pair_proven"], false);
+		assert_eq!(row["runtime_observed"], false);
+		assert_ne!(row["channel"], "must-not-link");
+	}
+	let calls = graph::report(&request(
+		graph_sources(),
+		JavascriptGraphCollection::ElectronCalls,
+	))
+	.expect("calls");
+	assert!(calls["rows"]
+		.as_array()
+		.expect("calls")
+		.iter()
+		.any(|call| call["role"] == "window_constructor"
+			&& call["literal_preload"] == "./preload.cjs"));
+	assert!(calls["rows"]
+		.as_array()
+		.expect("calls")
+		.iter()
+		.any(|call| call["role"] == "bridge_exposure" && call["exposure_key"] == "api"));
+}
+
+#[test]
+fn imports_keep_multiple_selected_extension_candidates_without_loader_claim() {
+	let inspected = graph::report(&request(
+		graph_sources(),
+		JavascriptGraphCollection::Imports,
+	))
+	.expect("imports");
+	let rows = inspected["rows"].as_array().expect("imports");
+	let ambiguous = rows
+		.iter()
+		.find(|row| row["specifier"] == "./util")
+		.expect("extensionless");
+	assert_eq!(
+		ambiguous["target_candidates"]["source_ids"],
+		json!(["src/util.js", "src/util.ts"])
+	);
+	assert_eq!(ambiguous["runtime_resolution_proven"], false);
+	assert!(!rows
+		.iter()
+		.any(|row| row["specifier"] == "not-a-dependency"));
+	assert!(!rows.iter().any(|row| row["specifier"] == "text-only"));
+}
+
+#[test]
+fn typescript_jsx_type_only_imports_and_dynamic_expressions_are_ast_observations() {
+	let mut ts = source(
+		"renderer.tsx",
+		r#"
+		import type {Envelope} from "./types";
+		import {type OnlyType} from "./type-only";
+		import {ipcRenderer as ipc} from "electron";
+		export const View = (props: {label:string}) => <div>{props.label}</div>;
+		declare const target: string;
+		import(target); import("./literal.js"); ipc.send(target); ipc[target]("x");
+	"#,
+	);
+	ts.syntax = JavascriptSyntax::Tsx;
+	let inspected = graph::report(&request(
+		vec![ts.clone()],
+		JavascriptGraphCollection::Imports,
+	))
+	.expect("TSX");
+	let rows = inspected["rows"].as_array().expect("imports");
+	assert_eq!(
+		rows.iter().filter(|row| row["type_only"] == true).count(),
+		2
+	);
+	assert!(rows
+		.iter()
+		.any(|row| row["kind"] == "dynamic_import" && row["specifier"].is_null()));
+	let unknowns =
+		graph::report(&request(vec![ts], JavascriptGraphCollection::Unknowns)).expect("unknowns");
+	assert_eq!(unknowns["total_rows"], 3);
+}
+
+#[test]
+fn reassigned_bindings_fake_modules_and_shadowed_commonjs_exports_are_not_promoted() {
+	let mut js = source(
+		"preload.cjs",
+		r#"
+		let ipc = require("electron").ipcRenderer;
+		ipc = {send() {}}; ipc.send("not-electron");
+		const fake = require("electron-lookalike"); fake.ipcMain.handle("fake", () => {});
+		exports.good = 1; module.exports.other = 2;
+		function f(exports, module) { exports.bad = 3; module.exports.bad = 4; }
+	"#,
+	);
+	js.module_kind = JavascriptModuleKind::Commonjs;
+	let inspected =
+		graph::report(&request(vec![js], JavascriptGraphCollection::Exports)).expect("CommonJS");
+	assert_eq!(inspected["counts"]["electron_calls"], 0);
+	assert_eq!(inspected["total_rows"], 2);
+	assert_eq!(inspected["rows"][0]["exported_name"], "good");
+	assert_eq!(inspected["rows"][1]["exported_name"], "other");
+}
+
+#[test]
+fn pagination_is_bound_to_every_selected_source_and_explicit_grammar() {
+	let mut selection = request(graph_sources(), JavascriptGraphCollection::Imports);
+	selection.limit = 1;
+	let first = graph::report(&selection).expect("first page");
+	selection.offset = 1;
+	assert!(graph::report(&selection).is_err());
+	selection.expected_graph_sha256 = Some(first["graph_sha256"].as_str().expect("hash").into());
+	assert!(graph::report(&selection).is_ok());
+	selection.sources.reverse();
+	assert!(
+		graph::report(&selection).is_ok(),
+		"input order does not alter the graph identity"
+	);
+	selection.sources[0]
+		.text
+		.push_str("\n// actual byte change");
+	assert!(graph::report(&selection).is_err());
+}
+
+#[test]
+fn type_only_dependencies_preserve_declaration_and_inline_specifier_scopes() {
+	// Node type stripping and TypeScript verbatimModuleSyntax retain an empty
+	// dependency for inline modifiers. A type-only binding is not proof of a
+	// type-only module dependency. Empty import/export clauses are value syntax.
+	for (text, type_only, scope) in [
+		("import type { Foo } from './types';", true, "declaration"),
+		(
+			"import type * as Types from './types';",
+			true,
+			"declaration",
+		),
+		(
+			"import { type Foo } from './types';",
+			true,
+			"named_specifiers",
+		),
+		(
+			"import { type Foo, type Bar as B } from './types';",
+			true,
+			"named_specifiers",
+		),
+		("import { type Foo, value } from './types';", false, "none"),
+		("import {} from './types';", false, "none"),
+		("import './types';", false, "none"),
+		("export type { Foo } from './types';", true, "declaration"),
+		(
+			"export { type Foo } from './types';",
+			true,
+			"named_specifiers",
+		),
+		(
+			"export { type Foo, type Bar as B } from './types';",
+			true,
+			"named_specifiers",
+		),
+		("export { type Foo, value } from './types';", false, "none"),
+		("export {} from './types';", false, "none"),
+		("export type * from './types';", true, "declaration"),
+		("export * from './types';", false, "none"),
+	] {
+		let mut selected = source("types.ts", text);
+		selected.syntax = JavascriptSyntax::Typescript;
+		let inspected = graph::report(&request(vec![selected], JavascriptGraphCollection::Imports))
+			.expect("valid declaration grammar");
+		assert_eq!(inspected["total_rows"], 1, "{text}");
+		assert_eq!(inspected["rows"][0]["type_only"], type_only, "{text}");
+		assert_eq!(inspected["rows"][0]["type_only_scope"], scope, "{text}");
+		assert_eq!(inspected["rows"][0]["runtime_resolution_proven"], false);
+	}
+}
+
+#[test]
+fn graph_continuation_rejects_identity_from_previous_analysis_semantics() {
+	let mut selected = request(graph_sources(), JavascriptGraphCollection::Imports);
+	for profile in [
+		"hepta.javascript-selected-source-graph.v1",
+		"hepta.javascript-selected-source-graph.v2",
+	] {
+		let legacy = sha256(
+			&serde_json::to_vec(&json!({
+				"profile":profile,
+				"parser":{"name":"oxc","version":PARSER_VERSION},
+				"sources":source_identities(&selected)
+			}))
+			.expect("legacy graph identity"),
+		);
+		selected.expected_graph_sha256 = Some(legacy);
+		selected.offset = 1;
+		assert!(graph::report(&selected).is_err(), "{profile}");
+	}
+	selected.expected_graph_sha256 = None;
+	selected.offset = 0;
+	let first = graph::report(&selected).expect("current first page");
+	assert_eq!(first["analysis_profile"], GRAPH_PROFILE);
+	selected.expected_graph_sha256 = Some(first["graph_sha256"].as_str().expect("hash").into());
+	selected.offset = 1;
+	assert!(graph::report(&selected).is_ok());
+}
+
+#[test]
+fn repaired_alias_graph_refuses_captured_v2_identity() {
+	let reference: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_javascript/alias-order-original-6.8.0.json"
+	))
+	.expect("actual original alias fixture");
+	let case = reference["cases"]
+		.as_array()
+		.expect("cases")
+		.iter()
+		.find(|case| case["id"] == "after.js")
+		.expect("captured source-order regression");
+	let mut selected = request(
+		vec![AdmittedSource {
+			id: "after.js".into(),
+			syntax: JavascriptSyntax::Javascript,
+			module_kind: JavascriptModuleKind::Commonjs,
+			text: case["source"].as_str().expect("source").into(),
+		}],
+		JavascriptGraphCollection::ElectronCalls,
+	);
+	// Actual old b80ff24a and pre-version-repair 4bd93ab8 workers returned
+	// this same v2 identity with respectively zero and one Electron rows.
+	let old_v2 = "e1032f30477d34882a64d5d86f648c416742e663a1bad3853913667ab885888c";
+	let first = graph::report(&selected).expect("current alias observations");
+	assert_eq!(
+		first["analysis_profile"],
+		"hepta.javascript-selected-source-graph.v4"
+	);
+	assert_eq!(first["total_rows"], 1);
+	assert_eq!(first["rows"][0]["channel"], "later");
+	assert_ne!(first["graph_sha256"], old_v2);
+	for offset in [0, 1] {
+		selected.expected_graph_sha256 = Some(old_v2.into());
+		selected.offset = offset;
+		assert!(graph::report(&selected).is_err(), "old v2 offset {offset}");
+	}
+	selected.expected_graph_sha256 = Some(first["graph_sha256"].as_str().expect("hash").into());
+	selected.offset = 0;
+	assert_eq!(
+		graph::report(&selected).expect("current identity")["rows"],
+		first["rows"]
+	);
+}
+
+#[test]
+fn invalid_ast_semantic_errors_utf16_surrogates_and_resource_excess_refuse() {
+	let one = graph::report(&request(
+		vec![source("one.js", "0;")],
+		JavascriptGraphCollection::Summary,
+	))
+	.expect("nonempty valid AST");
+	assert!(
+		one["source_statistics"][0]["ast_nodes"]
+			.as_u64()
+			.expect("node count")
+			> 0,
+		"Oxc's node store must be enabled"
+	);
+	let dense = graph::report(&request(
+		vec![source("nodes.js", &"0;".repeat(100_001))],
+		JavascriptGraphCollection::Summary,
+	))
+	.expect_err("actual AST node budget");
+	assert!(dense.to_string().contains("200000 AST nodes"), "{dense}");
+	for text in [
+		"const x = ;",
+		"let x; let x;",
+		"const pattern=/(/;",
+		r#"const x='\uD800';"#,
+	] {
+		assert!(
+			graph::report(&request(
+				vec![source("bad.js", text)],
+				JavascriptGraphCollection::Summary
+			))
+			.is_err(),
+			"{text}"
+		);
+	}
+	let mut selected = request(
+		vec![source("large.js", &" ".repeat(MAX_SOURCE_BYTES + 1))],
+		JavascriptGraphCollection::Summary,
+	);
+	assert!(graph::report(&selected).is_err());
+	selected.sources = vec![source("a.js", ""); MAX_SOURCES + 1];
+	assert!(graph::report(&selected).is_err());
+	for id in ["../a.js", "/a.js", "a/./b.js", "a//b.js", "a\\b.js"] {
+		assert!(validate_id(id).is_err());
+	}
+}
+
+#[tokio::test]
+#[cfg(unix)]
+async fn source_admission_rejects_outside_symlink_stale_hash_and_does_not_execute() {
+	let root = tempfile::tempdir().expect("root");
+	let outside = tempfile::tempdir().expect("outside");
+	let path = root.path().join("owned.js");
+	let marker = root.path().join("must-not-run");
+	let text = format!(
+		"require('fs').writeFileSync({}, 'bad'); export const a=1;",
+		json!(marker)
+	);
+	let bytes = text.as_bytes();
+	tokio::fs::write(&path, bytes).await.expect("source");
+	let mut params = InspectJavascriptGraphParams {
+		sources: vec![JavascriptSource {
+			id: "owned.js".into(),
+			path: path.to_string_lossy().into_owned(),
+			asar: None,
+			syntax: JavascriptSyntax::Javascript,
+			module_kind: JavascriptModuleKind::Module,
+			expected_sha256: Some(sha256(bytes)),
+		}],
+		expected_graph_sha256: None,
+		collection: JavascriptGraphCollection::Summary,
+		offset: 0,
+		limit: 64,
+	};
+	let roots = [root.path().to_owned()];
+	let cancellation = CancellationToken::new();
+	let inspected: Value = serde_json::from_str(
+		&inspect_with_roots(params.clone(), &roots, &cancellation)
+			.await
+			.expect("admitted analysis"),
+	)
+	.expect("report");
+	assert_eq!(inspected["javascript_executed"], false);
+	assert!(!tokio::fs::try_exists(&marker)
+		.await
+		.expect("marker absence"));
+	params.sources[0].expected_sha256 = Some("0".repeat(64));
+	assert!(inspect_with_roots(params.clone(), &roots, &cancellation)
+		.await
+		.is_err());
+	let external = outside.path().join("external.js");
+	tokio::fs::write(&external, bytes).await.expect("outside");
+	let link = root.path().join("linked.js");
+	tokio::fs::symlink(&external, &link).await.expect("symlink");
+	for rejected in [external, link] {
+		params.sources[0].path = rejected.to_string_lossy().into_owned();
+		params.sources[0].expected_sha256 = None;
+		assert!(inspect_with_roots(params.clone(), &roots, &cancellation)
+			.await
+			.is_err());
+	}
+}
+
+#[tokio::test]
+async fn cancelled_request_is_rejected_before_runtime_or_source_admission() {
+	let cancellation = CancellationToken::new();
+	cancellation.cancel();
+	let params = InspectJavascriptGraphParams {
+		sources: vec![JavascriptSource {
+			id: "cancelled.js".into(),
+			path: "/must-not-open/cancelled.js".into(),
+			asar: None,
+			syntax: JavascriptSyntax::Javascript,
+			module_kind: JavascriptModuleKind::Module,
+			expected_sha256: None,
+		}],
+		expected_graph_sha256: None,
+		collection: JavascriptGraphCollection::Summary,
+		offset: 0,
+		limit: 64,
+	};
+	let error = inspect_graph(params.clone(), cancellation.clone())
+		.await
+		.expect_err("cancel before runtime configuration");
+	assert_eq!(error.to_string(), "JavaScript AST inspection cancelled");
+	let error = inspect_with_roots(params, &[], &cancellation)
+		.await
+		.expect_err("cancel before source admission");
+	assert_eq!(error.to_string(), "JavaScript AST inspection cancelled");
+}
+
+#[test]
+fn wrapped_browser_window_options_preserve_preload_declarations() {
+	let cases = [
+		(
+			JavascriptSyntax::Javascript,
+			r#"{webPreferences:{preload:"./preload.cjs"}}"#,
+		),
+		(
+			JavascriptSyntax::Javascript,
+			r#"(({webPreferences:{preload:"./preload.cjs"}}))"#,
+		),
+		(
+			JavascriptSyntax::Typescript,
+			r#"({webPreferences:{preload:"./preload.cjs"}} as const)"#,
+		),
+		(
+			JavascriptSyntax::Typescript,
+			r#"({webPreferences:{preload:"./preload.cjs"}} satisfies Record<string, unknown>)"#,
+		),
+		(
+			JavascriptSyntax::Typescript,
+			r#"(<Record<string, unknown>>{webPreferences:{preload:"./preload.cjs"}})"#,
+		),
+		(
+			JavascriptSyntax::Typescript,
+			r#"({webPreferences:{preload:"./preload.cjs"}}!)"#,
+		),
+		(
+			JavascriptSyntax::Javascript,
+			r#"({webPreferences:({preload:("./preload.cjs")})})"#,
+		),
+	];
+	for (syntax, options) in cases {
+		let mut selected_source = source(
+			"main.ts",
+			&format!(r#"import {{BrowserWindow}} from "electron"; new BrowserWindow({options});"#),
+		);
+		selected_source.syntax = syntax;
+		let inspected = graph::report(&request(
+			vec![selected_source],
+			JavascriptGraphCollection::ElectronCalls,
+		))
+		.expect("wrapped literal constructor options");
+		assert_eq!(inspected["total_rows"], 1, "{options}");
+		assert_eq!(
+			inspected["rows"][0]["preload_declaration_present"], true,
+			"{options}"
+		);
+		assert_eq!(
+			inspected["rows"][0]["literal_preload"], "./preload.cjs",
+			"{options}"
+		);
+		assert_eq!(inspected["counts"]["reported_unknowns"], 0, "{options}");
+		assert_eq!(inspected["javascript_executed"], false);
+	}
+}
+
+#[test]
+fn wrapped_constructor_options_keep_dynamic_preload_unknown_and_skip_spreads() {
+	let text = r#"
+		import {BrowserWindow} from "electron";
+		new BrowserWindow(({webPreferences:{preload:getPath()}}));
+		new BrowserWindow((options));
+		new BrowserWindow(...[{webPreferences:{preload:"spread-not-selected"}}]);
+		function local(BrowserWindow) {
+			new BrowserWindow(({webPreferences:{preload:"shadow-not-electron"}}));
+		}
+	"#;
+	let inspected = graph::report(&request(
+		vec![source("main.js", text)],
+		JavascriptGraphCollection::ElectronCalls,
+	))
+	.expect("dynamic constructor options");
+	assert_eq!(inspected["total_rows"], 3);
+	assert_eq!(inspected["rows"][0]["preload_declaration_present"], true);
+	assert!(inspected["rows"][0]["literal_preload"].is_null());
+	for index in [1, 2] {
+		assert_eq!(
+			inspected["rows"][index]["preload_declaration_present"],
+			false
+		);
+		assert!(inspected["rows"][index]["literal_preload"].is_null());
+	}
+	let unknowns = graph::report(&request(
+		vec![source("main.js", text)],
+		JavascriptGraphCollection::Unknowns,
+	))
+	.expect("dynamic preload remains unknown");
+	assert_eq!(unknowns["total_rows"], 1);
+	assert_eq!(unknowns["rows"][0]["kind"], "dynamic_preload_path");
+}
+
+#[test]
+fn repaired_preload_observations_refuse_v3_graph_identity() {
+	let mut selected = request(
+		vec![source(
+			"main.js",
+			r#"
+		import {BrowserWindow} from "electron";
+		new BrowserWindow(({webPreferences:{preload:"./preload.cjs"}}));
+	"#,
+		)],
+		JavascriptGraphCollection::ElectronCalls,
+	);
+	let old_v3 = sha256(
+		&serde_json::to_vec(&json!({
+			"profile":"hepta.javascript-selected-source-graph.v3",
+			"parser":{"name":"oxc", "version":PARSER_VERSION},
+			"sources":source_identities(&selected)
+		}))
+		.expect("v3 identity serialization"),
+	);
+	let first = graph::report(&selected).expect("current preload observations");
+	assert_eq!(
+		first["analysis_profile"],
+		"hepta.javascript-selected-source-graph.v4"
+	);
+	assert_ne!(first["graph_sha256"], old_v3);
+	selected.expected_graph_sha256 = Some(old_v3);
+	assert!(graph::report(&selected)
+		.unwrap_err()
+		.to_string()
+		.contains("source set changed"));
+}

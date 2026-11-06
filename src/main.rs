@@ -22,10 +22,30 @@ use hepta_runtime::mcp;
 
 use cli::{Cli, Commands};
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
 	let cli = Cli::parse();
+	if matches!(&cli.command, Commands::ReaRecordedCoreWorker) {
+		let code = mcp::rea_recorded_core_worker::run_worker()?;
+		if code != 0 {
+			std::process::exit(code);
+		}
+		return Ok(());
+	}
+	if let Commands::ReaBrowserCapture(args) = &cli.command {
+		return mcp::rea_browser::run_cli(args.clone());
+	}
+	// Parser/client helpers run one bounded task. Creating a host-sized thread
+	// pool before a parser's address-space limit would consume its budget on
+	// large machines before any artifact is inspected.
+	let mut builder = if matches!(&cli.command, Commands::Mcp { .. }) {
+		tokio::runtime::Builder::new_multi_thread()
+	} else {
+		tokio::runtime::Builder::new_current_thread()
+	};
+	builder.enable_all().build()?.block_on(run(cli))
+}
 
+async fn run(cli: Cli) -> Result<()> {
 	match cli.command {
 		Commands::Mcp {
 			path,
@@ -122,6 +142,51 @@ async fn main() -> Result<()> {
 			observation_cleanup?;
 			transport?;
 		}
+		Commands::ReaWorker {
+			selected_path,
+			sandbox_probe,
+		} => {
+			mcp::rea_worker::serve_once(&selected_path, sandbox_probe)?;
+		}
+		Commands::ReaModelWorker { request } => {
+			mcp::rea_model::serve_once(&request)?;
+		}
+		Commands::WeightClient(args) => {
+			let code = mcp::weight_native::run_cli(args).await?;
+			if code != 0 {
+				std::process::exit(code);
+			}
+		}
+		Commands::ReaBrowserCapture(_) => {
+			anyhow::bail!("browser capture must run before Tokio initialization");
+		}
+		Commands::ReaRecordedCoreWorker => {
+			anyhow::bail!("recorded-core worker must run before Tokio initialization");
+		}
+		Commands::ReaElfNotesWorker => {
+			mcp::rea_elf_notes::run_worker()?;
+		}
+		Commands::ReaSourceMapWorker => {
+			mcp::rea_source_map::serve_once()?;
+		}
+		Commands::ReaApkSignatureWorker => {
+			mcp::rea_apk_signature::serve_once()?;
+		}
+		Commands::ReaApkStaticWorker => {
+			mcp::rea_apk_evidence::run_worker()?;
+		}
+		Commands::ReaJavascriptWorker => {
+			mcp::rea_javascript_graph::serve_once()?;
+		}
+		Commands::ReaStaticWorker => {
+			mcp::rea_static::serve_once().await?;
+		}
+		Commands::ReaArchiveWorker { request } => {
+			mcp::rea_artifact_zip::serve_once(&request)?;
+		}
+		Commands::ReaAsarWorker { request } => {
+			mcp::rea_asar::serve_once(&request)?;
+		}
 	}
 
 	Ok(())
@@ -137,9 +202,14 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 
 	tracing::info!("Starting MCP server (STDIO mode)");
 
-	let service = server.serve(stdio()).await.inspect_err(|e| {
-		tracing::error!("serving error: {:?}", e);
-	})?;
+	let rea_cleanup = server.clone();
+	let (input, output) = stdio();
+	let service = mcp::ReaFramedService::new(server)
+		.serve(mcp::ReaMcpTransport::new(input, output))
+		.await
+		.inspect_err(|e| {
+			tracing::error!("serving error: {:?}", e);
+		})?;
 
 	// `waiting()` blocks until the transport closes naturally (EOF on stdin).
 	// For SIGTERM we cancel via the service's cancellation token so the task
@@ -168,6 +238,7 @@ async fn run_stdio_server(server: mcp::server::OctofsServer) -> Result<()> {
 	// Kill request-scoped shell trees and interactive SSH PTYs. Durable runtime jobs
 	// are deliberately independent and remain queryable after this process restarts.
 	mcp::runtime::shutdown_request_scoped().await;
+	rea_cleanup.close_rea_exports().await?;
 
 	Ok(())
 }

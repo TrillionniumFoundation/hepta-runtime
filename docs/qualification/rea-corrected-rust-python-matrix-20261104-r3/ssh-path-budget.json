@@ -1,0 +1,204 @@
+{
+  "bound": {
+    "max_direct_unix_listener_path_bytes": 107,
+    "max_published_controlpath_bytes": 90,
+    "measurement": "Path.as_os_str().as_encoded_bytes().len()",
+    "openssh_temporary_suffix_bytes": 17,
+    "sun_path_bytes": 108,
+    "temporary_suffix_pattern": ".RRRRRRRRRRRRRRRR",
+    "terminating_nul_bytes": 1
+  },
+  "components": {
+    "private_root_name_bytes_formula": "38 + D",
+    "private_root_pid_separator_bytes": 1,
+    "private_root_prefix_bytes": 5,
+    "private_root_random_hex_bytes": 32,
+    "temporary_component": 10
+  },
+  "conservative_profile": {
+    "example_is_only_a_candidate_not_created_by_this_agent": true,
+    "example_path": "/dev/shm/q",
+    "including_nul_max_bytes": 108,
+    "initial_controlpath_max_bytes": 71,
+    "maximum_tmpdir_bytes": 10,
+    "openssh_temporary_name_max_bytes": 107,
+    "preconditions": [
+      "Exclusive mkdir of an unused single-ASCII-component child of /dev/shm; never adopt, overwrite, or chmod an existing entry.",
+      "Owner UID 1000 and mode 0700; no symlinks in the actual path.",
+      "Actual mount must be the existing executable tmpfs, with adequate free bytes; use an owned executable preflight.",
+      "Set TMPDIR only on the matrix process and its children; keep the directory's identity for the complete run.",
+      "Do not modify production path guards, fixture time limits, source, scripts, or mount/global environment configuration."
+    ],
+    "private_root_max_bytes": 67,
+    "production_m_u64_controlpath_max_bytes": 90,
+    "retired_final_socket_margin_bytes": 3,
+    "retired_fixture_u64_final_socket_max_bytes": 104
+  },
+  "dependency": {
+    "component_bytes": 10,
+    "default_prefix": ".tmp",
+    "default_random_characters": 6,
+    "default_suffix": "",
+    "path": "/home/qian-qi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tempfile-3.27.0/src/lib.rs",
+    "sha256": "d182721b62c126916b73bb4865ced5d3637bd1a4a77d27ea9e9708973e5f9493",
+    "version": "tempfile 3.27.0"
+  },
+  "formulas": {
+    "direct_retired_fixture_socket": "L + 67 + D + S",
+    "fixture_socket_parent": "L + 11",
+    "initial_control_path": "L + 54 + D",
+    "private_root": "L + 50 + D",
+    "production_m_sequence": "L + 53 + D + S"
+  },
+  "host": {
+    "maximum_pid_decimal_digits": 7,
+    "pid_max": 4194304,
+    "pid_max_source": "/proc/sys/kernel/pid_max",
+    "platform": "Linux"
+  },
+  "manual_bind_verification": {
+    "core_arguments_excerpt": [
+      "724: \tfn arguments(",
+      "725: \t\t&self,",
+      "726: \t\thost: &str,",
+      "727: \t\tmode: Mode,",
+      "728: \t\tsocket: &Path,",
+      "729: \t\teffective: bool,",
+      "730: \t) -> Result<Vec<String>> {",
+      "731: \t\tlet target = self",
+      "732: \t\t\t.profile",
+      "733: \t\t\t.hosts",
+      "734: \t\t\t.get(host)",
+      "735: \t\t\t.context(\"host is outside observation profile\")?;",
+      "736: \t\tlet mut args = vec![",
+      "737: \t\t\t\"/usr/bin/ssh\".to_owned(),",
+      "738: \t\t\t\"-F\".into(),",
+      "739: \t\t\tself.profile.config.to_string_lossy().into_owned(),",
+      "740: \t\t];",
+      "741: \t\tif effective {",
+      "742: \t\t\targs.push(\"-G\".into());",
+      "743: \t\t}"
+    ],
+    "inapplicable_assumption": "Applying the 90-byte OpenSSH publication bound to retired-fixture is not its actual bind path; its direct final socket bound is 107 bytes.",
+    "retired_generation_excerpt": [
+      "785: async fn retired_generation(",
+      "786: \tcore: &Arc<Core>,",
+      "787: \tremaining: Duration,",
+      "788: ) -> (Arc<Master>, u64, tokio::net::UnixListener) {",
+      "789: \tlet name = core.sequence.fetch_add(1, Ordering::Relaxed);",
+      "790: \tlet socket = core.root.path.join(format!(\"retired-fixture-{name}\"));",
+      "791: \tlet args = core",
+      "792: \t\t.arguments(\"fixture\", Mode::Master, &socket, true)",
+      "793: \t\t.unwrap();",
+      "794: \tlet mut command = core.command(&args);",
+      "795: \tcommand",
+      "796: \t\t.stdin(Stdio::null())",
+      "797: \t\t.stdout(Stdio::null())",
+      "798: \t\t.stderr(Stdio::null());",
+      "799: \tlet owned = core",
+      "800: \t\t.spawn(",
+      "801: \t\t\t&args,",
+      "802: \t\t\tcommand,",
+      "803: \t\t\tvec![],",
+      "804: \t\t\tInstant::now() + Duration::from_secs(3),",
+      "805: \t\t\t&CancellationToken::new(),",
+      "806: \t\t)",
+      "807: \t\t.await",
+      "808: \t\t.unwrap();",
+      "809: \tassert!(timeout(Duration::from_secs(3), owned.wait())",
+      "810: \t\t.await",
+      "811: \t\t.unwrap()",
+      "812: \t\t.unwrap()",
+      "813: \t\t.success());",
+      "814: \tassert!(owned.terminal().await.unwrap());",
+      "815: \tlet listener = tokio::net::UnixListener::bind(&socket).unwrap();",
+      "816: \tstd::fs::set_permissions(&socket, std::fs::Permissions::from_mode(0o600)).unwrap();"
+    ],
+    "semantics": "retired_generation passes effective=true, Core::arguments inserts -G, the original SSH child is waited successfully, then tokio::net::UnixListener directly binds the final socket. No OpenSSH temporary-publication suffix is applied to that test listener.",
+    "verified": true
+  },
+  "original_r2": {
+    "all_features": {
+      "failed": 4,
+      "passed": 1929,
+      "run": 1933,
+      "skipped": 40
+    },
+    "guard_limit": 90,
+    "guard_precedes_mkdirat": true,
+    "initial_controlpath_bytes": 91,
+    "logs": {
+      "07-nextest-all-features.stderr.log": {
+        "path": "/home/qian-qi/work/hepta-rea-continuation-20261104-r2-evidence/full-rust-matrix-r2/07-nextest-all-features.stderr.log",
+        "sha256": "456ae93a9ccf6ffcc8343bf267c9a8f3bb3ec05fa70078eb05483db835090167",
+        "total_lines": 2029
+      },
+      "08-nextest-no-default-features.stderr.log": {
+        "path": "/home/qian-qi/work/hepta-rea-continuation-20261104-r2-evidence/full-rust-matrix-r2/08-nextest-no-default-features.stderr.log",
+        "sha256": "88ea16ccbecf9efe6773e13790f4205bd9c2537c070b8a5b95d996f0e5817263",
+        "total_lines": 2002
+      }
+    },
+    "no_default_features": {
+      "failed": 4,
+      "passed": 1902,
+      "run": 1906,
+      "skipped": 28
+    },
+    "pid_digits": 7,
+    "rejection_excess_bytes": 1,
+    "tmpdir": "/run/user/1000/rea-q2-iiiwx6_w",
+    "tmpdir_bytes": 30
+  },
+  "raw_read_outputs": [
+    {
+      "job_id": "1a1a74ee6bd-fc05-2aee",
+      "path": "/home/qian-qi/.local/state/hepta-runtime-mac-worker/jobs/1a1a74ee6bd-fc05-2aee/stdout.log",
+      "stdout_sha256": "73ac1de2ae2527ed7991d1744cc2aaf701e5137636059f5b59b82c4693654dc2"
+    },
+    {
+      "job_id": "1a1a7506c19-fc05-2af7",
+      "path": "/home/qian-qi/.local/state/hepta-runtime-mac-worker/jobs/1a1a7506c19-fc05-2af7/stdout.log",
+      "stdout_sha256": "ac54c768217e03e4389cf6eb87e388003fb42b53823ed19dbd3bbeb8666f66b5"
+    },
+    {
+      "job_id": "1a1a751e769-fc05-2afe",
+      "path": "/home/qian-qi/.local/state/hepta-runtime-mac-worker/jobs/1a1a751e769-fc05-2afe/stdout.log",
+      "stdout_sha256": "415432304817b3bb94e0841a9bf27372071f2ff2526573f89831d408ab007008"
+    },
+    {
+      "job_id": "1a1a75475e3-fc05-2b08",
+      "path": "/home/qian-qi/.local/state/hepta-runtime-mac-worker/jobs/1a1a75475e3-fc05-2b08/stdout.log",
+      "stdout_sha256": "3e4f22a15fae7e34629fd8a92b780373e48af0a740c9c44645badcca1ab9390c"
+    }
+  ],
+  "root_at_read": "/home/qian-qi/hepta-runtime-rea-continuation-20261104-r2",
+  "schema": "hepta.ssh-controlpath-static-budget.v1",
+  "scope": "Read-only static diagnosis and an environment path budget; no test rerun, source change, mount, symlink workaround, global environment change, or temporary-profile directory creation.",
+  "source_commit_at_initial_read": "ed74d9dbf04b97fad38112c2ac08127bf99b3590",
+  "source_files_sha256": {
+    "src/mcp/runtime/ssh_file_observation_pool_tests.rs": "92c51769214d95b14e1f5ee58716e5ca22e343a0510e6cbede683ce8b053971b",
+    "src/mcp/runtime/ssh_observation_maintenance_tests.rs": "bcbc3b1d2df0ca3673baed01df0a02adcd4a79894535027f71ed5a1d81eb8434",
+    "src/mcp/runtime/ssh_observation_pool.rs": "018828a4f686aff1692e6f3fb09846ed22714239252149825ba25e4978612ed2",
+    "src/mcp/runtime/ssh_observation_pool_tests.rs": "4a5b3aea1d52177a5f76c2febdb47fb296a5c83097fb69ac0692cea2bcb3e177"
+  },
+  "source_references": {
+    "argument_mode": "src/mcp/runtime/ssh_observation_pool.rs::Core::arguments",
+    "direct_listener": "src/mcp/runtime/ssh_observation_pool_tests.rs::retired_generation",
+    "fixture_root": "src/mcp/runtime/ssh_observation_pool_tests.rs::fixture_with_file_policy",
+    "private_root": "src/mcp/runtime/ssh_observation_pool.rs::PrivateRoot::create",
+    "production_guard": "src/mcp/runtime/ssh_observation_pool.rs::check_control_socket_path",
+    "real_boundary_test": "src/mcp/runtime/ssh_observation_pool_tests.rs::control_paths_reserve_the_real_unix_temporary_socket_boundary"
+  },
+  "validation_plan": {
+    "four_case_rerun_cancelled": true,
+    "new_tests_executed": 0,
+    "r3_success_claimed": false,
+    "reason": "Parent will cover both feature sets in the complete r3 matrix using its separately created owned short TMPDIR."
+  },
+  "variables": {
+    "D": "decimal PID digits, at most 7 on the observed host",
+    "L": "byte length of absolute TMPDIR path with no symlink expansion or extra trailing slash",
+    "S": "decimal AtomicU64 sequence digits, at most 20"
+  }
+}

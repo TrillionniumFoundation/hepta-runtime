@@ -1,0 +1,1097 @@
+{
+  "format": "hepta.apk-service-projected-error-goldens.v1",
+  "frozen_npm_tarball_sha256": "8d542ec76a9cb350584b60a6c9c088706ff812d5bb5b094c20c95b6dc25698bb",
+  "source_qualification_sha256": "c133196eef6ad067fd139e22c2eb4866df522bf00b8c7505def494f99dcee0a4",
+  "cases": [
+    {
+      "name": "declared-33-signers",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-33-signers.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-33-signers.apk",
+      "fixture_sha256": "144c6a324c4ae5882b7ec05da0cd16817d04665471ecce1afd99518849d90216",
+      "fixture_bytes": 48064,
+      "source": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/bind-frozen-static-r1/cases/declared-33-signers.apk",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "resource": "capacity",
+        "reason": "APK Signature Scheme v2 holds more signers than the 32 limit.",
+        "reportedLimits": {
+          "max_signers": 32
+        },
+        "_tag": "AnalysisResourceConstraintError"
+      },
+      "expected": {
+        "code": "resource_constraint",
+        "category": "resource_constraint",
+        "message": "APK Signature Scheme v2 holds more signers than the 32 limit.",
+        "retryable": true,
+        "remediation": {
+          "action": "Wait for an active analysis to complete, then retry within the reported admission limits."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "resource": "capacity",
+          "reason": "APK Signature Scheme v2 holds more signers than the 32 limit.",
+          "reported_limits": {
+            "max_signers": 32
+          }
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "declared-rotation-33-nodes",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-rotation-33-nodes.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-rotation-33-nodes.apk",
+      "fixture_sha256": "a8528bf4aafda6db619b1fee3ba46ab4b2749ee61122d341b53de01625d9a2f6",
+      "fixture_bytes": 37161,
+      "source": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/bind-frozen-static-r1/cases/declared-rotation-33-nodes.apk",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "resource": "capacity",
+        "reason": "APK Signature Scheme v3.1 holds more lineage-nodes than the 32 limit.",
+        "reportedLimits": {
+          "max_lineage_nodes": 32
+        },
+        "_tag": "AnalysisResourceConstraintError"
+      },
+      "expected": {
+        "code": "resource_constraint",
+        "category": "resource_constraint",
+        "message": "APK Signature Scheme v3.1 holds more lineage-nodes than the 32 limit.",
+        "retryable": true,
+        "remediation": {
+          "action": "Wait for an active analysis to complete, then retry within the reported admission limits."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "resource": "capacity",
+          "reason": "APK Signature Scheme v3.1 holds more lineage-nodes than the 32 limit.",
+          "reported_limits": {
+            "max_lineage_nodes": 32
+          }
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "declared-v31-sdk-copy-mismatch",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-v31-sdk-copy-mismatch.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-v31-sdk-copy-mismatch.apk",
+      "fixture_sha256": "1e008e98e05663d900266c16f088b31b955cec1f63bdc192403bf518a8a5be20",
+      "fixture_bytes": 12375,
+      "source": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/bind-frozen-static-r1/cases/declared-v31-sdk-copy-mismatch.apk",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "issues": [
+          {
+            "path": [
+              "path"
+            ],
+            "reason": "invalid_value",
+            "message": "Malformed APK Signature Scheme v3.1 block: signer 0: outer SDK range disagrees with the signed SDK range."
+          }
+        ],
+        "_tag": "AnalysisInputError"
+      },
+      "expected": {
+        "code": "invalid_request",
+        "category": "invalid_input",
+        "message": "Analysis input is invalid. Check the arguments and try again.",
+        "retryable": false,
+        "remediation": {
+          "action": "Read the declared input schema or CLI usage for inspect_apk_signature; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call."
+        },
+        "recovery": {
+          "kind": "inspect_input_contract",
+          "operation": "inspect_apk_signature"
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "issues": [
+            {
+              "path": [
+                "path"
+              ],
+              "reason": "invalid_value",
+              "message": "Malformed APK Signature Scheme v3.1 block: signer 0: outer SDK range disagrees with the signed SDK range."
+            }
+          ]
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "declared-not-a-zip",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-not-a-zip.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-not-a-zip.apk",
+      "fixture_sha256": "bfbeba2280d6d309ee2eea746dd2334442c6b09825c65f70e68124e562a27737",
+      "fixture_bytes": 20,
+      "source": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/bind-frozen-static-r1/cases/declared-not-a-zip.apk",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-not-a-zip.apk",
+        "reason": "The selected file is not a ZIP/APK (shorter than a ZIP EOCD record).",
+        "_tag": "AnalysisUnsupportedTargetError",
+        "remediationAction": "Select a local .apk/.zip/.aab archive."
+      },
+      "expected": {
+        "code": "unsupported_target",
+        "category": "unsupported_target",
+        "message": "Unsupported target for inspect_apk_signature at /home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-not-a-zip.apk: The selected file is not a ZIP/APK (shorter than a ZIP EOCD record).",
+        "retryable": false,
+        "remediation": {
+          "action": "Select a local .apk/.zip/.aab archive."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-not-a-zip.apk",
+          "reason": "The selected file is not a ZIP/APK (shorter than a ZIP EOCD record)."
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "declared-truncated-zip",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-truncated-zip.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-truncated-zip.apk",
+      "fixture_sha256": "020da3e83b9de154e10937b1a36b057c561552f183bf516b1cb8eaad7193292c",
+      "fixture_bytes": 34,
+      "source": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/bind-frozen-static-r1/cases/declared-truncated-zip.apk",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "issues": [
+          {
+            "path": [
+              "path"
+            ],
+            "reason": "invalid_value",
+            "message": "Damaged ZIP/APK at byte 34: ZIP local headers present but no end-of-central-directory (truncated or damaged archive)."
+          }
+        ],
+        "_tag": "AnalysisInputError"
+      },
+      "expected": {
+        "code": "invalid_request",
+        "category": "invalid_input",
+        "message": "Analysis input is invalid. Check the arguments and try again.",
+        "retryable": false,
+        "remediation": {
+          "action": "Read the declared input schema or CLI usage for inspect_apk_signature; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call."
+        },
+        "recovery": {
+          "kind": "inspect_input_contract",
+          "operation": "inspect_apk_signature"
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "issues": [
+            {
+              "path": [
+                "path"
+              ],
+              "reason": "invalid_value",
+              "message": "Damaged ZIP/APK at byte 34: ZIP local headers present but no end-of-central-directory (truncated or damaged archive)."
+            }
+          ]
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "declared-ambiguous-eocd",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-ambiguous-eocd.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-ambiguous-eocd.apk",
+      "fixture_sha256": "247efd63408e3972f771827f45398bcdf463bdfccb6e7b5f4290f89e0e93dbed",
+      "fixture_bytes": 2710,
+      "source": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/bind-frozen-static-r1/cases/declared-ambiguous-eocd.apk",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "issues": [
+          {
+            "path": [
+              "path"
+            ],
+            "reason": "invalid_value",
+            "message": "Damaged ZIP/APK at byte 2688: 2 end-of-central-directory records each end the archive (one inside another's comment); the central directory is ambiguous."
+          }
+        ],
+        "_tag": "AnalysisInputError"
+      },
+      "expected": {
+        "code": "invalid_request",
+        "category": "invalid_input",
+        "message": "Analysis input is invalid. Check the arguments and try again.",
+        "retryable": false,
+        "remediation": {
+          "action": "Read the declared input schema or CLI usage for inspect_apk_signature; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call."
+        },
+        "recovery": {
+          "kind": "inspect_input_contract",
+          "operation": "inspect_apk_signature"
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "issues": [
+            {
+              "path": [
+                "path"
+              ],
+              "reason": "invalid_value",
+              "message": "Damaged ZIP/APK at byte 2688: 2 end-of-central-directory records each end the archive (one inside another's comment); the central directory is ambiguous."
+            }
+          ]
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "declared-frozen-pairs-4097",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-pairs-4097.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-pairs-4097.apk",
+      "fixture_sha256": "d4fd012acc52d485c36bbdb0d0c6f62efcaf842497e8ea3bf41ed84476501e48",
+      "fixture_bytes": 50418,
+      "source": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/bind-frozen-static-r1/cases/declared-frozen-pairs-4097.apk",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "resource": "capacity",
+        "reason": "APK Signing Block holds more signing-block-pairs than the 4096 limit.",
+        "reportedLimits": {
+          "max_signing_block_pairs": 4096
+        },
+        "_tag": "AnalysisResourceConstraintError"
+      },
+      "expected": {
+        "code": "resource_constraint",
+        "category": "resource_constraint",
+        "message": "APK Signing Block holds more signing-block-pairs than the 4096 limit.",
+        "retryable": true,
+        "remediation": {
+          "action": "Wait for an active analysis to complete, then retry within the reported admission limits."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "resource": "capacity",
+          "reason": "APK Signing Block holds more signing-block-pairs than the 4096 limit.",
+          "reported_limits": {
+            "max_signing_block_pairs": 4096
+          }
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "declared-frozen-certificates-4097",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-certificates-4097.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-certificates-4097.apk",
+      "fixture_sha256": "e3439835b41860269faeae37b5897fe24ac30a457dc0ada656f069a2d0978923",
+      "fixture_bytes": 18292,
+      "source": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/bind-frozen-static-r1/cases/declared-frozen-certificates-4097.apk",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "resource": "capacity",
+        "reason": "APK Signature Scheme v2 holds more certificates than the 4096 limit.",
+        "reportedLimits": {
+          "max_certificates": 4096
+        },
+        "_tag": "AnalysisResourceConstraintError"
+      },
+      "expected": {
+        "code": "resource_constraint",
+        "category": "resource_constraint",
+        "message": "APK Signature Scheme v2 holds more certificates than the 4096 limit.",
+        "retryable": true,
+        "remediation": {
+          "action": "Wait for an active analysis to complete, then retry within the reported admission limits."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "resource": "capacity",
+          "reason": "APK Signature Scheme v2 holds more certificates than the 4096 limit.",
+          "reported_limits": {
+            "max_certificates": 4096
+          }
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "declared-frozen-attributes-4097",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-attributes-4097.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-attributes-4097.apk",
+      "fixture_sha256": "0ea34ec47884ac6bec63c436d87433f0efad5a5780ef8e62b62b940d80cea597",
+      "fixture_bytes": 35464,
+      "source": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/bind-frozen-static-r1/cases/declared-frozen-attributes-4097.apk",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "resource": "capacity",
+        "reason": "APK Signature Scheme v2 holds more attributes than the 4096 limit.",
+        "reportedLimits": {
+          "max_attributes": 4096
+        },
+        "_tag": "AnalysisResourceConstraintError"
+      },
+      "expected": {
+        "code": "resource_constraint",
+        "category": "resource_constraint",
+        "message": "APK Signature Scheme v2 holds more attributes than the 4096 limit.",
+        "retryable": true,
+        "remediation": {
+          "action": "Wait for an active analysis to complete, then retry within the reported admission limits."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "resource": "capacity",
+          "reason": "APK Signature Scheme v2 holds more attributes than the 4096 limit.",
+          "reported_limits": {
+            "max_attributes": 4096
+          }
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "declared-frozen-digests-4097",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-digests-4097.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-digests-4097.apk",
+      "fixture_sha256": "c5a160f8449ac77a26f47ddef2ac133ca28e1428124d05c420f208660f6df2bc",
+      "fixture_bytes": 51808,
+      "source": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/bind-frozen-static-r1/cases/declared-frozen-digests-4097.apk",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "resource": "capacity",
+        "reason": "APK Signature Scheme v2 holds more digests than the 4096 limit.",
+        "reportedLimits": {
+          "max_digests": 4096
+        },
+        "_tag": "AnalysisResourceConstraintError"
+      },
+      "expected": {
+        "code": "resource_constraint",
+        "category": "resource_constraint",
+        "message": "APK Signature Scheme v2 holds more digests than the 4096 limit.",
+        "retryable": true,
+        "remediation": {
+          "action": "Wait for an active analysis to complete, then retry within the reported admission limits."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "resource": "capacity",
+          "reason": "APK Signature Scheme v2 holds more digests than the 4096 limit.",
+          "reported_limits": {
+            "max_digests": 4096
+          }
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "declared-frozen-signatures-4097",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-signatures-4097.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-signatures-4097.apk",
+      "fixture_sha256": "cf2eed0e6fb6c0ea015b8f9232fae8f039cd35b43502df360c7331a1a9a5fa73",
+      "fixture_bytes": 51584,
+      "source": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/bind-frozen-static-r1/cases/declared-frozen-signatures-4097.apk",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "resource": "capacity",
+        "reason": "APK Signature Scheme v2 holds more signatures than the 4096 limit.",
+        "reportedLimits": {
+          "max_signatures": 4096
+        },
+        "_tag": "AnalysisResourceConstraintError"
+      },
+      "expected": {
+        "code": "resource_constraint",
+        "category": "resource_constraint",
+        "message": "APK Signature Scheme v2 holds more signatures than the 4096 limit.",
+        "retryable": true,
+        "remediation": {
+          "action": "Wait for an active analysis to complete, then retry within the reported admission limits."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "resource": "capacity",
+          "reason": "APK Signature Scheme v2 holds more signatures than the 4096 limit.",
+          "reported_limits": {
+            "max_signatures": 4096
+          }
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "declared-frozen-v1-entry-cap",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-v1-entry-cap.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-v1-entry-cap.apk",
+      "fixture_sha256": "ecb02e17a6b220161641ae5d9d66d45daf7fd73e3dd0ae26f906d73200b1b390",
+      "fixture_bytes": 450692,
+      "source": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/bind-frozen-static-r1/cases/declared-frozen-v1-entry-cap.apk",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "resource": "capacity",
+        "reason": "The central directory holds more than 4096 META-INF v1 signing entries.",
+        "reportedLimits": {
+          "max_v1_signature_entries": 4096
+        },
+        "_tag": "AnalysisResourceConstraintError"
+      },
+      "expected": {
+        "code": "resource_constraint",
+        "category": "resource_constraint",
+        "message": "The central directory holds more than 4096 META-INF v1 signing entries.",
+        "retryable": true,
+        "remediation": {
+          "action": "Wait for an active analysis to complete, then retry within the reported admission limits."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "resource": "capacity",
+          "reason": "The central directory holds more than 4096 META-INF v1 signing entries.",
+          "reported_limits": {
+            "max_v1_signature_entries": 4096
+          }
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "declared-frozen-output-digest-1",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-output-digest-1.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-output-digest-1.apk",
+      "fixture_sha256": "3f51a9542d34bc1586e0919635c572f3bf36f60174a2d7c8dd2b39f505f4b9dc",
+      "fixture_bytes": 4192681,
+      "source": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/bind-frozen-static-r1/cases/declared-frozen-output-digest-1.apk",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "resource": "capacity",
+        "reason": "The decoded signing report (8388610 bytes) exceeds the 8388608-byte output budget.",
+        "reportedLimits": {
+          "max_output_bytes": 8388608
+        },
+        "_tag": "AnalysisResourceConstraintError"
+      },
+      "expected": {
+        "code": "resource_constraint",
+        "category": "resource_constraint",
+        "message": "The decoded signing report (8388610 bytes) exceeds the 8388608-byte output budget.",
+        "retryable": true,
+        "remediation": {
+          "action": "Wait for an active analysis to complete, then retry within the reported admission limits."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "resource": "capacity",
+          "reason": "The decoded signing report (8388610 bytes) exceeds the 8388608-byte output budget.",
+          "reported_limits": {
+            "max_output_bytes": 8388608
+          }
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "declared-frozen-output-stamp-1",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-output-stamp-1.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/declared-frozen-output-stamp-1.apk",
+      "fixture_sha256": "c46a2eacca8fb7e1264e4f0cda71c0ab4aa8911d1f5f15c044c3e1fee7b89bc4",
+      "fixture_bytes": 2097697,
+      "source": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/bind-frozen-static-r1/cases/declared-frozen-output-stamp-1.apk",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "resource": "capacity",
+        "reason": "The decoded signing report (8388612 bytes) exceeds the 8388608-byte output budget.",
+        "reportedLimits": {
+          "max_output_bytes": 8388608
+        },
+        "_tag": "AnalysisResourceConstraintError"
+      },
+      "expected": {
+        "code": "resource_constraint",
+        "category": "resource_constraint",
+        "message": "The decoded signing report (8388612 bytes) exceeds the 8388608-byte output budget.",
+        "retryable": true,
+        "remediation": {
+          "action": "Wait for an active analysis to complete, then retry within the reported admission limits."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "resource": "capacity",
+          "reason": "The decoded signing report (8388612 bytes) exceeds the 8388608-byte output budget.",
+          "reported_limits": {
+            "max_output_bytes": 8388608
+          }
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "owned-empty",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-empty.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-empty.apk",
+      "fixture_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "fixture_bytes": 0,
+      "source": "owned framing mutation or ZIP constructor in this script",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-empty.apk",
+        "reason": "The selected file is not a ZIP/APK (shorter than a ZIP EOCD record).",
+        "_tag": "AnalysisUnsupportedTargetError",
+        "remediationAction": "Select a local .apk/.zip/.aab archive."
+      },
+      "expected": {
+        "code": "unsupported_target",
+        "category": "unsupported_target",
+        "message": "Unsupported target for inspect_apk_signature at /home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-empty.apk: The selected file is not a ZIP/APK (shorter than a ZIP EOCD record).",
+        "retryable": false,
+        "remediation": {
+          "action": "Select a local .apk/.zip/.aab archive."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-empty.apk",
+          "reason": "The selected file is not a ZIP/APK (shorter than a ZIP EOCD record)."
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "owned-nonzip-without-eocd",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-nonzip-without-eocd.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-nonzip-without-eocd.apk",
+      "fixture_sha256": "5a78bcdac823fd46877ddd70d31e85aa5e6f00ebee8a2b3aa894e27d103f9e1b",
+      "fixture_bytes": 40,
+      "source": "owned framing mutation or ZIP constructor in this script",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-nonzip-without-eocd.apk",
+        "reason": "The selected file is not a ZIP/APK (no end-of-central-directory record).",
+        "_tag": "AnalysisUnsupportedTargetError",
+        "remediationAction": "Select a local .apk/.zip/.aab archive."
+      },
+      "expected": {
+        "code": "unsupported_target",
+        "category": "unsupported_target",
+        "message": "Unsupported target for inspect_apk_signature at /home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-nonzip-without-eocd.apk: The selected file is not a ZIP/APK (no end-of-central-directory record).",
+        "retryable": false,
+        "remediation": {
+          "action": "Select a local .apk/.zip/.aab archive."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-nonzip-without-eocd.apk",
+          "reason": "The selected file is not a ZIP/APK (no end-of-central-directory record)."
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "owned-block-size-mismatch",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-block-size-mismatch.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-block-size-mismatch.apk",
+      "fixture_sha256": "c68985a035f9a0667ff1300118923985f5be0c8afc48a8f1b8b5213109e87e23",
+      "fixture_bytes": 2688,
+      "source": "owned framing mutation or ZIP constructor in this script",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "issues": [
+          {
+            "path": [
+              "path"
+            ],
+            "reason": "invalid_value",
+            "message": "Malformed APK Signing Block at byte 1135: leading/trailing size mismatch."
+          }
+        ],
+        "_tag": "AnalysisInputError"
+      },
+      "expected": {
+        "code": "invalid_request",
+        "category": "invalid_input",
+        "message": "Analysis input is invalid. Check the arguments and try again.",
+        "retryable": false,
+        "remediation": {
+          "action": "Read the declared input schema or CLI usage for inspect_apk_signature; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call."
+        },
+        "recovery": {
+          "kind": "inspect_input_contract",
+          "operation": "inspect_apk_signature"
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "issues": [
+            {
+              "path": [
+                "path"
+              ],
+              "reason": "invalid_value",
+              "message": "Malformed APK Signing Block at byte 1135: leading/trailing size mismatch."
+            }
+          ]
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "owned-block-pair-too-short",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-block-pair-too-short.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-block-pair-too-short.apk",
+      "fixture_sha256": "2f1ecf07b9a0112cb50764010a87adf7a235437d25b3edd4a83e146224462d13",
+      "fixture_bytes": 2688,
+      "source": "owned framing mutation or ZIP constructor in this script",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "issues": [
+          {
+            "path": [
+              "path"
+            ],
+            "reason": "invalid_value",
+            "message": "Malformed APK Signing Block at byte 1143: pair length out of range."
+          }
+        ],
+        "_tag": "AnalysisInputError"
+      },
+      "expected": {
+        "code": "invalid_request",
+        "category": "invalid_input",
+        "message": "Analysis input is invalid. Check the arguments and try again.",
+        "retryable": false,
+        "remediation": {
+          "action": "Read the declared input schema or CLI usage for inspect_apk_signature; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call."
+        },
+        "recovery": {
+          "kind": "inspect_input_contract",
+          "operation": "inspect_apk_signature"
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "issues": [
+            {
+              "path": [
+                "path"
+              ],
+              "reason": "invalid_value",
+              "message": "Malformed APK Signing Block at byte 1143: pair length out of range."
+            }
+          ]
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "owned-central-signature-damage",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-central-signature-damage.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-central-signature-damage.apk",
+      "fixture_sha256": "8accd63098314e85e51aa9cb6034f97c91550cebc46e525cd441c333148168c6",
+      "fixture_bytes": 2688,
+      "source": "owned framing mutation or ZIP constructor in this script",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "issues": [
+          {
+            "path": [
+              "path"
+            ],
+            "reason": "invalid_value",
+            "message": "Malformed ZIP central directory at byte 2601: central-directory record signature mismatch."
+          }
+        ],
+        "_tag": "AnalysisInputError"
+      },
+      "expected": {
+        "code": "invalid_request",
+        "category": "invalid_input",
+        "message": "Analysis input is invalid. Check the arguments and try again.",
+        "retryable": false,
+        "remediation": {
+          "action": "Read the declared input schema or CLI usage for inspect_apk_signature; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call."
+        },
+        "recovery": {
+          "kind": "inspect_input_contract",
+          "operation": "inspect_apk_signature"
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "issues": [
+            {
+              "path": [
+                "path"
+              ],
+              "reason": "invalid_value",
+              "message": "Malformed ZIP central directory at byte 2601: central-directory record signature mismatch."
+            }
+          ]
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "owned-central-name-overrun",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-central-name-overrun.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-central-name-overrun.apk",
+      "fixture_sha256": "3c814a2ea537ea5218ef98014bc7f7ddf93dbacdb21179dd0ec696a6783c688a",
+      "fixture_bytes": 2688,
+      "source": "owned framing mutation or ZIP constructor in this script",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "issues": [
+          {
+            "path": [
+              "path"
+            ],
+            "reason": "invalid_value",
+            "message": "Malformed ZIP central directory at byte 2647: central-directory file name runs past the directory."
+          }
+        ],
+        "_tag": "AnalysisInputError"
+      },
+      "expected": {
+        "code": "invalid_request",
+        "category": "invalid_input",
+        "message": "Analysis input is invalid. Check the arguments and try again.",
+        "retryable": false,
+        "remediation": {
+          "action": "Read the declared input schema or CLI usage for inspect_apk_signature; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call."
+        },
+        "recovery": {
+          "kind": "inspect_input_contract",
+          "operation": "inspect_apk_signature"
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "issues": [
+            {
+              "path": [
+                "path"
+              ],
+              "reason": "invalid_value",
+              "message": "Malformed ZIP central directory at byte 2647: central-directory file name runs past the directory."
+            }
+          ]
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "owned-eocd-extent-overlap",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-eocd-extent-overlap.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-eocd-extent-overlap.apk",
+      "fixture_sha256": "40ec34bbaec328f336579a5eee165f04f65e30a1973dae45b47e7f29d44f68df",
+      "fixture_bytes": 2688,
+      "source": "owned framing mutation or ZIP constructor in this script",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "issues": [
+          {
+            "path": [
+              "path"
+            ],
+            "reason": "invalid_value",
+            "message": "Damaged ZIP/APK at byte 2666: central-directory extent overlaps or extends past the ZIP end records."
+          }
+        ],
+        "_tag": "AnalysisInputError"
+      },
+      "expected": {
+        "code": "invalid_request",
+        "category": "invalid_input",
+        "message": "Analysis input is invalid. Check the arguments and try again.",
+        "retryable": false,
+        "remediation": {
+          "action": "Read the declared input schema or CLI usage for inspect_apk_signature; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call."
+        },
+        "recovery": {
+          "kind": "inspect_input_contract",
+          "operation": "inspect_apk_signature"
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "issues": [
+            {
+              "path": [
+                "path"
+              ],
+              "reason": "invalid_value",
+              "message": "Damaged ZIP/APK at byte 2666: central-directory extent overlaps or extends past the ZIP end records."
+            }
+          ]
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "owned-v1-33-paired-signers",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-v1-33-paired-signers.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-v1-33-paired-signers.apk",
+      "fixture_sha256": "9e7fe98134d1e4d6c635a5192176604b8ca38f15a7c15bc15afa3a076a7672ad",
+      "fixture_bytes": 7424,
+      "source": "owned framing mutation or ZIP constructor in this script",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "resource": "capacity",
+        "reason": "The archive pairs more than 32 v1 signature blocks with .SF files.",
+        "reportedLimits": {
+          "max_v1_signers": 32
+        },
+        "_tag": "AnalysisResourceConstraintError"
+      },
+      "expected": {
+        "code": "resource_constraint",
+        "category": "resource_constraint",
+        "message": "The archive pairs more than 32 v1 signature blocks with .SF files.",
+        "retryable": true,
+        "remediation": {
+          "action": "Wait for an active analysis to complete, then retry within the reported admission limits."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "resource": "capacity",
+          "reason": "The archive pairs more than 32 v1 signature blocks with .SF files.",
+          "reported_limits": {
+            "max_v1_signers": 32
+          }
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "owned-zip64-zero-disks",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-zip64-zero-disks.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-zip64-zero-disks.apk",
+      "fixture_sha256": "c295df9def19b23962b2a79321dbf1fb8d9c4ebfb8b2d30695825cdd2eb8ff0f",
+      "fixture_bytes": 202,
+      "source": "owned framing mutation or ZIP constructor in this script",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "issues": [
+          {
+            "path": [
+              "path"
+            ],
+            "reason": "invalid_value",
+            "message": "Damaged ZIP/APK at byte 176: Zip64 locator declares zero disks."
+          }
+        ],
+        "_tag": "AnalysisInputError"
+      },
+      "expected": {
+        "code": "invalid_request",
+        "category": "invalid_input",
+        "message": "Analysis input is invalid. Check the arguments and try again.",
+        "retryable": false,
+        "remediation": {
+          "action": "Read the declared input schema or CLI usage for inspect_apk_signature; if using MCP and the catalog may be stale, call tools/list. Correct the listed fields, then retry. Do not repeat the unchanged call."
+        },
+        "recovery": {
+          "kind": "inspect_input_contract",
+          "operation": "inspect_apk_signature"
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "issues": [
+            {
+              "path": [
+                "path"
+              ],
+              "reason": "invalid_value",
+              "message": "Damaged ZIP/APK at byte 176: Zip64 locator declares zero disks."
+            }
+          ]
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "owned-zip64-multiple-disks",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-zip64-multiple-disks.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-zip64-multiple-disks.apk",
+      "fixture_sha256": "8827f26a04df4cb522505feaa681eee54c7043baaea9dcd1365d5de3517a48d1",
+      "fixture_bytes": 202,
+      "source": "owned framing mutation or ZIP constructor in this script",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-zip64-multiple-disks.apk",
+        "reason": "This archive uses a Zip64 structure this reader does not decode (multi-disk Zip64 archives are not supported).",
+        "_tag": "AnalysisUnsupportedTargetError"
+      },
+      "expected": {
+        "code": "unsupported_target",
+        "category": "unsupported_target",
+        "message": "Unsupported target for inspect_apk_signature at /home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-zip64-multiple-disks.apk: This archive uses a Zip64 structure this reader does not decode (multi-disk Zip64 archives are not supported).",
+        "retryable": false,
+        "remediation": {
+          "action": "Select a target supported by this operation or choose an operation supporting the reported target format."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-zip64-multiple-disks.apk",
+          "reason": "This archive uses a Zip64 structure this reader does not decode (multi-disk Zip64 archives are not supported)."
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    },
+    {
+      "name": "owned-file-size-512mib-plus-one",
+      "input": {
+        "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-file-size-512mib-plus-one.apk",
+        "detail": "complete"
+      },
+      "fixture": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-file-size-512mib-plus-one.apk",
+      "fixture_sha256": "7c40fe5ce847740d0f0d0cdde3949d6585804cdec3ae61a15b923165699c8137",
+      "fixture_bytes": 536870913,
+      "source": "owned sparse all-zero file; size checked by real provider",
+      "typed_error": {
+        "cleanupIncomplete": false,
+        "operation": "inspect_apk_signature",
+        "resource": "file-size",
+        "reason": "Selected artifact exceeds 536870912 bytes: /home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-file-size-512mib-plus-one.apk",
+        "reportedLimits": {
+          "max_input_bytes": 536870912
+        },
+        "_tag": "AnalysisResourceConstraintError",
+        "remediationAction": "The size budget is fixed; select a smaller archive."
+      },
+      "expected": {
+        "code": "resource_constraint",
+        "category": "resource_constraint",
+        "message": "Selected artifact exceeds 536870912 bytes: /home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-file-size-512mib-plus-one.apk",
+        "retryable": false,
+        "remediation": {
+          "action": "The size budget is fixed; select a smaller archive."
+        },
+        "details": {
+          "operation": "inspect_apk_signature",
+          "resource": "file-size",
+          "reason": "Selected artifact exceeds 536870912 bytes: /home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/service-errors-r1/fixtures/owned-file-size-512mib-plus-one.apk",
+          "reported_limits": {
+            "max_input_bytes": 536870912
+          }
+        }
+      },
+      "provider_calls": 1,
+      "record_calls": 0
+    }
+  ],
+  "comparison": "Every field produced by the actual projectAnalysisError after the actual APK Service/provider refusal; no tag-only/resource-only projection.",
+  "scope": "Finite original reference only. Native parent mapping, file-read admission policy and actual worker lifecycle require independent native gates."
+}

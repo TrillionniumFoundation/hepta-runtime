@@ -19,7 +19,10 @@ fn file_pool_is_an_independent_default_off_startup_option() {
 				runtime_file_observation_pool,
 				..
 			},
-		} = Cli::try_parse_from(arguments).unwrap();
+		} = Cli::try_parse_from(arguments).unwrap()
+		else {
+			panic!("MCP arguments selected an internal helper");
+		};
 		assert!(!runtime_file_observation_pool);
 	}
 }
@@ -56,7 +59,10 @@ fn file_pool_cli_requires_both_config_and_explicit_profile() {
 		"--runtime-observation-pool-profile",
 		"profile.json",
 	])
-	.unwrap();
+	.unwrap()
+	else {
+		panic!("MCP arguments selected an internal helper");
+	};
 	assert!(runtime_file_observation_pool);
 	assert_eq!(runtime_config, Some(PathBuf::from("runtime.json")));
 	assert_eq!(

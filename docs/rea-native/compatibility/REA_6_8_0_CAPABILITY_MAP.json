@@ -1,0 +1,2876 @@
+{
+  "schema": "hepta.rea.capability-map.v1",
+  "runtime_baseline": "d771f977246c6e3b7b73d6b4f3a26df000432dda",
+  "interfaces": {
+    "rea_inspect_artifact": {
+      "source_paths": [
+        "src/mcp/rea.rs",
+        "src/mcp/rea_static.rs",
+        "src/mcp/rea_binary_parser.rs",
+        "src/mcp/rea_worker.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_tests.rs",
+        "tests/rea_mcp_external.rs"
+      ],
+      "scope": "Bounded native header/selected ELF facts; NON-REA preview identity"
+    },
+    "rea_inspect_model": {
+      "source_paths": [
+        "src/mcp/rea_model.rs",
+        "src/mcp/rea_model_parser.rs",
+        "src/mcp/rea_model_worker.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_model_parser_tests.rs",
+        "tests/rea_model_worker.rs"
+      ],
+      "scope": "Bounded GGUF/safetensors declaration pages"
+    },
+    "rea_read_model": {
+      "source_paths": [
+        "src/mcp/rea_model.rs",
+        "src/mcp/rea_model_parser.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_model_tests.rs"
+      ],
+      "scope": "Selected pinned byte/tensor range, up to 64KiB"
+    },
+    "rea_model_session_open": {
+      "source_paths": [
+        "src/mcp/rea_model_session.rs",
+        "src/mcp/rea_model_session_store.rs",
+        "src/mcp/rea_model_session_index.rs",
+        "docs/rea-model-gguf-layout-validation.md"
+      ],
+      "tests": [
+        "src/mcp/rea_model_session_tests.rs",
+        "tests/rea_model_session_http.py"
+      ],
+      "scope": "Immutable owner/policy-bound snapshot under hepta.rea.model-directory-index.v2. A retained v1 index is not silently reused; an available original source must be reopened to create a v2 session. Stable and ambiguous GGUF layouts retain their separately documented validation boundaries."
+    },
+    "rea_model_session_query": {
+      "source_paths": [
+        "src/mcp/rea_model_session.rs",
+        "src/mcp/rea_model_session_index.rs",
+        "docs/rea-model-gguf-layout-validation.md"
+      ],
+      "tests": [
+        "src/mcp/rea_model_session_tests.rs"
+      ],
+      "scope": "Retained native v2 directory/index query. Legacy v1 session IDs are rejected without relabeling their stored validation proof; already opened v2 sessions remain usable alongside retained legacy directories."
+    },
+    "rea_model_session_read": {
+      "source_paths": [
+        "src/mcp/rea_model_session.rs",
+        "src/mcp/rea_model_session_store.rs",
+        "docs/rea-model-gguf-layout-validation.md"
+      ],
+      "tests": [
+        "src/mcp/rea_model_session_tests.rs"
+      ],
+      "scope": "Verified snapshot range read from a v2 session. Legacy v1 IDs require reopening the available original source; no automatic index migration or deletion is performed."
+    },
+    "rea_model_session_list": {
+      "source_paths": [
+        "src/mcp/rea_model_session.rs",
+        "docs/rea-model-gguf-layout-validation.md"
+      ],
+      "tests": [
+        "src/mcp/rea_model_session_tests.rs"
+      ],
+      "scope": "Current owner's native model-session inventory. Inventory remains fail-closed if any retained v1 directory is encountered, including legacy safetensors sessions; opening a new v2 session does not upgrade or remove old directories."
+    },
+    "rea_inspect_archive": {
+      "source_paths": [
+        "src/mcp/rea_artifact_zip.rs",
+        "src/mcp/rea_artifact_zip_parser.rs",
+        "src/mcp/rea_artifact_zip_worker.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_artifact_zip_parser_tests.rs",
+        "tests/rea_artifact_zip_worker.rs"
+      ],
+      "scope": "Classic ZIP directory, not complete container extraction"
+    },
+    "rea_inspect_application": {
+      "source_paths": [
+        "src/mcp/rea_application.rs",
+        "src/mcp/rea_application_parser.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_application_tests.rs",
+        "tests/rea_application_external.rs"
+      ],
+      "scope": "APK binary XML/JAR manifest declaration inspection"
+    },
+    "rea_inspect_javascript_package": {
+      "source_paths": [
+        "src/mcp/rea_javascript.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_javascript_tests.rs"
+      ],
+      "scope": "package.json declarations; no AST reconstruction"
+    },
+    "rea_inspect_web_capture": {
+      "source_paths": [
+        "src/mcp/rea_web.rs",
+        "src/mcp/rea_web_parser.rs",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json"
+      ],
+      "tests": [
+        "src/mcp/rea_web_tests.rs",
+        "tests/rea_web_external.rs"
+      ],
+      "scope": "Saved HAR observations only"
+    },
+    "rea_compare_web_captures": {
+      "source_paths": [
+        "src/mcp/rea_web.rs",
+        "src/mcp/rea_web_parser.rs",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json"
+      ],
+      "tests": [
+        "src/mcp/rea_web_tests.rs"
+      ],
+      "scope": "Occurrence-preserving saved HAR comparison; different input/result contract from upstream"
+    },
+    "rea_replay_web_entry": {
+      "source_paths": [
+        "src/mcp/rea_web.rs",
+        "src/mcp/rea_web_parser.rs",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json"
+      ],
+      "tests": [
+        "tests/rea_web_external.rs"
+      ],
+      "scope": "Retained response representation bytes; not network/browser-state replay"
+    },
+    "rea_static_profiles": {
+      "source_paths": [
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "docs/qualification/rea-ghidra-final-release-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-ghidra-final-release-20261104-r2/workspace-evidence/qualification.json",
+        "docs/qualification/rea-ghidra-final-release-20261104-r2/workspace-evidence/release-wrapper-binding.json",
+        "src/bin/jobctl.rs",
+        "src/mcp/rea_engine_directory.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_engine_job_owner.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_scratch.rs",
+        "src/mcp/rea_engine_usage.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_analysis_1214_v3.java",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_ghidra_inventory_1214_v3.java",
+        "src/mcp/rea_provider.rs",
+        "src/mcp/runtime/jobs.rs",
+        "src/native_observation.rs",
+        "src/native_observation_wire.rs",
+        "src/mcp/rea_ghidra_contract_v4.rs",
+        "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+      ],
+      "tests": [
+        "src/jobctl_engine_scratch_tests.rs",
+        "src/jobctl_tests.rs",
+        "src/mcp/rea_engine_scratch_tests.rs",
+        "src/mcp/rea_engine_tests.rs",
+        "src/mcp/rea_engine_usage_tests.rs",
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "src/native_scratch_tests.rs",
+        "tests/rea_engine_cleanup_assertions.py",
+        "tests/rea_engine_owner_tests.py",
+        "tests/rea_ghidra_analysis_external.py",
+        "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "tests/rea_ghidra_v4_api.py",
+        "src/mcp/rea_engine_profile_tests.rs",
+        "src/mcp/rea_engine_ghidra_tests.rs"
+      ],
+      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open."
+    },
+    "rea_static_start": {
+      "source_paths": [
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "docs/qualification/rea-ghidra-final-release-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-ghidra-final-release-20261104-r2/workspace-evidence/qualification.json",
+        "docs/qualification/rea-ghidra-final-release-20261104-r2/workspace-evidence/release-wrapper-binding.json",
+        "src/bin/jobctl.rs",
+        "src/mcp/rea_engine.rs",
+        "src/mcp/rea_engine_directory.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_engine_job_owner.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_scratch.rs",
+        "src/mcp/rea_engine_usage.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_analysis_1214_v3.java",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_ghidra_inventory_1214_v3.java",
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_static.rs",
+        "src/mcp/runtime/jobs.rs",
+        "src/native_observation.rs",
+        "src/native_observation_wire.rs",
+        "src/mcp/rea_ghidra_contract_v4.rs",
+        "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+      ],
+      "tests": [
+        "src/jobctl_engine_scratch_tests.rs",
+        "src/jobctl_tests.rs",
+        "src/mcp/rea_engine_scratch_tests.rs",
+        "src/mcp/rea_engine_tests.rs",
+        "src/mcp/rea_engine_usage_tests.rs",
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "src/native_scratch_tests.rs",
+        "tests/rea_engine_cleanup_assertions.py",
+        "tests/rea_engine_owner_tests.py",
+        "tests/rea_ghidra_analysis_external.py",
+        "tests/rea_ghidra_external.py",
+        "tests/rea_java_external.py",
+        "tests/rea_static_external.rs",
+        "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "tests/rea_ghidra_v4_api.py",
+        "src/mcp/rea_engine_profile_tests.rs",
+        "src/mcp/rea_engine_ghidra_tests.rs"
+      ],
+      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open."
+    },
+    "rea_static_status": {
+      "source_paths": [
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "src/bin/jobctl.rs",
+        "src/mcp/rea_engine_directory.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_engine_job_owner.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_scratch.rs",
+        "src/mcp/rea_engine_usage.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_analysis_1214_v3.java",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_ghidra_inventory_1214_v3.java",
+        "src/mcp/rea_provider.rs",
+        "src/mcp/runtime/jobs.rs",
+        "src/native_observation.rs",
+        "src/native_observation_wire.rs",
+        "src/mcp/rea_ghidra_contract_v4.rs",
+        "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+      ],
+      "tests": [
+        "src/jobctl_engine_scratch_tests.rs",
+        "src/jobctl_tests.rs",
+        "src/mcp/rea_engine_scratch_tests.rs",
+        "src/mcp/rea_engine_tests.rs",
+        "src/mcp/rea_engine_usage_tests.rs",
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "src/native_scratch_tests.rs",
+        "tests/rea_engine_cleanup_assertions.py",
+        "tests/rea_engine_owner_tests.py",
+        "tests/rea_ghidra_analysis_external.py",
+        "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "tests/rea_ghidra_v4_api.py",
+        "src/mcp/rea_engine_profile_tests.rs",
+        "src/mcp/rea_engine_ghidra_tests.rs"
+      ],
+      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open."
+    },
+    "rea_static_read": {
+      "source_paths": [
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "src/bin/jobctl.rs",
+        "src/mcp/rea_engine_directory.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_engine_job_owner.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_scratch.rs",
+        "src/mcp/rea_engine_usage.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_analysis_1214_v3.java",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_ghidra_inventory_1214_v3.java",
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_static.rs",
+        "src/mcp/runtime/jobs.rs",
+        "src/native_observation.rs",
+        "src/native_observation_wire.rs",
+        "src/mcp/rea_ghidra_contract_v4.rs",
+        "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+      ],
+      "tests": [
+        "src/jobctl_engine_scratch_tests.rs",
+        "src/jobctl_tests.rs",
+        "src/mcp/rea_engine_scratch_tests.rs",
+        "src/mcp/rea_engine_tests.rs",
+        "src/mcp/rea_engine_usage_tests.rs",
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "src/native_scratch_tests.rs",
+        "tests/rea_engine_cleanup_assertions.py",
+        "tests/rea_engine_owner_tests.py",
+        "tests/rea_ghidra_analysis_external.py",
+        "tests/rea_static_external.rs",
+        "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "tests/rea_ghidra_v4_api.py",
+        "src/mcp/rea_engine_profile_tests.rs",
+        "src/mcp/rea_engine_ghidra_tests.rs"
+      ],
+      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open."
+    },
+    "rea_static_cancel": {
+      "source_paths": [
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/finite-c-provider-link.json",
+        "docs/qualification/rea-ghidra-analysis-20261104-r1/mcp-native-r2/qualification.json",
+        "src/bin/jobctl.rs",
+        "src/mcp/rea_engine_directory.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_engine_job_owner.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_scratch.rs",
+        "src/mcp/rea_engine_usage.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_analysis_1214_v3.java",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_ghidra_inventory_1214_v3.java",
+        "src/mcp/rea_provider.rs",
+        "src/mcp/runtime/jobs.rs",
+        "src/native_observation.rs",
+        "src/native_observation_wire.rs",
+        "src/mcp/rea_ghidra_contract_v4.rs",
+        "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+      ],
+      "tests": [
+        "src/jobctl_engine_scratch_tests.rs",
+        "src/jobctl_tests.rs",
+        "src/mcp/rea_engine_scratch_tests.rs",
+        "src/mcp/rea_engine_tests.rs",
+        "src/mcp/rea_engine_usage_tests.rs",
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "src/native_scratch_tests.rs",
+        "tests/rea_engine_cleanup_assertions.py",
+        "tests/rea_engine_owner_tests.py",
+        "tests/rea_ghidra_analysis_external.py",
+        "tests/rea_static_external.rs",
+        "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "tests/rea_ghidra_v4_api.py",
+        "src/mcp/rea_engine_profile_tests.rs",
+        "src/mcp/rea_engine_ghidra_tests.rs"
+      ],
+      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open."
+    },
+    "rea_verify_evidence": {
+      "source_paths": [
+        "src/mcp/rea_evidence.rs",
+        "Cargo.lock",
+        "docs/qualification/rea-evidence-halfway-20261104-r2/qualification.json",
+        "docs/qualification/rea-evidence-halfway-20261104-r2/package-attestation.json",
+        "docs/qualification/rea-evidence-halfway-20261104-r2/before-fix-lib.json",
+        "docs/qualification/rea-evidence-halfway-20261104-r2/after-fix-mcp.json",
+        "docs/qualification/rea-final-independent-release-20261104-r2/README.md",
+        "docs/qualification/rea-final-independent-release-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-final-independent-release-20261104-r2/combined-qualification.json",
+        "docs/qualification/rea-final-independent-release-20261104-r2/evidence-public-mcp.json"
+      ],
+      "tests": [
+        "src/mcp/rea_evidence_tests.rs",
+        "scripts/rea-number-reference.mjs",
+        "scripts/rea-number-bit-reference.mjs",
+        "scripts/rea-evidence-number-mcp.py"
+      ],
+      "scope": "Finite-number semantic digest and selected Evidence schema checks, using existing serde_json/zmij shortest ties-to-even digits. Actual npm 438-case/public-MCP and 1,052,304 finite-bit observations close the known decimal-halfway mismatch; no complete Zod/Evidence/tool parity is claimed."
+    },
+    "rea_retain_preview": {
+      "source_paths": [
+        "src/mcp/rea_store.rs",
+        "src/mcp/rea_worker.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_store_tests.rs",
+        "tests/rea_mcp_external.rs"
+      ],
+      "scope": "Owner-admitted retained NON-REA preview"
+    },
+    "rea_read_preview": {
+      "source_paths": [
+        "src/mcp/rea_store.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_store_tests.rs",
+        "tests/rea_mcp_external.rs"
+      ],
+      "scope": "Verified native preview read/restart recovery"
+    },
+    "rea_inspect_javascript_graph": {
+      "source_paths": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "src/mcp/mod.rs",
+        "src/mcp/rea_javascript_graph.rs",
+        "src/mcp/rea_javascript_ast.rs",
+        "src/mcp/rea_javascript_graph_report.rs",
+        "src/mcp/rea_javascript_graph_worker.rs",
+        "src/mcp/rea_seccomp.rs",
+        "src/mcp/rea_worker.rs",
+        "src/mcp/rea_files.rs",
+        "docs/rea-native/JAVASCRIPT_AST.md",
+        "docs/qualification/rea-javascript-ast-20261104-r1/qualification-v6.json",
+        "docs/qualification/rea-javascript-ast-20261104-r1/reference-final-v6.json",
+        "docs/qualification/rea-javascript-ast-20261104-r1/worker-isolation.json",
+        "docs/qualification/rea-javascript-cancellation-20261104-r1/negative-v6/evidence/before-v6/qualification.json",
+        "docs/qualification/rea-javascript-cancellation-20261104-r1/negative-v6/handoff.json",
+        "docs/qualification/rea-javascript-final-release-20261104-r1/artifact-manifest.json",
+        "docs/qualification/rea-javascript-final-release-20261104-r1/gate-evidence/qualification.json",
+        "docs/qualification/rea-javascript-final-release-20261104-r1/gate-evidence/reference-final-release.json",
+        "docs/qualification/rea-js-cancellation-final-release-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-js-cancellation-final-release-20261104-r2/workspace-evidence/qualification.json",
+        "src/mcp/rea_asar.rs",
+        "src/mcp/rea_asar_parser.rs",
+        "src/mcp/rea_asar_worker.rs",
+        "src/mcp/rea_evidence.rs",
+        "docs/rea-native/ASAR.md",
+        "docs/rea-native/qualification/asar-20261104-r2/README.md",
+        "docs/rea-native/qualification/asar-20261104-r2/external/qualification.json",
+        "docs/rea-native/qualification/asar-20261104-r2/manifest.json",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/MANIFEST.json",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/README.md",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/final-summary.json"
+      ],
+      "tests": [
+        "scripts/qualify_javascript_type_erasure.mjs",
+        "scripts/rea-asar-reference.mjs",
+        "scripts/rea-javascript-ast-reference.mjs",
+        "src/mcp/rea_asar_parser_tests.rs",
+        "src/mcp/rea_asar_tests.rs",
+        "src/mcp/rea_javascript_alias_tests.rs",
+        "src/mcp/rea_javascript_graph_tests.rs",
+        "tests/fixtures/rea_javascript/alias-order-original-6.8.0.json",
+        "tests/fixtures/rea_javascript/barrel.ts",
+        "tests/fixtures/rea_javascript/dynamic.ts",
+        "tests/fixtures/rea_javascript/main.ts",
+        "tests/fixtures/rea_javascript/manifest.json",
+        "tests/fixtures/rea_javascript/manual-golden.json",
+        "tests/fixtures/rea_javascript/package.json",
+        "tests/fixtures/rea_javascript/preload.cjs",
+        "tests/fixtures/rea_javascript/reference.json",
+        "tests/fixtures/rea_javascript/renderer.tsx",
+        "tests/fixtures/rea_javascript/shadowing.cjs",
+        "tests/fixtures/rea_javascript/types.ts",
+        "tests/fixtures/rea_javascript/util.js",
+        "tests/rea_asar_external.rs",
+        "tests/rea_asar_qualification.py",
+        "tests/rea_javascript_cancellation_external.py",
+        "tests/rea_javascript_graph_external.rs",
+        "scripts/qualify_javascript_preload_wrappers.mjs",
+        "tests/fixtures/rea_javascript/preload-original-rea-6_8_0-679ccf.json"
+      ],
+      "scope": "Bounded Oxc 0.144.0 native AST/lexical-scope inspection of selected plain-file or packed-ASAR JS/TS/JSX/TSX bytes; import/export, Electron callsite and IPC candidates. Graph profile hepta.javascript-selected-source-graph.v4 binds type_only_scope distinctions (declaration, named_specifiers, none) deferred lexical Electron alias resolution, and transparent BrowserWindow option wrappers; old v1, v2 and v3 continuation IDs are refused even for unchanged source bytes. Type-only syntax alone does not prove TypeScript runtime dependency erasure. NON-REA report; no complete application graph or observed runtime behavior."
+    },
+    "rea_inspect_source_map": {
+      "source_paths": [
+        "src/mcp/rea_source_map.rs",
+        "src/mcp/rea_source_map_parser.rs",
+        "src/mcp/rea_source_map_worker.rs",
+        "docs/rea-native/SOURCE_MAP.md",
+        "docs/qualification/rea-source-map-20261104-r2/README.md",
+        "docs/qualification/rea-source-map-20261104-r2/independent-r4/qualification.json",
+        "docs/qualification/rea-source-map-20261104-r2/upstream-r3/qualification.json",
+        "docs/qualification/rea-source-map-20261104-r2/development-r3/mcp/qualification.json",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/MANIFEST.json",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/README.md",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/release/summary.json",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/independent/qualification.json",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/mcp/qualification.json",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/summary.json",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/upstream/qualification.json",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/summary.json"
+      ],
+      "tests": [
+        "src/mcp/rea_source_map_tests.rs",
+        "scripts/rea-source-map-reference.mjs",
+        "scripts/rea-source-map-upstream-reference.mjs",
+        "tests/rea_source_map_mcp.py"
+      ],
+      "scope": "Native bounded version-3 map declarations and across-line greatest-position lookup, including embedded indexed maps, all coincident records and source-bound collection paging. No source URL fetch, browser acquisition, source equivalence, retained upstream views or REA Evidence identity."
+    },
+    "rea_inspect_asar": {
+      "source_paths": [
+        "src/mcp/rea_asar.rs",
+        "src/mcp/rea_asar_parser.rs",
+        "src/mcp/rea_asar_worker.rs",
+        "src/mcp/rea_files.rs",
+        "src/mcp/rea_seccomp.rs",
+        "src/mcp/rea_evidence.rs",
+        "docs/rea-native/ASAR.md",
+        "docs/rea-native/qualification/asar-20261104-r2/README.md",
+        "docs/rea-native/qualification/asar-20261104-r2/external/qualification.json",
+        "docs/rea-native/qualification/asar-20261104-r2/manifest.json",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/MANIFEST.json",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/README.md",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/final-summary.json"
+      ],
+      "tests": [
+        "src/mcp/rea_asar_tests.rs",
+        "src/mcp/rea_asar_parser_tests.rs",
+        "tests/rea_asar_external.rs",
+        "tests/rea_asar_qualification.py",
+        "scripts/rea-asar-reference.mjs"
+      ],
+      "scope": "Complete bounded canonical Pickle/header declaration inventory, packed extent validation and bound paging; no full archive payload hash, extraction, link/sidecar reads, publisher authentication or REA Evidence."
+    },
+    "rea_read_asar_member": {
+      "source_paths": [
+        "src/mcp/rea_asar.rs",
+        "src/mcp/rea_asar_parser.rs",
+        "src/mcp/rea_asar_worker.rs",
+        "src/mcp/rea_files.rs",
+        "src/mcp/rea_seccomp.rs",
+        "src/mcp/rea_evidence.rs",
+        "docs/rea-native/ASAR.md",
+        "docs/rea-native/qualification/asar-20261104-r2/README.md",
+        "docs/rea-native/qualification/asar-20261104-r2/external/qualification.json",
+        "docs/rea-native/qualification/asar-20261104-r2/manifest.json",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/MANIFEST.json",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/README.md",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/final-summary.json"
+      ],
+      "tests": [
+        "src/mcp/rea_asar_tests.rs",
+        "src/mcp/rea_asar_parser_tests.rs",
+        "tests/rea_asar_external.rs",
+        "tests/rea_asar_qualification.py",
+        "scripts/rea-asar-reference.mjs"
+      ],
+      "scope": "Explicit packed regular member range acquisition after whole selected-member SHA256 and all declared block hashes match; descriptor/header preconditions, no link/unpacked following, no publisher authentication or REA Evidence."
+    },
+    "rea_inspect_apk_signature": {
+      "source_paths": [
+        "src/mcp/rea_apk_signature.rs",
+        "src/mcp/rea_apk_signature_parser.rs",
+        "src/mcp/rea_apk_signature_worker.rs",
+        "src/mcp/rea_files.rs",
+        "src/mcp/rea_seccomp.rs",
+        "docs/rea-native/APK_SIGNATURE_NATIVE.md",
+        "docs/rea-native/validation/apk-signature-native.json",
+        "docs/qualification/rea-apk-public-mcp-20261104-r2/README.md",
+        "docs/qualification/rea-apk-public-mcp-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-apk-public-mcp-20261104-r2/post-exponent-fix-mcp.json",
+        "docs/qualification/rea-apk-public-mcp-20261104-r2/rsa-exponent-before.json",
+        "docs/qualification/rea-apk-public-mcp-20261104-r2/rsa-exponent-after.json",
+        "docs/qualification/rea-final-independent-release-20261104-r2/README.md",
+        "docs/qualification/rea-final-independent-release-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-final-independent-release-20261104-r2/combined-qualification.json",
+        "docs/qualification/rea-final-independent-release-20261104-r2/apk-public-mcp.json",
+        "docs/qualification/rea-final-independent-release-20261104-r2/apk-oracle-projection.json"
+      ],
+      "tests": [
+        "src/mcp/rea_apk_signature_tests.rs",
+        "scripts/generate_apk_signature_fixtures.py",
+        "scripts/qualify_apk_signature_native.py",
+        "tests/rea_apk_signature_mcp.py",
+        "tests/fixtures/rea_apk_signature/provenance.json"
+      ],
+      "scope": "Native policy-admitted APK v2/v3 supported-record mathematical verification: whole captured-file identity, chunked content digest, signed-data signature, exact leaf DER/SPKI binding and selected SDK/algorithm/stripping consistency. Unsupported algorithms/key parameters are partial. No runtime Java/Node/REA dependency; no complete Android/platform-verification, trust, REA Evidence or retained upstream view claim."
+    },
+    "rea_inspect_elf_notes": {
+      "source_paths": [
+        "src/mcp/rea_contract.rs",
+        "src/mcp/rea_contract_schemas/inspect_elf_notes.input.json",
+        "src/mcp/rea_contract_schemas/inspect_elf_notes.output.json",
+        "src/mcp/rea_elf_notes.rs",
+        "src/mcp/rea_elf_notes_compression.rs",
+        "src/mcp/rea_elf_notes_parser.rs",
+        "src/mcp/rea_elf_notes_worker.rs",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_mcp_input.rs",
+        "src/mcp/rea_mcp_transport.rs",
+        "src/mcp/rea_response_encoding.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/rea_structured_wire.rs",
+        "vendor/ruzstd/src/decoding/block_decoder.rs",
+        "vendor/ruzstd/src/decoding/errors.rs",
+        "vendor/ruzstd/src/decoding/frame_decoder.rs",
+        "vendor/ruzstd/src/decoding/scratch.rs",
+        "vendor/ruzstd/src/decoding/sequence_execution.rs",
+        "vendor/ruzstd/src/decoding/sequence_section_decoder.rs",
+        "docs/rea-native/ELF_ZSTD_DESTINATION_DIFFERENTIAL.md"
+      ],
+      "tests": [
+        "src/mcp/rea_elf_notes_parser_tests.rs",
+        "src/mcp/rea_elf_notes_tests.rs",
+        "src/mcp/rea_elf_notes_worker_tests.rs",
+        "src/mcp/rea_mcp_input_tests.rs",
+        "scripts/rea_elf_evidence_family_qualification.py",
+        "tests/rea_elf_evidence_family_qualification_tests.py",
+        "scripts/rea_elf_evidence_family_evidence.py",
+        "tests/rea_elf_evidence_family_evidence_tests.py"
+      ],
+      "scope": "Frozen inspect_elf_notes MCP route with native ELF note parsing, bounded worker ownership, complete retained Evidence and exact input/output schema declarations. Source presence and finite differential results do not establish complete operation parity."
+    },
+    "rea_inspect_apk_signature_evidence": {
+      "source_paths": [
+        "src/mcp/rea_apk_evidence.rs",
+        "src/mcp/rea_apk_mcp_input.rs",
+        "src/mcp/rea_apk_signature_parser.rs",
+        "src/mcp/rea_contract.rs",
+        "src/mcp/rea_contract_schemas/inspect_apk_signature.input.json",
+        "src/mcp/rea_contract_schemas/inspect_apk_signature.output.json",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_mcp_transport.rs",
+        "src/mcp/rea_response_encoding.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/rea_structured_wire.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_apk_evidence_tests.rs",
+        "src/mcp/rea_apk_mcp_input_tests.rs"
+      ],
+      "scope": "Frozen inspect_apk_signature MCP route for static observations, complete retained Evidence, default summaries and selected signing pages. Separate from the native mathematical verification preview; no platform trust claim."
+    },
+    "rea_inspect_analysis_view": {
+      "source_paths": [
+        "src/mcp/rea_analysis_view.rs",
+        "src/mcp/rea_analysis_view_mcp_input.rs",
+        "src/mcp/rea_apk_evidence.rs",
+        "src/mcp/rea_contract.rs",
+        "src/mcp/rea_contract_schemas/inspect_analysis_view.input.json",
+        "src/mcp/rea_contract_schemas/inspect_analysis_view.output.json",
+        "src/mcp/rea_evidence_file.rs",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_evidence_source.rs",
+        "src/mcp/rea_inline_order.rs",
+        "src/mcp/rea_json_eof.rs",
+        "src/mcp/rea_mcp_transport.rs",
+        "src/mcp/rea_response_encoding.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/rea_structured_wire.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_analysis_view_mcp_input_tests.rs",
+        "src/mcp/rea_analysis_view_tests.rs",
+        "src/mcp/rea_evidence_file_tests.rs",
+        "src/mcp/rea_evidence_source_tests.rs",
+        "scripts/rea_json_differential.py",
+        "tests/fixtures/rea_evidence_file/json-corpus-v1.json",
+        "tests/fixtures/rea_evidence_file/syntax-reference-679ccf.json",
+        "tests/fixtures/rea_evidence_file/syntax-node22-679ccf-raw.json",
+        "tests/fixtures/rea_evidence_file/syntax-node22-boundaries-679ccf-raw.json",
+        "tests/fixtures/rea_evidence_file/partial-unicode-node22-679ccf-raw.json",
+        "tests/fixtures/rea_evidence_file/partial-unicode-node22-679ccf-receipt.json",
+        "tests/fixtures/rea_evidence_file/syntax-reference-r1.json",
+        "scripts/rea_elf_evidence_family_qualification.py",
+        "tests/rea_elf_evidence_family_qualification_tests.py",
+        "scripts/rea_elf_evidence_family_evidence.py",
+        "tests/rea_elf_evidence_family_evidence_tests.py"
+      ],
+      "scope": "Authenticated retained/inline/Linux evidence-file source resolution and APK summary/signing views; imported parents are borrowed and only derived records enter this session. Other valid upstream view kinds report an explicit capability gap. Bounded cancellation, file-descriptor and blocking-owner contracts are native-profile constraints."
+    },
+    "rea_get_evidence_bundle": {
+      "source_paths": [
+        "src/mcp/rea_contract.rs",
+        "src/mcp/rea_contract_schemas/get_evidence_bundle.input.json",
+        "src/mcp/rea_contract_schemas/get_evidence_bundle.output.json",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_mcp_input.rs",
+        "src/mcp/rea_mcp_transport.rs",
+        "src/mcp/rea_response_encoding.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/rea_structured_wire.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_evidence_session_tests.rs",
+        "src/mcp/rea_mcp_input_tests.rs",
+        "scripts/rea_elf_evidence_family_qualification.py",
+        "tests/rea_elf_evidence_family_qualification_tests.py",
+        "scripts/rea_elf_evidence_family_evidence.py",
+        "tests/rea_elf_evidence_family_evidence_tests.py"
+      ],
+      "scope": "Frozen get_evidence_bundle route over retained session records, imported residual-unknown revisions and canonical manifests, with full and exact summary/filter variants. A fresh session starts empty. Native preview persistence is a separate format; complete multi-host store recovery is not established."
+    },
+    "rea_read_evidence_bundle": {
+      "source_paths": [
+        "src/mcp/rea_evidence_readback.rs",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_contract.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_evidence_readback_tests.rs",
+        "src/mcp/server_tests.rs",
+        "scripts/rea_elf_evidence_family_qualification.py",
+        "tests/rea_elf_evidence_family_qualification_tests.py",
+        "scripts/rea_elf_evidence_family_evidence.py",
+        "tests/rea_elf_evidence_family_evidence_tests.py"
+      ],
+      "scope": "Native hepta.evidence-bundle-readback.v1 extension: freezes complete canonical bundle bytes in an immutable session-owned snapshot and returns bounded hex byte pages with snapshot identity, whole/chunk SHA-256, next_offset and eof. Pages are 1..262144 bytes; each snapshot is at most 64 MiB, with at most 4 snapshots and 128 MiB retained payload bytes, without silent eviction. Continuations require the same-session snapshot_id. This is not a published upstream tool or an operation qualification."
+    },
+    "rea_close_evidence_snapshot": {
+      "source_paths": [
+        "src/mcp/rea_evidence_readback.rs",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_contract.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_evidence_readback_tests.rs",
+        "src/mcp/server_tests.rs",
+        "scripts/rea_elf_evidence_family_qualification.py",
+        "tests/rea_elf_evidence_family_qualification_tests.py",
+        "scripts/rea_elf_evidence_family_evidence.py",
+        "tests/rea_elf_evidence_family_evidence_tests.py"
+      ],
+      "scope": "Native hepta.evidence-bundle-readback.v1 extension: explicitly releases one same-session complete-byte snapshot and reports release/accounting fields. Releasing an absent snapshot is idempotent; retained Evidence remains available for get/export, and already admitted readers may finish from their immutable bytes. This is not upstream persistence, cross-session handle recovery or an operation qualification."
+    },
+    "rea_export_evidence_bundle": {
+      "source_paths": [
+        "src/mcp/rea_contract.rs",
+        "src/mcp/rea_contract_schemas/export_evidence_bundle.input.json",
+        "src/mcp/rea_contract_schemas/export_evidence_bundle.output.json",
+        "src/mcp/rea_evidence_export.rs",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_mcp_input.rs",
+        "src/mcp/rea_mcp_transport.rs",
+        "src/mcp/rea_response_encoding.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/rea_structured_wire.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_evidence_export_tests.rs",
+        "src/mcp/rea_mcp_input_tests.rs",
+        "scripts/rea_elf_evidence_family_qualification.py",
+        "tests/rea_elf_evidence_family_qualification_tests.py",
+        "scripts/rea_elf_evidence_family_evidence.py",
+        "tests/rea_elf_evidence_family_evidence_tests.py"
+      ],
+      "scope": "Frozen export_evidence_bundle route with owned, confined local atomic publication, explicit overwrite, complete retained records and imported residual-unknown revision serialization. Cross-host durable-store recovery is not established."
+    },
+    "rea_import_evidence_bundle": {
+      "source_paths": [
+        "src/mcp/rea_contract.rs",
+        "src/mcp/rea_contract_schemas/import_evidence_bundle.input.json",
+        "src/mcp/rea_contract_schemas/import_evidence_bundle.output.json",
+        "src/mcp/rea_evidence.rs",
+        "src/mcp/rea_evidence_file.rs",
+        "src/mcp/rea_evidence_import.rs",
+        "src/mcp/rea_evidence_session.rs",
+        "src/mcp/rea_evidence_source.rs",
+        "src/mcp/rea_evidence_source_length.rs",
+        "src/mcp/rea_evidence_source_process.rs",
+        "src/mcp/rea_evidence_source_process_coverage.rs",
+        "src/mcp/rea_evidence_source_process_schema.rs",
+        "src/mcp/rea_evidence_source_process_semantics.rs",
+        "src/mcp/rea_evidence_stream.rs",
+        "src/mcp/rea_json_eof.rs",
+        "src/mcp/rea_mcp_input.rs",
+        "src/mcp/rea_mcp_transport.rs",
+        "src/mcp/rea_residual_unknown.rs",
+        "src/mcp/rea_response_encoding.rs",
+        "src/mcp/rea_response_order.rs",
+        "src/mcp/rea_structured_wire.rs"
+      ],
+      "tests": [
+        "scripts/rea_evidence_import_fixtures.mjs",
+        "scripts/rea_evidence_import_overflow.py",
+        "scripts/rea_evidence_import_qualification.py",
+        "src/mcp/rea_evidence_file_tests.rs",
+        "src/mcp/rea_evidence_import_tests.rs",
+        "src/mcp/rea_evidence_session_tests.rs",
+        "src/mcp/rea_evidence_source_length_tests.rs",
+        "src/mcp/rea_evidence_source_process_tests.rs",
+        "src/mcp/rea_evidence_source_tests.rs",
+        "src/mcp/rea_mcp_input_tests.rs",
+        "src/mcp/rea_residual_unknown_tests.rs",
+        "scripts/rea_json_differential.py",
+        "tests/fixtures/rea_evidence_file/json-corpus-v1.json",
+        "tests/fixtures/rea_evidence_file/syntax-reference-679ccf.json",
+        "tests/fixtures/rea_evidence_file/syntax-node22-679ccf-raw.json",
+        "tests/fixtures/rea_evidence_file/syntax-node22-boundaries-679ccf-raw.json",
+        "tests/fixtures/rea_evidence_file/partial-unicode-node22-679ccf-raw.json",
+        "tests/fixtures/rea_evidence_file/partial-unicode-node22-679ccf-receipt.json",
+        "tests/fixtures/rea_evidence_file/syntax-reference-r1.json",
+        "tests/fixtures/rea_evidence_import_errors.json",
+        "tests/rea_evidence_import_qualification_tests.py",
+        "scripts/rea_elf_evidence_family_qualification.py",
+        "tests/rea_elf_evidence_family_qualification_tests.py",
+        "scripts/rea_elf_evidence_family_evidence.py",
+        "tests/rea_elf_evidence_family_evidence_tests.py"
+      ],
+      "scope": "Frozen public import_evidence_bundle route authenticates complete records, residual-unknown revisions, all revision references and current-head dependency cycles, canonical manifests and process-capture normalized results before atomically merging into this session. Preserves original record-only reimport versus unknown-bearing metadata replacement, union conflict rollback and original schema-exception responses. Linux file admission has explicit native estimated materialization/token/depth budgets; the original 8 MiB parser threshold is not treated as a file-size limit. Public differential and cancellation evidence is bound separately to each tested binary; no complete cross-platform or multi-host replacement qualification is declared. The import-only ordered error projection follows independently captured original producer order for its admitted error profile; unknown native diagnostics retain their complete previous representation. The public differential compares complete CallToolResult objects without parsing embedded text. ASCII and horizontal-whitespace batching preserve both acquisition passes and the existing digest, UTF-8, token, EOF and cancellation checks; performance remains subject to actual same-input measurement."
+    }
+  },
+  "family_defaults": {
+    "direct": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Provider-backed selected-target operation, profile identities, coverage and all upstream argument/result/error semantics",
+      "dependencies": [
+        {
+          "component": "selected-native-engine",
+          "role": "analysis-engine",
+          "requirement": "Select a supported Ghidra/Hopper/IDA/Kuna profile; capabilities are provider-specific",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination"
+      ]
+    },
+    "enhanced": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Native function/relationship analysis and evidence-linked composed workflow",
+      "dependencies": [
+        {
+          "component": "selected-native-engine",
+          "role": "analysis-engine",
+          "requirement": "Select a supported Ghidra/Hopper/IDA/Kuna profile; capabilities are provider-specific",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination"
+      ]
+    },
+    "native": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Exact native format operation or platform observation; header recognition is insufficient",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus"
+      ]
+    },
+    "artifact": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Complete selected static-format operation and unknown/truncation semantics",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "managed": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "PE/CLI/CIL metadata and typed managed reconstruction/comparison contracts",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "firmware": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Firmware region/extraction semantics and independently checked original-byte provenance",
+      "dependencies": [
+        {
+          "component": "binwalk-unblob",
+          "role": "external-engine",
+          "requirement": "Caller-selected supported Linux firmware provider",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery",
+        "format_architecture_corpus"
+      ]
+    },
+    "android": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "JADX package/class/method/reference contracts, errors and evidence",
+      "dependencies": [
+        {
+          "component": "jadx-jdk",
+          "role": "external-engine",
+          "requirement": "Pinned JADX and Java installation; class/method/reference capabilities separately qualified",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "retention_and_pagination",
+        "format_architecture_corpus"
+      ]
+    },
+    "pcap": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Capture/protocol inspection through the exact selected producer",
+      "dependencies": [
+        {
+          "component": "tshark-capinfos",
+          "role": "external-engine",
+          "requirement": "Caller-selected Wireshark command profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "flutter": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Dart snapshot/build declarations with ABI/layout and unknown coverage",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "frida": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Device/session/script ownership, instrumentation observations and cleanup",
+      "dependencies": [
+        {
+          "component": "frida",
+          "role": "instrumentation-engine",
+          "requirement": "Pinned local/remote Frida device and session profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery",
+        "device_identity",
+        "cross_host_recovery"
+      ]
+    },
+    "apktool": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Decoded resources/manifests/locales, source identity and refusal contracts",
+      "dependencies": [
+        {
+          "component": "apktool-java",
+          "role": "external-engine",
+          "requirement": "Caller-selected Apktool launcher and Java",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "jeb": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Project/unit/decompilation operations, version/target binding and ownership",
+      "dependencies": [
+        {
+          "component": "jeb",
+          "role": "external-engine",
+          "requirement": "Caller-started licensed JEB MCP profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "adb": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Exact device command results, launch/transfer effects, receipts and recovery",
+      "dependencies": [
+        {
+          "component": "adb-device",
+          "role": "device-engine",
+          "requirement": "Pinned adb client and explicitly selected device/serial",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery",
+        "device_identity",
+        "cross_host_recovery"
+      ]
+    },
+    "browser": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "DOM/script/network/runtime observations and complete selected upstream browser contract",
+      "dependencies": [
+        {
+          "component": "chromium-cdp",
+          "role": "browser-engine",
+          "requirement": "Explicit endpoint/target or controlled browser instance, according to the upstream operation",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "browser_semantics",
+        "effects_and_recovery"
+      ]
+    },
+    "electron": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Exact static ASAR/AST/IPC graph or selected live Electron operation",
+      "dependencies": [
+        {
+          "component": "electron-cdp-or-static-parser",
+          "role": "mixed",
+          "requirement": "Only live operations require an Electron target; static ASAR/AST operations do not",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "js_graph_semantics",
+        "retention_and_pagination"
+      ]
+    },
+    "javascript-runtime": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Runtime target discovery/observation, identity and ownership",
+      "dependencies": [
+        {
+          "component": "v8-inspector",
+          "role": "runtime-engine",
+          "requirement": "Explicit loopback Node/Electron inspector target",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery",
+        "js_graph_semantics"
+      ]
+    },
+    "application": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "Evidence-authenticated application graph/comparison/workflow semantics",
+      "dependencies": [],
+      "extra_gates": [
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "session": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No upstream-compatible handler is registered in the pinned native runtime",
+      "missing": "REA binary/Evidence/unknown state machine under the existing native runtime owner",
+      "dependencies": [],
+      "extra_gates": [
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ]
+    }
+  },
+  "overrides": {
+    "inspect_model_artifact": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_model",
+        "rea_read_model",
+        "rea_model_session_open",
+        "rea_model_session_list",
+        "rea_model_session_query",
+        "rea_model_session_read"
+      ],
+      "scope": "GGUF/safetensors directory, header/full hash, 18 pinned invariant GGML scalar/block layouts with fastest-dimension constraints, checked exact ranges and immutable model snapshots under parser profile v2. Historical ambiguous layouts remain explicit.",
+      "missing": "Full upstream Evidence and supported metadata/value semantics, quantized payload decoding, unknown or historically ambiguous layouts, exact default limits and every error/detail/view case. Old v1 model indexes are explicitly rejected; source reopen is required and retained v1 directories keep global listing fail-closed.",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "inspect_artifact": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_artifact",
+        "rea_inspect_archive",
+        "rea_inspect_application",
+        "rea_inspect_asar",
+        "rea_read_asar_member"
+      ],
+      "scope": "Selected header/ELF facts, classic-ZIP/APK/JAR declarations, bounded canonical ASAR header inventory and explicit packed-member verified byte ranges",
+      "missing": "Complete upstream container graph/Evidence/view and integrity-policy contracts, other formats and extraction; ASAR unpacked/link resolution, whole-archive content identity and publisher/fuse authentication remain unimplemented",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ],
+      "related_auxiliary_capabilities": [
+        "asar_worker"
+      ]
+    },
+    "inspect_elf_notes": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_elf_notes"
+      ],
+      "scope": "Frozen public MCP input/output contracts, native ELF note parsing, bounded capture/worker ownership and retained complete Evidence. The selected compressed-note corpus records both matches and remaining error-precedence differences.",
+      "missing": "Complete frozen-operation differential coverage, including remaining compressed-note error precedence and all format/resource boundaries; complete same-combination lifecycle and recovery qualification.",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ],
+      "related_auxiliary_capabilities": [
+        "elf_notes_worker"
+      ]
+    },
+    "inspect_binary_layout": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_artifact",
+        "rea_static_start",
+        "rea_static_read"
+      ],
+      "scope": "ELF structures and selected GNU observations",
+      "missing": "Full pwntools-profile symbol/relocation/mitigation observations, exact format/architecture semantics and Evidence",
+      "dependencies": [
+        {
+          "component": "gnu-binutils",
+          "role": "optional-native-backend",
+          "requirement": "Fixed readelf/objdump profile only; no pwntools equivalence established",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "inspect_macho": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_artifact"
+      ],
+      "scope": "Limited Mach-O/header architecture recognition",
+      "missing": "Universal slices, selected-view mapping, native command/analysis details, source locations and exact upstream result",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "list_architectures": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_artifact"
+      ],
+      "scope": "Limited Mach-O/header architecture recognition",
+      "missing": "Universal slices, selected-view mapping, native command/analysis details, source locations and exact upstream result",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "inspect_gpu_code_objects": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_artifact"
+      ],
+      "scope": "Declared GPU metadata from selected ELF headers/notes",
+      "missing": "Complete ELF/PE/fatbin/CUBIN/PTX/HIP/CCOB layout and kernels plus exact upstream Evidence",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "inspect_native_exports": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_inspect_artifact",
+        "rea_static_start",
+        "rea_static_read"
+      ],
+      "scope": "ELF symbol inventory is a prerequisite",
+      "missing": "Full cross-format export visibility/occurrence semantics and upstream-normalized result"
+    },
+    "inspect_with_objdump": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Pinned fixed GNU objdump/readelf operations under the native durable owner",
+      "missing": "All caller-selected upstream operations/symbol selection, diagnostics, target/provenance and Evidence",
+      "dependencies": [
+        {
+          "component": "gnu-binutils",
+          "role": "external-engine",
+          "requirement": "Pinned native GNU tool profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus",
+        "effects_and_recovery"
+      ]
+    },
+    "inspect_android_package": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_application",
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "APK binary-XML declarations plus optional bounded JADX classes/sources; a separate native APK signature-record inspector provides a mathematical subset, without integration into the complete upstream package response.",
+      "missing": "Exact package/class/reference inventories, resource and signature observations required by the frozen package contract, retained Evidence and all input/error variants. The separate native signature-record report is not the complete upstream package response.",
+      "dependencies": [
+        {
+          "component": "jadx-jdk",
+          "role": "external-engine",
+          "requirement": "Optional native fixed JADX classes/sources operation",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ],
+      "related_runtime_routes": [
+        "rea_inspect_apk_signature"
+      ],
+      "related_auxiliary_capabilities": [
+        "apk_signature_worker"
+      ]
+    },
+    "search_android_classes": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed JADX classes/sources output is available through an owned job",
+      "missing": "No corresponding selected class search/method/reference contract is exposed"
+    },
+    "inspect_android_class": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed JADX classes/sources output is available through an owned job",
+      "missing": "No corresponding selected class search/method/reference contract is exposed"
+    },
+    "inspect_android_method": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed JADX classes/sources output is available through an owned job",
+      "missing": "No corresponding selected class search/method/reference contract is exposed"
+    },
+    "trace_android_references": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed JADX classes/sources output is available through an owned job",
+      "missing": "No corresponding selected class search/method/reference contract is exposed"
+    },
+    "binary_overview": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed Ghidra/ELF inventories, selected function metadata/references/decompilation and GNU outputs are related inputs; no exact upstream composed/instruction handler is registered",
+      "missing": "The upstream operation-specific query, normalized representation, coverage and full Evidence contract remain absent or unqualified"
+    },
+    "list_procedures": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Ghidra revisions 2 (12.2), 3 (12.1.4) and 4 (12.1.4) functions scan at most 4096 analyzed internal functions and return at most 128 with explicit omissions/completeness. Revision 4 separately scans at most 4096 external functions and returns at most 128 with distinct EXTERNAL identities and independent completeness fields. Complete original procedure-inventory qualification remains open. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
+      "missing": "Upstream selected-target/paging/query/result/Evidence semantics and broader provider/architecture coverage remain unimplemented or unqualified",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_analysis_1214_v3.java",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_ghidra_inventory_1214_v3.java",
+        "src/mcp/rea_ghidra_contract_v4.rs",
+        "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py",
+        "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "tests/rea_ghidra_v4_api.py",
+        "src/mcp/rea_engine_profile_tests.rs",
+        "src/mcp/rea_engine_ghidra_tests.rs"
+      ]
+    },
+    "list_segments": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed Ghidra/ELF inventories, selected function metadata/references/decompilation and GNU outputs are related inputs; no exact upstream composed/instruction handler is registered",
+      "missing": "The upstream operation-specific query, normalized representation, coverage and full Evidence contract remain absent or unqualified"
+    },
+    "procedure_info": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Ghidra revisions 2 (12.2) and 3 (12.1.4) return bounded metadata for one exact canonical internal function entry. Explicit revision 4 (12.1.4) also resolves an internal body address, preserves the requested address, and validates complete nonoverlapping body ranges containing both the request and resolved entry. External-address selectors and the complete original input/error contract are not supplied. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
+      "missing": "Upstream target/name/address selection, complete procedure properties, result schema and Evidence remain unqualified",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_analysis_1214_v3.java",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_ghidra_inventory_1214_v3.java",
+        "src/mcp/rea_ghidra_contract_v4.rs",
+        "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py",
+        "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "tests/rea_ghidra_v4_api.py",
+        "src/mcp/rea_engine_profile_tests.rs",
+        "src/mcp/rea_engine_ghidra_tests.rs"
+      ]
+    },
+    "procedure_assembly": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed Ghidra/ELF inventories, selected function metadata/references/decompilation and GNU outputs are related inputs; no exact upstream composed/instruction handler is registered",
+      "missing": "The upstream operation-specific query, normalized representation, coverage and full Evidence contract remain absent or unqualified"
+    },
+    "read_function_instructions": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed Ghidra/ELF inventories, selected function metadata/references/decompilation and GNU outputs are related inputs; no exact upstream composed/instruction handler is registered",
+      "missing": "The upstream operation-specific query, normalized representation, coverage and full Evidence contract remain absent or unqualified"
+    },
+    "inspect_native_load_image": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Fixed static-provider import/ELF inventories and GNU output are prerequisites",
+      "missing": "Deep analysis, active-target query/selection and exact upstream operation semantics remain absent"
+    },
+    "analyze_javascript_application": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_javascript_graph"
+      ],
+      "related_runtime_routes": [
+        "rea_inspect_javascript_package",
+        "rea_inspect_archive",
+        "rea_inspect_source_map",
+        "rea_inspect_asar",
+        "rea_read_asar_member"
+      ],
+      "related_auxiliary_capabilities": [
+        "javascript_worker",
+        "source_map_worker",
+        "asar_worker"
+      ],
+      "scope": "Native Oxc AST and lexical-scope analysis of 1..16 explicitly selected JS/TS/JSX/TSX sources, admitted as plain files or explicit packed ASAR members (at most 1 MiB each / 4 MiB total); selected-source imports, exports, conservative module candidates, Electron callsites and literal-channel IPC candidate pairs. Explicit ASAR acquisition preserves logical graph identity and carries separate archive provenance. No target execution, implicit resolution, complete application graph or live IPC proof.",
+      "missing": "Whole-artifact directory/ASAR inventory and selected/unselected source coverage in upstream application identity; unsupported/unpacked/link acquisition and publisher/integrity policies; automatic bundled/source-map/route associations and richer semantic graph relations; exact upstream node/unknown/deadline/partial-Evidence behavior; retained summary/view contracts and operation-specific REA Evidence identity.",
+      "dependencies": [],
+      "extra_gates": [
+        "js_graph_semantics",
+        "retention_and_pagination",
+        "format_architecture_corpus"
+      ]
+    },
+    "inspect_electron_fuses": {
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus"
+      ]
+    },
+    "inspect_web_network_capture": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_web_capture"
+      ],
+      "scope": "Offline HAR parsing with source SHA-256 and selected saved observations",
+      "missing": "Full HAR producer fields/number semantics, SAZ/mitmproxy/qlog/protobuf, credential exclusions and retained REA Evidence",
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "compare_web_captures": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_compare_web_captures"
+      ],
+      "scope": "Native comparison aligns saved HAR occurrences",
+      "missing": "Upstream compares passive DOM/network/WebMCP captures or scenario normalized results; native HAR input/output is a different contract",
+      "dependencies": [],
+      "extra_gates": [
+        "browser_semantics",
+        "bundle_auth_and_unknowns"
+      ]
+    },
+    "capture_browser_scenario": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_inspect_web_capture"
+      ],
+      "scope": "Existing process owner can run a bounded private Chromium resource-capture helper",
+      "missing": "Application scripts, DOM/actions/state, selected page contract and complete scenario artifacts remain unimplemented",
+      "related_runtime_routes": [
+        "process_start",
+        "process_status",
+        "process_read",
+        "process_cancel"
+      ],
+      "related_auxiliary_capabilities": [
+        "python_local_browser_capture",
+        "native_local_browser_capture"
+      ]
+    },
+    "export_environment_bundle": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_replay_web_entry"
+      ],
+      "scope": "Read retained response representation bytes",
+      "missing": "No agent environment construction, stateful API recreation, reward/task semantics or upstream bundle contract",
+      "extra_gates": [
+        "bundle_auth_and_unknowns",
+        "effects_and_recovery"
+      ]
+    },
+    "inspect_analysis_view": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_analysis_view"
+      ],
+      "scope": "Native authenticated retained, inline and Linux evidence-file sources for APK summary, signer, digest and rotation-lineage pages. Retained reads never reopen the artifact; imported parents are not implicitly retained. Unsupported valid view kinds remain explicit capability gaps.",
+      "missing": "All other upstream parent/view operations and exact selectors; complete cross-platform file-source, cancellation and recovery semantics; every malformed/oversized source and full operation differential qualification.",
+      "dependencies": [],
+      "extra_gates": [
+        "retention_and_pagination",
+        "bundle_auth_and_unknowns"
+      ]
+    },
+    "get_evidence_bundle": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_get_evidence_bundle"
+      ],
+      "scope": "Frozen public complete and summary session readback with retained records, authenticated imported revisions and original-value serialization. New sessions start empty.",
+      "missing": "Every frozen filter/error/oversize and producer boundary plus complete multi-host durable recovery beyond the finite source/binary-bound public gates."
+    },
+    "export_evidence_bundle": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_export_evidence_bundle"
+      ],
+      "scope": "Frozen public export of complete retained records and imported revision histories using bounded owned local filesystem publication and explicit overwrite.",
+      "missing": "Every frozen filesystem/error/ownership/cancellation boundary across platforms and producers plus complete multi-host recovery qualification beyond finite import/export closure."
+    },
+    "import_evidence_bundle": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_import_evidence_bundle"
+      ],
+      "scope": "Public authenticated bulk import of records and complete unknown revision histories, process-capture validation, atomic union validation/rollback, repeat-import metadata semantics and retained session readback under the native Linux source/owner profile. Bounded small-file JSON observation retains pinned EOF and non-EOF diagnostics and typed string-root rejection while preserving late read, UTF-8, quota and cancellation failures.",
+      "missing": "Unrepresentable V8 diagnostic windows that split UTF-16 surrogate pairs, nested unpaired-surrogate and numeric-overflow representation profiles, and syntax beyond the finite captured corpus; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits remain explicit profile differences.",
+      "related_runtime_routes": [
+        "rea_verify_evidence",
+        "rea_retain_preview",
+        "rea_read_preview",
+        "rea_inspect_analysis_view"
+      ],
+      "extra_gates": [
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination",
+        "effects_and_recovery",
+        "cross_host_recovery"
+      ]
+    },
+    "open_binary": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Existing jobs own fixed static operations; model sessions have their separate bounded scope",
+      "missing": "No REA BinarySession target switching, analysis-profile catalog, shared document/navigation state or drain/reset contract"
+    },
+    "close_binary": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Existing jobs own fixed static operations; model sessions have their separate bounded scope",
+      "missing": "No REA BinarySession target switching, analysis-profile catalog, shared document/navigation state or drain/reset contract"
+    },
+    "binary_session": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Existing jobs own fixed static operations; model sessions have their separate bounded scope",
+      "missing": "No REA BinarySession target switching, analysis-profile catalog, shared document/navigation state or drain/reset contract"
+    },
+    "inspect_analysis_settings": {
+      "missing": "Native policy is configured separately; no equivalent editable runtime settings/bounds/discovery contract"
+    },
+    "update_analysis_settings": {
+      "missing": "Native policy is configured separately; no equivalent editable runtime settings/bounds/discovery contract"
+    },
+    "inspect_packet_capture": {
+      "dependencies": [
+        {
+          "component": "tshark",
+          "role": "external-engine",
+          "requirement": "Pinned TShark 4.x plus selected resource-limiting host profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "inspect_packet_fields": {
+      "dependencies": [
+        {
+          "component": "tshark",
+          "role": "external-engine",
+          "requirement": "Pinned TShark 4.x plus selected resource-limiting host profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "decode_signal_recording": {
+      "dependencies": [
+        {
+          "component": "sigrok-cli",
+          "role": "external-engine",
+          "requirement": "Pinned decoder/runtime profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "inspect_signal_decoders": {
+      "dependencies": [
+        {
+          "component": "sigrok-cli",
+          "role": "external-engine",
+          "requirement": "Pinned decoder/runtime profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "inspect_wasm_artifact": {
+      "dependencies": [
+        {
+          "component": "wabt",
+          "role": "external-engine",
+          "requirement": "Upstream WABT 1.0.42 validation/WAT profile; native equivalent requires independent proof",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus",
+        "bundle_auth_and_unknowns"
+      ]
+    },
+    "compare_wasm_interfaces": {
+      "dependencies": [
+        {
+          "component": "wabt",
+          "role": "external-engine",
+          "requirement": "Upstream WABT 1.0.42 validation/WAT profile; native equivalent requires independent proof",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus",
+        "bundle_auth_and_unknowns"
+      ]
+    },
+    "inspect_recorded_crash": {
+      "dependencies": [
+        {
+          "component": "pwntools-pyelftools-unicorn",
+          "role": "external-engine",
+          "requirement": "Pinned offline ELF/core profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        },
+        {
+          "component": "gdb-pwndbg",
+          "role": "optional-engine",
+          "requirement": "Only requested extended crash context",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ],
+      "implementation": "related_facility",
+      "related_auxiliary_capabilities": [
+        "recorded_core_worker"
+      ],
+      "scope": "Native recorded-core payload parsing exists as an internal captured-byte worker. This is a partial helper migration with explicit admission and outer-protocol differences, not the public operation.",
+      "missing": [
+        "Public inspect_recorded_crash MCP schema, handler and Provider integration",
+        "Original request/reply-file, resource-marker and effective-limit behavior parity",
+        "Complete noncanonical section payload semantics, including nonempty ELF/GNU hash bodies and non-ASCII Python diagnostic representation, beyond bounded constructor traversal",
+        "Evidence retention, pagination, import/export and post-cancel query integration",
+        "Optional GDB/pwndbg crash enrichment and complete recorded-crash operation differential",
+        "Same-combination multi-host recovery and cost qualification"
+      ]
+    },
+    "observe_native_ui": {
+      "dependencies": [
+        {
+          "component": "macos-accessibility-screencapture",
+          "role": "platform-interface",
+          "requirement": "PID/window binding and granted OS permissions",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery",
+        "device_identity"
+      ]
+    },
+    "capture_native_ui_scenario": {
+      "dependencies": [
+        {
+          "component": "macos-accessibility-screencapture",
+          "role": "platform-interface",
+          "requirement": "PID/window binding and granted OS permissions",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery",
+        "device_identity"
+      ]
+    },
+    "observe_native_calls": {
+      "dependencies": [
+        {
+          "component": "lldb",
+          "role": "external-engine",
+          "requirement": "Pinned controlled native-call trace profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery",
+        "native_semantics"
+      ]
+    },
+    "demangle_swift": {
+      "dependencies": [
+        {
+          "component": "native-platform-tools",
+          "role": "platform-interface",
+          "requirement": "Exact selected native tool/provider, if required by the frozen profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "inspect_signature": {
+      "dependencies": [
+        {
+          "component": "native-platform-tools",
+          "role": "platform-interface",
+          "requirement": "Exact selected native tool/provider, if required by the frozen profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "inspect_plist": {
+      "dependencies": [
+        {
+          "component": "native-platform-tools",
+          "role": "platform-interface",
+          "requirement": "Exact selected native tool/provider, if required by the frozen profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "format_architecture_corpus"
+      ]
+    },
+    "list_cutter_sessions": {
+      "dependencies": [
+        {
+          "component": "cutter-bridge",
+          "role": "external-engine",
+          "requirement": "Caller-owned Cutter session/bridge",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "cutter_command": {
+      "dependencies": [
+        {
+          "component": "cutter-bridge",
+          "role": "external-engine",
+          "requirement": "Caller-owned Cutter session/bridge",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "execute_rizin_command": {
+      "dependencies": [
+        {
+          "component": "rizin",
+          "role": "external-engine",
+          "requirement": "Pinned command/debug session profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "start_rizin_debug_session": {
+      "dependencies": [
+        {
+          "component": "rizin",
+          "role": "external-engine",
+          "requirement": "Pinned command/debug session profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "rizin_debug_command": {
+      "dependencies": [
+        {
+          "component": "rizin",
+          "role": "external-engine",
+          "requirement": "Pinned command/debug session profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "rizin_debug_session_status": {
+      "dependencies": [
+        {
+          "component": "rizin",
+          "role": "external-engine",
+          "requirement": "Pinned command/debug session profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "close_rizin_debug_session": {
+      "dependencies": [
+        {
+          "component": "rizin",
+          "role": "external-engine",
+          "requirement": "Pinned command/debug session profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "start_gdb_session": {
+      "dependencies": [
+        {
+          "component": "gdb-mi3",
+          "role": "external-engine",
+          "requirement": "Pinned supported-host GDB session",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "gdb_console": {
+      "dependencies": [
+        {
+          "component": "gdb-mi3",
+          "role": "external-engine",
+          "requirement": "Pinned supported-host GDB session",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "gdb_session_status": {
+      "dependencies": [
+        {
+          "component": "gdb-mi3",
+          "role": "external-engine",
+          "requirement": "Pinned supported-host GDB session",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "close_gdb_session": {
+      "dependencies": [
+        {
+          "component": "gdb-mi3",
+          "role": "external-engine",
+          "requirement": "Pinned supported-host GDB session",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ]
+    },
+    "recover_javascript_sources": {
+      "dependencies": [
+        {
+          "component": "wakaru",
+          "role": "external-engine",
+          "requirement": "Caller-supplied supported source-recovery profile",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "js_graph_semantics",
+        "effects_and_recovery"
+      ]
+    },
+    "capture_process_scenario": {
+      "dependencies": [
+        {
+          "component": "native-pty",
+          "role": "platform-interface",
+          "requirement": "Owned process group and transcript descriptors",
+          "availability": "NOT_PROBED_BY_LEDGER"
+        }
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "effects_and_recovery"
+      ],
+      "related_runtime_routes": [
+        "process_start",
+        "process_status",
+        "process_read",
+        "process_cancel"
+      ]
+    },
+    "procedure_pseudo_code": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Ghidra revisions 2 (12.2) and 3 (12.1.4) decompile one exact internal entry; explicit revision 4 (12.1.4) also resolves a containing internal function through checked complete body ranges. The native decompiler has a 15-second budget, bounds whole UTF-8 C to 1 MiB, and returns an at-most-8192-character preview plus whole/preview hashes, byte length and completeness. This does not establish original decompiler/result equivalence. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
+      "missing": "Full upstream pseudocode/error/Evidence contract, retained complete large decompilation and broad semantic equivalence are not established; the 141-input owned-function result is finite evidence only",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_analysis_1214_v3.java",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_ghidra_inventory_1214_v3.java",
+        "src/mcp/rea_ghidra_contract_v4.rs",
+        "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py",
+        "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "tests/rea_ghidra_v4_api.py",
+        "src/mcp/rea_engine_profile_tests.rs",
+        "src/mcp/rea_engine_ghidra_tests.rs"
+      ]
+    },
+    "xrefs": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Ghidra revisions 2 (12.2), 3 (12.1.4) and 4 (12.1.4) observe incoming references to the selected function entry and outgoing references from its body; each direction scans at most 4096 and returns at most 128 with omissions. Revision 4 accepts a containing internal address but preserves the original request and explicitly resolves the entry through complete checked body ranges; incoming scope remains that resolved entry. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
+      "missing": "Arbitrary-address/upstream query coverage, resolved native relationship semantics, exact normalized result/Evidence and additional providers remain unqualified",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_analysis_1214_v3.java",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_ghidra_inventory_1214_v3.java",
+        "src/mcp/rea_ghidra_contract_v4.rs",
+        "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py",
+        "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "tests/rea_ghidra_v4_api.py",
+        "src/mcp/rea_engine_profile_tests.rs",
+        "src/mcp/rea_engine_ghidra_tests.rs"
+      ]
+    },
+    "procedure_references": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Same bounded Ghidra resolved-entry/body reference operation as xrefs; raw typed references retain from/to addresses, address spaces and scan limits. Revision 4 supports complete-body containment while revisions 2/3 retain exact-entry selection. This does not supply the complete original reference contract. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
+      "missing": "Upstream complete procedure relationship model, target selection, pagination, resolved/unknown distinctions and Evidence remain unqualified",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_analysis_1214_v3.java",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_ghidra_inventory_1214_v3.java",
+        "src/mcp/rea_ghidra_contract_v4.rs",
+        "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py",
+        "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "tests/rea_ghidra_v4_api.py",
+        "src/mcp/rea_engine_profile_tests.rs",
+        "src/mcp/rea_engine_ghidra_tests.rs"
+      ]
+    },
+    "procedure_callers": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Selected-entry incoming typed references are available; the runtime does not construct the upstream resolved caller-procedure list Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
+      "missing": "Resolve caller functions and preserve unresolved call targets, coverage and exact upstream contract",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_analysis_1214_v3.java",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_ghidra_inventory_1214_v3.java",
+        "src/mcp/rea_ghidra_contract_v4.rs",
+        "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py",
+        "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "tests/rea_ghidra_v4_api.py",
+        "src/mcp/rea_engine_profile_tests.rs",
+        "src/mcp/rea_engine_ghidra_tests.rs"
+      ]
+    },
+    "procedure_callees": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Selected-body outgoing typed references are available; the runtime does not construct the upstream resolved callee-procedure list Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
+      "missing": "Resolve callee functions and preserve unresolved indirect calls, coverage and exact upstream contract",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_analysis_1214_v3.java",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_ghidra_inventory_1214_v3.java",
+        "src/mcp/rea_ghidra_contract_v4.rs",
+        "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py",
+        "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "tests/rea_ghidra_v4_api.py",
+        "src/mcp/rea_engine_profile_tests.rs",
+        "src/mcp/rea_engine_ghidra_tests.rs"
+      ]
+    },
+    "analyze_function": {
+      "implementation": "related_facility",
+      "native_routes": [
+        "rea_static_profiles",
+        "rea_static_start",
+        "rea_static_status",
+        "rea_static_read",
+        "rea_static_cancel"
+      ],
+      "scope": "Separate functions/function/xrefs/decompile operations provide bounded inputs to a future composed analysis Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency.",
+      "missing": "Implement upstream composed function analysis and authenticated cross-operation Evidence, defaults, unknowns and outcomes",
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_analysis_1214_v3.java",
+        "src/mcp/rea_ghidra_inventory_v2.java",
+        "src/mcp/rea_ghidra_inventory_1214_v3.java",
+        "src/mcp/rea_ghidra_contract_v4.rs",
+        "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "src/mcp/rea_ghidra_inventory_1214_v4.java"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "tests/rea_ghidra_analysis_external.py",
+        "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "tests/rea_ghidra_v4_api.py",
+        "src/mcp/rea_engine_profile_tests.rs",
+        "src/mcp/rea_engine_ghidra_tests.rs"
+      ]
+    },
+    "reconcile_javascript_runtime": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No static/runtime Evidence reconciliation operation is implemented; this upstream operation consumes supplied Evidence and does not itself attach a live target",
+      "missing": "Authenticate supplied static and passive/active runtime layers, preserve provider/authority and ambiguity, reconcile exact source digests and declared file/URL mappings, and emit the upstream reconciliation Evidence contract. The native AST graph is only potential source material.",
+      "dependencies": [],
+      "extra_gates": [
+        "js_graph_semantics",
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "trace_javascript_semantics": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No corresponding upstream operation is implemented; selected-source native AST observations are potential inputs only",
+      "missing": "Implement typed seed/direction queries over authenticated Application Graph Evidence, including data-flow, direct call/return and closure relations. Oxc lexical scope/import/export facts are not this traversal or upstream semantic-node identity.",
+      "related_runtime_routes": [
+        "rea_inspect_javascript_graph"
+      ],
+      "extra_gates": [
+        "js_graph_semantics",
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "trace_application_feature": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No corresponding upstream operation is implemented; selected-source native AST observations are potential inputs only",
+      "missing": "Implement typed literal seed traversal across authenticated static/native/passive-runtime/inferred/unknown authorities, preserving exact retained references and native-addon handoffs. Selected-source AST candidates are potential source material only.",
+      "related_runtime_routes": [
+        "rea_inspect_javascript_graph"
+      ],
+      "extra_gates": [
+        "js_graph_semantics",
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "compare_application_versions": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No corresponding upstream operation is implemented; selected-source native AST observations are potential inputs only",
+      "missing": "Implement authenticated two-graph matching by unique exact digest, module digest, source-map identity, structural fingerprint and semantic keys, preserving ambiguous/unknown matches and changed_from relations; an AST graph and stable digest do not implement comparison.",
+      "related_runtime_routes": [
+        "rea_inspect_javascript_graph"
+      ],
+      "extra_gates": [
+        "js_graph_semantics",
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "compare_source_to_bundle": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No corresponding upstream operation is implemented; selected-source native AST observations are potential inputs only",
+      "missing": "Implement committed HistoricalSourceGraph input authentication, selected matching signals/weights, split/merge/duplicate/unknown classifications and retained paged comparison views. No native historical-source/bundle comparison is implemented.",
+      "related_runtime_routes": [
+        "rea_inspect_javascript_graph"
+      ],
+      "extra_gates": [
+        "js_graph_semantics",
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "compare_javascript_export_shapes": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No corresponding upstream operation is implemented; selected-source native AST observations are potential inputs only",
+      "missing": "Implement exact module/export selectors, static return-property shapes, reciprocal unique literal-discriminant pairing, presence versus value/coverage distinctions and JSON Pointer changes. Native export-name observations do not recover or compare return shapes.",
+      "related_runtime_routes": [
+        "rea_inspect_javascript_graph"
+      ],
+      "extra_gates": [
+        "js_graph_semantics",
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "trace_web_module_imports": {
+      "implementation": "absent",
+      "native_routes": [],
+      "scope": "No corresponding upstream operation is implemented; selected-source native AST observations are potential inputs only",
+      "missing": "Implement export_web_scripts manifest/source SHA and size authentication, exact URL/query/fragment identities and selected import-map context, native browser resolution outcomes and all captured candidates. The current selected-logical-ID exact/extension/index candidates do not implement Node, browser or import-map resolution; the frozen npm literal-import oracle uses caller-selected Chromium.",
+      "related_runtime_routes": [
+        "rea_inspect_javascript_graph"
+      ],
+      "extra_gates": [
+        "js_graph_semantics",
+        "bundle_auth_and_unknowns",
+        "retention_and_pagination"
+      ]
+    },
+    "trace_web_source_location": {
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_source_map"
+      ],
+      "related_auxiliary_capabilities": [
+        "source_map_worker"
+      ],
+      "scope": "Native decoding of explicitly admitted local source-map JSON and a finite actual-REA point projection: across-line greatest generated position, all coincident candidates, section/source/name declarations and embedded-content hashes.",
+      "missing": "Exact upstream input/default/target selection and acquisition; authenticated script/application context; source URL resolution and embedded-content UTF-16 offset verification; complete Evidence/profile/typed outcomes; retained views and operation-specific recovery. The native report is not upstream REA Evidence.",
+      "dependencies": [],
+      "extra_gates": [
+        "js_graph_semantics",
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ]
+    },
+    "inspect_apk_signature": {
+      "dependencies": [],
+      "extra_gates": [
+        "format_architecture_corpus",
+        "retention_and_pagination"
+      ],
+      "implementation": "partial_operation",
+      "native_routes": [
+        "rea_inspect_apk_signature_evidence"
+      ],
+      "related_auxiliary_capabilities": [
+        "apk_static_worker",
+        "apk_signature_worker"
+      ],
+      "scope": "Frozen public MCP static APK signature observations and Evidence, default summaries, selected signing pages and complete session retention; separate native mathematical verification remains available through rea_inspect_apk_signature.",
+      "missing": "Full frozen static APK corpus and exact malformed, unknown, truncation and resource semantics across every input/view variant; complete same-combination protocol, retained source, lifecycle and recovery qualification.",
+      "related_runtime_routes": [
+        "rea_inspect_apk_signature"
+      ]
+    }
+  },
+  "behavior_gates": {
+    "contracts": {
+      "common": true,
+      "requirement": "Run exact npm input/default/null/omission/unknown-field cases against native operations; both full schema profiles stay bound"
+    },
+    "results": {
+      "common": true,
+      "requirement": "Same selected inputs yield independently verified normalized facts, provenance, partial/unknown/unsupported/observed-empty distinctions"
+    },
+    "evidence": {
+      "common": true,
+      "requirement": "Full operation Evidence schema, profile identity and semantic commitment; NON-REA previews cannot be relabeled"
+    },
+    "typed_outcomes": {
+      "common": true,
+      "requirement": "Successful, invalid, unsupported, provider-failed, cancelled, timeout and cleanup-incomplete outcomes preserve distinct envelopes"
+    },
+    "limits_and_cancellation": {
+      "common": true,
+      "requirement": "Pinned resource bounds and cancellation with actual stopped/drained owner; client abandonment is not completion"
+    },
+    "source_package_boundary": {
+      "common": true,
+      "requirement": "Use the frozen npm behavioral oracle; Git source declarations or equal version strings cannot substitute for it"
+    },
+    "retention_and_pagination": {
+      "common": false,
+      "requirement": "Stable record/target identity, deterministic paging, retained partials and cold restart under unchanged owner/policy"
+    },
+    "provider_qualification": {
+      "common": false,
+      "requirement": "Real selected provider versions/host/architecture run success, failure, restart, disconnect and cleanup; mocks do not qualify"
+    },
+    "native_semantics": {
+      "common": false,
+      "requirement": "Independent native fixture oracles for functions, addresses, instructions and references, preserving unresolved analysis"
+    },
+    "format_architecture_corpus": {
+      "common": false,
+      "requirement": "Independent tool-produced artifacts plus malformed, overflow, duplicate, alias, endianness and format-version cases"
+    },
+    "js_graph_semantics": {
+      "common": false,
+      "requirement": "AST-based modules/imports/exports/IPC/routes, exact UTF-16/source-map locations, dynamic unknowns and independent source fixtures"
+    },
+    "browser_semantics": {
+      "common": false,
+      "requirement": "Actual selected application DOM/scripts/actions/network/storage/artifacts with exact target identity; saved HAR alone is insufficient"
+    },
+    "effects_and_recovery": {
+      "common": false,
+      "requirement": "Exact original request/job custody, no resend after uncertainty, independently read receipts, observed terminal cleanup and restart recovery"
+    },
+    "device_identity": {
+      "common": false,
+      "requirement": "Prove serial/PID/process/target ownership and permissions before action, including device reconnect and wrong-target refusal"
+    },
+    "cross_host_recovery": {
+      "common": false,
+      "requirement": "Original admitted remote host/job survives controller restart and host reboot without unintended replay"
+    },
+    "bundle_auth_and_unknowns": {
+      "common": false,
+      "requirement": "Authenticate exact parent/child Evidence and schema, preserve unknowns/contradictions, prevent unsupported equality claims"
+    }
+  },
+  "auxiliary_capabilities": {
+    "artifact_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaWorker",
+      "entrypoint": "hepta-runtime rea-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_worker.rs"
+      ],
+      "tests": [],
+      "scope": "Internal admitted-byte artifact parser; no separate upstream tool count",
+      "upstream_tools": [
+        "inspect_artifact"
+      ]
+    },
+    "model_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaModelWorker",
+      "entrypoint": "hepta-runtime rea-model-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_model.rs",
+        "src/mcp/rea_model_parser.rs",
+        "src/mcp/rea_model_session.rs",
+        "src/mcp/rea_model_session_index.rs",
+        "src/mcp/rea_model_session_store.rs",
+        "src/mcp/rea_model_worker.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_model_parser_tests.rs",
+        "src/mcp/rea_model_session_tests.rs",
+        "src/mcp/rea_model_tests.rs",
+        "scripts/rea-model-gguf-layout-diff.mjs",
+        "scripts/rea-model-gguf-layout-probe.cpp",
+        "scripts/rea-model-worker-lifecycle.test.mjs"
+      ],
+      "scope": "Internal descriptor-based model declaration parser, immutable snapshots and exact range reads. Eighteen pinned invariant GGML layouts validate fastest-dimension block constraints and checked extents; historical ambiguity and unsupported zero-element layouts remain explicit. Retained index profile v2 refuses old proofs rather than relabeling them. No model inference, dequantization or whole-provider qualification.",
+      "upstream_tools": [
+        "inspect_model_artifact"
+      ]
+    },
+    "static_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaStaticWorker",
+      "entrypoint": "hepta-runtime rea-static-worker",
+      "required": true,
+      "source_paths": [
+        "src/bin/jobctl.rs",
+        "src/mcp/rea_engine_directory.rs",
+        "src/mcp/rea_engine_job_owner.rs",
+        "src/mcp/rea_engine_scratch.rs",
+        "src/mcp/rea_engine_usage.rs",
+        "src/mcp/rea_static.rs",
+        "src/mcp/runtime/jobs.rs",
+        "src/native_observation.rs",
+        "src/native_observation_wire.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_contract_v4.rs",
+        "src/mcp/rea_ghidra_analysis_1214_v4.java",
+        "src/mcp/rea_ghidra_inventory_1214_v4.java",
+        "src/mcp/rea_engine_profile.rs",
+        "src/mcp/rea_engine_ghidra.rs"
+      ],
+      "tests": [
+        "src/jobctl_engine_scratch_tests.rs",
+        "src/jobctl_tests.rs",
+        "src/mcp/rea_engine_scratch_tests.rs",
+        "src/mcp/rea_engine_tests.rs",
+        "src/mcp/rea_engine_usage_tests.rs",
+        "src/native_scratch_tests.rs",
+        "tests/rea_engine_cleanup_assertions.py",
+        "tests/rea_engine_owner_tests.py",
+        "src/mcp/rea_ghidra_contract_v4_tests.rs",
+        "tests/rea_ghidra_v4_api.py",
+        "src/mcp/rea_engine_profile_tests.rs",
+        "src/mcp/rea_engine_ghidra_tests.rs"
+      ],
+      "scope": "Fixed GNU/JADX/Ghidra operations on a Linux controller and executable Linux host. Ghidra revision 2 (12.2) and revision 3 (12.1.4) retain their four-analyzer exact-entry contracts. Revision 4 uses hepta.ghidra.12.1.4.elf-x86_64-default-functions.v1 only for x86:LE:64:default/gcc, preserving the fixed default analysis options without analyzer overrides: 26 enabled and 4 disabled analyzers, 146 complete key/type/class/value options with SHA-256 a5531d741cf6e4e42215ea1f4268049600b80c3a03ab7d3586bd3a7bbb7acd75. Revision 4 installation manifests and before/after file verification include both Ghidra/ and GPL/ subtrees, with the GNU demangler module and its selected linux_x86_64 helper required; the classpath remains restricted to admitted Ghidra jars. Historical Ghidra-only inventories do not authenticate the added GPL dependency. Revision 4 adds a separately bounded external inventory and exact-or-containing internal address selection checked against complete body ranges. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts, including the earlier revision-4 four-analyzer candidate, retain their original source/binary/profile identities and do not qualify this later profile. IDA/Hopper, other platforms and complete engine operation coverage remain open.",
+      "upstream_tools": []
+    },
+    "archive_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaArchiveWorker",
+      "entrypoint": "hepta-runtime rea-archive-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_artifact_zip.rs"
+      ],
+      "tests": [],
+      "scope": "Internal ZIP directory parser; no archive extraction or target execution",
+      "upstream_tools": [
+        "inspect_artifact"
+      ]
+    },
+    "python_local_browser_capture": {
+      "kind": "python_cli",
+      "entrypoint": "python3 deploy/hepta_browser_capture.py",
+      "required": true,
+      "source_paths": [
+        "deploy/hepta_browser_capture.py"
+      ],
+      "tests": [
+        "tests/rea_browser_capture_tests.py",
+        "tests/rea_browser_external.py",
+        "tests/rea_browser_environment.py",
+        "tests/fixtures/rea_browser_env_observer.c"
+      ],
+      "scope": "Existing fixed local-resource before/after HAR capture via original process_start job; user resources fetched as data; no arbitrary-page DOM or general state replay",
+      "upstream_tools": [
+        "capture_browser_scenario"
+      ]
+    },
+    "native_local_browser_capture": {
+      "kind": "rust_cli",
+      "variant": "ReaBrowserCapture",
+      "entrypoint": "hepta-runtime rea-browser-capture --manifest ABS --expected-sha256 HASH --output-directory NEW",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_browser.rs",
+        "src/mcp/rea_browser_input.rs",
+        "src/mcp/rea_browser_process.rs",
+        "src/mcp/rea_browser_fixture.rs",
+        "src/mcp/rea_browser_cdp.rs",
+        "src/mcp/rea_browser_capture.rs",
+        "docs/qualification/rea-browser-final-release-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-browser-final-release-20261104-r2/gate-evidence/qualification.json",
+        "docs/qualification/rea-browser-final-release-20261104-r2/native-workspace/qualification.json",
+        "docs/qualification/rea-browser-final-release-20261104-r2/gate-evidence/native-python-differential.json",
+        "docs/qualification/rea-browser-final-release-20261104-r2/deadline-workspace/qualification.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/README.md",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-deadline.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/browser-native.json",
+        "docs/qualification/rea-final-engine-regressions-20261104-r2/ghidra-qualification.json",
+        "src/native_observation.rs",
+        "src/native_observation_wire.rs",
+        "src/mcp/runtime/jobs.rs",
+        "src/bin/jobctl.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_browser_tests.rs",
+        "tests/rea_browser_external.py",
+        "src/mcp/rea_browser_process_tests.rs",
+        "tests/rea_browser_native_differential.py",
+        "tests/rea_browser_deadline_external.py",
+        "tests/rea_browser_environment.py",
+        "tests/fixtures/rea_browser_env_observer.c"
+      ],
+      "scope": "Native Linux Rust CLI for fixed owned local-resource before/after HAR through an independent Chrome CDP pipe under the original durable job. Rust owns capture, fixtures, CDP and original Chrome child custody; the existing operator job owner still uses Python. HOME and XDG data/config/cache directories are owned beneath the private profile; custody is published before post-spawn verification, and unknown cleanup retains that profile. Listed 20261104 receipts belong to their historical binary identities and do not qualify this source combination; current capture/deadline qualification requires fresh identity-bound real execution. Resources are fetched as data. Arbitrary input-page DOM, process-level network isolation and general browser state replay remain open.",
+      "upstream_tools": [
+        "capture_browser_scenario"
+      ]
+    },
+    "javascript_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaJavascriptWorker",
+      "entrypoint": "hepta-runtime rea-javascript-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_javascript_graph.rs",
+        "src/mcp/rea_javascript_ast.rs",
+        "src/mcp/rea_javascript_graph_report.rs",
+        "src/mcp/rea_javascript_graph_worker.rs",
+        "docs/qualification/rea-js-cancellation-final-release-20261104-r2/artifact-manifest.json",
+        "docs/qualification/rea-js-cancellation-final-release-20261104-r2/workspace-evidence/qualification.json",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/MANIFEST.json",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/README.md",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/final-summary.json"
+      ],
+      "tests": [
+        "src/mcp/rea_javascript_alias_tests.rs",
+        "src/mcp/rea_javascript_graph_tests.rs",
+        "tests/fixtures/rea_javascript/alias-order-original-6.8.0.json"
+      ],
+      "scope": "Internal native Rust Oxc AST worker for explicitly admitted JS/TS/JSX/TSX text, lexical-scope facts and conservative candidates. Profile v2 distinguishes declaration-level and named-specifier type-only syntax without inferring erased runtime imports. Historical finite cancellation receipts below belong to their original source/binary combinations; this mapping does not transfer those results to a new build.",
+      "upstream_tools": [
+        "analyze_javascript_application"
+      ]
+    },
+    "source_map_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaSourceMapWorker",
+      "entrypoint": "hepta-runtime rea-source-map-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_source_map.rs",
+        "src/mcp/rea_source_map_parser.rs",
+        "src/mcp/rea_source_map_worker.rs",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/MANIFEST.json",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/README.md",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/release/summary.json",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/independent/qualification.json",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/mcp/qualification.json",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/summary.json",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/upstream/qualification.json",
+        "docs/qualification/rea-final-source-map-release-20261104-r2/summary.json"
+      ],
+      "tests": [
+        "src/mcp/rea_source_map_tests.rs",
+        "scripts/rea-source-map-reference.mjs",
+        "scripts/rea-source-map-upstream-reference.mjs",
+        "tests/rea_source_map_mcp.py"
+      ],
+      "scope": "Internal admitted-byte native source-map decoder with fixed limits, real MCP cancellation/deadline kill and reap, and explicit non-REA declaration output.",
+      "upstream_tools": [
+        "trace_web_source_location"
+      ]
+    },
+    "asar_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaAsarWorker",
+      "entrypoint": "hepta-runtime rea-asar-worker --request JSON",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_asar.rs",
+        "src/mcp/rea_asar_parser.rs",
+        "src/mcp/rea_asar_worker.rs",
+        "src/mcp/rea_files.rs",
+        "src/mcp/rea_seccomp.rs",
+        "src/mcp/rea_evidence.rs",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/MANIFEST.json",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/README.md",
+        "docs/qualification/rea-asar-javascript-final-release-20261104-r2/final-summary.json"
+      ],
+      "tests": [
+        "src/mcp/rea_asar_tests.rs",
+        "src/mcp/rea_asar_parser_tests.rs",
+        "tests/rea_asar_external.rs",
+        "tests/rea_asar_qualification.py",
+        "scripts/rea-asar-reference.mjs"
+      ],
+      "scope": "Internal bounded inherited read-only-descriptor ASAR header/member parser, with actual original-worker cancellation/deadline kill and reap. Native Pickle-header digest is distinct from the Electron JSON-only header digest.",
+      "upstream_tools": [
+        "inspect_artifact",
+        "analyze_javascript_application"
+      ]
+    },
+    "apk_signature_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaApkSignatureWorker",
+      "entrypoint": "hepta-runtime rea-apk-signature-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_apk_signature.rs",
+        "src/mcp/rea_apk_signature_parser.rs",
+        "src/mcp/rea_apk_signature_worker.rs",
+        "src/mcp/rea_files.rs",
+        "src/mcp/rea_seccomp.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_apk_signature_tests.rs",
+        "scripts/generate_apk_signature_fixtures.py",
+        "scripts/qualify_apk_signature_native.py",
+        "tests/rea_apk_signature_mcp.py",
+        "tests/fixtures/rea_apk_signature/provenance.json"
+      ],
+      "scope": "Internal stdin-only bounded native APK signature-record verifier over controller-captured bytes, with fixed worker budgets, cancellation/deadline kill and reap. Finite v2/v3 mathematics only; all complete-Android and REA-Evidence flags remain false.",
+      "upstream_tools": [
+        "inspect_apk_signature",
+        "inspect_android_package"
+      ]
+    },
+    "elf_notes_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaElfNotesWorker",
+      "entrypoint": "hepta-runtime rea-elf-notes-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_elf_notes.rs",
+        "src/mcp/rea_elf_notes_worker.rs",
+        "src/mcp/rea_elf_notes_parser.rs",
+        "src/mcp/rea_elf_notes_compression.rs",
+        "vendor/ruzstd/src/decoding/block_decoder.rs",
+        "vendor/ruzstd/src/decoding/errors.rs",
+        "vendor/ruzstd/src/decoding/frame_decoder.rs",
+        "vendor/ruzstd/src/decoding/scratch.rs",
+        "vendor/ruzstd/src/decoding/sequence_execution.rs",
+        "vendor/ruzstd/src/decoding/sequence_section_decoder.rs",
+        "docs/rea-native/ELF_ZSTD_DESTINATION_DIFFERENTIAL.md"
+      ],
+      "tests": [
+        "src/mcp/rea_elf_notes_worker_tests.rs",
+        "src/mcp/rea_elf_notes_parser_tests.rs"
+      ],
+      "scope": "Internal captured-byte native ELF notes parser for the frozen inspect_elf_notes route. The explicit ELF adapter adds conservative destination-capacity proofs to the vendored decoder; generic default decoding remains unchanged. Sequence proofs require the fixed 64-bit, no-dictionary, bounded-history regular decoder dispatch. Only proven literal layouts, complete fields or mathematically bounded known input prefixes may select the typed capacity error; unsupported cases retain their existing format validation. Finite decoder evidence is separate from final binary, complete operation, platform and resource qualification.",
+      "upstream_tools": [
+        "inspect_elf_notes"
+      ]
+    },
+    "apk_static_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaApkStaticWorker",
+      "entrypoint": "hepta-runtime rea-apk-static-worker",
+      "required": true,
+      "source_paths": [
+        "src/mcp/rea_apk_evidence.rs",
+        "src/mcp/rea_apk_static_worker.rs",
+        "src/mcp/rea_apk_signature_observation.rs",
+        "src/mcp/rea_apk_signature_archive.rs",
+        "src/mcp/rea_apk_signature_v1.rs",
+        "src/mcp/rea_apk_signature_certificate.rs",
+        "src/mcp/rea_apk_signature_view.rs"
+      ],
+      "tests": [
+        "src/mcp/rea_apk_static_worker_tests.rs",
+        "src/mcp/rea_apk_evidence_tests.rs",
+        "src/mcp/rea_apk_signature_observation_tests.rs",
+        "src/mcp/rea_apk_signature_view_tests.rs"
+      ],
+      "scope": "Internal captured-byte static APK observations for the frozen inspect_apk_signature route; no target execution or platform-trust assertion. Distinct from the mathematical-verification worker.",
+      "upstream_tools": [
+        "inspect_apk_signature"
+      ]
+    },
+    "recorded_core_worker": {
+      "kind": "rust_cli",
+      "variant": "ReaRecordedCoreWorker",
+      "entrypoint": "hepta-runtime rea-recorded-core-worker",
+      "required": true,
+      "source_paths": [
+        "src/cli.rs",
+        "src/main.rs",
+        "src/mcp/mod.rs",
+        "src/mcp/rea_recorded_core_worker.rs",
+        "src/mcp/rea_recorded_core_parser.rs",
+        "src/mcp/rea_recorded_core_budget.rs",
+        "src/mcp/rea_recorded_core_layout.rs",
+        "src/mcp/rea_recorded_core_sections.rs"
+      ],
+      "tests": [
+        "src/cli_recorded_core_tests.rs",
+        "src/mcp/rea_recorded_core_worker_tests.rs",
+        "src/mcp/rea_recorded_core_parser_tests.rs",
+        "scripts/rea_recorded_core_corpus.py",
+        "scripts/rea_recorded_core_differential.py",
+        "tests/fixtures/rea_recorded_core/dynamic-sections-rea-6.8.0.json"
+      ],
+      "scope": "Internal captured-byte Rust Linux ELF64 recorded-core payload decoder and strict stdin worker. Bounded PN_XNUM/PT_DYNAMIC section construction preserves source order, constructor failures and the first matching dynamic section with a shared work budget. Nonempty ELF/GNU hash bodies and unsupported diagnostic representations remain explicit gaps. Native frame, resource limits and output admission are separate from the frozen Python request/reply-file helper. Historical PIDs and paths grant no live authority. The original child owner must enforce wall deadlines and reap the worker. No public inspect_recorded_crash MCP route, Provider/Evidence integration, full helper parity, optional pwndbg enrichment or same-combination replacement qualification is claimed.",
+      "upstream_tools": [
+        "inspect_recorded_crash"
+      ]
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "format": "hepta.evidence-file-access-original.v1",
+  "node": "v22.23.4",
+  "uid": 1000,
+  "cases": [
+    {
+      "name": "permission",
+      "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-access-reference-r1/permission.json",
+      "expected": {
+        "ok": false,
+        "typed_error": {
+          "cleanupIncomplete": false,
+          "operation": "read",
+          "reason": "io",
+          "_tag": "EvidenceFileError",
+          "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-access-reference-r1/permission.json"
+        },
+        "projected": {
+          "code": "execution_failure",
+          "category": "execution_failure",
+          "message": "Evidence file could not be accessed. Check file permissions and try again.",
+          "retryable": false,
+          "remediation": {
+            "action": "Evidence file could not be accessed. Check file permissions and try again."
+          },
+          "details": {
+            "operation": "read",
+            "reason": "io",
+            "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-access-reference-r1/permission.json"
+          }
+        }
+      }
+    },
+    {
+      "name": "path-limit",
+      "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-access-reference-r1/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expected": {
+        "ok": false,
+        "typed_error": {
+          "cleanupIncomplete": false,
+          "operation": "read",
+          "reason": "path-limit",
+          "_tag": "EvidenceFileError",
+          "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-access-reference-r1/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        },
+        "projected": {
+          "code": "resource_constraint",
+          "category": "resource_constraint",
+          "message": "Filesystem path-length constraints prevented reading or atomic publication at the selected path. Choose a shorter local path.",
+          "retryable": false,
+          "remediation": {
+            "action": "Filesystem path-length constraints prevented reading or atomic publication at the selected path. Choose a shorter local path."
+          },
+          "details": {
+            "operation": "read",
+            "reason": "path-limit",
+            "boundary": "filesystem-path",
+            "path": "/home/qian-qi/work/hepta-rea-contracts-20261104-r4-evidence/apk/evidence-file-access-reference-r1/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          }
+        }
+      }
+    }
+  ]
+}

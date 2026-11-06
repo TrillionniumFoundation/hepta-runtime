@@ -1,0 +1,1076 @@
+{
+  "$defs": {
+    "__schema0": {
+      "pattern": "^ev_[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "__schema1": {
+      "anyOf": [
+        {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "architecture": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "x86",
+                        "x86_64",
+                        "arm",
+                        "arm64",
+                        "arm64_32",
+                        "mips",
+                        "riscv",
+                        "powerpc",
+                        "hexagon"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "digest": {
+                  "$ref": "#/$defs/__schema3"
+                },
+                "format": {
+                  "enum": [
+                    "hopper",
+                    "analysis-database",
+                    "mach-o",
+                    "elf",
+                    "pe",
+                    "dos-mz",
+                    "dos-com",
+                    "zip",
+                    "ipa",
+                    "apk",
+                    "msix",
+                    "appx",
+                    "hap",
+                    "hsp",
+                    "app-pack",
+                    "asar",
+                    "godot-pck",
+                    "dmg",
+                    "pkg",
+                    "plist",
+                    "javascript",
+                    "source-map",
+                    "directory",
+                    "file",
+                    "unknown",
+                    "mach-o-universal",
+                    "javascript-bundle",
+                    "entitlements",
+                    "pyinstaller",
+                    "node-sea"
+                  ],
+                  "type": "string"
+                },
+                "local_path": {
+                  "$ref": "#/$defs/__schema5"
+                },
+                "name": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "name",
+                "digest",
+                "local_path",
+                "format",
+                "architecture"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "architecture": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "6502",
+                        "x86",
+                        "x86_64",
+                        "arm",
+                        "arm64",
+                        "arm64_32",
+                        "mips",
+                        "riscv",
+                        "powerpc",
+                        "m68k",
+                        "hexagon"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "digest": {
+                  "$ref": "#/$defs/__schema3"
+                },
+                "format": {
+                  "const": "raw-binary",
+                  "type": "string"
+                },
+                "local_path": {
+                  "$ref": "#/$defs/__schema5"
+                },
+                "name": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "name",
+                "digest",
+                "local_path",
+                "format",
+                "architecture"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "architecture": {
+                  "const": "powerpc",
+                  "type": "string"
+                },
+                "digest": {
+                  "$ref": "#/$defs/__schema3"
+                },
+                "format": {
+                  "const": "gamecube-dol",
+                  "type": "string"
+                },
+                "local_path": {
+                  "$ref": "#/$defs/__schema5"
+                },
+                "name": {
+                  "$ref": "#/$defs/__schema2"
+                }
+              },
+              "required": [
+                "name",
+                "digest",
+                "local_path",
+                "format",
+                "architecture"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema10": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "__schema11": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "__schema12": {
+      "$ref": "#/$defs/__schema5",
+      "description": "Verbatim direct-request path; not part of semantic identity."
+    },
+    "__schema13": {
+      "anyOf": [
+        {},
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema14": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "additionalProperties": false,
+          "properties": {
+            "bytes": {
+              "$ref": "#/$defs/__schema15"
+            },
+            "path": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "sha256": {
+              "$ref": "#/$defs/__schema4"
+            }
+          },
+          "required": [
+            "path",
+            "sha256",
+            "bytes"
+          ],
+          "type": "object"
+        },
+        "byte_order": {
+          "enum": [
+            "little",
+            "big"
+          ],
+          "type": "string"
+        },
+        "coverage": {
+          "additionalProperties": false,
+          "properties": {
+            "examined_entries": {
+              "$ref": "#/$defs/__schema15"
+            },
+            "examined_tables": {
+              "$ref": "#/$defs/__schema15"
+            },
+            "status": {
+              "const": "complete",
+              "type": "string"
+            }
+          },
+          "required": [
+            "status",
+            "examined_tables",
+            "examined_entries"
+          ],
+          "type": "object"
+        },
+        "entries": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "descriptor": {
+                "additionalProperties": false,
+                "properties": {
+                  "bytes": {
+                    "$ref": "#/$defs/__schema15"
+                  },
+                  "hex": {
+                    "anyOf": [
+                      {
+                        "pattern": "^[0-9a-f]*$",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "location": {
+                    "$ref": "#/$defs/__schema16"
+                  },
+                  "sha256": {
+                    "$ref": "#/$defs/__schema4"
+                  }
+                },
+                "required": [
+                  "location",
+                  "bytes",
+                  "sha256",
+                  "hex"
+                ],
+                "type": "object"
+              },
+              "descsz": {
+                "$ref": "#/$defs/__schema15"
+              },
+              "gnu": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "abi_tag": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "major": {
+                                "$ref": "#/$defs/__schema15"
+                              },
+                              "minor": {
+                                "$ref": "#/$defs/__schema15"
+                              },
+                              "os": {
+                                "$ref": "#/$defs/__schema15"
+                              },
+                              "os_name": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "subminor": {
+                                "$ref": "#/$defs/__schema15"
+                              }
+                            },
+                            "required": [
+                              "os",
+                              "os_name",
+                              "major",
+                              "minor",
+                              "subminor"
+                            ],
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "build_id_hex": {
+                        "anyOf": [
+                          {
+                            "pattern": "^[0-9a-f]*$",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "gold_version": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "build_id_hex",
+                      "abi_tag",
+                      "gold_version"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "index": {
+                "$ref": "#/$defs/__schema15"
+              },
+              "location": {
+                "$ref": "#/$defs/__schema16"
+              },
+              "namesz": {
+                "$ref": "#/$defs/__schema15"
+              },
+              "owner": {
+                "type": "string"
+              },
+              "owner_bytes_hex": {
+                "pattern": "^[0-9a-f]*$",
+                "type": "string"
+              },
+              "table_index": {
+                "$ref": "#/$defs/__schema15"
+              },
+              "table_kind": {
+                "enum": [
+                  "program",
+                  "section"
+                ],
+                "type": "string"
+              },
+              "type": {
+                "$ref": "#/$defs/__schema15"
+              },
+              "type_name": {
+                "enum": [
+                  "gnu_abi_tag",
+                  "gnu_hwcap",
+                  "gnu_build_id",
+                  "gnu_gold_version",
+                  "gnu_property",
+                  "unknown"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "index",
+              "table_kind",
+              "table_index",
+              "location",
+              "namesz",
+              "descsz",
+              "type",
+              "type_name",
+              "owner",
+              "owner_bytes_hex",
+              "descriptor",
+              "gnu"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "format": {
+          "enum": [
+            "elf32",
+            "elf64"
+          ],
+          "type": "string"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "machine": {
+          "$ref": "#/$defs/__schema15"
+        },
+        "tables": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "alignment": {
+                "$ref": "#/$defs/__schema15"
+              },
+              "index": {
+                "$ref": "#/$defs/__schema15"
+              },
+              "kind": {
+                "enum": [
+                  "program",
+                  "section"
+                ],
+                "type": "string"
+              },
+              "location": {
+                "$ref": "#/$defs/__schema16"
+              },
+              "name": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "index",
+              "name",
+              "location",
+              "alignment"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "type": {
+          "$ref": "#/$defs/__schema15"
+        },
+        "type_name": {
+          "enum": [
+            "relocatable",
+            "executable",
+            "shared",
+            "core",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact",
+        "format",
+        "byte_order",
+        "machine",
+        "type",
+        "type_name",
+        "tables",
+        "entries",
+        "coverage",
+        "limitations"
+      ],
+      "type": "object"
+    },
+    "__schema15": {
+      "maximum": 4294967295,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "__schema16": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "$ref": "#/$defs/__schema15"
+        },
+        "offset": {
+          "$ref": "#/$defs/__schema15"
+        }
+      },
+      "required": [
+        "offset",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "__schema17": {
+      "enum": [
+        "observed",
+        "derived",
+        "inferred"
+      ],
+      "type": "string"
+    },
+    "__schema18": {
+      "enum": [
+        "shipped-artifact",
+        "controlled-replay",
+        "historical-reference",
+        "external-service",
+        "analyst-inference"
+      ],
+      "type": "string"
+    },
+    "__schema19": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "architecture": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "id": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "isolation": {
+              "enum": [
+                "none",
+                "process",
+                "container",
+                "virtual-machine"
+              ],
+              "type": "string"
+            },
+            "platform": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "platform",
+            "architecture",
+            "isolation"
+          ],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema2": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "__schema20": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "__schema21": {
+      "anyOf": [
+        {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "diagnostics": {
+                  "$ref": "#/$defs/__schema22"
+                },
+                "status": {
+                  "const": "complete",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "diagnostics": {
+                  "$ref": "#/$defs/__schema22"
+                },
+                "limitations": {
+                  "items": {
+                    "$ref": "#/$defs/__schema24"
+                  },
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "limited_directions": {
+                  "$ref": "#/$defs/__schema25"
+                },
+                "status": {
+                  "const": "partial",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status",
+                "limitations"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "diagnostics": {
+                  "$ref": "#/$defs/__schema22"
+                },
+                "limited_directions": {
+                  "$ref": "#/$defs/__schema25"
+                },
+                "reason": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "status": {
+                  "const": "unknown",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "status",
+                "reason"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema22": {
+      "items": {
+        "$ref": "#/$defs/__schema23"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "__schema23": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "__schema24": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "__schema25": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/__schema27"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/__schema26"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/__schema29"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/__schema28"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/__schema32"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/__schema30"
+            },
+            {
+              "$ref": "#/$defs/__schema31"
+            }
+          ],
+          "type": "array"
+        }
+      ]
+    },
+    "__schema26": {
+      "const": "callers",
+      "type": "string"
+    },
+    "__schema27": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/__schema26"
+        }
+      ]
+    },
+    "__schema28": {
+      "const": "callees",
+      "type": "string"
+    },
+    "__schema29": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/__schema28"
+        }
+      ]
+    },
+    "__schema3": {
+      "additionalProperties": false,
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/__schema4"
+        }
+      },
+      "required": [
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "__schema30": {
+      "const": "callers",
+      "type": "string"
+    },
+    "__schema31": {
+      "const": "callees",
+      "type": "string"
+    },
+    "__schema32": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/__schema30"
+        },
+        {
+          "$ref": "#/$defs/__schema31"
+        }
+      ]
+    },
+    "__schema33": {
+      "items": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "address": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "kind": {
+                "const": "address",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "address"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "end": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "kind": {
+                "const": "address-range",
+                "type": "string"
+              },
+              "start": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "start",
+              "end"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "artifact-path",
+                "type": "string"
+              },
+              "path": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "path"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "file-offset",
+                "type": "string"
+              },
+              "offset": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "offset"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "end": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "kind": {
+                "const": "file-offset-range",
+                "type": "string"
+              },
+              "start": {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "start",
+              "end"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "type": "array"
+    },
+    "__schema34": {
+      "items": {
+        "pattern": "^ev_[a-f0-9]{64}$",
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "__schema4": {
+      "pattern": "^[a-f0-9]{64}$",
+      "type": "string"
+    },
+    "__schema5": {
+      "pattern": "^[^\\x00]*$",
+      "type": "string"
+    },
+    "__schema6": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "__schema7": {
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "digest": {
+              "$ref": "#/$defs/__schema4"
+            },
+            "parameters": {
+              "$ref": "#/$defs/__schema9"
+            },
+            "provider": {
+              "$ref": "#/$defs/__schema8"
+            }
+          },
+          "required": [
+            "provider",
+            "parameters",
+            "digest"
+          ],
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "__schema8": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "__schema9": {
+      "additionalProperties": {},
+      "type": "object"
+    }
+  },
+  "$id": "urn:rea:tool-output:sha256:8fa191d70ee7b2f890bdf9c174d64180d8f7a556467683cd421dee88eec270fb",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "analysis_profile": {
+      "$ref": "#/$defs/__schema7"
+    },
+    "authority": {
+      "$ref": "#/$defs/__schema18"
+    },
+    "caller_input_path": {
+      "$ref": "#/$defs/__schema12"
+    },
+    "confidence": {
+      "$ref": "#/$defs/__schema17"
+    },
+    "environment": {
+      "$ref": "#/$defs/__schema19"
+    },
+    "evidence_id": {
+      "$ref": "#/$defs/__schema0"
+    },
+    "evidence_links": {
+      "$ref": "#/$defs/__schema34"
+    },
+    "limitations": {
+      "$ref": "#/$defs/__schema20"
+    },
+    "locations": {
+      "$ref": "#/$defs/__schema33"
+    },
+    "normalized_result": {
+      "$ref": "#/$defs/__schema14"
+    },
+    "operation": {
+      "$ref": "#/$defs/__schema11"
+    },
+    "parameters": {
+      "$ref": "#/$defs/__schema9"
+    },
+    "predicate_type": {
+      "$ref": "#/$defs/__schema10"
+    },
+    "provider": {
+      "$ref": "#/$defs/__schema6"
+    },
+    "raw_result": {
+      "$ref": "#/$defs/__schema13"
+    },
+    "relationship_coverage": {
+      "$ref": "#/$defs/__schema21"
+    },
+    "subject": {
+      "$ref": "#/$defs/__schema1"
+    }
+  },
+  "required": [
+    "evidence_id",
+    "subject",
+    "provider",
+    "analysis_profile",
+    "predicate_type",
+    "operation",
+    "parameters",
+    "raw_result",
+    "normalized_result",
+    "confidence",
+    "authority",
+    "environment",
+    "limitations",
+    "relationship_coverage",
+    "locations",
+    "evidence_links"
+  ],
+  "type": "object"
+}

@@ -1,0 +1,1106 @@
+{
+  "schema": "hepta.rea.recorded-core-constructor-oracle.v1",
+  "source": {
+    "package": "rea-agents@6.8.0",
+    "npm_tarball_sha256": "8d542ec76a9cb350584b60a6c9c088706ff812d5bb5b094c20c95b6dc25698bb",
+    "pyelftools_version": "0.33",
+    "evidence_archive_sha256": "ed0e9aa6f22a3f316e182f7f0defc78427ae9db5ff77c4faa90939ab9ae00335",
+    "original_rows_member": "native/final/comparison-rows.jsonl",
+    "original_rows_sha256": "5da3b36af13d3b968189135d661ac6a5e7781ba9f2cae035c32f3c464f977b20",
+    "fixture_directory_member": "corpus/r2/fixtures",
+    "scope": "The 37 retained PT_DYNAMIC differences from the fixed 812-case corpus. API payloads/errors are exact captured oracle values; one uncaught OverflowError uses the original whole-helper typed error. No reference execution is claimed by this fixture extraction."
+  },
+  "cases": [
+    {
+      "id": "dynamic-sections-canonical",
+      "sha256": "f578dac6368aba874b29935671262118a8657abfd7b31b1d62011dea36c6bba8",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-no-sections",
+      "sha256": "645c2dd98a109e5c86f02c2b4a0c7599b01d806aeb5090936f1cc737633eeffa",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000000010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-one-section",
+      "sha256": "d6d1d89ce8c71214985fd488c9bad801efec8176aba839f5133cbde964b28c91",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000100010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-shoff-max",
+      "sha256": "a580b6c334273028623a1a80157957a7872f38b0962bc63ad1a1cbdec1dc0423",
+      "input_hex": "7f454c4602010100000000000000000004003e000100000000000000000000004000000000000000ffffffffffffffff0000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: Reading section 0 at offset 18446744073709551615 past EOF 286"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-bad-shstrndx",
+      "sha256": "cfb4dee7bffb360acc65bb1219738c4169d122609d5898707b6cbd52901ddb42",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200feff02000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: String Table not found"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-str-offset-max",
+      "sha256": "25fc8cfa044d00440e911492757e8b3f1b3357d25551a81cef8839762f163eda",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f706171756500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000010000000300000000000000000000000000000000000000ffffffffffffffff0600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "decoder",
+        "message": "OverflowError: Python int too large to convert to C ssize_t"
+      },
+      "oracle_layer": "whole_helper_typed_exception"
+    },
+    {
+      "id": "dynamic-sections-str-offset-zero",
+      "sha256": "84f5195860e9c6f697ee26ef80c9141e5102fc8652f4fdd591a89986fa81f101",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000000000000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-short-shentsize",
+      "sha256": "5050673592b7d0882274438ff9951e03f0391bf4bdec8b6ad68a09cea579969d",
+      "input_hex": "7f454c4602010100000000000000000004003e0001000000000000000000000040000000000000009800000000000000000000004000380001003f000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: Too small e_shentsize: 63"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-large-shentsize",
+      "sha256": "7963a852a0e826a85e5ae2b6cac75ac499b3ae791b0c20095c01e680a148c2bd",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010080000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: String Table not found"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-compressed",
+      "sha256": "1606d5d363a292b5bb3e44b5e7a8e6064fa9f8405dbfd3223c9b0a2de08cd7fe",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-str-truncated",
+      "sha256": "47c20617b51f65e2d84cc4541e3c54cf2e5dc4120f551a813814e4a7579132db",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f706171756500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000010000000300000000000000000000000000000000000000180100000000000006000000000000000000000000000000010000000000000000000000000000",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: String Table not found"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-truncated",
+      "sha256": "569af8bf316d36be9c64b353fe6b2be5b49d0f736ec34ad90a8464ed5bb7a097",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f706171756500000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: expected 8, found 2"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-00000001",
+      "sha256": "7e2cfea9dc78d231774ab8d42554abf7d5b2b8b7423c4c94e23a37bf9f4c6aab",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-00000002",
+      "sha256": "77968b6ca44f93161f9fd6a3b299ce7f7cde82b572a577a385216d17945431f0",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: SHT_SYMTAB section points at section 0 of type SHT_SYMTAB, expected SHT_STRTAB"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-00000003",
+      "sha256": "0c6687e589c29bf27736acab8a5ee57f8dae599746f38ae21d8418b3f757f86f",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-00000004",
+      "sha256": "3d529a09a452a2eed648878c6fbfa314dfacb08df2f93aa46f0974e7898beab8",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: Expected sh_entsize of SHT_RELA section to be 24"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-00000006",
+      "sha256": "ff601eb3ac60fb95598d15e8ba6e9a60d4d6c891de78df9e62fd17f47b4b2955",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: Unexpected section type SHT_DYNAMIC, expected ('SHT_STRTAB', 'SHT_NOBITS', 'SHT_NULL')"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-00000007",
+      "sha256": "d549e290c09bf0a9248a0073cb8727829cf3238b9914e151b4e73108db733553",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000007000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-00000008",
+      "sha256": "3803b08c11030dba31d6a0e6b547cd1dec9e99cc2acfda3080a738b102e44b12",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000008000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-00000009",
+      "sha256": "1e3c292483981c00acf5f01eca503bf88d549bca0e58d669f1192754f30c8de6",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000009000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: Expected sh_entsize of SHT_REL section to be 16"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-0000000b",
+      "sha256": "2b443c65fde67bb082b7c7deed9c45b60788d2ee225671072a708ec81e1b0705",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f7061717565000000000000000000000b000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: SHT_SYMTAB section points at section 0 of type SHT_DYNSYM, expected SHT_STRTAB"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-00000011",
+      "sha256": "15cbcf363118a4845a70999c4ee343a76195ce59692b336e373aabe7208960ba",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000011000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-00000012",
+      "sha256": "d5a2d36e29093f10aa9f06601738f1bdd9bc738c312815e99a60bcb042440b1e",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000012000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-6ffffff5",
+      "sha256": "361cd5b3b44dcb486edcd2039071471f417896a58798c0b39b46a5954e7c22b0",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f706171756500000000000000000000f5ffff6f000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-6ffffff6",
+      "sha256": "898168b08cc716329875c46201334019f56f59754264af261c87d5b5846b9ffa",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f706171756500000000000000000000f6ffff6f000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: Section points at section 0 of type SHT_GNU_HASH, expected SHT_SYMTAB/SHT_DYNSYM"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-6ffffffd",
+      "sha256": "5201cdbbe17554694bad8cf53b2e88111d6b480bdbc0b5364973b3f9beb103da",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f706171756500000000000000000000fdffff6f000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: SHT_SYMTAB section points at section 0 of type SHT_GNU_verdef, expected SHT_STRTAB"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-6ffffffe",
+      "sha256": "b982ac089cd01092cb1f8e3b8c32ee7201287c43e8da90c4c4f2d5661536c4bb",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f706171756500000000000000000000feffff6f000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: SHT_SYMTAB section points at section 0 of type SHT_GNU_verneed, expected SHT_STRTAB"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-6fffffff",
+      "sha256": "aa52c8ebe341562ec24d37eb1eaed638147f05f7bcffa0450ca0fd37cd3d1c75",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f706171756500000000000000000000ffffff6f000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: Section points at section 0 of type SHT_GNU_versym, expected SHT_SYMTAB/SHT_DYNSYM"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-section-type-ffffffff",
+      "sha256": "e7f79933d9aaaee389ca585583d47f20df4c2a7d527e3eabdd77497202f28871",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f706171756500000000000000000000ffffffff000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-linked-type-2-size24",
+      "sha256": "35dfd737338381b2c0d83fe1edca20250d1f89e9951ddd06409abaf5a961ddd6",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000001000000010000000000000000000000180000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-linked-type-4-size24",
+      "sha256": "34b11108d7760021bef08fde193dc97d937b80170ad6f37b2e996b179a715758",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000001000000010000000000000000000000180000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-linked-type-6-size16",
+      "sha256": "9dcae2b7ef1c4acea78fb82db160f050d6f9b43400ac8e890a49b7fe045d168b",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000001000000010000000000000000000000100000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-linked-type-9-size16",
+      "sha256": "a1ec28382e25c65584907d33559be69873d1d35f4a65cd1633038544246b6883",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000009000000000000000000000000000000000000000000000000000000000000000000000001000000010000000000000000000000100000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-linked-type-11-size24",
+      "sha256": "6a5d18c6a13c8bc4e24d222bb77eb6d8568ea2d7c7cce55bffa21ca0ae9244bc",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000200010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f7061717565000000000000000000000b000000000000000000000000000000000000000000000000000000000000000000000001000000010000000000000000000000180000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-count-0",
+      "sha256": "b4d1744978ae1b83d01a1798dc3110fb8bfb3ac3319fd12c308218b306f72b39",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000000010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": true,
+        "value": {
+          "format": "elf-core",
+          "architecture": "x86_64-little-endian",
+          "target_execution": "not-performed",
+          "live_process_identity": "unknown",
+          "segments": [
+            {
+              "index": 0,
+              "type": "PT_DYNAMIC",
+              "type_id": 2,
+              "header_location": {
+                "offset": "0x40",
+                "bytes": "0x38"
+              },
+              "offset": "0x78",
+              "file_size": "0x1c",
+              "memory_size": "0x1c",
+              "virtual_address": "0x0",
+              "physical_address": "0x0",
+              "alignment": "0x4",
+              "flags": "0x0",
+              "file_backing": "file"
+            }
+          ],
+          "notes": [],
+          "note_padding": [],
+          "threads": [],
+          "signals": [],
+          "note_interpretation_completeness": "unknown",
+          "limitations": [
+            "The initial Linux note profile accepts System V/unspecified or GNU/Linux OSABI with ABI version zero; an unspecified OSABI alone does not prove operating-system origin.",
+            "Historical PID and signal values are recorded metadata, not current process identity or attach authority.",
+            "Only exact Linux CORE NT_PRSTATUS/NT_SIGINFO owners are interpreted; every descriptor and owner retains original bytes. Other note semantics remain unknown.",
+            "NT_SIGINFO thread association is unknown. Only SIGSEGV SEGV_MAPERR/SEGV_ACCERR initially establish a fault-address union meaning.",
+            "PT_LOAD file bytes are recorded bytes. Undumped memory and current executable/library identity remain unknown; no current host file is resolved from a recorded pathname.",
+            "Missing notes/registers/signals do not establish their absence at the original crash. Full unwinding, executable pairing and live control are not provided."
+          ]
+        }
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-count-3",
+      "sha256": "6a1b9edf89ba3b020755be8f4a2408bb214e71aebf693601ca01ab2fbe4a5639",
+      "input_hex": "7f454c4602010100000000000000000004003e00010000000000000000000000400000000000000098000000000000000000000040003800010040000300010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: expected 4, found 2"
+      },
+      "oracle_layer": "direct_api"
+    },
+    {
+      "id": "dynamic-sections-count-65535",
+      "sha256": "2f131480ce1246c49b5fc4d314897c966942efc152aaba1a9a5f0b72971594fc",
+      "input_hex": "7f454c4602010100000000000000000004003e0001000000000000000000000040000000000000009800000000000000000000004000380001004000ffff010002000000000000007800000000000000000000000000000000000000000000001c000000000000001c000000000000000400000000000000050000000600000002000000434f5245000000006f70617175650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000001000000030000000000000000000000000000000000000018010000000000000600000000000000000000000000000001000000000000000000000000000000006e616d6500",
+      "expected": {
+        "ok": false,
+        "reason": "format",
+        "message": "Recorded core failed unchanged upstream structural parsing: expected 4, found 2"
+      },
+      "oracle_layer": "direct_api"
+    }
+  ]
+}

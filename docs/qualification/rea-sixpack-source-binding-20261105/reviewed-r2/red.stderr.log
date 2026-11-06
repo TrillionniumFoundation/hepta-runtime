@@ -1,0 +1,41 @@
+test_build_storage_cannot_hide_execution_inputs (rea_source_binding_tests.SourceBindingTests.test_build_storage_cannot_hide_execution_inputs) ... ok
+test_each_input_mutation_changes_the_combination_identity (rea_source_binding_tests.SourceBindingTests.test_each_input_mutation_changes_the_combination_identity) ... ok
+test_frozen_reference_symlinks_are_refused (rea_source_binding_tests.SourceBindingTests.test_frozen_reference_symlinks_are_refused) ... ok
+test_generated_qualification_outputs_are_not_source_inputs (rea_source_binding_tests.SourceBindingTests.test_generated_qualification_outputs_are_not_source_inputs) ... ok
+test_reference_directory_symlinks_are_refused (rea_source_binding_tests.SourceBindingTests.test_reference_directory_symlinks_are_refused) ... ok
+test_replaced_then_restored_inputs_remain_observed (rea_source_binding_tests.SourceBindingTests.test_replaced_then_restored_inputs_remain_observed) ... ok
+test_snapshot_covers_native_and_non_rust_execution_inputs (rea_source_binding_tests.SourceBindingTests.test_snapshot_covers_native_and_non_rust_execution_inputs) ... ok
+test_source_profile_explicitly_records_reference_inputs (rea_source_binding_tests.SourceBindingTests.test_source_profile_explicitly_records_reference_inputs) ... ok
+test_storage_cannot_hide_an_additional_workspace_member (rea_source_binding_tests.SourceBindingTests.test_storage_cannot_hide_an_additional_workspace_member) ... 
+  test_storage_cannot_hide_an_additional_workspace_member (rea_source_binding_tests.SourceBindingTests.test_storage_cannot_hide_an_additional_workspace_member) (path='extra') ... FAIL
+  test_storage_cannot_hide_an_additional_workspace_member (rea_source_binding_tests.SourceBindingTests.test_storage_cannot_hide_an_additional_workspace_member) (path='extra/src') ... FAIL
+  test_storage_cannot_hide_an_additional_workspace_member (rea_source_binding_tests.SourceBindingTests.test_storage_cannot_hide_an_additional_workspace_member) (path='generated') ... FAIL
+
+======================================================================
+FAIL: test_storage_cannot_hide_an_additional_workspace_member (rea_source_binding_tests.SourceBindingTests.test_storage_cannot_hide_an_additional_workspace_member) (path='extra')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/ca4642dea694/evidence/source-binding-guard-review/red-source/tests/rea_source_binding_tests.py", line 119, in test_storage_cannot_hide_an_additional_workspace_member
+    self.assertTrue(matrix.storage_overlaps_inputs(self.repo, self.repo / name))
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_storage_cannot_hide_an_additional_workspace_member (rea_source_binding_tests.SourceBindingTests.test_storage_cannot_hide_an_additional_workspace_member) (path='extra/src')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/ca4642dea694/evidence/source-binding-guard-review/red-source/tests/rea_source_binding_tests.py", line 119, in test_storage_cannot_hide_an_additional_workspace_member
+    self.assertTrue(matrix.storage_overlaps_inputs(self.repo, self.repo / name))
+AssertionError: False is not true
+
+======================================================================
+FAIL: test_storage_cannot_hide_an_additional_workspace_member (rea_source_binding_tests.SourceBindingTests.test_storage_cannot_hide_an_additional_workspace_member) (path='generated')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/ca4642dea694/evidence/source-binding-guard-review/red-source/tests/rea_source_binding_tests.py", line 119, in test_storage_cannot_hide_an_additional_workspace_member
+    self.assertTrue(matrix.storage_overlaps_inputs(self.repo, self.repo / name))
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.295s
+
+FAILED (failures=3)

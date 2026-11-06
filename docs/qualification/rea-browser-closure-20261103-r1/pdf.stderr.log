@@ -1,0 +1,68 @@
+test_background_scale_and_omitbackground_affect_real_rendered_pixels (__main__.ChromiumPDF.test_background_scale_and_omitbackground_affect_real_rendered_pixels) ... Executing <Task finished name='Task-2' coro=<ChromiumPDF.test_background_scale_and_omitbackground_affect_real_rendered_pixels() done, defined at /home/qian-qi/hepta-runtime-rea-interfaces-20261103-r1/tests/dc_compat_chromium_pdf_tests.py:114> result=None created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.156 seconds
+ok
+test_css_page_size_and_custom_numeric_and_unit_dimensions (__main__.ChromiumPDF.test_css_page_size_and_custom_numeric_and_unit_dimensions) ... Executing <Task pending name='Task-7' coro=<ChromiumPDF.test_css_page_size_and_custom_numeric_and_unit_dimensions() running at /home/qian-qi/hepta-runtime-rea-interfaces-20261103-r1/tests/dc_compat_chromium_pdf_tests.py:107> wait_for=<Future pending cb=[_chain_future.<locals>._call_check_cancel() at /usr/lib/python3.12/asyncio/futures.py:387, Task.task_wakeup()] created at /usr/lib/python3.12/asyncio/base_events.py:449> cb=[_run_until_complete_cb() at /usr/lib/python3.12/asyncio/base_events.py:182] created at /usr/lib/python3.12/asyncio/runners.py:100> took 0.127 seconds
+ok
+test_explicit_mapping_every_pdfoption_and_unknown_refuses_before_browser (__main__.ChromiumPDF.test_explicit_mapping_every_pdfoption_and_unknown_refuses_before_browser) ... ok
+test_hyperlink_outside_resource_roots_does_not_read_or_reject_link_metadata (__main__.ChromiumPDF.test_hyperlink_outside_resource_roots_does_not_read_or_reject_link_metadata) ... ok
+test_letter_landscape_margins_headerfooter_tagged_outline_and_extra_path (__main__.ChromiumPDF.test_letter_landscape_margins_headerfooter_tagged_outline_and_extra_path) ... ok
+test_markdown_insert_inherits_original_page_dimensions_and_crop_margins (__main__.ChromiumPDF.test_markdown_insert_inherits_original_page_dimensions_and_crop_margins) ... ok
+test_page_ranges_print_only_selected_original_page (__main__.ChromiumPDF.test_page_ranges_print_only_selected_original_page) ... ok
+test_private_chrome_launch_uses_only_new_profile_and_disposes_it (__main__.ChromiumPDF.test_private_chrome_launch_uses_only_new_profile_and_disposes_it) ... FAIL
+test_svg_local_image_stylesheet_body_class_media_and_private_profiles (__main__.ChromiumPDF.test_svg_local_image_stylesheet_body_class_media_and_private_profiles) ... ok
+test_unknown_options_and_invalid_ranges_preserve_existing_output (__main__.ChromiumPDF.test_unknown_options_and_invalid_ranges_preserve_existing_output) ... ok
+
+======================================================================
+FAIL: test_private_chrome_launch_uses_only_new_profile_and_disposes_it (__main__.ChromiumPDF.test_private_chrome_launch_uses_only_new_profile_and_disposes_it)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/unittest/async_case.py", line 90, in _callTestMethod
+    if self._callMaybeAsync(method) is not None:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/async_case.py", line 112, in _callMaybeAsync
+    return self._asyncioRunner.run(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/home/qian-qi/hepta-runtime-rea-interfaces-20261103-r1/tests/dc_compat_chromium_pdf_tests.py", line 152, in test_private_chrome_launch_uses_only_new_profile_and_disposes_it
+    result = await asyncio.to_thread(render_markdown, '# PRIVATE-PROFILE', {},
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/qian-qi/hepta-runtime-rea-interfaces-20261103-r1/deploy/dc_compat/chromium_pdf.py", line 418, in render_markdown
+    with private_chrome(private, resource_check=resource_check,
+  File "/usr/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/home/qian-qi/hepta-runtime-rea-interfaces-20261103-r1/deploy/dc_compat/chromium_pdf.py", line 315, in private_chrome
+    _check_reaping_configuration(cleanup_guard)
+  File "/home/qian-qi/hepta-runtime-rea-interfaces-20261103-r1/deploy/dc_compat/chromium_pdf.py", line 242, in _check_reaping_configuration
+    probe = subprocess.Popen(['/bin/true'], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1134, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1138, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1199, in _execute_mock_call
+    result = effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/qian-qi/hepta-runtime-rea-interfaces-20261103-r1/tests/dc_compat_chromium_pdf_tests.py", line 143, in launch
+    self.assertEqual(command[0], '/usr/bin/google-chrome')
+AssertionError: '/bin/true' != '/usr/bin/google-chrome'
+- /bin/true
++ /usr/bin/google-chrome
+
+
+----------------------------------------------------------------------
+Ran 10 tests in 24.906s
+
+FAILED (failures=1)

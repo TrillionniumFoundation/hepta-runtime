@@ -1,0 +1,87 @@
+name: REA P5 independent runner native preview cold-recovery reference
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feature/rea-native-foundation-*'
+    paths:
+      - '.github/workflows/rea-crosshost-preview.yml'
+      - 'scripts/rea-crosshost-preview.py'
+      - 'src/mcp/rea_store.rs'
+      - 'src/mcp/rea_files.rs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rea-crosshost-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture-on-runner-a:
+    name: Capture preview through shipped Rust MCP on independent runner A
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build exact pinned native Release
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+          cargo build --locked --release
+
+      - name: Real policy-controlled MCP capture and local persistence
+        run: |
+          set -euo pipefail
+          python3 scripts/rea-crosshost-preview.py capture
+
+      - name: Retain single native preview record and original capture manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-crosshost-native-capture-${{ github.sha }}
+          path: ${{ runner.temp }}/rea-crosshost-transfer/
+          if-no-files-found: error
+          retention-days: 14
+
+  replay-on-runner-b:
+    name: Restore native preview on independent cold runner B without source
+    runs-on: ubuntu-24.04
+    needs: capture-on-runner-a
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download trusted CI transfer from prior independent runner
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: rea-crosshost-native-capture-${{ github.sha }}
+          path: ${{ runner.temp }}/rea-crosshost-transfer-downloaded
+
+      - name: Build same exact native Release independently
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+          cargo build --locked --release
+
+      - name: Cross-runner cold read, missing-source and tamper/permissions negatives
+        run: |
+          set -euo pipefail
+          python3 scripts/rea-crosshost-preview.py replay
+          test -s "$RUNNER_TEMP/rea-crosshost-recovery.json"
+
+      - name: Retain second host's independently verified recovery receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rea-crosshost-native-recovery-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/rea-crosshost-recovery.json
+          if-no-files-found: warn
+          retention-days: 14

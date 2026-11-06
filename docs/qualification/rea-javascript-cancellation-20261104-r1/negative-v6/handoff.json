@@ -1,0 +1,62 @@
+{
+  "artifact_manifest": {
+    "files": 34,
+    "path": "/home/qian-qi/work/hepta-rea-js-cancellation-handoff-20261104-r1/artifact-manifest.json",
+    "sha256": "d209d04f3bf7d4fcf999875ec7c58309e39f94ceda7d041268da931cc2d19d06",
+    "total_bytes": 1514860
+  },
+  "negative_qualification": {
+    "binary_sha256": "c54b97b6cb9eb5b65e900f047e8aa565ed4dba562604a102f513097eab5beb42",
+    "cancel_seconds": 5,
+    "manual_finally_cleanup_confirmed": true,
+    "observed_duration_seconds": 5.009520225,
+    "original_job_id": "1a1a5298635-fc05-1a10",
+    "owner_alive": true,
+    "owner_pid": 505413,
+    "path": "/home/qian-qi/work/hepta-rea-js-cancellation-handoff-20261104-r1/evidence/before-v6/qualification.json",
+    "qualified": false,
+    "sha256": "3ba500ae10eb78bea119c5a1968f88d69f1521bac7c92c9281897a338c880f89",
+    "state_after_observation": "T",
+    "worker_pid": 505477,
+    "worker_start_ticks": 85000196
+  },
+  "notes": [
+    "Only this harness-owned MCP process and its verified direct worker may be signalled.",
+    "The worker is pinned by pidfd, PPID, argv and start_ticks and confirmed in state T before cancellation.",
+    "Success requires exit and reaping while the original owner stays alive, followed by a successful call on that same owner.",
+    "The original failed receipt is preserved; manual finally cleanup is not counted as cancellation success.",
+    "No binary, target output or runtime state database is included."
+  ],
+  "original_harness_jobs": [
+    "1a1a5273461-fc05-19ed",
+    "1a1a5291c06-fc05-1a09",
+    "1a1a5298635-fc05-1a10"
+  ],
+  "original_readonly_review_jobs": [
+    "1a1a521f490-fc05-198b"
+  ],
+  "reproduction": {
+    "args": [
+      "-u",
+      "/home/qian-qi/work/hepta-rea-js-cancellation-handoff-20261104-r1/tests/rea_javascript_cancellation_external.py",
+      "--runtime",
+      "FINAL_COMBINED_BINARY_ABSOLUTE_PATH",
+      "--expected-runtime-sha256",
+      "FINAL_COMBINED_BINARY_SHA256",
+      "--workspace",
+      "FRESH_ABSOLUTE_WORKSPACE",
+      "--allow-owned-child-signals",
+      "--allow-local-mcp"
+    ],
+    "cancellation_observation_seconds": 5,
+    "change_harness_conditions": false,
+    "executable": "/usr/bin/python3",
+    "production_deadline_seconds": 20
+  },
+  "root": "/home/qian-qi/work/hepta-rea-js-cancellation-handoff-20261104-r1",
+  "schema": "hepta.javascript-cancellation-handoff.v1",
+  "script": {
+    "path": "/home/qian-qi/work/hepta-rea-js-cancellation-handoff-20261104-r1/tests/rea_javascript_cancellation_external.py",
+    "sha256": "7c7e504f2227846d6434ba1306454455aea1c3178799def379e5c37f1f54735d"
+  }
+}

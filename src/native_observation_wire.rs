@@ -65,6 +65,7 @@ pub(super) struct TerminalProof {
 	at_unix_ms: u64,
 	pub(super) stdout_bytes: u64,
 	pub(super) stderr_bytes: u64,
+	pub(super) scratch_cleanup: Option<Value>,
 }
 
 pub(super) fn terminal_proof(status: &Value, job_id: &str) -> Result<Option<TerminalProof>> {
@@ -137,7 +138,49 @@ pub(super) fn terminal_proof(status: &Value, job_id: &str) -> Result<Option<Term
 			.context("terminal publication time missing")?,
 		stdout_bytes: stream_bytes("stdout")?,
 		stderr_bytes: stream_bytes("stderr")?,
+		scratch_cleanup: scratch_cleanup(status, job_id, nonce)?,
 	}))
+}
+
+fn scratch_cleanup(status: &Value, job_id: &str, nonce: &str) -> Result<Option<Value>> {
+	let Some(value) = status
+		.get("scratch_cleanup")
+		.filter(|value| !value.is_null())
+	else {
+		return Ok(None);
+	};
+	let removed = value["removed"]
+		.as_bool()
+		.context("scratch removal flag absent")?;
+	let durable = value["durable"]
+		.as_bool()
+		.context("scratch durability flag absent")?;
+	let group_stopped = value["original_process_group_stopped"]
+		.as_bool()
+		.context("scratch original-group observation absent")?;
+	let reaped = value["original_child_reaped"]
+		.as_bool()
+		.context("scratch original-child wait absent")?;
+	let state = value["state"]
+		.as_str()
+		.context("scratch cleanup state absent")?;
+	if value["schema"] != "hepta.rea.engine-scratch-cleanup.v1"
+		|| value["job_id"] != job_id
+		|| value["launch_nonce"] != nonce
+		|| value["directory"] != "engine-scratch"
+		|| value["device"].as_u64().is_none()
+		|| value["inode"].as_u64().is_none_or(|n| n == 0)
+		|| value["worker_adopted"].as_bool().is_none()
+		|| !matches!(state, "removed" | "retained" | "incomplete")
+		|| (removed && !(group_stopped && reaped))
+		|| (durable && !removed)
+		|| (state == "removed" && !(removed && durable && group_stopped && reaped))
+		|| (state == "retained" && (removed || durable))
+		|| (state == "incomplete" && (!(group_stopped && reaped) || durable))
+	{
+		bail!("engine scratch receipt is not bound to the original owner and stopped group");
+	}
+	Ok(Some(value.clone()))
 }
 
 pub(super) struct ReadPage {
@@ -193,3 +236,7 @@ pub(super) fn decode_page(
 		eof,
 	})
 }
+
+#[cfg(test)]
+#[path = "native_scratch_tests.rs"]
+mod scratch_tests;

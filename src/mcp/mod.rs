@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//! Runtime tools, native analysis workers and per-session context.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -18,9 +19,58 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 pub mod fs;
+pub mod rea;
+mod rea_analysis_view;
+mod rea_analysis_view_mcp_input;
+pub mod rea_apk_evidence;
+mod rea_apk_mcp_input;
+pub mod rea_apk_signature;
+pub mod rea_application;
+pub mod rea_artifact_zip;
+pub mod rea_asar;
+pub mod rea_binary;
+pub mod rea_browser;
+mod rea_contract;
+mod rea_response_encoding;
+mod rea_response_frame;
+mod rea_response_order;
+mod rea_structured_wire;
+pub use rea_response_frame::ReaFramedService;
+pub mod rea_elf_notes;
+pub mod rea_evidence;
+mod rea_evidence_export;
+mod rea_evidence_file;
+mod rea_evidence_import;
+mod rea_evidence_readback;
+mod rea_evidence_session;
+mod rea_evidence_source;
+pub mod rea_files;
+mod rea_inline_order;
+pub mod rea_javascript;
+pub mod rea_javascript_graph;
+mod rea_mcp_input;
+mod rea_mcp_transport;
+pub use rea_mcp_transport::ReaMcpTransport;
+pub mod rea_model;
+pub mod rea_provider;
+mod rea_recorded_core_parser;
+pub mod rea_recorded_core_worker;
+pub mod rea_seccomp;
+pub mod rea_source_map;
+pub mod rea_static;
+pub mod rea_store;
+pub mod rea_web;
+pub mod rea_worker;
+mod rea_worker_transport;
 pub mod request_ctx;
 pub mod runtime;
 pub mod server;
+pub mod weight;
+pub mod weight_artifact;
+pub mod weight_config;
+pub mod weight_forward;
+pub mod weight_native;
+pub mod weight_tensor;
 
 // Session working directory is now stored per-server-instance (see server.rs).
 // This module only provides helper functions for the session root directory.
