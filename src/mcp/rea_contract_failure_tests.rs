@@ -212,7 +212,9 @@ fn original_input_order(case: &Value) -> Vec<String> {
 }
 
 fn observed_118_failure(case: &Value, expected: &Value) -> Failure {
-	let path = case["arguments"]["path"].as_str().unwrap_or("/unused-schema-path");
+	let path = case["arguments"]["path"]
+		.as_str()
+		.unwrap_or("/unused-schema-path");
 	if case["id"] == "exception/exception-path" {
 		return super::super::rea_mcp_input::import_ordered(
 			&case["arguments"],
@@ -256,7 +258,7 @@ fn observed_118_failure(case: &Value, expected: &Value) -> Failure {
 				},
 				path,
 			)
-		},
+		}
 		"Evidence bundle validation failed" => source_failure(
 			ImportSourceError::Source(SourceError::InvalidBundle {
 				message: error["message"].as_str().unwrap().to_owned(),
@@ -268,13 +270,20 @@ fn observed_118_failure(case: &Value, expected: &Value) -> Failure {
 		}
 		"wrong-kind" => source_failure(
 			ImportSourceError::SingleRecord {
-				evidence_id: case["single_record_evidence_id"].as_str().unwrap().to_owned(),
+				evidence_id: case["single_record_evidence_id"]
+					.as_str()
+					.unwrap()
+					.to_owned(),
 			},
 			path,
 		),
 		reason @ ("missing" | "not-file") => file_failure(
 			FileReadError::File {
-				reason: if reason == "missing" { FileReason::Missing } else { FileReason::NotFile },
+				reason: if reason == "missing" {
+					FileReason::Missing
+				} else {
+					FileReason::NotFile
+				},
 				errno: None,
 			},
 			path,
@@ -343,7 +352,11 @@ fn all_38_original_json_errors_and_four_sdk_exceptions_match_complete_text() {
 		assert!(actual.structured_content.is_none());
 		let old_text = &previous.content[0].as_text().unwrap().text;
 		if case["kind"] == "json" {
-			assert_ne!(old_text, text, "original must catch prior text order: {}", case["id"]);
+			assert_ne!(
+				old_text, text,
+				"original must catch prior text order: {}",
+				case["id"]
+			);
 			assert_eq!(
 				serde_json::from_str::<Value>(old_text).unwrap(),
 				serde_json::from_str::<Value>(text).unwrap()
@@ -357,7 +370,12 @@ fn all_38_original_json_errors_and_four_sdk_exceptions_match_complete_text() {
 #[test]
 fn input_order_remains_import_only_and_rejects_unobserved_issue_members() {
 	let fixture = original_118();
-	let case = fixture["cases"].as_array().unwrap().iter().find(|case| case["id"] == "main/input-0").unwrap();
+	let case = fixture["cases"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.find(|case| case["id"] == "main/input-0")
+		.unwrap();
 	let response = original_response(case);
 	let text = response["result"]["content"][0]["text"].as_str().unwrap();
 	let observed = serde_json::from_str::<Value>(text).unwrap()["error"].clone();

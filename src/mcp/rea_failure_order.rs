@@ -7,9 +7,7 @@
 //! This is not a generic error schema or a JSON-RPC frame rewrite. Other
 //! operations, unknown members and unobserved families keep their old projection.
 
-use super::super::rea_response_encoding::{
-	self as encoding, JsonView, ObjectOrder, PathComponent,
-};
+use super::super::rea_response_encoding::{self as encoding, JsonView, ObjectOrder, PathComponent};
 use anyhow::{bail, Result};
 use serde_json::{Map, Value};
 
@@ -61,9 +59,7 @@ fn observed_family(error: &Value) -> Option<ImportFailure> {
 		}
 		return observed_input(error);
 	}
-	if error.get("remediation")?.get("action")?.as_str()?
-		!= error.get("message")?.as_str()?
-	{
+	if error.get("remediation")?.get("action")?.as_str()? != error.get("message")?.as_str()? {
 		return None;
 	}
 	let details = error.get("details")?;
@@ -116,10 +112,21 @@ impl ObjectOrder for ImportOrder {
 		use PathComponent::{Index, Key};
 		let keys: &[&str] = match path {
 			[Key("error")] if matches!(self.0, ImportFailure::InputSchema) => &[
-				"code", "category", "message", "retryable", "remediation", "recovery", "details",
+				"code",
+				"category",
+				"message",
+				"retryable",
+				"remediation",
+				"recovery",
+				"details",
 			],
 			[Key("error")] => &[
-				"code", "category", "message", "retryable", "remediation", "details",
+				"code",
+				"category",
+				"message",
+				"retryable",
+				"remediation",
+				"details",
 			],
 			[Key("error"), Key("remediation")] => &["action"],
 			[Key("error"), Key("recovery")] if matches!(self.0, ImportFailure::InputSchema) => {

@@ -20,7 +20,7 @@
     ]
   },
   "runtime": {
-    "baseline_commit": "8e5f668d8e6ca75f3350f286780311dbc18324f8",
+    "baseline_commit": "42949877bcec4441e9d97034fd803306865a0083",
     "discovery": "Rust source handler discovery, not live MCP tools/list",
     "interface_count": 35,
     "interfaces": [
@@ -145,7 +145,7 @@
         "kind": "rust_cli",
         "entrypoint": "hepta-runtime rea-model-worker",
         "source_presence": "PRESENT",
-        "scope": "Internal descriptor-based model declaration parser; no model inference",
+        "scope": "Internal descriptor-based model declaration parser, immutable snapshots and exact range reads. Eighteen pinned invariant GGML layouts validate fastest-dimension block constraints and checked extents; historical ambiguity and unsupported zero-element layouts remain explicit. Retained index profile v2 refuses old proofs rather than relabeling them. No model inference, dequantization or whole-provider qualification.",
         "upstream_tools": [
           "inspect_model_artifact"
         ],
@@ -170,6 +170,17 @@
         "scope": "Existing fixed local-resource before/after HAR capture via original process_start job; user resources fetched as data; no arbitrary-page DOM or general state replay",
         "upstream_tools": [
           "capture_browser_scenario"
+        ],
+        "upstream_parity": "NOT_ESTABLISHED"
+      },
+      {
+        "id": "recorded_core_worker",
+        "kind": "rust_cli",
+        "entrypoint": "hepta-runtime rea-recorded-core-worker",
+        "source_presence": "PRESENT",
+        "scope": "Internal captured-byte Rust Linux ELF64 recorded-core payload decoder and strict stdin worker. Bounded PN_XNUM/PT_DYNAMIC section construction preserves source order, constructor failures and the first matching dynamic section with a shared work budget. Nonempty ELF/GNU hash bodies and unsupported diagnostic representations remain explicit gaps. Native frame, resource limits and output admission are separate from the frozen Python request/reply-file helper. Historical PIDs and paths grant no live authority. The original child owner must enforce wall deadlines and reap the worker. No public inspect_recorded_crash MCP route, Provider/Evidence integration, full helper parity, optional pwndbg enrichment or same-combination replacement qualification is claimed.",
+        "upstream_tools": [
+          "inspect_recorded_crash"
         ],
         "upstream_parity": "NOT_ESTABLISHED"
       },
@@ -486,6 +497,11 @@
         "bytes": 2966
       },
       {
+        "path": "docs/rea-model-gguf-layout-validation.md",
+        "sha256": "7c5439d81d61c830487971be1873cd6686fd39b48c851e6894fe8be2309f5921",
+        "bytes": 12977
+      },
+      {
         "path": "docs/rea-native/APK_SIGNATURE_NATIVE.md",
         "sha256": "4028b4f301c6e47cd5e48a0969617ed246eac5ec30de16e30cb0775dd601d281",
         "bytes": 14192
@@ -502,13 +518,13 @@
       },
       {
         "path": "docs/rea-native/EVIDENCE_CHECKPOINTS.md",
-        "sha256": "6972527c9424f79500e8b3acfeffcb39bf0a8995229d26cb94e0e40daa53aa28",
-        "bytes": 11152
+        "sha256": "1b05d28444f91bf02f1412dd611e590877cc59fd31af5685c404cd8ba379ff0a",
+        "bytes": 11786
       },
       {
         "path": "docs/rea-native/JAVASCRIPT_AST.md",
-        "sha256": "3e78e7603fdb57cfd7f0a944773344d2f266cfc94785e0638b7cf4aaee0eb3b0",
-        "bytes": 12426
+        "sha256": "f07e84ed14f5efe708760d4495db97e61f7870433a814aa3fce5fa55be2b46b5",
+        "bytes": 15260
       },
       {
         "path": "docs/rea-native/SOURCE_MAP.md",
@@ -571,6 +587,21 @@
         "bytes": 19608
       },
       {
+        "path": "scripts/rea-model-gguf-layout-diff.mjs",
+        "sha256": "32d97ad653035bf500224492044c5e7168f763558600a8a9833ee1fd082a1848",
+        "bytes": 11789
+      },
+      {
+        "path": "scripts/rea-model-gguf-layout-probe.cpp",
+        "sha256": "cb8934f1f313938d4455691a1ed5d882d91894f0680839bf8d81527ea13731b7",
+        "bytes": 1778
+      },
+      {
+        "path": "scripts/rea-model-worker-lifecycle.test.mjs",
+        "sha256": "a85068979b462eb67db31fc3047e65c8d50e8573f8d51927bade7f00fe2883fb",
+        "bytes": 6360
+      },
+      {
         "path": "scripts/rea-number-bit-reference.mjs",
         "sha256": "9ab5ab164889f6ebde4ce2d7f074584a74c4276a55adf67c1be1102122ce6603",
         "bytes": 5317
@@ -602,13 +633,23 @@
       },
       {
         "path": "scripts/rea_evidence_import_qualification.py",
-        "sha256": "e943ad5ed7ccd8e7f7409d5e8552cb79700fe699839d7252897cae1a1da98389",
-        "bytes": 28443
+        "sha256": "1e8486d2dd4eed175073a87e9801b25184ec262aecb45dd160f5237bc8abfec6",
+        "bytes": 30891
       },
       {
         "path": "scripts/rea_json_differential.py",
         "sha256": "a50826baf7d3fa6cc0634befff43fbb9faadff8574c2e99506068905fd2c6f99",
         "bytes": 32394
+      },
+      {
+        "path": "scripts/rea_recorded_core_corpus.py",
+        "sha256": "026a42ba0b3a37a9a448e46366f52ef44968df221201990dfbfa1624396ac7fa",
+        "bytes": 20922
+      },
+      {
+        "path": "scripts/rea_recorded_core_differential.py",
+        "sha256": "0d3ab3c3db0b3ee3675ad360674a6e7c4cf5ef5b4112aacb6f0ddfc9f0ff7a8c",
+        "bytes": 36145
       },
       {
         "path": "src/bin/jobctl.rs",
@@ -617,8 +658,13 @@
       },
       {
         "path": "src/cli.rs",
-        "sha256": "6314bbb91df367b3552e37cacbe9d7c6b8917392fc1caaa85c8b2baeb74681d3",
-        "bytes": 4776
+        "sha256": "af759cb2b23bd230ecf5ca2fe8cbc3194abc50a2c49aaa9974dc1d77ba4b5066",
+        "bytes": 4983
+      },
+      {
+        "path": "src/cli_recorded_core_tests.rs",
+        "sha256": "846e55e11013412802a0bbb5d95dda6c4f0240ab410cf68f62ff04c9915c7840",
+        "bytes": 886
       },
       {
         "path": "src/jobctl_engine_scratch_tests.rs",
@@ -632,13 +678,13 @@
       },
       {
         "path": "src/main.rs",
-        "sha256": "c7782a35b6846db3600aaca92da1ace10a09b0e705075d56ebe3094cb0087739",
-        "bytes": 12530
+        "sha256": "c7d92845ca693e192a878a340d7532accdef99ebe77fdb6853d2fba269b0020e",
+        "bytes": 12843
       },
       {
         "path": "src/mcp/mod.rs",
-        "sha256": "13f072220649f202c0c3c4763205f0547192c69794b27f987cd1729b51dfcf86",
-        "bytes": 3146
+        "sha256": "381f110bdb53cf22c457b7f347975118ad946e5d0e0ce4a36c7cedcbc336a4fa",
+        "bytes": 3278
       },
       {
         "path": "src/mcp/rea.rs",
@@ -647,8 +693,8 @@
       },
       {
         "path": "src/mcp/rea_analysis_view.rs",
-        "sha256": "21fd3021a6a31a1e42f50634de58b674e865e7e494b8c868b1f47e47bc6c6094",
-        "bytes": 18470
+        "sha256": "50a0906a93b7b53b32b9e515d818fadb00304541d1e9127d264b88a1f9435087",
+        "bytes": 18588
       },
       {
         "path": "src/mcp/rea_analysis_view_mcp_input.rs",
@@ -662,8 +708,8 @@
       },
       {
         "path": "src/mcp/rea_analysis_view_tests.rs",
-        "sha256": "2b7bf0dd5676d8bda822ff2eb5c4a958af476c4e7bbee5cfca40e4f3f5abfca8",
-        "bytes": 5052
+        "sha256": "aaf174d28e91d2cdc94bf58ba3acafc0ec2e914183481dbc3c344cc17713d860",
+        "bytes": 6488
       },
       {
         "path": "src/mcp/rea_apk_evidence.rs",
@@ -857,13 +903,13 @@
       },
       {
         "path": "src/mcp/rea_contract.rs",
-        "sha256": "1d1935c1823ad5f9f02720ecce259170473212afdda207a13405ea19d570dea2",
-        "bytes": 21687
+        "sha256": "c18c3129bcd1c772d87ce082ccfd379781245cb6138dabca05278259b6128b1b",
+        "bytes": 21679
       },
       {
         "path": "src/mcp/rea_contract_failure_tests.rs",
-        "sha256": "6f9377a640db7c9b6df4fe839d0c4b9d0292ca5dffc414d3aa95dafc21691a1a",
-        "bytes": 6037
+        "sha256": "147375955fdb34056aca5fe5b51c9d1516adb0f1c8386bab239dcea6c19cabe0",
+        "bytes": 12688
       },
       {
         "path": "src/mcp/rea_contract_schemas/export_evidence_bundle.input.json",
@@ -1042,13 +1088,13 @@
       },
       {
         "path": "src/mcp/rea_evidence_checkpoint_store.rs",
-        "sha256": "21690871446f102ac02cc9f9a8292cfb27902d4004821ca8f9d29dd03d0fb2e4",
-        "bytes": 22147
+        "sha256": "8561244e7d7a30c82eaa7180ad8ebc526246b06086b6b0237b90b9d212df9e4a",
+        "bytes": 24479
       },
       {
         "path": "src/mcp/rea_evidence_checkpoint_tests.rs",
-        "sha256": "18e1cd08f725416fbc9bb8e3558be691762d6ce9b03ce7739843189e1c9cf6ce",
-        "bytes": 25518
+        "sha256": "d8d8abad00dbd30a35e5fe31d1fc45c236e56113546766d6eb3da6215ca07885",
+        "bytes": 30346
       },
       {
         "path": "src/mcp/rea_evidence_export.rs",
@@ -1062,23 +1108,28 @@
       },
       {
         "path": "src/mcp/rea_evidence_file.rs",
-        "sha256": "9e9bc5e5c923d34d2b0d0a2613d82f900ab9dbbc414571d58ed5c2d4b984d89e",
-        "bytes": 31549
+        "sha256": "cbefc265f1d105d73831160029697ab6962bcca01d836766707927b4b1451902",
+        "bytes": 35160
       },
       {
         "path": "src/mcp/rea_evidence_file_tests.rs",
-        "sha256": "a4e43f2d5d7b3219e9896adbd3b95169274966de9fe4b0bce771dee6553664a3",
-        "bytes": 30105
+        "sha256": "74ac2e0de2b3b8e30b96e633c9a2c20d0a3d46c9381d82e937e9a7f803892b71",
+        "bytes": 34884
       },
       {
         "path": "src/mcp/rea_evidence_import.rs",
-        "sha256": "f19d145c5d2c06d6752d63b88ddeef9039293ba9685ca301c8e07921f7e14627",
-        "bytes": 10179
+        "sha256": "af98a01db8bdb047d86713be0e236fc1d38f4c3203f83d90b6f917004ff78114",
+        "bytes": 10320
       },
       {
         "path": "src/mcp/rea_evidence_import_tests.rs",
-        "sha256": "ce3bdadc577516ee435a114faf804b5416f93f4265fa682c928c26c322395a18",
-        "bytes": 8275
+        "sha256": "8362ba0884fe9352f6e4ced7636722563ce24bc4a2cfda96d17dc0e36a077e79",
+        "bytes": 12304
+      },
+      {
+        "path": "src/mcp/rea_evidence_root_string_tests.rs",
+        "sha256": "e3f77b2e862a926d2680b0bcca75c7bebe47ce5422c0e229a72e84360c90b4a8",
+        "bytes": 18113
       },
       {
         "path": "src/mcp/rea_evidence_session.rs",
@@ -1092,8 +1143,8 @@
       },
       {
         "path": "src/mcp/rea_evidence_source.rs",
-        "sha256": "6b3f5884f06b813147bd4b8cc5e568f77cff5a05647f8a95d50b2b4c69058d85",
-        "bytes": 44724
+        "sha256": "50c3c7520bb07d15ad54634f8d6f33d270cd7b2cb556212c5afe17bf2dcf3703",
+        "bytes": 45310
       },
       {
         "path": "src/mcp/rea_evidence_source_length.rs",
@@ -1147,8 +1198,8 @@
       },
       {
         "path": "src/mcp/rea_failure_order.rs",
-        "sha256": "e61aeeb658b42537d084b91a8cba122baf25e3ed522a5baad29b74732039a067",
-        "bytes": 3339
+        "sha256": "3c8c1eb06dbeb04e088e96f7543bd095a131ac4a9ed10fd295451c0c4bcfd220",
+        "bytes": 5738
       },
       {
         "path": "src/mcp/rea_files.rs",
@@ -1222,8 +1273,8 @@
       },
       {
         "path": "src/mcp/rea_json_eof.rs",
-        "sha256": "5fb1dde101c3b800d5e8475bd56dd1b75d72b4ed04fd99387f8344ae161cb1bc",
-        "bytes": 14597
+        "sha256": "f6ed46d84ec804024c5f654a2f405d3741fc42fda7fa6aeb88adeb29a8b2fa30",
+        "bytes": 15113
       },
       {
         "path": "src/mcp/rea_mcp_input.rs",
@@ -1247,18 +1298,18 @@
       },
       {
         "path": "src/mcp/rea_model_parser.rs",
-        "sha256": "271b5f75e110d71405258257d99b0f655b22983401f53e8e015f3932eaa5c8bf",
-        "bytes": 21593
+        "sha256": "1997cc703253a9223a5b2f693e6830c77ab592a3cb0246281d6374e3307a99ad",
+        "bytes": 24570
       },
       {
         "path": "src/mcp/rea_model_parser_tests.rs",
-        "sha256": "805c0e90f6b28d428827ff83690c3c070094087099a89f44f2f1cf0612f1bc5c",
-        "bytes": 9410
+        "sha256": "2d97b4bed49c92ddd270e06571755695c3f759320f30dead58389a9183c4be94",
+        "bytes": 16688
       },
       {
         "path": "src/mcp/rea_model_session.rs",
-        "sha256": "088598b2ca7f33affef61f859c4738b4fbb618b3ab060b8626f47c3fd54d679c",
-        "bytes": 27246
+        "sha256": "b1b9d7dd3c64b2bffe2103c9d28c1eaf349a26527b7d457f11fd09fbc348e095",
+        "bytes": 27551
       },
       {
         "path": "src/mcp/rea_model_session_index.rs",
@@ -1272,8 +1323,8 @@
       },
       {
         "path": "src/mcp/rea_model_session_tests.rs",
-        "sha256": "da4c781fe16963a5ef6e491752c167cd08b67a8768d9b9475edd95b6925ee7e4",
-        "bytes": 22960
+        "sha256": "4446044d54971fe16dde8c961c3aa1ee9306dea732350ba714f3bd978c3383a2",
+        "bytes": 30968
       },
       {
         "path": "src/mcp/rea_model_tests.rs",
@@ -1294,6 +1345,41 @@
         "path": "src/mcp/rea_provider_tests.rs",
         "sha256": "1a6cef8917851c5cf5ced907bfc7be0b62fb3e89e9fda2901ba82e77071d48a9",
         "bytes": 25950
+      },
+      {
+        "path": "src/mcp/rea_recorded_core_budget.rs",
+        "sha256": "c007c6bc7377da99aca0054d744cec104b8d466e0c84d60b83525e5e7e3b1271",
+        "bytes": 4502
+      },
+      {
+        "path": "src/mcp/rea_recorded_core_layout.rs",
+        "sha256": "8599656a07c9339f5b1af61daa33b39d41f559cbc766fa04f6ccc562d08f82cd",
+        "bytes": 4111
+      },
+      {
+        "path": "src/mcp/rea_recorded_core_parser.rs",
+        "sha256": "bdb49c6874d09c0e9bc6524c93c022eba5b19f532271474a654c06be0aedbbf7",
+        "bytes": 15600
+      },
+      {
+        "path": "src/mcp/rea_recorded_core_parser_tests.rs",
+        "sha256": "d14f2b62814fc01d2211ff37ecd0a9ff72f865a9d6a940e09b318e66f12cc167",
+        "bytes": 25886
+      },
+      {
+        "path": "src/mcp/rea_recorded_core_sections.rs",
+        "sha256": "db898c0c76dc4bb0a0ebb8c21995895e2fbafe33548fc6d7e05a2a1bec8dde95",
+        "bytes": 12726
+      },
+      {
+        "path": "src/mcp/rea_recorded_core_worker.rs",
+        "sha256": "e5dc24817d53dc5026d5d362e67cf64d60a842127cddd57f5dc98d89ed178e8e",
+        "bytes": 13896
+      },
+      {
+        "path": "src/mcp/rea_recorded_core_worker_tests.rs",
+        "sha256": "a61b3040f7f8c6161788802b79861811af4b247aa4ecc2369daab93f73729e55",
+        "bytes": 10884
       },
       {
         "path": "src/mcp/rea_residual_unknown.rs",
@@ -1446,6 +1532,11 @@
         "bytes": 5831
       },
       {
+        "path": "tests/fixtures/rea_evidence_file/import-error-text-original-118-rea-6_8_0-679ccf.json",
+        "sha256": "d15eb3fcc59d06c47e06f8efcc92978a7ef29aa679f808dda005fa078c434317",
+        "bytes": 167169
+      },
+      {
         "path": "tests/fixtures/rea_evidence_file/import-error-text-original-rea-6_8_0-679ccf.json",
         "sha256": "b74ccf73b6399eaa757514d8eed343a251a60ea11855f30deebb554d581e4d23",
         "bytes": 26600
@@ -1479,6 +1570,46 @@
         "path": "tests/fixtures/rea_evidence_file/syntax-reference-679ccf.json",
         "sha256": "4e1559cc9656af599dc5e02707cef17bf5faa943d348136d6108395abd5527c7",
         "bytes": 26170
+      },
+      {
+        "path": "tests/fixtures/rea_evidence_file/syntax-reference-r1.json",
+        "sha256": "82481a2ec3c3b74202f6d7c4fb2ac83dd87dc70d831a7840a0f4a226847dbc08",
+        "bytes": 39547
+      },
+      {
+        "path": "tests/fixtures/rea_evidence_root_string/node-probe.js",
+        "sha256": "6ff57ad93a277b850a1c27935c9d02dbe4b7b0096414c76de455e23a553bb58a",
+        "bytes": 969
+      },
+      {
+        "path": "tests/fixtures/rea_evidence_root_string/node-probe.stdout",
+        "sha256": "05bd4b43034a51666a6954a900150a2184946aab5b1b4657638eed26775808a0",
+        "bytes": 2529
+      },
+      {
+        "path": "tests/fixtures/rea_evidence_root_string/original-116-valid-json-control-12.json",
+        "sha256": "67aafb48282c3b8e538f05d58fa5f2dc5b137ab5faf746807d445068051362a0",
+        "bytes": 5782
+      },
+      {
+        "path": "tests/fixtures/rea_evidence_root_string/original-controls.json",
+        "sha256": "53fa6eace4cc9e9d8870e81f7c68f0eb382d9a42db17c97d18b97e090658acce",
+        "bytes": 44099
+      },
+      {
+        "path": "tests/fixtures/rea_evidence_root_string/producer-r2.py",
+        "sha256": "7133ec323f7c21159f2de46e664f05129796ad335cc9e47b111f0d958921688e",
+        "bytes": 9205
+      },
+      {
+        "path": "tests/fixtures/rea_evidence_root_string/producer-run.stdout",
+        "sha256": "a051657002c62ada20dff88912f66a6519e982908653ec526e0a74d049c7db10",
+        "bytes": 932
+      },
+      {
+        "path": "tests/fixtures/rea_evidence_root_string/provenance.json",
+        "sha256": "afcbf591ceb8214025d18ec6570b8c0cd51ed6b402fbd0dd3705a4bf27bf70d5",
+        "bytes": 10318
       },
       {
         "path": "tests/fixtures/rea_javascript/alias-order-original-6.8.0.json",
@@ -1549,6 +1680,11 @@
         "path": "tests/fixtures/rea_javascript/util.js",
         "sha256": "92f9be1410544b52e185c7d7945b645c0a1efe31a89886e3e53de3e530b91cf7",
         "bytes": 92
+      },
+      {
+        "path": "tests/fixtures/rea_recorded_core/dynamic-sections-rea-6.8.0.json",
+        "sha256": "c44df75dc8d80ffcdf49791d371600ab172849c30abb33194bbd8a234117f111",
+        "bytes": 70934
       },
       {
         "path": "tests/rea_apk_signature_mcp.py",
@@ -1706,7 +1842,7 @@
         "bytes": 23260
       }
     ],
-    "source_manifest_sha256": "925fc4dddf0c9fa75d9219ea330f2d2ea2b1568f037e8a987a51bbc189d7315f"
+    "source_manifest_sha256": "105a26800dcf6f7dd865216ff662e17d00eecea090e48395f2dd81ba53a30566"
   },
   "environment_observations_sha256": "4ace5e8f041a05d205825fb2b2a41769fcfdc91f60810072eb7a6c17a12f3e9c",
   "dependency_assessments": {
@@ -2300,16 +2436,16 @@
       "hard_missing_dependency": "NOT_ESTABLISHED"
     }
   },
-  "mapping_sha256": "1e1164a611992e622e7e7d742e7a85d2dc6cf90a1fa176cf5983729f1da532e0",
+  "mapping_sha256": "5bfea540562855055df1769fd23be648f01d3b72d2dcd874f0a7231604b42479",
   "inputs_sha256": "d143681c5384d0cff75d72659cd36381eaff60ca5bf3fe45fb5290b3eccc6904",
   "summary": {
     "published_tools": 229,
     "families": 18,
     "native_interfaces": 35,
     "implementation_counts": {
-      "absent": 188,
+      "absent": 187,
       "partial_operation": 22,
-      "related_facility": 19
+      "related_facility": 20
     },
     "qualified_tools": 0,
     "open_tools": 229,
@@ -2679,8 +2815,8 @@
         "rea_model_session_query",
         "rea_model_session_read"
       ],
-      "native_scope": "GGUF/safetensors directory, header/full hash, selected extents and immutable model snapshots",
-      "remaining_behavior": "Upstream Evidence, exact supported type/layout/metadata semantics and default limits, all error/detail/view cases",
+      "native_scope": "GGUF/safetensors directory, header/full hash, 18 pinned invariant GGML scalar/block layouts with fastest-dimension constraints, checked exact ranges and immutable model snapshots under parser profile v2. Historical ambiguous layouts remain explicit.",
+      "remaining_behavior": "Full upstream Evidence and supported metadata/value semantics, quantized payload decoding, unknown or historically ambiguous layouts, exact default limits and every error/detail/view case. Old v1 model indexes are explicitly rejected; source reopen is required and retained v1 directories keep global listing fail-closed.",
       "dependencies": [],
       "related_runtime_routes": [],
       "related_auxiliary_capabilities": [],
@@ -2699,7 +2835,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Upstream Evidence, exact supported type/layout/metadata semantics and default limits, all error/detail/view cases"
+          "next_step": "Full upstream Evidence and supported metadata/value semantics, quantized payload decoding, unknown or historically ambiguous layouts, exact default limits and every error/detail/view case. Old v1 model indexes are explicitly rejected; source reopen is required and retained v1 directories keep global listing fail-closed."
         },
         {
           "category": "behavioral_differential",
@@ -13425,10 +13561,17 @@
         "idempotentHint": true,
         "openWorldHint": true
       },
-      "native_implementation": "absent",
+      "native_implementation": "related_facility",
       "native_routes": [],
-      "native_scope": "No upstream-compatible handler is registered in the pinned native runtime",
-      "remaining_behavior": "Exact native format operation or platform observation; header recognition is insufficient",
+      "native_scope": "Native recorded-core payload parsing exists as an internal captured-byte worker. This is a partial helper migration with explicit admission and outer-protocol differences, not the public operation.",
+      "remaining_behavior": [
+        "Public inspect_recorded_crash MCP schema, handler and Provider integration",
+        "Original request/reply-file, resource-marker and effective-limit behavior parity",
+        "Complete noncanonical section payload semantics, including nonempty ELF/GNU hash bodies and non-ASCII Python diagnostic representation, beyond bounded constructor traversal",
+        "Evidence retention, pagination, import/export and post-cancel query integration",
+        "Optional GDB/pwndbg crash enrichment and complete recorded-crash operation differential",
+        "Same-combination multi-host recovery and cost qualification"
+      ],
       "dependencies": [
         {
           "component": "pwntools-pyelftools-unicorn",
@@ -13446,7 +13589,9 @@
         }
       ],
       "related_runtime_routes": [],
-      "related_auxiliary_capabilities": [],
+      "related_auxiliary_capabilities": [
+        "recorded_core_worker"
+      ],
       "required_behavior_gates": [
         "contracts",
         "results",
@@ -13462,7 +13607,14 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Exact native format operation or platform observation; header recognition is insufficient"
+          "next_step": [
+            "Public inspect_recorded_crash MCP schema, handler and Provider integration",
+            "Original request/reply-file, resource-marker and effective-limit behavior parity",
+            "Complete noncanonical section payload semantics, including nonempty ELF/GNU hash bodies and non-ASCII Python diagnostic representation, beyond bounded constructor traversal",
+            "Evidence retention, pagination, import/export and post-cancel query integration",
+            "Optional GDB/pwndbg crash enrichment and complete recorded-crash operation differential",
+            "Same-combination multi-host recovery and cost qualification"
+          ]
         },
         {
           "category": "behavioral_differential",
@@ -19131,8 +19283,8 @@
       "native_routes": [
         "rea_import_evidence_bundle"
       ],
-      "native_scope": "Public authenticated bulk import of records and complete unknown revision histories, process-capture validation, atomic union validation/rollback, repeat-import metadata semantics and retained session readback under the native Linux source/owner profile.",
-      "remaining_behavior": "Remaining original JSON parser diagnostics and value-representation profiles, including unpaired-surrogate and overflow cases; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries beyond the finite reference corpus; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits are recorded profile differences.",
+      "native_scope": "Public authenticated bulk import of records and complete unknown revision histories, process-capture validation, atomic union validation/rollback, repeat-import metadata semantics and retained session readback under the native Linux source/owner profile. Bounded small-file JSON observation retains pinned EOF and non-EOF diagnostics and typed string-root rejection while preserving late read, UTF-8, quota and cancellation failures.",
+      "remaining_behavior": "Unrepresentable V8 diagnostic windows that split UTF-16 surrogate pairs, nested unpaired-surrogate and numeric-overflow representation profiles, and syntax beyond the finite captured corpus; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits remain explicit profile differences.",
       "dependencies": [],
       "related_runtime_routes": [
         "rea_verify_evidence",
@@ -19160,7 +19312,7 @@
         {
           "category": "code_and_contracts",
           "status": "OPEN",
-          "next_step": "Remaining original JSON parser diagnostics and value-representation profiles, including unpaired-surrogate and overflow cases; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries beyond the finite reference corpus; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits are recorded profile differences."
+          "next_step": "Unrepresentable V8 diagnostic windows that split UTF-16 surrogate pairs, nested unpaired-surrogate and numeric-overflow representation profiles, and syntax beyond the finite captured corpus; complete frozen filesystem, platform, parser/resource, ownership, every-producer and fault boundaries; full multi-host recovery and replacement qualification remain open. Native estimated materialization/scalar-token/depth admission limits remain explicit profile differences."
         },
         {
           "category": "behavioral_differential",

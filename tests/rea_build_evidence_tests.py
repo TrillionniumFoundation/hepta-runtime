@@ -454,6 +454,18 @@ class BuildEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "environment observation is missing"):
             self.fixture.validate()
 
+    def test_cargo_terminal_success_requires_a_json_boolean(self):
+        original = self.fixture.artifacts["09-build-native-binary.stdout.log"]
+        messages = [json.loads(line) for line in original.splitlines()]
+        self.fixture.validate()
+        for value in (False, 0, 1, 1.0, "true", None, [], {}):
+            changed = deepcopy(messages)
+            changed[-1]["success"] = value
+            self.fixture.replace_log(9, "stdout", b"".join(
+                json.dumps(item).encode() + b"\n" for item in changed))
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "Cargo"):
+                self.fixture.validate()
+
     def test_stale_binary_and_wrong_or_unfinished_cargo_artifact_cannot_attest_a_build(self):
         original = self.fixture.artifacts["09-build-native-binary.stdout.log"]
         messages = [json.loads(line) for line in original.splitlines()]

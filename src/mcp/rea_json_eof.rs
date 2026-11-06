@@ -100,6 +100,7 @@ pub(super) struct Tracker {
 	error: Option<FirstError>,
 	utf8_value: u32,
 	utf8_remaining: u8,
+	root_string: bool,
 }
 
 impl Tracker {
@@ -120,6 +121,7 @@ impl Tracker {
 			error: None,
 			utf8_value: 0,
 			utf8_remaining: 0,
+			root_string: false,
 		}
 	}
 
@@ -302,6 +304,7 @@ impl Tracker {
 			'[' => self.push(Frame::ArrayFirst),
 			'{' => self.push(Frame::ObjectFirst),
 			'"' => {
+				self.root_string |= self.depth == 1;
 				self.token = Token::String {
 					key: false,
 					escape: Escape::None,
@@ -425,6 +428,19 @@ impl Tracker {
 		self.token = Token::Number(next);
 	}
 
+	/// Classify a complete top-level JS string without fabricating a Rust value.
+	/// The owner may use this type proof only after checked physical EOF.
+	pub(super) fn complete_root_string(&self) -> bool {
+		self.valid_prefix
+			&& self.utf8_remaining == 0
+			&& self.error.is_none()
+			&& self.root_string
+			&& self.depth == 1
+			&& matches!(self.token, Token::None)
+			&& matches!(self.frames[0], Frame::RootEnd)
+	}
+
+	#[cfg(test)]
 	pub(super) fn has_syntax_error(&self) -> bool {
 		self.error.is_some()
 	}

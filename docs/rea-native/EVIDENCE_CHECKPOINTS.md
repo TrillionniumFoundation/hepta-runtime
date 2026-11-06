@@ -116,6 +116,15 @@ bounded execution slot, and a descriptor-backed cross-process store lock until
 the real work ends. Dropping the awaiting task cancels its child token but does
 not release those owners while blocking filesystem work is still in progress.
 
+Every create or reconcile admission confirms the complete configured state
+directory parent chain with real directory synchronization, including parents
+left by a failed earlier attempt. A newly created state path therefore cannot
+receive a durability receipt merely because its internal checkpoint directory
+was synced. The configured final state path is reopened without following a
+final symlink and matched to its retained owner, mode, device and inode before
+and after this step. Parent traversal keeps the trusted administrator path
+policy.
+
 New commits write all three files into an exclusive private staging directory,
 sync each file, explicitly close it, and sync the staging directory. Immediately
 before create-only `renameat2(RENAME_NOREPLACE)`, the store revalidates the staged
@@ -136,7 +145,8 @@ commit left by an interrupted prior owner.
 
 The store opens private directories and regular files relative to retained
 descriptors, rejects symlinks, hard links, foreign ownership and wrong modes, and
-rechecks named directory and member identity after complete reads. Retained file
+rechecks the configured state-directory name, checkpoint directory, and member
+identity after complete reads and at every existing commit binding fence. Retained file
 metadata binds manifest, bundle and sidecar observations together; replacing an
 already read manifest cannot be combined with later payload reads. Catalog
 responses retain those observations until their final binding checks.

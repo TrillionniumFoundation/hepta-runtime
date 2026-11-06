@@ -178,3 +178,41 @@ fn a_summary_receipt_cannot_replace_its_complete_parent() {
 		"unsupported_target"
 	);
 }
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn file_root_string_proof_preserves_the_existing_analysis_view_schema_refusal() {
+	// Native integration consistency: real Node/REA fixture observations cover
+	// import. This test does not claim a newly captured original analysis view.
+	let directory = tempfile::tempdir().unwrap();
+	let path = directory.path().join("root-string.json");
+	let session = Arc::new(EvidenceSession::default());
+	let mut ordinary = None;
+	for bytes in [br#""plain""#.as_slice(), br#""\uD800""#.as_slice()] {
+		std::fs::write(&path, bytes).unwrap();
+		let result = inspect(
+			json!({"source":{"kind":"evidence-file","path":path}, "view":{"kind":"summary"}}),
+			None,
+			vec![directory.path().to_owned()],
+			Arc::clone(&session),
+			CancellationToken::new(),
+			permit().await,
+		)
+		.await;
+		assert_eq!(result.is_error, Some(true));
+		let text = result.content[0].as_text().unwrap().text.clone();
+		let value: Value = serde_json::from_str(&text).unwrap();
+		assert_eq!(value["error"]["details"]["reason"], "wrong-kind");
+		assert_eq!(
+			value["error"]["details"]["content_issues"],
+			json!([{"path":[],"reason":"invalid_type","expected":"object"}])
+		);
+		if let Some(expected) = ordinary.as_ref() {
+			assert_eq!(&text, expected);
+		} else {
+			ordinary = Some(text);
+		}
+		assert_eq!(session.snapshot().unwrap().record_count(), 0);
+		assert_eq!(session.snapshot().unwrap().unknown_count(), 0);
+	}
+}

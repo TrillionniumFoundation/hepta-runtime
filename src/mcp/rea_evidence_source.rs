@@ -1131,6 +1131,21 @@ fn bundle_schema_error(error: SourceError) -> SourceError {
 	}
 }
 
+/// A fully observed JSON.parse root string always fails the object schema.
+/// This typed rejection also handles escaped lone surrogates without replacing
+/// them with a different string or admitting any fabricated Evidence payload.
+pub(super) fn reject_string_root(bundle: bool) -> SourceError {
+	let error = SourceError::InvalidRecord {
+		issues: vec![json!({"path":[],"reason":"invalid_type","expected":"object"})],
+		description: "at the document root: Invalid input: expected object, received string".into(),
+	};
+	if bundle {
+		bundle_schema_error(error)
+	} else {
+		error
+	}
+}
+
 fn bundle_constraint(message: &str) -> SourceError {
 	SourceError::InvalidBundle {
 		message: format!(

@@ -95,6 +95,9 @@ pub(super) enum FileReadError {
 		message: String,
 		user_message: Option<String>,
 	},
+	/// A complete JSON.parse string whose escaped UTF-16 cannot become a Rust
+	/// string. Callers may reject its known root type; no value is fabricated.
+	RootString(RootStringProof),
 	Cancelled,
 	NativeProfileGap {
 		feature: &'static str,
@@ -117,6 +120,9 @@ impl fmt::Display for FileReadError {
 			Self::InvalidJson { message, .. } | Self::Unexpected { message } => {
 				f.write_str(message)
 			}
+			Self::RootString(_) => f.write_str(
+				"Evidence JSON root is a string outside the Rust Unicode representation",
+			),
 			Self::Cancelled => f.write_str("Evidence file acquisition cancelled"),
 			Self::NativeProfileGap { feature, .. } => {
 				write!(f, "Native Evidence JSON profile: {feature}")
@@ -204,6 +210,24 @@ pub(super) struct OwnedJson {
 	pub selected_path: String,
 	pub input_bytes: u64,
 	pub sha256: String,
+}
+
+/// Negative schema evidence for one acquired complete root string. Private fields
+/// and no Deserialize/constructor prevent callers from manufacturing this fact.
+/// The owner constructs it only after the source descriptor actually closes and
+/// cancellation is checked again. It is never a parsed or substituted JSON value.
+#[derive(Debug, Serialize)]
+pub(super) struct RootStringProof {
+	selected_path: String,
+	input_bytes: u64,
+	sha256: String,
+}
+
+#[cfg(target_os = "linux")]
+struct RootStringCandidate {
+	selected_path: String,
+	input_bytes: u64,
+	sha256: String,
 }
 
 fn gap(feature: &'static str, details: Value) -> FileReadError {
@@ -498,12 +522,51 @@ fn read_blocking(
 	active(&cancellation)?;
 	let _ = normalized_error_path(path)?;
 	let (mut file, before) = open_confined(Path::new(path), roots, &cancellation)?;
-	let result = read_admitted(&mut file, &before, path, roots, &cancellation, limits);
+	let mut root_string = None;
+	let result = read_admitted(
+		&mut file,
+		&before,
+		path,
+		roots,
+		&cancellation,
+		limits,
+		&mut root_string,
+	);
+	// Close the actual source descriptor with the original representation error
+	// still intact. A failed close must not be mistaken for a schema rejection.
 	let result = close_result(file, result);
-	if result.is_ok() {
-		active(&cancellation)?;
+	finish_after_close(result, root_string, &cancellation)
+}
+
+#[cfg(target_os = "linux")]
+fn finish_after_close(
+	result: Result<OwnedJson>,
+	root_string: Option<RootStringCandidate>,
+	cancellation: &CancellationToken,
+) -> Result<OwnedJson> {
+	match (result, root_string) {
+		(Ok(value), _) => {
+			active(cancellation)?;
+			Ok(value)
+		}
+		(
+			Err(FileReadError::NativeProfileGap {
+				feature: "json-diagnostic-or-value-representation",
+				..
+			}),
+			Some(candidate),
+		) => {
+			active(cancellation)?;
+			Err(FileReadError::RootString(RootStringProof {
+				selected_path: candidate.selected_path,
+				input_bytes: candidate.input_bytes,
+				sha256: candidate.sha256,
+			}))
+		}
+		// In particular, never promote a representation error nested inside a
+		// Cleanup failure. The retained candidate alone is not a closed proof.
+		(result, _) => result,
 	}
-	result
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -524,7 +587,9 @@ fn read_admitted(
 	roots: &[PathBuf],
 	cancellation: &CancellationToken,
 	limits: NativeJsonLimits,
+	root_string: &mut Option<RootStringCandidate>,
 ) -> Result<OwnedJson> {
+	*root_string = None;
 	let small = before.len() <= NATIVE_JSON_THRESHOLD;
 	let mut first_digest = None;
 	let mut early_error = None;
@@ -578,20 +643,59 @@ fn read_admitted(
 	close_result(current_file, identity)?;
 	active(cancellation)?;
 	let observed = state.borrow();
-	// A syntax diagnostic now observes the complete second read as well.
-	// Do not publish a message from bytes that changed between the UTF-8 scan
-	// and parsing, even when the parsed outcome is an expected rejection.
-	if (parsed.is_ok() || observed.eof)
-		&& (observed.input_bytes != before.len()
-			|| first_digest
-				.as_ref()
-				.is_some_and(|digest| digest != &observed.digest()))
-	{
-		return Err(changed());
+	// Syntax diagnostics and known root-type rejections must describe the same
+	// complete bytes validated in the first pass, not a changed second read.
+	if observed.eof {
+		ensure_complete_read(&observed, before.len(), first_digest.as_deref())?;
 	}
-	let sha256 = observed.digest();
+	if small
+		&& observed.eof
+		&& observed.complete_root_string
+		&& observed.syntax_diagnostic.is_none()
+		&& observed.failure.is_none()
+		&& first_digest
+			.as_ref()
+			.is_some_and(|digest| digest == &observed.digest())
+		&& matches!(
+			&parsed,
+			Err(FileReadError::NativeProfileGap {
+				feature: "json-diagnostic-or-value-representation",
+				..
+			})
+		) {
+		// serde can stop at an unpaired surrogate before visit_string charges
+		// its payload. Use the whole checked source as a conservative upper
+		// bound; an early representation refusal never bypasses native budgets.
+		let estimated = observed
+			.input_bytes
+			.checked_mul(2)
+			.and_then(|bytes| bytes.checked_add(64))
+			.and_then(|bytes| observed.materialized.checked_add(bytes));
+		if !estimated.is_some_and(|bytes| bytes <= limits.max_materialized_bytes) {
+			return Err(gap(
+				"native-json-materialization-budget",
+				json!({
+					"estimated_materialized_bytes": estimated,
+					"max_materialized_bytes": limits.max_materialized_bytes,
+					"reason": "complete-root-string proof requires a conservative materialization bound"
+				}),
+			));
+		}
+		// Both full reads, the source fd and the current confined name have
+		// passed their fences. This private candidate is not yet deliverable:
+		// read_blocking must still close the source and check cancellation.
+		*root_string = Some(RootStringCandidate {
+			selected_path: path.into(),
+			input_bytes: observed.input_bytes,
+			sha256: observed.digest(),
+		});
+	}
 	drop(observed);
 	let value = parsed?;
+	let observed = state.borrow();
+	ensure_complete_read(&observed, before.len(), first_digest.as_deref())?;
+	let sha256 = observed.digest();
+	drop(observed);
 	Ok(OwnedJson {
 		value: value.value,
 		object_order: ObjectOrder(value.order),
@@ -599,6 +703,17 @@ fn read_admitted(
 		input_bytes: before.len(),
 		sha256,
 	})
+}
+
+#[cfg(target_os = "linux")]
+fn ensure_complete_read(state: &State, expected: u64, first_digest: Option<&str>) -> Result<()> {
+	if !state.eof
+		|| state.input_bytes != expected
+		|| first_digest.is_some_and(|digest| digest != state.digest().as_str())
+	{
+		return Err(changed());
+	}
+	Ok(())
 }
 
 struct State {
@@ -609,8 +724,8 @@ struct State {
 	input_bytes: u64,
 	hash: Sha256,
 	prefix: Vec<u8>,
-	eof_diagnostic: Option<String>,
 	syntax_diagnostic: Option<String>,
+	complete_root_string: bool,
 	eof: bool,
 	small: bool,
 }
@@ -624,8 +739,8 @@ impl State {
 			input_bytes: 0,
 			hash: Sha256::new(),
 			prefix: Vec::new(),
-			eof_diagnostic: None,
 			syntax_diagnostic: None,
+			complete_root_string: false,
 			eof: false,
 			small,
 		}
@@ -810,11 +925,8 @@ impl<R: Read> Read for CheckedReader<R> {
 			let mut state = self.state.borrow_mut();
 			state.eof = true;
 			if let Some(tracker) = self.eof_tracker.take() {
-				if tracker.has_syntax_error() {
-					state.syntax_diagnostic = tracker.finish();
-				} else {
-					state.eof_diagnostic = tracker.finish();
-				}
+				state.complete_root_string = tracker.complete_root_string();
+				state.syntax_diagnostic = tracker.finish();
 			}
 			return Ok(0);
 		}
@@ -870,15 +982,18 @@ fn parse_reader<R: Read>(reader: R, expected: u64, state: Rc<RefCell<State>>) ->
 		.deserialize(&mut parser)
 		.and_then(|value| parser.end().map(|_| value))
 	};
-	// Small-file JSON.parse diagnostics can include source after the first
-	// error. Drain only this bounded profile through the same checked owner:
-	// UTF-8, physical I/O, cancellation and native budgets retain priority.
-	// The value parser still decides rejection; the observer never accepts a
-	// document, and large-file streaming/error behavior stays unchanged.
-	if result.is_err() && state.borrow().small && state.borrow().failure.is_none() {
-		let mut discard = [0_u8; CHUNK];
+	if result
+		.as_ref()
+		.is_err_and(|error| error.is_syntax() || error.is_eof())
+		&& state.borrow().small
+		&& state.borrow().failure.is_none()
+	{
+		// A syntax failure can stop serde before the source ends. Keep the same
+		// bounded owner through UTF-8/token checks, cancellation and physical EOF
+		// so neither later read failures nor V8's following context are skipped.
+		let mut tail = [0_u8; CHUNK];
 		while buffered
-			.read(&mut discard)
+			.read(&mut tail)
 			.map_err(|error| take_reader_error(&state, error))?
 			!= 0
 		{}
@@ -893,18 +1008,14 @@ fn parse_reader<R: Read>(reader: R, expected: u64, state: Rc<RefCell<State>>) ->
 			if state.bom() {
 				return Err(invalid_json(BOM_MESSAGE, true));
 			}
-			// A physical EOF and an independently observed grammar failure are
-			// required. Valid JSON with an unsupported value representation has
-			// no syntax diagnostic and remains an explicit native profile gap.
-			// IoRead may reach EOF while filling a four-byte Unicode escape
-			// after the observer has already found its first invalid hex unit.
+			// The value parser rejected this same input, and the independently
+			// bounded observer reached physical EOF under the small-file profile.
+			// A complete root-string observation remains a representation gap
+			// here. Only the file owner can supply custody and close guarantees.
+			// IoRead can report EOF while filling a Unicode escape after an
+			// earlier invalid unit. Keep the observer\'s first syntax failure.
 			if (error.is_syntax() || error.is_eof()) && state.small && state.eof {
 				if let Some(message) = state.syntax_diagnostic.take() {
-					return Err(invalid_json(&message, false));
-				}
-			}
-			if error.is_eof() && state.small && state.eof {
-				if let Some(message) = state.eof_diagnostic.take() {
 					return Err(invalid_json(&message, false));
 				}
 			}
@@ -1092,3 +1203,7 @@ impl<'de> Visitor<'de> for Seed {
 #[cfg(all(test, target_os = "linux"))]
 #[path = "rea_evidence_file_tests.rs"]
 mod tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "rea_evidence_root_string_tests.rs"]
+mod root_string_tests;

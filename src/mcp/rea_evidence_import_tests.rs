@@ -1,5 +1,8 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
+
+//! Public import outcomes preserve schema failures and publish only authenticated bundles.
 
 use super::*;
 
@@ -234,4 +237,119 @@ async fn standalone_record_fallback_does_not_swallow_unexpected_schema_exception
 	let snapshot = session.snapshot().unwrap();
 	assert_eq!(snapshot.record_count(), 0);
 	assert_eq!(snapshot.unknown_count(), 0);
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn original_non_eof_and_root_string_failures_keep_complete_errors_and_session_contents() {
+	let fixture: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_evidence_file/syntax-reference-r1.json"
+	))
+	.unwrap();
+	let dir = tempfile::tempdir().unwrap();
+	let path = dir.path().join("invalid.json");
+	let session = Arc::new(EvidenceSession::default());
+	let before = payload(&session.get_bundle(json!({})));
+	let cases = fixture["public_cases"].as_array().unwrap();
+	assert_eq!(cases.len(), 15);
+	for case in cases {
+		let hex = case["input_hex"].as_str().unwrap();
+		let bytes: Vec<u8> = (0..hex.len())
+			.step_by(2)
+			.map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+			.collect();
+		tokio::fs::write(&path, &bytes).await.unwrap();
+		let result = call(&path, dir.path(), &session, CancellationToken::new()).await;
+		let mut expected = case["error"].clone();
+		if let Some(error_path) = expected["details"].get_mut("path") {
+			*error_path = json!(path);
+		}
+		assert_eq!(
+			payload(&result),
+			json!({"error": expected}),
+			"{}",
+			case["id"]
+		);
+		assert_eq!(result.is_error, Some(true));
+		assert_eq!(
+			payload(&session.get_bundle(json!({}))),
+			before,
+			"{}",
+			case["id"]
+		);
+	}
+	// Different valid root strings must reach the identical object-schema
+	// refusal. Their content is neither replaced nor retained as Evidence.
+	let expected = cases.last().unwrap()["error"].clone();
+	for input in [r#""plain""#, r#""\uDC00""#, " \n\"\\uD800x\" \r\n"] {
+		tokio::fs::write(&path, input).await.unwrap();
+		let result = call(&path, dir.path(), &session, CancellationToken::new()).await;
+		assert_eq!(payload(&result), json!({"error": expected}), "{input:?}");
+		assert_eq!(payload(&session.get_bundle(json!({}))), before);
+	}
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn real_root_string_controls_keep_original_error_text_and_do_not_import_evidence() {
+	let reference: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_evidence_root_string/original-controls.json"
+	))
+	.unwrap();
+	let directory = tempfile::tempdir().unwrap();
+	let path = directory.path().join("control.json");
+	let session = Arc::new(EvidenceSession::default());
+	let before = payload(&session.get_bundle(json!({})));
+	let mut exact = 0;
+	let mut gaps = 0;
+	for case in reference["cases"].as_array().unwrap() {
+		let hex = case["input_hex"].as_str().unwrap();
+		let bytes: Vec<u8> = (0..hex.len())
+			.step_by(2)
+			.map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+			.collect();
+		std::fs::write(&path, bytes).unwrap();
+		let actual = call(&path, directory.path(), &session, CancellationToken::new()).await;
+		assert_eq!(actual.is_error, Some(true), "{}", case["id"]);
+		if case["expected_native"] == "gap" {
+			assert_eq!(
+				payload(&actual)["error"]["code"],
+				"capability_unavailable",
+				"{}",
+				case["id"]
+			);
+			gaps += 1;
+		} else {
+			let response: Value =
+				serde_json::from_str(case["original_response_raw"].as_str().unwrap()).unwrap();
+			let request: Value =
+				serde_json::from_str(case["original_request_raw"].as_str().unwrap()).unwrap();
+			let original_path =
+				serde_json::to_string(&request["params"]["arguments"]["path"]).unwrap();
+			let current_path = serde_json::to_string(&path).unwrap();
+			let expected_text = response["result"]["content"][0]["text"]
+				.as_str()
+				.unwrap()
+				.replace(&original_path, &current_path);
+			assert_eq!(
+				actual.content[0].as_text().unwrap().text,
+				expected_text,
+				"{}",
+				case["id"]
+			);
+			assert_eq!(actual.structured_content, None, "{}", case["id"]);
+			assert_eq!(
+				actual.meta.as_ref().unwrap()["provenance"]["source"],
+				"analysis_target"
+			);
+			exact += 1;
+		}
+		assert_eq!(
+			payload(&session.get_bundle(json!({}))),
+			before,
+			"{}",
+			case["id"]
+		);
+	}
+	assert_eq!((exact, gaps), (18, 3));
 }

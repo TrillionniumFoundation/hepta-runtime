@@ -15,7 +15,7 @@ use std::fs::{File, Metadata, OpenOptions};
 use std::io::{Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
-use std::path::Component;
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio_util::sync::CancellationToken;
@@ -55,6 +55,76 @@ fn private_directory(file: &File) -> Result<()> {
 		"checkpoint directory must be owned and mode 0700"
 	);
 	Ok(())
+}
+
+fn administrator_directory(file: &File) -> Result<()> {
+	let metadata = file.metadata()?;
+	ensure!(
+		metadata.is_dir()
+			&& metadata.uid() == unsafe { libc::geteuid() }
+			&& metadata.mode() & 0o022 == 0,
+		"checkpoint administrator state directory must be owned and not writable by other accounts"
+	);
+	Ok(())
+}
+
+fn open_state_path(path: &Path) -> Result<File> {
+	let file = OpenOptions::new()
+		.read(true)
+		.custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+		.open(path)
+		.context("checkpoint administrator state directory is unavailable")?;
+	administrator_directory(&file)?;
+	Ok(file)
+}
+
+fn require_state_binding(path: &Path, expected: &File) -> Result<()> {
+	administrator_directory(expected)?;
+	let current = open_state_path(path)?;
+	let checked = (|| {
+		ensure!(
+			same_inode(&expected.metadata()?, &current.metadata()?),
+			"checkpoint configured state directory identity changed"
+		);
+		Ok(())
+	})();
+	let closed = close_file(current);
+	checked?;
+	closed
+}
+
+fn sync_state_ancestors(
+	path: &Path,
+	state: &File,
+	cancellation: &CancellationToken,
+	before_sync: &dyn Fn(&Path) -> Result<()>,
+) -> Result<()> {
+	require_state_binding(path, state)?;
+	// A failed earlier setup may have left any ancestor newly created but
+	// unsynced. Every create/reconcile attempt confirms the whole parent chain,
+	// including existing directories; syncing only this attempt's mkdirs is
+	// insufficient. Ancestor traversal retains the trusted-administrator path
+	// policy; only the final configured state directory is opened NOFOLLOW.
+	for parent in path.ancestors().skip(1) {
+		active(cancellation)?;
+		let directory = OpenOptions::new()
+			.read(true)
+			.custom_flags(libc::O_DIRECTORY | libc::O_CLOEXEC)
+			.open(parent)
+			.context("checkpoint state ancestor is unavailable for durability confirmation")?;
+		let synced = (|| {
+			before_sync(parent)?;
+			active(cancellation)?;
+			directory
+				.sync_all()
+				.context("checkpoint state ancestor durability is unconfirmed")?;
+			active(cancellation)
+		})();
+		let closed = close_file(directory);
+		synced?;
+		closed?;
+	}
+	require_state_binding(path, state)
 }
 
 fn private_file(metadata: &Metadata) -> Result<()> {
@@ -186,6 +256,7 @@ fn require_named_file(directory: &File, member: &str, expected: &Metadata) -> Re
 }
 
 pub(super) struct Directory {
+	state_path: PathBuf,
 	state: File,
 	root: File,
 	name: String,
@@ -195,6 +266,7 @@ pub(super) struct Directory {
 
 impl Directory {
 	pub(super) fn check_binding(&self) -> Result<()> {
+		require_state_binding(&self.state_path, &self.state)?;
 		require_named_directory(&self.state, ROOT_NAME, &self.root)?;
 		require_named_directory(&self.root, &self.name, &self.file)
 	}
@@ -307,6 +379,7 @@ impl Directory {
 }
 
 pub(super) struct Store {
+	state_path: PathBuf,
 	state: File,
 	root: File,
 }
@@ -317,6 +390,16 @@ impl Store {
 		create: bool,
 		exclusive: bool,
 		cancellation: &CancellationToken,
+	) -> Result<Option<Self>> {
+		Self::open_with_parent_sync_hook(scope, create, exclusive, cancellation, &|_| Ok(()))
+	}
+
+	pub(super) fn open_with_parent_sync_hook(
+		scope: &Scope,
+		create: bool,
+		exclusive: bool,
+		cancellation: &CancellationToken,
+		before_parent_sync: &dyn Fn(&Path) -> Result<()>,
 	) -> Result<Option<Self>> {
 		active(cancellation)?;
 		ensure!(
@@ -334,23 +417,13 @@ impl Store {
 				.mode(0o700)
 				.create(&scope.state_dir)?;
 		}
-		let state = match OpenOptions::new()
-			.read(true)
-			.custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
-			.open(&scope.state_dir)
-		{
+		let state = match open_state_path(&scope.state_dir) {
 			Ok(file) => file,
-			Err(error) if !create && error.kind() == std::io::ErrorKind::NotFound => {
-				return Ok(None)
-			}
-			Err(error) => {
-				return Err(error)
-					.context("checkpoint administrator state directory is unavailable")
-			}
+			Err(error) if !create && is_missing(&error) => return Ok(None),
+			Err(error) => return Err(error),
 		};
-		let metadata = state.metadata()?;
-		ensure!(metadata.is_dir() && metadata.uid() == unsafe { libc::geteuid() } && metadata.mode() & 0o022 == 0, "checkpoint administrator state directory must be owned and not writable by other accounts");
 		if create {
+			sync_state_ancestors(&scope.state_dir, &state, cancellation, before_parent_sync)?;
 			let made =
 				unsafe { libc::mkdirat(state.as_raw_fd(), name(ROOT_NAME)?.as_ptr(), 0o700) };
 			if made != 0
@@ -386,13 +459,18 @@ impl Store {
 			ensure!(Instant::now() < deadline, "checkpoint store is busy; retry the same request after the current owner completes");
 			std::thread::sleep(Duration::from_millis(10));
 		}
-		let store = Self { state, root };
+		let store = Self {
+			state_path: scope.state_dir.clone(),
+			state,
+			root,
+		};
 		store.check_binding()?;
 		store.storage_bytes()?;
 		Ok(Some(store))
 	}
 
 	fn check_binding(&self) -> Result<()> {
+		require_state_binding(&self.state_path, &self.state)?;
 		require_named_directory(&self.state, ROOT_NAME, &self.root)
 	}
 
@@ -405,6 +483,7 @@ impl Store {
 		self.check_binding()?;
 		match directory_at(self.root.as_raw_fd(), id) {
 			Ok(file) => Ok(Some(Directory {
+				state_path: self.state_path.clone(),
 				state: self.state.try_clone()?,
 				root: self.root.try_clone()?,
 				name: id.to_owned(),

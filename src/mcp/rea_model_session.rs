@@ -36,7 +36,11 @@ mod index;
 mod store;
 
 const SCHEMA: &str = "hepta.rea.model-session.v1";
-const PARSER_SCHEMA: &str = "hepta.rea.model-directory-index.v1";
+// This identity binds retained validation meaning as well as page structure.
+// v2 adds stable GGML block/row validation and removes the unknown-empty proof.
+// Old indexes must not be relabeled or reused: a new open validates the source
+// under this profile and publishes a distinct immutable session.
+const PARSER_SCHEMA: &str = "hepta.rea.model-directory-index.v2";
 const ID_PREFIX: &str = "rms1_";
 const CHUNK_BYTES: usize = 1024 * 1024;
 const PAGE_ROWS: usize = 64;

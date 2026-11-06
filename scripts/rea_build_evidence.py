@@ -259,6 +259,7 @@ def compiler_artifact(raw, report, binary):
     require(messages and all(isinstance(item, dict) for item in messages), "invalid Cargo compiler artifact stream")
     finished = [item for item in messages if item.get("reason") == "build-finished"]
     require(finished == [{"reason": "build-finished", "success": True}]
+            and finished[0].get("success") is True
             and messages[-1] == finished[0], "Cargo did not finish the explicit native binary build")
     selected = [item for item in messages if item.get("reason") == "compiler-artifact"
                 and item.get("target", {}).get("name") == "hepta-runtime"]

@@ -110,7 +110,7 @@ fn load(path: &Path, root: &Path, limits: NativeJsonLimits) -> Result<OwnedJson>
 }
 
 #[test]
-fn original_19_file_outcomes_keep_15_exact_cases_and_four_profile_gaps() {
+fn original_19_file_outcomes_keep_15_exact_cases_and_four_representation_boundaries() {
 	let reference = reference();
 	assert_eq!(reference["cases"].as_array().unwrap().len(), 19);
 	let owned = temporary();
@@ -143,10 +143,15 @@ fn original_19_file_outcomes_keep_15_exact_cases_and_four_profile_gaps() {
 			kind => panic!("unexpected source kind {kind}"),
 		}
 		let result = load(&path, owned.path(), NativeJsonLimits::default());
-		if matches!(
-			name,
-			"unpaired-surrogate" | "number-overflow" | "depth-121" | "symlink"
-		) {
+		if name == "unpaired-surrogate" {
+			assert!(
+				matches!(result, Err(FileReadError::RootString(_))),
+				"{result:?}"
+			);
+			gaps += 1;
+			continue;
+		}
+		if matches!(name, "number-overflow" | "depth-121" | "symlink") {
 			assert!(
 				matches!(result, Err(FileReadError::NativeProfileGap { .. })),
 				"{name}: {result:?}"
@@ -322,6 +327,7 @@ fn actual_descriptor_fences_reject_writes_growth_truncation_and_name_replacement
 			&roots,
 			&cancellation,
 			NativeJsonLimits::default(),
+			&mut None,
 		);
 		assert!(
 			matches!(
@@ -676,17 +682,176 @@ fn frozen_eof_reference_errors_match_all_sixteen_inputs() {
 }
 
 #[test]
-fn syntax_diagnostics_do_not_reclassify_valid_unrepresentable_json() {
+fn frozen_syntax_reference_errors_match_across_every_byte_split() {
+	let reference: Value = serde_json::from_str(include_str!(
+		"../../tests/fixtures/rea_evidence_file/syntax-reference-r1.json"
+	))
+	.unwrap();
+	assert_eq!(reference["node_version"], "v22.23.4");
+	assert_eq!(
+		reference["node_sha256"],
+		"94efd062ed066c1a0b332e18249859c905e920eeada5df55d24c99b919629a90"
+	);
 	let owned = temporary();
-	let inputs = ["\"\\uD800\"", "1e400"];
-	for (index, input) in inputs.iter().enumerate() {
-		let path = owned.path().join(format!("non-eof-{index}.json"));
+	for (index, case) in reference["cases"].as_array().unwrap().iter().enumerate() {
+		let input = unhex(case["input_hex"].as_str().unwrap());
+		let expected = case["message"].as_str().unwrap();
+		for split in 0..=input.len() {
+			let mut tracker = json_eof::Tracker::new();
+			tracker.accept(&input[..split]);
+			tracker.accept(&input[split..]);
+			assert!(!tracker.complete_root_string(), "{}", case["id"]);
+			assert_eq!(
+				tracker.finish().as_deref(),
+				Some(expected),
+				"{} split {split}",
+				case["id"]
+			);
+		}
+		let path = owned.path().join(format!("syntax-{index}.json"));
+		std::fs::write(&path, &input).unwrap();
+		match load(&path, owned.path(), NativeJsonLimits::default()) {
+			Err(FileReadError::InvalidJson {
+				message,
+				user_message,
+			}) => {
+				assert_eq!(message, expected, "{}", case["id"]);
+				assert_eq!(user_message, None);
+			}
+			other => panic!("{}: {other:?}", case["id"]),
+		}
+	}
+}
+
+#[test]
+fn syntax_observer_never_substitutes_nested_surrogates_or_non_rust_diagnostic_text() {
+	let owned = temporary();
+	for (index, input) in [
+		r#"{"value":"\uD800"}"#,
+		r#"["\uDC00"]"#,
+		"1e400",
+		"[😀]",
+		r#"["😀😀😀",   x😀😀😀]"#,
+	]
+	.iter()
+	.enumerate()
+	{
+		let path = owned.path().join(format!("representation-{index}.json"));
 		std::fs::write(&path, input).unwrap();
 		let outcome = load(&path, owned.path(), NativeJsonLimits::default());
 		assert!(
 			matches!(outcome, Err(FileReadError::NativeProfileGap { .. })),
 			"{input:?}: {outcome:?}"
 		);
+	}
+}
+
+#[test]
+fn complete_unrepresentable_root_strings_are_typed_rejections_without_a_fake_value() {
+	let owned = temporary();
+	for (index, input) in [r#""\uD800""#, r#""\udc00""#, " \n\"\\uD800x\" \r\n"]
+		.iter()
+		.enumerate()
+	{
+		let path = owned.path().join(format!("root-string-{index}.json"));
+		std::fs::write(&path, input).unwrap();
+		assert!(
+			matches!(
+				load(&path, owned.path(), NativeJsonLimits::default()),
+				Err(FileReadError::RootString(_))
+			),
+			"{input:?}"
+		);
+	}
+	let path = owned.path().join("root-string-with-tail.json");
+	std::fs::write(&path, r#""\uD800"x"#).unwrap();
+	assert!(matches!(
+		load(&path, owned.path(), NativeJsonLimits::default()),
+		Err(FileReadError::InvalidJson { .. })
+	));
+}
+
+#[test]
+fn syntax_drain_keeps_later_utf8_and_token_refusals() {
+	let mut bytes = vec![b' '; CHUNK + 32];
+	bytes[0] = b'x';
+	bytes.push(0xff);
+	let state = Rc::new(RefCell::new(State::new(
+		CancellationToken::new(),
+		NativeJsonLimits::default(),
+		true,
+	)));
+	let outcome = parse_reader(io::Cursor::new(&bytes), bytes.len() as u64, state);
+	assert!(
+		matches!(outcome, Err(FileReadError::InvalidJson { message, .. }) if message == UTF8_MESSAGE)
+	);
+	bytes.pop();
+	bytes.extend_from_slice(b"abcdefghijklmnopqrstuvwxyz");
+	let limits = NativeJsonLimits {
+		max_token_bytes: 16,
+		..Default::default()
+	};
+	let state = Rc::new(RefCell::new(State::new(
+		CancellationToken::new(),
+		limits,
+		true,
+	)));
+	let outcome = parse_reader(io::Cursor::new(&bytes), bytes.len() as u64, state);
+	assert!(matches!(
+		outcome,
+		Err(FileReadError::NativeProfileGap {
+			feature: "native-json-token-budget",
+			..
+		})
+	));
+}
+
+struct FailAfterSyntax {
+	read_once: bool,
+	cancel: Option<CancellationToken>,
+}
+impl Read for FailAfterSyntax {
+	fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+		if !self.read_once {
+			self.read_once = true;
+			bytes[0] = b'x';
+			return Ok(1);
+		}
+		if let Some(stop) = &self.cancel {
+			stop.cancel();
+			bytes[0] = b' ';
+			Ok(1)
+		} else {
+			Err(io::Error::from_raw_os_error(libc::EIO))
+		}
+	}
+}
+
+#[test]
+fn syntax_drain_keeps_later_cancellation_and_physical_read_failures() {
+	for cancelled in [false, true] {
+		let stop = CancellationToken::new();
+		let state = Rc::new(RefCell::new(State::new(
+			stop.clone(),
+			NativeJsonLimits::default(),
+			true,
+		)));
+		let reader = FailAfterSyntax {
+			read_once: false,
+			cancel: cancelled.then_some(stop),
+		};
+		let outcome = parse_reader(reader, 2, state);
+		if cancelled {
+			assert!(matches!(outcome, Err(FileReadError::Cancelled)));
+		} else {
+			assert!(matches!(
+				outcome,
+				Err(FileReadError::File {
+					reason: FileReason::Io,
+					errno: Some(libc::EIO)
+				})
+			));
+		}
 	}
 }
 
@@ -709,7 +874,7 @@ fn eof_diagnostics_do_not_change_the_large_file_parser_profile() {
 }
 
 #[test]
-fn frozen_node_syntax_and_original_mcp_errors_match_without_lossy_surrogates() {
+fn frozen_remote_syntax_keeps_original_messages_and_root_type_upgrade() {
 	let reference: Value = serde_json::from_str(include_str!(
 		"../../tests/fixtures/rea_evidence_file/syntax-reference-679ccf.json"
 	))
@@ -736,6 +901,7 @@ fn frozen_node_syntax_and_original_mcp_errors_match_without_lossy_surrogates() {
 	let owned = temporary();
 	let mut exact = 0;
 	let mut gaps = 0;
+	let mut root_type_rejections = 0;
 	for case in cases.iter().chain(original) {
 		let name = case["id"].as_str().unwrap();
 		let input = case["input"].as_str().unwrap();
@@ -768,7 +934,18 @@ fn frozen_node_syntax_and_original_mcp_errors_match_without_lossy_surrogates() {
 		let path = owned.path().join(format!("{name}.json"));
 		std::fs::write(&path, input).unwrap();
 		let outcome = load(&path, owned.path(), NativeJsonLimits::default());
-		if case["native_value_profile_gap"] == true || case["native_diagnostic_profile_gap"] == true
+		// Preserve the remote raw fixture's historical gap label. The union
+		// can prove only this complete root string's type; it never decodes
+		// or substitutes the unpaired escaped surrogate as a Rust value.
+		if name == "node-syntax-34" {
+			assert_eq!(case["native_value_profile_gap"], true);
+			assert!(
+				matches!(outcome, Err(FileReadError::RootString(_))),
+				"{name}: {outcome:?}"
+			);
+			root_type_rejections += 1;
+		} else if case["native_value_profile_gap"] == true
+			|| case["native_diagnostic_profile_gap"] == true
 		{
 			assert!(
 				matches!(outcome, Err(FileReadError::NativeProfileGap { .. })),
@@ -792,7 +969,7 @@ fn frozen_node_syntax_and_original_mcp_errors_match_without_lossy_surrogates() {
 			exact += 1;
 		}
 	}
-	assert_eq!((exact, gaps), (86, 5));
+	assert_eq!((exact, gaps, root_type_rejections), (86, 4, 1));
 }
 
 #[test]

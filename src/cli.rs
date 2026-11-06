@@ -101,6 +101,9 @@ pub enum Commands {
 	/// Internal isolated ELF note parser.
 	#[command(hide = true)]
 	ReaElfNotesWorker,
+	/// Internal recorded-core decoder over one digest-bound captured stdin frame.
+	#[command(hide = true)]
+	ReaRecordedCoreWorker,
 	/// Internal bounded APK signature verifier over captured stdin bytes.
 	#[command(hide = true)]
 	ReaApkSignatureWorker,
@@ -126,3 +129,7 @@ pub enum Commands {
 #[cfg(test)]
 #[path = "cli_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "cli_recorded_core_tests.rs"]
+mod recorded_core_tests;

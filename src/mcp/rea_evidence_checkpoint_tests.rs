@@ -544,6 +544,162 @@ fn private_bytes(path: &Path, bytes: &[u8]) {
 }
 
 #[test]
+fn state_directory_ancestor_sync_failure_cannot_be_skipped_on_retry() {
+	for failed_ancestor in [0, 1] {
+		let (temp, mut scope) = environment();
+		scope.state_dir = temp
+			.path()
+			.join("new-parent")
+			.join("new-child")
+			.join("state");
+		let parents: Vec<PathBuf> = scope
+			.state_dir
+			.ancestors()
+			.skip(1)
+			.map(Path::to_path_buf)
+			.collect();
+		let token = CancellationToken::new();
+		for attempt in 0..2 {
+			let observed = Mutex::new(Vec::new());
+			let error =
+				store::Store::open_with_parent_sync_hook(&scope, true, true, &token, &|parent| {
+					observed.lock().unwrap().push(parent.to_path_buf());
+					if parent == parents[failed_ancestor].as_path() {
+						anyhow::bail!("injected state ancestor durability failure");
+					}
+					Ok(())
+				})
+				.err()
+				.expect("an unconfirmed state ancestor must refuse store admission");
+			assert!(
+				format!("{error:#}").contains("injected state ancestor durability failure"),
+				"attempt {attempt}: {error:#}"
+			);
+			assert_eq!(
+				observed.lock().unwrap().as_slice(),
+				&parents[..=failed_ancestor],
+				"retry must not skip directories left by the failed initialization"
+			);
+			assert!(scope.state_dir.is_dir());
+			assert!(!scope.state_dir.join(ROOT_NAME).exists());
+		}
+		let observed = Mutex::new(Vec::new());
+		let store =
+			store::Store::open_with_parent_sync_hook(&scope, true, true, &token, &|parent| {
+				observed.lock().unwrap().push(parent.to_path_buf());
+				Ok(())
+			})
+			.unwrap()
+			.unwrap();
+		assert_eq!(*observed.lock().unwrap(), parents);
+		assert!(store.names().unwrap().is_empty());
+		drop(store);
+		let receipt = save(&scope, &imported(IMPORT));
+		assert_eq!(receipt["durability"], "file_and_directory_sync_confirmed");
+		assert_eq!(listing(&scope, 0, 1, None).unwrap()["total"], 1);
+	}
+}
+
+#[test]
+fn configured_state_replacement_refuses_each_commit_phase_and_preserves_both_namespaces() {
+	for selected_phase in [
+		store::CommitPhase::BeforeRename,
+		store::CommitPhase::BeforeParentSync,
+		store::CommitPhase::AfterParentSync,
+	] {
+		let (temp, scope) = environment();
+		let detached = temp.path().join("detached-state");
+		let error = checkpoint_at(
+			&scope,
+			&imported(IMPORT),
+			&CancellationToken::new(),
+			&|phase| {
+				if phase == selected_phase {
+					fs::rename(&scope.state_dir, &detached).unwrap();
+					private_dir(&scope.state_dir);
+					private_bytes(
+						&scope.state_dir.join("foreign"),
+						b"keep configured replacement",
+					);
+				}
+				Ok(())
+			},
+		)
+		.unwrap_err();
+		assert!(
+			format!("{error:#}").contains("configured state directory identity changed"),
+			"{selected_phase:?}: {error:#}"
+		);
+		assert_eq!(
+			fs::read(scope.state_dir.join("foreign")).unwrap(),
+			b"keep configured replacement"
+		);
+		assert!(!scope.state_dir.join(ROOT_NAME).exists());
+		let committed: Vec<_> = fs::read_dir(detached.join(ROOT_NAME))
+			.unwrap()
+			.map(|entry| entry.unwrap().path())
+			.filter(|path| valid_id(path.file_name().unwrap().to_str().unwrap()))
+			.collect();
+		assert_eq!(
+			committed.len(),
+			if selected_phase == store::CommitPhase::BeforeRename {
+				0
+			} else {
+				1
+			}
+		);
+		for path in committed {
+			assert_eq!(fs::read_dir(&path).unwrap().count(), 3);
+			for member in ["bundle.json", "manifest.json", "retention.json"] {
+				assert!(path.join(member).is_file(), "{selected_phase:?}: {member}");
+			}
+		}
+		assert_eq!(listing(&scope, 0, 1, None).unwrap()["total"], 0);
+		assert!(!scope.state_dir.join(ROOT_NAME).exists());
+	}
+}
+
+#[test]
+fn complete_reads_and_reconciliation_reject_replaced_configured_state() {
+	let (temp, scope) = environment();
+	let id = save(&scope, &imported(IMPORT))["checkpoint_id"]
+		.as_str()
+		.unwrap()
+		.to_owned();
+	let token = CancellationToken::new();
+	let store = store::Store::open(&scope, false, false, &token)
+		.unwrap()
+		.unwrap();
+	let mut observed = store.checkpoint(&id).unwrap().unwrap();
+	let manifest = read_manifest(&mut observed, &id, &token).unwrap();
+	drop(read_payloads(&mut observed, &manifest, &token).unwrap());
+	observed.confirm_read().unwrap();
+	let detached = temp.path().join("detached-state");
+	fs::rename(&scope.state_dir, &detached).unwrap();
+	private_dir(&scope.state_dir);
+	private_bytes(&scope.state_dir.join("foreign"), b"keep read replacement");
+	let error = observed.confirm_read().unwrap_err();
+	assert!(
+		format!("{error:#}").contains("configured state directory identity changed"),
+		"{error:#}"
+	);
+	assert!(store.confirm_existing().is_err());
+	assert!(store.names().is_err());
+	assert!(store.checkpoint(&id).is_err());
+	assert_eq!(
+		fs::read(scope.state_dir.join("foreign")).unwrap(),
+		b"keep read replacement"
+	);
+	assert!(!scope.state_dir.join(ROOT_NAME).exists());
+	assert_eq!(
+		fs::read_dir(detached.join(ROOT_NAME).join(&id))
+			.unwrap()
+			.count(),
+		3
+	);
+}
+
+#[test]
 fn complete_reads_remain_bound_to_named_directory_and_all_three_member_inodes() {
 	for defect in 0..3 {
 		let (_temp, scope) = environment();
