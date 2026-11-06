@@ -1,0 +1,533 @@
+{
+  "schema": "hepta.rea.p1-persistence-audit.v1",
+  "status": "OPEN_IMPLEMENTATION_REQUIRED",
+  "scope": "只读审计；Evidence 会话身份、权限与冷重启；不修改当前冻结候选，不运行 Cargo。",
+  "expected_commit": "c25e4cef0610816bfd1263b69d3dd63e4114aa49",
+  "repo": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105",
+  "evidence_dir": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence",
+  "global_qualification": false,
+  "conclusion": {
+    "authentication": "已有私有 HTTP token 认证、可信 request extension、credential owner 固定；不能称为无认证。",
+    "evidence_persistence": "EvidenceSession 是每个 OctofsServer 的内存注册表；新 transport session 构造为空。尚无 Evidence checkpoint/resume 或自动冷重启恢复入口。",
+    "implemented_recovery": "显式导出完整 bundle，再在新会话显式 import，可恢复已导出的记录和 Unknown 历史；这是现有原版契约，不能称自动会话恢复。",
+    "reusable_foundation": "模型快照已有 owner/policy 绑定、私有文件、跨进程锁、Linux create-only rename 与父目录 fsync、重试对账的持久化协议，可抽取为 Evidence 专用存储；模型记录本身明确不是 Evidence。",
+    "recommended_next": "先新增独立 native 的不可变 checkpoint/resume/list 路由，保持所有 frozen REA 工具及新会话为空的行为。此轮仅审计和准备现有真实差分，不向冻结候选加入实现。"
+  },
+  "facts": [
+    {
+      "id": "P1-F01",
+      "kind": "current_source_fact",
+      "sources": [
+        "src/mcp/server.rs::OctofsServer::{new,with_root}",
+        "src/mcp/rea_evidence_session.rs::{EvidenceSession,SessionState,SessionRecord,EvidenceSnapshot}"
+      ],
+      "finding": "OctofsServer clones 共享 Arc<EvidenceSession>；不同 server 实例的 registry 独立。with_root 无条件创建 EvidenceSession::default。SessionState 只有 records、unknowns，无 durable owner/session ID、store path、revision 或恢复字段。"
+    },
+    {
+      "id": "P1-F02",
+      "kind": "current_source_fact",
+      "sources": [
+        "src/main.rs::{load_http_auth,require_http_auth,run_http_server}",
+        "src/mcp/runtime/caller_scope.rs::{AuthenticatedOperatorScope::from_verified_token,SessionOwnerBinding::resolve_parts,OwnerScope}",
+        "src/mcp/server.rs::ServerHandler::call_tool"
+      ],
+      "finding": "runtime HTTP 要求私有 token 文件、loopback bind；middleware 验证 token 后注入不可由 MCP 参数构造的可信 extension。owner 由带 domain 的 token SHA-256 得到，同一 token 重启后稳定。SessionOwnerBinding 固定首个 scope，拒绝 authority 改变。runtime 普通工具 dispatch 在执行前解析该 scope，Evidence 工具受此上层约束。"
+    },
+    {
+      "id": "P1-F03",
+      "kind": "current_source_fact",
+      "sources": [
+        "src/main.rs::run_http_server",
+        "src/mcp/runtime/caller_scope.rs::{OwnerScope::annotate,SessionOwnerBinding}",
+        "src/mcp/runtime/operation_crypto.rs::{ResultCryptoScope::from_verified_token,ResultCryptoScope::stdio}"
+      ],
+      "finding": "HTTP 使用 LocalSessionManager；transport sessions 不是磁盘恢复的 Evidence sessions。当前 principal 是 operator credential，明确不是 ChatGPT 用户或 conversation 身份。stdio owner 与 crypto 使用每会话新随机量，重启不能恢复其权限身份。HTTP 同 token 能恢复 credential owner 不代表 Evidence 自动加载。"
+    },
+    {
+      "id": "P1-F04",
+      "kind": "current_source_fact",
+      "sources": [
+        "src/mcp/rea_evidence_session.rs::{record_checked,record_if_active,import_if_active}",
+        "src/mcp/rea_evidence_import.rs::{authenticate_and_merge,import}",
+        "src/mcp/rea_evidence_source.rs::{authenticate_import_with_order,bundle_semantics,validate_unknown_union}"
+      ],
+      "finding": "record_checked 先验证 semantic identity，再在 mutex 内发布；import_if_active 在 pending state 上合并、验证完整 Unknown union、最终取消检查后一次性替换。原子性限于内存，没有磁盘 commit。导入校验七个 bundle 数组、record ID、Unknown revisions/history/references/cycles、canonical manifests，以及 process-capture normalized_result。内容身份校验不构成原生产者/平台可信签名。"
+    },
+    {
+      "id": "P1-F05",
+      "kind": "current_source_fact",
+      "sources": [
+        "src/mcp/rea_evidence_session.rs::{snapshot,EvidenceSnapshot::write_canonical}",
+        "src/mcp/rea_evidence_export.rs::{ExportRegistry,export,confined::execute,confined::write_owned}",
+        "src/mcp/server.rs::close_rea_exports"
+      ],
+      "finding": "export 从稳定 Arc snapshot 生成完整 canonical bytes，以私有 staging 和原子发布保护目标；已提交发布胜过随后取消，cleanup owner 保留并可重试。ExportRegistry/pending/completed 仍为 session 内存状态，session close 清理不等于 Evidence checkpoint。execute 同步 staging 文件，但未同步发布目标的父目录；当前输出不应直接充当已确认掉电持久 checkpoint。"
+    },
+    {
+      "id": "P1-F06",
+      "kind": "current_source_fact",
+      "sources": [
+        "src/mcp/rea_evidence_session.rs::{SessionRecord,EvidenceSnapshot,snapshot,get_bundle}",
+        "src/mcp/rea_response_order.rs::{RecordOrigin,BundleOrder}",
+        "src/mcp/rea_evidence_session_tests.rs::same_id_current_delivery_and_first_retention_keep_separate_creation_orders"
+      ],
+      "finding": "SessionRecord 保存首生产入口 RecordOrigin 和导入对象键顺序 ImportedObjectOrder；EvidenceSnapshot 仅带 payload 与 Unknown。只保存 canonical export 再导入会进入导入语义，不能当作无损恢复原 session 私有 provenance/order 状态。checkpoint 必须显式保存这些侧信息及格式版本。"
+    },
+    {
+      "id": "P1-F07",
+      "kind": "implemented_capability_do_not_mark_missing",
+      "sources": [
+        "src/mcp/rea_analysis_view.rs::{execute,project_completed,project_owned,retained_source}",
+        "src/mcp/server.rs::rea_inspect_analysis_view"
+      ],
+      "finding": "inspect_analysis_view 已支持 retained-evidence、经验证 inline、confined evidence-file 三种 source，当前 parent 为 inspect_apk_signature，提供 summary 与 APK signature 分页。retained 路径不重开原始 artifact；file/inline parent 不隐式 import；成功 derived view 被保留。其他 parent/view 的显式能力边界仍存在。"
+    },
+    {
+      "id": "P1-F08",
+      "kind": "existing_durable_foundation",
+      "sources": [
+        "src/mcp/rea_model_session.rs::{Scope::current,validate_manifest,load}",
+        "src/mcp/rea_model_session_store.rs::{require_file,require_directory,lock,admit_quota,publish_with_checkpoint,confirm_existing}",
+        "src/mcp/server.rs::{rea_model_session_open,rea_model_session_query,rea_model_session_read,rea_model_session_list}"
+      ],
+      "finding": "rms1_ model manifest 绑定 owner_sha256、policy_sha256、schema、内容 identity；load 每次验证。私有文件要求当前 UID、0600、单链接；root 私有；发布持有 AdmissionPermit 与 flock，Linux RENAME_NOREPLACE 后父目录 fsync。丢失响应可验证已有快照再 confirm_existing。manifest summary 要求 rea_evidence_compatible=false，不能把模型快照算作 Evidence 会话持久化。"
+    },
+    {
+      "id": "P1-F09",
+      "kind": "scope_boundary",
+      "sources": [
+        "src/mcp/rea_store.rs::{report_identity,retain_record_with_admission,read_record}",
+        "src/mcp/runtime/request_results.rs::{eligible,valid_tool,Record}",
+        "src/mcp/runtime/operation_async.rs::ReadOperation",
+        "src/mcp/runtime/operation_crypto.rs::{TrustedResultBinding,ResultCryptoScope}"
+      ],
+      "finding": "rea_store 只接受 hepta.rea.preview.v1 / rea_evidence_compatible=false；request_results 只保留 host_list/host_health/effective_config 的审查 DTO；async ReadOperation 不含 Evidence。operation crypto 有专属 operation/schema/domain、1 MiB payload 上限，不是 Evidence 存储的直接格式。持久审计 receipt 不是完整 Evidence payload 的持久化证明。"
+    },
+    {
+      "id": "P1-F10",
+      "kind": "compatibility_constraint",
+      "sources": [
+        "src/mcp/server.rs::rea_get_evidence_bundle",
+        "src/mcp/rea_evidence_import_tests.rs::public_import_is_idempotent_replaces_metadata_and_keeps_cold_sessions_empty",
+        "scripts/rea_evidence_import_qualification.py::main(cold scenario)"
+      ],
+      "finding": "当前 frozen 行为明确新会话为空；cold 场景先观察零记录/零 Unknown，再显式 import 3 records、3 Unknown revisions。若按 credential owner 在每个新会话自动加载所有历史，会破坏默认会话隔离和现有差分契约。"
+    }
+  ],
+  "current_test_evidence": {
+    "status": "源码与固定 fixture 已审阅；本审计未重新运行这些测试，不把测试定义当执行通过。",
+    "frozen_reference": {
+      "package": "rea-agents@6.8.0",
+      "source_commit": "93b8b82db70279e40f484114cff9dc1958dc14ee",
+      "tarball_sha256": "8d542ec76a9cb350584b60a6c9c088706ff812d5bb5b094c20c95b6dc25698bb",
+      "node_version": "v22.23.4",
+      "node_sha256": "94efd062ed066c1a0b332e18249859c905e920eeada5df55d24c99b919629a90",
+      "source": "docs/rea-native/PUBLIC_EVIDENCE_IMPORT.md; tests/fixtures/rea_evidence_source/provenance.json; tests/fixtures/rea_evidence_file/partial-unicode-node22-679ccf-receipt.json",
+      "warning": "已提交 component provenance 不等于当前 frozen binary 上 public import/HTTP restart 已通过。"
+    },
+    "exact_test_names": [
+      "rea_evidence_session_tests::complete_session_and_summaries_match_frozen_npm",
+      "rea_evidence_session_tests::tampered_record_is_never_published_and_sessions_are_independent",
+      "rea_evidence_session_tests::actual_frozen_node_export_bytes_match_the_native_snapshot_producer",
+      "rea_evidence_session_tests::same_id_current_delivery_and_first_retention_keep_separate_creation_orders",
+      "rea_evidence_import_tests::public_import_is_idempotent_replaces_metadata_and_keeps_cold_sessions_empty",
+      "rea_evidence_import_tests::invalid_candidate_and_precancelled_import_leave_existing_records_unchanged",
+      "rea_evidence_import_tests::standalone_record_has_import_wrong_kind_and_is_not_implicitly_retained",
+      "rea_analysis_view_tests::cancellation_before_projection_preserves_the_parent_and_session_reuse",
+      "rea_analysis_view_tests::inline_numbers_authenticate_before_projection_and_do_not_import_parent",
+      "rea_analysis_view_tests::exported_file_source_authenticates_and_retains_only_the_derived_view",
+      "rea_evidence_export_tests::cancellation_at_commit_boundary_has_truthful_outcome",
+      "rea_evidence_export_tests::abort_after_publication_retains_completed_receipt",
+      "rea_evidence_export_tests::real_unlink_failure_retains_published_bytes_owner_and_admission_until_retry",
+      "rea_evidence_export_tests::close_waits_for_active_and_queued_owners_and_closes_new_admission",
+      "caller_scope_tests::same_verified_credential_has_stable_private_scope_across_native_sessions",
+      "caller_scope_tests::session_binding_refuses_different_credential_without_mutating_its_owner",
+      "caller_scope_tests::http_headers_without_trusted_extension_cannot_spoof_or_use_stdio_fallback",
+      "caller_scope_tests::stdio_retains_random_native_session_ownership_and_no_secure_resume_claim",
+      "rea_model_session_tests::retained_pages_and_ranges_survive_source_removal_and_scope_reconstruction",
+      "rea_model_session_tests::owner_policy_and_current_roots_are_rechecked_after_restart",
+      "rea_model_session_external::real_http_model_session_survives_restart_and_refuses_changed_authority"
+    ],
+    "real_model_restart_test": {
+      "path": "tests/rea_model_session_http.py",
+      "procedure": "Server.stop 实际 kill/wait；同 token 重启、删除原 safetensors、相同 listing/query/read；换 token 不列出且拒绝 query/read；改 roots 拒绝；恢复原 policy 后可读；篡改 snapshot 后拒绝。",
+      "transfer_limit": "此测试只验证 model snapshot，不能给 Evidence checkpoint/resume 记 PASS。"
+    },
+    "bounded_historical_receipt_search": {
+      "directory": "docs/qualification",
+      "searched_filename_patterns": [
+        "*import*",
+        "*/*import*",
+        "*/*/*import*"
+      ],
+      "matching_files": [],
+      "conclusion": "未定位旧 public import qualification 运行 receipt；不扩大搜索，不报告旧次数为本轮执行结果。"
+    }
+  },
+  "proposed_minimum": {
+    "status": "DESIGN_ONLY_NOT_IMPLEMENTED",
+    "storage": "独立 state_dir/rea-evidence-checkpoints-v1；不可变 checkpoint manifest + 完整 bundle + provenance/order sidecar；不复用 preview/model record schema。",
+    "routes": [
+      {
+        "name": "rea_evidence_session_checkpoint",
+        "behavior": "从当前完整 SessionState 获取一致快照；以当前可信 authenticated credential owner 与 policy 绑定写入新不可变 checkpoint，文件及目录 durability 确认后才返回 receipt。checkpoint ID 仅是 locator，不是授权凭据。"
+      },
+      {
+        "name": "rea_evidence_session_resume",
+        "behavior": "显式 ID；要求当前会话为空，可信当前 owner/policy 与 checkpoint 相同。完整读取/验证、重建 private state 后，在最终取消与 empty-state race 检查内一次性发布；禁止隐式 merge 和重新执行 producer。"
+      },
+      {
+        "name": "rea_evidence_session_list",
+        "behavior": "有界枚举当前可信 owner 与当前 policy 可见 checkpoint；分页、计数、私有字段脱敏；不列出 foreign owner 或 incomplete staging。"
+      }
+    ],
+    "defaults": [
+      "新会话仍为空；不自动按 token 聚合所有 Evidence，不改变 frozen get/import/export/view schema。",
+      "第一版只对 authenticated HTTP credential scope 开放可恢复 checkpoint；stdio 继续明确不能恢复，除非之后增加独立审查的稳定本地 authority 配置。",
+      "checkpoint 是显式时间点快照。恢复后继续产生的新记录仍在当前会话，只有再次 checkpoint 才有持久保证；不能宣称自动保存最新状态。",
+      "凭据变化或 policy 变化默认拒绝读取/恢复；token migration、共享 ACL 与跨用户授权不在第一版。",
+      "沿用既有可信管理员 state_dir 的威胁边界；SHA 内容身份不抵御拥有 server UID/state_dir 写权限者。若要求更强 envelope authentication/encryption，另加 Evidence 专用 domain 与绑定，不把 owner digest 当密钥。"
+    ],
+    "metadata_required": [
+      "schema/version、checkpoint identity、owner binding、policy binding、producer/profile/response-order format version",
+      "complete record payloads 与所有 Unknown revisions/history",
+      "每个 record 的首保留 RecordOrigin、imported object-order metadata、保留的 display metadata",
+      "完整文件长度/摘要、计数和安全预算；manifest 与 sidecar/bundle 的关联身份"
+    ],
+    "implementation_seams": [
+      "rea_evidence_session.rs 增加 private checkpoint snapshot 与仅空 session restore 原子入口；保留现有 record/import 规则。",
+      "新 rea_evidence_checkpoint.rs / store 专属模块；借用 model store 的 guarded publication 与 private FD read pattern，但独立 schema、root、quota 和验证。",
+      "server.rs 新独立 native 路由显式取 owner_binding.resolve 的可信 scope，不能从 args/_meta 接受 owner。",
+      "用完整 import/source 验证器校验 checkpoint bundle；额外验证 origin/order sidecar 的所有引用、key sets 和版本。",
+      "block owner 持有 admission 与 store lock 到实际 rename/父目录 fsync/cleanup 完成。发布后取消/响应丢失不得伪称 rollback，重试需验证已有 checkpoint 后对账。"
+    ],
+    "deferred_semantics": "若目标进一步要求每次 record/import 成功即自动持久，应另设 opt-in durable session + journal/generation commit 协议、并明确恢复后的写入/并发/配额/崩溃语义；该扩展不能隐含在第一版 explicit checkpoint 里。"
+  },
+  "remaining_gates": {
+    "implementation_gaps": [
+      {
+        "id": "P1-I01",
+        "gap": "Evidence checkpoint/resume/list 路由、专属 durable schema/store/owner+policy manifest 尚无实现。",
+        "acceptance": "真实同凭据冷重启能显式恢复完整 checkpoint；全新默认 session 仍为空。"
+      },
+      {
+        "id": "P1-I02",
+        "gap": "SessionState 私有 origin/order 未包含于现有 canonical export snapshot。",
+        "acceptance": "恢复前后完整 bundle 双 wire 内容/对象顺序、first-origin 冲突行为、summary counts/filters 与分页结果保持一致。"
+      },
+      {
+        "id": "P1-I03",
+        "gap": "没有 Evidence 磁盘 commit/reconciliation/crash recovery 协议。",
+        "acceptance": "在 write/file-sync/rename/parent-sync/receipt-loss 边界真实 kill，恢复只能得到完整已提交快照或明确未提交；取消与 durability 结果准确。"
+      },
+      {
+        "id": "P1-I04",
+        "gap": "没有 Evidence 专属 durable quota/staging cleanup/schema migration/rollback 处理。",
+        "acceptance": "quota 包含未完成 staging；满盘/权限/截断拒绝不会污染 registry；未知更高版本拒绝；升级/回滚不会静默降级解析。"
+      },
+      {
+        "id": "P1-I05",
+        "gap": "stdio 无可重启的稳定 authority/key；当前无 per-user/conversation principal 或 ACL。",
+        "acceptance": "第一版明确禁用 stdio 恢复；不得声称同 operator token 下各个人的权限隔离。"
+      }
+    ],
+    "environment_and_execution_gates": [
+      {
+        "id": "P1-E01",
+        "requirement": "c25 clean source + 同一最终 binary/hash + 原 npm/tar/Node 固定输入。",
+        "status": "等 parent binary/binding ready；现成两组 explicit import 差分准备顺序运行。"
+      },
+      {
+        "id": "P1-E02",
+        "requirement": "新 checkpoint 实现后，真实 HTTP server PID kill/restart；token A/A、A/B、policy change、原 artifact/bundle 不在场；保留请求响应与进程终态。",
+        "status": "接口尚不存在，不能现在判 PASS。"
+      },
+      {
+        "id": "P1-E03",
+        "requirement": "Linux private filesystem 上真实 mode/UID/symlink/hardlink/ENOSPC/权限与跨进程锁/kill 边界测试。",
+        "status": "可借 model fixtures/commit hooks，需针对 Evidence 新实现单独验证。"
+      },
+      {
+        "id": "P1-E04",
+        "requirement": "macOS/其他适用文件系统与平台的 durability、权限、恢复行为单独验证。",
+        "status": "现有 model publication 只 qualified Linux；不得据 Linux 结果外推。"
+      },
+      {
+        "id": "P1-E05",
+        "requirement": "断连、丢失响应、并发 checkpoint/resume 与相同 credential 下多个独立 transport sessions；无跨 session 自动污染。",
+        "status": "新增接口实现后实跑。"
+      }
+    ],
+    "negative_matrix": [
+      "复制 checkpoint ID 给 token B；伪造 args.owner、_meta、MCP session id/header；全部仍需 trusted current owner",
+      "token A 但 current roots/policy 改变；默认拒绝，恢复原策略的行为按显式协议验证",
+      "篡改 record semantic bytes、Unknown history/reference、manifest digest、origin/order sidecar 或 schema version",
+      "私有文件被 symlink/hardlink/宽权限/不同 UID/截断替换，或恢复期间文件身份改变",
+      "checkpoint 与 record/import 并发；resume 到已非空 session；最终 state 不得部分发布或静默覆盖",
+      "取消发生于提交前、rename 后、父目录同步后和响应发送前；对外结果与真实持久副作用相符"
+    ]
+  },
+  "prepared_runs": {
+    "status": "WAITING_FOR_PARENT_BINARY_READY_DO_NOT_RUN_YET",
+    "repo": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105",
+    "node": "/usr/bin/node",
+    "reference_package": "/home/qian-qi/work/hepta-rea-reference-recovery-ca464-20261105-r1/install/node_modules/rea-agents",
+    "reference_tarball": "/home/qian-qi/work/hepta-rea-reference-20261103/pack/rea-agents-6.8.0.tgz",
+    "parent_provided_package_own_file_manifest": {
+      "file_count": 2398,
+      "sha256": "7f06a93473f1f74139d710545850ebab47e2bc026909113b7d010740e922e4e0",
+      "basis": "parent attestation; fresh run also invokes q.reference_package"
+    },
+    "extra_auth_required": false,
+    "transport": "各脚本创建独立 stdio MCP processes、临时 confined runtime config；无生产凭据、无真实远程 host 调用。",
+    "invocation": [
+      "python3",
+      "-B",
+      "SCRIPT",
+      "--binary",
+      "PARENT_READY_BINARY_ABS",
+      "--binary-sha256",
+      "PARENT_READY_BINARY_SHA256",
+      "--reference-package",
+      "/home/qian-qi/work/hepta-rea-reference-recovery-ca464-20261105-r1/install/node_modules/rea-agents",
+      "--reference-tarball",
+      "/home/qian-qi/work/hepta-rea-reference-20261103/pack/rea-agents-6.8.0.tgz",
+      "--node",
+      "/usr/bin/node",
+      "--repo",
+      "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105",
+      "--output-dir",
+      "NEW_OUTPUT_ABS"
+    ],
+    "sequence": [
+      {
+        "script": "scripts/rea_evidence_import_qualification.py",
+        "output": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/evidence-import-r1",
+        "expected_comparisons": 118,
+        "fixture_inputs": [
+          "scripts/rea_evidence_import_fixtures.mjs",
+          "tests/fixtures/rea_process_capture/minimal.json"
+        ],
+        "generated_fixture_location": "output/workspace/fixtures",
+        "cold_assertion": "cold-empty: 0 records/0 unknowns；cold-import: 3 imported/3 unknowns_added/3 total；cold-complete: 3 records/3 revisions"
+      },
+      {
+        "script": "scripts/rea_evidence_import_overflow.py",
+        "output": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/evidence-import-overflow-r1",
+        "expected_comparisons": 22,
+        "fixture_inputs": [
+          "tests/fixtures/rea_apk_signature/rotation-v31.apk",
+          "scripts/rea_analysis_view_recovery.py::oversized_apk"
+        ],
+        "generated_fixture_location": "output/workspace/overflow.apk",
+        "assertion": "真实 producer >10 MiB complete response；导出完整父记录；new session import 后 summary + 6 digest pages；8-record complete history 再 cold import；三类 canonical exports 跨 producer byte-identical。"
+      }
+    ],
+    "execution_rules": [
+      "仅在 parent 提供最终 binary/binding ready 后顺序启动；零自动重试，uncertain execution 必须用原 idempotency key/status 对账。",
+      "启动前验证 c25 HEAD、clean、实际 binary SHA、固定 Node/tar/原包；不写 repo 或 __pycache__，Python -B。",
+      "保留每个原 MCP request/response、每 case comparisons、producer-before/after/source monitor、binary/reference before/after。",
+      "记录 controller durable job id、terminal exit/state、stdout/stderr 完整性、durability、无 truncation；有限 PASS 不改 qualified=false。",
+      "这两组只为 explicit import/recovery 增加事实覆盖，不测试或声称自动 Evidence 会话持久化。"
+    ]
+  },
+  "reviewed_files": [
+    "src/main.rs",
+    "src/mcp/server.rs",
+    "src/mcp/rea_evidence_session.rs",
+    "src/mcp/rea_evidence_session_tests.rs",
+    "src/mcp/rea_evidence_import.rs",
+    "src/mcp/rea_evidence_import_tests.rs",
+    "src/mcp/rea_evidence_source.rs",
+    "src/mcp/rea_evidence_export.rs",
+    "src/mcp/rea_evidence_export_tests.rs",
+    "src/mcp/rea_analysis_view.rs",
+    "src/mcp/rea_analysis_view_tests.rs",
+    "src/mcp/rea_response_order.rs",
+    "src/mcp/rea_store.rs",
+    "src/mcp/runtime/caller_scope.rs",
+    "src/mcp/runtime/caller_scope_tests.rs",
+    "src/mcp/runtime/request_results.rs",
+    "src/mcp/runtime/operation_async.rs",
+    "src/mcp/runtime/operation_crypto.rs",
+    "src/mcp/rea_model_session.rs",
+    "src/mcp/rea_model_session_store.rs",
+    "src/mcp/rea_model_session_tests.rs",
+    "tests/rea_model_session_http.py",
+    "tests/rea_model_session_external.rs",
+    "scripts/rea_evidence_import_qualification.py",
+    "scripts/rea_evidence_import_overflow.py",
+    "scripts/rea_evidence_import_fixtures.mjs",
+    "tests/fixtures/rea_process_capture/minimal.json",
+    "tests/fixtures/rea_apk_signature/rotation-v31.apk",
+    "tests/fixtures/rea_evidence_session.json",
+    "tests/fixtures/rea_export_reference_complete.json",
+    "tests/fixtures/rea_evidence_source/provenance.json",
+    "docs/rea-native/PUBLIC_EVIDENCE_IMPORT.md"
+  ],
+  "observed_commit": "c25e4cef0610816bfd1263b69d3dd63e4114aa49",
+  "written_utc": "2026-11-06T00:03:54.690490+00:00",
+  "source_file_bindings": [
+    {
+      "path": "src/main.rs",
+      "byte_length": 12530,
+      "sha256": "c7782a35b6846db3600aaca92da1ace10a09b0e705075d56ebe3094cb0087739"
+    },
+    {
+      "path": "src/mcp/server.rs",
+      "byte_length": 162099,
+      "sha256": "f817bdc993a41d739dc6fe1dbd4969d0ac2c386476c5bd8b42097580e7cdfd98"
+    },
+    {
+      "path": "src/mcp/rea_evidence_session.rs",
+      "byte_length": 21598,
+      "sha256": "f5bee5498f2ce762fffc83955f018486af77c2880779945ba1c9522dfa4566b4"
+    },
+    {
+      "path": "src/mcp/rea_evidence_session_tests.rs",
+      "byte_length": 12441,
+      "sha256": "29b014b779e63834c14ac4bde547d12130f7e76c16fcfb60da8bedf27573b888"
+    },
+    {
+      "path": "src/mcp/rea_evidence_import.rs",
+      "byte_length": 10092,
+      "sha256": "2476b196968ba228d49d426772e3e99be107c20922584b204b0eac0ab332f2a1"
+    },
+    {
+      "path": "src/mcp/rea_evidence_import_tests.rs",
+      "byte_length": 8275,
+      "sha256": "ce3bdadc577516ee435a114faf804b5416f93f4265fa682c928c26c322395a18"
+    },
+    {
+      "path": "src/mcp/rea_evidence_source.rs",
+      "byte_length": 44724,
+      "sha256": "6b3f5884f06b813147bd4b8cc5e568f77cff5a05647f8a95d50b2b4c69058d85"
+    },
+    {
+      "path": "src/mcp/rea_evidence_export.rs",
+      "byte_length": 41884,
+      "sha256": "65666e8ab6850f210f4b4b10f3a197548245a192d854342cb5c7d7ebd33a9532"
+    },
+    {
+      "path": "src/mcp/rea_evidence_export_tests.rs",
+      "byte_length": 34373,
+      "sha256": "89e729fb56c56eb065f7319fa7e418dd86ab22b5ed2e63046a5dd944050bb1ab"
+    },
+    {
+      "path": "src/mcp/rea_analysis_view.rs",
+      "byte_length": 18470,
+      "sha256": "21fd3021a6a31a1e42f50634de58b674e865e7e494b8c868b1f47e47bc6c6094"
+    },
+    {
+      "path": "src/mcp/rea_analysis_view_tests.rs",
+      "byte_length": 5052,
+      "sha256": "2b7bf0dd5676d8bda822ff2eb5c4a958af476c4e7bbee5cfca40e4f3f5abfca8"
+    },
+    {
+      "path": "src/mcp/rea_response_order.rs",
+      "byte_length": 22509,
+      "sha256": "836926e692bd37a19982c1bab95fe478f79aef8fd5e9abd50fa0b91ed4ce1089"
+    },
+    {
+      "path": "src/mcp/rea_store.rs",
+      "byte_length": 19729,
+      "sha256": "83144f0fce1671aef5e02c9567b87544f85f0affb86f3be6b89a35179f33f658"
+    },
+    {
+      "path": "src/mcp/runtime/caller_scope.rs",
+      "byte_length": 8822,
+      "sha256": "8013904df0fbe9e0aa5a44bf4e1c77a6ea9a273de06fe365078f81fd40a4254c"
+    },
+    {
+      "path": "src/mcp/runtime/caller_scope_tests.rs",
+      "byte_length": 5897,
+      "sha256": "77ccf054de81a644a3dc1245fffd7ce840853137205f33d93ab7c023088af950"
+    },
+    {
+      "path": "src/mcp/runtime/request_results.rs",
+      "byte_length": 47927,
+      "sha256": "5090ea015457c77f7f37641e3dbdff3185eb9a24881974a60d5f396b8cdbf281"
+    },
+    {
+      "path": "src/mcp/runtime/operation_async.rs",
+      "byte_length": 57879,
+      "sha256": "610879ccdcb477da688030f507baa64541d7439fdc157aa543af9d63d04c534c"
+    },
+    {
+      "path": "src/mcp/runtime/operation_crypto.rs",
+      "byte_length": 15524,
+      "sha256": "a48463ef35ca41d0aa8ef64fcaeb9d3245773052221789a38d18d52ced891633"
+    },
+    {
+      "path": "src/mcp/rea_model_session.rs",
+      "byte_length": 27246,
+      "sha256": "088598b2ca7f33affef61f859c4738b4fbb618b3ab060b8626f47c3fd54d679c"
+    },
+    {
+      "path": "src/mcp/rea_model_session_store.rs",
+      "byte_length": 9723,
+      "sha256": "39e2f9408c64c57cd77577df04189f3325153c174ca4a318cbfa0120a039ce9f"
+    },
+    {
+      "path": "src/mcp/rea_model_session_tests.rs",
+      "byte_length": 22960,
+      "sha256": "da4c781fe16963a5ef6e491752c167cd08b67a8768d9b9475edd95b6925ee7e4"
+    },
+    {
+      "path": "tests/rea_model_session_http.py",
+      "byte_length": 9988,
+      "sha256": "b6fb30835c26739b0982acd607763242d1db407d91083d53162dca0f1aee3818"
+    },
+    {
+      "path": "tests/rea_model_session_external.rs",
+      "byte_length": 1485,
+      "sha256": "3393fba0af8b0e857f748c332e82b5a4ccc37da36a9994ed6e7e5191d7ff3519"
+    },
+    {
+      "path": "scripts/rea_evidence_import_qualification.py",
+      "byte_length": 26075,
+      "sha256": "c3036552976cc6d518e492ef56e2db3aa3f913d02cc2f7fccc78fb7a9520723e"
+    },
+    {
+      "path": "scripts/rea_evidence_import_overflow.py",
+      "byte_length": 13320,
+      "sha256": "4127b3d01b0d1d9800967c0fbd5d1da3f2f1ef0b267142e47e998c1519bc59b4"
+    },
+    {
+      "path": "scripts/rea_evidence_import_fixtures.mjs",
+      "byte_length": 11155,
+      "sha256": "7bde7c4e0430ce4928b465df4fb9102e4a3c4983b15c3d7f551156a26e703e69"
+    },
+    {
+      "path": "tests/fixtures/rea_process_capture/minimal.json",
+      "byte_length": 2898,
+      "sha256": "6c1e6cd8d31818899d03c80b4bef6e74d54764b71602825cb5909c1cc537ff3f"
+    },
+    {
+      "path": "tests/fixtures/rea_apk_signature/rotation-v31.apk",
+      "byte_length": 12375,
+      "sha256": "5127923e25443cfe023ec6ca2acdb6c188b1502665f244a2584a899d2885ee09"
+    },
+    {
+      "path": "tests/fixtures/rea_evidence_session.json",
+      "byte_length": 411521,
+      "sha256": "9d7ff77e7b867f7d7524bf8cfe5962c212a677eb733d85bad7aa5c8fa9c7c723"
+    },
+    {
+      "path": "tests/fixtures/rea_export_reference_complete.json",
+      "byte_length": 309466,
+      "sha256": "7e2114adf2d6f2d11e106cfa3c744230627dadd63e42a690c6995e8953cf5627"
+    },
+    {
+      "path": "tests/fixtures/rea_evidence_source/provenance.json",
+      "byte_length": 8016,
+      "sha256": "04681c4497fd179c2ad9337314afd3c86cc33f078b8a2ef7961a8a978b0ded3b"
+    },
+    {
+      "path": "docs/rea-native/PUBLIC_EVIDENCE_IMPORT.md",
+      "byte_length": 6153,
+      "sha256": "b8df3119aefe32504ce40a90d7dd4a38ecc76a6838af98d8bfd615abf8a830ce"
+    }
+  ],
+  "scope_note": "Some implementation bodies were read in full and remaining supporting files/test names were inspected selectively; file hashes bind the complete file, not a claim of full line-by-line review."
+}

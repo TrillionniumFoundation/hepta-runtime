@@ -183,6 +183,26 @@ object order, rejects changed credentials/policy and nonempty restore, exercises
 catalog continuation and sidecar damage, and verifies all three stdio refusals.
 It uses no production credential and contacts no configured remote host.
 
+The separate [checkpoint upgrade runner](../../scripts/rea_evidence_checkpoint_upgrade.py)
+requires explicit old/new executable and build-binding paths and SHA-256 values,
+the selected checkout's `tests` directory, a new private output directory, and
+`--original-public-observation` pointing to the pinned original REA cold-complete
+response. It reads that original text to derive the public Unknown member order.
+The old source is consumed from its historical Git objects and original matrix;
+the new source must be the current clean, monitored, exact candidate.
+
+Its finite Linux profile runs A → B → A → B using four real private HTTP servers.
+It compares complete public values and text/order, adds two native records to the
+three-record imported history, checkpoints all five records and three Unknown
+revisions, waits for real termination before deleting source inputs, checks that
+rollback leaves every checkpoint file byte and inode unchanged, then explicitly
+resumes under B. Launch registration and owned shutdown defer soft cancellation
+until process ownership and cleanup are established. A cancellation during final
+verification also fails qualification. Raw responses, process identities, logs,
+file observations and terminal receipts remain distinct from the final summary.
+The profile does not establish automatic recovery, arbitrary version migration,
+production deployment or whole-product cost benefits.
+
 These are implementation and verification artifacts. Compilation, the focused
 unit suite, the real HTTP run, and the next fixed-candidate full regression must
 be recorded by the qualification controller; the presence of this document or

@@ -1,0 +1,365 @@
+{
+  "schema": "hepta.rea.c25.provider-gates.outer-receipt.v1",
+  "host": "desktop",
+  "job_id": "1a1ae74be39-fc05-5fad",
+  "source_commit": "c25e4cef0610816bfd1263b69d3dd63e4114aa49",
+  "expected_binding_sha256": "7cee8cc6f6f141fcee5a744ae831ae0b24987e4e428bd91eb936c6ae3257503f",
+  "expected_binary_sha256": "9cde66234030515651177e3d8ab113b2b6f674ee76196283c71874348a0b6c90",
+  "launch": {
+    "audit_recorded": true,
+    "job": {
+      "args": [
+        "-c",
+        "exec /usr/bin/python3 -B - <<'PY'\nimport hashlib, json, os, stat, sys\nfrom pathlib import Path\nroot = Path('/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence')\npins = {\n    'run_bound_provider_gates_r1.py': (54792, 'b4fc9d821c09ebe6d0bacaff24e4cc2f722bf3b4734d7edd7d884e660c28f5fa'),\n    'run_owned_real_apk_r1.py': (35175, 'df35e61f96d90d7420ff86a8d1a6466dc5555f20d1282ba000499436a2638901'),\n    'provider-gates-plan-r1.json': (13973, '78e90d96ec4389e20392f34294a744fd081182fd3ab552466e65b28c6356ad0f'),\n    'PROVIDER_GATES_PLAN_R1.md': (7018, '8f54bdaddbba261d23a5c7de267f738165d796074070e1e19e0ca0974ec5e8e4'),\n    'binding.json': (None, '7cee8cc6f6f141fcee5a744ae831ae0b24987e4e428bd91eb936c6ae3257503f'),\n    'hepta-runtime': (50656984, '9cde66234030515651177e3d8ab113b2b6f674ee76196283c71874348a0b6c90'),\n}\nreceipts=[]\nfor name, (size, expected) in pins.items():\n    path=root/name\n    fd=os.open(path, os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW)\n    try:\n        before=os.fstat(fd)\n        assert stat.S_ISREG(before.st_mode) and before.st_nlink==1 and before.st_uid==os.getuid(), name\n        digest=hashlib.sha256()\n        total=0\n        while True:\n            chunk=os.read(fd, 1024*1024)\n            if not chunk: break\n            digest.update(chunk)\n            total+=len(chunk)\n        after=os.fstat(fd)\n        identity=lambda s:(s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns,s.st_ctime_ns,s.st_mode,s.st_uid,s.st_gid,s.st_nlink)\n        assert identity(before)==identity(after), name\n        assert total==before.st_size and (size is None or total==size), name\n        assert digest.hexdigest()==expected, name\n        receipts.append({'path':str(path),'bytes':total,'sha256':digest.hexdigest()})\n    finally:\n        os.close(fd)\nassert not (root/'provider-gates-r1').exists(), 'provider run directory already exists; retry forbidden'\nprint(json.dumps({'prelaunch_sha_guard':'passed','files':receipts,'automatic_retry':False}),flush=True)\nos.environ['PYTHONDONTWRITEBYTECODE']='1'\nos.execv('/usr/bin/python3', [\n    '/usr/bin/python3','-B',str(root/'run_bound_provider_gates_r1.py'),'--execute',\n    '--expected-binding-sha256','7cee8cc6f6f141fcee5a744ae831ae0b24987e4e428bd91eb936c6ae3257503f',\n    '--expected-binary-sha256','9cde66234030515651177e3d8ab113b2b6f674ee76196283c71874348a0b6c90',\n])\nPY"
+      ],
+      "created_unix_ms": 1793928248889,
+      "cwd": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence",
+      "env_keys": [],
+      "executable": "/bin/sh",
+      "execution_mode": "operator",
+      "host": "desktop",
+      "id": "1a1ae74be39-fc05-5fad",
+      "idempotency_key": "rea-p0p5-c25-provider-r1-20261106-679ccf",
+      "launch_error": null,
+      "launch_state": "launched",
+      "remote_job_dir": "/home/qian-qi/.local/state/hepta-runtime-mac-worker/jobs/1a1ae74be39-fc05-5fad",
+      "request_digest": "2c2eb9df0887285df39c770337aac96e11d6ee0dd563c737675bc824284d8699",
+      "request_fingerprint": 3183686354169440000,
+      "ssh_target": "desktop-ts",
+      "system_jobctl": false,
+      "unit": "hepta-runtime-job-1a1ae74be39-fc05-5fad"
+    },
+    "launch": {
+      "backend": "systemd",
+      "launcher_pid": null,
+      "ok": true,
+      "unit": "hepta-runtime-job-1a1ae74be39-fc05-5fad"
+    },
+    "local_record_pending": false,
+    "reused": false
+  },
+  "status_observations": [
+    {
+      "audit_recorded": true,
+      "backend": "systemd",
+      "job_id": "1a1ae74be39-fc05-5fad",
+      "state": "running",
+      "systemd": {
+        "ActiveState": "active",
+        "Description": "Hepta Runtime job 1a1ae74be39-fc05-5fad bf741301eb2a233f0282a89389c8942e",
+        "ExecMainCode": "0",
+        "ExecMainPID": "1850085",
+        "ExecMainStatus": "0",
+        "InvocationID": "61efdb612e1a44d291a35af59b6f1d62",
+        "LoadState": "loaded",
+        "Result": "success",
+        "SubState": "running"
+      }
+    },
+    {
+      "at_unix_ms": 1793928740324,
+      "audit_recorded": true,
+      "automatic_retry": false,
+      "cancelled": false,
+      "exit_code": 1,
+      "job_id": "1a1ae74be39-fc05-5fad",
+      "launch_nonce": "bf741301eb2a233f0282a89389c8942e",
+      "log_bytes": {
+        "stderr": {
+          "seen": 906,
+          "stored": 906
+        },
+        "stdout": {
+          "seen": 2590,
+          "stored": 2590
+        }
+      },
+      "log_errors": {
+        "stderr": null,
+        "stdout": null
+      },
+      "log_synced": {
+        "stderr": true,
+        "stdout": true
+      },
+      "log_truncated": {
+        "stderr": false,
+        "stdout": false
+      },
+      "output_complete": true,
+      "output_durable": true,
+      "state": "failed",
+      "terminal_publication_confirmed": true,
+      "terminal_publication_protocol": 1,
+      "timed_out": false
+    }
+  ],
+  "final_status": {
+    "at_unix_ms": 1793928740324,
+    "audit_recorded": true,
+    "automatic_retry": false,
+    "cancelled": false,
+    "exit_code": 1,
+    "job_id": "1a1ae74be39-fc05-5fad",
+    "launch_nonce": "bf741301eb2a233f0282a89389c8942e",
+    "log_bytes": {
+      "stderr": {
+        "seen": 906,
+        "stored": 906
+      },
+      "stdout": {
+        "seen": 2590,
+        "stored": 2590
+      }
+    },
+    "log_errors": {
+      "stderr": null,
+      "stdout": null
+    },
+    "log_synced": {
+      "stderr": true,
+      "stdout": true
+    },
+    "log_truncated": {
+      "stderr": false,
+      "stdout": false
+    },
+    "output_complete": true,
+    "output_durable": true,
+    "state": "failed",
+    "terminal_publication_confirmed": true,
+    "terminal_publication_protocol": 1,
+    "timed_out": false
+  },
+  "original_read_pages": [
+    {
+      "audit_recorded": true,
+      "job_id": "1a1ae74be39-fc05-5fad",
+      "stderr": {
+        "bytes_hex": "",
+        "eof": true,
+        "next_offset": 0,
+        "offset": 0,
+        "size": 0,
+        "text": ""
+      },
+      "stdout": {
+        "bytes_hex": "7b227072656c61756e63685f7368615f6775617264223a2022706173736564222c202266696c6573223a205b7b2270617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f72756e5f626f756e645f70726f76696465725f67617465735f72312e7079222c20226279746573223a2035343739322c2022736861323536223a202262346663396438323163303965626536643062616361666632346534636332663732326266336234373334643765646437643838346536363063323866356661227d2c207b2270617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f72756e5f6f776e65645f7265616c5f61706b5f72312e7079222c20226279746573223a2033353137352c2022736861323536223a202264663335653631663936643930643734323066663836613864316136343636646335353535663230643132383262613030303439393433366132363338393031227d2c207b2270617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f70726f76696465722d67617465732d706c616e2d72312e6a736f6e222c20226279746573223a2031333937332c2022736861323536223a202237386539306439366563343338396532303339326633343239346137343466643038313138326664336162353532343636653635623238633633353661643066227d2c207b2270617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f50524f56494445525f47415445535f504c414e5f52312e6d64222c20226279746573223a20373031382c2022736861323536223a202238663534626461646462626132363164323361356337646532363766373338313635643739363037343037306531653139653063613039373465633565386534227d2c207b2270617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f62696e64696e672e6a736f6e222c20226279746573223a20353030322c2022736861323536223a202237636565386363366636663134316663656535613734346165383331616530623234393837653465343238626439316562393336633661653332353735303366227d2c207b2270617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f68657074612d72756e74696d65222c20226279746573223a2035303635363938342c2022736861323536223a202239636465363632333430333035313536353131373765336438616231313362326236663637346565373631393632383363373138373433343861306236633930227d5d2c20226175746f6d617469635f7265747279223a2066616c73657d0a",
+        "eof": true,
+        "next_offset": 1205,
+        "offset": 0,
+        "size": 1205,
+        "text": "{\"prelaunch_sha_guard\": \"passed\", \"files\": [{\"path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/run_bound_provider_gates_r1.py\", \"bytes\": 54792, \"sha256\": \"b4fc9d821c09ebe6d0bacaff24e4cc2f722bf3b4734d7edd7d884e660c28f5fa\"}, {\"path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/run_owned_real_apk_r1.py\", \"bytes\": 35175, \"sha256\": \"df35e61f96d90d7420ff86a8d1a6466dc5555f20d1282ba000499436a2638901\"}, {\"path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/provider-gates-plan-r1.json\", \"bytes\": 13973, \"sha256\": \"78e90d96ec4389e20392f34294a744fd081182fd3ab552466e65b28c6356ad0f\"}, {\"path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/PROVIDER_GATES_PLAN_R1.md\", \"bytes\": 7018, \"sha256\": \"8f54bdaddbba261d23a5c7de267f738165d796074070e1e19e0ca0974ec5e8e4\"}, {\"path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/binding.json\", \"bytes\": 5002, \"sha256\": \"7cee8cc6f6f141fcee5a744ae831ae0b24987e4e428bd91eb936c6ae3257503f\"}, {\"path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/hepta-runtime\", \"bytes\": 50656984, \"sha256\": \"9cde66234030515651177e3d8ab113b2b6f674ee76196283c71874348a0b6c90\"}], \"automatic_retry\": false}\n"
+      }
+    },
+    {
+      "audit_recorded": true,
+      "job_id": "1a1ae74be39-fc05-5fad",
+      "stderr": {
+        "bytes_hex": "",
+        "eof": true,
+        "next_offset": 0,
+        "offset": 0,
+        "size": 0,
+        "text": ""
+      },
+      "stdout": {
+        "bytes_hex": "",
+        "eof": true,
+        "next_offset": 1205,
+        "offset": 1205,
+        "size": 1205,
+        "text": ""
+      }
+    },
+    {
+      "audit_recorded": true,
+      "job_id": "1a1ae74be39-fc05-5fad",
+      "stderr": {
+        "bytes_hex": "",
+        "eof": true,
+        "next_offset": 0,
+        "offset": 0,
+        "size": 0,
+        "text": ""
+      },
+      "stdout": {
+        "bytes_hex": "",
+        "eof": true,
+        "next_offset": 1205,
+        "offset": 1205,
+        "size": 1205,
+        "text": ""
+      }
+    },
+    {
+      "audit_recorded": true,
+      "job_id": "1a1ae74be39-fc05-5fad",
+      "stderr": {
+        "bytes_hex": "",
+        "eof": true,
+        "next_offset": 0,
+        "offset": 0,
+        "size": 0,
+        "text": ""
+      },
+      "stdout": {
+        "bytes_hex": "",
+        "eof": true,
+        "next_offset": 1205,
+        "offset": 1205,
+        "size": 1205,
+        "text": ""
+      }
+    },
+    {
+      "audit_recorded": true,
+      "job_id": "1a1ae74be39-fc05-5fad",
+      "stderr": {
+        "bytes_hex": "",
+        "eof": true,
+        "next_offset": 0,
+        "offset": 0,
+        "size": 0,
+        "text": ""
+      },
+      "stdout": {
+        "bytes_hex": "7b227374616765223a2022676869647261222c2022737461747573223a2022706173736564222c2022726573756c74223a207b22636865636b73223a2031312c2022636f6e666967223a207b2270617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f70726f76696465722d67617465732d72312f30312d6768696472612f776f726b73706163652f636f6e6669672e6a736f6e222c20226279746573223a20353231342c2022736861323536223a202265376531623465346666313632623863323061633964613864663638336334366665363464656165663733343262306137376532653738363931303532646165227d7d7d0a",
+        "eof": true,
+        "next_offset": 1496,
+        "offset": 1205,
+        "size": 1496,
+        "text": "{\"stage\": \"ghidra\", \"status\": \"passed\", \"result\": {\"checks\": 11, \"config\": {\"path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/provider-gates-r1/01-ghidra/workspace/config.json\", \"bytes\": 5214, \"sha256\": \"e7e1b4e4ff162b8c20ac9da8df683c46fe64deaef7342b0a77e2e78691052dae\"}}}\n"
+      }
+    },
+    {
+      "audit_recorded": true,
+      "job_id": "1a1ae74be39-fc05-5fad",
+      "stderr": {
+        "bytes_hex": "",
+        "eof": true,
+        "next_offset": 0,
+        "offset": 0,
+        "size": 0,
+        "text": ""
+      },
+      "stdout": {
+        "bytes_hex": "7b227374616765223a20226a616478222c2022737461747573223a2022706173736564222c2022726573756c74223a207b22636865636b73223a20382c2022636f6e666967223a207b2270617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f70726f76696465722d67617465732d72312f30322d6a6164782f776f726b73706163652f636f6e6669672e6a736f6e222c20226279746573223a20323836372c2022736861323536223a202234373866346663383932623361656465643736613130363138363439333164323232326331363263336261636530346562653238623333646634336461306661227d7d7d0a",
+        "eof": true,
+        "next_offset": 1782,
+        "offset": 1496,
+        "size": 1782,
+        "text": "{\"stage\": \"jadx\", \"status\": \"passed\", \"result\": {\"checks\": 8, \"config\": {\"path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/provider-gates-r1/02-jadx/workspace/config.json\", \"bytes\": 2867, \"sha256\": \"478f4fc892b3aeded76a1061864931d2222c162c3bace04ebe28b33df43da0fa\"}}}\n"
+      }
+    },
+    {
+      "audit_recorded": true,
+      "job_id": "1a1ae74be39-fc05-5fad",
+      "stderr": {
+        "bytes_hex": "",
+        "eof": true,
+        "next_offset": 0,
+        "offset": 0,
+        "size": 0,
+        "text": ""
+      },
+      "stdout": {
+        "bytes_hex": "7b227374616765223a20226368726f6d65222c2022737461747573223a2022706173736564222c2022726573756c74223a207b22636865636b73223a2031342c2022636f6e666967223a207b2270617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f70726f76696465722d67617465732d72312f30332d6368726f6d652f776f726b73706163652f636f6e6669672e6a736f6e222c20226279746573223a203835382c2022736861323536223a202263643732383365326130636266386534343565336464653566333161623463656439333437623032353463353535353230653861353664623565623139373336227d7d7d0a7b227374616765223a202261706b2d74687265652d776179222c2022737461747573223a2022706173736564222c2022726573756c74223a207b22706f736974697665223a2031392c2022666f72676564223a20312c20226d616c666f726d6564223a20342c20227265615f7061636b6167655f66696c65735f636865636b6564223a20323339387d7d0a7b227374616765223a202261706b2d6d6370222c2022737461747573223a2022706173736564222c2022726573756c74223a207b226761746573223a20362c2022636f6e74726f6c6c6572735f636c65616e223a20322c20226f776e65645f666978747572655f6279746573223a2036373131323438327d7d0a",
+        "eof": true,
+        "next_offset": 2333,
+        "offset": 1782,
+        "size": 2333,
+        "text": "{\"stage\": \"chrome\", \"status\": \"passed\", \"result\": {\"checks\": 14, \"config\": {\"path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/provider-gates-r1/03-chrome/workspace/config.json\", \"bytes\": 858, \"sha256\": \"cd7283e2a0cbf8e445e3dde5f31ab4ced9347b0254c555520e8a56db5eb19736\"}}}\n{\"stage\": \"apk-three-way\", \"status\": \"passed\", \"result\": {\"positive\": 19, \"forged\": 1, \"malformed\": 4, \"rea_package_files_checked\": 2398}}\n{\"stage\": \"apk-mcp\", \"status\": \"passed\", \"result\": {\"gates\": 6, \"controllers_clean\": 2, \"owned_fixture_bytes\": 67112482}}\n"
+      }
+    },
+    {
+      "audit_recorded": true,
+      "job_id": "1a1ae74be39-fc05-5fad",
+      "stderr": {
+        "bytes_hex": "54726163656261636b20286d6f737420726563656e742063616c6c206c617374293a0a202046696c6520222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f72756e5f626f756e645f70726f76696465725f67617465735f72312e7079222c206c696e65203832382c20696e203c6d6f64756c653e0a2020202072616973652053797374656d45786974286d61696e2829290a2020202020202020202020202020202020202020205e5e5e5e5e5e0a202046696c6520222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f72756e5f626f756e645f70726f76696465725f67617465735f72312e7079222c206c696e65203639362c20696e206d61696e0a20202020726f775b2270726f63657373225d203d2072756e5f70726f636573732873746167652c2073746167655f656e76290a2020202020202020202020202020202020202020205e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e0a202046696c6520222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f72756e5f626f756e645f70726f76696465725f67617465735f72312e7079222c206c696e65203331322c20696e2072756e5f70726f636573730a20202020726571756972652872657475726e636f6465203d3d203020616e64206e6f742074696d65645f6f757420616e64206e6f7420636c65616e75702c202273746167652070726f6365737320646964206e6f7420636f6d706c65746520636c65616e6c793a2022202b2073746167655b226e616d65225d290a202046696c6520222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f72756e5f626f756e645f70726f76696465725f67617465735f72312e7079222c206c696e652036382c20696e20726571756972650a20202020726169736520417373657274696f6e4572726f72286d657373616765290a417373657274696f6e4572726f723a2073746167652070726f6365737320646964206e6f7420636f6d706c65746520636c65616e6c793a2061706b2d67656e6572617465640a",
+        "eof": true,
+        "next_offset": 906,
+        "offset": 0,
+        "size": 906,
+        "text": "Traceback (most recent call last):\n  File \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/run_bound_provider_gates_r1.py\", line 828, in <module>\n    raise SystemExit(main())\n                     ^^^^^^\n  File \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/run_bound_provider_gates_r1.py\", line 696, in main\n    row[\"process\"] = run_process(stage, stage_env)\n                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/run_bound_provider_gates_r1.py\", line 312, in run_process\n    require(returncode == 0 and not timed_out and not cleanup, \"stage process did not complete cleanly: \" + stage[\"name\"])\n  File \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/run_bound_provider_gates_r1.py\", line 68, in require\n    raise AssertionError(message)\nAssertionError: stage process did not complete cleanly: apk-generated\n"
+      },
+      "stdout": {
+        "bytes_hex": "7b2270726f76696465725f6761746573223a20226661696c6564222c20227175616c6966696564223a2066616c73652c202273756d6d617279223a207b2270617468223a20222f686f6d652f7169616e2d71692f776f726b2f68657074612d7265612d703070352d3637396363662d32303236313130352d65766964656e63652f70726f76696465722d67617465732d72312f73756d6d6172792e6a736f6e222c20226279746573223a2033393137312c2022736861323536223a202262666531626331643463663162653532646164346336623639333831323739313639313733653962323164383034346631306431316438373438353534383432227d7d0a",
+        "eof": true,
+        "next_offset": 2590,
+        "offset": 2333,
+        "size": 2590,
+        "text": "{\"provider_gates\": \"failed\", \"qualified\": false, \"summary\": {\"path\": \"/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/provider-gates-r1/summary.json\", \"bytes\": 39171, \"sha256\": \"bfe1bc1d4cf1be52dad4c6b69381279169173e9b21d8044f10d11d8748554842\"}}\n"
+      }
+    },
+    {
+      "audit_recorded": true,
+      "job_id": "1a1ae74be39-fc05-5fad",
+      "stderr": {
+        "bytes_hex": "",
+        "eof": true,
+        "next_offset": 906,
+        "offset": 906,
+        "size": 906,
+        "text": ""
+      },
+      "stdout": {
+        "bytes_hex": "",
+        "eof": true,
+        "next_offset": 2590,
+        "offset": 2590,
+        "size": 2590,
+        "text": ""
+      }
+    }
+  ],
+  "log_coverage": {
+    "complete": true,
+    "byte_counts": {
+      "stdout": 2590,
+      "stderr": 906
+    },
+    "final_eof": {
+      "stdout": true,
+      "stderr": true
+    },
+    "no_loss_or_truncation": true
+  },
+  "summary": {
+    "path": "/home/qian-qi/work/hepta-rea-p0p5-679ccf-20261105-evidence/provider-gates-r1/summary.json",
+    "bytes": 39171,
+    "sha256": "bfe1bc1d4cf1be52dad4c6b69381279169173e9b21d8044f10d11d8748554842",
+    "status": "failed",
+    "qualified": false,
+    "passed_stages": [
+      "ghidra",
+      "jadx",
+      "chrome",
+      "apk-three-way",
+      "apk-mcp"
+    ],
+    "failed_stage": "apk-generated"
+  },
+  "failure_classification": {
+    "phase": "generated APK installation closure, before any owned subprocess",
+    "type": "FileNotFoundError",
+    "missing_assumed_path": "/usr/lib/jvm/java-21-openjdk-amd64/lib/libsunec.so",
+    "commands_executed": 0,
+    "checks_passed": 0,
+    "actual_generated_apk_behavior": "not_exercised",
+    "automatic_retry": false,
+    "assertions_relaxed": false
+  },
+  "source_and_runtime_integrity": {
+    "source_bytes_unchanged": true,
+    "source_git_unchanged": true,
+    "source_monitor_complete": true,
+    "source_monitor_event_count": 0,
+    "runtime_unchanged": true,
+    "binding_unchanged": true,
+    "driver_unchanged": true,
+    "host_unchanged": true
+  },
+  "production_qualified": false,
+  "rea_full_parity": false
+}
