@@ -54,7 +54,8 @@
         "src/mcp/rea_static.rs",
         "src/mcp/runtime/jobs.rs",
         "src/native_observation.rs",
-        "src/native_observation_wire.rs"
+        "src/native_observation_wire.rs",
+        "src/mcp/rea_ghidra_instructions.rs"
       ],
       "tests": [
         "src/jobctl_engine_scratch_tests.rs",
@@ -64,9 +65,10 @@
         "src/mcp/rea_engine_usage_tests.rs",
         "src/native_scratch_tests.rs",
         "tests/rea_engine_cleanup_assertions.py",
-        "tests/rea_engine_owner_tests.py"
+        "tests/rea_engine_owner_tests.py",
+        "src/mcp/rea_ghidra_instructions_tests.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open.",
+      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/instructions/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open.",
       "upstream_tools": []
     },
     "archive_worker": {
@@ -184,15 +186,20 @@
         "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/mcp/qualification.json",
         "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/summary.json",
         "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/upstream/qualification.json",
-        "docs/qualification/rea-final-source-map-release-20261104-r2/summary.json"
+        "docs/qualification/rea-final-source-map-release-20261104-r2/summary.json",
+        "src/mcp/rea_source_map_content.rs"
       ],
       "tests": [
         "src/mcp/rea_source_map_tests.rs",
         "scripts/rea-source-map-reference.mjs",
         "scripts/rea-source-map-upstream-reference.mjs",
-        "tests/rea_source_map_mcp.py"
+        "tests/rea_source_map_mcp.py",
+        "src/mcp/rea_source_map_content_tests.rs",
+        "scripts/rea-source-map-content-reference.mjs",
+        "tests/fixtures/rea_source_map/content-position-rea-6_8_0.json",
+        "tests/fixtures/rea_source_map/content-position-rea-6_8_0.provenance.json"
       ],
-      "scope": "Internal admitted-byte native source-map decoder with fixed limits, real MCP cancellation/deadline kill and reap, and explicit non-REA declaration output.",
+      "scope": "Bounded admitted-byte native source-map decoding with explicit embedded-content states and UTF-16 position/offset observations. Source/code presence and historical finite tests do not qualify this new candidate or the full upstream trace operation; the report remains a non-REA declaration.",
       "upstream_tools": [
         "trace_web_source_location"
       ]
@@ -773,7 +780,8 @@
         "src/mcp/rea_response_order.rs",
         "src/mcp/runtime/caller_scope.rs",
         "src/mcp/runtime/request_results.rs",
-        "docs/rea-native/EVIDENCE_CHECKPOINTS.md"
+        "docs/rea-native/EVIDENCE_CHECKPOINTS.md",
+        "scripts/rea_evidence_checkpoint_upgrade.py"
       ],
       "tests": [
         "src/mcp/rea_evidence_checkpoint_tests.rs",
@@ -782,7 +790,16 @@
         "tests/rea_evidence_checkpoint_http.py",
         "tests/fixtures/rea_evidence_checkpoint/unknown-verified.json",
         "tests/fixtures/rea_evidence_checkpoint/provenance.json",
-        "tests/fixtures/rea_evidence_checkpoint/producer-run.stdout"
+        "tests/fixtures/rea_evidence_checkpoint/producer-run.stdout",
+        "tests/rea_evidence_checkpoint_upgrade_tests.py",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/call-003-cold-complete.json",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/call-026-unknown-verified-complete.json",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/native-b2-apk-summary.result.json",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/native-c25-cold-empty.http",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/provenance.json",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/wire-0055-sent.json.gz",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/wire-0056-received.json.gz",
+        "tests/fixtures/rea_evidence_checkpoint/upgrade-public-order/wire.jsonl"
       ],
       "scope": "Separate native Linux extension: explicit same-credential/same-policy checkpoint restore into an empty session. Revalidates canonical bytes, complete Evidence and Unknown graph, strict complete object-order sidecar, private inode/directory bindings and final empty-state/cancellation checks before atomic publication. Does not reopen source artifacts, dispatch providers or automatically load another session. Unsupported versions, authority changes, corruption, nonempty sessions and native budgets are refused. Not full multi-host or production recovery qualification."
     },
@@ -847,7 +864,8 @@
         "src/mcp/rea_response_encoding.rs",
         "src/mcp/rea_response_order.rs",
         "src/mcp/rea_structured_wire.rs",
-        "src/mcp/rea_failure_order.rs"
+        "src/mcp/rea_failure_order.rs",
+        "src/mcp/rea_overflow_order.rs"
       ],
       "tests": [
         "scripts/rea_evidence_import_fixtures.mjs",
@@ -879,7 +897,10 @@
         "tests/fixtures/rea_evidence_root_string/node-probe.stdout",
         "tests/fixtures/rea_evidence_root_string/node-probe.js",
         "tests/fixtures/rea_evidence_root_string/producer-run.stdout",
-        "tests/fixtures/rea_evidence_root_string/provenance.json"
+        "tests/fixtures/rea_evidence_root_string/provenance.json",
+        "src/mcp/rea_contract_overflow_tests.rs",
+        "scripts/rea_overflow_error_fixture.py",
+        "tests/fixtures/rea_evidence_file/overflow-error-text-original-rea-6_8_0-679ccf.json"
       ]
     },
     "rea_inspect_analysis_view": {
@@ -957,11 +978,15 @@
         "src/mcp/rea_mcp_transport.rs",
         "src/mcp/rea_response_encoding.rs",
         "src/mcp/rea_response_order.rs",
-        "src/mcp/rea_structured_wire.rs"
+        "src/mcp/rea_structured_wire.rs",
+        "src/mcp/rea_overflow_order.rs"
       ],
       "tests": [
         "src/mcp/rea_apk_evidence_tests.rs",
-        "src/mcp/rea_apk_mcp_input_tests.rs"
+        "src/mcp/rea_apk_mcp_input_tests.rs",
+        "src/mcp/rea_contract_overflow_tests.rs",
+        "scripts/rea_overflow_error_fixture.py",
+        "tests/fixtures/rea_evidence_file/overflow-error-text-original-rea-6_8_0-679ccf.json"
       ],
       "scope": "Frozen inspect_apk_signature MCP route for static observations, complete retained Evidence, default summaries and selected signing pages. Separate from the native mathematical verification preview; no platform trust claim."
     },
@@ -1160,15 +1185,20 @@
         "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/mcp/qualification.json",
         "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/summary.json",
         "docs/qualification/rea-final-source-map-release-20261104-r2/source-map/upstream/qualification.json",
-        "docs/qualification/rea-final-source-map-release-20261104-r2/summary.json"
+        "docs/qualification/rea-final-source-map-release-20261104-r2/summary.json",
+        "src/mcp/rea_source_map_content.rs"
       ],
       "tests": [
         "src/mcp/rea_source_map_tests.rs",
         "scripts/rea-source-map-reference.mjs",
         "scripts/rea-source-map-upstream-reference.mjs",
-        "tests/rea_source_map_mcp.py"
+        "tests/rea_source_map_mcp.py",
+        "src/mcp/rea_source_map_content_tests.rs",
+        "scripts/rea-source-map-content-reference.mjs",
+        "tests/fixtures/rea_source_map/content-position-rea-6_8_0.json",
+        "tests/fixtures/rea_source_map/content-position-rea-6_8_0.provenance.json"
       ],
-      "scope": "Native bounded version-3 map declarations and across-line greatest-position lookup, including embedded indexed maps, all coincident records and source-bound collection paging. No source URL fetch, browser acquisition, source equivalence, retained upstream views or REA Evidence identity."
+      "scope": "Bounded admitted-byte native source-map decoding with explicit embedded-content states and UTF-16 position/offset observations. Source/code presence and historical finite tests do not qualify this new candidate or the full upstream trace operation; the report remains a non-REA declaration."
     },
     "rea_inspect_web_capture": {
       "source_paths": [
@@ -1324,7 +1354,8 @@
         "src/mcp/rea_provider.rs",
         "src/mcp/runtime/jobs.rs",
         "src/native_observation.rs",
-        "src/native_observation_wire.rs"
+        "src/native_observation_wire.rs",
+        "src/mcp/rea_ghidra_instructions.rs"
       ],
       "tests": [
         "src/jobctl_engine_scratch_tests.rs",
@@ -1338,9 +1369,10 @@
         "tests/rea_engine_cleanup_assertions.py",
         "tests/rea_engine_owner_tests.py",
         "tests/rea_ghidra_analysis_external.py",
-        "tests/rea_static_external.rs"
+        "tests/rea_static_external.rs",
+        "src/mcp/rea_ghidra_instructions_tests.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
+      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/instructions/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
     },
     "rea_static_profiles": {
       "source_paths": [
@@ -1367,7 +1399,8 @@
         "src/mcp/rea_provider.rs",
         "src/mcp/runtime/jobs.rs",
         "src/native_observation.rs",
-        "src/native_observation_wire.rs"
+        "src/native_observation_wire.rs",
+        "src/mcp/rea_ghidra_instructions.rs"
       ],
       "tests": [
         "src/jobctl_engine_scratch_tests.rs",
@@ -1380,9 +1413,10 @@
         "src/native_scratch_tests.rs",
         "tests/rea_engine_cleanup_assertions.py",
         "tests/rea_engine_owner_tests.py",
-        "tests/rea_ghidra_analysis_external.py"
+        "tests/rea_ghidra_analysis_external.py",
+        "src/mcp/rea_ghidra_instructions_tests.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
+      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/instructions/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
     },
     "rea_static_read": {
       "source_paths": [
@@ -1407,7 +1441,8 @@
         "src/mcp/rea_static.rs",
         "src/mcp/runtime/jobs.rs",
         "src/native_observation.rs",
-        "src/native_observation_wire.rs"
+        "src/native_observation_wire.rs",
+        "src/mcp/rea_ghidra_instructions.rs"
       ],
       "tests": [
         "src/jobctl_engine_scratch_tests.rs",
@@ -1421,9 +1456,10 @@
         "tests/rea_engine_cleanup_assertions.py",
         "tests/rea_engine_owner_tests.py",
         "tests/rea_ghidra_analysis_external.py",
-        "tests/rea_static_external.rs"
+        "tests/rea_static_external.rs",
+        "src/mcp/rea_ghidra_instructions_tests.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
+      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/instructions/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
     },
     "rea_static_start": {
       "source_paths": [
@@ -1452,7 +1488,8 @@
         "src/mcp/rea_static.rs",
         "src/mcp/runtime/jobs.rs",
         "src/native_observation.rs",
-        "src/native_observation_wire.rs"
+        "src/native_observation_wire.rs",
+        "src/mcp/rea_ghidra_instructions.rs"
       ],
       "tests": [
         "src/jobctl_engine_scratch_tests.rs",
@@ -1468,9 +1505,10 @@
         "tests/rea_ghidra_analysis_external.py",
         "tests/rea_ghidra_external.py",
         "tests/rea_java_external.py",
-        "tests/rea_static_external.rs"
+        "tests/rea_static_external.rs",
+        "src/mcp/rea_ghidra_instructions_tests.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
+      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/instructions/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
     },
     "rea_static_status": {
       "source_paths": [
@@ -1494,7 +1532,8 @@
         "src/mcp/rea_provider.rs",
         "src/mcp/runtime/jobs.rs",
         "src/native_observation.rs",
-        "src/native_observation_wire.rs"
+        "src/native_observation_wire.rs",
+        "src/mcp/rea_ghidra_instructions.rs"
       ],
       "tests": [
         "src/jobctl_engine_scratch_tests.rs",
@@ -1507,9 +1546,10 @@
         "src/native_scratch_tests.rs",
         "tests/rea_engine_cleanup_assertions.py",
         "tests/rea_engine_owner_tests.py",
-        "tests/rea_ghidra_analysis_external.py"
+        "tests/rea_ghidra_analysis_external.py",
+        "src/mcp/rea_ghidra_instructions_tests.rs"
       ],
-      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
+      "scope": "Fixed GNU/JADX/Ghidra operations; selected Ghidra revision 2 provides bounded functions/function/instructions/xrefs/native-decompile with four fixed analyzers. Java scratch is bound to the original job/nonce/directory identity and is cleaned only after original-group stop and leader reap; inconclusive ownership remains unknown/retained. FD-relative sampling tolerates an owned descendant disappearing but preserves root/replacement/permission failures and is not a hard quota. Historical receipts retain their original source/binary identities and do not qualify a later build; IDA/Hopper and complete engine operation coverage remain open."
     },
     "rea_verify_evidence": {
       "source_paths": [
@@ -2576,7 +2616,7 @@
       ]
     },
     "read_function_instructions": {
-      "implementation": "related_facility",
+      "implementation": "partial_operation",
       "native_routes": [
         "rea_static_profiles",
         "rea_static_start",
@@ -2584,8 +2624,35 @@
         "rea_static_read",
         "rea_static_cancel"
       ],
-      "scope": "Fixed Ghidra/ELF inventories, selected function metadata/references/decompilation and GNU outputs are related inputs; no exact upstream composed/instruction handler is registered",
-      "missing": "The upstream operation-specific query, normalized representation, coverage and full Evidence contract remain absent or unqualified"
+      "scope": "Native Ghidra revision 2 instructions operation for an explicitly selected canonical ELF function entry. Fixed restricted analysis returns the complete observed Listing within 4096-row/65536-UTF8-byte bounds, exact inclusive AddressSet ranges and symbol metadata, initialized-memory byte rows and text digest. No target execution; a bound violation fails the complete observation.",
+      "missing": "Actual same-candidate original/native Ghidra comparison and lifecycle gates remain required. Original default analysis, terminal-call and Borland SEH boundary heuristics, persistent document lifecycle, full Evidence and other providers remain unimplemented or unqualified. Empty Listing and loader-adjusted bytes retain explicit limitations.",
+      "source_paths": [
+        "src/mcp/rea_provider.rs",
+        "src/mcp/rea_engine_ghidra.rs",
+        "src/mcp/rea_ghidra_contract.rs",
+        "src/mcp/rea_ghidra_analysis_bridge.java",
+        "src/mcp/rea_ghidra_instructions.rs",
+        "src/mcp/rea_static_summary.rs",
+        "docs/rea-ghidra-instructions.md"
+      ],
+      "tests": [
+        "src/mcp/rea_ghidra_instructions_tests.rs",
+        "src/mcp/rea_ghidra_contract_tests.rs",
+        "src/mcp/rea_provider_tests.rs",
+        "src/mcp/rea_static_summary_tests.rs",
+        "tests/rea_ghidra_instructions_contract.mjs",
+        "tests/fixtures/rea_ghidra_instructions/contract-window.json",
+        "tests/fixtures/rea_ghidra_instructions/owned-instructions.S"
+      ],
+      "extra_gates": [
+        "provider_qualification",
+        "native_semantics",
+        "retention_and_pagination",
+        "effects_and_recovery"
+      ],
+      "related_auxiliary_capabilities": [
+        "static_worker"
+      ]
     },
     "reconcile_javascript_runtime": {
       "implementation": "absent",
@@ -2744,8 +2811,8 @@
       "related_auxiliary_capabilities": [
         "source_map_worker"
       ],
-      "scope": "Native decoding of explicitly admitted local source-map JSON and a finite actual-REA point projection: across-line greatest generated position, all coincident candidates, section/source/name declarations and embedded-content hashes.",
-      "missing": "Exact upstream input/default/target selection and acquisition; authenticated script/application context; source URL resolution and embedded-content UTF-16 offset verification; complete Evidence/profile/typed outcomes; retained views and operation-specific recovery. The native report is not upstream REA Evidence.",
+      "scope": "Native decoding of explicitly admitted local source-map JSON with across-line greatest generated position, coincident candidates, sections/source/name declarations and embedded-content hashes. Embedded source content now exposes absent/null/text states and bounded UTF-16 line/column/offset observations, including CRLF, CR, LF, U+2028, U+2029 and astral positions; all nested leaves share one line budget.",
+      "missing": "Exact upstream input/default/target selection and acquisition; authenticated script/application context; source URL resolution; complete Evidence/profile/typed outcomes; retained views and operation-specific recovery. The retained original point corpus includes six explicit surrogate gaps, so complete upstream source-location equivalence remains unqualified. The native report is not upstream REA Evidence.",
       "dependencies": [],
       "extra_gates": [
         "js_graph_semantics",
@@ -2788,6 +2855,6 @@
       ]
     }
   },
-  "runtime_baseline": "42949877bcec4441e9d97034fd803306865a0083",
+  "runtime_baseline": "d0b4f86386b5b7e04a674c34dbbc1704513f6c52",
   "schema": "hepta.rea.capability-map.v1"
 }

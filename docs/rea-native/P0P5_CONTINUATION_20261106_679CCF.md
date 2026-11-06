@@ -1,5 +1,9 @@
 # REA P0–P5 integration — 2026-11-06, 679ccf
 
+The [fresh B2 observation record](B2_OBSERVATIONS_20261106_679CCF.md) gives the
+actual later results, preserved failures and exact boundary for the new combined
+source. The implementation and planned gates below retain their original context.
+
 ## Decision and exact qualification boundary
 
 Full REA replacement and production qualification remain **HOLD / NO_GO**.

@@ -19,6 +19,8 @@ It never qualifies general deployment, migration, rollback, production or cost.
 from __future__ import annotations
 
 import argparse
+import gzip
+import io
 from contextlib import contextmanager
 import hashlib
 import importlib.util
@@ -53,6 +55,22 @@ ORIGINAL_PUBLIC_ORDER = {
     "sha256": "2731674c30c89cc91124430db061599626410a23562faa0820ba36694a89fc71",
     "scope": "Original REA 6.8.0 complete public Unknown key sequence; not a checkpoint receipt",
 }
+
+ORIGINAL_PUBLIC_RECORD_ORDER = {
+    "observation": "evidence-import-r1/reference-main/call-026-unknown-verified-complete.json",
+    "sha256": "e6420a795dd15d1a44437dd4d540b008195bd603089839f779ecf100d011ca18",
+    "manifest_sha256": "dc95e62a9008731bae830389ef0470e95edfbffbe10ff973c0efc76af8b4657d",
+    "scope": "Observed 16-key Evidence envelopes and this fixture's optional caller_input_path 17-key envelope only",
+    "frames": {
+        "sent": {"path": "wire-0055-sent.json.gz", "gzip_bytes": 110,
+                 "gzip_sha256": "cd4c4c5eb273be358d625bcc3d8a4a867aff46816d0c2764e024c88305e30f84",
+                 "raw_bytes": 103, "raw_sha256": "5113cc06f61d377e08b83d6c9cbd00ca7a8e253adb04babf23f901c8296e0d5c"},
+        "received": {"path": "wire-0056-received.json.gz", "gzip_bytes": 1915,
+                     "gzip_sha256": "63a215e60664c2f818fcba90d72ee9a8e49b19e36c561076cc1e83de71cb1570",
+                     "raw_bytes": 12469, "raw_sha256": "947187395b9f8a88ec3d16d9f05a5be63ace356d9af8262d1a8cf2c69ae3268a"},
+    },
+}
+
 UNKNOWN_KEYS = [
     "unknown_id", "revision", "previous_revision_digest", "revision_digest",
     "scope_digest", "question", "status", "severity", "domain",
@@ -286,6 +304,16 @@ def bind(label, args, repo, output, report, state):
         state["source_before"] = source
         save(folder / "current-source-before.json", source)
         require(read(Path(__file__).resolve()) == state["runner_raw"], "runner changed before source monitoring")
+        runner_source = state["runner_source"]
+        if runner_source["repository_raw"] is not None:
+            relative = runner_source["binding"]["repository_source_relative_path"]
+            rows = [row for row in source["files"] if row["path"] == relative]
+            pinned_repository = runner_source["binding"]["replaced_repository_runner"]
+            require(len(rows) == 1 and rows[0]["bytes"] == pinned_repository["bytes"]
+                    and rows[0]["sha256"] == pinned_repository["sha256"],
+                    "replaced repository runner differs from current selected build source")
+            require(read(repo / relative) == runner_source["repository_raw"],
+                    "replaced repository runner changed before source monitoring")
     captured = {}
     def artifact(name):
         raw = consumer.read_regular(summary_path.parent, name)
@@ -660,6 +688,21 @@ def orders(value, path=()):
     return result
 
 
+def expected_http_structured(body):
+    """Expected native HTTP structured channel for the pinned serde_json Value build.
+
+    The actual c25 HTTP frame and both bound build artifact streams establish
+    BTreeMap member order without preserve_order. Text keeps its own REA order.
+    Only the expected representation is built here; observed replies are never
+    reordered, normalized, or accepted under a second ordering profile.
+    """
+    if isinstance(body, dict):
+        return {key: expected_http_structured(body[key]) for key in sorted(body)}
+    if isinstance(body, list):
+        return [expected_http_structured(item) for item in body]
+    return body
+
+
 def tool_json(reply, compatibility=False):
     require(not reply.get("isError"), "public tool returned an error; inspect raw HTTP response")
     content = reply.get("content")
@@ -670,7 +713,8 @@ def tool_json(reply, compatibility=False):
     if compatibility:
         require(list(body) == ["result"], "compatibility result wrapper differs")
         require(reply.get("structuredContent") == body, "text and structured values differ")
-        require(orders(reply["structuredContent"]) == orders(body), "text and structured object order differ")
+        require(orders(reply["structuredContent"]) == orders(expected_http_structured(body)),
+                "native HTTP structured object order differs")
         require(reply.get("_meta") == {"provenance": {"untrusted_content": True, "source": "analysis_target"}},
                 "original target-content provenance differs")
         return body["result"]
@@ -687,8 +731,8 @@ def evidence_json(reply, operation):
             and re.fullmatch(r"ev_[0-9a-f]{64}", body["evidence_id"]),
             "direct Evidence identity differs")
     require(reply.get("structuredContent") == body, "Evidence text and structured values differ")
-    require(orders(reply["structuredContent"]) == orders(body),
-            "Evidence text and structured object order differ")
+    require(orders(reply["structuredContent"]) == orders(expected_http_structured(body)),
+            "native HTTP Evidence structured object order differs")
     require(reply.get("_meta") == {"provenance": {"untrusted_content": True, "source": "analysis_target"}},
             "Evidence target-content provenance differs")
     return body
@@ -731,12 +775,96 @@ def consume_original_public_order(path, output):
     }
 
 
-def expected_bundle(fixture, unknown_keys=None):
+
+def consume_original_public_record_order(path, fixture, output):
+    """Consume the actual original MCP frame; never infer public order from a fixture."""
+    raw = pinned(path, ORIGINAL_PUBLIC_RECORD_ORDER["sha256"])
+    observation = parse(raw)
+    require(observation["id"] == "unknown-verified-complete"
+            and observation["operation"] == "get_evidence_bundle" and observation["arguments"] == {},
+            "original public record observation is not the fixed complete bundle call")
+    manifest_path = path.parent / "wire.jsonl"
+    manifest_raw = pinned(manifest_path, ORIGINAL_PUBLIC_RECORD_ORDER["manifest_sha256"])
+    entries = [parse(line) for line in manifest_raw.splitlines()]
+    require(0 < len(entries) < 10000, "original raw-frame manifest is empty or excessive")
+    inputs = [identity(path, raw), identity(manifest_path, manifest_raw)]
+    frames = {}
+    write(output / "inputs" / "public-record-order.original-call.json", raw)
+    write(output / "inputs" / "public-record-order.original-manifest.jsonl", manifest_raw)
+    for direction, expected in ORIGINAL_PUBLIC_RECORD_ORDER["frames"].items():
+        selected = [entry for entry in entries if entry.get("path") == expected["path"]]
+        require(len(selected) == 1 and selected[0]["direction"] == direction
+                and selected[0]["encoding"] == "gzip-original-jsonrpc-line"
+                and all(selected[0][key] == value for key, value in expected.items()),
+                "original public record raw-frame manifest entry differs")
+        member = path.parent / expected["path"]
+        compressed = pinned(member, expected["gzip_sha256"])
+        require(len(compressed) == expected["gzip_bytes"], "original frame gzip length differs")
+        with gzip.GzipFile(fileobj=io.BytesIO(compressed), mode="rb") as stream:
+            frame_raw = stream.read(expected["raw_bytes"] + 1)
+        require(len(frame_raw) == expected["raw_bytes"] and sha(frame_raw) == expected["raw_sha256"]
+                and frame_raw.endswith(b"\n") and frame_raw.count(b"\n") == 1,
+                "original public record frame is not losslessly recovered")
+        frames[direction] = parse(frame_raw)
+        inputs.append(identity(member, compressed))
+        write(output / "inputs" / ("public-record-order.original-" + direction + ".jsonrpc"), frame_raw)
+    frame = frames["received"]
+    require(frame == observation["response"] and frame.get("jsonrpc") == "2.0" and "error" not in frame,
+            "retained original record observation differs from its actual raw frame")
+    require(frames["sent"] == {"jsonrpc": "2.0", "id": frame["id"], "method": "tools/call",
+                               "params": {"name": "get_evidence_bundle", "arguments": {}}},
+            "original record frame lacks the exact complete-bundle request")
+    result = frame["result"]
+    require(not result.get("isError") and len(result.get("content", [])) == 1
+            and result["content"][0].get("type") == "text"
+            and isinstance(result["content"][0].get("text"), str),
+            "original public record frame is not a successful single text result")
+    text_raw = result["content"][0]["text"].encode("utf-8")
+    body = parse(text_raw)
+    require(list(body) == ["result"] and list(body["result"]) == BUNDLE_KEYS
+            and result["structuredContent"] == body, "original public bundle shape/value differs")
+    bundle = body["result"]
+    require(len(bundle["records"]) == len(bundle["unknowns"]) == 3
+            and [(record["evidence_id"], record["operation"]) for record in bundle["records"]]
+            == [(record["evidence_id"], record["operation"]) for record in fixture["records"]]
+            and bundle["unknowns"] == fixture["unknowns"],
+            "original record identity/operation or complete Unknown history differs")
+    optional_keys = EVIDENCE_KEYS[:7] + ["caller_input_path"] + EVIDENCE_KEYS[7:]
+    record_orders = []
+    for index, (record, authored) in enumerate(zip(bundle["records"], fixture["records"], strict=True)):
+        keys = list(record)
+        expected_keys = optional_keys if index == 1 else EVIDENCE_KEYS
+        require(keys == expected_keys and set(authored) == set(keys),
+                "record is outside the observed 16-key/optional 17-key envelope")
+        require(index != 1 or record["operation"] == "import_fixture_observation",
+                "optional caller_input_path order is outside its observed fixture operation")
+        record_orders.append({"evidence_id": record["evidence_id"], "operation": record["operation"], "keys": keys})
+    write(output / "inputs" / "public-record-order.original-text.json", text_raw)
+    return record_orders, {
+        "source": ORIGINAL_PUBLIC_RECORD_ORDER, "consumed_in_this_run": True,
+        "inputs": inputs, "original_jsonrpc_id": frame["id"],
+        "text_bytes": len(text_raw), "text_sha256": sha(text_raw),
+        "derived_record_envelope_orders": record_orders,
+        "fixture_values_replaced_with_historical_paths": False,
+        "actual_response_reordered": False,
+        "scope": "Only expected imported Evidence root envelopes use observed public order; generic JSON child order remains the authored fixture's",
+    }
+
+
+def expected_bundle(fixture, unknown_keys=None, record_orders=None):
     require(list(fixture) == BUNDLE_KEYS and len(fixture["records"]) == 3
             and len(fixture["unknowns"]) == 3, "original fixture shape/counts changed")
     unknown_keys = UNKNOWN_KEYS if unknown_keys is None else unknown_keys
     require(unknown_keys == UNKNOWN_KEYS, "observed Unknown order differs from the supported public schema")
+    require(isinstance(record_orders, list) and len(record_orders) == 3,
+            "expected imported record order requires the consumed original public frames")
     result = dict(fixture)
+    result["records"] = []
+    for record, observed in zip(fixture["records"], record_orders, strict=True):
+        require((record["evidence_id"], record["operation"]) == (observed["evidence_id"], observed["operation"])
+                and set(record) == set(observed["keys"]),
+                "expected record identity/operation/key set differs from its original public envelope")
+        result["records"].append({key: record[key] for key in observed["keys"]})
     history = []
     for revision in fixture["unknowns"]:
         require(set(revision) == set(UNKNOWN_KEYS), "fixture Unknown fields differ from observed public schema")
@@ -754,7 +882,8 @@ def expected_delivery(reply, expected, name):
     body = {"result": expected}
     raw_expected = json.dumps(body, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
     require(reply["content"][0]["text"] == raw_expected, name + ": exact public text differs")
-    require(orders(reply["structuredContent"]) == orders(body), name + ": complete structured key order differs")
+    require(orders(reply["structuredContent"]) == orders(expected_http_structured(body)),
+            name + ": complete native HTTP structured key order differs")
     return value
 
 
@@ -888,6 +1017,74 @@ def qualification_passed(report, actions_passed):
             and all(item["status"] == "PASS" for item in report["phases"]))
 
 
+
+def select_runner_source(args, repo, executing_file, invoked_file):
+    """Bind an actual entrypoint; external review never changes __file__."""
+    repository_path = repo / "scripts" / "rea_evidence_checkpoint_upgrade.py"
+    extra = (args.external_reviewed_runner_sha256, args.external_reviewed_runner_bytes,
+             args.replaced_repo_runner_sha256, args.replaced_repo_runner_bytes)
+    if args.external_reviewed_runner is None:
+        require(all(value is None for value in extra),
+                "external runner pins require the explicit external-reviewed-runner mode")
+        require(args.tests_dir.name == "tests" and Path(executing_file).resolve() == repository_path,
+                "tests and runner must belong to the selected current source checkout")
+        actual = Path(executing_file).resolve()
+        raw = read(actual)
+        return {"raw": raw, "path": actual, "repository_raw": None,
+                "binding": {"mode": "repository", "runner": identity(actual, raw)}}
+
+    require(all(value is not None for value in extra), "external mode requires both SHA256 and byte-count pins")
+    for digest in (args.external_reviewed_runner_sha256, args.replaced_repo_runner_sha256):
+        require(re.fullmatch(r"[0-9a-f]{64}", digest), "external runner SHA256 must be explicit lowercase hex")
+    require(args.external_reviewed_runner_bytes > 0 and args.replaced_repo_runner_bytes > 0,
+            "external runner byte-count pins must be positive")
+    declared = Path(args.external_reviewed_runner)
+    require(str(declared) == args.external_reviewed_runner,
+            "external runner path must use its exact canonical spelling")
+    actual = Path(executing_file)
+    invoked = Path(invoked_file)
+    require(str(actual) == executing_file and str(invoked) == invoked_file,
+            "actual entrypoint path contains a lexical alias")
+    for path in (repo, args.tests_dir, repository_path, declared, actual, invoked):
+        require(path.is_absolute() and ".." not in path.parts and path.resolve(strict=True) == path,
+                "external mode requires existing canonical paths without aliases: " + str(path))
+    require(args.tests_dir.name == "tests" and args.tests_dir.is_dir() and repo.is_dir(),
+            "external runner requires the selected current tests directory")
+    require(actual == invoked == declared, "actual __file__/argv entrypoint differs from explicitly reviewed path")
+    require(actual != repo and repo not in actual.parents,
+            "external-reviewed runner must be outside the selected repository")
+    raw = pinned(actual, args.external_reviewed_runner_sha256)
+    repository_raw = pinned(repository_path, args.replaced_repo_runner_sha256)
+    require(len(raw) == args.external_reviewed_runner_bytes
+            and len(repository_raw) == args.replaced_repo_runner_bytes,
+            "external or replaced repository runner byte-count pin differs")
+    current_binding_raw = pinned(args.new_binding, args.new_binding_sha256)
+    current_binding = parse(current_binding_raw)
+    require(current_binding["schema"] == "hepta.rea.p0p5.build-binding.v1",
+            "external runner requires the original current build-binding schema")
+    build_summary_pin = current_binding["build_summary"]
+    build_summary_path = Path(build_summary_pin["path"])
+    build_summary_raw = pinned(build_summary_path, build_summary_pin["sha256"])
+    require(identity(build_summary_path, build_summary_raw) == build_summary_pin,
+            "external runner current build-summary byte binding differs")
+    require(Path(parse(build_summary_raw)["inputs"]["repo"]) == repo,
+            "external runner selected repository differs from the actual bound build directory")
+    return {
+        "raw": raw, "path": actual, "repository_raw": repository_raw,
+        "binding": {
+            "mode": "external-reviewed-runner", "actual___file__": executing_file,
+            "actual_argv_entrypoint": invoked_file, "runner": identity(actual, raw),
+            "replaced_repository_runner": identity(repository_path, repository_raw),
+            "runner_metadata": metadata(actual.lstat()),
+            "replaced_repository_runner_metadata": metadata(repository_path.lstat()),
+            "repository_source_relative_path": "scripts/rea_evidence_checkpoint_upgrade.py",
+            "external_runner_is_compiled_source": False,
+            "repository_build_binding": identity(args.new_binding, current_binding_raw),
+            "repository_build_summary": build_summary_pin,
+        },
+    }
+
+
 def main():
     global TOKEN
     parser = argparse.ArgumentParser(description=__doc__)
@@ -898,21 +1095,27 @@ def main():
         parser.add_argument("--" + label + "-binding-sha256", required=True)
     parser.add_argument("--original-public-observation", type=Path, required=True,
                         help="Pinned original REA 118-case cold-complete CallToolResult observation")
+    parser.add_argument("--original-public-record-observation", type=Path, required=True,
+                        help="Pinned original 17-field record observation and its sibling compressed raw frames")
     parser.add_argument("--tests-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--external-reviewed-runner", help="Exact canonical path of a separately reviewed external entrypoint")
+    parser.add_argument("--external-reviewed-runner-sha256")
+    parser.add_argument("--external-reviewed-runner-bytes", type=int)
+    parser.add_argument("--replaced-repo-runner-sha256")
+    parser.add_argument("--replaced-repo-runner-bytes", type=int)
     args = parser.parse_args()
     for label in ("old", "new"):
         for name in (label + "_sha256", label + "_binding_sha256"):
             require(re.fullmatch(r"[0-9a-f]{64}", getattr(args, name)), "explicit lowercase SHA256 required")
-    for name in ("old_runtime", "new_runtime", "old_binding", "new_binding", "original_public_observation", "tests_dir", "output_dir"):
+    for name in ("old_runtime", "new_runtime", "old_binding", "new_binding", "original_public_observation", "original_public_record_observation", "tests_dir", "output_dir"):
         path = getattr(args, name)
         require(path.is_absolute() and ".." not in path.parts, "explicit normal absolute paths required")
     require(sys.platform.startswith("linux") and hasattr(os, "pidfd_open")
             and hasattr(signal, "pthread_sigmask") and hasattr(signal, "sigtimedwait"),
             "this profile requires Linux pidfds and POSIX signal deferral")
     output, repo = args.output_dir, args.tests_dir.parent
-    require(args.tests_dir.name == "tests" and Path(__file__).resolve() == repo / "scripts" / "rea_evidence_checkpoint_upgrade.py",
-            "tests and runner must belong to the selected current source checkout")
+    runner_source = select_runner_source(args, repo, __file__, sys.argv[0])
     require(output != repo and repo not in output.parents and output not in repo.parents,
             "output must be a new path outside the current repository")
     require(not output.exists() and not output.is_symlink(), "output must not already exist")
@@ -931,7 +1134,7 @@ def main():
         "generated_private_operator_credential": True, "production_credentials_used": False,
         "original_unknown_public_order": {"source": ORIGINAL_PUBLIC_ORDER, "consumed_in_this_run": False},
     }
-    state = {"runner_raw": read(Path(__file__).resolve())}
+    state = {"runner_raw": runner_source["raw"], "runner_source": runner_source}
     old_handlers = {}
     def interrupted(signum, _frame):
         report["interrupted_by_signal"] = signum
@@ -940,8 +1143,11 @@ def main():
         old_handlers[number] = signal.signal(number, interrupted)
     try:
         write(output / "inputs" / "runner.original.py", state["runner_raw"])
-        report["invocation"] = {"argv": sys.argv, "python": sys.executable,
-                                "runner": identity(Path(__file__).resolve(), state["runner_raw"])}
+        if runner_source["repository_raw"] is not None:
+            write(output / "inputs" / "replaced-repository-runner.original.py", runner_source["repository_raw"])
+        report["invocation"] = {"argv": sys.argv, "python": sys.executable, "actual___file__": __file__,
+                                "runner": identity(runner_source["path"], state["runner_raw"]),
+                                "runner_source_binding": runner_source["binding"]}
         old_runtime = bind("old", args, repo, output, report, state)
         new_runtime = bind("new", args, repo, output, report, state)
         helper = load_http_helper(args.tests_dir, output)
@@ -964,7 +1170,12 @@ def main():
         observed_unknown_keys, public_order = consume_original_public_order(args.original_public_observation, output)
         report["original_unknown_public_order"] = public_order
         state["original_public_order_identity"] = public_order["observation"]
-        expected = expected_bundle(parse(fixture_raw), observed_unknown_keys)
+        authored_fixture = parse(fixture_raw)
+        record_orders, public_records = consume_original_public_record_order(
+            args.original_public_record_observation, authored_fixture, output)
+        report["original_record_public_order"] = public_records
+        state["original_public_record_inputs"] = public_records["inputs"]
+        expected = expected_bundle(authored_fixture, observed_unknown_keys, record_orders)
         save(output / "inputs" / "expected-public-bundle.json", expected)
         apk_original = args.tests_dir / "fixtures" / "rea_apk_signature" / "rotation-v31.apk"
         apk_raw = read(apk_original)
@@ -1150,6 +1361,17 @@ def main():
                                  pinned(args.original_public_observation, ORIGINAL_PUBLIC_ORDER["sha256"]))
                         == state["original_public_order_identity"],
                         "consumed original public observation changed during execution")
+            for item in state.get("original_public_record_inputs", []):
+                require(identity(Path(item["path"]), pinned(Path(item["path"]), item["sha256"])) == item,
+                        "consumed original public record input changed during execution")
+            if runner_source["repository_raw"] is not None:
+                selected = runner_source["binding"]
+                for path, original_raw, expected_metadata in (
+                        (runner_source["path"], runner_source["raw"], selected["runner_metadata"]),
+                        (repo / selected["repository_source_relative_path"], runner_source["repository_raw"],
+                         selected["replaced_repository_runner_metadata"])):
+                    require(read(path) == original_raw and metadata(path.lstat()) == expected_metadata,
+                            "reviewed runner path/bytes/identity changed during execution: " + str(path))
             if "policy" in report:
                 require(identity(output / "policy.json") == report["policy"], "complete policy changed")
         except BaseException as error:

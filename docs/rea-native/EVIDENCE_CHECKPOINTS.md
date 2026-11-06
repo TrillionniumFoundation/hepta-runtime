@@ -185,11 +185,31 @@ It uses no production credential and contacts no configured remote host.
 
 The separate [checkpoint upgrade runner](../../scripts/rea_evidence_checkpoint_upgrade.py)
 requires explicit old/new executable and build-binding paths and SHA-256 values,
-the selected checkout's `tests` directory, a new private output directory, and
-`--original-public-observation` pointing to the pinned original REA cold-complete
-response. It reads that original text to derive the public Unknown member order.
+the selected checkout's `tests` directory and a new private output directory.
+It also requires both original observations:
+
+- `--original-public-observation` selects the pinned original REA cold-complete
+  response that establishes the public Unknown member order.
+- `--original-public-record-observation` selects the pinned original
+  `reference-main/call-026-unknown-verified-complete.json`, together with its
+  sibling `wire.jsonl`, `wire-0055-sent.json.gz` and `wire-0056-received.json.gz`.
+  The exact original request/response bytes establish the observed sixteen-field
+  record envelopes and this fixture's seventeen-field envelope containing
+  `caller_input_path`. Current fixture values, paths and generic JSON child
+  order remain intact when building the expected public response.
+
+Each HTTP channel has its own expected serialization. Public content text
+retains the original tool's observed member order; HTTP `structuredContent`
+uses the fixed recursive object order of the bound Rust transport. Actual
+responses are never reordered. Both channels retain exact within-version and
+cross-version comparisons, including complete values and text bytes.
+
 The old source is consumed from its historical Git objects and original matrix;
-the new source must be the current clean, monitored, exact candidate.
+the new source must be the current clean, monitored, exact candidate. The
+default entrypoint must be the selected checkout's script. An explicitly
+reviewed external entrypoint additionally binds its real path, complete bytes
+and SHA-256, and the replaced repository script's complete bytes and SHA-256.
+Both sources are checked again at the end of the run.
 
 Its finite Linux profile runs A → B → A → B using four real private HTTP servers.
 It compares complete public values and text/order, adds two native records to the
