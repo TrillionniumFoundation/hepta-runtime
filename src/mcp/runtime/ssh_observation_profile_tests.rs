@@ -152,21 +152,95 @@ fn directory_identity_survives_owned_membership_but_detects_replacement() {
 }
 
 #[test]
-fn only_the_fixed_system_shell_alias_has_a_pinned_symlink_exception() {
-	let (target, components) = fixed_shell_resolution().unwrap();
-	assert_eq!(target, std::fs::canonicalize("/bin/sh").unwrap());
-	assert!(components.iter().all(|node| node.stamp.uid == 0));
+fn only_the_two_fixed_system_programs_have_a_pinned_symlink_exception() {
+	for (entry, fixed) in [
+		(FixedSystemProgram::Shell, "/bin/sh"),
+		(FixedSystemProgram::Refusal, "/usr/bin/false"),
+	] {
+		let (target, components) = fixed_system_resolution(entry).unwrap();
+		assert_eq!(target, std::fs::canonicalize(fixed).unwrap());
+		assert!(components.iter().all(|node| node.stamp.uid == 0));
+		let hash = digest(&std::fs::read(&target).unwrap())
+			.iter()
+			.map(|v| format!("{v:02x}"))
+			.collect::<String>();
+		let program = PinnedSystemProgram::load(entry, &hash).unwrap();
+		program.verify().unwrap();
+		assert!(PinnedSystemProgram::load(entry, &"0".repeat(64)).is_err());
+		assert_eq!(program.target.maximum, MAX_SYSTEM_PROGRAM_BYTES);
+		if components.iter().any(|node| node.link.is_some()) {
+			assert!(open_absolute(Path::new(fixed), false).is_err());
+		}
+	}
+}
+
+#[test]
+fn fixed_refusal_rechecks_exact_link_count_and_inode_stamp() {
+	let (target, _) = fixed_system_resolution(FixedSystemProgram::Refusal).unwrap();
 	let hash = digest(&std::fs::read(&target).unwrap())
 		.iter()
 		.map(|v| format!("{v:02x}"))
 		.collect::<String>();
-	let shell = PinnedShell::load(&hash).unwrap();
-	shell.verify().unwrap();
-	assert!(PinnedShell::load(&"0".repeat(64)).is_err());
-	assert!(
-		open_absolute(Path::new("/bin/sh"), false).is_err()
-			|| std::fs::symlink_metadata("/bin/sh").unwrap().is_file()
-	);
+	let mut program = PinnedSystemProgram::load(FixedSystemProgram::Refusal, &hash).unwrap();
+	let original = program.target.stamp.clone();
+	assert!(original.nlink > 0);
+	if original.nlink > 1 {
+		assert!(
+			PinnedFile::load(&target, Some(&hash), MAX_SYSTEM_PROGRAM_BYTES, false, true).is_err()
+		);
+	}
+	program.verify().unwrap();
+	// Leave the host's root-owned executable untouched. Change only the test's
+	// expected stamp to prove identity checks compare the complete pinned count,
+	// even when all bytes still match and the current count remains positive.
+	for field in ["nlink", "inode", "ctime"] {
+		program.target.stamp = original.clone();
+		match field {
+			"nlink" => program.target.stamp.nlink += 1,
+			"inode" => program.target.stamp.ino ^= 1,
+			"ctime" => program.target.stamp.ctime.1 ^= 1,
+			_ => unreachable!(),
+		}
+		assert!(program.target.verify_identity().is_err(), "missed {field}");
+		assert!(program.verify().is_err(), "missed {field}");
+	}
+	program.target.stamp = original;
+	program.verify().unwrap();
+	for index in 0..program.components.len() {
+		if program.components[index].link.is_some() {
+			let expected = program.components[index].clone();
+			program.components[index].stamp.nlink += 1;
+			assert!(program.verify_resolution().is_err());
+			program.components[index] = expected;
+		}
+	}
+	program.verify().unwrap();
+}
+
+#[test]
+fn fixed_refusal_link_policy_cannot_authorize_private_or_nonexecutable_inputs() {
+	let root = tempfile::tempdir().unwrap();
+	let path = root.path().join("private-profile");
+	std::fs::write(&path, b"profile").unwrap();
+	std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+	let link = root.path().join("hardlink");
+	std::fs::hard_link(&path, &link).unwrap();
+	for private in [false, true] {
+		for executable in [false, true] {
+			assert!(PinnedFile::load_with_links(
+				&path,
+				None,
+				1024,
+				private,
+				executable,
+				FileLinks::FixedRefusal
+			)
+			.is_err());
+		}
+	}
+	assert!(PinnedFile::load(&path, None, 1024, true, false).is_err());
+	std::fs::remove_file(link).unwrap();
+	PinnedFile::load(&path, None, 1024, true, false).unwrap();
 }
 
 fn identities(key: &[u8]) -> Vec<u8> {

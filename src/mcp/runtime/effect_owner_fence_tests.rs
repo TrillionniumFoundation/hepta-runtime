@@ -1,6 +1,7 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
+//! Owner transfer fences and exact classification of every mutating MCP route.
 use super::*;
 use std::fs::{self, OpenOptions};
 use std::os::unix::fs::{symlink, PermissionsExt};
@@ -177,6 +178,14 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 	let matcher =
 		regex::Regex::new(r"(?s)#\[tool\((.*?)\)\]\s*async fn\s+([a-zA-Z0-9_]+)\s*\(").unwrap();
 	let expected: BTreeSet<&str> = [
+		"hia_artifact",
+		"hia_context",
+		"hia_candidate",
+		"hia_verify",
+		"hia_emit",
+		"hia_evaluate",
+		"hia_adopt",
+		"hia_rollback",
 		"request_start",
 		"request_cancel",
 		"operation_start",
@@ -251,6 +260,20 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 	.into_iter()
 	.collect();
 	let direct_native: BTreeSet<&str> = ["process_start", "pty_start"].into_iter().collect();
+	// HIA owns no scheduler. Its exact common dispatch chain is audited below
+	// through native's guarded, no-relaunch entry and the real jobs fence.
+	let hia_native: BTreeSet<&str> = [
+		"hia_artifact",
+		"hia_context",
+		"hia_candidate",
+		"hia_verify",
+		"hia_emit",
+		"hia_evaluate",
+		"hia_adopt",
+		"hia_rollback",
+	]
+	.into_iter()
+	.collect();
 	let rea_record_effects = [
 		(
 			"rea_inspect_elf_notes",
@@ -308,6 +331,14 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 				!body.contains("effect_owner_fence::admit_new_effect"),
 				"{name} is already-owned continuation or local session state"
 			);
+		} else if hia_native.contains(name) {
+			assert_eq!(
+				body.chars()
+					.filter(|value| !value.is_ascii_whitespace())
+					.collect::<String>(),
+				format!("{{self.dispatch_hia(\"{name}\",arguments,&context).await}}"),
+				"{name} must transfer to the audited native HIA route"
+			);
 		} else if !direct_native.contains(name) {
 			assert!(
 				body.contains("effect_owner_fence::admit_new_effect"),
@@ -357,7 +388,7 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		actual, expected,
 		"MCP mutation contract expanded without owner audit"
 	);
-	assert_eq!(actual.difference(&retained).count(), 41);
+	assert_eq!(actual.difference(&retained).count(), 49);
 	let jobs = include_str!("jobs.rs");
 	let pty = include_str!("pty.rs");
 	assert!(jobs
@@ -369,6 +400,93 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		"PTY ingress must reject a predecessor V4 idempotency replay"
 	);
 }
+fn owner_fence_named_body<'a>(source: &'a str, function: &str) -> &'a str {
+	let start = source
+		.find(&format!("fn {function}"))
+		.expect("audited function missing");
+	let body = source[start..].find('{').unwrap() + start;
+	owner_fence_tool_body(source, body)
+}
+
+fn compact_owner_body(source: &str, function: &str) -> String {
+	owner_fence_named_body(source, function)
+		.chars()
+		.filter(|value| !value.is_ascii_whitespace())
+		.collect()
+}
+
+#[test]
+fn hia_routes_retain_native_owner_admission_and_never_relaunch_an_existing_binding() {
+	let server = include_str!("../server.rs");
+	let common = compact_owner_body(server, "dispatch_hia(");
+	let authority = common
+		.find(".owner_binding.resolve(")
+		.expect("HIA caller authority missing");
+	let validation = common
+		.find("hia_contract::validate_input(")
+		.expect("HIA input validation missing");
+	let dispatch = common
+		.find("hia_provider::execute(")
+		.expect("HIA native provider missing");
+	assert!(authority < validation && validation < dispatch);
+	for name in crate::mcp::hia_contract::TOOLS {
+		let body = compact_owner_body(server, &format!("{name}("));
+		assert_eq!(
+			body,
+			format!("{{self.dispatch_hia(\"{name}\",arguments,&context).await}}")
+		);
+	}
+	let resource = compact_owner_body(server, "read_resource(");
+	assert!(resource.contains("hia_provider::execute(\"hia_resource_read\","));
+	let provider = compact_owner_body(include_str!("../hia_provider.rs"), "execute(");
+	let observe = provider
+		.find("crate::native::observe_request(")
+		.expect("original HIA observation missing");
+	let branch = provider
+		.find("letraw=matchoriginal{Some(raw)=>raw,None=>{")
+		.expect("existing HIA request must stay on the observation branch");
+	let native_entry = provider
+		.find("crate::native::execute_or_observe_with_entry(")
+		.expect("guarded HIA native entry missing");
+	assert!(observe < branch && branch < native_entry);
+	assert_eq!(
+		provider
+			.matches("crate::native::execute_or_observe_with_entry(")
+			.count(),
+		1
+	);
+	assert!(!provider.contains("crate::native::execute_or_observe("));
+	assert!(!provider.contains("start_job("));
+	assert!(!provider.contains("Command::new("));
+	let native = compact_owner_body(
+		include_str!("../../native.rs"),
+		"execute_or_observe_with_entry<",
+	);
+	assert!(native.contains("require_key(&params)?;jobs::start_job_with_entry(params,enter).await"));
+	let jobs = include_str!("jobs.rs");
+	let entry = compact_owner_body(jobs, "start_job_with_entry<");
+	assert_eq!(entry, "{start_job_with_policy(params,false,enter).await}");
+	let owner = compact_owner_body(jobs, "start_job_with_policy<");
+	let admission = owner
+		.find("let_owner_admission=super::effect_owner_fence::admit_new_effect().await?;")
+		.expect("real owner fence missing");
+	let retained = owner
+		.find("letowner_admission=Arc::new(_owner_admission);")
+		.expect("owner permit custody missing");
+	let lookup = owner
+		.find("find_idempotent_async(")
+		.expect("existing request lookup missing");
+	let durable = owner
+		.find("publish_pending_record(record,&start_guard,&owner_admission)")
+		.expect("durable intent must retain its owner permit");
+	let launch = owner
+		.find("launch_record_with_entry(")
+		.expect("physical dispatch missing");
+	assert!(admission < retained && retained < lookup && lookup < durable && durable < launch);
+	assert!(owner.contains("letretry=allow_reconcile_launch&&reconcile_retry_allowed(&existing);"));
+	assert!(owner[launch..].contains("&start_guard,&owner_admission,"));
+}
+
 #[test]
 fn matching_owner_receives_epoch_bound_shared_admission() {
 	let f = Fixture::new();

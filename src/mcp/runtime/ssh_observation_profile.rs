@@ -16,6 +16,7 @@ use tokio::time::{timeout_at, Instant};
 
 const MAX_PROFILE_BYTES: usize = 256 * 1024;
 const MAX_AGENT_BYTES: usize = 64 * 1024;
+const MAX_SYSTEM_PROGRAM_BYTES: usize = 16 * 1024 * 1024;
 const VERIFY_BUFFER_BYTES: usize = 16 * 1024;
 const DIRECTIVES: &[&str] = &[
 	"batchmode",
@@ -81,6 +82,14 @@ impl Stamp {
 	}
 }
 
+/// Only the fixed, root-owned refusal executable may be a multicall hardlink.
+/// Its positive initial link count remains part of the exact immutable stamp.
+#[derive(Clone, Copy)]
+enum FileLinks {
+	Single,
+	FixedRefusal,
+}
+
 #[derive(Clone)]
 struct PinnedFile {
 	path: PathBuf,
@@ -89,6 +98,7 @@ struct PinnedFile {
 	maximum: usize,
 	private: bool,
 	executable: bool,
+	links: FileLinks,
 }
 
 pub(super) fn absolute(path: &Path) -> Result<()> {
@@ -153,11 +163,16 @@ fn checked_file(
 	maximum: usize,
 	private: bool,
 	executable: bool,
+	links: FileLinks,
 ) -> Result<(File, Stamp)> {
 	let file = open_absolute(path, false)?;
 	let before = file.metadata()?;
+	let links_supported = match links {
+		FileLinks::Single => before.nlink() == 1,
+		FileLinks::FixedRefusal => !private && executable && before.nlink() > 0,
+	};
 	if !before.is_file()
-		|| before.nlink() != 1
+		|| !links_supported
 		|| before.len() as u128 > maximum as u128
 		|| if private {
 			before.uid() != unsafe { libc::geteuid() } || before.mode() & 0o7777 != 0o600
@@ -202,8 +217,9 @@ fn read_file(
 	maximum: usize,
 	private: bool,
 	executable: bool,
+	links: FileLinks,
 ) -> Result<(Stamp, Vec<u8>)> {
-	let (mut file, stamp) = checked_file(path, maximum, private, executable)?;
+	let (mut file, stamp) = checked_file(path, maximum, private, executable, links)?;
 	let mut bytes = Vec::with_capacity(stamp.len as usize);
 	Read::by_ref(&mut file)
 		.take(maximum as u64 + 1)
@@ -241,7 +257,24 @@ impl PinnedFile {
 		private: bool,
 		executable: bool,
 	) -> Result<(Self, Vec<u8>)> {
-		let (stamp, bytes) = read_file(path, maximum, private, executable)?;
+		Self::load_with_links(
+			path,
+			expected,
+			maximum,
+			private,
+			executable,
+			FileLinks::Single,
+		)
+	}
+	fn load_with_links(
+		path: &Path,
+		expected: Option<&str>,
+		maximum: usize,
+		private: bool,
+		executable: bool,
+		links: FileLinks,
+	) -> Result<(Self, Vec<u8>)> {
+		let (stamp, bytes) = read_file(path, maximum, private, executable, links)?;
 		let digest = digest(&bytes);
 		if expected.is_some_and(|pin| hex_digest(pin).ok() != Some(digest)) {
 			bail!("observation profile byte pin mismatch");
@@ -254,12 +287,19 @@ impl PinnedFile {
 				maximum,
 				private,
 				executable,
+				links,
 			},
 			bytes,
 		))
 	}
 	fn verify_identity(&self) -> Result<()> {
-		let (_, stamp) = checked_file(&self.path, self.maximum, self.private, self.executable)?;
+		let (_, stamp) = checked_file(
+			&self.path,
+			self.maximum,
+			self.private,
+			self.executable,
+			self.links,
+		)?;
 		if stamp != self.stamp {
 			bail!("observation profile changed after complete validation");
 		}
@@ -270,8 +310,13 @@ impl PinnedFile {
 	}
 	fn verify_checked(&self, check_current: &impl Fn() -> Result<()>) -> Result<()> {
 		check_current()?;
-		let (mut file, stamp) =
-			checked_file(&self.path, self.maximum, self.private, self.executable)?;
+		let (mut file, stamp) = checked_file(
+			&self.path,
+			self.maximum,
+			self.private,
+			self.executable,
+			self.links,
+		)?;
 		check_current()?;
 		if stamp != self.stamp {
 			bail!("observation profile changed");
@@ -317,18 +362,39 @@ struct SystemComponent {
 	link: Option<PathBuf>,
 }
 
-/// This is the only symlink exception. OpenSSH's fixed ProxyCommand invokes
-/// /bin/sh when SHELL is absent. No profile-supplied path enters this resolver.
-fn fixed_shell_resolution() -> Result<(PathBuf, Vec<SystemComponent>)> {
+/// These two fixed OpenSSH dependencies are the only symlink exceptions.
+/// No profile-supplied path can select an entry or enter their resolver.
+#[derive(Clone, Copy)]
+enum FixedSystemProgram {
+	Shell,
+	Refusal,
+}
+
+impl FixedSystemProgram {
+	fn parts(self) -> VecDeque<std::ffi::OsString> {
+		match self {
+			Self::Shell => VecDeque::from(["bin".into(), "sh".into()]),
+			Self::Refusal => VecDeque::from(["usr".into(), "bin".into(), "false".into()]),
+		}
+	}
+	fn links(self) -> FileLinks {
+		match self {
+			Self::Shell => FileLinks::Single,
+			Self::Refusal => FileLinks::FixedRefusal,
+		}
+	}
+}
+
+fn fixed_system_resolution(entry: FixedSystemProgram) -> Result<(PathBuf, Vec<SystemComponent>)> {
 	let mut directory = File::open("/")?;
 	let mut current = PathBuf::from("/");
-	let mut remaining: VecDeque<std::ffi::OsString> = VecDeque::from(["bin".into(), "sh".into()]);
+	let mut remaining = entry.parts();
 	let mut components = Vec::new();
 	let mut links = 0usize;
 	for _ in 0..64 {
 		let info = directory.metadata()?;
 		if !info.is_dir() || info.uid() != 0 || info.mode() & 0o6022 != 0 {
-			bail!("unsupported observation system shell directory");
+			bail!("unsupported observation fixed system program directory");
 		}
 		components.push(SystemComponent {
 			path: current.clone(),
@@ -337,13 +403,13 @@ fn fixed_shell_resolution() -> Result<(PathBuf, Vec<SystemComponent>)> {
 		});
 		let part: std::ffi::OsString = remaining
 			.pop_front()
-			.context("observation system shell target missing")?;
+			.context("observation fixed system program target missing")?;
 		if part == "." {
 			continue;
 		}
 		if part == ".." {
 			if !current.pop() {
-				bail!("observation system shell escapes root");
+				bail!("observation fixed system program escapes root");
 			}
 			directory = open_absolute(&current, true)?;
 			continue;
@@ -365,7 +431,7 @@ fn fixed_shell_resolution() -> Result<(PathBuf, Vec<SystemComponent>)> {
 		if info.file_type().is_symlink() {
 			links += 1;
 			if links > 8 || info.uid() != 0 || info.nlink() != 1 {
-				bail!("unsupported observation system shell alias");
+				bail!("unsupported observation fixed system program alias");
 			}
 			let mut target = vec![0u8; 4097];
 			let count = unsafe {
@@ -377,7 +443,7 @@ fn fixed_shell_resolution() -> Result<(PathBuf, Vec<SystemComponent>)> {
 				)
 			};
 			if count <= 0 || count as usize > 4096 {
-				bail!("unsupported observation system shell alias target");
+				bail!("unsupported observation fixed system program alias target");
 			}
 			target.truncate(count as usize);
 			let target = PathBuf::from(std::ffi::OsString::from_vec(target));
@@ -394,7 +460,7 @@ fn fixed_shell_resolution() -> Result<(PathBuf, Vec<SystemComponent>)> {
 			let reopened = unsafe { File::from_raw_fd(reopened) };
 			let stamp = Stamp::of(&info);
 			if Stamp::of(&node.metadata()?) != stamp || Stamp::of(&reopened.metadata()?) != stamp {
-				bail!("observation system shell alias changed");
+				bail!("observation fixed system program alias changed");
 			}
 			components.push(SystemComponent {
 				path,
@@ -411,7 +477,7 @@ fn fixed_shell_resolution() -> Result<(PathBuf, Vec<SystemComponent>)> {
 					Component::ParentDir => remaining.push_front("..".into()),
 					Component::CurDir => remaining.push_front(".".into()),
 					Component::RootDir => {}
-					_ => bail!("unsupported observation system shell alias target"),
+					_ => bail!("unsupported observation fixed system program alias target"),
 				}
 			}
 		} else if info.is_dir() && !remaining.is_empty() {
@@ -420,26 +486,38 @@ fn fixed_shell_resolution() -> Result<(PathBuf, Vec<SystemComponent>)> {
 		} else if info.is_file() && remaining.is_empty() {
 			return Ok((path, components));
 		} else {
-			bail!("unsupported observation system shell resolution");
+			bail!("unsupported observation fixed system program resolution");
 		}
 	}
-	bail!("observation system shell resolution bound")
+	bail!("observation fixed system program resolution bound")
 }
 
-struct PinnedShell {
+struct PinnedSystemProgram {
+	entry: FixedSystemProgram,
 	components: Vec<SystemComponent>,
 	target: PinnedFile,
 }
-impl PinnedShell {
-	fn load(expected: &str) -> Result<Self> {
-		let (path, components) = fixed_shell_resolution()?;
-		let (target, _) = PinnedFile::load(&path, Some(expected), 16 * 1024 * 1024, false, true)?;
-		let result = Self { components, target };
+impl PinnedSystemProgram {
+	fn load(entry: FixedSystemProgram, expected: &str) -> Result<Self> {
+		let (path, components) = fixed_system_resolution(entry)?;
+		let (target, _) = PinnedFile::load_with_links(
+			&path,
+			Some(expected),
+			MAX_SYSTEM_PROGRAM_BYTES,
+			false,
+			true,
+			entry.links(),
+		)?;
+		let result = Self {
+			entry,
+			components,
+			target,
+		};
 		result.verify()?;
 		Ok(result)
 	}
 	fn verify_resolution(&self) -> Result<()> {
-		let (path, components) = fixed_shell_resolution()?;
+		let (path, components) = fixed_system_resolution(self.entry)?;
 		if path != self.target.path
 			|| components.len() != self.components.len()
 			|| components
@@ -454,7 +532,7 @@ impl PinnedShell {
 							!now.stamp.same_directory(&expected.stamp)
 						}
 				}) {
-			bail!("observation fixed system shell resolution changed");
+			bail!("observation fixed system program resolution changed");
 		}
 		Ok(())
 	}
@@ -682,7 +760,7 @@ pub(super) async fn agent_snapshot(path: &Path, deadline: Instant) -> Result<Age
 
 pub(super) struct Profile {
 	files: Vec<PinnedFile>,
-	shell: PinnedShell,
+	system_programs: [PinnedSystemProgram; 2],
 	pub config: PathBuf,
 	pub known_hosts: PathBuf,
 	pub agent: PathBuf,
@@ -731,18 +809,14 @@ impl Profile {
 		let (ssh, _) = PinnedFile::load(
 			Path::new("/usr/bin/ssh"),
 			Some(&spec.ssh_sha256),
-			16 * 1024 * 1024,
+			MAX_SYSTEM_PROGRAM_BYTES,
 			false,
 			true,
 		)?;
-		let (false_program, _) = PinnedFile::load(
-			Path::new("/usr/bin/false"),
-			Some(&spec.false_sha256),
-			1024 * 1024,
-			false,
-			true,
-		)?;
-		let shell = PinnedShell::load(&spec.shell_sha256)?;
+		let system_programs = [
+			PinnedSystemProgram::load(FixedSystemProgram::Shell, &spec.shell_sha256)?,
+			PinnedSystemProgram::load(FixedSystemProgram::Refusal, &spec.false_sha256)?,
+		];
 		let runtime = crate::mcp::runtime::config::runtime_config()?;
 		let hosts: BTreeMap<_, _> = runtime
 			.hosts
@@ -758,8 +832,8 @@ impl Profile {
 		}
 		Ok(Self {
 			ssh_inode: (ssh.stamp.dev, ssh.stamp.ino),
-			files: vec![profile, config, known, ssh, false_program],
-			shell,
+			files: vec![profile, config, known, ssh],
+			system_programs,
 			config: spec.ssh_config,
 			known_hosts: spec.known_hosts,
 			agent: spec.agent_socket,
@@ -773,7 +847,9 @@ impl Profile {
 		for file in &self.files {
 			file.verify()?;
 		}
-		self.shell.verify()?;
+		for program in &self.system_programs {
+			program.verify()?;
+		}
 		self.verify_policy()
 	}
 	pub(super) fn verify_files_checked(
@@ -785,11 +861,13 @@ impl Profile {
 			file.verify_checked(check_current)?;
 			check_current()?;
 		}
-		check_current()?;
-		self.shell.verify_resolution()?;
-		check_current()?;
-		self.shell.target.verify_checked(check_current)?;
-		check_current()?;
+		for program in &self.system_programs {
+			check_current()?;
+			program.verify_resolution()?;
+			check_current()?;
+			program.target.verify_checked(check_current)?;
+			check_current()?;
+		}
 		self.verify_policy()?;
 		check_current()
 	}
@@ -799,11 +877,13 @@ impl Profile {
 			file.verify_identity()?;
 			check_current()?;
 		}
-		check_current()?;
-		self.shell.verify_resolution()?;
-		check_current()?;
-		self.shell.target.verify_identity()?;
-		check_current()?;
+		for program in &self.system_programs {
+			check_current()?;
+			program.verify_resolution()?;
+			check_current()?;
+			program.target.verify_identity()?;
+			check_current()?;
+		}
 		self.verify_policy()?;
 		check_current()
 	}

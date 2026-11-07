@@ -19,6 +19,8 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 pub mod fs;
+mod hia_contract;
+pub mod hia_provider;
 pub mod rea;
 mod rea_analysis_view;
 mod rea_analysis_view_mcp_input;
