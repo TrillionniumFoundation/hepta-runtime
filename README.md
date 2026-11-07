@@ -76,6 +76,32 @@ For trusted-account shell, external-PID signalling and temporary sudo, see [Oper
 
 Follow the exact source/binary qualification receipts under `docs/qualification/`. Source implementation, a parallel installed service, and a completed Desktop Commander cutover are different states. Preserve DC for existing sessions and rescue; cloud/ChatGPT registration is the final, separately authorized step.
 
+## Durable inventory pagination
+
+`process_list_page` observes the complete private job registry before returning
+its first page. Continue the returned opaque cursor with the same host filter;
+page limits are independently selectable from 1 to 128, with a 64 KiB response
+bound. Only the final page has `inventory_complete: true`. Job metadata remains
+an observation; use `process_status` for authoritative live status.
+
+The controller retains at most four snapshots and 32 MiB of owned snapshot
+payload. Cursors expire five minutes after the observation; expired idle entries
+are removed on subsequent access. In-flight entries remain charged until their
+readers finish. At most two synchronous inventory workers may scan or render,
+including cold observations not yet published in the cache. A continuation is
+bound to its original state root,
+host filter and controller-local handle. Expiry, eviction, restart or a detected
+source change requires a fresh first page. A fresh first page always rechecks
+the source; it cannot silently resume an older observation.
+
+Every continuation reads and hashes all original receipt bytes on every host.
+The cache reuses the checked public projection and digest. Filesystem timestamps
+and directory content watches do not prove unchanged content; in particular,
+Linux inotify does not report writes through an existing shared memory mapping. The source limits remain 65,536 records, 128 MiB,
+4 MiB + 64 KiB per record and five seconds; a refusal returns no partial inventory.
+This source candidate still requires dev-host tests and an exact-build Mac
+measurement before it qualifies the observed 1,912-record production workload.
+
 ## Native library builds
 
 The default `remote-fs` feature includes the existing SSH/SFTP filesystem backend.

@@ -1,7 +1,7 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! Borrow validated command text until a registry scan selects its original.
+//! Validate command strings while retaining only the ownership a reader needs.
 use serde::de::{Deserializer, Visitor};
 use serde::Deserialize;
 use std::borrow::Cow;
@@ -47,6 +47,34 @@ impl<'de> Deserialize<'de> for BorrowedJobString<'de> {
 
 			fn visit_string<E: serde::de::Error>(self, value: String) -> Result<Self::Value, E> {
 				Ok(BorrowedJobString(Cow::Owned(value)))
+			}
+		}
+
+		deserializer.deserialize_str(StringVisitor)
+	}
+}
+
+// Inventory never returns private command text, including escaped text that
+// cannot borrow the JSON buffer. Validate the same string type without copying
+// the decoder's scratch string or keeping private payloads until the scan ends.
+// IgnoredAny would also admit numbers, objects and null and is not equivalent.
+#[cfg(unix)]
+pub(super) struct ValidatedJobString;
+
+#[cfg(unix)]
+impl<'de> Deserialize<'de> for ValidatedJobString {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		struct StringVisitor;
+
+		impl<'de> Visitor<'de> for StringVisitor {
+			type Value = ValidatedJobString;
+
+			fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+				formatter.write_str("a string")
+			}
+
+			fn visit_str<E: serde::de::Error>(self, _value: &str) -> Result<Self::Value, E> {
+				Ok(ValidatedJobString)
 			}
 		}
 

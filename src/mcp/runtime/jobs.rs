@@ -26,6 +26,13 @@ use super::ssh::{run_jobctl_with_entry, run_python_json_with_entry};
 mod record_projection;
 use record_projection::BorrowedJobString;
 
+#[cfg(unix)]
+#[path = "jobs_inventory_cache.rs"]
+mod inventory_cache;
+#[cfg(unix)]
+#[path = "jobs_inventory_source.rs"]
+mod inventory_source;
+
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 const START_LANE_COUNT: usize = 64;
 type StartLanes = [Arc<AsyncMutex<()>>; START_LANE_COUNT];
@@ -146,7 +153,7 @@ pub struct ProcessListParams {
 pub struct ProcessListPageParams {
 	#[serde(default)]
 	pub host: Option<String>,
-	/// Opaque continuation from this exact registry snapshot. Changes require a fresh first page.
+	/// Opaque controller-local snapshot cursor. Changes, expiry or restart require a fresh first page.
 	#[serde(default)]
 	pub cursor: Option<String>,
 	/// At most 128 identities per page, additionally bounded to a 64 KiB wire response.
@@ -4591,26 +4598,30 @@ pub fn list_jobs(params: ProcessListParams) -> Result<String> {
 
 /// The old unpaginated API remains unchanged; this API never silently truncates it.
 pub fn list_jobs_page(params: ProcessListPageParams) -> Result<String> {
+	let config = runtime_config()?;
 	if let Some(host) = params.host.as_deref() {
-		runtime_config()?.host(host)?;
+		config.host(host)?;
 	}
-	let rows = inventory_page_rows_at(
-		&runtime_config()?.state_dir,
-		params.host.as_deref(),
-		InventoryLimits::default(),
-	)?;
-	let root = runtime_config()?.state_dir.to_string_lossy();
-	page_job_rows(&rows, &params, &root)
+	#[cfg(unix)]
+	{
+		inventory_cache::list(&config.state_dir, &params)
+	}
+	#[cfg(not(unix))]
+	{
+		bail!("bounded durable inventory requires Unix descriptor support")
+	}
 }
 
 // Retain the original public field types until the complete source scan has
 // passed every final fence. This drops private args/paths per record without
 // serializing unselected records or changing whole-source error ordering.
+// Sorted field order matches the previous serde_json::Value binding exactly.
+#[derive(Serialize)]
 struct InventoryRow {
-	id: String,
-	host: String,
 	created_unix_ms: u128,
 	execution_mode: ExecutionMode,
+	host: String,
+	id: String,
 	launch_state: String,
 }
 
@@ -4650,6 +4661,7 @@ fn list_job_rows_in(dir: &Path, host: Option<&str>) -> Result<Vec<InventoryRow>>
 	Ok(rows)
 }
 
+#[cfg(test)]
 fn inventory_page_rows_at(
 	root: &Path,
 	host: Option<&str>,
@@ -4674,6 +4686,7 @@ fn inventory_page_rows_at(
 	Ok(rows)
 }
 
+#[cfg(any(unix, test))]
 #[derive(Clone, Copy)]
 struct InventoryLimits {
 	records: usize,
@@ -4682,6 +4695,7 @@ struct InventoryLimits {
 	time: Duration,
 }
 
+#[cfg(any(unix, test))]
 impl Default for InventoryLimits {
 	fn default() -> Self {
 		Self {
@@ -4698,217 +4712,16 @@ fn inventory_records_at(root: &Path, limits: InventoryLimits) -> Result<Vec<JobR
 	inventory_projected_at(root, limits, |record| record)
 }
 
-#[cfg(unix)]
+#[cfg(all(test, unix))]
 fn inventory_projected_at<T>(
 	root: &Path,
 	limits: InventoryLimits,
-	mut project: impl FnMut(JobRecord) -> T,
+	project: impl FnMut(JobRecord) -> T,
 ) -> Result<Vec<T>> {
-	use std::fs::{File, Metadata};
-	use std::io::Read;
-	use std::os::fd::{AsRawFd, FromRawFd};
-	use std::os::unix::fs::MetadataExt;
-	use std::time::Instant;
-	let started = Instant::now();
-	let deadline = || -> Result<()> {
-		if started.elapsed() >= limits.time {
-			bail!("durable inventory source time budget exceeded; no partial inventory returned");
-		}
-		Ok(())
-	};
-	fn open_at(base: Option<&File>, component: &str, flags: i32) -> Result<File> {
-		let name = std::ffi::CString::new(component)?;
-		let fd = unsafe {
-			libc::openat(
-				base.map_or(libc::AT_FDCWD, AsRawFd::as_raw_fd),
-				name.as_ptr(),
-				flags | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
-			)
-		};
-		if fd < 0 {
-			return Err(std::io::Error::last_os_error().into());
-		}
-		Ok(unsafe { File::from_raw_fd(fd) })
-	}
-	fn open_root(root: &std::path::Path) -> Result<File> {
-		let raw = root
-			.to_str()
-			.ok_or_else(|| anyhow::anyhow!("inventory root must be UTF-8"))?;
-		if !root.is_absolute() || raw.split('/').any(|part| matches!(part, "." | "..")) {
-			bail!("inventory root must be an explicit absolute path");
-		}
-		let mut base = open_at(None, "/", libc::O_RDONLY | libc::O_DIRECTORY)?;
-		for part in raw.split('/').filter(|part| !part.is_empty()) {
-			base = open_at(Some(&base), part, libc::O_RDONLY | libc::O_DIRECTORY)?;
-		}
-		let info = base.metadata()?;
-		if info.uid() != unsafe { libc::geteuid() } || info.mode() & 0o077 != 0 {
-			bail!("durable inventory root must be private and account-owned");
-		}
-		Ok(base)
-	}
-	fn stamp(info: &Metadata) -> (u64, u64, u32, u32, u64, u64, i64, i64, i64, i64) {
-		(
-			info.dev(),
-			info.ino(),
-			info.uid(),
-			info.mode(),
-			info.nlink(),
-			info.len(),
-			info.mtime(),
-			info.mtime_nsec(),
-			info.ctime(),
-			info.ctime_nsec(),
-		)
-	}
-	fn directory_identity(info: &Metadata) -> (u64, u64, u32, u32) {
-		(info.dev(), info.ino(), info.uid(), info.mode())
-	}
-	fn entries(
-		base: &File,
-		maximum: usize,
-		check: &impl Fn() -> Result<()>,
-	) -> Result<Vec<String>> {
-		// A new file description keeps repeated membership scans independent.
-		let scan = open_at(Some(base), ".", libc::O_RDONLY | libc::O_DIRECTORY)?;
-		let fd = unsafe { libc::dup(scan.as_raw_fd()) };
-		if fd < 0 {
-			return Err(std::io::Error::last_os_error().into());
-		}
-		let pointer = unsafe { libc::fdopendir(fd) };
-		if pointer.is_null() {
-			unsafe { libc::close(fd) };
-			return Err(std::io::Error::last_os_error().into());
-		}
-		struct Stream(*mut libc::DIR);
-		impl Drop for Stream {
-			fn drop(&mut self) {
-				unsafe { libc::closedir(self.0) };
-			}
-		}
-		let stream = Stream(pointer);
-		let mut names = Vec::new();
-		loop {
-			check()?;
-			#[cfg(target_os = "linux")]
-			let error = unsafe { libc::__errno_location() };
-			#[cfg(target_os = "macos")]
-			let error = unsafe { libc::__error() };
-			#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-			{
-				bail!("bounded inventory directory scans require Linux or macOS");
-			}
-			#[cfg(any(target_os = "linux", target_os = "macos"))]
-			{
-				unsafe { *error = 0 };
-				let item = unsafe { libc::readdir(stream.0) };
-				if item.is_null() {
-					if unsafe { *error } != 0 {
-						return Err(std::io::Error::last_os_error().into());
-					}
-					break;
-				}
-				let value =
-					unsafe { std::ffi::CStr::from_ptr((*item).d_name.as_ptr()) }.to_str()?;
-				if matches!(value, "." | "..") {
-					continue;
-				}
-				if names.len() >= maximum.saturating_add(32) {
-					bail!("durable inventory source entry bound exceeded");
-				}
-				names.push(value.to_owned());
-			}
-		}
-		names.sort();
-		Ok(names
-			.into_iter()
-			.filter(|name| name.ends_with(".json"))
-			.collect())
-	}
-	let rootfd = open_root(root)?;
-	let root_identity = directory_identity(&rootfd.metadata()?);
-	let base = open_at(Some(&rootfd), "jobs", libc::O_RDONLY | libc::O_DIRECTORY)?;
-	let base_metadata = base.metadata()?;
-	if base_metadata.uid() != unsafe { libc::geteuid() } || base_metadata.mode() & 0o022 != 0 {
-		bail!("durable inventory directory must be account-owned and non-writable by others");
-	}
-	let base_identity = directory_identity(&base_metadata);
-	let names = entries(&base, limits.records, &deadline)?;
-	if names.len() > limits.records {
-		bail!("durable inventory source row bound exceeded");
-	}
-	let mut records = Vec::with_capacity(names.len());
-	let mut stamps = Vec::with_capacity(names.len());
-	let mut bytes = 0u64;
-	// Reuse only the raw input buffer within this scan. Every receipt is still
-	// read and validated in full before projection; no record survives in a cache.
-	let mut raw = Vec::new();
-	for name in &names {
-		deadline()?;
-		let id = name
-			.strip_suffix(".json")
-			.ok_or_else(|| anyhow::anyhow!("invalid inventory identity"))?;
-		if !valid_name(id) {
-			bail!("invalid durable inventory identity");
-		}
-		let mut file = open_at(Some(&base), name, libc::O_RDONLY)?;
-		let before = file.metadata()?;
-		if !before.is_file()
-			|| before.uid() != unsafe { libc::geteuid() }
-			|| before.mode() & 0o7777 != 0o600
-			|| before.nlink() != 1
-			|| before.len() == 0
-			|| before.len() > limits.record_bytes
-		{
-			bail!("durable inventory metadata inode or byte bound refused");
-		}
-		bytes = bytes
-			.checked_add(before.len())
-			.ok_or_else(|| anyhow::anyhow!("durable inventory byte overflow"))?;
-		if bytes > limits.bytes {
-			bail!("durable inventory total source byte bound exceeded");
-		}
-		raw.clear();
-		raw.reserve_exact(before.len() as usize);
-		Read::by_ref(&mut file)
-			.take(before.len() + 1)
-			.read_to_end(&mut raw)?;
-		deadline()?;
-		if raw.len() as u64 != before.len() || stamp(&before) != stamp(&file.metadata()?) {
-			bail!("durable inventory metadata changed during observation");
-		}
-		let record: JobRecord =
-			serde_json::from_slice(&raw).context("corrupt durable inventory metadata")?;
-		if record.id != id || !valid_name(&record.host) {
-			bail!("durable inventory record identity mismatch");
-		}
-		stamps.push(stamp(&before));
-		records.push(project(record));
-	}
-	drop(raw);
-	if entries(&base, limits.records, &deadline)? != names {
-		bail!("durable inventory membership changed");
-	}
-	for (name, before) in names.iter().zip(stamps) {
-		deadline()?;
-		let current = open_at(Some(&base), name, libc::O_RDONLY)?;
-		if stamp(&current.metadata()?) != before {
-			bail!("durable inventory metadata changed");
-		}
-	}
-	let held_base = open_at(Some(&rootfd), "jobs", libc::O_RDONLY | libc::O_DIRECTORY)?;
-	if directory_identity(&held_base.metadata()?) != base_identity
-		|| directory_identity(&base.metadata()?) != base_identity
-		|| directory_identity(&rootfd.metadata()?) != root_identity
-		|| directory_identity(&open_root(root)?.metadata()?) != root_identity
-	{
-		bail!("durable inventory root or directory changed");
-	}
-	deadline()?;
-	Ok(records)
+	inventory_source::observe_owned(root, limits, project).map(|(records, _)| records)
 }
 
-#[cfg(not(unix))]
+#[cfg(all(test, not(unix)))]
 fn inventory_projected_at<T>(
 	_root: &Path,
 	_limits: InventoryLimits,
@@ -4917,6 +4730,7 @@ fn inventory_projected_at<T>(
 	bail!("bounded durable inventory requires Unix descriptor support")
 }
 
+#[cfg(test)]
 fn page_job_rows(
 	rows: &[Value],
 	params: &ProcessListPageParams,
@@ -4976,8 +4790,9 @@ fn page_job_rows(
 	}
 }
 
-fn inventory_snapshot_digest(
-	rows: &[Value],
+#[cfg(any(unix, test))]
+fn inventory_snapshot_digest<T: Serialize>(
+	rows: &[T],
 	host: Option<&str>,
 	namespace: &str,
 ) -> Result<String> {
@@ -4985,10 +4800,10 @@ fn inventory_snapshot_digest(
 	// remain valid. Borrow rows and hash bounded chunks instead of cloning the
 	// complete Value tree and then allocating another complete snapshot buffer.
 	#[derive(Serialize)]
-	struct Binding<'a> {
+	struct Binding<'a, T> {
 		host: Option<&'a str>,
 		namespace: &'a str,
-		rows: &'a [Value],
+		rows: &'a [T],
 	}
 	struct DigestWriter(Sha256);
 	impl Write for DigestWriter {

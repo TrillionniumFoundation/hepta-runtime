@@ -44,6 +44,39 @@ fn rejected_report(prepared: &PreparedRequest) -> Value {
 			"error":{"code":"HIA_INPUT", "phase":"validation", "message":"Unsupported input", "retry_action":"correct_input", "details_artifact":null}}})
 }
 
+#[tokio::test]
+async fn observation_failure_keeps_original_operation_and_schema_without_transport_secrets() {
+	let prepared = prepared();
+	let operation = json!({"host":prepared.params.host,"job_id":"original-job",
+		"request_sha256":prepared.worker.request_sha256,"report_artifact":null});
+	let mut invalid = prepared.params.clone();
+	invalid.idempotency_key = None;
+	let failure = crate::native::observe_terminal_output(&invalid, MAX_WORKER_BYTES)
+		.await
+		.err()
+		.unwrap();
+	let response = observation_unavailable(&prepared, operation.clone(), &failure).unwrap();
+	assert_eq!(response["operation"], operation);
+	assert_eq!(response["status"], "unknown");
+	assert_eq!(response["error"]["code"], "HIA_OBSERVATION_UNAVAILABLE");
+	assert_eq!(response["error"]["phase"], "runtime_observation");
+	assert_eq!(response["error"]["retry_action"], "observe_original");
+	assert!(response["error"]["message"]
+		.as_str()
+		.unwrap()
+		.contains("stage=admission cause=invalid_request"));
+	hia_contract::validate_output(&prepared.worker.tool, &response).unwrap();
+	let secret = anyhow::anyhow!("SSH stderr contains fixture-private-token");
+	let response = observation_unavailable(&prepared, operation.clone(), &secret).unwrap();
+	assert_eq!(response["operation"], operation);
+	assert!(response["error"]["message"]
+		.as_str()
+		.unwrap()
+		.contains("stage=unclassified cause=unavailable"));
+	assert!(!response.to_string().contains("fixture-private-token"));
+	hia_contract::validate_output(&prepared.worker.tool, &response).unwrap();
+}
+
 #[test]
 fn exact_replay_retains_the_same_owner_but_changed_payload_collides() {
 	let config = config();

@@ -83,6 +83,7 @@ mod entry_tests;
 
 #[path = "native_observation.rs"]
 mod observation;
+pub(crate) use observation::observation_failure_diagnostic;
 pub use observation::{
 	cancel_request, observe_terminal_output, NativeJobOutcome, NativeOutputObservationTiming,
 	NativeTerminalOutput,

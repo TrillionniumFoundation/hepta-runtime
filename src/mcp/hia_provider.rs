@@ -452,6 +452,31 @@ fn pending(
 	Ok(response)
 }
 
+fn observation_unavailable(
+	prepared: &PreparedRequest,
+	operation: Value,
+	error: &anyhow::Error,
+) -> Result<Value> {
+	let diagnostic = crate::native::observation_failure_diagnostic(error);
+	// Neither the source error nor request stdin is safe to print here. The
+	// diagnostic contains only fixed labels and bounded numeric observations.
+	tracing::warn!(
+		host = %prepared.params.host,
+		job_id = operation["job_id"].as_str().unwrap_or("unavailable"),
+		request_sha256 = %prepared.worker.request_sha256,
+		diagnostic = %diagnostic,
+		"Original HIA output observation failed"
+	);
+	let message = format!(
+		"Complete terminal output could not be authenticated. {diagnostic}. Observe this exact original request; a disconnected observation does not establish termination."
+	);
+	pending(
+		prepared,
+		operation,
+		Some(("HIA_OBSERVATION_UNAVAILABLE", &message)),
+	)
+}
+
 fn admission_failure(
 	tool: &str,
 	arguments: &Value,
@@ -496,7 +521,9 @@ pub(super) async fn execute(tool: &str, arguments: Value, workdir: &Path) -> Res
 	let original_operation = operation(&prepared, &raw)?;
 	match crate::native::observe_terminal_output(&prepared.params, MAX_WORKER_BYTES).await {
 		Ok(Some(output)) => {
-			if !output.matches_request(&prepared.params)? || output.job_id() != original_operation["job_id"] {
+			if !output.matches_request(&prepared.params)?
+				|| output.job_id() != original_operation["job_id"]
+			{
 				return pending(&prepared, original_operation, Some(("HIA_OWNER_BINDING_MISMATCH", "Original native output binding changed; keep this request unchanged and observe it.")));
 			}
 			let exit_code = output.exit_code();
@@ -520,7 +547,7 @@ pub(super) async fn execute(tool: &str, arguments: Value, workdir: &Path) -> Res
 				|| raw["job"]["launch_state"] == "unknown";
 			pending(&prepared, original_operation, uncertain.then_some(("HIA_OPERATION_UNKNOWN", "The original job has no confirmed terminal outcome. Observe this same tool and request key; do not allocate a replacement.")))
 		}
-		Err(_) => pending(&prepared, original_operation, Some(("HIA_OBSERVATION_UNAVAILABLE", "Complete terminal output could not be authenticated. Observe this exact original request; a disconnected observation does not establish termination."))),
+		Err(error) => observation_unavailable(&prepared, original_operation, &error),
 	}
 }
 
