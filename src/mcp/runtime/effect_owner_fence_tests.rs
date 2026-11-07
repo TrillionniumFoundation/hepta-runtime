@@ -1,5 +1,8 @@
+// Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
+//! Admission authority, lifecycle and complete MCP mutation classification.
+
 use super::*;
 use std::fs::{self, OpenOptions};
 use std::os::unix::fs::{symlink, PermissionsExt};
@@ -123,6 +126,8 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		"rea_static_cancel",
 		"weight_artifact_patch",
 		"weight_artifact_restore",
+		"weight_cohort_patch",
+		"weight_cohort_restore",
 		"weight_guarded_linear_patch",
 		"weight_open",
 		"weight_call",
@@ -147,6 +152,9 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 	.into_iter()
 	.collect();
 	let direct_native: BTreeSet<&str> = ["process_start", "pty_start"].into_iter().collect();
+	let cohort_native: BTreeSet<&str> = ["weight_cohort_patch", "weight_cohort_restore"]
+		.into_iter()
+		.collect();
 	let mut actual = BTreeSet::new();
 	for capture in matcher.captures_iter(server_source) {
 		if !capture[1].contains("read_only_hint = false") {
@@ -162,6 +170,11 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 				!short.contains("effect_owner_fence::admit_new_effect"),
 				"{name} is already-owned continuation or local session state"
 			);
+		} else if cohort_native.contains(name) {
+			assert!(
+				short.contains("weight_artifact::cohort::"),
+				"{name} must delegate to the retained cohort owner"
+			);
 		} else if !direct_native.contains(name) {
 			assert!(
 				short.contains("effect_owner_fence::admit_new_effect"),
@@ -173,7 +186,21 @@ fn all_mcp_mutating_tools_are_classified_for_owner_fencing() {
 		actual, expected,
 		"MCP mutation contract expanded without owner audit"
 	);
-	assert_eq!(actual.difference(&retained).count(), 36);
+	assert_eq!(actual.difference(&retained).count(), 38);
+	let cohort = include_str!("../weight_artifact_cohort.rs");
+	assert!(cohort.contains("runtime::effect_owner_fence::admit_new_effect().await?"));
+	assert_eq!(
+		cohort
+			.matches("let guards = owner_guards().await?;")
+			.count(),
+		2
+	);
+	assert_eq!(
+		cohort
+			.matches("retained_transaction(guards, operation)")
+			.count(),
+		2
+	);
 	let jobs = include_str!("jobs.rs");
 	let pty = include_str!("pty.rs");
 	assert!(jobs

@@ -322,10 +322,11 @@ async fn execute(path: &str, mut input: Value, write: bool) -> Result<CallToolRe
 			check_local_path(Path::new(file))?;
 		}
 	}
-	let parser =
-		std::env::var_os("HEPTA_RUNTIME_DOCUMENT_PYTHON").ok_or_else(|| {
-			anyhow!("native parser is not configured; administrator must set HEPTA_RUNTIME_DOCUMENT_PYTHON")
-		})?;
+	let parser = std::env::var_os("HEPTA_RUNTIME_DOCUMENT_PYTHON").ok_or_else(|| {
+		anyhow!(
+			"native parser is not configured; administrator must set HEPTA_RUNTIME_DOCUMENT_PYTHON"
+		)
+	})?;
 	if !Path::new(&parser).is_absolute() {
 		bail!("configured document interpreter must be absolute");
 	}

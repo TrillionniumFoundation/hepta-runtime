@@ -400,9 +400,14 @@ async fn rename_exclusive(from: &Path, to: &Path) -> Result<()> {
 	#[cfg(target_os = "linux")]
 	{
 		use std::os::unix::ffi::OsStrExt;
+		#[cfg(test)]
+		let test_paths = (from.to_owned(), to.to_owned());
 		let from = std::ffi::CString::new(from.as_os_str().as_bytes())?;
 		let to = std::ffi::CString::new(to.as_os_str().as_bytes())?;
 		tokio::task::spawn_blocking(move || {
+			#[cfg(test)]
+			cohort::before_rename_test_hook(&test_paths.0, &test_paths.1)
+				.map_err(std::io::Error::other)?;
 			let result = unsafe {
 				libc::renameat2(
 					libc::AT_FDCWD,

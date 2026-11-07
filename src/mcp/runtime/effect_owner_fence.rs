@@ -677,6 +677,15 @@ pub async fn admit_new_effect() -> Result<AdmissionPermit> {
 }
 
 #[cfg(test)]
+pub(crate) fn test_admission_from_root(
+	root: &Path,
+	owner: &str,
+	state: &Path,
+) -> Result<AdmissionPermit> {
+	acquire_from_root(root, owner, state)
+}
+
+#[cfg(test)]
 #[path = "effect_owner_fence_tests.rs"]
 mod tests;
 

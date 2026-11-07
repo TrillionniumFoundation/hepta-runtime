@@ -801,48 +801,49 @@ fn publish_anchor(root: &File, anchor: &ArchiveAnchor) -> Result<()> {
 #[cfg(unix)]
 fn open_archive_store(root: &Path, legacy: &File, create: bool) -> Result<Option<ArchiveStore>> {
 	let base = open_root(root)?;
-	let cached =
-		match read_anchor(&base) {
-			Ok(anchor) => anchor,
-			Err(error) if is_not_found(&error) => {
-				let _initialization = store_lock()?;
-				// Another stripe may have finished first-time initialization while this
-				// caller waited. Never interpret its newly anchored state as empty.
-				match read_anchor(&base) {
-					Ok(anchor) => anchor,
-					Err(error) if is_not_found(&error) => {
-						if read_archive_marker(legacy)?.is_some() {
-							bail!("result archive anchor missing; history never recreated automatically");
-						}
-						if !is_absent(&base, ARCHIVE_STORE_NAME)? {
-							bail!("unanchored result archive refused; history never recreated automatically");
-						}
-						if !create {
-							return Ok(None);
-						}
-						let store = make_directory(&base, ARCHIVE_STORE_NAME)?;
-						let archive = make_directory(&store, ARCHIVE_NAME)?;
-						let mut shards = Vec::with_capacity(256);
-						for index in 0..256 {
-							let directory = make_directory(&archive, &format!("{index:02x}"))?;
-							shards.push(directory_identity(&directory, true)?);
-						}
-						let anchor = ArchiveAnchor {
-							schema: 2,
-							root: directory_identity(&base, false)?,
-							legacy: directory_identity(legacy, true)?,
-							store: directory_identity(&store, true)?,
-							archive: directory_identity(&archive, true)?,
-							shards,
-						};
-						publish_anchor(&base, &anchor)?;
-						read_anchor(&base)?
+	let cached = match read_anchor(&base) {
+		Ok(anchor) => anchor,
+		Err(error) if is_not_found(&error) => {
+			let _initialization = store_lock()?;
+			// Another stripe may have finished first-time initialization while this
+			// caller waited. Never interpret its newly anchored state as empty.
+			match read_anchor(&base) {
+				Ok(anchor) => anchor,
+				Err(error) if is_not_found(&error) => {
+					if read_archive_marker(legacy)?.is_some() {
+						bail!(
+							"result archive anchor missing; history never recreated automatically"
+						);
 					}
-					Err(error) => return Err(error),
+					if !is_absent(&base, ARCHIVE_STORE_NAME)? {
+						bail!("unanchored result archive refused; history never recreated automatically");
+					}
+					if !create {
+						return Ok(None);
+					}
+					let store = make_directory(&base, ARCHIVE_STORE_NAME)?;
+					let archive = make_directory(&store, ARCHIVE_NAME)?;
+					let mut shards = Vec::with_capacity(256);
+					for index in 0..256 {
+						let directory = make_directory(&archive, &format!("{index:02x}"))?;
+						shards.push(directory_identity(&directory, true)?);
+					}
+					let anchor = ArchiveAnchor {
+						schema: 2,
+						root: directory_identity(&base, false)?,
+						legacy: directory_identity(legacy, true)?,
+						store: directory_identity(&store, true)?,
+						archive: directory_identity(&archive, true)?,
+						shards,
+					};
+					publish_anchor(&base, &anchor)?;
+					read_anchor(&base)?
 				}
+				Err(error) => return Err(error),
 			}
-			Err(error) => return Err(error),
-		};
+		}
+		Err(error) => return Err(error),
+	};
 	let anchor = &cached.anchor;
 	let store = open_at(
 		&base,

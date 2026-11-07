@@ -543,10 +543,11 @@ impl Proxy {
 	}
 
 	async fn acquire(&self, target: &str, deadline: Instant) -> Result<Leases> {
-		let admission =
-			self.admission.clone().try_acquire_owned().map_err(|_| {
-				anyhow!("direct SSH admitted capacity exhausted; no child submitted; no automatic retry")
-			})?;
+		let admission = self.admission.clone().try_acquire_owned().map_err(|_| {
+			anyhow!(
+				"direct SSH admitted capacity exhausted; no child submitted; no automatic retry"
+			)
+		})?;
 		let host = self.target(target)?;
 		let host = tokio::select! {
 			biased;
