@@ -131,6 +131,7 @@ pub(super) fn create(
 	owner: Option<String>,
 	job_id: Option<String>,
 ) -> Result<Scratch> {
+	directory::require_supported_platform()?;
 	if !matches!(engine, "jadx" | "ghidra") {
 		bail!("unknown fixed engine scratch kind");
 	}

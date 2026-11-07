@@ -15,6 +15,9 @@
 
 //! Real inherited-fd worker qualification with independent zipfile fixtures.
 
+// macOS arm64 refuses this finite-address-space worker profile before parsing.
+// The exact shipped-binary refusal is covered by rea_macos_resource_refusal.rs.
+#![cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
 #![cfg(unix)]
 #![cfg(feature = "remote-fs")]
 

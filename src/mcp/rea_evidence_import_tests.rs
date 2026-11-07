@@ -6,6 +6,7 @@
 
 use super::*;
 
+#[cfg(target_os = "linux")]
 async fn permit() -> Arc<runtime::effect_owner_fence::AdmissionPermit> {
 	Arc::new(
 		runtime::effect_owner_fence::admit_new_effect()
@@ -14,6 +15,7 @@ async fn permit() -> Arc<runtime::effect_owner_fence::AdmissionPermit> {
 	)
 }
 
+#[cfg(target_os = "linux")]
 fn payload(result: &CallToolResult) -> Value {
 	serde_json::from_str(&result.content[0].as_text().unwrap().text).unwrap()
 }
@@ -79,6 +81,7 @@ fn unrecognized_import_error_detail_does_not_publish_a_partial_text_prefix() {
 	);
 }
 
+#[cfg(target_os = "linux")]
 async fn call(
 	path: &std::path::Path,
 	root: &std::path::Path,

@@ -15,6 +15,9 @@
 //! Exercise the *shipped* MCP binary and its child worker end to end, with
 //! a synthetic deny-by-default runtime policy. No remote SSH is contacted.
 
+// macOS arm64 refuses this finite-address-space worker profile before parsing.
+// The exact shipped-binary refusal is covered by rea_macos_resource_refusal.rs.
+#![cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
 #![cfg(feature = "remote-fs")]
 
 use serde_json::{json, Value};

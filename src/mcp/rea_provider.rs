@@ -205,6 +205,7 @@ impl StaticProvider {
 	}
 
 	/// No caller-controlled flags, output paths, plugins, scripts or disassembly.
+	#[cfg(any(target_os = "linux", test))]
 	pub(crate) fn arguments(
 		self,
 		operation: StaticOperation,

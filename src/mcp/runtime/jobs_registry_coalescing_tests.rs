@@ -4,7 +4,9 @@
 //! Concurrent cold readers share only completely scanned positive bindings.
 use super::*;
 use std::cell::{Cell, RefCell};
+#[cfg(target_os = "linux")]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(target_os = "linux")]
 use std::sync::Condvar;
 
 thread_local! {

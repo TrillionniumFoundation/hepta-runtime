@@ -5,6 +5,7 @@
 //! Real subprocess regressions for stderr deadlines and private-owner drainage.
 
 use super::*;
+#[cfg(target_os = "linux")]
 use serde_json::json;
 use std::os::fd::OwnedFd;
 use std::os::unix::net::UnixStream;

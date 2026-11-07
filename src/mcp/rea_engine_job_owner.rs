@@ -214,6 +214,7 @@ pub(crate) fn confirm_group_visibility(mounts: &str) -> Result<()> {
 /// Stops residual engine descendants before reaping releases the original PGID.
 /// An observation failure or timeout retains scratch and grants no later signal.
 pub(crate) fn stop_original_group(pid: u32) -> Result<()> {
+	directory::require_supported_platform()?;
 	let mut mounts = Vec::new();
 	File::open("/proc/self/mountinfo")?
 		.take(1048577)

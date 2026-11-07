@@ -81,10 +81,22 @@ fn config() -> RuntimeConfig {
 		"rea_static_profiles":{"owned_readelf":profile()}})).unwrap()
 }
 
+fn assert_controller_profile_admission(cfg: &RuntimeConfig) {
+	if cfg!(target_os = "linux") {
+		validate_profiles(cfg).unwrap();
+	} else {
+		// The controller platform fence precedes profile/path admission.
+		assert_eq!(
+			validate_profiles(cfg).unwrap_err().to_string(),
+			"static backend profiles currently require a Linux controller"
+		);
+	}
+}
+
 #[test]
 fn static_profiles_are_explicit_and_default_empty() {
 	let mut cfg = config();
-	validate_profiles(&cfg).unwrap();
+	assert_controller_profile_admission(&cfg);
 	cfg.rea_static_profiles.clear();
 	assert!(prepare_request(&cfg, request()).is_err());
 	validate_profiles(&cfg).unwrap();
@@ -326,7 +338,7 @@ fn java_profile_files_follow_host_read_and_protected_root_policy() {
 		.unwrap()
 		.allowed_read_path_prefixes
 		.extend(["/opt/jdk21".into(), "/opt/jadx".into()]);
-	validate_profiles(&cfg).unwrap();
+	assert_controller_profile_admission(&cfg);
 	let mut descendant = cfg.clone();
 	descendant
 		.hosts

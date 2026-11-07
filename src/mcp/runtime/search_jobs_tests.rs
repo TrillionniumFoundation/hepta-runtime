@@ -135,9 +135,10 @@ fn compiled_globs_match_ripgrep_order_braces_anchors_escapes_and_byte_case_foldi
 		"names/star*.txt",
 		"names/q?.txt",
 		"!bang.txt",
-		"unicode/Å.txt",
-		"unicode/å.txt",
-		"unicode/中.txt",
+		// Separate directories retain both Unicode cases on case-insensitive filesystems.
+		"unicode/upper/Å.txt",
+		"unicode/lower/å.txt",
+		"unicode/cjk/中.txt",
 		"a1.txt",
 		"a2.txt",
 		"new\nline.txt",
@@ -145,7 +146,13 @@ fn compiled_globs_match_ripgrep_order_braces_anchors_escapes_and_byte_case_foldi
 	for path in paths {
 		let full = temporary.path().join(path);
 		std::fs::create_dir_all(full.parent().unwrap()).unwrap();
-		std::fs::write(full, "needle").unwrap();
+		std::fs::OpenOptions::new()
+			.write(true)
+			.create_new(true)
+			.open(full)
+			.unwrap()
+			.write_all(b"needle")
+			.unwrap();
 	}
 	let patterns = [
 		"*.txt|!secret.txt",
@@ -161,7 +168,7 @@ fn compiled_globs_match_ripgrep_order_braces_anchors_escapes_and_byte_case_foldi
 		"#comment|*.js",
 		"*.{txt,js}|!src/**|src/a.js",
 		"dir/",
-		"unicode/Å.txt",
+		"unicode/*/Å.txt",
 		"*.txt| | !secret.txt",
 	];
 	let mut requests = Vec::new();
@@ -225,8 +232,9 @@ fn compiled_globs_match_ripgrep_order_braces_anchors_escapes_and_byte_case_foldi
 		("src/*.{js,ts}", vec![]),
 		("src/**", vec![]),
 		(r"names/q\?.txt", vec![]),
-		("unicode/?.txt", vec![]),
-		("unicode/??.txt", vec![]),
+		("unicode/*/?.txt", vec![]),
+		("unicode/*/??.txt", vec![]),
+		("unicode/*/???.txt", vec![]),
 		("a[!2].txt", vec![]),
 		("*", vec!["*.txt", "!a.txt"]),
 		("*", vec!["dir/", "!dir/a.txt"]),

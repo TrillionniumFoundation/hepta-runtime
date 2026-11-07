@@ -971,21 +971,61 @@ fn checkpoint_verifies_every_inode_and_ctime_on_cold_load() {
 		.unwrap()
 		.path();
 	let bytes = std::fs::read(&receipt).unwrap();
+	let original: Record = serde_json::from_slice(&bytes).unwrap();
+	let filename = receipt.file_name().unwrap().to_str().unwrap();
+	let key = id(receipt.file_stem().unwrap().to_str().unwrap()).unwrap();
+	let prior_stamp = stamp(&archive, filename).unwrap();
+	let watched = content_version(&archive).unwrap().is_some();
 	std::fs::write(&receipt, &bytes).unwrap();
-	// A live watch rejects an outside edit; a fresh process starts a new epoch.
-	assert!(cached(&slot, deadline).unwrap().is_none());
+	let rewritten_stamp = stamp(&archive, filename).unwrap();
+	assert!(rewritten_stamp != prior_stamp);
+	// A live watch rejects an outside edit. Without one, the cold loader must
+	// reread the complete original and may accept identical bytes with a new stamp.
+	let observed = cached(&slot, deadline).unwrap();
+	if watched {
+		assert!(observed.is_none());
+	} else {
+		assert!(content_version(&archive).unwrap().is_none());
+		let db = observed.unwrap().database;
+		let transaction = db.begin_read().unwrap();
+		let rows = transaction.open_table(ROWS).unwrap();
+		let entry: Entry =
+			codec::decode(rows.get(key.as_slice()).unwrap().unwrap().value()).unwrap();
+		assert!(entry.record == original);
+		assert!(entry.stamp == rewritten_stamp);
+		assert_eq!(std::fs::read(&receipt).unwrap(), bytes);
+	}
 	slot.state.lock().unwrap().version = content_version(&archive).unwrap();
 	let db = cached(&slot, deadline).unwrap().unwrap().database;
 	let transaction = db.begin_read().unwrap();
 	let rows = transaction.open_table(ROWS).unwrap();
-	let key = id(receipt.file_stem().unwrap().to_str().unwrap()).unwrap();
 	let entry: Entry = codec::decode(rows.get(key.as_slice()).unwrap().unwrap().value()).unwrap();
-	assert!(
-		entry.stamp == stamp(&archive, receipt.file_name().unwrap().to_str().unwrap()).unwrap()
-	);
+	assert!(entry.record == original);
+	assert!(entry.stamp == rewritten_stamp);
+	assert!(entry.stamp == stamp(&archive, filename).unwrap());
 	drop(rows);
 	drop(transaction);
 	drop(db);
+	if !watched {
+		// A matching length cannot conceal a different, otherwise valid identity.
+		let text = std::str::from_utf8(&bytes).unwrap();
+		assert_eq!(text.matches("host_list").count(), 1);
+		let changed = text.replacen("host_list", "file_info", 1).into_bytes();
+		assert_eq!(changed.len(), bytes.len());
+		let mut altered = original.clone();
+		altered.tool_name = "file_info".into();
+		assert!(serde_json::from_slice::<Record>(&changed).unwrap() == altered);
+		std::fs::write(&receipt, &changed).unwrap();
+		let error = cached(&slot, deadline)
+			.err()
+			.expect("unwatched cold validation must reject an original identity change");
+		assert!(matches!(
+			error.downcast_ref::<OriginalRecordConflict>(),
+			Some(OriginalRecordConflict::Identity)
+		));
+		assert_eq!(std::fs::read(&receipt).unwrap(), changed);
+		std::fs::write(&receipt, &bytes).unwrap();
+	}
 	std::fs::set_permissions(
 		root.path().join(CACHE_NAME),
 		std::fs::Permissions::from_mode(0o644),
@@ -1321,6 +1361,71 @@ pub(super) fn freeze_index(root: &Path, owner: &str) -> Arc<Slot> {
 		state.retired = false;
 	}
 	slot
+}
+
+#[test]
+fn cache_validation_lock_survives_database_open_and_excludes_other_openers() {
+	let root = private_root();
+	let path = root.path().join(CACHE_NAME);
+	let file = std::fs::OpenOptions::new()
+		.read(true)
+		.write(true)
+		.create_new(true)
+		.mode(0o600)
+		.open(&path)
+		.unwrap();
+	private_cache(&file).unwrap();
+	lock_cache_for_validation(&file).unwrap();
+	let hint = file.try_clone().unwrap();
+	let excluded = || {
+		let other = std::fs::OpenOptions::new()
+			.read(true)
+			.write(true)
+			.open(&path)
+			.unwrap();
+		let error = lock_cache_for_validation(&other).unwrap_err();
+		assert!(matches!(
+			error.downcast_ref::<redb::DatabaseError>(),
+			Some(redb::DatabaseError::DatabaseAlreadyOpen)
+		));
+		let error = match open_database(other, Instant::now() + Duration::from_secs(5)) {
+			Err(error) => error,
+			Ok(_) => panic!("independent database opener acquired a held validation lock"),
+		};
+		assert!(matches!(
+			error.downcast_ref::<redb::DatabaseError>(),
+			Some(redb::DatabaseError::DatabaseAlreadyOpen)
+		));
+	};
+	// The same open description keeps custody before the seal is read, while
+	// redb takes ownership, and after a real commit. No unlock/relock handoff.
+	excluded();
+	let (db, _) = open_database(file, Instant::now() + Duration::from_secs(5)).unwrap();
+	excluded();
+	let table = TableDefinition::<u64, u64>::new("validation_lock_probe");
+	let write = db.begin_write().unwrap();
+	write.open_table(table).unwrap().insert(10, 17).unwrap();
+	write.commit().unwrap();
+	excluded();
+	drop(db);
+	drop(hint);
+	let other = std::fs::OpenOptions::new()
+		.read(true)
+		.write(true)
+		.open(&path)
+		.unwrap();
+	let (db, _) = open_database(other, Instant::now() + Duration::from_secs(5)).unwrap();
+	assert_eq!(
+		db.begin_read()
+			.unwrap()
+			.open_table(table)
+			.unwrap()
+			.get(10)
+			.unwrap()
+			.unwrap()
+			.value(),
+		17
+	);
 }
 
 #[test]

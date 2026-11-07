@@ -22,7 +22,9 @@
 mod tests;
 
 use super::rea_contract::Failure;
-use anyhow::{bail, Context, Result};
+#[cfg(target_os = "linux")]
+use anyhow::bail;
+use anyhow::{Context, Result};
 use serde::Serialize;
 use serde_json::Value;
 use std::io::{self, Read, Write};

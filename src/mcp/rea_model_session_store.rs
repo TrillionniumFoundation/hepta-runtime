@@ -203,8 +203,11 @@ impl<G> PublishGuards<G> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum CommitPhase {
+	#[cfg(target_os = "linux")]
 	BeforeRename,
+	#[cfg(target_os = "linux")]
 	BeforeParentSync,
+	#[cfg(target_os = "linux")]
 	AfterParentSync,
 }
 

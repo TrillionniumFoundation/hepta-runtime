@@ -15,6 +15,9 @@
 //! Exercised shipped Rust binary (not the test harness): real worker framing,
 //! process isolation setup, limit rejection and error-only stderr.
 
+// macOS arm64 refuses this finite-address-space worker profile before parsing.
+// The exact shipped-binary refusal is covered by rea_macos_resource_refusal.rs.
+#![cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
 #![cfg(feature = "remote-fs")]
 
 use std::io::Write;

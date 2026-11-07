@@ -1050,6 +1050,41 @@ fn cold_phase(phase: &str, opened: Instant) {
 		);
 	}
 }
+fn lock_cache_for_validation(file: &File) -> Result<()> {
+	#[cfg(target_os = "macos")]
+	{
+		// redb 4.4 uses OFD range locks on macOS. A prior flock conflicts even
+		// on this same descriptor, so take its lock class before checking the
+		// seal and keep the same description locked through create_file().
+		// A zero-length range covers the complete file and future growth.
+		let mut lock: libc::flock = unsafe { std::mem::zeroed() };
+		lock.l_type = libc::F_WRLCK;
+		lock.l_whence = libc::SEEK_SET.try_into()?;
+		loop {
+			if unsafe { libc::fcntl(file.as_raw_fd(), libc::F_OFD_SETLK, &mut lock) } == 0 {
+				return Ok(());
+			}
+			let error = std::io::Error::last_os_error();
+			if error.kind() == std::io::ErrorKind::Interrupted {
+				continue;
+			}
+			if matches!(error.raw_os_error(), Some(libc::EAGAIN | libc::EACCES)) {
+				return Err(redb::DatabaseError::DatabaseAlreadyOpen.into());
+			}
+			return Err(error.into());
+		}
+	}
+	#[cfg(not(target_os = "macos"))]
+	{
+		match file.try_lock() {
+			Ok(()) => Ok(()),
+			Err(std::fs::TryLockError::WouldBlock) => {
+				Err(redb::DatabaseError::DatabaseAlreadyOpen.into())
+			}
+			Err(std::fs::TryLockError::Error(error)) => Err(error.into()),
+		}
+	}
+}
 fn cached(slot: &Slot, deadline: Instant) -> Result<Option<ValidatedDatabase>> {
 	let file = match open_at(&slot.root, CACHE_NAME, libc::O_RDWR | libc::O_NONBLOCK, 0) {
 		Ok(file) => file,
@@ -1064,13 +1099,7 @@ fn cached(slot: &Slot, deadline: Instant) -> Result<Option<ValidatedDatabase>> {
 	};
 	private_cache(&file)?;
 	let opened = Instant::now();
-	match file.try_lock() {
-		Ok(()) => {}
-		Err(std::fs::TryLockError::WouldBlock) => {
-			return Err(redb::DatabaseError::DatabaseAlreadyOpen.into());
-		}
-		Err(std::fs::TryLockError::Error(error)) => return Err(error.into()),
-	}
+	lock_cache_for_validation(&file)?;
 	let sealed = seal::verified(slot, &file, deadline)?;
 	cold_phase(
 		if sealed {

@@ -330,7 +330,7 @@ fn oversized_receipts_and_mismatched_filenames_keep_the_original_refusals() {
 #[test]
 fn unselected_nonregular_hardlinked_and_non_utf8_receipts_are_not_skipped() {
 	use std::os::unix::ffi::{OsStrExt, OsStringExt};
-	use std::os::unix::fs::symlink;
+	use std::os::unix::fs::{symlink, OpenOptionsExt};
 	for case in ["symlink", "hardlink", "directory", "fifo", "filename"] {
 		let root = tempfile::tempdir().unwrap();
 		write_record(root.path(), &record("selected", "main", 1));
@@ -361,10 +361,25 @@ fn unselected_nonregular_hardlinked_and_non_utf8_receipts_are_not_skipped() {
 			}
 			"filename" => {
 				let name = std::ffi::OsString::from_vec(b"non-utf8-\xff.json".to_vec());
-				write_bytes(
-					&root.path().join(name),
-					b"not decoded before filename refusal",
-				);
+				let opened = OpenOptions::new()
+					.create_new(true)
+					.write(true)
+					.mode(0o600)
+					.open(root.path().join(name));
+				let mut file = match opened {
+					Ok(file) => file,
+					#[cfg(target_os = "macos")]
+					Err(error) if error.raw_os_error() == Some(libc::EILSEQ) => {
+						// APFS rejects this name before a directory entry exists.
+						// The other four unsafe entries still exercise both readers.
+						assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+						assert_eq!(assert_same_response(root.path(), Some("main"))["total"], 1);
+						continue;
+					}
+					Err(error) => panic!("cannot construct invalid-name fixture: {error}"),
+				};
+				file.write_all(b"not decoded before filename refusal")
+					.unwrap();
 				"invalid durable job record name"
 			}
 			_ => unreachable!(),

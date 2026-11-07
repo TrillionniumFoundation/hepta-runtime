@@ -679,6 +679,9 @@ fn controller_state_root_rebinding_is_detected() {
 	assert!(verify_root_path_identity(&f.v4_state, &pinned).is_err());
 }
 
+// Predecessor replay inspection is implemented only on Linux; the explicit
+// unsupported-platform refusal is exercised separately below.
+#[cfg(target_os = "linux")]
 #[test]
 fn successor_replay_rejects_predecessor_host_and_key_but_allows_new_key() {
 	let f = Fixture::new();
@@ -706,6 +709,7 @@ fn successor_replay_rejects_predecessor_host_and_key_but_allows_new_key() {
 	assert!(guard.require_new_process_identity("main", None).is_err());
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn successor_replay_denies_uncertain_or_corrupt_legacy_registry() {
 	let f = Fixture::new();
@@ -732,6 +736,7 @@ fn successor_replay_denies_uncertain_or_corrupt_legacy_registry() {
 		.is_err());
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn successor_replay_can_scan_predecessor_past_old_32768_job_limit() {
 	let f = Fixture::new();
@@ -773,6 +778,7 @@ fn successor_replay_can_scan_predecessor_past_old_32768_job_limit() {
 	);
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn successor_replay_cache_uses_same_pinned_authority_and_denies_stale_registry() {
 	let f = Fixture::new();
@@ -805,6 +811,7 @@ fn successor_replay_cache_uses_same_pinned_authority_and_denies_stale_registry()
 	fs::remove_file(&marker).unwrap();
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn successor_replay_cache_cannot_be_used_by_second_authority_epoch() {
 	let f = Fixture::new();
@@ -825,6 +832,44 @@ fn successor_replay_cache_cannot_be_used_by_second_authority_epoch() {
 	assert!(later
 		.require_new_process_identity("main", Some("SAFE_KEY"))
 		.is_err());
+}
+
+#[cfg(not(target_os = "linux"))]
+#[test]
+fn successor_process_replay_refuses_without_linux_support() {
+	for registry in ["absent", "empty", "populated"] {
+		let f = Fixture::new();
+		let jobs = f.v4_state.join("jobs");
+		if registry != "absent" {
+			fs::create_dir(&jobs).unwrap();
+			fs::set_permissions(&jobs, fs::Permissions::from_mode(0o700)).unwrap();
+		}
+		if registry == "populated" {
+			let row = serde_json::json!({"id":"1a14-cafe-1","host":"main",
+				"idempotency_key":"old-key","request_digest":"a".repeat(64)});
+			let path = jobs.join("1a14-cafe-1.json");
+			fs::write(&path, serde_json::to_vec(&row).unwrap()).unwrap();
+			fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+		}
+		f.write_state("v11", "admitting", 8);
+		let permit = f.admit("v11").unwrap();
+		assert!(permit.has_predecessor_state());
+		for (host, key) in [
+			("main", Some("old-key")),
+			("main", Some("new-key")),
+			("other-host", Some("old-key")),
+			("main", None),
+		] {
+			assert_eq!(
+				permit
+					.require_new_process_identity(host, key)
+					.unwrap_err()
+					.to_string(),
+				"V11 predecessor replay validation requires supported Linux controller",
+				"registry={registry}, host={host}, key={key:?}"
+			);
+		}
+	}
 }
 
 #[test]
@@ -915,6 +960,7 @@ mod isolated_pty_replay_tests {
 			.require_new_pty_identity("main", Some("owned"))
 			.is_err());
 	}
+	#[cfg(target_os = "linux")]
 	#[test]
 	fn successor_can_start_first_keyed_pty_when_old_terminal_store_absent() {
 		let (_t, root, old, new) = fixture();
@@ -935,8 +981,14 @@ mod isolated_pty_replay_tests {
 		d["predecessor_state_root"] = serde_json::Value::Null;
 		std::fs::write(root.join(".owner.json"), serde_json::to_vec(&d).unwrap()).unwrap();
 		let permit = acquire_from_root(&root, "v4", &old).unwrap();
+		assert!(!permit.has_predecessor_state());
+		assert!(permit.require_new_process_identity("main", None).is_ok());
+		assert!(permit
+			.require_new_process_identity("main", Some("new-key"))
+			.is_ok());
 		assert!(permit.require_new_pty_identity("main", None).is_ok());
 	}
+	#[cfg(target_os = "linux")]
 	#[test]
 	fn successor_rejects_predecessor_pty_key_before_new_session() {
 		let (_t, root, old, new) = fixture();
@@ -952,5 +1004,35 @@ mod isolated_pty_replay_tests {
 			.require_new_pty_identity("pocket4", Some("same-original-key"))
 			.is_ok());
 		assert!(permit.require_new_pty_identity("main", None).is_err());
+	}
+
+	#[cfg(not(target_os = "linux"))]
+	#[test]
+	fn successor_pty_replay_refuses_without_linux_support() {
+		for registry in ["absent", "empty", "populated"] {
+			let (_t, root, old, new) = fixture();
+			if registry == "absent" {
+				std::fs::remove_dir(old.join("terminals")).unwrap();
+			} else if registry == "populated" {
+				persist_old_pty(&old, "main", "old-key");
+			}
+			let permit = acquire_from_root(&root, "v11", &new).unwrap();
+			assert!(permit.has_predecessor_state());
+			for (host, key) in [
+				("main", Some("old-key")),
+				("main", Some("new-key")),
+				("other-host", Some("old-key")),
+				("main", None),
+			] {
+				assert_eq!(
+					permit
+						.require_new_pty_identity(host, key)
+						.unwrap_err()
+						.to_string(),
+					"V11 predecessor PTY replay validation requires Linux",
+					"registry={registry}, host={host}, key={key:?}"
+				);
+			}
+		}
 	}
 }

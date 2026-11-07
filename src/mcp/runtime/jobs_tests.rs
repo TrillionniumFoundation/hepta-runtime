@@ -1648,6 +1648,7 @@ fn streaming_scan_rejects_post_enumeration_directory_mutation() {
 
 	let mut duplicate = inserted.clone();
 	duplicate.id = "second-conflicting-id".into();
+	let content_watch = registry_has_content_watch(&registry_epoch(root.path()).unwrap());
 	let rejected_existing =
 		scan_idempotent_binding_in_with_observer(root.path(), "main", "never-accepted", || {
 			std::thread::sleep(Duration::from_millis(5));
@@ -1655,10 +1656,14 @@ fn streaming_scan_rejects_post_enumeration_directory_mutation() {
 		})
 		.unwrap_err()
 		.to_string();
-	assert!(
-		rejected_existing.contains("registry changed during scan"),
-		"{rejected_existing}"
-	);
+	// The no-watch fallback performs a second complete scan before comparing
+	// directory epochs, so it diagnoses the newly inserted duplicate first.
+	let expected = if content_watch {
+		"registry changed during scan"
+	} else {
+		"duplicate original"
+	};
+	assert!(rejected_existing.contains(expected), "{rejected_existing}");
 	assert!(
 		scan_idempotent_binding_in(root.path(), "main", "never-accepted")
 			.unwrap_err()

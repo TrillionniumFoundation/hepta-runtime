@@ -18,6 +18,7 @@
 //! executable under inspection is ever launched.
 
 use super::inspect_elf_bytes;
+#[cfg(target_os = "linux")]
 use serde_json::Value;
 
 fn put16(data: &mut [u8], at: usize, value: u16, little: bool) {
