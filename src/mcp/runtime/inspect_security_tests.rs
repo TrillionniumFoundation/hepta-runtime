@@ -17,9 +17,24 @@ fn run_fake_sudo(script: &str, timeout_seconds: f64) -> Value {
 
 	let old_path = std::env::var("PATH").unwrap_or_default();
 	let path = format!("{}:{old_path}", dir.path().display());
+	// Fresh executable startup can exceed the action deadline on macOS. These
+	// fixtures test capture after output exists, so wait without reading the pipe
+	// before the production helper starts its unchanged timeout/capture loop.
+	let launch_ready = r#"
+import select, subprocess
+fixture_popen = subprocess.Popen
+def launch_fixture_ready(*args, **kwargs):
+    child = fixture_popen(*args, **kwargs)
+    if not select.select([child.stdout], [], [], 10)[0]:
+        child.kill()
+        child.wait(timeout=5)
+        raise RuntimeError("fixture stdout was not ready within 10 seconds")
+    return child
+subprocess.Popen = launch_fixture_ready
+"#;
 	let mut child = Command::new("python3")
 		.arg("-c")
-		.arg(PRIVILEGED_CODE)
+		.arg(format!("{launch_ready}\n{PRIVILEGED_CODE}"))
 		.env("PATH", path)
 		.stdin(Stdio::piped())
 		.stdout(Stdio::piped())
@@ -46,7 +61,12 @@ fn run_fake_sudo(script: &str, timeout_seconds: f64) -> Value {
 fn privileged_timeout_with_stdout_is_json_serializable() {
 	let output = run_fake_sudo("#!/bin/sh\nprintf 'started\\n'\nexec sleep 4\n", 1.0);
 	assert_eq!(output["exit_code"], 124);
+	assert_eq!(output["timed_out"], true);
+	assert_eq!(output["exit_code_authoritative"], false);
+	assert_eq!(output["process_exit_confirmed"], true);
 	assert_eq!(output["stdout"], "started\n");
+	assert_eq!(output["stdout_bytes_seen"], 8);
+	assert_eq!(output["capture_error"], Value::Null);
 }
 
 #[test]

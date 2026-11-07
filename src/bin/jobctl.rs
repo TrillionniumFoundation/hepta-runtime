@@ -50,7 +50,14 @@ fn boot() -> Result<String> {
 		.trim()
 		.to_owned())
 }
+fn require_linux_launch() -> Result<()> {
+	if !cfg!(target_os = "linux") {
+		bail!("Isolated job launch requires Linux");
+	}
+	Ok(())
+}
 fn launch_nonce() -> Result<String> {
+	require_linux_launch()?;
 	// The worker adoption and witnessed terminal wire share this exact format.
 	// Existing records retain their original nonce; only a new launch calls here.
 	let nonce = fs::read_to_string("/proc/sys/kernel/random/uuid")?
@@ -998,6 +1005,9 @@ fn cancel(id: &str) -> Result<Value> {
 	Ok(json!({"job_id":id,"result":"stop_requested","invocation_id":r.invocation_id}))
 }
 fn start(mut q: Request, interactive: bool) -> Result<Value> {
+	// New isolated dispatch requires systemd, /proc identities and group custody.
+	// Check before policy/lock acquisition can create a registry namespace.
+	require_linux_launch()?;
 	let p = policy()?;
 	validate(&mut q, &p)?;
 	let lock = Lock::acquire()?;
@@ -1513,6 +1523,7 @@ fn retain_engine_supervision_failure<T>(
 	}
 }
 fn supervise(id: &str, interactive: bool) -> Result<()> {
+	require_linux_launch()?;
 	if unsafe { libc::geteuid() } == 0 {
 		bail!("supervisor must never execute as root");
 	}

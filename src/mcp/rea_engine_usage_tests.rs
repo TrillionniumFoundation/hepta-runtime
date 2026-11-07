@@ -4,6 +4,7 @@
 //! Deterministic live-sample races on private fixtures; no engine qualification.
 
 use super::*;
+#[cfg(target_os = "linux")]
 use std::os::unix::fs::{symlink, PermissionsExt};
 
 #[test]
@@ -15,6 +16,7 @@ fn device_identity_comparison_never_truncates_or_accepts_negative_ids() {
 	assert!(!same_device(u128::from(u64::MAX) + 1, 0));
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn vanished_enumerated_file_is_a_sample_absence_with_owned_root_unchanged() {
 	let temp = tempfile::tempdir().unwrap();
@@ -31,6 +33,7 @@ fn vanished_enumerated_file_is_a_sample_absence_with_owned_root_unchanged() {
 	directory.verify().unwrap();
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn sampling_refuses_replaced_entries_and_root_rebinding() {
 	let temp = tempfile::tempdir().unwrap();
@@ -61,6 +64,7 @@ fn sampling_refuses_replaced_entries_and_root_rebinding() {
 	assert!(directory.path.is_dir());
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn sampling_preserves_permission_symlink_and_resource_errors() {
 	let temp = tempfile::tempdir().unwrap();
@@ -87,6 +91,7 @@ fn sampling_preserves_permission_symlink_and_resource_errors() {
 	assert_eq!(std::fs::read(outside).unwrap(), b"preserved");
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn sampling_never_treats_a_disappeared_root_as_an_empty_sample() {
 	let temp = tempfile::tempdir().unwrap();
@@ -95,6 +100,7 @@ fn sampling_never_treats_a_disappeared_root_as_an_empty_sample() {
 	assert!(sample(&directory, 1024, 32).is_err());
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn sampling_distinguishes_an_unlinked_open_directory_from_a_live_renamed_directory() {
 	for removed in [true, false] {

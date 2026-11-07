@@ -4,8 +4,10 @@
 //! Scratch adoption and replacement safety at real filesystem boundaries.
 
 use super::*;
+#[cfg(target_os = "linux")]
 use std::os::unix::fs::symlink;
 
+#[cfg(target_os = "linux")]
 fn binding(root: &Directory) -> String {
 	let (device, inode) = root.identity();
 	serde_json::to_string(&OwnerBinding {
@@ -19,6 +21,7 @@ fn binding(root: &Directory) -> String {
 	.unwrap()
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn worker_adopts_exact_owner_and_defers_removal_to_original_owner() {
 	let temp = tempfile::tempdir().unwrap();
@@ -54,6 +57,7 @@ fn worker_adopts_exact_owner_and_defers_removal_to_original_owner() {
 	assert!(!path.exists());
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn cleanup_refuses_rebound_parent_even_when_absolute_leaf_inode_is_unchanged() {
 	let temp = tempfile::tempdir().unwrap();
@@ -75,6 +79,7 @@ fn cleanup_refuses_rebound_parent_even_when_absolute_leaf_inode_is_unchanged() {
 	assert!(old_parent.join(&leaf).is_dir());
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn wrong_owner_or_substituted_inode_cannot_be_adopted() {
 	let temp = tempfile::tempdir().unwrap();
@@ -105,6 +110,7 @@ fn wrong_owner_or_substituted_inode_cannot_be_adopted() {
 	assert!(!replacement.path.join("claim.json").exists());
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn cleanup_refuses_a_replaced_root_and_unlinks_symlinks_without_following_them() {
 	let temp = tempfile::tempdir().unwrap();
@@ -126,4 +132,72 @@ fn cleanup_refuses_a_replaced_root_and_unlinks_symlinks_without_following_them()
 	assert!(work.directory.remove().is_err());
 	assert!(path.join("preserve").is_file());
 	assert!(temp.path().join("retained-owned").is_dir());
+}
+
+#[cfg(not(target_os = "linux"))]
+#[test]
+fn unsupported_platform_refuses_creation_and_adoption_without_scratch_changes() {
+	use std::os::unix::fs::{MetadataExt, PermissionsExt};
+	let temp = tempfile::tempdir().unwrap();
+	let parent = std::fs::canonicalize(temp.path()).unwrap();
+	let existing = parent.join("engine-scratch");
+	std::fs::create_dir(&existing).unwrap();
+	std::fs::set_permissions(&existing, std::fs::Permissions::from_mode(0o700)).unwrap();
+	let sentinel = existing.join("sentinel");
+	std::fs::write(&sentinel, b"existing private data").unwrap();
+	let held = std::fs::metadata(&existing).unwrap();
+	let error = "Static engine scratch lifecycle requires Linux";
+	assert_eq!(
+		Directory::create(&parent, "new-owned")
+			.err()
+			.unwrap()
+			.to_string(),
+		error
+	);
+	assert_eq!(
+		Directory::open(&existing, held.dev(), held.ino())
+			.err()
+			.unwrap()
+			.to_string(),
+		error
+	);
+	let owner = serde_json::to_string(&OwnerBinding {
+		schema: "hepta.rea.engine-scratch-owner.v1".into(),
+		job_id: "owned-job".into(),
+		launch_nonce: "a".repeat(32),
+		path: existing.clone(),
+		device: held.dev(),
+		inode: held.ino(),
+	})
+	.unwrap();
+	for engine in ["ghidra", "jadx"] {
+		assert_eq!(
+			create(&parent, engine, None, None)
+				.err()
+				.unwrap()
+				.to_string(),
+			error
+		);
+		assert_eq!(
+			create(
+				&parent,
+				engine,
+				Some(owner.clone()),
+				Some("owned-job".into())
+			)
+			.err()
+			.unwrap()
+			.to_string(),
+			error
+		);
+	}
+	assert_eq!(std::fs::read_dir(&parent).unwrap().count(), 1);
+	assert_eq!(std::fs::read_dir(&existing).unwrap().count(), 1);
+	assert!(!existing.join("claim.json").exists());
+	assert_eq!(std::fs::read(sentinel).unwrap(), b"existing private data");
+	let after = std::fs::metadata(existing).unwrap();
+	assert_eq!(
+		(held.dev(), held.ino(), held.mode()),
+		(after.dev(), after.ino(), after.mode())
+	);
 }

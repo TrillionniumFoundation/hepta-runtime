@@ -13,6 +13,15 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, Instant};
 
+pub(crate) fn require_supported_platform() -> Result<()> {
+	// Mount identity, descendant observation and cleanup use the Linux /proc
+	// contracts. Refuse before creating or adopting a namespace on other OSes.
+	if !cfg!(target_os = "linux") {
+		bail!("Static engine scratch lifecycle requires Linux");
+	}
+	Ok(())
+}
+
 pub(crate) fn open_at(parent: &File, name: &OsStr) -> Result<File> {
 	let name = CString::new(name.as_bytes())?;
 	// The parent descriptor, not a re-resolved pathname, selects each child.
@@ -63,6 +72,7 @@ pub(crate) struct Directory {
 
 impl Directory {
 	pub(crate) fn create(parent: &Path, name: &str) -> Result<Self> {
+		require_supported_platform()?;
 		if name.is_empty() || name == "." || name == ".." || name.contains('/') {
 			bail!("invalid private engine directory name");
 		}
@@ -87,6 +97,7 @@ impl Directory {
 	}
 
 	pub(crate) fn open(path: &Path, device: u64, inode: u64) -> Result<Self> {
+		require_supported_platform()?;
 		let parent_path = path.parent().context("engine directory parent absent")?;
 		let parent = open_path(parent_path)?;
 		let file = open_at(
@@ -112,6 +123,7 @@ impl Directory {
 	}
 
 	pub(crate) fn verify(&self) -> Result<()> {
+		require_supported_platform()?;
 		let parent_path = self
 			.path
 			.parent()

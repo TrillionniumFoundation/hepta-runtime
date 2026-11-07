@@ -8,11 +8,12 @@ use super::*;
 use std::os::unix::process::CommandExt;
 
 // Compile the real worker consumer into this producer contract test. Its async
-// entry is unused here; no replacement parser or handwritten valid nonce exists.
+// entry is unused here. Linux adoption fixtures use the production nonce issuer.
 #[allow(dead_code)]
 #[path = "mcp/rea_engine_scratch.rs"]
 mod worker_scratch;
 
+#[cfg(target_os = "linux")]
 fn engine_record(nonce: String) -> Record {
 	Record {
 		job_id: "owned-job".into(),
@@ -27,6 +28,7 @@ fn engine_record(nonce: String) -> Record {
 	}
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn production_nonce_is_accepted_by_the_real_worker_and_terminal_projection() {
 	let temp = tempfile::tempdir().unwrap();
@@ -64,6 +66,7 @@ fn production_nonce_is_accepted_by_the_real_worker_and_terminal_projection() {
 	assert_eq!(projected["output_durable"], true);
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn restricted_group_visibility_preserves_unknown_and_readable_retention() {
 	let temp = tempfile::tempdir().unwrap();
@@ -131,6 +134,7 @@ fn restricted_group_visibility_preserves_unknown_and_readable_retention() {
 	assert!(sentinel.exists());
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn engine_scratch_owner_stops_original_group_before_reap_and_publishes_cleanup() {
 	let temp = tempfile::tempdir().unwrap();
@@ -174,6 +178,7 @@ time.sleep(5)
 	assert!(!temp.path().join("engine-scratch").exists());
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn engine_scratch_lost_child_custody_never_authorizes_numeric_group_cleanup() {
 	let temp = tempfile::tempdir().unwrap();
@@ -188,4 +193,56 @@ fn engine_scratch_lost_child_custody_never_authorizes_numeric_group_cleanup() {
 	assert_eq!(receipt["state"], "retained");
 	assert_eq!(receipt["removed"], false);
 	assert!(temp.path().join("engine-scratch").exists());
+}
+
+#[cfg(not(target_os = "linux"))]
+#[test]
+fn unsupported_engine_launch_refuses_before_state_changes_or_group_signals() {
+	let temp = tempfile::tempdir().unwrap();
+	let state = fs::canonicalize(temp.path()).unwrap();
+	let sentinel = state.join("sentinel");
+	fs::write(&sentinel, b"original state").unwrap();
+	let expected = "Isolated job launch requires Linux";
+	assert_eq!(launch_nonce().unwrap_err().to_string(), expected);
+	for interactive in [false, true] {
+		let request: Request = serde_json::from_value(json!({
+			"op":"start", "job_id":"unsupported-job", "executable":"/bin/true",
+			"cwd":state,
+		}))
+		.unwrap();
+		assert_eq!(
+			start(request, interactive).unwrap_err().to_string(),
+			expected
+		);
+		assert_eq!(
+			supervise("unsupported-job", interactive)
+				.unwrap_err()
+				.to_string(),
+			expected
+		);
+	}
+	assert_eq!(
+		engine_owner::ScratchOwner::prepare(&state, "unsupported-job", "unissued")
+			.err()
+			.unwrap()
+			.to_string(),
+		"Static engine scratch lifecycle requires Linux"
+	);
+	let mut child = Command::new("/bin/sleep")
+		.arg("5")
+		.process_group(0)
+		.spawn()
+		.unwrap();
+	let refusal = engine_owner::stop_original_group(child.id());
+	let observed = child.try_wait();
+	let _ = child.kill();
+	let reaped = child.wait();
+	assert_eq!(
+		refusal.unwrap_err().to_string(),
+		"Static engine scratch lifecycle requires Linux"
+	);
+	assert!(observed.unwrap().is_none());
+	reaped.unwrap();
+	assert_eq!(fs::read_dir(&state).unwrap().count(), 1);
+	assert_eq!(fs::read(sentinel).unwrap(), b"original state");
 }

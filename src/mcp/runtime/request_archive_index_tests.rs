@@ -1324,6 +1324,71 @@ pub(super) fn freeze_index(root: &Path, owner: &str) -> Arc<Slot> {
 }
 
 #[test]
+fn cache_validation_lock_survives_database_open_and_excludes_other_openers() {
+	let root = private_root();
+	let path = root.path().join(CACHE_NAME);
+	let file = std::fs::OpenOptions::new()
+		.read(true)
+		.write(true)
+		.create_new(true)
+		.mode(0o600)
+		.open(&path)
+		.unwrap();
+	private_cache(&file).unwrap();
+	lock_cache_for_validation(&file).unwrap();
+	let hint = file.try_clone().unwrap();
+	let excluded = || {
+		let other = std::fs::OpenOptions::new()
+			.read(true)
+			.write(true)
+			.open(&path)
+			.unwrap();
+		let error = lock_cache_for_validation(&other).unwrap_err();
+		assert!(matches!(
+			error.downcast_ref::<redb::DatabaseError>(),
+			Some(redb::DatabaseError::DatabaseAlreadyOpen)
+		));
+		let error = match open_database(other, Instant::now() + Duration::from_secs(5)) {
+			Err(error) => error,
+			Ok(_) => panic!("independent database opener acquired a held validation lock"),
+		};
+		assert!(matches!(
+			error.downcast_ref::<redb::DatabaseError>(),
+			Some(redb::DatabaseError::DatabaseAlreadyOpen)
+		));
+	};
+	// The same open description keeps custody before the seal is read, while
+	// redb takes ownership, and after a real commit. No unlock/relock handoff.
+	excluded();
+	let (db, _) = open_database(file, Instant::now() + Duration::from_secs(5)).unwrap();
+	excluded();
+	let table = TableDefinition::<u64, u64>::new("validation_lock_probe");
+	let write = db.begin_write().unwrap();
+	write.open_table(table).unwrap().insert(10, 17).unwrap();
+	write.commit().unwrap();
+	excluded();
+	drop(db);
+	drop(hint);
+	let other = std::fs::OpenOptions::new()
+		.read(true)
+		.write(true)
+		.open(&path)
+		.unwrap();
+	let (db, _) = open_database(other, Instant::now() + Duration::from_secs(5)).unwrap();
+	assert_eq!(
+		db.begin_read()
+			.unwrap()
+			.open_table(table)
+			.unwrap()
+			.get(10)
+			.unwrap()
+			.unwrap()
+			.value(),
+		17
+	);
+}
+
+#[test]
 fn cold_cache_repairs_a_lost_tail_without_replaying_or_changing_originals() {
 	let (root, owner) = fixture();
 	let slot = freeze_index(root.path(), &owner);
