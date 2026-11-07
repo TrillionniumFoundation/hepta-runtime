@@ -116,6 +116,9 @@ pub struct RuntimeConfig {
 	/// Fixed read-only static analyzers, pinned by executable, version and SHA-256.
 	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
 	pub rea_static_profiles: BTreeMap<String, crate::mcp::rea_provider::ReaStaticProfile>,
+	/// Pinned HIA installation and private operator artifact namespace; absent disables HIA.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub hia_worker: Option<crate::mcp::hia_provider::HiaWorkerProfile>,
 }
 
 // The installed value has no mutable accessor or interior-mutable policy fields.
@@ -284,6 +287,7 @@ impl RuntimeConfig {
 		}
 		crate::mcp::weight_config::validate_profiles(self)?;
 		crate::mcp::rea_provider::validate_profiles(self)?;
+		crate::mcp::hia_provider::validate_profile(self)?;
 		Ok(())
 	}
 
