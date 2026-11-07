@@ -254,6 +254,8 @@ const RUNTIME_TOOL_NAMES: &[&str] = &[
 	"weight_profiles",
 	"weight_artifact_patch",
 	"weight_artifact_restore",
+		"weight_cohort_patch",
+		"weight_cohort_restore",
 	"weight_linear_forward",
 	"weight_guarded_linear_patch",
 	"weight_linear_ridge_plan",
@@ -1794,6 +1796,32 @@ impl OctofsServer {
 		weight_artifact::restore(params)
 			.await
 			.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Create Native Weight Cohort",
+		annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
+		description = "Create one immutable safetensors candidate for 1..32 unique tensors and at most 1024 total exact element edits. Requires one complete checkpoint SHA, data/code/tensor-map/dependency/objective identities, exact per-member and global L2 budgets, and an explicit inference-only or fresh stateless optimizer contract. Reuses the existing private weight owner, shared storage quota and owner fence. Durable intent and outcome records reconcile interruption; candidate and all reverse edits publish together and receive full readback. Does not modify a production incumbent, run training, migrate optimizer state or establish behavioral quality."
+	)]
+	async fn weight_cohort_patch(
+		&self,
+		Parameters(params): Parameters<weight_artifact::cohort::PatchParams>,
+	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect().await.map_err(|error| error.to_string())?;
+		weight_artifact::cohort::patch(params).await.map_err(|error| error.to_string())
+	}
+
+	#[tool(
+		title = "Restore Native Weight Cohort",
+		annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
+		description = "Restore an entire verified native weight cohort into a new immutable artifact. Requires a fresh stable request key and exact cohort artifact ID. Every recorded edit is reversed together and the complete result must equal the original checkpoint SHA. Never adopts or overwrites a production model."
+	)]
+	async fn weight_cohort_restore(
+		&self,
+		Parameters(params): Parameters<weight_artifact::cohort::RestoreCohortParams>,
+	) -> Result<String, String> {
+		let _owner_admission = runtime::effect_owner_fence::admit_new_effect().await.map_err(|error| error.to_string())?;
+		weight_artifact::cohort::restore(params).await.map_err(|error| error.to_string())
 	}
 
 	#[tool(

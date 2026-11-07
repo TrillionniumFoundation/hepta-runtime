@@ -14,7 +14,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
-use super::weight_tensor::{self, ExactElementEdit, PatchTensorParams, TensorPatch};
+use super::weight_tensor::{self, ByteChange, ExactElementEdit, PatchTensorParams, TensorPatch};
+
+#[path = "weight_artifact_cohort.rs"]
+pub mod cohort;
 
 const MAX_MODEL_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const MAX_STORE_BYTES: u64 = 8 * 1024 * 1024 * 1024;
@@ -217,15 +220,24 @@ async fn copy_bytes(
 
 async fn transform(
 	input: &mut tokio::fs::File,
-	mut output: Option<&mut tokio::fs::File>,
+	output: Option<&mut tokio::fs::File>,
 	patch: &TensorPatch,
+) -> Result<(String, String, u64)> {
+	transform_changes(input, output, &patch.changes, patch.source_size_bytes).await
+}
+
+async fn transform_changes(
+	input: &mut tokio::fs::File,
+	mut output: Option<&mut tokio::fs::File>,
+	changes: &[ByteChange],
+	source_size_bytes: u64,
 ) -> Result<(String, String, u64)> {
 	input.seek(std::io::SeekFrom::Start(0)).await?;
 	let mut source = Sha256::new();
 	let mut target = Sha256::new();
 	let mut position = 0u64;
 	let mut changed = 0u64;
-	for change in &patch.changes {
+	for change in changes {
 		let before = weight_tensor::unhex(&change.expected_hex)?;
 		let after = weight_tensor::unhex(&change.replacement_hex)?;
 		let gap = change
@@ -256,8 +268,7 @@ async fn transform(
 	copy_bytes(
 		input,
 		&mut output,
-		patch
-			.source_size_bytes
+		source_size_bytes
 			.checked_sub(position)
 			.ok_or_else(|| anyhow!("patch exceeds admitted source"))?,
 		&mut source,
@@ -331,6 +342,9 @@ pub(super) async fn open_pinned_artifact(
 	id: &str,
 	state: &Path,
 ) -> Result<(tokio::fs::File, std::fs::Metadata, String)> {
+	if cohort::valid_id(id) {
+		return cohort::open_pinned(id, state).await;
+	}
 	let root = state.join("weight-artifacts-v1");
 	verify_private_directory(&root).await?;
 	let manifest = read_manifest_metadata(&root, id).await?;
@@ -366,7 +380,7 @@ async fn find_reusable(
 			.file_name()
 			.into_string()
 			.map_err(|_| anyhow!("invalid artifact filename"))?;
-		if name.starts_with(".pending-") {
+		if name.starts_with(".pending-") || cohort::valid_id(&name) {
 			continue;
 		}
 		let saved = read_manifest_metadata(root, &name).await?;
