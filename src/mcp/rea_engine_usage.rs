@@ -43,6 +43,12 @@ fn absent(error: &anyhow::Error) -> bool {
 		.is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound)
 }
 
+// libc::dev_t is signed on Darwin while MetadataExt exposes u64. Refuse an
+// unrepresentable identity instead of truncating or wrapping either side.
+fn same_device(device: impl TryInto<u64>, held: u64) -> bool {
+	device.try_into().ok() == Some(held)
+}
+
 fn scan(
 	directory: &File,
 	budget: &mut Budget,
@@ -100,7 +106,10 @@ fn scan(
 					Err(error) => return Err(error).context("open owned Java scratch child"),
 				};
 				let held = child.metadata()?;
-				if held.dev() != before.st_dev || held.ino() != before.st_ino || !held.is_dir() {
+				if !same_device(before.st_dev, held.dev())
+					|| held.ino() != before.st_ino
+					|| !held.is_dir()
+				{
 					bail!("Java scratch directory identity changed before traversal: {name:?}");
 				}
 				if mount_id(directory)? != mount_id(&child)? {
@@ -109,7 +118,7 @@ fn scan(
 				scan(&child, budget, depth + 1, enumerated)?;
 				match stat_at(directory, &name) {
 					Ok(after)
-						if after.st_dev == held.dev()
+						if same_device(after.st_dev, held.dev())
 							&& after.st_ino == held.ino()
 							&& after.st_mode & libc::S_IFMT == libc::S_IFDIR => {}
 					// A removed directory has zero links. A renamed live directory

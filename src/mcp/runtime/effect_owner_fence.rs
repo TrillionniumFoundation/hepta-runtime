@@ -14,10 +14,14 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::Deserialize;
+#[cfg(target_os = "linux")]
 use sha2::{Digest, Sha256};
+#[cfg(target_os = "linux")]
 use std::collections::HashSet;
 use std::ffi::CString;
-use std::fs::{self, File};
+#[cfg(any(target_os = "linux", test))]
+use std::fs;
+use std::fs::File;
 use std::io::Read;
 #[cfg(unix)]
 use std::os::fd::{AsRawFd, FromRawFd};
@@ -34,8 +38,11 @@ const MAX_OWNER_BYTES: u64 = 4096;
 // Match the native source-inventory row bound, not the older 32,768 facaded
 // list bound. A frozen predecessor remains eligible for a V11 transition as
 // its historical job registry grows, but always within finite resource caps.
+#[cfg(target_os = "linux")]
 const MAX_PREDECESSOR_JOBS: usize = 65_536;
+#[cfg(target_os = "linux")]
 const MAX_PREDECESSOR_TOTAL_BYTES: u64 = 128 * 1024 * 1024;
+#[cfg(target_os = "linux")]
 const MAX_PREDECESSOR_SCAN_SECS: u64 = 30;
 const FENCE_DIRECTORY: &str = "HEPTA_EFFECT_OWNER_FENCE_DIR";
 const SELF_OWNER: &str = "HEPTA_EFFECT_OWNER_SELF";
@@ -68,6 +75,7 @@ pub struct AdmissionPermit {
 	// Keep the authority and state identities open for the complete admitted
 	// submission. Admission requires their pathnames to have remained stable.
 	_authority_root: Option<File>,
+	#[cfg(target_os = "linux")]
 	authority_path: Option<PathBuf>,
 	_state_root: Option<File>,
 	predecessor_state_root: Option<(PathBuf, File)>,
@@ -265,6 +273,7 @@ fn acquire_from_root(root: &Path, self_owner: &str, self_state: &Path) -> Result
 	Ok(AdmissionPermit {
 		_locked: Some(lock),
 		_authority_root: Some(root_fd),
+		#[cfg(target_os = "linux")]
 		authority_path: Some(root.to_path_buf()),
 		_state_root: Some(state_fd),
 		predecessor_state_root,
@@ -277,7 +286,7 @@ fn acquire_from_root(root: &Path, self_owner: &str, self_state: &Path) -> Result
 // This is intentionally a bounded, conservative read-only scan of the
 // predecessor's PRIVATE frozen registry. A faster sealed index can replace
 // it only after retaining these same fail-closed identity checks.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 #[derive(Deserialize)]
 struct LegacyJobKey {
 	id: String,
@@ -654,6 +663,7 @@ pub async fn admit_new_effect() -> Result<AdmissionPermit> {
 			return Ok(AdmissionPermit {
 				_locked: None,
 				_authority_root: None,
+				#[cfg(target_os = "linux")]
 				authority_path: None,
 				_state_root: None,
 				predecessor_state_root: None,

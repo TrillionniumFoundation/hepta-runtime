@@ -14,9 +14,12 @@ pub(crate) const GHIDRA_RELEASE_SHA256: &str =
 	"2c2cd776db3c1f6a097ba418922378ac3649cadd5e844a6f5f088ae628a7be67";
 pub(crate) const GHIDRA_1214_RELEASE_SHA256: &str =
 	"ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db";
+#[cfg(target_os = "linux")]
 pub(crate) const MAX_MANIFEST_BYTES: u64 = 8 * 1024 * 1024;
+#[cfg(any(target_os = "linux", test))]
 pub(crate) const MAX_INSTALLATION_FILES: usize = 20_000;
 
+#[cfg(any(target_os = "linux", test))]
 pub(crate) const GHIDRA_V4_GPL_REQUIRED: [(&str, &str); 2] = [
 	(
 		"GPL/DemanglerGnu/Module.manifest",
@@ -28,6 +31,7 @@ pub(crate) const GHIDRA_V4_GPL_REQUIRED: [(&str, &str); 2] = [
 	),
 ];
 
+#[cfg(any(target_os = "linux", test))]
 pub(crate) fn installation_subtrees(revision: Option<u32>) -> &'static [&'static str] {
 	if revision == Some(4) {
 		&["Ghidra", "GPL"]
@@ -53,6 +57,7 @@ pub struct GhidraEngineProfile {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(any(target_os = "linux", test))]
 pub(crate) struct InstallationManifest {
 	pub schema: String,
 	pub engine_version: String,
@@ -135,6 +140,7 @@ pub(crate) fn validate_ghidra(profile: &ReaStaticProfile) -> Result<()> {
 	Ok(())
 }
 
+#[cfg(any(target_os = "linux", test))]
 pub(crate) fn validate_manifest(
 	manifest: &InstallationManifest,
 	engine: &GhidraEngineProfile,

@@ -22,25 +22,40 @@
 //! 8 MiB file-size policy (there is no such upstream policy).
 //! Frozen REA behavior is MIT licensed; see LICENSES/REA-MIT.txt.
 
+#[cfg(target_os = "linux")]
 use super::rea_files;
+#[cfg(target_os = "linux")]
 use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use serde::Serialize;
-use serde_json::{json, Map, Number, Value};
+use serde_json::{json, Value};
+#[cfg(target_os = "linux")]
+use serde_json::{Map, Number};
+#[cfg(target_os = "linux")]
 use sha2::{Digest, Sha256};
+#[cfg(target_os = "linux")]
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fmt;
+#[cfg(target_os = "linux")]
 use std::io::{self, BufReader, Read, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
+#[cfg(target_os = "linux")]
+use std::path::Path;
+use std::path::PathBuf;
+#[cfg(target_os = "linux")]
 use std::rc::Rc;
 use tokio_util::sync::CancellationToken;
 
+#[cfg(target_os = "linux")]
 #[path = "rea_json_eof.rs"]
 mod json_eof;
 
+#[cfg(target_os = "linux")]
 const CHUNK: usize = 64 * 1024;
+#[cfg(target_os = "linux")]
 const NATIVE_JSON_THRESHOLD: u64 = 8 * 1024 * 1024;
+#[cfg(target_os = "linux")]
 const BOM_MESSAGE: &str = "JSON input begins with a UTF-8 byte-order mark (EF BB BF), which strict JSON input does not accept. Save the file as UTF-8 without a byte-order mark.";
+#[cfg(target_os = "linux")]
 const UTF8_MESSAGE: &str = "JSON input is not valid UTF-8";
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -62,6 +77,13 @@ impl Default for NativeJsonLimits {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
+#[cfg_attr(
+	not(target_os = "linux"),
+	expect(
+		dead_code,
+		reason = "shared error rendering retains Linux acquisition reasons"
+	)
+)]
 pub(super) enum FileReason {
 	Missing,
 	PathLimit,
@@ -86,6 +108,13 @@ impl fmt::Display for FileReason {
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
+#[cfg_attr(
+	not(target_os = "linux"),
+	expect(
+		dead_code,
+		reason = "shared error rendering retains the Linux reader result contract"
+	)
+)]
 pub(super) enum FileReadError {
 	File {
 		reason: FileReason,
@@ -137,6 +166,13 @@ impl std::error::Error for FileReadError {}
 type Result<T> = std::result::Result<T, FileReadError>;
 
 #[derive(Debug, Default)]
+#[cfg_attr(
+	not(target_os = "linux"),
+	expect(
+		dead_code,
+		reason = "shared object-order accessors retain the Linux parser tree contract"
+	)
+)]
 enum OrderNode {
 	#[default]
 	Leaf,
@@ -188,10 +224,12 @@ impl ObjectOrder {
 }
 
 #[derive(Debug)]
+#[cfg(target_os = "linux")]
 struct Parsed {
 	value: Value,
 	order: OrderNode,
 }
+#[cfg(target_os = "linux")]
 fn leaf(value: Value) -> Parsed {
 	Parsed {
 		value,
@@ -211,6 +249,7 @@ pub(super) struct OwnedJson {
 fn gap(feature: &'static str, details: Value) -> FileReadError {
 	FileReadError::NativeProfileGap { feature, details }
 }
+#[cfg(target_os = "linux")]
 fn active(cancellation: &CancellationToken) -> Result<()> {
 	if cancellation.is_cancelled() {
 		Err(FileReadError::Cancelled)
@@ -218,12 +257,14 @@ fn active(cancellation: &CancellationToken) -> Result<()> {
 		Ok(())
 	}
 }
+#[cfg(target_os = "linux")]
 fn invalid_json(message: &str, user_message: bool) -> FileReadError {
 	FileReadError::InvalidJson {
 		message: message.into(),
 		user_message: user_message.then(|| message.into()),
 	}
 }
+#[cfg(target_os = "linux")]
 fn physical(error: io::Error) -> FileReadError {
 	let errno = error.raw_os_error();
 	let reason = match errno {
@@ -233,6 +274,7 @@ fn physical(error: io::Error) -> FileReadError {
 	};
 	FileReadError::File { reason, errno }
 }
+#[cfg(target_os = "linux")]
 fn changed() -> FileReadError {
 	FileReadError::File {
 		reason: FileReason::Io,
@@ -611,6 +653,7 @@ fn read_admitted(
 	})
 }
 
+#[cfg(target_os = "linux")]
 struct State {
 	cancellation: CancellationToken,
 	limits: NativeJsonLimits,
@@ -624,6 +667,7 @@ struct State {
 	eof: bool,
 	small: bool,
 }
+#[cfg(target_os = "linux")]
 impl State {
 	fn new(cancellation: CancellationToken, limits: NativeJsonLimits, small: bool) -> Self {
 		Self {
@@ -672,11 +716,13 @@ impl State {
 }
 
 #[derive(Default)]
+#[cfg(target_os = "linux")]
 struct Utf8 {
 	remaining: u8,
 	low: u8,
 	high: u8,
 }
+#[cfg(target_os = "linux")]
 impl Utf8 {
 	fn accept_slice(&mut self, bytes: &[u8]) -> bool {
 		// ASCII cannot complete a scalar split across reads. Only a clean
@@ -741,11 +787,13 @@ impl Utf8 {
 }
 
 #[derive(Default)]
+#[cfg(target_os = "linux")]
 struct TokenMeter {
 	quoted: bool,
 	escaped: bool,
 	count: usize,
 }
+#[cfg(target_os = "linux")]
 impl TokenMeter {
 	fn accept_slice(&mut self, bytes: &[u8], maximum: usize) -> bool {
 		// Padding still crosses the same physical reads, cancellation and
@@ -787,6 +835,7 @@ impl TokenMeter {
 	}
 }
 
+#[cfg(target_os = "linux")]
 struct CheckedReader<R> {
 	inner: R,
 	expected: u64,
@@ -795,6 +844,7 @@ struct CheckedReader<R> {
 	meter: Option<TokenMeter>,
 	eof_tracker: Option<json_eof::Tracker>,
 }
+#[cfg(target_os = "linux")]
 impl<R> CheckedReader<R> {
 	fn new(inner: R, expected: u64, state: Rc<RefCell<State>>, meter: bool) -> Self {
 		let eof_tracker = (meter && state.borrow().small).then(json_eof::Tracker::new);
@@ -814,6 +864,7 @@ impl<R> CheckedReader<R> {
 		io::Error::other("owned Evidence JSON reader refused input")
 	}
 }
+#[cfg(target_os = "linux")]
 impl<R: Read> Read for CheckedReader<R> {
 	fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
 		if output.is_empty() {
@@ -877,6 +928,7 @@ impl<R: Read> Read for CheckedReader<R> {
 	}
 }
 
+#[cfg(target_os = "linux")]
 fn take_reader_error(state: &Rc<RefCell<State>>, fallback: io::Error) -> FileReadError {
 	state
 		.borrow_mut()
@@ -885,6 +937,7 @@ fn take_reader_error(state: &Rc<RefCell<State>>, fallback: io::Error) -> FileRea
 		.unwrap_or_else(|| physical(fallback))
 }
 
+#[cfg(target_os = "linux")]
 fn parse_reader<R: Read>(reader: R, expected: u64, state: Rc<RefCell<State>>) -> Result<Parsed> {
 	let guarded = CheckedReader::new(reader, expected, Rc::clone(&state), true);
 	let mut buffered = BufReader::with_capacity(CHUNK, guarded);
@@ -948,10 +1001,12 @@ fn parse_reader<R: Read>(reader: R, expected: u64, state: Rc<RefCell<State>>) ->
 	}
 }
 
+#[cfg(target_os = "linux")]
 struct Seed {
 	state: Rc<RefCell<State>>,
 	depth: usize,
 }
+#[cfg(target_os = "linux")]
 impl<'de> DeserializeSeed<'de> for Seed {
 	type Value = Parsed;
 	fn deserialize<D: de::Deserializer<'de>>(
@@ -972,6 +1027,7 @@ impl<'de> DeserializeSeed<'de> for Seed {
 		deserializer.deserialize_any(self)
 	}
 }
+#[cfg(target_os = "linux")]
 fn array_index(key: &str) -> Option<u32> {
 	if key.is_empty()
 		|| (key.len() > 1 && key.starts_with('0'))
@@ -981,6 +1037,7 @@ fn array_index(key: &str) -> Option<u32> {
 	}
 	key.parse::<u32>().ok().filter(|&index| index != u32::MAX)
 }
+#[cfg(target_os = "linux")]
 fn js_number(number: f64) -> Option<Number> {
 	if !number.is_finite() {
 		return None;
@@ -998,6 +1055,7 @@ fn js_number(number: f64) -> Option<Number> {
 	}
 	Number::from_f64(number)
 }
+#[cfg(target_os = "linux")]
 impl<'de> Visitor<'de> for Seed {
 	type Value = Parsed;
 	fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {

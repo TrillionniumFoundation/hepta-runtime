@@ -16,6 +16,9 @@
 //! Exercise the shipped inherited-fd worker on a model larger than its address
 //! space limit. These generated model fixtures contain no executable code.
 
+// macOS arm64 refuses this finite-address-space worker profile before parsing.
+// The exact shipped-binary refusal is covered by rea_macos_resource_refusal.rs.
+#![cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
 #![cfg(unix)]
 #![cfg(feature = "remote-fs")]
 use serde_json::{json, Value};

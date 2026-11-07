@@ -7,6 +7,15 @@ use super::*;
 use std::os::unix::fs::{symlink, PermissionsExt};
 
 #[test]
+fn device_identity_comparison_never_truncates_or_accepts_negative_ids() {
+	assert!(same_device(7_i32, 7));
+	assert!(same_device(u64::MAX, u64::MAX));
+	assert!(!same_device(-1_i32, u64::MAX));
+	assert!(!same_device(7_u64, 8));
+	assert!(!same_device(u128::from(u64::MAX) + 1, 0));
+}
+
+#[test]
 fn vanished_enumerated_file_is_a_sample_absence_with_owned_root_unchanged() {
 	let temp = tempfile::tempdir().unwrap();
 	let directory = Directory::create(temp.path(), "scratch").unwrap();

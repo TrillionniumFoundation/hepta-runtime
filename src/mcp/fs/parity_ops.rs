@@ -37,7 +37,7 @@ pub async fn execute_directory_create(call: &McpToolCall) -> Result<String> {
 		.and_then(|v| v.as_str())
 		.ok_or_else(|| anyhow!("path must be a string"))?;
 	let path = scoped_local(name, &call.workdir)?;
-	let (display, created) = tokio::task::spawn_blocking(move || {
+	let (display, created): (String, bool) = tokio::task::spawn_blocking(move || {
 		#[cfg(target_os = "linux")]
 		{
 			let created = local_linux::make_directories(&path)?;
