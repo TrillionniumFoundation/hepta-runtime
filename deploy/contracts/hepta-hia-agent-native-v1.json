@@ -1,5 +1,5 @@
 {
-  "catalog_sha256": "1272b4eac724219a42411c4555d4f17cc715ec39e8000b30f9911514a3788355",
+  "catalog_sha256": "bced11cc7a67cb39b7a928a0deafbd5c043dc50171324e30cfa3ecb6cec99653",
   "execution_backend": "Pinned HIA worker through the existing native durable process owner",
   "name": "Hepta HIA Agent Native Tools",
   "schema": "hepta-native-tool-contract-v1",
@@ -2360,7 +2360,7 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "Emit machine code with HIA direct code generation only. Use the published canonical lowering or an explicit, supported and checked Agent machine plan. No implicit optimizer, LLVM codegen or external assembler fallback is permitted. Shared output may use a separately identified linker. Reverify actual Core/plan bytes; build success does not claim execution or whole-language refinement. Unsupported targets/plans return a diagnostic.",
+      "description": "Emit machine code with HIA direct code generation only. Use the published canonical lowering or an explicit, supported and checked Agent machine plan. No implicit optimizer, LLVM codegen or external assembler fallback is permitted. Shared output may use a separately identified linker. Reverify actual Core/plan bytes; build success does not claim execution or whole-language refinement. The build receipt retains the actual emitted object artifact and binds it to the final native bytes for independent consumers. Unsupported targets/plans return a diagnostic.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -4734,7 +4734,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Check explicit claims using a discovered validation profile. Results distinguish Core admission, behavioral equivalence and Core-to-machine refinement and state their domains. An unsupported proof is not a failed program, and a passing finite test is not a universal proof. The subject explicitly binds canonical lowering, an Agent plan, or emitted native bytes to the exact Core and context target. Plan receipts cannot be reused for another plan. Obtain required receipts before emission/adoption; do not substitute model assertions.",
+      "description": "Check explicit claims using a discovered validation profile. Results distinguish Core admission, behavioral equivalence and Core-to-machine refinement. Every check carries its exact subject, property, profile, assumptions, checker identity and unproved obligations. Proved is conditional on that scope, never global safety or execution authority. An unsupported proof is not a failed program, and a passing finite test is not a universal proof. The subject explicitly binds canonical lowering, an Agent plan, or emitted native bytes to the exact Core and context target. Plan receipts cannot be reused for another plan. Native lowering_refinement independently checks retained object/final ELF bytes only within the discovered shared-only unsigned scalar acyclic Safe Core profile; outside it the result is unsupported. It never regenerates the proof inputs. Obtain required receipts before emission/adoption; do not substitute model assertions.",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
@@ -4912,6 +4912,85 @@
                         "backend_profile",
                         "plan_profile",
                         "plan"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "backend_profile": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                              "type": "string"
+                            },
+                            "sha256": {
+                              "pattern": "^[0-9a-f]{64}$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "sha256"
+                          ],
+                          "type": "object"
+                        },
+                        "build_receipt": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                              "type": "string"
+                            },
+                            "sha256": {
+                              "pattern": "^[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "uri": {
+                              "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "sha256",
+                            "uri"
+                          ],
+                          "type": "object"
+                        },
+                        "kind": {
+                          "const": "native_artifact"
+                        },
+                        "native_artifact": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                              "type": "string"
+                            },
+                            "sha256": {
+                              "pattern": "^[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "uri": {
+                              "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "sha256",
+                            "uri"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "backend_profile",
+                        "native_artifact",
+                        "build_receipt"
                       ],
                       "type": "object"
                     }
@@ -5608,39 +5687,185 @@
                 "items": {
                   "additionalProperties": false,
                   "properties": {
+                    "assumptions": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "maxLength": 128,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "statement": {
+                            "maxLength": 2048,
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "statement"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 16,
+                      "minItems": 1,
+                      "type": "array"
+                    },
                     "assumptions_artifact": {
-                      "anyOf": [
-                        {
-                          "additionalProperties": false,
-                          "properties": {
-                            "id": {
-                              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
-                              "type": "string"
-                            },
-                            "sha256": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                          "type": "string"
+                        },
+                        "sha256": {
+                          "pattern": "^[0-9a-f]{64}$",
+                          "type": "string"
+                        },
+                        "uri": {
+                          "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "sha256",
+                        "uri"
+                      ],
+                      "type": "object"
+                    },
+                    "checker": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "auxiliary_checker_sha256": {
+                          "anyOf": [
+                            {
                               "pattern": "^[0-9a-f]{64}$",
                               "type": "string"
                             },
-                            "uri": {
-                              "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "installation": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "backend_sha256": {
+                              "pattern": "^[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "catalog_sha256": {
+                              "pattern": "^[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "worker_sha256": {
+                              "pattern": "^[0-9a-f]{64}$",
                               "type": "string"
                             }
                           },
                           "required": [
-                            "id",
-                            "sha256",
-                            "uri"
+                            "worker_sha256",
+                            "backend_sha256",
+                            "catalog_sha256"
                           ],
                           "type": "object"
                         },
-                        {
-                          "type": "null"
+                        "method": {
+                          "enum": [
+                            "core_admission",
+                            "canonical_core_identity",
+                            "finite_domain",
+                            "compositional_scalar_effect",
+                            "context_budget_exhausted",
+                            "checked_explicit_machine_choices",
+                            "canonical_lowering_unsupported",
+                            "complete_native_rederivation",
+                            "independent_safe_core_machine_validation"
+                          ],
+                          "type": "string"
+                        },
+                        "name": {
+                          "maxLength": 256,
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "python": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "implementation": {
+                              "maxLength": 64,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "version": {
+                              "maxLength": 64,
+                              "minLength": 1,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "implementation",
+                            "version"
+                          ],
+                          "type": "object"
+                        },
+                        "solver": {
+                          "anyOf": [
+                            {
+                              "additionalProperties": false,
+                              "properties": {
+                                "binding_sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "library_sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "maxLength": 64,
+                                  "minLength": 1,
+                                  "type": "string"
+                                },
+                                "version": {
+                                  "maxLength": 64,
+                                  "minLength": 1,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "version",
+                                "binding_sha256",
+                                "library_sha256"
+                              ],
+                              "type": "object"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
-                      ]
+                      },
+                      "required": [
+                        "name",
+                        "method",
+                        "installation",
+                        "python",
+                        "auxiliary_checker_sha256",
+                        "solver"
+                      ],
+                      "type": "object"
                     },
                     "claim": {
-                      "maxLength": 256,
-                      "minLength": 1,
+                      "enum": [
+                        "core_admission",
+                        "behavior_equivalence",
+                        "lowering_refinement",
+                        "encoding_check"
+                      ],
                       "type": "string"
                     },
                     "domain": {
@@ -5649,34 +5874,78 @@
                       "type": "string"
                     },
                     "evidence_artifact": {
-                      "anyOf": [
-                        {
-                          "additionalProperties": false,
-                          "properties": {
-                            "id": {
-                              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
-                              "type": "string"
-                            },
-                            "sha256": {
-                              "pattern": "^[0-9a-f]{64}$",
-                              "type": "string"
-                            },
-                            "uri": {
-                              "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "id",
-                            "sha256",
-                            "uri"
-                          ],
-                          "type": "object"
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                          "type": "string"
                         },
-                        {
-                          "type": "null"
+                        "sha256": {
+                          "pattern": "^[0-9a-f]{64}$",
+                          "type": "string"
+                        },
+                        "uri": {
+                          "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                          "type": "string"
                         }
-                      ]
+                      },
+                      "required": [
+                        "id",
+                        "sha256",
+                        "uri"
+                      ],
+                      "type": "object"
+                    },
+                    "execution_authority_granted": {
+                      "const": false
+                    },
+                    "global_safety_proved": {
+                      "const": false
+                    },
+                    "profile": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                          "type": "string"
+                        },
+                        "sha256": {
+                          "pattern": "^[0-9a-f]{64}$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "sha256"
+                      ],
+                      "type": "object"
+                    },
+                    "property": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "id": {
+                          "enum": [
+                            "core_admission",
+                            "behavior_equivalence",
+                            "lowering_refinement",
+                            "encoding_check"
+                          ],
+                          "type": "string"
+                        },
+                        "statement": {
+                          "maxLength": 2048,
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "statement"
+                      ],
+                      "type": "object"
+                    },
+                    "schema": {
+                      "const": "hepta.hia.agent.proof-result.v1"
                     },
                     "status": {
                       "enum": [
@@ -5687,6 +5956,690 @@
                         "not_run"
                       ],
                       "type": "string"
+                    },
+                    "subject": {
+                      "oneOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "base_core_sha256": {
+                              "anyOf": [
+                                {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "base_program": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                      "type": "string"
+                                    },
+                                    "sha256": {
+                                      "pattern": "^[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "uri": {
+                                      "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "sha256",
+                                    "uri"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "candidate": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "uri": {
+                                  "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256",
+                                "uri"
+                              ],
+                              "type": "object"
+                            },
+                            "candidate_core_sha256": {
+                              "pattern": "^[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "context": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256"
+                              ],
+                              "type": "object"
+                            },
+                            "kind": {
+                              "const": "core"
+                            },
+                            "target_profile": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256"
+                              ],
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "context",
+                            "target_profile",
+                            "candidate",
+                            "candidate_core_sha256",
+                            "base_program",
+                            "base_core_sha256"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "backend_profile": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256"
+                              ],
+                              "type": "object"
+                            },
+                            "base_core_sha256": {
+                              "anyOf": [
+                                {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "base_program": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                      "type": "string"
+                                    },
+                                    "sha256": {
+                                      "pattern": "^[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "uri": {
+                                      "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "sha256",
+                                    "uri"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "candidate": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "uri": {
+                                  "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256",
+                                "uri"
+                              ],
+                              "type": "object"
+                            },
+                            "candidate_core_sha256": {
+                              "pattern": "^[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "context": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256"
+                              ],
+                              "type": "object"
+                            },
+                            "kind": {
+                              "const": "canonical_lowering"
+                            },
+                            "lowering_profile": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256"
+                              ],
+                              "type": "object"
+                            },
+                            "target_profile": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256"
+                              ],
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "backend_profile",
+                            "lowering_profile",
+                            "context",
+                            "target_profile",
+                            "candidate",
+                            "candidate_core_sha256",
+                            "base_program",
+                            "base_core_sha256"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "backend_profile": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256"
+                              ],
+                              "type": "object"
+                            },
+                            "base_core_sha256": {
+                              "anyOf": [
+                                {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "base_program": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                      "type": "string"
+                                    },
+                                    "sha256": {
+                                      "pattern": "^[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "uri": {
+                                      "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "sha256",
+                                    "uri"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "candidate": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "uri": {
+                                  "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256",
+                                "uri"
+                              ],
+                              "type": "object"
+                            },
+                            "candidate_core_sha256": {
+                              "pattern": "^[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "context": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256"
+                              ],
+                              "type": "object"
+                            },
+                            "kind": {
+                              "const": "agent_machine_plan"
+                            },
+                            "plan": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "uri": {
+                                  "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256",
+                                "uri"
+                              ],
+                              "type": "object"
+                            },
+                            "plan_profile": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256"
+                              ],
+                              "type": "object"
+                            },
+                            "target_profile": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256"
+                              ],
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "backend_profile",
+                            "plan_profile",
+                            "plan",
+                            "context",
+                            "target_profile",
+                            "candidate",
+                            "candidate_core_sha256",
+                            "base_program",
+                            "base_core_sha256"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "backend_profile": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256"
+                              ],
+                              "type": "object"
+                            },
+                            "base_core_sha256": {
+                              "anyOf": [
+                                {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "base_program": {
+                              "anyOf": [
+                                {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                      "type": "string"
+                                    },
+                                    "sha256": {
+                                      "pattern": "^[0-9a-f]{64}$",
+                                      "type": "string"
+                                    },
+                                    "uri": {
+                                      "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "sha256",
+                                    "uri"
+                                  ],
+                                  "type": "object"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "build_receipt": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "uri": {
+                                  "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256",
+                                "uri"
+                              ],
+                              "type": "object"
+                            },
+                            "candidate": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "uri": {
+                                  "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256",
+                                "uri"
+                              ],
+                              "type": "object"
+                            },
+                            "candidate_core_sha256": {
+                              "pattern": "^[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "context": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256"
+                              ],
+                              "type": "object"
+                            },
+                            "kind": {
+                              "const": "native_artifact"
+                            },
+                            "native_artifact": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                },
+                                "uri": {
+                                  "pattern": "^hia://artifacts/[A-Za-z0-9][A-Za-z0-9._~-]{0,191}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256",
+                                "uri"
+                              ],
+                              "type": "object"
+                            },
+                            "target_profile": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "id": {
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,191}$",
+                                  "type": "string"
+                                },
+                                "sha256": {
+                                  "pattern": "^[0-9a-f]{64}$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "sha256"
+                              ],
+                              "type": "object"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "backend_profile",
+                            "native_artifact",
+                            "build_receipt",
+                            "context",
+                            "target_profile",
+                            "candidate",
+                            "candidate_core_sha256",
+                            "base_program",
+                            "base_core_sha256"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    },
+                    "unproved_obligations": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "maxLength": 128,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "statement": {
+                            "maxLength": 2048,
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "statement"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 16,
+                      "minItems": 1,
+                      "type": "array"
                     },
                     "validator": {
                       "additionalProperties": false,
@@ -5708,10 +6661,19 @@
                     }
                   },
                   "required": [
+                    "schema",
                     "claim",
                     "status",
                     "domain",
+                    "subject",
+                    "property",
+                    "profile",
                     "validator",
+                    "assumptions",
+                    "checker",
+                    "unproved_obligations",
+                    "global_safety_proved",
+                    "execution_authority_granted",
                     "assumptions_artifact",
                     "evidence_artifact"
                   ],

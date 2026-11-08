@@ -165,3 +165,145 @@ fn maximum_escaped_read_page_fits_the_actual_dual_content_wire_limit() {
 	)
 	.unwrap();
 }
+
+fn scoped_verification_response() -> Value {
+	serde_json::from_str(include_str!("hia_scoped_proof_fixture.json")).unwrap()
+}
+
+#[test]
+fn every_proof_outcome_carries_its_scope_without_global_authority() {
+	for status in ["proved", "refuted", "unknown", "unsupported", "not_run"] {
+		let mut response = scoped_verification_response();
+		response["result"]["checks"][0]["status"] = json!(status);
+		validate_output("hia_verify", &response).unwrap();
+		let encoded = wire(response).unwrap();
+		assert!(serde_json::to_vec(&encoded).unwrap().len() < MAX_WORKER_BYTES);
+	}
+}
+
+#[test]
+fn legacy_proofs_and_missing_scope_or_checker_identity_are_rejected() {
+	let valid = scoped_verification_response();
+	validate_output("hia_verify", &valid).unwrap();
+	for field in [
+		"schema",
+		"subject",
+		"property",
+		"profile",
+		"assumptions",
+		"checker",
+		"unproved_obligations",
+		"global_safety_proved",
+		"execution_authority_granted",
+		"assumptions_artifact",
+		"evidence_artifact",
+	] {
+		let mut changed = valid.clone();
+		changed["result"]["checks"][0]
+			.as_object_mut()
+			.unwrap()
+			.remove(field);
+		assert!(validate_output("hia_verify", &changed).is_err(), "{field}");
+	}
+	for (path, field) in [
+		("/subject", "candidate"),
+		("/subject", "candidate_core_sha256"),
+		("/subject", "base_program"),
+		("/subject", "base_core_sha256"),
+		("/subject", "context"),
+		("/subject", "target_profile"),
+		("/property", "statement"),
+		("/checker", "method"),
+		("/checker", "python"),
+		("/checker/installation", "worker_sha256"),
+		("/checker/installation", "backend_sha256"),
+		("/checker/installation", "catalog_sha256"),
+		("/checker/python", "version"),
+	] {
+		let mut changed = valid.clone();
+		changed["result"]["checks"][0]
+			.pointer_mut(path)
+			.unwrap()
+			.as_object_mut()
+			.unwrap()
+			.remove(field);
+		assert!(
+			validate_output("hia_verify", &changed).is_err(),
+			"{path}/{field}"
+		);
+	}
+}
+
+#[test]
+fn proof_results_cannot_erase_obligations_or_claim_global_safety() {
+	let valid = scoped_verification_response();
+	for field in ["global_safety_proved", "execution_authority_granted"] {
+		let mut changed = valid.clone();
+		changed["result"]["checks"][0][field] = json!(true);
+		assert!(validate_output("hia_verify", &changed).is_err(), "{field}");
+	}
+	for field in ["assumptions", "unproved_obligations"] {
+		let mut changed = valid.clone();
+		changed["result"]["checks"][0][field] = json!([]);
+		assert!(validate_output("hia_verify", &changed).is_err(), "{field}");
+	}
+	for field in ["assumptions_artifact", "evidence_artifact"] {
+		let mut changed = valid.clone();
+		changed["result"]["checks"][0][field] = Value::Null;
+		assert!(validate_output("hia_verify", &changed).is_err(), "{field}");
+	}
+	let mut changed = valid;
+	changed["result"]["checks"][0]["checker"]["solver"] = json!({
+		"name":"Z3", "version":"4.16", "binding_sha256":"a".repeat(64)
+	});
+	assert!(validate_output("hia_verify", &changed).is_err());
+}
+
+#[test]
+fn lowering_plan_and_native_proofs_retain_the_exact_selected_subject() {
+	for (kind, fields) in [
+		(
+			"canonical_lowering",
+			vec![
+				("backend_profile", profile()),
+				("lowering_profile", profile()),
+			],
+		),
+		(
+			"agent_machine_plan",
+			vec![
+				("backend_profile", profile()),
+				("plan_profile", profile()),
+				("plan", reference()),
+			],
+		),
+		(
+			"native_artifact",
+			vec![
+				("backend_profile", profile()),
+				("native_artifact", reference()),
+				("build_receipt", reference()),
+			],
+		),
+	] {
+		let mut response = scoped_verification_response();
+		response["result"]["subject"]["kind"] = json!(kind);
+		response["result"]["checks"][0]["subject"]["kind"] = json!(kind);
+		for (name, value) in &fields {
+			response["result"]["subject"][name] = value.clone();
+			response["result"]["checks"][0]["subject"][name] = value.clone();
+		}
+		validate_output("hia_verify", &response).unwrap();
+		for (name, _) in &fields {
+			let mut changed = response.clone();
+			changed["result"]["checks"][0]["subject"]
+				.as_object_mut()
+				.unwrap()
+				.remove(*name);
+			assert!(
+				validate_output("hia_verify", &changed).is_err(),
+				"{kind}/{name}"
+			);
+		}
+	}
+}

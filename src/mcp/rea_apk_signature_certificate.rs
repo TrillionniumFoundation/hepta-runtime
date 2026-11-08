@@ -255,13 +255,17 @@ fn directory_string(tag: u8, bytes: &[u8]) -> Option<String> {
 		}
 		0x1e if bytes.len().is_multiple_of(2) => {
 			let units = bytes
-				.chunks_exact(2)
+				.as_chunks::<2>()
+				.0
+				.iter()
 				.map(|c| u16::from_be_bytes([c[0], c[1]]))
 				.collect::<Vec<_>>();
 			String::from_utf16(&units).ok()
 		}
 		0x1c if bytes.len().is_multiple_of(4) => bytes
-			.chunks_exact(4)
+			.as_chunks::<4>()
+			.0
+			.iter()
 			.map(|c| char::from_u32(u32::from_be_bytes([c[0], c[1], c[2], c[3]])))
 			.collect(),
 		_ => None,

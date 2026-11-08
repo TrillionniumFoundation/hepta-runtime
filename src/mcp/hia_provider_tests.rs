@@ -364,3 +364,155 @@ fn maximum_utf8_capture_survives_json_escaping_within_the_full_worker_bound() {
 	let too_long = artifact_request(&"\0".repeat(65537));
 	assert!(prepare_request(&config, "hia_artifact", too_long, Path::new("/controller")).is_err());
 }
+
+fn scoped_verification_report() -> (PreparedRequest, Value) {
+	let mut response: Value =
+		serde_json::from_str(include_str!("hia_scoped_proof_fixture.json")).unwrap();
+	response["result"]["checks"][0]["checker"]["installation"]["catalog_sha256"] =
+		json!(hia_contract::catalog_sha256());
+	let result = &response["result"];
+	let request = prepare_request(
+		&config(),
+		"hia_verify",
+		json!({
+			"catalog_sha256":hia_contract::catalog_sha256(),
+			"context":result["checks"][0]["subject"]["context"],
+			"request_key":"scoped-proof",
+			"candidate":result["candidate"],
+			"base_program":null,
+			"validation_profile":result["checks"][0]["profile"],
+			"subject":result["subject"],
+			"claims":["core_admission"]
+		}),
+		Path::new("/controller"),
+	)
+	.unwrap();
+	let mut report = rejected_report(&request);
+	report["response"] = response;
+	(request, report)
+}
+
+#[test]
+fn worker_report_replay_cannot_restore_an_unscoped_legacy_proof() {
+	let (request, report) = scoped_verification_report();
+	validate_report(&request, &serde_json::to_vec(&report).unwrap(), 0).unwrap();
+	let mut legacy = report;
+	let check = legacy["response"]["result"]["checks"][0]
+		.as_object_mut()
+		.unwrap();
+	for field in [
+		"schema",
+		"subject",
+		"property",
+		"profile",
+		"assumptions",
+		"checker",
+		"unproved_obligations",
+		"global_safety_proved",
+		"execution_authority_granted",
+	] {
+		check.remove(field);
+	}
+	assert!(validate_report(&request, &serde_json::to_vec(&legacy).unwrap(), 0).is_err());
+}
+
+#[test]
+fn scoped_proof_claims_cannot_rebind_request_or_checker_identity() {
+	let (request, report) = scoped_verification_report();
+	validate_report(&request, &serde_json::to_vec(&report).unwrap(), 0).unwrap();
+	for path in [
+		"/subject/candidate/sha256",
+		"/subject/context/sha256",
+		"/profile/sha256",
+		"/validator/sha256",
+		"/checker/installation/worker_sha256",
+		"/checker/installation/backend_sha256",
+		"/checker/installation/catalog_sha256",
+	] {
+		let mut changed = report.clone();
+		*changed["response"]["result"]["checks"][0]
+			.pointer_mut(path)
+			.unwrap() = json!("f".repeat(64));
+		hia_contract::validate_output("hia_verify", &changed["response"]).unwrap();
+		assert!(
+			validate_report(&request, &serde_json::to_vec(&changed).unwrap(), 0).is_err(),
+			"{path}"
+		);
+	}
+	for field in ["claim", "property"] {
+		let mut changed = report.clone();
+		if field == "claim" {
+			changed["response"]["result"]["checks"][0]["claim"] = json!("encoding_check");
+		} else {
+			changed["response"]["result"]["checks"][0]["property"]["id"] = json!("encoding_check");
+		}
+		hia_contract::validate_output("hia_verify", &changed["response"]).unwrap();
+		assert!(
+			validate_report(&request, &serde_json::to_vec(&changed).unwrap(), 0).is_err(),
+			"{field}"
+		);
+	}
+	let mut changed = report.clone();
+	changed["response"]["result"]["checks"][0]["subject"]["base_core_sha256"] =
+		json!("e".repeat(64));
+	hia_contract::validate_output("hia_verify", &changed["response"]).unwrap();
+	assert!(validate_report(&request, &serde_json::to_vec(&changed).unwrap(), 0).is_err());
+	let mut changed = report;
+	let duplicate = changed["response"]["result"]["checks"][0].clone();
+	changed["response"]["result"]["checks"]
+		.as_array_mut()
+		.unwrap()
+		.push(duplicate);
+	hia_contract::validate_output("hia_verify", &changed["response"]).unwrap();
+	assert!(validate_report(&request, &serde_json::to_vec(&changed).unwrap(), 0).is_err());
+}
+
+#[test]
+fn native_machine_proofs_bind_the_exact_artifact_and_build_receipt() {
+	let (_, report) = scoped_verification_report();
+	let mut response = report["response"].clone();
+	let reference = response["result"]["candidate"].clone();
+	let subject = json!({
+		"kind":"native_artifact",
+		"backend_profile":{"id":"native-backend","sha256":"f".repeat(64)},
+		"native_artifact":reference,
+		"build_receipt":reference
+	});
+	response["result"]["subject"] = subject.clone();
+	let check = &mut response["result"]["checks"][0];
+	for (name, value) in subject.as_object().unwrap() {
+		check["subject"][name] = value.clone();
+	}
+	check["claim"] = json!("lowering_refinement");
+	check["property"]["id"] = json!("lowering_refinement");
+	check["checker"]["method"] = json!("independent_safe_core_machine_validation");
+	let request = prepare_request(
+		&config(),
+		"hia_verify",
+		json!({
+			"catalog_sha256":hia_contract::catalog_sha256(),
+			"context":check["subject"]["context"],
+			"request_key":"native-machine-proof",
+			"candidate":check["subject"]["candidate"],
+			"base_program":null,
+			"validation_profile":check["profile"],
+			"subject":subject,
+			"claims":["lowering_refinement"]
+		}),
+		Path::new("/controller"),
+	)
+	.unwrap();
+	let mut report = rejected_report(&request);
+	report["response"] = response;
+	validate_report(&request, &serde_json::to_vec(&report).unwrap(), 0).unwrap();
+	for name in ["backend_profile", "native_artifact", "build_receipt"] {
+		let mut changed = report.clone();
+		changed["response"]["result"]["checks"][0]["subject"][name]["sha256"] =
+			json!("0".repeat(64));
+		hia_contract::validate_output("hia_verify", &changed["response"]).unwrap();
+		assert!(
+			validate_report(&request, &serde_json::to_vec(&changed).unwrap(), 0).is_err(),
+			"{name}"
+		);
+	}
+}

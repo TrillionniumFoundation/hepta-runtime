@@ -230,7 +230,9 @@ fn file_hex_encoding_preserves_empty_zero_high_and_all_byte_values() {
 		.all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
 	let decoded: Vec<u8> = encoded
 		.as_bytes()
-		.chunks_exact(2)
+		.as_chunks::<2>()
+		.0
+		.iter()
 		.map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap())
 		.collect();
 	assert_eq!(decoded, every);

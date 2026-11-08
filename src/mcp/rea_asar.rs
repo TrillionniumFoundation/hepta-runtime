@@ -108,7 +108,9 @@ fn unhex(text: &str) -> Result<Vec<u8>> {
 		bail!("invalid ASAR worker byte representation length");
 	}
 	text.as_bytes()
-		.chunks_exact(2)
+		.as_chunks::<2>()
+		.0
+		.iter()
 		.map(|pair| {
 			let mut value = 0u8;
 			for byte in pair {

@@ -1106,7 +1106,9 @@ os.write(2,bytes([0,128,255]))
 			.all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
 		decoded.extend(
 			hex.as_bytes()
-				.chunks_exact(2)
+				.as_chunks::<2>()
+				.0
+				.iter()
 				.map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap()),
 		);
 		assert_eq!(

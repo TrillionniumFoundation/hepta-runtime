@@ -227,7 +227,9 @@ pub(super) fn decode_page(
 	};
 	let bytes = encoded
 		.as_bytes()
-		.chunks_exact(2)
+		.as_chunks::<2>()
+		.0
+		.iter()
 		.map(|pair| Ok((digit(pair[0])? << 4) | digit(pair[1])?))
 		.collect::<Result<Vec<_>>>()?;
 	Ok(ReadPage {

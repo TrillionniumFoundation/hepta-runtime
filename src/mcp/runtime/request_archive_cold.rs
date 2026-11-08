@@ -31,7 +31,7 @@ pub(super) fn stamp_value(s: FileStamp) -> [u8; 72] {
 	value[8..16].copy_from_slice(&s.inode.to_be_bytes());
 	value[16..20].copy_from_slice(&s.mode.to_be_bytes());
 	value[20..24].copy_from_slice(&s.uid.to_be_bytes());
-	for (part, word) in value[24..].chunks_exact_mut(8).zip([
+	for (part, word) in value[24..].as_chunks_mut::<8>().0.iter_mut().zip([
 		s.links,
 		s.length,
 		s.modified.0 as u64,

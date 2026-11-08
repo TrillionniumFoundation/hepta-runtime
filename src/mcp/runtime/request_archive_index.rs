@@ -494,7 +494,10 @@ fn id(value: &str) -> Result<Id> {
 		}
 	}
 	let mut bytes = [0u8; 32];
-	for (out, pair) in bytes.iter_mut().zip(value.as_bytes().chunks_exact(2)) {
+	for (out, pair) in bytes
+		.iter_mut()
+		.zip(value.as_bytes().as_chunks::<2>().0.iter())
+	{
 		*out = digit(pair[0])? * 16 + digit(pair[1])?;
 	}
 	Ok(bytes)
@@ -955,7 +958,7 @@ impl Fingerprint {
 			bail!("invalid archive row image sum");
 		}
 		let mut value = Self::default();
-		for (out, part) in value.0.iter_mut().zip(bytes.chunks_exact(8)) {
+		for (out, part) in value.0.iter_mut().zip(bytes.as_chunks::<8>().0.iter()) {
 			let mut raw = [0u8; 8];
 			raw.copy_from_slice(part);
 			*out = u64::from_le_bytes(raw);
@@ -964,7 +967,7 @@ impl Fingerprint {
 	}
 	fn encode(&self) -> [u8; 32] {
 		let mut bytes = [0u8; 32];
-		for (out, word) in bytes.chunks_exact_mut(8).zip(self.0) {
+		for (out, word) in bytes.as_chunks_mut::<8>().0.iter_mut().zip(self.0) {
 			out.copy_from_slice(&word.to_le_bytes());
 		}
 		bytes
@@ -1011,7 +1014,7 @@ impl Fingerprint {
 	}
 	fn add_digest(&mut self, hash: &[u8; 32], copies: u64) {
 		let mut carry = 0u128;
-		for (out, part) in self.0.iter_mut().zip(hash.chunks_exact(8)) {
+		for (out, part) in self.0.iter_mut().zip(hash.as_chunks::<8>().0.iter()) {
 			let mut bytes = [0u8; 8];
 			bytes.copy_from_slice(part);
 			let value = u64::from_le_bytes(bytes) as u128 * copies as u128 + *out as u128 + carry;

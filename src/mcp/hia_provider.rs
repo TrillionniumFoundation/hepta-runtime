@@ -356,6 +356,56 @@ fn validate_result_bindings(
 			bail!("HIA result is bound to a different {field}");
 		}
 	}
+	if tool == "hia_verify" {
+		let claims = arguments["claims"]
+			.as_array()
+			.context("HIA verification request omitted its claims")?;
+		let checks = result["checks"]
+			.as_array()
+			.context("HIA verification result omitted its scoped checks")?;
+		if checks.len() != claims.len()
+			|| claims.iter().any(|claim| {
+				checks
+					.iter()
+					.filter(|check| check["claim"] == *claim)
+					.count() != 1
+			}) {
+			bail!("HIA verification result changed its requested claims");
+		}
+		let subject = arguments["subject"]
+			.as_object()
+			.context("HIA verification request omitted its subject")?;
+		let installation = json!({
+			"worker_sha256":profile.worker_sha256,
+			"backend_sha256":profile.backend_sha256,
+			"catalog_sha256":profile.catalog_sha256
+		});
+		for check in checks {
+			for (field, value) in subject {
+				if check["subject"][field] != *value {
+					bail!("HIA proof scope changed its selected {field}");
+				}
+			}
+			for field in ["candidate", "base_program", "context"] {
+				if check["subject"][field] != arguments[field] {
+					bail!("HIA proof scope is bound to a different {field}");
+				}
+			}
+			if check["subject"]["base_core_sha256"].is_null() != arguments["base_program"].is_null()
+			{
+				bail!("HIA proof scope changed whether a base Core was selected");
+			}
+			if check["property"]["id"] != check["claim"]
+				|| check["profile"] != arguments["validation_profile"]
+				|| check["validator"] != arguments["validation_profile"]
+			{
+				bail!("HIA proof property or validation profile differs from its request");
+			}
+			if check["checker"]["installation"] != installation {
+				bail!("HIA proof checker differs from the admitted installation");
+			}
+		}
+	}
 	if tool == "hia_describe" && result["catalog_sha256"] != profile.catalog_sha256 {
 		bail!("HIA discovery changed the admitted catalog identity");
 	}

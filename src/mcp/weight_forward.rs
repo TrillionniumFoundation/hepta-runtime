@@ -245,9 +245,11 @@ async fn forward_with_roots(
 		bail!("native linear complete source SHA-256 differs");
 	}
 	let weights = bytes
-		.chunks_exact(4)
-		.map(|chunk| -> Result<f32> { Ok(f32::from_le_bytes(chunk.try_into()?)) })
-		.collect::<Result<Vec<_>>>()?;
+		.as_chunks::<4>()
+		.0
+		.iter()
+		.map(|chunk| f32::from_le_bytes(*chunk))
+		.collect::<Vec<_>>();
 	let input_sha = hex(&Sha256::digest(serde_json::to_vec(
 		&json!({"inputs":params.inputs,"bias":params.bias}),
 	)?));

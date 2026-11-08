@@ -190,7 +190,9 @@ fn string_pool(chunk: &Chunk<'_>) -> Result<Vec<String>> {
 				bail!("APK UTF-16 string has no terminating zero");
 			}
 			let units = raw
-				.chunks_exact(2)
+				.as_chunks::<2>()
+				.0
+				.iter()
 				.map(|word| u16::from_le_bytes([word[0], word[1]]))
 				.collect::<Vec<_>>();
 			String::from_utf16(&units)
