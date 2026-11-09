@@ -159,6 +159,13 @@ class CancellationTests(unittest.TestCase):
                 if len(self.proxy._active)==count:return
             time.sleep(.005)
         self.fail('active table evidence deadline')
+    def retire_legacy_control_ids(self,count=4200):
+        identities=['retained-'+str(index) for index in range(count)]
+        for ident in identities:
+            context,refused=self.proxy._reserve(request(ident,'ping',{}),remember=True)
+            self.assertIsNone(refused)
+            self.assertTrue(self.proxy._finish(context))
+        return identities,{self.proxy._identity_digest(ident) for ident in identities}
     def test_cancel_reaches_owned_native_id_and_frozen_session_during_wait(self):
         self.begin();self.start()
         call=self.server.calls[0];native=call['request']['id']
@@ -223,17 +230,61 @@ class CancellationTests(unittest.TestCase):
         self.server.catalog_gate=None;self.server.release.set()
         for ident in range(32):self.assertIn('result',self.stream.output.wait(ident))
         self.assertEqual(len(self.server.calls),32)
-    def test_retired_identity_budget_fails_closed_across_idle_initialize(self):
+    def test_more_than_4096_active_legacy_ids_retain_all_original_tombstones(self):
+        active=[]
+        for ident in range(4200):
+            context,refused=self.proxy._reserve(request(ident,'ping',{}),remember=True)
+            self.assertIsNone(refused)
+            self.assertTrue(context.remember)
+            active.append(context)
+        self.assertEqual(len(self.proxy._active),4200)
+        self.assertEqual(len(self.proxy._retired),0)
+        duplicate,refused=self.proxy._reserve(request(4199,'ping',{}),remember=True)
+        self.assertIsNone(duplicate);self.assertEqual(refused['error']['code'],-32600)
+        for context in active:self.assertTrue(self.proxy._finish(context))
+        self.assertEqual(len(self.proxy._retired),4200)
+        retained=set(self.proxy._retired)
+        for ident in (0,4095,4199):
+            reused,refused=self.proxy._reserve(request(ident,'ping',{}),remember=True)
+            self.assertIsNone(reused);self.assertEqual(refused['error']['data']['outcome'],'not_submitted')
+        # Typed identities remain distinct even after the former storage boundary.
+        fresh,refused=self.proxy._reserve(request('0','ping',{}),remember=True)
+        self.assertIsNone(refused);self.assertTrue(self.proxy._finish(fresh))
+        self.assertTrue(retained.issubset(self.proxy._retired))
+        self.assertEqual(len(self.proxy._retired),4201)
+        self.assertFalse(self.proxy._finish(active[0]))
+        # Modern correlation IDs can still be reused after their own completion.
+        modern=request(0,'ping',{'_meta':{F.VERSION_KEY:F.MODERN_VERSION,F.CAPABILITIES_KEY:{}}})
+        original,refused=self.proxy._reserve(modern,remember=True)
+        self.assertIsNone(refused);self.assertFalse(original.remember)
+        self.assertTrue(self.proxy._finish(original))
+        newer,refused=self.proxy._reserve(modern,remember=True)
+        self.assertIsNone(refused)
+        self.assertFalse(self.proxy._finish(original))
+        self.assertIs(self.proxy._active[newer.key],newer)
+        self.assertTrue(self.proxy._finish(newer))
+        self.assertEqual(len(self.proxy._retired),4201)
+    def test_retired_ids_above_old_budget_survive_idle_initialize_and_new_calls(self):
         self.server.delay=False
-        with mock.patch.object(F,'MAX_RETIRED_IDS',3):
-            self.begin()
-            for ident in [1,2]:self.stream.send(request(ident));self.assertIn('result',self.stream.output.wait(ident))
-            self.stream.send(request(3));self.assertEqual(self.stream.output.wait(3)['error']['data']['outcome'],'not_submitted')
-            self.assertEqual(len(self.server.calls),2)
-            self.stream.send(request('init2','initialize',{'protocolVersion':'2025-06-18','capabilities':{},'clientInfo':{'name':'new','version':'1'}}))
-            self.assertEqual(self.stream.output.wait('init2')['error']['data']['outcome'],'not_submitted')
-            self.stream.send(request(4));self.assertEqual(self.stream.output.wait(4)['error']['data']['outcome'],'not_submitted')
-            self.assertEqual(len(self.server.calls),2)
+        identities,retained=self.retire_legacy_control_ids()
+        self.begin()
+        self.stream.send(request(7));self.assertIn('result',self.stream.output.wait(7))
+        old_native=self.server.calls[0]['request']['id']
+        for ident in (identities[0],identities[-1]):
+            self.stream.send(request(ident))
+            self.assertEqual(self.stream.output.wait(ident)['error']['data']['outcome'],'not_submitted')
+            self.stream.send(cancellation(ident))
+        self.stream.send(request('init2','initialize',{'protocolVersion':'2025-06-18','capabilities':{},'clientInfo':{'name':'new','version':'1'}}))
+        self.assertIn('result',self.stream.output.wait('init2'))
+        self.stream.send(request(7))
+        self.assertEqual(self.stream.output.wait(7,predicate=lambda value:'error' in value)['error']['data']['outcome'],'not_submitted')
+        self.stream.send(cancellation(7))
+        self.stream.send(request(8));self.assertIn('result',self.stream.output.wait(8))
+        self.assertEqual(len(self.server.calls),2)
+        self.assertEqual(self.server.cancels,[])
+        self.assertNotEqual(old_native,self.server.calls[1]['request']['id'])
+        self.assertNotEqual(self.server.calls[0]['session'],self.server.calls[1]['session'])
+        self.assertTrue(retained.issubset(self.proxy._retired))
     def test_failed_cancel_does_not_retry_operation_or_cancel(self):
         self.server.cancel_status=503;self.server.release_on_cancel=False;self.server.disconnect=True
         self.begin();self.start();self.stream.send(cancellation(7))
@@ -244,8 +295,9 @@ class CancellationTests(unittest.TestCase):
         self.assertFalse(reply['error']['data']['automatic_retry'])
         self.stream.send(cancellation(7));time.sleep(.1)
         self.assertEqual(len(self.server.calls),1);self.assertEqual(len(self.server.cancels),1)
-    def test_eof_has_one_deadline_skips_queue_and_retains_unknown_write(self):
+    def test_eof_above_old_identity_budget_retains_unknown_write_and_suppresses_late_reply(self):
         self.server.release_on_cancel=False
+        _,retained=self.retire_legacy_control_ids()
         with mock.patch.object(F,'SHUTDOWN_TIMEOUT',.5):
             self.begin();self.start()
             with self.proxy._state_lock:
@@ -260,6 +312,9 @@ class CancellationTests(unittest.TestCase):
             self.assertEqual(len(self.server.calls),1)
             before=len(self.stream.output.values);self.server.release.set();time.sleep(.1)
             self.assertEqual(len(self.stream.output.values),before,'late response duplicated a finalized identity')
+            self.assertTrue(retained.issubset(self.proxy._retired))
+            self.assertIn(self.proxy._identity_digest(7),self.proxy._retired)
+            self.assertIn(self.proxy._identity_digest(8),self.proxy._retired)
     def test_output_failure_and_blocked_writer_do_not_make_eof_join_unbounded(self):
         class BlockingOutput:
             def write(self,data):gate.wait(3)

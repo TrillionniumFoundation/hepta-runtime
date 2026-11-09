@@ -60,6 +60,236 @@ fn resources_are_capped_by_admin() {
 	assert!(validate(&mut q, &p).is_ok());
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn isolated_registry_retains_129_originals_while_admitting_another_job() {
+	let root = tempfile::tempdir().unwrap();
+	let registry = root.path().join("registry");
+	let p = Policy {
+		workspace: root.path().to_owned(),
+		allow_network: false,
+		max_timeout_seconds: 60,
+		max_cpu_percent: 25,
+		max_memory_bytes: 134217728,
+	};
+	let mut q: Request = serde_json::from_value(json!({
+		"op":"start", "job_id":"new-job", "executable":"/usr/bin/true"
+	}))
+	.unwrap();
+	validate(&mut q, &p).unwrap();
+	let mut originals = Vec::new();
+	for index in 0..129 {
+		let mut previous = q.clone();
+		previous.job_id = format!("original-{index}");
+		let completed = index % 3 == 2;
+		if completed {
+			previous.op = "pty".into();
+		}
+		let (mut record, reused) =
+			prepare_start_record(&registry, &previous, &p, completed).unwrap();
+		assert!(!reused);
+		let directory = registry.join(&previous.job_id);
+		if index % 3 != 0 {
+			record.launch_state = "launched".into();
+			record.invocation_id = Some(format!("original-invocation-{index}"));
+			atomic(&directory.join("record.json"), &record).unwrap();
+		}
+		let mut paths = vec![directory.join("record.json"), directory.join("spec.json")];
+		if completed {
+			let state = root.path().join(format!("state-{}", previous.job_id));
+			fs::create_dir(&state).unwrap();
+			let receipt = Exit::new(
+				&record.job_id,
+				record.nonce.clone(),
+				0,
+				false,
+				false,
+				TerminalProtocol::PtyV1,
+				None,
+			);
+			publish_terminal(&state, &receipt).unwrap();
+			paths.extend([state.join("exit.json"), state.join("exit.witness")]);
+		}
+		for path in paths {
+			let bytes = fs::read(&path).unwrap();
+			let inode = fs::metadata(&path).unwrap().ino();
+			originals.push((path, bytes, inode));
+		}
+	}
+
+	let (record, reused) = prepare_start_record(&registry, &q, &p, false).unwrap();
+	assert!(!reused);
+	assert_eq!(record.job_id, q.job_id);
+	assert_eq!(record.launch_state, "pending");
+	assert_eq!(record.invocation_id, None);
+	let directory = registry.join(&q.job_id);
+	assert_eq!(fs::metadata(&directory).unwrap().mode() & 0o777, 0o700);
+	let spec: Spec = json_file(&directory.join("spec.json")).unwrap();
+	assert_eq!(spec.nonce, record.nonce);
+	assert_eq!(spec.boot_id, record.boot_id);
+	assert_eq!(spec.terminal_protocol, Some(TerminalProtocol::CapturedV1));
+	assert_eq!(digest(&spec.request).unwrap(), record.request_digest);
+	for name in ["record.json", "spec.json"] {
+		let path = directory.join(name);
+		assert_eq!(fs::metadata(&path).unwrap().mode() & 0o777, 0o600);
+		originals.push((
+			path.clone(),
+			fs::read(&path).unwrap(),
+			fs::metadata(&path).unwrap().ino(),
+		));
+	}
+	let (same, reused) = prepare_start_record(&registry, &q, &p, false).unwrap();
+	assert!(reused);
+	assert_eq!(
+		serde_json::to_value(&same).unwrap(),
+		serde_json::to_value(&record).unwrap()
+	);
+	q.args.push("different-request".into());
+	let conflict = prepare_start_record(&registry, &q, &p, false)
+		.err()
+		.unwrap();
+	assert_eq!(
+		conflict.to_string(),
+		"job ID already bound to a different request"
+	);
+	assert_eq!(fs::read_dir(&registry).unwrap().count(), 130);
+	for (path, bytes, inode) in originals {
+		assert_eq!(fs::read(&path).unwrap(), bytes, "{}", path.display());
+		assert_eq!(
+			fs::metadata(&path).unwrap().ino(),
+			inode,
+			"{}",
+			path.display()
+		);
+	}
+}
+
+#[test]
+fn isolated_systemd_command_has_no_task_ceiling_and_keeps_its_security_contract() {
+	let root = tempfile::tempdir().unwrap();
+	for interactive in [false, true] {
+		for allow_network in [false, true] {
+			let p = Policy {
+				workspace: root.path().to_owned(),
+				allow_network,
+				max_timeout_seconds: 60,
+				max_cpu_percent: 25,
+				max_memory_bytes: 268435456,
+			};
+			let mut q: Request = serde_json::from_value(json!({
+				"op":if interactive {"pty"} else {"start"},
+				"job_id":"fixture", "executable":"/usr/bin/true"
+			}))
+			.unwrap();
+			if interactive {
+				q.cpu_quota_percent = Some(17);
+				q.memory_max_bytes = Some(134217728);
+				q.timeout_seconds = Some(7);
+				q.nice = Some(4);
+			}
+			validate(&mut q, &p).unwrap();
+			let (record, _) = completed_fixture();
+			let spec_path = root.path().join("spec.json");
+			let command = systemd_launch_command(&q, &p, &record, &spec_path, interactive);
+			assert_eq!(command.get_program(), "/usr/bin/systemd-run");
+			let args: Vec<_> = command
+				.get_args()
+				.map(|arg| arg.to_str().unwrap())
+				.collect();
+			assert_eq!(&args[..4], ["--quiet", "--collect", "--unit", &record.unit]);
+			assert_eq!(args.contains(&"--pty"), interactive);
+			assert_eq!(args.contains(&"--wait"), interactive);
+			assert_eq!(
+				&args[args.len() - 4..],
+				[
+					"--",
+					HELPER,
+					if interactive {
+						"supervise-pty"
+					} else {
+						"supervise"
+					},
+					&q.job_id
+				]
+			);
+			let property_args: Vec<_> = args
+				.windows(2)
+				.filter(|pair| pair[0] == "--property")
+				.map(|pair| pair[1])
+				.collect();
+			let properties: BTreeMap<_, _> = property_args
+				.iter()
+				.map(|property| property.split_once('=').unwrap())
+				.collect();
+			assert_eq!(
+				properties.len(),
+				property_args.len(),
+				"duplicate systemd property"
+			);
+			for (name, expected) in [
+				("TasksMax", "infinity"),
+				("DynamicUser", "yes"),
+				("Slice", "hepta-runtime-jobs.slice"),
+				("SupplementaryGroups", "hepta-workspace"),
+				("StateDirectory", "hepta-job-fixture"),
+				("StateDirectoryMode", "0700"),
+				("WorkingDirectory", "/workspace"),
+				("ProtectHome", "yes"),
+				("ProtectSystem", "strict"),
+				("PrivateTmp", "yes"),
+				("PrivateDevices", "yes"),
+				("NoNewPrivileges", "yes"),
+				("CapabilityBoundingSet", ""),
+				("RestrictSUIDSGID", "yes"),
+				("ProtectKernelTunables", "yes"),
+				("ProtectKernelModules", "yes"),
+				("ProtectControlGroups", "yes"),
+				("RestrictRealtime", "yes"),
+				("LockPersonality", "yes"),
+				("ProtectProc", "invisible"),
+				("KillMode", "control-group"),
+				("TimeoutStopSec", "3s"),
+				("UMask", "0007"),
+				("MemorySwapMax", "0"),
+				("CPUQuota", if interactive { "17%" } else { "25%" }),
+				(
+					"MemoryMax",
+					if interactive {
+						"134217728"
+					} else {
+						"268435456"
+					},
+				),
+				("RuntimeMaxSec", if interactive { "17s" } else { "70s" }),
+				("Nice", if interactive { "4" } else { "10" }),
+			] {
+				assert_eq!(properties.get(name).copied(), Some(expected), "{name}");
+			}
+			assert_eq!(
+				properties["Description"],
+				format!("Hepta Runtime {} {}", record.job_id, record.nonce)
+			);
+			assert_eq!(
+				properties["LoadCredential"],
+				format!("spec:{}", spec_path.display())
+			);
+			assert_eq!(
+				properties["BindPaths"],
+				format!("{}:/workspace", p.workspace.display())
+			);
+			assert_eq!(properties["InaccessiblePaths"], "-/var/lib/hepta-runtime -/etc/hepta-runtime -/run/user -/run/dbus -/run/systemd/private -/run/docker.sock -/run/libvirt");
+			assert_eq!(
+				properties.get("PrivateNetwork").copied(),
+				(!allow_network).then_some("yes")
+			);
+			assert_eq!(
+				properties.get("RestrictAddressFamilies").copied(),
+				(!allow_network).then_some("AF_UNIX AF_NETLINK")
+			);
+		}
+	}
+}
+
 fn completed_fixture() -> (Record, Exit) {
 	(
 		Record {

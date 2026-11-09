@@ -22,7 +22,6 @@ use super::ssh::{run_python_json_with_interpreter, validate_python_interpreter};
 mod search_globs;
 use search_globs::compile_glob_program;
 
-const MAX_RECEIPTS: usize = 1024;
 const MAX_PAGE_BYTES: usize = 96 * 1024;
 const MAX_RECORD_BYTES: u64 = 16 * 1024;
 const TERMINAL: &[&str] = &["completed", "limited", "cancelled", "failed", "interrupted"];
@@ -424,8 +423,8 @@ async fn retained_records(directory: &Path) -> Result<Vec<SearchRecord>> {
 		let Some(id) = name.strip_suffix(".json") else {
 			bail!("invalid controller search state entry");
 		};
-		if !valid_id(id) || result.len() >= MAX_RECEIPTS {
-			bail!("invalid or excessive controller search receipts");
+		if !valid_id(id) {
+			bail!("invalid controller search receipt identity");
 		}
 		let mut record = read_record(&entry.path()).await?;
 		if record.id != id {
@@ -719,10 +718,8 @@ pub async fn search_start(owner: &str, params: SearchStartParams) -> Result<Stri
 	}
 	let _guard = lock().lock().await;
 	let directory = directory().await?;
-	let all = retained_records(&directory).await?;
-	if all.len() >= MAX_RECEIPTS {
-		bail!("search receipt quota reached; administrator cleanup required");
-	}
+	// Retained receipts remain available for reconciliation, regardless of count.
+	retained_records(&directory).await?;
 	let record = SearchRecord {
 		id: new_owner_id()?,
 		owner: owner.into(),

@@ -25,7 +25,6 @@ use super::weight_config::WeightWorkerProfile;
 
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_RECORD_BYTES: usize = 128 * 1024;
-const MAX_STORED_SESSIONS: usize = 1024;
 const MAX_STATE_BYTES: u64 = 64 * 1024 * 1024;
 static STAGING_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -697,22 +696,11 @@ fn receipt(intent: &SessionIntent, binding: &JobBinding, request_id: &str) -> Re
 	)?)
 }
 
-async fn enforce_session_budget(root: &Path) -> Result<()> {
-	let mut entries = tokio::fs::read_dir(root).await?;
-	let mut stored = 0usize;
-	while let Some(entry) = entries.next_entry().await? {
-		if entry
-			.file_name()
-			.to_string_lossy()
-			.ends_with(".intent.json")
-		{
-			stored += 1;
-		}
-	}
-	if stored >= MAX_STORED_SESSIONS {
-		bail!("weight session index at capacity; owner archival required");
-	}
-	Ok(())
+async fn publish_session_intent(root: &Path, intent: &SessionIntent) -> Result<()> {
+	// Every live session needs its original intent. A retained-record count must
+	// not become another active-session gate or require deleting those identities.
+	let _index = lock_state(root).await?;
+	publish_record(root, &intent_name(&intent.session_id), intent).await
 }
 
 pub async fn open(input: WeightOpenParams) -> Result<String> {
@@ -722,13 +710,7 @@ pub async fn open(input: WeightOpenParams) -> Result<String> {
 	if tokio::fs::try_exists(root.join(close_name(&intent.session_id))).await? {
 		bail!("weight session is already closed; its identity cannot be relaunched");
 	}
-	{
-		let _index = lock_state(&root).await?;
-		if !tokio::fs::try_exists(root.join(intent_name(&intent.session_id))).await? {
-			enforce_session_budget(&root).await?;
-		}
-		publish_record(&root, &intent_name(&intent.session_id), &intent).await?;
-	}
+	publish_session_intent(&root, &intent).await?;
 	let reply = jobs::start_job(worker_start(&intent)?).await?;
 	let binding = bind_job(&intent, digest(&intent.worker_request)?, &reply)?;
 	publish_record(&root, &worker_name(&intent.session_id), &binding).await?;

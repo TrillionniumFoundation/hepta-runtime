@@ -465,10 +465,14 @@ fn data_dir(id: &str) -> PathBuf {
 	PathBuf::from(format!("/var/lib/hepta-job-{id}"))
 }
 fn load_record(id: &str) -> Result<Record> {
+	load_record_at(Path::new(ROOT), id)
+}
+fn load_record_at(registry: &Path, id: &str) -> Result<Record> {
 	if !safe_id(id) {
 		bail!("invalid owned job ID");
 	}
-	let r: Record = json_file(&record_path(id)).context("unknown owned job")?;
+	let r: Record =
+		json_file(&registry.join(id).join("record.json")).context("unknown owned job")?;
 	if r.job_id != id || r.unit != format!("hepta-job-{id}.service") {
 		bail!("job identity mismatch");
 	}
@@ -1004,37 +1008,29 @@ fn cancel(id: &str) -> Result<Value> {
 	atomic(&record_path(id), &r)?;
 	Ok(json!({"job_id":id,"result":"stop_requested","invocation_id":r.invocation_id}))
 }
-fn start(mut q: Request, interactive: bool) -> Result<Value> {
-	// New isolated dispatch requires systemd, /proc identities and group custody.
-	// Check before policy/lock acquisition can create a registry namespace.
-	require_linux_launch()?;
-	let p = policy()?;
-	validate(&mut q, &p)?;
-	let lock = Lock::acquire()?;
-	let path = record_path(&q.job_id);
-	let hash = digest(&q)?;
+fn prepare_start_record(
+	registry: &Path,
+	q: &Request,
+	p: &Policy,
+	interactive: bool,
+) -> Result<(Record, bool)> {
+	// The caller holds the registry lock after validating the request and policy.
+	// Retained records are ownership evidence, never execution slots. Preparing
+	// another job must neither count nor remove other jobs' original receipts.
+	let path = registry.join(&q.job_id).join("record.json");
+	let hash = digest(q)?;
 	if path.exists() {
-		let r = load_record(&q.job_id)?;
+		let r = load_record_at(registry, &q.job_id)?;
 		if hash != r.request_digest {
 			bail!("job ID already bound to a different request");
 		}
-		return Ok(
-			json!({"ok":true,"reused_remote":true,"backend":"systemd_system","status":status(&q.job_id)?}),
-		);
-	}
-	if fs::read_dir(ROOT)?
-		.filter_map(|e| e.ok())
-		.filter(|e| e.path().is_dir())
-		.count()
-		>= 128
-	{
-		bail!("retained job limit reached; administrator must archive completed jobs");
+		return Ok((r, true));
 	}
 	let dir = path.parent().context("record directory")?;
 	fs::create_dir_all(dir)?;
 	fs::set_permissions(dir, fs::Permissions::from_mode(0o700))?;
 	let nonce = launch_nonce()?;
-	let mut r = Record {
+	let r = Record {
 		job_id: q.job_id.clone(),
 		unit: format!("hepta-job-{}.service", q.job_id),
 		request_digest: hash,
@@ -1057,6 +1053,16 @@ fn start(mut q: Request, interactive: bool) -> Result<Value> {
 		},
 	)?;
 	atomic(&path, &r)?;
+	Ok((r, false))
+}
+
+fn systemd_launch_command(
+	q: &Request,
+	p: &Policy,
+	r: &Record,
+	spec_path: &Path,
+	interactive: bool,
+) -> Command {
 	let mut cmd = Command::new("/usr/bin/systemd-run");
 	cmd.args(["--quiet", "--collect", "--unit", &r.unit]);
 	if interactive {
@@ -1068,7 +1074,7 @@ fn start(mut q: Request, interactive: bool) -> Result<Value> {
  format!("StateDirectory=hepta-job-{}",q.job_id),"StateDirectoryMode=0700".to_owned(),format!("LoadCredential=spec:{}",spec_path.display()),
  format!("BindPaths={}:/workspace",p.workspace.display()),"WorkingDirectory=/workspace".to_owned(),
  "InaccessiblePaths=-/var/lib/hepta-runtime -/etc/hepta-runtime -/run/user -/run/dbus -/run/systemd/private -/run/docker.sock -/run/libvirt".to_owned(),
- "ProtectHome=yes".to_owned(),"ProtectSystem=strict".to_owned(),"PrivateTmp=yes".to_owned(),"PrivateDevices=yes".to_owned(),"NoNewPrivileges=yes".to_owned(),"CapabilityBoundingSet=".to_owned(),"RestrictSUIDSGID=yes".to_owned(),"ProtectKernelTunables=yes".to_owned(),"ProtectKernelModules=yes".to_owned(),"ProtectControlGroups=yes".to_owned(),"RestrictRealtime=yes".to_owned(),"LockPersonality=yes".to_owned(),"ProtectProc=invisible".to_owned(),"KillMode=control-group".to_owned(),"TimeoutStopSec=3s".to_owned(),"TasksMax=64".to_owned(),"UMask=0007".to_owned(),"MemorySwapMax=0".to_owned(),
+ "ProtectHome=yes".to_owned(),"ProtectSystem=strict".to_owned(),"PrivateTmp=yes".to_owned(),"PrivateDevices=yes".to_owned(),"NoNewPrivileges=yes".to_owned(),"CapabilityBoundingSet=".to_owned(),"RestrictSUIDSGID=yes".to_owned(),"ProtectKernelTunables=yes".to_owned(),"ProtectKernelModules=yes".to_owned(),"ProtectControlGroups=yes".to_owned(),"RestrictRealtime=yes".to_owned(),"LockPersonality=yes".to_owned(),"ProtectProc=invisible".to_owned(),"KillMode=control-group".to_owned(),"TimeoutStopSec=3s".to_owned(),"TasksMax=infinity".to_owned(),"UMask=0007".to_owned(),"MemorySwapMax=0".to_owned(),
  format!("CPUQuota={}%",q.cpu_quota_percent.unwrap_or(p.max_cpu_percent)),format!("MemoryMax={}",q.memory_max_bytes.unwrap_or(p.max_memory_bytes)),format!("Nice={}",q.nice.unwrap_or(10)),format!("RuntimeMaxSec={}s",q.timeout_seconds.unwrap_or(p.max_timeout_seconds)+10)];
 	for prop in props {
 		cmd.args(["--property", &prop]);
@@ -1091,6 +1097,25 @@ fn start(mut q: Request, interactive: bool) -> Result<Value> {
 		},
 		&q.job_id,
 	]);
+	cmd
+}
+
+fn start(mut q: Request, interactive: bool) -> Result<Value> {
+	// New isolated dispatch requires systemd, /proc identities and group custody.
+	// Check before policy/lock acquisition can create a registry namespace.
+	require_linux_launch()?;
+	let p = policy()?;
+	validate(&mut q, &p)?;
+	let lock = Lock::acquire()?;
+	let (mut r, reused) = prepare_start_record(Path::new(ROOT), &q, &p, interactive)?;
+	if reused {
+		return Ok(
+			json!({"ok":true,"reused_remote":true,"backend":"systemd_system","status":status(&q.job_id)?}),
+		);
+	}
+	let path = record_path(&q.job_id);
+	let spec_path = path.parent().context("record directory")?.join("spec.json");
+	let mut cmd = systemd_launch_command(&q, &p, &r, &spec_path, interactive);
 	let mut pty_child: Option<Child> = None;
 	dispatch_after_launch_namespace_sync(Path::new(ROOT), || {
 		if interactive {

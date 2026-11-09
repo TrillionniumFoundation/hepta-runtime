@@ -67,7 +67,12 @@ policy, and creates a transient **system** systemd unit. Workloads run under a
 separate DynamicUser, not root and not the controller SSH identity. The unit
 hides controller state/credentials and user homes, uses a private network by
 default, and grants write access only to the workspace and its own result data.
-The independent aggregate job slice limits CPU, memory and task counts.
+The independent aggregate job slice enforces its configured CPU and memory
+budgets. Both the slice and each new job unit use `TasksMax=infinity`, so Hepta
+does not impose a fixed process or thread count on a job. Per-job CPU, memory
+and timeout settings remain enforced. Retaining active or completed job
+records does not block new job admission, and admitting a new job does not
+delete the original records or terminal receipts.
 
 Controller startup acquires a nonblocking OS-level exclusive lock on
 both `controller.lock` and `controller.owner.lock` inside its canonical,

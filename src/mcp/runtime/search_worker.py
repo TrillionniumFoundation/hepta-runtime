@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 TERMINAL = {"completed", "limited", "cancelled", "failed", "interrupted"}
 CAPS = {"entries": 10000, "results": 1000, "bytes": 64 * 1024 * 1024,
         "seconds": 30, "depth": 64, "file_bytes": 4 * 1024 * 1024,
-        "result_bytes": 2 * 1024 * 1024, "jobs": 1024}
+        "result_bytes": 2 * 1024 * 1024}
 DOCUMENT_EXPANSION = 16 * 1024 * 1024
 DOCUMENT_TEXT = 4 * 1024 * 1024
 FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -679,15 +679,7 @@ def main(request):
         if request["action"] == "start":
             authorized_root(request)
             options(request)
-            # Retain the receipt storage boundary without capping active workers.
-            total = 0
-            with os.scandir(base) as entries:
-                for entry in entries:
-                    if entry.name.startswith("."):
-                        continue
-                    total += 1
-                    if total >= CAPS["jobs"]:
-                        raise ValueError("search receipt quota reached")
+            # Original receipts are retained; their count cannot deny a new search.
             os.mkdir(identity, 0o700, dir_fd=base)
         fd = os.open(identity, FLAGS | os.O_DIRECTORY, dir_fd=base)
         private(fd)
