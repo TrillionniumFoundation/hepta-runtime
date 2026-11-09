@@ -13,6 +13,8 @@ import http.server
 import json
 import os
 import pathlib
+import queue
+import socket
 import socketserver
 import stat
 import sys
@@ -104,6 +106,7 @@ def filter_response(request, response):
 class UnixThreadingHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     daemon_threads = True
     allow_reuse_address = False
+    request_queue_size = socket.SOMAXCONN
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -129,8 +132,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/healthz":
             self._send_json(200, {"ok": True, "mode": "read_only", "tools": len(ALLOWED_TOOLS)})
-        else:
+        elif self.path == "/mcp":
             self._send_json(405, {"error": "POST /mcp only"})
+        else:
+            # No OAuth metadata is advertised by this private socket bridge.
+            self._send_json(404, {"error": "not found"})
 
     def do_POST(self):
         if self.path != "/mcp":
@@ -219,12 +225,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             connection.close()
 
 
-def _stdio_emit(value):
+def _stdio_bytes(value):
     data = json.dumps(value, separators=(",", ":")).encode()
     if len(data) > MAX_BODY:
         raise ValueError("stdio response exceeds bridge limit")
-    sys.stdout.buffer.write(data + b"\n")
-    sys.stdout.buffer.flush()
+    return data + b"\n"
 
 
 def _request_has_id(request):
@@ -236,66 +241,77 @@ def _request_has_id(request):
 
 
 def serve_stdio(upstream_url, token):
-    """Serve newline-delimited MCP JSON-RPC on stdio for tunnel-client.
+    """Forward independent reads concurrently while owning session transitions.
 
-    The facade remains the policy owner: every request is inspected before the
-    loopback backend is contacted. MCP session and protocol headers are retained
-    inside this one bridge process and never supplied by the tunnel caller.
+    Every original request retains its connection, response IDs and completion
+    until its worker exits. Only initialize waits for earlier requests and holds
+    later requests behind it; unrelated reads never share an execution gate.
     """
     upstream = urllib.parse.urlsplit(upstream_url)
     if upstream.scheme != "http" or upstream.hostname not in ("127.0.0.1", "localhost"):
         raise ValueError("stdio bridge upstream must remain loopback HTTP")
-    session = None
-    protocol = None
-    while True:
-        raw = sys.stdin.buffer.readline(MAX_BODY + 2)
-        if not raw:
-            return
-        if len(raw) > MAX_BODY + 1 or not raw.endswith(b"\n"):
-            while raw and not raw.endswith(b"\n"):
-                raw = sys.stdin.buffer.readline(MAX_BODY + 2)
-            _stdio_emit({"jsonrpc":"2.0","id":None,"error":{"code":-32600,"message":"bounded JSON-RPC line required"}})
-            continue
-        raw = raw.rstrip(b"\r\n")
-        if not raw:
-            _stdio_emit({"jsonrpc":"2.0","id":None,"error":{"code":-32600,"message":"Invalid Request"}})
-            continue
-        try:
-            request = json.loads(raw)
-        except json.JSONDecodeError:
-            _stdio_emit({"jsonrpc":"2.0","id":None,"error":{"code":-32700,"message":"Parse error"}})
-            continue
+    state_lock = threading.Lock()
+    responses = queue.SimpleQueue()
+    state = {"session": None, "protocol": None}
+    active = {}
+    active_ids = set()
+    initialized = threading.Event()
+    initialized.set()
+
+    def emit(value, finished=None):
+        responses.put((_stdio_bytes(value), finished))
+
+    def write_responses():
+        available = True
+        while True:
+            item = responses.get()
+            if item is None:
+                return
+            data, finished = item
+            if finished is not None:
+                finished.wait()
+            if available:
+                try:
+                    sys.stdout.buffer.write(data)
+                    sys.stdout.buffer.flush()
+                except OSError:
+                    available = False
+
+    writer = threading.Thread(target=write_responses, name="readonly-mcp-responses")
+    writer.start()
+
+    def failure(request, code, message, finished=None):
         items = request if isinstance(request, list) else [request]
-        blocked = [inspect_request(value) for value in items]
-        if any(value is not None for value in blocked):
-            replies = []
-            for original, error in zip(items, blocked):
-                if error is not None and isinstance(original, dict) and "id" in original:
-                    replies.append(error)
-            if replies:
-                _stdio_emit(replies if isinstance(request, list) else replies[0])
-            continue
-        headers = {
-            "Content-Type":"application/json",
-            "Accept":"application/json, text/event-stream",
-            "X-Hepta-Runtime-Token":token,
-        }
-        if session:
-            headers["Mcp-Session-Id"] = session
-        if protocol:
-            headers["MCP-Protocol-Version"] = protocol
-        connection = http.client.HTTPConnection(upstream.hostname, upstream.port, timeout=30)
+        replies = [jsonrpc_error(item, code, message)
+                   for item in items if isinstance(item, dict) and "id" in item]
+        if replies:
+            emit(replies if isinstance(request, list) else replies[0], finished)
+
+    def forward(request, raw, identities, predecessors, done, initializes):
+        connection = None
         try:
+            for predecessor in predecessors:
+                predecessor.wait()
+            with state_lock:
+                session, protocol = state["session"], state["protocol"]
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+                "X-Hepta-Runtime-Token": token,
+            }
+            if session:
+                headers["Mcp-Session-Id"] = session
+            if protocol:
+                headers["MCP-Protocol-Version"] = protocol
+            connection = http.client.HTTPConnection(upstream.hostname, upstream.port, timeout=30)
             connection.request("POST", upstream.path or "/mcp", body=raw, headers=headers)
             response = connection.getresponse()
             body = response.read(MAX_BODY + 1)
             if len(body) > MAX_BODY:
                 raise ValueError("upstream response exceeds bridge limit")
             returned_session = response.getheader("Mcp-Session-Id")
-            if returned_session:
-                session = returned_session
             if response.status == 202 or not body:
-                continue
+                return
             content_type = (response.getheader("Content-Type") or "").lower()
             values = []
             if "text/event-stream" in content_type:
@@ -306,26 +322,112 @@ def serve_stdio(upstream_url, token):
                 values.append(json.loads(body))
             else:
                 raise ValueError("unexpected upstream response type")
+            filtered_values = []
+            response_ids = set()
             for value in values:
-                filtered = filter_response(request, value)
-                if isinstance(request, dict) and request.get("method") == "initialize":
-                    result = filtered.get("result") if isinstance(filtered, dict) else None
-                    if isinstance(result, dict) and isinstance(result.get("protocolVersion"), str):
-                        protocol = result["protocolVersion"]
-                if _request_has_id(request) or (isinstance(filtered, dict) and "method" in filtered):
-                    _stdio_emit(filtered)
+                response_items = value if isinstance(value, list) else [value]
+                for item in response_items:
+                    if isinstance(item, dict) and "id" in item:
+                        response_id = json.dumps(item["id"], sort_keys=True)
+                        if response_id not in identities or response_id in response_ids:
+                            raise ValueError("upstream response id does not belong to this request")
+                        response_ids.add(response_id)
+                filtered_values.append(filter_response(request, value))
+            if initializes:
+                # Only the initialize owner may publish a new binding. Ordinary
+                # read responses cannot rebind another in-flight request.
+                init_ids = {json.dumps(item.get("id"), sort_keys=True)
+                            for item in (request if isinstance(request, list) else [request])
+                            if item.get("method") == "initialize" and "id" in item}
+                for value in filtered_values:
+                    for item in value if isinstance(value, list) else [value]:
+                        if not isinstance(item, dict) or json.dumps(item.get("id"), sort_keys=True) not in init_ids:
+                            continue
+                        result = item.get("result")
+                        if isinstance(result, dict) and isinstance(result.get("protocolVersion"), str):
+                            with state_lock:
+                                state["session"] = returned_session or session
+                                state["protocol"] = result["protocolVersion"]
+            outgoing = [_stdio_bytes(filtered) for filtered in filtered_values
+                        if _request_has_id(request) or (isinstance(filtered, dict) and "method" in filtered)]
+            for data in outgoing:
+                responses.put((data, done))
         except Exception:
-            if _request_has_id(request):
-                if isinstance(request, dict):
-                    ident = request.get("id")
-                    _stdio_emit({"jsonrpc":"2.0","id":ident,"error":{"code":-32000,"message":"private MCP upstream unavailable"}})
-                else:
-                    replies=[jsonrpc_error(item,-32000,"private MCP upstream unavailable")
-                             for item in request if isinstance(item,dict) and "id" in item]
-                    if replies:
-                        _stdio_emit(replies)
+            failure(request, -32000, "private MCP upstream unavailable", done)
         finally:
-            connection.close()
+            try:
+                if connection is not None:
+                    connection.close()
+            finally:
+                with state_lock:
+                    active_ids.difference_update(identities)
+                    active.pop(threading.current_thread(), None)
+                    done.set()
+
+    try:
+        while True:
+            raw = sys.stdin.buffer.readline(MAX_BODY + 2)
+            if not raw:
+                break
+            if len(raw) > MAX_BODY + 1 or not raw.endswith(b"\n"):
+                while raw and not raw.endswith(b"\n"):
+                    raw = sys.stdin.buffer.readline(MAX_BODY + 2)
+                emit({"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "bounded JSON-RPC line required"}})
+                continue
+            raw = raw.rstrip(b"\r\n")
+            if not raw:
+                emit({"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid Request"}})
+                continue
+            try:
+                request = json.loads(raw)
+            except json.JSONDecodeError:
+                emit({"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}})
+                continue
+            items = request if isinstance(request, list) else [request]
+            blocked = [inspect_request(value) for value in items]
+            if any(value is not None for value in blocked):
+                replies = [error for original, error in zip(items, blocked)
+                           if error is not None and isinstance(original, dict) and "id" in original]
+                if replies:
+                    emit(replies if isinstance(request, list) else replies[0])
+                continue
+            ids = [json.dumps(item["id"], sort_keys=True) for item in items if "id" in item]
+            identities = set(ids)
+            initializes = any(item.get("method") == "initialize" for item in items)
+            done = threading.Event()
+            with state_lock:
+                duplicate = len(identities) != len(ids) or bool(identities & active_ids)
+                if not duplicate:
+                    predecessors = list(active.values()) if initializes else [initialized]
+                    if initializes:
+                        initialized = done
+                    worker = threading.Thread(
+                        target=forward,
+                        args=(request, raw, identities, predecessors, done, initializes),
+                        name="readonly-mcp-request",
+                    )
+                    active[worker] = done
+                    active_ids.update(identities)
+                    try:
+                        worker.start()
+                    except Exception:
+                        active.pop(worker)
+                        active_ids.difference_update(identities)
+                        done.set()
+                        worker = None
+            if duplicate:
+                failure(request, -32600, "request id is already active")
+            elif worker is None:
+                failure(request, -32000, "private MCP request was not submitted")
+    finally:
+        # EOF stops admission, not ownership: join each original worker after it
+        # closes its own HTTP connection and emits its one original response.
+        with state_lock:
+            workers = list(active)
+        for worker in workers:
+            worker.join()
+        responses.put(None)
+        writer.join()
 
 
 def main():

@@ -17,15 +17,12 @@ use rmcp::model::{CallToolResult, JsonObject};
 use serde_json::{json, Map, Value};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio_util::sync::CancellationToken;
 
 pub(super) const OP: &str = "import_evidence_bundle";
-const MAX_CONCURRENT_OWNERS: usize = 2;
 
 struct ImportOwnership {
 	_admission: Arc<runtime::effect_owner_fence::AdmissionPermit>,
-	_capacity: OwnedSemaphorePermit,
 }
 
 pub(super) fn input_schema() -> Arc<JsonObject> {
@@ -119,21 +116,8 @@ fn ownership(
 	cancellation: &CancellationToken,
 ) -> Result<Arc<ImportOwnership>, Failure> {
 	active(cancellation)?;
-	static CAPACITY: OnceLock<Arc<Semaphore>> = OnceLock::new();
-	let semaphore = CAPACITY.get_or_init(|| Arc::new(Semaphore::new(MAX_CONCURRENT_OWNERS)));
-	let capacity = Arc::clone(semaphore).try_acquire_owned().map_err(|_| {
-		Failure::resource(
-			OP,
-			"concurrency",
-			"The native Evidence import owner capacity is occupied.",
-			json!({"native_profile":true,"concurrent_owners":MAX_CONCURRENT_OWNERS}),
-			true,
-			"Wait for active Evidence import owners to finish, then retry.",
-		)
-	})?;
 	Ok(Arc::new(ImportOwnership {
 		_admission: admission,
-		_capacity: capacity,
 	}))
 }
 

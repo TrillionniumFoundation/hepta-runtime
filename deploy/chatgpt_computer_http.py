@@ -39,20 +39,6 @@ def _parse(raw):
     return json.loads(raw.decode('utf-8'), object_pairs_hook=_pairs, parse_constant=invalid)
 
 
-def unlimited_proxy(proxy):
-    """Only HTTP instances bypass the stdio compatibility admission budget."""
-    seen, pending = set(), [proxy]
-    while pending:
-        current = pending.pop()
-        if id(current) in seen:
-            continue
-        seen.add(id(current))
-        current.active_request_limit = None
-        pending.extend(child for name in ('native', 'compatibility', 'legacy', 'predecessor')
-                       if (child := getattr(current, name, None)) is not None)
-    return proxy
-
-
 class _Session:
     def __init__(self, proxy, sid=None):
         self.proxy, self.sid = proxy, sid
@@ -110,7 +96,7 @@ class ComputerHTTPServer(http.server.ThreadingHTTPServer):
             raise
 
     def _new_proxy(self):
-        proxy = unlimited_proxy(self._factory())
+        proxy = self._factory()
         native = getattr(proxy, 'native', proxy)
         pager = getattr(native, 'registry_pager', None)
         if pager is None:

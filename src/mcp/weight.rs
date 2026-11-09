@@ -19,14 +19,12 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use super::runtime::config::{runtime_config, RuntimeConfig};
 use super::runtime::jobs::{
-	self, ProcessCancelParams, ProcessReadParams, ProcessRefParams, ProcessStartParams,
-	ProcessWaitParams,
+	self, ProcessCancelParams, ProcessReadParams, ProcessStartParams, ProcessWaitParams,
 };
 use super::weight_config::WeightWorkerProfile;
 
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_RECORD_BYTES: usize = 128 * 1024;
-const MAX_STORED_SESSIONS: usize = 1024;
 const MAX_STATE_BYTES: u64 = 64 * 1024 * 1024;
 static STAGING_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -425,13 +423,23 @@ async fn state_directory() -> Result<PathBuf> {
 	Ok(path)
 }
 
-/// A cooperating-controller index fence; all process authority remains in jobs.
+/// The index fence covers only receipt accounting/publication, never remote I/O.
 async fn lock_state(root: &Path) -> Result<std::fs::File> {
+	lock_named(root, "owner.lock").await
+}
+
+/// Distinct sessions proceed independently; one session preserves call/close order.
+async fn lock_session(root: &Path, session: &str) -> Result<std::fs::File> {
+	check_session_id(session)?;
+	lock_named(root, &format!("{session}.lock")).await
+}
+
+async fn lock_named(root: &Path, name: &str) -> Result<std::fs::File> {
 	let mut options = tokio::fs::OpenOptions::new();
 	options.create(true).read(true).write(true);
 	#[cfg(unix)]
 	options.mode(0o600).custom_flags(libc::O_NOFOLLOW);
-	let file = options.open(root.join("owner.lock")).await?;
+	let file = options.open(root.join(name)).await?;
 	let meta = file.metadata().await?;
 	if !meta.is_file() {
 		bail!("weight owner lock is not a regular file");
@@ -688,59 +696,21 @@ fn receipt(intent: &SessionIntent, binding: &JobBinding, request_id: &str) -> Re
 	)?)
 }
 
-async fn enforce_session_budget(root: &Path, wanted: &SessionIntent) -> Result<()> {
-	let mut entries = tokio::fs::read_dir(root).await?;
-	let mut stored = 0usize;
-	let mut active = 0usize;
-	while let Some(entry) = entries.next_entry().await? {
-		let name = entry.file_name().to_string_lossy().into_owned();
-		if !name.ends_with(".intent.json") {
-			continue;
-		}
-		stored += 1;
-		let other: SessionIntent = read_record(&entry.path()).await?;
-		if other.session_id == wanted.session_id || other.profile_name != wanted.profile_name {
-			continue;
-		}
-		let binding = load_binding(root, &other, None).await;
-		let terminal = if let Ok(binding) = binding {
-			let reply = jobs::status_job(ProcessRefParams {
-				host: binding.host,
-				job_id: binding.job_id,
-			})
-			.await?;
-			let value: Value = serde_json::from_str(&reply)?;
-			matches!(
-				value["state"].as_str(),
-				Some("succeeded" | "failed" | "cancelled" | "timed_out")
-			)
-		} else {
-			false
-		};
-		if !terminal {
-			active += 1;
-		}
-	}
-	if stored >= MAX_STORED_SESSIONS {
-		bail!("weight session index at capacity; owner archival required");
-	}
-	if active >= wanted.profile.max_active_sessions {
-		bail!("weight profile has no free session lease; reconcile or close the original session");
-	}
-	Ok(())
+async fn publish_session_intent(root: &Path, intent: &SessionIntent) -> Result<()> {
+	// Every live session needs its original intent. A retained-record count must
+	// not become another active-session gate or require deleting those identities.
+	let _index = lock_state(root).await?;
+	publish_record(root, &intent_name(&intent.session_id), intent).await
 }
 
 pub async fn open(input: WeightOpenParams) -> Result<String> {
 	let intent = prepare_intent(runtime_config()?, input)?;
 	let root = state_directory().await?;
-	let _lock = lock_state(&root).await?;
+	let _session = lock_session(&root, &intent.session_id).await?;
 	if tokio::fs::try_exists(root.join(close_name(&intent.session_id))).await? {
 		bail!("weight session is already closed; its identity cannot be relaunched");
 	}
-	if !tokio::fs::try_exists(root.join(intent_name(&intent.session_id))).await? {
-		enforce_session_budget(&root, &intent).await?;
-	}
-	publish_record(&root, &intent_name(&intent.session_id), &intent).await?;
+	publish_session_intent(&root, &intent).await?;
 	let reply = jobs::start_job(worker_start(&intent)?).await?;
 	let binding = bind_job(&intent, digest(&intent.worker_request)?, &reply)?;
 	publish_record(&root, &worker_name(&intent.session_id), &binding).await?;
@@ -748,7 +718,7 @@ pub async fn open(input: WeightOpenParams) -> Result<String> {
 }
 
 pub fn profiles() -> Result<String> {
-	let values: Vec<Value> = runtime_config()?.weight_workers.iter().map(|(name, p)| json!({"profile":name,"host":p.host,"providers":p.allowed_providers,"worker_sha256":p.worker_sha256,"worker_package_sha256":p.worker_package_sha256,"client_transport":if p.native_client.is_some(){"native_rust"}else{"python_compat"},"native_client_sha256":p.native_client.as_ref().map(|c|&c.sha256),"max_memory_bytes":p.max_memory_bytes,"max_cpu_threads":p.max_cpu_threads,"max_lifetime_seconds":p.max_lifetime_seconds,"max_request_ms":p.max_request_ms,"max_active_sessions":p.max_active_sessions,"max_requests_per_session":p.max_requests_per_session})).collect();
+	let values: Vec<Value> = runtime_config()?.weight_workers.iter().map(|(name, p)| json!({"profile":name,"host":p.host,"providers":p.allowed_providers,"worker_sha256":p.worker_sha256,"worker_package_sha256":p.worker_package_sha256,"client_transport":if p.native_client.is_some(){"native_rust"}else{"python_compat"},"native_client_sha256":p.native_client.as_ref().map(|c|&c.sha256),"max_memory_bytes":p.max_memory_bytes,"max_cpu_threads":p.max_cpu_threads,"max_lifetime_seconds":p.max_lifetime_seconds,"max_request_ms":p.max_request_ms,"max_active_sessions":null,"legacy_max_active_sessions":p.max_active_sessions,"max_requests_per_session":p.max_requests_per_session})).collect();
 	Ok(serde_json::to_string(
 		&json!({"profiles":values,"authority":"isolated_experiment_only"}),
 	)?)
@@ -760,7 +730,7 @@ pub async fn call(input: WeightCallParams) -> Result<String> {
 		bail!("reserved weight request identity");
 	}
 	let root = state_directory().await?;
-	let _lock = lock_state(&root).await?;
+	let _session = lock_session(&root, &input.session_id).await?;
 	let intent = load_intent(&root, &input.session_id, true).await?;
 	if tokio::fs::try_exists(root.join(close_name(&intent.session_id))).await? {
 		bail!("weight session is closed");
@@ -842,7 +812,7 @@ pub async fn read(input: WeightReadParams) -> Result<String> {
 
 pub async fn close(input: WeightCloseParams) -> Result<String> {
 	let root = state_directory().await?;
-	let _lock = lock_state(&root).await?;
+	let _session = lock_session(&root, &input.session_id).await?;
 	let intent = load_intent(&root, &input.session_id, false).await?;
 	let binding = load_binding(&root, &intent, None).await?;
 	publish_record(

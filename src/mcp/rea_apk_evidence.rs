@@ -25,9 +25,8 @@ use rmcp::model::CallToolResult;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use tokio::io::AsyncReadExt;
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio_util::sync::CancellationToken;
 
 #[path = "rea_apk_static_worker.rs"]
@@ -36,10 +35,10 @@ mod worker;
 pub(super) const OP: &str = "inspect_apk_signature";
 pub(super) const MAX_BYTES: u64 = 512 * 1024 * 1024;
 pub(super) const MAX_WORKER_REPLY: usize = 8 * 1024 * 1024 + 1024;
+const CAPACITY_ACTION: &str =
+	"Review the reported parser capacity and select an input within those bounds.";
 #[cfg(not(test))]
 pub(super) const DEADLINE_MS: u64 = 30_000;
-const CAPACITY_ACTION: &str =
-	"Wait for an active analysis to complete, then retry within the reported admission limits.";
 
 struct Input {
 	path: String,
@@ -88,30 +87,6 @@ pub(super) fn active(cancellation: &CancellationToken) -> Result<(), Failure> {
 	} else {
 		Ok(())
 	}
-}
-
-async fn admission(cancellation: &CancellationToken) -> Result<Arc<OwnedSemaphorePermit>, Failure> {
-	static SCANS: OnceLock<Arc<Semaphore>> = OnceLock::new();
-	static WAITING: OnceLock<Arc<Semaphore>> = OnceLock::new();
-	active(cancellation)?;
-	let scans = Arc::clone(SCANS.get_or_init(|| Arc::new(Semaphore::new(1))));
-	if let Ok(permit) = scans.clone().try_acquire_owned() {
-		return Ok(Arc::new(permit));
-	}
-	let waiting = Arc::clone(WAITING.get_or_init(|| Arc::new(Semaphore::new(8))))
-		.try_acquire_owned()
-		.map_err(|_| {
-			Failure::resource(OP,"capacity",
-			"The process-wide APK inspection queue is full; retry after an active scan finishes.",
-			json!({"max_active_scans":1,"max_waiting_scans":8}),true,CAPACITY_ACTION)
-		})?;
-	let permit = tokio::select! {
-		biased;
-		_ = cancellation.cancelled() => return Err(Failure::cancelled(OP)),
-		permit = scans.acquire_owned() => permit.map_err(|_| Failure::output(OP,"APK inspection admission is closed."))?,
-	};
-	drop(waiting);
-	Ok(Arc::new(permit))
 }
 
 fn file_limit(path: &str, grew: bool) -> Failure {
@@ -421,7 +396,7 @@ async fn execute(
 	cancellation: CancellationToken,
 	owner_admission: Arc<runtime::effect_owner_fence::AdmissionPermit>,
 ) -> Result<RetainedRecord, Failure> {
-	let lease = admission(&cancellation).await?;
+	active(&cancellation)?;
 	let (bytes, digest) = capture(&input.path, roots, &cancellation).await?;
 	let length = bytes.len() as u64;
 	let reply = worker::inspect_isolated(
@@ -429,7 +404,6 @@ async fn execute(
 		&digest,
 		Arc::new(bytes),
 		&cancellation,
-		Arc::clone(&lease),
 		Arc::clone(&owner_admission),
 	)
 	.await?;
@@ -451,7 +425,6 @@ async fn execute(
 		return Err(parser_failure(failure, &input.path));
 	}
 	tokio::task::spawn_blocking(move || {
-		let _lease = lease;
 		let _admission = owner_admission;
 		let parent = complete_record(reply, &input, &digest, length)?;
 		let retained = session.record_with_origin(parent, RecordOrigin::NativeTool)?;

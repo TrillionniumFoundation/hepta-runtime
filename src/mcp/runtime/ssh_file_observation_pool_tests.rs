@@ -1,10 +1,10 @@
 // Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
-//! File entry regressions using the existing queue, leases and isolated owner.
+//! File entry regressions using the unbounded queue and isolated owner.
 use super::*;
 use crate::mcp::runtime::{binary, ssh};
 
 #[test]
-fn file_response_parsing_retains_both_output_leases_on_every_outcome() {
+fn file_response_parsing_uses_original_output_on_every_outcome() {
 	let host = serde_json::from_value::<crate::mcp::runtime::config::HostConfig>(json!({
 		"ssh_target":"original-fixture", "remote_state_dir":"/private/jobs-fixture"
 	}))
@@ -23,19 +23,13 @@ fn file_response_parsing_retains_both_output_leases_on_every_outcome() {
 		(7, b"original stdout".as_slice(), None),
 		(0, b"invalid original JSON".as_slice(), None),
 	] {
-		let global = Arc::new(Semaphore::new(1));
-		let admission = Arc::new(Semaphore::new(1));
 		let output = Captured {
 			output: Output {
 				status: ExitStatus::from_raw(code << 8),
 				stdout: bytes.to_vec(),
 				stderr: b"original stderr".to_vec(),
 			},
-			_budget: Arc::new(global.clone().try_acquire_owned().unwrap()),
-			_admission: Arc::new(admission.clone().try_acquire_owned().unwrap()),
 		};
-		assert_eq!(global.available_permits(), 0);
-		assert_eq!(admission.available_permits(), 0);
 		let result = ssh::parse_file_observation(&host, &output);
 		if let Some(expected) = expected {
 			assert_eq!(result.unwrap(), expected);
@@ -53,16 +47,12 @@ fn file_response_parsing_retains_both_output_leases_on_every_outcome() {
 				assert!(error.contains("invalid JSON"));
 			}
 		}
-		assert_eq!(global.available_permits(), 0);
-		assert_eq!(admission.available_permits(), 0);
 		drop(output);
-		assert_eq!(global.available_permits(), 1);
-		assert_eq!(admission.available_permits(), 1);
 	}
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn queued_file_wire_retains_its_original_deadline_and_single_admission() {
+async fn queued_file_wire_retains_its_original_payload_deadline_and_cancel_identity() {
 	let (proxy, mut receiver) = proxy_admission_fixture();
 	let deadline = Instant::now() + Duration::from_secs(30);
 	let earlier = fill_proxy_channel(&proxy, deadline).await;
@@ -76,35 +66,29 @@ async fn queued_file_wire_retains_its_original_deadline_and_single_admission() {
 	.unwrap();
 	let cancel = CancellationToken::new();
 	let (send, _receive) = oneshot::channel();
-	let mut waiting = Box::pin(proxy.enqueue(
-		"fixture",
-		command.clone(),
-		input.clone(),
-		deadline,
-		cancel.clone(),
-		send,
-	));
-	assert_proxy_submission_pending(waiting.as_mut()).await;
-	assert_eq!(
-		proxy.admission.available_permits(),
-		MAX_ADMITTED - QUEUE - 1
-	);
-	drop(receiver.recv().await.unwrap());
-	waiting.await.unwrap();
-	for _ in 1..QUEUE {
+	proxy
+		.enqueue(
+			"fixture",
+			command.clone(),
+			input.clone(),
+			deadline,
+			cancel.clone(),
+			send,
+		)
+		.await
+		.unwrap();
+	assert_eq!(receiver.len(), 33);
+	for _ in 0..32 {
 		drop(receiver.recv().await.unwrap());
 	}
 	let request = receiver.recv().await.unwrap();
 	assert_eq!(request.command, command);
 	assert_eq!(request.input, input);
 	assert_eq!(request.deadline, deadline);
-	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED - 1);
-	assert_eq!(proxy.sender.capacity(), QUEUE);
 	cancel.cancel();
 	assert!(request.cancel.is_cancelled());
 	drop(request);
 	drop(earlier);
-	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED);
 }
 
 #[test]
@@ -205,11 +189,6 @@ async fn isolated_file_helper() {
 				.to_string()
 				.contains("observation_pool_payload_unsupported"));
 			assert_eq!(control.requests.load(Ordering::Acquire), before);
-			assert_eq!(
-				POOL.get().unwrap().admission.available_permits(),
-				MAX_ADMITTED
-			);
-			assert_eq!(POOL.get().unwrap().sender.capacity(), QUEUE);
 			ssh::freeze_observation_pool();
 			assert!(ssh::file_observation_pool_requested());
 			for result in [
@@ -277,10 +256,6 @@ async fn isolated_file_helper() {
 		}
 		guard.shutdown().await.unwrap();
 		assert!(POOL.get().unwrap().thread.lock().unwrap().is_none());
-		assert_eq!(
-			POOL.get().unwrap().admission.available_permits(),
-			MAX_ADMITTED
-		);
 		assert!(ssh::start_observation_pool(None, false)
 			.await
 			.unwrap()

@@ -381,16 +381,18 @@ fn legacy_hint_falls_back_to_full_compatibility_scan_without_strict_promotion() 
 }
 
 #[test]
-fn cold_demand_has_worker_byte_and_lifetime_bounds() {
+fn cold_demand_has_no_worker_count_limit_and_preserves_byte_and_lifetime_bounds() {
 	let scans = Arc::new(RegistryColdScans::default());
 	let mut guards = Vec::new();
-	for index in 0..MAX_REGISTRY_LOOKUPS {
+	for index in 0..64 {
 		guards.push(demand(&scans, "main", &format!("key-{index}")));
 	}
-	assert!(RegistryColdDemand::register(scans.clone(), "main", "extra")
-		.unwrap()
-		.is_none());
-	guards.pop();
+	guards.push(
+		RegistryColdDemand::register(scans.clone(), "main", "extra")
+			.unwrap()
+			.unwrap(),
+	);
+	assert_eq!(scans.state.lock().unwrap().demands.len(), 65);
 	assert!(RegistryColdDemand::register(
 		scans.clone(),
 		"main",
@@ -659,7 +661,6 @@ async fn cancelled_cold_leader_and_waiter_retain_real_worker_capacity_and_cleanu
 		.values()
 		.all(|binding| binding.strict));
 	std::fs::write(root.path().join("invalidate.marker"), b"changed").unwrap();
-	let slots = Arc::new(Semaphore::new(2));
 	let release = Arc::new((Mutex::new(false), Condvar::new()));
 	let waiter_release = Arc::new((Mutex::new(false), Condvar::new()));
 	let (entered, running) = tokio::sync::oneshot::channel();
@@ -670,7 +671,7 @@ async fn cancelled_cold_leader_and_waiter_retain_real_worker_capacity_and_cleanu
 	let waiter_cache = cache.clone();
 	let waiter_resume = waiter_release.clone();
 	let waiter_finished = finished.clone();
-	let waiter = tokio::spawn(run_registry_lookup(slots.clone(), move || {
+	let waiter = tokio::spawn(run_registry_lookup(move || {
 		let _hooks = Hooks::new();
 		AFTER_REGISTRATION.with(|slot| {
 			*slot.borrow_mut() = Some(Box::new(move || {
@@ -708,7 +709,7 @@ async fn cancelled_cold_leader_and_waiter_retain_real_worker_capacity_and_cleanu
 	let leader_cache = cache.clone();
 	let leader_release = release.clone();
 	let leader_finished = finished.clone();
-	let leader = tokio::spawn(run_registry_lookup(slots.clone(), move || {
+	let leader = tokio::spawn(run_registry_lookup(move || {
 		let _hooks = Hooks::new();
 		ON_SCAN.with(|slot| {
 			*slot.borrow_mut() = Some(Box::new(move || {
@@ -752,7 +753,6 @@ async fn cancelled_cold_leader_and_waiter_retain_real_worker_capacity_and_cleanu
 	waiter.abort();
 	assert!(leader.await.unwrap_err().is_cancelled());
 	assert!(waiter.await.unwrap_err().is_cancelled());
-	assert_eq!(slots.available_permits(), 0);
 	assert_eq!(scans.state.lock().unwrap().demands.len(), 2);
 	*release.0.lock().unwrap() = true;
 	release.1.notify_all();
@@ -768,13 +768,7 @@ async fn cancelled_cold_leader_and_waiter_retain_real_worker_capacity_and_cleanu
 	}
 	identities.sort();
 	assert_eq!(identities, ["original-leader", "original-waiter"]);
-	tokio::time::timeout(Duration::from_secs(5), async {
-		while slots.available_permits() != 2 {
-			tokio::task::yield_now().await;
-		}
-	})
-	.await
-	.unwrap();
+
 	let state = scans.state.lock().unwrap();
 	assert!(state.demands.is_empty());
 	assert!(state.hints.is_empty());

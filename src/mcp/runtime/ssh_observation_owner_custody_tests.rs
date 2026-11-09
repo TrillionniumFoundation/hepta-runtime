@@ -13,8 +13,7 @@ pub(super) async fn run(path: &Path, fail_cleanup: bool) {
 	assert_ne!(core.owner_tid, unsafe { libc::syscall(libc::SYS_gettid) });
 	let root = core.root.path.clone();
 	let weak_core = Arc::downgrade(&core);
-	let global = Arc::new(Semaphore::new(MAX_SESSIONS));
-	let host = Arc::new(Semaphore::new(HOST_SESSIONS));
+	let host = Arc::new(Activity::default());
 	let child = Command::new("python3")
 		.args(["-I", "-S", "-c", "import sys; sys.stdin.buffer.read()"])
 		.stdin(Stdio::piped())
@@ -25,7 +24,7 @@ pub(super) async fn run(path: &Path, fail_cleanup: bool) {
 		.unwrap();
 	let pid = child.id().unwrap();
 	// This local pipe-blocked fixture is an original Child, not a fabricated
-	// PID. Transfer its sole strong owner and all three budgets to the real
+	// PID. Transfer its sole strong owner and lifetime lease to the real
 	// pool ledger; no SSH server or external process is signalled by the test.
 	let id = core.sequence.fetch_add(1, Ordering::Relaxed);
 	let owned = Arc::new(OwnedChild {
@@ -35,11 +34,7 @@ pub(super) async fn run(path: &Path, fail_cleanup: bool) {
 		identity: OnceLock::new(),
 		approved: AtomicBool::new(false),
 		child: AsyncMutex::new(child),
-		_permits: vec![
-			Arc::new(proxy.admission.clone().try_acquire_owned().unwrap()),
-			Arc::new(global.clone().try_acquire_owned().unwrap()),
-			Arc::new(host.clone().try_acquire_owned().unwrap()),
-		],
+		_leases: vec![Arc::new(host.lease().unwrap())],
 	});
 	let weak_child = Arc::downgrade(&owned);
 	assert!(core.children.lock().await.insert(id, owned).is_none());
@@ -67,9 +62,8 @@ pub(super) async fn run(path: &Path, fail_cleanup: bool) {
 			error.to_string().contains("supervisor unavailable"),
 			"{error:#}"
 		);
-		assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED - 1);
-		assert_eq!(global.available_permits(), MAX_SESSIONS - 1);
-		assert_eq!(host.available_permits(), HOST_SESSIONS - 1);
+
+		assert_eq!(host.active(), 1);
 		let core = weak_core
 			.upgrade()
 			.expect("failed owner lost its original ledger");
@@ -116,7 +110,6 @@ pub(super) async fn run(path: &Path, fail_cleanup: bool) {
 	assert!(weak_child.upgrade().is_none());
 	assert!(!root.exists());
 	assert!(!PathBuf::from(format!("/proc/{pid}")).exists());
-	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED);
-	assert_eq!(global.available_permits(), MAX_SESSIONS);
-	assert_eq!(host.available_permits(), HOST_SESSIONS);
+
+	assert_eq!(host.active(), 0);
 }

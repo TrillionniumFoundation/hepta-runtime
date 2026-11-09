@@ -1,0 +1,583 @@
+{
+  "schema": "hepta.concurrency-audit.v1",
+  "date": "2026-11-09",
+  "record_state": "activation_outcome_unconfirmed",
+  "implementation": {
+    "commit": "826c462699a27ed6afa83298440acb732b726af5",
+    "baseline_commit": "4cd85c99c5f5a480832c48fbde8561bb365f67a9",
+    "policy": "docs/CONCURRENCY_POLICY.md",
+    "reported_policy": {
+      "limits.concurrent_execution": "unbounded_by_runtime"
+    },
+    "validation_src_tree_sha256": "bad34fdd5ff48e0169a38cb4a8c3cd04d7303467a573467e57b196c033618604",
+    "validation_src_file_count": 427
+  },
+  "remaining": {
+    "live_activation": {
+      "state": "launched_unconfirmed",
+      "job_id": "1a1c07dac49-5e21-a9a",
+      "launch_state": "launched",
+      "bound_plan_sha256": "2f91972315995f8c66cd041c1875455825a5bd59eff9fac46fb191bfd14d7944",
+      "planned_runtime_sha256": "8969ebef564d162fdeb539be3b59fce9c511550f44eb4282655c3fc06d85f989",
+      "planned_tunnel_sha256": "754bfa627d6fb2f779daa42e91782af85ce1b01a3bfbae99065ac82326e3f7e1",
+      "runtime_binary_sha256": null,
+      "http_tunnel_results": [],
+      "completion_receipt_observed": false,
+      "rollback_receipt_observed": false,
+      "terminal_state": null,
+      "activation_replayed": false,
+      "observation_limit": "Subsequent Hepta APIs returned MCP Internal error, including a fresh independent context. Completion and rollback are both unconfirmed; no available alternative Mac channel established either outcome."
+    },
+    "hosted_ci": {
+      "state": "in_progress",
+      "last_observed_state": "in_progress",
+      "passing_result_attested": false,
+      "attestation": "not_attested_by_this_record"
+    }
+  },
+  "rust": {
+    "platform": "linux/x86_64",
+    "host": "rog",
+    "rust_version": "1.96.0",
+    "nextest_version": "0.9.151",
+    "build_jobs": 2,
+    "incremental": false,
+    "debug_information": false,
+    "temp_root": "short task-owned directory",
+    "final_state": "passed",
+    "final_journal_sha256": "a1ec00a8cf1089f406a93a286c7bbc037f14ff53194f061d2c0222993e522096",
+    "final_src_tree_sha256": "bad34fdd5ff48e0169a38cb4a8c3cd04d7303467a573467e57b196c033618604",
+    "final_stages": {
+      "01-fmt": {
+        "command": [
+          "cargo",
+          "fmt",
+          "--all",
+          "--check"
+        ],
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 1.929,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "02-check": {
+        "command": [
+          "cargo",
+          "check",
+          "--locked",
+          "--all-features",
+          "--all-targets"
+        ],
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 37.6,
+        "log_sha256": "6693032117c78ac4ee658490b3cbccfd35bb8c610c0ed7162fedd1d804581656"
+      },
+      "03-clippy": {
+        "command": [
+          "cargo",
+          "clippy",
+          "--locked",
+          "--all-features",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 44.325,
+        "log_sha256": "369e7b8788a5650592d1c60fa2b7031c2db9d7c0b769059ef74494d6e9650f9e"
+      },
+      "04-nextest": {
+        "command": [
+          "cargo",
+          "nextest",
+          "run",
+          "--locked",
+          "--all-features",
+          "--all-targets",
+          "--test-threads",
+          "1",
+          "--retries",
+          "0",
+          "--no-fail-fast",
+          "--status-level",
+          "all",
+          "--final-status-level",
+          "all"
+        ],
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 558.495,
+        "log_sha256": "c07c43a9b428feb965b78abc02dd147befb16fd9f34a82cc3b2507ddb0cfec73",
+        "tests_run": 2392,
+        "passed": 2392,
+        "failed": 0,
+        "skipped": 40,
+        "test_execution_seconds": 144.211,
+        "retries": 0,
+        "process_isolation": true
+      }
+    },
+    "first_run": {
+      "state": "failed",
+      "src_tree_sha256": "e75b836c2ab67b168f626e78f2ee6b716a1629eea78aa3394c55fa1c28ec3a67",
+      "tests_run": 2392,
+      "passed": 2386,
+      "failed": 6,
+      "skipped": 40,
+      "exit_code": 100,
+      "log_sha256": "0e51cd3dac72dace65fe855b72653369a4df34260c4d53e474b67773297065c4",
+      "failure_groups": [
+        {
+          "count": 4,
+          "cause": "Qualification TMPDIR exceeded the existing OpenSSH temporary socket path bound.",
+          "resolution": "Use a short task-owned temporary root; retain production path validation."
+        },
+        {
+          "count": 1,
+          "cause": "Legacy audit-reader test waited on a removed shared reader-count cap.",
+          "resolution": "Update the fixture to the uncapped reader admission contract."
+        },
+        {
+          "count": 1,
+          "cause": "Exact error-projection test expected obsolete concurrency remediation text.",
+          "resolution": "Update the current projection assertion; retain historical golden evidence."
+        }
+      ],
+      "retained_as_failed": true
+    },
+    "supplemental_prior_source": {
+      "src_tree_sha256": "e75b836c2ab67b168f626e78f2ee6b716a1629eea78aa3394c55fa1c28ec3a67",
+      "stages": {
+        "05-ssh-short-tmp": {
+          "command": [
+            "cargo",
+            "nextest",
+            "run",
+            "--locked",
+            "--all-features",
+            "--all-targets",
+            "--test-threads",
+            "1",
+            "--retries",
+            "0",
+            "--no-fail-fast",
+            "--status-level",
+            "all",
+            "--final-status-level",
+            "all",
+            "-E",
+            "test(=mcp::runtime::ssh::observation_pool::tests::file_observations::isolated_file_pool_startup_intent_and_no_fallback_fixtures) | test(=mcp::runtime::ssh::observation_pool::tests::isolated_actual_ssh_guard_cancellation_and_ownership_fixtures) | test(=mcp::runtime::ssh::observation_pool::tests::maintenance::background_notification_survives_an_unconsumed_empty_maintenance_result) | test(=mcp::runtime::ssh::observation_pool::tests::maintenance::isolated_master_retirement_preserves_other_hosts_and_cleanup_custody)"
+          ],
+          "state": "passed",
+          "exit_code": 0,
+          "elapsed_seconds": 33.336,
+          "log_sha256": "627f3a03159ac51e04628bc0fca71301ad4e9a215be7d6b16d0f29ee3a99d449",
+          "tests_run": 4,
+          "passed": 4
+        },
+        "06-check-no-default": {
+          "command": [
+            "cargo",
+            "check",
+            "--locked",
+            "--no-default-features",
+            "--all-targets"
+          ],
+          "state": "passed",
+          "exit_code": 0,
+          "elapsed_seconds": 52.44,
+          "log_sha256": "6f5132f13bc82ca6a42793076a6a47b774a8efadbcd95e8bf7a2de72677fe114"
+        },
+        "07-clippy-no-default": {
+          "command": [
+            "cargo",
+            "clippy",
+            "--locked",
+            "--no-default-features",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings"
+          ],
+          "state": "passed",
+          "exit_code": 0,
+          "elapsed_seconds": 44.27,
+          "log_sha256": "de658e11f7f1789e9dd20c63bf35f999db9efc0ca2334b893ee91bb41453fa5a"
+        }
+      },
+      "scope": "Earlier source; not final-tree no-default verification."
+    },
+    "final_no_default": {
+      "src_tree_sha256": "bad34fdd5ff48e0169a38cb4a8c3cd04d7303467a573467e57b196c033618604",
+      "state": "passed",
+      "journal_sha256": "4e793ee0b5a6fff7e9af3c713a02903bffa13a52c1c7a1433560c765974159eb",
+      "stages": {
+        "01-check-no-default-final": {
+          "command": [
+            "cargo",
+            "check",
+            "--locked",
+            "--no-default-features",
+            "--all-targets"
+          ],
+          "state": "passed",
+          "exit_code": 0,
+          "elapsed_seconds": 36.602,
+          "log_sha256": "42d0cfa4e8b79af2565607b9342ff8592f3a8fde207aa978816e617c0d1b2cd8"
+        },
+        "02-clippy-no-default-final": {
+          "command": [
+            "cargo",
+            "clippy",
+            "--locked",
+            "--no-default-features",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings"
+          ],
+          "state": "passed",
+          "exit_code": 0,
+          "elapsed_seconds": 42.408,
+          "log_sha256": "2d152a52cda99689ca58525a6219bfb7c1fd76a93f226766131a573a547d3d32"
+        }
+      }
+    }
+  },
+  "python_rea": {
+    "host": "rog",
+    "state": "passed",
+    "source_tree_sha256": "6648882134882221505e18127c42efb387f88e23ba4447bbf444801e0b93d1b1",
+    "journal_sha256": "819f9be63c4ac0ad3714d0ccde23a4c801c7cd44d73789c2988a6dbbb5e35637",
+    "stages": {
+      "01-rea-all": {
+        "command": [
+          "python3",
+          "-B",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "rea_*tests.py",
+          "-v"
+        ],
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 7.564,
+        "log_sha256": "73e61fb4953db07c6c319f1ed61dc551d13c5431dce59046960c7c9aa28c36da",
+        "tests_run": 303,
+        "passed": 303,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "test_execution_seconds": 7.169
+      },
+      "02-real-descriptor-drain": {
+        "command": [
+          "python3",
+          "-B",
+          "tests/rea_lifecycle_qualification_tests.py",
+          "ActualOwnedProcessTests.test_real_descriptor_open_and_drain_with_same_live_owner",
+          "-v"
+        ],
+        "state": "passed",
+        "exit_code": 0,
+        "elapsed_seconds": 0.177,
+        "log_sha256": "8c5b0285d385437136837be552ac90d837292367af1e0a8e0ffddf7c9a6211c6",
+        "tests_run": 1,
+        "passed": 1,
+        "test_execution_seconds": 0.011,
+        "also_included_in_303_test_suite": true
+      }
+    }
+  },
+  "tunnel_client": {
+    "source_version": "v0.0.19",
+    "source_commit": "01d67bb4da0d8359b808b4761f8db171ab682cd7",
+    "patch_id": "hepta-unbounded1",
+    "patch_sha256": "d2a8e8ec047de59b3ac8c2619e6d62b3f0c8b6b62fe09daa89d2ff23378ac6c8",
+    "go_version": "go1.27.3",
+    "flavor": "full",
+    "binary_sha256": "754bfa627d6fb2f779daa42e91782af85ce1b01a3bfbae99065ac82326e3f7e1",
+    "target": "darwin/arm64",
+    "binary_bytes": 24612146,
+    "build_receipt_sha256": "5986599b41928d058e5d8d9c35e1d904353bb5c5d8109f580e8fbdc57db0fb20",
+    "transfer_archive_sha256": "b4daf63fe0439ab401781ec39b53b45ae502a28a6b1a1c06e82fb799b31de495",
+    "transfer_commit_size": 8966971,
+    "transfer_commit_verified": true,
+    "zero_semantics": "Explicit zero selects the ants unbounded pool. Positive values retain upstream behavior; negatives are rejected; the omitted default remains ten.",
+    "transport_scope": "Unbounded Hepta configurations use authenticated HTTP or the existing private Unix HTTP read-only bridge. Generic stdio response-identity locks and tombstones remain.",
+    "go_tests": {
+      "schema": 1,
+      "source_commit": "01d67bb4da0d8359b808b4761f8db171ab682cd7",
+      "patch_sha256": "d2a8e8ec047de59b3ac8c2619e6d62b3f0c8b6b62fe09daa89d2ff23378ac6c8",
+      "go_version": "go1.27.3",
+      "platform": "linux/amd64",
+      "steps": [
+        {
+          "name": "config-dispatcher",
+          "command": [
+            "go",
+            "test",
+            "-mod=readonly",
+            "-p",
+            "2",
+            "./pkg/runtimeconfig",
+            "./pkg/dispatcher/internal"
+          ],
+          "state": "passed",
+          "exit_code": 0,
+          "elapsed_seconds": 6.621,
+          "log_sha256": "15b6ff779c7d1b15e9dcf98a1d584d4c5f29b4fd934ff48a05f8b1b3d2e7bcee",
+          "log_bytes": 130
+        },
+        {
+          "name": "config-dispatcher-race",
+          "command": [
+            "go",
+            "test",
+            "-race",
+            "-mod=readonly",
+            "-p",
+            "2",
+            "./pkg/runtimeconfig",
+            "./pkg/dispatcher/internal"
+          ],
+          "state": "passed",
+          "exit_code": 0,
+          "elapsed_seconds": 14.411,
+          "log_sha256": "f3c29257bea16ac162c09c65b7dcfedccb0021dd026c79f72ca9f9b3886100c9",
+          "log_bytes": 130
+        },
+        {
+          "name": "doctor-non-unix",
+          "command": [
+            "go",
+            "test",
+            "-mod=readonly",
+            "-p",
+            "2",
+            "./cmd/client",
+            "-run",
+            "^TestDoctor",
+            "-skip",
+            "TestDoctorUsesConfiguredUnixHTTPBridge|TestDoctorUsesUnixSocketHealthListener"
+          ],
+          "state": "passed",
+          "exit_code": 0,
+          "elapsed_seconds": 15.032,
+          "log_sha256": "242456881687d1912e68e0a507b2b3af9b915439f8ebd0bd22a77e5d205a8d9c",
+          "log_bytes": 55
+        }
+      ]
+    },
+    "unix_go_test_environment_limit": "The local build sandbox denies AF_UNIX socket creation. Two Unix doctor tests are explicitly excluded from the local doctor selection; final-binary Unix behavior was separately checked on macOS.",
+    "mac_bridge_http": {
+      "state": "passed",
+      "tests_run": 4,
+      "passed": 4,
+      "elapsed_seconds": 2.227,
+      "bridge_copies": 2,
+      "simultaneous_original_requests_per_copy": 32,
+      "checks": [
+        "original response IDs",
+        "session forwarding",
+        "local backend-token injection",
+        "read-only catalog filtering",
+        "mutating-tool refusal",
+        "OAuth metadata absence"
+      ],
+      "log_sha256": "be090d7eeed9576bc082d665ac3e96ab800442b4a9d77c45dfca111c78db6fba"
+    },
+    "mac_doctor": {
+      "state": "passed",
+      "exit_code": 0,
+      "result": "ok",
+      "checks": {
+        "mcp_server_reachable": "PASS",
+        "oauth_metadata": "PASS",
+        "health_listener": "PASS"
+      },
+      "observed_request_paths": [
+        "/mcp",
+        "/mcp",
+        "/.well-known/oauth-protected-resource/mcp",
+        "/.well-known/oauth-protected-resource"
+      ],
+      "binary_sha256": "754bfa627d6fb2f779daa42e91782af85ce1b01a3bfbae99065ac82326e3f7e1",
+      "real_account_credentials_used": false,
+      "poller_started": false,
+      "receipt_sha256": "d8fd09e05bb889a58d0e7af7bf4c7eab675edc7c5f5a0e7cf972e5e8a86e8c25"
+    },
+    "mac_acceptance_owner": {
+      "state": "succeeded",
+      "exit_code": 0,
+      "output_complete": true,
+      "output_durable": true,
+      "terminal_publication_confirmed": true,
+      "automatic_retry": false,
+      "verification_receipt_sha256": "72522cb9e27a53a254558d79f55b0354449bbde0dc9389644d5e557353101271"
+    }
+  },
+  "history": {
+    "direct_ssh_introduction_commit": "b20bcf02cfe72b3873c5c03180e4028ea673067f",
+    "url": "https://github.com/TrillionniumFoundation/hepta-runtime/commit/b20bcf02cfe72b3873c5c03180e4028ea673067f",
+    "title": "perf(runtime): bound direct native SSH and retain original cleanup custody (A53)",
+    "scope": "The original commit described an exact X230-qualified 175-file source identity and retained separate pending performance, full-six-host and CI qualifications. Its nested transport admission gates survived outer dispatch changes. No author motive is inferred."
+  },
+  "systemd": {
+    "unit": "hepta-runtime-jobs.slice",
+    "hosts_audited": 5,
+    "hosts_repaired": 3,
+    "raw_private_record_sha256": "e9d93f31750eed53e1c7e8d4226e31596d7b9062de7930c03b57c7fd0b744838",
+    "hosts": [
+      {
+        "host": "rog",
+        "system_tasks_max_before": "128",
+        "user_tasks_max_observed": "infinity",
+        "system_tasks_max_after": "infinity",
+        "changed": true,
+        "verified": true,
+        "other_properties_preserved": true,
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_durable": true,
+        "terminal_publication_confirmed": true,
+        "cgroup_observed": false,
+        "pids_max": null
+      },
+      {
+        "host": "desktop",
+        "system_tasks_max_before": "infinity",
+        "user_tasks_max_observed": "infinity",
+        "system_tasks_max_after": "infinity",
+        "changed": false
+      },
+      {
+        "host": "ai395",
+        "system_tasks_max_before": "infinity",
+        "user_tasks_max_observed": "infinity",
+        "system_tasks_max_after": "infinity",
+        "changed": false
+      },
+      {
+        "host": "pocket4",
+        "system_tasks_max_before": "128",
+        "user_tasks_max_observed": "infinity",
+        "system_tasks_max_after": "infinity",
+        "changed": true,
+        "verified": true,
+        "other_properties_preserved": true,
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_durable": true,
+        "terminal_publication_confirmed": true,
+        "cgroup_observed": false,
+        "pids_max": null
+      },
+      {
+        "host": "x230",
+        "system_tasks_max_before": "128",
+        "user_tasks_max_observed": "infinity",
+        "system_tasks_max_after": "infinity",
+        "changed": true,
+        "verified": true,
+        "other_properties_preserved": true,
+        "state": "succeeded",
+        "exit_code": 0,
+        "output_durable": true,
+        "terminal_publication_confirmed": true,
+        "cgroup_observed": true,
+        "pids_max": "max"
+      }
+    ],
+    "scope": "Only the aggregate TasksMax property was changed where it was 128. Existing CPU and memory properties were preserved. Two inactive repaired units had no active cgroup to inspect."
+  },
+  "claim_boundaries": {
+    "historical_receipts_requalified": false,
+    "historical_failures_erased": false,
+    "external_engine_or_provider_parity_claimed": false,
+    "unlimited_physical_capacity_claimed": false,
+    "hosted_ci_pass_claimed": false,
+    "full_cmd_client_go_suite_claimed": false,
+    "credentials_or_private_profiles_included": false,
+    "private_paths_or_raw_large_logs_included": false
+  },
+  "completion_requirements": [
+    "Resolve the original activation job and its bound plan without replaying uncertain execution.",
+    "Update live_activation only from the actual original terminal receipt and deployed binary/runtime-policy/tunnel-health observations, or record an observed rollback.",
+    "A passing hosted-CI result needs its own observed receipt; the current in_progress observation is not a pass."
+  ],
+  "native_runtime_r2": {
+    "state": "passed",
+    "implementation_commit": "826c462699a27ed6afa83298440acb732b726af5",
+    "implementation_tree": "fc34c18deeed0964c9bedb557a8385d72013273d",
+    "build": {
+      "state": "passed",
+      "exit_code": 0,
+      "elapsed_seconds": 179.237,
+      "toolchain": "1.98.0-aarch64-apple-darwin",
+      "source_state": "clean committed checkout",
+      "source_inputs_unchanged": true,
+      "runtime_sha256": "8969ebef564d162fdeb539be3b59fce9c511550f44eb4282655c3fc06d85f989",
+      "runtime_bytes": 16837440
+    },
+    "cohorts": [
+      {
+        "host": "mac",
+        "report_sha256": "b10458dddcf86483d928e0cbe29484a0ebf3144354ff62526783cacd1c7550d6",
+        "checks": 75,
+        "passed": true,
+        "complete": true,
+        "failures": [],
+        "count": 32,
+        "peak_outstanding": 32,
+        "peak_original_ssh_children": 32,
+        "new_key_retries": 0
+      },
+      {
+        "host": "rog",
+        "report_sha256": "f809ab5c7ef87a4f950e3e7f45288dd62ba1b66707f1342b70d008fbf7e7ba02",
+        "checks": 75,
+        "passed": true,
+        "complete": true,
+        "failures": [],
+        "count": 32,
+        "peak_outstanding": 32,
+        "peak_original_ssh_children": 32,
+        "new_key_retries": 0
+      }
+    ],
+    "provenance": {
+      "observation_journal_sha256": "8ae0e67fed2610ed3bb9a3312c39759e59b7c4eeeb9b03da910f4cd22ad842dd",
+      "observation_journal_kind": "derived observation log; not an original activation receipt",
+      "original_build_job_id": "1a1c0728c01-5e21-a65",
+      "report_hashes": "Computed by the original Mac build script from the completed report files, then read from build job 1a1c0728c01-5e21-a65 stdout; raw reports were observed through h_view but not copied as files before connection loss.",
+      "raw_reports_copied_to_cloud": false
+    }
+  },
+  "deployment_stage": {
+    "state": "passed",
+    "plan_sha256": "2f91972315995f8c66cd041c1875455825a5bd59eff9fac46fb191bfd14d7944",
+    "plan_exact_bytes_verified_in_cloud": true,
+    "runtime_commit": "826c462699a27ed6afa83298440acb732b726af5",
+    "runtime_sha256": "8969ebef564d162fdeb539be3b59fce9c511550f44eb4282655c3fc06d85f989",
+    "tunnel_sha256": "754bfa627d6fb2f779daa42e91782af85ce1b01a3bfbae99065ac82326e3f7e1",
+    "http_tunnel_count": 2,
+    "terminal": {
+      "state": "succeeded",
+      "exit_code": 0,
+      "job_id": "1a1c07c1c58-5e21-a91",
+      "output_complete": true,
+      "output_durable": true,
+      "terminal_publication_confirmed": true,
+      "automatic_retry": false
+    },
+    "provenance": "Original stage result and terminal receipt were independently observed; the recovered plan bytes match the original emitted SHA256."
+  }
+}

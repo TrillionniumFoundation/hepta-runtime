@@ -29,7 +29,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::{self, Read};
 use std::sync::Arc;
-use tokio::sync::OwnedSemaphorePermit;
 use tokio_util::sync::CancellationToken;
 
 const MEMORY_BYTES: libc::rlim_t = 2 * 1024 * 1024 * 1024;
@@ -133,7 +132,6 @@ pub(super) async fn inspect_isolated(
 	digest: &str,
 	bytes: Arc<Vec<u8>>,
 	cancellation: &CancellationToken,
-	lease: Arc<OwnedSemaphorePermit>,
 	admission: Arc<super::runtime::effect_owner_fence::AdmissionPermit>,
 ) -> std::result::Result<Value, Failure> {
 	let header = serde_json::to_vec(&Header {
@@ -152,7 +150,6 @@ pub(super) async fn inspect_isolated(
 		header,
 		bytes,
 		cancellation,
-		lease,
 		admission,
 	)
 	.await
@@ -164,7 +161,6 @@ pub(super) async fn inspect_isolated(
 	digest: &str,
 	bytes: Arc<Vec<u8>>,
 	cancellation: &CancellationToken,
-	_lease: Arc<OwnedSemaphorePermit>,
 	_admission: Arc<super::runtime::effect_owner_fence::AdmissionPermit>,
 ) -> std::result::Result<Value, Failure> {
 	super::active(cancellation)?;

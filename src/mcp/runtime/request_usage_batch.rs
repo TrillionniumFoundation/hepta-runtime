@@ -8,7 +8,7 @@ use std::sync::{Condvar, MutexGuard};
 use std::time::Duration;
 
 const COLLECT_WINDOW: Duration = Duration::from_millis(1);
-const MAX_HINTS: usize = MAX_METADATA_QUERIES;
+const MAX_HINTS: usize = METADATA_BATCH_SIZE;
 static COORDINATOR: OnceLock<Coordinator> = OnceLock::new();
 
 struct ObservedUsage {
@@ -118,7 +118,7 @@ struct Waiter {
 	group: Arc<Group>,
 	reply: Arc<Reply>,
 	deadline: Instant,
-	// A follower's own unwind must also retain the outer query permit until
+	// A synchronous follower's unwind must retain original group custody until
 	// the leader is really done. A leader has its separate completion guard.
 	follower_custody: bool,
 }
@@ -147,7 +147,7 @@ impl Waiter {
 impl Drop for Waiter {
 	fn drop(&mut self) {
 		if self.follower_custody {
-			// No deadline/poison/notification shortcut may return its permit
+			// No deadline/poison/notification shortcut may release custody
 			// while shared I/O is still owned by the actual leader closure.
 			self.group.wait_complete();
 		}
@@ -196,7 +196,7 @@ impl Completion<'_> {
 		loop {
 			let until = self.group.collect_until.min(state.deadline());
 			let now = Instant::now();
-			if state.members.len() == MAX_METADATA_QUERIES || now >= until {
+			if state.members.len() == METADATA_BATCH_SIZE || now >= until {
 				return Ok(());
 			}
 			state = self
@@ -379,7 +379,7 @@ impl Coordinator {
 			if !state.frozen
 				&& !state.complete
 				&& !state.failed
-				&& state.members.len() < MAX_METADATA_QUERIES
+				&& state.members.len() < METADATA_BATCH_SIZE
 				&& now < group.collect_until
 				&& now < state.deadline()
 			{
@@ -407,9 +407,6 @@ impl Coordinator {
 		registry.collecting.retain(|(saved, group)| {
 			saved.as_os_str() != root.as_os_str() && now < group.collect_until
 		});
-		if registry.collecting.len() >= MAX_METADATA_QUERIES {
-			bail!("usage query group admission bound exceeded");
-		}
 		registry
 			.collecting
 			.push((root.to_path_buf(), candidate.clone()));

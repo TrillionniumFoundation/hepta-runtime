@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use tokio::io::AsyncReadExt;
 use tokio_util::sync::CancellationToken;
 
@@ -358,10 +358,6 @@ async fn execute(
 	cancellation: &CancellationToken,
 	admission: Arc<runtime::effect_owner_fence::AdmissionPermit>,
 ) -> Result<Value, Failure> {
-	static SLOTS: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
-	let permit = Arc::new(Arc::clone(SLOTS.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(2))))
-		.try_acquire_owned().map_err(|_| Failure::resource(OP,"capacity","Native ELF parser capacity is occupied.",
-			json!({"max_concurrent_elf_workers":2}),true,"Wait for an active analysis to complete, then retry within the reported admission limits."))?);
 	let (bytes, digest) = capture(&input, roots, cancellation).await?;
 	let length = bytes.len() as u64;
 	let result = worker::inspect_isolated(
@@ -369,7 +365,6 @@ async fn execute(
 		&digest,
 		Arc::new(bytes),
 		cancellation,
-		Arc::clone(&permit),
 		Arc::clone(&admission),
 	)
 	.await?;
@@ -388,9 +383,8 @@ async fn execute(
 		.remove("report")
 		.ok_or_else(|| Failure::output(OP, "ELF worker omitted its complete report."))?;
 	// Identity construction scans the complete report. Keep it off async
-	// executor threads and retain both guards if the caller drops while hashing.
+	// executor threads and retain the owner guard if the caller drops while hashing.
 	tokio::task::spawn_blocking(move || {
-		let _permit = permit;
 		let _admission = admission;
 		evidence(report, &input, &digest, length)
 	})

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
-"""Bounded stdio request cancellation with an authenticated loopback fixture.
+"""Concurrent stdio requests and cancellation over authenticated loopback fixtures.
 
 The backend records one synthetic effect per submitted call. A cancellation
 notification can release a wait, but never retracts the recorded effect.
@@ -68,7 +68,9 @@ class Backend(http.server.BaseHTTPRequestHandler):
         if method=='initialize':
             self.server.initializations+=1
             result={'protocolVersion':'2025-06-18','capabilities':{'tools':{}},'serverInfo':{'name':'fixture','version':'1'}}
-        elif method=='tools/list':result={'tools':self.server.tools}
+        elif method=='tools/list':
+            if self.server.catalog_gate is not None:self.server.catalog_gate.wait(6)
+            result={'tools':self.server.tools}
         elif method=='tools/call':result={'content':[{'type':'text','text':'effect-recorded'}],'isError':False}
         else:result={}
         if method=='tools/call' and self.server.invalid_response is not None:
@@ -119,12 +121,15 @@ class Stream:
 
 class CancellationTests(unittest.TestCase):
     def setUp(self):
-        self.server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Backend);self.server.daemon_threads=True
+        class FixtureServer(http.server.ThreadingHTTPServer):
+            request_queue_size=socket.SOMAXCONN
+        self.server=FixtureServer(('127.0.0.1',0),Backend);self.server.daemon_threads=True
         self.server.tools=copy.deepcopy(TOOLS);self.server.changed=threading.Condition()
         self.server.seen=[];self.server.calls=[];self.server.cancels=[];self.server.initializations=0
         self.server.started=threading.Event();self.server.release=threading.Event();self.server.delay=True
         self.server.release_on_cancel=True;self.server.cancel_status=202;self.server.disconnect=False
         self.server.cancel_gate=None;self.server.send_sid=True;self.server.cancel_trickle=False;self.server.invalid_response=None
+        self.server.catalog_gate=None
         self.http_thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.http_thread.start()
         self.proxy=F.NativeProxy(f'http://127.0.0.1:{self.server.server_port}/mcp','fixture-private-token',
                                  ToolContract(make_contract(copy.deepcopy(TOOLS))),timeout=8)
@@ -154,6 +159,13 @@ class CancellationTests(unittest.TestCase):
                 if len(self.proxy._active)==count:return
             time.sleep(.005)
         self.fail('active table evidence deadline')
+    def retire_legacy_control_ids(self,count=4200):
+        identities=['retained-'+str(index) for index in range(count)]
+        for ident in identities:
+            context,refused=self.proxy._reserve(request(ident,'ping',{}),remember=True)
+            self.assertIsNone(refused)
+            self.assertTrue(self.proxy._finish(context))
+        return identities,{self.proxy._identity_digest(ident) for ident in identities}
     def test_cancel_reaches_owned_native_id_and_frozen_session_during_wait(self):
         self.begin();self.start()
         call=self.server.calls[0];native=call['request']['id']
@@ -181,9 +193,11 @@ class CancellationTests(unittest.TestCase):
         self.assertEqual(len(self.server.cancels),1)
     def test_typed_pending_identity_cancel_skips_unsent_call(self):
         self.begin();self.start(7)
-        self.stream.send(request('7'));self.active_wait(2)
-        self.stream.send(cancellation('7'));time.sleep(.05)
-        self.assertEqual(self.server.cancels,[])
+        # Hold only session-state preparation; there is no global work queue.
+        with self.proxy._state_lock:
+            self.stream.send(request('7'));self.active_wait(2)
+            self.stream.send(cancellation('7'));time.sleep(.05)
+            self.assertEqual(self.server.cancels,[])
         self.stream.send(cancellation(7));self.stream.output.wait(7)
         skipped=self.stream.output.wait('7')
         self.assertEqual(skipped['error']['data']['outcome'],'not_submitted')
@@ -206,28 +220,71 @@ class CancellationTests(unittest.TestCase):
         self.stream.send(request(8));self.assertIn('result',self.stream.output.wait(8))
         self.assertNotEqual(old_native,self.server.calls[1]['request']['id'])
         self.stream.send(cancellation(7));time.sleep(.05);self.assertEqual(self.server.cancels,[])
-    def test_active_table_and_queue_are_bounded(self):
-        with mock.patch.object(F,'MAX_ACTIVE_REQUESTS',4):
-            self.begin();self.start(1)
-            for ident in [2,3,4]:self.stream.send(request(ident))
-            self.active_wait(4);self.stream.send(request(5))
-            refused=self.stream.output.wait(5)
-            self.assertEqual(refused['error']['data']['outcome'],'not_submitted')
-            with self.proxy._active_lock:self.assertEqual(len(self.proxy._active),4)
-            self.stream.writer.close();self.stream.thread.join(4)
-            self.assertFalse(self.stream.thread.is_alive());self.assertEqual(len(self.server.calls),1)
-            for ident in [2,3,4]:self.assertEqual(self.stream.output.wait(ident)['error']['data']['outcome'],'not_submitted')
-    def test_retired_identity_budget_fails_closed_across_idle_initialize(self):
+    def test_more_than_sixteen_calls_and_attestations_run_concurrently(self):
+        self.begin()
+        self.server.catalog_gate=threading.Barrier(32)
+        for ident in range(32):self.stream.send(request(ident))
+        self.backend_wait(lambda:len(self.server.calls)==32,timeout=6)
+        with self.proxy._active_lock:self.assertEqual(len(self.proxy._active),32)
+        self.assertEqual(len({call['request']['id'] for call in self.server.calls}),32)
+        self.server.catalog_gate=None;self.server.release.set()
+        for ident in range(32):self.assertIn('result',self.stream.output.wait(ident))
+        self.assertEqual(len(self.server.calls),32)
+    def test_more_than_4096_active_legacy_ids_retain_all_original_tombstones(self):
+        active=[]
+        for ident in range(4200):
+            context,refused=self.proxy._reserve(request(ident,'ping',{}),remember=True)
+            self.assertIsNone(refused)
+            self.assertTrue(context.remember)
+            active.append(context)
+        self.assertEqual(len(self.proxy._active),4200)
+        self.assertEqual(len(self.proxy._retired),0)
+        duplicate,refused=self.proxy._reserve(request(4199,'ping',{}),remember=True)
+        self.assertIsNone(duplicate);self.assertEqual(refused['error']['code'],-32600)
+        for context in active:self.assertTrue(self.proxy._finish(context))
+        self.assertEqual(len(self.proxy._retired),4200)
+        retained=set(self.proxy._retired)
+        for ident in (0,4095,4199):
+            reused,refused=self.proxy._reserve(request(ident,'ping',{}),remember=True)
+            self.assertIsNone(reused);self.assertEqual(refused['error']['data']['outcome'],'not_submitted')
+        # Typed identities remain distinct even after the former storage boundary.
+        fresh,refused=self.proxy._reserve(request('0','ping',{}),remember=True)
+        self.assertIsNone(refused);self.assertTrue(self.proxy._finish(fresh))
+        self.assertTrue(retained.issubset(self.proxy._retired))
+        self.assertEqual(len(self.proxy._retired),4201)
+        self.assertFalse(self.proxy._finish(active[0]))
+        # Modern correlation IDs can still be reused after their own completion.
+        modern=request(0,'ping',{'_meta':{F.VERSION_KEY:F.MODERN_VERSION,F.CAPABILITIES_KEY:{}}})
+        original,refused=self.proxy._reserve(modern,remember=True)
+        self.assertIsNone(refused);self.assertFalse(original.remember)
+        self.assertTrue(self.proxy._finish(original))
+        newer,refused=self.proxy._reserve(modern,remember=True)
+        self.assertIsNone(refused)
+        self.assertFalse(self.proxy._finish(original))
+        self.assertIs(self.proxy._active[newer.key],newer)
+        self.assertTrue(self.proxy._finish(newer))
+        self.assertEqual(len(self.proxy._retired),4201)
+    def test_retired_ids_above_old_budget_survive_idle_initialize_and_new_calls(self):
         self.server.delay=False
-        with mock.patch.object(F,'MAX_RETIRED_IDS',3):
-            self.begin()
-            for ident in [1,2]:self.stream.send(request(ident));self.assertIn('result',self.stream.output.wait(ident))
-            self.stream.send(request(3));self.assertEqual(self.stream.output.wait(3)['error']['data']['outcome'],'not_submitted')
-            self.assertEqual(len(self.server.calls),2)
-            self.stream.send(request('init2','initialize',{'protocolVersion':'2025-06-18','capabilities':{},'clientInfo':{'name':'new','version':'1'}}))
-            self.assertEqual(self.stream.output.wait('init2')['error']['data']['outcome'],'not_submitted')
-            self.stream.send(request(4));self.assertEqual(self.stream.output.wait(4)['error']['data']['outcome'],'not_submitted')
-            self.assertEqual(len(self.server.calls),2)
+        identities,retained=self.retire_legacy_control_ids()
+        self.begin()
+        self.stream.send(request(7));self.assertIn('result',self.stream.output.wait(7))
+        old_native=self.server.calls[0]['request']['id']
+        for ident in (identities[0],identities[-1]):
+            self.stream.send(request(ident))
+            self.assertEqual(self.stream.output.wait(ident)['error']['data']['outcome'],'not_submitted')
+            self.stream.send(cancellation(ident))
+        self.stream.send(request('init2','initialize',{'protocolVersion':'2025-06-18','capabilities':{},'clientInfo':{'name':'new','version':'1'}}))
+        self.assertIn('result',self.stream.output.wait('init2'))
+        self.stream.send(request(7))
+        self.assertEqual(self.stream.output.wait(7,predicate=lambda value:'error' in value)['error']['data']['outcome'],'not_submitted')
+        self.stream.send(cancellation(7))
+        self.stream.send(request(8));self.assertIn('result',self.stream.output.wait(8))
+        self.assertEqual(len(self.server.calls),2)
+        self.assertEqual(self.server.cancels,[])
+        self.assertNotEqual(old_native,self.server.calls[1]['request']['id'])
+        self.assertNotEqual(self.server.calls[0]['session'],self.server.calls[1]['session'])
+        self.assertTrue(retained.issubset(self.proxy._retired))
     def test_failed_cancel_does_not_retry_operation_or_cancel(self):
         self.server.cancel_status=503;self.server.release_on_cancel=False;self.server.disconnect=True
         self.begin();self.start();self.stream.send(cancellation(7))
@@ -238,12 +295,15 @@ class CancellationTests(unittest.TestCase):
         self.assertFalse(reply['error']['data']['automatic_retry'])
         self.stream.send(cancellation(7));time.sleep(.1)
         self.assertEqual(len(self.server.calls),1);self.assertEqual(len(self.server.cancels),1)
-    def test_eof_has_one_deadline_skips_queue_and_retains_unknown_write(self):
+    def test_eof_above_old_identity_budget_retains_unknown_write_and_suppresses_late_reply(self):
         self.server.release_on_cancel=False
+        _,retained=self.retire_legacy_control_ids()
         with mock.patch.object(F,'SHUTDOWN_TIMEOUT',.5):
-            self.begin();self.start();self.stream.send(request(8));self.active_wait(2)
-            began=time.monotonic();self.stream.writer.close();self.stream.thread.join(1.5)
-            self.assertFalse(self.stream.thread.is_alive());self.assertLess(time.monotonic()-began,1.3)
+            self.begin();self.start()
+            with self.proxy._state_lock:
+                self.stream.send(request(8));self.active_wait(2)
+                began=time.monotonic();self.stream.writer.close();self.stream.thread.join(1.5)
+                self.assertFalse(self.stream.thread.is_alive());self.assertLess(time.monotonic()-began,1.3)
             self.backend_wait(lambda:len(self.server.cancels)==1)
             reply=self.stream.output.wait(7)
             self.assertEqual(reply['error']['data']['outcome'],'unknown')
@@ -252,6 +312,9 @@ class CancellationTests(unittest.TestCase):
             self.assertEqual(len(self.server.calls),1)
             before=len(self.stream.output.values);self.server.release.set();time.sleep(.1)
             self.assertEqual(len(self.stream.output.values),before,'late response duplicated a finalized identity')
+            self.assertTrue(retained.issubset(self.proxy._retired))
+            self.assertIn(self.proxy._identity_digest(7),self.proxy._retired)
+            self.assertIn(self.proxy._identity_digest(8),self.proxy._retired)
     def test_output_failure_and_blocked_writer_do_not_make_eof_join_unbounded(self):
         class BlockingOutput:
             def write(self,data):gate.wait(3)
@@ -281,6 +344,26 @@ class CancellationTests(unittest.TestCase):
         self.assertIn('result',self.stream.output.wait('init'));self.assertIn('result',self.stream.output.wait(7))
         self.assertEqual(self.server.initializations,1)
         self.assertEqual(self.server.calls[0]['session'],'session-fixture-1')
+    def test_idle_reinitialize_with_queued_call_replaces_only_the_idle_session(self):
+        self.server.delay=False;self.begin()
+        with self.proxy._state_lock:
+            self.stream.send(request('init2','initialize',{'protocolVersion':'2025-06-18','capabilities':{},'clientInfo':{'name':'new','version':'1'}}))
+            self.stream.send(request(7));self.active_wait(2)
+        self.assertIn('result',self.stream.output.wait('init2'))
+        self.assertIn('result',self.stream.output.wait(7))
+        self.assertEqual(self.server.initializations,2)
+        self.assertEqual(len(self.server.calls),1)
+        self.assertEqual(self.server.calls[0]['session'],'session-fixture-2')
+    def test_chained_reinitializations_keep_later_calls_on_the_final_session(self):
+        self.server.delay=False;self.begin()
+        with self.proxy._state_lock:
+            for ident in ('init2','init3'):
+                self.stream.send(request(ident,'initialize',{'protocolVersion':'2025-06-18','capabilities':{},'clientInfo':{'name':'new','version':'1'}}))
+            self.stream.send(request(7));self.active_wait(3)
+        for ident in ('init2','init3',7):self.assertIn('result',self.stream.output.wait(ident))
+        self.assertEqual(self.server.initializations,3)
+        self.assertEqual(len(self.server.calls),1)
+        self.assertEqual(self.server.calls[0]['session'],'session-fixture-3')
     def test_late_cancel_of_retired_control_id_cannot_target_a_new_tool(self):
         self.server.delay=False;self.begin();self.stream.send(request(7,'ping',{}))
         self.assertIn('result',self.stream.output.wait(7))
@@ -347,19 +430,20 @@ class CancellationTests(unittest.TestCase):
             self.stream.writer.close();self.stream.thread.join(1.5)
             self.assertFalse(self.stream.thread.is_alive())
             self.assertEqual(self.stream.output.wait(7)['error']['data']['outcome'],'unavailable')
-    def test_slot_release_schedules_only_cancel_intents_never_sent(self):
+    def test_more_than_two_cancellations_start_without_waiting_for_other_replies(self):
         self.server.cancel_gate=threading.Event();self.server.release_on_cancel=False
         self.begin()
-        for ident in [1,2]:
-            self.server.started.clear();self.server.release.clear();self.start(ident)
-            self.stream.send(cancellation(ident));self.backend_wait(lambda:len(self.server.cancels)==ident)
-            self.server.release.set();self.assertIn('result',self.stream.output.wait(ident))
-        self.server.started.clear();self.server.release.clear();self.start(3);self.stream.send(cancellation(3))
-        time.sleep(.05);self.assertEqual(len(self.server.cancels),2)
-        with self.proxy._active_lock:self.assertLessEqual(len(self.proxy._cancel_threads),2)
-        self.server.cancel_gate.set();self.backend_wait(lambda:len(self.server.cancels)==3)
-        self.server.release.set();self.stream.output.wait(3)
-        self.assertEqual(len(self.server.calls),3);self.assertEqual(len(self.server.cancels),3)
+        for ident in range(8):self.stream.send(request(ident))
+        self.backend_wait(lambda:len(self.server.calls)==8)
+        for ident in range(8):self.stream.send(cancellation(ident))
+        self.backend_wait(lambda:len(self.server.cancels)==8)
+        with self.proxy._active_lock:self.assertGreater(len(self.proxy._cancel_threads),2)
+        expected={call['request']['id'] for call in self.server.calls}
+        self.assertEqual({cancel['request']['params']['requestId'] for cancel in self.server.cancels},expected)
+        for ident in range(8):self.stream.send(cancellation(ident))
+        self.server.cancel_gate.set();self.server.release.set()
+        for ident in range(8):self.assertIn('result',self.stream.output.wait(ident))
+        self.assertEqual(len(self.server.calls),8);self.assertEqual(len(self.server.cancels),8)
     def test_broken_stdout_with_open_stdin_exits_without_waiting_for_eof(self):
         source_read,source_write=os.pipe();output_read,output_write=os.pipe();os.close(output_read)
         source=os.fdopen(source_read,'rb');sink=os.fdopen(output_write,'wb')
@@ -369,7 +453,7 @@ class CancellationTests(unittest.TestCase):
                 os.write(source_write,b'not-json\n');worker.join(1)
                 self.assertFalse(worker.is_alive(),'writer failure waited for caller EOF')
         finally:os.close(source_write);source.close();sink.close()
-    def test_cancel_trickle_cannot_hold_a_slot_past_absolute_deadline(self):
+    def test_cancel_trickle_cannot_keep_its_worker_past_absolute_deadline(self):
         self.server.cancel_trickle=True;self.server.release_on_cancel=False
         with mock.patch.object(F,'CANCEL_TIMEOUT',.25):
             self.begin();self.start();began=time.monotonic();self.stream.send(cancellation(7))

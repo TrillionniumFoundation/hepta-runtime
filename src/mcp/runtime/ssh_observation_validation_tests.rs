@@ -4,6 +4,7 @@
 //! Exercise real blocking closures, cancellation, late failure and drain ownership.
 
 use super::*;
+use anyhow::Context;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tokio::sync::oneshot;
@@ -67,15 +68,15 @@ async fn workers_leave_owner_responsive_and_hash_each_call() {
 		assert_eq!(count.load(Ordering::SeqCst), expected);
 	}
 	assert!(!stop.is_cancelled());
-	assert_eq!(workers.permits.available_permits(), WORKERS);
+	assert_eq!(workers.activity.active(), 0);
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn dropped_callers_keep_worker_capacity_and_shutdown_waits() {
+async fn dropped_callers_retain_original_work_without_blocking_new_validation() {
 	let workers = Arc::new(Workers::new());
 	let stop = CancellationToken::new();
 	let mut releases = Vec::new();
-	for _ in 0..WORKERS {
+	for _ in 0..8 {
 		let (check, entered, release) = held_check(Ok(()));
 		let task_workers = workers.clone();
 		let task_stop = stop.clone();
@@ -92,22 +93,18 @@ async fn dropped_callers_keep_worker_capacity_and_shutdown_waits() {
 		assert!(task.await.unwrap_err().is_cancelled());
 		releases.push(release);
 	}
-	assert_eq!(workers.permits.available_permits(), 0);
+	assert_eq!(workers.activity.active(), 8);
 	let called = Arc::new(AtomicUsize::new(0));
 	let observed = called.clone();
-	assert!(workers
-		.run(
-			&stop,
-			Instant::now() + Duration::from_millis(25),
-			move || {
-				observed.fetch_add(1, Ordering::SeqCst);
-				Ok(())
-			}
-		)
+	workers
+		.run(&stop, Instant::now() + Duration::from_secs(2), move || {
+			observed.fetch_add(1, Ordering::SeqCst);
+			Ok(())
+		})
 		.await
-		.is_err());
-	assert_eq!(called.load(Ordering::SeqCst), 0);
-	assert_eq!(workers.permits.available_permits(), 0);
+		.unwrap();
+	assert_eq!(called.load(Ordering::SeqCst), 1);
+	assert_eq!(workers.activity.active(), 8);
 	stop.cancel();
 	assert!(timeout(Duration::from_millis(25), workers.drain())
 		.await
@@ -119,7 +116,7 @@ async fn dropped_callers_keep_worker_capacity_and_shutdown_waits() {
 		.await
 		.unwrap()
 		.unwrap();
-	assert_eq!(workers.permits.available_permits(), WORKERS);
+	assert_eq!(workers.activity.active(), 0);
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -141,7 +138,7 @@ async fn late_authority_failure_freezes_even_after_caller_cancellation() {
 	task.abort();
 	assert!(task.await.unwrap_err().is_cancelled());
 	assert!(!stop.is_cancelled());
-	assert_eq!(workers.permits.available_permits(), WORKERS - 1);
+	assert_eq!(workers.activity.active(), 1);
 	release.send(()).unwrap();
 	timeout(Duration::from_secs(2), stop.cancelled())
 		.await
@@ -150,7 +147,7 @@ async fn late_authority_failure_freezes_even_after_caller_cancellation() {
 		.await
 		.unwrap()
 		.unwrap();
-	assert_eq!(workers.permits.available_permits(), WORKERS);
+	assert_eq!(workers.activity.active(), 0);
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -179,7 +176,7 @@ async fn deadline_discards_late_success_but_does_not_release_running_worker() {
 		.unwrap()
 		.is_err());
 	assert!(stop.is_cancelled());
-	assert_eq!(workers.permits.available_permits(), WORKERS - 1);
+	assert_eq!(workers.activity.active(), 1);
 	assert!(timeout(Duration::from_millis(25), workers.drain())
 		.await
 		.is_err());
@@ -188,11 +185,11 @@ async fn deadline_discards_late_success_but_does_not_release_running_worker() {
 		.await
 		.unwrap()
 		.unwrap();
-	assert_eq!(workers.permits.available_permits(), WORKERS);
+	assert_eq!(workers.activity.active(), 0);
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn worker_panic_freezes_before_capacity_is_reused() {
+async fn worker_panic_freezes_before_new_work_starts() {
 	let workers = Workers::new();
 	let stop = CancellationToken::new();
 	let error = workers
@@ -228,7 +225,7 @@ fn queued_worker_rechecks_original_deadline_and_stop_before_full_read() {
 	runtime.block_on(async {
 		for cause in ["deadline", "stop"] {
 			// Occupy the only blocking thread first, so the validation closure
-			// must remain queued even though it already owns its worker permit.
+			// must remain queued even though its original lifetime is already tracked.
 			let (entered, receive) = oneshot::channel();
 			let (release, wait) = std::sync::mpsc::channel();
 			let occupant = tokio::task::spawn_blocking(move || {
@@ -255,7 +252,7 @@ fn queued_worker_rechecks_original_deadline_and_stop_before_full_read() {
 					.await
 			});
 			timeout(Duration::from_secs(2), async {
-				while workers.permits.available_permits() == WORKERS {
+				while workers.activity.active() == 0 {
 					tokio::task::yield_now().await;
 				}
 			})
@@ -265,7 +262,7 @@ fn queued_worker_rechecks_original_deadline_and_stop_before_full_read() {
 			// from setting stop. The closure itself must notice the old budget.
 			task.abort();
 			assert!(task.await.unwrap_err().is_cancelled());
-			assert_eq!(workers.permits.available_permits(), WORKERS - 1);
+			assert_eq!(workers.activity.active(), 1);
 			assert!(!stop.is_cancelled());
 			if cause == "deadline" {
 				tokio::time::sleep_until(deadline).await;
@@ -281,18 +278,18 @@ fn queued_worker_rechecks_original_deadline_and_stop_before_full_read() {
 				.unwrap();
 			assert!(stop.is_cancelled());
 			assert_eq!(called.load(Ordering::SeqCst), 0, "executed after {cause}");
-			assert_eq!(workers.permits.available_permits(), WORKERS);
+			assert_eq!(workers.activity.active(), 0);
 		}
 	});
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn returned_owner_tickets_keep_the_original_two_slot_budget() {
+async fn retained_owner_tickets_do_not_limit_new_validation() {
 	let workers = Workers::new();
 	let stop = CancellationToken::new();
 	let deadline = Instant::now() + Duration::from_secs(4);
 	let mut tickets = Vec::new();
-	for _ in 0..WORKERS {
+	for _ in 0..16 {
 		let ticket = workers
 			.run_retained(&stop, deadline, |_| Ok(()))
 			.await
@@ -300,30 +297,18 @@ async fn returned_owner_tickets_keep_the_original_two_slot_budget() {
 		assert_eq!(ticket.deadline, deadline);
 		tickets.push(ticket);
 	}
-	assert_eq!(workers.permits.available_permits(), 0);
-	let called = Arc::new(AtomicUsize::new(0));
-	let observed = called.clone();
-	assert!(workers
-		.run_retained(
-			&stop,
-			Instant::now() + Duration::from_millis(25),
-			move |_| {
-				observed.fetch_add(1, Ordering::SeqCst);
-				Ok(())
-			}
-		)
-		.await
-		.is_err());
-	assert_eq!(called.load(Ordering::SeqCst), 0);
+	assert_eq!(workers.activity.active(), 16);
+	workers.run(&stop, deadline, || Ok(())).await.unwrap();
+	assert_eq!(workers.activity.active(), 16);
 	assert!(!stop.is_cancelled());
 	for (index, ticket) in tickets.into_iter().enumerate() {
 		ticket
 			.finish(|_| {
-				assert_eq!(workers.permits.available_permits(), index);
+				assert_eq!(workers.activity.active(), 16 - index);
 				Ok(())
 			})
 			.unwrap();
-		assert_eq!(workers.permits.available_permits(), index + 1);
+		assert_eq!(workers.activity.active(), 15 - index);
 	}
 	assert!(!stop.is_cancelled());
 }
@@ -335,7 +320,7 @@ async fn shutdown_waits_for_every_returned_owner_ticket() {
 	let workers = Workers::new();
 	let stop = CancellationToken::new();
 	let mut tickets = Vec::new();
-	for _ in 0..WORKERS {
+	for _ in 0..2 {
 		tickets.push(
 			workers
 				.run_retained(&stop, Instant::now() + Duration::from_secs(4), |_| Ok(()))
@@ -354,11 +339,11 @@ async fn shutdown_waits_for_every_returned_owner_ticket() {
 		.is_pending());
 	drop(tickets.pop().unwrap());
 	drain.await.unwrap();
-	assert_eq!(workers.permits.available_permits(), WORKERS);
+	assert_eq!(workers.activity.active(), 0);
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn owner_error_and_panic_freeze_before_ticket_capacity_is_reused() {
+async fn owner_error_and_panic_freeze_before_new_work_starts() {
 	for panic in [false, true] {
 		let workers = Workers::new();
 		let stop = CancellationToken::new();
@@ -368,7 +353,7 @@ async fn owner_error_and_panic_freeze_before_ticket_capacity_is_reused() {
 			.unwrap();
 		let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 			ticket.finish(|_| {
-				assert_eq!(workers.permits.available_permits(), WORKERS - 1);
+				assert_eq!(workers.activity.active(), 1);
 				if panic {
 					panic!("controlled owner check panic");
 				}
@@ -384,7 +369,7 @@ async fn owner_error_and_panic_freeze_before_ticket_capacity_is_reused() {
 			);
 		}
 		assert!(stop.is_cancelled());
-		assert_eq!(workers.permits.available_permits(), WORKERS);
+		assert_eq!(workers.activity.active(), 0);
 		workers.drain().await.unwrap();
 	}
 }
@@ -411,7 +396,7 @@ async fn owner_finish_checks_stop_before_and_after_its_fresh_read() {
 			.is_err());
 		assert_eq!(called, !cancel_before);
 		assert!(stop.is_cancelled());
-		assert_eq!(workers.permits.available_permits(), WORKERS);
+		assert_eq!(workers.activity.active(), 0);
 	}
 }
 
@@ -424,7 +409,7 @@ async fn expired_owner_ticket_cannot_begin_or_accept_a_late_success() {
 		// file stamps, and the production ticket never resets its deadline.
 		let ticket = OwnerTicket {
 			completion: Completion {
-				_permit: workers.permits.clone().acquire_owned().await.unwrap(),
+				_activity: workers.activity.lease().unwrap(),
 				stop: stop.clone(),
 				completed: false,
 			},
@@ -448,7 +433,7 @@ async fn expired_owner_ticket_cannot_begin_or_accept_a_late_success() {
 			.is_err());
 		assert_eq!(called, !expire_before);
 		assert!(stop.is_cancelled());
-		assert_eq!(workers.permits.available_permits(), WORKERS);
+		assert_eq!(workers.activity.active(), 0);
 	}
 }
 
@@ -483,12 +468,12 @@ fn dropping_an_unpolled_completed_worker_result_freezes_and_releases_its_ticket(
 		let (sent, receive) = std::sync::mpsc::channel();
 		let sentinel = tokio::task::spawn_blocking(move || sent.send(()).unwrap());
 		receive.recv_timeout(Duration::from_secs(4)).unwrap();
-		assert_eq!(workers.permits.available_permits(), WORKERS - 1);
+		assert_eq!(workers.activity.active(), 1);
 		assert!(!stop.is_cancelled());
 		drop(pending);
 		assert!(stop.is_cancelled());
 		sentinel.await.unwrap();
 		workers.drain().await.unwrap();
-		assert_eq!(workers.permits.available_permits(), WORKERS);
+		assert_eq!(workers.activity.active(), 0);
 	});
 }

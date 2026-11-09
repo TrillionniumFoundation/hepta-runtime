@@ -84,7 +84,6 @@ fn install_timing(timing: &Rc<RefCell<Timing>>) {
 async fn lookup_batch(
 	root: &Path,
 	cache: &Arc<Mutex<ReuseHitCache>>,
-	slots: &Arc<Semaphore>,
 	indices: std::ops::Range<usize>,
 ) -> (Vec<Value>, usize) {
 	let active = Arc::new(AtomicUsize::new(0));
@@ -94,7 +93,6 @@ async fn lookup_batch(
 	for index in indices {
 		let root = root.to_path_buf();
 		let cache = cache.clone();
-		let slots = slots.clone();
 		let sender = sender.clone();
 		let active = active.clone();
 		let peak = peak.clone();
@@ -102,7 +100,7 @@ async fn lookup_batch(
 		// Natural submission: no barrier or sleep inside admission, scan or publication.
 		tasks.push(tokio::spawn(async move {
 			let original = format!("original-{index:02}");
-			let result = run_registry_lookup(slots, move || {
+			let result = run_registry_lookup( move || {
 				let entered = Instant::now();
 				let _active = ActiveWorker::enter(active, &peak);
 				let _hooks = Hooks::new();
@@ -149,7 +147,7 @@ async fn lookup_batch(
 	rows.sort_by_key(|value| value["index"].as_u64().unwrap());
 	assert_eq!(active.load(Ordering::SeqCst), 0);
 	let peak = peak.load(Ordering::SeqCst);
-	assert!(peak <= MAX_REGISTRY_LOOKUPS);
+	assert!(peak <= rows.len());
 	(rows, peak)
 }
 
@@ -186,18 +184,13 @@ fn write_fixture(root: &Path) {
 
 #[test]
 #[ignore = "manual lookup-only cold-tail diagnosis; not a release MCP benchmark"]
-fn six_callers_four_slots_cold_tail_probe() {
-	assert_eq!(
-		MAX_REGISTRY_LOOKUPS, 4,
-		"probe requires the actual four-slot limit"
-	);
+fn six_callers_uncapped_cold_tail_probe() {
 	let root = tempfile::tempdir().unwrap();
 	write_fixture(root.path());
 	assert!(registry_has_content_watch(
 		&registry_epoch(root.path()).unwrap()
 	));
 	let cache = Arc::new(Mutex::new(ReuseHitCache::default()));
-	let slots = Arc::new(Semaphore::new(MAX_REGISTRY_LOOKUPS));
 	let runtime = tokio::runtime::Builder::new_multi_thread()
 		.worker_threads(2)
 		.enable_all()
@@ -206,7 +199,7 @@ fn six_callers_four_slots_cold_tail_probe() {
 	let results = runtime.block_on(async {
 		// Prime original strict ownership and the bounded prediction list outside measurement.
 		for index in 0..ORIGINALS {
-			let (rows, _) = lookup_batch(root.path(), &cache, &slots, index..index + 1).await;
+			let (rows, _) = lookup_batch(root.path(), &cache, index..index + 1).await;
 			assert_eq!(rows.len(), 1);
 		}
 		assert_eq!(cache.lock().unwrap().known.len(), ORIGINALS);
@@ -217,8 +210,8 @@ fn six_callers_four_slots_cold_tail_probe() {
 			.values()
 			.all(|binding| binding.strict));
 		// Start the existing blocking threads before timing. This barrier is setup only.
-		let ready = Arc::new(std::sync::Barrier::new(MAX_REGISTRY_LOOKUPS + 1));
-		let workers: Vec<_> = (0..MAX_REGISTRY_LOOKUPS)
+		let ready = Arc::new(std::sync::Barrier::new(ORIGINALS + 1));
+		let workers: Vec<_> = (0..ORIGINALS)
 			.map(|_| {
 				let ready = ready.clone();
 				tokio::task::spawn_blocking(move || {
@@ -241,12 +234,11 @@ fn six_callers_four_slots_cold_tail_probe() {
 				for category in ["cold", "warm"] {
 					let started = Instant::now();
 					let (rows, peak) = if pattern == "natural-six" {
-						lookup_batch(root.path(), &cache, &slots, 0..ORIGINALS).await
+						lookup_batch(root.path(), &cache, 0..ORIGINALS).await
 					} else {
-						let (mut first, first_peak) =
-							lookup_batch(root.path(), &cache, &slots, 0..4).await;
+						let (mut first, first_peak) = lookup_batch(root.path(), &cache, 0..4).await;
 						let (last, last_peak) =
-							lookup_batch(root.path(), &cache, &slots, 4..ORIGINALS).await;
+							lookup_batch(root.path(), &cache, 4..ORIGINALS).await;
 						first.extend(last);
 						(first, first_peak.max(last_peak))
 					};
@@ -280,9 +272,9 @@ fn six_callers_four_slots_cold_tail_probe() {
 		json!({
 			"schema":"hepta-test-only-cohort-tail-probe/v1", "passed":true,
 			"scope":"synthetic lookup-only diagnostic; no start audit, SSH, RPC envelope or remote effects",
-			"originals":ORIGINALS, "synthetic_records":HISTORY, "lookup_slots":MAX_REGISTRY_LOOKUPS,
+			"originals":ORIGINALS, "synthetic_records":HISTORY, "application_lookup_limit":null,
 			"tokio_workers":2, "waves_per_pattern":WAVES,
-			"submit_to_worker_scope":"async scheduling plus semaphore admission plus blocking-pool dispatch, not isolated semaphore wait",
+			"submit_to_worker_scope":"async scheduling plus blocking-pool dispatch; no application concurrency gate",
 			"cohort_wait_scope":"cohort-wait entry until lookup end; includes final validation and is an upper bound on gate wait",
 			"first_scan_scope":"first full record scan only; total scan count includes any further passes",
 			"staged_scope":"first four tasks fully complete before the final two are submitted; per-call timers start at each submission",

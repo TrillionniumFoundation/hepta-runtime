@@ -22,7 +22,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::io::AsyncReadExt;
 use tokio_util::sync::CancellationToken;
@@ -112,10 +111,6 @@ async fn inspect_with_roots(
 ) -> Result<String> {
 	ensure_not_cancelled(cancellation)?;
 	validate(&params)?;
-	static SLOTS: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
-	let _permit = Arc::clone(SLOTS.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(2))))
-		.try_acquire_owned()
-		.context("APK signature parser busy; retry when another inspection finishes")?;
 	let (mut file, before) =
 		super::rea_files::open_confined(Path::new(&params.path), roots).await?;
 	ensure_not_cancelled(cancellation)?;

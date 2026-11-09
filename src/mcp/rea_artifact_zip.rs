@@ -23,7 +23,6 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
 #[path = "rea_artifact_zip_parser.rs"]
@@ -185,12 +184,6 @@ fn validate_params(params: &InspectArchiveParams) -> Result<()> {
 
 async fn inspect_with_roots(params: InspectArchiveParams, roots: &[PathBuf]) -> Result<Value> {
 	validate_params(&params)?;
-	static SLOTS: OnceLock<tokio::sync::Semaphore> = OnceLock::new();
-	let _slot = SLOTS
-		.get_or_init(|| tokio::sync::Semaphore::new(2))
-		.acquire()
-		.await
-		.context("archive parser admission closed")?;
 	let (mut file, before) =
 		super::rea_files::open_confined(Path::new(&params.path), roots).await?;
 	let version = observed_version(&before)?;

@@ -25,7 +25,6 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
-use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
 const OP: &str = "read_evidence_bundle";
@@ -86,25 +85,67 @@ struct Snapshot {
 struct State {
 	snapshots: BTreeMap<String, Arc<Snapshot>>,
 	bytes: usize,
+	pending_bytes: usize,
+	pending_encoders: usize,
 }
 
 /// No eviction: an accepted cursor remains usable until explicit release or
-/// session shutdown. One encoder owns the allocation budget even if its caller
-/// drops the future. Limits count encoded payload bytes, not total process RSS.
+/// session shutdown. Each encoder charges its actual payload allocation against
+/// the shared byte budget and retains that charge after caller cancellation.
+/// There is no encoder count limit. Limits are payload bytes, not process RSS.
 #[derive(Debug)]
 pub(super) struct ReadbackRegistry {
-	state: Mutex<State>,
-	encoder: Arc<Semaphore>,
+	state: Arc<Mutex<State>>,
 	limits: Limits,
 }
 
 impl Default for ReadbackRegistry {
 	fn default() -> Self {
 		Self {
-			state: Mutex::new(State::default()),
-			encoder: Arc::new(Semaphore::new(1)),
+			state: Arc::new(Mutex::new(State::default())),
 			limits: Limits::default(),
 		}
+	}
+}
+
+/// Actual encoded bytes stay reserved until publication or the blocking owner
+/// exits. A dropped async waiter cannot free memory still in use by an encoder.
+#[derive(Debug)]
+struct PendingEncoding {
+	state: Arc<Mutex<State>>,
+	bytes: usize,
+	total_limit: usize,
+}
+
+impl PendingEncoding {
+	fn charge(&mut self, bytes: usize) -> io::Result<bool> {
+		let mut state = self
+			.state
+			.lock()
+			.map_err(|_| io::Error::other("snapshot registry unavailable"))?;
+		let used = state.bytes.saturating_add(state.pending_bytes);
+		if bytes > self.total_limit.saturating_sub(used) {
+			return Ok(false);
+		}
+		state.pending_bytes += bytes;
+		self.bytes += bytes;
+		Ok(true)
+	}
+
+	fn publish(&mut self, state: &mut State) {
+		state.pending_bytes -= self.bytes;
+		self.bytes = 0;
+	}
+}
+
+impl Drop for PendingEncoding {
+	fn drop(&mut self) {
+		let mut state = match self.state.lock() {
+			Ok(state) => state,
+			Err(poisoned) => poisoned.into_inner(),
+		};
+		state.pending_bytes -= self.bytes;
+		state.pending_encoders -= 1;
 	}
 }
 
@@ -160,6 +201,19 @@ impl ReadbackRegistry {
 		)
 	}
 
+	fn reserve_encoding(&self) -> Result<PendingEncoding, Failure> {
+		let mut state = self.state.lock().map_err(|_| Self::unavailable())?;
+		if state.snapshots.len() >= self.limits.snapshots {
+			return Err(self.budget("The retained snapshot count limit was reached."));
+		}
+		state.pending_encoders += 1;
+		Ok(PendingEncoding {
+			state: Arc::clone(&self.state),
+			bytes: 0,
+			total_limit: self.limits.total_bytes,
+		})
+	}
+
 	async fn select(
 		&self,
 		params: &ReadParams,
@@ -190,29 +244,16 @@ impl ReadbackRegistry {
 				"continuation requires snapshot_id; a new snapshot starts at offset zero",
 			));
 		}
-		let permit = Arc::clone(&self.encoder)
-			.try_acquire_owned()
-			.map_err(|_| self.budget("A snapshot encoder is already active in this session."))?;
-		let available = {
-			let state = self.state.lock().map_err(|_| Self::unavailable())?;
-			if state.snapshots.len() >= self.limits.snapshots {
-				return Err(self.budget("The retained snapshot count limit was reached."));
-			}
-			self.limits
-				.snapshot_bytes
-				.min(self.limits.total_bytes.saturating_sub(state.bytes))
-		};
-		if available == 0 {
-			return Err(self.budget("The retained snapshot byte limit was reached."));
-		}
+		let reservation = self.reserve_encoding()?;
 		let selected = session.snapshot()?;
 		let child = cancellation.child_token();
-		// Dropping a cancelled request cancels its bounded encoder as well. The
-		// semaphore stays with the worker until it has actually stopped writing.
+		// Cancellation stops writing; accounting remains with the actual worker.
 		let _cancel_on_drop = child.clone().drop_guard();
-		let (candidate, _permit) = tokio::task::spawn_blocking(move || {
-			let candidate = encode(selected, available, child);
-			(candidate, permit)
+		let snapshot_limit = self.limits.snapshot_bytes;
+		let (candidate, mut reservation) = tokio::task::spawn_blocking(move || {
+			let mut reservation = reservation;
+			let candidate = encode(selected, snapshot_limit, child, &mut reservation);
+			(candidate, reservation)
 		})
 		.await
 		.map_err(|error| Failure::output(OP, format!("Snapshot encoder failed: {error}")))?;
@@ -235,6 +276,7 @@ impl ReadbackRegistry {
 			return Err(self.budget("The retained snapshot budget was reached before publication."));
 		}
 		let candidate = Arc::new(candidate);
+		reservation.publish(&mut state);
 		state.bytes += candidate.bytes.len();
 		state
 			.snapshots
@@ -304,15 +346,16 @@ enum EncodeError {
 	Other(String),
 }
 
-struct BoundedWriter {
+struct BoundedWriter<'a> {
 	bytes: Vec<u8>,
 	hash: Sha256,
 	limit: usize,
 	cancellation: CancellationToken,
 	limit_exceeded: bool,
+	reservation: Option<&'a mut PendingEncoding>,
 }
 
-impl Write for BoundedWriter {
+impl Write for BoundedWriter<'_> {
 	fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
 		if bytes.len() > self.limit.saturating_sub(self.bytes.len()) {
 			self.limit_exceeded = true;
@@ -321,6 +364,12 @@ impl Write for BoundedWriter {
 		for chunk in bytes.chunks(64 * 1024) {
 			if self.cancellation.is_cancelled() {
 				return Err(io::Error::other("snapshot encoding cancelled"));
+			}
+			if let Some(reservation) = self.reservation.as_deref_mut() {
+				if !reservation.charge(chunk.len())? {
+					self.limit_exceeded = true;
+					return Err(io::Error::other("snapshot shared encoding budget exceeded"));
+				}
 			}
 			self.bytes
 				.try_reserve(chunk.len())
@@ -339,6 +388,7 @@ fn encode(
 	selected: EvidenceSnapshot,
 	limit: usize,
 	cancellation: CancellationToken,
+	reservation: &mut PendingEncoding,
 ) -> Result<Snapshot, EncodeError> {
 	let mut output = BoundedWriter {
 		bytes: Vec::new(),
@@ -346,6 +396,7 @@ fn encode(
 		limit,
 		cancellation,
 		limit_exceeded: false,
+		reservation: Some(reservation),
 	};
 	if let Err(error) = selected.write_canonical(&mut output) {
 		return Err(if output.cancellation.is_cancelled() {

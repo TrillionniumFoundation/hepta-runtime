@@ -28,10 +28,12 @@ use std::os::fd::{AsRawFd, FromRawFd};
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
+#[cfg(test)]
+use std::sync::Arc;
 #[cfg(target_os = "linux")]
 use std::sync::Mutex;
-use std::sync::{Arc, OnceLock};
-use tokio::sync::Semaphore;
+#[cfg(target_os = "linux")]
+use std::sync::OnceLock;
 
 const SCHEMA: &str = "hepta-effect-owner-fence-v1";
 const MAX_OWNER_BYTES: u64 = 4096;
@@ -47,10 +49,6 @@ const MAX_PREDECESSOR_SCAN_SECS: u64 = 30;
 const FENCE_DIRECTORY: &str = "HEPTA_EFFECT_OWNER_FENCE_DIR";
 const SELF_OWNER: &str = "HEPTA_EFFECT_OWNER_SELF";
 const FENCE_REQUIRED: &str = "HEPTA_EFFECT_OWNER_FENCE_REQUIRED";
-// Bound real acquisition closures, including queued or cancelled waiters that
-// can still be blocked on an administrative exclusive owner transition.
-const MAX_FENCE_ACQUISITION_WORKERS: usize = 4;
-static FENCE_ACQUISITIONS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -628,23 +626,13 @@ fn acquire_from_root(_: &Path, _: &str, _: &Path) -> Result<AdmissionPermit> {
 }
 
 async fn run_fence_acquisition(
-	slots: Arc<Semaphore>,
 	acquire: impl FnOnce() -> Result<AdmissionPermit> + Send + 'static,
 ) -> Result<AdmissionPermit> {
-	let permit = slots
-		.acquire_owned()
+	// No worker-count gate precedes the shared/exclusive authority lock. The
+	// returned permit independently retains that authority through the effect.
+	tokio::task::spawn_blocking(acquire)
 		.await
-		.map_err(|_| anyhow!("effect owner admission capacity unavailable"))?;
-	tokio::task::spawn_blocking(move || {
-		// Cancellation drops only the caller's future. This actual worker keeps
-		// its capacity until lock acquisition and all original validation end.
-		// The returned AdmissionPermit independently owns the shared flock for
-		// the complete effect; it does not retain this acquisition-worker slot.
-		let _permit = permit;
-		acquire()
-	})
-	.await
-	.context("effect owner admission worker unavailable")?
+		.context("effect owner admission worker unavailable")?
 }
 
 /// Each selected new-effect tool calls this before allocating an identity.
@@ -677,13 +665,7 @@ pub async fn admit_new_effect() -> Result<AdmissionPermit> {
 		.into_string()
 		.map_err(|_| anyhow!("invalid owner configuration"))?;
 	let state = super::config::runtime_config()?.state_dir.clone();
-	let slots = FENCE_ACQUISITIONS
-		.get_or_init(|| Arc::new(Semaphore::new(MAX_FENCE_ACQUISITION_WORKERS)))
-		.clone();
-	run_fence_acquisition(slots, move || {
-		acquire_from_root(&PathBuf::from(root), &owner, &state)
-	})
-	.await
+	run_fence_acquisition(move || acquire_from_root(&PathBuf::from(root), &owner, &state)).await
 }
 
 #[cfg(test)]

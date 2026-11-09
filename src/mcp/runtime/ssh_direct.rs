@@ -6,18 +6,15 @@ use anyhow::{anyhow, bail, Context, Result};
 use std::collections::BTreeMap;
 use std::process::{ExitStatus, Output};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, Weak};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, Command};
-use tokio::sync::{mpsc, oneshot, Mutex as AsyncMutex, Notify, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{mpsc, oneshot, Mutex as AsyncMutex, Notify};
 use tokio::task::JoinSet;
 use tokio::time::{timeout_at, Instant};
 use tokio_util::sync::CancellationToken;
 
-const HOST_CONNECTIONS: usize = 2;
-const GLOBAL_CONNECTIONS: usize = 8;
-const MAX_ADMITTED: usize = 16;
 const REAP: Duration = Duration::from_secs(3);
 static DIRECT: OnceLock<std::result::Result<Arc<Proxy>, String>> = OnceLock::new();
 static FROZEN: AtomicBool = AtomicBool::new(false);
@@ -65,12 +62,6 @@ impl Drop for StopOnDrop {
 	}
 }
 
-struct Leases {
-	_admission: OwnedSemaphorePermit,
-	_host: OwnedSemaphorePermit,
-	_global: OwnedSemaphorePermit,
-}
-
 // Only the independent owner may consume this capability. The caller's task
 // can disappear while the request is queued or while its child is being reaped.
 type Entry = Box<dyn FnOnce() -> Result<Box<dyn Send>> + Send>;
@@ -82,7 +73,6 @@ struct Request {
 	deadline: Instant,
 	cancel: Arc<Cancellation>,
 	reply: oneshot::Sender<Result<Output>>,
-	leases: Option<Leases>,
 	entry: Option<Entry>,
 }
 
@@ -101,8 +91,6 @@ struct OwnedChild {
 	state: AsyncMutex<ChildState>,
 	#[cfg(all(test, unix))]
 	hooks: tests::ChildHooks,
-	// Registry ownership retains both limits across caller/task cancellation.
-	_leases: Leases,
 }
 
 impl OwnedChild {
@@ -202,7 +190,7 @@ impl Core {
 		Ok(())
 	}
 
-	fn spawn(&self, request: &mut Request, leases: Leases) -> Result<Arc<OwnedChild>> {
+	fn spawn(&self, request: &mut Request) -> Result<Arc<OwnedChild>> {
 		// Acquire the only ownership registry before any child can exist. The
 		// critical section has no await or fallible pipe/identity preparation.
 		let mut children = self.children.lock().map_err(|_| {
@@ -283,7 +271,6 @@ impl Core {
 			}),
 			#[cfg(all(test, unix))]
 			hooks: child_hooks,
-			_leases: leases,
 		});
 		children.insert(id, owned.clone());
 		drop(children);
@@ -301,7 +288,7 @@ impl Core {
 	async fn release(&self, owned: &Arc<OwnedChild>) -> Result<()> {
 		if !owned.state.lock().await.reaped {
 			self.stop.cancel();
-			bail!("direct SSH child was not reaped; capacity retained");
+			bail!("direct SSH child was not reaped; original custody retained");
 		}
 		let mut children = self.children.lock().unwrap_or_else(|poisoned| {
 			self.stop.cancel();
@@ -319,19 +306,12 @@ impl Core {
 	}
 
 	async fn execute(&self, mut request: Request) {
-		// Taking the leases before spawn does not expose a child. If admission
-		// fails, these unsubmitted leases can be returned immediately.
-		let result = match request.leases.take() {
-			Some(leases) => self.capture(&mut request, leases).await,
-			None => Err(anyhow!(
-				"direct SSH request lacks original admission; no child submitted"
-			)),
-		};
+		let result = self.capture(&mut request).await;
 		let _ = request.reply.send(result);
 	}
 
-	async fn capture(&self, request: &mut Request, leases: Leases) -> Result<Output> {
-		let owned = self.spawn(request, leases)?;
+	async fn capture(&self, request: &mut Request) -> Result<Output> {
+		let owned = self.spawn(request)?;
 		// Borrow only transport fields across I/O. The owned one-shot callback
 		// is Send but intentionally need not be Sync.
 		let input = &request.input;
@@ -375,13 +355,13 @@ impl Core {
 		}
 		self.release(&owned).await?;
 		drop(owned);
-		// Drop the last owner and both permits before the reply is published.
+		// Drop the last original child owner before the reply is published.
 		outcome
 	}
 
 	async fn run(
 		self: &Arc<Self>,
-		mut receiver: mpsc::Receiver<Request>,
+		mut receiver: mpsc::UnboundedReceiver<Request>,
 		tasks: &mut JoinSet<()>,
 	) -> Result<()> {
 		loop {
@@ -438,11 +418,8 @@ impl Core {
 }
 
 struct Proxy {
-	sender: mpsc::Sender<Request>,
-	hosts: Mutex<BTreeMap<String, Weak<Semaphore>>>,
-	admission: Arc<Semaphore>,
-	global: Arc<Semaphore>,
-	// The process-wide proxy retains quarantined original children and permits
+	sender: mpsc::UnboundedSender<Request>,
+	// The process-wide proxy retains quarantined original children
 	// even if its owner thread exits with an error. No replacement owner is made.
 	core: Arc<Core>,
 	join: Arc<JoinReceipt>,
@@ -461,7 +438,7 @@ struct JoinReceipt {
 
 impl Proxy {
 	fn start() -> Result<Arc<Self>> {
-		let (sender, receiver) = mpsc::channel(GLOBAL_CONNECTIONS);
+		let (sender, receiver) = mpsc::unbounded_channel();
 		let core = Arc::new(Core {
 			stop: CancellationToken::new(),
 			accepting: Mutex::new(true),
@@ -472,9 +449,6 @@ impl Proxy {
 		});
 		let proxy = Arc::new(Self {
 			sender,
-			hosts: Mutex::new(BTreeMap::new()),
-			admission: Arc::new(Semaphore::new(MAX_ADMITTED)),
-			global: Arc::new(Semaphore::new(GLOBAL_CONNECTIONS)),
 			core: core.clone(),
 			join: Arc::new(JoinReceipt {
 				state: Mutex::new(JoinState {
@@ -526,46 +500,6 @@ impl Proxy {
 		Ok(proxy)
 	}
 
-	fn target(&self, target: &str) -> Result<Arc<Semaphore>> {
-		let mut hosts = self
-			.hosts
-			.lock()
-			.map_err(|_| anyhow!("direct SSH admission registry poisoned"))?;
-		// Owned permits hold this exact Semaphore Arc; a live child or waiter
-		// cannot be bypassed by replacing a weakly registered target wrapper.
-		hosts.retain(|_, value| value.strong_count() != 0);
-		if let Some(value) = hosts.get(target).and_then(Weak::upgrade) {
-			return Ok(value);
-		}
-		let value = Arc::new(Semaphore::new(HOST_CONNECTIONS));
-		hosts.insert(target.to_owned(), Arc::downgrade(&value));
-		Ok(value)
-	}
-
-	async fn acquire(&self, target: &str, deadline: Instant) -> Result<Leases> {
-		let admission =
-			self.admission.clone().try_acquire_owned().map_err(|_| {
-				anyhow!("direct SSH admitted capacity exhausted; no child submitted; no automatic retry")
-			})?;
-		let host = self.target(target)?;
-		let host = tokio::select! {
-			biased;
-			_ = self.core.stop.cancelled() => bail!("direct SSH admission stopped"),
-			value = timeout_at(deadline, host.acquire_owned()) => value.context("direct SSH host admission deadline; no child submitted")??,
-		};
-		// Same-host waiters cannot consume all global slots while queued.
-		let global = tokio::select! {
-			biased;
-			_ = self.core.stop.cancelled() => bail!("direct SSH admission stopped"),
-			value = timeout_at(deadline, self.global.clone().acquire_owned()) => value.context("direct SSH global admission deadline; no child submitted")??,
-		};
-		Ok(Leases {
-			_admission: admission,
-			_host: host,
-			_global: global,
-		})
-	}
-
 	async fn capture(
 		&self,
 		target: &str,
@@ -603,7 +537,6 @@ impl Proxy {
 		deadline: Instant,
 		entry: Option<Entry>,
 	) -> Result<Output> {
-		let leases = self.acquire(target, deadline).await?;
 		let cancel = Cancellation::new();
 		let _cancel_on_drop = CancelOnDrop(cancel.clone());
 		self.core.active(deadline, &cancel.token)?;
@@ -615,12 +548,11 @@ impl Proxy {
 			deadline,
 			cancel: cancel.clone(),
 			reply,
-			leases: Some(leases),
 			entry,
 		};
 		self.core.active(deadline, &cancel.token)?;
 		self.sender
-			.try_send(request)
+			.send(request)
 			.map_err(|_| anyhow!("direct SSH owner unavailable; no child submitted"))?;
 		let output = timeout_at(deadline, receive)
 			.await

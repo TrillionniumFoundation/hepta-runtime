@@ -15,6 +15,30 @@ python3 -B scripts/rea_compatibility_ledger.py check-mapping
 
 The success result deliberately says `mapping_check: PASS` and `raw_reference_authenticity: NOT_REVERIFIED`. It establishes repository consistency with a previously authenticated snapshot; it does **not** read or reauthenticate the original schemas, npm tarball, upstream source bytes or behavioral oracle. The normal CI gate does not depend on the expiring Actions artifact described below. Runtime commit metadata records the sampling baseline only; the gate binds file contents and never requires the current Git HEAD to equal an embedded commit SHA.
 
+## Concurrent execution source refresh
+
+The [2026-11-09 source projection refresh](../../qualification/rea-concurrency-source-projection-20261109-r1/README.md)
+archives the previous ledger bytes and updates only the existing runtime
+source/test/document hashes after removal of application execution-count gates.
+All 229 tool rows and their qualification fields remain unchanged: 229 OPEN,
+0 qualified. This local mapping refresh does not rerun historical native or
+upstream behavior. Current execution policy is described in
+[Concurrent execution](../../CONCURRENCY_POLICY.md).
+The [subsequent lifecycle v2 source checkpoint](../../qualification/rea-concurrency-source-projection-20261109-r2/README.md)
+preserves the intermediate ledger and records the unchanged regenerated
+projection. The versioned parallel/cancellation producer and consumer do not
+reinterpret historical v1 observations or qualify a new runtime binary.
+The [r3 source and response-text checkpoint](../../qualification/rea-concurrency-source-projection-20261109-r3/README.md)
+also binds the current request-start description and the explicit APK parser
+remediation-text change. It preserves both earlier checkpoints and all frozen
+qualification fields.
+The [r4 retained-record admission checkpoint](../../qualification/rea-concurrency-source-projection-20261109-r4/README.md)
+archives the exact ledger preceding the later removal of the isolated-job task
+and registry gates, then refreshes its two already-mapped helper source/test
+hashes. The additional search, weight and facade changes are identified as
+outside this REA mapping. Historical `826c462` validation does not cover these
+later changes; all 229 qualification rows remain OPEN.
+
 ## Reproduce full input authentication
 
 Run from the repository root, using a development cache outside the checkout:

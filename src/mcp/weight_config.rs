@@ -34,6 +34,7 @@ pub struct WeightWorkerProfile {
 	pub max_lifetime_seconds: u64,
 	#[serde(default = "default_request")]
 	pub max_request_ms: u64,
+	/// Legacy identity field retained for existing profile digests; no concurrency cap is applied.
 	#[serde(default = "default_sessions")]
 	pub max_active_sessions: usize,
 	#[serde(default = "default_calls")]
@@ -165,7 +166,6 @@ pub fn validate_profiles(config: &RuntimeConfig) -> Result<()> {
 			|| !(1..=8).contains(&profile.max_cpu_threads)
 			|| !(30..=7200).contains(&profile.max_lifetime_seconds)
 			|| !(1000..=600_000).contains(&profile.max_request_ms)
-			|| !(1..=8).contains(&profile.max_active_sessions)
 			|| !(1..=512).contains(&profile.max_requests_per_session)
 		{
 			bail!("weight profile {name} has an unsupported resource budget");

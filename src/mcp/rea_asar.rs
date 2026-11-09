@@ -23,7 +23,6 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio_util::sync::CancellationToken;
 
@@ -318,10 +317,6 @@ async fn inspect_with_roots(
 		parser::Request::Read { .. } => true,
 	};
 	validate_identity(expected_version, expected_header, required)?;
-	static SLOTS: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
-	let _permit = Arc::clone(SLOTS.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(2))))
-		.try_acquire_owned()
-		.context("ASAR parser is busy; retry after another inspection finishes")?;
 	let (mut file, before) = super::rea_files::open_confined(Path::new(path), roots).await?;
 	ensure_not_cancelled(cancellation)?;
 	let version = observed_version(&before)?;

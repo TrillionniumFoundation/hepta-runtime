@@ -1,0 +1,83 @@
+{
+  "schema": "hepta.rea.compatibility-source-projection-refresh.v1",
+  "date": "2026-11-09",
+  "scope": "Current source mapping after request-start description and explicit APK parser remediation regression update; no behavioral qualification",
+  "raw_reference_authenticity": "NOT_REVERIFIED",
+  "behavioral_qualification": "NOT_RERUN",
+  "previous_refresh": {
+    "path": "docs/qualification/rea-concurrency-source-projection-20261109-r2/source-projection-refresh.json",
+    "sha256": "e660900201254886212d6306da3ed727aa3c5030c33cf453d32086fa8f350cda"
+  },
+  "projection_functions": [
+    "published_pin",
+    "snapshot_rows",
+    "assemble_ledger"
+  ],
+  "previous_ledger": {
+    "path": "docs/qualification/rea-concurrency-source-projection-20261109-r3/REA_6_8_0_LEDGER.before.json",
+    "sha256": "0b52b1742d2bf6e7cf24c1214614e785b0c59034a2c07f53c4caa240ebe6d871",
+    "bytes": 779163,
+    "source_manifest_sha256": "0c1ab850999957ebbc9b2864e666e687cb2df0c469b0e850d83ce2a6a53fd7ca"
+  },
+  "current_ledger": {
+    "path": "docs/rea-native/compatibility/REA_6_8_0_LEDGER.json",
+    "sha256": "b58bc5059c8d37b8ce5aa1764d696db77a50c92e7b2a0d25b3cc85e8286131c2",
+    "bytes": 779164,
+    "source_manifest_sha256": "59b35e795f256bee543d12086c3b7aef9c8baa8aeab9f34fc0daced2a21c4839"
+  },
+  "changed_fields": [
+    "runtime.source_files",
+    "runtime.source_manifest_sha256"
+  ],
+  "changed_source_paths": [
+    "docs/rea-native/APK_SIGNATURE_NATIVE.md",
+    "src/mcp/rea_apk_evidence_tests.rs",
+    "src/mcp/server.rs"
+  ],
+  "preserved": {
+    "published_tools": 229,
+    "native_interfaces": 34,
+    "qualified_tools": 0,
+    "open_tools": 229,
+    "all_tool_rows_exactly_equal": true,
+    "all_other_top_level_fields_exactly_equal": true,
+    "all_other_runtime_fields_exactly_equal": true
+  },
+  "unchanged_input_files": [
+    {
+      "path": "docs/rea-native/compatibility/REA_6_8_0_INPUTS.json",
+      "sha256": "31b9fc41fd9e4a626072de0ea10446c25660eb347949270e40d6ce02b1abd119"
+    },
+    {
+      "path": "docs/rea-native/compatibility/REA_6_8_0_CAPABILITY_MAP.json",
+      "sha256": "e325cd33b95718e751d3f315307471c12ac42afa4bf1522c8ccf56b1cb5939dd"
+    },
+    {
+      "path": "docs/rea-native/compatibility/REA_6_8_0_ENVIRONMENT.json",
+      "sha256": "b1bd6c31cf869b4d27154e5221cd6e3358d6f6e96873629cdae77076f18488b4"
+    },
+    {
+      "path": "scripts/rea_compatibility_ledger.py",
+      "sha256": "3e6ccb06e7a41f39e7a5ce1d27adff62e37fc3302ee585f514de350d7113478a"
+    }
+  ],
+  "historical_apk_captures": [
+    {
+      "path": "tests/fixtures/rea_apk_signature/service-errors-r1.json",
+      "sha256": "63aad86db7c9968526cbf1928f5e588c5ea45ac472957d1e76a8f0a0927b9615",
+      "exact_head_bytes_preserved": true
+    },
+    {
+      "path": "tests/fixtures/rea_apk_signature/service-error-bytes-r1.json",
+      "sha256": "f36300e9777a3329ef31128ee6a612e2eb8506003262db7bc5b138978743fb85",
+      "exact_head_bytes_preserved": true
+    }
+  ],
+  "current_apk_error_deviation": {
+    "scope": "Only remediation.action for the 11 frozen per-input parser capacity cases",
+    "historical_action": "Wait for an active analysis to complete, then retry within the reported admission limits.",
+    "current_action": "Review the reported parser capacity and select an input within those bounds.",
+    "all_other_error_fields_compared_exactly": true,
+    "new_runtime_behavior_qualified": false
+  }
+}

@@ -26,7 +26,8 @@ fi
 printf '%s\n' 'hepta-runtime ALL=(root) NOPASSWD: /usr/local/libexec/hepta-runtime-jobctl ""' > /etc/sudoers.d/hepta-runtime-jobctl
 chmod 0440 /etc/sudoers.d/hepta-runtime-jobctl
 visudo -cf /etc/sudoers.d/hepta-runtime-jobctl
-# Aggregate caps apply only to our jobs, not to trading or CI services.
+# Aggregate CPU and memory budgets apply only to our jobs. Task count follows
+# available host resources; individual jobs keep their own resource boundaries.
 cat > /etc/systemd/system/hepta-runtime-jobs.slice <<'UNIT'
 [Unit]
 Description=Bounded Hepta Runtime isolated jobs
@@ -36,7 +37,7 @@ CPUWeight=10
 MemoryHigh=768M
 MemoryMax=1G
 MemorySwapMax=0
-TasksMax=128
+TasksMax=infinity
 IOWeight=10
 UNIT
 systemctl daemon-reload

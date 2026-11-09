@@ -10,7 +10,6 @@ use std::sync::{mpsc, Condvar};
 use std::thread::JoinHandle;
 
 const MAX_BATCH: usize = 32;
-const MAX_QUEUED: usize = 128;
 static COORDINATOR: OnceLock<Coordinator> = OnceLock::new();
 
 struct Begin {
@@ -200,8 +199,8 @@ impl Coordinator {
 				.lock()
 				.map_err(|_| anyhow!("audit queue unavailable"))
 		})?;
-		if pending.closed || pending.jobs.len() >= MAX_QUEUED {
-			bail!("audit queue closed or full; no automatic replay");
+		if pending.closed {
+			bail!("audit queue closed; no automatic replay");
 		}
 		// The caller already runs on a blocking pool. Claim the same serial
 		// processor when idle, avoiding a second thread handoff for C1. Backlog

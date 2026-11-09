@@ -24,7 +24,6 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
 use tokio_util::sync::CancellationToken;
 
 #[path = "rea_javascript_ast.rs"]
@@ -285,18 +284,14 @@ async fn inspect_with_roots(
 	ensure_not_cancelled(cancellation)?;
 	validate(&params)?;
 	ensure_not_cancelled(cancellation)?;
-	static SLOTS: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
-	let permit = Arc::clone(SLOTS.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(2))))
-		.try_acquire_owned()
-		.context("JavaScript graph parser is busy; retry after another inspection finishes")?;
 	ensure_not_cancelled(cancellation)?;
 	let mut sources = Vec::with_capacity(params.sources.len());
 	let mut archive_sources = Vec::new();
 	let mut total = 0;
 	for source in params.sources {
 		ensure_not_cancelled(cancellation)?;
-		// Admission uses blocking file operations internally. Retain the slot and
-		// finish this read before honoring cancellation, rather than detach it.
+		// Finish each descriptor-bound read before honoring cancellation,
+		// rather than detach it from its file owner.
 		let bytes = if let Some(selection) = &source.asar {
 			let (bytes, provenance) = super::rea_asar::read_javascript_source(
 				&source.path,
@@ -370,7 +365,6 @@ async fn inspect_with_roots(
 	if output.len() > MAX_RESPONSE_BYTES {
 		bail!("JavaScript graph response exceeds 1 MiB; reduce the selected page");
 	}
-	drop(permit);
 	ensure_not_cancelled(cancellation)?;
 	Ok(output)
 }

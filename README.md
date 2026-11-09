@@ -1,5 +1,18 @@
 # Hepta Runtime
 
+## Concurrent execution
+
+Independent requests have no Hepta Runtime execution-count ceiling. SSH,
+durable-job I/O, search, document and artifact workers, PTYs, model workers,
+metadata queries and audit synchronization no longer reserve fixed global or
+per-host execution slots. `effective_config` reports
+`limits.concurrent_execution: "unbounded_by_runtime"`.
+
+Same-operation reconciliation, shared-store transactions and original-child
+cleanup still preserve their owners. Data size and retained-history quotas are
+separate from concurrent execution. See [Concurrency policy](docs/CONCURRENCY_POLICY.md)
+for the removed gates, preserved invariants and external transport boundaries.
+
 ## Native artifact and weight integration
 
 The [unified REA/runtime integration](docs/rea-native/UNIFIED_RUNTIME.md) combines
@@ -84,12 +97,13 @@ page limits are independently selectable from 1 to 128, with a 64 KiB response
 bound. Only the final page has `inventory_complete: true`. Job metadata remains
 an observation; use `process_status` for authoritative live status.
 
-The controller retains at most four snapshots and 32 MiB of owned snapshot
-payload. Cursors expire five minutes after the observation; expired idle entries
-are removed on subsequent access. In-flight entries remain charged until their
-readers finish. At most two synchronous inventory workers may scan or render,
-including cold observations not yet published in the cache. A continuation is
-bound to its original state root,
+The controller prunes idle snapshots toward a four-entry cache target and
+accounts for at most 32 MiB of owned snapshot payload. The entry-count target
+does not refuse additional active readers. Cursors expire five minutes after
+the observation; expired idle entries are removed on subsequent access.
+In-flight entries remain charged until their readers finish. Independent scans
+and render operations have no fixed worker admission ceiling, including cold
+observations not yet published in the cache. A continuation is bound to its original state root,
 host filter and controller-local handle. Expiry, eviction, restart or a detected
 source change requires a fresh first page. A fresh first page always rechecks
 the source; it cannot silently resume an older observation.

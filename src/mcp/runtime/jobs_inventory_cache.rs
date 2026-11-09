@@ -8,12 +8,10 @@ use ring::rand::SecureRandom;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
-const MAX_SNAPSHOTS: usize = 4;
+const IDLE_SNAPSHOT_TARGET: usize = 4;
 const MAX_SNAPSHOT_BYTES: usize = 32 * 1024 * 1024;
 const SNAPSHOT_TTL: Duration = Duration::from_secs(300);
-const MAX_INVENTORY_WORKERS: usize = 2;
 static SNAPSHOTS: OnceLock<Mutex<SnapshotCache>> = OnceLock::new();
-static WORKERS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
 struct Snapshot {
 	root: PathBuf,
@@ -85,14 +83,16 @@ impl SnapshotCache {
 			.cloned()
 			.ok_or_else(|| {
 				anyhow::anyhow!(
-			"inventory snapshot unavailable, expired or invalidated; restart from the first page"
-		)
+					"inventory snapshot unavailable, expired or invalidated; restart from the first page"
+				)
 			})
 	}
 
 	fn insert(&mut self, snapshot: Snapshot, now: Instant) -> Result<()> {
 		if snapshot.retained_bytes > MAX_SNAPSHOT_BYTES {
-			bail!("durable inventory snapshot cache byte bound exceeded; no partial inventory returned");
+			bail!(
+				"durable inventory snapshot cache byte bound exceeded; no partial inventory returned"
+			);
 		}
 		self.prune(now);
 		if self
@@ -102,14 +102,22 @@ impl SnapshotCache {
 		{
 			bail!("durable inventory snapshot identity collision");
 		}
-		while self.entries.len() >= MAX_SNAPSHOTS
+		while self.entries.len() >= IDLE_SNAPSHOT_TARGET
 			|| self.bytes + snapshot.retained_bytes > MAX_SNAPSHOT_BYTES
 		{
 			let position = self
 				.entries
 				.iter()
-				.position(|entry| Arc::strong_count(entry) == 1)
-				.context("durable inventory snapshot cache busy; retry a fresh first page")?;
+				.position(|entry| Arc::strong_count(entry) == 1);
+			let Some(position) = position else {
+				if self.bytes + snapshot.retained_bytes > MAX_SNAPSHOT_BYTES {
+					bail!(
+						"durable inventory snapshot byte budget in use; retry a fresh first page"
+					);
+				}
+				// The entry-count target prunes idle cache only, never active readers.
+				break;
+			};
 			if let Some(old) = self.entries.remove(position) {
 				self.bytes -= old.retained_bytes;
 			}
@@ -263,18 +271,9 @@ fn page_at(
 	Ok(text)
 }
 
-fn acquire_worker(workers: &Arc<Semaphore>) -> Result<OwnedSemaphorePermit> {
-	workers.clone().try_acquire_owned().map_err(|_| {
-		anyhow::anyhow!("durable inventory observation workers busy; no partial inventory returned")
-	})
-}
-
 pub(super) fn list(root: &Path, params: &ProcessListPageParams) -> Result<String> {
-	// This guard belongs to the actual synchronous worker. A cancelled request
-	// cannot release its slot while spawn_blocking still scans or renders. Cold
-	// builders are bounded too, before they qualify for the retained-cache quota.
-	let _permit =
-		acquire_worker(WORKERS.get_or_init(|| Arc::new(Semaphore::new(MAX_INVENTORY_WORKERS))))?;
+	// Scan admission has no worker-count gate. Snapshot retention keeps its
+	// independent cache bounds after each caller owns a complete observation.
 	page_at(
 		root,
 		params,

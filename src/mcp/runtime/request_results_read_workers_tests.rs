@@ -1,7 +1,7 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! Retained-result reads keep their actual worker bound across caller cancellation.
+//! Uncapped retained-result reads preserve exact record isolation and worker custody.
 use super::*;
 use std::future::{poll_fn, Future};
 use std::os::unix::fs::PermissionsExt;
@@ -113,76 +113,45 @@ async fn started(receiver: &mut tokio::sync::mpsc::UnboundedReceiver<()>, count:
 	}
 }
 
-async fn drain(slots: &Arc<Semaphore>) {
-	let all = tokio::time::timeout(
-		WAIT,
-		slots
-			.clone()
-			.acquire_many_owned(MAX_RESULT_READ_WORKERS as u32),
-	)
+async fn drain(counts: &Counts) {
+	tokio::time::timeout(WAIT, async {
+		while counts.active.load(Ordering::SeqCst) != 0 {
+			tokio::task::yield_now().await;
+		}
+	})
 	.await
-	.unwrap()
 	.unwrap();
-	drop(all);
 }
 
 #[test]
 // Intentionally hold the real sync lock on this current-thread fixture while
 // observing blocked workers; unwind drops the lock before runtime teardown.
 #[allow(clippy::await_holding_lock)]
-fn cancelled_reads_waiting_on_real_record_lock_keep_four_worker_slots() {
+fn result_reads_exceed_old_four_worker_limit_and_keep_actual_record_lock() {
 	let runtime = tokio::runtime::Builder::new_current_thread()
 		.enable_all()
-		.max_blocking_threads(MAX_RESULT_READ_WORKERS * 2)
 		.build()
 		.unwrap();
 	runtime.block_on(async {
 		let fixture = Fixture::new();
-		// Model a slow durable completion holding the real per-record lock.
-		// Declared inside block_on so an assertion unwind releases it before
-		// dropping the runtime, whose blocking workers are not abortable.
 		let held_record = record_lock(&fixture.identity.request_id).unwrap();
-		let slots = Arc::new(Semaphore::new(MAX_RESULT_READ_WORKERS));
 		let counts = Arc::new(Counts::default());
 		let (entered, mut notices) = tokio::sync::mpsc::unbounded_channel();
 		let mut callers = Vec::new();
-		for _ in 0..MAX_RESULT_READ_WORKERS {
-			callers.push(tokio::spawn(run_result_read(
-				slots.clone(),
-				observed_read(fixture.clone(), counts.clone(), entered.clone()),
-			)));
+		for _ in 0..12 {
+			callers.push(tokio::spawn(run_result_read(observed_read(
+				fixture.clone(),
+				counts.clone(),
+				entered.clone(),
+			))));
 		}
-		started(&mut notices, MAX_RESULT_READ_WORKERS).await;
-		for caller in callers {
+		started(&mut notices, 12).await;
+		assert_eq!(counts.active.load(Ordering::SeqCst), 12);
+		for caller in callers.drain(..4) {
 			caller.abort();
-			match caller.await {
-				Err(error) => assert!(error.is_cancelled()),
-				Ok(_) => {
-					panic!("read caller unexpectedly completed while its record lock was held")
-				}
-			}
+			assert!(matches!(caller.await, Err(error) if error.is_cancelled()));
 		}
-		assert_eq!(slots.available_permits(), 0);
-		for _wave in 0..3 {
-			for _ in 0..MAX_RESULT_READ_WORKERS * 2 {
-				let mut waiter = Box::pin(run_result_read(
-					slots.clone(),
-					observed_read(fixture.clone(), counts.clone(), entered.clone()),
-				));
-				pending(waiter.as_mut()).await;
-				drop(waiter);
-			}
-			assert_eq!(
-				counts.entered.load(Ordering::SeqCst),
-				MAX_RESULT_READ_WORKERS
-			);
-			assert_eq!(
-				counts.active.load(Ordering::SeqCst),
-				MAX_RESULT_READ_WORKERS
-			);
-			assert_eq!(slots.available_permits(), 0);
-			assert!(notices.try_recv().is_err());
-		}
+		assert!(callers.iter().all(|caller| !caller.is_finished()));
 		assert_eq!(
 			tokio::time::timeout(WAIT, tokio::spawn(async { 42 }))
 				.await
@@ -191,13 +160,12 @@ fn cancelled_reads_waiting_on_real_record_lock_keep_four_worker_slots() {
 			42
 		);
 		drop(held_record);
-		drain(&slots).await;
-		assert_eq!(
-			counts.maximum.load(Ordering::SeqCst),
-			MAX_RESULT_READ_WORKERS
-		);
-		assert_eq!(counts.active.load(Ordering::SeqCst), 0);
-		assert_eq!(slots.available_permits(), MAX_RESULT_READ_WORKERS);
+		for caller in callers {
+			let record = caller.await.unwrap().unwrap().unwrap();
+			assert_eq!(record.request_id, fixture.identity.request_id);
+		}
+		drain(&counts).await;
+		assert_eq!(counts.maximum.load(Ordering::SeqCst), 12);
 	});
 }
 
@@ -216,121 +184,72 @@ impl Drop for ReleaseBlockingPool {
 // This current-thread fixture owns the lock until queued workers have started.
 // Keeping it across awaits is the fault injection, not a production lock path.
 #[allow(clippy::await_holding_lock)]
-fn cancelled_queued_result_reads_keep_slots_before_workers_start() {
-	let blocking_threads = MAX_RESULT_READ_WORKERS + 1;
+fn cancelled_queued_result_reads_retain_original_work_until_completion() {
 	let runtime = tokio::runtime::Builder::new_current_thread()
 		.enable_all()
-		.max_blocking_threads(blocking_threads)
+		.max_blocking_threads(1)
 		.build()
 		.unwrap();
 	runtime.block_on(async {
 		let fixture = Fixture::new();
 		let held_record = record_lock(&fixture.identity.request_id).unwrap();
 		let mut release_pool = ReleaseBlockingPool::default();
-		let mut blockers = Vec::new();
-		let (blocked, mut blocking_notices) = tokio::sync::mpsc::unbounded_channel();
-		for _ in 0..blocking_threads {
-			let (release, wait) = mpsc::channel();
-			release_pool.0.push(release);
-			let blocked = blocked.clone();
-			blockers.push(tokio::task::spawn_blocking(move || {
-				let _ = blocked.send(());
-				wait.recv_timeout(WAIT).unwrap();
-			}));
-		}
-		started(&mut blocking_notices, blocking_threads).await;
-		let slots = Arc::new(Semaphore::new(MAX_RESULT_READ_WORKERS));
+		let (release, wait) = mpsc::channel();
+		release_pool.0.push(release);
+		let (blocked, blocking_notice) = tokio::sync::oneshot::channel();
+		let blocker = tokio::task::spawn_blocking(move || {
+			let _ = blocked.send(());
+			wait.recv_timeout(WAIT).unwrap();
+		});
+		tokio::time::timeout(WAIT, blocking_notice)
+			.await
+			.unwrap()
+			.unwrap();
 		let counts = Arc::new(Counts::default());
 		let (entered, mut notices) = tokio::sync::mpsc::unbounded_channel();
-		let mut submitted = Vec::new();
-		for _ in 0..MAX_RESULT_READ_WORKERS {
-			let mut caller = Box::pin(run_result_read(
-				slots.clone(),
-				observed_read(fixture.clone(), counts.clone(), entered.clone()),
-			));
+		for _ in 0..12 {
+			let mut caller = Box::pin(run_result_read(observed_read(
+				fixture.clone(),
+				counts.clone(),
+				entered.clone(),
+			)));
 			pending(caller.as_mut()).await;
-			submitted.push(caller);
+			drop(caller);
 		}
-		assert_eq!(slots.available_permits(), 0);
 		assert_eq!(counts.entered.load(Ordering::SeqCst), 0);
-		drop(submitted);
-		for _ in 0..MAX_RESULT_READ_WORKERS * 2 {
-			let mut extra = Box::pin(run_result_read(
-				slots.clone(),
-				observed_read(fixture.clone(), counts.clone(), entered.clone()),
-			));
-			pending(extra.as_mut()).await;
-			drop(extra);
-		}
-		assert_eq!(slots.available_permits(), 0);
-		assert_eq!(counts.entered.load(Ordering::SeqCst), 0);
-		drop(release_pool);
-		for blocker in blockers {
-			tokio::time::timeout(WAIT, blocker).await.unwrap().unwrap();
-		}
-		started(&mut notices, MAX_RESULT_READ_WORKERS).await;
-		assert_eq!(
-			counts.active.load(Ordering::SeqCst),
-			MAX_RESULT_READ_WORKERS
-		);
-		assert_eq!(slots.available_permits(), 0);
 		drop(held_record);
-		drain(&slots).await;
-		assert_eq!(
-			counts.entered.load(Ordering::SeqCst),
-			MAX_RESULT_READ_WORKERS
-		);
-		assert_eq!(
-			counts.maximum.load(Ordering::SeqCst),
-			MAX_RESULT_READ_WORKERS
-		);
-		assert_eq!(counts.active.load(Ordering::SeqCst), 0);
+		drop(release_pool);
+		blocker.await.unwrap();
+		started(&mut notices, 12).await;
+		drain(&counts).await;
+		assert_eq!(counts.entered.load(Ordering::SeqCst), 12);
 	});
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn cancelled_or_closed_result_read_admission_never_submits_io() {
-	let slots = Arc::new(Semaphore::new(1));
-	let held = slots.clone().acquire_owned().await.unwrap();
+async fn unpolled_result_read_never_submits_io() {
 	let calls = Arc::new(AtomicUsize::new(0));
 	let observed = calls.clone();
-	let mut waiter = Box::pin(run_result_read(slots.clone(), move || {
+	drop(run_result_read(move || {
 		observed.fetch_add(1, Ordering::SeqCst);
 		Ok(None)
 	}));
-	pending(waiter.as_mut()).await;
-	drop(waiter);
-	assert_eq!(calls.load(Ordering::SeqCst), 0);
-	assert_eq!(slots.available_permits(), 0);
-	drop(held);
-	slots.close();
-	let observed = calls.clone();
-	let error = run_result_read(slots, move || {
-		observed.fetch_add(1, Ordering::SeqCst);
-		Ok(None)
-	})
-	.await
-	.err()
-	.unwrap();
-	assert_eq!(
-		error.to_string(),
-		"request result unavailable to this scope or current policy"
-	);
+	tokio::task::yield_now().await;
 	assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn result_read_success_refusal_missing_record_and_panic_release_capacity() {
+async fn result_read_success_refusal_missing_record_and_panic_preserve_results() {
 	let fixture = Fixture::new();
-	let slots = Arc::new(Semaphore::new(1));
+
 	let original = fixture.clone();
-	let record = run_result_read(slots.clone(), move || original.read())
+	let record = run_result_read(move || original.read())
 		.await
 		.unwrap()
 		.unwrap();
 	assert_eq!(record.request_id, fixture.identity.request_id);
 	assert_eq!(result_state(Some(&record), "host_health"), "unknown");
-	assert_eq!(slots.available_permits(), 1);
+
 	let mut foreign = fixture.identity.clone();
 	foreign.owner = "c".repeat(64);
 	let expected = lookup_at(fixture.root.path(), &foreign, &fixture.binding)
@@ -338,16 +257,15 @@ async fn result_read_success_refusal_missing_record_and_panic_release_capacity()
 		.unwrap()
 		.to_string();
 	let original = fixture.clone();
-	let error = run_result_read(slots.clone(), move || {
-		lookup_at(original.root.path(), &foreign, &original.binding)
-	})
-	.await
-	.err()
-	.unwrap();
+	let error =
+		run_result_read(move || lookup_at(original.root.path(), &foreign, &original.binding))
+			.await
+			.err()
+			.unwrap();
 	assert_eq!(error.to_string(), expected);
-	assert_eq!(slots.available_permits(), 1);
+
 	let original = fixture.clone();
-	assert!(run_result_read(slots.clone(), move || {
+	assert!(run_result_read(move || {
 		let mut missing = original.identity.clone();
 		missing.request_id = format!("d1{:062x}", 2);
 		lookup_at(original.root.path(), &missing, &original.binding)
@@ -355,17 +273,55 @@ async fn result_read_success_refusal_missing_record_and_panic_release_capacity()
 	.await
 	.unwrap()
 	.is_none());
-	assert_eq!(slots.available_permits(), 1);
-	let error = run_result_read(slots.clone(), || {
-		panic!("fixture result-read panic must release its worker slot")
-	})
-	.await
-	.err()
-	.unwrap();
+
+	let error = run_result_read(|| panic!("fixture result-read panic must not return a record"))
+		.await
+		.err()
+		.unwrap();
 	assert_eq!(
 		error.to_string(),
 		"request result unavailable to this scope or current policy"
 	);
-	assert_eq!(slots.available_permits(), 1);
-	assert!(run_result_read(slots, move || fixture.read()).await.is_ok());
+
+	assert!(run_result_read(move || fixture.read()).await.is_ok());
+}
+
+#[test]
+fn same_prefix_result_ids_are_independent_but_exact_id_remains_serialized() {
+	let first_id = format!("cf{:062x}", 0xb16b00b5_u64);
+	let second_id = format!("cf{:062x}", 0xb16b00b6_u64);
+	let held = record_lock(&first_id).unwrap();
+	let (other_send, other_recv) = mpsc::channel();
+	let other = std::thread::spawn(move || {
+		let _guard = record_lock(&second_id).unwrap();
+		other_send.send(()).unwrap();
+	});
+	let (same_send, same_recv) = mpsc::channel();
+	let same = std::thread::spawn(move || {
+		let _guard = record_lock(&first_id).unwrap();
+		same_send.send(()).unwrap();
+	});
+	let independent = other_recv.recv_timeout(Duration::from_secs(2));
+	let serialized = same_recv.recv_timeout(Duration::from_millis(30));
+	drop(held);
+	other.join().unwrap();
+	same.join().unwrap();
+	assert!(independent.is_ok());
+	assert!(matches!(serialized, Err(mpsc::RecvTimeoutError::Timeout)));
+	same_recv.recv_timeout(WAIT).unwrap();
+}
+
+#[test]
+fn poisoned_result_identity_does_not_poison_another_id_with_the_same_prefix() {
+	let first_id = format!("ce{:062x}", 0xb16b00b5_u64);
+	let second_id = format!("ce{:062x}", 0xb16b00b6_u64);
+	let original = first_id.clone();
+	assert!(std::thread::spawn(move || {
+		let _guard = record_lock(&original).unwrap();
+		panic!("poison only the original record identity");
+	})
+	.join()
+	.is_err());
+	assert!(record_lock(&first_id).is_err());
+	assert!(record_lock(&second_id).is_ok());
 }

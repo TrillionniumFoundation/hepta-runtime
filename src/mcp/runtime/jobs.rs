@@ -13,9 +13,9 @@ use std::future::Future;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock, TryLockError};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock, TryLockError, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{Mutex as AsyncMutex, OwnedMutexGuard};
 
 use super::config::{check_environment, check_execution, runtime_config, valid_name};
 use super::config::{ExecutionMode, Platform};
@@ -34,24 +34,12 @@ mod inventory_cache;
 mod inventory_source;
 
 static JOB_SEQUENCE: AtomicU64 = AtomicU64::new(1);
-const START_LANE_COUNT: usize = 64;
-type StartLanes = [Arc<AsyncMutex<()>>; START_LANE_COUNT];
-static START_LOCKS: OnceLock<Mutex<HashMap<String, StartLanes>>> = OnceLock::new();
+type StartIdentity = (String, Option<String>);
+type StartLockRegistry = Mutex<HashMap<StartIdentity, Weak<AsyncMutex<()>>>>;
+static START_LOCKS: OnceLock<StartLockRegistry> = OnceLock::new();
 type OwnedStartGuard = Arc<OwnedMutexGuard<()>>;
-const MAX_START_IO_WORKERS: usize = 4;
-static START_IO_WORKERS: OnceLock<Arc<Semaphore>> = OnceLock::new();
-// Reserve before remote submission so a received ACK always owns bounded
-// publication capacity, including when its original request is cancelled.
-const MAX_START_OUTCOME_PUBLICATIONS: usize = 8;
-static START_OUTCOME_PUBLICATIONS: OnceLock<Arc<Semaphore>> = OnceLock::new();
-const MAX_CANCEL_PUBLICATIONS: usize = 8;
-static CANCEL_PUBLICATIONS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 static AUDIT_LOCK: OnceLock<Mutex<Option<AuditReadiness>>> = OnceLock::new();
-const MAX_OBSERVATION_AUDITS: usize = 8;
-static OBSERVATION_AUDITS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 static REUSE_HITS: OnceLock<Mutex<ReuseHitCache>> = OnceLock::new();
-const MAX_REGISTRY_LOOKUPS: usize = 4;
-static REGISTRY_LOOKUPS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 const MAX_COLD_DEMAND_BYTES: usize = 1024;
 const MAX_COLD_HINT_BYTES: usize = 16 * 1024;
 const MAX_COLD_COHORT_IDENTITIES: usize = 8;
@@ -239,29 +227,25 @@ fn default_launch_state() -> String {
 	"launched".to_string()
 }
 
-fn start_lane(key: Option<&str>) -> usize {
-	// Hash only the original key. A changed payload with the same key must
-	// still wait for the original lookup, durable intent and remote outcome.
-	key.map_or(0, |key| {
-		usize::from(Sha256::digest(key.as_bytes())[0]) % START_LANE_COUNT
-	})
-}
-
 fn start_lock_in(
-	registry: &Mutex<HashMap<String, StartLanes>>,
+	registry: &StartLockRegistry,
 	host: &str,
 	key: Option<&str>,
 ) -> Result<Arc<AsyncMutex<()>>> {
-	// Only configured hosts reach this map in production. Fixed lanes bound
-	// retained locks regardless of caller key cardinality. Collisions merely
-	// serialize independent starts, and missing keys keep their original lane.
+	// Only the same exact host/key serializes. Weak entries keep completed keys
+	// from retaining locks; owned guards keep an in-flight identity alive even
+	// after its original caller is cancelled. Missing keys retain one host lock.
 	let mut locks = registry
 		.lock()
 		.map_err(|_| anyhow::anyhow!("job launch lock registry unavailable"))?;
-	Ok(locks
-		.entry(host.to_owned())
-		.or_insert_with(|| std::array::from_fn(|_| Arc::new(AsyncMutex::new(()))))[start_lane(key)]
-	.clone())
+	let identity = (host.to_owned(), key.map(str::to_owned));
+	if let Some(lock) = locks.get(&identity).and_then(Weak::upgrade) {
+		return Ok(lock);
+	}
+	locks.retain(|_, lock| lock.strong_count() > 0);
+	let lock = Arc::new(AsyncMutex::new(()));
+	locks.insert(identity, Arc::downgrade(&lock));
+	Ok(lock)
 }
 
 fn start_lock(host: &str, key: Option<&str>) -> Result<Arc<AsyncMutex<()>>> {
@@ -673,7 +657,7 @@ struct RegistryColdHint {
 	digest: [u8; 32],
 }
 
-// Only admitted workers register demand. No complete receipt, absent result,
+// Only actual workers register demand. No complete receipt, absent result,
 // error or speculative ownership survives the last worker for its key.
 struct RegistryColdDemand {
 	scans: Arc<RegistryColdScans>,
@@ -691,9 +675,6 @@ impl RegistryColdDemand {
 				.state
 				.lock()
 				.map_err(|_| anyhow::anyhow!("job registry cold demand unavailable"))?;
-			if state.demands.values().sum::<usize>() >= MAX_REGISTRY_LOOKUPS {
-				return Ok(None);
-			}
 			*state.demands.entry(identity.clone()).or_default() += 1;
 		}
 		Ok(Some(Self { scans, identity }))
@@ -736,8 +717,8 @@ impl RegistryColdDemand {
 			.state
 			.lock()
 			.map_err(|_| anyhow::anyhow!("job registry cold demand unavailable"))?;
-		// All actual other demands fit: at most three distinct keys, each at
-		// most 1 KiB. Predictions never displace them or reject the lookup.
+		// Live demands are not a worker quota. Predictions remain a bounded
+		// cache optimization and never displace callers or reject their lookup.
 		let mut cohort = self.targets(&state);
 		let mut bytes: usize = cohort
 			.iter()
@@ -762,8 +743,7 @@ impl RegistryColdDemand {
 				candidate: None,
 			});
 		}
-		// The consumed prediction iterator (including unused keys) is dropped
-		// before cloning this separate, at-most-3-KiB active-membership payload.
+		// Drop the consumed prediction iterator before cloning active membership.
 		// Membership and the actual scan targets are one frozen snapshot. Late
 		// keys cannot wait for a scan that may already have passed their owner.
 		state.active = Some(
@@ -1275,8 +1255,8 @@ fn prefill_scanned_strict_peers(
 	cohort: &[RegistryColdTarget],
 	epoch_probe: &impl Fn(&Path) -> Result<RegistryEpoch>,
 ) -> Result<()> {
-	// A complete scan can cover callers still outside the four-worker admission
-	// bound. Predictions earn only ordinary ID hits after independent strict
+	// A complete scan can cover later callers through prediction cache hits.
+	// Predictions earn only ordinary ID hits after independent strict
 	// verification; they never create ownership or extend a demand's hint life.
 	if initial_epoch != scanned_epoch
 		|| !registry_has_content_watch(&scanned_epoch)
@@ -1473,7 +1453,7 @@ fn find_idempotent_in_with_probe(
 
 	// Only members of an already frozen scan wait for its hints. An admitted
 	// late key retains the original parallel full scan instead of queuing for
-	// work that never covered it. The original worker still owns its permit.
+	// work that never covered it. Each actual worker retains its demand custody.
 	let mut cold_leader = None;
 	let mut shared = None;
 	let mut cohort = Vec::new();
@@ -1655,21 +1635,9 @@ fn find_idempotent(host: &str, key: &str) -> Result<Option<JobRecord>> {
 }
 
 async fn run_registry_lookup(
-	slots: Arc<Semaphore>,
 	lookup: impl FnOnce() -> Result<Option<JobRecord>> + Send + 'static,
 ) -> Result<Option<JobRecord>> {
-	let permit = slots
-		.acquire_owned()
-		.await
-		.map_err(|_| anyhow::anyhow!("job registry lookup capacity unavailable"))?;
-	let result = tokio::task::spawn_blocking(move || {
-		// A cancelled caller cannot release capacity while its original scan
-		// still holds the registry read lock or accesses historical receipts.
-		let _permit = permit;
-		lookup()
-	})
-	.await;
-	match result {
+	match tokio::task::spawn_blocking(lookup).await {
 		Ok(result) => result,
 		Err(_) => bail!("job registry lookup worker unavailable"),
 	}
@@ -1678,47 +1646,18 @@ async fn run_registry_lookup(
 async fn find_idempotent_async(host: &str, key: &str) -> Result<Option<JobRecord>> {
 	let host = host.to_owned();
 	let key = key.to_owned();
-	let slots = REGISTRY_LOOKUPS
-		.get_or_init(|| Arc::new(Semaphore::new(MAX_REGISTRY_LOOKUPS)))
-		.clone();
-	// This lookup worker is read-only. The caller retains its
-	// original key lane and effect admission fence around later publication.
-	run_registry_lookup(slots, move || find_idempotent(&host, &key)).await
-}
-
-fn start_io_slots() -> Arc<Semaphore> {
-	START_IO_WORKERS
-		.get_or_init(|| Arc::new(Semaphore::new(MAX_START_IO_WORKERS)))
-		.clone()
-}
-
-fn start_outcome_slots() -> Arc<Semaphore> {
-	START_OUTCOME_PUBLICATIONS
-		.get_or_init(|| Arc::new(Semaphore::new(MAX_START_OUTCOME_PUBLICATIONS)))
-		.clone()
+	// The caller retains its exact key lock and effect admission fence around
+	// later publication; an unrelated lookup never waits for a capacity permit.
+	run_registry_lookup(move || find_idempotent(&host, &key)).await
 }
 
 async fn run_start_io<T: Send + 'static>(
-	slots: Arc<Semaphore>,
 	ownership: impl Send + 'static,
 	operation: impl FnOnce() -> Result<T> + Send + 'static,
 ) -> Result<T> {
-	let permit = slots
-		.acquire_owned()
-		.await
-		.map_err(|_| anyhow::anyhow!("job start I/O capacity unavailable"))?;
-	run_admitted_start_io(permit, ownership, operation).await
-}
-
-async fn run_admitted_start_io<T: Send + 'static>(
-	permit: OwnedSemaphorePermit,
-	ownership: impl Send + 'static,
-	operation: impl FnOnce() -> Result<T> + Send + 'static,
-) -> Result<T> {
+	// Transfer custody before the first await. Cancelling a caller cannot
+	// release its exact key lock or owner fence while this publication runs.
 	let result = tokio::task::spawn_blocking(move || {
-		// Cancellation cannot release the original key lane, owner fence or
-		// worker slot while a durable publication can still change the registry.
-		let _permit = permit;
 		let _ownership = ownership;
 		operation()
 	})
@@ -1734,7 +1673,7 @@ async fn start_io<T: Send + 'static>(
 	owner: &Arc<super::effect_owner_fence::AdmissionPermit>,
 	operation: impl FnOnce() -> Result<T> + Send + 'static,
 ) -> Result<T> {
-	run_start_io(start_io_slots(), (guard.clone(), owner.clone()), operation).await
+	run_start_io((guard.clone(), owner.clone()), operation).await
 }
 
 async fn start_audit(
@@ -1745,7 +1684,7 @@ async fn start_audit(
 	guard: &Option<OwnedStartGuard>,
 	owner: &Arc<super::effect_owner_fence::AdmissionPermit>,
 ) -> Result<()> {
-	// Freeze the original event before capacity backpressure can suspend it.
+	// Freeze the original event before handing it to the physical writer.
 	let prepared = prepare_audit(action, host, subject, outcome)?;
 	start_io(guard, owner, move || append_audit(prepared)).await
 }
@@ -1765,7 +1704,6 @@ fn persist_pending_with(
 async fn publish_pending_with(
 	record: JobRecord,
 	prepared: PreparedAudit,
-	slots: Arc<Semaphore>,
 	ownership: impl Send + 'static,
 	append: impl FnOnce(PreparedAudit) -> Result<()> + Send + 'static,
 	persist: impl FnOnce(&JobRecord) -> Result<()> + Send + 'static,
@@ -1773,7 +1711,7 @@ async fn publish_pending_with(
 	// Transfer the original payload to its physical publisher. Returning it
 	// after both barriers avoids a second receipt copy while preserving custody
 	// if the awaiting caller is cancelled before or after worker submission.
-	run_start_io(slots, ownership, move || {
+	run_start_io(ownership, move || {
 		persist_pending_with(prepared, &record, append, persist)?;
 		Ok(record)
 	})
@@ -1792,11 +1730,10 @@ async fn publish_pending_record(
 		&json!({"phase":"intent","remote_operation_submitted":false}),
 	)
 	.map_err(|_| operation_intent_unavailable())?;
-	// Freeze the same original intent before waiting for physical writer capacity.
+	// Preserve the original intent through the physical writer handoff.
 	publish_pending_with(
 		record,
 		prepared,
-		start_io_slots(),
 		(guard.clone(), owner.clone()),
 		append_audit,
 		save_record,
@@ -2281,21 +2218,10 @@ fn observation_audit_unavailable() -> anyhow::Error {
 
 async fn run_observation_audit(
 	prepared: PreparedAudit,
-	slots: Arc<Semaphore>,
 	append: impl FnOnce(PreparedAudit) -> Result<()> + Send + 'static,
 ) -> Result<()> {
-	let permit = slots
-		.acquire_owned()
-		.await
-		.map_err(|_| observation_audit_unavailable())?;
-	let result = tokio::task::spawn_blocking(move || {
-		// A cancelled waiter cannot release capacity while its blocking append
-		// still owns a file or waits for the shared audit synchronization lock.
-		let _permit = permit;
-		append(prepared)
-	})
-	.await;
-	match result {
+	// The actual append owns its frozen event after request cancellation.
+	match tokio::task::spawn_blocking(move || append(prepared)).await {
 		Ok(Ok(())) => Ok(()),
 		_ => Err(observation_audit_unavailable()),
 	}
@@ -2308,13 +2234,10 @@ async fn observation_completion_audit(
 	outcome: &Value,
 ) -> Result<()> {
 	// Freeze the original observation time, destination and identity before
-	// either capacity backpressure or the blocking-pool handoff can suspend.
+	// the blocking-pool handoff can suspend.
 	let prepared = prepare_audit(action, host, subject, outcome)
 		.map_err(|_| observation_audit_unavailable())?;
-	let slots = OBSERVATION_AUDITS
-		.get_or_init(|| Arc::new(Semaphore::new(MAX_OBSERVATION_AUDITS)))
-		.clone();
-	run_observation_audit(prepared, slots, append_audit).await
+	run_observation_audit(prepared, append_audit).await
 }
 
 // Shared by start and reconciliation: existing unsafe directories never become a new launch.
@@ -3901,28 +3824,16 @@ fn require_operation_intent(outcome: Result<()>) -> Result<()> {
 	outcome.map_err(|_| operation_intent_unavailable())
 }
 
-fn cancel_publication_slots() -> Arc<Semaphore> {
-	CANCEL_PUBLICATIONS
-		.get_or_init(|| Arc::new(Semaphore::new(MAX_CANCEL_PUBLICATIONS)))
-		.clone()
-}
-
 async fn run_cancel_intent<O: Send + 'static>(
 	prepared: PreparedAudit,
-	slots: Arc<Semaphore>,
 	ownership: O,
 	append: impl FnOnce(PreparedAudit) -> Result<()> + Send + 'static,
-) -> Result<(OwnedSemaphorePermit, O)> {
-	let permit = slots
-		.acquire_owned()
-		.await
-		.map_err(|_| operation_intent_unavailable())?;
+) -> Result<O> {
 	let result = tokio::task::spawn_blocking(move || {
-		// The same reservation follows this already-owned cancellation from
-		// durable intent through the remote response and completion audit.
-		// Cancelling a waiter never admits another worker before this one ends.
+		// The verified original identity follows the cancellation from durable
+		// intent through its remote response and completion audit.
 		require_operation_intent(append(prepared))?;
-		Ok((permit, ownership))
+		Ok(ownership)
 	})
 	.await;
 	match result {
@@ -3934,14 +3845,13 @@ async fn run_cancel_intent<O: Send + 'static>(
 async fn complete_cancel_audit(
 	output: Value,
 	prepared: Result<PreparedAudit>,
-	permit: OwnedSemaphorePermit,
 	ownership: impl Send + 'static,
 	append: impl FnOnce(PreparedAudit) -> Result<()> + Send + 'static,
 ) -> Value {
 	let completion = match prepared {
-		// Capacity was reserved before the remote cancellation. A received ACK
-		// reaches the actual writer before the first cancellable suspension.
-		Ok(prepared) => run_admitted_start_io(permit, ownership, move || append(prepared)).await,
+		// Hand the received ACK and custody to the actual writer before the
+		// first cancellable suspension, even when the blocking pool is busy.
+		Ok(prepared) => run_start_io(ownership, move || append(prepared)).await,
 		Err(error) => Err(error),
 	};
 	retain_result_after_audit(output, completion)
@@ -4040,19 +3950,16 @@ where
 async fn preserve_launch_outcome_async(
 	record: &mut JobRecord,
 	outcome: Result<Value>,
-	permit: OwnedSemaphorePermit,
 	ownership: impl Send + 'static,
 	persist: impl FnOnce(&JobRecord) -> Result<()> + Send + 'static,
 ) -> LaunchOutcome {
-	// The launch reserved capacity before submitting any remote effect. From
-	// receiving its ACK to handing the original outcome and ownership to the
-	// blocking worker there is no cancellable await, even when writers are busy.
+	// From receiving the ACK to handing its original outcome and ownership to
+	// the blocking worker there is no cancellable await, even when writers are busy.
 	let mut retained = preserve_launch_outcome(record, outcome, |_| Ok(()));
 	let publication = record.clone();
-	retained.local_record_pending =
-		run_admitted_start_io(permit, ownership, move || persist(&publication))
-			.await
-			.is_err();
+	retained.local_record_pending = run_start_io(ownership, move || persist(&publication))
+		.await
+		.is_err();
 	retained
 }
 
@@ -4149,13 +4056,6 @@ where
 {
 	let config = runtime_config()?;
 	let host = config.host(&record.host)?;
-	// These eight permits bound remote launches through outcome publication,
-	// not observation RPCs or the independent pending/audit writer workers.
-	// Waiting for SSH never consumes a blocking-pool thread.
-	let publication_permit = start_outcome_slots()
-		.acquire_owned()
-		.await
-		.map_err(|_| anyhow::anyhow!("job launch publication capacity unavailable"))?;
 	let request = json!({
 		"job_id": record.id,
 		"job_dir": record.remote_job_dir,
@@ -4201,7 +4101,6 @@ where
 	Ok(preserve_launch_outcome_async(
 		record,
 		launch_result,
-		publication_permit,
 		(guard.clone(), owner.clone()),
 		save_record,
 	)
@@ -4563,8 +4462,7 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 		&json!({"phase":"intent","remote_operation_submitted":false}),
 	)
 	.map_err(|_| operation_intent_unavailable())?;
-	let (publication_permit, record) =
-		run_cancel_intent(intent, cancel_publication_slots(), record, append_audit).await?;
+	let record = run_cancel_intent(intent, record, append_audit).await?;
 	let remote = if record.system_jobctl {
 		run_jobctl(host, &json!({"op":"cancel","job_id":record.id})).await
 	} else {
@@ -4583,8 +4481,7 @@ pub async fn cancel_job(params: ProcessCancelParams) -> Result<String> {
 		&params.job_id,
 		&json!({"phase":"result","outcome_unknown":output["outcome"]=="unknown"}),
 	);
-	let output =
-		complete_cancel_audit(output, completion, publication_permit, record, append_audit).await;
+	let output = complete_cancel_audit(output, completion, record, append_audit).await;
 	Ok(serde_json::to_string_pretty(&output)?)
 }
 

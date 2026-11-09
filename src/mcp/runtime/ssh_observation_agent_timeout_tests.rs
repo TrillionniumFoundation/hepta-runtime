@@ -59,7 +59,7 @@ pub(super) async fn startup(path: &Path, control: &Arc<AgentControl>, kind: &str
 	assert!(!pool.healthy.load(Ordering::Acquire));
 	assert!(pool.stop.is_cancelled());
 	assert!(pool.thread.lock().unwrap().is_none());
-	assert_eq!(pool.admission.available_permits(), MAX_ADMITTED);
+
 	assert_eq!(control.requests.load(Ordering::Acquire), selected);
 	assert!(capture(
 		"fixture",
@@ -83,8 +83,6 @@ async fn request_phase(core: &Arc<Core>, control: &Arc<AgentControl>, prelease: 
 	let offset = if prelease { 2 } else { 1 };
 	let before = arm_next_lookup(control, offset);
 	let sequence = core.sequence.load(Ordering::Acquire);
-	let global = Arc::new(Semaphore::new(MAX_SESSIONS));
-	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
 	let (reply, receive) = oneshot::channel();
 	let request = Request {
 		host: "fixture".into(),
@@ -93,15 +91,10 @@ async fn request_phase(core: &Arc<Core>, control: &Arc<AgentControl>, prelease: 
 		deadline: Instant::now() + Duration::from_millis(500),
 		cancel: CancellationToken::new(),
 		reply,
-		admission: Arc::new(admissions.clone().try_acquire_owned().unwrap()),
 	};
-	let initial = global.clone().try_acquire_owned().unwrap();
-	timeout(
-		Duration::from_secs(3),
-		core.clone().execute(request, initial, global.clone()),
-	)
-	.await
-	.unwrap();
+	timeout(Duration::from_secs(3), core.clone().execute(request))
+		.await
+		.unwrap();
 	let error = receive.await.unwrap().err().unwrap();
 	assert!(error.is::<profile::AgentLookupDeadline>(), "{error:#}");
 	assert!(error
@@ -111,13 +104,12 @@ async fn request_phase(core: &Arc<Core>, control: &Arc<AgentControl>, prelease: 
 	assert!(!core.stop.is_cancelled());
 	assert_eq!(control.requests.load(Ordering::Acquire), before + offset);
 	assert_eq!(core.sequence.load(Ordering::Acquire), sequence);
-	assert_eq!(global.available_permits(), MAX_SESSIONS);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
+
 	if let Some((master, generation, _)) = &retired {
 		let entries = core.masters.lock().await;
 		let entry = entries.get("fixture").unwrap();
 		assert_eq!(entry.generation, *generation);
-		assert_eq!(entry.permits.available_permits(), HOST_SESSIONS);
+		assert_eq!(entry.activity.active(), 0);
 		assert_eq!(master.active.load(Ordering::Acquire), 0);
 		assert!(master.accepting.load(Ordering::Acquire));
 		assert_eq!(core.children.lock().await.len(), 1);
@@ -136,27 +128,24 @@ async fn request_phase(core: &Arc<Core>, control: &Arc<AgentControl>, prelease: 
 }
 
 async fn postresponse(core: &Arc<Core>, agent: &Arc<AgentControl>) {
-	let global = Arc::new(Semaphore::new(MAX_SESSIONS));
-	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
-	let host = Arc::new(Semaphore::new(HOST_SESSIONS));
+	let host = Arc::new(Activity::default());
 	let release = Arc::new(Semaphore::new(0));
-	let (completed_send, mut completed) = mpsc::channel(MAX_SESSIONS);
+	let (completed_send, mut completed) = mpsc::channel(8);
 	let control = Arc::new(PostverifyControl {
-		global: global.clone(),
 		host: host.clone(),
 		completed: completed_send,
 		release: release.clone(),
 	});
-	let (sender, receiver) = mpsc::channel(QUEUE);
-	let actor = tokio::task::spawn_local(core.clone().run_with_dispatch(
-		receiver,
-		global.clone(),
-		move |core, request, initial| postverify_dispatch(core, request, initial, control.clone()),
-	));
+	let (sender, receiver) = mpsc::unbounded_channel();
+	let actor = tokio::task::spawn_local(
+		core.clone()
+			.run_with_dispatch(receiver, move |core, request| {
+				postverify_dispatch(core, request, control.clone())
+			}),
+	);
 	let before = agent.requests.load(Ordering::Acquire);
 	let first = enqueue_fair_request(
 		&sender,
-		&admissions,
 		"fixture",
 		"must-discard-completed-output",
 		Instant::now() + Duration::from_secs(15),
@@ -164,9 +153,8 @@ async fn postresponse(core: &Arc<Core>, agent: &Arc<AgentControl>) {
 	assert_eq!(phase_notice(&mut completed).await, first.command);
 	assert_eq!(agent.requests.load(Ordering::Acquire), before + 2);
 	assert!(core.children.lock().await.is_empty());
-	assert_eq!(host.available_permits(), HOST_SESSIONS);
-	assert_eq!(global.available_permits(), MAX_SESSIONS - 1);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED - 1);
+	assert_eq!(host.active(), 0);
+
 	arm_next_lookup(agent, 1);
 	release.add_permits(1);
 	let error = timeout(Duration::from_secs(5), first.reply)
@@ -178,8 +166,7 @@ async fn postresponse(core: &Arc<Core>, agent: &Arc<AgentControl>) {
 	assert!(error.is::<profile::AgentLookupDeadline>(), "{error:#}");
 	lookup_closed(agent, 1).await;
 	assert_eq!(agent.requests.load(Ordering::Acquire), before + 3);
-	assert_eq!(global.available_permits(), MAX_SESSIONS);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
+
 	assert!(core.children.lock().await.is_empty());
 	assert!(!core.stop.is_cancelled());
 	assert!(!actor.is_finished());
@@ -188,7 +175,6 @@ async fn postresponse(core: &Arc<Core>, agent: &Arc<AgentControl>) {
 	// or an authenticated-mux integration fixture.
 	let second = enqueue_fair_request(
 		&sender,
-		&admissions,
 		"fixture",
 		"separate-request-with-fresh-checks",
 		Instant::now() + Duration::from_secs(15),
@@ -203,13 +189,11 @@ async fn postresponse(core: &Arc<Core>, agent: &Arc<AgentControl>) {
 	assert_eq!(agent.requests.load(Ordering::Acquire), before + 6);
 	assert!(output.status.success());
 	assert!(!output.stdout.is_empty());
-	assert_eq!(host.available_permits(), HOST_SESSIONS);
-	assert_eq!(global.available_permits(), MAX_SESSIONS - 1);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED - 1);
+	assert_eq!(host.active(), 0);
+
 	assert!(!core.stop.is_cancelled());
 	drop(output);
-	assert_eq!(global.available_permits(), MAX_SESSIONS);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
+
 	core.stop.cancel();
 	timeout(Duration::from_secs(3), actor)
 		.await
@@ -225,7 +209,7 @@ async fn failed_master(core: &Arc<Core>, control: &Arc<AgentControl>) {
 		.entry("fixture", &cancel, Instant::now() + Duration::from_secs(1))
 		.await
 		.unwrap();
-	let held = failed.permits.clone().try_acquire_owned().unwrap();
+	let held = failed.activity.lease().unwrap();
 	assert!(renewal_error(&mut failed.ready)
 		.await
 		.contains("observation SSH agent deadline"));
@@ -241,8 +225,8 @@ async fn failed_master(core: &Arc<Core>, control: &Arc<AgentControl>) {
 		let still_failed = entries.get("fixture").unwrap();
 		assert_eq!(still_failed.generation, failed.generation);
 		assert!(still_failed.ready.same_channel(&failed.ready));
-		assert!(Arc::ptr_eq(&still_failed.permits, &failed.permits));
-		assert_eq!(still_failed.permits.available_permits(), HOST_SESSIONS - 1);
+		assert!(Arc::ptr_eq(&still_failed.activity, &failed.activity));
+		assert_eq!(still_failed.activity.active(), 1);
 		assert!(still_failed.draining.is_none());
 		assert!(matches!(&*still_failed.ready.borrow(), Some(Err(_))));
 	}
@@ -273,14 +257,14 @@ async fn failed_renewal(core: &Arc<Core>, control: &Arc<AgentControl>) {
 	let cancel = CancellationToken::new();
 	let deadline = Instant::now() + Duration::from_secs(15);
 	let stale = core.entry("fixture", &cancel, deadline).await.unwrap();
-	let held = stale.permits.clone().try_acquire_owned().unwrap();
+	let held = stale.activity.lease().unwrap();
 	let before = arm_next_lookup(control, 1);
 	core.renew("fixture", generation, &old, deadline, &cancel)
 		.await
 		.unwrap();
 	let mut failed = core.entry("fixture", &cancel, deadline).await.unwrap();
 	assert_ne!(failed.generation, generation);
-	assert!(Arc::ptr_eq(&failed.permits, &stale.permits));
+	assert!(Arc::ptr_eq(&failed.activity, &stale.activity));
 	assert!(renewal_error(&mut failed.ready)
 		.await
 		.contains("observation SSH agent deadline"));
@@ -296,8 +280,8 @@ async fn failed_renewal(core: &Arc<Core>, control: &Arc<AgentControl>) {
 		let current = entries.get("fixture").unwrap();
 		assert_eq!(current.generation, failed.generation);
 		assert!(current.draining.is_none());
-		assert!(Arc::ptr_eq(&current.permits, &stale.permits));
-		assert_eq!(current.permits.available_permits(), HOST_SESSIONS - 1);
+		assert!(Arc::ptr_eq(&current.activity, &stale.activity));
+		assert_eq!(current.activity.active(), 1);
 		assert!(matches!(&*current.ready.borrow(), Some(Err(_))));
 	}
 	let sequence = core.sequence.load(Ordering::Acquire);

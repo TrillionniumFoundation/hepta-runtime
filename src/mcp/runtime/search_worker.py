@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 TERMINAL = {"completed", "limited", "cancelled", "failed", "interrupted"}
 CAPS = {"entries": 10000, "results": 1000, "bytes": 64 * 1024 * 1024,
         "seconds": 30, "depth": 64, "file_bytes": 4 * 1024 * 1024,
-        "result_bytes": 2 * 1024 * 1024, "jobs": 1024, "active": 8}
+        "result_bytes": 2 * 1024 * 1024}
 DOCUMENT_EXPANSION = 16 * 1024 * 1024
 DOCUMENT_TEXT = 4 * 1024 * 1024
 FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -679,25 +679,7 @@ def main(request):
         if request["action"] == "start":
             authorized_root(request)
             options(request)
-            # Limit both permanent state growth and concurrent detached workers.
-            total = active = owned = 0
-            with os.scandir(base) as entries:
-                for entry in entries:
-                    if entry.name.startswith("."):
-                        continue
-                    total += 1
-                    if total >= CAPS["jobs"]:
-                        raise ValueError("search receipt quota reached")
-                    other_fd = os.open(entry.name, FLAGS | os.O_DIRECTORY, dir_fd=base)
-                    try:
-                        other = reconcile(other_fd, read_json(other_fd, "record.json"))
-                    finally:
-                        os.close(other_fd)
-                    if other["state"] not in TERMINAL:
-                        active += 1
-                        owned += other["owner"] == owner
-            if active >= CAPS["active"] or owned >= 4:
-                raise ValueError("active search quota reached")
+            # Original receipts are retained; their count cannot deny a new search.
             os.mkdir(identity, 0o700, dir_fd=base)
         fd = os.open(identity, FLAGS | os.O_DIRECTORY, dir_fd=base)
         private(fd)

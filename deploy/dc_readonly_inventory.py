@@ -22,6 +22,7 @@ import shlex
 import stat
 import subprocess
 import sys
+import threading
 import time
 
 import inventory_host_readonly as core
@@ -29,8 +30,6 @@ import inventory_host_readonly as core
 MAX_TRANSPORT_STDOUT = 8 * 1024 * 1024
 MAX_TRANSPORT_STDERR = 64 * 1024
 MAX_TRANSPORT_INPUT = 8 * 1024 * 1024
-MAX_HOSTS = 16
-MAX_WORKERS = 2
 MAX_CONTROLLER_ENTRIES = 16_384
 
 
@@ -150,7 +149,7 @@ def check_config(config: dict, expected_hosts: list[str] | None) -> tuple[Path, 
     if type(config) is not dict:
         raise InventoryError("invalid_config")
     configured = config.get("hosts")
-    if not isinstance(configured, dict) or not 1 <= len(configured) <= MAX_HOSTS:
+    if not isinstance(configured, dict) or not configured:
         raise InventoryError("invalid_host_count")
     if expected_hosts is not None and set(configured) != set(expected_hosts):
         raise InventoryError("host_set_mismatch")
@@ -341,15 +340,34 @@ def run(args: argparse.Namespace) -> tuple[Path, dict]:
     rows, unresolved, snapshots, manifests = scan_controller(state, hosts)
     write_private(output / "controller-manifest.json", manifests)
     answers = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        pending = {
-            name: pool.submit(host_observation, name, host, rows[name], helper_source)
-            for name, host in hosts.items()
-        }
+    pending = {}
+    workers = []
+
+    def observe(name, host, future):
+        try:
+            future.set_result(host_observation(name, host, rows[name], helper_source))
+        except BaseException as error:
+            future.set_exception(error)
+
+    try:
+        # Each configured host has its own original transport owner. A slow
+        # host cannot queue unrelated hosts behind a fixed worker population.
+        for name, host in hosts.items():
+            future = concurrent.futures.Future()
+            worker = threading.Thread(target=observe, args=(name, host, future),
+                                      name="inventory-" + name)
+            worker.start()
+            workers.append(worker)
+            pending[name] = future
         for name, future in pending.items():
             answer = future.result()
             answers[name] = answer
             write_private(output / (name + ".json"), answer)
+    finally:
+        # A failed response, output write, or later thread creation must not
+        # abandon the original child owners started for the other hosts.
+        for worker in workers:
+            worker.join()
     stable, changed = final_controller_reread(state, snapshots, manifests)
     if source_sha256(helper_path.read_bytes()) != helper_sha:
         raise InventoryError("helper_source_mutated")

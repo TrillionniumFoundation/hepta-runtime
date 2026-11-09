@@ -313,3 +313,107 @@ async fn atomic_publication_recovers_after_rename_before_directory_sync_or_ack()
 		.unwrap();
 	assert!(read_record::<Value>(&destination).await.is_err());
 }
+
+#[tokio::test]
+async fn distinct_session_locks_do_not_wait_on_each_other_or_the_index() {
+	let temp = tempfile::tempdir().unwrap();
+	let root = temp.path().join("state");
+	private_directory(&root).await.unwrap();
+	let index = lock_state(&root).await.unwrap();
+	let one_id = "ws_000000000000000000000001";
+	let other_id = "ws_000000000000000000000002";
+	let one = lock_session(&root, one_id).await.unwrap();
+	let other = tokio::time::timeout(
+		std::time::Duration::from_secs(1),
+		lock_session(&root, other_id),
+	)
+	.await
+	.unwrap()
+	.unwrap();
+	assert!(tokio::time::timeout(
+		std::time::Duration::from_millis(40),
+		lock_session(&root, one_id)
+	)
+	.await
+	.is_err());
+	drop(one);
+	drop(lock_session(&root, one_id).await.unwrap());
+	drop((index, other));
+	assert!(lock_session(&root, "../outside").await.is_err());
+}
+
+#[test]
+fn legacy_session_limit_is_identity_only_and_no_longer_restricts_configuration() {
+	for legacy in [0, 1, 8, 9, 1024] {
+		let mut policy = config();
+		policy
+			.weight_workers
+			.get_mut("cpu")
+			.unwrap()
+			.max_active_sessions = legacy;
+		policy.validate().unwrap();
+	}
+}
+
+#[tokio::test]
+async fn session_intent_admission_crosses_old_record_ceiling_without_archival() {
+	let temp = tempfile::tempdir().unwrap();
+	let policy = config();
+	let mut original = Vec::new();
+	for index in 0..1024 {
+		// Absence of a remote binding used to be counted as an active session.
+		let mut input = open_params();
+		input.idempotency_key = format!("concurrent-{index}");
+		let intent = prepare_intent(&policy, input).unwrap();
+		let payload = serde_json::to_value(&intent).unwrap();
+		let bytes =
+			serde_json::to_vec(&json!({"sha256":digest(&payload).unwrap(),"payload":payload}))
+				.unwrap();
+		let path = temp.path().join(intent_name(&intent.session_id));
+		let mut options = tokio::fs::OpenOptions::new();
+		options.write(true).create_new(true);
+		#[cfg(unix)]
+		options.mode(0o600);
+		let mut file = options.open(&path).await.unwrap();
+		file.write_all(&bytes).await.unwrap();
+		file.flush().await.unwrap();
+		drop(file);
+		original.push((path, bytes));
+	}
+	let mut input = open_params();
+	input.idempotency_key = "concurrent-1024".into();
+	let intent = prepare_intent(&policy, input).unwrap();
+	publish_session_intent(temp.path(), &intent).await.unwrap();
+	publish_session_intent(temp.path(), &intent).await.unwrap();
+	assert_eq!(
+		read_record::<SessionIntent>(&temp.path().join(intent_name(&intent.session_id)))
+			.await
+			.unwrap(),
+		intent
+	);
+	let mut conflicting = intent.clone();
+	conflicting.request_digest = "changed-original-request".into();
+	assert!(publish_session_intent(temp.path(), &conflicting)
+		.await
+		.is_err());
+	for (path, bytes) in original {
+		assert_eq!(tokio::fs::read(path).await.unwrap(), bytes);
+	}
+	// The byte contract remains distinct from the removed session count.
+	let filler = tokio::fs::File::create(temp.path().join("stored-bytes.fixture"))
+		.await
+		.unwrap();
+	filler.set_len(MAX_STATE_BYTES).await.unwrap();
+	publish_session_intent(temp.path(), &intent).await.unwrap();
+	let input = open_params();
+	let another = prepare_intent(&policy, input).unwrap();
+	let error = publish_session_intent(temp.path(), &another)
+		.await
+		.unwrap_err();
+	assert!(error.to_string().contains("64 MiB quota"));
+	assert!(
+		!tokio::fs::try_exists(temp.path().join(intent_name(&another.session_id)))
+			.await
+			.unwrap()
+	);
+}

@@ -29,7 +29,6 @@ use sha2::{Digest, Sha256};
 use std::io;
 use std::io::Read;
 use std::sync::Arc;
-use tokio::sync::OwnedSemaphorePermit;
 use tokio_util::sync::CancellationToken;
 
 #[cfg(unix)]
@@ -166,7 +165,6 @@ pub(super) async fn inspect_isolated(
 	digest: &str,
 	bytes: Arc<Vec<u8>>,
 	cancellation: &CancellationToken,
-	lease: Arc<OwnedSemaphorePermit>,
 	admission: Arc<super::runtime::effect_owner_fence::AdmissionPermit>,
 ) -> std::result::Result<Value, Failure> {
 	if cancellation.is_cancelled() {
@@ -192,7 +190,6 @@ pub(super) async fn inspect_isolated(
 		header,
 		bytes,
 		cancellation,
-		lease,
 		admission,
 	)
 	.await
@@ -207,7 +204,6 @@ pub(super) async fn inspect_isolated<A>(
 	digest: &str,
 	bytes: Arc<Vec<u8>>,
 	cancellation: &CancellationToken,
-	_lease: Arc<OwnedSemaphorePermit>,
 	_admission: Arc<A>,
 ) -> std::result::Result<Value, Failure> {
 	if cancellation.is_cancelled() {

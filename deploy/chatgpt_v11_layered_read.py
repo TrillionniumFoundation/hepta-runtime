@@ -190,7 +190,6 @@ class LayeredReadNativeProxy(DualReadNativeProxy):
                 raise UnsafeProvenance('layered_three_independent_state_roots_required')
         finally:
             for fd in descriptors:os.close(fd)
-        self._predecessor_lock=threading.RLock()
         self._legacy_read_lock=_OriginalSessionGate()
         self._v4_epoch=None;self._v4_workdir_bound=False;self._v4_workdir=None
         self._v4_undo_credits={}
@@ -200,9 +199,7 @@ class LayeredReadNativeProxy(DualReadNativeProxy):
         self.workflow_owners.assert_native_effect_registries_empty()
 
     def _attest_predecessor(self):
-        with self._predecessor_lock,self.predecessor._state_lock:
-            self.predecessor._ensure_native()
-            self.predecessor._verify_catalog()
+        self.predecessor._attested_binding()
 
     def _attest_additional_registry_backend(self):
         self._assert_empty_native_effects()
@@ -262,8 +259,7 @@ class LayeredReadNativeProxy(DualReadNativeProxy):
                 with self._active_lock:
                     if context.cancel_requested or self._closing.is_set():return self._not_submitted(context,era)
                     context.native_id=None;context.binding=None
-            with self._state_lock:
-                self._ensure_native(context);self._verify_catalog(context)
+            self._attested_binding(context)
             # Native process_start never reads MCP workdir or undo state. Keep
             # arguments untouched and all other V4 calls exclusively admitted.
             cwd=arguments.get('cwd')
@@ -341,7 +337,7 @@ class LayeredReadNativeProxy(DualReadNativeProxy):
                 automatic_retry=False,original_request_replayed=False)
 
     def _predecessor_call(self,request,context,era,*,mutating):
-        identity=request.get('id')
+        identity=request.get('id');child=None
         try:
             self._assert_empty_native_effects()
             if context is not None:
@@ -349,15 +345,20 @@ class LayeredReadNativeProxy(DualReadNativeProxy):
                     if context.cancel_requested or self._closing.is_set():return self._not_submitted(context,era)
                     # A predecessor POST must never inherit a V11 cancellation mapping.
                     context.native_id=None;context.binding=None
-            with self._state_lock:
-                self._ensure_native(context);self._verify_catalog(context)
-            with self._predecessor_lock:
-                self._attest_predecessor()
-                binding=(self.predecessor.session,self.predecessor.protocol)
-                native={'jsonrpc':'2.0','id':self.predecessor._next_native_id('predecessor'),
-                    'method':'tools/call','params':{'name':request['params']['name'],
-                    'arguments':request['params'].get('arguments',{})}}
-                reply=self.predecessor.exchange(native,binding=binding,context=context,timeout=38)
+            self._attested_binding(context)
+            native={'jsonrpc':'2.0','id':self.predecessor._next_native_id('predecessor'),
+                'method':'tools/call','params':{'name':request['params']['name'],
+                'arguments':request['params'].get('arguments',{})}}
+            # This exact active child pins the predecessor's session until its
+            # original HTTP exchange exits. Distinct calls own distinct leases.
+            child,refused=self.predecessor._reserve(native)
+            if refused is not None:raise ValueError('predecessor request ownership unavailable')
+            binding=self.predecessor._attested_binding(child)
+            with self.predecessor._active_lock:
+                child.native_id=native['id'];child.binding=binding
+            # Keep the outer transport outcome on its original request context;
+            # no V11 cancellation is rebound to the predecessor's session.
+            reply=self.predecessor.exchange(native,binding=binding,context=context,timeout=38)
             reply={**reply,'id':identity}
             if era=='modern' and 'error' not in reply:
                 value=reply.get('result')
@@ -370,6 +371,8 @@ class LayeredReadNativeProxy(DualReadNativeProxy):
             return error(identity,-32603,'Predecessor result unavailable; original request was not replayed',
                 outcome='unknown' if mutating else 'unavailable',automatic_retry=False,
                 original_request_replayed=False)
+        finally:
+            if child is not None:self.predecessor._finish(child)
 
     def _handle_owner(self,kind,identity,mutating):
         owner=self.workflow_owners.owner(kind,identity)

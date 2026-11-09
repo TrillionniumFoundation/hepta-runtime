@@ -37,9 +37,9 @@ const LARGE_WRITE_CHUNK: usize = 256;
 const QUERY_WRITE_CHUNK: usize = 128;
 const MAINTENANCE_INTERVAL: Duration = Duration::from_millis(500);
 const IDLE_SYNC_QUIET: Duration = Duration::from_secs(5);
-// Each complete large archive pins 258 directories. Keep active scopes within
-// the usual 1024-descriptor process budget; this never limits retained records.
-const MAX_INDEXES: usize = 2;
+// Retire unused cached indexes above this cache target. Active scopes are
+// never refused merely because other indexes are still in use.
+const IDLE_INDEX_CACHE_TARGET: usize = 2;
 pub(super) const QUERY_BUDGET: Duration = Duration::from_secs(3);
 const BUILD_BUDGET: Duration = Duration::from_secs(2400);
 const ROWS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("receipts");
@@ -131,10 +131,16 @@ impl Drop for SteadyTrace {
 		};
 		// Formatting is static and numeric; no identity, path or error text is
 		// emitted. Diagnostic I/O failure must not become a product error.
-		let _ = writeln!(std::io::stderr(),
+		let _ = writeln!(
+			std::io::stderr(),
 			"archive_index steady_stage={} start_unix_ms={} end_unix_ms={} elapsed_us={} input_rows={} durable={} outcome={} claim_pending_us={} store_lock_wait_us={} state_us={} begin_write_us={} update_rows_us={} commit_us={} size_read_us={} snapshot_read_us={} seal_us={} other_us={}",
-			self.stage, clock.start_unix_ms, end_unix_ms, elapsed.as_micros(),
-			self.rows, durable, self.outcome,
+			self.stage,
+			clock.start_unix_ms,
+			end_unix_ms,
+			elapsed.as_micros(),
+			self.rows,
+			durable,
+			self.outcome,
 			self.phase_us[SteadyPhase::ClaimPending as usize],
 			self.phase_us[SteadyPhase::StoreLockWait as usize],
 			self.phase_us[SteadyPhase::State as usize],
@@ -144,7 +150,8 @@ impl Drop for SteadyTrace {
 			self.phase_us[SteadyPhase::SizeRead as usize],
 			self.phase_us[SteadyPhase::SnapshotRead as usize],
 			self.phase_us[SteadyPhase::Seal as usize],
-			self.phase_us[SteadyPhase::Other as usize]);
+			self.phase_us[SteadyPhase::Other as usize]
+		);
 	}
 }
 // A warm metadata observation keeps one FIFO turn from opening hot state through
@@ -406,7 +413,10 @@ impl ParallelEpoch {
 			if let super::super::namespace_version::Version::Watch(watch, generation) = self.version
 			{
 				let complete = stage == "parallel_epoch_publication_complete";
-				eprintln!("archive_index cold_stage={stage} watch_id={watch} watch_generation={generation} publication_generation={} full_window={complete}", self.generation);
+				eprintln!(
+					"archive_index cold_stage={stage} watch_id={watch} watch_generation={generation} publication_generation={} full_window={complete}",
+					self.generation
+				);
 			}
 		}
 	}
@@ -1096,7 +1106,7 @@ fn cached(slot: &Slot, deadline: Instant) -> Result<Option<ValidatedDatabase>> {
 				.downcast_ref::<std::io::Error>()
 				.is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) =>
 		{
-			return Ok(None)
+			return Ok(None);
 		}
 		Err(error) => return Err(error),
 	};
@@ -1246,7 +1256,10 @@ fn cached(slot: &Slot, deadline: Instant) -> Result<Option<ValidatedDatabase>> {
 				if std::env::var_os("HEPTA_ARCHIVE_INDEX_TRACE").as_deref()
 					== Some(std::ffi::OsStr::new("1"))
 				{
-					eprintln!("archive_index cold_stage=original_namespace_join_coverage_verified matched_rows={} changed_rows={} extra_rows={} observed_rows={} complete_identity_join=true full_namespace_rescan=true old_snapshot_random_probes=0", originals.matched, originals.changed, originals.extra, originals.rows);
+					eprintln!(
+						"archive_index cold_stage=original_namespace_join_coverage_verified matched_rows={} changed_rows={} extra_rows={} observed_rows={} complete_identity_join=true full_namespace_rescan=true old_snapshot_random_probes=0",
+						originals.matched, originals.changed, originals.extra, originals.rows
+					);
 				}
 				(coverage.0, coverage.1, true)
 			}
@@ -1643,17 +1656,7 @@ fn can_retire(slot: &Arc<Slot>) -> bool {
 		!state.busy && Arc::strong_count(slot) <= internal_owners
 	})
 }
-#[derive(Debug)]
-struct IndexCapacityBusy;
-impl std::fmt::Display for IndexCapacityBusy {
-	fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		out.write_str("archive index workers busy")
-	}
-}
-impl std::error::Error for IndexCapacityBusy {}
-
-// The caller holds STORE_LOCK. A full pool is transient contention, distinct
-// from unsafe storage or an invalid archive; only that capacity error may wait.
+// The caller holds STORE_LOCK. Original active indexes retain their ownership.
 fn try_slot_at(root: &Path, archive: &Archive) -> Result<Arc<Slot>> {
 	let key = identity(archive.legacy())?;
 	let mut registry = INDEXES
@@ -1663,10 +1666,9 @@ fn try_slot_at(root: &Path, archive: &Archive) -> Result<Arc<Slot>> {
 	if let Some(slot) = registry.iter().find(|slot| slot.identity == key) {
 		return Ok(slot.clone());
 	}
-	if registry.len() >= MAX_INDEXES {
-		let position = registry.iter().position(can_retire);
-		let Some(position) = position else {
-			return Err(IndexCapacityBusy.into());
+	while registry.len() >= IDLE_INDEX_CACHE_TARGET {
+		let Some(position) = registry.iter().position(can_retire) else {
+			break;
 		};
 		if let Some(old) = registry.remove(position) {
 			if let Ok(mut state) = old.state.lock() {
@@ -1704,31 +1706,16 @@ fn try_slot_at(root: &Path, archive: &Archive) -> Result<Arc<Slot>> {
 	registry.push_back(slot.clone());
 	Ok(slot)
 }
-// A caller already holding an index must stay protected from retirement. New
-// roots wait only within their original query deadline. Release every store,
-// registry and state guard before waiting so current readers/workers can leave
-// and authoritative writers can continue; no failed request is redispatched.
+// A caller holding an index stays protected from retirement. Independent roots
+// retain the original query deadline and authoritative store fence.
 fn slot_with_admission(
 	root: &Path,
 	archive: &Archive,
 	deadline: Instant,
 	admission: &mut SnapshotAdmission,
 ) -> Result<Arc<Slot>> {
-	loop {
-		admission.acquire(deadline)?;
-		match try_slot_at(root, archive) {
-			Ok(slot) => return Ok(slot),
-			Err(error) if error.is::<IndexCapacityBusy>() => {
-				admission.release();
-				let remaining = deadline.saturating_duration_since(Instant::now());
-				if remaining.is_zero() {
-					bail!("archive metadata query total deadline exceeded");
-				}
-				std::thread::sleep(remaining.min(Duration::from_millis(1)));
-			}
-			Err(error) => return Err(error),
-		}
-	}
+	admission.acquire(deadline)?;
+	try_slot_at(root, archive)
 }
 
 #[cfg(test)]
@@ -1832,7 +1819,9 @@ fn ready_with_admission(
 		}
 		admission.release();
 		if Instant::now() >= deadline {
-			bail!("archive index preparing or validation unavailable; repeat only this metadata query");
+			bail!(
+				"archive index preparing or validation unavailable; repeat only this metadata query"
+			);
 		}
 		std::thread::sleep(Duration::from_millis(2));
 	}
@@ -2365,7 +2354,7 @@ fn try_shared_pages_with_gate(
 	deadline: Instant,
 	gate: &AuditStoreLock,
 ) -> Result<Option<PageBatch>> {
-	if requests.is_empty() || requests.len() > MAX_METADATA_QUERIES {
+	if requests.is_empty() || requests.len() > METADATA_BATCH_SIZE {
 		bail!("archive page group exceeded its admitted bound");
 	}
 	if !cfg!(target_os = "linux") {
@@ -2556,7 +2545,7 @@ pub(super) fn pages(
 	queries: Vec<Result<PageQuery>>,
 	deadline: Instant,
 ) -> Result<PageBatch> {
-	if queries.is_empty() || queries.len() > MAX_METADATA_QUERIES {
+	if queries.is_empty() || queries.len() > METADATA_BATCH_SIZE {
 		bail!("archive page group exceeded its admitted bound");
 	}
 	// Freeze happened before even the hot store or any cursor was opened.
@@ -2752,7 +2741,7 @@ pub(super) fn usage(
 	deadline: Instant,
 	admission: SnapshotAdmission,
 ) -> Result<UsageBatch> {
-	if owners.is_empty() || owners.len() > MAX_METADATA_QUERIES {
+	if owners.is_empty() || owners.len() > METADATA_BATCH_SIZE {
 		bail!("usage query group exceeded its admitted bound");
 	}
 	read_snapshot_with_mode(

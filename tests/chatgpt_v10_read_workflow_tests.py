@@ -305,7 +305,7 @@ class ReadWorkflowRouting(unittest.TestCase):
     def test_actual_native_transport_failure_does_not_retry_or_dispatch_in_v4(self):
         self.proxy.initialized = True
         self.proxy.session, self.proxy.protocol = "fixed-private-session", "2025-11-25"
-        self.proxy._verify_catalog = mock.Mock()
+        self.proxy._verify_bound_catalog = mock.Mock(side_effect=lambda binding, context=None: binding)
         self.proxy.exchange = mock.Mock(side_effect=OSError("lost acknowledgement"))
         with mock.patch.object(D.NativeProxy, "_dispatch", self.actual_native_dispatch):
             result = self.proxy._dispatch(self.request("operation_start", self.start()))
@@ -316,7 +316,7 @@ class ReadWorkflowRouting(unittest.TestCase):
 
     def test_native_catalog_attestation_failure_prevents_submission_without_v4_fallback(self):
         self.proxy.initialized = True
-        self.proxy._verify_catalog = mock.Mock(side_effect=ValueError("contract drift"))
+        self.proxy._verify_bound_catalog = mock.Mock(side_effect=ValueError("contract drift"))
         self.proxy.exchange = mock.Mock()
         with mock.patch.object(D.NativeProxy, "_dispatch", self.actual_native_dispatch):
             result = self.proxy._dispatch(self.request("search_stop", {"search_id": ID}))

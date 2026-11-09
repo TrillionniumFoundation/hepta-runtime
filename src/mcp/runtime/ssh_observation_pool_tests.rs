@@ -7,6 +7,7 @@ use serde_json::json;
 use std::future::Future;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::ExitStatusExt;
+use tokio::sync::Semaphore;
 
 #[path = "ssh_observation_agent_timeout_tests.rs"]
 mod agent_timeout;
@@ -23,21 +24,10 @@ mod maintenance;
 #[path = "ssh_observation_owner_custody_tests.rs"]
 mod owner_custody;
 
-// Direct lifecycle fixtures own a private admission; actor capacity fixtures
-// below instead share the actual sixteen-permit admission pool.
-fn test_admission() -> Arc<OwnedSemaphorePermit> {
-	Arc::new(
-		Arc::new(Semaphore::new(MAX_ADMITTED))
-			.try_acquire_owned()
-			.unwrap(),
-	)
-}
-
-fn proxy_admission_fixture() -> (Arc<Proxy>, mpsc::Receiver<Request>) {
-	let (sender, receiver) = mpsc::channel(QUEUE);
+fn proxy_admission_fixture() -> (Arc<Proxy>, mpsc::UnboundedReceiver<Request>) {
+	let (sender, receiver) = mpsc::unbounded_channel();
 	let proxy = Arc::new(Proxy {
 		sender,
-		admission: Arc::new(Semaphore::new(MAX_ADMITTED)),
 		stop: CancellationToken::new(),
 		healthy: AtomicBool::new(true),
 		thread: Mutex::new(None),
@@ -65,7 +55,7 @@ async fn fill_proxy_channel(
 	deadline: Instant,
 ) -> Vec<oneshot::Receiver<Result<Captured>>> {
 	let mut replies = Vec::new();
-	for index in 0..QUEUE {
+	for index in 0..32 {
 		replies.push(
 			proxy_submission(
 				proxy.clone(),
@@ -77,264 +67,88 @@ async fn fill_proxy_channel(
 			.unwrap(),
 		);
 	}
-	assert_eq!(proxy.sender.capacity(), 0);
-	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED - QUEUE);
 	replies
 }
 
-async fn assert_proxy_submission_pending<F: Future>(mut task: std::pin::Pin<&mut F>) {
-	std::future::poll_fn(|context| {
-		assert!(task.as_mut().poll(context).is_pending());
-		std::task::Poll::Ready(())
-	})
-	.await;
-}
-
 #[tokio::test(flavor = "current_thread")]
-async fn queued_proxy_waiters_keep_sixteen_identities_and_send_each_request_once() {
+async fn proxy_accepts_beyond_old_queue_and_admission_caps_once_per_identity() {
 	let (proxy, mut receiver) = proxy_admission_fixture();
 	let deadline = Instant::now() + Duration::from_secs(30);
-	let mut replies = fill_proxy_channel(&proxy, deadline).await;
-	let mut waiters = Vec::new();
-	for index in 0..MAX_ADMITTED - QUEUE {
-		let mut task = Box::pin(proxy_submission(
-			proxy.clone(),
-			format!("waiting-{index}"),
-			deadline,
-			CancellationToken::new(),
-		));
-		assert_proxy_submission_pending(task.as_mut()).await;
-		waiters.push(task);
-	}
-	assert_eq!(receiver.len(), QUEUE);
-	assert_eq!(proxy.sender.capacity(), 0);
-	assert_eq!(proxy.admission.available_permits(), 0);
-	// All sixteen are real queued or reserve-waiting requests. The next call
-	// must fail in its first poll without creating another channel waiter.
-	let mut excess = Box::pin(proxy_submission(
-		proxy.clone(),
-		"seventeenth".to_owned(),
-		deadline,
-		CancellationToken::new(),
-	));
-	std::future::poll_fn(|context| {
-		match excess.as_mut().poll(context) {
-			std::task::Poll::Ready(Err(error)) => {
-				assert!(error.to_string().contains("pool capacity unavailable"));
-			}
-			_ => panic!("the seventeenth identity must be refused immediately"),
-		}
-		std::task::Poll::Ready(())
-	})
-	.await;
-	assert_eq!(proxy.admission.available_permits(), 0);
-	let mut requests = Vec::new();
-	for (index, waiter) in waiters.into_iter().enumerate() {
+	let replies = fill_proxy_channel(&proxy, deadline).await;
+	assert_eq!(receiver.len(), 32);
+	for index in 0..32 {
 		let request = receiver.try_recv().unwrap();
 		assert_eq!(request.command, format!("queued-{index}"));
-		// Keep the received identity alive as an actor/child would. Draining
-		// the channel cannot create a seventeenth accepted identity.
-		requests.push(request);
-		replies.push(
-			timeout(Duration::from_secs(5), waiter)
-				.await
-				.unwrap()
-				.unwrap(),
-		);
-		assert_eq!(receiver.len(), QUEUE);
-		assert_eq!(proxy.sender.capacity(), 0);
-		assert_eq!(proxy.admission.available_permits(), 0);
-	}
-	for index in 0..MAX_ADMITTED - QUEUE {
-		let request = receiver.try_recv().unwrap();
-		assert_eq!(request.command, format!("waiting-{index}"));
-		requests.push(request);
+		assert_eq!(request.host, "fixture");
+		assert_eq!(request.input.as_slice(), request.command.as_bytes());
+		assert_eq!(request.deadline, deadline);
+		assert!(!request.cancel.is_cancelled());
 	}
 	assert!(matches!(
 		receiver.try_recv(),
 		Err(mpsc::error::TryRecvError::Empty)
 	));
-	assert_eq!(requests.len(), MAX_ADMITTED);
-	for request in &requests {
-		assert_eq!(request.host, "fixture");
-		assert_eq!(request.input.as_slice(), request.command.as_bytes());
-		assert_eq!(
-			request.deadline, deadline,
-			"queue waiting cannot extend the deadline"
-		);
-		assert!(!request.cancel.is_cancelled());
-	}
-	drop(requests);
 	for reply in replies {
 		assert!(reply.await.is_err());
 	}
-	assert_eq!(proxy.sender.capacity(), QUEUE);
-	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED);
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn queued_proxy_waiters_release_identity_on_cancel_deadline_stop_and_close() {
-	for reason in ["cancel", "deadline", "stop", "close"] {
-		let (proxy, mut receiver) = proxy_admission_fixture();
-		let queued_deadline = Instant::now() + Duration::from_secs(30);
-		let replies = fill_proxy_channel(&proxy, queued_deadline).await;
-		let deadline = if reason == "deadline" {
-			Instant::now() + Duration::from_secs(1)
-		} else {
-			queued_deadline
-		};
-		let cancel = CancellationToken::new();
-		let mut task = Box::pin(proxy_submission(
-			proxy.clone(),
-			"must-not-send".to_owned(),
-			deadline,
-			cancel.clone(),
-		));
-		assert_proxy_submission_pending(task.as_mut()).await;
-		assert_eq!(
-			proxy.admission.available_permits(),
-			MAX_ADMITTED - QUEUE - 1
-		);
-		match reason {
-			"cancel" => cancel.cancel(),
-			"stop" => proxy.stop.cancel(),
-			"close" => receiver.close(),
-			"deadline" => {}
-			_ => unreachable!(),
-		}
-		let error = timeout(Duration::from_secs(5), task)
-			.await
-			.unwrap()
-			.err()
-			.unwrap();
-		assert!(error.to_string().contains(match reason {
-			"cancel" => "cancelled before queue",
-			"deadline" => "queue admission deadline",
-			"stop" => "stopped before queue",
-			"close" => "queue closed",
-			_ => unreachable!(),
-		}));
-		assert_eq!(receiver.len(), QUEUE);
-		assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED - QUEUE);
-		for index in 0..QUEUE {
-			let request = receiver.try_recv().unwrap();
-			assert_eq!(request.command, format!("queued-{index}"));
-		}
-		for reply in replies {
-			assert!(reply.await.is_err());
-		}
-		assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED);
-		assert_eq!(proxy.stop.is_cancelled(), reason == "stop");
-	}
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn queued_proxy_rechecks_submission_fences_after_capacity_wakes() {
+async fn proxy_checks_cancel_deadline_stop_health_and_closed_queue_before_submission() {
 	for reason in ["cancel", "deadline", "stop", "unhealthy", "close"] {
 		let (proxy, mut receiver) = proxy_admission_fixture();
-		let queued_deadline = Instant::now() + Duration::from_secs(30);
-		let replies = fill_proxy_channel(&proxy, queued_deadline).await;
-		let deadline = if reason == "deadline" {
-			Instant::now() + Duration::from_secs(1)
-		} else {
-			queued_deadline
-		};
+		let deadline = Instant::now() + Duration::from_secs(30);
+		let replies = fill_proxy_channel(&proxy, deadline).await;
 		let cancel = CancellationToken::new();
-		let mut task = Box::pin(proxy_submission(
-			proxy.clone(),
-			"must-not-send".to_owned(),
-			deadline,
-			cancel.clone(),
-		));
-		assert_proxy_submission_pending(task.as_mut()).await;
-		let held = receiver.try_recv().unwrap();
-		// The waiter now has channel capacity, but cannot be polled between
-		// this wake and the new fence. In the unhealthy case neither select
-		// cancellation arm is ready, so only the post-reserve check can refuse.
 		match reason {
 			"cancel" => cancel.cancel(),
 			"stop" => proxy.stop.cancel(),
 			"unhealthy" => proxy.healthy.store(false, Ordering::Release),
 			"close" => receiver.close(),
-			"deadline" => tokio::time::sleep_until(deadline).await,
+			"deadline" => {}
 			_ => unreachable!(),
 		}
-		assert!(timeout(Duration::from_secs(5), task)
+		let deadline = if reason == "deadline" {
+			Instant::now()
+		} else {
+			deadline
+		};
+		let error = proxy_submission(proxy.clone(), "must-not-send".into(), deadline, cancel)
 			.await
-			.unwrap()
-			.is_err());
-		assert_eq!(
-			receiver.len(),
-			QUEUE - 1,
-			"a wake cannot bypass a submission fence"
-		);
-		assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED - QUEUE);
-		if reason == "unhealthy" {
-			assert!(!proxy.stop.is_cancelled());
-			assert!(!cancel.is_cancelled());
-		}
-		drop(held);
-		for index in 1..QUEUE {
-			let request = receiver.try_recv().unwrap();
-			assert_eq!(request.command, format!("queued-{index}"));
-		}
+			.err()
+			.unwrap();
+		assert!(error.to_string().contains("before queue submission"));
+		assert_eq!(receiver.len(), 32);
+		drop(receiver);
 		for reply in replies {
 			assert!(reply.await.is_err());
 		}
-		assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED);
+		assert_eq!(proxy.stop.is_cancelled(), reason == "stop");
 	}
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn queued_proxy_future_drop_and_receiver_drop_return_their_own_identities() {
+async fn proxy_future_and_receiver_drop_never_create_or_replay_requests() {
 	let (proxy, receiver) = proxy_admission_fixture();
 	let deadline = Instant::now() + Duration::from_secs(30);
 	let replies = fill_proxy_channel(&proxy, deadline).await;
 	let unpolled = proxy_submission(
 		proxy.clone(),
-		"unpolled".to_owned(),
+		"unpolled".into(),
 		deadline,
 		CancellationToken::new(),
 	);
 	drop(unpolled);
-	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED - QUEUE);
-	let cancel = CancellationToken::new();
-	let mut abandoned = Box::pin(async {
-		// Match capture's cancellation guard while its enqueue is suspended.
-		let _guard = CancelOnDrop(cancel.clone());
-		proxy_submission(
-			proxy.clone(),
-			"abandoned".to_owned(),
-			deadline,
-			cancel.clone(),
-		)
-		.await
-	});
-	assert_proxy_submission_pending(abandoned.as_mut()).await;
-	assert_eq!(
-		proxy.admission.available_permits(),
-		MAX_ADMITTED - QUEUE - 1
-	);
-	drop(abandoned);
-	assert!(cancel.is_cancelled());
-	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED - QUEUE);
-	assert_eq!(receiver.len(), QUEUE);
-	let mut waiting = Box::pin(proxy_submission(
-		proxy.clone(),
-		"receiver-dropped".to_owned(),
-		deadline,
-		CancellationToken::new(),
-	));
-	assert_proxy_submission_pending(waiting.as_mut()).await;
+	assert_eq!(receiver.len(), 32);
 	drop(receiver);
-	// Dropping the receiver releases only its eight queued identities. The
-	// ninth still belongs to the suspended submission until it sees closure.
-	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED - 1);
-	assert!(timeout(Duration::from_secs(5), waiting)
-		.await
-		.unwrap()
-		.is_err());
-	assert_eq!(proxy.admission.available_permits(), MAX_ADMITTED);
+	assert!(proxy_submission(
+		proxy.clone(),
+		"receiver-dropped".into(),
+		deadline,
+		CancellationToken::new()
+	)
+	.await
+	.is_err());
 	for reply in replies {
 		assert!(reply.await.is_err());
 	}
@@ -375,100 +189,14 @@ fn control_paths_reserve_the_real_unix_temporary_socket_boundary() {
 	}
 }
 
-#[tokio::test]
-async fn completed_output_keeps_global_capacity_until_original_caller_finishes() {
-	let permits = Arc::new(Semaphore::new(1));
-	let budget = Arc::new(permits.clone().acquire_owned().await.unwrap());
-	let output = Captured {
-		output: Output {
-			status: ExitStatus::from_raw(0),
-			stdout: b"{}".to_vec(),
-			stderr: vec![],
-		},
-		_budget: budget.clone(),
-		_admission: test_admission(),
-	};
-	let (send, receive) = oneshot::channel();
-	assert!(send.send(output).is_ok());
-	drop(budget);
-	assert_eq!(permits.available_permits(), 0);
-	let output = receive.await.unwrap();
-	assert_eq!(
-		serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap(),
-		json!({})
-	);
-	assert_eq!(permits.available_permits(), 0);
-	drop(output);
-	assert_eq!(permits.available_permits(), 1);
-}
-
 #[tokio::test(flavor = "current_thread")]
-async fn completed_reply_supervisors_do_not_consume_replacement_slots() {
-	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
-	let returned = Arc::new(AtomicUsize::new(0));
+async fn completed_supervisors_leave_all_original_outputs_owned_by_callers() {
 	let mut work = JoinSet::new();
 	let mut replies = Vec::new();
-	for _ in 0..MAX_SESSIONS {
-		let permit = permits.clone().acquire_owned().await.unwrap();
-		let returned = returned.clone();
+	for _ in 0..32 {
 		let (send, receive) = oneshot::channel();
 		work.spawn(async move {
-			let output = Captured {
-				output: Output {
-					status: ExitStatus::from_raw(0),
-					stdout: b"{}".to_vec(),
-					stderr: vec![],
-				},
-				_budget: Arc::new(permit),
-				_admission: test_admission(),
-			};
-			assert!(send.send(output).is_ok());
-			// Match execute: reply send through return contains no await/yield.
-			returned.fetch_add(1, Ordering::SeqCst);
-		});
-		replies.push(receive);
-	}
-	for reply in replies {
-		let output = timeout(Duration::from_secs(5), reply)
-			.await
-			.unwrap()
-			.unwrap();
-		assert_eq!(
-			serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap(),
-			json!({})
-		);
-		drop(output);
-	}
-	// The owner-thread actor cannot run during a worker's synchronous return.
-	assert_eq!(returned.load(Ordering::SeqCst), MAX_SESSIONS);
-	assert_eq!(permits.available_permits(), MAX_SESSIONS);
-	// The old len-only admission path would reject this exact state.
-	assert_eq!(work.len(), MAX_SESSIONS);
-	Core::reap_completed_requests(&mut work).unwrap();
-	assert!(work.is_empty());
-	assert!(permits.try_acquire_owned().is_ok());
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn reaping_supervisors_does_not_release_unparsed_output_budget() {
-	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
-	let mut work = JoinSet::new();
-	let mut replies = Vec::new();
-	for _ in 0..MAX_SESSIONS {
-		let permit = permits.clone().acquire_owned().await.unwrap();
-		let (send, receive) = oneshot::channel();
-		work.spawn(async move {
-			assert!(send
-				.send(Captured {
-					output: Output {
-						status: ExitStatus::from_raw(0),
-						stdout: b"{}".to_vec(),
-						stderr: vec![],
-					},
-					_budget: Arc::new(permit),
-					_admission: test_admission(),
-				})
-				.is_ok());
+			assert!(send.send(fair_output()).is_ok());
 		});
 		replies.push(receive);
 	}
@@ -481,78 +209,18 @@ async fn reaping_supervisors_does_not_release_unparsed_output_budget() {
 				.unwrap(),
 		);
 	}
-	assert_eq!(work.len(), MAX_SESSIONS);
 	Core::reap_completed_requests(&mut work).unwrap();
 	assert!(work.is_empty());
-	assert_eq!(permits.available_permits(), 0);
-	assert!(permits.clone().try_acquire_owned().is_err());
-	drop(outputs.pop());
-	let replacement = permits.clone().try_acquire_owned().unwrap();
-	assert_eq!(permits.available_permits(), 0);
-	drop(replacement);
-	drop(outputs);
-	assert_eq!(permits.available_permits(), MAX_SESSIONS);
+	for output in outputs {
+		assert_eq!(
+			serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap(),
+			json!({})
+		);
+	}
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn admission_reap_preserves_mixed_and_full_live_supervisor_bounds() {
-	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
-	let stop = CancellationToken::new();
-	let mut work = JoinSet::new();
-	let mut started = Vec::new();
-	for index in 0..MAX_SESSIONS {
-		let permit = permits.clone().acquire_owned().await.unwrap();
-		let stop = stop.clone();
-		let (send, receive) = oneshot::channel();
-		work.spawn(async move {
-			let _permit = permit;
-			assert!(send.send(()).is_ok());
-			if index < MAX_SESSIONS / 2 {
-				stop.cancelled().await;
-			}
-		});
-		started.push(receive);
-	}
-	for ready in started {
-		timeout(Duration::from_secs(5), ready)
-			.await
-			.unwrap()
-			.unwrap();
-	}
-	assert_eq!(work.len(), MAX_SESSIONS);
-	Core::reap_completed_requests(&mut work).unwrap();
-	assert_eq!(work.len(), MAX_SESSIONS / 2);
-	assert_eq!(permits.available_permits(), MAX_SESSIONS / 2);
-	let mut replacements = Vec::new();
-	for _ in 0..MAX_SESSIONS / 2 {
-		let permit = permits.clone().try_acquire_owned().unwrap();
-		let stop = stop.clone();
-		let (send, receive) = oneshot::channel();
-		work.spawn(async move {
-			let _permit = permit;
-			assert!(send.send(()).is_ok());
-			stop.cancelled().await;
-		});
-		replacements.push(receive);
-	}
-	for ready in replacements {
-		timeout(Duration::from_secs(5), ready)
-			.await
-			.unwrap()
-			.unwrap();
-	}
-	Core::reap_completed_requests(&mut work).unwrap();
-	assert_eq!(work.len(), MAX_SESSIONS);
-	assert!(permits.clone().try_acquire_owned().is_err());
-	stop.cancel();
-	while let Some(result) = work.join_next().await {
-		result.unwrap();
-	}
-	assert_eq!(permits.available_permits(), MAX_SESSIONS);
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn admission_reap_propagates_panicked_and_cancelled_supervisors() {
+async fn reap_propagates_panicked_and_cancelled_supervisors() {
 	for cancel in [false, true] {
 		let mut work = JoinSet::new();
 		let (send, receive) = oneshot::channel();
@@ -561,7 +229,7 @@ async fn admission_reap_propagates_panicked_and_cancelled_supervisors() {
 			if cancel {
 				std::future::pending::<()>().await;
 			} else {
-				panic!("bounded admission fixture panic");
+				panic!("request supervisor fixture panic");
 			}
 		});
 		timeout(Duration::from_secs(5), receive)
@@ -670,6 +338,11 @@ async fn fixture_with_file_policy(
 		spec["hosts"]["fixture"]["execution_mode"] = json!("operator");
 		spec["hosts"]["fixture"]["allowed_read_path_prefixes"] =
 			json!(["/allowed", "/allowed/nested"]);
+	}
+	if std::env::var("HEPTA_A15_TEST_FIXTURE").as_deref() == Ok("many-hosts") {
+		for index in 1..12 {
+			spec["hosts"][format!("fixture-{index}")] = spec["hosts"]["fixture"].clone();
+		}
 	}
 	let runtime = serde_json::from_value(spec).unwrap();
 	crate::mcp::runtime::config::init_runtime(runtime).unwrap();
@@ -831,7 +504,7 @@ async fn retired_generation(
 		"fixture".into(),
 		Entry {
 			ready: receive,
-			permits: Arc::new(Semaphore::new(HOST_SESSIONS)),
+			activity: Arc::new(Activity::default()),
 			generation,
 			ready_deadline: Instant::now() + START + REAP,
 			draining: None,
@@ -875,7 +548,7 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 			let mut installed = core.entry("fixture", &cancel, deadline).await.unwrap();
 			assert_ne!(installed.generation, generation);
 			assert!(!old.accepting.load(Ordering::Acquire));
-			assert!(Arc::ptr_eq(&installed.permits, &stale.permits));
+			assert!(Arc::ptr_eq(&installed.activity, &stale.activity));
 			assert!(installed
 				.draining
 				.as_ref()
@@ -890,7 +563,7 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 			assert_eq!(latest.generation, installed.generation);
 			assert_eq!(latest.ready_deadline, installed.ready_deadline);
 			assert!(latest.ready.same_channel(&installed.ready));
-			assert!(Arc::ptr_eq(&latest.permits, &installed.permits));
+			assert!(Arc::ptr_eq(&latest.activity, &installed.activity));
 			assert_eq!(core.masters.lock().await.len(), 1);
 			assert_eq!(core.background.lock().unwrap().len(), 1);
 			assert_eq!(core.children.lock().await.len(), 1);
@@ -990,17 +663,10 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 				deadline,
 				cancel: request_cancel.clone(),
 				reply,
-				admission: test_admission(),
 			};
 			assert!(request.deadline > old.created + AGE);
-			let permits = Arc::new(Semaphore::new(1));
-			let permit = permits.clone().acquire_owned().await.unwrap();
 			let task_core = core.clone();
-			let global = permits.clone();
-			let task =
-				tokio::spawn(
-					async move { task_core.execute_inner(&request, permit, global).await },
-				);
+			let task = tokio::spawn(async move { task_core.execute_inner(&request).await });
 			timeout(Duration::from_secs(3), async {
 				while old.accepting.load(Ordering::Acquire) {
 					tokio::task::yield_now().await;
@@ -1014,11 +680,6 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 				.draining
 				.as_ref()
 				.is_some_and(|value| Arc::ptr_eq(value, &old)));
-			assert_eq!(
-				permits.available_permits(),
-				1,
-				"renewal waiting must return global capacity"
-			);
 			assert_eq!(
 				core.children.lock().await.len(),
 				1,
@@ -1035,7 +696,6 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 			};
 			assert!(error.to_string().contains("cancelled"), "{error:#}");
 			assert!(!error.to_string().contains("lifetime cannot cover"));
-			assert_eq!(permits.available_permits(), 1);
 			core.stop.cancel();
 			old.active.store(0, Ordering::Release);
 			assert!(renewal_error(&mut installed.ready)
@@ -1059,29 +719,29 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 			assert!(matches!(&*stale.ready.borrow(), Some(Ok(value)) if Arc::ptr_eq(value, &old)));
 		}
 		"renew-retirement" => {
-			// A terminal master does not release the old session budget.
+			// A terminal master does not retire original activity leases.
 			old.active.store(1, Ordering::Release);
-			assert_eq!(stale.permits.available_permits(), HOST_SESSIONS);
+			assert_eq!(stale.activity.active(), 0);
 			core.maintain().await.unwrap();
 			assert!(!old.accepting.load(Ordering::Acquire));
 			assert!(core.children.lock().await.is_empty());
 			assert!(!old.socket.exists());
 			let held = core.entry("fixture", &cancel, deadline).await.unwrap();
 			assert_eq!(held.generation, generation);
-			assert!(Arc::ptr_eq(&held.permits, &stale.permits));
-			let permit = stale.permits.clone().acquire_owned().await.unwrap();
+			assert!(Arc::ptr_eq(&held.activity, &stale.activity));
+			let permit = stale.activity.lease().unwrap();
 			old.active.store(0, Ordering::Release);
 			core.maintain().await.unwrap();
 			let held = core.entry("fixture", &cancel, deadline).await.unwrap();
 			assert_eq!(held.generation, generation);
-			assert!(Arc::ptr_eq(&held.permits, &stale.permits));
-			assert_eq!(held.permits.available_permits(), HOST_SESSIONS - 1);
+			assert!(Arc::ptr_eq(&held.activity, &stale.activity));
+			assert_eq!(held.activity.active(), 1);
 			drop(permit);
 			core.maintain().await.unwrap();
 			assert!(core.masters.lock().await.is_empty());
 			assert_eq!(core.background.lock().unwrap().len(), 0);
-			// Error-ready generations retain their outstanding permits too.
-			let permit = stale.permits.clone().acquire_owned().await.unwrap();
+			// Error-ready generations retain their outstanding activity too.
+			let permit = stale.activity.lease().unwrap();
 			let (send, receive) =
 				watch::channel(Some(Err("synthetic failed generation".to_owned())));
 			let failed_generation = core.sequence.fetch_add(1, Ordering::Relaxed);
@@ -1089,7 +749,7 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 				"fixture".into(),
 				Entry {
 					ready: receive,
-					permits: stale.permits.clone(),
+					activity: stale.activity.clone(),
 					generation: failed_generation,
 					ready_deadline: deadline,
 					draining: None,
@@ -1099,7 +759,7 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 			core.maintain().await.unwrap();
 			let held = core.entry("fixture", &cancel, deadline).await.unwrap();
 			assert_eq!(held.generation, failed_generation);
-			assert!(Arc::ptr_eq(&held.permits, &stale.permits));
+			assert!(Arc::ptr_eq(&held.activity, &stale.activity));
 			assert!(matches!(&*held.ready.borrow(), Some(Err(_))));
 			drop(permit);
 			core.maintain().await.unwrap();
@@ -1110,140 +770,6 @@ async fn renewal_fixture(core: &Arc<Core>, kind: &str) {
 	}
 }
 
-async fn queued_admission_fixture(core: &Arc<Core>, kind: &str, agent: &Arc<AgentControl>) {
-	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
-	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
-	let mut retained = Vec::new();
-	for _ in 0..MAX_SESSIONS {
-		retained.push(Captured {
-			output: Output {
-				status: ExitStatus::from_raw(0),
-				stdout: b"{}".to_vec(),
-				stderr: vec![],
-			},
-			_budget: Arc::new(permits.clone().acquire_owned().await.unwrap()),
-			_admission: Arc::new(admissions.clone().try_acquire_owned().unwrap()),
-		});
-	}
-	let (sender, receiver) = mpsc::channel(QUEUE);
-	let mut replies = Vec::new();
-	let mut cancellations = Vec::new();
-	let initially_queued = if kind == "queue-stop" {
-		QUEUE - 1
-	} else {
-		QUEUE
-	};
-	for _ in 0..initially_queued {
-		let (reply, receive) = oneshot::channel();
-		let cancel = CancellationToken::new();
-		let request = Request {
-			host: "fixture".into(),
-			command: "NEVER_DISPATCH".into(),
-			input: vec![],
-			deadline: Instant::now() + Duration::from_secs(40),
-			cancel: cancel.clone(),
-			reply,
-			admission: Arc::new(admissions.clone().try_acquire_owned().unwrap()),
-		};
-		assert!(sender.try_send(request).is_ok());
-		replies.push(Some(receive));
-		cancellations.push(cancel);
-	}
-	let mut actor = Box::pin(core.clone().run_with_capacity(receiver, permits.clone()));
-	// Poll the real actor while every output permit is retained. Moving all
-	// channel entries into pending must not admit a seventeenth request.
-	std::future::poll_fn(|cx| {
-		assert!(actor.as_mut().poll(cx).is_pending());
-		std::task::Poll::Ready(())
-	})
-	.await;
-	assert_eq!(sender.capacity(), QUEUE);
-	assert_eq!(permits.available_permits(), 0);
-	assert_eq!(admissions.available_permits(), QUEUE - initially_queued);
-	for reply in &mut replies {
-		assert!(matches!(
-			reply.as_mut().unwrap().try_recv(),
-			Err(oneshot::error::TryRecvError::Empty)
-		));
-	}
-	if kind == "queue-stop" {
-		// The actor is not polled between enqueue and cancellation: seven
-		// requests are pending and one remains in the channel when stop fires.
-		let waiting = enqueue_fair_request(
-			&sender,
-			&admissions,
-			"fixture",
-			"NEVER_DISPATCH",
-			Instant::now() + Duration::from_secs(40),
-		);
-		replies.push(Some(waiting.reply));
-		assert_eq!(sender.capacity(), QUEUE - 1);
-	}
-	assert_eq!(admissions.available_permits(), 0);
-	assert!(admissions.clone().try_acquire_owned().is_err());
-	if kind == "queue-stop" {
-		core.stop.cancel();
-		timeout(Duration::from_secs(3), actor)
-			.await
-			.unwrap()
-			.unwrap();
-		for reply in replies.into_iter().flatten() {
-			let error = reply.await.unwrap().err().unwrap();
-			assert!(error.to_string().contains("pool stopped before admission"));
-		}
-		assert_eq!(permits.available_permits(), 0);
-	} else {
-		for (index, cancel) in cancellations.iter().enumerate() {
-			if !(kind == "queue-admission" && index == 0 || kind == "queue-capacity" && index == 2)
-			{
-				cancel.cancel();
-			}
-		}
-		if kind == "queue-capacity" {
-			// Exercise cancellation and a caller that disappeared while waiting,
-			// without creating any SSH task. Fairness fixtures also cover expiry.
-			drop(replies[2].take());
-		} else {
-			agent.stall.store(true, Ordering::Release);
-		}
-		// Return exactly one parsed-output budget. The actor must admit from
-		// the original queue, not reject or allocate a larger pool.
-		drop(retained.pop());
-		let observe = async {
-			if kind == "queue-admission" {
-				agent.entered.notified().await;
-				assert_eq!(permits.available_permits(), 0);
-				assert!(core.masters.lock().await.is_empty());
-				assert!(core.children.lock().await.is_empty());
-				cancellations[0].cancel();
-			}
-			for (index, reply) in replies.into_iter().enumerate() {
-				let Some(reply) = reply else { continue };
-				let error = reply.await.unwrap().err().unwrap();
-				let expected = if kind == "queue-admission" && index == 0 {
-					"cancelled during admission profile check"
-				} else {
-					"cancelled before admission"
-				};
-				assert!(error.to_string().contains(expected), "{error:#}");
-			}
-			core.stop.cancel();
-		};
-		let (_, result) = timeout(Duration::from_secs(5), async {
-			tokio::join!(observe, actor)
-		})
-		.await
-		.unwrap();
-		result.unwrap();
-		assert_eq!(permits.available_permits(), 1);
-	}
-	drop(retained);
-	assert_eq!(permits.available_permits(), MAX_SESSIONS);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
-	assert!(core.masters.lock().await.is_empty());
-	assert!(core.children.lock().await.is_empty());
-}
-
 struct FairRequest {
 	reply: oneshot::Receiver<Result<Captured>>,
 	cancel: CancellationToken,
@@ -1251,8 +777,7 @@ struct FairRequest {
 }
 
 fn enqueue_fair_request(
-	sender: &mpsc::Sender<Request>,
-	admissions: &Arc<Semaphore>,
+	sender: &mpsc::UnboundedSender<Request>,
 	host: &str,
 	command: &str,
 	deadline: Instant,
@@ -1266,9 +791,8 @@ fn enqueue_fair_request(
 		deadline,
 		cancel: cancel.clone(),
 		reply,
-		admission: Arc::new(admissions.clone().try_acquire_owned().unwrap()),
 	};
-	assert!(sender.try_send(request).is_ok());
+	assert!(sender.send(request).is_ok());
 	FairRequest {
 		reply: receive,
 		cancel,
@@ -1276,82 +800,14 @@ fn enqueue_fair_request(
 	}
 }
 
-fn fair_output(budget: OwnedSemaphorePermit, admission: Arc<OwnedSemaphorePermit>) -> Captured {
+fn fair_output() -> Captured {
 	Captured {
 		output: Output {
 			status: ExitStatus::from_raw(0),
 			stdout: b"{}".to_vec(),
 			stderr: vec![],
 		},
-		_budget: Arc::new(budget),
-		_admission: admission,
 	}
-}
-
-struct ControlledDispatch {
-	global: Arc<Semaphore>,
-	hosts: BTreeMap<String, Arc<Semaphore>>,
-	started: mpsc::Sender<(String, String)>,
-	preflight: mpsc::Sender<String>,
-	budget_waiting: mpsc::Sender<String>,
-	preflight_gate: Option<Arc<Semaphore>>,
-	release: Arc<Semaphore>,
-}
-
-async fn controlled_dispatch(
-	core: Arc<Core>,
-	request: Request,
-	initial: OwnedSemaphorePermit,
-	control: Arc<ControlledDispatch>,
-) {
-	let result = async {
-		core.admission_profile(&request, initial).await?;
-		assert!(control.preflight.try_send(request.command.clone()).is_ok());
-		if let Some(gate) = &control.preflight_gate {
-			tokio::select! {
-				value = gate.clone().acquire_owned() => value.unwrap().forget(),
-				_ = request.cancel.cancelled() => bail!("controlled request cancelled"),
-				_ = core.stop.cancelled() => bail!("controlled pool stopped"),
-				_ = tokio::time::sleep_until(request.deadline) => bail!("controlled deadline"),
-			};
-		}
-		let host = tokio::select! {
-			value = control.hosts[&request.host].clone().acquire_owned() => value.unwrap(),
-			_ = request.cancel.cancelled() => bail!("controlled request cancelled"),
-			_ = core.stop.cancelled() => bail!("controlled pool stopped"),
-			_ = tokio::time::sleep_until(request.deadline) => bail!("controlled deadline"),
-		};
-		assert!(control
-			.budget_waiting
-			.try_send(request.command.clone())
-			.is_ok());
-		let budget = core
-			.request_budget(&request, control.global.clone())
-			.await?;
-		assert!(control
-			.started
-			.try_send((request.host.clone(), request.command.clone()))
-			.is_ok());
-		tokio::select! {
-			value = control.release.clone().acquire_owned() => value.unwrap().forget(),
-			_ = request.cancel.cancelled() => bail!("controlled request cancelled"),
-			_ = core.stop.cancelled() => bail!("controlled pool stopped"),
-			_ = tokio::time::sleep_until(request.deadline) => bail!("controlled deadline"),
-		};
-		assert_ne!(request.command, "PANIC", "controlled supervisor panic");
-		drop(host);
-		Ok(Captured {
-			output: Output {
-				status: ExitStatus::from_raw(0),
-				stdout: b"{}".to_vec(),
-				stderr: vec![],
-			},
-			_budget: budget,
-			_admission: request.admission.clone(),
-		})
-	}
-	.await;
-	let _ = request.reply.send(result);
 }
 
 async fn phase_notice(notices: &mut mpsc::Receiver<String>) -> String {
@@ -1359,16 +815,6 @@ async fn phase_notice(notices: &mut mpsc::Receiver<String>) -> String {
 		.await
 		.unwrap()
 		.unwrap()
-}
-
-async fn drained(sender: &mpsc::Sender<Request>) {
-	timeout(Duration::from_secs(3), async {
-		while sender.capacity() != QUEUE {
-			tokio::task::yield_now().await;
-		}
-	})
-	.await
-	.unwrap();
 }
 
 async fn started_host(started: &mut mpsc::Receiver<(String, String)>, host: &str) -> String {
@@ -1380,391 +826,145 @@ async fn started_host(started: &mut mpsc::Receiver<(String, String)>, host: &str
 	command
 }
 
-// These fixtures exercise the production actor with controlled work, so no
-// network timing is used as evidence of scheduling or of resource bounds.
-async fn fairness_fixture(core: &Arc<Core>, kind: &str) {
-	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
-	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
-	let (sender, receiver) = mpsc::channel(QUEUE);
-	let (started_send, mut started) = mpsc::channel(MAX_ADMITTED);
-	let (preflight_send, mut preflight) = mpsc::channel(MAX_ADMITTED + 1);
-	let (budget_send, mut budget_waiting) = mpsc::channel(MAX_ADMITTED + 1);
+// The real actor runs controlled work so all starts can be observed before any
+// completes, independently of network connection or authentication timing.
+async fn unbounded_dispatch_fixture(core: &Arc<Core>, kind: &str) {
+	let (sender, receiver) = mpsc::unbounded_channel();
+	let (started_send, mut started) = mpsc::channel(64);
 	let release = Arc::new(Semaphore::new(0));
-	let preflight_gate = matches!(
-		kind,
-		"fair-panic" | "fair-budget-cancel" | "fair-budget-deadline"
-	)
-	.then(|| Arc::new(Semaphore::new(0)));
-	let control = Arc::new(ControlledDispatch {
-		global: permits.clone(),
-		hosts: core
-			.profile
-			.hosts
-			.keys()
-			.map(|host| (host.clone(), Arc::new(Semaphore::new(HOST_SESSIONS))))
-			.collect(),
-		started: started_send,
-		preflight: preflight_send,
-		budget_waiting: budget_send,
-		preflight_gate: preflight_gate.clone(),
-		release: release.clone(),
-	});
+	let task_release = release.clone();
 	let actor = tokio::task::spawn_local(core.clone().run_with_dispatch(
 		receiver,
-		permits.clone(),
-		move |core, request, permit| controlled_dispatch(core, request, permit, control.clone()),
+		move |core, request| {
+			let started = started_send.clone();
+			let release = task_release.clone();
+			async move {
+				let result = async {
+					core.admission_profile(&request).await?;
+					assert!(started
+						.try_send((request.host.clone(), request.command.clone()))
+						.is_ok());
+					tokio::select! {
+						permit = release.acquire() => permit.unwrap().forget(),
+						_ = request.cancel.cancelled() => bail!("controlled request cancelled"),
+						_ = core.stop.cancelled() => bail!("controlled pool stopped"),
+						_ = tokio::time::sleep_until(request.deadline) => bail!("controlled deadline"),
+					}
+					assert_ne!(request.command, "PANIC", "controlled supervisor panic");
+					Ok(fair_output())
+				}
+				.await;
+				let _ = request.reply.send(result);
+			}
+		},
 	));
-	let deadline = Instant::now() + Duration::from_secs(40);
+	let deadline = Instant::now() + Duration::from_secs(30);
 	let mut requests = Vec::new();
-	let mut retained = Vec::new();
-	match kind {
-		"fair-hot-cold" | "fair-capacity" => {
-			for index in 0..QUEUE {
-				requests.push(enqueue_fair_request(
-					&sender,
-					&admissions,
-					"fixture",
-					&format!("hot-{index}"),
-					deadline,
-				));
-			}
-			let first = started_host(&mut started, "fixture").await;
-			let second = started_host(&mut started, "fixture").await;
-			assert_ne!(first, second);
-			for _ in 0..QUEUE {
-				phase_notice(&mut preflight).await;
-			}
-			drained(&sender).await;
-			assert_eq!(permits.available_permits(), MAX_SESSIONS - HOST_SESSIONS);
-			if kind == "fair-hot-cold" {
-				for index in 0..HOST_SESSIONS {
-					requests.push(enqueue_fair_request(
-						&sender,
-						&admissions,
-						"cold",
-						&format!("cold-{index}"),
-						deadline,
-					));
-				}
-				// Both cold tasks start while all eight earlier hot requests are
-				// unfinished. Hot host waiters hold no global budget.
-				let mut cold = [
-					started_host(&mut started, "cold").await,
-					started_host(&mut started, "cold").await,
-				];
-				cold.sort();
-				assert_eq!(cold, ["cold-0", "cold-1"]);
-				assert_eq!(
-					permits.available_permits(),
-					MAX_SESSIONS - 2 * HOST_SESSIONS
-				);
-				assert_eq!(admissions.available_permits(), MAX_ADMITTED - 10);
-			} else {
-				// The channel still has capacity eight. Drain the first batch
-				// before proving the unchanged pure-hot admission bound of 16.
-				for index in QUEUE..MAX_ADMITTED {
-					requests.push(enqueue_fair_request(
-						&sender,
-						&admissions,
-						"fixture",
-						&format!("hot-{index}"),
-						deadline,
-					));
-				}
-				drained(&sender).await;
-				for _ in QUEUE..MAX_ADMITTED {
-					phase_notice(&mut preflight).await;
-				}
-				assert_eq!(admissions.available_permits(), 0);
-				assert!(admissions.clone().try_acquire_owned().is_err());
-				assert_eq!(permits.available_permits(), MAX_SESSIONS - HOST_SESSIONS);
-				let index = requests
-					.iter()
-					.position(|request| request.command != first && request.command != second)
-					.unwrap();
-				let cancelled = requests.remove(index);
-				cancelled.cancel.cancel();
-				assert!(timeout(Duration::from_secs(3), cancelled.reply)
-					.await
-					.unwrap()
-					.unwrap()
-					.is_err());
-				assert_eq!(admissions.available_permits(), 1);
-				requests.push(enqueue_fair_request(
-					&sender,
-					&admissions,
-					"fixture",
-					"replacement",
-					deadline,
-				));
-				drained(&sender).await;
-				assert_eq!(phase_notice(&mut preflight).await, "replacement");
-				assert_eq!(admissions.available_permits(), 0);
-			}
-			assert!(started.try_recv().is_err());
+	for index in 0..32 {
+		requests.push(enqueue_fair_request(
+			&sender,
+			"fixture",
+			&format!("held-{index}"),
+			deadline,
+		));
+	}
+	if kind == "fair-stopped" {
+		core.stop.cancel();
+		for request in requests {
+			assert!(!matches!(request.reply.await, Ok(Ok(_))));
 		}
-		"fair-retained" => {
-			release.add_permits(MAX_SESSIONS);
-			for index in 0..MAX_SESSIONS {
-				requests.push(enqueue_fair_request(
-					&sender,
-					&admissions,
-					"fixture",
-					&format!("output-{index}"),
-					deadline,
-				));
-			}
-			for request in requests.drain(..) {
-				retained.push(
-					timeout(Duration::from_secs(3), request.reply)
-						.await
-						.unwrap()
-						.unwrap()
-						.unwrap(),
-				);
-			}
-			let mut executed = Vec::new();
-			for _ in 0..MAX_SESSIONS {
-				executed.push(started_host(&mut started, "fixture").await);
-				phase_notice(&mut preflight).await;
-			}
-			executed.sort();
-			assert_eq!(
-				executed,
-				(0..MAX_SESSIONS)
-					.map(|index| format!("output-{index}"))
-					.collect::<Vec<_>>()
-			);
-			assert_eq!(permits.available_permits(), 0);
-			assert_eq!(admissions.available_permits(), QUEUE);
-			for index in 0..QUEUE {
-				requests.push(enqueue_fair_request(
-					&sender,
-					&admissions,
-					"fixture",
-					&format!("pending-{index}"),
-					deadline,
-				));
-			}
-			drained(&sender).await;
-			// Captured outputs count toward the same 16: eight retained plus
-			// eight pending cannot turn into eight retained plus 16 pending.
-			assert_eq!(admissions.available_permits(), 0);
-			assert!(admissions.clone().try_acquire_owned().is_err());
-			assert!(started.try_recv().is_err());
-			release.add_permits(1);
-			drop(retained.pop());
-			let executed = started_host(&mut started, "fixture").await;
-			let index = requests
-				.iter()
-				.position(|request| request.command == executed)
-				.unwrap();
-			let next = requests.remove(index);
-			retained.push(
-				timeout(Duration::from_secs(3), next.reply)
-					.await
-					.unwrap()
-					.unwrap()
-					.unwrap(),
-			);
-			assert_eq!(permits.available_permits(), 0);
-			assert_eq!(admissions.available_permits(), 1);
-			requests.push(enqueue_fair_request(
-				&sender,
-				&admissions,
-				"fixture",
-				"new-pending",
-				deadline,
-			));
-			drained(&sender).await;
-			assert_eq!(admissions.available_permits(), 0);
-			assert!(started.try_recv().is_err());
+		timeout(Duration::from_secs(5), actor)
+			.await
+			.unwrap()
+			.unwrap()
+			.unwrap();
+		assert!(started.try_recv().is_err());
+		assert!(core.children.lock().await.is_empty());
+		return;
+	}
+	let mut names = std::collections::BTreeSet::new();
+	for _ in 0..32 {
+		names.insert(started_host(&mut started, "fixture").await);
+	}
+	assert_eq!(names.len(), 32);
+	let cold = enqueue_fair_request(
+		&sender,
+		"cold",
+		if kind == "fair-panic" {
+			"PANIC"
+		} else {
+			"cold"
+		},
+		deadline,
+	);
+	assert_eq!(started_host(&mut started, "cold").await, cold.command);
+	requests.push(cold);
+	if kind == "fair-cancel-deadline" {
+		let timed = enqueue_fair_request(
+			&sender,
+			"cold",
+			"running-deadline",
+			Instant::now() + Duration::from_secs(1),
+		);
+		assert_eq!(started_host(&mut started, "cold").await, timed.command);
+		assert!(timeout(Duration::from_secs(3), timed.reply)
+			.await
+			.unwrap()
+			.unwrap()
+			.is_err());
+		for request in &requests {
+			request.cancel.cancel();
 		}
-		"fair-cancel-deadline" => {
-			for _ in 0..MAX_SESSIONS {
-				retained.push(fair_output(
-					permits.clone().try_acquire_owned().unwrap(),
-					Arc::new(admissions.clone().try_acquire_owned().unwrap()),
-				));
-			}
-			let cancelled =
-				enqueue_fair_request(&sender, &admissions, "fixture", "cancelled", deadline);
-			let expired = enqueue_fair_request(
-				&sender,
-				&admissions,
-				"fixture",
-				"expired",
-				Instant::now() - Duration::from_millis(1),
-			);
-			let closed = enqueue_fair_request(&sender, &admissions, "fixture", "closed", deadline);
-			let unknown =
-				enqueue_fair_request(&sender, &admissions, "outside-profile", "unknown", deadline);
-			requests.push(enqueue_fair_request(
-				&sender,
-				&admissions,
-				"cold",
-				"still-pending",
-				deadline,
-			));
-			drained(&sender).await;
-			cancelled.cancel.cancel();
-			drop(closed);
-			// Introduce the future deadline only after the earlier queue is
-			// drained. With no intervening await, this assertion has no race
-			// against the actor or a slow three-second drain timeout.
-			let mut expiring = enqueue_fair_request(
-				&sender,
-				&admissions,
-				"fixture",
-				"expiring",
-				Instant::now() + Duration::from_secs(1),
-			);
-			assert!(matches!(
-				expiring.reply.try_recv(),
-				Err(oneshot::error::TryRecvError::Empty)
-			));
-			for request in [cancelled, expired, expiring] {
-				let error = timeout(Duration::from_secs(3), request.reply)
-					.await
-					.unwrap()
-					.unwrap()
-					.err()
-					.unwrap();
-				assert!(error.to_string().contains("cancelled before admission"));
-			}
-			let error = unknown.reply.await.unwrap().err().unwrap();
-			assert!(error.to_string().contains("outside observation profile"));
-			assert_eq!(
-				admissions.available_permits(),
-				MAX_ADMITTED - MAX_SESSIONS - 1
-			);
-			assert_eq!(permits.available_permits(), 0);
-			assert!(started.try_recv().is_err());
+		for request in requests {
+			assert!(request.reply.await.unwrap().is_err());
 		}
-		"fair-panic" | "fair-budget-cancel" | "fair-budget-deadline" => {
-			for _ in 0..MAX_SESSIONS - 1 {
-				retained.push(fair_output(
-					permits.clone().try_acquire_owned().unwrap(),
-					Arc::new(admissions.clone().try_acquire_owned().unwrap()),
-				));
+		let expired = enqueue_fair_request(&sender, "fixture", "expired", Instant::now());
+		assert!(expired.reply.await.unwrap().is_err());
+		let cancelled =
+			enqueue_fair_request(&sender, "fixture", "cancelled-before-start", deadline);
+		cancelled.cancel.cancel();
+		assert!(cancelled.reply.await.unwrap().is_err());
+		let closed = enqueue_fair_request(&sender, "fixture", "closed-before-start", deadline);
+		drop(closed.reply);
+		let unknown = enqueue_fair_request(&sender, "outside-profile", "unknown", deadline);
+		assert!(unknown.reply.await.unwrap().is_err());
+		assert!(started.try_recv().is_err());
+	} else {
+		release.add_permits(requests.len());
+		if kind == "fair-panic" {
+			for request in requests {
+				let _ = request.reply.await;
 			}
-			let command = if kind == "fair-panic" {
-				"PANIC"
-			} else {
-				"HOLD"
-			};
-			let held = enqueue_fair_request(&sender, &admissions, "fixture", command, deadline);
-			assert_eq!(phase_notice(&mut preflight).await, command);
-			let waiting_deadline = if kind == "fair-budget-deadline" {
-				Instant::now() + Duration::from_secs(10)
-			} else {
-				deadline
-			};
-			let replacement = enqueue_fair_request(
-				&sender,
-				&admissions,
-				"cold",
-				"MUST_NOT_START",
-				waiting_deadline,
-			);
-			assert_eq!(phase_notice(&mut preflight).await, "MUST_NOT_START");
-			// Both supervisors already exist. Let the first own the only global
-			// budget, then prove the second has entered the same budget wait.
-			let gate = preflight_gate.as_ref().unwrap();
-			gate.add_permits(1);
-			assert_eq!(started_host(&mut started, "fixture").await, command);
-			assert_eq!(phase_notice(&mut budget_waiting).await, command);
-			gate.add_permits(1);
-			assert_eq!(phase_notice(&mut budget_waiting).await, "MUST_NOT_START");
-			assert_eq!(permits.available_permits(), 0);
-			if kind != "fair-panic" {
-				if kind == "fair-budget-cancel" {
-					replacement.cancel.cancel();
-				}
-				let error = timeout(Duration::from_secs(12), replacement.reply)
-					.await
-					.unwrap()
-					.unwrap()
-					.err()
-					.unwrap();
-				assert!(error.to_string().contains("global capacity"));
-				assert_eq!(permits.available_permits(), 0);
-				assert_eq!(
-					admissions.available_permits(),
-					MAX_ADMITTED - retained.len() - 1
-				);
-				assert!(started.try_recv().is_err());
-				assert!(!core.stop.is_cancelled());
-				core.stop.cancel();
-				timeout(Duration::from_secs(3), actor)
-					.await
-					.unwrap()
-					.unwrap()
-					.unwrap();
-				assert!(held.reply.await.unwrap().is_err());
-				assert_eq!(
-					admissions.available_permits(),
-					MAX_ADMITTED - retained.len()
-				);
-				drop(retained);
-				assert_eq!(permits.available_permits(), MAX_SESSIONS);
-				assert_eq!(admissions.available_permits(), MAX_ADMITTED);
-				return;
-			}
-			release.add_permits(1);
-			// The guard synchronously stops the pool before the awakened peer
-			// can cross request_budget, independently of when the actor reaps.
-			let error = timeout(Duration::from_secs(3), actor)
+			assert!(timeout(Duration::from_secs(5), actor)
 				.await
 				.unwrap()
 				.unwrap()
-				.unwrap_err();
-			assert!(error.to_string().contains("supervisor failed"));
+				.is_err());
 			assert!(core.stop.is_cancelled());
-			assert!(held.reply.await.is_err());
-			let error = replacement.reply.await.unwrap().err().unwrap();
-			assert!(error.to_string().contains("global capacity"));
-			assert!(started.try_recv().is_err());
-			assert_eq!(permits.available_permits(), 1);
-			assert_eq!(
-				admissions.available_permits(),
-				MAX_ADMITTED - retained.len()
-			);
-			drop(retained);
-			assert_eq!(permits.available_permits(), MAX_SESSIONS);
-			assert_eq!(admissions.available_permits(), MAX_ADMITTED);
 			return;
 		}
-		_ => panic!("unsupported fairness fixture"),
+		let mut outputs = Vec::new();
+		for request in requests {
+			outputs.push(request.reply.await.unwrap().unwrap());
+		}
+		// Keeping every prior output cannot obstruct another original request.
+		let later = enqueue_fair_request(&sender, "fixture", "after-retained-outputs", deadline);
+		assert_eq!(started_host(&mut started, "fixture").await, later.command);
+		release.add_permits(1);
+		outputs.push(later.reply.await.unwrap().unwrap());
+		assert_eq!(outputs.len(), 34);
 	}
+	assert!(core.children.lock().await.is_empty());
 	core.stop.cancel();
-	timeout(Duration::from_secs(3), actor)
+	timeout(Duration::from_secs(5), actor)
 		.await
 		.unwrap()
 		.unwrap()
 		.unwrap();
-	for request in requests {
-		assert!(request.reply.await.unwrap().is_err());
-	}
-	// Stopping the actor never refunds output held by the original caller.
-	assert_eq!(permits.available_permits(), MAX_SESSIONS - retained.len());
-	assert_eq!(
-		admissions.available_permits(),
-		MAX_ADMITTED - retained.len()
-	);
-	drop(retained);
-	assert_eq!(permits.available_permits(), MAX_SESSIONS);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
-	assert!(core.masters.lock().await.is_empty());
-	assert!(core.children.lock().await.is_empty());
 }
 
 async fn owned_admission_fixture(core: &Arc<Core>) {
-	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
-	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
-	let host = Arc::new(Semaphore::new(HOST_SESSIONS));
-	let admission = Arc::new(admissions.clone().try_acquire_owned().unwrap());
-	let budget = Arc::new(permits.clone().try_acquire_owned().unwrap());
+	let host = Arc::new(Activity::default());
 	let (reply, _receive) = oneshot::channel();
 	let request = Request {
 		host: "fixture".into(),
@@ -1773,9 +973,8 @@ async fn owned_admission_fixture(core: &Arc<Core>) {
 		deadline: Instant::now() + Duration::from_secs(5),
 		cancel: CancellationToken::new(),
 		reply,
-		admission: admission.clone(),
 	};
-	let socket = core.root.path.join("owned-budget");
+	let socket = core.root.path.join("owned-lifetime");
 	let listener = tokio::net::UnixListener::bind(&socket).unwrap();
 	std::fs::set_permissions(&socket, std::fs::Permissions::from_mode(0o600)).unwrap();
 	let mut args = core
@@ -1791,11 +990,7 @@ async fn owned_admission_fixture(core: &Arc<Core>) {
 		.spawn(
 			&args,
 			command,
-			vec![
-				budget.clone(),
-				Arc::new(host.clone().try_acquire_owned().unwrap()),
-				admission.clone(),
-			],
+			vec![Arc::new(host.lease().unwrap())],
 			request.deadline,
 			&request.cancel,
 		)
@@ -1806,62 +1001,45 @@ async fn owned_admission_fixture(core: &Arc<Core>) {
 		.unwrap()
 		.unwrap();
 	drop(request);
-	drop(admission);
-	drop(budget);
-	// A caller/supervisor can disappear, but its exact unreaped child keeps
-	// all three permits. Refusing premature release also freezes dispatch.
+	// The exact unreaped child retains master activity after the caller leaves.
+	// Refusing premature release freezes dispatch until custody is reconciled.
 	assert!(core.release(&owned).await.is_err());
 	assert!(core.stop.is_cancelled());
 	assert_eq!(core.children.lock().await.len(), 1);
-	assert_eq!(permits.available_permits(), MAX_SESSIONS - 1);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED - 1);
-	assert_eq!(host.available_permits(), HOST_SESSIONS - 1);
+	assert_eq!(host.active(), 1);
 	core.stop_child(&owned, Duration::ZERO).await.unwrap();
 	core.release(&owned).await.unwrap();
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED - 1);
+	assert_eq!(host.active(), 1);
 	drop(owned);
-	assert_eq!(permits.available_permits(), MAX_SESSIONS);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
-	assert_eq!(host.available_permits(), HOST_SESSIONS);
+	assert_eq!(host.active(), 0);
 	std::fs::remove_file(socket).unwrap();
 }
 
 async fn fair_renewal_fixture(core: &Arc<Core>) {
 	let (old, generation, _listener) = retired_generation(core, Duration::from_secs(20)).await;
 	old.active.store(1, Ordering::Release);
-	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
-	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
-	let (sender, receiver) = mpsc::channel(QUEUE);
-	let (started_send, mut started) = mpsc::channel(MAX_ADMITTED);
-	let request_global = permits.clone();
+	let (sender, receiver) = mpsc::unbounded_channel();
+	let (started_send, mut started) = mpsc::channel(64);
 	let actor = tokio::task::spawn_local(core.clone().run_with_dispatch(
 		receiver,
-		permits.clone(),
-		move |core, request, permit| {
+		move |core, request| {
 			assert!(started_send
 				.try_send((request.host.clone(), request.command.clone()))
 				.is_ok());
-			let global = request_global.clone();
 			async move {
 				if request.host == "cold" {
-					let output = fair_output(permit, request.admission.clone());
+					let output = fair_output();
 					assert!(request.reply.send(Ok(output)).is_ok());
 				} else {
-					core.execute(request, permit, global).await;
+					core.execute(request).await;
 				}
 			}
 		},
 	));
 	let deadline = Instant::now() + Duration::from_secs(40);
-	let first = enqueue_fair_request(&sender, &admissions, "fixture", "renew-first", deadline);
-	let second = enqueue_fair_request(&sender, &admissions, "fixture", "renew-second", deadline);
-	let waiting = enqueue_fair_request(
-		&sender,
-		&admissions,
-		"fixture",
-		"waiting-for-renewal",
-		deadline,
-	);
+	let first = enqueue_fair_request(&sender, "fixture", "renew-first", deadline);
+	let second = enqueue_fair_request(&sender, "fixture", "renew-second", deadline);
+	let waiting = enqueue_fair_request(&sender, "fixture", "waiting-for-renewal", deadline);
 	assert_eq!(started_host(&mut started, "fixture").await, "renew-first");
 	assert_eq!(started_host(&mut started, "fixture").await, "renew-second");
 	assert_eq!(
@@ -1876,7 +1054,7 @@ async fn fair_renewal_fixture(core: &Arc<Core>) {
 				.await
 				.get("fixture")
 				.is_some_and(|entry| entry.generation != generation && entry.draining.is_some());
-			if changed && permits.available_permits() == MAX_SESSIONS {
+			if changed {
 				break;
 			}
 			tokio::task::yield_now().await;
@@ -1884,21 +1062,13 @@ async fn fair_renewal_fixture(core: &Arc<Core>) {
 	})
 	.await
 	.unwrap();
-	let cold = enqueue_fair_request(
-		&sender,
-		&admissions,
-		"cold",
-		"cold-during-renewal",
-		deadline,
-	);
+	let cold = enqueue_fair_request(&sender, "cold", "cold-during-renewal", deadline);
 	assert_eq!(
 		started_host(&mut started, "cold").await,
 		"cold-during-renewal"
 	);
 	let output = cold.reply.await.unwrap().unwrap();
 	assert!(started.try_recv().is_err());
-	assert_eq!(permits.available_permits(), MAX_SESSIONS - 1);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED - 4);
 	waiting.cancel.cancel();
 	assert!(timeout(Duration::from_secs(3), waiting.reply)
 		.await
@@ -1916,50 +1086,40 @@ async fn fair_renewal_fixture(core: &Arc<Core>) {
 	assert!(second.reply.await.unwrap().is_err());
 	assert!(started.try_recv().is_err());
 	drop(output);
-	assert_eq!(permits.available_permits(), MAX_SESSIONS);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
 }
 
 async fn phased_preflight_fixture(core: &Arc<Core>, agent: &Arc<AgentControl>) {
-	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
-	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
-	let host = Arc::new(Semaphore::new(HOST_SESSIONS));
-	let occupied = host
-		.clone()
-		.acquire_many_owned(HOST_SESSIONS as u32)
-		.await
-		.unwrap();
+	let host = Arc::new(Activity::default());
 	let (_ready, receive_ready) = watch::channel(None);
 	core.masters.lock().await.insert(
 		"fixture".into(),
 		Entry {
 			ready: receive_ready,
-			permits: host.clone(),
+			activity: host.clone(),
 			generation: core.sequence.fetch_add(1, Ordering::Relaxed),
 			ready_deadline: Instant::now() + Duration::from_secs(40),
 			draining: None,
 		},
 	);
 	let before = agent.requests.load(Ordering::Acquire);
-	let (sender, receiver) = mpsc::channel(QUEUE);
-	let actor = tokio::task::spawn_local(core.clone().run_with_capacity(receiver, permits.clone()));
+	let (sender, receiver) = mpsc::unbounded_channel();
+	let actor = tokio::task::spawn_local(core.clone().run(receiver));
 	let mut requests = Vec::new();
-	for index in 0..MAX_SESSIONS {
+	for index in 0..32 {
 		requests.push(enqueue_fair_request(
 			&sender,
-			&admissions,
 			"fixture",
 			&format!("preflight-{index}"),
 			Instant::now() + Duration::from_secs(40),
 		));
 	}
-	// Run the actual execute path. All eight real agent/profile checks finish
-	// while the original host semaphore is occupied and no SSH child exists.
-	timeout(Duration::from_secs(5), async {
+	// Every request completes its initial authority check and independently
+	// waits on the same master initialization, with no child dispatched early.
+	timeout(Duration::from_secs(8), async {
 		loop {
 			let checked = agent.requests.load(Ordering::Acquire) - before;
-			assert!(checked <= MAX_SESSIONS);
-			if checked == MAX_SESSIONS && permits.available_permits() == MAX_SESSIONS {
+			assert!(checked <= 32);
+			if checked == 32 && host.active() == 32 {
 				break;
 			}
 			tokio::task::yield_now().await;
@@ -1967,8 +1127,6 @@ async fn phased_preflight_fixture(core: &Arc<Core>, agent: &Arc<AgentControl>) {
 	})
 	.await
 	.unwrap();
-	assert_eq!(host.available_permits(), 0);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED - MAX_SESSIONS);
 	assert!(core.children.lock().await.is_empty());
 	for request in &requests {
 		request.cancel.cancel();
@@ -1980,6 +1138,7 @@ async fn phased_preflight_fixture(core: &Arc<Core>, agent: &Arc<AgentControl>) {
 			.unwrap()
 			.is_err());
 	}
+	assert_eq!(host.active(), 0);
 	assert!(!core.stop.is_cancelled());
 	core.stop.cancel();
 	timeout(Duration::from_secs(3), actor)
@@ -1987,36 +1146,18 @@ async fn phased_preflight_fixture(core: &Arc<Core>, agent: &Arc<AgentControl>) {
 		.unwrap()
 		.unwrap()
 		.unwrap();
-	drop(occupied);
-	assert_eq!(host.available_permits(), HOST_SESSIONS);
-	assert_eq!(permits.available_permits(), MAX_SESSIONS);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
 }
 
 struct PostverifyControl {
-	global: Arc<Semaphore>,
-	host: Arc<Semaphore>,
+	host: Arc<Activity>,
 	completed: mpsc::Sender<String>,
 	release: Arc<Semaphore>,
 }
 
-async fn postverify_dispatch(
-	core: Arc<Core>,
-	request: Request,
-	initial: OwnedSemaphorePermit,
-	control: Arc<PostverifyControl>,
-) {
+async fn postverify_dispatch(core: Arc<Core>, request: Request, control: Arc<PostverifyControl>) {
 	let result = async {
-		core.admission_profile(&request, initial).await?;
-		let host = tokio::select! {
-			value = control.host.clone().acquire_owned() => value.unwrap(),
-			_ = core.stop.cancelled() => bail!("postverify fixture stopped"),
-			_ = request.cancel.cancelled() => bail!("postverify fixture cancelled"),
-			_ = tokio::time::sleep_until(request.deadline) => bail!("postverify fixture deadline"),
-		};
-		let budget = core
-			.request_budget(&request, control.global.clone())
-			.await?;
+		core.admission_profile(&request).await?;
+		let host = Arc::new(control.host.lease()?);
 		core.verify_request_profile(request.deadline).await?;
 		let args = core.arguments(
 			"fixture",
@@ -2024,16 +1165,10 @@ async fn postverify_dispatch(
 			&core.root.path.join("phase-effective"),
 			true,
 		)?;
-		// This is a real pinned, descriptor-owned ssh -G child. Its real wait,
-		// release and output capture determine when the host permit is free.
+		// A real pinned, descriptor-owned ssh -G child must be captured and
+		// reaped before its lifetime lease ends or any output can be delivered.
 		let output = core
-			.captured(
-				args,
-				&[],
-				request.deadline,
-				&request.cancel,
-				vec![budget.clone(), Arc::new(host), request.admission.clone()],
-			)
+			.captured(args, &[], request.deadline, &request.cancel, vec![host])
 			.await?;
 		assert!(output.status.success());
 		assert!(!output.stdout.is_empty());
@@ -2045,61 +1180,51 @@ async fn postverify_dispatch(
 			_ = tokio::time::sleep_until(request.deadline) => bail!("postverify fixture deadline"),
 		};
 		core.verify_request_profile(request.deadline).await?;
-		Ok(Captured {
-			output,
-			_budget: budget,
-			_admission: request.admission.clone(),
-		})
+		Ok(Captured { output })
 	}
 	.await;
 	let _ = request.reply.send(result);
 }
 
 async fn phased_postverify_fixture(core: &Arc<Core>) {
-	let permits = Arc::new(Semaphore::new(MAX_SESSIONS));
-	let admissions = Arc::new(Semaphore::new(MAX_ADMITTED));
-	let host = Arc::new(Semaphore::new(HOST_SESSIONS));
+	let host = Arc::new(Activity::default());
 	let release = Arc::new(Semaphore::new(0));
-	let (completed_send, mut completed) = mpsc::channel(MAX_SESSIONS);
+	let (completed_send, mut completed) = mpsc::channel(64);
 	let control = Arc::new(PostverifyControl {
-		global: permits.clone(),
 		host: host.clone(),
 		completed: completed_send,
 		release: release.clone(),
 	});
-	let (sender, receiver) = mpsc::channel(QUEUE);
-	let actor = tokio::task::spawn_local(core.clone().run_with_dispatch(
-		receiver,
-		permits.clone(),
-		move |core, request, permit| postverify_dispatch(core, request, permit, control.clone()),
-	));
+	let (sender, receiver) = mpsc::unbounded_channel();
+	let actor = tokio::task::spawn_local(
+		core.clone()
+			.run_with_dispatch(receiver, move |core, request| {
+				postverify_dispatch(core, request, control.clone())
+			}),
+	);
 	let mut requests = Vec::new();
-	let count = HOST_SESSIONS * 2;
+	let count = 24;
 	for index in 0..count {
 		requests.push(enqueue_fair_request(
 			&sender,
-			&admissions,
 			"fixture",
 			&format!("postverify-{index}"),
 			Instant::now() + Duration::from_secs(40),
 		));
 	}
-	let mut finished = Vec::new();
+	let mut finished = std::collections::BTreeSet::new();
 	for _ in 0..count {
-		finished.push(phase_notice(&mut completed).await);
+		finished.insert(phase_notice(&mut completed).await);
 	}
-	finished.sort();
 	assert_eq!(
 		finished,
 		(0..count)
 			.map(|index| format!("postverify-{index}"))
-			.collect::<Vec<_>>()
+			.collect()
 	);
-	// Four children have been captured and reaped while all four response
-	// checks are blocked. Host2 is free; four output budgets remain charged.
-	assert_eq!(host.available_permits(), HOST_SESSIONS);
-	assert_eq!(permits.available_permits(), MAX_SESSIONS - count);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED - count);
+	// All children are reaped while every response still awaits a fresh
+	// authority check. No output becomes visible before that check finishes.
+	assert_eq!(host.active(), 0);
 	assert!(core.children.lock().await.is_empty());
 	for request in &mut requests {
 		assert!(matches!(
@@ -2124,11 +1249,8 @@ async fn phased_postverify_fixture(core: &Arc<Core>) {
 		.unwrap()
 		.unwrap()
 		.unwrap();
-	assert_eq!(permits.available_permits(), MAX_SESSIONS - count);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED - count);
-	drop(outputs);
-	assert_eq!(permits.available_permits(), MAX_SESSIONS);
-	assert_eq!(admissions.available_permits(), MAX_ADMITTED);
+	assert_eq!(outputs.len(), count);
+	assert_eq!(host.active(), 0);
 }
 
 async fn validation_early_shutdown_drain_fixture(core: &Arc<Core>, poison_lock: bool) {
@@ -2136,8 +1258,8 @@ async fn validation_early_shutdown_drain_fixture(core: &Arc<Core>, poison_lock: 
 	private_write(&marker, b"validation authority remains alive");
 	let reads = Arc::new(AtomicUsize::new(0));
 	let mut releases = Vec::new();
-	// Occupy both real validation slots. Aborting the async callers must leave
-	// the blocking closures and their permits alive across failed cleanup.
+	// Hold two original validations. Aborting the async callers must leave
+	// the blocking closures and their activity leases alive across failed cleanup.
 	for _ in 0..2 {
 		let (entered, receive) = oneshot::channel();
 		let (release, wait) = std::sync::mpsc::channel();
@@ -2172,28 +1294,14 @@ async fn validation_early_shutdown_drain_fixture(core: &Arc<Core>, poison_lock: 
 		assert!(caller.await.unwrap_err().is_cancelled());
 		releases.push(release);
 	}
+	// Existing retained work cannot prevent a separate full validation.
+	core.validation
+		.run(&core.stop, Instant::now() + Duration::from_secs(2), || {
+			Ok(())
+		})
+		.await
+		.unwrap();
 	let refused_reads = Arc::new(AtomicUsize::new(0));
-	let queued_core = core.clone();
-	let queued_marker = marker.clone();
-	let queued_reads = refused_reads.clone();
-	let (waiting, admitted) = oneshot::channel();
-	let queued = tokio::spawn(async move {
-		let _ = waiting.send(());
-		queued_core
-			.validation
-			.run(
-				&queued_core.stop,
-				Instant::now() + Duration::from_secs(10),
-				move || {
-					queued_reads.fetch_add(1, Ordering::SeqCst);
-					std::fs::read(queued_marker)?;
-					Ok(())
-				},
-			)
-			.await
-	});
-	admitted.await.unwrap();
-	assert!(!queued.is_finished());
 	if poison_lock {
 		let poisoned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 			let _held = core.background.lock().unwrap();
@@ -2220,11 +1328,6 @@ async fn validation_early_shutdown_drain_fixture(core: &Arc<Core>, poison_lock: 
 	);
 	let original_error = error.root_cause() as *const _;
 	assert!(core.stop.is_cancelled());
-	assert!(timeout(Duration::from_secs(2), queued)
-		.await
-		.unwrap()
-		.unwrap()
-		.is_err());
 	let new_marker = marker.clone();
 	let new_reads = refused_reads.clone();
 	assert!(core
@@ -2244,7 +1347,7 @@ async fn validation_early_shutdown_drain_fixture(core: &Arc<Core>, poison_lock: 
 	let finished = core.validation.finish_shutdown(cleanup);
 	tokio::pin!(finished);
 	// Poll the actual barrier: no wall-clock delay is used to establish that
-	// it is pending while either real closure still owns its permit.
+	// it is pending while either original closure remains active.
 	assert!(
 		std::future::poll_fn(|cx| std::task::Poll::Ready(finished.as_mut().poll(cx)))
 			.await
@@ -2286,6 +1389,7 @@ fn isolated_actual_ssh_guard_cancellation_and_ownership_fixtures() {
 	for kind in [
 		"off",
 		"startup",
+		"many-hosts",
 		"owner-custody-success",
 		"owner-custody-failure",
 		"missing",
@@ -2303,16 +1407,10 @@ fn isolated_actual_ssh_guard_cancellation_and_ownership_fixtures() {
 		"renew-deadline",
 		"renew-maintain",
 		"renew-retirement",
-		"queue-capacity",
-		"queue-stop",
-		"queue-admission",
 		"fair-hot-cold",
-		"fair-capacity",
-		"fair-retained",
+		"fair-stopped",
 		"fair-cancel-deadline",
 		"fair-panic",
-		"fair-budget-cancel",
-		"fair-budget-deadline",
 		"fair-owned-child",
 		"fair-renewal",
 		"fair-preflight",
@@ -2470,6 +1568,26 @@ async fn isolated_helper() {
 	} else {
 		let core = core(&path).await;
 		match kind.as_str() {
+			"many-hosts" => {
+				assert_eq!(core.profile.hosts.len(), 12);
+				let cancel = CancellationToken::new();
+				for host in core.profile.hosts.keys() {
+					core.entry(host, &cancel, Instant::now() + Duration::from_secs(5))
+						.await
+						.unwrap();
+				}
+				assert_eq!(core.masters.lock().await.len(), 12);
+				for _ in 0..40 {
+					let stop = core.stop.clone();
+					core.background(async move {
+						stop.cancelled().await;
+						Ok(())
+					})
+					.unwrap();
+				}
+				assert_eq!(core.background.lock().unwrap().len(), 52);
+				core.stop.cancel();
+			}
 			"validation-cleanup-error-drain" | "validation-lock-error-drain" => {
 				validation_early_shutdown_drain_fixture(
 					&core,
@@ -2480,17 +1598,9 @@ async fn isolated_helper() {
 			kind if kind.starts_with("agent-") => {
 				agent_timeout::run(&core, &agent_control, kind).await;
 			}
-			"fair-hot-cold"
-			| "fair-capacity"
-			| "fair-retained"
-			| "fair-cancel-deadline"
-			| "fair-panic"
-			| "fair-budget-cancel"
-			| "fair-budget-deadline" => {
-				// The real actor is intentionally not Send: all maintenance and
-				// child ownership stay on this same current-thread runtime.
+			"fair-hot-cold" | "fair-stopped" | "fair-cancel-deadline" | "fair-panic" => {
 				tokio::task::LocalSet::new()
-					.run_until(fairness_fixture(&core, &kind))
+					.run_until(unbounded_dispatch_fixture(&core, &kind))
 					.await;
 			}
 			"fair-owned-child" => owned_admission_fixture(&core).await,
@@ -2509,9 +1619,6 @@ async fn isolated_helper() {
 					.run_until(phased_postverify_fixture(&core))
 					.await;
 			}
-			"queue-capacity" | "queue-stop" | "queue-admission" => {
-				queued_admission_fixture(&core, &kind, &agent_control).await;
-			}
 			"renew-singleflight" | "renew-refused" | "renew-cleanup" | "renew-deadline"
 			| "renew-maintain" | "renew-retirement" => renewal_fixture(&core, &kind).await,
 			"admission-cancel" => {
@@ -2525,16 +1632,9 @@ async fn isolated_helper() {
 					deadline: Instant::now() + Duration::from_secs(40),
 					cancel: cancel.clone(),
 					reply,
-					admission: test_admission(),
 				};
-				let permits = Arc::new(Semaphore::new(1));
-				let permit = permits.clone().acquire_owned().await.unwrap();
 				let task_core = core.clone();
-				let global = permits.clone();
-				let task =
-					tokio::spawn(
-						async move { task_core.execute_inner(&request, permit, global).await },
-					);
+				let task = tokio::spawn(async move { task_core.execute_inner(&request).await });
 				timeout(Duration::from_secs(1), agent_control.entered.notified())
 					.await
 					.unwrap();
@@ -2544,7 +1644,6 @@ async fn isolated_helper() {
 					.unwrap()
 					.unwrap()
 					.is_err());
-				assert_eq!(permits.available_permits(), 1);
 				assert!(core.masters.lock().await.is_empty());
 				assert!(core.children.lock().await.is_empty());
 				assert!(!core.stop.is_cancelled());
@@ -2642,8 +1741,8 @@ async fn isolated_helper() {
 					.arguments("fixture", Mode::Slave, &socket, false)
 					.unwrap();
 				args.push("printf SHOULD_NEVER_EXECUTE".into());
-				let permits = Arc::new(Semaphore::new(1));
-				let permit = permits.clone().acquire_owned().await.unwrap();
+				let activity = Arc::new(Activity::default());
+				let lease = activity.lease().unwrap();
 				let cancel = CancellationToken::new();
 				let task_cancel = cancel.clone();
 				let task_core = core.clone();
@@ -2654,7 +1753,7 @@ async fn isolated_helper() {
 							&[],
 							Instant::now() + Duration::from_secs(5),
 							&task_cancel,
-							vec![Arc::new(permit)],
+							vec![Arc::new(lease)],
 						)
 						.await
 				});
@@ -2662,12 +1761,12 @@ async fn isolated_helper() {
 					.await
 					.unwrap()
 					.unwrap();
-				assert_eq!(permits.available_permits(), 0);
+				assert_eq!(activity.active(), 1);
 				assert_eq!(core.children.lock().await.len(), 1);
 				cancel.cancel();
 				assert!(task.await.unwrap().is_err());
 				assert!(core.children.lock().await.is_empty());
-				assert_eq!(permits.available_permits(), 1);
+				assert_eq!(activity.active(), 0);
 				fake.abort();
 				let _ = fake.await;
 				std::fs::remove_file(socket).unwrap();

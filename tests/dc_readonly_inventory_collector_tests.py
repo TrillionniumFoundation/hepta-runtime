@@ -12,7 +12,9 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import threading
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("collector", ROOT / "deploy/dc_readonly_inventory.py")
@@ -112,6 +114,89 @@ class CollectorTests(unittest.TestCase):
         }}
         with self.assertRaisesRegex(I.InventoryError, "host_set_mismatch"):
             I.check_config(config, ["main", "pocket4"])
+
+    def empty_host_fixture(self, count):
+        state = self.base / "controller"
+        state.mkdir(mode=0o700)
+        for name in ("jobs", "terminals"):
+            (state / name).mkdir(mode=0o700)
+        hosts = {
+            f"host{i}": {"platform": "linux", "ssh_target": "fixture",
+                         "remote_state_dir": "/private/fixture"}
+            for i in range(count)
+        }
+        config = self.base / "runtime.json"
+        config.write_text(json.dumps({"state_dir": str(state), "hosts": hosts}))
+        config.chmod(0o600)
+        return argparse.Namespace(config=str(config), output=str(self.base / "out"),
+                                  hosts=list(hosts), dc_identity=[])
+
+    def test_all_32_configured_hosts_start_before_any_host_finishes(self):
+        args = self.empty_host_fixture(32)
+        barrier = threading.Barrier(32)
+        entered = set()
+        lock = threading.Lock()
+
+        def observe(name, host, rows, helper):
+            with lock:
+                entered.add(name)
+            barrier.wait(timeout=5)
+            return {"rows": [], "metadata_scan_finished": True,
+                    "all_records_resolved": True}
+
+        with mock.patch.object(I, "host_observation", side_effect=observe):
+            output, report = I.run(args)
+        self.assertEqual(entered, set(args.hosts))
+        self.assertEqual(report["configured_hosts"], sorted(args.hosts))
+        self.assertTrue(report["every_host_response_complete"])
+        self.assertTrue(report["count_matched"])
+        for name in args.hosts:
+            self.assertTrue((output / (name + ".json")).is_file())
+
+    def test_first_host_failure_waits_for_other_original_workers(self):
+        args = self.empty_host_fixture(3)
+        all_started = threading.Barrier(3)
+        release = threading.Event()
+        failed = threading.Event()
+        done = threading.Event()
+        completed = set()
+        errors = []
+        lock = threading.Lock()
+
+        def observe(name, host, rows, helper):
+            all_started.wait(timeout=5)
+            if name == "host0":
+                failed.set()
+                raise RuntimeError("original host failed")
+            if not release.wait(timeout=5):
+                raise RuntimeError("test did not release original worker")
+            with lock:
+                completed.add(name)
+            return {"rows": [], "metadata_scan_finished": True,
+                    "all_records_resolved": True}
+
+        def collect():
+            try:
+                I.run(args)
+            except BaseException as error:
+                errors.append(error)
+            finally:
+                done.set()
+
+        with mock.patch.object(I, "host_observation", side_effect=observe):
+            runner = threading.Thread(target=collect)
+            runner.start()
+            try:
+                self.assertTrue(failed.wait(timeout=5))
+                self.assertFalse(done.wait(timeout=0.1))
+            finally:
+                release.set()
+                runner.join(timeout=5)
+            self.assertFalse(runner.is_alive())
+        self.assertEqual(completed, {"host1", "host2"})
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], RuntimeError)
+        self.assertEqual(str(errors[0]), "original host failed")
 
     def test_invalid_record_refusal_not_success(self):
         state = self.base / "controller"

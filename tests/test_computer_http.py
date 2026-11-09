@@ -362,9 +362,6 @@ class Fixture(unittest.TestCase):
             results = list(pool.map(lambda n: self.http(call(100 + n, str(n), barrier='parallel'), sid=sid), range(64)))
         self.assertTrue(all(item[0] == 200 and 'result' in item[2] for item in results))
         self.assertGreaterEqual(self.control.peak, 64)
-        proxy = self.control.proxies[-1]
-        for item in (proxy, proxy.native, proxy.compatibility, proxy.native.legacy, proxy.native.predecessor):
-            self.assertIsNone(item.active_request_limit)
 
     def test_32_stateless_same_ids_have_independent_concurrent_lanes(self):
         self.control.barriers['modern'] = threading.Barrier(32)

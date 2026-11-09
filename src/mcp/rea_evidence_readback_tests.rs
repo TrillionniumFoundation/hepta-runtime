@@ -226,7 +226,8 @@ async fn limits_bad_cursors_and_cancellation_publish_no_partial_snapshot() {
 	);
 	assert_eq!(bounded.state.lock().unwrap().bytes, 0);
 	assert!(bounded.state.lock().unwrap().snapshots.is_empty());
-	assert_eq!(bounded.encoder.available_permits(), 1);
+	assert_eq!(bounded.state.lock().unwrap().pending_encoders, 0);
+	assert_eq!(bounded.state.lock().unwrap().pending_bytes, 0);
 }
 
 #[tokio::test]
@@ -286,29 +287,97 @@ async fn count_limit_refuses_without_evicting_and_release_restores_capacity() {
 }
 
 #[tokio::test]
-async fn active_encoder_has_one_owner_and_existing_reads_stay_available() {
-	let session = EvidenceSession::default();
-	let registry = ReadbackRegistry::default();
+async fn concurrent_encoders_share_payload_budget_without_a_count_gate() {
+	let session = Arc::new(EvidenceSession::default());
+	let registry = Arc::new(ReadbackRegistry::default());
+	let reservations: Vec<_> = (0..32)
+		.map(|_| registry.reserve_encoding().unwrap())
+		.collect();
+	assert_eq!(registry.state.lock().unwrap().pending_encoders, 32);
 	let token = CancellationToken::new();
 	let first = payload(
 		registry
 			.read(params(None, 0, 1), &session, token.clone())
 			.await,
 	);
-	let permit = registry.encoder.acquire().await.unwrap();
-	assert_eq!(
-		registry
-			.read(params(None, 0, 1), &session, token.clone())
-			.await
-			.is_error,
-		Some(true)
-	);
 	let id = first["snapshot_id"].as_str().unwrap();
 	assert_eq!(
 		payload(registry.read(params(Some(id), 0, 1), &session, token).await),
 		first
 	);
-	drop(permit);
+	drop(reservations);
+	let mut requests = tokio::task::JoinSet::new();
+	for _ in 0..32 {
+		let registry = Arc::clone(&registry);
+		let session = Arc::clone(&session);
+		requests.spawn(async move {
+			payload(
+				registry
+					.read(params(None, 0, 1), &session, CancellationToken::new())
+					.await,
+			)
+		});
+	}
+	while let Some(reply) = requests.join_next().await {
+		assert_eq!(reply.unwrap(), first);
+	}
+	let state = registry.state.lock().unwrap();
+	assert_eq!(state.snapshots.len(), 1);
+	assert_eq!(state.pending_encoders, 0);
+	assert_eq!(state.pending_bytes, 0);
+}
+
+#[test]
+fn pending_encoding_charges_aggregate_bytes_and_releases_only_its_own_charge() {
+	let registry = ReadbackRegistry {
+		limits: Limits {
+			snapshot_bytes: 32,
+			total_bytes: 32,
+			snapshots: 4,
+		},
+		..Default::default()
+	};
+	let mut first = registry.reserve_encoding().unwrap();
+	let mut second = registry.reserve_encoding().unwrap();
+	assert!(first.charge(20).unwrap());
+	assert!(second.charge(12).unwrap());
+	assert!(!second.charge(1).unwrap());
+	assert_eq!(registry.state.lock().unwrap().pending_bytes, 32);
+	drop(first);
+	assert_eq!(registry.state.lock().unwrap().pending_bytes, 12);
+	assert!(second.charge(20).unwrap());
+	drop(second);
+	assert_eq!(registry.state.lock().unwrap().pending_bytes, 0);
+	assert_eq!(registry.state.lock().unwrap().pending_encoders, 0);
+}
+
+#[tokio::test]
+async fn aborted_encoder_waiter_keeps_accounting_until_the_blocking_owner_finishes() {
+	let registry = ReadbackRegistry::default();
+	let mut reservation = registry.reserve_encoding().unwrap();
+	assert!(reservation.charge(32).unwrap());
+	let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+	let (release_tx, release_rx) = std::sync::mpsc::channel();
+	let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+	let waiter = tokio::spawn(async move {
+		tokio::task::spawn_blocking(move || {
+			started_tx.send(()).unwrap();
+			release_rx.recv().unwrap();
+			drop(reservation);
+			done_tx.send(()).unwrap();
+		})
+		.await
+		.unwrap();
+	});
+	started_rx.await.unwrap();
+	waiter.abort();
+	assert!(waiter.await.unwrap_err().is_cancelled());
+	assert_eq!(registry.state.lock().unwrap().pending_encoders, 1);
+	assert_eq!(registry.state.lock().unwrap().pending_bytes, 32);
+	release_tx.send(()).unwrap();
+	done_rx.await.unwrap();
+	assert_eq!(registry.state.lock().unwrap().pending_encoders, 0);
+	assert_eq!(registry.state.lock().unwrap().pending_bytes, 0);
 }
 
 #[test]
@@ -320,6 +389,7 @@ fn bounded_writer_stops_after_cancellation_without_accepting_more_bytes() {
 		limit: 16,
 		cancellation: token.clone(),
 		limit_exceeded: false,
+		reservation: None,
 	};
 	writer.write_all(b"prefix").unwrap();
 	token.cancel();

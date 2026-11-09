@@ -1130,12 +1130,9 @@ async fn key_lane_preserves_same_host_idempotency_serialization() {
 async fn different_key_lanes_allow_same_host_progress_during_remote_wait() {
 	let host = "hepta-fixture-distinct-key-lanes";
 	let first_key = "slow-first-key";
-	let other_key = (0..1024)
-		.map(|index| format!("fast-other-key-{index}"))
-		.find(|key| start_lane(Some(key)) != start_lane(Some(first_key)))
-		.unwrap();
+	let other_key = "fast-other-key";
 	let first = start_lock(host, Some(first_key)).unwrap();
-	let other = start_lock(host, Some(&other_key)).unwrap();
+	let other = start_lock(host, Some(other_key)).unwrap();
 	assert!(!Arc::ptr_eq(&first, &other));
 	let guard = first.lock().await;
 	let original_completed = std::sync::atomic::AtomicBool::new(false);
@@ -1161,7 +1158,6 @@ async fn different_key_lanes_allow_same_host_progress_during_remote_wait() {
 async fn missing_keys_remain_on_one_serialized_lane() {
 	let first = start_lock("hepta-fixture-no-key", None).unwrap();
 	let second = start_lock("hepta-fixture-no-key", None).unwrap();
-	assert_eq!(start_lane(None), 0);
 	assert!(Arc::ptr_eq(&first, &second));
 	let guard = first.lock().await;
 	assert!(second.try_lock().is_err());
@@ -1170,42 +1166,60 @@ async fn missing_keys_remain_on_one_serialized_lane() {
 }
 
 #[tokio::test]
-async fn colliding_keys_share_a_lock_without_merging_their_identity() {
+async fn keys_that_collided_in_the_old_64_lane_table_now_progress_independently() {
 	let first_key = "first-collision-key";
+	let old_lane = |key: &str| usize::from(Sha256::digest(key.as_bytes())[0]) % 64;
 	let other_key = (0..4096)
 		.map(|index| format!("other-collision-key-{index}"))
-		.find(|key| start_lane(Some(key)) == start_lane(Some(first_key)))
+		.find(|key| old_lane(key) == old_lane(first_key))
 		.unwrap();
 	assert_ne!(first_key, other_key);
 	let first = start_lock("hepta-fixture-collision", Some(first_key)).unwrap();
 	let other = start_lock("hepta-fixture-collision", Some(&other_key)).unwrap();
-	assert!(Arc::ptr_eq(&first, &other));
+	assert!(!Arc::ptr_eq(&first, &other));
 	let guard = first.lock().await;
-	assert!(other.try_lock().is_err());
-	drop(guard);
 	assert!(other.try_lock().is_ok());
+	drop(guard);
+	assert!(first.try_lock().is_ok());
 }
 
 #[test]
-fn retained_start_locks_are_bounded_by_hosts_not_key_cardinality() {
+fn exact_start_locks_exceed_old_lanes_and_reclaim_completed_keys() {
 	let registry = Mutex::new(HashMap::new());
+	let mut live = Vec::new();
+	let mut identities = std::collections::HashSet::new();
 	for host in ["first-private-host", "second-private-host"] {
-		let mut identities = std::collections::HashSet::new();
-		for index in 0..16_384 {
+		for index in 0..256 {
 			let key = format!("private-key-{index}");
 			let first = start_lock_in(&registry, host, Some(&key)).unwrap();
 			let second = start_lock_in(&registry, host, Some(&key)).unwrap();
 			assert!(Arc::ptr_eq(&first, &second));
-			identities.insert(Arc::as_ptr(&first) as usize);
+			assert!(identities.insert(Arc::as_ptr(&first) as usize));
+			live.push(first);
 		}
-		assert_eq!(identities.len(), START_LANE_COUNT);
 	}
-	let registry = registry.lock().unwrap();
-	assert_eq!(registry.len(), 2);
-	for lanes in registry.values() {
-		assert_eq!(lanes.len(), START_LANE_COUNT);
-		assert!(lanes.iter().all(|lane| Arc::strong_count(lane) == 1));
-	}
+	assert_eq!(registry.lock().unwrap().len(), 512);
+	drop(live);
+	let last = start_lock_in(&registry, "first-private-host", Some("new-key")).unwrap();
+	assert_eq!(registry.lock().unwrap().len(), 1);
+	assert_eq!(Arc::strong_count(&last), 1);
+}
+
+#[tokio::test]
+async fn exact_start_lock_remains_registered_while_only_its_owned_guard_exists() {
+	let registry = Mutex::new(HashMap::new());
+	let original = start_lock_in(&registry, "host", Some("same-key")).unwrap();
+	let weak = Arc::downgrade(&original);
+	let guard = original.lock_owned().await;
+	let retry = start_lock_in(&registry, "host", Some("same-key")).unwrap();
+	assert!(Arc::ptr_eq(&retry, &weak.upgrade().unwrap()));
+	assert!(retry.try_lock().is_err());
+	let no_key = start_lock_in(&registry, "host", None).unwrap();
+	assert!(no_key.try_lock().is_ok());
+	drop(guard);
+	assert!(retry.try_lock().is_ok());
+	drop(retry);
+	assert!(weak.upgrade().is_none());
 }
 
 fn fixture_write(dir: &Path, record: &JobRecord) {
@@ -2267,7 +2281,7 @@ fn observation_audit_fixture(root: &Path, subject: &str) -> PreparedAudit {
 #[tokio::test(flavor = "current_thread")]
 async fn observation_audit_releases_the_executor_but_waits_for_the_real_sync_barrier() {
 	let root = tempfile::tempdir().unwrap();
-	let slots = Arc::new(Semaphore::new(MAX_OBSERVATION_AUDITS));
+
 	let caller_thread = std::thread::current().id();
 	let mut host = "original-host".to_owned();
 	let mut phase = json!({"phase":"observation","ok":true});
@@ -2288,9 +2302,8 @@ async fn observation_audit_releases_the_executor_but_waits_for_the_real_sync_bar
 	let expected = original.clone();
 	let (entered, started) = tokio::sync::oneshot::channel();
 	let (release, barrier) = std::sync::mpsc::channel();
-	let audit_slots = slots.clone();
 	let task = tokio::spawn(async move {
-		let completion = run_observation_audit(prepared, audit_slots, move |event| {
+		let completion = run_observation_audit(prepared, move |event| {
 			append_audit_with(event, |file| {
 				entered
 					.send(std::thread::current().id())
@@ -2314,7 +2327,7 @@ async fn observation_audit_releases_the_executor_but_waits_for_the_real_sync_bar
 		!task.is_finished(),
 		"a written line is not a durable acknowledgement"
 	);
-	assert_eq!(slots.available_permits(), MAX_OBSERVATION_AUDITS - 1);
+
 	tokio::time::timeout(Duration::from_secs(3), async {
 		tokio::task::yield_now().await;
 		tokio::time::sleep(Duration::from_millis(1)).await;
@@ -2340,7 +2353,6 @@ async fn observation_audit_releases_the_executor_but_waits_for_the_real_sync_bar
 	for (key, value) in expected.as_object().unwrap() {
 		assert_eq!(&retained[key], value);
 	}
-	assert_eq!(slots.available_permits(), MAX_OBSERVATION_AUDITS);
 }
 
 struct ActiveObservationAudit(Arc<std::sync::atomic::AtomicUsize>);
@@ -2351,16 +2363,15 @@ impl Drop for ActiveObservationAudit {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn observation_audit_cancellation_keeps_the_worker_permit_and_the_eight_task_bound() {
-	use std::sync::atomic::{AtomicBool, AtomicUsize};
+async fn observation_audits_exceed_old_eight_worker_limit_and_survive_cancellation() {
+	use std::sync::atomic::AtomicUsize;
 	let root = tempfile::tempdir().unwrap();
-	let slots = Arc::new(Semaphore::new(MAX_OBSERVATION_AUDITS));
 	let active = Arc::new(AtomicUsize::new(0));
 	let maximum = Arc::new(AtomicUsize::new(0));
 	let mut tasks = Vec::new();
 	let mut releases = Vec::new();
 	let mut starts = Vec::new();
-	for number in 0..MAX_OBSERVATION_AUDITS {
+	for number in 0..16 {
 		let prepared = observation_audit_fixture(root.path(), &format!("job-{number}"));
 		let (entered, started) = tokio::sync::oneshot::channel();
 		let (release, barrier) = std::sync::mpsc::channel();
@@ -2368,14 +2379,13 @@ async fn observation_audit_cancellation_keeps_the_worker_permit_and_the_eight_ta
 		let peak = maximum.clone();
 		tasks.push(tokio::spawn(run_observation_audit(
 			prepared,
-			slots.clone(),
 			move |event| {
 				let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
 				let _active = ActiveObservationAudit(counter);
 				peak.fetch_max(count, Ordering::SeqCst);
 				entered
 					.send(())
-					.map_err(|_| anyhow::anyhow!("capacity test observer disappeared"))?;
+					.map_err(|_| anyhow::anyhow!("audit observer disappeared"))?;
 				barrier.recv_timeout(Duration::from_secs(10))?;
 				append_audit(event)
 			},
@@ -2384,116 +2394,58 @@ async fn observation_audit_cancellation_keeps_the_worker_permit_and_the_eight_ta
 		starts.push(started);
 	}
 	for started in starts {
-		tokio::time::timeout(Duration::from_secs(3), started)
+		tokio::time::timeout(Duration::from_secs(5), started)
 			.await
 			.unwrap()
 			.unwrap();
 	}
-	assert_eq!(active.load(Ordering::SeqCst), MAX_OBSERVATION_AUDITS);
-	assert_eq!(slots.available_permits(), 0);
-	let (entered, mut ninth_started) = tokio::sync::oneshot::channel();
-	let counter = active.clone();
-	let peak = maximum.clone();
-	let ninth = tokio::spawn(run_observation_audit(
-		observation_audit_fixture(root.path(), "ninth-job"),
-		slots.clone(),
-		move |event| {
-			let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
-			let _active = ActiveObservationAudit(counter);
-			peak.fetch_max(count, Ordering::SeqCst);
-			entered
-				.send(())
-				.map_err(|_| anyhow::anyhow!("ninth test observer disappeared"))?;
-			append_audit(event)
-		},
-	));
-	let waiting_started = Arc::new(AtomicBool::new(false));
-	let unexpected = waiting_started.clone();
-	let waiting = tokio::spawn(run_observation_audit(
-		observation_audit_fixture(root.path(), "cancelled-before-submission"),
-		slots.clone(),
-		move |event| {
-			unexpected.store(true, Ordering::SeqCst);
-			append_audit(event)
-		},
-	));
-	tokio::task::yield_now().await;
-	assert!(matches!(
-		ninth_started.try_recv(),
-		Err(tokio::sync::oneshot::error::TryRecvError::Empty)
-	));
-	waiting.abort();
-	assert!(waiting.await.unwrap_err().is_cancelled());
-	let cancelled_waiter = tasks.remove(0);
-	cancelled_waiter.abort();
-	assert!(cancelled_waiter.await.unwrap_err().is_cancelled());
-	tokio::task::yield_now().await;
-	assert_eq!(slots.available_permits(), 0);
-	assert_eq!(active.load(Ordering::SeqCst), MAX_OBSERVATION_AUDITS);
-	assert!(!waiting_started.load(Ordering::SeqCst));
-	assert!(matches!(
-		ninth_started.try_recv(),
-		Err(tokio::sync::oneshot::error::TryRecvError::Empty)
-	));
-	releases.remove(0).send(()).unwrap();
-	tokio::time::timeout(Duration::from_secs(3), &mut ninth_started)
-		.await
-		.unwrap()
-		.unwrap();
-	tokio::time::timeout(Duration::from_secs(3), ninth)
-		.await
-		.unwrap()
-		.unwrap()
-		.unwrap();
+	assert_eq!(active.load(Ordering::SeqCst), 16);
+	for cancelled in tasks.drain(..4) {
+		cancelled.abort();
+		assert!(cancelled.await.unwrap_err().is_cancelled());
+	}
+	assert_eq!(active.load(Ordering::SeqCst), 16);
 	for release in releases {
 		release.send(()).unwrap();
 	}
 	for task in tasks {
-		tokio::time::timeout(Duration::from_secs(3), task)
+		tokio::time::timeout(Duration::from_secs(5), task)
 			.await
 			.unwrap()
 			.unwrap()
 			.unwrap();
 	}
-	// The cancelled outer future detached its blocking task. Drain every permit
-	// before dropping the filesystem fixture, including that detached worker.
-	let drained = tokio::time::timeout(
-		Duration::from_secs(3),
-		slots
-			.clone()
-			.acquire_many_owned(MAX_OBSERVATION_AUDITS as u32),
-	)
+	tokio::time::timeout(Duration::from_secs(5), async {
+		while active.load(Ordering::SeqCst) != 0 {
+			tokio::task::yield_now().await;
+		}
+	})
 	.await
-	.unwrap()
 	.unwrap();
-	drop(drained);
-	assert_eq!(slots.available_permits(), MAX_OBSERVATION_AUDITS);
-	assert_eq!(active.load(Ordering::SeqCst), 0);
-	assert_eq!(maximum.load(Ordering::SeqCst), MAX_OBSERVATION_AUDITS);
+	assert_eq!(maximum.load(Ordering::SeqCst), 16);
 	let rows = std::fs::read_to_string(root.path().join("audit/events.jsonl")).unwrap();
 	let rows: Vec<Value> = rows
 		.lines()
 		.map(|line| serde_json::from_str(line).unwrap())
 		.collect();
-	assert_eq!(rows.len(), MAX_OBSERVATION_AUDITS + 1);
-	assert!(rows.iter().any(|row| row["subject"] == "job-0"));
-	assert!(rows.iter().any(|row| row["subject"] == "ninth-job"));
-	assert!(!rows
-		.iter()
-		.any(|row| row["subject"] == "cancelled-before-submission"));
+	assert_eq!(rows.len(), 16);
+	for number in 0..16 {
+		assert!(rows
+			.iter()
+			.any(|row| row["subject"] == format!("job-{number}")));
+	}
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn observation_audit_append_sync_panic_and_closed_capacity_preserve_results_and_redact_errors(
-) {
+async fn observation_audit_append_sync_and_panic_preserve_results_and_redact_errors() {
 	for original in [
 		json!({"job_id":"original-job","caller_request":"caller-a","state":"succeeded","exit_code":0}),
 		json!({"job_id":"original-job","caller_request":"caller-b","state":"running","pid":1234}),
 		json!({"job_id":"original-job","caller_request":"caller-c","stdout":{"text":"original-output","offset":7,"next_offset":22,"eof":true}}),
 	] {
-		for failure in 0..4 {
+		for failure in 0..3 {
 			let root = tempfile::tempdir().unwrap();
-			let slots = Arc::new(Semaphore::new(MAX_OBSERVATION_AUDITS));
+
 			let prepared = if failure == 0 {
 				let blocked = root.path().join("PRIVATE_AUDIT_SECRET");
 				std::fs::write(&blocked, b"not a directory").unwrap();
@@ -2508,21 +2460,17 @@ async fn observation_audit_append_sync_panic_and_closed_capacity_preserve_result
 			} else {
 				observation_audit_fixture(root.path(), "original-job")
 			};
-			if failure == 3 {
-				slots.close();
-			}
-			let completion =
-				run_observation_audit(prepared, slots.clone(), move |event| match failure {
-					0 => append_audit(event).context("PRIVATE_AUDIT_SECRET"),
-					1 => append_audit_with(event, |_file| {
-						Err(anyhow::anyhow!(
-							"PRIVATE_AUDIT_SECRET: injected sync failure"
-						))
-					}),
-					2 => std::panic::panic_any(("PRIVATE_AUDIT_SECRET", 17_u32)),
-					_ => panic!("closed observation capacity must not submit a blocking task"),
-				})
-				.await;
+			let completion = run_observation_audit(prepared, move |event| match failure {
+				0 => append_audit(event).context("PRIVATE_AUDIT_SECRET"),
+				1 => append_audit_with(event, |_file| {
+					Err(anyhow::anyhow!(
+						"PRIVATE_AUDIT_SECRET: injected sync failure"
+					))
+				}),
+				2 => std::panic::panic_any(("PRIVATE_AUDIT_SECRET", 17_u32)),
+				_ => panic!("invalid observation failure fixture"),
+			})
+			.await;
 			let error = completion.as_ref().unwrap_err();
 			assert_eq!(
 				error.to_string(),
@@ -2545,7 +2493,6 @@ async fn observation_audit_append_sync_panic_and_closed_capacity_preserve_result
 				"Existing job observation retained; audit unavailable. No new job was launched."
 			);
 			assert!(!retained.to_string().contains("PRIVATE_AUDIT_SECRET"));
-			assert_eq!(slots.available_permits(), MAX_OBSERVATION_AUDITS);
 		}
 	}
 }

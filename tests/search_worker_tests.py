@@ -79,6 +79,55 @@ class SearchWorkerTests(unittest.TestCase):
         finally:
             os.close(fd)
 
+    def test_start_accepts_more_than_old_host_and_owner_active_limits(self):
+        self.state.mkdir(mode=0o700)
+        search_root = self.state / "search"
+        search_root.mkdir(mode=0o700)
+        for index in range(12):
+            directory = search_root / format(index + 100, "064x")
+            directory.mkdir(mode=0o700)
+            record = {"owner": self.owner if index < 6 else "3" * 64,
+                      "state": "running", "snapshot_ready": False,
+                      "deadline": time.time() + 60, "statistics": {}}
+            (directory / "record.json").write_text(json.dumps(record))
+        self.identity = "f" * 64
+        (self.root / "proof.txt").write_text("needle")
+        self.assertEqual(self.start()["state"], "running")
+        result = self.terminal()
+        self.assertEqual(result["state"], "completed")
+        self.assertEqual(result["results"][0]["path"], "proof.txt")
+        self.assertEqual(len(list(search_root.glob("*/record.json"))), 13)
+
+    def test_start_above_old_receipt_count_preserves_all_original_receipts(self):
+        self.state.mkdir(mode=0o700)
+        search_root = self.state / "search"
+        search_root.mkdir(mode=0o700)
+        originals = {}
+        for index in range(1025):
+            directory = search_root / format(index, "064x")
+            directory.mkdir(mode=0o700)
+            record = {"owner": self.owner if index % 2 == 0 else "3" * 64,
+                      "state": "running" if index % 3 else "completed",
+                      "snapshot_ready": False, "deadline": time.time() + 60,
+                      "statistics": {}}
+            path = directory / "record.json"
+            originals[path] = json.dumps(record).encode()
+            path.write_bytes(originals[path])
+            path.chmod(0o600)
+        (self.root / "proof.txt").write_text("needle")
+        for identity in ("e" * 64, "f" * 64):
+            self.identity = identity
+            self.assertEqual(self.start()["state"], "running")
+            result = self.terminal()
+            self.assertEqual(result["state"], "completed")
+            self.assertEqual(result["results"][0]["path"], "proof.txt")
+        self.assertEqual(len(list(search_root.glob("*/record.json"))), 1027)
+        self.rpc("status", expect=False, search_id=format(2, "064x"), owner="9" * 64)
+        self.assertEqual(self.rpc("status", search_id=format(2, "064x"))["state"], "running")
+        self.rpc("results", expect=False, cursor=0, limit=33)
+        for path, original in originals.items():
+            self.assertEqual(path.read_bytes(), original)
+
     def test_native_content_path_utf8_binary_and_no_symlink_or_hardlink_escape(self):
         (self.root / "alpha.txt").write_text("needle 中文\nother\nneedle two\n")
         (self.root / ".hidden").write_text("needle hidden")

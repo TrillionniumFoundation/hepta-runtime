@@ -373,7 +373,7 @@ fn unfinished_restart_receipt_is_interrupted_without_pid_reattachment() {
 }
 
 #[test]
-fn abandoned_native_completed_receipt_frees_active_quota_without_exposing_its_owner() {
+fn abandoned_native_completed_receipt_preserves_its_owner_and_terminal_state() {
 	let mut r = record();
 	assert!(!apply_native_terminal(&mut r, &json!({"state":"running"})));
 	assert!(!apply_native_terminal(
@@ -420,6 +420,56 @@ async fn private_receipt_denies_other_session_without_path_details() {
 		.unwrap_err()
 		.to_string();
 	assert_eq!(error, "search unavailable to this session");
+}
+
+#[tokio::test]
+async fn retained_receipts_above_old_count_allow_new_start_without_changing_originals() {
+	let temporary = tempfile::tempdir().unwrap();
+	let current_instance = instance().unwrap();
+	let mut originals = BTreeMap::new();
+	for index in 0..1025 {
+		let mut retained = record();
+		retained.id = format!("{index:064x}");
+		retained.instance = current_instance.into();
+		retained.owner = if index % 2 == 0 { "2" } else { "4" }.repeat(64);
+		retained.state = if index % 3 == 0 {
+			"completed".into()
+		} else {
+			"running".into()
+		};
+		let path = temporary.path().join(format!("{}.json", retained.id));
+		originals.insert(path, serde_json::to_vec(&retained).unwrap());
+		save(temporary.path(), &retained).await.unwrap();
+	}
+	// This is also the validation/reconciliation scan performed before start.
+	let retained = retained_records(temporary.path()).await.unwrap();
+	assert_eq!(retained.len(), originals.len());
+	assert!(retained.windows(2).all(|pair| pair[0].id < pair[1].id));
+	assert_eq!(
+		retained.iter().filter(|r| r.state == "running").count(),
+		683
+	);
+
+	let mut started = record();
+	started.id = "f".repeat(64);
+	started.instance = current_instance.into();
+	started.state = "launching".into();
+	let result = dispatch_search_start(temporary.path(), started.clone(), async {
+		Ok(effect_ack(&started, "start", "running"))
+	})
+	.await
+	.unwrap();
+	let result: Value = serde_json::from_str(&result).unwrap();
+	assert_eq!(result["search"]["search_id"], started.id);
+	assert_eq!(result["effect_outcome"], "start_acknowledged");
+	assert_eq!(result["metadata_durability_confirmed"], true);
+	assert_eq!(
+		retained_records(temporary.path()).await.unwrap().len(),
+		1026
+	);
+	for (path, bytes) in originals {
+		assert_eq!(tokio::fs::read(path).await.unwrap(), bytes);
+	}
 }
 
 #[tokio::test]
@@ -733,4 +783,45 @@ fn oversized_effect_response_retains_identity_under_actual_mcp_envelope_cap() {
 	assert_eq!(value["automatic_retry"], false);
 	assert!(wire_size(&result).unwrap() < 64 * 1024);
 	assert!(!result.contains("SECRET"));
+}
+
+#[tokio::test]
+async fn distinct_search_receipts_are_not_serialized_by_a_shared_remote_io_lock() {
+	let first = record_lock(&"a".repeat(64)).unwrap();
+	let same = record_lock(&"a".repeat(64)).unwrap();
+	assert!(Arc::ptr_eq(&first, &same));
+	let held = first.lock().await;
+	let mut others = Vec::new();
+	for index in 0..32 {
+		let lock = record_lock(&format!("{index:064x}")).unwrap();
+		others.push(
+			tokio::time::timeout(Duration::from_secs(1), lock.lock_owned())
+				.await
+				.unwrap(),
+		);
+	}
+	assert!(tokio::time::timeout(Duration::from_millis(30), same.lock())
+		.await
+		.is_err());
+	drop(held);
+	drop(same.lock().await);
+	assert!(record_lock("../outside").is_err());
+}
+
+#[tokio::test]
+async fn refreshing_more_than_eight_receipts_ignores_unavailable_hosts() {
+	let root = tempfile::tempdir().unwrap();
+	let mut records = Vec::new();
+	for index in 0..12 {
+		let mut r = record();
+		r.id = format!("{index:064x}");
+		r.instance = instance().unwrap().into();
+		r.host = "unconfigured_search_status_test_host".into();
+		assert!(pinned_host(&r).is_err());
+		save(root.path(), &r).await.unwrap();
+		records.push(r);
+	}
+	refresh_active(root.path(), &mut records).await.unwrap();
+	assert_eq!(records.len(), 12);
+	assert!(records.iter().all(|record| record.state == "running"));
 }

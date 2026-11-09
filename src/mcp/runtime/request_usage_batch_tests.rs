@@ -48,7 +48,7 @@ impl<'a> FixedGroup<'a> {
 			Registration::Follower(mut waiter) => {
 				// A failed synthetic membership assertion must be able to unwind
 				// to the old FixedGroup that this thread still owns. No real I/O
-				// or semaphore permit exists on this test-only failure path.
+				// exists on this test-only failure path.
 				waiter.follower_custody = false;
 				panic!("expected a new test group");
 			}
@@ -393,21 +393,21 @@ fn hints_are_bounded_and_never_replace_a_complete_observation() {
 }
 
 #[test]
-fn one_group_cannot_accept_more_than_the_existing_eight_admitted_slots() {
+fn full_eight_member_batch_routes_later_call_to_an_independent_group() {
 	let coordinator = Coordinator::default();
 	let root = Path::new("/synthetic/eight");
 	let mut full = FixedGroup::new(&coordinator, root, &owner(0));
-	for index in 1..MAX_METADATA_QUERIES {
+	for index in 1..METADATA_BATCH_SIZE {
 		full.add(&owner(index), budget());
 	}
 	let mut next = FixedGroup::new(&coordinator, root, &owner(8));
 	let frozen = full.freeze();
-	assert_eq!(frozen.owners.len(), MAX_METADATA_QUERIES);
+	assert_eq!(frozen.owners.len(), METADATA_BATCH_SIZE);
 	assert_eq!(coordinator.registry.lock().unwrap().collecting.len(), 1);
 	full.finish(Ok(replies(&frozen.owners)));
 	let next_frozen = next.freeze();
 	next.finish(Ok(replies(&next_frozen.owners)));
-	assert_eq!(full.results().len(), MAX_METADATA_QUERIES);
+	assert_eq!(full.results().len(), METADATA_BATCH_SIZE);
 	assert_eq!(next.results().len(), 1);
 }
 
@@ -469,7 +469,7 @@ fn closure_case(case: ClosureCase) {
 		.unwrap();
 	runtime.block_on(async {
 		let coordinator = Arc::new(Coordinator::default());
-		let slots = Arc::new(Semaphore::new(2));
+
 		let cleaned = Arc::new(AtomicBool::new(false));
 		let follower_saw_cleanup = Arc::new(AtomicBool::new(false));
 		let (leader_admitted, leader_ready) = tokio::sync::oneshot::channel();
@@ -489,29 +489,27 @@ fn closure_case(case: ClosureCase) {
 			};
 		let leader_coordinator = coordinator.clone();
 		let leader_cleaned = cleaned.clone();
-		let leader = tokio::spawn(run_metadata_query(
-			deadline,
-			slots.clone(),
-			move |deadline| {
-				let registration = leader_coordinator.register(
-					Path::new("/synthetic/closure"),
-					&owner(0),
-					deadline,
-					Instant::now() + Duration::from_secs(30),
-				)?;
-				let Registration::Leader {
-					mut completion,
-					waiter,
-				} = registration
-				else {
-					bail!("test leader unexpectedly joined another group");
-				};
-				let _ = leader_admitted.send(());
-				freeze_receiver
-					.recv()
-					.map_err(|_| anyhow!("test freeze gate closed"))?;
-				let frozen = completion.freeze()?;
-				let result = (|| {
+		let leader = tokio::spawn(run_metadata_query(deadline, move |deadline| {
+			let registration = leader_coordinator.register(
+				Path::new("/synthetic/closure"),
+				&owner(0),
+				deadline,
+				Instant::now() + Duration::from_secs(30),
+			)?;
+			let Registration::Leader {
+				mut completion,
+				waiter,
+			} = registration
+			else {
+				bail!("test leader unexpectedly joined another group");
+			};
+			let _ = leader_admitted.send(());
+			freeze_receiver
+				.recv()
+				.map_err(|_| anyhow!("test freeze gate closed"))?;
+			let frozen = completion.freeze()?;
+			let result =
+				(|| {
 					let _io = IoCleanup(leader_cleaned);
 					let _ = io_started.send(());
 					io_receiver
@@ -524,11 +522,10 @@ fn closure_case(case: ClosureCase) {
 						_ => Ok(replies(&frozen.owners)),
 					}
 				})();
-				completion.stage(result);
-				drop(completion);
-				waiter.result()
-			},
-		));
+			completion.stage(result);
+			drop(completion);
+			waiter.result()
+		}));
 		tokio::time::timeout(Duration::from_secs(5), leader_ready)
 			.await
 			.unwrap()
@@ -536,26 +533,21 @@ fn closure_case(case: ClosureCase) {
 		let follower_coordinator = coordinator.clone();
 		let follower_cleaned = cleaned.clone();
 		let follower_observed = follower_saw_cleanup.clone();
-		let follower = tokio::spawn(run_metadata_query(
-			deadline,
-			slots.clone(),
-			move |deadline| {
-				let registration = follower_coordinator.register(
-					Path::new("/synthetic/closure"),
-					&owner(1),
-					deadline,
-					Instant::now(),
-				)?;
-				let Registration::Follower(waiter) = registration else {
-					bail!("test follower failed to join the fixed group");
-				};
-				let _ = follower_admitted.send(());
-				let result = waiter.result();
-				follower_observed
-					.store(follower_cleaned.load(Ordering::Acquire), Ordering::Release);
-				result
-			},
-		));
+		let follower = tokio::spawn(run_metadata_query(deadline, move |deadline| {
+			let registration = follower_coordinator.register(
+				Path::new("/synthetic/closure"),
+				&owner(1),
+				deadline,
+				Instant::now(),
+			)?;
+			let Registration::Follower(waiter) = registration else {
+				bail!("test follower failed to join the fixed group");
+			};
+			let _ = follower_admitted.send(());
+			let result = waiter.result();
+			follower_observed.store(follower_cleaned.load(Ordering::Acquire), Ordering::Release);
+			result
+		}));
 		tokio::time::timeout(Duration::from_secs(5), follower_ready)
 			.await
 			.unwrap()
@@ -565,7 +557,7 @@ fn closure_case(case: ClosureCase) {
 			.await
 			.unwrap()
 			.unwrap();
-		assert_eq!(slots.available_permits(), 0);
+
 		assert!(!cleaned.load(Ordering::Acquire));
 		let mut leader = Some(leader);
 		let mut follower = Some(follower);
@@ -596,8 +588,7 @@ fn closure_case(case: ClosureCase) {
 			}
 			ClosureCase::SharedError | ClosureCase::LeaderUnwind => {}
 		}
-		assert_eq!(slots.available_permits(), 0);
-		assert!(slots.clone().try_acquire_owned().is_err());
+
 		assert!(!follower_saw_cleanup.load(Ordering::Acquire));
 		release_io.release();
 		for task in [leader, follower].into_iter().flatten() {
@@ -613,28 +604,29 @@ fn closure_case(case: ClosureCase) {
 				_ => assert!(result.is_ok()),
 			}
 		}
-		let drained =
-			tokio::time::timeout(Duration::from_secs(5), slots.clone().acquire_many_owned(2))
-				.await
-				.unwrap()
-				.unwrap();
+		tokio::time::timeout(Duration::from_secs(5), async {
+			while !cleaned.load(Ordering::Acquire) || !follower_saw_cleanup.load(Ordering::Acquire)
+			{
+				tokio::task::yield_now().await;
+			}
+		})
+		.await
+		.unwrap();
 		assert!(cleaned.load(Ordering::Acquire));
 		assert!(follower_saw_cleanup.load(Ordering::Acquire));
-		drop(drained);
-		assert_eq!(slots.available_permits(), 2);
 	});
 }
 
 #[test]
-fn cancelled_leader_async_handle_does_not_release_either_actual_closures_permit() {
+fn cancelled_leader_async_handle_preserves_original_io_custody() {
 	closure_case(ClosureCase::CancelLeader);
 }
 #[test]
-fn cancelled_follower_async_handle_keeps_its_permit_until_actual_leader_cleanup() {
+fn cancelled_follower_async_handle_preserves_original_leader_cleanup() {
 	closure_case(ClosureCase::CancelFollower);
 }
 #[test]
-fn both_async_timeouts_keep_all_admitted_permits_until_actual_io_cleanup() {
+fn both_async_timeouts_preserve_actual_io_cleanup() {
 	closure_case(ClosureCase::TimeoutBoth);
 }
 #[test]
@@ -763,4 +755,32 @@ fn completion_after_fixed_minimum_deadline_rejects_even_a_later_deadline_member(
 		assert!(error.is::<MetadataQueryDeadline>());
 		assert!(error.root_cause().is::<OriginalFailure>());
 	}
+}
+
+#[test]
+fn collecting_groups_exceed_the_old_eight_group_limit_with_private_replies() {
+	const GROUPS: usize = 16;
+	let coordinator = Coordinator::default();
+	let mut groups = Vec::new();
+	for index in 0..GROUPS {
+		let root = PathBuf::from(format!("/synthetic/unbounded-groups-{index}"));
+		groups.push(FixedGroup::new(&coordinator, &root, &owner(index)));
+	}
+	assert_eq!(
+		coordinator.registry.lock().unwrap().collecting.len(),
+		GROUPS
+	);
+	for (index, group) in groups.iter_mut().enumerate() {
+		let frozen = group.freeze();
+		assert_eq!(frozen.owners, vec![owner(index)]);
+		group.finish(Ok(ObservedUsage {
+			replies: vec![Ok(format!("root-{index}"))],
+			large: true,
+		}));
+		assert_eq!(
+			group.results().pop().unwrap().unwrap(),
+			format!("root-{index}")
+		);
+	}
+	assert!(coordinator.registry.lock().unwrap().collecting.is_empty());
 }

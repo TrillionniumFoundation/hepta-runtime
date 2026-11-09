@@ -22,7 +22,6 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
 use tokio_util::sync::CancellationToken;
 
 #[path = "rea_source_map_parser.rs"]
@@ -168,12 +167,8 @@ async fn inspect_with_roots(
 		generated_position: params.generated_position,
 	};
 	validate_request(&request)?;
-	static SLOTS: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
-	let permit = Arc::clone(SLOTS.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(2))))
-		.try_acquire_owned()
-		.context("source-map parser is busy; retry after another inspection finishes")?;
 	ensure_not_cancelled(cancellation)?;
-	// The descriptor-bound file read retains admission until it actually finishes.
+	// Finish the descriptor-bound file read before honoring cancellation.
 	let bytes =
 		super::rea_files::read_bounded(Path::new(&params.path), roots, MAX_MAP_BYTES as u64).await;
 	ensure_not_cancelled(cancellation)?;
@@ -209,7 +204,6 @@ async fn inspect_with_roots(
 	if output.len() > MAX_RESPONSE_BYTES {
 		bail!("source-map response exceeds 1 MiB; reduce the selected page");
 	}
-	drop(permit);
 	Ok(output)
 }
 

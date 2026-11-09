@@ -738,28 +738,72 @@ fn job(work: Work) -> Job {
 	Job { work, reply }
 }
 #[test]
-fn queue_bound_refuses_before_any_dispatch_or_storage_write() {
+fn queue_accepts_more_than_the_old_128_waiters_and_completes_every_reply() {
+	const BACKLOG: usize = 256;
 	let root = root();
-	let queue = Arc::new(Queue::default());
+	let (entered, wait_entered) = mpsc::channel();
+	let (resume, wait_resume) = mpsc::channel();
+	let wait_resume = Mutex::new(wait_resume);
+	let processed = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+	let observed = processed.clone();
+	let coordinator = Arc::new(
+		Coordinator::with_processor(Arc::new(move |works| {
+			if observed.fetch_add(works.len(), Ordering::SeqCst) == 0 {
+				entered.send(()).unwrap();
+				wait_resume
+					.lock()
+					.unwrap()
+					.recv_timeout(Duration::from_secs(10))
+					.unwrap();
+			}
+			works.into_iter().map(|_| Ok(Outcome::Finished)).collect()
+		}))
+		.unwrap(),
+	);
+	let first = coordinator.clone();
+	let first_path = root.path().to_owned();
+	let active =
+		std::thread::spawn(move || first.submit(begin(&first_path, 'a', "host_list", None)));
+	wait_entered.recv_timeout(Duration::from_secs(5)).unwrap();
+	let mut waiters = Vec::new();
 	{
-		let mut q = queue.pending.lock().unwrap();
-		for work in admissions(root.path(), MAX_QUEUED) {
-			q.jobs.push_back(job(work));
+		let mut pending = coordinator.queue.pending.lock().unwrap();
+		for work in admissions(root.path(), BACKLOG) {
+			let (reply, receive) = mpsc::channel();
+			pending.jobs.push_back(Job { work, reply });
+			waiters.push(receive);
 		}
 	}
-	let coordinator = Coordinator {
-		queue,
-		processor: Arc::new(|_| panic!("full queue must not execute")),
-		worker: None,
-	};
-	assert!(coordinator
-		.begin(root.path().into(), "a".repeat(64), "host_list".into(), None)
-		.is_err());
+	let next = coordinator.clone();
+	let next_path = root.path().to_owned();
+	let additional =
+		std::thread::spawn(move || next.submit(begin(&next_path, 'a', "host_list", None)));
+	let deadline = std::time::Instant::now() + Duration::from_secs(5);
+	while coordinator.queue.pending.lock().unwrap().jobs.len() != BACKLOG + 1 {
+		assert!(
+			std::time::Instant::now() < deadline,
+			"additional submission was not queued"
+		);
+		std::thread::yield_now();
+	}
+	assert!(waiters
+		.iter()
+		.all(|reply| matches!(reply.try_recv(), Err(mpsc::TryRecvError::Empty))));
+	resume.send(()).unwrap();
+	assert!(matches!(active.join().unwrap(), Ok(Outcome::Finished)));
+	assert!(matches!(additional.join().unwrap(), Ok(Outcome::Finished)));
+	for reply in waiters {
+		assert!(matches!(
+			reply.recv_timeout(Duration::from_secs(5)).unwrap(),
+			Ok(Outcome::Finished)
+		));
+	}
+	assert_eq!(processed.load(Ordering::SeqCst), BACKLOG + 2);
 	assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
-	assert_eq!(
-		coordinator.queue.pending.lock().unwrap().jobs.len(),
-		MAX_QUEUED
-	);
+	coordinator.queue.close();
+	assert!(coordinator
+		.submit(begin(root.path(), 'a', "host_list", None))
+		.is_err());
 }
 
 #[test]
@@ -869,7 +913,8 @@ fn idle_caller_owns_processor_until_ack_and_backlog_keeps_fifo() {
 }
 
 #[test]
-fn inline_processor_panic_closes_and_wakes_all_queued_waiters() {
+fn inline_processor_panic_closes_and_wakes_more_than_128_queued_waiters() {
+	const BACKLOG: usize = 256;
 	let root = root();
 	let path = root.path().to_owned();
 	let (entered, wait_entered) = mpsc::channel();
@@ -878,33 +923,52 @@ fn inline_processor_panic_closes_and_wakes_all_queued_waiters() {
 	let coordinator = Arc::new(
 		Coordinator::with_processor(Arc::new(move |_| {
 			entered.send(()).unwrap();
-			wait_resume.lock().unwrap().recv().unwrap();
+			wait_resume
+				.lock()
+				.unwrap()
+				.recv_timeout(Duration::from_secs(10))
+				.unwrap();
 			panic!("isolated inline fixture");
 		}))
 		.unwrap(),
 	);
 	let caller = coordinator.clone();
 	let active = std::thread::spawn(move || caller.submit(begin(&path, 'a', "host_list", None)));
-	wait_entered.recv_timeout(Duration::from_secs(60)).unwrap();
+	wait_entered.recv_timeout(Duration::from_secs(5)).unwrap();
 	let mut waiters = Vec::new();
 	{
 		let mut pending = coordinator.queue.pending.lock().unwrap();
-		for work in admissions(root.path(), MAX_QUEUED) {
+		for work in admissions(root.path(), BACKLOG) {
 			let (reply, receive) = mpsc::channel();
 			pending.jobs.push_back(Job { work, reply });
 			waiters.push(receive);
 		}
 	}
+	let next = coordinator.clone();
+	let next_path = root.path().to_owned();
+	let additional =
+		std::thread::spawn(move || next.submit(begin(&next_path, 'a', "host_list", None)));
+	let deadline = std::time::Instant::now() + Duration::from_secs(5);
+	while coordinator.queue.pending.lock().unwrap().jobs.len() != BACKLOG + 1 {
+		assert!(
+			std::time::Instant::now() < deadline,
+			"additional submission was not queued"
+		);
+		std::thread::yield_now();
+	}
+	resume.send(()).unwrap();
+	assert!(active.join().unwrap().is_err());
+	assert!(additional.join().unwrap().is_err());
+	assert!(waiters.into_iter().all(|waiter| {
+		waiter
+			.recv_timeout(Duration::from_secs(60))
+			.unwrap()
+			.is_err()
+	}));
+	assert!(!coordinator.is_ready());
 	assert!(coordinator
 		.submit(begin(root.path(), 'a', "host_list", None))
 		.is_err());
-	resume.send(()).unwrap();
-	assert!(active.join().unwrap().is_err());
-	assert!(waiters.into_iter().all(|waiter| waiter
-		.recv_timeout(Duration::from_secs(60))
-		.unwrap()
-		.is_err()));
-	assert!(!coordinator.is_ready());
 	assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
 }
 

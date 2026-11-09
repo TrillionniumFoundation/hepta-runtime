@@ -27,22 +27,19 @@ async fn slow_retirement(core: &Arc<Core>) {
 		)
 		.await
 		.unwrap();
-	let host_permit = old.permits.clone().acquire_owned().await.unwrap();
+	let host_permit = old.activity.lease().unwrap();
 	let original_child = master.owned.child.lock().await;
-	let (sender, receiver) = mpsc::channel(QUEUE);
-	let global = Arc::new(Semaphore::new(MAX_SESSIONS));
+	let (sender, receiver) = mpsc::unbounded_channel();
 	let task_core = core.clone();
-	let task_global = global.clone();
 	let mut actor = tokio::task::spawn_local(async move {
 		task_core
-			.run_with_dispatch(receiver, task_global, |core, request, permit| async move {
-				let _permit = permit;
+			.run_with_dispatch(receiver, |core, request| async move {
 				assert_eq!(request.host, "cold");
 				let result = core
 					.entry("fixture", &request.cancel, request.deadline)
 					.await
 					.and_then(|binding| {
-						assert_eq!(binding.permits.available_permits(), HOST_SESSIONS - 1);
+						assert_eq!(binding.activity.active(), 1);
 						Err(anyhow!("controlled cold-host dispatch completed"))
 					});
 				let _ = request.reply.send(result);
@@ -59,9 +56,7 @@ async fn slow_retirement(core: &Arc<Core>) {
 			deadline: Instant::now() + Duration::from_secs(3),
 			cancel: CancellationToken::new(),
 			reply,
-			admission: test_admission(),
 		})
-		.await
 		.unwrap();
 	let dispatched = timeout(Duration::from_secs(2), receive).await;
 	core.stop.cancel();
@@ -73,7 +68,7 @@ async fn slow_retirement(core: &Arc<Core>) {
 		stopped.is_pending(),
 		"actor escaped its original retirement"
 	);
-	assert_eq!(old.permits.available_permits(), HOST_SESSIONS - 1);
+	assert_eq!(old.activity.active(), 1);
 	drop(original_child);
 	timeout(Duration::from_secs(5), actor)
 		.await
@@ -84,11 +79,11 @@ async fn slow_retirement(core: &Arc<Core>) {
 		let entries = core.masters.lock().await;
 		let retained = entries.get("fixture").unwrap();
 		assert_eq!(retained.generation, generation);
-		assert!(Arc::ptr_eq(&retained.permits, &old.permits));
+		assert!(Arc::ptr_eq(&retained.activity, &old.activity));
 	}
 	assert!(core.children.lock().await.is_empty());
 	assert!(!master.socket.exists());
-	assert_eq!(global.available_permits(), MAX_SESSIONS);
+
 	drop(host_permit);
 	core.maintain().await.unwrap();
 	assert!(core.masters.lock().await.is_empty());
@@ -116,7 +111,7 @@ async fn concurrent_renewal(core: &Arc<Core>) {
 		.unwrap();
 	let mut renewed = core.entry("fixture", &cancel, deadline).await.unwrap();
 	assert_ne!(renewed.generation, generation);
-	assert!(Arc::ptr_eq(&renewed.permits, &old.permits));
+	assert!(Arc::ptr_eq(&renewed.activity, &old.activity));
 	core.stop.cancel();
 	drop(original_child);
 	timeout(Duration::from_secs(5), maintenance)
@@ -132,7 +127,7 @@ async fn concurrent_renewal(core: &Arc<Core>) {
 		let current = entries.get("fixture").unwrap();
 		assert_eq!(current.generation, renewed.generation);
 		assert!(current.ready.same_channel(&renewed.ready));
-		assert!(Arc::ptr_eq(&current.permits, &old.permits));
+		assert!(Arc::ptr_eq(&current.activity, &old.activity));
 	}
 	assert!(matches!(&*master.retirement.lock().await, Some(Ok(()))));
 	assert!(core.children.lock().await.is_empty());
@@ -146,15 +141,13 @@ async fn persistent_cleanup_failure(core: &Arc<Core>) {
 	std::fs::set_permissions(&master.socket, std::fs::Permissions::from_mode(0o600)).unwrap();
 	let replacement = profile::socket_stamp(&master.socket).unwrap();
 	assert_ne!(replacement, master.stamp);
-	let (_sender, receiver) = mpsc::channel(QUEUE);
+	let (_sender, receiver) = mpsc::unbounded_channel();
 	let task_core = core.clone();
 	let actor = tokio::task::spawn_local(async move {
 		task_core
-			.run_with_dispatch(
-				receiver,
-				Arc::new(Semaphore::new(MAX_SESSIONS)),
-				|_, _, _| async { panic!("no request was submitted") },
-			)
+			.run_with_dispatch(receiver, |_, _| async {
+				panic!("no request was submitted")
+			})
 			.await
 	});
 	let error = timeout(Duration::from_secs(5), actor)
@@ -184,14 +177,13 @@ async fn persistent_cleanup_failure(core: &Arc<Core>) {
 }
 
 async fn maintenance_panic(core: &Arc<Core>) {
-	let (_sender, receiver) = mpsc::channel(QUEUE);
+	let (_sender, receiver) = mpsc::unbounded_channel();
 	let task_core = core.clone();
 	let actor = tokio::task::spawn_local(async move {
 		task_core
 			.run_with_maintenance(
 				receiver,
-				Arc::new(Semaphore::new(MAX_SESSIONS)),
-				|_, _, _| async { panic!("no request was submitted") },
+				|_, _| async { panic!("no request was submitted") },
 				|_| async { panic!("injected maintenance owner panic") },
 			)
 			.await
@@ -221,17 +213,15 @@ async fn idle_rearm(core: &Arc<Core>) {
 	let observed = ticks.clone();
 	let release = CancellationToken::new();
 	let dispatched_release = release.clone();
-	let (sender, receiver) = mpsc::channel(QUEUE);
+	let (sender, receiver) = mpsc::unbounded_channel();
 	let task_core = core.clone();
 	let actor = tokio::task::spawn_local(async move {
 		task_core
 			.run_with_maintenance(
 				receiver,
-				Arc::new(Semaphore::new(MAX_SESSIONS)),
-				move |core, request, permit| {
+				move |core, request| {
 					let release = dispatched_release.clone();
 					async move {
-						let _permit = permit;
 						core.background(async move {
 							release.cancelled().await;
 							Ok(())
@@ -262,9 +252,7 @@ async fn idle_rearm(core: &Arc<Core>) {
 			deadline: Instant::now() + Duration::from_secs(3),
 			cancel: CancellationToken::new(),
 			reply,
-			admission: test_admission(),
 		})
-		.await
 		.unwrap();
 	assert!(timeout(Duration::from_secs(2), response)
 		.await
@@ -297,14 +285,13 @@ async fn idle_rearm(core: &Arc<Core>) {
 async fn idle_supervisor_failure(core: &Arc<Core>) {
 	let first_pass = Arc::new(AtomicUsize::new(0));
 	let observed = first_pass.clone();
-	let (_sender, receiver) = mpsc::channel(QUEUE);
+	let (_sender, receiver) = mpsc::unbounded_channel();
 	let task_core = core.clone();
 	let actor = tokio::task::spawn_local(async move {
 		task_core
 			.run_with_maintenance(
 				receiver,
-				Arc::new(Semaphore::new(MAX_SESSIONS)),
-				|_, _, _| async { panic!("no request was submitted") },
+				|_, _| async { panic!("no request was submitted") },
 				move |core| {
 					let observed = observed.clone();
 					async move {
@@ -332,14 +319,18 @@ async fn idle_supervisor_failure(core: &Arc<Core>) {
 async fn idle_pending_cancellation(core: &Arc<Core>) {
 	let ticks = Arc::new(AtomicUsize::new(0));
 	let observed = ticks.clone();
-	let (sender, receiver) = mpsc::channel(QUEUE);
+	let (sender, receiver) = mpsc::unbounded_channel();
 	let task_core = core.clone();
 	let actor = tokio::task::spawn_local(async move {
 		task_core
 			.run_with_maintenance(
 				receiver,
-				Arc::new(Semaphore::new(0)),
-				|_, _, _| async { panic!("global capacity must remain closed") },
+				|_, request| async move {
+					request.cancel.cancelled().await;
+					let _ = request
+						.reply
+						.send(Err(anyhow!("controlled active request cancelled")));
+				},
 				move |core| {
 					let observed = observed.clone();
 					async move {
@@ -357,14 +348,12 @@ async fn idle_pending_cancellation(core: &Arc<Core>) {
 	sender
 		.send(Request {
 			host: "fixture".into(),
-			command: "cancel-before-capacity".into(),
+			command: "cancel-active-request".into(),
 			input: vec![],
 			deadline: Instant::now() + Duration::from_secs(20),
 			cancel: cancel.clone(),
 			reply,
-			admission: test_admission(),
 		})
-		.await
 		.unwrap();
 	wait_until(|| ticks.load(Ordering::SeqCst) >= 2).await;
 	cancel.cancel();
@@ -374,7 +363,7 @@ async fn idle_pending_cancellation(core: &Arc<Core>) {
 		.unwrap();
 	assert!(
 		error.is_err(),
-		"cancelled waiter must release before its deadline"
+		"cancelled active request must finish before its deadline"
 	);
 	core.stop.cancel();
 	actor.await.unwrap().unwrap();
@@ -479,14 +468,13 @@ async fn idle_maintenance_benchmark() {
 		.run_until(async {
 			let ticks = Arc::new(AtomicUsize::new(0));
 			let observed = ticks.clone();
-			let (_sender, receiver) = mpsc::channel(QUEUE);
+			let (_sender, receiver) = mpsc::unbounded_channel();
 			let task_core = core.clone();
 			let actor = tokio::task::spawn_local(async move {
 				task_core
 					.run_with_maintenance(
 						receiver,
-						Arc::new(Semaphore::new(MAX_SESSIONS)),
-						|_, _, _| async { panic!("no request was submitted") },
+						|_, _| async { panic!("no request was submitted") },
 						move |core| {
 							let observed = observed.clone();
 							async move {
@@ -544,11 +532,10 @@ async fn background_notification_survives_an_unconsumed_empty_maintenance_result
 			let completed = Arc::new(Mutex::new(Some(completed)));
 			let (spawned, spawning) = oneshot::channel();
 			let spawned = Arc::new(Mutex::new(Some(spawned)));
-			let (_sender, receiver) = mpsc::channel(QUEUE);
+			let (_sender, receiver) = mpsc::unbounded_channel();
 			let mut actor = Box::pin(core.clone().run_with_maintenance(
 				receiver,
-				Arc::new(Semaphore::new(MAX_SESSIONS)),
-				|_, _, _| async { panic!("no request was submitted") },
+				|_, _| async { panic!("no request was submitted") },
 				move |core| {
 					let completed = completed.clone();
 					if let Some(spawned) = spawned.lock().unwrap().take() {

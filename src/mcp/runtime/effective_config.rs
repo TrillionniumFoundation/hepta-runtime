@@ -68,6 +68,7 @@ struct FileApiSummary {
 
 #[derive(Serialize)]
 struct SummaryLimits {
+	concurrent_execution: &'static str,
 	maximum_summary_host_entries: usize,
 	maximum_summary_response_bytes: usize,
 }
@@ -122,6 +123,7 @@ fn render_effective_config(config: Result<&RuntimeConfig>) -> Result<String> {
 		},
 		hosts,
 		limits: SummaryLimits {
+			concurrent_execution: "unbounded_by_runtime",
 			maximum_summary_host_entries: MAX_HOST_ENTRIES,
 			maximum_summary_response_bytes: MAX_SUMMARY_BYTES,
 		},

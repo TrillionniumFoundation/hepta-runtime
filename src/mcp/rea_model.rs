@@ -24,7 +24,6 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
@@ -184,11 +183,6 @@ async fn hash_prefix(file: &mut tokio::fs::File, length: u64) -> Result<String> 
 	Ok(digest_hex(&hash.finalize()))
 }
 
-fn model_admission() -> &'static tokio::sync::Semaphore {
-	static SLOTS: OnceLock<tokio::sync::Semaphore> = OnceLock::new();
-	SLOTS.get_or_init(|| tokio::sync::Semaphore::new(2))
-}
-
 struct ExpectedIdentity<'a> {
 	version: Option<&'a str>,
 	header: Option<&'a str>,
@@ -211,10 +205,6 @@ async fn execute_with_roots(
 	if let Some(digest) = expected.full {
 		validate_digest(digest, "expected_full_sha256")?;
 	}
-	let _slot = model_admission()
-		.acquire()
-		.await
-		.context("model artifact admission is closed")?;
 	let (mut file, before) = super::rea_files::open_confined(path, roots).await?;
 	let version = observed_version(&before)?;
 	if expected.version.is_some_and(|expected| expected != version) {
@@ -396,10 +386,6 @@ pub(super) async fn inspect_tensor_descriptor(
 	file: &mut tokio::fs::File,
 	tensor_name: &str,
 ) -> Result<Value> {
-	let _slot = model_admission()
-		.acquire()
-		.await
-		.context("model artifact admission is closed")?;
 	let before = file.metadata().await?;
 	let version = observed_version(&before)?;
 	let worker_file = file.try_clone().await?.into_std().await;
@@ -475,10 +461,6 @@ pub(super) async fn inspect_tensor_descriptor(
 /// The controller validates structure bytes on the same admitted descriptor;
 /// subsequent session operations use committed pages instead of this parser.
 pub(super) async fn inspect_snapshot_directory(file: &mut tokio::fs::File) -> Result<Value> {
-	let _slot = model_admission()
-		.acquire()
-		.await
-		.context("model parser admission closed")?;
 	let before = file.metadata().await?;
 	let version = observed_version(&before)?;
 	let worker_file = file.try_clone().await?.into_std().await;

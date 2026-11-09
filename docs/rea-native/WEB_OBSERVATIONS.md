@@ -22,8 +22,10 @@ Exact method, URL and status filters intersect; page offsets count matching
 entries and entry indices continue to address the original capture.
 
 The implementation supports at most 8 MiB of input, 10,000 entries, 256 rows per
-page and 1 MiB of encoded output. It retains two concurrent parser slots even
-if a caller cancels while a blocking parse is completing. Resource excess,
+page and 1 MiB of encoded output. Independent parser work has no runtime count
+ceiling; see [concurrent execution](../CONCURRENCY_POLICY.md). An already-running
+blocking parse retains its captured input until completion even if its caller
+cancels. Resource excess,
 malformed selected fields and changed source identity are errors, not empty
 successful inventories. This bounded in-process parser is for saved owned
 artifacts; it is not an independently sandboxed browser or hostile-file service.

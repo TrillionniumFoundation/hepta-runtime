@@ -1,0 +1,422 @@
+diff --git a/cmd/client/doctor_command.go b/cmd/client/doctor_command.go
+index ddd36246492154bfc899944dddb617afde7a846d..271d1edb742a3fbd6ecf5e1e20cfe49221ee37af 100644
+--- a/cmd/client/doctor_command.go
++++ b/cmd/client/doctor_command.go
+@@ -170,6 +170,11 @@ func runDoctor(fs *pflag.FlagSet, lookupEnv func(string) (string, bool)) doctorR
+ 				Summary: mainBinding.ServerURL.String(),
+ 			})
+ 			transport, err := tctransport.CloneDefaultWithBundle(cfg.TLS)
++			if err == nil {
++				// Diagnose the same private HTTP endpoint used by the runtime;
++				// the URL is only a logical origin when a Unix socket is set.
++				transport, err = tctransport.ApplyUnixSocketPath(transport, mainBinding.UnixSocketPath)
++			}
+ 			if err != nil {
+ 				checks = append(checks, doctorOAuthMetadataFailure("configure diagnostic HTTP transport: "+tclog.ErrorForLog(err)))
+ 			} else {
+diff --git a/pkg/dispatcher/internal/health.go b/pkg/dispatcher/internal/health.go
+index c4a412c336a39d5acde33b6074e622a83858b32e..ce965454fc72c96bf49463dc25490aa5e3b03595 100644
+--- a/pkg/dispatcher/internal/health.go
++++ b/pkg/dispatcher/internal/health.go
+@@ -50,13 +50,13 @@ type ActivityHealth struct {
+ 
+ func NewActivityHealth(cfg *runtimeconfig.MCPConfig) *ActivityHealth {
+ 	limit := 1
+-	if cfg != nil && cfg.MaxConcurrentRequests > 0 {
++	if cfg != nil && cfg.MaxConcurrentRequests >= 0 {
+ 		limit = cfg.MaxConcurrentRequests
+ 	}
+ 	// Bound diagnostics independently of the configured execution pool. The
+ 	// extra slot normally covers the existing inline submission fallback.
+ 	slots := 1024
+-	if limit < slots {
++	if limit > 0 && limit < slots {
+ 		slots = limit + 1
+ 	}
+ 	return &ActivityHealth{starts: make([]time.Time, slots), details: healthstate.DispatcherDetails{PoolLimit: limit}, state: "starting", limited: limit >= 1024}
+diff --git a/pkg/dispatcher/internal/queue_listener.go b/pkg/dispatcher/internal/queue_listener.go
+index 16ceaa999c9f9ca923f1844fb0e0fab68da793d1..c724e73471dcdae3d8dfe6c461ad2baa3734ffff 100644
+--- a/pkg/dispatcher/internal/queue_listener.go
++++ b/pkg/dispatcher/internal/queue_listener.go
+@@ -38,12 +38,17 @@ func (p *antsWorkerPool) ReleaseTimeout(timeout time.Duration) error {
+ 	return p.base.ReleaseTimeout(timeout)
+ }
+ 
+-func (p *antsWorkerPool) Cap() int { return p.base.Cap() }
++func (p *antsWorkerPool) Cap() int {
++	if capacity := p.base.Cap(); capacity >= 0 {
++		return capacity
++	}
++	return 0 // Match the configured representation of an unbounded pool.
++}
+ 
+ func (p *antsWorkerPool) Running() int { return p.base.Running() }
+ 
+ // QueueListener drains the polled command queue and forwards work to the processor
+-// using a bounded worker pool.
++// using a worker pool; a configured zero means unbounded execution.
+ type QueueListener struct {
+ 	logger         *slog.Logger
+ 	processor      Processor
+@@ -76,7 +81,7 @@ func newQueueListenerMetrics(meter metric.Meter, pool workerPool) (*queueListene
+ 
+ 	workerPoolCapacity, err := meter.Int64ObservableGauge(
+ 		"dispatcher_worker_pool_capacity",
+-		metric.WithDescription("Capacity of the dispatcher worker pool."),
++		metric.WithDescription("Configured capacity of the dispatcher worker pool; 0 means unbounded."),
+ 		metric.WithUnit("{count}"),
+ 	)
+ 	if err != nil {
+@@ -111,6 +116,11 @@ type poolFactory func(maxConcurrent int) (workerPool, error)
+ // NewQueueListener constructs a QueueListener with a worker pool sized according to the MCP configuration.
+ func NewQueueListener(logger *slog.Logger, processor Processor, queue controlplane.PolledCommandQueue, mcpConfig *runtimeconfig.MCPConfig, meterProvider *sdkmetric.MeterProvider) (*QueueListener, error) {
+ 	return newQueueListener(logger, processor, queue, mcpConfig, meterProvider, func(maxConcurrent int) (workerPool, error) {
++		if maxConcurrent == 0 {
++			// ants uses -1 for its native infinite pool. retrieveWorker then
++			// skips capacity waiting; this is not a large finite substitute.
++			maxConcurrent = -1
++		}
+ 		pool, err := ants.NewPool(maxConcurrent)
+ 		if err != nil {
+ 			return nil, fmt.Errorf("dispatcher queue listener: create worker pool: %w", err)
+@@ -132,8 +142,8 @@ func newQueueListener(logger *slog.Logger, processor Processor, queue controlpla
+ 	if mcpConfig == nil {
+ 		return nil, fmt.Errorf("dispatcher queue listener: nil MCP config")
+ 	}
+-	if mcpConfig.MaxConcurrentRequests <= 0 {
+-		return nil, fmt.Errorf("dispatcher queue listener: non-positive max concurrent requests")
++	if mcpConfig.MaxConcurrentRequests < 0 {
++		return nil, fmt.Errorf("dispatcher queue listener: negative max concurrent requests")
+ 	}
+ 	if meterProvider == nil {
+ 		return nil, fmt.Errorf("dispatcher queue listener: nil meter provider")
+diff --git a/pkg/dispatcher/internal/queue_listener_test.go b/pkg/dispatcher/internal/queue_listener_test.go
+index e044bd6b6ac05070744d84341614a5d7dd0c3532..49645e18d3b277fbad63c1054be0fe9d5587dee8 100644
+--- a/pkg/dispatcher/internal/queue_listener_test.go
++++ b/pkg/dispatcher/internal/queue_listener_test.go
+@@ -108,10 +108,10 @@ func TestNewQueueListenerValidationErrors(t *testing.T) {
+ 			},
+ 		},
+ 		{
+-			name: "non_positive_max_concurrent",
++			name: "negative_max_concurrent",
+ 			fn: func() error {
+ 				cfg := *mcpConfig
+-				cfg.MaxConcurrentRequests = 0
++				cfg.MaxConcurrentRequests = -1
+ 				_, err := NewQueueListener(logger, processor, queue, &cfg, meterProvider)
+ 				return err
+ 			},
+@@ -260,7 +260,7 @@ func TestNewQueueListenerRejectsNilPoolFactory(t *testing.T) {
+ 
+ func newTestMCPConfigQueue(t *testing.T, maxConcurrent int) *config.MCPConfig {
+ 	t.Helper()
+-	if maxConcurrent <= 0 {
++	if maxConcurrent < 0 {
+ 		maxConcurrent = 1
+ 	}
+ 	serverURL, err := url.Parse("https://example.com/mcp")
+diff --git a/pkg/runtimeconfig/config.go b/pkg/runtimeconfig/config.go
+index 8827cfa4ae0f6a56bac9ae330ca95c4285ac5e71..b7517c5963670c5d580df19c51807be540804e27 100644
+--- a/pkg/runtimeconfig/config.go
++++ b/pkg/runtimeconfig/config.go
+@@ -697,7 +697,7 @@ func RegisterFlags(fs *pflag.FlagSet, flavor Flavor) {
+ 	fs.StringArray("mcp.oauth-trusted-origin", nil, "Additional HTTP(S) origin trusted for OAuth discovery (repeatable; origin only, without a path) (env.MCP_OAUTH_TRUSTED_ORIGINS)")
+ 	fs.Duration("mcp.startup-wait-timeout", 0, "Maximum opt-in startup wait for the main MCP HTTP listener before first poll (env.MCP_STARTUP_WAIT_TIMEOUT)")
+ 	fs.Duration("mcp.connection-max-ttl", defaultMCPConnectionMaxTTL, "Maximum lifetime of MCP transport connections (env.MCP_CONNECTION_MAX_TTL)")
+-	fs.Int("mcp.max-concurrent-requests", defaultMCPMaxConcurrentRequests, "Maximum number of requests actively dispatched to the MCP server (env.MCP_MAX_CONCURRENT_REQUESTS)")
++	fs.Int("mcp.max-concurrent-requests", defaultMCPMaxConcurrentRequests, "Maximum number of requests actively dispatched to the MCP server; 0 means unbounded (env.MCP_MAX_CONCURRENT_REQUESTS)")
+ 	fs.StringArray("harpoon.target", nil, "Harpoon target mapping (format 'label=...,url=...,unix-socket=...,desc=...') (env.HARPOON_TARGETS)")
+ 	fs.Bool("harpoon.allow-plaintext-http", false, "Allow http:// harpoon targets and redirects (env.HARPOON_ALLOW_PLAINTEXT_HTTP)")
+ 	fs.Int("harpoon.max-response-bytes", DefaultHarpoonMaxResponseBytes, "Maximum harpoon response size in bytes (env.HARPOON_MAX_RESPONSE_BYTES)")
+@@ -2112,8 +2112,8 @@ func buildMCPConfig(fs *pflag.FlagSet, lookupEnv func(string) (string, bool), gl
+ 		if err != nil {
+ 			return MCPConfig{}, fmt.Errorf("invalid value for --mcp.max-concurrent-requests: %w", err)
+ 		}
+-		if val <= 0 {
+-			return MCPConfig{}, errors.New("mcp.max-concurrent-requests must be greater than zero")
++		if val < 0 {
++			return MCPConfig{}, errors.New("mcp.max-concurrent-requests must not be negative (0 means unbounded)")
+ 		}
+ 		maxConcurrent = val
+ 	} else if envVal, ok := lookupEnv("MCP_MAX_CONCURRENT_REQUESTS"); ok && envVal != "" {
+@@ -2121,8 +2121,8 @@ func buildMCPConfig(fs *pflag.FlagSet, lookupEnv func(string) (string, bool), gl
+ 		if err != nil {
+ 			return MCPConfig{}, fmt.Errorf("invalid MCP_MAX_CONCURRENT_REQUESTS: %w", err)
+ 		}
+-		if val <= 0 {
+-			return MCPConfig{}, errors.New("MCP_MAX_CONCURRENT_REQUESTS must be greater than zero")
++		if val < 0 {
++			return MCPConfig{}, errors.New("MCP_MAX_CONCURRENT_REQUESTS must not be negative (0 means unbounded)")
+ 		}
+ 		maxConcurrent = val
+ 	}
+diff --git a/cmd/client/hepta_unix_doctor_test.go b/cmd/client/hepta_unix_doctor_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..1dd9b7b81350855785c6181ddc509b53cccb65f7
+--- /dev/null
++++ b/cmd/client/hepta_unix_doctor_test.go
+@@ -0,0 +1,72 @@
++package main
++
++import (
++	"encoding/json"
++	"fmt"
++	"net"
++	"net/http"
++	"os"
++	"path/filepath"
++	"runtime"
++	"slices"
++	"strings"
++	"sync"
++	"testing"
++
++	"github.com/stretchr/testify/require"
++)
++
++func TestDoctorUsesConfiguredUnixHTTPBridge(t *testing.T) {
++	t.Parallel()
++	if runtime.GOOS == "windows" {
++		t.Skip("private Unix HTTP bridge is Unix-only")
++	}
++	// A short private directory also fits macOS's Unix-socket path limit.
++	directory, err := os.MkdirTemp("", "hepta-doctor-")
++	require.NoError(t, err)
++	defer func() { require.NoError(t, os.RemoveAll(directory)) }()
++	socket := filepath.Join(directory, "bridge.sock")
++	listener, err := net.Listen("unix", socket)
++	require.NoError(t, err)
++	require.NoError(t, os.Chmod(socket, 0o600))
++	var mu sync.Mutex
++	var paths []string
++	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		mu.Lock()
++		paths = append(paths, r.URL.Path)
++		mu.Unlock()
++		if r.URL.Path == "/mcp" {
++			w.WriteHeader(http.StatusMethodNotAllowed)
++			return
++		}
++		http.NotFound(w, r)
++	})}
++	defer func() { require.NoError(t, server.Close()) }()
++	go func() { _ = server.Serve(listener) }()
++	config := filepath.Join(directory, "profile.yaml")
++	require.NoError(t, os.WriteFile(config, []byte(fmt.Sprintf(`config_version: 1
++control_plane:
++  tunnel_id: tunnel_0123456789abcdef0123456789abcdef
++  api_key: env:HEPTA_TEST_CONTROL_KEY
++mcp:
++  server_urls:
++    - channel: main
++      url: http://localhost/mcp
++      unix_socket: %q
++  max_concurrent_requests: 0
++`, socket)), 0o600))
++	stdout, stderr, err := executeCommand(t, map[string]string{
++		"HOME": directory, "HEPTA_TEST_CONTROL_KEY": "private-test-control-key",
++	}, "doctor", "--config", config, "--health.listen-addr", "127.0.0.1:0", "--json")
++	require.NoError(t, err, stdout)
++	require.Empty(t, stderr)
++	var report doctorReport
++	require.NoError(t, json.Unmarshal([]byte(stdout), &report))
++	require.Equal(t, "ok", report.Result)
++	mu.Lock()
++	defer mu.Unlock()
++	require.Contains(t, paths, "/mcp")
++	require.True(t, slices.ContainsFunc(paths, func(path string) bool {
++		return strings.HasPrefix(path, "/.well-known/")
++	}), "OAuth absence must be checked on the same Unix HTTP endpoint")
++}
+diff --git a/pkg/dispatcher/internal/unbounded_concurrency_test.go b/pkg/dispatcher/internal/unbounded_concurrency_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..29aeee27b49cf0cb77a5da18ce1ad610b3a227b0
+--- /dev/null
++++ b/pkg/dispatcher/internal/unbounded_concurrency_test.go
+@@ -0,0 +1,108 @@
++package dispatcherinternal
++
++import (
++	"context"
++	"io"
++	"log/slog"
++	"sync"
++	"testing"
++	"time"
++
++	"github.com/stretchr/testify/require"
++	"go.opentelemetry.io/otel/sdk/metric/metricdata"
++
++	"github.com/openai/tunnel-client/pkg/controlplane"
++	"github.com/openai/tunnel-client/pkg/healthstate"
++	"github.com/openai/tunnel-client/pkg/types"
++)
++
++func TestZeroConcurrencyDispatchesBeyondPriorLimitsAndDrainsOriginalCommands(t *testing.T) {
++	t.Parallel()
++	const count = 64
++	block := make(chan struct{})
++	release := sync.OnceFunc(func() { close(block) })
++	defer release()
++	processor := &stubProcessor{
++		started:  make(chan types.RequestID, count),
++		finished: make(chan types.RequestID, count),
++		block:    block,
++	}
++	cfg := newTestMCPConfigQueue(t, 0)
++	meterProvider, reader := newManualMeterProviderWithReader(t)
++	queue := make(controlplane.PolledCommandQueue, count)
++	listener, err := NewQueueListener(slog.New(slog.NewTextHandler(io.Discard, nil)), processor, queue, cfg, meterProvider)
++	require.NoError(t, err)
++	activity := NewActivityHealth(cfg)
++	listener.ObserveHealth(nil, activity)
++	listener.Start(t.Context())
++	for index := range count {
++		queue <- newTestCommand(index)
++	}
++	close(queue)
++	for index := range count {
++		select {
++		case <-processor.started:
++		case <-time.After(5 * time.Second):
++			t.Fatalf("command %d did not enter while the prior commands remained active", index)
++		}
++	}
++	details := activity.Snapshot(time.Now()).Details.(healthstate.DispatcherDetails)
++	require.Zero(t, details.PoolLimit)
++	require.Equal(t, uint64(count), details.Active)
++	var metrics metricdata.ResourceMetrics
++	require.NoError(t, reader.Collect(context.Background(), &metrics))
++	assertGaugeValue(t, metrics, "dispatcher_worker_pool_capacity", 0)
++	waitDone := make(chan struct{})
++	go func() { listener.Wait(); close(waitDone) }()
++	select {
++	case <-waitDone:
++		t.Fatal("listener released original commands before they completed")
++	case <-time.After(25 * time.Millisecond):
++	}
++	release()
++	select {
++	case <-waitDone:
++	case <-time.After(5 * time.Second):
++		t.Fatal("listener did not finish draining original commands")
++	}
++	processor.requireCalls(t, count)
++	details = activity.Snapshot(time.Now()).Details.(healthstate.DispatcherDetails)
++	require.Zero(t, details.Active)
++	require.Equal(t, uint64(count), details.Completed)
++}
++
++func TestZeroConcurrencyPreservesCancellationAndOriginalDrain(t *testing.T) {
++	t.Parallel()
++	const count = 32
++	processor := &stubProcessor{started: make(chan types.RequestID, count), block: make(chan struct{})}
++	cfg := newTestMCPConfigQueue(t, 0)
++	queue := make(controlplane.PolledCommandQueue, count)
++	listener, err := NewQueueListener(slog.New(slog.NewTextHandler(io.Discard, nil)), processor, queue, cfg, newManualMeterProvider(t))
++	require.NoError(t, err)
++	activity := NewActivityHealth(cfg)
++	listener.ObserveHealth(nil, activity)
++	ctx, cancel := context.WithCancel(t.Context())
++	defer cancel()
++	listener.Start(ctx)
++	for index := range count {
++		queue <- newTestCommand(index)
++	}
++	for index := range count {
++		select {
++		case <-processor.started:
++		case <-time.After(5 * time.Second):
++			t.Fatalf("command %d never started", index)
++		}
++	}
++	cancel()
++	waitDone := make(chan struct{})
++	go func() { listener.Wait(); close(waitDone) }()
++	select {
++	case <-waitDone:
++	case <-time.After(5 * time.Second):
++		t.Fatal("canceled original commands were not drained")
++	}
++	details := activity.Snapshot(time.Now()).Details.(healthstate.DispatcherDetails)
++	require.Zero(t, details.Active)
++	require.Equal(t, uint64(count), details.Completed)
++}
+diff --git a/pkg/runtimeconfig/unbounded_concurrency_test.go b/pkg/runtimeconfig/unbounded_concurrency_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..706d2b49d439e56aaa95754ef05adf600f32fbf1
+--- /dev/null
++++ b/pkg/runtimeconfig/unbounded_concurrency_test.go
+@@ -0,0 +1,71 @@
++package runtimeconfig
++
++import "testing"
++
++func TestMCPConcurrencyZeroIsUnboundedAndPositiveLimitsRemainCompatible(t *testing.T) {
++	t.Parallel()
++	for _, tc := range []struct {
++		name string
++		args []string
++		env  string
++		want int
++		bad  bool
++	}{
++		{name: "upstream_default", want: 10},
++		{name: "zero_flag", args: []string{"--mcp.max-concurrent-requests=0"}},
++		{name: "zero_env", env: "0"},
++		{name: "positive_flag", args: []string{"--mcp.max-concurrent-requests=12"}, want: 12},
++		{name: "positive_env", env: "12", want: 12},
++		{name: "negative_flag", args: []string{"--mcp.max-concurrent-requests=-1"}, bad: true},
++		{name: "negative_env", env: "-1", bad: true},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			t.Parallel()
++			env := map[string]string{
++				"CONTROL_PLANE_TUNNEL_ID": envTunnelID,
++				"CONTROL_PLANE_API_KEY":   "test-control-key",
++				"MCP_SERVER_URL":          "https://example.com/mcp",
++			}
++			if tc.env != "" {
++				env["MCP_MAX_CONCURRENT_REQUESTS"] = tc.env
++			}
++			cfg, err := LoadRuntimeForTest(tc.args, lookupEnvMap(env))
++			if tc.bad {
++				if err == nil {
++					t.Fatal("negative concurrency limit was accepted")
++				}
++				return
++			}
++			if err != nil {
++				t.Fatalf("load concurrency configuration: %v", err)
++			}
++			if cfg.MCP.MaxConcurrentRequests != tc.want {
++				t.Fatalf("concurrency = %d, want %d", cfg.MCP.MaxConcurrentRequests, tc.want)
++			}
++		})
++	}
++}
++
++func TestMCPConcurrencyYAMLExplicitZeroSurvivesConfigurationMerge(t *testing.T) {
++	t.Parallel()
++	path := writeTempConfigFile(t, `
++config_version: 1
++control_plane:
++  tunnel_id: tunnel_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
++  api_key: env:TEST_CONTROL_KEY
++mcp:
++  server_urls:
++    - channel: main
++      url: https://example.com/mcp
++  max_concurrent_requests: 0
++`)
++	cfg, err := LoadRuntimeForTest([]string{"--config", path}, lookupEnvMap(map[string]string{
++		"TEST_CONTROL_KEY": "test-control-key",
++	}))
++	if err != nil {
++		t.Fatalf("load explicit zero YAML: %v", err)
++	}
++	if cfg.MCP.MaxConcurrentRequests != 0 {
++		t.Fatalf("explicit YAML zero was replaced by %d", cfg.MCP.MaxConcurrentRequests)
++	}
++}

@@ -13,13 +13,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
-	collections::VecDeque,
+	collections::{HashSet, VecDeque},
 	fs::File,
 	io::{Read, Write},
 	path::{Path, PathBuf},
-	sync::{Arc, Mutex, OnceLock},
+	sync::{Arc, Condvar, Mutex, OnceLock},
 };
-use tokio::sync::Semaphore;
 
 use super::{
 	config::runtime_config,
@@ -31,7 +30,6 @@ const MAX_GLOBAL: usize = 512;
 const MAX_RESULT_BYTES: usize = 64 * 1024;
 const MAX_RECORD_BYTES: usize = 96 * 1024;
 const MAX_PAGE_BYTES: usize = 64 * 1024;
-const MAX_RESULT_READ_WORKERS: usize = 4;
 const STORE_NAME: &str = "request-results";
 const ARCHIVE_STORE_NAME: &str = "request-results-v2";
 const ARCHIVE_NAME: &str = "archive";
@@ -40,11 +38,10 @@ const ARCHIVE_MARKER: &str = ".request-results-v2.json";
 pub const ID_META: &str = "io.hepta.runtime/request-v8";
 pub const ACK_META: &str = "io.hepta.runtime/retention-v8";
 static STORE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-static RECORD_LOCKS: OnceLock<[Mutex<()>; 256]> = OnceLock::new();
+static RECORD_LOCKS: OnceLock<RecordLocks> = OnceLock::new();
 type AnchorCache = VecDeque<(AnchorStamp, Arc<CachedAnchor>)>;
 static ANCHOR_CACHE: OnceLock<Mutex<AnchorCache>> = OnceLock::new();
 static POLICY_BINDING: OnceLock<String> = OnceLock::new();
-static RESULT_READ_SLOTS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -157,17 +154,64 @@ fn store_lock() -> Result<std::sync::MutexGuard<'static, ()>> {
 		.lock()
 		.map_err(|_| anyhow!("result state unavailable"))
 }
-fn record_lock(id: &str) -> Result<std::sync::MutexGuard<'static, ()>> {
+#[derive(Default)]
+struct RecordLockState {
+	active: HashSet<String>,
+	poisoned: HashSet<String>,
+}
+#[derive(Default)]
+struct RecordLocks {
+	state: Mutex<RecordLockState>,
+	changed: Condvar,
+}
+struct RecordGuard {
+	locks: &'static RecordLocks,
+	id: String,
+}
+impl Drop for RecordGuard {
+	fn drop(&mut self) {
+		let mut state = self
+			.locks
+			.state
+			.lock()
+			.unwrap_or_else(std::sync::PoisonError::into_inner);
+		state.active.remove(&self.id);
+		if std::thread::panicking() {
+			state.poisoned.insert(self.id.clone());
+		}
+		drop(state);
+		self.locks.changed.notify_all();
+	}
+}
+fn record_lock(id: &str) -> Result<RecordGuard> {
 	if !valid_id(id) {
 		bail!("invalid retained result identity");
 	}
-	let index = u8::from_str_radix(&id[..2], 16)? as usize;
 	trace::measure("result_record_lock", 1, None, || {
-		RECORD_LOCKS.get_or_init(|| std::array::from_fn(|_| Mutex::new(())))[index]
+		let locks = RECORD_LOCKS.get_or_init(RecordLocks::default);
+		let mut state = locks
+			.state
 			.lock()
-			.map_err(|_| anyhow!("result state unavailable"))
+			.map_err(|_| anyhow!("result state unavailable"))?;
+		loop {
+			if state.poisoned.contains(id) {
+				bail!("result state unavailable");
+			}
+			if !state.active.contains(id) {
+				state.active.insert(id.to_owned());
+				return Ok(RecordGuard {
+					locks,
+					id: id.to_owned(),
+				});
+			}
+			state = locks
+				.changed
+				.wait(state)
+				.map_err(|_| anyhow!("result state unavailable"))?;
+		}
 	})
 }
+
 fn new_id() -> Result<String> {
 	let mut data = [0u8; 32];
 	File::open("/dev/urandom")?.read_exact(&mut data)?;
@@ -354,6 +398,7 @@ fn safe_dto(tool: &str, result: &CallToolResult) -> Result<bool> {
 			) && keys(
 				&parsed["limits"],
 				&[
+					"concurrent_execution",
 					"maximum_summary_host_entries",
 					"maximum_summary_response_bytes",
 				],
@@ -400,12 +445,42 @@ fn safe_dto(tool: &str, result: &CallToolResult) -> Result<bool> {
 				return Ok(false);
 			};
 			let healthy = parsed["status"] == "healthy";
-			Ok(keys(&parsed,&["schema","host","platform","transport","status","reachable","authenticated","ssh_roundtrip_ms","timeout_ms","measurement","diagnostics_redacted"]) &&
-			parsed["schema"]=="hepta-host-health-v1" && parsed["transport"]=="ssh" && parsed["platform"]==serde_json::to_value(host.platform)? &&
-			["healthy","ssh_failed","invalid_response","transport_error","timeout"].iter().any(|v|parsed["status"]==*v) &&
-			parsed["reachable"]==healthy && parsed["authenticated"]==healthy && parsed["diagnostics_redacted"]==true &&
-			parsed["timeout_ms"]==10000 && parsed["ssh_roundtrip_ms"].as_f64().is_some_and(|v|v.is_finite()&&(0.0..=60000.0).contains(&v)) &&
-			parsed["measurement"]=="SSH invocation roundtrip including connection setup or reuse, authentication, remote shell startup and fixed response; not ICMP RTT.")
+			Ok(keys(
+				&parsed,
+				&[
+					"schema",
+					"host",
+					"platform",
+					"transport",
+					"status",
+					"reachable",
+					"authenticated",
+					"ssh_roundtrip_ms",
+					"timeout_ms",
+					"measurement",
+					"diagnostics_redacted",
+				],
+			) && parsed["schema"] == "hepta-host-health-v1"
+				&& parsed["transport"] == "ssh"
+				&& parsed["platform"] == serde_json::to_value(host.platform)?
+				&& [
+					"healthy",
+					"ssh_failed",
+					"invalid_response",
+					"transport_error",
+					"timeout",
+				]
+				.iter()
+				.any(|v| parsed["status"] == *v)
+				&& parsed["reachable"] == healthy
+				&& parsed["authenticated"] == healthy
+				&& parsed["diagnostics_redacted"] == true
+				&& parsed["timeout_ms"] == 10000
+				&& parsed["ssh_roundtrip_ms"]
+					.as_f64()
+					.is_some_and(|v| v.is_finite() && (0.0..=60000.0).contains(&v))
+				&& parsed["measurement"]
+					== "SSH invocation roundtrip including connection setup or reuse, authentication, remote shell startup and fixed response; not ICMP RTT.")
 		}
 		_ => Ok(false),
 	}
@@ -801,48 +876,51 @@ fn publish_anchor(root: &File, anchor: &ArchiveAnchor) -> Result<()> {
 #[cfg(unix)]
 fn open_archive_store(root: &Path, legacy: &File, create: bool) -> Result<Option<ArchiveStore>> {
 	let base = open_root(root)?;
-	let cached =
-		match read_anchor(&base) {
-			Ok(anchor) => anchor,
-			Err(error) if is_not_found(&error) => {
-				let _initialization = store_lock()?;
-				// Another stripe may have finished first-time initialization while this
-				// caller waited. Never interpret its newly anchored state as empty.
-				match read_anchor(&base) {
-					Ok(anchor) => anchor,
-					Err(error) if is_not_found(&error) => {
-						if read_archive_marker(legacy)?.is_some() {
-							bail!("result archive anchor missing; history never recreated automatically");
-						}
-						if !is_absent(&base, ARCHIVE_STORE_NAME)? {
-							bail!("unanchored result archive refused; history never recreated automatically");
-						}
-						if !create {
-							return Ok(None);
-						}
-						let store = make_directory(&base, ARCHIVE_STORE_NAME)?;
-						let archive = make_directory(&store, ARCHIVE_NAME)?;
-						let mut shards = Vec::with_capacity(256);
-						for index in 0..256 {
-							let directory = make_directory(&archive, &format!("{index:02x}"))?;
-							shards.push(directory_identity(&directory, true)?);
-						}
-						let anchor = ArchiveAnchor {
-							schema: 2,
-							root: directory_identity(&base, false)?,
-							legacy: directory_identity(legacy, true)?,
-							store: directory_identity(&store, true)?,
-							archive: directory_identity(&archive, true)?,
-							shards,
-						};
-						publish_anchor(&base, &anchor)?;
-						read_anchor(&base)?
+	let cached = match read_anchor(&base) {
+		Ok(anchor) => anchor,
+		Err(error) if is_not_found(&error) => {
+			let _initialization = store_lock()?;
+			// Another stripe may have finished first-time initialization while this
+			// caller waited. Never interpret its newly anchored state as empty.
+			match read_anchor(&base) {
+				Ok(anchor) => anchor,
+				Err(error) if is_not_found(&error) => {
+					if read_archive_marker(legacy)?.is_some() {
+						bail!(
+							"result archive anchor missing; history never recreated automatically"
+						);
 					}
-					Err(error) => return Err(error),
+					if !is_absent(&base, ARCHIVE_STORE_NAME)? {
+						bail!(
+							"unanchored result archive refused; history never recreated automatically"
+						);
+					}
+					if !create {
+						return Ok(None);
+					}
+					let store = make_directory(&base, ARCHIVE_STORE_NAME)?;
+					let archive = make_directory(&store, ARCHIVE_NAME)?;
+					let mut shards = Vec::with_capacity(256);
+					for index in 0..256 {
+						let directory = make_directory(&archive, &format!("{index:02x}"))?;
+						shards.push(directory_identity(&directory, true)?);
+					}
+					let anchor = ArchiveAnchor {
+						schema: 2,
+						root: directory_identity(&base, false)?,
+						legacy: directory_identity(legacy, true)?,
+						store: directory_identity(&store, true)?,
+						archive: directory_identity(&archive, true)?,
+						shards,
+					};
+					publish_anchor(&base, &anchor)?;
+					read_anchor(&base)?
 				}
+				Err(error) => return Err(error),
 			}
-			Err(error) => return Err(error),
-		};
+		}
+		Err(error) => return Err(error),
+	};
 	let anchor = &cached.anchor;
 	let store = open_at(
 		&base,
@@ -1439,25 +1517,12 @@ fn result_state(record: Option<&Record>, tool: &str) -> &'static str {
 	}
 }
 
-fn result_read_slots() -> Arc<Semaphore> {
-	RESULT_READ_SLOTS
-		.get_or_init(|| Arc::new(Semaphore::new(MAX_RESULT_READ_WORKERS)))
-		.clone()
-}
-
 async fn run_result_read(
-	slots: Arc<Semaphore>,
 	read: impl FnOnce() -> Result<Option<Record>> + Send + 'static,
 ) -> Result<Option<Record>> {
-	let permit = slots
-		.acquire_owned()
-		.await
-		.map_err(|_| anyhow!("request result unavailable to this scope or current policy"))?;
 	tokio::task::spawn_blocking(move || {
-		// A dropped caller cannot stop an already submitted blocking lookup.
-		// Keep capacity with that closure while queued and throughout actual I/O,
-		// including waiting for a record lock held by durable completion.
-		let _permit = permit;
+		// A dropped caller cannot stop a submitted blocking lookup. The closure
+		// owns the original I/O and per-record guard through actual completion.
 		read()
 	})
 	.await
@@ -1470,10 +1535,7 @@ pub async fn request_status(owner: &str, params: RequestStatusParams) -> Result<
 	let tool = identity.tool_name.clone();
 	let root = runtime_config()?.state_dir.clone();
 	let binding = policy_binding()?;
-	let record = run_result_read(result_read_slots(), move || {
-		lookup_at(&root, &identity, &binding)
-	})
-	.await?;
+	let record = run_result_read(move || lookup_at(&root, &identity, &binding)).await?;
 	page(
 		json!({"request_id":params.request_id,"tool_name":tool,"dispatch_state":observation.state,
 		"elapsed_ms":observation.elapsed_ms,"result_state":result_state(record.as_ref(),&tool),
@@ -1492,11 +1554,9 @@ pub async fn request_result(owner: &str, params: RequestResultParams) -> Result<
 	let identity = observation.identity;
 	let root = runtime_config()?.state_dir.clone();
 	let binding = policy_binding()?;
-	let record = run_result_read(result_read_slots(), move || {
-		lookup_at(&root, &identity, &binding)
-	})
-	.await?
-	.ok_or_else(|| anyhow!("original result was not retained; never replay automatically"))?;
+	let record = run_result_read(move || lookup_at(&root, &identity, &binding))
+		.await?
+		.ok_or_else(|| anyhow!("original result was not retained; never replay automatically"))?;
 	if record.state != ResultState::Stored {
 		bail!("original result unavailable in retained state; never replay automatically");
 	}

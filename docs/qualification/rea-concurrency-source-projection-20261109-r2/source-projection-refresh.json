@@ -1,0 +1,115 @@
+{
+  "schema": "hepta.rea.compatibility-source-projection-refresh.v1",
+  "date": "2026-11-09",
+  "scope": "Recompute current source mapping after versioned lifecycle tooling changes; no native/provider lifecycle execution or behavioral qualification",
+  "raw_reference_authenticity": "NOT_REVERIFIED",
+  "behavioral_qualification": "NOT_RERUN",
+  "previous_refresh": {
+    "path": "docs/qualification/rea-concurrency-source-projection-20261109-r1/source-projection-refresh.json",
+    "sha256": "05f3597aa88dc6440b9bc556ca62f204b710aa2a8f51c8403b71c21b309ca487"
+  },
+  "projection_functions": [
+    "published_pin",
+    "snapshot_rows",
+    "assemble_ledger"
+  ],
+  "previous_ledger": {
+    "path": "docs/qualification/rea-concurrency-source-projection-20261109-r2/REA_6_8_0_LEDGER.before.json",
+    "sha256": "0b52b1742d2bf6e7cf24c1214614e785b0c59034a2c07f53c4caa240ebe6d871",
+    "bytes": 779163,
+    "source_manifest_sha256": "0c1ab850999957ebbc9b2864e666e687cb2df0c469b0e850d83ce2a6a53fd7ca"
+  },
+  "current_ledger": {
+    "path": "docs/rea-native/compatibility/REA_6_8_0_LEDGER.json",
+    "sha256": "0b52b1742d2bf6e7cf24c1214614e785b0c59034a2c07f53c4caa240ebe6d871",
+    "bytes": 779163,
+    "source_manifest_sha256": "0c1ab850999957ebbc9b2864e666e687cb2df0c469b0e850d83ce2a6a53fd7ca"
+  },
+  "current_projection_changed": false,
+  "changed_source_paths": [],
+  "selection_note": "The existing runtime mapping does not select these lifecycle producer/consumer/test/document files. The lifecycle producer separately binds its complete execution-input snapshot; no mapping or qualification row was broadened.",
+  "lifecycle_profile": "rea-agents-6.8.0/inspect_elf_notes/linux-owned-lifecycle/v2",
+  "lifecycle_profile_execution": "NOT_RUN",
+  "lifecycle_inputs": [
+    {
+      "path": "scripts/rea_lifecycle_qualification.py",
+      "sha256": "7a80f5d540dba41fe9201c3dadd9acae4dc8b0828d674f079fd201d0d723bdb5",
+      "bytes": 27955,
+      "selected_by_existing_runtime_mapping": false
+    },
+    {
+      "path": "scripts/rea_lifecycle_evidence.py",
+      "sha256": "840f16956bf66f4e63bb4c839cccd03bb64889fa8237e1493309b22cc3aa5c2d",
+      "bytes": 43049,
+      "selected_by_existing_runtime_mapping": false
+    },
+    {
+      "path": "tests/rea_lifecycle_qualification_tests.py",
+      "sha256": "6d90bc8ce3541397bd421be4b4479d78c43c0776076a46286d24797dac5e7fd0",
+      "bytes": 28357,
+      "selected_by_existing_runtime_mapping": false
+    },
+    {
+      "path": "tests/rea_lifecycle_parallel_tests.py",
+      "sha256": "8608e5109d231410826342b1bd5b34fe233b2973a8634216d20c810532fb46f2",
+      "bytes": 17228,
+      "selected_by_existing_runtime_mapping": false
+    },
+    {
+      "path": "docs/rea-native/ELF_LIFECYCLE_QUALIFICATION.md",
+      "sha256": "348123515beb36e24a994fcfa113bf670aa07e8c37b6a7ecf768e1b4a2aa85da",
+      "bytes": 9954,
+      "selected_by_existing_runtime_mapping": false
+    }
+  ],
+  "preserved": {
+    "published_tools": 229,
+    "native_interfaces": 34,
+    "qualified_tools": 0,
+    "open_tools": 229,
+    "all_tool_rows_exactly_equal": true,
+    "all_other_top_level_fields_exactly_equal": true,
+    "all_other_runtime_fields_exactly_equal": true
+  },
+  "unchanged_input_files": [
+    {
+      "path": "docs/rea-native/compatibility/REA_6_8_0_INPUTS.json",
+      "sha256": "31b9fc41fd9e4a626072de0ea10446c25660eb347949270e40d6ce02b1abd119"
+    },
+    {
+      "path": "docs/rea-native/compatibility/REA_6_8_0_CAPABILITY_MAP.json",
+      "sha256": "e325cd33b95718e751d3f315307471c12ac42afa4bf1522c8ccf56b1cb5939dd"
+    },
+    {
+      "path": "docs/rea-native/compatibility/REA_6_8_0_ENVIRONMENT.json",
+      "sha256": "b1bd6c31cf869b4d27154e5221cd6e3358d6f6e96873629cdae77076f18488b4"
+    },
+    {
+      "path": "scripts/rea_compatibility_ledger.py",
+      "sha256": "3e6ccb06e7a41f39e7a5ce1d27adff62e37fc3302ee585f514de350d7113478a"
+    }
+  ],
+  "python_validation": {
+    "argv": [
+      "python",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-p",
+      "rea_*tests.py"
+    ],
+    "exit_code": 1,
+    "tests_run": 303,
+    "tests_passed": 302,
+    "errors": 1,
+    "log": {
+      "path": "docs/qualification/rea-concurrency-source-projection-20261109-r2/rea-python-gate.log",
+      "sha256": "c9c828e4bb09f29c6866b24e38dfea58c35232c0325ca7b5fc2d396617fdb74e",
+      "bytes": 3224
+    },
+    "environment_failure": "ActualOwnedProcessTests.test_real_descriptor_open_and_drain_with_same_live_owner: this cloud environment lacks /proc/<pid>/task/<pid>/children; missing inventories remain errors, never empty or PASS"
+  }
+}

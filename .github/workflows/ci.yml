@@ -136,6 +136,17 @@ jobs:
           /usr/bin/python3 -B -m unittest discover -s tools/x230/20261029 -p '*_tests.py' -v
           /usr/bin/python3 -B -m unittest discover -s tools/x230/20261030 -p '*_tests.py' -v
 
+      - name: Unbounded ingress and collector regressions
+        run: |
+          set -euo pipefail
+          /usr/bin/python3 -B tests/dc_readonly_inventory_collector_tests.py
+          /usr/bin/python3 -B tests/chatgpt_bridge_stdio_tests.py
+          /usr/bin/python3 -B tests/chatgpt_bridge_http_tests.py
+          /usr/bin/python3 -B tests/search_worker_tests.py
+          /usr/bin/python3 -B tests/tunnel_client_patch_tests.py
+          /usr/bin/python3 -B tests/tunnel_deployment_config_tests.py
+          /usr/bin/python3 -B tests/runtime_http_probe_tests.py
+
       - name: Test without remote filesystem in isolated processes
         run: |
           umask 022

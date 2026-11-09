@@ -64,10 +64,9 @@ fn prepared(path: &Path) -> PreparedAudit {
 
 #[tokio::test(flavor = "current_thread")]
 async fn blocked_start_publication_keeps_single_thread_executor_responsive() {
-	let slots = Arc::new(Semaphore::new(1));
 	let (gate, release) = gate();
 	let (entered, started) = tokio::sync::oneshot::channel();
-	let writer = tokio::spawn(run_start_io(slots.clone(), (), move || {
+	let writer = tokio::spawn(run_start_io((), move || {
 		let _ = entered.send(());
 		wait_gate(&gate)?;
 		Ok(7)
@@ -88,10 +87,9 @@ async fn blocked_start_publication_keeps_single_thread_executor_responsive() {
 		42
 	);
 	assert!(!writer.is_finished());
-	assert_eq!(slots.available_permits(), 0);
+
 	drop(release);
 	assert_eq!(writer.await.unwrap().unwrap(), 7);
-	assert_eq!(slots.available_permits(), 1);
 }
 
 #[cfg(unix)]
@@ -107,26 +105,22 @@ async fn cancelled_pending_writer_retains_same_key_lane_and_actual_owner_flock()
 	std::fs::create_dir(&registry).unwrap();
 	let lane = Arc::new(AsyncMutex::new(()));
 	let guard = Arc::new(lane.clone().lock_owned().await);
-	let slots = Arc::new(Semaphore::new(1));
+
 	let (gate, release) = gate();
 	let (entered, started) = tokio::sync::oneshot::channel();
 	let path = registry.join("original-start.json");
-	let writer = tokio::spawn(run_start_io(
-		slots.clone(),
-		(Some(guard), Arc::new(owner)),
-		move || {
-			let _ = entered.send(());
-			wait_gate(&gate)?;
-			save_record_at(&path, &record())
-		},
-	));
+	let writer = tokio::spawn(run_start_io((Some(guard), Arc::new(owner)), move || {
+		let _ = entered.send(());
+		wait_gate(&gate)?;
+		save_record_at(&path, &record())
+	}));
 	tokio::time::timeout(Duration::from_secs(5), started)
 		.await
 		.unwrap()
 		.unwrap();
 	writer.abort();
 	assert!(writer.await.unwrap_err().is_cancelled());
-	assert_eq!(slots.available_permits(), 0);
+
 	assert!(lane.try_lock().is_err());
 	assert_ne!(
 		unsafe { libc::flock(contender.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
@@ -135,8 +129,9 @@ async fn cancelled_pending_writer_retains_same_key_lane_and_actual_owner_flock()
 	);
 	let (entered, mut following_started) = tokio::sync::mpsc::unbounded_channel();
 	let following_registry = registry.clone();
+	let following_lane = lane.clone();
 	let following = tokio::spawn(async move {
-		let _lane = lane.lock_owned().await;
+		let _lane = following_lane.lock_owned().await;
 		entered.send(()).unwrap();
 		find_idempotent_in(
 			&following_registry,
@@ -161,7 +156,9 @@ async fn cancelled_pending_writer_retains_same_key_lane_and_actual_owner_flock()
 	assert_eq!(original.launch_state, "pending");
 	assert_eq!(std::fs::read_dir(registry).unwrap().count(), 1);
 	tokio::time::timeout(Duration::from_secs(5), async {
-		while slots.available_permits() != 1 {
+		while lane.try_lock().is_err()
+			|| unsafe { libc::flock(contender.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0
+		{
 			tokio::task::yield_now().await;
 		}
 	})
@@ -186,8 +183,7 @@ impl Drop for ActiveWriter {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn cancelled_start_waiters_do_not_expand_actual_writer_capacity() {
-	let slots = Arc::new(Semaphore::new(MAX_START_IO_WORKERS));
+async fn cancelled_start_waiters_keep_custody_without_limiting_other_writers() {
 	let (gate, release) = gate();
 	let active = Arc::new(AtomicUsize::new(0));
 	let maximum = Arc::new(AtomicUsize::new(0));
@@ -197,7 +193,7 @@ async fn cancelled_start_waiters_do_not_expand_actual_writer_capacity() {
 		let active = active.clone();
 		let maximum = maximum.clone();
 		let entered = entered.clone();
-		tokio::spawn(run_start_io(slots.clone(), (), move || {
+		tokio::spawn(run_start_io((), move || {
 			let count = active.fetch_add(1, Ordering::SeqCst) + 1;
 			let _active = ActiveWriter(active);
 			maximum.fetch_max(count, Ordering::SeqCst);
@@ -205,8 +201,8 @@ async fn cancelled_start_waiters_do_not_expand_actual_writer_capacity() {
 			wait_gate(&gate)
 		}))
 	};
-	let owners: Vec<_> = (0..MAX_START_IO_WORKERS).map(|_| launch()).collect();
-	for _ in 0..MAX_START_IO_WORKERS {
+	let owners: Vec<_> = (0..4).map(|_| launch()).collect();
+	for _ in 0..4 {
 		tokio::time::timeout(Duration::from_secs(5), started.recv())
 			.await
 			.unwrap()
@@ -216,73 +212,55 @@ async fn cancelled_start_waiters_do_not_expand_actual_writer_capacity() {
 		owner.abort();
 		assert!(owner.await.unwrap_err().is_cancelled());
 	}
-	assert_eq!(slots.available_permits(), 0);
-	let queued: Vec<_> = (0..2).map(|_| launch()).collect();
-	assert!(
-		tokio::time::timeout(Duration::from_millis(50), started.recv())
+	let independent: Vec<_> = (0..8).map(|_| launch()).collect();
+	for _ in 0..8 {
+		tokio::time::timeout(Duration::from_secs(5), started.recv())
 			.await
-			.is_err()
-	);
-	assert_eq!(active.load(Ordering::SeqCst), MAX_START_IO_WORKERS);
+			.unwrap()
+			.unwrap();
+	}
+	assert_eq!(active.load(Ordering::SeqCst), 12);
 	drop(release);
-	for waiter in queued {
-		waiter.await.unwrap().unwrap();
+	for writer in independent {
+		writer.await.unwrap().unwrap();
 	}
 	tokio::time::timeout(Duration::from_secs(5), async {
-		while active.load(Ordering::SeqCst) != 0
-			|| slots.available_permits() != MAX_START_IO_WORKERS
-		{
+		while active.load(Ordering::SeqCst) != 0 {
 			tokio::task::yield_now().await;
 		}
 	})
 	.await
 	.unwrap();
-	assert_eq!(maximum.load(Ordering::SeqCst), MAX_START_IO_WORKERS);
+	assert_eq!(maximum.load(Ordering::SeqCst), 12);
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn cancelled_or_closed_start_admission_never_submits_a_writer() {
-	let slots = Arc::new(Semaphore::new(1));
-	let held = slots.clone().acquire_owned().await.unwrap();
+async fn unpolled_start_publication_never_submits_a_writer() {
 	let calls = Arc::new(AtomicUsize::new(0));
 	let seen = calls.clone();
-	let waiting = tokio::spawn(run_start_io(slots.clone(), (), move || {
+	drop(run_start_io((), move || {
 		seen.fetch_add(1, Ordering::SeqCst);
 		Ok(())
 	}));
 	tokio::task::yield_now().await;
-	waiting.abort();
-	assert!(waiting.await.unwrap_err().is_cancelled());
-	drop(held);
-	slots.close();
-	let seen = calls.clone();
-	let error = run_start_io(slots, (), move || {
-		seen.fetch_add(1, Ordering::SeqCst);
-		Ok(())
-	})
-	.await
-	.unwrap_err();
-	assert_eq!(error.to_string(), "job start I/O capacity unavailable");
 	assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn start_worker_errors_and_panics_release_capacity_without_success() {
-	let slots = Arc::new(Semaphore::new(1));
-	let error = run_start_io(slots.clone(), (), || -> Result<()> {
+async fn start_worker_errors_and_panics_preserve_failure() {
+	let error = run_start_io((), || -> Result<()> {
 		bail!("original publication failure")
 	})
 	.await
 	.unwrap_err();
 	assert_eq!(error.to_string(), "original publication failure");
-	assert_eq!(slots.available_permits(), 1);
-	let error = run_start_io(slots.clone(), (), || -> Result<()> {
+
+	let error = run_start_io((), || -> Result<()> {
 		panic!("publication worker panic fixture")
 	})
 	.await
 	.unwrap_err();
 	assert_eq!(error.to_string(), "job start I/O worker unavailable");
-	assert_eq!(slots.available_permits(), 1);
 }
 
 #[test]
@@ -330,9 +308,10 @@ async fn pending_publication_saves_frozen_intent_before_recoverable_identity() {
 	let original_line = prepared.line.clone();
 	let observed_audit_path = audit_path.clone();
 	let observed_record_path = record_path.clone();
-	let slots = Arc::new(Semaphore::new(1));
-	let held = slots.clone().acquire_owned().await.unwrap();
-	let writer = tokio::spawn(run_start_io(slots, (), move || {
+
+	let (gate, release) = gate();
+	let writer = tokio::spawn(run_start_io((), move || {
+		wait_gate(&gate)?;
 		persist_pending_with(
 			prepared,
 			&record(),
@@ -366,7 +345,7 @@ async fn pending_publication_saves_frozen_intent_before_recoverable_identity() {
 	tokio::task::yield_now().await;
 	assert!(!audit_path.exists());
 	assert!(!record_path.exists());
-	drop(held);
+	drop(release);
 	writer.await.unwrap().unwrap();
 	assert!(temporary_parent.path().join("unrelated-testcase").is_file());
 	let saved = read_record_at(&record_path, "original-start").unwrap();
@@ -384,15 +363,6 @@ fn acknowledged_launch_is_owned_before_cancellation_even_with_a_busy_blocking_po
 		.build()
 		.unwrap();
 	runtime.block_on(async {
-		assert_eq!(MAX_START_OUTCOME_PUBLICATIONS, 8);
-		assert!(!Arc::ptr_eq(&start_io_slots(), &start_outcome_slots()));
-		let slots = Arc::new(Semaphore::new(MAX_START_OUTCOME_PUBLICATIONS));
-		let mut reserved = Vec::new();
-		for _ in 0..MAX_START_OUTCOME_PUBLICATIONS {
-			reserved.push(slots.clone().acquire_owned().await.unwrap());
-		}
-		let permit = reserved.pop().unwrap();
-		assert_eq!(slots.available_permits(), 0);
 		let (blocker_gate, blocker_release) = gate();
 		let (entered, started) = tokio::sync::oneshot::channel();
 		let blocker = tokio::task::spawn_blocking(move || {
@@ -423,7 +393,6 @@ fn acknowledged_launch_is_owned_before_cancellation_even_with_a_busy_blocking_po
 			preserve_launch_outcome_async(
 				&mut record,
 				Ok(acknowledgement()),
-				permit,
 				(Some(guard), Arc::new(owner)),
 				move |record| {
 					save_record_at(&publication_path, record)?;
@@ -446,7 +415,7 @@ fn acknowledged_launch_is_owned_before_cancellation_even_with_a_busy_blocking_po
 		waiter.abort();
 		assert!(waiter.await.unwrap_err().is_cancelled());
 		assert!(lane.try_lock().is_err());
-		assert_eq!(slots.available_permits(), 0);
+
 		assert_ne!(
 			unsafe { libc::flock(contender.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
 			0
@@ -457,8 +426,6 @@ fn acknowledged_launch_is_owned_before_cancellation_even_with_a_busy_blocking_po
 				.launch_state,
 			"pending"
 		);
-		// Closing admission after the ACK must not revoke its earlier reservation.
-		slots.close();
 		drop(blocker_release);
 		blocker.await.unwrap().unwrap();
 		tokio::time::timeout(Duration::from_secs(5), publication)
@@ -466,7 +433,9 @@ fn acknowledged_launch_is_owned_before_cancellation_even_with_a_busy_blocking_po
 			.unwrap()
 			.unwrap();
 		tokio::time::timeout(Duration::from_secs(5), async {
-			while slots.available_permits() != 1 {
+			while lane.try_lock().is_err()
+				|| unsafe { libc::flock(contender.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0
+			{
 				tokio::task::yield_now().await;
 			}
 		})
@@ -480,26 +449,21 @@ fn acknowledged_launch_is_owned_before_cancellation_even_with_a_busy_blocking_po
 			unsafe { libc::flock(contender.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
 			0
 		);
-		drop(reserved);
-		assert_eq!(slots.available_permits(), MAX_START_OUTCOME_PUBLICATIONS);
 	});
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn successful_remote_ack_survives_local_publication_failure() {
 	for failure in ["write", "panic"] {
-		let slots = Arc::new(Semaphore::new(1));
-		let permit = slots.clone().acquire_owned().await.unwrap();
 		let mut record = record();
 		let ack = acknowledgement();
-		let retained =
-			preserve_launch_outcome_async(&mut record, Ok(ack.clone()), permit, (), move |_| {
-				if failure == "write" {
-					bail!("private sync failure");
-				}
-				panic!("original outcome writer panic fixture")
-			})
-			.await;
+		let retained = preserve_launch_outcome_async(&mut record, Ok(ack.clone()), (), move |_| {
+			if failure == "write" {
+				bail!("private sync failure");
+			}
+			panic!("original outcome writer panic fixture")
+		})
+		.await;
 		assert_eq!(retained.value, ack);
 		assert!(retained.local_record_pending);
 		assert_eq!(record.id, "original-start");
@@ -511,7 +475,6 @@ async fn successful_remote_ack_survives_local_publication_failure() {
 			.as_str()
 			.unwrap()
 			.contains("existing job_id"));
-		assert_eq!(slots.available_permits(), 1);
 	}
 }
 
@@ -521,12 +484,10 @@ async fn uncertain_ack_publishes_only_the_original_unknown_identity() {
 		Ok(json!({"ok":true, "backend":"invalid"})),
 		Err(anyhow::anyhow!("transport unavailable")),
 	] {
-		let slots = Arc::new(Semaphore::new(1));
-		let permit = slots.acquire_owned().await.unwrap();
 		let saved = Arc::new(Mutex::new(None));
 		let observed = saved.clone();
 		let mut record = record();
-		let retained = preserve_launch_outcome_async(&mut record, ack, permit, (), move |record| {
+		let retained = preserve_launch_outcome_async(&mut record, ack, (), move |record| {
 			*observed.lock().unwrap() = Some(record.clone());
 			Ok(())
 		})
