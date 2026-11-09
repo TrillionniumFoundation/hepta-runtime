@@ -10,6 +10,10 @@ use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 use std::sync::OnceLock;
 
+#[path = "config_identity.rs"]
+mod config_identity;
+pub use config_identity::LoadedRuntimeConfig;
+
 static RUNTIME_CONFIG: OnceLock<InstalledRuntimeConfig> = OnceLock::new();
 static CONTROLLER_OWNER: OnceLock<ControllerLocks> = OnceLock::new();
 
@@ -127,6 +131,7 @@ pub struct RuntimeConfig {
 // including configurations whose normalized paths cannot be JSON serialized.
 struct InstalledRuntimeConfig {
 	config: RuntimeConfig,
+	load_provenance: Option<config_identity::LoadProvenance>,
 	#[cfg(any(target_os = "linux", test))]
 	policy_digest: OnceLock<std::result::Result<[u8; 32], serde_json::Error>>,
 }
@@ -135,6 +140,7 @@ impl InstalledRuntimeConfig {
 	fn new(config: RuntimeConfig) -> Self {
 		Self {
 			config,
+			load_provenance: None,
 			#[cfg(any(target_os = "linux", test))]
 			policy_digest: OnceLock::new(),
 		}
@@ -393,7 +399,41 @@ fn prepare_controller_state_dir(path: &Path) -> Result<PathBuf> {
 	Ok(canonical)
 }
 
-pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
+pub fn init_runtime(config: RuntimeConfig) -> Result<()> {
+	init_runtime_at(config, None, &RUNTIME_CONFIG, &CONTROLLER_OWNER)
+}
+
+/// Opt-in private evidence for this initialization, never an MCP response.
+/// A receipt records installed configuration, not listener or worker readiness.
+pub fn init_runtime_with_private_receipt(loaded: LoadedRuntimeConfig) -> Result<()> {
+	init_runtime_with_private_receipt_at(loaded, &RUNTIME_CONFIG, &CONTROLLER_OWNER).map(|_| ())
+}
+
+fn init_runtime_with_private_receipt_at(
+	loaded: LoadedRuntimeConfig,
+	runtime: &OnceLock<InstalledRuntimeConfig>,
+	controller_owner: &OnceLock<ControllerLocks>,
+) -> Result<PathBuf> {
+	config_identity::require_supported_platform()?;
+	let (config, provenance) = loaded.into_parts();
+	init_runtime_at(config, Some(provenance), runtime, controller_owner)?;
+	// Both sets must have succeeded. In particular, a partial initialization
+	// must not be turned into a positive receipt by inspecting only runtime.
+	let installed = runtime
+		.get()
+		.context("runtime configuration was not installed")?;
+	let owner = controller_owner
+		.get()
+		.context("controller ownership was not installed")?;
+	config_identity::publish_private_receipt(installed, owner)
+}
+
+fn init_runtime_at(
+	mut config: RuntimeConfig,
+	provenance: Option<config_identity::LoadProvenance>,
+	runtime: &OnceLock<InstalledRuntimeConfig>,
+	controller_owner: &OnceLock<ControllerLocks>,
+) -> Result<()> {
 	config.validate()?;
 	config.state_dir = prepare_controller_state_dir(&config.state_dir)?;
 	let owner = claim_controller_state_dir(&config.state_dir)?;
@@ -411,10 +451,12 @@ pub fn init_runtime(mut config: RuntimeConfig) -> Result<()> {
 			std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700))?;
 		}
 	}
-	RUNTIME_CONFIG
-		.set(InstalledRuntimeConfig::new(config))
+	let mut installed = InstalledRuntimeConfig::new(config);
+	installed.load_provenance = provenance;
+	runtime
+		.set(installed)
 		.map_err(|_| anyhow!("runtime config was already initialized"))?;
-	CONTROLLER_OWNER
+	controller_owner
 		.set(owner)
 		.map_err(|_| anyhow!("controller owner lock was already initialized"))
 }

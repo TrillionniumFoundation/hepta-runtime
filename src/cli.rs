@@ -50,6 +50,11 @@ pub enum Commands {
 		#[arg(long, value_name = "FILE")]
 		runtime_config: Option<PathBuf>,
 
+		/// Privately retain same-read configuration identity after successful installation (Unix).
+		/// Does not expose policy digests through MCP or certify service readiness.
+		#[arg(long, requires = "runtime_config")]
+		runtime_private_config_receipt: bool,
+
 		/// File containing the X-Hepta-Runtime-Token value for HTTP MCP requests.
 		#[arg(long, value_name = "FILE")]
 		auth_token_file: Option<PathBuf>,
@@ -133,3 +138,7 @@ mod tests;
 #[cfg(test)]
 #[path = "cli_recorded_core_tests.rs"]
 mod recorded_core_tests;
+
+#[cfg(test)]
+#[path = "cli_config_receipt_tests.rs"]
+mod config_receipt_tests;
