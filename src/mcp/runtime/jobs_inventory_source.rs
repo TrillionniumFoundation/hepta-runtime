@@ -33,6 +33,10 @@ pub(super) struct SourceProof {
 	records: Vec<RecordProof>,
 }
 
+#[path = "jobs_inventory_progress.rs"]
+mod progress;
+pub(super) use progress::Progress;
+
 impl SourceProof {
 	pub(super) fn retained_bytes(&self) -> usize {
 		self.names.capacity() * std::mem::size_of::<String>()
@@ -262,6 +266,7 @@ fn same_content_watch(
 	}
 }
 
+#[cfg(test)]
 fn scan<T>(
 	root: &Path,
 	budget: &Budget,
@@ -360,6 +365,7 @@ fn scan<T>(
 	))
 }
 
+#[cfg(test)]
 pub(super) fn observe<T>(
 	root: &Path,
 	limits: InventoryLimits,
@@ -401,11 +407,13 @@ pub(super) fn observe_owned<T>(
 	})
 }
 
+#[cfg(test)]
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum ValidationPath {
 	OriginalBytes,
 }
 
+#[cfg(test)]
 pub(super) fn validate(
 	root: &Path,
 	limits: InventoryLimits,
