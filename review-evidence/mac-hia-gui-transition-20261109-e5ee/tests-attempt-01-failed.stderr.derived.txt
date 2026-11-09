@@ -1,0 +1,116 @@
+test_baseline_same_bytes_inode_replacement_is_not_accepted (__main__.ActivationProtocol.test_baseline_same_bytes_inode_replacement_is_not_accepted) ... ok
+test_complete_contract_capture_binding_is_required (__main__.ActivationProtocol.test_complete_contract_capture_binding_is_required) ... ok
+test_concurrent_cooperating_lock_holder_blocks_before_effect (__main__.ActivationProtocol.test_concurrent_cooperating_lock_holder_blocks_before_effect) ... ok
+test_failed_preflight_cannot_be_admitted (__main__.ActivationProtocol.test_failed_preflight_cannot_be_admitted) ... ok
+test_foreign_owner_fence_is_not_overwritten (__main__.ActivationProtocol.test_foreign_owner_fence_is_not_overwritten) ... ok
+test_hardlink_symlink_and_duplicate_json_are_refused (__main__.ActivationProtocol.test_hardlink_symlink_and_duplicate_json_are_refused) ... ok
+test_helper_identity_is_not_inherited_from_runtime_pin (__main__.ActivationProtocol.test_helper_identity_is_not_inherited_from_runtime_pin) ... ok
+test_interrupted_owner_acknowledgement_recovers_only_exact_original_claim (__main__.ActivationProtocol.test_interrupted_owner_acknowledgement_recovers_only_exact_original_claim) ... ok
+test_interrupted_post_replace_receipt_is_observed_not_replayed (__main__.ActivationProtocol.test_interrupted_post_replace_receipt_is_observed_not_replayed) ... ok
+test_live_state_policy_or_budget_change_is_out_of_scope (__main__.ActivationProtocol.test_live_state_policy_or_budget_change_is_out_of_scope) ... ok
+test_mocked_mac_observer_binds_real_file_not_argv_pointer_or_credentials (__main__.ActivationProtocol.test_mocked_mac_observer_binds_real_file_not_argv_pointer_or_credentials) ... ERROR
+test_mocked_mac_observer_rejects_different_loaded_inode (__main__.ActivationProtocol.test_mocked_mac_observer_rejects_different_loaded_inode) ... ERROR
+test_mocked_mac_observer_rejects_start_identity_change (__main__.ActivationProtocol.test_mocked_mac_observer_rejects_start_identity_change) ... ERROR
+test_native_adapter_refuses_this_test_environment (__main__.ActivationProtocol.test_native_adapter_refuses_this_test_environment) ... ok
+test_owner_release_requires_external_loaded_config_and_checker_receipts (__main__.ActivationProtocol.test_owner_release_requires_external_loaded_config_and_checker_receipts) ... ok
+test_pending_operation_is_not_reapplied (__main__.ActivationProtocol.test_pending_operation_is_not_reapplied) ... ok
+test_pre_effect_failure_is_retained_and_can_only_abort_exact_baseline (__main__.ActivationProtocol.test_pre_effect_failure_is_retained_and_can_only_abort_exact_baseline) ... ok
+test_prepare_is_private_and_never_starts_service (__main__.ActivationProtocol.test_prepare_is_private_and_never_starts_service) ... ok
+test_process_start_drift_is_not_accepted (__main__.ActivationProtocol.test_process_start_drift_is_not_accepted) ... ok
+test_replaced_identical_owner_fence_is_refused (__main__.ActivationProtocol.test_replaced_identical_owner_fence_is_refused) ... ok
+test_rollback_is_conditional_and_cannot_be_repeated (__main__.ActivationProtocol.test_rollback_is_conditional_and_cannot_be_repeated) ... ok
+test_rollback_requires_separate_observation (__main__.ActivationProtocol.test_rollback_requires_separate_observation) ... ok
+test_rollback_timeout_before_restart_does_not_reuse_candidate_pid_as_new (__main__.ActivationProtocol.test_rollback_timeout_before_restart_does_not_reuse_candidate_pid_as_new) ... ok
+test_same_bytes_foreign_config_inode_refuses_rollback (__main__.ActivationProtocol.test_same_bytes_foreign_config_inode_refuses_rollback) ... ok
+test_successful_fake_cutover_remains_pending_real_loaded_readback (__main__.ActivationProtocol.test_successful_fake_cutover_remains_pending_real_loaded_readback) ... ok
+test_unknown_after_dispatch_is_observed_without_retry_then_explicit_rollback (__main__.ActivationProtocol.test_unknown_after_dispatch_is_observed_without_retry_then_explicit_rollback) ... ok
+test_unknown_or_expired_admission_never_touches_live_state (__main__.ActivationProtocol.test_unknown_or_expired_admission_never_touches_live_state) ... ok
+test_unknown_without_new_process_cannot_trigger_rollback_or_abort (__main__.ActivationProtocol.test_unknown_without_new_process_cannot_trigger_rollback_or_abort) ... ok
+test_whole_probe_configuration_binding_is_required (__main__.ActivationProtocol.test_whole_probe_configuration_binding_is_required) ... ok
+
+======================================================================
+ERROR: test_mocked_mac_observer_binds_real_file_not_argv_pointer_or_credentials (__main__.ActivationProtocol.test_mocked_mac_observer_binds_real_file_not_argv_pointer_or_credentials)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<candidate-checkout>/tests/mac_hia_activation_tests.py", line 467, in test_mocked_mac_observer_binds_real_file_not_argv_pointer_or_credentials
+    result = backend.observe()
+             ^^^^^^^^^^^^^^^^^
+  File "<candidate-checkout>/deploy/mac_hia_activation.py", line 338, in observe
+    raw, _ = snapshot(self.plist)
+             ^^^^^^^^^^^^^^^^^^^^
+  File "<python-runtime>/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<python-runtime>/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<python-runtime>/lib/python3.12/unittest/mock.py", line 1204, in _execute_mock_call
+    result = effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "<candidate-checkout>/tests/mac_hia_activation_tests.py", line 458, in no_token
+    return original_snapshot(path, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<candidate-checkout>/deploy/mac_hia_activation.py", line 114, in snapshot
+    S.require_trusted_publication_parent(parent)
+  File "<candidate-checkout>/deploy/stage_dc_successor.py", line 68, in require_trusted_publication_parent
+    raise PermissionError("publication parent requires trusted owner and no group/other writes")
+PermissionError: publication parent requires trusted owner and no group/other writes
+
+======================================================================
+ERROR: test_mocked_mac_observer_rejects_different_loaded_inode (__main__.ActivationProtocol.test_mocked_mac_observer_rejects_different_loaded_inode)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<candidate-checkout>/tests/mac_hia_activation_tests.py", line 475, in test_mocked_mac_observer_rejects_different_loaded_inode
+    backend.observe()
+  File "<candidate-checkout>/deploy/mac_hia_activation.py", line 338, in observe
+    raw, _ = snapshot(self.plist)
+             ^^^^^^^^^^^^^^^^^^^^
+  File "<python-runtime>/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<python-runtime>/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<python-runtime>/lib/python3.12/unittest/mock.py", line 1204, in _execute_mock_call
+    result = effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "<candidate-checkout>/tests/mac_hia_activation_tests.py", line 458, in no_token
+    return original_snapshot(path, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<candidate-checkout>/deploy/mac_hia_activation.py", line 114, in snapshot
+    S.require_trusted_publication_parent(parent)
+  File "<candidate-checkout>/deploy/stage_dc_successor.py", line 68, in require_trusted_publication_parent
+    raise PermissionError("publication parent requires trusted owner and no group/other writes")
+PermissionError: publication parent requires trusted owner and no group/other writes
+
+======================================================================
+ERROR: test_mocked_mac_observer_rejects_start_identity_change (__main__.ActivationProtocol.test_mocked_mac_observer_rejects_start_identity_change)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<candidate-checkout>/tests/mac_hia_activation_tests.py", line 480, in test_mocked_mac_observer_rejects_start_identity_change
+    backend.observe()
+  File "<candidate-checkout>/deploy/mac_hia_activation.py", line 338, in observe
+    raw, _ = snapshot(self.plist)
+             ^^^^^^^^^^^^^^^^^^^^
+  File "<python-runtime>/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<python-runtime>/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<python-runtime>/lib/python3.12/unittest/mock.py", line 1204, in _execute_mock_call
+    result = effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "<candidate-checkout>/tests/mac_hia_activation_tests.py", line 458, in no_token
+    return original_snapshot(path, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<candidate-checkout>/deploy/mac_hia_activation.py", line 114, in snapshot
+    S.require_trusted_publication_parent(parent)
+  File "<candidate-checkout>/deploy/stage_dc_successor.py", line 68, in require_trusted_publication_parent
+    raise PermissionError("publication parent requires trusted owner and no group/other writes")
+PermissionError: publication parent requires trusted owner and no group/other writes
+
+----------------------------------------------------------------------
+Ran 29 tests in 0.277s
+
+FAILED (errors=3)
