@@ -419,7 +419,9 @@ fn init_runtime_with_private_receipt_at(
 	init_runtime_at(config, Some(provenance), runtime, controller_owner)?;
 	// Both sets must have succeeded. In particular, a partial initialization
 	// must not be turned into a positive receipt by inspecting only runtime.
-	let installed = runtime.get().context("runtime configuration was not installed")?;
+	let installed = runtime
+		.get()
+		.context("runtime configuration was not installed")?;
 	let owner = controller_owner
 		.get()
 		.context("controller ownership was not installed")?;

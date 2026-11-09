@@ -250,9 +250,7 @@ mod unix {
 	}
 
 	fn open_relative(parent: &File, name: &CStr, flags: i32, mode: u32) -> Result<File> {
-		let fd = unsafe {
-			libc::openat(parent.as_raw_fd(), name.as_ptr(), flags, mode)
-		};
+		let fd = unsafe { libc::openat(parent.as_raw_fd(), name.as_ptr(), flags, mode) };
 		if fd < 0 {
 			return Err(std::io::Error::last_os_error())
 				.context("cannot open private startup receipt entry");

@@ -52,7 +52,11 @@ fn receipt_binds_original_buffer_after_path_replacement_and_normalization() {
 	let state = root.path().join("intermediate/../state");
 	let (path, original, loaded) = loaded_at(root.path(), &state);
 	let replacement = root.path().join("replacement.json");
-	fs::write(&replacement, fixture_bytes(&root.path().join("other-state"))).unwrap();
+	fs::write(
+		&replacement,
+		fixture_bytes(&root.path().join("other-state")),
+	)
+	.unwrap();
 	fs::rename(replacement, &path).unwrap();
 	assert_ne!(fs::read(&path).unwrap(), original);
 	let runtime = OnceLock::new();
@@ -127,8 +131,12 @@ fn input_whitespace_changes_raw_identity_without_changing_existing_policy_identi
 		qualified.policy_digest().unwrap()
 	);
 	assert_eq!(before, serde_json::to_vec(&qualified.config).unwrap());
-	assert!(!String::from_utf8(compact).unwrap().contains("allow_execute"));
-	assert!(String::from_utf8(before).unwrap().contains("\"allow_execute\":false"));
+	assert!(!String::from_utf8(compact)
+		.unwrap()
+		.contains("allow_execute"));
+	assert!(String::from_utf8(before)
+		.unwrap()
+		.contains("\"allow_execute\":false"));
 }
 
 #[test]
@@ -184,7 +192,12 @@ fn rejected_reinstallation_preserves_original_subject_and_receipt() {
 		original_owner
 	);
 	assert_eq!(fs::read(&receipt_path).unwrap(), receipt_bytes);
-	assert_eq!(fs::read_dir(receipt_path.parent().unwrap()).unwrap().count(), 1);
+	assert_eq!(
+		fs::read_dir(receipt_path.parent().unwrap())
+			.unwrap()
+			.count(),
+		1
+	);
 	assert!(!root.path().join("rejected-state/startup-receipts").exists());
 }
 
@@ -221,7 +234,9 @@ fn failed_second_installation_set_never_publishes_partial_initialization() {
 	let root = tempfile::tempdir().unwrap();
 	let old_state = prepare_controller_state_dir(&root.path().join("old-owner")).unwrap();
 	let owner = OnceLock::new();
-	assert!(owner.set(claim_controller_state_dir(&old_state).unwrap()).is_ok());
+	assert!(owner
+		.set(claim_controller_state_dir(&old_state).unwrap())
+		.is_ok());
 	let (_, _, loaded) = loaded_at(root.path(), &root.path().join("state"));
 	let runtime = OnceLock::new();
 	assert!(init_runtime_with_private_receipt_at(loaded, &runtime, &owner).is_err());
@@ -282,7 +297,12 @@ fn existing_pending_entries_cannot_replace_or_write_through_an_alias() {
 	for kind in ["file", "symlink", "hardlink"] {
 		let root = tempfile::tempdir().unwrap();
 		let (runtime, owner) = installed_at(root.path());
-		let namespace = runtime.get().unwrap().config.state_dir.join("startup-receipts");
+		let namespace = runtime
+			.get()
+			.unwrap()
+			.config
+			.state_dir
+			.join("startup-receipts");
 		fs::create_dir(&namespace).unwrap();
 		fs::set_permissions(&namespace, fs::Permissions::from_mode(0o700)).unwrap();
 		let id = "b".repeat(32);
@@ -308,7 +328,13 @@ fn invalid_instance_name_cannot_create_a_receipt_namespace() {
 	for id in ["../outside".to_owned(), "X".repeat(32), "a".repeat(33)] {
 		assert!(unix::publish_instance(runtime.get().unwrap(), owner.get().unwrap(), id).is_err());
 	}
-	assert!(!runtime.get().unwrap().config.state_dir.join("startup-receipts").exists());
+	assert!(!runtime
+		.get()
+		.unwrap()
+		.config
+		.state_dir
+		.join("startup-receipts")
+		.exists());
 }
 
 #[test]

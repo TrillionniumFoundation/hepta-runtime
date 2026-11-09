@@ -26,10 +26,12 @@ fn private_config_receipt_is_default_off() {
 
 #[test]
 fn private_config_receipt_requires_selected_config() {
-	let error =
-		Cli::try_parse_from(["hepta-runtime", "mcp", "--runtime-private-config-receipt"])
-			.unwrap_err();
-	assert_eq!(error.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+	let error = Cli::try_parse_from(["hepta-runtime", "mcp", "--runtime-private-config-receipt"])
+		.unwrap_err();
+	assert_eq!(
+		error.kind(),
+		clap::error::ErrorKind::MissingRequiredArgument
+	);
 }
 
 #[test]
