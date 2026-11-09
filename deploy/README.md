@@ -65,3 +65,26 @@ install `/etc/hepta-runtime/tunnel.env` with owner `root:hepta-runtime` and mode
 Never commit runtime API keys, private SSH keys or generated tunnel profiles.
 Desktop Commander remains the rescue path until local MCP discovery, tunnel
 health, reconnect, controller restart, target reboot and rollback tests pass.
+
+## Native readiness and release switches
+
+`runtime_http_probe.py --token-file /absolute/private/token` initializes a
+private HTTP MCP session, reads `effective_config`, checks the unbounded runtime
+policy and deletes its session. Use `--endpoint` for another loopback port.
+Its output contains only policy/schema and host count, never credentials or
+tool payloads. SSE responses are matched to their original JSON-RPC IDs and
+returned immediately; waiting for the connection's EOF can misdiagnose a
+healthy persistent MCP stream as a failed release.
+
+A running launchd PID alone is not readiness. Check the native listener,
+`/readyz`, the MCP policy and each active tunnel's dispatcher `pool_limit: 0`,
+readiness and control-plane health. Verify the actual mapped binary against
+the release receipt, not just the current symlink. Before replacing a stuck
+controller, preserve durable job/request identities; never delete receipts,
+signal payload process groups or replay original effects to repair readiness.
+Any bounded graceful-stop fallback must target only the controller service.
+On launchd, `bootout` may return before the old registration and process have
+fully gone away. Observe that retirement before re-registering the same label,
+and reconcile registration if a bootstrap acknowledgment races late removal;
+an accepted bootstrap alone does not prove a running replacement. Recheck
+the mapped binary and health after registration settles.
