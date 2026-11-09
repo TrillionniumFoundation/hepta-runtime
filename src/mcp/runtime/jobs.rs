@@ -153,7 +153,7 @@ pub struct ProcessListParams {
 pub struct ProcessListPageParams {
 	#[serde(default)]
 	pub host: Option<String>,
-	/// Opaque controller-local snapshot cursor. Changes, expiry or restart require a fresh first page.
+	/// Opaque controller-local cursor. Continue even an empty validation_pending page; changes, expiry or restart require a fresh first page.
 	#[serde(default)]
 	pub cursor: Option<String>,
 	/// At most 128 identities per page, additionally bounded to a 64 KiB wire response.
@@ -1143,7 +1143,7 @@ fn scan_registry_records_observed(
 	let mut bytes = Vec::new();
 	let mut digest = fingerprint.then(|| RequestHashWriter(Sha256::new()));
 	if let Some(digest) = &mut digest {
-		digest.write_all(b"hepta-job-registry-stream-v1\0")?;
+		digest.write_all(b"hepta-job-registry-original-stream-v2\0")?;
 	}
 	for entry in std::fs::read_dir(dir)? {
 		let entry = entry?;
@@ -1156,11 +1156,6 @@ fn scan_registry_records_observed(
 			.and_then(|name| name.to_str())
 			.context("invalid durable job record name")?;
 		let record = with_record_read_buffer(&mut bytes, |bytes| {
-			if fingerprint {
-				// The no-watch fallback fingerprints every decoded field. Preserve
-				// its owned decode and canonical serialization without projection.
-				return read_record_at_into(&path, expected_id, bytes).map(Some);
-			}
 			let projection = read_borrowed_record_at_into(&path, expected_id, bytes)?;
 			let selected = (projection.host == host
 				&& projection.idempotency_key.as_deref() == Some(key))
@@ -1168,21 +1163,29 @@ fn scan_registry_records_observed(
 					projection.host == target.identity.0
 						&& projection.idempotency_key.as_deref() == Some(target.identity.1.as_str())
 				});
-			if !selected {
-				return Ok(None);
-			}
 			// Keep only selected originals, borrowing from the descriptor-validated
 			// bytes until now. This neither rereads the file nor reparses the JSON.
-			Ok(Some(projection.into_owned()))
+			let record = if selected {
+				Some(projection.into_owned())
+			} else {
+				drop(projection);
+				None
+			};
+			if let Some(digest) = &mut digest {
+				// Both fallback passes still validate the complete schema and inode
+				// fences. Hash every original byte after releasing decoded borrows;
+				// materializing and reserializing all receipts adds no authority.
+				// Include lengths so filenames and adjacent records cannot alias.
+				digest.write_all(&(expected_id.len() as u64).to_le_bytes())?;
+				digest.write_all(expected_id.as_bytes())?;
+				digest.write_all(&(bytes.len() as u64).to_le_bytes())?;
+				digest.write_all(bytes)?;
+			}
+			Ok(record)
 		})?;
 		let Some(record) = record else { continue };
 		for target in &mut *cohort {
 			target.observe(&record)?;
-		}
-		if let Some(digest) = &mut digest {
-			digest.write_all(&(expected_id.len() as u64).to_le_bytes())?;
-			digest.write_all(expected_id.as_bytes())?;
-			serde_json::to_writer(digest, &record)?;
 		}
 		found =
 			select_idempotent_record(found.into_iter().chain(std::iter::once(record)), host, key)?;
@@ -1224,7 +1227,7 @@ fn scan_idempotent_binding_once(
 	after_scan();
 	if let Some(fingerprint) = fingerprint {
 		// Without a content watch no positive cache is authoritative. Two complete
-		// scans validate every receipt and compare decoded bindings, with memory
+		// scans validate every receipt and compare complete original bytes, with memory
 		// bounded by the selected record and one input record. Directory order is
 		// intentionally retained: reordering conservatively retries, never sorts
 		// an unbounded pathname collection or uses a commutative digest.

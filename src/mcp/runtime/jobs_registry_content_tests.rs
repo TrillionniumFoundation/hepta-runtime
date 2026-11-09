@@ -205,6 +205,21 @@ fn unavailable_content_watch_revalidates_every_receipt_without_timestamp_authori
 	assert!(fingerprint().is_err());
 }
 
+#[test]
+fn fallback_digest_covers_every_original_byte_even_when_decoded_fields_are_unchanged() {
+	let (root, _, first, second) = fixture();
+	let before = scan_registry_records(root.path(), "main", "first-key", true).unwrap();
+	let path = root.path().join(format!("{}.json", second.id));
+	let mut bytes = std::fs::read(&path).unwrap();
+	bytes.push(b' ');
+	rewrite(&path, &bytes);
+	let after = scan_registry_records(root.path(), "main", "first-key", true).unwrap();
+	assert_eq!(before.0.unwrap(), first);
+	assert_eq!(after.0.unwrap(), first);
+	assert_ne!(before.1, after.1);
+	assert_eq!(read_record_at(&path, &second.id).unwrap(), second);
+}
+
 fn no_content_watch(root: &Path) -> Result<RegistryEpoch> {
 	let mut epoch = registry_epoch(root)?;
 	epoch.content = None;
@@ -478,4 +493,52 @@ fn strict_cached_reader_rejects_fifo_swap_without_blocking() {
 		.unwrap_err()
 		.to_string();
 	assert!(error.contains("identity changed before read"), "{error}");
+}
+
+#[test]
+#[ignore = "explicit read-only real-registry benchmark; emits aggregate measurements only"]
+fn real_registry_readonly_lookup_benchmark() {
+	let root = PathBuf::from(
+		std::env::var_os("HEPTA_REGISTRY_BENCH_ROOT").expect("explicit benchmark root"),
+	);
+	let jobs = root.join("jobs");
+	let mut count = 0usize;
+	let mut bytes = 0u64;
+	let mut original = None;
+	for entry in std::fs::read_dir(&jobs).unwrap() {
+		let path = entry.unwrap().path();
+		if path.extension().and_then(|value| value.to_str()) != Some("json") {
+			continue;
+		}
+		count += 1;
+		bytes += std::fs::symlink_metadata(&path).unwrap().len();
+		if original.is_none() {
+			if let Some(id) = path.file_stem().and_then(|value| value.to_str()) {
+				if let Ok(record) = read_record_at(&path, id) {
+					if record.idempotency_key.is_some() {
+						original = Some(record);
+					}
+				}
+			}
+		}
+	}
+	let original = original.expect("at least one existing keyed receipt");
+	let key = original.idempotency_key.as_deref().unwrap();
+	let cache = Mutex::new(ReuseHitCache::default());
+	let absent = format!("readonly-registry-benchmark-{}", std::process::id());
+	for (operation, candidate) in [
+		("new_key", absent.as_str()),
+		("same_key_first", key),
+		("same_key_repeat", key),
+	] {
+		let started = std::time::Instant::now();
+		let result = find_idempotent_in(&jobs, &original.host, candidate, &cache);
+		println!(
+			"{}",
+			json!({"benchmark":"readonly_registry_lookup", "operation":operation,
+			"records":count, "source_bytes":bytes, "elapsed_ms":started.elapsed().as_millis(),
+			"accepted":result.is_ok(), "absent":matches!(&result, Ok(None)),
+			"original_binding":matches!(&result, Ok(Some(record)) if record.id == original.id)})
+		);
+	}
 }
