@@ -21,13 +21,15 @@ work for shutdown and cleanup; they do not grant or deny execution permits.
 | Audit persistence | 128 queued submissions; 4 file-sync workers and a 32-slot queue | Submissions retain order; each original file sync is joined without a shared worker cap. |
 | Configured-host read-only inventory | 2 host workers and 16 configured hosts | Every configured host starts its own original observation worker. All started owners are joined, including when another host or result write fails. |
 | Retained-result reads | 4 workers and 256 hashed record locks | Independent reads run concurrently; mutations lock only the exact result identity. |
-| Search | 8 active globally and 4 per owner, including the target Python worker | Original searches retain their receipts without an active-count gate. |
+| Search | 8 active globally, 4 per owner and 1024 total retained receipts, including the target Python worker | Original searches retain their receipts without an active or retained-receipt count gate. |
 | PTYs | 128 active sessions | Active sessions have no fixed count ceiling; only closed cache entries are pruned. |
 | Document and REA workers | Fixed parser/import/view gates, typically 2; APK serialization and an 8-call queue | Independent workers execute without those admission gates. |
 | Evidence encoding | One encoder at a time | Each original encoder retains ownership; encoded-byte accounting remains accurate across concurrent encoders. |
-| Resident weight workers | Profile active-session count, default 1 and validation maximum 8 | Independent sessions are admitted; a legacy serialized field is retained only for existing profile identity compatibility. |
-| Python operator ingress | 16 active requests, 2 cancellation workers, bounded queues and serialized independent stdio calls | Each original request and cancellation retains an independent worker; session transitions still preserve their required ordering. |
-| Hepta systemd job slice | 128 aggregate processes/threads | The aggregate slice uses `TasksMax=infinity`; a job's explicit individual resource contract is unchanged. |
+| Resident weight workers | Profile active-session count, default 1 and validation maximum 8; 1024 retained session intents | Independent sessions are admitted without an active or retained-intent count gate. Original intents remain retained; a legacy serialized field is used only for existing profile identity compatibility. |
+| Python operator ingress | 16 active requests, 2 cancellation workers, bounded queues, serialized independent stdio calls and 4096 legacy pending/retired request IDs | Each original request and cancellation retains an independent worker. Legacy IDs and retired-request tombstones remain complete without a count gate; session transitions still preserve their required ordering. |
+| Hepta systemd job slice | 128 aggregate processes/threads | The aggregate slice uses `TasksMax=infinity`. |
+| Isolated systemd job | 64 processes/threads, including its supervisor | Each new job unit uses `TasksMax=infinity`; its configured CPU, memory and timeout properties remain enforced. |
+| Isolated job registry | New jobs refused at 128 retained directories, including active jobs | Preparing a new job does not count or remove other jobs' records. Exact job IDs still bind the original request and receipts. |
 | Packaged tunnel-client | Template count 4; stock omitted-config default 10 | The pinned v0.0.19 patch makes an explicit configured zero select the underlying pool's unbounded mode. |
 
 The removed SSH defaults originated in small-host qualification work. They
@@ -48,10 +50,11 @@ Concurrent execution does not change these contracts:
   encoders or store transactions before the original work reaches its cleanup
   boundary. Shutdown drains observed activity; it does not infer completion
   from permit availability.
-- Payload, response, archive, timeout and retained-history bounds remain
-  separate contracts. Retained model snapshots and durable no-replay keys are
-  stored objects, not active execution slots. Existing receipts are not deleted
-  to admit more work.
+- Payload, response, archive and timeout bounds remain separate contracts.
+  Retained-history limits must not become admission gates by counting active
+  jobs or ownership records. Retained model snapshots and durable no-replay
+  keys are stored objects, not active execution slots. Existing receipts are
+  not deleted to admit more work.
 - Per-request streaming batches and internal sort/scan fan-out are algorithmic
   working sets. Their sizes do not limit how many independent requests execute.
 - CPU, memory, file descriptors, executor threads, remote provider capacity and
@@ -98,11 +101,27 @@ service. Authentication and transport cancellation remain unchanged.
 
 ## Verification
 
+The [initial concurrency verification](qualification/concurrency-20261109/README.md)
+binds implementation commit `826c462699a27ed6afa83298440acb732b726af5` and its
+recorded binaries. A subsequent review found the isolated-job 64-task and
+128-record gates, the search and weight 1024-record gates, and the Python
+facade's 4096-ID gate still present in that source. Those omissions are removed
+in the later changes described above. The earlier Rust suite and Mac/ROG
+native probes do not verify these later changes. The
+[r4 source checkpoint](qualification/rea-concurrency-source-projection-20261109-r4/README.md)
+refreshes only the current REA source mapping; it does not attest to a new
+runtime build, deployment, throughput result or external-tool qualification.
+
 Regression tests cross the former limits with simultaneous original work,
 including same-host SSH children, observation actor queues, exact-key job and
 result locks, metadata reads, collecting groups, indexes, file syncs, active
 searches, PTYs, weight sessions and evidence encoders. They also retain the
 cancel, timeout, partial-spawn, panic, original-result and cleanup assertions.
+The isolated-job registry fixture admits another job with 129 existing records
+and verifies that the original record, spec and terminal-receipt bytes and
+file identities remain unchanged. The systemd command fixture covers both
+captured and PTY execution, network policies and configured resource values;
+it verifies `TasksMax=infinity` alongside the unchanged isolation properties.
 
 Run the Rust suite with the process-isolated commands in
 [Runtime test strategy](RUNTIME_TEST_STRATEGY.md). Isolation prevents unrelated

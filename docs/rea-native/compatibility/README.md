@@ -28,10 +28,16 @@ The [subsequent lifecycle v2 source checkpoint](../../qualification/rea-concurre
 preserves the intermediate ledger and records the unchanged regenerated
 projection. The versioned parallel/cancellation producer and consumer do not
 reinterpret historical v1 observations or qualify a new runtime binary.
-The [final source and response-text checkpoint](../../qualification/rea-concurrency-source-projection-20261109-r3/README.md)
+The [r3 source and response-text checkpoint](../../qualification/rea-concurrency-source-projection-20261109-r3/README.md)
 also binds the current request-start description and the explicit APK parser
 remediation-text change. It preserves both earlier checkpoints and all frozen
 qualification fields.
+The [r4 retained-record admission checkpoint](../../qualification/rea-concurrency-source-projection-20261109-r4/README.md)
+archives the exact ledger preceding the later removal of the isolated-job task
+and registry gates, then refreshes its two already-mapped helper source/test
+hashes. The additional search, weight and facade changes are identified as
+outside this REA mapping. Historical `826c462` validation does not cover these
+later changes; all 229 qualification rows remain OPEN.
 
 ## Reproduce full input authentication
 

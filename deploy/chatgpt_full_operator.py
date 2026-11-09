@@ -24,7 +24,6 @@ from mcp_tool_contract import ToolContract,canonical
 
 MAX_REQUEST=4*1024*1024
 MAX_RESPONSE=16*1024*1024
-MAX_RETIRED_IDS=4096
 CANCEL_TIMEOUT=2
 SHUTDOWN_TIMEOUT=3
 KEEPALIVE_INTERVAL=120
@@ -193,7 +192,7 @@ class NativeProxy:
         self._legacy_state_lost=False;self._credential_scope_proofs={}
 
     def _identity_digest(self,ident):
-        # Fixed-size retired identities bound memory even for large integer IDs.
+        # Each retained identity uses a fixed-size digest even for large integer IDs.
         return (type(ident),hashlib.sha256(canonical(ident)).digest())
 
     def _reserve(self,request,remember=False):
@@ -207,9 +206,6 @@ class NativeProxy:
             if remember:
                 if self._identity_digest(ident) in self._retired:
                     return None,error(ident,-32600,'Request identity cannot be reused in this facade process',outcome='not_submitted',automatic_retry=False)
-                pending_retirements=sum(c.remember for c in self._active.values())
-                if len(self._retired)+pending_retirements>=MAX_RETIRED_IDS:
-                    return None,error(ident,-32603,'Bounded request identity history is full; reconnect with a new facade process',outcome='not_submitted',automatic_retry=False)
             context=ActiveRequest(request,self._owner,remember);self._active[key]=context
             return context,None
 

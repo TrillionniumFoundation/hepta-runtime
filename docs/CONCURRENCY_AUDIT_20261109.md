@@ -1,5 +1,13 @@
 # Concurrent execution audit — 2026-11-09
 
+> Scope correction from the subsequent review: this entry records revision
+> `826c462` and its first deployment. That revision still contained the isolated
+> job 64-task/128-record gates, search and weight 1024-record gates, and legacy
+> facade 4096-ID gate. The supplemental changes remove them. See the current
+> [concurrency policy](CONCURRENCY_POLICY.md) and
+> [r4 source checkpoint](qualification/rea-concurrency-source-projection-20261109-r4/README.md).
+> The tests and deployed binary below do not verify the later native changes.
+
 ## Scope and result
 
 Reviewed native runtime revision `826c462699a27ed6afa83298440acb732b726af5`
