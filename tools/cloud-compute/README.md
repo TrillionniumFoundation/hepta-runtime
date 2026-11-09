@@ -1,16 +1,16 @@
 # Hepta cloud compute adapters
 
-This directory publishes the accepted compute router 0.1.0, Colab scoped-profile
-adapter v4, and Kaggle batch adapter 0.1.7 as a standalone Python toolchain.
+This directory contains compute router 0.1.1, the Colab scoped-profile adapter
+v5, and Kaggle batch adapter 0.1.8 as a standalone Python toolchain.
 A HeptaRuntime controller invokes the installed entry points on a configured
 Linux worker. Provider credentials remain in the worker's existing private
 account stores.
 
-| Component | Directory | Offline regression suite |
+| Component | Directory | Main responsibility |
 | --- | --- | --- |
-| Router 0.1.0 | `router` | 40 tests |
-| Colab scoped profiles v4 | `colab` | 31 tests |
-| Kaggle batch 0.1.7 | `kaggle` | 72 tests |
+| Router 0.1.1 | `router` | Durable request binding, resource ownership, collection and cleanup |
+| Colab scoped profiles v5 | `colab` | Account-scoped runtime jobs and immutable runner compatibility |
+| Kaggle batch 0.1.8 | `kaggle` | Exact notebook-version jobs and bounded artifact retrieval |
 
 These suites test state, concurrency, identity, recovery and artifact integrity
 with local fixtures. They submit no cloud workloads. Readiness, actual GPU
@@ -27,7 +27,7 @@ library; the official provider SDKs are loaded lazily by live operations.
 cd tools/cloud-compute/router
 python3 -B -m unittest -v test_hepta_compute.py
 cd ../colab
-python3 -B -m unittest -v test_scoped_profiles.py test_cleanup_unstarted.py test_bind_ledger.py
+python3 -B -m unittest discover -s . -p 'test_*.py' -v
 cd ../kaggle
 python3 -B -m unittest discover -s tests -v
 ```
@@ -46,14 +46,21 @@ are pinned in `kaggle/requirements.in`. This source publication does not modify
 an existing installation, credential store or job ledger.
 
 The router expects `~/.local/bin/hepta-colab-account` and
-`~/.local/bin/hepta-kaggle-account`. Each should launch its corresponding
-`account_launcher.py` with that provider's virtual-environment interpreter.
-Use a fixed absolute release path in the installed launcher; keep the actual
-Python file in the same directory as the other component modules. The Kaggle
+`~/.local/bin/hepta-kaggle-account`. Use fixed absolute release paths and the
+provider's virtual-environment interpreter in installed launchers; keep each
+`account_launcher.py` with its corresponding component modules. The Kaggle
 launcher expects its batch source at
-`~/.local/share/hepta-kaggle/releases/batch-0.1.7`.
+`~/.local/share/hepta-kaggle/releases/batch-0.1.8`.
 Its session and interactive modes refer to separately installed adapters and
 are outside this batch-only source publication.
+
+For Colab upgrades, retain the complete old release and use the release
+dispatcher described in the Colab README. The original job ledger binds each
+job to its runner SHA-256. A new runner belongs in a new release; replacing the
+old file in place would invalidate existing queued jobs and original-key
+recovery. The dispatcher selects an explicitly trusted release from that
+immutable hash and starts its original account launcher in a fresh process.
+It rejects unknown runner identities instead of rewriting the job's intent.
 
 The router's `hepta-compute` entry point runs its colocated `hepta_compute.py`.
 Install the pair together in a versioned release and expose a launcher from
@@ -108,11 +115,31 @@ whether computation succeeded. GPU success requires task-specific device and
 arithmetic evidence. A never-dispatched allocation may instead finish as
 `CLEANED_NOT_EXECUTED`, which reports no computation success.
 
+## Review fixes and compatibility
+
+Router 0.1.1 checks task ownership before binding a newly returned or recovered
+Colab allocation. If a runtime appears after planning and the provider returns
+it as externally owned, the router does not execute work on it or release it.
+It releases only its local reservation when the original allocation receipt
+proves there were no allocation, binding or dispatch attempts. Ambiguous
+ownership or prior effects keep the original reservation for reconciliation.
+
+Kaggle 0.1.8 applies the caller's current artifact byte budget to retained
+results as well as fresh downloads. It checks recorded totals before hashing
+and bounds reads of files that grow during verification.
+
+Colab v5 checks final stdout and stderr sizes after the process group stops,
+including programs that exit before the polling loop observes their output.
+Existing jobs retain their original runner and release; new jobs use the
+updated runner. The compatibility dispatcher preserves the original account,
+profile and job validation performed by the selected release.
+
 ## Publication provenance
 
-`SOURCE-MANIFEST.json` records each included file's accepted-release hash and
-its public-source hash. Public packaging makes only these portability/privacy
-changes to executable code:
+`SOURCE-MANIFEST.json` records the accepted baseline, initial public source and
+current public-source hashes. The original baseline versions were router
+0.1.0, Colab scoped profiles v4 and Kaggle batch 0.1.7. The initial publication
+made these portability and privacy changes to executable code:
 
 - Derive launcher configuration roots from the current home directory and the
   Linux keyring session path from the current UID.
@@ -126,7 +153,8 @@ Tests use fictional aliases. Documentation uses example identities and paths;
 the Colab dependency snapshot uses the official pinned Git URL instead of a
 machine-local SDK checkout. Obsolete deployment manifests, live account
 observations, task logs, runtime profiles and credentials are excluded.
-The provider state machines, unknown-effect handling, ownership checks,
-artifact verification and cleanup proofs remain the accepted release logic.
-
-This publication contains only the three accepted component versions above.
+The current source additionally includes the explicit review fixes and runner
+compatibility described above. The manifest distinguishes those changes from
+the initial packaging and identifies newly added tests and dispatcher files.
+It does not imply that passing offline tests establishes live provider access
+or accelerator availability.

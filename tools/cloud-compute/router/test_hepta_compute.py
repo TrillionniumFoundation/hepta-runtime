@@ -24,11 +24,23 @@ class FakeLauncher:
         self.fail_bind = self.unknown_release = False
         self.reconcile_phase = "runtime_ready"
         self.reconcile_receipt = None
+        self.allocation_receipt = None
         self.lookup_result = None
         self.timeout_cancel = False
         self.unknown_close = False
         self.remaining = 108000
         self.bytes = b'{"cuda":true,"value":128}\n'
+
+    @staticmethod
+    def provision_receipt(key, phase="runtime_ready", owned=True, **changes):
+        receipt = {"key": key, "phase": phase, "endpoint": "runtime-1",
+                   "owned_runtime": owned, "owned_kernel": phase == "bound",
+                   "runtime_submit_attempts": 1 if owned else 0,
+                   "kernel_submit_attempts": 1 if phase == "bound" else 0,
+                   "actual_spec": {"variant": "GPU", "accelerator": "T4", "shape": "STANDARD"}}
+        if phase == "bound":
+            receipt.update(kernel_id="kernel-1", profile_hash="a" * 64)
+        return dict(receipt, **changes)
 
     def call(self, provider, account, args, timeout=90):
         with self.guard:
@@ -82,12 +94,12 @@ class FakeLauncher:
                      "sha256": "0" * 64 if self.bad_artifact else digest(self.bytes)}]}
         if args[:2] == ["manage", "create"]:
             self.effects["allocate"] += 1
-            return {"phase": "runtime_ready", "owned_runtime": True}
+            return self.allocation_receipt or self.provision_receipt(args[args.index("--key") + 1])
         if args[:2] == ["manage", "release"]:
             self.effects["release"] += 1
             return {"phase": "release_unknown" if self.unknown_release else "released"}
         if args[:2] == ["manage", "reconcile"]:
-            return self.reconcile_receipt or {"phase": self.reconcile_phase, "profile_hash": "a" * 64}
+            return self.reconcile_receipt or self.provision_receipt(args[args.index("--key") + 1], self.reconcile_phase)
         if args[:2] == ["manage", "close-unstarted"]:
             self.effects["close_unstarted"] += 1
             return {"phase": "release_unknown" if self.unknown_close else "released", "never_dispatched": True,
@@ -97,7 +109,7 @@ class FakeLauncher:
                 self.effects["bind"] += 1
                 if self.fail_bind:
                     raise RouterError("PROVIDER_OBSERVATION_TIMEOUT")
-                return {"phase": "bound", "profile_hash": "a" * 64}
+                return self.provision_receipt(args[1], "bound")
             verb = args[3]
             if verb == "submit":
                 self.effects["submit_local"] += 1
@@ -173,7 +185,8 @@ class RouterTests(unittest.TestCase):
         record["lease_until"] = 0
         record["effects"] = {"allocate": {"status": "confirmed"}, "bind": {"status": "confirmed"},
                              "submit_local": {"status": "unknown"}}
-        record["receipts"] = {"allocate": {"phase": "runtime_ready"}, "bind": {"phase": "bound", "profile_hash": "a" * 64}}
+        record["receipts"] = {"allocate": self.fake.provision_receipt(record["provision_key"]),
+                              "bind": self.fake.provision_receipt(record["provision_key"], "bound")}
         record["last_error"] = "LOCAL_SUBMISSION_RESPONSE_LOST"
         self.router.store.save(record)
         self.fake.reconcile_phase = "bound"
@@ -316,6 +329,109 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(record["state"], "REMOTE_TERMINAL")
         self.assertEqual(self.fake.effects["allocate"], 1)
         self.assertEqual(self.fake.effects["run"], 1)
+
+    def test_runtime_appearing_after_plan_is_rejected_without_binding_or_releasing_it(self):
+        record = self.plan(provider="colab", account="account-c")
+        # This is Manager.create's existing_assignment public record, including
+        # the original key and zero runtime/kernel dispatch attempts.
+        self.fake.allocation_receipt = self.fake.provision_receipt(record["provision_key"], owned=False)
+        result = self.router.execute(record["request_id"])
+        self.assertEqual(result["state"], "REJECTED")
+        self.assertEqual(result["last_error"], "COLAB_RUNTIME_NOT_TASK_OWNED")
+        self.assertEqual(result["reservation_disposition"], "released_not_dispatched")
+        self.assertFalse(result["outcome"]["compute_succeeded"])
+        self.assertFalse(result["outcome"]["resource_released"])
+        self.assertEqual(self.fake.effects, {"allocate": 1})
+        self.assertEqual(self.router.store.reservations(), [])
+        calls = list(self.fake.calls)
+        for command in (self.router.execute, self.router.inspect, self.router.collect):
+            self.assertEqual(command(record["request_id"])["state"], "REJECTED")
+        self.assertEqual(self.fake.calls, calls)
+        self.assertEqual((result["provider"], result["account"]), ("colab", "account-c"))
+
+    def test_original_zero_attempt_nonowned_receipt_closes_lost_or_legacy_allocation(self):
+        for status in ("started", "unknown", "confirmed"):
+            with self.subTest(status=status):
+                record = self.plan(key="recovered-foreign-" + status, provider="colab", account="account-c")
+                receipt = self.fake.provision_receipt(record["provision_key"], owned=False)
+                record.update(state="RECONCILIATION_REQUIRED", lease_until=0,
+                              effects={"allocate": {"status": status}},
+                              receipts={"allocate": receipt} if status == "confirmed" else {})
+                self.router.store.save(record)
+                self.fake.reconcile_receipt = receipt
+                result = self.router.execute(record["request_id"])
+                self.assertEqual(result["state"], "REJECTED")
+                self.assertEqual(result["effects"]["allocate"]["status"], "rejected")
+                self.assertEqual(self.router.store.reservations(), [])
+                self.assertEqual(self.fake.effects, {})
+                self.assertIn(("colab", "account-c", ["manage", "reconcile", "--key", record["provision_key"]]), self.fake.calls)
+
+    def test_incomplete_or_unknown_ownership_retains_reservation_until_original_proof_arrives(self):
+        record = self.plan(provider="colab", account="account-c")
+        uncertain = self.fake.provision_receipt(record["provision_key"], "allocation_unknown",
+                                              owned=False, runtime_submit_attempts=1)
+        self.fake.allocation_receipt = self.fake.reconcile_receipt = uncertain
+        self.assertEqual(self.router.execute(record["request_id"])["state"], "RECONCILIATION_REQUIRED")
+        valid = self.fake.provision_receipt(record["provision_key"])
+        variants = [dict(valid, owned_runtime=None), dict(valid, key="another-key"),
+                    dict(valid, owned_runtime=False), dict(valid, runtime_submit_attempts=None),
+                    dict(valid, endpoint=None), dict(valid, phase="allocation_unknown")]
+        for receipt in variants:
+            with self.subTest(receipt=receipt):
+                self.fake.reconcile_receipt = receipt
+                result = self.router.execute(record["request_id"])
+                self.assertEqual(result["state"], "RECONCILIATION_REQUIRED")
+                self.assertEqual(len(self.router.store.reservations()), 1)
+                self.assertEqual(self.fake.effects, {"allocate": 1})
+                result = self.router.collect(record["request_id"])
+                self.assertEqual(result["state"], "RECONCILIATION_REQUIRED")
+                self.assertEqual(result["reservation_disposition"], "retained_ownership_unconfirmed")
+                self.assertEqual(self.fake.effects, {"allocate": 1})
+        self.fake.reconcile_receipt = valid
+        result = self.router.execute(record["request_id"])
+        self.assertEqual(result["state"], "REMOTE_TERMINAL")
+        self.assertNotIn("reservation_disposition", result)
+        self.assertEqual(self.fake.effects, {"allocate": 1, "bind": 1, "submit_local": 1, "run": 1})
+
+    def test_nonowned_runtime_with_uncertain_legacy_bind_never_cleans_or_drops_reservation(self):
+        record = self.plan(provider="colab", account="account-c")
+        foreign = self.fake.provision_receipt(record["provision_key"], owned=False)
+        record.update(state="RECONCILIATION_REQUIRED", lease_until=0,
+                      effects={"allocate": {"status": "confirmed"}, "bind": {"status": "unknown"}},
+                      receipts={"allocate": foreign})
+        self.router.store.save(record)
+        self.fake.reconcile_receipt = foreign
+        for command in (self.router.execute, self.router.inspect, self.router.collect):
+            result = command(record["request_id"])
+            self.assertEqual(result["state"], "RECONCILIATION_REQUIRED")
+            self.assertEqual(result["effects"]["bind"]["status"], "unknown")
+            self.assertEqual(result["reservation_disposition"], "retained_ownership_unconfirmed")
+            self.assertEqual(len(self.router.store.reservations()), 1)
+        self.assertEqual(self.fake.effects, {})
+
+    def test_legacy_completed_job_on_nonowned_runtime_retains_outputs_without_release(self):
+        record = self.plan(provider="colab", account="account-c")
+        record.update(state="RUNNING", lease_until=0, adapter_job_id="colab-job-1",
+                      effects={name: {"status": "confirmed"} for name in ("allocate", "bind", "submit_local", "run")},
+                      receipts={"allocate": self.fake.provision_receipt(record["provision_key"], owned=False)})
+        self.router.store.save(record)
+        result = self.router.collect(record["request_id"])
+        self.assertEqual(result["state"], "RECONCILIATION_REQUIRED")
+        self.assertEqual(result["last_error"], "COLAB_RUNTIME_NOT_TASK_OWNED")
+        self.assertEqual(result["reservation_disposition"], "retained_ownership_unconfirmed")
+        self.assertEqual(Path(result["outputs"]["files"][0]["path"]).read_bytes(), self.fake.bytes)
+        self.assertEqual(len(self.router.store.reservations()), 1)
+        self.assertEqual(self.fake.effects, {})
+
+    def test_new_unknown_observation_revokes_old_allocation_confirmation(self):
+        record = self.plan(provider="colab", account="account-c")
+        self.router.effect(record, "allocate", ["manage", "create", "--key", record["provision_key"]])
+        self.fake.reconcile_receipt = self.fake.provision_receipt(record["provision_key"], "allocation_unknown")
+        result = self.router.execute(record["request_id"])
+        self.assertEqual(result["state"], "RECONCILIATION_REQUIRED")
+        self.assertEqual(result["effects"]["allocate"]["status"], "unknown")
+        self.assertEqual(len(self.router.store.reservations()), 1)
+        self.assertEqual(self.fake.effects, {"allocate": 1})
 
     def test_uncertain_bind_only_resumes_after_original_binding_confirmed(self):
         record = self.plan(provider="colab")

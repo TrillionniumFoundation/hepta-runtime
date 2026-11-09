@@ -1,7 +1,7 @@
 """Small JSON tool contract shared by the manifest and stdin dispatcher."""
 from __future__ import annotations
 
-VERSION = "0.1.7"
+VERSION = "0.1.8"
 REQ = {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$"}
 STR = {"type": "string"}
 INT = {"type": "integer"}

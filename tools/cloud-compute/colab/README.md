@@ -1,4 +1,4 @@
-# Hepta Colab adapter — scoped profiles v4
+# Hepta Colab adapter — scoped profiles v5
 
 这个目录把聊天侧的 Hepta `process_start/status/read` 接到 Google 官方 `google-colab-cli` Python SDK。适配器提交有限时长的 Python 脚本，把执行身份、完成证据和原始产物保存到 SQLite 及文件。每个 profile 固定一个已经分配的 Colab runtime、专属 kernel 和 Jupyter client session；管理客户端负责授权、资源资格查询及创建专属 kernel。
 
@@ -38,8 +38,10 @@ client 所属项目不等于用户项目。公共接口返回 `PUBLIC_API_SERVIC
 | `authorize_colab.py` | 独立安全授权流程，由管理客户端明确启动 |
 | `manage_colab.py` | 账号/额度/资源规格与专属 kernel 的管理客户端（若部署包提供） |
 | `account_launcher.py` | 按私有配置选择账号和独立 profile，不允许尾随参数覆盖身份 |
+| `release_dispatcher.py` | 按原账本的 runner 摘要选择受信任的保留版本，再启动该版本的原账号 launcher |
 | `launch_authorization.py` | 显式授权启动辅助入口 |
-| `test_scoped_profiles.py`、`test_cleanup_unstarted.py`、`test_bind_ledger.py` | 31 项离线故障回归 |
+| `test_scoped_profiles.py`、`test_cleanup_unstarted.py`、`test_bind_ledger.py`、`test_remote_runner.py` | 账号、台账、清理和最终输出限额离线回归 |
+| `test_release_dispatcher.py` | 旧任务版本选择、未知提交回执、配置身份、文件摘要及入口隔离离线回归 |
 
 适配器运行 Python **脚本任务**。用户代码由固定 kernel 启动的 Python 子进程执行，工作目录为该 job 的 `work/`；不会继承 notebook 的 Python 变量。这个选择让 stdout/stderr 能作为真实二进制文件留存，并且取消能够只终止当前 job 的进程组。需要 notebook 内存状态的任务应另外定义对应合同。
 
@@ -77,6 +79,85 @@ queued job 须先得到本地取消回执。已 dispatch、active、unknown、fo
 kernel、身份冲突或缺失证据都拒绝清理。结果保留 `never_dispatched=true`、
 `cleanup_reason=unstarted_compute` 和原始证明；未知释放只 reconcile，不重发。
 这条路径不代表计算成功，也不会丢弃已经执行任务的唯一输出。
+
+## v5 升级与原 runner 兼容
+
+v5 保留上述 v4 profile、任务恢复和清理合同，并补上最终输出限额检查。
+每个已提交 job 的 payload 都包含不可变的 `runner_sha256`，因此升级必须
+安装到新目录并保留完整旧版本。不要覆盖旧 `remote_runner.py`、修改历史
+payload 摘要，或放宽原 adapter 的 runner/profile 校验。
+
+稳定的 `hepta-colab-account` 入口可以先启动 `release_dispatcher.py`。
+分发器接受原账号 launcher 的完整 argv，不提供 config、home、state、
+release 或任意文件路径的覆盖选项。它使用 effective UID 在系统用户数据库
+中的 home，读取固定的 `~/.config/hepta-colab/accounts.json` 和
+`~/.config/hepta-colab/release-map.json`。账号的 jobs 路径仍只由原配置的
+`state_dir/jobs` 推导，不同账号不能指向同一个 jobs 根目录。
+
+`release-map.json` 是运营者维护的受信任版本清单，字段如下。下面的字段名
+描述真实 JSON 结构；其中所有路径和摘要都必须来自已经审核的本地安装。
+
+| 字段 | 要求 |
+| --- | --- |
+| `schema` | 整数 `1` |
+| `current` | 新任务使用的版本键，例如 `v5` |
+| `releases` | 以版本键索引的对象；保留历史账本涉及的每个 runner 版本，例如 `v4` 与 `v5` |
+| `releases[VERSION].directory` | 完整保留版本的绝对、规范路径 |
+| `releases[VERSION].python` | 已安装官方 SDK 的受信任 Python/venv 可执行文件绝对路径 |
+| `releases[VERSION].python_sha256` | 解析受信任解释器符号链接后，实际可执行文件的 SHA-256 |
+| `releases[VERSION].runner_sha256` | 该版本 `remote_runner.py` 的 SHA-256 |
+| `releases[VERSION].files` | 该版本所有 `.py` 文件的相对路径到 SHA-256 的映射，包含子目录与测试源码 |
+
+`files` 至少必须包含 `account_launcher.py`、`hepta_colab.py`、
+`remote_runner.py`、`manage_colab.py`、`authorize_colab.py` 和
+`launch_authorization.py`；其他 Python 源码也不能遗漏。一个 runner 摘要
+只能对应一个保留版本，`runner_sha256` 必须等于 `files` 中的 runner 摘要。
+摘要使用实际文件的完整小写 SHA-256，不能使用示例占位值。版本目录、配置、
+账本及其路径链不能有符号链接，祖先不能允许 group/other 写入；私有配置和
+账本须为当前 UID 所有、权限 `0600`。解释器可以经过逐跳核验的受信任符号
+链接，但启动时保留配置中的 venv 路径，不能改成解析后的系统解释器路径而
+丢失 SDK 环境。SDK venv 及其依赖仍是部署者原有的受信任安装。
+
+| 原命令 | 版本选择 |
+| --- | --- |
+| `run submit --key KEY`、`run inspect-key --key KEY`，原账本已有唯一记录 | 使用原记录的 runner 摘要对应的保留版本 |
+| 上述 key 在有效、已存在的原账本中确认不存在 | 使用 `current`，旧 key 的未知回执不按新提交处理 |
+| `run run/status/cancel/read/fetch --job-id ID` | 按唯一原 job-id 的 runner 摘要选择版本 |
+| `manage`、`authorize` 和子命令 help | 使用 `current`；全局 `--help` 由分发器本地输出 |
+
+缺失或损坏的账本、重复身份、未知 runner、未知 job-id、未列入清单的代码，
+以及文件或解释器摘要变化都会被拒绝。分发器不创建替代空账本，也不把未知
+记录转交给新版本尝试。它只读取原账本来选择版本，不修改 job、profile、
+runner 或提交意图。
+
+选中版本的全部源码与解释器核验后，分发器以
+`-I -B -X pycache_prefix=/dev/null` 启动一个新的 Python 进程，执行原
+`account_launcher.py` 并原样传递 argv。已有 `__pycache__` 不用于加载代码；
+不在清单中的可导入源码、无源码字节码及扩展模块会被拒绝。原 launcher 与
+adapter 继续验证账号、provisioning key、profile、job 及 runner 摘要。
+
+安装稳定入口时可以使用以下结构，先把两个占位路径换成经过核验的绝对路径：
+
+```sh
+#!/bin/sh
+exec /absolute/trusted/sdk-venv/bin/python -I -B -X pycache_prefix=/dev/null \
+  /absolute/retained/dispatcher/release_dispatcher.py "$@"
+```
+
+切换前须核实原入口实际使用的 SDK Python、所有保留版本的文件摘要、私有
+配置权限和原 jobs 根目录。还须逐个读取所有已配置账号的原 jobs ledger，
+在包含原 WAL 的只读事务中检查不同的 `runner_sha256`，确认每个历史摘要
+都有完整保留且全模块核验通过的版本映射；不能假定历史任务只涉及 v4。
+缺失的账本继续阻断，不能新建空账本来伪造 key 不存在的证据。
+切换后使用原 job-id/key 做只读续接验收，确认旧
+任务仍选原 runner；已被账本确认不存在的新 key 才能选 v5。源码测试通过
+不表示这些部署条件已在某台机器满足，也不表示已经执行过生产入口切换。
+
+一旦账本存在 v5 job，就不能把稳定入口退回只认识 v4 的旧 wrapper，也
+不能删除 v5 的版本映射。回退新任务默认只调整 `current`，保留分发器、
+所有历史版本映射和完整源码，使已有 v4/v5 任务继续按原 runner 续接。
+离线分发器测试使用未修改的账号 launcher、隔离 fixture 和禁网 SDK stub；
+真实路径、权限、解释器符号链接链和历史 runner 覆盖仍须独立验证。
 
 ## Profile 与准备条件
 
@@ -209,8 +290,12 @@ queued job 可在发送前取消，并明确标记 `local_only_cancel=true`。�
 ## 本地验证与云端验收
 
 ```bash
-python3 -m unittest -v test_scoped_profiles.py test_cleanup_unstarted.py test_bind_ledger.py
+python3 -B -m unittest discover -s . -p 'test_*.py' -v
 python -m py_compile hepta_colab.py remote_runner.py
 ```
 
 必须单独保留云端证据：账号/资格返回值、真实分配规格、固定 session ID、计算结果及 hash、下载后本地 hash、断线前后相同 job 身份和一次提交计数、取消后云进程停止回执。离线故障测试证明代码的控制语义，不能代替这些真实账号结果。
+
+### 最终输出限额
+
+Runner 在子进程及其进程组停止后重新检查 stdout/stderr 的最终字节数。即使子进程在两次轮询之间以退出码 0 结束，任何一个输出流超过 `max_output_bytes` 也会报告 `failed` 和 `output_size_limit`。等于限额仍可成功。历史任务继续绑定原 runner 哈希；升级部署必须保留对应旧版本。

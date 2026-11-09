@@ -82,14 +82,24 @@ def safe_name(value: str):
     return value
 
 
-def hash_file(path: Path):
+def hash_file(path: Path, *, max_bytes=None):
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     size, h = 0, hashlib.sha256()
     try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
             raise AdapterError("UNSAFE_ARTIFACT_PATH", "Artifact is not a regular file.")
+        if max_bytes is not None and info.st_size > max_bytes:
+            raise AdapterError("ARTIFACT_BUDGET", "Retained artifact exceeds the requested byte budget.")
         with os.fdopen(fd, "rb", closefd=False) as f:
-            while chunk := f.read(1024 * 1024): size += len(chunk); h.update(chunk)
+            while True:
+                allowance = 1024 * 1024 if max_bytes is None else min(1024 * 1024, max_bytes - size + 1)
+                chunk = f.read(allowance)
+                if not chunk: break
+                size += len(chunk)
+                if max_bytes is not None and size > max_bytes:
+                    raise AdapterError("ARTIFACT_BUDGET", "Retained artifact grew beyond the requested byte budget.")
+                h.update(chunk)
     finally: os.close(fd)
     return {"bytes": size, "sha256": h.hexdigest()}
 
@@ -651,7 +661,7 @@ class KaggleAdapter:
         if info["http_content_length"] != actual["bytes"]:
             raise AdapterError("ARTIFACT_LENGTH", "Actual bytes do not match the verified HTTP length receipt.")
 
-    def _reuse_artifacts(self, record, folder, receipt, manifest_name, *, recovered=False):
+    def _reuse_artifacts(self, record, folder, receipt, manifest_name, *, max_bytes, recovered=False):
         if folder.is_symlink() or folder.parent.is_symlink() or not folder.is_dir():
             raise AdapterError("UNSAFE_STATE_PATH", "Artifact directory must be a regular local directory.")
         identity = {"schema": "hepta-kaggle-download-v1", "request_id": record["request_id"],
@@ -662,6 +672,15 @@ class KaggleAdapter:
         files = receipt.get("files")
         if not isinstance(files, list) or receipt.get("files_manifest_sha256") != digest(files):
             raise AdapterError("ARTIFACT_RECEIPT_INVALID", "Published artifact receipt is incomplete or damaged.")
+        if type(receipt.get("total_bytes")) is not int or receipt["total_bytes"] < 0 or any(
+                not isinstance(item, dict) or type(item.get("bytes")) is not int or item["bytes"] < 0
+                for item in files):
+            raise AdapterError("ARTIFACT_RECEIPT_INVALID", "Published artifact byte counts are invalid.")
+        if sum(item["bytes"] for item in files) != receipt["total_bytes"]:
+            raise AdapterError("ARTIFACT_RECEIPT_INVALID", "Published artifact byte total does not match its files.")
+        # Reject a tighter collection budget before opening or hashing retained payloads.
+        if receipt["total_bytes"] > max_bytes:
+            raise AdapterError("ARTIFACT_BUDGET", "Published artifacts exceed the requested byte budget.")
         if not manifest_name and any(item.get("provider_size_matches") is False for item in files):
             raise AdapterError("ARTIFACT_LENGTH", "Provider-size conflict requires an explicitly requested execution manifest; strict provider-size mode cannot accept it.")
         seen, total = set(), 0
@@ -672,7 +691,7 @@ class KaggleAdapter:
             target = folder / name
             if any(parent.is_symlink() for parent in target.parents if parent != folder.parent):
                 raise AdapterError("UNSAFE_STATE_PATH", "Artifact path contains a symlink.")
-            checked = hash_file(target)
+            checked = hash_file(target, max_bytes=max_bytes - total)
             if checked != {"bytes": item["bytes"], "sha256": item["sha256"]}:
                 raise AdapterError("LOCAL_ARTIFACT_CHANGED", "A previously verified artifact has changed.")
             total += checked["bytes"]
@@ -689,7 +708,7 @@ class KaggleAdapter:
         return {**receipt, "reused": True, "recovered_local_publish": recovered}
 
     def artifacts(self, request_id, *, max_bytes=1024 ** 3, manifest_name=None):
-        if not 1 <= max_bytes <= 64 * 1024 ** 3: raise AdapterError("INVALID_ARTIFACT_BUDGET", "Download budget must be 1 byte..64 GiB.")
+        if type(max_bytes) is not int or not 1 <= max_bytes <= 64 * 1024 ** 3: raise AdapterError("INVALID_ARTIFACT_BUDGET", "Download budget must be an integer from 1 byte..64 GiB.")
         if manifest_name: safe_name(manifest_name)
         with self.ledger.locked(request_id):
             record = self.ledger.load(request_id); self._account_for(record)
@@ -699,14 +718,14 @@ class KaggleAdapter:
             existing = record.get("artifacts")
             folder = self.ledger.directory(request_id) / "artifacts" / ("v" + str(record["notebook_version"]))
             if existing:
-                return self._reuse_artifacts(record, folder, dict(existing), manifest_name)
+                return self._reuse_artifacts(record, folder, dict(existing), manifest_name, max_bytes=max_bytes)
             if folder.exists() or folder.is_symlink():
                 if folder.is_symlink() or folder.parent.is_symlink():
                     raise AdapterError("UNSAFE_STATE_PATH", "Artifact directory cannot contain a symlink.")
                 try: receipt = json.loads(private_read(folder / ".hepta-download-receipt.json", 16 * 1024 * 1024))
                 except (FileNotFoundError, json.JSONDecodeError):
                     raise AdapterError("ARTIFACT_DESTINATION_EXISTS", "Unrecorded artifact directory has no valid publication receipt.") from None
-                return self._reuse_artifacts(record, folder, receipt, manifest_name, recovered=True)
+                return self._reuse_artifacts(record, folder, receipt, manifest_name, max_bytes=max_bytes, recovered=True)
             self._status(record)
             if record["remote_state"] != "COMPLETE":
                 raise AdapterError("REMOTE_NOT_COMPLETE", "Only a completed execution can publish verified artifacts.", details={"remote_state": record["remote_state"]})

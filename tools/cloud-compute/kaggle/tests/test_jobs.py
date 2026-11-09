@@ -326,6 +326,64 @@ class JobsTest(unittest.TestCase):
         with self.assertRaises(AdapterError) as ctx: self.adapter.artifacts("test-1")
         self.assertEqual(ctx.exception.code, "LOCAL_ARTIFACT_CHANGED")
 
+    def test_reused_artifacts_enforce_tighter_budget_before_hashing(self):
+        self.prepare_outputs()
+        result = self.adapter.artifacts("test-1", manifest_name="hepta-manifest.json")
+        before = self.adapter.ledger.load("test-1")
+        calls, downloads = len(self.transport.calls), len(self.transport.downloads)
+        for manifest_name in (None, "hepta-manifest.json"):
+            with self.subTest(manifest=manifest_name), patch("kaggle_jobs.hash_file") as hashed:
+                with self.assertRaises(AdapterError) as ctx:
+                    self.adapter.artifacts("test-1", manifest_name=manifest_name,
+                                           max_bytes=result["total_bytes"] - 1)
+                self.assertEqual(ctx.exception.code, "ARTIFACT_BUDGET")
+                hashed.assert_not_called()
+            self.assertEqual(self.adapter.ledger.load("test-1"), before)
+        self.assertEqual((len(self.transport.calls), len(self.transport.downloads)), (calls, downloads))
+        exact = self.adapter.artifacts("test-1", manifest_name="hepta-manifest.json",
+                                       max_bytes=result["total_bytes"])
+        self.assertTrue(exact["reused"])
+
+    def test_recovered_artifacts_enforce_tighter_budget_before_hashing(self):
+        self.prepare_outputs()
+        result = self.adapter.artifacts("test-1", manifest_name="hepta-manifest.json")
+        record = self.adapter.ledger.load("test-1")
+        record.pop("artifacts"); self.adapter.ledger.save(record)
+        before = self.adapter.ledger.load("test-1")
+        calls, downloads = len(self.transport.calls), len(self.transport.downloads)
+        with patch("kaggle_jobs.hash_file") as hashed:
+            with self.assertRaises(AdapterError) as ctx:
+                self.adapter.artifacts("test-1", manifest_name="hepta-manifest.json", max_bytes=1)
+            self.assertEqual(ctx.exception.code, "ARTIFACT_BUDGET")
+            hashed.assert_not_called()
+        self.assertEqual(self.adapter.ledger.load("test-1"), before)
+        self.assertEqual((len(self.transport.calls), len(self.transport.downloads)), (calls, downloads))
+        exact = self.adapter.artifacts("test-1", manifest_name="hepta-manifest.json",
+                                       max_bytes=result["total_bytes"])
+        self.assertTrue(exact["recovered_local_publish"])
+
+    def test_retained_payload_growth_is_bounded_before_reading(self):
+        self.prepare_outputs()
+        result = self.adapter.artifacts("test-1")
+        target = Path(result["directory"]) / "result.json"
+        target.write_bytes(b"x" * (result["total_bytes"] + 1))
+        from kaggle_jobs import hash_file
+        with patch("kaggle_jobs.os.fdopen") as stream_open:
+            with self.assertRaises(AdapterError) as ctx:
+                hash_file(target, max_bytes=result["total_bytes"])
+            self.assertEqual(ctx.exception.code, "ARTIFACT_BUDGET")
+            stream_open.assert_not_called()
+        with self.assertRaises(AdapterError) as ctx:
+            self.adapter.artifacts("test-1", max_bytes=result["total_bytes"])
+        self.assertEqual(ctx.exception.code, "ARTIFACT_BUDGET")
+
+    def test_artifact_budget_requires_integer_bytes(self):
+        for value in (True, False, 1.0, "100", None):
+            with self.subTest(value=value), self.assertRaises(AdapterError) as ctx:
+                self.adapter.artifacts("test-1", max_bytes=value)
+            self.assertEqual(ctx.exception.code, "INVALID_ARTIFACT_BUDGET")
+        self.assertEqual(self.transport.calls, [])
+
     def test_remote_hash_mismatch_never_publishes(self):
         self.prepare_outputs()
         self.transport.payloads["result.json"] = b'{"answer":6}\n'

@@ -4,6 +4,15 @@ This adapter submits a private Python script or notebook through **official Kagg
 
 The implementation is usable from a CLI or as one JSON tool call per subprocess. It is a transport adapter for HeptaRuntime, not a claim that a particular Hepta tool registry has already been configured. Live acceptance must be established by deployment receipts; unit tests are fault-injection tests, not cloud execution evidence. Interactive Jupyter execution is a separate adapter.
 
+## Retained artifact budgets (0.1.8)
+
+Every artifact request applies its current integer byte budget, including reuse
+and recovery of an already published collection. An oversized receipt is
+rejected before payload files are opened or hashed. Local file sizes and reads
+are also bounded, so growth after publication cannot exceed the requested read
+budget. Existing immutable notebook/version bindings and submission guards are
+unchanged.
+
 ## Read-only submission readiness (0.1.7)
 
 `readiness [--request-id TASK]` verifies authentication and enumerates the full

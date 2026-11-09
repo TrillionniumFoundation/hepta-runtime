@@ -26,11 +26,12 @@ import sys
 import time
 import uuid
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 SAFE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z")
 PROVIDERS = ("kaggle", "colab")
 TERMINAL = {"COLLECTED", "CLEANED_NOT_EXECUTED", "REJECTED", "EXPIRED"}
 COLAB_TERMINAL = {"succeeded", "failed", "cancelled", "timed_out"}
+COLAB_READY_PHASES = {"runtime_ready", "kernel_ready", "bound"}
 KAGGLE_TERMINAL = {"COMPLETE", "ERROR", "CANCEL_ACKNOWLEDGED"}
 MAX_SOURCE = 2 * 1024 * 1024
 
@@ -170,6 +171,16 @@ def safe_receipt(data):
     if isinstance(out.get("last_error"), dict):
         out["last_error"] = {k: v for k, v in out["last_error"].items() if k in ("code", "type")}
     return out
+
+
+def task_owned_colab_allocation(record, receipt):
+    """Only the original provisioner's one confirmed allocation grants custody."""
+    return (receipt.get("phase") in COLAB_READY_PHASES
+            and receipt.get("key") == record["provision_key"]
+            and receipt.get("owned_runtime") is True
+            and type(receipt.get("runtime_submit_attempts")) is int
+            and receipt["runtime_submit_attempts"] == 1
+            and isinstance(receipt.get("endpoint"), str) and bool(receipt["endpoint"]))
 
 
 class Launcher:
@@ -495,6 +506,46 @@ class Router:
     def colab_args(self, record, verb, *args):
         return ["--provision-key", record["provision_key"], "run", verb, *args]
 
+    def require_colab_ownership(self, record, receipt=None):
+        if receipt is None:
+            receipt = record["receipts"].get("provision_observation", record["receipts"].get("allocate", {}))
+        if task_owned_colab_allocation(record, receipt):
+            record.pop("reservation_disposition", None)
+            return True
+        code = ("COLAB_RUNTIME_NOT_TASK_OWNED" if receipt.get("owned_runtime") is False
+                else "COLAB_RUNTIME_OWNERSHIP_UNCONFIRMED")
+        previous = record["receipts"].get("allocate", {})
+        # Manager.create may select an assignment that appeared after planning.
+        # Its original-key zero-attempt receipt proves no cloud dispatch only
+        # while this router has never started a later effect. Legacy/uncertain
+        # binds, contradictory receipts and missing evidence retain custody.
+        unused = (receipt.get("key") == record["provision_key"]
+                  and receipt.get("phase") == "runtime_ready"
+                  and receipt.get("owned_runtime") is False
+                  and receipt.get("owned_kernel") is False
+                  and type(receipt.get("runtime_submit_attempts")) is int
+                  and receipt["runtime_submit_attempts"] == 0
+                  and type(receipt.get("kernel_submit_attempts")) is int
+                  and receipt["kernel_submit_attempts"] == 0
+                  and not receipt.get("kernel_id") and not receipt.get("profile_hash")
+                  and not record.get("adapter_job_id")
+                  and set(record["effects"]) == {"allocate"}
+                  and previous.get("owned_runtime") is not True
+                  and previous.get("runtime_submit_attempts", 0) in (None, 0))
+        record["receipts"]["ownership_observation"] = safe_receipt(receipt)
+        record["last_error"] = code
+        record["lease_until"] = 0
+        record["state"] = "REJECTED" if unused else "RECONCILIATION_REQUIRED"
+        record["effects"]["allocate"]["status"] = "rejected" if unused else "unknown"
+        record["reservation_disposition"] = "released_not_dispatched" if unused else "retained_ownership_unconfirmed"
+        if unused:
+            record["receipts"]["allocate"] = safe_receipt(receipt)
+            record["outcome"] = {"provider_terminal_state": "not_dispatched", "compute_succeeded": False,
+                                 "error_code": code, "resource_released": False}
+        self.store.save(record, {"event": "colab_runtime_ownership_refused", "error_code": code,
+                                 "reservation_released": unused})
+        return False
+
     def effect(self, record, stage, args, timeout=90):
         old = record["effects"].get(stage)
         if old:
@@ -515,7 +566,7 @@ class Router:
         receipt = safe_receipt(output)
         confirmed = True
         if stage == "allocate":
-            confirmed = output.get("phase") in ("runtime_ready", "kernel_ready", "bound")
+            confirmed = task_owned_colab_allocation(record, output)
         elif stage == "bind":
             confirmed = output.get("phase") == "bound"
         elif stage == "release":
@@ -580,9 +631,13 @@ class Router:
                 elif "allocate" in record["effects"]:
                     receipt = self.call(record, ["manage", "reconcile", "--key", record["provision_key"]])
                     record["receipts"]["provision_observation"] = safe_receipt(receipt)
-                    if receipt.get("phase") in ("runtime_ready", "kernel_ready", "bound"):
+                    if receipt.get("phase") in COLAB_READY_PHASES:
+                        if not self.require_colab_ownership(record, receipt):
+                            return record
                         record["effects"]["allocate"]["status"] = "confirmed"
                         record["receipts"]["allocate"] = safe_receipt(receipt)
+                    else:
+                        record["effects"]["allocate"]["status"] = "unknown"
                     if receipt.get("phase") == "bound" and "bind" in record["effects"]:
                         record["effects"]["bind"]["status"] = "confirmed"
                         record["receipts"]["bind"] = safe_receipt(receipt)
@@ -655,6 +710,8 @@ class Router:
         else:
             if observe_only:
                 return record
+            if not self.require_colab_ownership(record):
+                return record
             if "submit_local" in record["effects"]:
                 lookup = self.inspect_submit_key(record)
                 if lookup.get("found") is False:
@@ -704,6 +761,8 @@ class Router:
                     return self.observe_locked(record)
                 if record["state"] not in ("PLANNED", "PREPARING"):
                     record = self.observe_locked(record)
+                    if record["state"] in TERMINAL:
+                        return record
                     local_job = record["receipts"].get("observation", record["receipts"].get("submit_local", {}))
                     if (record["provider"] == "colab" and local_job.get("state") == "cancelled"
                             and local_job.get("submit_attempts") == 0 and local_job.get("local_only_cancel") is True
@@ -746,8 +805,10 @@ class Router:
                         model = "NONE" if intent["accelerator"] == "cpu" else intent["accelerator"]
                         allocation = self.effect(record, "allocate", ["manage", "create", "--key", record["provision_key"],
                             "--kind", "cpu" if model == "NONE" else "gpu", "--accelerator", model, "--shape", "standard"], timeout=150)
-                        if allocation.get("phase") not in ("runtime_ready", "kernel_ready", "bound"):
+                        if allocation.get("phase") not in COLAB_READY_PHASES:
                             raise RouterError("ALLOCATION_NOT_CONFIRMED")
+                        if not self.require_colab_ownership(record, allocation):
+                            return record
                         bound = self.effect(record, "bind", ["--provision-key", record["provision_key"], "manage", "bind",
                                             "--key", record["provision_key"]], timeout=150)
                         if bound.get("phase") != "bound":
@@ -984,6 +1045,8 @@ class Router:
                     if record["effects"].get("release", {}).get("status") in ("started", "unknown"):
                         released = self.call(record, ["manage", "reconcile", "--key", record["provision_key"]])
                     else:
+                        if not self.require_colab_ownership(record):
+                            return record
                         released = self.effect(record, "release", ["manage", "release", "--key", record["provision_key"]], timeout=150)
                     record["receipts"]["release"] = safe_receipt(released)
                     if released.get("phase") != "released":

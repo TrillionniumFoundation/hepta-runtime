@@ -1,4 +1,4 @@
-# Hepta Compute Router 0.1.0
+# Hepta Compute Router 0.1.1
 
 Runs on a configured Linux compute worker. The controller calls the installed
 `hepta-compute` executable through HeptaRuntime. Credentials remain with the
@@ -36,6 +36,14 @@ most 512 UTF-8 bytes, with no NUL, empty segment, or traversal component.
 - Supported choices are T4 and CPU, standard Colab shape. Kaggle T4 maps to
   NvidiaTeslaT4. Existing Colab runtimes require explicit binding and are not
   automatically adopted. Ready permits an attempt, not guaranteed hardware.
+- Before binding or resuming an allocation, require the original provisioning
+  key, task-owned runtime, one confirmed allocation attempt and its endpoint.
+  A matching runtime that appears after planning is not adopted. A complete
+  zero-attempt receipt with no later router effect rejects the request and
+  releases only its local reservation; the external runtime is left alone.
+  Missing or contradictory ownership evidence, or an earlier uncertain bind,
+  retains the reservation for original-identity reconciliation. Legacy task
+  outputs can be retained without authorizing release of a non-owned runtime.
 - Stable preference: Kaggle then Colab; configured default account first,
   then other aliases lexically. Explicit filters
   narrow candidates. Quotas are never aggregated and a request never rotates.
@@ -84,5 +92,6 @@ including `run inspect-key --key KEY` and `manage close-unstarted --key KEY`.
 Colab v4 initializes the fixed jobs ledger before the first kernel mutation or
 profile publication. A missing ledger on an already bound profile remains a
 blocker and is never recreated as empty evidence.
-Run `python3 -m unittest -v test_hepta_compute.py`. These local regression tests
+Run `python3 -m unittest -v test_hepta_compute.py` (46 tests in this revision).
+These local regression tests
 do not submit cloud work. Live readiness and GPU acceptance remain separate.

@@ -5,7 +5,7 @@ from pathlib import Path
 import runpy,sys
 CONFIG=Path.home()/'.config/hepta-kaggle/accounts.json'
 BASE=Path.home()/'.local/share/hepta-kaggle'
-RELEASES={'batch':BASE/'releases/batch-0.1.7','session':BASE/'releases/session-0.1.1','interactive':BASE/'releases/interactive-0.1.0'}
+RELEASES={'batch':BASE/'releases/batch-0.1.8','session':BASE/'releases/session-0.1.1','interactive':BASE/'releases/interactive-0.1.0'}
 SCRIPTS={'batch':'hepta_kaggle.py','session':'hepta_kaggle_session.py','interactive':'hepta_kaggle_interactive.py'}
 
 def isolated_oauth_load(self):

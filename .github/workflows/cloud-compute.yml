@@ -23,12 +23,12 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Router regression suite (40 tests)
+      - name: Router regression suite
         working-directory: tools/cloud-compute/router
         run: python3 -B -m unittest -v test_hepta_compute.py
-      - name: Colab regression suite (31 tests)
+      - name: Colab regression suite
         working-directory: tools/cloud-compute/colab
-        run: python3 -B -m unittest -v test_scoped_profiles.py test_cleanup_unstarted.py test_bind_ledger.py
-      - name: Kaggle regression suite (72 tests)
+        run: python3 -B -m unittest discover -s . -p 'test_*.py' -v
+      - name: Kaggle regression suite
         working-directory: tools/cloud-compute/kaggle
         run: python3 -B -m unittest discover -s tests -v

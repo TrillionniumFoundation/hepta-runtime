@@ -164,6 +164,12 @@ def _hepta_main(payload):
                 proc.wait()
                 stopped = not group_live(proc.pid)
             exit_code = proc.returncode
+            # A short-lived child can exit between polls, and descendants can
+            # write while their group is stopping. Validate the final sizes
+            # before a zero exit code is allowed to become success.
+            if reason is None and max(os.fstat(stdout.fileno()).st_size,
+                                      os.fstat(stderr.fileno()).st_size) > payload["max_output_bytes"]:
+                reason = "output_size_limit"
             if not stopped:
                 state = "unknown"
                 reason = "process_group_still_live"
