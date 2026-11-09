@@ -1,0 +1,337 @@
+{
+  "schema": "hepta-compute-adapter-v1",
+  "provider": "kaggle",
+  "adapter_version": "0.1.7",
+  "entrypoint": "hepta_kaggle.py",
+  "protocol": "json-stdout",
+  "stdin_command": "call",
+  "input": {
+    "tool": "kaggle_<command>",
+    "arguments": {}
+  },
+  "credentials": "host-local official Kaggle credential file; never tool arguments",
+  "host_configuration": {
+    "expected_username": "optional --expected-username; verified before business RPCs; cannot be overridden by tool arguments"
+  },
+  "tools": [
+    {
+      "name": "kaggle_capabilities",
+      "command": "capabilities",
+      "description": "Report implemented adapter features; optional live authentication check.",
+      "mutates_cloud": false,
+      "cloud_verified": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "live": {
+            "type": "boolean"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kaggle_account",
+      "command": "account",
+      "description": "Verify the active Kaggle account with the official token introspection API.",
+      "mutates_cloud": false,
+      "cloud_verified": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kaggle_readiness",
+      "command": "readiness",
+      "description": "Observe authentication and complete owned-notebook inventory without creating a task or cloud resource. Correlation request_id does not reserve a notebook; submit rechecks.",
+      "mutates_cloud": false,
+      "cloud_verified": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kaggle_quota",
+      "command": "quota",
+      "description": "Read live accelerator quota, preserving used, reserved, total and refresh fields.",
+      "mutates_cloud": false,
+      "cloud_verified": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kaggle_notebooks",
+      "command": "notebooks",
+      "description": "List the authenticated account's own notebooks; paginate explicitly.",
+      "mutates_cloud": false,
+      "cloud_verified": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "page_token": {
+            "type": "string"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kaggle_submit",
+      "command": "submit",
+      "description": "Create one private, bounded Python notebook execution under a stable request ID. Existing IDs never submit again.",
+      "mutates_cloud": true,
+      "cloud_verified": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$"
+          },
+          "source": {
+            "type": "string"
+          },
+          "timeout": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 43200
+          },
+          "accelerator": {
+            "type": "string"
+          },
+          "internet": {
+            "type": "boolean"
+          },
+          "kernel_type": {
+            "type": "string",
+            "enum": [
+              "script",
+              "notebook"
+            ]
+          },
+          "dataset_source": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50
+          },
+          "kernel_source": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50
+          },
+          "model_source": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50
+          },
+          "competition_source": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50
+          }
+        },
+        "required": [
+          "request_id",
+          "source"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kaggle_status",
+      "command": "status",
+      "description": "Observe the recorded exact notebook version.",
+      "mutates_cloud": false,
+      "cloud_verified": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kaggle_resume",
+      "command": "resume",
+      "description": "Reconcile or observe the original execution without submitting a new version.",
+      "mutates_cloud": false,
+      "cloud_verified": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kaggle_wait",
+      "command": "wait",
+      "description": "Observe the recorded execution for at most 60 seconds.",
+      "mutates_cloud": false,
+      "cloud_verified": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$"
+          },
+          "wait_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 60
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kaggle_logs",
+      "command": "logs",
+      "description": "Read a bounded, redacted log snapshot with a generation-aware cursor.",
+      "mutates_cloud": false,
+      "cloud_verified": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$"
+          },
+          "cursor": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65536
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kaggle_artifacts",
+      "command": "artifacts",
+      "description": "Download fixed-version output files. With a manifest, require its payload sizes/SHA-256 and verified HTTP lengths, recording provider-size conflicts; without one, require provider-size matches.",
+      "mutates_cloud": false,
+      "cloud_verified": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$"
+          },
+          "max_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 68719476736
+          },
+          "manifest_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kaggle_cancel",
+      "command": "cancel",
+      "description": "Cancel only a proven Kaggle session ID and observe the remote terminal state. An acknowledgement does not mean stopped.",
+      "mutates_cloud": true,
+      "cloud_verified": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$"
+          },
+          "wait_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 60
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "kaggle_inspect",
+      "command": "inspect",
+      "description": "Read the local durable request receipt without remote requests.",
+      "mutates_cloud": false,
+      "cloud_verified": false,
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

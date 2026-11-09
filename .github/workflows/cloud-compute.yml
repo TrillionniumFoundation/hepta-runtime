@@ -1,0 +1,34 @@
+name: Cloud Compute Offline Tests
+
+on:
+  push:
+    paths:
+      - 'tools/cloud-compute/**'
+      - '.github/workflows/cloud-compute.yml'
+  pull_request:
+    paths:
+      - 'tools/cloud-compute/**'
+      - '.github/workflows/cloud-compute.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact source HEAD
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Router regression suite (40 tests)
+        working-directory: tools/cloud-compute/router
+        run: python3 -B -m unittest -v test_hepta_compute.py
+      - name: Colab regression suite (31 tests)
+        working-directory: tools/cloud-compute/colab
+        run: python3 -B -m unittest -v test_scoped_profiles.py test_cleanup_unstarted.py test_bind_ledger.py
+      - name: Kaggle regression suite (72 tests)
+        working-directory: tools/cloud-compute/kaggle
+        run: python3 -B -m unittest discover -s tests -v
