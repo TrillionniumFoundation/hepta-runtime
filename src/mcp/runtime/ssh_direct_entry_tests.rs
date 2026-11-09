@@ -48,7 +48,7 @@ async fn queued_cancellation_and_expiry_never_consume_final_entry() {
 		if !expired {
 			cancel.cancel();
 		}
-		assert!(owner.0.sender.try_send(request).is_ok());
+		assert!(owner.0.sender.send(request).is_ok());
 		assert!(reply(receive).await.is_err());
 	}
 	assert_eq!(entered.load(Ordering::Acquire), 0);
@@ -136,7 +136,7 @@ async fn cancelled_caller_cannot_release_entry_guard_before_original_child_reap(
 		"entry guard must survive the cancelled caller"
 	);
 	assert_eq!(entered.load(Ordering::Acquire), 1);
-	assert_eq!(owner.0.global.available_permits(), GLOBAL_CONNECTIONS - 1);
+	assert_eq!(owner.0.core.children.lock().unwrap().len(), 1);
 	gate.release();
 	idle(&owner).await;
 	assert!(!live.load(Ordering::Acquire));

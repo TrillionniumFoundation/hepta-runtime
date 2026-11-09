@@ -195,35 +195,16 @@ fn streamed_reply_preserves_complete_json_and_propagates_output_failure() {
 
 #[tokio::test]
 async fn unit_dispatch_keeps_cancellation_separate_from_a_business_refusal() {
-	let semaphore = Arc::new(tokio::sync::Semaphore::new(1));
-	let lease = Arc::new(semaphore.clone().acquire_owned().await.unwrap());
 	let token = CancellationToken::new();
 	let bytes = Arc::new(Vec::new());
 	let digest = digest_hex(&Sha256::digest(bytes.as_slice()));
-	let result = inspect_isolated(
-		DISPLAY_PATH,
-		&digest,
-		bytes.clone(),
-		&token,
-		lease.clone(),
-		Arc::new(()),
-	)
-	.await
-	.unwrap();
+	let result = inspect_isolated(DISPLAY_PATH, &digest, bytes.clone(), &token, Arc::new(()))
+		.await
+		.unwrap();
 	assert_eq!(result["failure"]["_tag"], "AnalysisUnsupportedTargetError");
 	token.cancel();
-	let failure = inspect_isolated(
-		DISPLAY_PATH,
-		&digest,
-		bytes,
-		&token,
-		lease.clone(),
-		Arc::new(()),
-	)
-	.await
-	.unwrap_err();
+	let failure = inspect_isolated(DISPLAY_PATH, &digest, bytes, &token, Arc::new(()))
+		.await
+		.unwrap_err();
 	assert_eq!(failure.0["code"], "cancelled");
-	assert_eq!(semaphore.available_permits(), 0);
-	drop(lease);
-	assert_eq!(semaphore.available_permits(), 1);
 }

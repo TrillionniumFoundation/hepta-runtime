@@ -1,14 +1,15 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! Bounded persistent file barriers before serial, ownership-fenced publication.
+//! File barrier batches precede serial, ownership-fenced publication.
 use super::*;
 use std::os::fd::AsRawFd;
 
 #[path = "request_audit_sync.rs"]
 mod file_sync;
 
-const MAX_FILES: usize = 32;
+// This is the transaction batch shape, not a shared worker or admission limit.
+const FILE_BARRIER_BATCH_SIZE: usize = 32;
 
 pub(super) fn is_ready() -> bool {
 	file_sync::is_ready()
@@ -214,7 +215,7 @@ pub(super) fn save_many_with_barrier(
 	operation: file_sync::Operation,
 	barrier: &impl Fn(&[Arc<File>], file_sync::Operation) -> Vec<Result<()>>,
 ) -> Vec<Result<()>> {
-	if records.len() > MAX_FILES {
+	if records.len() > FILE_BARRIER_BATCH_SIZE {
 		return (0..records.len())
 			.map(|_| Err(anyhow!("audit file barrier cohort exceeded")))
 			.collect();

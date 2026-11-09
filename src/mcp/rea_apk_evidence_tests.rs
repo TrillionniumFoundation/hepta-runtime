@@ -293,7 +293,7 @@ fn frozen_refusal_bytes(row: &Value) -> Vec<u8> {
 }
 
 #[test]
-fn real_frozen_refusals_keep_the_entire_public_error_projection() {
+fn frozen_refusals_change_only_the_obsolete_concurrency_remediation() {
 	let inputs: Value = serde_json::from_str(include_str!(
 		"../../tests/fixtures/rea_apk_signature/service-error-bytes-r1.json"
 	))
@@ -304,6 +304,7 @@ fn real_frozen_refusals_keep_the_entire_public_error_projection() {
 	.unwrap();
 	let cases = inputs["cases"].as_array().unwrap();
 	assert_eq!(cases.len(), 24);
+	let mut updated_parser_actions = 0;
 	for case in cases {
 		let expected = original["cases"]
 			.as_array()
@@ -314,8 +315,22 @@ fn real_frozen_refusals_keep_the_entire_public_error_projection() {
 		let bytes = frozen_refusal_bytes(case);
 		let error = rea_apk_signature::inspect_static(&bytes).unwrap_err();
 		let actual = parser_failure(error, expected["input"]["path"].as_str().unwrap());
-		assert_eq!(actual.0, expected["expected"], "{}", case["name"]);
+		let mut current = expected["expected"].clone();
+		if current["details"]["resource"] == "capacity" {
+			// Preserve the frozen capture. These are per-input parser bounds;
+			// the current action must not imply a concurrent execution ceiling.
+			assert_eq!(
+				current["remediation"]["action"],
+				"Wait for an active analysis to complete, then retry within the reported admission limits."
+			);
+			current["remediation"]["action"] = json!(
+				"Review the reported parser capacity and select an input within those bounds."
+			);
+			updated_parser_actions += 1;
+		}
+		assert_eq!(actual.0, current, "{}", case["name"]);
 	}
+	assert_eq!(updated_parser_actions, 11);
 	let large = inputs["capture_only"].as_array().unwrap();
 	assert_eq!(large.len(), 1);
 	for case in large {

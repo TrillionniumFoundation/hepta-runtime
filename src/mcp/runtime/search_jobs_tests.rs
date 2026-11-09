@@ -734,3 +734,44 @@ fn oversized_effect_response_retains_identity_under_actual_mcp_envelope_cap() {
 	assert!(wire_size(&result).unwrap() < 64 * 1024);
 	assert!(!result.contains("SECRET"));
 }
+
+#[tokio::test]
+async fn distinct_search_receipts_are_not_serialized_by_a_shared_remote_io_lock() {
+	let first = record_lock(&"a".repeat(64)).unwrap();
+	let same = record_lock(&"a".repeat(64)).unwrap();
+	assert!(Arc::ptr_eq(&first, &same));
+	let held = first.lock().await;
+	let mut others = Vec::new();
+	for index in 0..32 {
+		let lock = record_lock(&format!("{index:064x}")).unwrap();
+		others.push(
+			tokio::time::timeout(Duration::from_secs(1), lock.lock_owned())
+				.await
+				.unwrap(),
+		);
+	}
+	assert!(tokio::time::timeout(Duration::from_millis(30), same.lock())
+		.await
+		.is_err());
+	drop(held);
+	drop(same.lock().await);
+	assert!(record_lock("../outside").is_err());
+}
+
+#[tokio::test]
+async fn refreshing_more_than_eight_receipts_ignores_unavailable_hosts() {
+	let root = tempfile::tempdir().unwrap();
+	let mut records = Vec::new();
+	for index in 0..12 {
+		let mut r = record();
+		r.id = format!("{index:064x}");
+		r.instance = instance().unwrap().into();
+		r.host = "unconfigured_search_status_test_host".into();
+		assert!(pinned_host(&r).is_err());
+		save(root.path(), &r).await.unwrap();
+		records.push(r);
+	}
+	refresh_active(root.path(), &mut records).await.unwrap();
+	assert_eq!(records.len(), 12);
+	assert!(records.iter().all(|record| record.state == "running"));
+}

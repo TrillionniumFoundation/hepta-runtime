@@ -313,3 +313,59 @@ async fn atomic_publication_recovers_after_rename_before_directory_sync_or_ack()
 		.unwrap();
 	assert!(read_record::<Value>(&destination).await.is_err());
 }
+
+#[tokio::test]
+async fn distinct_session_locks_do_not_wait_on_each_other_or_the_index() {
+	let temp = tempfile::tempdir().unwrap();
+	let root = temp.path().join("state");
+	private_directory(&root).await.unwrap();
+	let index = lock_state(&root).await.unwrap();
+	let one_id = "ws_000000000000000000000001";
+	let other_id = "ws_000000000000000000000002";
+	let one = lock_session(&root, one_id).await.unwrap();
+	let other = tokio::time::timeout(
+		std::time::Duration::from_secs(1),
+		lock_session(&root, other_id),
+	)
+	.await
+	.unwrap()
+	.unwrap();
+	assert!(tokio::time::timeout(
+		std::time::Duration::from_millis(40),
+		lock_session(&root, one_id)
+	)
+	.await
+	.is_err());
+	drop(one);
+	drop(lock_session(&root, one_id).await.unwrap());
+	drop((index, other));
+	assert!(lock_session(&root, "../outside").await.is_err());
+}
+
+#[test]
+fn legacy_session_limit_is_identity_only_and_no_longer_restricts_configuration() {
+	for legacy in [0, 1, 8, 9, 1024] {
+		let mut policy = config();
+		policy
+			.weight_workers
+			.get_mut("cpu")
+			.unwrap()
+			.max_active_sessions = legacy;
+		policy.validate().unwrap();
+	}
+}
+
+#[tokio::test]
+async fn stored_session_accounting_does_not_probe_or_cap_active_sessions() {
+	let temp = tempfile::tempdir().unwrap();
+	for index in 0..32 {
+		// Absence of a remote binding used to be counted as an active session.
+		let mut input = open_params();
+		input.idempotency_key = format!("concurrent-{index}");
+		let intent = prepare_intent(&config(), input).unwrap();
+		publish_record(temp.path(), &intent_name(&intent.session_id), &intent)
+			.await
+			.unwrap();
+	}
+	enforce_session_budget(temp.path()).await.unwrap();
+}

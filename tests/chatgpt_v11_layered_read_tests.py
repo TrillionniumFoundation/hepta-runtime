@@ -2,10 +2,12 @@
 # Copyright 2026 TrillionniumFoundation; SPDX-License-Identifier: Apache-2.0
 """Three-owner custody and no-replay regression fixtures; no installed services."""
 import copy
+import concurrent.futures
 import json
 import pathlib
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -33,6 +35,7 @@ class LayeredRouting(unittest.TestCase):
         for proxy in (self.proxy,self.proxy.legacy,self.proxy.predecessor):
             proxy._ensure_native=lambda context=None:None
             proxy._verify_catalog=lambda context=None:None
+            proxy._verify_bound_catalog=lambda binding,context=None:binding
         self.proxy.predecessor.session='predecessor-fixture';self.proxy.predecessor.protocol='2025-11-25'
         self.proxy.predecessor.exchange=self.predecessor_exchange
         self.proxy._original=lambda request,context,era,*,mutating:self.reply('v4',request,mutating)
@@ -180,6 +183,29 @@ class LayeredRouting(unittest.TestCase):
             self.assertTrue(context.posted);self.assertTrue(context.transmitting)
             self.assertIsNone(context.native_id);self.assertIsNone(context.binding)
         finally:self.proxy._finish(context)
+
+    def test_predecessor_calls_run_concurrently_and_pin_their_original_session(self):
+        entered=threading.Barrier(33);release=threading.Event()
+        def exchange(request,**kwargs):
+            entered.wait(timeout=5)
+            release.wait(timeout=5)
+            return self.predecessor_exchange(request,**kwargs)
+        self.proxy.predecessor.exchange=exchange
+        with concurrent.futures.ThreadPoolExecutor(max_workers=32) as workers:
+            futures=[workers.submit(self.proxy._predecessor_call,
+                self.request('operation_status',{'operation_id':f'{index:064x}'}),
+                None,'legacy',mutating=False) for index in range(32)]
+            try:
+                entered.wait(timeout=5)
+                with self.proxy.predecessor._active_lock:
+                    self.assertEqual(len(self.proxy.predecessor._active),32)
+                with self.proxy.predecessor._state_lock:
+                    with self.assertRaisesRegex(ValueError,'cannot replace native session'):
+                        self.proxy.predecessor._new_native_session({})
+            finally:release.set()
+            for future in futures:self.assertNotIn('error',future.result(timeout=5))
+        self.assertEqual(len(self.calls),32)
+        self.assertEqual(self.proxy.predecessor._active,{})
 
     def test_v11_effect_registry_entry_or_root_replacement_refuses_all_dispatch(self):
         path=self.roots['native']/'jobs'/'unexpected';path.write_text('not admitted here')

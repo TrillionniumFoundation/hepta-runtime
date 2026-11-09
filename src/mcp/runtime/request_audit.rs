@@ -16,8 +16,6 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-#[cfg(unix)]
-use tokio::sync::Semaphore;
 
 use super::config::runtime_config;
 
@@ -33,9 +31,7 @@ const MAX_OWNER: usize = 128;
 const MAX_RECORD_BYTES: usize = 2048;
 const MAX_PAGE_BYTES: usize = 64 * 1024;
 #[cfg(unix)]
-const MAX_METADATA_QUERIES: usize = 8;
-#[cfg(unix)]
-static METADATA_QUERY_SLOTS: OnceLock<Arc<Semaphore>> = OnceLock::new();
+const METADATA_BATCH_SIZE: usize = 8;
 const STORE_NAME: &str = "request-audit";
 const ARCHIVE_NAME: &str = "request-archive-v11";
 const ARCHIVE_ANCHOR: &str = ".request-archive-v11-anchor.json";
@@ -519,10 +515,7 @@ impl AuditStoreLock {
 				self.cancel(&mut queue, ticket);
 				return Err(StoreLockFailure::Unavailable);
 			}
-			if !queue.active
-				&& queue.readers < 2
-				&& queue.waiting.front() == Some(&(ticket, AuditStoreAccess::Shared))
-			{
+			if !queue.active && queue.waiting.front() == Some(&(ticket, AuditStoreAccess::Shared)) {
 				queue.waiting.pop_front();
 				queue.readers += 1;
 				// Let the next adjacent reader observe its own admission condition.
@@ -1917,13 +1910,6 @@ impl std::fmt::Display for MetadataQueryDeadline {
 impl std::error::Error for MetadataQueryDeadline {}
 
 #[cfg(unix)]
-fn metadata_query_slots() -> Arc<Semaphore> {
-	METADATA_QUERY_SLOTS
-		.get_or_init(|| Arc::new(Semaphore::new(MAX_METADATA_QUERIES)))
-		.clone()
-}
-
-#[cfg(unix)]
 fn metadata_query_public_error(error: anyhow::Error) -> anyhow::Error {
 	if error.is::<MetadataQueryDeadline>() {
 		error
@@ -1934,18 +1920,16 @@ fn metadata_query_public_error(error: anyhow::Error) -> anyhow::Error {
 	}
 }
 
-// Admission and blocking-pool queue time consume the original query budget.
-// A cancelled caller cannot release a slot while queued or running I/O still
-// owns it, and a late blocking worker must not open the archive or start a scan.
+// Queue time consumes the original query budget. Independent queries have no
+// application admission ceiling. A late worker must not open the archive or
+// start a scan; its closure still owns all actual I/O and associated guards.
 #[cfg(all(test, unix))]
 async fn run_metadata_query<T: Send + 'static>(
 	deadline: Instant,
-	slots: Arc<Semaphore>,
 	query: impl FnOnce(Instant) -> Result<T> + Send + 'static,
 ) -> Result<T> {
 	run_metadata_query_traced(
 		deadline,
-		slots,
 		metadata_trace::QueryTrace::new("test", deadline, 0, false),
 		query,
 	)
@@ -1955,7 +1939,6 @@ async fn run_metadata_query<T: Send + 'static>(
 #[cfg(unix)]
 async fn run_metadata_query_traced<T: Send + 'static>(
 	deadline: Instant,
-	slots: Arc<Semaphore>,
 	trace: metadata_trace::QueryTrace,
 	query: impl FnOnce(Instant) -> Result<T> + Send + 'static,
 ) -> Result<T> {
@@ -1965,19 +1948,12 @@ async fn run_metadata_query_traced<T: Send + 'static>(
 		return Err(MetadataQueryDeadline.into());
 	}
 	let result = tokio::time::timeout_at(tokio::time::Instant::from_std(deadline), async move {
-		trace.mark("permit_wait", 0);
-		let permit = slots
-			.acquire_owned()
-			.await
-			.map_err(|_| anyhow!("archive metadata query admission unavailable"))?;
-		trace.mark("permit_acquired", 0);
 		if Instant::now() >= deadline {
 			return Err(MetadataQueryDeadline.into());
 		}
 		trace.mark("blocking_submitted", 0);
 		tokio::task::spawn_blocking(move || {
 			let _context = trace.enter();
-			let _permit = permit;
 			trace.mark("blocking_entered", 0);
 			let result = if Instant::now() >= deadline {
 				Err(MetadataQueryDeadline.into())
@@ -2014,7 +1990,7 @@ fn usage_stats_at(root: &Path, owner: &str) -> Result<String> {
 #[cfg(unix)]
 fn usage_stats_at_until(root: &Path, owners: &[String; 1], deadline: Instant) -> Result<String> {
 	// The admitted blocking closure reaches the coordinator before opening
-	// hot/archive state. Its original permit remains owned by that closure.
+	// hot/archive state. Original I/O and its guards are owned by that closure.
 	usage_batch::run(root, owners, deadline)
 }
 
@@ -2027,7 +2003,7 @@ pub async fn usage_stats(owner: &str, _params: UsageStatsParams) -> Result<Strin
 	let owner = owner.to_owned();
 	#[cfg(unix)]
 	{
-		run_metadata_query_traced(deadline, metadata_query_slots(), trace, move |deadline| {
+		run_metadata_query_traced(deadline, trace, move |deadline| {
 			usage_stats_at_until(&root, std::array::from_ref(&owner), deadline)
 		})
 		.await
@@ -2113,7 +2089,7 @@ pub async fn archive_history(owner: &str, params: RequestHistoryParams) -> Resul
 	let owner = owner.to_owned();
 	#[cfg(unix)]
 	{
-		archive_batch::run_owned(root, owner, params, deadline, metadata_query_slots(), trace)
+		archive_batch::run_owned(root, owner, params, deadline, trace)
 			.await
 			.map_err(metadata_query_public_error)
 	}

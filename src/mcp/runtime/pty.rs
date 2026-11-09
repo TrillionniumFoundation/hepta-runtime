@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::process::{ChildStdin, Command};
-use tokio::sync::{Mutex as AsyncMutex, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::Mutex as AsyncMutex;
 
 use super::config::{check_environment, check_execution, runtime_config, valid_name};
 use super::config::{ExecutionMode, Platform};
@@ -26,17 +26,7 @@ const MAX_READ_BYTES: usize = 16 * 1024;
 const MAX_WRITE_BYTES: usize = 64 * 1024;
 static PTY_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 static PTYS: OnceLock<Mutex<HashMap<String, PtySession>>> = OnceLock::new();
-static PTY_SLOTS: OnceLock<Arc<Semaphore>> = OnceLock::new();
-const MAX_ACTIVE_SESSIONS: usize = 128;
 const MAX_TRACKED_SESSIONS: usize = 256;
-
-fn reserve_pty_slot() -> Result<OwnedSemaphorePermit> {
-	PTY_SLOTS
-		.get_or_init(|| Arc::new(Semaphore::new(MAX_ACTIVE_SESSIONS)))
-		.clone()
-		.try_acquire_owned()
-		.map_err(|_| anyhow!("active PTY session limit reached"))
-}
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -204,6 +194,18 @@ struct PtySession {
 	status: Arc<Mutex<PtyStatus>>,
 }
 
+fn prune_closed_sessions(sessions: &mut HashMap<String, PtySession>) {
+	if sessions.len() >= MAX_TRACKED_SESSIONS {
+		sessions.retain(|_, session| {
+			session
+				.status
+				.lock()
+				.map(|status| matches!(status.state, PtyState::Running))
+				.unwrap_or(true)
+		});
+	}
+}
+
 fn registry() -> &'static Mutex<HashMap<String, PtySession>> {
 	PTYS.get_or_init(|| Mutex::new(HashMap::new()))
 }
@@ -362,22 +364,11 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 	if params.idempotency_key.is_some() {
 		bail!("PTY keys require an operator host");
 	}
-	// Reserve before any asynchronous launch, so concurrent starts cannot
-	// overrun the cap. Closed sessions must not permanently consume capacity.
-	let permit = reserve_pty_slot()?;
 	{
 		let mut sessions = registry()
 			.lock()
 			.map_err(|_| anyhow!("PTY registry lock poisoned"))?;
-		if sessions.len() >= MAX_TRACKED_SESSIONS {
-			sessions.retain(|_, session| {
-				session
-					.status
-					.lock()
-					.map(|status| matches!(status.state, PtyState::Running))
-					.unwrap_or(true)
-			});
-		}
+		prune_closed_sessions(&mut sessions);
 	}
 	let id = next_id();
 	let rows = params.rows.unwrap_or(24).clamp(1, 500);
@@ -449,7 +440,6 @@ pub async fn start_pty(params: PtyStartParams) -> Result<String> {
 	let cancelled = stop.clone();
 	let remote_job_id = id.clone();
 	tokio::spawn(async move {
-		let _permit = permit;
 		let waited = tokio::select! {
 			result = child.wait() => result,
 			_ = cancelled.cancelled() => {

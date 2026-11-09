@@ -616,11 +616,12 @@ fn strict_walk_with_finish_still_rejects_cross_namespace_duplicates_before_finis
 }
 
 #[test]
-fn async_metadata_timeout_retains_its_permit_until_original_children_join() {
+fn async_metadata_timeout_retains_custody_until_original_children_join() {
 	let fixture = Arc::new(Fixture::new(false, 1));
 	let started = Arc::new(Gate::default());
 	let release = Arc::new(Gate::default());
-	let slots = Arc::new(tokio::sync::Semaphore::new(MAX_METADATA_QUERIES));
+	let custody = Arc::new(());
+	let witness = Arc::downgrade(&custody);
 	let runtime = tokio::runtime::Builder::new_multi_thread()
 		.worker_threads(2)
 		.enable_all()
@@ -630,30 +631,25 @@ fn async_metadata_timeout_retains_its_permit_until_original_children_join() {
 	// child held while Runtime::drop waits for the original blocking closure.
 	let _release = ReleaseGates(vec![release.clone()]);
 	runtime.block_on(async {
-		let reserved = slots.clone().acquire_many_owned(7).await.unwrap();
 		let query_fixture = fixture.clone();
 		let query_started = started.clone();
 		let query_release = release.clone();
-		let query_slots = slots.clone();
 		let task = tokio::spawn(async move {
-			run_metadata_query(
-				Instant::now() + Duration::from_secs(2),
-				query_slots,
-				move |deadline| {
-					let cancelled = AtomicBool::new(false);
-					let perform = |task: OriginalTask<'_>| {
-						query_started.release();
-						query_release.wait();
-						verify_original_task(task)
-					};
-					std::thread::scope(|scope| {
-						let mut workers = OriginalWorkers::new(&cancelled, deadline);
-						workers.start(scope, &perform)?;
-						query_fixture.submit(&mut workers, 0)?;
-						workers.finish(1)
-					})
-				},
-			)
+			run_metadata_query(Instant::now() + Duration::from_secs(2), move |deadline| {
+				let _custody = custody;
+				let cancelled = AtomicBool::new(false);
+				let perform = |task: OriginalTask<'_>| {
+					query_started.release();
+					query_release.wait();
+					verify_original_task(task)
+				};
+				std::thread::scope(|scope| {
+					let mut workers = OriginalWorkers::new(&cancelled, deadline);
+					workers.start(scope, &perform)?;
+					query_fixture.submit(&mut workers, 0)?;
+					workers.finish(1)
+				})
+			})
 			.await
 		});
 		tokio::task::spawn_blocking(move || started.wait())
@@ -661,15 +657,15 @@ fn async_metadata_timeout_retains_its_permit_until_original_children_join() {
 			.unwrap();
 		let error = task.await.unwrap().unwrap_err();
 		assert!(error.is::<MetadataQueryDeadline>());
-		assert_eq!(slots.available_permits(), 0);
+		assert!(witness.upgrade().is_some());
 		release.release();
-		let drained = tokio::time::timeout(Duration::from_secs(10), slots.clone().acquire_owned())
-			.await
-			.unwrap()
-			.unwrap();
-		drop(drained);
-		drop(reserved);
-		assert_eq!(slots.available_permits(), MAX_METADATA_QUERIES);
+		tokio::time::timeout(Duration::from_secs(10), async {
+			while witness.upgrade().is_some() {
+				tokio::task::yield_now().await;
+			}
+		})
+		.await
+		.unwrap();
 	});
 }
 

@@ -156,7 +156,8 @@ its own bounded acquisition worker before the Oxc parser.
 The parser rejects more than 200,000 AST nodes in one source and more than
 10,000 combined observations or IPC candidate edges. Pages contain at most
 256 rows and one response is at most 1 MiB; oversized pages fail explicitly.
-Two inspections may run concurrently in one controller.
+Independent inspections have no runtime count ceiling; see
+[concurrent execution](../CONCURRENCY_POLICY.md).
 
 Production parsing uses the shipped `hepta-runtime rea-javascript-worker`
 subcommand over bounded stdin/stdout pipes. The worker clears its environment,
@@ -166,9 +167,9 @@ parent-death protection and the existing REA post-input seccomp restrictions.
 Timeout and output errors kill and reap the worker. The MCP handler also passes
 its request cancellation token explicitly. It checks cancellation before admission
 and spawning, and the running worker responds to the token by killing and awaiting
-the same owned child before releasing the parser slot. An already-started bounded
-file read retains the slot until that read completes; cancellation does not detach
-the read and admit an unbounded background queue.
+the same owned child before the operation returns. An already-started bounded
+file read remains awaited until it completes; cancellation does not replace the
+original read with another attempt.
 
 This cancellation path requires the handler to remain running and observe the
 request token. Arbitrary future destruction or runtime exit still uses the existing

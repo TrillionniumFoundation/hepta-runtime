@@ -28,10 +28,17 @@ import rea_operation_qualification as q
 
 
 SCHEMA = "hepta.rea.lifecycle-qualification.v1"
-PROFILE = "rea-agents-6.8.0/inspect_elf_notes/linux-owned-lifecycle/v1"
+LEGACY_PROFILE = "rea-agents-6.8.0/inspect_elf_notes/linux-owned-lifecycle/v1"
+PROFILE = "rea-agents-6.8.0/inspect_elf_notes/linux-owned-lifecycle/v2"
+LEGACY_SESSION_ORDER = (("reference", "capture-cancel"), ("native", "capture-cancel"),
+                        ("native", "worker-capacity-cancel"), ("native", "worker-deadline"),
+                        ("reference", "active-eof"), ("native", "active-eof"))
 SESSION_ORDER = (("reference", "capture-cancel"), ("native", "capture-cancel"),
-                 ("native", "worker-capacity-cancel"), ("native", "worker-deadline"),
+                 ("native", "worker-parallel-cancel"), ("native", "worker-deadline"),
                  ("reference", "active-eof"), ("native", "active-eof"))
+PROFILE_SESSIONS = {LEGACY_PROFILE: LEGACY_SESSION_ORDER, PROFILE: SESSION_ORDER}
+# The consumer pins its own finite sample, independent of producer summaries.
+PARALLEL_REQUESTS = 8
 PRODUCER_FILES = (
     "scripts/rea_lifecycle_qualification.py", "scripts/rea_lifecycle_evidence.py",
     "tests/rea_lifecycle_qualification_tests.py", "scripts/rea_operation_qualification.py",
@@ -392,6 +399,77 @@ class Replay:
         q.require((identity["pid"], identity["start_time_ticks"]) in after["tracked_ids"], "stopped worker lacks a retained pidfd")
         return stopped, identity
 
+    def held_workers(self, role, identities):
+        event, observed = self.observation(role)
+        if not observed["complete"]:
+            raise OpenObservation("incomplete inventory cannot prove original workers remained stopped")
+        tracked = {item["identity"]["pid"]: item for item in event["snapshot"]["tracked"]}
+        need(all(observed["identities"].get(identity["pid"]) == identity
+                 and observed["states"].get(identity["pid"]) in {"T", "t"}
+                 and tracked.get(identity["pid"], {}).get("identity") == identity
+                 and tracked[identity["pid"]].get("pidfd_exited") is False
+                 and isinstance(tracked[identity["pid"]].get("stat"), str)
+                 and parse_stat(tracked[identity["pid"]]["stat"])[1] in {"T", "t"}
+                 for identity in identities), "original held workers did not remain stopped and owned")
+        return event
+
+    def parallel_cancel(self, prime, record):
+        workers, held_ids, last_drain = set(), set(), 0
+        completed = 0
+        for round_index in range(2):
+            selected = []
+            for index in range(2):
+                role = f"round-{round_index}-held-{index}"
+                identifier, sent = self.active_request(role, "worker")
+                stopped, identity = self.stopped(role)
+                q.require(last_drain <= sent <= stopped["snapshot"]["start_ns"],
+                          "held worker preceded its request or the prior round drain")
+                key = (identity["pid"], identity["start_time_ticks"])
+                q.require(key not in workers, "parallel cancellation reused an earlier worker observation")
+                workers.add(key)
+                held_ids.add(identifier)
+                selected.append((identifier, stopped, identity))
+            identities = [identity for _, _, identity in selected]
+            before = self.held_workers(f"round-{round_index}-held-before", identities)
+            after = self.held_workers(f"round-{round_index}-held-after", identities)
+            q.require(max(stopped["snapshot"]["end_ns"] for _, stopped, _ in selected)
+                      <= before["snapshot"]["start_ns"] <= before["snapshot"]["end_ns"]
+                      <= after["snapshot"]["start_ns"], "held-worker observations are out of order")
+            for index in range(PARALLEL_REQUESTS):
+                role = f"round-{round_index}-parallel-{index}"
+                request = self.one("request", role)
+                q.require(request["tool"] == self.tool and request["arguments"] == {
+                    "path": self.fixtures["prime"]["path"]}, "parallel call did not use the reviewed baseline fixture")
+                identifier = request["request_id"]
+                sent = self.wire["times"]["sent"][identifier]
+                received = self.wire["times"]["received"].get(identifier)
+                need(received is not None, "independent parallel request had no original response")
+                q.require(before["snapshot"]["end_ns"] <= sent <= received <= after["snapshot"]["start_ns"],
+                          "parallel response was not completed between original held-worker observations")
+                need(q.tool_value(self.result(role)) == q.tool_value(prime),
+                     "independent request failed or changed baseline Evidence while two workers were held")
+                completed += 1
+            cancelled_at = [self.cancelled(identifier, after)[0] for identifier, _, _ in selected]
+            drain, drained = self.observation(f"round-{round_index}-drained", clear=True)
+            q.require(workers <= drained["tracked_ids"], "drain omitted an original worker pidfd")
+            need(max(cancelled_at) <= drain["snapshot"]["start_ns"]
+                 <= drain["snapshot"]["end_ns"] <= max(cancelled_at) + 5_000_000_000,
+                 "parallel worker cancellation did not finish original reap/drain within five seconds")
+            last_drain = drain["snapshot"]["end_ns"]
+        controls = [event for event in self.events if event["event"] == "signal"]
+        q.require(len(controls) == len(workers) and all(
+            event.get("signal") == "SIGSTOP" and event.get("delivery") == "pidfd"
+            and (event["identity"]["pid"], event["identity"]["start_time_ticks"]) in workers
+            for event in controls), "parallel lifecycle used an unreviewed process control")
+        notifications = [event for event in self.events if event["event"] == "notification"]
+        q.require(len(notifications) == len(held_ids) and {
+            event["params"].get("requestId") for event in notifications} == held_ids,
+            "parallel lifecycle cancelled an independent request or omitted an original held worker")
+        self.steady(prime, record)
+        return {"distinct_reaped_workers": len(workers),
+                "successful_requests_while_workers_stopped": completed,
+                "held_workers_per_round": 2, "additional_requests_per_round": PARALLEL_REQUESTS}
+
     def replay(self):
         self.closed()
         if any(event["event"] == "error" for event in self.events):
@@ -447,6 +525,8 @@ class Replay:
                 self.observation(f"round-{round_index}-drained", clear=True)
             self.steady(prime, record)
             details["distinct_reaped_workers"] = len(workers)
+        elif self.scenario == "worker-parallel-cancel":
+            details = self.parallel_cancel(prime, record)
         elif self.scenario == "worker-deadline":
             identifier, sent = self.active_request("deadline", "worker")
             stopped, _ = self.stopped("deadline")
@@ -483,7 +563,8 @@ def validate_lifecycle_receipt(repo, receipt_path, expected_sha256):
     raw = receipt_path.read_bytes()
     q.require(len(raw) <= q.MAX_WIRE_BYTES, "lifecycle receipt exceeds allowance")
     report, root = q.parse_json(raw), receipt_path.parent
-    q.require(report.get("schema") == SCHEMA and report.get("profile") == PROFILE
+    profile = report.get("profile")
+    q.require(report.get("schema") == SCHEMA and isinstance(profile, str) and profile in PROFILE_SESSIONS
               and report.get("operation") == "inspect_elf_notes", "unknown lifecycle qualification profile")
     q.require(report.get("errors") == [], "lifecycle execution did not produce a complete receipt")
     bindings = report.get("producer_before")
@@ -533,7 +614,7 @@ def validate_lifecycle_receipt(repo, receipt_path, expected_sha256):
                   and value["sha256"] == expected_fixture(size) and stat.S_ISREG(value["mode"])
                   and integer(value["dev"]) and integer(value["ino"], 1), "fixture differs from independent ELF encoding")
     rows = report.get("sessions")
-    q.require(isinstance(rows, list) and [(row.get("producer"), row.get("scenario")) for row in rows] == list(SESSION_ORDER),
+    q.require(isinstance(rows, list) and [(row.get("producer"), row.get("scenario")) for row in rows] == list(PROFILE_SESSIONS[profile]),
               "lifecycle session set/order is incomplete or invented")
     results = {}
     for row in rows:
@@ -548,17 +629,20 @@ def validate_lifecycle_receipt(repo, receipt_path, expected_sha256):
     def combined(names):
         values = [results[name]["status"] for name in names]
         return "FAILED" if "FAILED" in values else "OPEN" if "OPEN" in values else "PASS"
+    worker_scenario = "native/" + PROFILE_SESSIONS[profile][2][1]
     gates = {
-        "active-cancellation-owner-drain": combined(["reference/capture-cancel", "native/capture-cancel", "native/worker-capacity-cancel"]),
+        "active-cancellation-owner-drain": combined(["reference/capture-cancel", "native/capture-cancel", worker_scenario]),
         "unknown-cancellation-boundary": combined(["reference/capture-cancel", "native/capture-cancel"]),
         "active-eof-owner-drain": combined(["reference/active-eof", "native/active-eof"]),
         "native-worker-deadline-owner-drain": results["native/worker-deadline"]["status"],
         "deadline-owner-drain": "OPEN",
     }
+    if profile == PROFILE:
+        gates["parallel-independent-request-completion"] = results[worker_scenario]["status"]
     q.require(report.get("unsupported") == [{"producer": "reference", "scenario": "worker-deadline",
         "reason": "frozen ElfNotesProvider parses in process; no independent parser pidfd deadline injection boundary"}],
         "unsupported reference deadline scope was omitted or replaced")
-    return {"schema": "hepta.rea.lifecycle-assessment.v1", "profile": PROFILE,
+    return {"schema": "hepta.rea.lifecycle-assessment.v1", "profile": profile,
             "qualified": False, "status": "FAILED" if "FAILED" in gates.values() else "OPEN",
             "gates": gates, "sessions": results,
             "binary": report["native_before"], "binary_source_commit_declared": declared,

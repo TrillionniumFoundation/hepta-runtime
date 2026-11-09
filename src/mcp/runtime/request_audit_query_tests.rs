@@ -12,7 +12,7 @@ use std::sync::mpsc;
 use std::sync::Arc;
 use std::task::Poll;
 use std::time::{Duration, Instant};
-use tokio::sync::{oneshot, Semaphore};
+use tokio::sync::oneshot;
 
 fn isolated_runtime() -> tokio::runtime::Runtime {
 	tokio::runtime::Builder::new_current_thread()
@@ -32,10 +32,9 @@ async fn blocking_queue_fence() {
 #[test]
 fn metadata_query_expired_before_admission_never_runs() {
 	isolated_runtime().block_on(async {
-		let slots = Arc::new(Semaphore::new(1));
 		let calls = Arc::new(AtomicUsize::new(0));
 		let observed = calls.clone();
-		let error = run_metadata_query(Instant::now(), slots.clone(), move |_| {
+		let error = run_metadata_query(Instant::now(), move |_| {
 			observed.fetch_add(1, Ordering::SeqCst);
 			Ok(())
 		})
@@ -43,23 +42,20 @@ fn metadata_query_expired_before_admission_never_runs() {
 		.unwrap_err();
 		assert!(error.is::<MetadataQueryDeadline>());
 		assert_eq!(calls.load(Ordering::SeqCst), 0);
-		assert_eq!(slots.available_permits(), 1);
 	});
 }
 
 #[test]
 fn metadata_query_preserves_result_and_original_deadline() {
 	isolated_runtime().block_on(async {
-		let slots = Arc::new(Semaphore::new(1));
 		let deadline = Instant::now() + Duration::from_secs(5);
-		let result = run_metadata_query(deadline, slots.clone(), move |actual| {
+		let result = run_metadata_query(deadline, move |actual| {
 			assert_eq!(actual, deadline);
 			Ok("original query result")
 		})
 		.await
 		.unwrap();
 		assert_eq!(result, "original query result");
-		assert_eq!(slots.available_permits(), 1);
 	});
 }
 
@@ -73,74 +69,62 @@ fn metadata_query_expired_in_blocking_queue_never_runs() {
 			blocked.recv().unwrap();
 		});
 		ready.await.unwrap();
-		let slots = Arc::new(Semaphore::new(1));
+
 		let calls = Arc::new(AtomicUsize::new(0));
 		let observed = calls.clone();
 		let mut query = Box::pin(run_metadata_query(
 			Instant::now() + Duration::from_millis(250),
-			slots.clone(),
 			move |_| {
 				observed.fetch_add(1, Ordering::SeqCst);
 				Ok(())
 			},
 		));
 		// The only blocking worker is held. Poll once to submit the query and
-		// establish its slot ownership before waiting for its original deadline.
+		// establish worker ownership before waiting for its original deadline.
 		poll_fn(|cx| {
 			assert!(query.as_mut().poll(cx).is_pending());
 			Poll::Ready(())
 		})
 		.await;
-		assert_eq!(slots.available_permits(), 0);
+
 		let error = query.await.unwrap_err();
 		assert!(error.is::<MetadataQueryDeadline>());
-		assert_eq!(slots.available_permits(), 0);
+
 		release.send(()).unwrap();
 		blocker.await.unwrap();
 		blocking_queue_fence().await;
 		assert_eq!(calls.load(Ordering::SeqCst), 0);
-		assert_eq!(slots.available_permits(), 1);
 	});
 }
 
 #[test]
-fn metadata_query_cancelled_while_waiting_never_spawns() {
+fn metadata_query_dropped_before_poll_never_spawns() {
 	isolated_runtime().block_on(async {
-		let slots = Arc::new(Semaphore::new(1));
-		let held = slots.clone().acquire_owned().await.unwrap();
 		let calls = Arc::new(AtomicUsize::new(0));
 		let observed = calls.clone();
-		let mut query = Box::pin(run_metadata_query(
+		drop(run_metadata_query(
 			Instant::now() + Duration::from_secs(5),
-			slots.clone(),
 			move |_| {
 				observed.fetch_add(1, Ordering::SeqCst);
 				Ok(())
 			},
 		));
-		poll_fn(|cx| {
-			assert!(query.as_mut().poll(cx).is_pending());
-			Poll::Ready(())
-		})
-		.await;
-		drop(query);
-		drop(held);
 		blocking_queue_fence().await;
 		assert_eq!(calls.load(Ordering::SeqCst), 0);
-		assert_eq!(slots.available_permits(), 1);
 	});
 }
 
 #[test]
-fn metadata_query_cancelled_worker_retains_capacity_until_exit() {
+fn metadata_query_cancelled_worker_retains_custody_until_exit() {
 	isolated_runtime().block_on(async {
-		let slots = Arc::new(Semaphore::new(1));
 		let (started, ready) = oneshot::channel();
 		let (release, blocked) = mpsc::channel();
+		let custody = Arc::new(());
+		let witness = Arc::downgrade(&custody);
 		let query = tokio::spawn(run_metadata_query(
 			Instant::now() + Duration::from_secs(5),
-			slots.clone(),
 			move |_| {
+				let _custody = custody;
 				started.send(()).unwrap();
 				blocked.recv().unwrap();
 				Ok(())
@@ -149,24 +133,25 @@ fn metadata_query_cancelled_worker_retains_capacity_until_exit() {
 		ready.await.unwrap();
 		query.abort();
 		assert!(query.await.unwrap_err().is_cancelled());
-		assert_eq!(slots.available_permits(), 0);
-		assert!(slots.clone().try_acquire_owned().is_err());
+
+		assert!(witness.upgrade().is_some());
 		release.send(()).unwrap();
 		blocking_queue_fence().await;
-		assert_eq!(slots.available_permits(), 1);
+		assert!(witness.upgrade().is_none());
 	});
 }
 
 #[test]
-fn metadata_query_timed_out_worker_retains_capacity_until_exit() {
+fn metadata_query_timed_out_worker_retains_custody_until_exit() {
 	isolated_runtime().block_on(async {
-		let slots = Arc::new(Semaphore::new(1));
 		let (started, ready) = oneshot::channel();
 		let (release, blocked) = mpsc::channel();
+		let custody = Arc::new(());
+		let witness = Arc::downgrade(&custody);
 		let query = tokio::spawn(run_metadata_query(
 			Instant::now() + Duration::from_millis(250),
-			slots.clone(),
 			move |_| {
+				let _custody = custody;
 				started.send(()).unwrap();
 				blocked.recv().unwrap();
 				Ok(())
@@ -180,11 +165,11 @@ fn metadata_query_timed_out_worker_retains_capacity_until_exit() {
 			.unwrap()
 			.unwrap_err()
 			.is::<MetadataQueryDeadline>());
-		assert_eq!(slots.available_permits(), 0);
-		assert!(slots.clone().try_acquire_owned().is_err());
+
+		assert!(witness.upgrade().is_some());
 		release.send(()).unwrap();
 		blocking_queue_fence().await;
-		assert_eq!(slots.available_permits(), 1);
+		assert!(witness.upgrade().is_none());
 	});
 }
 
@@ -224,13 +209,12 @@ fn metadata_query_errors_preserve_timeout_and_redact_inner_details() {
 #[test]
 fn metadata_query_ready_success_consumed_after_deadline_is_refused() {
 	isolated_runtime().block_on(async {
-		let slots = Arc::new(Semaphore::new(1));
 		let calls = Arc::new(AtomicUsize::new(0));
 		let observed = calls.clone();
 		let (started, ready) = oneshot::channel();
 		let (release, blocked) = mpsc::channel();
 		let deadline = Instant::now() + Duration::from_secs(2);
-		let mut query = Box::pin(run_metadata_query(deadline, slots.clone(), move |actual| {
+		let mut query = Box::pin(run_metadata_query(deadline, move |actual| {
 			assert_eq!(actual, deadline);
 			observed.fetch_add(1, Ordering::SeqCst);
 			started.send(()).unwrap();
@@ -253,7 +237,7 @@ fn metadata_query_ready_success_consumed_after_deadline_is_refused() {
 		// the caller future is deliberately left unpolled.
 		blocking_queue_fence().await;
 		assert_eq!(calls.load(Ordering::SeqCst), 1);
-		assert_eq!(slots.available_permits(), 1);
+
 		assert!(
 			Instant::now() < deadline,
 			"fixture missed its pre-deadline ready window"
@@ -270,6 +254,58 @@ fn metadata_query_ready_success_consumed_after_deadline_is_refused() {
 			1,
 			"metadata query was replayed"
 		);
-		assert_eq!(slots.available_permits(), 1);
+	});
+}
+
+#[test]
+fn metadata_queries_exceed_old_eight_worker_limit_and_preserve_custody() {
+	let runtime = tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.build()
+		.unwrap();
+	runtime.block_on(async {
+		let deadline = Instant::now() + Duration::from_secs(10);
+		let (entered, mut started) = tokio::sync::mpsc::unbounded_channel();
+		let mut tasks = Vec::new();
+		let mut releases = Vec::new();
+		let mut witnesses = Vec::new();
+		for index in 0..16 {
+			let (release, blocked) = mpsc::channel();
+			let custody = Arc::new(());
+			witnesses.push(Arc::downgrade(&custody));
+			let entered = entered.clone();
+			tasks.push(tokio::spawn(run_metadata_query(deadline, move |actual| {
+				let _custody = custody;
+				assert_eq!(actual, deadline);
+				entered.send(index).unwrap();
+				blocked.recv_timeout(Duration::from_secs(10)).unwrap();
+				Ok(index)
+			})));
+			releases.push(release);
+		}
+		for _ in 0..16 {
+			tokio::time::timeout(Duration::from_secs(5), started.recv())
+				.await
+				.unwrap()
+				.unwrap();
+		}
+		for task in tasks.drain(..4) {
+			task.abort();
+			assert!(task.await.unwrap_err().is_cancelled());
+		}
+		assert!(witnesses.iter().all(|witness| witness.upgrade().is_some()));
+		for release in releases {
+			release.send(()).unwrap();
+		}
+		for task in tasks {
+			task.await.unwrap().unwrap();
+		}
+		tokio::time::timeout(Duration::from_secs(5), async {
+			while witnesses.iter().any(|witness| witness.upgrade().is_some()) {
+				tokio::task::yield_now().await;
+			}
+		})
+		.await
+		.unwrap();
 	});
 }

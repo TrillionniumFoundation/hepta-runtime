@@ -48,7 +48,6 @@ fn cold_positive_and_absent_concurrency_benchmark() {
 	let runtime = Arc::new(
 		tokio::runtime::Builder::new_multi_thread()
 			.worker_threads(2)
-			.max_blocking_threads(MAX_REGISTRY_LOOKUPS)
 			.enable_all()
 			.build()
 			.unwrap(),
@@ -94,13 +93,13 @@ fn cold_positive_and_absent_concurrency_benchmark() {
 					.values()
 					.filter(|binding| binding.strict)
 					.count();
-				let slots = Arc::new(Semaphore::new(MAX_REGISTRY_LOOKUPS));
+
 				let barrier = Arc::new(Barrier::new(concurrency + 1));
 				let mut workers = Vec::new();
 				for index in 0..concurrency {
 					let path = root.path().to_owned();
 					let cache = cache.clone();
-					let slots = slots.clone();
+
 					let runtime = runtime.clone();
 					let barrier = barrier.clone();
 					workers.push(std::thread::spawn(move || {
@@ -112,7 +111,7 @@ fn cold_positive_and_absent_concurrency_benchmark() {
 						barrier.wait();
 						let started = Instant::now();
 						let found = runtime
-							.block_on(run_registry_lookup(slots, move || {
+							.block_on(run_registry_lookup(move || {
 								find_idempotent_in(&path, "main", &key, &cache)
 							}))
 							.unwrap();
@@ -137,7 +136,7 @@ fn cold_positive_and_absent_concurrency_benchmark() {
 					.collect();
 				let wall = started.elapsed().as_secs_f64();
 				let after = usage();
-				assert_eq!(slots.available_permits(), MAX_REGISTRY_LOOKUPS);
+
 				let row = json!({
 					"repetition":repetition, "kind":kind, "primed_strict_bindings":primed_strict_bindings,
 					"concurrency":concurrency, "successes":latencies.len(), "failures":0,
@@ -158,7 +157,7 @@ fn cold_positive_and_absent_concurrency_benchmark() {
 		"REGISTRY_CONCURRENCY_BENCH {}",
 		json!({
 			"schema":"hepta-registry-cold-concurrency-v1", "records":6000,
-			"actual_worker_limit":MAX_REGISTRY_LOOKUPS, "repetitions":4,
+			"application_worker_limit":null, "repetitions":4,
 			"cache":"fresh ReuseHitCache per wave; known_invalidated primes original keys then adds non-JSON marker before timing; OS cache may stay warm",
 			"timing":"main barrier wait through all original worker joins; fixture and thread creation excluded",
 			"cpu":"getrusage RUSAGE_SELF delta for each complete wave",

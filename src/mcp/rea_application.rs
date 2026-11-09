@@ -26,7 +26,6 @@ use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 #[path = "rea_application_parser.rs"]
@@ -326,19 +325,13 @@ fn inspect_file(
 
 async fn inspect_with_roots(params: InspectApplicationParams, roots: &[PathBuf]) -> Result<String> {
 	validate(&params)?;
-	static SLOTS: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
-	let permit = Arc::clone(SLOTS.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(2))))
-		.try_acquire_owned()
-		.context("application manifest parser is busy; retry after another inspection finishes")?;
 	let (file, before) = super::rea_files::open_confined(Path::new(&params.path), roots).await?;
 	if before.len() == 0 || before.len() > MAX_ARCHIVE_BYTES {
 		bail!("application archive must contain 1 byte through 512 MiB");
 	}
 	let file = file.into_std().await;
 	tokio::task::spawn_blocking(move || {
-		// Own the slot throughout blocking work, even if the awaiting request
-		// is cancelled. This read-only worker never opens another source path.
-		let _permit = permit;
+		// This read-only worker owns its source descriptor until parsing finishes.
 		let result = serde_json::to_string(&inspect_file(file, before, &params)?)?;
 		if result.len() > MAX_RESPONSE_BYTES {
 			bail!("application manifest response exceeds 1 MiB; reduce the selected page");

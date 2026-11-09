@@ -223,11 +223,11 @@ fn expiration_does_not_uncharge_an_inflight_snapshot() {
 }
 
 #[test]
-fn count_and_byte_capacity_never_evict_inflight_payloads() {
+fn idle_count_target_never_limits_active_snapshot_readers() {
 	let fixture = Fixture::new(2);
 	let mut cache = SnapshotCache::default();
 	let mut held = Vec::new();
-	for _ in 0..MAX_SNAPSHOTS {
+	for _ in 0..IDLE_SNAPSHOT_TARGET {
 		let snapshot = observe(&fixture.root, Some("main"), InventoryLimits::default()).unwrap();
 		let token = snapshot.token.clone();
 		cache.insert(snapshot, Instant::now()).unwrap();
@@ -238,16 +238,18 @@ fn count_and_byte_capacity_never_evict_inflight_payloads() {
 		);
 	}
 	let next = observe(&fixture.root, Some("main"), InventoryLimits::default()).unwrap();
-	assert!(cache
-		.insert(next, Instant::now())
-		.unwrap_err()
-		.to_string()
-		.contains("cache busy"));
-	assert_eq!(cache.entries.len(), MAX_SNAPSHOTS);
+	cache.insert(next, Instant::now()).unwrap();
+	assert_eq!(cache.entries.len(), IDLE_SNAPSHOT_TARGET + 1);
+	assert!(held.iter().all(|entry| {
+		cache
+			.entries
+			.iter()
+			.any(|current| Arc::ptr_eq(entry, current))
+	}));
 	held.pop();
 	let next = observe(&fixture.root, Some("main"), InventoryLimits::default()).unwrap();
 	cache.insert(next, Instant::now()).unwrap();
-	assert_eq!(cache.entries.len(), MAX_SNAPSHOTS);
+	assert_eq!(cache.entries.len(), IDLE_SNAPSHOT_TARGET);
 	let mut oversized = observe(&fixture.root, Some("main"), InventoryLimits::default()).unwrap();
 	oversized.retained_bytes = MAX_SNAPSHOT_BYTES + 1;
 	assert!(cache
@@ -322,28 +324,57 @@ fn cached_pages_do_not_bypass_the_original_source_deadline() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn cancelled_request_keeps_actual_blocking_worker_admission_until_exit() {
-	let workers = Arc::new(Semaphore::new(1));
-	let worker_slots = workers.clone();
-	let (entered, ready) = tokio::sync::oneshot::channel();
-	let (finished, complete) = tokio::sync::oneshot::channel();
+async fn inventory_scans_exceed_old_two_worker_limit_without_busy_refusal() {
+	let fixture = Arc::new(Fixture::new(1));
+	let (locked, lock_ready) = tokio::sync::oneshot::channel();
 	let (release, blocked) = std::sync::mpsc::channel();
-	let request = tokio::spawn(async move {
-		tokio::task::spawn_blocking(move || {
-			let permit = acquire_worker(&worker_slots).unwrap();
-			entered.send(()).unwrap();
-			blocked.recv().unwrap();
-			drop(permit);
-			finished.send(()).unwrap();
-		})
-		.await
-		.unwrap();
+	let blocker = std::thread::spawn(move || {
+		let _cache = SNAPSHOTS
+			.get_or_init(|| Mutex::new(SnapshotCache::default()))
+			.lock()
+			.unwrap();
+		locked.send(()).unwrap();
+		let _ = blocked.recv_timeout(Duration::from_secs(10));
 	});
-	ready.await.unwrap();
-	request.abort();
-	assert!(request.await.unwrap_err().is_cancelled());
-	assert!(acquire_worker(&workers).is_err());
+	tokio::time::timeout(Duration::from_secs(5), lock_ready)
+		.await
+		.unwrap()
+		.unwrap();
+	let (entered, mut started) = tokio::sync::mpsc::unbounded_channel();
+	let (finished, mut completed) = tokio::sync::mpsc::unbounded_channel();
+	let mut workers = Vec::new();
+	for _ in 0..16 {
+		let fixture = fixture.clone();
+		let entered = entered.clone();
+		let finished = finished.clone();
+		workers.push(tokio::task::spawn_blocking(move || {
+			entered.send(()).unwrap();
+			let result = list(&fixture.root, &params());
+			finished.send(result.is_ok()).unwrap();
+			result
+		}));
+	}
+	for _ in 0..16 {
+		tokio::time::timeout(Duration::from_secs(5), started.recv())
+			.await
+			.unwrap()
+			.unwrap();
+	}
+	// All scans must wait for the real cache lock, never a worker-count refusal.
+	assert!(
+		tokio::time::timeout(Duration::from_millis(50), completed.recv())
+			.await
+			.is_err()
+	);
 	release.send(()).unwrap();
-	complete.await.unwrap();
-	assert!(acquire_worker(&workers).is_ok());
+	blocker.join().unwrap();
+	for worker in workers {
+		let result = tokio::time::timeout(Duration::from_secs(5), worker)
+			.await
+			.unwrap()
+			.unwrap()
+			.unwrap();
+		let value: Value = serde_json::from_str(&result).unwrap();
+		assert!(value.to_string().contains("job-00000"));
+	}
 }

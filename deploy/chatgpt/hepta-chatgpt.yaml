@@ -10,8 +10,12 @@ log:
   level: info
   format: json
 mcp:
-  commands:
+  # Preserve the seven-tool read-only bridge and its private Unix HTTP socket.
+  # A command/stdio target would serialize full request lifecycles upstream.
+  server_urls:
     - channel: main
-      command: "/usr/bin/python3 /home/qian-qi/.local/lib/hepta-chatgpt-bridge/bridge.py --stdio --upstream http://127.0.0.1:8790/mcp --token-file /home/qian-qi/.config/hepta-runtime-operator/token"
+      url: "http://localhost/mcp"
+      unix_socket: "env:HEPTA_CHATGPT_BRIDGE_SOCKET"
   startup_wait_timeout: 30s
-  max_concurrent_requests: 4
+  # Requires the pinned Hepta patch: zero selects native unbounded dispatch.
+  max_concurrent_requests: 0

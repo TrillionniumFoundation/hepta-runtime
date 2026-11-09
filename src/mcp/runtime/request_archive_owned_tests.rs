@@ -46,11 +46,10 @@ fn runtime() -> tokio::runtime::Runtime {
 
 // As in the existing blocking suite, direct membership tests inject a future
 // entry clock instead of relying on OS scheduling inside the production 2 ms.
-// Work::run tests fill all eight slots before start, so collection ends at the
-// unchanged admission bound. Public execute_owned tests use its real clock.
+// Work::run tests fill an eight-member batch before start, so collection can
+// freeze without a clock race. Public execute_owned tests use its real clock.
 struct Fixture {
 	coordinator: Arc<Coordinator>,
-	slots: Arc<Semaphore>,
 	root: PathBuf,
 	completion: Option<Completion>,
 	waiters: Vec<AsyncWaiter>,
@@ -59,30 +58,21 @@ impl Fixture {
 	fn new(deadline: Instant) -> Self {
 		Self::at(
 			Arc::new(Coordinator::default()),
-			Arc::new(Semaphore::new(MAX_METADATA_QUERIES)),
 			Path::new("/synthetic/owned"),
 			deadline,
 			Instant::now() + Duration::from_secs(30),
 		)
 	}
 
-	fn at(
-		coordinator: Arc<Coordinator>,
-		slots: Arc<Semaphore>,
-		root: &Path,
-		deadline: Instant,
-		entered: Instant,
-	) -> Self {
-		let permit = slots.clone().try_acquire_owned().unwrap();
+	fn at(coordinator: Arc<Coordinator>, root: &Path, deadline: Instant, entered: Instant) -> Self {
 		let registration = coordinator
-			.register_owned(root, &owner(0), deadline, entered, permit, trace(deadline))
+			.register_owned(root, &owner(0), deadline, entered, trace(deadline))
 			.unwrap();
 		let OwnedRegistration::Leader { completion, waiter } = registration else {
 			panic!("test requires a new collecting group");
 		};
 		Self {
 			coordinator,
-			slots,
 			root: root.to_path_buf(),
 			completion: Some(completion),
 			waiters: vec![waiter],
@@ -97,7 +87,6 @@ impl Fixture {
 				&owner(index),
 				deadline,
 				Instant::now(),
-				self.slots.clone().try_acquire_owned().unwrap(),
 				trace(deadline),
 			)
 			.unwrap();
@@ -108,7 +97,7 @@ impl Fixture {
 	}
 
 	fn fill(&mut self, deadline: Instant) {
-		for index in self.waiters.len()..MAX_METADATA_QUERIES {
+		for index in self.waiters.len()..METADATA_BATCH_SIZE {
 			self.add(index, deadline);
 		}
 	}
@@ -156,9 +145,8 @@ impl Drop for Cleanup {
 }
 
 // Record, rather than panic during unwind, if a queued operation capture is
-// destroyed after a permit or terminal state has already been published.
+// destroyed after terminal state has already been published.
 struct CaptureCleanup {
-	slots: Arc<Semaphore>,
 	group: Arc<Group>,
 	cleaned: Arc<AtomicBool>,
 	wrong_order: Arc<AtomicBool>,
@@ -166,10 +154,7 @@ struct CaptureCleanup {
 impl Drop for CaptureCleanup {
 	fn drop(&mut self) {
 		let complete = self.group.cleanup_state().complete;
-		self.wrong_order.store(
-			self.slots.available_permits() != 0 || complete,
-			Ordering::Release,
-		);
+		self.wrong_order.store(complete, Ordering::Release);
 		self.cleaned.store(true, Ordering::Release);
 	}
 }
@@ -227,14 +212,13 @@ fn io_case(case: IoCase) {
 		let follower_operations = Arc::new(AtomicUsize::new(0));
 		// Every follower goes through the actual async admission and routing
 		// function. The real owner has not been sent to the blocking pool yet.
-		for index in 1..MAX_METADATA_QUERIES {
+		for index in 1..METADATA_BATCH_SIZE {
 			let calls = follower_operations.clone();
 			callers.push(Some(tokio::spawn(
 				fixture.coordinator.clone().execute_owned(
 					fixture.root.clone(),
 					owner(index),
 					deadline,
-					fixture.slots.clone(),
 					trace(deadline),
 					move |_, _, _| {
 						calls.fetch_add(1, Ordering::SeqCst);
@@ -243,9 +227,8 @@ fn io_case(case: IoCase) {
 				),
 			)));
 		}
-		until(|| group.cleanup_state().members.len() == MAX_METADATA_QUERIES).await;
-		assert_eq!(fixture.slots.available_permits(), 0);
-		assert_eq!(group.cleanup_state().permits.len(), MAX_METADATA_QUERIES);
+		until(|| group.cleanup_state().members.len() == METADATA_BATCH_SIZE).await;
+
 		// With one blocking worker, a follower occupying the pool to wait for
 		// this still-unsubmitted leader would prevent this sentinel completing.
 		assert_eq!(
@@ -264,9 +247,9 @@ fn io_case(case: IoCase) {
 		let reader_calls = reads.clone();
 		let work = fixture.work(move |_, requests, _| {
 			reader_calls.fetch_add(1, Ordering::SeqCst);
-			assert_eq!(requests.len(), MAX_METADATA_QUERIES);
+			assert_eq!(requests.len(), METADATA_BATCH_SIZE);
 			// Model a real scoped original-reader thread. Work must not publish
-			// completion or release a permit until this join and its Drop finish.
+			// completion until this join and its Drop finish.
 			std::thread::scope(|scope| {
 				let worker = scope.spawn(move || {
 					let _cleanup = Cleanup(reader_cleaned);
@@ -321,7 +304,7 @@ fn io_case(case: IoCase) {
 			}
 			IoCase::SharedError | IoCase::ReaderUnwind | IoCase::CoverageMismatch => {}
 		}
-		assert_eq!(fixture.slots.available_permits(), 0);
+
 		assert!(!group.cleanup_state().complete);
 		assert!(!cleaned.load(Ordering::Acquire));
 		release.release();
@@ -349,9 +332,9 @@ fn io_case(case: IoCase) {
 		}
 		assert_eq!(reads.load(Ordering::SeqCst), 1);
 		assert_eq!(follower_operations.load(Ordering::SeqCst), 0);
-		assert_eq!(fixture.slots.available_permits(), MAX_METADATA_QUERIES);
+
 		assert!(group.cleanup_state().complete);
-		assert!(group.cleanup_state().permits.is_empty());
+
 		assert!(fixture
 			.coordinator
 			.registry
@@ -363,17 +346,17 @@ fn io_case(case: IoCase) {
 }
 
 #[test]
-fn owned_leader_waiter_cancellation_keeps_all_permits_through_reader_join() {
+fn owned_leader_waiter_cancellation_keeps_custody_through_reader_join() {
 	io_case(IoCase::CancelLeader);
 }
 
 #[test]
-fn async_follower_cancellation_is_nonblocking_and_keeps_its_group_permit() {
+fn async_follower_cancellation_is_nonblocking_and_preserves_group_custody() {
 	io_case(IoCase::CancelFollower);
 }
 
 #[test]
-fn async_follower_timeouts_leave_all_eight_permits_with_original_work() {
+fn async_follower_timeouts_leave_original_work_owned() {
 	io_case(IoCase::TimeoutAll);
 }
 
@@ -412,7 +395,7 @@ fn queued_public_case(case: QueueCase) {
 		let coordinator = Arc::new(Coordinator::default());
 		let root = PathBuf::from("/synthetic/owned-queued-public");
 		coordinator.remember(&root, true);
-		let slots = Arc::new(Semaphore::new(1));
+
 		let calls = Arc::new(AtomicUsize::new(0));
 		let call_count = calls.clone();
 		let deadline = Instant::now()
@@ -425,7 +408,6 @@ fn queued_public_case(case: QueueCase) {
 			root,
 			owner(0),
 			deadline,
-			slots.clone(),
 			trace(deadline),
 			move |_, requests, _| {
 				call_count.fetch_add(1, Ordering::SeqCst);
@@ -434,7 +416,7 @@ fn queued_public_case(case: QueueCase) {
 		));
 		until(|| coordinator.registrations.load(Ordering::Relaxed) == 1).await;
 		let group = coordinator.registry.lock().unwrap().collecting[0].1.clone();
-		assert_eq!(slots.available_permits(), 0);
+
 		assert_eq!(calls.load(Ordering::SeqCst), 0);
 		match case {
 			QueueCase::CancelCaller => {
@@ -449,12 +431,12 @@ fn queued_public_case(case: QueueCase) {
 					.is::<MetadataQueryDeadline>());
 			}
 		}
-		assert_eq!(slots.available_permits(), 0);
+
 		assert!(!group.cleanup_state().complete);
 		release.release();
 		blocking_owner.await.unwrap();
 		until(|| group.cleanup_state().complete).await;
-		assert_eq!(slots.available_permits(), 1);
+
 		assert!(coordinator.registry.lock().unwrap().collecting.is_empty());
 		assert_eq!(
 			calls.load(Ordering::SeqCst),
@@ -488,7 +470,6 @@ fn aborted_queued_closure_destroys_captures_then_finalizes_without_io() {
 		let cleaned = Arc::new(AtomicBool::new(false));
 		let wrong_order = Arc::new(AtomicBool::new(false));
 		let cleanup = CaptureCleanup {
-			slots: fixture.slots.clone(),
 			group: group.clone(),
 			cleaned: cleaned.clone(),
 			wrong_order: wrong_order.clone(),
@@ -513,7 +494,7 @@ fn aborted_queued_closure_destroys_captures_then_finalizes_without_io() {
 		// Tokio may retain the cancelled closure until its worker dequeues it.
 		// Either way, only actual destruction may end custody.
 		if !cleaned.load(Ordering::Acquire) {
-			assert_eq!(fixture.slots.available_permits(), 0);
+			assert!(!group.cleanup_state().complete);
 		}
 		release.release();
 		blocker.await.unwrap();
@@ -521,7 +502,7 @@ fn aborted_queued_closure_destroys_captures_then_finalizes_without_io() {
 		assert!(cleaned.load(Ordering::Acquire));
 		assert!(!wrong_order.load(Ordering::Acquire));
 		assert_eq!(calls.load(Ordering::SeqCst), 0);
-		assert_eq!(fixture.slots.available_permits(), MAX_METADATA_QUERIES);
+
 		assert!(group.cleanup_state().complete);
 		for waiter in fixture.waiters {
 			assert!(waiter.result(trace(deadline)).await.is_err());
@@ -530,17 +511,15 @@ fn aborted_queued_closure_destroys_captures_then_finalizes_without_io() {
 }
 
 #[test]
-fn unsubmitted_owner_unwind_drops_captures_before_permits_and_has_no_arc_cycle() {
+fn unsubmitted_owner_unwind_drops_captures_before_completion_and_has_no_arc_cycle() {
 	let deadline = budget();
 	let mut fixture = Fixture::new(deadline);
 	fixture.fill(deadline);
 	let group = fixture.group();
 	let coordinator = Arc::downgrade(&fixture.coordinator);
-	let slots = fixture.slots.clone();
 	let cleaned = Arc::new(AtomicBool::new(false));
 	let wrong_order = Arc::new(AtomicBool::new(false));
 	let cleanup = CaptureCleanup {
-		slots: slots.clone(),
 		group: group.clone(),
 		cleaned: cleaned.clone(),
 		wrong_order: wrong_order.clone(),
@@ -559,7 +538,7 @@ fn unsubmitted_owner_unwind_drops_captures_before_permits_and_has_no_arc_cycle()
 	assert!(result.is_err());
 	assert!(cleaned.load(Ordering::Acquire));
 	assert!(!wrong_order.load(Ordering::Acquire));
-	assert_eq!(slots.available_permits(), MAX_METADATA_QUERIES);
+
 	assert!(group.cleanup_state().complete);
 	assert!(coordinator.upgrade().is_none());
 	runtime().block_on(async {
@@ -571,8 +550,6 @@ fn unsubmitted_owner_unwind_drops_captures_before_permits_and_has_no_arc_cycle()
 
 struct CompletionWake {
 	group: Arc<Group>,
-	slots: Arc<Semaphore>,
-	expected_permits: usize,
 	wakes: AtomicUsize,
 	wrong_order: AtomicBool,
 }
@@ -583,10 +560,7 @@ impl Wake for CompletionWake {
 
 	fn wake_by_ref(self: &Arc<Self>) {
 		let complete = self.group.cleanup_state().complete;
-		self.wrong_order.fetch_or(
-			!complete || self.slots.available_permits() != self.expected_permits,
-			Ordering::Release,
-		);
+		self.wrong_order.fetch_or(!complete, Ordering::Release);
 		self.wakes.fetch_add(1, Ordering::SeqCst);
 	}
 }
@@ -599,8 +573,6 @@ fn notify_case(complete_before_poll: bool) {
 	let frozen = fixture.completion.as_ref().unwrap().freeze().unwrap();
 	let wake = Arc::new(CompletionWake {
 		group: group.clone(),
-		slots: fixture.slots.clone(),
-		expected_permits: MAX_METADATA_QUERIES,
 		wakes: AtomicUsize::new(0),
 		wrong_order: AtomicBool::new(false),
 	});
@@ -613,7 +585,7 @@ fn notify_case(complete_before_poll: bool) {
 	}
 	fixture.finish(Ok(replies(&frozen.requests)));
 	assert!(group.cleanup_state().complete);
-	assert_eq!(fixture.slots.available_permits(), MAX_METADATA_QUERIES);
+
 	let Poll::Ready(result) = future.as_mut().poll(&mut context) else {
 		panic!("a terminal group must not lose its notification");
 	};
@@ -637,7 +609,7 @@ fn completion_before_first_poll_is_persistent_for_each_private_reply() {
 }
 
 #[test]
-fn enabled_notification_wakes_only_after_permit_release_and_complete() {
+fn enabled_notification_wakes_only_after_completion() {
 	notify_case(false);
 }
 
@@ -653,7 +625,7 @@ fn cancelled_earliest_member_keeps_minimum_deadline_and_blocks_late_io() {
 		drop(fixture.waiters.pop());
 		assert_eq!(group.cleanup_state().deadline(), earlier_deadline);
 		assert_eq!(group.cleanup_state().members.len(), 2);
-		assert_eq!(fixture.slots.available_permits(), MAX_METADATA_QUERIES - 2);
+
 		tokio::time::sleep_until(tokio::time::Instant::from_std(earlier_deadline)).await;
 		let calls = Arc::new(AtomicUsize::new(0));
 		let read_calls = calls.clone();
@@ -665,7 +637,7 @@ fn cancelled_earliest_member_keeps_minimum_deadline_and_blocks_late_io() {
 			.await
 			.unwrap();
 		assert_eq!(calls.load(Ordering::SeqCst), 0);
-		assert_eq!(fixture.slots.available_permits(), MAX_METADATA_QUERIES);
+
 		assert!(group.cleanup_state().expired);
 		assert!(fixture
 			.waiters
@@ -682,26 +654,24 @@ fn cancelled_earliest_member_keeps_minimum_deadline_and_blocks_late_io() {
 fn old_owned_completion_removes_only_its_identity_and_preserves_successor_custody() {
 	let deadline = budget();
 	let coordinator = Arc::new(Coordinator::default());
-	let slots = Arc::new(Semaphore::new(2));
+
 	let root = Path::new("/synthetic/owned-successor");
 	let mut old = Fixture::at(
 		coordinator.clone(),
-		slots.clone(),
 		root,
 		deadline,
 		Instant::now() - Duration::from_secs(1),
 	);
 	let mut next = Fixture::at(
 		coordinator.clone(),
-		slots.clone(),
 		root,
 		deadline,
 		Instant::now() + Duration::from_secs(30),
 	);
 	let next_group = next.group();
-	assert_eq!(slots.available_permits(), 0);
+
 	drop(old.completion.take());
-	assert_eq!(slots.available_permits(), 1);
+
 	assert!(!next_group.cleanup_state().complete);
 	let registry = coordinator.registry.lock().unwrap();
 	assert_eq!(registry.collecting.len(), 1);
@@ -709,7 +679,7 @@ fn old_owned_completion_removes_only_its_identity_and_preserves_successor_custod
 	drop(registry);
 	let frozen = next.completion.as_ref().unwrap().freeze().unwrap();
 	next.finish(Ok(replies(&frozen.requests)));
-	assert_eq!(slots.available_permits(), 2);
+
 	runtime().block_on(async {
 		assert!(old
 			.waiters
@@ -736,7 +706,7 @@ enum Poison {
 }
 
 #[test]
-fn poisoned_owned_coordination_drains_every_permit_and_refuses_all_successes() {
+fn poisoned_owned_coordination_finalizes_all_members_and_refuses_all_successes() {
 	for poison in [Poison::Registry, Poison::Group, Poison::Reply] {
 		let deadline = budget();
 		let mut fixture = Fixture::new(deadline);
@@ -764,10 +734,10 @@ fn poisoned_owned_coordination_drains_every_permit_and_refuses_all_successes() {
 		}));
 		assert!(result.is_err());
 		drop(fixture.completion.take());
-		assert_eq!(fixture.slots.available_permits(), MAX_METADATA_QUERIES);
+
 		assert!(group.cleanup_state().complete);
 		assert!(group.cleanup_state().failed);
-		assert!(group.cleanup_state().permits.is_empty());
+
 		runtime().block_on(async {
 			for waiter in fixture.waiters {
 				assert!(waiter.result(trace(deadline)).await.is_err());
@@ -788,20 +758,19 @@ fn poisoned_hint_registry_preserves_public_unhinted_singleton_behavior() {
 		})
 		.is_err());
 		let deadline = budget();
-		let slots = Arc::new(Semaphore::new(1));
+
 		let result = coordinator
 			.clone()
 			.execute_owned(
 				PathBuf::from("/synthetic/owned-unhinted"),
 				owner(0),
 				deadline,
-				slots.clone(),
 				trace(deadline),
 				|_, requests, _| Ok(replies(requests)),
 			)
 			.await;
 		assert_eq!(result.unwrap(), format!("private-{}", owner(0).owner));
-		assert_eq!(slots.available_permits(), 1);
+
 		assert_eq!(coordinator.registrations.load(Ordering::Relaxed), 0);
 	});
 }
@@ -813,8 +782,7 @@ fn invalid_or_admission_expired_public_call_cannot_register_or_observe() {
 		let coordinator = Arc::new(Coordinator::default());
 		let root = PathBuf::from("/synthetic/owned-no-admission");
 		coordinator.remember(&root, true);
-		let slots = Arc::new(Semaphore::new(1));
-		let held = slots.clone().try_acquire_owned().unwrap();
+
 		let mut invalid = owner(0);
 		invalid.params.limit = Some(0);
 		let deadline = budget();
@@ -824,7 +792,6 @@ fn invalid_or_admission_expired_public_call_cannot_register_or_observe() {
 				root.clone(),
 				invalid,
 				deadline,
-				slots.clone(),
 				trace(deadline),
 				|_, _, _| panic!("invalid caller must not observe"),
 			)
@@ -833,23 +800,54 @@ fn invalid_or_admission_expired_public_call_cannot_register_or_observe() {
 			.unwrap_err()
 			.to_string()
 			.contains("invalid request archive page"));
-		let deadline = Instant::now() + Duration::from_millis(25);
+		let deadline = Instant::now();
 		let result = coordinator
 			.clone()
-			.execute_owned(
-				root,
-				owner(0),
-				deadline,
-				slots.clone(),
-				trace(deadline),
-				|_, _, _| panic!("non-admitted caller must not observe"),
-			)
+			.execute_owned(root, owner(0), deadline, trace(deadline), |_, _, _| {
+				panic!("expired caller must not observe")
+			})
 			.await;
 		assert!(result.unwrap_err().is::<MetadataQueryDeadline>());
 		assert_eq!(coordinator.registrations.load(Ordering::Relaxed), 0);
 		assert!(coordinator.registry.lock().unwrap().collecting.is_empty());
-		assert_eq!(slots.available_permits(), 0);
-		drop(held);
-		assert_eq!(slots.available_permits(), 1);
 	});
+}
+
+#[test]
+fn owned_registration_exceeds_eight_groups_and_publishes_private_completion() {
+	const GROUPS: usize = 16;
+	let deadline = budget();
+	let coordinator = Arc::new(Coordinator::default());
+	let mut fixtures = Vec::new();
+	for index in 0..GROUPS {
+		let root = PathBuf::from(format!("/synthetic/unbounded-owned-{index}"));
+		fixtures.push(Fixture::at(
+			coordinator.clone(),
+			&root,
+			deadline,
+			Instant::now() + Duration::from_secs(30),
+		));
+	}
+	assert_eq!(
+		coordinator.registry.lock().unwrap().collecting.len(),
+		GROUPS
+	);
+	for (index, fixture) in fixtures.iter_mut().enumerate() {
+		let frozen = fixture.completion.as_ref().unwrap().freeze().unwrap();
+		assert_eq!(frozen.requests.len(), 1);
+		fixture.finish(Ok(ObservedPages {
+			replies: vec![Ok(format!("owned-root-{index}"))],
+			large: true,
+		}));
+	}
+	runtime().block_on(async {
+		for (index, mut fixture) in fixtures.into_iter().enumerate() {
+			let waiter = fixture.waiters.pop().unwrap();
+			assert_eq!(
+				waiter.result(trace(deadline)).await.unwrap(),
+				format!("owned-root-{index}")
+			);
+		}
+	});
+	assert!(coordinator.registry.lock().unwrap().collecting.is_empty());
 }

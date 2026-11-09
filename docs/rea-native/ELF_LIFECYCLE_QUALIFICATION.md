@@ -6,8 +6,9 @@ requests, responses, cancellation notifications, process identities, file
 descriptors, pidfds, retained Evidence and EOF observations. The independent
 consumer is `scripts/rea_lifecycle_evidence.py`.
 
-This is the finite profile
-`rea-agents-6.8.0/inspect_elf_notes/linux-owned-lifecycle/v1`. It does not mark the
+The current producer emits the finite profile
+`rea-agents-6.8.0/inspect_elf_notes/linux-owned-lifecycle/v2`. It follows the
+[concurrent execution policy](../CONCURRENCY_POLICY.md). It does not mark the
 entire `inspect_elf_notes` operation, the other 228 tools, a provider installation,
 or another platform qualified. In particular, the original `ElfNotesProvider`
 reads and parses within Node. There is no separate original parser process on
@@ -20,9 +21,17 @@ gate remains OPEN even when the native deadline observation passes.
 | --- | --- | --- | --- |
 | Active file capture cancellation | Actual npm MCP | Actual Rust MCP | Observe the target's device/inode through a live process FD before sending `notifications/cancelled`; then observe complete negative FD/process inventories, unchanged retained Evidence for five seconds, and a successful call in the same session. |
 | Unknown and completed request cancellation | Actual npm MCP | Actual Rust MCP | Send cancellation for an unused ID and an already completed ID, then verify the same public operation and retained Evidence remain usable. |
-| Isolated worker cancellation and slot recovery | No corresponding process boundary | Actual `rea-elf-notes-worker` children | Observe and stop two owned workers with pidfds, verify a third request reports the two-slot capacity boundary, cancel and observe both workers reaped; repeat with two new workers to prove both slots became available. |
+| Independent execution while original workers are held, then cancellation | No corresponding process boundary | Actual `rea-elf-notes-worker` children | Observe and stop two owned workers with pidfds; submit eight additional baseline requests before collecting them and require every original response to succeed with unchanged Evidence. Complete before/after inventories must show both original workers still stopped with live pidfds. Cancel those original requests, then prove both pidfds exited and both processes disappeared within five seconds. Repeat with two distinct new workers. |
 | Fixed worker deadline | OPEN | Actual stopped native worker | No cancellation notification is sent. The native operation must return its 30,000 ms provider timeout, reap the stopped child, retain no cancelled/failed artifact, and accept a later call in the same session. |
 | Active EOF | Actual file capture | Actual stopped worker | Close stdin only after a positive active observation; observe normal EOF, reader completion, exited owner pidfd, absent process group and no forced harness cleanup. |
+
+The two rounds contain 16 additional successful requests and four distinct
+cancelled/reaped workers. These are finite qualification sample sizes, not
+runtime admission limits or a claim of unlimited physical throughput. The
+consumer derives `parallel-independent-request-completion` separately from the
+cancellation and deadline gates. A capacity refusal, a result received only after
+the held workers were cancelled, a resumed/replaced worker, an omitted pidfd or
+an incomplete negative inventory cannot establish the new parallel gate.
 
 The target files are independently encoded ELF images. The small baseline is
 156 bytes. The active capture fixture is a 512 MiB sparse regular file, and the
@@ -36,6 +45,22 @@ An absent response to a cancellation notification is valid. The consumer accepts
 an optional cancelled terminal response but rejects a successful result or an
 unrelated error as proof of cancellation. If the operation completed before the
 notification, or the observer missed the active phase, the trace remains OPEN.
+
+## Historical profile v1
+
+The consumer still accepts
+`rea-agents-6.8.0/inspect_elf_notes/linux-owned-lifecycle/v1` with its exact
+`worker-capacity-cancel` session and original two-slot refusal condition. Its
+assessment retains the original profile and gate set. Existing v1 receipts and
+dated evidence are unchanged. A v1 success is not a v2 parallel observation;
+relabeling the receipt without the exact v2 session set is rejected.
+
+The JSON receipt and assessment schemas remain version 1 because their wire
+structure is unchanged; the lifecycle **profile** identifies the different
+required behavior. Replay of a historical receipt still requires its exact
+producer source tree and original content hashes. This source change supplies
+the v2 producer and consumer logic; it does not requalify an old binary or
+invent a new external execution receipt.
 
 ## Ownership and observation boundaries
 
@@ -70,8 +95,10 @@ Git commit is expressly not sufficient build proof.
 
 Use absolute paths and a new output directory. The selected binary need not be
 built from the lifecycle producer's checkout; this permits truthful examination
-of an older immutable binary while the next build is in progress. Keep its actual
-build/source receipt and declared commit distinct from the producer source.
+of an older immutable binary while the next build is in progress. A binary that
+still enforces the former two-worker ceiling fails the v2 parallel scenario.
+Keep its actual build/source receipt and declared commit distinct from the
+producer source.
 
 ```sh
 python3 scripts/rea_lifecycle_qualification.py \
@@ -119,12 +146,15 @@ This module deliberately does not change `rea_operation_qualification.py` or
 ## Verification
 
 ```sh
-python3 -m unittest discover -s tests -p rea_lifecycle_qualification_tests.py -v
+python3 -m unittest discover -s tests -p 'rea_lifecycle*tests.py' -v
 ```
 
 The stdlib suite checks real owned-process FD acquisition/drain plus deliberate
 receipt errors: PID reuse, zombies, incomplete descriptor/children inventories,
 wrong owner groups, duplicate wire responses, unbound process controls,
 cancellation without an acknowledgement, racing cancellation, unknown state and
-handwritten PASS flags that must not hide forced cleanup. Synthetic test rows are
+handwritten PASS flags that must not hide forced cleanup. The parallel regression
+suite additionally rejects capacity refusals, partial samples, late responses,
+resumed/replaced workers, missing original pidfds and delayed reap; it checks
+that v1's old refusal semantics remain distinct. Synthetic test rows are
 consumer tests, not substitute provider qualification evidence.

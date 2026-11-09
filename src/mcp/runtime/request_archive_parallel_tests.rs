@@ -463,11 +463,12 @@ fn cold_epoch_failure_is_not_swallowed_as_a_request_to_rebuild_the_cache() {
 		assert!(error.is::<ColdEpochChanged>());
 		let after = std::fs::metadata(root.path().join(CACHE_NAME)).unwrap();
 		assert_eq!((before.dev(), before.ino()), (after.dev(), after.ino()));
-		assert!(!std::fs::read_dir(root.path()).unwrap().any(|row| row
-			.unwrap()
-			.file_name()
-			.to_string_lossy()
-			.starts_with(".disk-index-")));
+		assert!(!std::fs::read_dir(root.path()).unwrap().any(|row| {
+			row.unwrap()
+				.file_name()
+				.to_string_lossy()
+				.starts_with(".disk-index-")
+		}));
 	}
 }
 
@@ -706,13 +707,13 @@ fn exercise_worker_epoch_failures() -> (Vec<tempfile::TempDir>, Vec<std::sync::W
 
 #[cfg(target_os = "linux")]
 #[test]
-fn direct_worker_failure_fixtures_release_the_real_bounded_registry_capacity() {
+fn direct_worker_failure_fixtures_release_idle_registry_entries() {
 	let (mut roots, failed) = exercise_worker_epoch_failures();
 	assert_eq!(failed.len(), 4);
 	// These are real slot_at registrations, without extra strong pins or a
-	// registry reset. More than the descriptor-aware bound must evict retired slots.
+	// registry reset. Registrations beyond the idle target evict retired slots.
 	let mut fresh = Vec::new();
-	for _ in 0..=MAX_INDEXES {
+	for _ in 0..=IDLE_INDEX_CACHE_TARGET {
 		let (root, _) = tests::fixture();
 		let archive = open_archive(root.path()).unwrap();
 		let slot = slot_at(root.path(), &archive).unwrap();

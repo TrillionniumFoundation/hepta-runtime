@@ -1,20 +1,15 @@
 # ChatGPT Secure MCP Tunnel deployment
 
-This is the final local integration layer between ChatGPT and the existing
-hepta-runtime operator deployment. It deliberately does not modify the
-runtime listener, token, SSH configuration, host authority, or Desktop
-Commander service.
+This document describes the repository's seven-tool read-only tunnel profile.
+An installed full-operator profile has a separate tool contract and keeps its
+own authenticated HTTP target.
 
 ## Architecture
 
-~~~
-ChatGPT custom MCP app (read/fetch on Pro)
-  -> OpenAI Secure MCP Tunnel
-  -> tunnel-client v0.0.16 on qian-qi
-  -> stdio read-only MCP facade (child of tunnel-client)
-  -> http://127.0.0.1:8790/mcp
-  -> existing hepta-runtime
-~~~
+The custom MCP app reaches the outbound Secure MCP Tunnel client, which sends
+HTTP requests to the read-only bridge over an account-owned Unix socket. The
+bridge forwards permitted requests to the existing runtime at
+`http://127.0.0.1:8790/mcp`.
 
 There is no inbound Internet listener. tunnel-client initiates outbound HTTPS
 to OpenAI. The private runtime token never becomes ChatGPT authentication: the
@@ -44,13 +39,38 @@ A direct attempt to call shell_start, host_signal, sudo_start, process_start,
 pty_write, binary/document writes, or an unknown tool is rejected before the
 private runtime is contacted.
 
-The tunnel profile launches the facade directly over stdio. This avoids a DNS/probe mismatch observed when tunnel-client doctor validated a logical HTTP hostname before honoring the Unix-socket dial override. The stdio facade still talks only to the existing loopback runtime and retains MCP session/protocol state inside that one child process.
+The profile uses `mcp.server_urls` with the logical URL `http://localhost/mcp`
+and `unix_socket: env:HEPTA_CHATGPT_BRIDGE_SOCKET`.
+`hepta-openai-tunnel.service` requires `hepta-chatgpt-bridge.service` and supplies
+`%t/hepta-chatgpt/bridge.sock`. The bridge service creates its runtime directory
+with mode 0700 and the socket with mode 0600. Filesystem ownership authorizes
+the local tunnel client; the separate backend token authorizes the bridge's
+loopback connection to the runtime.
 
-The previously installed `hepta-chatgpt-bridge.service` remains available as a local acceptance/debug surface on an account-owned Unix socket, but it is no longer required by `hepta-openai-tunnel.service`. The tunnel service depends only on the existing `hepta-runtime-operator.service`.
+Independent HTTP calls retain independent workers and original response
+identities. `mcp.max_concurrent_requests: 0` selects the patched tunnel pool's
+unlimited mode. Both HTTP and the zero setting are required for this policy.
+
+The generic upstream stdio forwarding wrapper remains a compatibility path
+with one request lifecycle at a time. Its response-ownership lock and late-reply
+tombstones are preserved. A zero dispatcher setting alone does not remove that
+serialization, so `mcp.commands` must not be used for an unbounded Hepta profile.
+The Python bridge still supports direct stdio clients, but that does not change
+an external client's wrapper.
 
 ## tunnel-client
 
-The local deployment currently uses `tunnel-client 0.0.16+5f99daab`, whose embedded git SHA resolves to the public `openai/tunnel-client` repository. The locally installed binary SHA256 is recorded in qualification evidence. An attempted downgrade to the latest tagged v0.0.15 release was abandoned before replacement because the local download path produced an incomplete archive/CDN denial; the existing binary was left unchanged.
+Build the source-pinned v0.0.19 full CLI described in
+[Deployment assets](../deploy/README.md). The source manifest pins the upstream
+commit, Go toolchain and patch digest; the build receipt records the binary
+digest. This profile's helper uses `doctor` and `admin`, so it requires the full
+flavor rather than the runtime-only CLI.
+
+The patch makes `doctor` honor the Unix socket during HTTP reachability and
+OAuth metadata probes. The bridge returns 405 for `GET /mcp` and 404 for absent
+metadata paths. Diagnostics check the same endpoint as the daemon. Earlier
+stdio guidance worked around that diagnostic mismatch and should not be reused
+for this profile.
 
 Profile:
 
@@ -66,9 +86,8 @@ http://127.0.0.1:8792/readyz
 http://127.0.0.1:8792/ui
 ~~~
 
-The long-lived service is hepta-openai-tunnel.service. It is enabled but has
-two systemd ConditionPathExists gates, so it remains inactive without the real
-account values:
+The long-lived service is `hepta-openai-tunnel.service`. Its two systemd
+`ConditionPathExists` gates keep it inactive without the real account values:
 
 ~~~
 ~/.config/hepta-chatgpt-tunnel/runtime-api-key
@@ -94,7 +113,8 @@ Platform:
 
 The helper requires an interactive TTY. It will not accept secrets over argv or
 a pipe. Paste the tunnel ID normally and the Runtime API key into the hidden
-prompt. It writes both local files mode 0600, runs:
+prompt. It writes both local files mode 0600, starts the private bridge, exports
+its Unix socket path, and runs:
 
 ~~~
 tunnel-client doctor --profile hepta-chatgpt --explain
@@ -119,15 +139,15 @@ Only after /readyz is 200:
    release blocker.
 8. Create the app only after the scan matches.
 
-On ChatGPT Pro, this deployment is intentionally read/fetch only. Full MCP
-write/modify support currently requires Business or Enterprise/Edu.
+This profile is intentionally read-only. Its catalog is enforced by the local
+bridge and is independent of other capabilities a workspace may support.
 
 ## Golden tests
 
 After creating the app:
 
-1. Ask ChatGPT to use host_list and list the configured hosts. The current
-   runtime should return six configured hosts.
+1. Ask ChatGPT to use host_list and compare the result with the deployment's
+   configured hosts.
 2. Ask it to call stream_handoff_list with a small limit and summarize the
    retained sessions without changing anything.
 3. Ask for stream_handoff_status or stream_handoff_read on one returned
@@ -138,20 +158,24 @@ After creating the app:
 
 Do not use a production secret or sensitive document as the first golden test.
 
-## Current qualification
+## Verification
 
-Local acceptance has already verified:
+Repository tests verify the profile, service dependencies and native HTTP
+provisioning headers. The Unix HTTP regression holds 32 original read-only
+calls at the fixture simultaneously, then checks every response identity,
+private-token injection, session header and rejection of a mutating tool. It
+runs against both packaged bridges. These isolated fixture services require
+a host that permits Unix sockets:
 
-- anonymous direct access to the private runtime is not the supported path;
-- the installed facade can authenticate to the existing runtime while ignoring
-  a caller-supplied Authorization header;
-- initialization and initialized notification handling;
-- discovery exposes exactly seven read-only tools;
-- host_list traverses facade -> runtime and returns all six configured hosts;
-- shell_start is rejected by the facade;
-- stream_handoff_list reaches the installed persistent stream broker;
-- seven hosted-safe facade unit tests pass.
+```sh
+python3 -m unittest discover -s tests -p tunnel_deployment_config_tests.py
+python3 -m unittest discover -s tests -p chatgpt_bridge_http_tests.py
+python3 -m unittest discover -s tests -p chatgpt_bridge_stdio_tests.py
+```
 
-The only intentionally incomplete steps are OpenAI-account provisioning,
-tunnel-client doctor with a real runtime key/tunnel ID, ChatGPT Scan Tools,
-and ChatGPT-originated golden tool calls.
+The full CLI includes a regression that runs `doctor` against a real private
+Unix HTTP endpoint. `install-tunnel-client.sh --flavor full --test` runs its
+affected Go packages before building. Repository fixtures do not attest to an
+installed binary, account provisioning or ChatGPT tool discovery; record the
+deployed binary/configuration identities and run the golden tests against the
+chosen profile.

@@ -27,7 +27,8 @@ the tests, add a production timeout exemption, or qualify a concurrent-load SLA.
 
 The [audit store lock](../src/mcp/runtime/request_audit.rs) is process-global,
 and the [archive index registry](../src/mcp/runtime/request_archive_index.rs)
-holds a bounded global cache with background workers. Different fixture directories do
+holds a global cache with background workers and an idle-cache eviction target.
+Different fixture directories do
 not isolate those owners. The three-second archive metadata query budget
 includes lock admission and index readiness. The legacy shared-process Cargo
 harness can therefore combine one test's deliberate concurrency with unrelated

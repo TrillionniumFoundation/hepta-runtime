@@ -86,6 +86,17 @@ class Composition(unittest.TestCase):
         self.assertIsNone(context)
         self.assertEqual(refused['error']['data']['outcome'], 'not_submitted')
 
+    def test_each_composition_owner_accepts_more_than_sixteen_active_requests(self):
+        for proxy in (self.proxy, self.proxy.native, self.proxy.compatibility):
+            active = []
+            for ident in range(64):
+                context, refused = proxy._reserve({'jsonrpc': '2.0', 'id': ident, 'method': 'ping'})
+                self.assertIsNone(refused)
+                active.append(context)
+            self.assertEqual(len(proxy._active), 64)
+            for context in active:
+                proxy._finish(context)
+
     def test_cancelled_before_child_submission_does_not_execute(self):
         self.request('server/discover', modern=True)
         request = {'jsonrpc': '2.0', 'id': 'cancel', 'method': 'tools/call', 'params': {'name': 'native_effect', 'arguments': {'marker': 'never'}, '_meta': {VERSION_KEY: MODERN_VERSION, CAPABILITIES_KEY: {}}}}

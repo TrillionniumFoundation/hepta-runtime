@@ -52,7 +52,7 @@ def main():
            'MCP_SERVER_URL="url=http://127.0.0.1:8787/mcp,channel=main"\n'
            'MCP_EXTRA_HEADERS="X-Hepta-Runtime-Token: file:/etc/hepta-runtime/mcp-token"\n'
            'MCP_DISCOVERY_EXTRA_HEADERS="X-Hepta-Runtime-Token: file:/etc/hepta-runtime/mcp-token"\n'
-           'MCP_STARTUP_WAIT_TIMEOUT=30s\nHEALTH_LISTEN_ADDR=127.0.0.1:8788\n')
+           'MCP_STARTUP_WAIT_TIMEOUT=30s\nMCP_MAX_CONCURRENT_REQUESTS=0\nHEALTH_LISTEN_ADDR=127.0.0.1:8788\n')
     atomic('tunnel.env', env.encode(), gid)
     subprocess.run(['systemctl', 'daemon-reload'], check=True)
     subprocess.run(['systemctl', 'enable', '--now', 'hepta-runtime-tunnel.service'], check=True)

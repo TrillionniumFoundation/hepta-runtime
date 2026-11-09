@@ -14,7 +14,6 @@ use std::{path::Path, process::Stdio, time::Duration};
 use tokio::{
 	io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
 	process::Command,
-	sync::Semaphore,
 };
 
 const WORKER: &str = concat!(
@@ -32,7 +31,6 @@ const WORKER: &str = concat!(
 	"\n",
 	include_str!("document_local.py")
 );
-static WORKERS: Semaphore = Semaphore::const_new(2);
 
 #[derive(Debug, Clone, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -329,9 +327,6 @@ async fn execute(path: &str, mut input: Value, write: bool) -> Result<CallToolRe
 	if !Path::new(&parser).is_absolute() {
 		bail!("configured document interpreter must be absolute");
 	}
-	let _permit = WORKERS
-		.try_acquire()
-		.context("document worker capacity reached; no operation started")?;
 	input["roots"] = json!(config.controller_workspace_roots);
 	let bytes = serde_json::to_vec(&input)?;
 	if bytes.len() > 2 * 1024 * 1024 {

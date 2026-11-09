@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::future::Future;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex as StdMutex, OnceLock, Weak};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
@@ -27,6 +27,7 @@ const MAX_PAGE_BYTES: usize = 96 * 1024;
 const MAX_RECORD_BYTES: u64 = 16 * 1024;
 const TERMINAL: &[&str] = &["completed", "limited", "cancelled", "failed", "interrupted"];
 static SEARCH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static SEARCH_RECORD_LOCKS: OnceLock<StdMutex<BTreeMap<String, Weak<Mutex<()>>>>> = OnceLock::new();
 static INSTANCE: OnceLock<std::result::Result<String, String>> = OnceLock::new();
 static INTERPRETERS: OnceLock<std::result::Result<BTreeMap<String, String>, String>> =
 	OnceLock::new();
@@ -190,6 +191,24 @@ struct SearchRecord {
 
 fn lock() -> &'static Mutex<()> {
 	SEARCH_LOCK.get_or_init(|| Mutex::new(()))
+}
+
+/// Only operations on the same receipt serialize across remote I/O.
+fn record_lock(id: &str) -> Result<Arc<Mutex<()>>> {
+	if !valid_id(id) {
+		bail!("invalid search identity");
+	}
+	let mut locks = SEARCH_RECORD_LOCKS
+		.get_or_init(|| StdMutex::new(BTreeMap::new()))
+		.lock()
+		.map_err(|_| anyhow!("search record lock registry unavailable"))?;
+	locks.retain(|_, lock| lock.strong_count() != 0);
+	if let Some(lock) = locks.get(id).and_then(Weak::upgrade) {
+		return Ok(lock);
+	}
+	let lock = Arc::new(Mutex::new(()));
+	locks.insert(id.into(), Arc::downgrade(&lock));
+	Ok(lock)
 }
 
 /// Random entropy failures disable the session's search surface; no predictable fallback.
@@ -391,7 +410,7 @@ fn reconcile(record: &mut SearchRecord, current_instance: &str) -> bool {
 	false
 }
 
-async fn records(directory: &Path) -> Result<Vec<SearchRecord>> {
+async fn retained_records(directory: &Path) -> Result<Vec<SearchRecord>> {
 	let mut entries = tokio::fs::read_dir(directory).await?;
 	let mut result = Vec::new();
 	while let Some(entry) = entries.next_entry().await? {
@@ -418,6 +437,14 @@ async fn records(directory: &Path) -> Result<Vec<SearchRecord>> {
 		result.push(record);
 	}
 	result.sort_by(|a, b| a.id.cmp(&b.id));
+	Ok(result)
+}
+
+async fn records(directory: &Path) -> Result<Vec<SearchRecord>> {
+	let mut result = {
+		let _index = lock().lock().await;
+		retained_records(directory).await?
+	};
 	refresh_active(directory, &mut result).await?;
 	Ok(result)
 }
@@ -442,24 +469,35 @@ async fn refresh_active(directory: &Path, records: &mut [SearchRecord]) -> Resul
 		.filter(|record| !TERMINAL.contains(&record.state.as_str()))
 		.cloned()
 		.collect();
-	if active.len() > 8 {
-		bail!("controller active-search invariant exceeded");
-	}
 	let mut tasks = tokio::task::JoinSet::new();
 	for record in active {
+		let directory = directory.to_path_buf();
 		tasks.spawn(async move {
-			let status = rpc(&record, "status", json!({})).await;
-			(record.id, status)
+			let lock = record_lock(&record.id)?;
+			let _guard = lock.lock().await;
+			let mut latest = read_record(&directory.join(format!("{}.json", record.id))).await?;
+			if latest.id != record.id || latest.owner != record.owner {
+				bail!("search receipt identity mismatch");
+			}
+			if reconcile(&mut latest, instance()?) {
+				save(&directory, &latest).await?;
+			}
+			if !TERMINAL.contains(&latest.state.as_str()) {
+				// An unavailable/revoked host must not fail unrelated owners' lists.
+				// rpc validates its pinned policy, and search_list filters disclosure.
+				if let Ok(native) = rpc(&latest, "status", json!({})).await {
+					if apply_native_terminal(&mut latest, &native) {
+						save(&directory, &latest).await?;
+					}
+				}
+			}
+			Ok::<_, anyhow::Error>(latest)
 		});
 	}
 	while let Some(outcome) = tasks.join_next().await {
-		let (id, status) = outcome.context("search status reconciliation task failed")?;
-		if let Ok(native) = status {
-			if let Some(record) = records.iter_mut().find(|record| record.id == id) {
-				if apply_native_terminal(record, &native) {
-					save(directory, record).await?;
-				}
-			}
+		let updated = outcome.context("search status reconciliation task failed")??;
+		if let Some(record) = records.iter_mut().find(|record| record.id == updated.id) {
+			*record = updated;
 		}
 	}
 	Ok(())
@@ -681,21 +719,9 @@ pub async fn search_start(owner: &str, params: SearchStartParams) -> Result<Stri
 	}
 	let _guard = lock().lock().await;
 	let directory = directory().await?;
-	let all = records(&directory).await?;
+	let all = retained_records(&directory).await?;
 	if all.len() >= MAX_RECEIPTS {
 		bail!("search receipt quota reached; administrator cleanup required");
-	}
-	if all
-		.iter()
-		.filter(|r| !TERMINAL.contains(&r.state.as_str()))
-		.count()
-		>= 8 || all
-		.iter()
-		.filter(|r| r.owner == owner && !TERMINAL.contains(&r.state.as_str()))
-		.count()
-		>= 4
-	{
-		bail!("active search quota reached; collect terminal results or stop own searches first");
 	}
 	let record = SearchRecord {
 		id: new_owner_id()?,
@@ -722,6 +748,12 @@ pub async fn search_start(owner: &str, params: SearchStartParams) -> Result<Stri
 		"glob_program":compile_glob_program(&record.request)?,
 		"limits":limits(&record.request),"allowed_roots":host.allowed_read_path_prefixes,
 		"protected_roots":host.protected_path_prefixes});
+	let per_record = record_lock(&record.id)?;
+	let _record_guard = per_record.lock().await;
+	// Reserve the receipt while holding the index lock, then release that lock
+	// before any remote start/status work. The exact receipt remains owned.
+	save(&directory, &record).await?;
+	drop(_guard);
 	dispatch_search_start(&directory, record, rpc(&remote_record, "start", request)).await
 }
 
@@ -731,7 +763,8 @@ pub async fn search_results(owner: &str, params: SearchResultsParams) -> Result<
 	if cursor > 1000 {
 		bail!("invalid search cursor");
 	}
-	let _guard = lock().lock().await;
+	let per_record = record_lock(&params.search_id)?;
+	let _guard = per_record.lock().await;
 	let directory = directory().await?;
 	let mut record = owned(&directory, owner, &params.search_id).await?;
 	if record.state == "interrupted" {
@@ -771,7 +804,6 @@ pub async fn search_list(owner: &str, params: SearchListParams) -> Result<String
 	if params.after_id.as_deref().is_some_and(|id| !valid_id(id)) {
 		bail!("invalid search list cursor");
 	}
-	let _guard = lock().lock().await;
 	let directory = directory().await?;
 	let all = records(&directory).await?;
 	let owned: Vec<_> = all
@@ -801,7 +833,8 @@ pub async fn search_list(owner: &str, params: SearchListParams) -> Result<String
 }
 
 pub async fn search_stop(owner: &str, params: SearchRefParams) -> Result<String> {
-	let _guard = lock().lock().await;
+	let per_record = record_lock(&params.search_id)?;
+	let _guard = per_record.lock().await;
 	let directory = directory().await?;
 	let record = owned(&directory, owner, &params.search_id).await?;
 	if TERMINAL.contains(&record.state.as_str()) {

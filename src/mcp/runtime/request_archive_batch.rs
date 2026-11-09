@@ -7,13 +7,13 @@ use super::*;
 use std::path::PathBuf;
 use std::sync::{Condvar, MutexGuard};
 use std::time::Duration;
-use tokio::sync::{Notify, OwnedSemaphorePermit};
+use tokio::sync::Notify;
 
 // Large snapshots amortize one complete observation across already admitted calls.
 // The fixed 2 ms is included in every member's original deadline, including C1.
 // Small snapshots bypass collection; freeze still closes membership permanently.
 const COLLECT_WINDOW: Duration = Duration::from_millis(2);
-const MAX_HINTS: usize = MAX_METADATA_QUERIES;
+const MAX_HINTS: usize = METADATA_BATCH_SIZE;
 static COORDINATOR: OnceLock<Arc<Coordinator>> = OnceLock::new();
 
 #[derive(Clone)]
@@ -95,7 +95,6 @@ struct Member {
 }
 struct GroupState {
 	members: Vec<Member>,
-	permits: Vec<OwnedSemaphorePermit>,
 	deadline: Instant,
 	frozen: bool,
 	finishing: bool,
@@ -147,8 +146,8 @@ struct Waiter {
 	group: Arc<Group>,
 	reply: Arc<Reply>,
 	deadline: Instant,
-	// A follower's own unwind must also retain the outer query permit until
-	// the leader is really done. A leader has its separate completion guard.
+	// Synchronous followers retain original group custody until the leader
+	// finishes. A leader has its separate completion guard.
 	follower_custody: bool,
 }
 impl Waiter {
@@ -161,8 +160,8 @@ impl Waiter {
 	}
 
 	fn into_async(mut self) -> AsyncWaiter {
-		// register_owned has already put the permit in the group. The async
-		// waiter must never inherit a Condvar-blocking destructor.
+		// The original work owns its Completion independently. An async waiter
+		// must never inherit a Condvar-blocking destructor.
 		self.follower_custody = false;
 		AsyncWaiter {
 			group: self.group.clone(),
@@ -174,8 +173,8 @@ impl Waiter {
 impl Drop for Waiter {
 	fn drop(&mut self) {
 		if self.follower_custody {
-			// No deadline/poison/notification shortcut may return its permit
-			// while shared I/O is still owned by the actual leader closure.
+			// Preserve synchronous custody while shared I/O is still owned
+			// by the actual leader closure.
 			self.group.wait_complete();
 		}
 	}
@@ -202,8 +201,8 @@ impl Reply {
 	}
 }
 
-// Dropping an async caller releases only these Arc snapshots. Every admitted
-// permit stays in the original group until its work owner finishes cleanup.
+// Dropping an async caller releases only these Arc snapshots. The original
+// work owner keeps its Completion and all I/O custody until actual cleanup.
 struct AsyncWaiter {
 	group: Arc<Group>,
 	reply: Arc<Reply>,
@@ -335,7 +334,7 @@ impl Completion {
 		loop {
 			let until = self.group.collect_until.min(state.deadline());
 			let now = Instant::now();
-			if state.members.len() == MAX_METADATA_QUERIES || now >= until {
+			if state.members.len() == METADATA_BATCH_SIZE || now >= until {
 				return Ok(());
 			}
 			state = self
@@ -418,7 +417,7 @@ impl Drop for Completion {
 				.retain(|(_, group)| !Arc::ptr_eq(group, &self.group));
 			poisoned
 		};
-		let permits = {
+		{
 			let mut state = self.group.cleanup_state();
 			state.frozen = true;
 			state.finishing = true;
@@ -439,11 +438,8 @@ impl Drop for Completion {
 					state.failed |= reply_poisoned;
 				}
 			}
-			std::mem::take(&mut state.permits)
 		};
-		// No observation, original-reader join or coordination lock survives
-		// here. Releasing permits can wake another admitted async caller.
-		drop(permits);
+		// Original observation and reader joins have finished before publication.
 		let expired = {
 			let mut state = self.group.cleanup_state();
 			state.expired = Instant::now() >= state.deadline();
@@ -491,7 +487,7 @@ impl Coordinator {
 		deadline: Instant,
 		entered: Instant,
 	) -> Result<Registration> {
-		self.register_inner(root, request, deadline, entered, None, None)
+		self.register_inner(root, request, deadline, entered, false, None)
 	}
 
 	fn register_owned(
@@ -500,10 +496,9 @@ impl Coordinator {
 		request: &Query,
 		deadline: Instant,
 		entered: Instant,
-		permit: OwnedSemaphorePermit,
 		trace: metadata_trace::QueryTrace,
 	) -> Result<OwnedRegistration> {
-		match self.register_inner(root, request, deadline, entered, Some(permit), Some(trace))? {
+		match self.register_inner(root, request, deadline, entered, true, Some(trace))? {
 			Registration::Leader { completion, waiter } => Ok(OwnedRegistration::Leader {
 				completion,
 				waiter: waiter.into_async(),
@@ -518,10 +513,9 @@ impl Coordinator {
 		request: &Query,
 		deadline: Instant,
 		entered: Instant,
-		mut permit: Option<OwnedSemaphorePermit>,
+		owned: bool,
 		trace: Option<metadata_trace::QueryTrace>,
 	) -> Result<Registration> {
-		let owned = permit.is_some();
 		#[cfg(test)]
 		self.registrations.fetch_add(1, Ordering::Relaxed);
 		let fallback = SharedFailure::new(anyhow!("archive page query leader unavailable"));
@@ -532,14 +526,13 @@ impl Coordinator {
 			request: request.to_owned(),
 			reply: reply.clone(),
 		};
-		let mut members = Vec::with_capacity(MAX_METADATA_QUERIES);
+		let mut members = Vec::with_capacity(METADATA_BATCH_SIZE);
 		members.push(member.clone());
 		let candidate = Arc::new(Group {
 			trace_id: metadata_trace::next_cohort(),
 			collect_until: entered + COLLECT_WINDOW,
 			state: Mutex::new(GroupState {
 				members,
-				permits: Vec::with_capacity(MAX_METADATA_QUERIES),
 				deadline,
 				frozen: false,
 				finishing: false,
@@ -584,7 +577,7 @@ impl Coordinator {
 				&& !state.finishing
 				&& !state.complete
 				&& !state.failed
-				&& state.members.len() < MAX_METADATA_QUERIES
+				&& state.members.len() < METADATA_BATCH_SIZE
 				&& now < group.collect_until
 				&& now < state.deadline()
 			{
@@ -594,11 +587,6 @@ impl Coordinator {
 					deadline,
 					follower_custody: !owned,
 				});
-				// Transfer ownership before exposing this new member. Both
-				// vectors were preallocated to the fixed admission bound.
-				if let Some(permit) = permit.take() {
-					state.permits.push(permit);
-				}
 				state.deadline = state.deadline.min(deadline);
 				state.members.push(member);
 				registration_mark(
@@ -624,12 +612,6 @@ impl Coordinator {
 		registry.collecting.retain(|(saved, group)| {
 			saved.as_os_str() != root.as_os_str() && now < group.collect_until
 		});
-		if registry.collecting.len() >= MAX_METADATA_QUERIES {
-			bail!("archive page query group admission bound exceeded");
-		}
-		if let Some(permit) = permit.take() {
-			candidate.cleanup_state().permits.push(permit);
-		}
 		registry
 			.collecting
 			.push((root.to_path_buf(), candidate.clone()));
@@ -719,7 +701,6 @@ impl Coordinator {
 		root: PathBuf,
 		request: Query,
 		deadline: Instant,
-		slots: Arc<Semaphore>,
 		trace: metadata_trace::QueryTrace,
 		operation: Q,
 	) -> Result<String>
@@ -734,12 +715,6 @@ impl Coordinator {
 		let result =
 			tokio::time::timeout_at(tokio::time::Instant::from_std(deadline), async move {
 				request.validate()?;
-				trace.mark("permit_wait", 0);
-				let permit = slots
-					.acquire_owned()
-					.await
-					.map_err(|_| anyhow!("archive metadata query admission unavailable"))?;
-				trace.mark("permit_acquired", 0);
 				if Instant::now() >= deadline {
 					return Err(MetadataQueryDeadline.into());
 				}
@@ -749,7 +724,6 @@ impl Coordinator {
 					trace.mark("blocking_submitted", 0);
 					return tokio::task::spawn_blocking(move || {
 						let _context = trace.enter();
-						let _permit = permit;
 						trace.mark("blocking_entered", 0);
 						let result = self
 							.observe(&root, std::slice::from_ref(&request), deadline, operation)
@@ -768,7 +742,7 @@ impl Coordinator {
 				// Registration and transfer to the original queued Work contain no
 				// await. Its Completion already exists before registry exposure.
 				let registration =
-					self.register_owned(&root, &request, deadline, Instant::now(), permit, trace)?;
+					self.register_owned(&root, &request, deadline, Instant::now(), trace)?;
 				let waiter = match registration {
 					OwnedRegistration::Leader { completion, waiter } => {
 						let work = Work {
@@ -887,20 +861,12 @@ pub(super) async fn run_owned(
 	owner: String,
 	params: RequestHistoryParams,
 	deadline: Instant,
-	slots: Arc<Semaphore>,
 	trace: metadata_trace::QueryTrace,
 ) -> Result<String> {
 	COORDINATOR
 		.get_or_init(|| Arc::new(Coordinator::default()))
 		.clone()
-		.execute_owned(
-			root,
-			Query { owner, params },
-			deadline,
-			slots,
-			trace,
-			read_pages,
-		)
+		.execute_owned(root, Query { owner, params }, deadline, trace, read_pages)
 		.await
 }
 

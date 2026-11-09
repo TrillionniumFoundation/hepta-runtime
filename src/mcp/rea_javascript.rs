@@ -23,7 +23,6 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
 
 const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
@@ -373,14 +372,9 @@ async fn inspect_with_roots(
 	roots: &[PathBuf],
 ) -> Result<String> {
 	validate(&params)?;
-	static SLOTS: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
-	let permit = Arc::clone(SLOTS.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(2))))
-		.try_acquire_owned()
-		.context("package declaration parser is busy; retry after another inspection finishes")?;
 	let bytes =
 		super::rea_files::read_bounded(Path::new(&params.path), roots, MAX_FILE_BYTES).await?;
 	let rendered = tokio::task::spawn_blocking(move || {
-		let _permit = permit;
 		let output = serde_json::to_string(&report(&bytes, &params)?)?;
 		if output.len() > MAX_RESPONSE_BYTES {
 			bail!("package declaration response exceeds 1 MiB; reduce the selected page");

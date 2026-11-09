@@ -1,6 +1,7 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
+use super::super::Activity;
 use super::*;
 use std::cell::Cell;
 use std::future::Future;
@@ -9,11 +10,11 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use tokio::process::Command;
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::Mutex;
 
-async fn fixture() -> (Arc<OwnedChild>, ProcessIdentity, Arc<Semaphore>) {
-	let capacity = Arc::new(Semaphore::new(1));
-	let permit = Arc::new(capacity.clone().acquire_owned().await.unwrap());
+async fn fixture() -> (Arc<OwnedChild>, ProcessIdentity, Arc<Activity>) {
+	let activity = Arc::new(Activity::default());
+	let permit = Arc::new(activity.lease().unwrap());
 	let child = Command::new("/usr/bin/cat")
 		.stdin(Stdio::piped())
 		.stdout(Stdio::null())
@@ -31,7 +32,7 @@ async fn fixture() -> (Arc<OwnedChild>, ProcessIdentity, Arc<Semaphore>) {
 		identity: OnceLock::new(),
 		approved: AtomicBool::new(false),
 		child: Mutex::new(child),
-		_permits: vec![permit],
+		_leases: vec![permit],
 	});
 	// Only fixture preparation may wait for a real long-lived test executable.
 	// The production helper below has no errno retry or generic readiness rule.
@@ -46,20 +47,20 @@ async fn fixture() -> (Arc<OwnedChild>, ProcessIdentity, Arc<Semaphore>) {
 		tokio::time::sleep(Duration::from_millis(2)).await;
 	};
 	assert_eq!(identity.uid, unsafe { libc::geteuid() });
-	assert_eq!(capacity.available_permits(), 0);
-	(owned, identity, capacity)
+	assert_eq!(activity.active(), 1);
+	(owned, identity, activity)
 }
 
-async fn dispose(owned: Arc<OwnedChild>, capacity: Arc<Semaphore>) {
+async fn dispose(owned: Arc<OwnedChild>, activity: Arc<Activity>) {
 	owned.stop(Duration::ZERO).await.unwrap();
 	assert!(owned.terminal().await.unwrap());
 	assert_eq!(
-		capacity.available_permits(),
-		0,
+		activity.active(),
+		1,
 		"reaping alone must not release ownership"
 	);
 	drop(owned);
-	assert_eq!(capacity.available_permits(), 1);
+	assert_eq!(activity.active(), 0);
 }
 
 fn empty(identity: &ProcessIdentity) -> ProcessIdentity {
@@ -150,7 +151,7 @@ fn waiting<'a>(
 
 #[tokio::test(flavor = "current_thread")]
 async fn empty_argv_readiness_requires_exact_match_before_identity_is_stored() {
-	let (owned, exact, capacity) = fixture().await;
+	let (owned, exact, activity) = fixture().await;
 	let anchor = empty(&exact);
 	let cancel = CancellationToken::new();
 	let stop = CancellationToken::new();
@@ -189,12 +190,12 @@ async fn empty_argv_readiness_requires_exact_match_before_identity_is_stored() {
 	assert!(owned.identity.get().is_none());
 	owned.identity.set(ready.identity.unwrap()).unwrap();
 	assert_eq!(owned.identity.get(), Some(&exact));
-	dispose(owned, capacity).await;
+	dispose(owned, activity).await;
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn empty_argv_readiness_serializes_reaping_and_never_reads_proc_after_terminal() {
-	let (owned, exact, capacity) = fixture().await;
+	let (owned, exact, activity) = fixture().await;
 	let anchor = empty(&exact);
 	let cancel = CancellationToken::new();
 	let stop = CancellationToken::new();
@@ -239,12 +240,12 @@ async fn empty_argv_readiness_serializes_reaping_and_never_reads_proc_after_term
 	assert_eq!(samples.get(), 0);
 	assert!(owned.identity.get().is_none());
 	assert!(!owned.approved.load(Ordering::Acquire));
-	dispose(owned, capacity).await;
+	dispose(owned, activity).await;
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn empty_argv_readiness_rejects_every_identity_contradiction_without_another_sample() {
-	let (owned, exact, capacity) = fixture().await;
+	let (owned, exact, activity) = fixture().await;
 	let anchor = empty(&exact);
 	let cancel = CancellationToken::new();
 	let stop = CancellationToken::new();
@@ -283,12 +284,12 @@ async fn empty_argv_readiness_rejects_every_identity_contradiction_without_anoth
 		);
 		assert!(owned.identity.get().is_none());
 	}
-	dispose(owned, capacity).await;
+	dispose(owned, activity).await;
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn empty_argv_readiness_does_not_retry_any_proc_errno() {
-	let (owned, exact, capacity) = fixture().await;
+	let (owned, exact, activity) = fixture().await;
 	let anchor = empty(&exact);
 	let cancel = CancellationToken::new();
 	let stop = CancellationToken::new();
@@ -325,12 +326,12 @@ async fn empty_argv_readiness_does_not_retry_any_proc_errno() {
 		);
 		assert_eq!(samples.get(), 1);
 	}
-	dispose(owned, capacity).await;
+	dispose(owned, activity).await;
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn empty_argv_readiness_checks_cancellation_after_an_otherwise_matching_observation() {
-	let (owned, exact, capacity) = fixture().await;
+	let (owned, exact, activity) = fixture().await;
 	let anchor = empty(&exact);
 	for pool_stop in [false, true] {
 		let cancel = CancellationToken::new();
@@ -359,12 +360,12 @@ async fn empty_argv_readiness_checks_cancellation_after_an_otherwise_matching_ob
 		assert!(owned.identity.get().is_none());
 		assert!(!owned.approved.load(Ordering::Acquire));
 	}
-	dispose(owned, capacity).await;
+	dispose(owned, activity).await;
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn empty_argv_readiness_respects_original_deadline_and_retains_capacity_until_reap() {
-	let (owned, exact, capacity) = fixture().await;
+async fn empty_argv_readiness_respects_original_deadline_and_retains_activity_until_reap() {
+	let (owned, exact, activity) = fixture().await;
 	let anchor = empty(&exact);
 	let cancel = CancellationToken::new();
 	let stop = CancellationToken::new();
@@ -379,14 +380,14 @@ async fn empty_argv_readiness_respects_original_deadline_and_retains_capacity_un
 	assert!(unresolved.is_err());
 	assert!(Instant::now() >= deadline);
 	assert!(!owned.terminal().await.unwrap());
-	assert_eq!(capacity.available_permits(), 0);
+	assert_eq!(activity.active(), 1);
 	assert!(owned.identity.get().is_none());
-	dispose(owned, capacity).await;
+	dispose(owned, activity).await;
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn empty_argv_readiness_requires_original_pidfd_and_exact_entry_identity() {
-	let (mut owned, exact, capacity) = fixture().await;
+	let (mut owned, exact, activity) = fixture().await;
 	let cancel = CancellationToken::new();
 	let stop = CancellationToken::new();
 	for field in ["uid", "ino", "argv"] {
@@ -422,12 +423,12 @@ async fn empty_argv_readiness_requires_original_pidfd_and_exact_entry_identity()
 	.await;
 	assert!(result.is_err());
 	Arc::get_mut(&mut owned).unwrap().pidfd = pidfd;
-	dispose(owned, capacity).await;
+	dispose(owned, activity).await;
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn empty_argv_readiness_does_not_accept_a_late_matching_observation() {
-	let (owned, exact, capacity) = fixture().await;
+	let (owned, exact, activity) = fixture().await;
 	let anchor = empty(&exact);
 	let cancel = CancellationToken::new();
 	let stop = CancellationToken::new();
@@ -448,12 +449,12 @@ async fn empty_argv_readiness_does_not_accept_a_late_matching_observation() {
 	assert!(result.is_err());
 	assert!(owned.identity.get().is_none());
 	assert!(!owned.approved.load(Ordering::Acquire));
-	dispose(owned, capacity).await;
+	dispose(owned, activity).await;
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn empty_argv_readiness_rejects_a_mismatch_even_when_the_same_child_exits() {
-	let (owned, exact, capacity) = fixture().await;
+	let (owned, exact, activity) = fixture().await;
 	let anchor = empty(&exact);
 	let cancel = CancellationToken::new();
 	let stop = CancellationToken::new();
@@ -493,5 +494,5 @@ async fn empty_argv_readiness_rejects_a_mismatch_even_when_the_same_child_exits(
 	assert!(owned.terminal().await.unwrap());
 	assert!(owned.identity.get().is_none());
 	assert!(!owned.approved.load(Ordering::Acquire));
-	dispose(owned, capacity).await;
+	dispose(owned, activity).await;
 }

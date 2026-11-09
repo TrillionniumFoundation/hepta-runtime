@@ -21,7 +21,6 @@ use rmcp::schemars;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
 
 #[path = "rea_web_parser.rs"]
 mod parser;
@@ -144,29 +143,17 @@ fn validate_replay(params: &ReplayWebEntryParams) -> Result<()> {
 	Ok(())
 }
 
-fn admission() -> Arc<tokio::sync::Semaphore> {
-	static SLOTS: OnceLock<Arc<tokio::sync::Semaphore>> = OnceLock::new();
-	Arc::clone(SLOTS.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(2))))
-}
-
 async fn load_capture(
 	path: &str,
 	expected: Option<&str>,
 	roots: &[PathBuf],
 ) -> Result<parser::Capture> {
-	let permit = admission()
-		.try_acquire_owned()
-		.context("saved web parser is busy; retry this read after another inspection finishes")?;
 	let bytes = super::rea_files::read_bounded(Path::new(path), roots, MAX_FILE_BYTES).await?;
 	let expected = expected.map(str::to_owned);
-	// The blocking task retains the permit after caller cancellation, so detached
-	// parsing cannot silently exceed the shared concurrency bound.
-	tokio::task::spawn_blocking(move || {
-		let _permit = permit;
-		parser::parse_capture(&bytes, expected.as_deref())
-	})
-	.await
-	.context("saved web parse task failed")?
+	// The blocking task owns its captured input even after caller cancellation.
+	tokio::task::spawn_blocking(move || parser::parse_capture(&bytes, expected.as_deref()))
+		.await
+		.context("saved web parse task failed")?
 }
 
 fn encode(report: Value) -> Result<String> {

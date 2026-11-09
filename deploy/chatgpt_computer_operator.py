@@ -13,7 +13,7 @@ import json
 import pathlib
 import sys
 
-from chatgpt_full_operator import (ActiveRequest, MAX_ACTIVE_REQUESTS, MODERN_VERSION,
+from chatgpt_full_operator import (ActiveRequest, MODERN_VERSION,
     NativeProxy, error, private_token, request_era, valid_request)
 from chatgpt_v11_layered_read import LayeredReadNativeProxy
 from mcp_tool_contract import ToolContract, make_contract
@@ -70,9 +70,6 @@ class ComputerOperatorProxy(NativeProxy):
                 return None, error(ident, -32603, 'Facade input is closing', outcome='not_submitted', automatic_retry=False)
             if key in self._active or (remember and self._identity_digest(ident) in self._retired):
                 return None, error(ident, -32600, 'Request identity has already been used', outcome='not_submitted', automatic_retry=False)
-            active_limit = getattr(self, 'active_request_limit', MAX_ACTIVE_REQUESTS)
-            if active_limit is not None and len(self._active) >= active_limit:
-                return None, error(ident, -32603, 'Facade active request limit reached', outcome='not_submitted', automatic_retry=False)
             context = ActiveRequest(request, self._owner, remember)
             self._active[key] = context
             return context, None

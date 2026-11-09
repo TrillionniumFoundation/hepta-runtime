@@ -137,12 +137,15 @@ class StreamCustody(unittest.TestCase):
         with self.assertRaisesRegex(D.UnsafeProvenance,"unknown_stream"):
             self.owner.route("stream_handoff_list",{})
 
-    def test_list_overflow_refuses_whole_result(self):
-        base=self.old/"stream_handoffs";base.mkdir(mode=0o700)
-        for i in range(D.MAX_STREAM_SESSIONS+1):
-            (base/f"stream-{i:064x}").mkdir(mode=0o700)
+    def test_metadata_list_bound_does_not_limit_exact_stream_reads(self):
+        identities = [f"stream-{i:064x}" for i in range(D.MAX_STREAM_INVENTORY_ENTRIES+1)]
+        for sid in identities:
+            self.add(self.old, sid)
         with self.assertRaisesRegex(D.UnsafeProvenance,"stream_list_bound"):
             self.owner.route("stream_handoff_list",{})
+        for sid in (identities[0], identities[-1]):
+            self.assertEqual(self.owner.route("stream_handoff_status", {"session_id": sid}), "legacy")
+            self.assertEqual(self.owner.route("stream_handoff_read", {"session_id": sid}), "legacy")
 
     def test_default_mutating_stream_write_refused_without_network(self):
         c10=ToolContract.load(ROOT/"deploy/contracts/hepta-runtime-full-operator-v10.json",

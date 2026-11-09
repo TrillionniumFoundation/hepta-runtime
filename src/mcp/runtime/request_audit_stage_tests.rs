@@ -1,7 +1,7 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! Real staged files remain unpublished until persistent jobs drain, also on unwind.
+//! Real staged files remain unpublished until owned workers join, also on unwind.
 use super::*;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::atomic::AtomicUsize;
@@ -53,6 +53,13 @@ fn wait_for_release(gate: &(Mutex<bool>, Condvar)) {
 fn release(gate: &(Mutex<bool>, Condvar)) {
 	*gate.0.lock().unwrap() = true;
 	gate.1.notify_all();
+}
+
+struct ReleaseOnDrop(Arc<(Mutex<bool>, Condvar)>);
+impl Drop for ReleaseOnDrop {
+	fn drop(&mut self) {
+		release(&self.0);
+	}
 }
 
 #[test]
@@ -111,10 +118,11 @@ fn one_file_barrier_cohort_spans_directories_and_preserves_exact_failure_slot() 
 }
 
 #[test]
-fn overlapping_file_barriers_are_bounded_and_nothing_publishes_until_all_complete() {
+fn file_barriers_exceed_four_workers_and_publish_only_after_all_complete() {
 	let root = private_root();
 	let path = root.path().to_owned();
 	let gate = Arc::new((Mutex::new(false), Condvar::new()));
+	let _release = ReleaseOnDrop(gate.clone());
 	let allow = gate.clone();
 	let (send, receive) = mpsc::channel();
 	let completed = Arc::new(AtomicUsize::new(0));
@@ -123,7 +131,6 @@ fn overlapping_file_barriers_are_bounded_and_nothing_publishes_until_all_complet
 		let directory = File::open(&path).unwrap();
 		let records = records(16);
 		let writes: Vec<_> = records.iter().map(|record| (record, false)).collect();
-		let pool = file_sync::Pool::new().unwrap();
 		let results = save_with_barrier(
 			&directory,
 			&writes,
@@ -134,11 +141,11 @@ fn overlapping_file_barriers_are_bounded_and_nothing_publishes_until_all_complet
 				done.fetch_add(1, Ordering::SeqCst);
 				Ok(())
 			}),
-			&|files, operation| pool.synchronize(files, operation),
+			&file_sync::synchronize,
 		);
 		assert!(results.iter().all(Result::is_ok));
 	});
-	for _ in 0..file_sync::WORKERS {
+	for _ in 0..16 {
 		receive.recv_timeout(Duration::from_secs(20)).unwrap();
 	}
 	assert!(receive.try_recv().is_err());
@@ -212,6 +219,7 @@ fn panicking_worker_drains_every_other_file_before_refusing_the_entire_cohort() 
 	let root = private_root();
 	let path = root.path().to_owned();
 	let gate = Arc::new((Mutex::new(false), Condvar::new()));
+	let _release = ReleaseOnDrop(gate.clone());
 	let allow = gate.clone();
 	let calls = Arc::new(AtomicUsize::new(0));
 	let observed = calls.clone();
@@ -221,7 +229,6 @@ fn panicking_worker_drains_every_other_file_before_refusing_the_entire_cohort() 
 		let directory = File::open(&path).unwrap();
 		let records = records(8);
 		let writes: Vec<_> = records.iter().map(|record| (record, false)).collect();
-		let pool = file_sync::Pool::new().unwrap();
 		let results = save_with_barrier(
 			&directory,
 			&writes,
@@ -236,12 +243,12 @@ fn panicking_worker_drains_every_other_file_before_refusing_the_entire_cohort() 
 				file.sync_all()?;
 				Ok(())
 			}),
-			&|files, operation| pool.synchronize(files, operation),
+			&file_sync::synchronize,
 		);
 		assert!(results.iter().all(Result::is_err));
 		finished.send(()).unwrap();
 	});
-	for _ in 0..file_sync::WORKERS {
+	for _ in 0..7 {
 		receive.recv_timeout(Duration::from_secs(20)).unwrap();
 	}
 	assert!(result.try_recv().is_err());
@@ -257,6 +264,7 @@ fn caller_unwind_after_submission_drains_jobs_before_prepared_can_unlink() {
 	let root = private_root();
 	let path = root.path().to_owned();
 	let gate = Arc::new((Mutex::new(false), Condvar::new()));
+	let _release = ReleaseOnDrop(gate.clone());
 	let allow = gate.clone();
 	let completed = Arc::new(AtomicUsize::new(0));
 	let done = completed.clone();
@@ -265,7 +273,6 @@ fn caller_unwind_after_submission_drains_jobs_before_prepared_can_unlink() {
 		let directory = File::open(&path).unwrap();
 		let records = records(8);
 		let writes: Vec<_> = records.iter().map(|record| (record, false)).collect();
-		let pool = file_sync::Pool::new().unwrap();
 		let _ = save_with_barrier(
 			&directory,
 			&writes,
@@ -277,13 +284,13 @@ fn caller_unwind_after_submission_drains_jobs_before_prepared_can_unlink() {
 				Ok(())
 			}),
 			&|files, operation| {
-				pool.synchronize_with_hook(files, operation, |submitted| {
+				file_sync::synchronize_with_hook(files, operation, |submitted| {
 					assert_ne!(submitted, 4, "injected caller unwind after accepted jobs");
 				})
 			},
 		);
 	});
-	for _ in 0..file_sync::WORKERS {
+	for _ in 0..4 {
 		receive.recv_timeout(Duration::from_secs(20)).unwrap();
 	}
 	assert!(!handle.is_finished());
@@ -314,10 +321,10 @@ fn parallel_staging_refuses_changed_owner_and_keeps_the_existing_original() {
 fn oversized_cohort_is_refused_before_any_temporary_is_created() {
 	let root = private_root();
 	let directory = File::open(root.path()).unwrap();
-	let records = records(MAX_FILES + 1);
+	let records = records(FILE_BARRIER_BATCH_SIZE + 1);
 	let writes: Vec<_> = records.iter().map(|record| (record, false)).collect();
 	let results = save(&directory, &writes);
 	assert!(results.iter().all(Result::is_err));
-	assert_eq!(results.len(), MAX_FILES + 1);
+	assert_eq!(results.len(), FILE_BARRIER_BATCH_SIZE + 1);
 	assert_eq!(members(root.path()), 0);
 }

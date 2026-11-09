@@ -40,6 +40,7 @@ unset RUNTIME_KEY
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 export CONTROL_PLANE_TUNNEL_ID="$TUNNEL_ID"
+export HEPTA_CHATGPT_BRIDGE_SOCKET="$XDG_RUNTIME_DIR/hepta-chatgpt/bridge.sock"
 
 echo '== runtime-key visibility for selected tunnel =='
 CONTROL_PLANE_API_KEY="$(cat "$CONFIG/runtime-api-key")" \
@@ -60,6 +61,7 @@ print("workspace attachments:", len(value.get("workspace_ids") or []))
 PY
 
 echo '== tunnel metadata / doctor =='
+systemctl --user start hepta-chatgpt-bridge.service
 "$HOME/.local/bin/tunnel-client" doctor --profile "$PROFILE" --health.listen-addr 127.0.0.1:0 --explain
 
 echo '== start managed user service =='

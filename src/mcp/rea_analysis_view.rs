@@ -28,18 +28,15 @@ use super::{rea_apk_evidence, rea_apk_signature, runtime};
 use rmcp::model::CallToolResult;
 use serde_json::{json, Map, Value};
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 pub(super) const OP: &str = "inspect_analysis_view";
-const MAX_CONCURRENT_OWNERS: usize = 2;
 
 /// One ownership object follows acquisition, authentication, projection and
 /// encoding. A dropped async waiter cannot release a running blocking owner.
 struct ViewOwnership {
 	_admission: Arc<runtime::effect_owner_fence::AdmissionPermit>,
-	_capacity: OwnedSemaphorePermit,
 }
 
 fn ownership(
@@ -47,21 +44,8 @@ fn ownership(
 	cancellation: &CancellationToken,
 ) -> Result<Arc<ViewOwnership>, Failure> {
 	active(cancellation)?;
-	static CAPACITY: OnceLock<Arc<Semaphore>> = OnceLock::new();
-	let semaphore = CAPACITY.get_or_init(|| Arc::new(Semaphore::new(MAX_CONCURRENT_OWNERS)));
-	let capacity = Arc::clone(semaphore).try_acquire_owned().map_err(|_| {
-		Failure::resource(
-			OP,
-			"concurrency",
-			"The native analysis view owner capacity is occupied.",
-			json!({"native_profile":true,"concurrent_owners":MAX_CONCURRENT_OWNERS}),
-			true,
-			"Wait for active Evidence source and view owners to finish, then retry.",
-		)
-	})?;
 	Ok(Arc::new(ViewOwnership {
 		_admission: admission,
-		_capacity: capacity,
 	}))
 }
 

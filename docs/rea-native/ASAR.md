@@ -73,7 +73,7 @@ Declared integrity supports explicit `SHA256`, a lowercase 64-character digest, 
 | Public member range | 1–65,536 bytes requested, default 16,384; an offset at EOF returns zero bytes |
 | Whole selected member verification | At most 64 MiB per read, including range requests |
 | ASAR member admitted as JavaScript | Complete member at most 1 MiB; existing graph source-count and 4 MiB total-source limits also apply |
-| Concurrent admitted ASAR requests | Two; additional requests receive a busy refusal |
+| Concurrent admitted ASAR requests | No runtime count ceiling; see [concurrent execution](../CONCURRENCY_POLICY.md) |
 | Isolated worker | 768 MiB address-space ceiling, 12 CPU seconds, 20-second wall deadline, bounded stdin request and output |
 | Controller commitment verification | Separate 20-second wall deadline and bounded stream reads |
 

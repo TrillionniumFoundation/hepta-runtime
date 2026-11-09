@@ -39,7 +39,8 @@ PTY_ID = re.compile(r"dpty-[A-Za-z0-9-]{1,91}", re.ASCII)
 STREAM_ID = re.compile(r"stream-[0-9a-f]{64}", re.ASCII)
 STREAM_READ_NAMES = frozenset(("stream_handoff_list", "stream_handoff_status", "stream_handoff_read"))
 STREAM_EFFECT_BINDING = frozenset(("stream_handoff_write", "stream_handoff_close"))
-MAX_STREAM_SESSIONS = 128
+# Per-call retained metadata snapshot bound; exact-ID routing has no count gate.
+MAX_STREAM_INVENTORY_ENTRIES = 128
 # The facade admits at most 4 MiB of request JSON. A legal persisted launch
 # record can retain almost that much argv, plus the runtime's fixed wrapper.
 # Keep the same finite bound for discovery and later direct owner lookups.
@@ -253,7 +254,7 @@ def inspect_owned_stream(root: pathlib.Path, identity: str) -> bool:
 
 
 def owned_stream_names(root: pathlib.Path) -> list[str]:
-    """Bounded stable member set; future dual-populated lists explicitly refuse."""
+    """Bound one complete metadata snapshot, not live workers or exact-ID reads."""
     fd = directory_fd(root)
     try:
         try:
@@ -265,7 +266,7 @@ def owned_stream_names(root: pathlib.Path) -> list[str]:
             if sb.st_uid != os.getuid() or (sb.st_mode & 0o077) or not stat.S_ISDIR(sb.st_mode):
                 raise UnsafeProvenance("stream_registry_not_private")
             names = os.listdir(base)
-            if len(names) > MAX_STREAM_SESSIONS or len(names) != len(set(names)):
+            if len(names) > MAX_STREAM_INVENTORY_ENTRIES or len(names) != len(set(names)):
                 raise UnsafeProvenance("stream_list_bound_or_duplicate")
             if any(STREAM_ID.fullmatch(name) is None for name in names):
                 raise UnsafeProvenance("unknown_stream_registry_entry")
@@ -399,9 +400,7 @@ class DualReadNativeProxy(NativeProxy):
                 raise UnsafeProvenance("registry_page_not_configured")
             # Re-attest both execution contracts before exposing their fixed registries.
             # This read never submits a process or a native tool call.
-            with self._state_lock:
-                self._ensure_native(context)
-                self._verify_catalog(context)
+            self._attested_binding(context)
             with self._legacy_read_lock:
                 with self.legacy._state_lock:
                     self.legacy._ensure_native()
@@ -429,9 +428,7 @@ class DualReadNativeProxy(NativeProxy):
                         return self._not_submitted(context, era)
             # Both native contracts are re-attested before delegating. The
             # separate V4 session is the only allowed effect owner.
-            with self._state_lock:
-                self._ensure_native(context)
-                self._verify_catalog(context)
+            self._attested_binding(context)
             with self._legacy_read_lock:
                 with self.legacy._state_lock:
                     self.legacy._ensure_native()

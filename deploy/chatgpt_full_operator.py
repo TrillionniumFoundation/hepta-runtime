@@ -24,9 +24,7 @@ from mcp_tool_contract import ToolContract,canonical
 
 MAX_REQUEST=4*1024*1024
 MAX_RESPONSE=16*1024*1024
-MAX_ACTIVE_REQUESTS=16
 MAX_RETIRED_IDS=4096
-MAX_CANCEL_WORKERS=2
 CANCEL_TIMEOUT=2
 SHUTDOWN_TIMEOUT=3
 KEEPALIVE_INTERVAL=120
@@ -145,12 +143,39 @@ class RequestNotSubmitted(RuntimeError):
     """A locally cancelled intent never entered the tool HTTP submission."""
 
 
+class _InitializationBarrier:
+    """Order explicit stdio session transitions without serializing tool calls."""
+    def __init__(self,previous):
+        self.previous=previous;self.completed=threading.Event()
+
+    def set(self):
+        # A failed worker may finish before its predecessor. Keep that live
+        # dependency, but retire completed history after the transition ends.
+        if self.previous is not None and self.previous.wait(0):self.previous=None
+        self.completed.set()
+
+    def wait(self,timeout):
+        barrier=self
+        while barrier is not None:
+            if not barrier.completed.wait(timeout):return False
+            barrier=barrier.previous
+        return True
+
+    def follows(self,transition):
+        barrier=self
+        while barrier is not None:
+            if barrier is transition:return True
+            barrier=barrier.previous
+        return False
+
+
 class ActiveRequest:
     def __init__(self, request, owner, remember):
         self.request=request;self.ident=request['id'];self.key=(type(self.ident),self.ident)
         self.owner=owner;self.remember=remember;self.native_id=None;self.binding=None
         self.transmitting=False;self.posted=False;self.completed=False
         self.cancel_requested=False;self.cancel_started=False;self.cancel_failed=False
+        self.initialization_wait=None;self.initialization_done=None
 
 
 class NativeProxy:
@@ -163,7 +188,7 @@ class NativeProxy:
         self._state_lock=threading.RLock();self._active_lock=threading.RLock()
         self._trace_lock=threading.Lock();self._owner=object();self._namespace=secrets.token_hex(16)
         self._active={};self._retired=set();self._closing=threading.Event()
-        self._cancel_slots=threading.BoundedSemaphore(MAX_CANCEL_WORKERS);self._cancel_threads=set()
+        self._cancel_threads=set()
         self._keepalive_stop=threading.Event();self._keepalive_thread=None
         self._legacy_state_lost=False;self._credential_scope_proofs={}
 
@@ -185,10 +210,6 @@ class NativeProxy:
                 pending_retirements=sum(c.remember for c in self._active.values())
                 if len(self._retired)+pending_retirements>=MAX_RETIRED_IDS:
                     return None,error(ident,-32603,'Bounded request identity history is full; reconnect with a new facade process',outcome='not_submitted',automatic_retry=False)
-            # HTTP instances opt out; stdio retains its queue's live budget.
-            active_limit=getattr(self,'active_request_limit',MAX_ACTIVE_REQUESTS)
-            if active_limit is not None and len(self._active)>=active_limit:
-                return None,error(ident,-32603,'Facade active request limit reached',outcome='not_submitted',automatic_retry=False)
             context=ActiveRequest(request,self._owner,remember);self._active[key]=context
             return context,None
 
@@ -304,6 +325,37 @@ class NativeProxy:
             raise ValueError('cannot attest full native catalog')
         self.contract.verify(tools['result']['tools'])
 
+    def _verify_bound_catalog(self,binding,context=None):
+        # Attestation reads use the frozen session without monopolizing shared
+        # state during HTTP I/O. Session replacement still owns the state lock.
+        try:
+            tools=self.exchange({'jsonrpc':'2.0','id':self._next_native_id('contract'),
+                                 'method':'tools/list','params':{}},binding=binding)
+        except NativeSessionExpired:
+            with self._state_lock:
+                if binding!=(self.session,self.protocol):raise
+                legacy=self.legacy_ready
+                if legacy:self._legacy_state_lost=True
+                if (not self.initialized or self._other_active(context)
+                        or (legacy and not self._recoverable_read(context))):
+                    if legacy and context is not None and context.request.get('method')=='tools/call':
+                        raise NativeSessionStateLost() from None
+                    raise
+                self._new_native_session({'protocolVersion':'2025-11-25','capabilities':{},
+                    'clientInfo':{'name':'hepta-full-operator-adapter','version':'1'}},context)
+                if legacy:self.legacy_ready=True;self._legacy_state_lost=True
+                return (self.session,self.protocol)
+        if 'error' in tools or not isinstance(tools.get('result'),dict) or tools['result'].get('nextCursor'):
+            raise ValueError('cannot attest full native catalog')
+        self.contract.verify(tools['result']['tools'])
+        return binding
+
+    def _attested_binding(self,context=None):
+        with self._state_lock:
+            self._ensure_native(context)
+            binding=(self.session,self.protocol)
+        return self._verify_bound_catalog(binding,context)
+
     @staticmethod
     def _scope_family(name):
         return name.split('_',1)[0] if isinstance(name,str) and name.startswith(('search_','request_','operation_','usage_')) else None
@@ -337,11 +389,12 @@ class NativeProxy:
             if self._closing.is_set() or not self.initialized or not self._valid_sid(self.session):return
             binding=(self.session,self.protocol)
             request={'jsonrpc':'2.0','id':self._next_native_id('keepalive'),'method':'ping','params':{}}
+        finally:self._state_lock.release()
+        try:
             # Never reinitialize or replay anything after a heartbeat failure.
             self.exchange(request,binding=binding,timeout=KEEPALIVE_TIMEOUT,
                           absolute_timeout=KEEPALIVE_TIMEOUT)
         except Exception:pass
-        finally:self._state_lock.release()
 
     def _start_keepalive(self):
         if self._keepalive_thread is not None or self._closing.is_set():return
@@ -366,7 +419,16 @@ class NativeProxy:
 
     def _new_native_session(self,init_params,context=None):
         with self._active_lock:
-            others=[c for c in self._active.values() if c is not context and not c.completed]
+            transition=context.initialization_done if context is not None else None
+            # Pipelined callers registered after this exact initialize cannot
+            # use either session until its barrier completes. They do not own
+            # the former session; every earlier/bound/transmitting call does.
+            def waiting_after_transition(other):
+                return (transition is not None and other.binding is None and not other.transmitting
+                        and other.initialization_wait is not None
+                        and other.initialization_wait.follows(transition))
+            others=[c for c in self._active.values()
+                    if c is not context and not c.completed and not waiting_after_transition(c)]
             cold=self.session is None and not any(c.binding is not None or c.transmitting for c in others)
             if others and not cold:raise ValueError('cannot replace native session while requests are active')
         self.initialized=False;self.legacy_ready=False;self.session=None;self.protocol=None
@@ -398,7 +460,6 @@ class NativeProxy:
             if (self._active.get(context.key) is not context or context.completed or context.owner is not self._owner
                     or not context.cancel_requested or context.cancel_started or not context.posted
                     or context.native_id is None or context.binding is None or not self._valid_sid(context.binding[0])):return
-            if not self._cancel_slots.acquire(blocking=False):return
             context.cancel_started=True
             def forward():
                 try:
@@ -414,14 +475,11 @@ class NativeProxy:
                     with self._active_lock:context.cancel_failed=True
                 finally:
                     with self._active_lock:self._cancel_threads.discard(threading.current_thread())
-                    self._cancel_slots.release()
-                    # The active table is the bounded pending-intent store.
-                    # A call can complete before its cancellation HTTP reply,
-                    # so release must wake a later call that lacked a slot.
-                    with self._active_lock:waiting=list(self._active.values())
-                    for pending in waiting:self._schedule_cancel(pending)
             thread=threading.Thread(target=forward,name='hepta-request-cancel',daemon=True)
-            self._cancel_threads.add(thread);thread.start()
+            self._cancel_threads.add(thread)
+            try:thread.start()
+            except Exception:
+                self._cancel_threads.discard(thread);context.cancel_failed=True
 
     def _cancel_active(self,params):
         ident=params['requestId'];key=(type(ident),ident)
@@ -470,18 +528,20 @@ class NativeProxy:
                 if method=='server/discover':
                     return self._modern_result(ident,{'supportedVersions':[MODERN_VERSION],
                         'capabilities':{'tools':{'listChanged':False}},'cacheScope':'private','ttlMs':0})
-                if method=='tools/list':
-                    self._verify_catalog(context)
-                    value={'tools':self.contract.tools}
-                    if era=='modern':return self._modern_result(ident,{**value,'cacheScope':'private','ttlMs':0})
-                    return {'jsonrpc':'2.0','id':ident,'result':value}
                 if method=='ping' and era=='modern':return self._modern_result(ident,{})
                 if method=='tools/call':
                     if self._legacy_state_lost and not self._recoverable_read(context):
                         return self._state_lost(ident,era)
-                    self._verify_catalog(context)
-                native_id=self._next_native_id('call')
                 binding=(self.session,self.protocol)
+            if method in ('tools/list','tools/call'):
+                binding=self._verify_bound_catalog(binding,context)
+            if method=='tools/list':
+                value={'tools':self.contract.tools}
+                if era=='modern':return self._modern_result(ident,{**value,'cacheScope':'private','ttlMs':0})
+                return {'jsonrpc':'2.0','id':ident,'result':value}
+            with self._state_lock:
+                if binding!=(self.session,self.protocol):raise ValueError('native session changed before tool submission')
+                native_id=self._next_native_id('call')
                 if context is not None:
                     with self._active_lock:
                         if context.cancel_requested or self._closing.is_set():return self._not_submitted(context,era)
@@ -489,7 +549,7 @@ class NativeProxy:
                 native_req={**request,'id':native_id}
                 if era=='modern':native_req['params']={'name':request['params']['name'],'arguments':request.get('params',{}).get('arguments',{})}
             # HTTP tool waits never hold the state lock; the input reader and
-            # bounded cancellation workers can operate on the frozen binding.
+            # cancellation workers can operate on the frozen binding.
             response=self.exchange(native_req,binding=binding,context=context)
             response={**response,'id':ident}
             if method=='tools/call' and isinstance(response.get('result'),dict):
@@ -546,7 +606,7 @@ class NativeProxy:
         return reply
 
     def serve(self,input_stream,output_stream):
-        pending=queue.Queue(MAX_ACTIVE_REQUESTS);responses=queue.Queue(MAX_ACTIVE_REQUESTS)
+        responses=queue.SimpleQueue();workers=set();initialization=[None]
         output_stop=threading.Event();output_failed=threading.Event();output_lock=threading.Lock();reader_done=threading.Event()
         shutdown_deadline=[None]
         def descriptor(stream):
@@ -596,9 +656,7 @@ class NativeProxy:
             if value is None:return True
             payload=canonical(value)
             if len(payload)>MAX_RESPONSE:payload=canonical(error(value.get('id'),-32070,'Response exceeds facade limit',outcome='unknown',automatic_retry=False))
-            wait=0.1 if deadline is None else max(0,min(0.1,deadline-time.monotonic()))
-            try:responses.put(payload+b'\n',timeout=wait);return True
-            except queue.Full:output_failed.set();self._closing.set();return False
+            responses.put(payload+b'\n');return True
         def write_responses():
             fd=descriptor(output_stream);previous=None
             if fd is not None:previous=os.get_blocking(fd);os.set_blocking(fd,False)
@@ -620,14 +678,22 @@ class NativeProxy:
                     except Exception:output_failed.set();self._closing.set();return
             finally:
                 if fd is not None:os.set_blocking(fd,previous)
-        def work():
-            while True:
-                try:context=pending.get(timeout=0.05)
-                except queue.Empty:
-                    if self._closing.is_set():return
-                    continue
+        def work(context,prior_initialization,initialized):
+            try:
+                # An explicit initialize is a session transition. Only callers
+                # after that transition wait for it; independent calls fan out.
+                while prior_initialization is not None and not prior_initialization.wait(.05):
+                    if context.cancel_requested or self._closing.is_set():break
                 value=self.dispatch(context.request,context)
                 if self._finish(context):emit(value)
+            except Exception:
+                mutating=context.request['method']=='tools/call' and not self.contract.read_only(context.request['params']['name'])
+                outcome='unknown' if context.transmitting and mutating else ('unavailable' if context.transmitting else 'not_submitted')
+                if self._finish(context):emit(error(context.ident,-32603,
+                    'Facade operation result unavailable',outcome=outcome,automatic_retry=False))
+            finally:
+                if initialized is not None:initialized.set()
+                with self._active_lock:workers.discard(threading.current_thread())
         def read_requests():
             try:
                 for raw in frames():
@@ -647,20 +713,35 @@ class NativeProxy:
                     if invalid is not None:
                         if not emit(invalid):break
                         continue
-                    context,refused=self._reserve(request,remember=True)
+                    # Register ordering metadata atomically with the active
+                    # identity so initialize cannot mistake a later waiter for
+                    # an owner of the old session during this small transition.
+                    with self._active_lock:
+                        context,refused=self._reserve(request,remember=True)
+                        if context is not None:
+                            prior_initialization=initialization[0]
+                            initialized=_InitializationBarrier(prior_initialization) if request['method']=='initialize' else None
+                            context.initialization_wait=prior_initialization
+                            context.initialization_done=initialized
+                            if initialized is not None:initialization[0]=initialized
                     if refused is not None:
                         if not emit(refused):break
                         continue
-                    try:pending.put_nowait(context)
-                    except queue.Full:
-                        self._finish(context)
-                        if not emit(error(context.ident,-32603,'Facade request queue is full',outcome='not_submitted',automatic_retry=False)):break
+                    worker=threading.Thread(target=work,args=(context,prior_initialization,initialized),
+                                            name='hepta-stdio-operation',daemon=True)
+                    with self._active_lock:
+                        workers.add(worker)
+                        try:worker.start()
+                        except Exception:
+                            workers.discard(worker)
+                            if initialized is not None:initialized.set()
+                            if self._finish(context):emit(error(context.ident,-32603,
+                                'Facade operation worker unavailable',outcome='not_submitted',automatic_retry=False))
             except (OSError,ValueError):self._closing.set()
             finally:self._closing.set();reader_done.set()
         writer=threading.Thread(target=write_responses,name='hepta-stdio-output',daemon=True)
-        worker=threading.Thread(target=work,name='hepta-stdio-operation',daemon=True)
         reader=threading.Thread(target=read_requests,name='hepta-stdio-input',daemon=True)
-        writer.start();worker.start();reader.start()
+        writer.start();reader.start()
         try:
             while not self._closing.is_set() and not reader_done.wait(.05):pass
         finally:
@@ -676,7 +757,8 @@ class NativeProxy:
             # One overall deadline covers all workers. A daemon blocked on an
             # upstream or stdout cannot turn EOF into an unbounded join.
             reader.join(max(0,deadline-time.monotonic()-output_grace))
-            worker.join(max(0,deadline-time.monotonic()-output_grace))
+            with self._active_lock:operation_threads=list(workers)
+            for thread in operation_threads:thread.join(max(0,deadline-time.monotonic()-output_grace))
             with self._active_lock:cancel_threads=list(self._cancel_threads)
             for thread in cancel_threads:thread.join(max(0,deadline-time.monotonic()-output_grace))
             with self._active_lock:unresolved=list(self._active.values())

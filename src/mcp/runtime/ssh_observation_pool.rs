@@ -2,17 +2,20 @@
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
 //! A separate, explicitly opted-in transport; it never falls back or replays.
+#[path = "ssh_observation_activity.rs"]
+mod activity;
 #[path = "ssh_observation_postspawn.rs"]
 mod postspawn;
 #[path = "ssh_observation_profile.rs"]
 mod profile;
 #[path = "ssh_observation_validation.rs"]
 mod validation;
+use activity::{Activity, Lease};
 
 use anyhow::{anyhow, bail, Context, Result};
 use profile::{AgentIdentity, Profile, Stamp};
 use ring::rand::{SecureRandom, SystemRandom};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::fs::MetadataExt;
@@ -24,20 +27,11 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tokio::process::{Child, ChildStderr, Command};
-use tokio::sync::{
-	mpsc, oneshot, watch, Mutex as AsyncMutex, Notify, OwnedSemaphorePermit, Semaphore,
-};
+use tokio::sync::{mpsc, oneshot, watch, Mutex as AsyncMutex, Notify};
 use tokio::task::JoinSet;
 use tokio::time::{timeout, timeout_at, Instant};
 use tokio_util::sync::CancellationToken;
 
-const MAX_MASTERS: usize = 8;
-const MAX_SESSIONS: usize = 8;
-const HOST_SESSIONS: usize = 2;
-const QUEUE: usize = 8;
-// Same logical request bound as eight executing/retained outputs plus the
-// original eight channel entries. Moving a waiter cannot create new capacity.
-const MAX_ADMITTED: usize = MAX_SESSIONS + QUEUE;
 const IDLE: Duration = Duration::from_secs(30);
 const AGE: Duration = Duration::from_secs(120);
 const START: Duration = Duration::from_secs(12);
@@ -86,14 +80,11 @@ struct Request {
 	deadline: Instant,
 	cancel: CancellationToken,
 	reply: oneshot::Sender<Result<Captured>>,
-	admission: Arc<OwnedSemaphorePermit>,
 }
 
-/// Capacity also covers completed output until its original caller parses it.
+/// The original complete capture remains owned until its caller parses it.
 pub(super) struct Captured {
 	output: Output,
-	_budget: Arc<OwnedSemaphorePermit>,
-	_admission: Arc<OwnedSemaphorePermit>,
 }
 impl std::ops::Deref for Captured {
 	type Target = Output;
@@ -103,13 +94,12 @@ impl std::ops::Deref for Captured {
 }
 
 struct Proxy {
-	sender: mpsc::Sender<Request>,
-	admission: Arc<Semaphore>,
+	sender: mpsc::UnboundedSender<Request>,
 	stop: CancellationToken,
 	healthy: AtomicBool,
 	thread: Mutex<Option<std::thread::JoinHandle<Result<()>>>>,
 	// The process-wide proxy outlives a failed owner thread. Quarantined
-	// original children and permits must not fall into implicit Drop cleanup.
+	// original children and their activity must not fall into implicit Drop cleanup.
 	custody: Mutex<Option<Arc<Core>>>,
 }
 
@@ -158,11 +148,10 @@ pub(super) async fn start(path: &Path) -> Result<PoolGuard> {
 	}
 	let profile = Arc::new(Profile::load(path)?);
 	let root = PrivateRoot::create(&profile)?;
-	let (sender, receiver) = mpsc::channel(QUEUE);
+	let (sender, receiver) = mpsc::unbounded_channel();
 	let (ready_tx, ready_rx) = oneshot::channel();
 	let proxy = Arc::new(Proxy {
 		sender,
-		admission: Arc::new(Semaphore::new(MAX_ADMITTED)),
 		stop: CancellationToken::new(),
 		healthy: AtomicBool::new(false),
 		thread: Mutex::new(None),
@@ -326,9 +315,6 @@ impl Proxy {
 		cancel: CancellationToken,
 		reply: oneshot::Sender<Result<Captured>>,
 	) -> Result<()> {
-		let admission = self.admission.clone().try_acquire_owned().map_err(|_| {
-			anyhow!("observation pool capacity unavailable; no fallback or automatic retry")
-		})?;
 		let request = Request {
 			host: host.to_owned(),
 			command,
@@ -336,19 +322,8 @@ impl Proxy {
 			deadline,
 			cancel,
 			reply,
-			admission: Arc::new(admission),
 		};
-		// A channel waiter already owns one of the same sixteen identities.
-		// Wait within its original deadline; do not enlarge the channel or retry.
-		let slot = tokio::select! {
-			value = timeout_at(deadline, self.sender.reserve()) => value
-				.context("observation queue admission deadline; no automatic retry")?
-				.context("observation queue closed; no fallback or automatic retry")?,
-			_ = request.cancel.cancelled() => bail!("observation cancelled before queue submission; no automatic retry"),
-			_ = self.stop.cancelled() => bail!("observation pool stopped before queue submission; no automatic retry"),
-		};
-		// Capacity, shutdown and expiry may become ready together. Recheck after
-		// reservation and leave no await between these fences and the single send.
+		// Every request retains its original deadline and cancellation identity.
 		if !self.healthy.load(Ordering::Acquire)
 			|| self.stop.is_cancelled()
 			|| request.cancel.is_cancelled()
@@ -357,7 +332,9 @@ impl Proxy {
 		{
 			bail!("observation cancelled, expired or unavailable before queue submission; no automatic retry");
 		}
-		slot.send(request);
+		self.sender
+			.send(request)
+			.map_err(|_| anyhow!("observation queue closed; no automatic retry"))?;
 		Ok(())
 	}
 }
@@ -489,9 +466,9 @@ struct OwnedChild {
 	identity: OnceLock<ProcessIdentity>,
 	approved: AtomicBool,
 	child: AsyncMutex<Child>,
-	// Registry ownership keeps capacity charged through timeout/cancellation
+	// Registry ownership keeps master use alive through timeout/cancellation
 	// until wait/reap proves that this exact child has terminated.
-	_permits: Vec<Arc<OwnedSemaphorePermit>>,
+	_leases: Vec<Arc<Lease>>,
 }
 impl OwnedChild {
 	fn signal(&self, signal: i32) -> Result<()> {
@@ -586,7 +563,7 @@ type Ready = Option<std::result::Result<Arc<Master>, String>>;
 #[derive(Clone)]
 struct Entry {
 	ready: watch::Receiver<Ready>,
-	permits: Arc<Semaphore>,
+	activity: Arc<Activity>,
 	generation: u64,
 	ready_deadline: Instant,
 	// Preserve the exact old socket proof outside the fallible renewal task.
@@ -679,7 +656,7 @@ impl Core {
 			})
 			.await?;
 		// A same-length change can retain every timestamp/metadata field. Keep
-		// the original permit through a second fresh complete read on the owner;
+		// the original activity lease through a second fresh complete read on the owner;
 		// metadata-only acceptance after the await is not content validation.
 		ticket.finish(|ticket| {
 			if unsafe { libc::syscall(libc::SYS_gettid) } != self.owner_tid {
@@ -849,7 +826,7 @@ impl Core {
 		&self,
 		args: &[String],
 		mut command: Command,
-		permits: Vec<Arc<OwnedSemaphorePermit>>,
+		leases: Vec<Arc<Lease>>,
 		deadline: Instant,
 		cancel: &CancellationToken,
 	) -> Result<Arc<OwnedChild>> {
@@ -890,10 +867,10 @@ impl Core {
 			identity: OnceLock::new(),
 			approved: AtomicBool::new(false),
 			child: AsyncMutex::new(child),
-			_permits: permits,
+			_leases: leases,
 		});
 		// Register the original Child before fallible post-exec proof or waiting.
-		// Failed pidfd/identity checks use the same bounded cleanup ledger.
+		// Failed pidfd/identity checks use the same original-child cleanup ledger.
 		children.insert(id, owned.clone());
 		drop(children);
 		// The child has not escaped spawn; shutdown joins owner work before
@@ -979,16 +956,14 @@ impl Core {
 		input: &[u8],
 		deadline: Instant,
 		cancel: &CancellationToken,
-		permits: Vec<Arc<OwnedSemaphorePermit>>,
+		leases: Vec<Arc<Lease>>,
 	) -> Result<Output> {
 		let mut command = self.command(&args);
 		command
 			.stdin(Stdio::piped())
 			.stdout(Stdio::piped())
 			.stderr(Stdio::piped());
-		let owned = self
-			.spawn(&args, command, permits, deadline, cancel)
-			.await?;
+		let owned = self.spawn(&args, command, leases, deadline, cancel).await?;
 		let pipes = {
 			let mut child = owned.child.lock().await;
 			(child.stdin.take(), child.stdout.take(), child.stderr.take())
@@ -1111,9 +1086,6 @@ impl Core {
 			.background
 			.lock()
 			.map_err(|_| anyhow!("observation supervisor unavailable"))?;
-		if tasks.len() >= MAX_MASTERS * 4 {
-			bail!("observation supervisor bound exceeded");
-		}
 		tasks.spawn(work);
 		// The actor may have no master or supervisor left to poll. Retain the
 		// wakeup even when its previous maintenance result is still in flight.
@@ -1217,9 +1189,6 @@ impl Core {
 			bail!("observation cancelled or expired before master admission");
 		}
 		if !entries.contains_key(host) {
-			if entries.len() >= MAX_MASTERS {
-				bail!("observation master capacity unavailable");
-			}
 			let socket = self.root.path.join(format!(
 				"m-{}",
 				self.sequence.fetch_add(1, Ordering::Relaxed)
@@ -1243,7 +1212,7 @@ impl Core {
 				host.to_owned(),
 				Entry {
 					ready: receive,
-					permits: Arc::new(Semaphore::new(HOST_SESSIONS)),
+					activity: Arc::new(Activity::default()),
 					generation,
 					ready_deadline,
 					draining: None,
@@ -1255,7 +1224,7 @@ impl Core {
 			.context("observation master unavailable")?;
 		Ok(Entry {
 			ready: entry.ready.clone(),
-			permits: entry.permits.clone(),
+			activity: entry.activity.clone(),
 			generation: entry.generation,
 			ready_deadline: entry.ready_deadline,
 			draining: entry.draining.clone(),
@@ -1364,23 +1333,11 @@ impl Core {
 		)
 		.await
 	}
-	async fn execute(
-		self: Arc<Self>,
-		request: Request,
-		initial: OwnedSemaphorePermit,
-		global: Arc<Semaphore>,
-	) {
-		let result = self.clone().execute_inner(&request, initial, global).await;
+	async fn execute(self: Arc<Self>, request: Request) {
+		let result = self.clone().execute_inner(&request).await;
 		let _ = request.reply.send(result);
 	}
-	async fn admission_profile(
-		&self,
-		request: &Request,
-		initial: OwnedSemaphorePermit,
-	) -> Result<()> {
-		// The full initial authority check and its bounded agent frame use the
-		// same eight-budget pool as capture. No budget waits behind a hot host.
-		let _budget = initial;
+	async fn admission_profile(&self, request: &Request) -> Result<()> {
 		tokio::select! {
 			value = self.verify_request_profile(request.deadline) => value?,
 			_ = request.cancel.cancelled() => bail!("observation cancelled during admission profile check"),
@@ -1388,42 +1345,13 @@ impl Core {
 		};
 		Ok(())
 	}
-	async fn request_budget(
-		&self,
-		request: &Request,
-		global: Arc<Semaphore>,
-	) -> Result<Arc<OwnedSemaphorePermit>> {
-		let permit = tokio::select! {
-			value = timeout_at(request.deadline, global.acquire_owned()) => value.context("observation global capacity deadline")??,
-			_ = request.cancel.cancelled() => bail!("observation request cancelled before global capacity"),
-			_ = self.stop.cancelled() => bail!("observation pool stopped before global capacity"),
-		};
-		// A released permit and cancellation can become ready together. Never
-		// let select's choice bypass a failed supervisor's synchronous stop.
-		if self.stop.is_cancelled()
-			|| request.cancel.is_cancelled()
-			|| Instant::now() >= request.deadline
-		{
-			bail!("observation cancelled or expired before global capacity");
-		}
-		Ok(Arc::new(permit))
-	}
-	async fn execute_inner(
-		self: Arc<Self>,
-		request: &Request,
-		initial: OwnedSemaphorePermit,
-		global: Arc<Semaphore>,
-	) -> Result<Captured> {
-		self.admission_profile(request, initial).await?;
-		let (master, host, budget, _active) = loop {
+	async fn execute_inner(self: Arc<Self>, request: &Request) -> Result<Captured> {
+		self.admission_profile(request).await?;
+		let (master, host, _active) = loop {
 			let mut entry = self
 				.entry(&request.host, &request.cancel, request.deadline)
 				.await?;
-			let host = tokio::select! {
-				value = timeout_at(request.deadline, entry.permits.clone().acquire_owned()) => value.context("observation host capacity deadline")??,
-				_ = request.cancel.cancelled() => bail!("observation request cancelled before submission"),
-				_ = self.stop.cancelled() => bail!("observation pool stopped before submission"),
-			};
+			let host = Arc::new(entry.activity.lease()?);
 			let ready = async {
 				loop {
 					let current = { entry.ready.borrow().clone() };
@@ -1442,7 +1370,6 @@ impl Core {
 				_ = request.cancel.cancelled() => bail!("observation request cancelled before submission"),
 				_ = self.stop.cancelled() => bail!("observation pool stopped before submission"),
 			};
-			let budget = self.request_budget(request, global.clone()).await?;
 			// Recheck immutable policy/credentials after queueing, before the lease.
 			tokio::select! {
 				value = self.verify_request_profile(request.deadline) => value?,
@@ -1460,12 +1387,11 @@ impl Core {
 			if master.accepting.load(Ordering::Acquire) && request.deadline <= master.created + AGE
 			{
 				let active = ActiveMaster(master.clone());
-				break (master, host, budget, active);
+				break (master, host, active);
 			}
 			master.active.fetch_sub(1, Ordering::AcqRel);
 			drop(host);
-			drop(budget);
-			// No slave has been created. Join a single bounded admission renewal.
+			// No slave has been created. Join this exact master generation renewal.
 			self.renew(
 				&request.host,
 				entry.generation,
@@ -1499,7 +1425,7 @@ impl Core {
 				&request.input,
 				request.deadline,
 				&request.cancel,
-				vec![budget.clone(), Arc::new(host), request.admission.clone()],
+				vec![host],
 			)
 			.await?;
 		tokio::select! {
@@ -1511,11 +1437,7 @@ impl Core {
 			self.stop.cancel();
 			bail!("observation socket changed during response");
 		}
-		Ok(Captured {
-			output,
-			_budget: budget,
-			_admission: request.admission.clone(),
-		})
+		Ok(Captured { output })
 	}
 	async fn retire_master(&self, master: &Master) -> Result<()> {
 		// Only this exact master's lifetime owns the receipt. A concurrent
@@ -1555,9 +1477,8 @@ impl Core {
 				result.context("observation supervisor panicked")??;
 			}
 		}
-		// The table has at most MAX_MASTERS entries. Preserve generation and
-		// watch identity in this bounded snapshot, then release the table before
-		// waiting on any original Child. A slow host must not stop other hosts.
+		// Preserve generation and watch identity in this snapshot, then release
+		// the table before waiting on any original Child. A slow host must not stop other hosts.
 		let snapshot: Vec<_> = self
 			.masters
 			.lock()
@@ -1604,13 +1525,13 @@ impl Core {
 						self.retire_master(&master).await?;
 						let mut entries = self.masters.lock().await;
 						// Renewal may install a later generation during cleanup. It
-						// retains the original semaphore and must never be removed by
-						// this stale snapshot, even when all its permits are free.
+						// retains the original activity ledger and must never be removed
+						// by this stale snapshot, even when it has no active use.
 						if entries.get(&host).is_some_and(|entry| {
 							entry.generation == observed.generation
 								&& entry.ready.same_channel(&observed.ready)
 								&& master.active.load(Ordering::Acquire) == 0
-								&& entry.permits.available_permits() == HOST_SESSIONS
+								&& entry.activity.active() == 0
 						}) {
 							entries.remove(&host);
 						}
@@ -1627,7 +1548,7 @@ impl Core {
 					if entry.draining.is_some() {
 						bail!("observation renewal cleanup unresolved; reconciliation required");
 					}
-					if entry.permits.available_permits() == HOST_SESSIONS {
+					if entry.activity.active() == 0 {
 						entries.remove(&host);
 					}
 				}
@@ -1685,54 +1606,41 @@ impl Core {
 		}
 		Ok(())
 	}
-	async fn run(self: Arc<Self>, receiver: mpsc::Receiver<Request>) -> Result<()> {
-		self.run_with_capacity(receiver, Arc::new(Semaphore::new(MAX_SESSIONS)))
+	async fn run(self: Arc<Self>, receiver: mpsc::UnboundedReceiver<Request>) -> Result<()> {
+		self.run_with_dispatch(receiver, |core, request| core.execute(request))
 			.await
 	}
-	async fn run_with_capacity(
-		self: Arc<Self>,
-		receiver: mpsc::Receiver<Request>,
-		global: Arc<Semaphore>,
-	) -> Result<()> {
-		let request_global = global.clone();
-		self.run_with_dispatch(receiver, global, move |core, request, permit| {
-			core.execute(request, permit, request_global.clone())
-		})
-		.await
-	}
-	// The same actor is exercised with a controlled executor in isolated tests.
-	// Production always supplies execute above; no caller chooses this function.
+	// Tests supply a controlled executor; production always uses execute above.
 	async fn run_with_dispatch<F, Work>(
 		self: Arc<Self>,
-		receiver: mpsc::Receiver<Request>,
-		global: Arc<Semaphore>,
+		receiver: mpsc::UnboundedReceiver<Request>,
 		dispatch: F,
 	) -> Result<()>
 	where
-		F: Fn(Arc<Self>, Request, OwnedSemaphorePermit) -> Work,
+		F: Fn(Arc<Self>, Request) -> Work,
 		Work: std::future::Future<Output = ()> + Send + 'static,
 	{
-		self.run_with_maintenance(receiver, global, dispatch, |core| async move {
-			core.maintain().await
-		})
+		self.run_with_maintenance(
+			receiver,
+			dispatch,
+			|core| async move { core.maintain().await },
+		)
 		.await
 	}
 	async fn run_with_maintenance<F, Work, M, Maintenance>(
 		self: Arc<Self>,
-		mut receiver: mpsc::Receiver<Request>,
-		global: Arc<Semaphore>,
+		mut receiver: mpsc::UnboundedReceiver<Request>,
 		dispatch: F,
 		maintain: M,
 	) -> Result<()>
 	where
-		F: Fn(Arc<Self>, Request, OwnedSemaphorePermit) -> Work,
+		F: Fn(Arc<Self>, Request) -> Work,
 		Work: std::future::Future<Output = ()> + Send + 'static,
 		M: Fn(Arc<Self>) -> Maintenance,
 		Maintenance: std::future::Future<Output = Result<()>> + Send + 'static,
 	{
 		let mut work = JoinSet::new();
 		let mut maintenance = JoinSet::new();
-		let mut pending = VecDeque::with_capacity(MAX_ADMITTED);
 		let new_tick = || {
 			let mut tick = tokio::time::interval(Duration::from_millis(100));
 			tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -1743,33 +1651,22 @@ impl Core {
 			if let Err(error) = Self::reap_completed_requests(&mut work) {
 				break Err(error);
 			}
-			Self::discard_pending(&mut pending, &self.profile.hosts);
-			let next_deadline = pending
-				.iter()
-				.map(|request| request.deadline)
-				.min()
-				.unwrap_or_else(Instant::now);
 			tokio::select! {
 				_ = self.stop.cancelled() => break Ok(()),
 				_ = async {
 					if let Some(tick) = tick.as_mut() { tick.tick().await; }
 				}, if tick.is_some() && maintenance.is_empty() => {
-					// One bounded owner task may wait for an original master's reap.
-					// It cannot stall another host's request admission, and its guard
-					// freezes admission if the task unwinds before publishing a result.
+					// Serialize maintenance of the same master identities, without
+					// blocking independent request dispatch while cleanup waits.
 					let core = self.clone();
-					let guard = StopUnlessCompleted {
-						stop: self.stop.clone(), completed: false,
-					};
+					let guard = StopUnlessCompleted { stop: self.stop.clone(), completed: false };
 					let task = maintain(core.clone());
 					maintenance.spawn(async move {
 						let result = match task.await {
 							Ok(()) => core.maintenance_needed().await,
 							Err(error) => Err(error),
 						};
-						if result.is_err() {
-							core.stop.cancel();
-						}
+						if result.is_err() { core.stop.cancel(); }
 						guard.complete();
 						result
 					});
@@ -1777,13 +1674,7 @@ impl Core {
 				Some(result) = maintenance.join_next(), if !maintenance.is_empty() => {
 					match result {
 						Ok(Ok(true)) => {},
-						Ok(Ok(false)) if pending.is_empty() => {
-							// Drop the timer as well as disabling its select branch:
-							// an empty pool has no child or queued cancellation to
-							// observe. Retained state keeps the original cadence.
-							tick = None;
-						},
-						Ok(Ok(false)) => {},
+						Ok(Ok(false)) => { tick = None; },
 						Ok(Err(error)) => break Err(error),
 						Err(error) => break Err(anyhow!("observation maintenance supervisor failed: {error}")),
 					}
@@ -1791,62 +1682,32 @@ impl Core {
 				_ = self.maintenance_changed.notified(), if maintenance.is_empty() => {
 					if tick.is_none() { tick = Some(new_tick()); }
 				},
-				_ = tokio::time::sleep_until(next_deadline), if !pending.is_empty() => {},
 				Some(result) = work.join_next(), if !work.is_empty() => {
 					if let Err(error) = result { break Err(anyhow!("observation request supervisor failed: {error}")); }
 				},
-				// At most sixteen logical requests exist, including these cheap
-				// host waiters. Expensive preflight/capture still share global8.
-				permit = global.clone().acquire_owned(), if !pending.is_empty() && work.len() < MAX_ADMITTED => {
-					let permit = match permit {
-						Ok(permit) => permit,
-						Err(_) => break Err(anyhow!("observation global capacity closed")),
-					};
-					// A failed task may have released capacity while select was
-					// asleep. Observe its failure before any replacement is spawned.
-					if let Err(error) = Self::reap_completed_requests(&mut work) {
-						break Err(error);
-					}
-					if self.stop.is_cancelled() {
-						break Ok(());
-					}
-					Self::discard_pending(&mut pending, &self.profile.hosts);
-					let Some(request) = pending.pop_front() else {
-						continue;
-					};
-					// Construct outside the async body: abort before its first poll
-					// and synchronous dispatcher panic must freeze admission too.
-					let guard = StopUnlessCompleted {
-						stop: self.stop.clone(), completed: false,
-					};
-					let task = dispatch(self.clone(), request, permit);
-					work.spawn(async move {
-						task.await;
-						guard.complete();
-					});
-				},
-				// Drain accepted channel requests even when global or the first
-				// host is full. Their existing admission16 permit moves with them.
 				request = receiver.recv() => {
 					let Some(request) = request else { break Ok(()); };
-					if pending.len() >= MAX_ADMITTED {
-						let _ = request.reply.send(Err(anyhow!("observation pending bound exceeded")));
-						break Err(anyhow!("observation pending bound exceeded"));
+					if let Err(error) = Self::reap_completed_requests(&mut work) { break Err(error); }
+					if self.stop.is_cancelled() { break Ok(()); }
+					let refusal = if request.cancel.is_cancelled() || request.reply.is_closed()
+						|| Instant::now() >= request.deadline {
+						Some("observation cancelled before admission")
+					} else if !self.profile.hosts.contains_key(&request.host) {
+						Some("host is outside observation profile")
+					} else { None };
+					if let Some(error) = refusal {
+						let _ = request.reply.send(Err(anyhow!(error)));
+						continue;
 					}
-					pending.push_back(request);
-					// A capacity waiter can cancel before it starts any background
-					// work. Preserve the original bounded cancellation sweep.
+					let guard = StopUnlessCompleted { stop: self.stop.clone(), completed: false };
+					let task = dispatch(self.clone(), request);
+					work.spawn(async move { task.await; guard.complete(); });
 					if tick.is_none() { tick = Some(new_tick()); }
 				}
 			}
 		};
 		self.stop.cancel();
 		receiver.close();
-		for request in pending {
-			let _ = request
-				.reply
-				.send(Err(anyhow!("observation pool stopped before admission")));
-		}
 		while let Ok(request) = receiver.try_recv() {
 			let _ = request
 				.reply
@@ -1873,30 +1734,6 @@ impl Core {
 			}
 		}
 		outcome.and(cleanup)
-	}
-	fn discard_pending(pending: &mut VecDeque<Request>, hosts: &BTreeMap<String, String>) {
-		// One bounded pass, retaining order and the existing allocation. Neither
-		// cancellation nor expiry waits for a global output budget to be returned.
-		for _ in 0..pending.len() {
-			let Some(request) = pending.pop_front() else {
-				break;
-			};
-			let error = if request.cancel.is_cancelled()
-				|| request.reply.is_closed()
-				|| Instant::now() >= request.deadline
-			{
-				Some("observation cancelled before admission")
-			} else if !hosts.contains_key(&request.host) {
-				Some("host is outside observation profile")
-			} else {
-				None
-			};
-			if let Some(error) = error {
-				let _ = request.reply.send(Err(anyhow!(error)));
-			} else {
-				pending.push_back(request);
-			}
-		}
 	}
 	async fn shutdown(&self) -> Result<()> {
 		self.stop.cancel();

@@ -29,8 +29,6 @@ use serde::Serialize;
 use serde_json::Value;
 use std::io::{self, Read, Write};
 use std::sync::Arc;
-#[cfg(not(test))]
-use tokio::sync::OwnedSemaphorePermit;
 use tokio_util::sync::CancellationToken;
 
 pub(super) const MAX_HEADER: usize = 64 * 1024;
@@ -429,13 +427,12 @@ pub(super) async fn supervise_child(
 
 #[cfg(all(not(test), unix))]
 struct OwnerResources {
-	_lease: Arc<OwnedSemaphorePermit>,
 	_admission: Arc<super::runtime::effect_owner_fence::AdmissionPermit>,
 }
 
 /// The resource value remains owned until the complete supervision future ends.
 /// Tests use a drop witness alongside a real semaphore lease; production passes
-/// both real admission guards. No requester can abort this private owner task.
+/// the effect-owner guard. No requester can abort this private owner task.
 #[cfg(unix)]
 async fn keep_resources<R: Send>(
 	resources: R,
@@ -475,7 +472,6 @@ pub(super) async fn inspect_frame(
 	header: Vec<u8>,
 	bytes: Arc<Vec<u8>>,
 	cancellation: &CancellationToken,
-	lease: Arc<OwnedSemaphorePermit>,
 	admission: Arc<super::runtime::effect_owner_fence::AdmissionPermit>,
 ) -> std::result::Result<Value, Failure> {
 	if cancellation.is_cancelled() {
@@ -489,7 +485,7 @@ pub(super) async fn inspect_frame(
 	}
 	#[cfg(not(unix))]
 	{
-		let _ = (command, header, bytes, lease, admission);
+		let _ = (command, header, bytes, admission);
 		Err(Failure::output(
 			spec.operation,
 			"Native isolation is not available on this platform",
@@ -501,7 +497,6 @@ pub(super) async fn inspect_frame(
 		let binary = std::env::current_exe()
 			.map_err(|error| Failure::output(spec.operation, error.to_string()))?;
 		let resources = OwnerResources {
-			_lease: lease,
 			_admission: admission,
 		};
 		await_owned(

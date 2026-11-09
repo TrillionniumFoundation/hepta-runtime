@@ -64,8 +64,6 @@ impl Owner {
 			.unwrap()
 			.unwrap();
 		assert!(self.0.core.children.lock().unwrap().is_empty());
-		assert_eq!(self.0.global.available_permits(), GLOBAL_CONNECTIONS);
-		assert_eq!(self.0.admission.available_permits(), MAX_ADMITTED);
 	}
 }
 impl Drop for Owner {
@@ -214,190 +212,56 @@ async fn reply(receive: oneshot::Receiver<Result<Output>>) -> Result<Output> {
 }
 
 async fn idle(owner: &Owner) {
-	until(|| {
-		owner.0.admission.available_permits() == MAX_ADMITTED
-			&& owner.0.global.available_permits() == GLOBAL_CONNECTIONS
-	})
-	.await;
-	assert!(owner.0.core.children.lock().unwrap().is_empty());
+	until(|| owner.0.core.children.lock().unwrap().is_empty()).await;
 }
 
 #[tokio::test]
-async fn sixteen_pending_calls_share_two_original_children_and_next_batch_has_all_capacity() {
+async fn independent_same_target_calls_exceed_all_previous_caps_and_finish_once() {
 	let owner = Owner::new();
 	let fixture = Fixture::new();
-	let tasks: Vec<_> = (0..16)
+	let count = 32;
+	let tasks: Vec<_> = (0..count)
 		.map(|slot| submit(&owner, &fixture, "same-target", slot))
 		.collect();
-	until(|| {
-		(0..16).filter(|slot| fixture.ready(*slot).exists()).count() == 2
-			&& owner.0.admission.available_permits() == 0
-	})
-	.await;
-	assert_eq!(owner.0.global.available_permits(), 6);
-	assert_eq!(owner.0.core.children.lock().unwrap().len(), 2);
-	for slot in 0..16 {
+	until(|| (0..count).all(|slot| fixture.ready(slot).exists())).await;
+	assert_eq!(owner.0.core.children.lock().unwrap().len(), count);
+	for slot in 0..count {
 		fixture.release(slot);
 	}
 	for (slot, task) in tasks.into_iter().enumerate() {
 		finish_call(task, slot).await;
 	}
-	// Every reply is visible only after admitted, host and global capacity returns.
-	assert_eq!(owner.0.admission.available_permits(), 16);
-	assert_eq!(owner.0.global.available_permits(), 8);
-	for slot in 16..32 {
-		fixture.release(slot);
-	}
-	let next: Vec<_> = (16..32)
-		.map(|slot| submit(&owner, &fixture, "same-target", slot))
-		.collect();
-	for (offset, task) in next.into_iter().enumerate() {
-		finish_call(task, offset + 16).await;
-	}
-	assert_eq!(owner.0.core.hooks.spawned.load(Ordering::Acquire), 32);
-	assert!(fixture.event_peak() <= HOST_CONNECTIONS);
+	assert_eq!(
+		owner.0.core.hooks.spawned.load(Ordering::Acquire),
+		count as u64
+	);
+	assert_eq!(fixture.event_peak(), count);
 	owner.finish().await;
 }
 
 #[tokio::test]
-async fn seventeenth_request_is_rejected_before_new_target_or_payload_retention() {
+async fn slow_target_does_not_block_other_targets_or_new_same_target_work() {
 	let owner = Owner::new();
 	let fixture = Fixture::new();
-	let tasks: Vec<_> = (0..16)
-		.map(|slot| submit(&owner, &fixture, "full", slot))
+	let tasks: Vec<_> = (0..20)
+		.map(|slot| submit(&owner, &fixture, "slow-target", slot))
 		.collect();
-	until(|| owner.0.admission.available_permits() == 0).await;
-	let error = owner
-		.0
-		.capture(
-			"never-registered",
-			fixture.command(99),
-			b"not-submitted",
-			Instant::now() + Duration::from_secs(5),
-		)
-		.await
-		.unwrap_err();
-	assert!(error.to_string().contains("admitted capacity exhausted"));
-	assert!(!fixture.ready(99).exists());
-	assert!(!owner
-		.0
-		.hosts
-		.lock()
-		.unwrap()
-		.contains_key("never-registered"));
-	for slot in 0..16 {
+	until(|| (0..20).all(|slot| fixture.ready(slot).exists())).await;
+	for (slot, target) in [(20, "other-target"), (21, "slow-target")] {
+		fixture.release(slot);
+		finish_call(submit(&owner, &fixture, target, slot), slot).await;
+	}
+	for slot in 0..20 {
 		fixture.release(slot);
 	}
 	for (slot, task) in tasks.into_iter().enumerate() {
 		finish_call(task, slot).await;
 	}
-	assert_eq!(owner.0.core.hooks.spawned.load(Ordering::Acquire), 16);
-	owner.finish().await;
-}
-
-#[tokio::test]
-async fn same_target_queue_does_not_take_global_capacity_from_another_target() {
-	let owner = Owner::new();
-	let fixture = Fixture::new();
-	let held: Vec<_> = (0..10)
-		.map(|slot| submit(&owner, &fixture, "held", slot))
-		.collect();
-	until(|| (0..10).filter(|slot| fixture.ready(*slot).exists()).count() == 2).await;
-	fixture.release(20);
-	finish_call(submit(&owner, &fixture, "other", 20), 20).await;
-	assert_eq!(
-		(0..10).filter(|slot| fixture.ready(*slot).exists()).count(),
-		2
-	);
-	for slot in 0..10 {
-		fixture.release(slot);
-	}
-	for (slot, task) in held.into_iter().enumerate() {
-		finish_call(task, slot).await;
-	}
-	owner.finish().await;
-}
-
-#[tokio::test]
-async fn global_eight_limit_and_cancelled_global_waiter_keep_original_capacity() {
-	let owner = Owner::new();
-	let fixture = Fixture::new();
-	let held: Vec<_> = (0..8)
-		.map(|slot| submit(&owner, &fixture, &format!("target-{}", slot / 2), slot))
-		.collect();
-	until(|| (0..8).all(|slot| fixture.ready(slot).exists())).await;
-	assert_eq!(owner.0.global.available_permits(), 0);
-	let waiting = submit(&owner, &fixture, "ninth-target", 9);
-	until(|| owner.0.admission.available_permits() == 7).await;
-	assert!(!fixture.ready(9).exists());
-	waiting.abort();
-	assert!(waiting.await.unwrap_err().is_cancelled());
-	assert_eq!(owner.0.admission.available_permits(), 8);
-	assert_eq!(
-		owner.0.target("ninth-target").unwrap().available_permits(),
-		2
-	);
-	assert_eq!(owner.0.core.children.lock().unwrap().len(), 8);
-	for slot in 0..8 {
-		fixture.release(slot);
-	}
-	for (slot, task) in held.into_iter().enumerate() {
-		finish_call(task, slot).await;
-	}
-	assert!(!fixture.ready(9).exists());
-	assert_eq!(owner.0.core.hooks.spawned.load(Ordering::Acquire), 8);
-	owner.finish().await;
-}
-
-#[tokio::test]
-async fn cancelled_host_waiter_never_submits_after_original_slots_return() {
-	let owner = Owner::new();
-	let fixture = Fixture::new();
-	let first = submit(&owner, &fixture, "host", 0);
-	let second = submit(&owner, &fixture, "host", 1);
-	until(|| fixture.ready(0).exists() && fixture.ready(1).exists()).await;
-	let waiting = submit(&owner, &fixture, "host", 2);
-	until(|| owner.0.admission.available_permits() == 13).await;
-	waiting.abort();
-	assert!(waiting.await.unwrap_err().is_cancelled());
-	fixture.release(0);
-	fixture.release(1);
-	finish_call(first, 0).await;
-	finish_call(second, 1).await;
-	assert!(!fixture.ready(2).exists());
-	assert_eq!(owner.0.core.hooks.spawned.load(Ordering::Acquire), 2);
-	owner.finish().await;
-}
-
-#[tokio::test]
-async fn host_wait_counts_against_the_original_deadline_and_cannot_start_late() {
-	let owner = Owner::new();
-	let fixture = Fixture::new();
-	let first = submit(&owner, &fixture, "host", 0);
-	let second = submit(&owner, &fixture, "host", 1);
-	until(|| fixture.ready(0).exists() && fixture.ready(1).exists()).await;
-	let error = owner
-		.0
-		.capture(
-			"host",
-			fixture.command(2),
-			b"expired",
-			Instant::now() + Duration::from_millis(30),
-		)
-		.await
-		.unwrap_err();
-	assert!(error.to_string().contains("host admission deadline"));
-	fixture.release(0);
-	fixture.release(1);
-	finish_call(first, 0).await;
-	finish_call(second, 1).await;
-	assert!(!fixture.ready(2).exists());
-	assert_eq!(owner.0.core.hooks.spawned.load(Ordering::Acquire), 2);
 	owner.finish().await;
 }
 
 async fn queued_request(
-	owner: &Owner,
+	_owner: &Owner,
 	fixture: &Fixture,
 	slot: usize,
 	deadline: Instant,
@@ -407,11 +271,6 @@ async fn queued_request(
 	oneshot::Receiver<Result<Output>>,
 ) {
 	let cancel = Cancellation::new();
-	let leases = owner
-		.0
-		.acquire("host", Instant::now() + Duration::from_secs(5))
-		.await
-		.unwrap();
 	let (reply, receive) = oneshot::channel();
 	(
 		Request {
@@ -421,7 +280,6 @@ async fn queued_request(
 			deadline,
 			cancel: cancel.clone(),
 			reply,
-			leases: Some(leases),
 			entry: None,
 		},
 		cancel,
@@ -436,7 +294,7 @@ async fn queued_cancel_and_expired_deadline_are_refused_at_the_submission_bounda
 	let (request, cancel, receive) =
 		queued_request(&owner, &fixture, 0, Instant::now() + Duration::from_secs(5)).await;
 	cancel.cancel();
-	assert!(owner.0.sender.try_send(request).is_ok());
+	assert!(owner.0.sender.send(request).is_ok());
 	assert!(reply(receive).await.is_err());
 	let (request, _, receive) = queued_request(
 		&owner,
@@ -445,7 +303,7 @@ async fn queued_cancel_and_expired_deadline_are_refused_at_the_submission_bounda
 		Instant::now() - Duration::from_millis(1),
 	)
 	.await;
-	assert!(owner.0.sender.try_send(request).is_ok());
+	assert!(owner.0.sender.send(request).is_ok());
 	assert!(reply(receive).await.is_err());
 	assert!(!fixture.ready(0).exists() && !fixture.ready(1).exists());
 	assert_eq!(owner.0.core.hooks.spawned.load(Ordering::Acquire), 0);
@@ -461,7 +319,7 @@ async fn cancellation_that_wins_before_commit_prevents_the_original_spawn() {
 		queued_request(&owner, &fixture, 0, Instant::now() + Duration::from_secs(5)).await;
 	{
 		let _gate = owner.0.core.accepting.lock().unwrap();
-		assert!(owner.0.sender.try_send(request).is_ok());
+		assert!(owner.0.sender.send(request).is_ok());
 		cancel.cancel();
 		assert_eq!(cancel.phase.load(Ordering::Acquire), CANCELLED);
 	}
@@ -472,7 +330,7 @@ async fn cancellation_that_wins_before_commit_prevents_the_original_spawn() {
 }
 
 #[tokio::test]
-async fn committed_then_cancelled_attempt_keeps_all_permits_through_actual_reap() {
+async fn committed_then_cancelled_attempt_keeps_original_attempt_through_actual_reap() {
 	let owner = Owner::new();
 	let fixture = Fixture::new();
 	let gate = Arc::new(Gate::default());
@@ -480,14 +338,12 @@ async fn committed_then_cancelled_attempt_keeps_all_permits_through_actual_reap(
 	*owner.0.core.hooks.after_commit.lock().unwrap() = Some(gate.clone());
 	let (request, cancel, receive) =
 		queued_request(&owner, &fixture, 0, Instant::now() + Duration::from_secs(5)).await;
-	assert!(owner.0.sender.try_send(request).is_ok());
+	assert!(owner.0.sender.send(request).is_ok());
 	until(|| gate.reached.load(Ordering::Acquire)).await;
 	assert_eq!(cancel.phase.load(Ordering::Acquire), COMMITTED);
 	cancel.cancel();
 	assert_eq!(cancel.phase.load(Ordering::Acquire), COMMITTED);
-	assert_eq!(owner.0.admission.available_permits(), 15);
-	assert_eq!(owner.0.global.available_permits(), 7);
-	assert_eq!(owner.0.target("host").unwrap().available_permits(), 1);
+
 	gate.release();
 	assert!(reply(receive).await.is_err());
 	idle(&owner).await;
@@ -496,7 +352,7 @@ async fn committed_then_cancelled_attempt_keeps_all_permits_through_actual_reap(
 }
 
 #[tokio::test]
-async fn running_caller_cancellation_cannot_return_permits_before_original_reap() {
+async fn running_caller_cancellation_retains_original_child_until_reap() {
 	let owner = Owner::new();
 	let fixture = Fixture::new();
 	let gate = Arc::new(Gate::default());
@@ -510,9 +366,7 @@ async fn running_caller_cancellation_cannot_return_permits_before_original_reap(
 	call.abort();
 	assert!(call.await.unwrap_err().is_cancelled());
 	until(|| gate.reached.load(Ordering::Acquire)).await;
-	assert_eq!(owner.0.global.available_permits(), 7);
-	assert_eq!(owner.0.admission.available_permits(), 15);
-	assert_eq!(owner.0.target("host").unwrap().available_permits(), 1);
+	assert_eq!(owner.0.core.children.lock().unwrap().len(), 1);
 	gate.release();
 	idle(&owner).await;
 	owner.finish().await;
@@ -570,7 +424,7 @@ async fn spawn_and_pipe_preparation_errors_never_leave_an_unowned_original_child
 }
 
 #[tokio::test]
-async fn response_capture_limit_error_reaps_the_original_child_before_capacity_returns() {
+async fn response_capture_limit_error_reaps_the_original_child_before_reply() {
 	let owner = Owner::new();
 	let mut command = Command::new("python3");
 	command.args(["-I", "-S", "-c", "import sys,time;sys.stdout.buffer.write(b'x'*(8*1024*1024+1));sys.stdout.flush();time.sleep(5)"]);
@@ -586,8 +440,7 @@ async fn response_capture_limit_error_reaps_the_original_child_before_capacity_r
 		.await
 		.unwrap_err();
 	assert!(format!("{error:#}").contains("8 MiB"));
-	assert_eq!(owner.0.global.available_permits(), 8);
-	assert_eq!(owner.0.admission.available_permits(), 16);
+
 	owner.finish().await;
 }
 
@@ -642,8 +495,6 @@ async fn owner_unwind_reaps_registered_child_and_failed_shutdown_is_persistent()
 	assert!(owner.0.shutdown().await.is_err());
 	assert!(owner.0.shutdown().await.is_err());
 	assert!(owner.0.core.children.lock().unwrap().is_empty());
-	assert_eq!(owner.0.global.available_permits(), 8);
-	assert_eq!(owner.0.admission.available_permits(), 16);
 }
 
 #[tokio::test]
@@ -683,7 +534,7 @@ async fn cancelled_shutdown_waiter_cannot_replace_pending_join_with_success() {
 }
 
 #[tokio::test]
-async fn unconfirmed_wait_quarantines_original_capacity_and_never_reports_shutdown_success() {
+async fn unconfirmed_wait_quarantines_original_child_and_never_reports_shutdown_success() {
 	let owner = Owner::new();
 	let fixture = Fixture::new();
 	fixture.release(0);
@@ -704,9 +555,7 @@ async fn unconfirmed_wait_quarantines_original_capacity_and_never_reports_shutdo
 	assert!(owner.0.shutdown().await.is_err());
 	assert!(owner.0.shutdown().await.is_err());
 	assert_eq!(owner.0.core.children.lock().unwrap().len(), 1);
-	assert_eq!(owner.0.global.available_permits(), 7);
-	assert_eq!(owner.0.admission.available_permits(), 15);
-	assert_eq!(owner.0.target("host").unwrap().available_permits(), 1);
+
 	assert!(owner
 		.0
 		.capture(
@@ -736,7 +585,6 @@ async fn unconfirmed_wait_quarantines_original_capacity_and_never_reports_shutdo
 	owner.0.core.release(&original).await.unwrap();
 	drop(original);
 	assert!(owner.0.shutdown().await.is_err());
-	assert_eq!(owner.0.global.available_permits(), 8);
 }
 
 #[test]
@@ -765,40 +613,19 @@ fn caller_runtime_shutdown_does_not_retire_the_original_child_owner() {
 }
 
 #[tokio::test]
-async fn weak_target_entries_are_reclaimed_but_live_permits_keep_the_exact_target() {
-	let owner = Owner::new();
-	let original = owner.0.target("held").unwrap();
-	let weak = Arc::downgrade(&original);
-	let permit = original.acquire_owned().await.unwrap();
-	let same = owner.0.target("held").unwrap();
-	assert!(Arc::ptr_eq(&same, &weak.upgrade().unwrap()));
-	assert_eq!(same.available_permits(), 1);
-	drop(same);
-	for index in 0..1000 {
-		drop(owner.0.target(&format!("temporary-{index}")).unwrap());
-	}
-	assert_eq!(owner.0.hosts.lock().unwrap().len(), 2);
-	assert!(weak.upgrade().is_some());
-	drop(permit);
-	drop(owner.0.target("last").unwrap());
-	assert_eq!(owner.0.hosts.lock().unwrap().len(), 1);
-	assert!(weak.upgrade().is_none());
-	owner.finish().await;
-}
-
-#[tokio::test]
 async fn freeze_refuses_uncommitted_work_and_joins_all_original_children() {
 	let owner = Owner::new();
 	let fixture = Fixture::new();
 	let first = submit(&owner, &fixture, "host", 0);
 	let second = submit(&owner, &fixture, "host", 1);
 	until(|| fixture.ready(0).exists() && fixture.ready(1).exists()).await;
-	let queued = submit(&owner, &fixture, "host", 2);
-	until(|| owner.0.admission.available_permits() == 13).await;
+	let (request, _, receive) =
+		queued_request(&owner, &fixture, 2, Instant::now() + Duration::from_secs(5)).await;
 	owner.0.core.freeze();
+	let _ = owner.0.sender.send(request);
 	assert!(first.await.unwrap().is_err());
 	assert!(second.await.unwrap().is_err());
-	assert!(queued.await.unwrap().is_err());
+	assert!(!matches!(receive.await, Ok(Ok(_))));
 	owner.finish().await;
 	assert!(!fixture.ready(2).exists());
 	assert_eq!(owner.0.core.hooks.spawned.load(Ordering::Acquire), 2);

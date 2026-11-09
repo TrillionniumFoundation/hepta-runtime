@@ -1217,32 +1217,38 @@ fn shared_gate_allows_two_readers_without_bypassing_a_queued_writer() {
 }
 
 #[test]
-fn shared_gate_cap_and_cancelled_head_or_middle_preserve_fifo() {
+fn shared_readers_have_no_count_cap_and_cancelled_waiters_preserve_fifo() {
 	use std::sync::mpsc;
 	use std::time::Duration;
-	// A third reader cannot consume a reservation until one real owner releases.
+	// Independent readers all own the same snapshot concurrently. A writer still
+	// waits for every original reader to release that protected snapshot.
 	let lock = Arc::new(AuditStoreLock::default());
-	let first = lock
-		.acquire_shared(Instant::now() + Duration::from_secs(5))
-		.unwrap();
-	let second = lock
-		.acquire_shared(Instant::now() + Duration::from_secs(5))
-		.unwrap();
+	let mut readers = (0..32)
+		.map(|_| {
+			lock.acquire_shared(Instant::now() + Duration::from_secs(5))
+				.unwrap()
+		})
+		.collect::<Vec<_>>();
+	assert_eq!(lock.queue.lock().unwrap().readers, 32);
+	assert!(lock.queue.lock().unwrap().waiting.is_empty());
 	let other = lock.clone();
 	let (tx, rx) = mpsc::channel();
-	let third = std::thread::spawn(move || {
+	let writer = std::thread::spawn(move || {
 		let guard = other
-			.acquire_shared(Instant::now() + Duration::from_secs(5))
+			.acquire(Some(Instant::now() + Duration::from_secs(5)))
 			.unwrap();
 		tx.send(()).unwrap();
-		guard.finish().unwrap();
+		drop(guard);
 	});
 	wait_for_shared_gate_queue(&lock, 1);
-	assert_eq!(lock.queue.lock().unwrap().readers, 2);
-	first.finish().unwrap();
+	while readers.len() > 1 {
+		readers.pop().unwrap().finish().unwrap();
+	}
+	assert_eq!(lock.queue.lock().unwrap().readers, 1);
+	assert!(matches!(rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
+	readers.pop().unwrap().finish().unwrap();
 	rx.recv_timeout(Duration::from_secs(5)).unwrap();
-	third.join().unwrap();
-	second.finish().unwrap();
+	writer.join().unwrap();
 	assert_shared_gate_idle(&lock);
 	for cancelled_position in [0, 1] {
 		let lock = Arc::new(AuditStoreLock::default());

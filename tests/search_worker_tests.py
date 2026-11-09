@@ -79,6 +79,25 @@ class SearchWorkerTests(unittest.TestCase):
         finally:
             os.close(fd)
 
+    def test_start_accepts_more_than_old_host_and_owner_active_limits(self):
+        self.state.mkdir(mode=0o700)
+        search_root = self.state / "search"
+        search_root.mkdir(mode=0o700)
+        for index in range(12):
+            directory = search_root / format(index + 100, "064x")
+            directory.mkdir(mode=0o700)
+            record = {"owner": self.owner if index < 6 else "3" * 64,
+                      "state": "running", "snapshot_ready": False,
+                      "deadline": time.time() + 60, "statistics": {}}
+            (directory / "record.json").write_text(json.dumps(record))
+        self.identity = "f" * 64
+        (self.root / "proof.txt").write_text("needle")
+        self.assertEqual(self.start()["state"], "running")
+        result = self.terminal()
+        self.assertEqual(result["state"], "completed")
+        self.assertEqual(result["results"][0]["path"], "proof.txt")
+        self.assertEqual(len(list(search_root.glob("*/record.json"))), 13)
+
     def test_native_content_path_utf8_binary_and_no_symlink_or_hardlink_escape(self):
         (self.root / "alpha.txt").write_text("needle 中文\nother\nneedle two\n")
         (self.root / ".hidden").write_text("needle hidden")

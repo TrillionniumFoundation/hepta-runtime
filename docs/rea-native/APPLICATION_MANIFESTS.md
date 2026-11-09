@@ -52,7 +52,7 @@ Attribute names are validated and duplicates are rejected case-insensitively. Ro
 | Selected compressed / uncompressed manifest | 4 MiB each |
 | Selected compression methods | Stored (0), raw deflate (8) |
 | JSON response | 1 MiB |
-| Concurrent application workers | 2; the blocking worker retains its slot after waiter cancellation |
+| Concurrent application workers | No runtime count ceiling; the original blocking worker retains its input through completion; see [concurrent execution](../CONCURRENCY_POLICY.md) |
 | Stream/parser work deadline | 240 seconds, checked between bounded work units |
 | AXML strings / individual decoded string | 65,536 / 64 KiB |
 | AXML total decoded strings / referenced text | 8 MiB / 32 MiB |

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright 2026 TrillionniumFoundation
 # Licensed under the Apache License, Version 2.0.
-"""Observe owned ELF MCP cancellation, capacity, deadline and EOF lifecycles.
+"""Observe owned ELF MCP parallel work, cancellation, deadline and EOF lifecycles.
 
 Only newly launched clients and their identity-checked children are controlled.
 An unobserved active phase is OPEN, never a successful cancellation. The frozen
@@ -29,7 +29,9 @@ import rea_operation_qualification as q
 
 
 SCHEMA = "hepta.rea.lifecycle-qualification.v1"
-PROFILE = "rea-agents-6.8.0/inspect_elf_notes/linux-owned-lifecycle/v1"
+PROFILE = "rea-agents-6.8.0/inspect_elf_notes/linux-owned-lifecycle/v2"
+# Finite qualification sample sizes, never runtime admission limits.
+PARALLEL_REQUESTS = 8
 ACTIVE_BYTES = 536870912
 WORKER_BYTES = 33554432
 ACTIVE_SECONDS = 15.0
@@ -354,15 +356,46 @@ def run_capture(session, _args):
     session.unknown()
 
 
-def run_worker_capacity(session, args):
+def workers_still_stopped(observation, identities):
+    """Producer convenience; the independent consumer rechecks original rows."""
+    if observation["errors"]:
+        return False
+    rows = {item["pid"]: item for item in observation["processes"]}
+    tracked = {item["identity"]["pid"]: item for item in observation["tracked"]}
+    for identity in identities:
+        process, ticket = rows.get(identity["pid"], {}), tracked.get(identity["pid"], {})
+        raw = process.get("stat")
+        if (not raw or proc_identity(raw) != identity
+                or raw[raw.rfind(")") + 2:].split()[0] not in {"T", "t"}
+                or ticket.get("identity") != identity or ticket.get("pidfd_exited") is not False
+                or ticket.get("error") is not None):
+            return False
+    return True
+
+
+def run_worker_parallel(session, args):
     for round_index in range(2):
-        identifiers = []
-        for slot in range(2):
-            role = f"round-{round_index}-slot-{slot}"
+        identifiers, identities = [], []
+        for index in range(2):
+            role = f"round-{round_index}-held-{index}"
             identifiers.append(session.begin(role, "worker"))
-            session.stopped_worker(role, args.binary)
-        session.call(f"round-{round_index}-capacity", session.tool,
-                     {"path": session.fixtures["prime"]["path"]})
+            identities.append(session.stopped_worker(role, args.binary))
+        session.observe(f"round-{round_index}-held-before",
+                        lambda row: workers_still_stopped(row, identities), DRAIN_SECONDS)
+        pending = []
+        for index in range(PARALLEL_REQUESTS):
+            role = f"round-{round_index}-parallel-{index}"
+            arguments = {"path": session.fixtures["prime"]["path"]}
+            identifier = session.client.begin("tools/call", {"name": session.tool, "arguments": arguments})
+            session.append("request", role=role, request_id=identifier, tool=session.tool, arguments=arguments)
+            session.request_ids.append(identifier)
+            pending.append((role, identifier))
+        for role, identifier in pending:
+            response = session.client.receive(identifier, seconds=q.REQUEST_SECONDS)
+            session.append("response", role=role, request_id=identifier, response=response)
+            q.check_independent_facts(q.evidence_value(response), prime_case(session.fixtures))
+        session.observe(f"round-{round_index}-held-after",
+                        lambda row: workers_still_stopped(row, identities), DRAIN_SECONDS)
         for identifier in identifiers:
             session.cancel(identifier)
         session.clear(f"round-{round_index}-drained")
@@ -481,7 +514,7 @@ def main(argv=None):
         for label in ("reference", "native"):
             report["sessions"].append(execute_session(label, "capture-cancel", run_capture,
                                                      args, output, fixtures, config))
-        report["sessions"].append(execute_session("native", "worker-capacity-cancel", run_worker_capacity,
+        report["sessions"].append(execute_session("native", "worker-parallel-cancel", run_worker_parallel,
                                                  args, output, fixtures, config))
         report["sessions"].append(execute_session("native", "worker-deadline", run_deadline,
                                                  args, output, fixtures, config))

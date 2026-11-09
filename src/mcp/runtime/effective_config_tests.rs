@@ -79,6 +79,10 @@ fn effective_config_preserves_flags_counts_and_alias_order() {
 	config.validate().unwrap();
 	let summary = result(&config);
 	assert_eq!(summary["schema"], "hepta-effective-config-v1");
+	assert_eq!(
+		summary["limits"]["concurrent_execution"],
+		"unbounded_by_runtime"
+	);
 	assert_eq!(summary["controller"]["workspace_root_count"], 1);
 	assert_eq!(summary["hosts"][0]["alias"], "gpu");
 	assert_eq!(summary["hosts"][1]["alias"], "primary");

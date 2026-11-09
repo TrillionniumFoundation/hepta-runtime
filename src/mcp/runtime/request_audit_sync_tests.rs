@@ -1,11 +1,11 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! Persistent worker identity, closed queues, inline paths and reference fences.
+//! Uncapped scoped file barriers preserve exact results and reference fences.
 use super::*;
-use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Barrier;
+use std::sync::{mpsc, Condvar, Mutex};
+use std::time::Duration;
 
 fn files(root: &std::path::Path, count: usize) -> Vec<Arc<File>> {
 	(0..count)
@@ -24,110 +24,183 @@ fn actual_sync() -> Operation {
 	})
 }
 
-#[test]
-fn exactly_the_same_four_threads_serve_multiple_cohorts_and_release_all_file_arcs() {
-	let root = tempfile::tempdir().unwrap();
-	let files = files(root.path(), 8);
-	let pool = Pool::new().unwrap();
-	assert!(pool.is_ready());
-	let mut previous = None;
-	for _ in 0..4 {
-		let gate = Arc::new(Barrier::new(WORKERS));
-		let ids = Arc::new(Mutex::new(HashSet::new()));
-		let observed = ids.clone();
-		let results = pool.synchronize(
-			&files,
-			Arc::new(move |file: &File| {
-				observed.lock().unwrap().insert(std::thread::current().id());
-				gate.wait();
-				file.sync_all()?;
-				Ok(())
-			}),
-		);
-		assert!(results.iter().all(Result::is_ok));
-		let ids = ids.lock().unwrap().clone();
-		assert_eq!(ids.len(), WORKERS);
-		if let Some(previous) = &previous {
-			assert_eq!(&ids, previous);
+#[derive(Default)]
+struct Gate {
+	open: Mutex<bool>,
+	changed: Condvar,
+}
+impl Gate {
+	fn wait(&self) {
+		let mut open = self.open.lock().unwrap();
+		while !*open {
+			open = self.changed.wait(open).unwrap();
 		}
-		previous = Some(ids);
-		assert!(files.iter().all(|file| Arc::strong_count(file) == 1));
+	}
+	fn release(&self) {
+		*self.open.lock().unwrap() = true;
+		self.changed.notify_all();
+	}
+}
+struct ReleaseOnDrop(Arc<Gate>);
+impl Drop for ReleaseOnDrop {
+	fn drop(&mut self) {
+		self.0.release();
 	}
 }
 
 #[test]
-fn one_file_is_inline_without_initializing_any_worker() {
+fn independent_cohorts_exceed_four_workers_and_32_files_while_owning_every_file() {
+	const COHORT_FILES: usize = 40;
+	let roots = [tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap()];
+	let files: Vec<_> = roots
+		.iter()
+		.map(|root| files(root.path(), COHORT_FILES))
+		.collect();
+	let gate = Arc::new(Gate::default());
+	let release = ReleaseOnDrop(gate.clone());
+	let (started, receive) = mpsc::channel();
+	let completed = Arc::new(AtomicUsize::new(0));
+	let mut callers = Vec::new();
+	for cohort in &files {
+		let cohort = cohort.clone();
+		let gate = gate.clone();
+		let started = started.clone();
+		let completed = completed.clone();
+		callers.push(std::thread::spawn(move || {
+			synchronize(
+				&cohort,
+				Arc::new(move |file| {
+					started.send(()).unwrap();
+					gate.wait();
+					file.sync_all()?;
+					completed.fetch_add(1, Ordering::SeqCst);
+					Ok(())
+				}),
+			)
+		}));
+	}
+	for _ in 0..COHORT_FILES * files.len() {
+		receive.recv_timeout(Duration::from_secs(5)).unwrap();
+	}
+	assert!(callers.iter().all(|caller| !caller.is_finished()));
+	assert_eq!(completed.load(Ordering::SeqCst), 0);
+	drop(release);
+	for caller in callers {
+		let results = caller.join().unwrap();
+		assert_eq!(results.len(), COHORT_FILES);
+		assert!(results.iter().all(Result::is_ok));
+	}
+	assert_eq!(completed.load(Ordering::SeqCst), COHORT_FILES * files.len());
+	assert!(files
+		.iter()
+		.flatten()
+		.all(|file| Arc::strong_count(file) == 1));
+}
+
+#[test]
+fn one_file_stays_inline_and_empty_cohorts_spawn_nothing() {
 	let root = tempfile::tempdir().unwrap();
 	let files = files(root.path(), 1);
-	let cell = PoolCell::new();
-	assert!(cell_is_ready(&cell));
 	let caller = std::thread::current().id();
-	let results = with_cell(
+	let results = synchronize_with_hooks(
 		&files,
 		Arc::new(move |file: &File| {
 			assert_eq!(std::thread::current().id(), caller);
 			file.sync_all()?;
 			Ok(())
 		}),
-		&cell,
-		|| panic!("C1 must not initialize the sync pool"),
+		|_| panic!("a singleton must not spawn"),
+		|_| panic!("a singleton has no submitted workers"),
 	);
 	assert!(results.iter().all(Result::is_ok));
-	assert!(cell.get().is_none());
-	assert!(cell_is_ready(&cell));
 	assert_eq!(Arc::strong_count(&files[0]), 1);
+	assert!(synchronize_with_hooks(
+		&[],
+		actual_sync(),
+		|_| panic!("empty cohort spawned"),
+		|_| panic!("empty cohort submitted")
+	)
+	.is_empty());
 }
 
 #[test]
-fn partial_initialization_joins_existing_workers_and_caches_the_error_without_retries() {
+fn partial_spawn_failure_joins_accepted_workers_and_preserves_errno_without_replay() {
 	let root = tempfile::tempdir().unwrap();
 	let files = files(root.path(), 8);
-	let cell = PoolCell::new();
-	let initialized = AtomicUsize::new(0);
-	let attempted = AtomicUsize::new(0);
-	let alive = Arc::new(AtomicUsize::new(0));
-	for _ in 0..2 {
-		let results = with_cell(&files, actual_sync(), &cell, || {
-			initialized.fetch_add(1, Ordering::SeqCst);
-			Pool::start_with(|index, task| {
+	let gate = Arc::new(Gate::default());
+	let release = ReleaseOnDrop(gate.clone());
+	let (started, receive) = mpsc::channel();
+	let attempts = Arc::new(AtomicUsize::new(0));
+	let attempted = attempts.clone();
+	let completed = Arc::new(AtomicUsize::new(0));
+	let done = completed.clone();
+	let owned = files.clone();
+	let caller = std::thread::spawn(move || {
+		synchronize_with_hooks(
+			&owned,
+			Arc::new(move |file| {
+				started.send(()).unwrap();
+				gate.wait();
+				file.sync_all()?;
+				done.fetch_add(1, Ordering::SeqCst);
+				Ok(())
+			}),
+			move |index| {
 				attempted.fetch_add(1, Ordering::SeqCst);
 				if index == 2 {
-					return Err(std::io::Error::from_raw_os_error(libc::EAGAIN));
+					Err(std::io::Error::from_raw_os_error(libc::EAGAIN))
+				} else {
+					Ok(())
 				}
-				let alive = alive.clone();
-				Builder::new().spawn(move || {
-					alive.fetch_add(1, Ordering::SeqCst);
-					task();
-					alive.fetch_sub(1, Ordering::SeqCst);
-				})
-			})
-		});
-		assert!(results.iter().all(Result::is_err));
-		for result in &results {
-			assert_eq!(
-				result
-					.as_ref()
-					.unwrap_err()
-					.chain()
-					.find_map(|error| error.downcast_ref::<std::io::Error>())
-					.and_then(std::io::Error::raw_os_error),
-				Some(libc::EAGAIN)
-			);
-		}
-		assert!(!cell_is_ready(&cell));
-		assert_eq!(alive.load(Ordering::SeqCst), 0);
-		assert!(files.iter().all(|file| Arc::strong_count(file) == 1));
+			},
+			|_| {},
+		)
+	});
+	for _ in 0..2 {
+		receive.recv_timeout(Duration::from_secs(5)).unwrap();
 	}
-	assert_eq!(initialized.load(Ordering::SeqCst), 1);
-	assert_eq!(attempted.load(Ordering::SeqCst), 3);
+	assert!(!caller.is_finished());
+	assert_eq!(completed.load(Ordering::SeqCst), 0);
+	drop(release);
+	let results = caller.join().unwrap();
+	assert_eq!(results.len(), files.len());
+	for result in results {
+		assert_eq!(
+			result
+				.unwrap_err()
+				.chain()
+				.find_map(|error| error.downcast_ref::<std::io::Error>())
+				.and_then(std::io::Error::raw_os_error),
+			Some(libc::EAGAIN)
+		);
+	}
+	assert_eq!(attempts.load(Ordering::SeqCst), 3);
+	assert_eq!(completed.load(Ordering::SeqCst), 2);
+	assert!(files.iter().all(|file| Arc::strong_count(file) == 1));
+	// A separate explicit call remains possible; the failed cohort was not replayed.
+	assert!(synchronize(&files, actual_sync()).iter().all(Result::is_ok));
+}
+
+#[test]
+fn first_spawn_failure_runs_no_io_and_releases_every_rejected_file_reference() {
+	let root = tempfile::tempdir().unwrap();
+	let files = files(root.path(), 8);
+	let results = synchronize_with_hooks(
+		&files,
+		Arc::new(|_| panic!("failed spawn must not run I/O")),
+		|_| Err(std::io::Error::from_raw_os_error(libc::EAGAIN)),
+		|_| panic!("failed spawn must not report submission"),
+	);
+	assert_eq!(results.len(), files.len());
+	assert!(results.iter().all(Result::is_err));
+	assert!(files.iter().all(|file| Arc::strong_count(file) == 1));
 }
 
 #[test]
 fn ordinary_io_failure_maps_to_its_input_position_and_panic_refuses_the_whole_cohort() {
 	let root = tempfile::tempdir().unwrap();
 	let files = files(root.path(), 16);
-	let pool = Pool::new().unwrap();
-	let results = pool.synchronize(
+	let results = synchronize(
 		&files,
 		Arc::new(|file: &File| {
 			if file.metadata()?.len() == 4 {
@@ -157,7 +230,7 @@ fn ordinary_io_failure_maps_to_its_input_position_and_panic_refuses_the_whole_co
 		.all(|(index, result)| index == 3 || result.is_ok()));
 	let calls = Arc::new(AtomicUsize::new(0));
 	let observed = calls.clone();
-	let results = pool.synchronize(
+	let results = synchronize(
 		&files,
 		Arc::new(move |file: &File| {
 			observed.fetch_add(1, Ordering::SeqCst);
@@ -169,85 +242,7 @@ fn ordinary_io_failure_maps_to_its_input_position_and_panic_refuses_the_whole_co
 	assert!(results.iter().all(Result::is_err));
 	assert_eq!(calls.load(Ordering::SeqCst), files.len());
 	assert!(files.iter().all(|file| Arc::strong_count(file) == 1));
-	assert!(pool
-		.synchronize(&files, actual_sync())
-		.iter()
-		.all(Result::is_ok));
-}
-
-#[test]
-fn a_closed_queue_releases_the_rejected_job_reference_and_refuses_every_result() {
-	let root = tempfile::tempdir().unwrap();
-	let files = files(root.path(), 8);
-	let (sender, receive) = mpsc::sync_channel(MAX_FILES);
-	drop(receive);
-	let pool = Pool {
-		sender: Some(sender),
-		workers: Vec::new(),
-	};
-	assert!(!pool.is_ready());
-	assert!(pool
-		.synchronize(&files, actual_sync())
-		.iter()
-		.all(Result::is_err));
-	assert!(files.iter().all(|file| Arc::strong_count(file) == 1));
-}
-
-#[test]
-fn duplicate_completion_cannot_end_draining_while_an_accepted_sender_is_alive() {
-	let (reply, receive) = mpsc::sync_channel(MAX_FILES);
-	let faulty = reply.clone();
-	let pending = reply.clone();
-	let (done, observed) = mpsc::channel();
-	let handle = std::thread::spawn(move || {
-		let mut drain = CohortDrainGuard {
-			reply: Some(reply),
-			receive,
-			remaining: 2,
-			disconnected: false,
-		};
-		drain.close_reply();
-		while drain.next().is_some() {}
-		assert!(drain.disconnected);
-		done.send(()).unwrap();
-	});
-	for _ in 0..2 {
-		faulty
-			.send(Completion {
-				index: 0,
-				outcome: Outcome::Synced,
-			})
-			.unwrap();
-	}
-	drop(faulty);
-	assert!(observed.try_recv().is_err());
-	pending
-		.send(Completion {
-			index: 1,
-			outcome: Outcome::Synced,
-		})
-		.unwrap();
-	drop(pending);
-	observed
-		.recv_timeout(std::time::Duration::from_secs(20))
-		.unwrap();
-	handle.join().unwrap();
-}
-
-#[test]
-fn oversized_cohorts_are_refused_without_initializing_or_synchronizing_files() {
-	let root = tempfile::tempdir().unwrap();
-	let files = files(root.path(), MAX_FILES + 1);
-	let cell = PoolCell::new();
-	let results = with_cell(
-		&files,
-		Arc::new(|_| panic!("oversized cohort reached fsync")),
-		&cell,
-		|| panic!("oversized cohort initialized workers"),
-	);
-	assert_eq!(results.len(), MAX_FILES + 1);
-	assert!(results.iter().all(Result::is_err));
-	assert!(cell.get().is_none());
+	assert!(synchronize(&files, actual_sync()).iter().all(Result::is_ok));
 }
 
 #[cfg(target_os = "linux")]
@@ -255,9 +250,8 @@ fn oversized_cohorts_are_refused_without_initializing_or_synchronizing_files() {
 fn workers_share_the_original_file_descriptors_without_duplication_or_retention() {
 	use std::os::unix::fs::MetadataExt;
 	let root = tempfile::tempdir().unwrap();
-	let files = files(root.path(), MAX_FILES);
-	let pool = Pool::new().unwrap();
-	let results = pool.synchronize(
+	let files = files(root.path(), 64);
+	let results = synchronize(
 		&files,
 		Arc::new(|file: &File| {
 			let expected = file.metadata()?;

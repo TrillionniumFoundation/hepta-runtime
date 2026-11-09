@@ -2301,9 +2301,9 @@ fn retirement_distinguishes_an_idle_worker_from_a_live_caller() {
 }
 
 #[test]
-fn bounded_index_capacity_waits_without_retiring_live_callers_or_blocking_writers() {
-	// This case deliberately fills the process-global pool. Isolate just this
-	// fixture so unrelated tests can keep running with the unchanged pool bound.
+fn active_indexes_exceed_the_old_two_root_limit_without_retirement_or_writer_blocking() {
+	// Isolate exact registry ownership assertions from unrelated test roots.
+	// Every original live caller stays pinned while new roots are admitted.
 	let mut child = std::process::Command::new(std::env::current_exe().unwrap())
 		.args([
 			"mcp::runtime::request_audit::index::tests::archive_capacity_wait_child",
@@ -2334,11 +2334,12 @@ fn archive_capacity_wait_child() {
 	if std::env::var_os("HEPTA_TEST_ARCHIVE_CAPACITY_WAIT").is_none() {
 		return;
 	}
-	assert_eq!(MAX_INDEXES, 2);
+	const ACTIVE_ROOTS: usize = 16;
+	assert_eq!(IDLE_INDEX_CACHE_TARGET, 2);
 	let mut fixtures = Vec::new();
 	let mut slots = Vec::new();
 	let mut originals = Vec::new();
-	for _ in 0..MAX_INDEXES {
+	for _ in 0..ACTIVE_ROOTS {
 		let (root, owner) = fixture();
 		let archive = open_archive(root.path()).unwrap();
 		let slot = slot_at(root.path(), &archive).unwrap();
@@ -2349,48 +2350,40 @@ fn archive_capacity_wait_child() {
 		fixtures.push((root, owner, archive));
 		slots.push(slot);
 	}
-	let (waiting_root, owner) = fixture();
-	let waiting_archive = open_archive(waiting_root.path()).unwrap();
-	let error = {
-		let _guard = store_lock().unwrap();
-		try_slot_at(waiting_root.path(), &waiting_archive)
-			.err()
-			.unwrap()
-	};
-	assert!(error.is::<IndexCapacityBusy>());
 	assert!(slots.iter().all(|slot| !slot.state.lock().unwrap().retired));
-	// The full pool must still admit a caller of an already registered root.
 	let same = slot_at(fixtures[0].0.path(), &fixtures[0].2).unwrap();
 	assert!(Arc::ptr_eq(&same, &slots[0]));
 	drop(same);
-	let started = Instant::now();
-	let deadline = started + Duration::from_millis(30);
-	let error = slot_at_until(waiting_root.path(), &waiting_archive, deadline)
+
+	let (new_root, owner) = fixture();
+	let new_archive = open_archive(new_root.path()).unwrap();
+	let new_slot =
+		slot_at_until(new_root.path(), &new_archive, Instant::now() + QUERY_BUDGET).unwrap();
+	assert!(slots.iter().all(|slot| !slot.state.lock().unwrap().retired));
+	assert!(!new_slot.state.lock().unwrap().retired);
+	{
+		let registry = INDEXES.get().unwrap().lock().unwrap();
+		assert!(registry.len() > IDLE_INDEX_CACHE_TARGET);
+		assert!(slots.iter().all(|slot| {
+			registry
+				.iter()
+				.any(|registered| Arc::ptr_eq(slot, registered))
+		}));
+		assert!(registry
+			.iter()
+			.any(|registered| Arc::ptr_eq(&new_slot, registered)));
+	}
+	// Removing the admission cap does not relax an already-expired deadline.
+	let error = slot_at_until(new_root.path(), &new_archive, Instant::now())
 		.err()
 		.unwrap();
 	assert!(error.to_string().contains("total deadline exceeded"));
-	assert!(Instant::now() >= deadline);
-	assert!(started.elapsed() < Duration::from_secs(1));
-	assert!(slots.iter().all(|slot| !slot.state.lock().unwrap().retired));
-	assert_eq!(INDEXES.get().unwrap().lock().unwrap().len(), MAX_INDEXES);
 
-	let (started_tx, started_rx) = std::sync::mpsc::channel();
 	let (done_tx, done_rx) = std::sync::mpsc::channel();
-	let waiting_path = waiting_root.path().to_owned();
-	let query_owner = owner.clone();
+	let query_root = new_root.path().to_owned();
 	let query = std::thread::spawn(move || {
-		started_tx.send(()).unwrap();
-		done_tx
-			.send(usage_stats_at(&waiting_path, &query_owner))
-			.unwrap();
+		done_tx.send(usage_stats_at(&query_root, &owner)).unwrap();
 	});
-	started_rx.recv_timeout(Duration::from_secs(1)).unwrap();
-	assert!(matches!(
-		done_rx.recv_timeout(Duration::from_millis(30)),
-		Err(std::sync::mpsc::RecvTimeoutError::Timeout)
-	));
-	// A pending third-root query must release STORE_LOCK so an authoritative
-	// admission and completion can both finish while the two callers stay live.
 	let (write_tx, write_rx) = std::sync::mpsc::channel();
 	let writer_root = fixtures[0].0.path().to_owned();
 	let writer_owner = fixtures[0].1.clone();
@@ -2399,28 +2392,23 @@ fn archive_capacity_wait_child() {
 			.and_then(|ticket| finish_sync(ticket, AuditCompletion::Completed));
 		write_tx.send(result).unwrap();
 	});
-	write_rx
-		.recv_timeout(Duration::from_secs(1))
-		.expect("waiting for a slot must not hold STORE_LOCK")
+	let stats = done_rx
+		.recv_timeout(QUERY_BUDGET)
+		.expect("new root query must not wait for live callers to release indexes")
 		.unwrap();
-	writer.join().unwrap();
-	assert!(matches!(
-		done_rx.try_recv(),
-		Err(std::sync::mpsc::TryRecvError::Empty)
-	));
-	assert!(slots.iter().all(|slot| !slot.state.lock().unwrap().retired));
-	let released = Arc::downgrade(slots.last().unwrap());
-	drop(slots.pop().unwrap());
-	let stats = done_rx.recv_timeout(QUERY_BUDGET).unwrap().unwrap();
+	write_rx
+		.recv_timeout(QUERY_BUDGET)
+		.expect("live indexes must not block authoritative writers")
+		.unwrap();
 	query.join().unwrap();
+	writer.join().unwrap();
 	let stats: Value = serde_json::from_str(&stats).unwrap();
 	assert_eq!(stats["total_requests"], 1);
 	assert_eq!(stats["completed"], 1);
-	assert!(released.upgrade().is_none());
-	assert!(!slots[0].state.lock().unwrap().retired);
-	assert_eq!(INDEXES.get().unwrap().lock().unwrap().len(), MAX_INDEXES);
+	assert!(slots.iter().all(|slot| !slot.state.lock().unwrap().retired));
 	let stats: Value =
-		serde_json::from_str(&usage_stats_at(fixtures[0].0.path(), &owner).unwrap()).unwrap();
+		serde_json::from_str(&usage_stats_at(fixtures[0].0.path(), &fixtures[0].1).unwrap())
+			.unwrap();
 	assert_eq!(stats["total_requests"], 2);
 	assert_eq!(stats["completed"], 2);
 	for (path, before) in originals {

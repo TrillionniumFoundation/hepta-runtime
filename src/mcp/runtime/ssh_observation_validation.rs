@@ -1,24 +1,22 @@
 // Copyright 2026 Muvon Un Limited
 // Copyright 2026 TrillionniumFoundation
 // SPDX-License-Identifier: Apache-2.0
-//! Bounded complete-file validation that never owns an SSH child or credential lease.
+//! Complete-file validation with original-work custody and no worker count cap.
 
-use anyhow::{anyhow, bail, Context, Result};
+use super::activity::{Activity, Lease};
+use anyhow::{anyhow, bail, Result};
 use std::sync::Arc;
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
-use tokio::time::{timeout_at, Instant};
+use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
-const WORKERS: usize = 2;
-
 pub(super) struct Workers {
-	permits: Arc<Semaphore>,
+	activity: Arc<Activity>,
 }
 
 // The same guard follows queued/running work, its returned result, and the
-// final owner check. Failure freezes admission before releasing capacity.
+// final owner check. Failure freezes admission before releasing custody.
 struct Completion {
-	_permit: OwnedSemaphorePermit,
+	_activity: Lease,
 	stop: CancellationToken,
 	completed: bool,
 }
@@ -26,7 +24,7 @@ struct Completion {
 impl Completion {
 	fn finish(mut self) {
 		// Consuming the whole guard forces the blocking closure to own its
-		// permit and Drop state together, rather than capturing copied fields.
+		// activity and Drop state together, rather than capturing copied fields.
 		self.completed = true;
 	}
 }
@@ -61,7 +59,7 @@ impl OwnerTicket {
 		self.check_current()?;
 		check(&self)?;
 		self.check_current()?;
-		// No fresh acquisition or early permit release separates the complete
+		// No early activity release separates the complete
 		// worker read from this owner result. Errors/unwind retain failure Drop.
 		self.completion.finish();
 		Ok(())
@@ -71,7 +69,7 @@ impl OwnerTicket {
 impl Workers {
 	pub(super) fn new() -> Self {
 		Self {
-			permits: Arc::new(Semaphore::new(WORKERS)),
+			activity: Arc::new(Activity::default()),
 		}
 	}
 
@@ -101,19 +99,12 @@ impl Workers {
 	where
 		F: FnOnce(&OwnerTicket) -> Result<()> + Send + 'static,
 	{
-		let permit = tokio::select! {
-			biased;
-			_ = stop.cancelled() => bail!("observation validation stopped before admission"),
-			value = timeout_at(deadline, self.permits.clone().acquire_owned()) => value
-				.context("observation validation capacity deadline")?
-				.context("observation validation capacity closed")?,
-		};
 		// Construct before spawn so even a discarded unstarted closure freezes
-		// admission. At most WORKERS closures are submitted; Tokio's otherwise
-		// unbounded blocking queue cannot accumulate validation work.
+		// admission. The lease only tracks work for shutdown; it never queues or
+		// rejects an independent validation because another one is active.
 		let ticket = OwnerTicket {
 			completion: Completion {
-				_permit: permit,
+				_activity: self.activity.lease()?,
 				stop: stop.clone(),
 				completed: false,
 			},
@@ -158,13 +149,8 @@ impl Workers {
 		// Admission is stopped first. Normal cleanup also joins supervisors;
 		// the owner's final barrier still runs if that cleanup returned early.
 		// Detached checks and unconsumed/active owner tickets retain the same
-		// permits, so cleanup cannot overtake either phase of validation.
-		let _all = self
-			.permits
-			.clone()
-			.acquire_many_owned(WORKERS as u32)
-			.await
-			.context("observation validation drain unavailable")?;
+		// activity leases, so cleanup cannot overtake either phase of validation.
+		self.activity.drain().await;
 		Ok(())
 	}
 }

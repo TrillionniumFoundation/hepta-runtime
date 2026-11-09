@@ -322,6 +322,8 @@ class ActualOwnedProcessTests(unittest.TestCase):
 
 
 class ArchiveRelocationTests(unittest.TestCase):
+    profile = evidence.PROFILE
+
     """Complete synthetic OPEN receipts check relocation, never execution success."""
 
     def setUp(self):
@@ -353,7 +355,7 @@ class ArchiveRelocationTests(unittest.TestCase):
             "state_dir": str(self.original / "state"), "hosts": {"never-connect": {
                 "ssh_target": "never-connect-invalid", "remote_state_dir": str(self.original / "unused-remote"),
                 "allow_execute": False, "allow_pty": False, "allow_write": False, "allow_job_network": False}}}
-        self.report = {"schema": evidence.SCHEMA, "profile": evidence.PROFILE, "operation": "inspect_elf_notes",
+        self.report = {"schema": evidence.SCHEMA, "profile": self.profile, "operation": "inspect_elf_notes",
             "errors": [], "producer_before": bindings, "producer_after": copy.deepcopy(bindings),
             "source_before": self.put("source-before.json", source), "source_after": self.put("source-after.json", source),
             "source_monitor": self.put("source-monitor.json", {"event_count": 0, "errors": [],
@@ -367,7 +369,7 @@ class ArchiveRelocationTests(unittest.TestCase):
             "fixtures_after": self.put("fixtures-after.json", self.fixtures), "sessions": [],
             "unsupported": [{"producer": "reference", "scenario": "worker-deadline",
                 "reason": "frozen ElfNotesProvider parses in process; no independent parser pidfd deadline injection boundary"}]}
-        for index, (label, scenario) in enumerate(evidence.SESSION_ORDER):
+        for index, (label, scenario) in enumerate(evidence.PROFILE_SESSIONS[self.profile]):
             prefix = label + "-" + scenario
             owner = {"pid": 1234 + index, "parent_pid": 1200, "process_group": 1234 + index, "start_time_ticks": 91 + index}
             close = {"owner": owner, "returncode": 0, "forced_cleanup": [], "reader_stopped": True,
@@ -525,6 +527,23 @@ class ArchiveRelocationTests(unittest.TestCase):
         result = self.validate(repin=True)
         self.assertEqual(result["status"], "FAILED")
         self.assertFalse(result["qualified"])
+
+
+class LegacyProfileReceiptTests(ArchiveRelocationTests):
+    profile = evidence.LEGACY_PROFILE
+
+    def test_legacy_receipt_keeps_legacy_profile_and_gate_set(self):
+        result = self.validate()
+        self.assertEqual(result["profile"], evidence.LEGACY_PROFILE)
+        self.assertIn("native/worker-capacity-cancel", result["sessions"])
+        self.assertNotIn("parallel-independent-request-completion", result["gates"])
+        self.assertFalse(result["qualified"])
+
+    def test_relabeling_legacy_receipt_cannot_establish_parallel_profile(self):
+        self.report["profile"] = evidence.PROFILE
+        with self.assertRaisesRegex(ValueError, "session set/order"):
+            self.validate(repin=True)
+
 
 
 if __name__ == "__main__":

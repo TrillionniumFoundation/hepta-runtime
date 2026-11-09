@@ -107,6 +107,7 @@ class ProcessStartConcurrency(unittest.TestCase):
         self.addCleanup(self.proxy.close);self.proxy.legacy_ready=True
         for proxy in (self.proxy,self.proxy.legacy,self.proxy.predecessor):
             proxy._ensure_native=mock.Mock();proxy._verify_catalog=mock.Mock()
+            proxy._verify_bound_catalog=mock.Mock(side_effect=lambda binding,context=None:binding)
             proxy.exchange=mock.Mock(side_effect=AssertionError('unexpected owner exchange'))
         legacy=self.proxy.legacy
         legacy.session='original-session';legacy.protocol='2025-11-25';legacy._namespace='original-namespace'

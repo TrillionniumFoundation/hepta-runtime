@@ -823,12 +823,11 @@ impl Profile {
 			.iter()
 			.map(|(name, host)| (name.clone(), host.ssh_target.clone()))
 			.collect();
-		if hosts.len() > 8
-			|| hosts
-				.values()
-				.any(|target| !crate::mcp::runtime::config::valid_name(target))
+		if hosts
+			.values()
+			.any(|target| !crate::mcp::runtime::config::valid_name(target))
 		{
-			bail!("observation profile supports at most eight literal SSH aliases");
+			bail!("observation profile requires literal SSH aliases");
 		}
 		Ok(Self {
 			ssh_inode: (ssh.stamp.dev, ssh.stamp.ino),
