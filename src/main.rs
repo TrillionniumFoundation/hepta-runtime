@@ -53,6 +53,7 @@ async fn run(cli: Cli) -> Result<()> {
 			ssh_key,
 			ssh_timeout,
 			runtime_config,
+			runtime_private_config_receipt,
 			auth_token_file,
 			runtime_prewarm,
 			runtime_audit_group_commit,
@@ -61,9 +62,15 @@ async fn run(cli: Cli) -> Result<()> {
 		} => {
 			let runtime_enabled = runtime_config.is_some();
 			if let Some(config_path) = runtime_config.as_ref() {
-				let config = mcp::runtime::RuntimeConfig::load(config_path)?;
-				mcp::runtime::search_jobs::init_search_interpreters(&config)?;
-				mcp::runtime::init_runtime(config)?;
+				if runtime_private_config_receipt {
+					let loaded = mcp::runtime::config::LoadedRuntimeConfig::load(config_path)?;
+					mcp::runtime::search_jobs::init_search_interpreters(loaded.config())?;
+					mcp::runtime::config::init_runtime_with_private_receipt(loaded)?;
+				} else {
+					let config = mcp::runtime::RuntimeConfig::load(config_path)?;
+					mcp::runtime::search_jobs::init_search_interpreters(&config)?;
+					mcp::runtime::init_runtime(config)?;
+				}
 				if runtime_prewarm || runtime_audit_group_commit {
 					mcp::runtime::prepare_durable_stores().await?;
 				}
