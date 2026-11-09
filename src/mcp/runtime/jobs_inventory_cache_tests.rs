@@ -51,7 +51,11 @@ fn params() -> ProcessListPageParams {
 	}
 }
 
-fn call(fixture: &Fixture, params: &ProcessListPageParams, cache: &Mutex<SnapshotCache>) -> Value {
+fn call(
+	fixture: &Fixture,
+	params: &ProcessListPageParams,
+	cache: &Arc<Mutex<SnapshotCache>>,
+) -> Value {
 	serde_json::from_str(
 		&page_at(&fixture.root, params, InventoryLimits::default(), cache).unwrap(),
 	)
@@ -65,7 +69,7 @@ fn continue_from(value: &Value, params: &mut ProcessListPageParams) {
 #[test]
 fn complete_original_pages_reuse_one_snapshot_with_unchanged_public_binding() {
 	let fixture = Fixture::new(275);
-	let cache = Mutex::new(SnapshotCache::default());
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
 	let mut params = ProcessListPageParams {
 		limit: Some(128),
 		..params()
@@ -103,7 +107,7 @@ fn complete_original_pages_reuse_one_snapshot_with_unchanged_public_binding() {
 fn every_first_page_revalidates_all_originals_before_filtering() {
 	let fixture = Fixture::new(3);
 	fixture.write(2, "mac", "PRIVATE_OTHER_HOST");
-	let cache = Mutex::new(SnapshotCache::default());
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
 	call(&fixture, &params(), &cache);
 	std::fs::write(fixture.path(2), br#"{"args":[false]}"#).unwrap();
 	let error = page_at(&fixture.root, &params(), InventoryLimits::default(), &cache).unwrap_err();
@@ -118,7 +122,7 @@ fn continuation_refuses_private_other_host_change_and_does_not_resurrect_after_r
 	let fixture = Fixture::new(3);
 	fixture.write(2, "mac", "PRIVATE_BEFORE");
 	let original = std::fs::read(fixture.path(2)).unwrap();
-	let cache = Mutex::new(SnapshotCache::default());
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
 	let mut params = params();
 	let first = call(&fixture, &params, &cache);
 	continue_from(&first, &mut params);
@@ -137,7 +141,7 @@ fn continuation_refuses_private_other_host_change_and_does_not_resurrect_after_r
 fn continuation_is_bound_to_root_host_and_original_process_cache() {
 	let fixture = Fixture::new(2);
 	let other = Fixture::new(2);
-	let cache = Mutex::new(SnapshotCache::default());
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
 	let mut params = params();
 	let first = call(&fixture, &params, &cache);
 	continue_from(&first, &mut params);
@@ -146,7 +150,7 @@ fn continuation_is_bound_to_root_host_and_original_process_cache() {
 		&fixture.root,
 		&params,
 		InventoryLimits::default(),
-		&Mutex::new(SnapshotCache::default())
+		&Arc::new(Mutex::new(SnapshotCache::default()))
 	)
 	.is_err());
 	params.host = None;
@@ -159,7 +163,7 @@ fn continuation_is_bound_to_root_host_and_original_process_cache() {
 fn additions_removals_and_directory_replacements_invalidate_the_original_cursor() {
 	for change in ["add", "remove", "jobs", "root"] {
 		let fixture = Fixture::new(2);
-		let cache = Mutex::new(SnapshotCache::default());
+		let cache = Arc::new(Mutex::new(SnapshotCache::default()));
 		let mut params = params();
 		continue_from(&call(&fixture, &params, &cache), &mut params);
 		match change {
@@ -188,7 +192,7 @@ fn additions_removals_and_directory_replacements_invalidate_the_original_cursor(
 #[test]
 fn ignored_staging_files_do_not_become_committed_inventory_rows() {
 	let fixture = Fixture::new(2);
-	let cache = Mutex::new(SnapshotCache::default());
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
 	let mut params = params();
 	continue_from(&call(&fixture, &params, &cache), &mut params);
 	std::fs::write(
@@ -202,7 +206,7 @@ fn ignored_staging_files_do_not_become_committed_inventory_rows() {
 #[test]
 fn expiration_does_not_uncharge_an_inflight_snapshot() {
 	let fixture = Fixture::new(2);
-	let cache = Mutex::new(SnapshotCache::default());
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
 	let first = call(&fixture, &params(), &cache);
 	let cursor = first["next_cursor"].as_str().unwrap();
 	let token = cursor.split_once(':').unwrap().0;
@@ -266,7 +270,7 @@ fn page_wire_limit_shrinks_the_slice_without_changing_the_snapshot() {
 		record["launch_state"] = json!("x".repeat(24 * 1024));
 		std::fs::write(fixture.path(index), serde_json::to_vec(&record).unwrap()).unwrap();
 	}
-	let cache = Mutex::new(SnapshotCache::default());
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
 	let mut params = ProcessListPageParams {
 		limit: Some(3),
 		..params()
@@ -282,7 +286,7 @@ fn page_wire_limit_shrinks_the_slice_without_changing_the_snapshot() {
 
 #[test]
 fn malformed_cursor_and_limit_fail_before_any_source_read() {
-	let cache = Mutex::new(SnapshotCache::default());
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
 	for (limit, cursor) in [
 		(0, None),
 		(129, None),
@@ -308,7 +312,7 @@ fn malformed_cursor_and_limit_fail_before_any_source_read() {
 #[test]
 fn cached_pages_do_not_bypass_the_original_source_deadline() {
 	let fixture = Fixture::new(2);
-	let cache = Mutex::new(SnapshotCache::default());
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
 	let mut params = params();
 	continue_from(&call(&fixture, &params, &cache), &mut params);
 	let limits = InventoryLimits {
@@ -346,4 +350,248 @@ async fn cancelled_request_keeps_actual_blocking_worker_admission_until_exit() {
 	release.send(()).unwrap();
 	complete.await.unwrap();
 	assert!(acquire_worker(&workers).is_ok());
+}
+
+fn bounded_call(
+	fixture: &Fixture,
+	params: &ProcessListPageParams,
+	cache: &Arc<Mutex<SnapshotCache>>,
+	limits: InventoryLimits,
+) -> Result<Value> {
+	Ok(serde_json::from_str(&request_at(
+		&fixture.root,
+		params,
+		limits,
+		cache,
+	)?)?)
+}
+
+#[test]
+fn source_larger_than_one_step_returns_only_pending_until_every_original_is_checked() {
+	let fixture = Fixture::new(9);
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
+	let bytes = std::fs::metadata(fixture.path(0)).unwrap().len();
+	let limits = InventoryLimits {
+		bytes: bytes * 2,
+		..InventoryLimits::default()
+	};
+	let mut request = params();
+	let mut pending = 0;
+	let mut ids = Vec::new();
+	for _ in 0..1000 {
+		let page = bounded_call(&fixture, &request, &cache, limits).unwrap();
+		assert!(cache.lock().unwrap().bytes <= MAX_SNAPSHOT_BYTES);
+		if page["validation_pending"] == true {
+			pending += 1;
+			std::thread::sleep(Duration::from_millis(1));
+			assert_eq!(page["jobs"], json!([]));
+			assert_eq!(page["inventory_complete"], false);
+			assert_eq!(page["has_more"], true);
+			assert!(page["next_cursor"]
+				.as_str()
+				.unwrap()
+				.starts_with("pending:"));
+		} else {
+			assert_eq!(page["total"], 9);
+			ids.extend(
+				page["jobs"]
+					.as_array()
+					.unwrap()
+					.iter()
+					.map(|row| row["id"].as_str().unwrap().to_owned()),
+			);
+		}
+		continue_from(&page, &mut request);
+		if request.cursor.is_none() {
+			break;
+		}
+	}
+	assert!(
+		pending >= 9,
+		"continuations must also re-read complete original bytes"
+	);
+	assert_eq!(
+		ids,
+		(0..9)
+			.map(|index| format!("job-{index:05}"))
+			.collect::<Vec<_>>()
+	);
+	assert!(request.cursor.is_none());
+	assert!(cache.lock().unwrap().pending.is_empty());
+}
+
+#[test]
+fn pending_observation_refuses_late_corrupt_other_host_before_returning_any_row() {
+	let fixture = Fixture::new(4);
+	fixture.write(3, "mac", "PRIVATE_OTHER_HOST");
+	let original = std::fs::read(fixture.path(3)).unwrap();
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
+	let limits = InventoryLimits {
+		bytes: 500,
+		..InventoryLimits::default()
+	};
+	let mut gate = pending::tests::block_after_step(&fixture.root);
+	let mut request = params();
+	let page = bounded_call(&fixture, &request, &cache, limits).unwrap();
+	assert_eq!(page["validation_pending"], true);
+	continue_from(&page, &mut request);
+	gate.wait();
+	std::fs::write(fixture.path(3), br#"{"args":[false]}"#).unwrap();
+	gate.release();
+	let error = page_at(&fixture.root, &request, limits, &cache).unwrap_err();
+	assert!(error
+		.to_string()
+		.contains("corrupt durable inventory metadata"));
+	std::fs::write(fixture.path(3), original).unwrap();
+	assert!(bounded_call(&fixture, &request, &cache, limits).is_err());
+	assert!(cache.lock().unwrap().entries.is_empty());
+}
+
+#[test]
+fn pending_continuation_failure_invalidates_the_original_page_cursor_after_restore() {
+	let fixture = Fixture::new(4);
+	fixture.write(3, "mac", "PRIVATE_OTHER_HOST");
+	let original = std::fs::read(fixture.path(3)).unwrap();
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
+	let mut request = params();
+	continue_from(&call(&fixture, &request, &cache), &mut request);
+	let original_cursor = request.cursor.clone();
+	let limits = InventoryLimits {
+		bytes: 500,
+		..InventoryLimits::default()
+	};
+	let mut gate = pending::tests::block_after_step(&fixture.root);
+	let first = bounded_call(&fixture, &request, &cache, limits).unwrap();
+	assert_eq!(first["validation_pending"], true);
+	continue_from(&first, &mut request);
+	gate.wait();
+	fixture.write(3, "mac", "PRIVATE_MUTATED_HOST");
+	gate.release();
+	assert!(page_at(&fixture.root, &request, limits, &cache).is_err());
+	std::fs::write(fixture.path(3), original).unwrap();
+	assert!(bounded_call(&fixture, &request, &cache, limits).is_err());
+	request.cursor = original_cursor;
+	assert!(bounded_call(&fixture, &request, &cache, InventoryLimits::default()).is_err());
+}
+
+#[test]
+fn pending_steps_keep_bounded_projection_and_hold_reservation_through_actual_lifetime() {
+	let fixture = Fixture::new(20);
+	for index in 0..20 {
+		fixture.write(index, "main", &"X".repeat(128 * 1024));
+	}
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
+	let limits = InventoryLimits {
+		bytes: 200 * 1024,
+		..InventoryLimits::default()
+	};
+	let mut gate = pending::tests::block_after_step(&fixture.root);
+	let page = bounded_call(&fixture, &params(), &cache, limits).unwrap();
+	assert_eq!(page["validation_pending"], true);
+	gate.wait();
+	let expired = Instant::now() + SNAPSHOT_TTL + Duration::from_secs(1);
+	{
+		let mut state = cache.lock().unwrap();
+		assert!(
+			state.bytes < 128 * 1024,
+			"private raw bytes must not survive a step"
+		);
+		state.prune(expired);
+		assert_eq!(state.pending.len(), 1);
+		assert!(state.bytes > 0);
+		assert_eq!(state.workers.available_permits(), 1);
+	}
+	gate.release();
+	pending::tests::wait_finished(&cache);
+	let mut state = cache.lock().unwrap();
+	state.prune(expired);
+	assert!(state.pending.is_empty());
+	assert_eq!(state.bytes, 0);
+	assert_eq!(state.workers.available_permits(), MAX_INVENTORY_WORKERS);
+}
+
+#[test]
+fn pending_cursor_is_bound_to_scope_and_polling_never_restarts_the_observation() {
+	let fixture = Fixture::new(4);
+	let other = Fixture::new(4);
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
+	let limits = InventoryLimits {
+		bytes: 500,
+		..InventoryLimits::default()
+	};
+	let mut gate = pending::tests::block_after_step(&fixture.root);
+	let mut request = params();
+	continue_from(
+		&bounded_call(&fixture, &request, &cache, limits).unwrap(),
+		&mut request,
+	);
+	gate.wait();
+	let original = request.cursor.clone();
+	assert!(bounded_call(&other, &request, &cache, limits).is_err());
+	request.host = Some("mac".into());
+	assert!(bounded_call(&fixture, &request, &cache, limits).is_err());
+	request.host = Some("main".into());
+	for _ in 0..4 {
+		let poll = bounded_call(&fixture, &request, &cache, limits).unwrap();
+		assert_eq!(poll["validation_pending"], true);
+		assert_eq!(poll["next_cursor"].as_str(), original.as_deref());
+	}
+	assert_eq!(gate.starts(), 1);
+	gate.release();
+	pending::tests::wait_finished(&cache);
+	assert_eq!(call(&fixture, &request, &cache)["total"], 4);
+}
+
+#[test]
+#[ignore = "explicit read-only real-registry benchmark; emits aggregate measurements only"]
+fn real_registry_readonly_inventory_benchmark() {
+	let root = PathBuf::from(
+		std::env::var_os("HEPTA_REGISTRY_BENCH_ROOT").expect("explicit benchmark root"),
+	);
+	let cache = Arc::new(Mutex::new(SnapshotCache::default()));
+	let mut request = ProcessListPageParams {
+		host: None,
+		cursor: None,
+		limit: Some(32),
+	};
+	let mut pages = 0;
+	let mut steps = 0;
+	let all_started = Instant::now();
+	let mut pending = 0;
+	for _ in 0..4000 {
+		let started = Instant::now();
+		let result = request_at(&root, &request, InventoryLimits::default(), &cache);
+		let elapsed = started.elapsed().as_millis();
+		let total_ms = all_started.elapsed().as_millis();
+		steps += 1;
+		let Ok(text) = result else {
+			println!(
+				"{}",
+				json!({"benchmark":"readonly_inventory", "accepted":false,
+				"steps":steps,"pending_steps":pending,"pages":pages,"total_ms":total_ms,
+				"last_step_ms":elapsed,"retained_bytes":cache.lock().unwrap().bytes})
+			);
+			return;
+		};
+		let value: Value = serde_json::from_str(&text).unwrap();
+		if value["validation_pending"] == true {
+			pending += 1;
+			std::thread::sleep(Duration::from_millis(20));
+		} else {
+			pages += 1;
+		}
+		request.cursor = value["next_cursor"].as_str().map(str::to_owned);
+		if pages >= 2 || request.cursor.is_none() {
+			println!(
+				"{}",
+				json!({"benchmark":"readonly_inventory", "accepted":true,
+				"steps":steps,"pending_steps":pending,"pages":pages,"total_ms":total_ms,
+				"last_step_ms":elapsed,"total":value["total"],
+				"all_originals_validated":value["validation_pending"] == false,
+				"retained_bytes":cache.lock().unwrap().bytes})
+			);
+			return;
+		}
+	}
+	panic!("bounded benchmark did not finish its first two pages");
 }
