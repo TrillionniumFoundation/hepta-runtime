@@ -3,6 +3,7 @@
 
 pub mod config;
 pub mod inspect;
+mod privileged_ledger;
 pub mod jobs;
 pub mod pty;
 pub mod ssh;

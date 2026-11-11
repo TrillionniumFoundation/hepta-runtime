@@ -636,7 +636,7 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = true
 		),
-		description = "Start an explicit executable and argv on one configured host. No shell syntax is parsed. Jobs have durable metadata and logs, survive MCP reconnects, support idempotency keys, and may be resource-limited."
+		description = "Start an explicit executable and argv on one configured host. No shell syntax is parsed. Jobs have durable metadata and logs, survive MCP reconnects, require a stable idempotency_key, and may be resource-limited."
 	)]
 	async fn process_start(
 		&self,
@@ -896,7 +896,7 @@ impl OctofsServer {
 			idempotent_hint = false,
 			open_world_hint = true
 		),
-		description = "Run one exact, administrator-configured sudo action on a configured host. Arbitrary sudo commands, executable paths, services, and PIDs are never accepted from tool input."
+		description = "Run one exact, administrator-configured sudo action on a configured host. Requires a stable idempotency_key. A lost response is indeterminate and is never automatically replayed. Arbitrary sudo commands and executable paths are rejected."
 	)]
 	async fn privileged_action(
 		&self,
