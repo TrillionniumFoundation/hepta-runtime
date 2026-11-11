@@ -1,0 +1,22 @@
+[package]
+name = "hepta-weightspace-audit"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Isolated research audit of exact upstream math plus bounded F32 projection planning"
+
+[dependencies]
+anyhow = "=1.0.104"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.154", features = ["float_roundtrip"] }
+sha2 = "=0.11.1"
+schemars = "=1.2.3"
+tokio = { version = "=1.53.3", features = ["rt-multi-thread", "macros", "sync", "time"] }
+num-bigint = "=0.4.8"
+
+[[bin]]
+name = "projection-demo"
+path = "src/main.rs"
+
+[dev-dependencies]
+serial_test = { path = "harness/serial_test" }
