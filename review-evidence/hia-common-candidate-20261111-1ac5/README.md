@@ -15,7 +15,7 @@ The audit recomputed the original profile, request and mutation owner-key digest
 
 For the wrong-bundle-pin control, the worker's original job exited 2 with a confirmed terminal publication. Three observations retained the same original operation and UNKNOWN status. Cleanup errors were empty. The two independent runs had identical Runtime binary, worker/backend/catalog, helper bundle and helper image identities.
 
-The final candidate's HIA-specific contract suite also passed 35 tests in each feature configuration with zero ignored tests. Those commands deliberately filter non-HIA tests. The broader Runtime CI is still running at this checkpoint; its existing skips and filters must remain visible in the final result.
+The final candidate's HIA-specific contract suite also passed 35 tests in each feature configuration with zero ignored tests. Those commands deliberately filter non-HIA tests. The complete original exact-head push CI has also passed: all-features ran 2400 tests, all passed, with 40 existing top-level skips; no-default-features ran 2371, all passed, with 28 existing top-level skips. Release build, the real JavaScript MCP cancellation/recovery gates, REA parser/syscall-denial checks and the independent Python ZIP-to-shipped-Rust checks all passed. The separate original PR exact-head and prospective-merge jobs are still finishing at this checkpoint.
 
 ## Execution boundary
 
@@ -35,6 +35,12 @@ sha256sum original-joint-artifact.zip
 ```
 
 The complete ZIP must have SHA256 `fddefa9bde25e03980e315acf5e2d04e06adb1d9a337c9a48d72f26e68a54ec1`. The untouched original GitHub ZIP was downloaded, its metadata digest verified, and every entry read for ZIP CRC and content-hash verification before these parts were saved.
+
+## Full Runtime regression evidence
+
+[full-push/INDEX.json](full-push/INDEX.json) retains the complete 1.16-million-character original job log, original run/job/artifact metadata, both complete release-gate artifacts and their independent byte audits. The added HIA controls and four parent-owned helper tests actually passed in both full configurations.
+
+[Existing ignore inventory](full-ci/existing-ignore-inventory.json) records every original ignore reason and source identity. These files and the general CI configuration match the unchanged deployment base. The 40 entries include manual benchmarks, remote SSH/filesystem and external-oracle work; 12 are excluded from compilation without remote-fs, leaving 28. Four top-level ignored private helpers are deliberately launched by normal bounded parent tests; their parent PASS lines are retained, so top-level skipped is not a claim that those helpers never execute.
 
 ## Earlier original outcomes
 
