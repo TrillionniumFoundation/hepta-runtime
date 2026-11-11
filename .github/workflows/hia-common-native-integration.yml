@@ -9,6 +9,7 @@ on:
     paths:
       - 'src/mcp/hia_*'
       - 'tests/hia_native_helper_mcp_integration.py'
+      - 'tests/test_hia_native_helper_mcp_integration.py'
       - '.github/workflows/hia-common-native-integration.yml'
   workflow_dispatch:
 
@@ -16,7 +17,7 @@ permissions:
   contents: read
 
 env:
-  HEPTA_SOURCE_SHA: '8dae9d0b74f8520d1522548e0a04c0c077b3f074'
+  HEPTA_SOURCE_SHA: '7c20b6cfc792f0147b5418968f94734b8890fcca'
   CARGO_INCREMENTAL: '0'
   CARGO_PROFILE_DEV_DEBUG: '0'
   CARGO_PROFILE_TEST_DEBUG: '0'
@@ -79,6 +80,12 @@ jobs:
           /usr/bin/clang-20 --version > "$RUNNER_TEMP/hia-common-stage/clang.txt"
           /usr/bin/ld --version > "$RUNNER_TEMP/hia-common-stage/ld.txt"
 
+      - name: Reject foreign cold sources and cached or hidden import substitutions
+        id: source_controls
+        run: |
+          set -euo pipefail
+          python -I -B tests/test_hia_native_helper_mcp_integration.py -v 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/source-admission-tests.log"
+
       - name: Install pinned Runtime toolchain
         run: |
           set -euo pipefail
@@ -112,12 +119,12 @@ jobs:
 
       - name: Real stdio MCP, SSH worker, native image and consumer lifecycle
         id: integration
-        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.dependencies.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.dependencies.outcome == 'success' && steps.source_controls.outcome == 'success' }}
         env:
           RUNTIME_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          python -B tests/hia_native_helper_mcp_integration.py \
+          python -I -B tests/hia_native_helper_mcp_integration.py \
             --runtime "$GITHUB_WORKSPACE/target/debug/hepta-runtime" \
             --runtime-source "$GITHUB_WORKSPACE" \
             --hepta "$GITHUB_WORKSPACE/hia-source" \
@@ -135,6 +142,7 @@ jobs:
           COLD_OUTCOME: ${{ steps.cold.outcome }}
           LANGUAGE_OUTCOME: ${{ steps.language.outcome }}
           INTEGRATION_OUTCOME: ${{ steps.integration.outcome }}
+          SOURCE_CONTROLS_OUTCOME: ${{ steps.source_controls.outcome }}
         run: |
           python -B - <<'PY'
           import json, os
@@ -142,7 +150,7 @@ jobs:
           path = Path(os.environ["RUNNER_TEMP"]) / "hia-common-stage"
           path.mkdir(exist_ok=True)
           outcomes = {name.lower(): os.environ[name + "_OUTCOME"] for name in
-                      ("BUILD", "COLD", "LANGUAGE", "INTEGRATION")}
+                      ("BUILD", "COLD", "LANGUAGE", "INTEGRATION", "SOURCE_CONTROLS")}
           report = {"schema": "hepta.runtime.common-candidate-stages.v1",
                     "status": "PASS" if all(value == "success" for value in outcomes.values()) else "HOLD",
                     "runtime_source": os.environ["RUNTIME_SOURCE_SHA"],
