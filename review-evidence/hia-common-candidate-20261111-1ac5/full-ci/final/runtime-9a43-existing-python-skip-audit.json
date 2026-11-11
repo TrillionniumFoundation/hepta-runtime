@@ -1,0 +1,37 @@
+{
+  "schema": "hepta.runtime.existing-python-skip-audit.v1",
+  "source_commit": "9a43021137b72316f5345ce660c7f3d00ea93c02",
+  "path": "tests/search_worker_tests.py",
+  "blob_sha": "7cac59384a7979080d0b176e336105d6bd51b9a8",
+  "file_changed_since_deployed_baseline": false,
+  "test_method_count": 17,
+  "skip_site_count": 1,
+  "test": "test_pdf_extraction_with_installed_parser_is_bounded_and_page_located",
+  "condition": "ImportError from `from pypdf import PdfWriter`",
+  "reason": "optional pypdf parser unavailable in this interpreter",
+  "source_context": "    def test_pdf_extraction_with_installed_parser_is_bounded_and_page_located(self):\n        try:\n            from pypdf import PdfWriter\n        except ImportError:\n            self.skipTest(\"optional pypdf parser unavailable in this interpreter\")\n        from pypdf.generic import DecodedStreamObject, DictionaryObject, EncodedStreamObject, NameObject, NumberObject",
+  "observations": [
+    {
+      "run_id": 43005206656,
+      "job_id": 130470968608,
+      "unittest_tests_run_including_skipped": 17,
+      "passed": 16,
+      "skipped": 1,
+      "raw_summary": [
+        "2026-11-11T10:56:01.3945269Z OK (skipped=1)"
+      ]
+    },
+    {
+      "run_id": 43005214787,
+      "job_id": 130471009211,
+      "unittest_tests_run_including_skipped": 17,
+      "passed": 16,
+      "skipped": 1,
+      "raw_summary": [
+        "2026-11-11T11:03:09.1855891Z OK (skipped=1)"
+      ]
+    }
+  ],
+  "attribution": "The nonverbose original log records one skip; the unchanged suite has exactly one skip site and that site's reason is shown above. This attribution is based on matching the original suite command, test count and source branch, not a newly rerun test.",
+  "merge_job": "The original prospective-merge workflow does not include the Unbounded ingress and collector regressions step."
+}
