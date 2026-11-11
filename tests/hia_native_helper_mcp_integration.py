@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import argparse
 import copy
-from hashlib import sha256
+from hashlib import sha1, sha256
+from importlib.machinery import PathFinder
+from importlib.util import module_from_spec
 import json
 import os
 from pathlib import Path
@@ -61,19 +63,187 @@ def clean_environment():
             and key not in {"PYTHONPATH", "PYTHONHOME"}}
 
 
+def source_import_inventory(root):
+    """Refuse cache/extension shadows and bind importable source to Git bytes."""
+    root = root.resolve()
+    top = subprocess.check_output(["git", "--no-replace-objects", "-C", str(root),
+                                    "ls-tree", "-z", "HEAD"])
+    tracked_directories = set()
+    for entry in top.split(b"\0"):
+        if entry:
+            metadata, name = entry.split(b"\t", 1)
+            if metadata.split(b" ")[1] == b"tree":
+                tracked_directories.add(name.decode("utf-8"))
+    subtrees = {"hepta", "tools", "deploy", "tests"}
+    for path in root.iterdir():
+        if path.name.isidentifier() and path.is_dir():
+            require(not path.is_symlink(), "root Python package directories cannot be symbolic links")
+            # These build outputs are never inserted as import roots. All new
+            # package names and explicit packages can otherwise shadow imports.
+            if path.name not in {"target", "build", "dist"}:
+                initializer = any(item.name.startswith("__init__.")
+                                  and item.suffix.lower() in {".py", ".pyc", ".pyo", ".so", ".pyd"}
+                                  for item in path.iterdir())
+                if path.name not in tracked_directories or initializer:
+                    subtrees.add(path.name)
+    entries = subprocess.check_output(["git", "--no-replace-objects", "-C", str(root),
+                                       "ls-tree", "-r", "-z", "HEAD", "--", *sorted(subtrees)])
+    entries += top
+    tracked = {}
+    for entry in entries.split(b"\0"):
+        if entry:
+            metadata, raw_name = entry.split(b"\t", 1)
+            mode, kind, blob = metadata.split(b" ")
+            name = raw_name.decode("utf-8")
+            if kind == b"blob" and name.endswith(".py"):
+                require(mode in {b"100644", b"100755"}, "Python source must be a tracked ordinary file")
+                tracked[name] = blob.decode("ascii")
+    candidates = [path for path in root.iterdir() if not path.is_dir()]
+    for name in subtrees:
+        directory = root / name
+        require(not directory.is_symlink(), "source import directories cannot be symbolic links")
+        if directory.is_dir():
+            candidates.extend(directory.rglob("*"))
+    actual, identities = {}, {}
+    for path in candidates:
+        require(not path.is_symlink(), "source import paths cannot be symbolic links")
+        if path.is_dir():
+            continue
+        require(path.suffix.lower() not in {".pyc", ".pyo", ".so", ".pyd"},
+                "compiled Python cache or extension shadow in source tree: " + str(path.relative_to(root)))
+        if path.suffix == ".py":
+            name = path.relative_to(root).as_posix()
+            raw = path.read_bytes()
+            actual[name] = sha1(b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest()
+            identities[name] = sha256(raw).hexdigest()
+    require(actual == tracked, "importable Python source differs from the selected Git commit")
+    return {"files": len(identities), "source_sha256": sha256(encoded(identities)).hexdigest()}
+
+
+def prepare_source_imports(roots, cache):
+    require(sys.flags.isolated == 1 and sys.dont_write_bytecode is True,
+            "joint qualification and consumer require Python -I -B")
+    require(not any(name in {"hepta", "tools", "hia_mcp_catalog"}
+                    or name.startswith(("hepta.", "tools.")) for name in sys.modules),
+            "repository Python modules were loaded before source admission")
+    inventories = [source_import_inventory(root) for root in roots]
+    # -B prevents writes but still reads timestamp-valid bytecode. A fresh
+    # private prefix also prevents reuse of caches outside the selected trees.
+    cache.mkdir(mode=0o700)
+    sys.pycache_prefix = str(cache.resolve())
+    # The first root is the explicitly selected Hepta checkout. Runtime's
+    # tools directory is inventoried too, but never becomes a tools fallback.
+    tool_root = roots[0].resolve()
+    if (tool_root / "tools").is_dir() and not (tool_root / "tools/__init__.py").exists():
+        # A later regular site package beats an earlier namespace directory in
+        # Python's default search. Select this namespace before any tool code.
+        spec = PathFinder.find_spec("tools", [str(tool_root)])
+        require(spec is not None and spec.loader is None
+                and list(spec.submodule_search_locations or []) == [str(tool_root / "tools")],
+                "selected tools namespace differs from the admitted source")
+        sys.modules["tools"] = module_from_spec(spec)
+    return inventories
+
+
 def source_identity(root, expected):
     require(re.fullmatch(r"[0-9a-f]{40}", expected) is not None,
             "source identity must be a complete commit")
-    actual = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"],
+    actual = subprocess.check_output(["git", "--no-replace-objects", "-C", str(root), "rev-parse", "HEAD"],
                                      text=True).strip()
     require(actual == expected, "checked-out source differs from the frozen candidate")
     dirty = subprocess.check_output(
-        ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"],
+        ["git", "--no-replace-objects", "-C", str(root), "status", "--porcelain", "--untracked-files=no"],
         text=True)
     require(not dirty, "tracked source changed during qualification")
     tree = subprocess.check_output(
-        ["git", "-C", str(root), "rev-parse", "HEAD^{tree}"], text=True).strip()
+        ["git", "--no-replace-objects", "-C", str(root), "rev-parse", "HEAD^{tree}"], text=True).strip()
+    source_import_inventory(root)
     return {"commit": actual, "tree": tree}
+
+
+def admit_cold_compiler(hepta, cold_report):
+    """Bind the original cold export and B3 to the actual selected Hepta files."""
+    contract_name = "docs/HIA_SELFHOST_CORE_SUPPORT.json"
+    contract_bytes = (hepta / contract_name).read_bytes()
+    contract = json.loads(contract_bytes)
+    require(type(contract) is dict
+            and contract.get("schema") == "hepta.hia.selfhost-core-support.v1"
+            and type(contract.get("profile")) is str
+            and type(contract.get("source_identity")) is dict
+            and type(contract["source_identity"].get("files")) is dict
+            and bool(contract["source_identity"]["files"]),
+            "selected Hepta source contract is incomplete")
+    sources = dict(contract["source_identity"]["files"])
+    require(contract_name not in sources, "source contract cannot recursively pin itself")
+    sources[contract_name] = sha256(contract_bytes).hexdigest()
+    actual_blobs = {}
+    for name, expected in sources.items():
+        require(type(name) is str and re.fullmatch(r"[A-Za-z0-9_./-]+", name) is not None
+                and not name.startswith("/")
+                and all(part not in {"", ".", ".."} for part in name.split("/"))
+                and type(expected) is str and re.fullmatch(r"[0-9a-f]{64}", expected) is not None,
+                "selected Hepta source contract contains an invalid source identity")
+        raw = (hepta / name).read_bytes()
+        require(sha256(raw).hexdigest() == expected,
+                "selected Hepta file differs from its source contract: " + name)
+        actual_blobs[name] = sha1(b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest()
+    # Git status deliberately trusts assume-unchanged/skip-worktree entries.
+    # Compare the actual source closure with the selected immutable Git objects.
+    tree = subprocess.check_output(["git", "--no-replace-objects", "-C", str(hepta),
+                                    "ls-tree", "-r", "-z", "HEAD", "--", *sorted(sources)])
+    expected_blobs = {}
+    for entry in tree.split(b"\0"):
+        if entry:
+            metadata, name = entry.split(b"\t", 1)
+            mode, kind, blob = metadata.split(b" ")
+            require(mode in {b"100644", b"100755"} and kind == b"blob",
+                    "selected Hepta source closure must contain tracked ordinary files")
+            expected_blobs[name.decode("ascii")] = blob.decode("ascii")
+    require(actual_blobs == expected_blobs,
+            "actual Hepta source closure differs from its selected Git commit")
+
+    cold_bytes = cold_report.read_bytes()
+    cold = json.loads(cold_bytes)
+    required_checks = {
+        "export_manifest_matches_qualification", "isolated_python_without_site",
+        "nested_full_qualification_pass", "nested_process_exit_zero", "no_ancestor_git_identity",
+        "no_bytecode_cache_created", "no_inherited_home_or_python_cache",
+        "no_inherited_seed_or_successor_images", "origin_hashes_preserved",
+        "owned_process_tree_cleanup_confirmed", "source_export_hashes_preserved"}
+    require(type(cold) is dict and cold.get("schema") == "hepta.hia.selfhost-cold-replay.v1"
+            and cold.get("status") == "COLD_SELFHOST_REPLAY_PASS"
+            and type(cold.get("returncode")) is int and cold["returncode"] == 0
+            and cold.get("qualification_wall_limit_seconds") == 180
+            and cold.get("cleanup_wall_limit_seconds") == 3
+            and type(cold.get("checks")) is dict and set(cold["checks"]) == required_checks
+            and all(value is True for value in cold["checks"].values()),
+            "unchanged-budget cold qualification is incomplete; native integration remains HOLD")
+    require(cold.get("profile") == contract["profile"] and cold.get("source_manifest") == sources,
+            "cold qualification belongs to different Hepta source or support profile")
+    cold_directory = cold_report.resolve().with_suffix(".cold")
+    nested_path = Path(cold["nested_report"]).resolve()
+    require(nested_path.is_relative_to(cold_directory),
+            "cold report does not name its own source-only qualification")
+    nested_bytes = nested_path.read_bytes()
+    require(sha256(nested_bytes).hexdigest() == cold["nested_report_sha256"],
+            "cold nested report drifted")
+    nested = json.loads(nested_bytes)
+    require(type(nested) is dict and nested.get("schema") == "hepta.hia.selfhost-qualification.v6"
+            and nested.get("status") == "SELF_HOSTED_FIXED_CORE_PASS"
+            and nested.get("profile") == contract["profile"] and nested.get("source_manifest") == sources
+            and type(nested.get("generations")) is list and len(nested["generations"]) == 3,
+            "cold nested qualification belongs to different source or an incomplete generation chain")
+    compiler = Path(nested["generations"][-1]["produced_image"]).resolve()
+    require(compiler.is_relative_to(cold_directory),
+            "B3 must come from the original cold qualification")
+    compiler_sha = digest(compiler)
+    require(cold.get("generation_sha256") == [compiler_sha] * 3
+            and all(row.get("produced_sha256") == compiler_sha for row in nested["generations"]),
+            "cold compiler bytes differ from the retained fixed-point generation chain")
+    binding = {"profile": contract["profile"], "source_manifest_sha256": sha256(encoded(sources)).hexdigest(),
+               "support_contract_sha256": sources[contract_name], "compiler_sha256": compiler_sha,
+               "nested_report_sha256": cold["nested_report_sha256"]}
+    return compiler, cold_bytes, binding
 
 
 def consumer_main(argv):
@@ -83,7 +253,9 @@ def consumer_main(argv):
     parser.add_argument("--bundle-sha256", required=True)
     parser.add_argument("--state-root", type=Path, required=True)
     parser.add_argument("--artifact-root", type=Path, required=True)
+    parser.add_argument("--import-cache", type=Path, required=True)
     args = parser.parse_args(argv)
+    prepare_source_imports([args.hepta], args.import_cache)
     sys.path.insert(0, str(args.hepta))
     from hepta.hia_native_helpers import native_helpers_scope
     from hepta.hia_agent_service import HIAAgentService
@@ -387,6 +559,8 @@ def main(argv=None):
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--allow-disposable-sshd", action="store_true")
     args = parser.parse_args(argv)
+    require(sys.flags.isolated == 1 and sys.dont_write_bytecode is True,
+            "joint qualification requires Python -I -B")
     require(args.allow_disposable_sshd and os.environ.get("GITHUB_ACTIONS") == "true"
             and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted",
             "this test requires an explicitly authorized disposable GitHub-hosted runner")
@@ -439,10 +613,22 @@ def main(argv=None):
             save()
 
     def open_transport(config_path):
+        check_import_sources()
         from tools.hia_agent_native_transport import MCPStdio
         return MCPStdio([str(runtime), "mcp", "--path", str(output),
                          "--runtime-config", str(config_path)],
                         cwd=runtime_source, env=ssh.env, timeout=180)
+
+    def check_import_sources():
+        observed = [source_import_inventory(root) for root in (hepta, runtime_source)]
+        require(observed == report["python_source_imports"],
+                "Python import sources changed during qualification")
+
+    def checked_call(tool, arguments):
+        check_import_sources()
+        response = transport.call(tool, arguments)
+        check_import_sources()
+        return response
 
     try:
         save()
@@ -452,24 +638,13 @@ def main(argv=None):
         report["runtime_binary_sha256"] = digest(runtime)
         report["client_sha256"] = digest(__file__)
         report["python"] = {"executable": sys.executable, "version": sys.version}
+        report["python_source_imports"] = prepare_source_imports(
+            [hepta, runtime_source], private / "qualification-import-cache")
         sys.path.insert(0, str(hepta))
+        compiler, cold_bytes, report["cold_source_binding"] = admit_cold_compiler(
+            hepta, args.cold_report)
         from tools.build_hia_agent_identity import build
         from tools.hia_agent_native_qualification import ToolClient, Session, scripted_loop, campaign_binding
-        cold_bytes = args.cold_report.read_bytes()
-        cold = json.loads(cold_bytes)
-        require(cold.get("status") == "COLD_SELFHOST_REPLAY_PASS"
-                and cold.get("qualification_wall_limit_seconds") == 180
-                and cold.get("cleanup_wall_limit_seconds") == 3,
-                "unchanged-budget cold qualification is incomplete; native integration remains HOLD")
-        nested_path = Path(cold["nested_report"])
-        require(nested_path.resolve().is_relative_to(args.cold_report.resolve().with_suffix(".cold")),
-                "cold report does not name its own source-only qualification")
-        require(digest(nested_path) == cold["nested_report_sha256"],
-                "cold nested report drifted")
-        nested = json.loads(nested_path.read_bytes())
-        compiler = Path(nested["generations"][-1]["produced_image"]).resolve()
-        require(compiler.is_relative_to(args.cold_report.resolve().with_suffix(".cold")),
-                "B3 must come from the original cold qualification")
         manifest = build(output / "native-helper", compiler, args.cold_report.resolve())
         bundle = output / "native-helpers.json"
         write_json(bundle, {"schema": "hepta.hia.native-helpers.v1",
@@ -516,9 +691,10 @@ def main(argv=None):
         config_path = output / "runtime-config.json"
         write_json(config_path, config)
         consumer = Consumer(
-            [sys.executable, "-B", str(Path(__file__).resolve()), "--consumer",
+            [sys.executable, "-I", "-B", str(Path(__file__).resolve()), "--consumer",
              "--hepta", str(hepta), "--bundle", str(bundle), "--bundle-sha256", bundle_sha,
-             "--state-root", str(state_root), "--artifact-root", str(inputs)],
+             "--state-root", str(state_root), "--artifact-root", str(inputs),
+             "--import-cache", str(private / "consumer-import-cache")],
             cwd=hepta, env=ssh.env, output=output, journal=journal)
         probe = consumer.result("probe")
         require(probe == {"u64_max": 18446744073709551615, "u64_overflow": None,
@@ -543,13 +719,13 @@ def main(argv=None):
 
         def qualified_call(tool, arguments):
             if tool != "hia_rollback":
-                return transport.call(tool, arguments)
+                return checked_call(tool, arguments)
             lease = consumer.result("acquire", slot=arguments["target_slot"])
             require(lease["generation"] == arguments["expected_current"]["generation"],
                     "consumer did not pin the currently adopted generation")
             before = consumer.result("invoke", lease=lease)
             invocation_matches(before, lease)
-            response = transport.call(tool, arguments)
+            response = checked_call(tool, arguments)
             require(response["status"] == "completed", "MCP rollback was not completed")
             retained = consumer.result("invoke", lease=lease)
             invocation_matches(retained, lease)
@@ -622,7 +798,7 @@ def main(argv=None):
         report["checks"]["actual_request_profile_and_helper_bound_report_retained"] = True
         close_transport()
         transport = open_transport(config_path)
-        replay = transport.call(original["tool"], original["arguments"])
+        replay = checked_call(original["tool"], original["arguments"])
         require(replay == original["response"], "restart replay changed the original domain response")
         require(job_ids(transport, journal) == ids_before, "restart replay launched a second job")
         observation = generic_call(transport, "process_status",
@@ -645,20 +821,20 @@ def main(argv=None):
         write_json(wrong_path, wrong)
         transport = open_transport(wrong_path)
         wrong_arguments = {"section": "manifest"}
-        unknown = transport.call("hia_describe", wrong_arguments)
+        unknown = checked_call("hia_describe", wrong_arguments)
         require(unknown.get("status") == "unknown"
                 and unknown.get("error", {}).get("retry_action") == "observe_original"
                 and isinstance(unknown.get("operation", {}).get("job_id"), str),
                 "wrong helper pin must retain an UNKNOWN original operation")
         unknown_ids = job_ids(transport, journal)
-        repeated = transport.call("hia_describe", wrong_arguments)
+        repeated = checked_call("hia_describe", wrong_arguments)
         require(repeated.get("operation") == unknown["operation"]
                 and repeated.get("status") == "unknown"
                 and job_ids(transport, journal) == unknown_ids,
                 "same failed request launched another job or lost UNKNOWN")
         close_transport()
         transport = open_transport(wrong_path)
-        after_restart = transport.call("hia_describe", wrong_arguments)
+        after_restart = checked_call("hia_describe", wrong_arguments)
         require(after_restart.get("operation") == unknown["operation"]
                 and after_restart.get("status") == "unknown"
                 and job_ids(transport, journal) == unknown_ids,
