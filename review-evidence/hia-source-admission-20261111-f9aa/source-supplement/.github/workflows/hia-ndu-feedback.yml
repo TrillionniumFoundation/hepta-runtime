@@ -1,0 +1,110 @@
+name: HIA NDU feedback mechanism gates (research)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/hia-ndu-feedback.yml'
+      - 'experiments/hia_ndu_feedback_20261106/**'
+      - 'benchmarks/hia_ndu_feedback/**'
+      - 'benchmarks/hia_ndu_feedback_state_coverage/**'
+      - 'rust/hia-ndu-value/**'
+      - 'tests/test_hia_source_head_identity.py'
+      - 'tests/test_hia_core_only.py'
+      - 'tools/hia_core_source_identity.py'
+      - 'tools/qualify_hia_integrated.py'
+      - 'tools/hia_selfhost_contract.py'
+      - 'docs/HIA_SELFHOST_CORE_SUPPORT.json'
+      - 'hepta/**'
+      - 'tests/test_hia_ndu_dynamic.py'
+      - 'tests/test_hia_ndu_feedback.py'
+      - 'tests/test_hia_ndu_feedback_ci_paths.py'
+      - 'tests/test_hia_ndu_feedback_workload.py'
+      - 'tests/test_hia_ndu_feedback_campaign.py'
+      - 'tests/test_hia_ndu_feedback_coverage.py'
+      - 'tests/test_hia_ndu_economical.py'
+      - 'tests/test_hia_ndu_compute_price.py'
+      - 'tests/test_hia_ndu_compute_debit.py'
+      - 'tests/test_hia_ndu_policy_audit.py'
+      - 'tests/test_hia_ndu_policy_campaign.py'
+      - 'tests/test_hia_ndu_preparation_bound.py'
+      - 'tools/build_hia_ndu_dynamic_bridge.py'
+      - 'tools/build_hia_ndu_value_bridge.py'
+      - 'tools/qualify_hia_ndu_feedback.py'
+      - 'tools/qualify_hia_ndu_compute_price.py'
+      - 'tools/qualify_hia_ndu_witnesses.py'
+      - 'tools/qualify_hia_ndu_policy_audit.py'
+      - 'docs/HIA_NDU_FEEDBACK.md'
+      - 'docs/HIA_NDU_COMPUTE_DEBIT.md'
+      - 'docs/HIA_NDU_POLICY_AUDIT.md'
+      - 'docs/HIA_NDU_NATIVE_VALUE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reference-and-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      GIT_TERMINAL_PROMPT: '0'
+      EXPECTED_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Freeze clean source before evaluation
+        id: source_identity
+        run: |
+          feedback_actual_head=$(git rev-parse HEAD)
+          printf 'actual_head=%s\n' "$feedback_actual_head" >> "$GITHUB_OUTPUT"
+          python -B -m experiments.hia_ndu_feedback_20261106.ci snapshot \
+            --expected-head "$EXPECTED_SOURCE_HEAD" \
+            --output "$RUNNER_TEMP/hia-ndu-feedback/public/source-before.json"
+      - name: Require rejection of wrong heads and same-tree synthetic merges
+        run: |
+          python -B -m experiments.hia_ndu_feedback_20261106.ci guard-controls \
+            --evidence "$RUNNER_TEMP/hia-ndu-feedback/public"
+      - name: Require mechanism, price, campaign and source-boundary tests with zero skips
+        run: |
+          python -B -m experiments.hia_ndu_feedback_20261106.ci reference \
+            --evidence "$RUNNER_TEMP/hia-ndu-feedback/public"
+      - name: Acquire pinned original source and build both native adapters
+        run: |
+          # Anonymous, exact-commit Git fetch follows existing NDU workflows.
+          # No extra token/secret, permission widening or fallback evaluator.
+          # An inaccessible upstream fails this gate and leaves an OPEN receipt.
+          python -B -m experiments.hia_ndu_feedback_20261106.ci prepare \
+            --scratch "$RUNNER_TEMP/hia-ndu-feedback/private" \
+            --evidence "$RUNNER_TEMP/hia-ndu-feedback/public"
+      - name: Require native tests, reversals, degeneration and actual execution
+        run: |
+          python -B -m experiments.hia_ndu_feedback_20261106.ci native \
+            --config "$RUNNER_TEMP/hia-ndu-feedback/private/native-config.json" \
+            --evidence "$RUNNER_TEMP/hia-ndu-feedback/public"
+      - name: Verify identical clean source after success or failure
+        if: always()
+        run: |
+          python -B -m experiments.hia_ndu_feedback_20261106.ci snapshot \
+            --expected-head "$EXPECTED_SOURCE_HEAD" \
+            --before "$RUNNER_TEMP/hia-ndu-feedback/public/source-before.json" \
+            --output "$RUNNER_TEMP/hia-ndu-feedback/public/source-after.json"
+      - name: Stage only the explicit public evidence allowlist
+        if: always()
+        run: |
+          python -B -m experiments.hia_ndu_feedback_20261106.ci publish \
+            --evidence "$RUNNER_TEMP/hia-ndu-feedback/public" \
+            --output "$RUNNER_TEMP/hia-ndu-feedback/upload"
+      - name: Retain receipts and protocol frames, including failures
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hia-ndu-feedback-${{ steps.source_identity.outputs.actual_head || 'unobserved-head' }}
+          if-no-files-found: error
+          retention-days: 30
+          path: ${{ runner.temp }}/hia-ndu-feedback/upload/
