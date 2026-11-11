@@ -84,7 +84,7 @@ pub(super) fn validate_profile(config: &RuntimeConfig) -> Result<()> {
 		&profile.native_helpers_manifest,
 		&profile.native_helpers_sha256,
 	) {
-		(None, None) => {},
+		(None, None) => {}
 		(Some(path), Some(digest)) => {
 			if !super::rea_provider::is_sha256(digest)
 				|| !super::rea_provider::absolute_normal_path(path)
@@ -94,7 +94,7 @@ pub(super) fn validate_profile(config: &RuntimeConfig) -> Result<()> {
 			{
 				bail!("HIA native helpers require an exact digest and permitted installation path outside mutable state");
 			}
-		},
+		}
 		_ => bail!("HIA native helper manifest and digest must be configured together"),
 	}
 	if !(1..=3600).contains(&profile.timeout_seconds)
@@ -644,4 +644,3 @@ pub(super) async fn execute(tool: &str, arguments: Value, workdir: &Path) -> Res
 #[cfg(test)]
 #[path = "hia_provider_tests.rs"]
 mod tests;
-
