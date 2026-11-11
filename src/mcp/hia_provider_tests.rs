@@ -44,6 +44,89 @@ fn rejected_report(prepared: &PreparedRequest) -> Value {
 			"error":{"code":"HIA_INPUT", "phase":"validation", "message":"Unsupported input", "retry_action":"correct_input", "details_artifact":null}}})
 }
 
+fn native_config() -> RuntimeConfig {
+	let mut config = config();
+	let profile = config.hia_worker.as_mut().unwrap();
+	profile.native_helpers_manifest = Some("/srv/hia-install/native-helpers.json".into());
+	profile.native_helpers_sha256 = Some("e".repeat(64));
+	config
+}
+
+#[test]
+fn absent_native_helper_selection_preserves_legacy_profile_bytes() {
+	let profile = config().hia_worker.unwrap();
+	let original = json!({
+		"host":"worker", "python_executable":"/usr/bin/python3",
+		"working_directory":"/srv/hepta", "state_root":"/srv/hia-state",
+		"artifact_roots":["/srv/inputs"], "worker_sha256":"a".repeat(64),
+		"backend_sha256":"b".repeat(64), "catalog_sha256":hia_contract::catalog_sha256(),
+		"timeout_seconds":120, "memory_max_bytes":1073741824_u64
+	});
+	assert_eq!(serde_json::to_value(&profile).unwrap(), original);
+	let prepared = prepared();
+	assert_eq!(prepared.worker.profile_sha256, sha256(&canonical(&original).unwrap()));
+	assert!(!prepared.params.args.iter().any(|arg| arg.contains("native-helpers")));
+	validate_report(&prepared, &serde_json::to_vec(&rejected_report(&prepared)).unwrap(), 0).unwrap();
+}
+
+#[test]
+fn native_helpers_are_fixed_admin_inputs_and_change_the_existing_mutation_identity_body() {
+	let original = prepare_request(&config(), "hia_artifact", artifact_request("input"), Path::new("/controller")).unwrap();
+	let selected = prepare_request(&native_config(), "hia_artifact", artifact_request("input"), Path::new("/controller")).unwrap();
+	let repeat = prepare_request(&native_config(), "hia_artifact", artifact_request("input"), Path::new("/controller")).unwrap();
+	assert_eq!(original.params.idempotency_key, selected.params.idempotency_key);
+	assert_eq!(selected.params.idempotency_key, repeat.params.idempotency_key);
+	assert_eq!(selected.params.stdin, repeat.params.stdin);
+	assert_ne!(original.worker.profile_sha256, selected.worker.profile_sha256);
+	assert_ne!(original.worker.request_sha256, selected.worker.request_sha256);
+	assert_ne!(super::super::runtime::jobs::request_digest(&original.params).unwrap(), super::super::runtime::jobs::request_digest(&selected.params).unwrap());
+	assert!(selected.params.args.windows(2).any(|pair| pair == ["--native-helpers-manifest", "/srv/hia-install/native-helpers.json"]));
+	assert!(selected.params.args.windows(2).any(|pair| pair[0] == "--expected-native-helpers-sha256" && pair[1] == "e".repeat(64)));
+	assert!(!selected.params.env.keys().any(|key| key.starts_with("HEPTA_HIA_")));
+	let mut arguments = artifact_request("input");
+	arguments["native_helpers_manifest"] = json!("/srv/input-selected.json");
+	assert!(prepare_request(&native_config(), "hia_artifact", arguments, Path::new("/controller")).is_err());
+}
+
+#[test]
+fn native_helper_profiles_require_paired_pins_and_disjoint_admitted_paths() {
+	native_config().validate().unwrap();
+	for mutation in ["missing_path", "missing_digest", "invalid_digest", "uppercase_digest", "relative", "traversal", "outside_policy", "protected", "mutable_state"] {
+		let mut config = native_config();
+		let profile = config.hia_worker.as_mut().unwrap();
+		match mutation {
+			"missing_path" => profile.native_helpers_manifest = None,
+			"missing_digest" => profile.native_helpers_sha256 = None,
+			"invalid_digest" => profile.native_helpers_sha256 = Some("e".repeat(63)),
+			"uppercase_digest" => profile.native_helpers_sha256 = Some("E".repeat(64)),
+			"relative" => profile.native_helpers_manifest = Some("native-helpers.json".into()),
+			"traversal" => profile.native_helpers_manifest = Some("/srv/../private/native.json".into()),
+			"outside_policy" => profile.native_helpers_manifest = Some("/private/native.json".into()),
+			"protected" => config.hosts.get_mut("worker").unwrap().protected_path_prefixes.push("/srv/hia-install".into()),
+			"mutable_state" => profile.native_helpers_manifest = Some("/srv/hia-state/native.json".into()),
+			_ => unreachable!(),
+		}
+		assert!(config.validate().is_err(), "{mutation}");
+	}
+}
+
+#[test]
+fn terminal_report_must_bind_exactly_the_selected_native_helpers() {
+	let request = prepare_request(&native_config(), "hia_describe", json!({"section":"manifest"}), Path::new("/controller")).unwrap();
+	let mut report = rejected_report(&request);
+	assert!(validate_report(&request, &serde_json::to_vec(&report).unwrap(), 0).is_err());
+	report["native_helpers_sha256"] = json!("e".repeat(64));
+	validate_report(&request, &serde_json::to_vec(&report).unwrap(), 0).unwrap();
+	for value in [Value::Null, json!("f".repeat(64)), json!(true)] {
+		report["native_helpers_sha256"] = value;
+		assert!(validate_report(&request, &serde_json::to_vec(&report).unwrap(), 0).is_err());
+	}
+	let legacy = prepared();
+	let mut report = rejected_report(&legacy);
+	report["native_helpers_sha256"] = json!("e".repeat(64));
+	assert!(validate_report(&legacy, &serde_json::to_vec(&report).unwrap(), 0).is_err());
+}
+
 #[tokio::test]
 async fn observation_failure_keeps_original_operation_and_schema_without_transport_secrets() {
 	let prepared = prepared();
@@ -515,4 +598,51 @@ fn native_machine_proofs_bind_the_exact_artifact_and_build_receipt() {
 			"{name}"
 		);
 	}
+}
+
+
+#[test]
+fn scoped_checker_receipts_bind_the_selected_native_helper_installation() {
+	let (legacy, old_report) = scoped_verification_report();
+	let request = prepare_request(
+		&native_config(),
+		"hia_verify",
+		legacy.worker.arguments.clone(),
+		Path::new("/controller"),
+	)
+	.unwrap();
+	let mut report = rejected_report(&request);
+	report["native_helpers_sha256"] = json!("e".repeat(64));
+	report["response"] = old_report["response"].clone();
+	report["response"]["result"]["checks"][0]["checker"]["installation"]["native_helpers_sha256"] =
+		json!("e".repeat(64));
+	validate_report(&request, &serde_json::to_vec(&report).unwrap(), 0).unwrap();
+
+	let mut unbound = report.clone();
+	unbound["response"]["result"]["checks"][0]["checker"]["installation"]
+		.as_object_mut()
+		.unwrap()
+		.remove("native_helpers_sha256");
+	hia_contract::validate_output("hia_verify", &unbound["response"]).unwrap();
+	assert!(validate_report(&request, &serde_json::to_vec(&unbound).unwrap(), 0).is_err());
+
+	let mut foreign = report.clone();
+	foreign["response"]["result"]["checks"][0]["checker"]["installation"]["native_helpers_sha256"] =
+		json!("f".repeat(64));
+	hia_contract::validate_output("hia_verify", &foreign["response"]).unwrap();
+	assert!(validate_report(&request, &serde_json::to_vec(&foreign).unwrap(), 0).is_err());
+
+	for digest in [Value::Null, json!("e".repeat(63)), json!("E".repeat(64))] {
+		let mut malformed = report.clone();
+		malformed["response"]["result"]["checks"][0]["checker"]["native_selection_sha256"] = digest;
+		assert!(
+			validate_report(&request, &serde_json::to_vec(&malformed).unwrap(), 0).is_err()
+		);
+	}
+	let mut legacy_proof = report;
+	legacy_proof["response"]["result"]["checks"][0]["checker"]
+		.as_object_mut()
+		.unwrap()
+		.remove("native_selection_sha256");
+	assert!(validate_report(&request, &serde_json::to_vec(&legacy_proof).unwrap(), 0).is_err());
 }

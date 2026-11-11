@@ -33,6 +33,12 @@ pub struct HiaWorkerProfile {
 	pub worker_sha256: String,
 	pub backend_sha256: String,
 	pub catalog_sha256: String,
+	/// Optional administrator-selected manifest for pinned native helper images.
+	/// Omitted legacy fields must not change durable profile/request identities.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub native_helpers_manifest: Option<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub native_helpers_sha256: Option<String>,
 	#[serde(default = "default_timeout")]
 	pub timeout_seconds: u64,
 	#[serde(default = "default_memory")]
@@ -73,6 +79,23 @@ pub(super) fn validate_profile(config: &RuntimeConfig) -> Result<()> {
 	}
 	if profile.catalog_sha256 != hia_contract::catalog_sha256() {
 		bail!("HIA worker catalog differs from the runtime's registered tool contract");
+	}
+	match (
+		&profile.native_helpers_manifest,
+		&profile.native_helpers_sha256,
+	) {
+		(None, None) => {},
+		(Some(path), Some(digest)) => {
+			if !super::rea_provider::is_sha256(digest)
+				|| !super::rea_provider::absolute_normal_path(path)
+				|| !inside(path, &host.allowed_read_path_prefixes)
+				|| inside(path, &host.protected_path_prefixes)
+				|| Path::new(path).starts_with(&profile.state_root)
+			{
+				bail!("HIA native helpers require an exact digest and permitted installation path outside mutable state");
+			}
+		},
+		_ => bail!("HIA native helper manifest and digest must be configured together"),
 	}
 	if !(1..=3600).contains(&profile.timeout_seconds)
 		|| !(64 * 1024 * 1024..=16 * 1024 * 1024 * 1024).contains(&profile.memory_max_bytes)
@@ -131,6 +154,8 @@ struct WorkerReport {
 	catalog_sha256: String,
 	worker_sha256: String,
 	backend_sha256: String,
+	#[serde(default)]
+	native_helpers_sha256: Option<String>,
 	complete: bool,
 	response: Value,
 }
@@ -297,6 +322,17 @@ pub(super) fn prepare_request(
 	for root in &profile.artifact_roots {
 		args.extend(["--artifact-root".into(), root.clone()]);
 	}
+	if let (Some(manifest), Some(digest)) = (
+		&profile.native_helpers_manifest,
+		&profile.native_helpers_sha256,
+	) {
+		args.extend([
+			"--native-helpers-manifest".into(),
+			manifest.clone(),
+			"--expected-native-helpers-sha256".into(),
+			digest.clone(),
+		]);
+	}
 	args.push("--request-json-stdin".into());
 	let mut stdin = String::from_utf8(canonical(&serde_json::to_value(&worker)?)?)?;
 	stdin.push('\n');
@@ -375,11 +411,14 @@ fn validate_result_bindings(
 		let subject = arguments["subject"]
 			.as_object()
 			.context("HIA verification request omitted its subject")?;
-		let installation = json!({
+		let mut installation = json!({
 			"worker_sha256":profile.worker_sha256,
 			"backend_sha256":profile.backend_sha256,
 			"catalog_sha256":profile.catalog_sha256
 		});
+		if let Some(digest) = &profile.native_helpers_sha256 {
+			installation["native_helpers_sha256"] = json!(digest);
+		}
 		for check in checks {
 			for (field, value) in subject {
 				if check["subject"][field] != *value {
@@ -449,6 +488,7 @@ fn validate_report(prepared: &PreparedRequest, stdout: &[u8], exit_code: i32) ->
 		|| report.catalog_sha256 != request.catalog_sha256
 		|| report.worker_sha256 != prepared.profile.worker_sha256
 		|| report.backend_sha256 != prepared.profile.backend_sha256
+		|| report.native_helpers_sha256 != prepared.profile.native_helpers_sha256
 	{
 		bail!("HIA terminal report does not match the exact admitted request and installed code");
 	}
@@ -604,3 +644,4 @@ pub(super) async fn execute(tool: &str, arguments: Value, workdir: &Path) -> Res
 #[cfg(test)]
 #[path = "hia_provider_tests.rs"]
 mod tests;
+
