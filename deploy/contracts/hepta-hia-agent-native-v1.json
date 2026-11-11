@@ -1,5 +1,5 @@
 {
-  "catalog_sha256": "bced11cc7a67cb39b7a928a0deafbd5c043dc50171324e30cfa3ecb6cec99653",
+  "catalog_sha256": "e2d6afe443a9f3e91b7ef36cd3628499548e01b7a56f96dce9081e8f04a9fa2e",
   "execution_backend": "Pinned HIA worker through the existing native durable process owner",
   "name": "Hepta HIA Agent Native Tools",
   "schema": "hepta-native-tool-contract-v1",
@@ -5760,6 +5760,10 @@
                               "pattern": "^[0-9a-f]{64}$",
                               "type": "string"
                             },
+                            "native_helpers_sha256": {
+                              "pattern": "^[0-9a-f]{64}$",
+                              "type": "string"
+                            },
                             "worker_sha256": {
                               "pattern": "^[0-9a-f]{64}$",
                               "type": "string"
@@ -5789,6 +5793,10 @@
                         "name": {
                           "maxLength": 256,
                           "minLength": 1,
+                          "type": "string"
+                        },
+                        "native_selection_sha256": {
+                          "pattern": "^[0-9a-f]{64}$",
                           "type": "string"
                         },
                         "python": {
@@ -5853,6 +5861,7 @@
                         "name",
                         "method",
                         "installation",
+                        "native_selection_sha256",
                         "python",
                         "auxiliary_checker_sha256",
                         "solver"

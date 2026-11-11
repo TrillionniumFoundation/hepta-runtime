@@ -1,0 +1,170 @@
+name: HIA common candidate native integration
+
+on:
+  push:
+    branches:
+      - 'codex/hia-native-helper-runtime-*'
+      - 'codex/hia-three-loop-*'
+  pull_request:
+    paths:
+      - 'src/mcp/hia_*'
+      - 'tests/hia_native_helper_mcp_integration.py'
+      - '.github/workflows/hia-common-native-integration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  HEPTA_SOURCE_SHA: '8dae9d0b74f8520d1522548e0a04c0c077b3f074'
+  CARGO_INCREMENTAL: '0'
+  CARGO_PROFILE_DEV_DEBUG: '0'
+  CARGO_PROFILE_TEST_DEBUG: '0'
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  common-native:
+    name: Fixed candidate cold, language, MCP and native lease integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact Runtime candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Checkout the frozen Hepta candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          ref: ${{ env.HEPTA_SOURCE_SHA }}
+          path: hia-source
+          persist-credentials: false
+
+      - name: Preserve candidate source identities
+        env:
+          RUNTIME_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/hia-common-stage"
+          test "$(git rev-parse HEAD)" = "$RUNTIME_SOURCE_SHA"
+          test "$(git -C hia-source rev-parse HEAD)" = "$HEPTA_SOURCE_SHA"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          test -z "$(git -C hia-source status --porcelain --untracked-files=no)"
+          git rev-parse HEAD > "$RUNNER_TEMP/hia-common-stage/runtime-commit.txt"
+          git rev-parse 'HEAD^{tree}' > "$RUNNER_TEMP/hia-common-stage/runtime-tree.txt"
+          git -C hia-source rev-parse HEAD > "$RUNNER_TEMP/hia-common-stage/hepta-commit.txt"
+          git -C hia-source rev-parse 'HEAD^{tree}' > "$RUNNER_TEMP/hia-common-stage/hepta-tree.txt"
+
+      - name: Install qualification Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install native prerequisites and real OpenSSH
+        id: dependencies
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/hia-llvm.asc" https://apt.llvm.org/llvm-snapshot.gpg.key
+          fingerprint=$(gpg --show-keys --with-colons "$RUNNER_TEMP/hia-llvm.asc" | awk -F: '$1 == "fpr" { print $10; exit }')
+          test "$fingerprint" = 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
+          sudo install -m 0644 "$RUNNER_TEMP/hia-llvm.asc" /usr/share/keyrings/hia-llvm.asc
+          printf '%s\n' 'deb [arch=amd64 signed-by=/usr/share/keyrings/hia-llvm.asc] https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main' | sudo tee /etc/apt/sources.list.d/hia-llvm20.list
+          sudo apt-get update
+          sudo apt-get install -y binutils gcc clang-20 libclang-rt-20-dev strace openssh-server
+          printf 'CLANG=/usr/bin/clang-20\nHEPTA_CLANG=/usr/bin/clang-20\n' >> "$GITHUB_ENV"
+          python -m pip install setuptools==78.1.1 wheel==0.46.3 z3-solver==4.15.4.0 jsonschema==4.26.0
+          python --version > "$RUNNER_TEMP/hia-common-stage/python.txt"
+          /usr/bin/clang-20 --version > "$RUNNER_TEMP/hia-common-stage/clang.txt"
+          /usr/bin/ld --version > "$RUNNER_TEMP/hia-common-stage/ld.txt"
+
+      - name: Install pinned Runtime toolchain
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+          rustc --version > "$RUNNER_TEMP/hia-common-stage/rustc.txt"
+          cargo --version > "$RUNNER_TEMP/hia-common-stage/cargo.txt"
+
+      - name: Build the exact Runtime candidate
+        id: build
+        run: |
+          set -euo pipefail
+          cargo build --locked --all-features --bin hepta-runtime 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/runtime-build.log"
+          sha256sum target/debug/hepta-runtime > "$RUNNER_TEMP/hia-common-stage/runtime-binary.sha256"
+
+      - name: Original source-only cold replay with unchanged 180-second budget
+        id: cold
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        working-directory: hia-source
+        run: |
+          set -euo pipefail
+          python -B tools/replay_hia_selfhost_cold.py --output "$RUNNER_TEMP/hia-common-cold.json" 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/cold.log"
+
+      - name: Language qualification from the same Hepta source
+        id: language
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        working-directory: hia-source
+        run: |
+          set -euo pipefail
+          python -B tests/test_hia_selfhost_language_coverage.py --output "$RUNNER_TEMP/hia-common-language.json" 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/language.log"
+
+      - name: Real stdio MCP, SSH worker, native image and consumer lifecycle
+        id: integration
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.dependencies.outcome == 'success' }}
+        env:
+          RUNTIME_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python -B tests/hia_native_helper_mcp_integration.py \
+            --runtime "$GITHUB_WORKSPACE/target/debug/hepta-runtime" \
+            --runtime-source "$GITHUB_WORKSPACE" \
+            --hepta "$GITHUB_WORKSPACE/hia-source" \
+            --expected-runtime-source "$RUNTIME_SOURCE_SHA" \
+            --expected-hepta-source "$HEPTA_SOURCE_SHA" \
+            --cold-report "$RUNNER_TEMP/hia-common-cold.json" \
+            --output "$RUNNER_TEMP/hia-common-native" \
+            --allow-disposable-sshd 2>&1 | tee "$RUNNER_TEMP/hia-common-stage/integration.log"
+
+      - name: Preserve original stage outcomes
+        if: always()
+        env:
+          RUNTIME_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          COLD_OUTCOME: ${{ steps.cold.outcome }}
+          LANGUAGE_OUTCOME: ${{ steps.language.outcome }}
+          INTEGRATION_OUTCOME: ${{ steps.integration.outcome }}
+        run: |
+          python -B - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path(os.environ["RUNNER_TEMP"]) / "hia-common-stage"
+          path.mkdir(exist_ok=True)
+          outcomes = {name.lower(): os.environ[name + "_OUTCOME"] for name in
+                      ("BUILD", "COLD", "LANGUAGE", "INTEGRATION")}
+          report = {"schema": "hepta.runtime.common-candidate-stages.v1",
+                    "status": "PASS" if all(value == "success" for value in outcomes.values()) else "HOLD",
+                    "runtime_source": os.environ["RUNTIME_SOURCE_SHA"],
+                    "hepta_source": os.environ["HEPTA_SOURCE_SHA"], "original_stage_outcomes": outcomes,
+                    "cold_wall_seconds": 180, "cold_cleanup_seconds": 3,
+                    "production_activated": False, "whole_worker_native": False,
+                    "cold_failure_does_not_suppress_independent_provider_tests": True}
+          (path / "stage-outcomes.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+          PY
+
+      - name: Retain raw qualification reports, source exports and MCP records
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hia-common-native-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/hia-common-stage/
+            ${{ runner.temp }}/hia-common-cold.json
+            ${{ runner.temp }}/hia-common-cold.cold/
+            ${{ runner.temp }}/hia-common-language.json
+            ${{ runner.temp }}/hia-common-language.assertions.json
+            ${{ runner.temp }}/hia-common-language.evidence/
+            ${{ runner.temp }}/hia-common-native/
+          if-no-files-found: error
+          retention-days: 14

@@ -52,6 +52,61 @@ hepta-runtime mcp --runtime-config /path/to/reviewed-runtime.json
 The usual authenticated streamable HTTP transport also exposes the same router.
 No separate HIA scheduler, HTTP server or command endpoint is introduced.
 
+
+## Explicit native helper installation
+
+A configured Python worker may execute an administrator-selected bundle of HIA
+native helpers. The runtime profile accepts the paired fields
+`native_helpers_manifest` and `native_helpers_sha256`. The manifest path must be
+absolute, fit the host read policy, and remain outside the mutable worker state
+root. The digest is lowercase SHA-256 of the exact bundle bytes. Both fields are
+omitted when no bundle is selected; absent fields do not introduce JSON nulls or
+change an otherwise identical legacy profile identity.
+
+The bundle has exactly these top-level fields:
+
+| Field | Required value |
+| --- | --- |
+| `schema` | `hepta.hia.native-helpers.v1` |
+| `target` | `linux-x86_64-lp64` |
+| `abi` | `hia-byte-six-argument-v1` |
+| `helpers` | Entries with `selector`, `manifest_path`, and `manifest_sha256` |
+
+Each selector must be in the installed worker's explicit allowlist. Each entry
+pins the exact existing helper manifest, whose source, image and ABI are checked
+before entering the service. An entry path may be absolute or relative to the
+bundle parent, without parent traversal. Installed bundle, manifest and image
+files must satisfy the worker's ownership, mode and single-link checks.
+
+Obtain the installation identities with the same explicit selection that the
+runtime will use:
+
+```sh
+python3 -B -E -s -m hepta.hia_agent_worker \
+  --installation-manifest \
+  --native-helpers-manifest /srv/hepta-install/native-helpers.json \
+  --expected-native-helpers-sha256 ACTUAL_LOWERCASE_BUNDLE_SHA256
+```
+
+Keep the returned worker, backend and catalog pins, and add the same manifest
+path and returned `native_helpers_sha256` to the `hia_worker` object. The adapter
+passes the selection through fixed argv; a tool caller cannot select a helper,
+override its pin, or add a `HEPTA_HIA_*` environment variable. Changing this
+selection changes the full profile and request body. A mutation retains its
+original tool/key owner identity and therefore conflicts with a changed body.
+
+A terminal worker report must include exactly the selected optional helper
+digest. Scoped checker receipts bind the same installation, including that
+digest when present. The separate required `checker.native_selection_sha256`
+identifies the checker's actual native selection and is not the bundle digest.
+Neither digest alone establishes machine-code execution or universal compiler
+correctness.
+
+The worker's JSON protocol, request journal, persistence and Python adapter
+remain hosted. The first integration selection exercises the
+`HEPTA_HIA_AGENT_IDENTITY_MANIFEST` scalar guard and real emitted workload images;
+it does not claim that the entire worker has become native.
+
 ## Discovery and use
 
 Call `hia_describe` with `{"section":"manifest"}`. Read its returned resources
@@ -131,3 +186,20 @@ report forgery and omitted-output rejection, native-only emission flags, and the
 serialized size of maximally escaped read pages. Runtime build/lint/test results
 and actual SSH/MCP lifecycle evidence belong to the accompanying qualification
 record; source registration alone does not assert those results.
+
+The `HIA native helper contract` workflow independently checks provider/schema
+controls with and without the remote-filesystem feature. The `HIA common
+candidate native integration` workflow freezes a Hepta commit and the exact
+Runtime commit, retains the original cold and language reports, and builds the
+identity image only from the successful cold B3 compiler. Its cold qualification
+and cleanup budgets remain 180 and 3 seconds.
+
+The joint harness uses a disposable GitHub-hosted runner, real loopback OpenSSH,
+the existing durable process owner, and actual stdio MCP. It checks exact
+request/profile/report bindings, the eleven-tool scripted loop, retained native
+lease consumption across rollback, release rejection, restart replay without a
+second job, and an intentionally wrong helper pin that remains UNKNOWN under
+the same original job across restart. It preserves raw tool calls and owner
+observations. Private SSH keys remain outside uploaded evidence. A missing or
+failed stage is HOLD; source registration, a native build receipt, and passing
+provider tests cannot substitute for this execution evidence.
