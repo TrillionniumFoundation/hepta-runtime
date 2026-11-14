@@ -1,0 +1,1140 @@
+{
+  "schema": "hepta.runtime.hia-migration.v1",
+  "runtime_base_commit": "a0dcdda1991ec536d5e2d252c006a778993fa566",
+  "runtime_base_tree": "98d96c88d54082637c27f1cbfae61a66d0dd81e7",
+  "compiler_repository": "TrillionniumFoundation/Hepta",
+  "compiler_commit": "d3e2c90173cf733e42b299d0c4274df4b593a12f",
+  "compiler_tree": "8d8b0fb8d015fb7edab302498bb9ed4c74ab6f49",
+  "target": "linux-x86_64",
+  "whole_runtime_replaced": false,
+  "old_stack_removal_qualified": false,
+  "production_activated": false,
+  "native_components": [
+    {
+      "source": "native/runtime_bytes.hepta",
+      "scope": "Byte hashes and line identifiers; strict/clamped signed line indices; log page windows; bounded identity predicates. Borrowed byte ABI; no filesystem or process effects.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/runtime_protocol.hepta",
+      "scope": "Strict JSON parsing, MCP 2025-06-18 negotiation and initialization state, native JSON response serialization, runtime_native_info and original line-hash computation. Existing 125 production tool handlers are not provided by this service.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/text_budget.hepta",
+      "scope": "Original token estimate, one-decimal MiB formatting, line-ID range rendering and smart head/tail truncation under the retained Rust release semantics.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/line_endpoint.hepta",
+      "scope": "Original line-endpoint parsing and exact error formatting at a typed serde Value boundary, including Unicode trim, signed/unsigned integer parsing and N:hh normalization. JSON classification/serialization remains the caller boundary.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/line_verify.hepta",
+      "scope": "Complete original stale-line-ID verification with exact context/relocation diagnostics and strict/clamped signed index resolution over LP64 totals; compact typed line-slice ABI including the complete five-MiB file domain. No file effects or production tool replacement.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/batch_plan.hepta",
+      "scope": "Typed original batch preflight, operation parsing and endpoint planning, including ordered error aggregation, exact null/end/insert semantics and full 50-operation / 5 MiB file domains. Native endpoint and stale-ID owners are called through fixed identities. The named image-only capacity profile retains complete repeated diagnostics; the static four-image fixture declares its smaller adapter boundary. JSON/MCP admission, path authorization, conflict checks, edits, history/cache effects and production routing remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/delta.hepta",
+      "scope": "Original bounded Myers line diff and exact operation order, delta hunks with line IDs, removal markers, CRLF normalization and Rust line splitting. File access, path authorization and per-session view-cache state remain caller owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/editable_content.hepta",
+      "scope": "Internal original EditableContent construction, normalized/rendered bytes, ordered insertion/replacement and trailing-newline preservation. Original complete methods and UTF-8/u64/5 MiB state histories are compared directly. File IO, locking, history, line-id validation and production handler replacement remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/view_render.hepta",
+      "scope": "Internal original view range/render/prepare decisions over independent read snapshots, exact line IDs, cache plan, delta selection and 8 MiB result gate. Complete 5 MiB file and maximum-line workspace domains use an explicit transport profile; actual file reads, session cache storage and production handler replacement remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/view_filter_packer.hepta",
+      "scope": "Static opaque-byte filter for the named view-render.v1 capacity profile: 16 MiB input/output and 256 MiB workspace. Exact native image binding, frame/output refusal and no interpreter/libc dependency; no new OS effect authority or public MCP route.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/view_cache.hepta",
+      "scope": "Serial persistent original ViewCache map operations, per-value one-MiB admission, missing/empty distinction, cache invalidation, poisoned-lock behavior, create/write normalization and application of native view plans. Explicit workspace-capacity refusals preserve state; dynamic storage, concurrent Arc/Mutex ownership, canonical lock keys and production call-site replacement remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/binary_codec.hepta",
+      "scope": "SHA256 raw/hex and portable incremental state using unchanged pinned HIA compression, canonical Base64 encoding and explicit legacy/current/canonical decode policies. File descriptors, versions, authorization and upload transactions remain original owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/operation_kdf.hepta",
+      "scope": "Internal HMAC/HKDF-SHA256, original verified-token key derivation, private request/idempotency/policy bindings and per-record key bytes with workspace clearing. Caller verification, canonical context, non-exportable scope, AEAD, nonce custody, replay and ledger owners remain original; no public MCP key output or production handler replacement.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/operation_aead.hepta",
+      "scope": "Internal ChaCha20-Poly1305 encrypt/authenticate-before-decrypt byte primitive with bounded AAD and original inner-payload ceiling. Workspace clearing, unchanged failure output and original seal/open fixture interoperability are explicit test domains. Trusted scope, nonce uniqueness, entropy, record admission, persistence and production call-site replacement remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/operation_nonce.hepta",
+      "scope": "Internal serial NonceLedger reservation over a private persistent workspace: exact 16384-use scope budget, original SHA256 identity namespace and 12-byte nonce keys, bounded collision handling, duplicate refusal and trusted lifecycle clearing. Direct calls and a test-only persistent two-image ELF are separately counted. Entropy, production serialization, shared-clone custody, key lifetime and call-site replacement remain original owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/operation_record.hepta",
+      "scope": "Internal trusted-scope result binding and canonical AAD over the complete u128 domain, original bounded seal/open byte composition through existing KDF/SHA/AEAD images, authenticated inner-record validation and declared workspace cleanup. Test-only five-image ELF, typed transport refusals and actual original semantic-owner comparisons are separately counted. Scope capability custody, entropy, nonce reservation, cloning/concurrency and production call-site replacement remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/entropy_policy.hepta",
+      "scope": "Internal Linux x86-64 entropy fill with the original ring/getrandom default backend probe, cached serial direct/device backend, partial-fill advancement, retry/error rules and complete-output publication for 0..128 bytes. Per-workspace custody is serial; cross-thread sharing, whole-runtime dependency-lock identity and production call-site replacement remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/entropy_packer.hepta",
+      "scope": "Static native entropy ELF boundary: fixed 24-byte input frames, checked HIA continuations, opaque fixed-device descriptor cache, output-length admission and explicit EOF cleanup. No raw caller-supplied paths or file descriptors; no MCP registration or production activation.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/operation_scope.hepta",
+      "scope": "Internal private serial ResultCryptoScope construction, private bindings, seal/open ordering, shared reference lifetime and joint key/nonce destruction using unchanged HIA KDF/record/nonce owners. Separately mandatory eight-image profiles cover deterministic fixture entropy and actual Linux SystemEntropy; caller authentication, concurrent capability admission and production call-site replacement remain separate owners. Entire predefined fixture fault histories and real OS trace/cleanup domains are accounted independently.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/caller_authority.hepta",
+      "scope": "Serial private credential authentication, complete-header SHA and fixed 32-byte comparison, Origin/token priority, first-tool owner binding, distinct HTTP/stdio scopes and trusted lifecycle. Actual nine-image Linux startup transport and independent original controller/kernel comparisons; concurrent HTTP, metadata annotations and production call-site replacement remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/authority_loader.hepta",
+      "scope": "Original startup private-token descriptor admission, account-owned single-link 0600 file checks, bounded reads and before/after metadata fences; distinct fixed /dev/urandom owner seed and ordered cleanup. The path is immutable administrator argv, never caller-selected request authority.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/authority_packer.hepta",
+      "scope": "Exact nine-image source/image-pinned authority ELF with protected startup events, fixed loader and entropy capabilities, checked continuations, private descriptor custody and workspace/transport cleanup. Dedicated serial qualification profile, not a public HTTP listener or MCP route.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/policy.hepta",
+      "scope": "Original deterministic config policy for permission and protection order, executable/environment checks, remote lexical paths, local normalization and path containment. Host/config loading, filesystem canonicalization and effect authorization remain caller owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/stat_version.hepta",
+      "scope": "Exact original five-field file-version formatting over full stat integer/timestamp domains plus a canonical inverse validated through the unchanged Python formatter. No file I/O, authorization or MCP dispatch.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/io_policy.hepta",
+      "scope": "Read-only descriptor custody, bounded chunk/full-file continuations, and complete-file fingerprint/Linux metadata capture with original ordering, separate version intervals, typed guard start/finish and cleanup precedence. A fixed owned-process watchdog supplies the local 30-second deadline. Persistent startup-root custody and local error diagnostics remain explicit differences; no original configured-host or write owner is replaced.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/io_packer.hepta",
+      "scope": "HIA construction of a static Linux x86-64 ELF with checked syscall effect records, opaque descriptor handles, bounds validation and persistent binary framing for the read-only IO primitive.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/multi_read_service.hepta",
+      "scope": "Native batch-read controller for the explicit native-local profile: original typed validation order, policy-before-effects, independent complete-file results, strict UTF-8, exact nested MCP text budget and redacted failures. Synthetic controller IO controls are distinguished from actual full-read/MCP filesystem comparisons; remote configured-host and production parity remain incomplete.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/file_info_service.hepta",
+      "scope": "Explicit native-local file_info controller: original typed parameter and host/path ordering, complete Linux fingerprint/metadata results, exact stat version and compact MCP text, bounded response validation and continuation/capacity refusal. Synthetic IO completions are distinct from actual file, xattr, ACL, deadline and original-helper comparisons. Remote SSH and full production handler parity remain unported.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/local_service.hepta",
+      "scope": "Strict JSON MCP controller for explicit administrator-owned native-local host_list, binary_read, read_multiple_files and file_info delegation through a fixed seven-image table. Full original configured-host, SSH, authorization and 125-tool production parity remain incomplete.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/composition_packer.hepta",
+      "scope": "Native closed image tables with fixed call authority, private workspaces, bounded child/OS continuations and fixed owned-worker file inspection deadlines. Real entropy effects require the exact eight-image scope profile, native SHA256 binding of every actual image and an exclusive slot-seven policy; ordinary profiles retain their existing authority. No public raw entropy or production scope activation.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/stdio_packer.hepta",
+      "scope": "Native ELF construction for persistent LF-delimited stdio framing and Linux system-call transport.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/filter_packer.hepta",
+      "scope": "Native ELF construction for a single binary input/output invocation.",
+      "legacy_call_sites_replaced": false
+    }
+  ],
+  "legacy_tool_handlers": [
+    {
+      "name": "hia_describe",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_artifact",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_read",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_context",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_inspect",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_candidate",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_verify",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_emit",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_evaluate",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_adopt",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hia_rollback",
+      "family": "hia_agent",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "effective_config",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "usage_stats",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "request_archive",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "request_history",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "request_status",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "request_result",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "request_start",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "request_cancel",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "operation_start",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "operation_status",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "operation_result",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "operation_cancel",
+      "family": "durable_requests",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "view",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "text_editor",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "directory_create",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "file_move",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "text_file_write",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "directory_move",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "batch_edit",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "extract_lines",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "shell",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "shell_start",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "host_processes",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "host_signal",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "sudo_start",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "execution_shadow_admit",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "host_list",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "search_start",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "search_results",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "search_list",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "search_stop",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "read_multiple_files",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "host_health",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_artifact",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_model",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_read_model",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_web_capture",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_compare_web_captures",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_replay_web_entry",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_javascript_package",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_javascript_graph",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_elf_notes",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_apk_signature_evidence",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_analysis_view",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_import_evidence_bundle",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_export_evidence_bundle",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_get_evidence_bundle",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_read_evidence_bundle",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_close_evidence_snapshot",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_source_map",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_model_session_list",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_application",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_apk_signature",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_model_session_open",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_model_session_query",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_model_session_read",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_archive",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_inspect_asar",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_read_asar_member",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_static_profiles",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_static_start",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_static_status",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_static_read",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_static_cancel",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_verify_evidence",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_retain_preview",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "rea_read_preview",
+      "family": "reverse_engineering",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_artifact_patch",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_artifact_restore",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_linear_forward",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_profiles",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_open",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_call",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_status",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_read",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "weight_close",
+      "family": "weights",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_start",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_status",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_read",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_wait",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_cancel",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_list",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_list_page",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "document_read",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "image_read",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "document_write",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "document_edit",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "file_info",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "binary_read",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "binary_write",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "binary_upload",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "pdf_edit",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "worksheet_edit",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "document_render",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "worksheet_recalculate",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "binary_patch_inode",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "pdf_security",
+      "family": "documents",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "stream_handoff_prepare",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "stream_handoff_status",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "stream_handoff_read",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "stream_handoff_write",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "stream_handoff_close",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "stream_handoff_list",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "process_checkpoint",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "pty_start",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "pty_read",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "pty_write",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "pty_close",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "pty_list",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "hardware_snapshot",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "service_status",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "network_inspect",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "privileged_action",
+      "family": "hosts_and_processes",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    },
+    {
+      "name": "workdir",
+      "family": "filesystem_and_control",
+      "status": "not_ported",
+      "owner": "src/mcp/server.rs",
+      "native_owner": null
+    }
+  ],
+  "remaining_system_owners": [
+    {
+      "name": "durable_request_and_process_state",
+      "status": "not_ported",
+      "paths": [
+        "src/mcp/runtime/jobs.rs",
+        "src/mcp/runtime/request_async.rs",
+        "src/mcp/runtime/operation_async.rs"
+      ]
+    },
+    {
+      "name": "authorization_and_effect_ownership",
+      "status": "not_ported",
+      "paths": [
+        "src/mcp/runtime/caller_scope.rs",
+        "src/mcp/runtime/effect_owner_fence.rs",
+        "src/mcp/runtime/config.rs"
+      ],
+      "scope": "The internal serial caller-authority component is independently qualified. Production effect ownership, concurrent authenticated sessions, metadata annotations and actual routing remain original owners."
+    },
+    {
+      "name": "ssh_sftp_http_pty_and_services",
+      "status": "not_ported",
+      "paths": [
+        "src/main.rs",
+        "src/mcp/fs/remote.rs",
+        "src/mcp/runtime/ssh.rs",
+        "src/mcp/runtime/pty.rs"
+      ]
+    },
+    {
+      "name": "filesystem_edits_and_recovery",
+      "status": "not_ported",
+      "paths": [
+        "src/mcp/fs/core.rs",
+        "src/mcp/fs/text_editing.rs",
+        "src/mcp/fs/delta.rs"
+      ]
+    },
+    {
+      "name": "rea_parsers_and_evidence",
+      "status": "not_ported",
+      "paths": [
+        "src/rea"
+      ]
+    },
+    {
+      "name": "documents_and_worksheets",
+      "status": "not_ported",
+      "paths": [
+        "src/mcp/runtime/documents.rs"
+      ]
+    },
+    {
+      "name": "weights_and_provider_workers",
+      "status": "not_ported",
+      "paths": [
+        "src/weight",
+        "workers/weight"
+      ]
+    },
+    {
+      "name": "hia_agent_store_and_worker",
+      "status": "not_ported",
+      "paths": [
+        "src/mcp/hia_provider.rs",
+        "deploy/hia_mcp_catalog.py"
+      ]
+    },
+    {
+      "name": "deployment_gateway_and_control_plane",
+      "status": "not_ported",
+      "paths": [
+        "deploy/chatgpt_full_operator.py",
+        "deploy/chatgpt_mcp_bridge.py"
+      ]
+    },
+    {
+      "name": "other_targets",
+      "status": "not_ported",
+      "paths": []
+    }
+  ],
+  "cleanup": {
+    "history_rewrite": false,
+    "legacy_implementation_retained": true,
+    "historical_evidence_retained": true,
+    "reason": "Existing tools and recovery owners are still active; CI and regression controls still read archived evidence. Remove only after their complete replacement is verified."
+  }
+}

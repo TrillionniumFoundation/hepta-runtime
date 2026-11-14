@@ -1,0 +1,24 @@
+[package]
+name = "hia-caller-authority-reference"
+version = "0.0.0"
+edition = "2021"
+publish = false
+build = "build.rs"
+
+[[bin]]
+name = "hia-caller-authority-reference"
+path = "../oracle_caller_authority.rs"
+
+[dependencies]
+anyhow = "=1.0.104"
+axum = { version = "=0.8.9", default-features = false, features = ["http1", "tokio"] }
+libc = "=0.2.189"
+ring = "=0.17.14"
+rmcp = { version = "=3.4.1", features = ["server", "transport-io", "transport-streamable-http-server"] }
+serde_json = { version = "=1.0.151", features = ["float_roundtrip", "raw_value"] }
+sha2 = "=0.11.0"
+subtle = "=2.6.1"
+tokio = { version = "=1.53.1", features = ["io-util", "rt", "macros"] }
+tower = { version = "=0.5.3", features = ["util"] }
+tracing = { version = "=0.1.44", default-features = false, features = ["std"] }
+zeroize = "=1.9.0"

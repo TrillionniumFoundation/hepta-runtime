@@ -1,5 +1,22 @@
 # Hepta Runtime
 
+## HIA native implementation
+
+The [HIA native profile](native/README.md) contains executable `.hepta` sources
+for byte-processing, text budgets, line endpoints, stale-ID verification and typed batch planning,
+editable text, view rendering and serial view-cache state, private serial crypto
+scopes with Linux entropy, startup token loading and serial caller authentication,
+a persistent MCP
+stdio protocol owner, and Linux ELF transport packers. The produced executables run without Python, Rust,
+libc, or a dynamic loader. A pinned Hepta compiler and explicit Python build
+and test drivers produce and verify those executables.
+
+The existing production runtime still owns the 125 registered tool handlers,
+durable processes, host authorization, SSH, HTTP, documents, REA and model
+workers. [The source coverage inventory](native/migration.json) records these
+remaining owners individually. The native profile's passing component tests
+do not qualify removal of those owners or production activation.
+
 ## Concurrent execution
 
 Independent requests have no Hepta Runtime execution-count ceiling. SSH,

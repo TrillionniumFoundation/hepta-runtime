@@ -1,0 +1,76 @@
+{
+  "schema": "hepta.runtime.operation-kdf-original-rust-parity.v1",
+  "status": "passed",
+  "source_sha256": "4bc99f1a2c5b0830fe2d2bc2b9bfd6dde2521ec0893d5103117af3a7243b8fb1",
+  "image_sha256": "35c604af3afc00eaa7b33f528455e0ec30214de01e8db8ba563d7d1486636db7",
+  "manifest_sha256": "915a2289e6b8f2b9ca644429494d0d65b30e981dcf38c9a220ba2421d36a21b0",
+  "original_source": "src/mcp/runtime/operation_crypto.rs",
+  "original_source_sha256": "a48463ef35ca41d0aa8ef64fcaeb9d3245773052221789a38d18d52ced891633",
+  "native_test_counts": {
+    "capacity_refusal_cases": 14,
+    "elf_requests": 5,
+    "exact_capacity_reference_cases": 7,
+    "native_calls": 1378,
+    "original_binding_cases": 388,
+    "standard_reference_cases": 867
+  },
+  "native_corpus_sha256": "5c24ac8716618a916f1ba832ea2573d60e71b3622698b8b8add6d02e6070b523",
+  "corpus": {
+    "cases": 1364,
+    "file": "kdf_cases.jsonl.gz",
+    "gzip_sha256": "4fd08e88f5cd8949a24e36c2a4d5480ca80a8f5cc38408bc8035da97fe3d2cb1",
+    "raw_bytes": 23956371,
+    "raw_sha256": "3b2f7e98af4a0ac785437b2a2b56abb90339be5f1340463d35c74cac6c0bd01e"
+  },
+  "native_output_sha256": "d82853213bda03f46d7d064402ea01257cb7fc80e93b1df4fac85bd8b74de46e",
+  "rust_reference": {
+    "native_cases_added_by_replay": 0,
+    "original_owner_calls": 405,
+    "original_record_key_cipher_comparisons": 28,
+    "output_sha256": "d82853213bda03f46d7d064402ea01257cb7fc80e93b1df4fac85bd8b74de46e",
+    "rust_oracle_cases": 1364,
+    "status": "PASS"
+  },
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "rust_binary_sha256": "d6656ba170ca700903a202ed8f6b4457e8c4a272800f9df5af546406c2383a45",
+  "compile_exit_code": 0,
+  "run_exit_code": 0,
+  "stderr_bytes": 0,
+  "source_files_sha256": {
+    "native/operation_kdf.hepta": "4bc99f1a2c5b0830fe2d2bc2b9bfd6dde2521ec0893d5103117af3a7243b8fb1",
+    "native/operation_kdf_composition.json": "a52bb9529f0b882e58f8a7dd5eaf39872401e36a9f973cf60e44f3eab911bf16",
+    "native/operation_kdf_abi.md": "d75ca80a82328dbc4a7a317fa23cac1e358120c5d9522c953524f0aa5bed9c10",
+    "tests/test_operation_kdf.py": "514cdb4118d1750c8cff2dceabacf7c12d7e5c2220154269b05a078f58974ce5"
+  },
+  "oracle_sources_sha256": {
+    "kdf_oracle/Cargo.lock": "dae8026088c5aa47ec3c4e43fabb6fdb28f67b2479c406fbf6aca1ddb64b6c62",
+    "kdf_oracle/Cargo.toml": "fe40ba8f3a16519d56508a2a97ed6e6b2306d9607a9821928a3485e5f42337eb",
+    "kdf_oracle/build.rs": "83a315c1dfaa2fc1296ffbd99ef9cab39e83a32a26f8a3699efd72ad8c448d03",
+    "kdf_oracle/original_access.rs": "cbe29514b411e230b629920cea8d5baf35b860c4e4332f3de3cf1ae07b0ab127",
+    "oracle_operation_kdf.rs": "f1e7a1b51f6b99ea64413c2ea8d49e80b5a9afff7089e8e62ab48ceea9de7d77"
+  },
+  "reference_execution_sources_sha256": {
+    "runtime/src/mcp/runtime/operation_crypto.rs": "a48463ef35ca41d0aa8ef64fcaeb9d3245773052221789a38d18d52ced891633",
+    "tests/kdf_oracle/Cargo.lock": "dae8026088c5aa47ec3c4e43fabb6fdb28f67b2479c406fbf6aca1ddb64b6c62",
+    "tests/kdf_oracle/Cargo.toml": "fe40ba8f3a16519d56508a2a97ed6e6b2306d9607a9821928a3485e5f42337eb",
+    "tests/kdf_oracle/build.rs": "83a315c1dfaa2fc1296ffbd99ef9cab39e83a32a26f8a3699efd72ad8c448d03",
+    "tests/kdf_oracle/original_access.rs": "cbe29514b411e230b629920cea8d5baf35b860c4e4332f3de3cf1ae07b0ab127",
+    "tests/oracle_operation_kdf.rs": "f1e7a1b51f6b99ea64413c2ea8d49e80b5a9afff7089e8e62ab48ceea9de7d77"
+  },
+  "host": "desktop",
+  "observed_job_id": "1a1d92ed780-392-1180",
+  "observed_job_state": "succeeded",
+  "observed_job_exit_code": 0,
+  "observed_output_complete": true,
+  "observed_output_durable": true,
+  "observed_terminal_publication_confirmed": true,
+  "transfer": {
+    "format": "xz",
+    "sha256": "6ab406ea8f9803a8053af6e27bc3847994d040a87ed6b1e45afd8364fdac59ac",
+    "raw_sha256": "3b2f7e98af4a0ac785437b2a2b56abb90339be5f1340463d35c74cac6c0bd01e"
+  },
+  "scope": "Pure internal trusted bytes. Standard HMAC/HKDF uses ring; token/three private bindings call the complete unchanged original module. Record derivation also compares the original opaque AEAD record key. All keys/tokens are synthetic fixtures. Does not authenticate bearers or qualify native AEAD, nonce custody, scope lifecycle, persistence or any production handler.",
+  "reference_generation": "Cargo build.rs embeds the complete pinned original Rust source verbatim inside a test-only module and appends a synthetic access shim. Source hashes and locked dependencies are retained. Native runtime execution uses no Rust, Python or libc.",
+  "whole_runtime_replaced": false,
+  "production_activated": false
+}

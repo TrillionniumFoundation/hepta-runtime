@@ -1,0 +1,148 @@
+name: HIA Runtime Native
+
+on:
+  push:
+    branches: ['codex/**', hepta-runtime-base]
+    paths:
+      - 'native/**'
+      - 'scripts/*hia*native*'
+      - 'scripts/generate_hia_transport.py'
+      - 'scripts/compare_hia_runtime_rust.py'
+      - 'tests/hia_native/**'
+      - '.github/workflows/hia-runtime-native.yml'
+      - 'src/mcp/server.rs'
+      - 'src/utils/line_hash.rs'
+      - 'src/utils/truncation.rs'
+      - 'src/mcp/fs/delta.rs'
+      - 'src/mcp/fs/core.rs'
+      - 'src/mcp/fs/delta_tests.rs'
+      - 'src/mcp/fs/file_ops.rs'
+      - 'src/mcp/fs/fs_tests.rs'
+      - 'src/mcp/fs/text_editing.rs'
+      - 'src/mcp/request_ctx.rs'
+      - 'src/mcp/runtime/config.rs'
+      - 'src/mcp/runtime/execution.rs'
+      - 'src/mcp/runtime/jobs.rs'
+      - 'src/mcp/runtime/binary.rs'
+      - 'src/mcp/runtime/binary_file.py'
+      - 'src/mcp/runtime/file_metadata.py'
+      - 'src/mcp/runtime/inode_patch.py'
+      - 'src/mcp/runtime/inspect.rs'
+      - 'src/mcp/runtime/ssh.rs'
+      - 'src/mcp/runtime/multi_read.rs'
+      - 'src/mcp/runtime/multi_read_host.py'
+      - 'src/mcp/runtime/operation_crypto.rs'
+      - 'src/main.rs'
+      - 'src/mcp/runtime/caller_scope.rs'
+      - 'src/mcp/runtime/caller_scope_tests.rs'
+      - 'src/mcp/runtime/search_jobs.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rustfmt.toml'
+  pull_request:
+    paths:
+      - 'native/**'
+      - 'scripts/*hia*native*'
+      - 'scripts/generate_hia_transport.py'
+      - 'scripts/compare_hia_runtime_rust.py'
+      - 'tests/hia_native/**'
+      - '.github/workflows/hia-runtime-native.yml'
+      - 'src/mcp/server.rs'
+      - 'src/utils/line_hash.rs'
+      - 'src/utils/truncation.rs'
+      - 'src/mcp/fs/delta.rs'
+      - 'src/mcp/fs/core.rs'
+      - 'src/mcp/fs/delta_tests.rs'
+      - 'src/mcp/fs/file_ops.rs'
+      - 'src/mcp/fs/fs_tests.rs'
+      - 'src/mcp/fs/text_editing.rs'
+      - 'src/mcp/request_ctx.rs'
+      - 'src/mcp/runtime/config.rs'
+      - 'src/mcp/runtime/execution.rs'
+      - 'src/mcp/runtime/jobs.rs'
+      - 'src/mcp/runtime/binary.rs'
+      - 'src/mcp/runtime/binary_file.py'
+      - 'src/mcp/runtime/file_metadata.py'
+      - 'src/mcp/runtime/inode_patch.py'
+      - 'src/mcp/runtime/inspect.rs'
+      - 'src/mcp/runtime/ssh.rs'
+      - 'src/mcp/runtime/multi_read.rs'
+      - 'src/mcp/runtime/multi_read_host.py'
+      - 'src/mcp/runtime/operation_crypto.rs'
+      - 'src/main.rs'
+      - 'src/mcp/runtime/caller_scope.rs'
+      - 'src/mcp/runtime/caller_scope_tests.rs'
+      - 'src/mcp/runtime/search_jobs.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rustfmt.toml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hia-runtime-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: Full compiler cold gate, native HIA components and guarded inspection
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact runtime source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: runtime
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            native
+            scripts
+            src
+            tests/hia_native
+            .github
+
+      - name: Checkout pinned HIA compiler
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TrillionniumFoundation/Hepta
+          path: compiler
+          ref: d3e2c90173cf733e42b299d0c4274df4b593a12f
+          persist-credentials: false
+
+      - name: Install pinned independent Python reference libraries
+        run: |
+          python3 -m venv "$RUNNER_TEMP/hia-native-python"
+          "$RUNNER_TEMP/hia-native-python/bin/python" -m pip install --only-binary=:all: \
+            -r runtime/tests/hia_native/python-reference-requirements.txt
+          echo "$RUNNER_TEMP/hia-native-python/bin" >> "$GITHUB_PATH"
+
+      - name: Replay fresh full cold gate and test native executables
+        env:
+          EXPECTED_RUNTIME_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          test "$(git -C runtime rev-parse HEAD)" = "$EXPECTED_RUNTIME_SHA"
+          python3 -I -B runtime/scripts/qualify_hia_runtime_native.py \
+            --hepta "$GITHUB_WORKSPACE/compiler" \
+            --output "$RUNNER_TEMP/hia-runtime-native"
+
+      - name: Compare all declared original owners and Rust references
+        env:
+          RUSTUP_TOOLCHAIN: 1.95.0
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+          python3 -I -B runtime/scripts/compare_hia_runtime_rust.py \
+            --output "$RUNNER_TEMP/hia-runtime-native" \
+            --rustc "$(rustup which --toolchain 1.95.0 rustc)"
+
+      - name: Retain original native results and executable identities
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hia-runtime-native-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/hia-runtime-native/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

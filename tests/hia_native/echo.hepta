@@ -1,0 +1,15 @@
+hia-asm.v1 hepta.hia.program.v8 runtime_transport_echo
+fn f0(source:readbuf,output:mutbuf,workspace:mutbuf) -> (u32) effects(read,write,trap) entry(entry)
+block entry(source:readbuf,output:mutbuf,workspace:mutbuf)
+  size:usize = buffer.len(source)
+  capacity:usize = buffer.len(output)
+  fits:bool = compare.le(size,capacity)
+  branch fits copy(source,output,workspace,size) reject(source,output,workspace)
+block reject(source_r:readbuf,output_r:mutbuf,workspace_r:mutbuf)
+  failure:u32 = const() {"value":4294967294}
+  ret(failure)
+block copy(source_c:readbuf,output_c:mutbuf,workspace_c:mutbuf,size_c:usize)
+  _ = buffer.copy(output_c,source_c,size_c)
+  result:u32 = int.cast(size_c) {"mode":"checked"}
+  ret(result)
+end

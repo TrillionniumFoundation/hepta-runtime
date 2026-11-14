@@ -1,0 +1,190 @@
+{
+  "bulk_rendering": {
+    "added_functions": 9,
+    "body_and_cache_copy": "Native buffer.copy_range preserves complete spans; CRLF normalization removes only the CR directly followed by LF.",
+    "changed_existing_functions": [
+      "f2",
+      "f3",
+      "f9"
+    ],
+    "ci_success_claimed_for_candidate": false,
+    "elapsed_seconds": 43.6679999020007,
+    "existing_functions_unchanged": 58,
+    "full_cold_executed_for_candidate": false,
+    "imported_functions_unchanged": 49,
+    "input_and_output_domain_unchanged": true,
+    "loader_difference_after_full_run": "Two explanatory comments only; guard ranges and result-length copy are identical.",
+    "loader_transport_tested_sha256": "d5d41f225f759d7ef9f82821b267708752d9755e9471302906806420efc3c669",
+    "loader_used_for_full_run_sha256": "a77a580b5849837276178ea5f08cd41ad2024271c0779257fbdf14128b8fae34",
+    "measurement": "Count line bytes and decimal-prefix widths; compute original line hashes when publishing their actual text. The original range checks, capacity admission and post-body hints are retained.",
+    "output_capacity_checked_before_publication": true,
+    "performance_limit": "Local complete-domain execution; this is not a cross-host speedup or future deadline guarantee.",
+    "suite_limit_seconds": 180,
+    "test_sha256": "5bd8ab04d2f70162a4f8978eb903786c1c123852f8016f035eaa69c284a58fff",
+    "test_unchanged": true
+  },
+  "corpus": {
+    "cases": 3125,
+    "image_sha256": "a1e5bc7cf485dd0d91521a3018c6e67e8fda5c85fcdbe1dfbb27fa37dca6e9c6",
+    "manifest_sha256": "357356bf90e8a90dc025a8ee815e5d990e08e066a0e81dba9f14cd8f78f71144",
+    "native_output_bytes": 139202296,
+    "native_output_file": "native-output.txt.gz",
+    "native_output_sha256": "3d432e0350eb351df875bcc8fa7d195fbefe2e64460a117a6e3c92c601417c17",
+    "oracle_sha256": "36efacf6a1d418c10251afed788f52b20127c62fa39a3f2534882461cce8d585",
+    "requests_bytes": 237318931,
+    "requests_file": "requests.hex.gz",
+    "requests_sha256": "25ee9795db24913b4d2bb717711f613242b51b629203a1588e79bc7dba71a8db",
+    "schema": "hepta.runtime.view-render-native-corpus.v1",
+    "source_sha256": "d7012a796fd83744bcfb4951d01a95d3bab63f9a7ed185ad035c4665989066a3"
+  },
+  "legacy_runtime_removal_allowed": false,
+  "loader_controls": {
+    "actual_process_result_sha256": "e69d180a0c6d0a1df401651d47776f82bcd3a708d13ed681e07b0f196bb2ca36",
+    "groups": 11,
+    "guard_bytes_checked_per_buffer": 16,
+    "guard_corruption_controls": 64,
+    "input_mutation_controls": 1,
+    "raw_full_buffers_unchanged": true,
+    "zero_capacity_buffers_checked": true
+  },
+  "native": {
+    "complete_byte_bounds": true,
+    "composition_sha256": "177e1675e1e29ffdc5389c77e070522149e44a34063eaba2537133771d1037ba",
+    "counts": {
+      "body_budget": 3,
+      "cache_after_oversize": 1,
+      "cache_byte_cap": 3,
+      "cache_byte_cap_with_previous": 3,
+      "cache_delta": 225,
+      "capacity": 6,
+      "declared_input_capacity": 1,
+      "endpoint_bounds": 1008,
+      "exact_myers_ceiling": 6,
+      "exact_output_capacity": 1,
+      "file_byte_cap": 2,
+      "file_stat_refusal": 1,
+      "full_refresh": 225,
+      "hints_after_body_budget": 1,
+      "independent_large_snapshots": 1,
+      "invalid_abi": 135,
+      "maximum_line_workspace": 1,
+      "metadata_order": 72,
+      "normalization_and_terminators": 7,
+      "normalization_at_cache_cap": 1,
+      "prepare": 404,
+      "random_snapshots": 900,
+      "separate_read_snapshots": 200,
+      "standalone_elf": 3,
+      "standalone_frame_capacity": 1,
+      "whole": 60,
+      "workspace_refusal_is_not_semantic_none": 1
+    },
+    "functions": 70,
+    "image_sha256": "a1e5bc7cf485dd0d91521a3018c6e67e8fda5c85fcdbe1dfbb27fa37dca6e9c6",
+    "manifest_sha256": "357356bf90e8a90dc025a8ee815e5d990e08e066a0e81dba9f14cd8f78f71144",
+    "oracle_sha256": "36efacf6a1d418c10251afed788f52b20127c62fa39a3f2534882461cce8d585",
+    "scope": "typed view range/render/cache plan only",
+    "seconds": 43.607974450000256,
+    "source_sha256": "d7012a796fd83744bcfb4951d01a95d3bab63f9a7ed185ad035c4665989066a3",
+    "status": "PASS",
+    "test_sha256": "5bd8ab04d2f70162a4f8978eb903786c1c123852f8016f035eaa69c284a58fff",
+    "whole_view_migrated": false
+  },
+  "original_git_blob_verification": {
+    "all_matched": true,
+    "commit": "a0dcdda1991ec536d5e2d252c006a778993fa566",
+    "sources": {
+      "src/mcp/fs/core.rs": {
+        "blob": "e6459083ab7636cd573807a5ae1c2e02cedabb56",
+        "sha256": "51c9a864c6b18ac43957cf3e6c74b07d8ee8952e0589b68e1051e976c1dd09ec"
+      },
+      "src/mcp/fs/delta.rs": {
+        "blob": "76681c01b571536e80f5bd1b93d79053d9df8985",
+        "sha256": "a21e86bc959ce79f35cb7695e908fa37d5fd5fb56e00673ecf4a8cd291c080e1"
+      },
+      "src/mcp/fs/delta_tests.rs": {
+        "blob": "9d985284554db50fabf6bf79fe28da192bbebb8b",
+        "sha256": "12cb15fb6fae75a6fee698fe16523a87586b6fe7782ebc9194f358a55f30556a"
+      },
+      "src/mcp/fs/file_ops.rs": {
+        "blob": "dc43bd59c2dff679b8a741d52d1d7861002c0150",
+        "sha256": "6e35ad8e18eee86ae0b9e268272d34bf792e3fb2fd2f606cbdc404c4bc9f592e"
+      },
+      "src/mcp/fs/fs_tests.rs": {
+        "blob": "7c4fe232b5c7f7439d06f95f916cbb9f07100ff1",
+        "sha256": "c410bf1091aa159b650ade889d87eb6a13f26c95310f0280873ba289635c7cc7"
+      },
+      "src/mcp/request_ctx.rs": {
+        "blob": "0150c07b2d7ac593851c30557f71c628083d083b",
+        "sha256": "81ebf6e68bcf8c119c83274a090b5e4796d00b3ca6d889c92e9922be0612e943"
+      },
+      "src/mcp/server.rs": {
+        "blob": "90fe15fd6a998e9b165739bc27e6f3854022221d",
+        "sha256": "ea43d13d2e870188abc33afca771eb3f5ecacdf982a56467c7b7c2fa0fa81d0d"
+      },
+      "src/utils/line_hash.rs": {
+        "blob": "0e521656ba24869dbc05afc51d62aa4af79b5e44",
+        "sha256": "904bc9a70e1ade3802213cd067ab7b75bce4dd075e4ab4965f32e9964293ba57"
+      },
+      "src/utils/truncation.rs": {
+        "blob": "a14ad26adedbff7624c67f5b89672e54fe60918e",
+        "sha256": "3967bee0b0a897d470737c64dd735ee8f206c00d87f3778dee212f326334283e"
+      }
+    }
+  },
+  "previous_ci_failure": {
+    "artifact_bytes": 79200223,
+    "artifact_sha256": "9824f3c3c292ae99843622fcac98200be57170f7198f19c7760496c62f3f5a5c",
+    "commit": "1ce0868abea0d72156d6b9f15c11439eb92ead90",
+    "elapsed_seconds": 180.09638561699995,
+    "job": 132515239778,
+    "run": 43617361740,
+    "status": "FAIL",
+    "suite": "test_view_render.py",
+    "timed_out": true,
+    "timeout_seconds": 180
+  },
+  "retained_original_comparison": {
+    "all_corpus_fields_equal": true,
+    "baseline_image_sha256": "d0d133703dad92b8bc3f51bd9fc38f8496fdda471e6c50de3b70ab7abc892b00",
+    "baseline_source_sha256": "f8f2a8cf88527bbe2282d384f09069d4686da83a6f1f8d4b368ffd8670211237",
+    "candidate_image_sha256": "a1e5bc7cf485dd0d91521a3018c6e67e8fda5c85fcdbe1dfbb27fa37dca6e9c6",
+    "candidate_source_sha256": "d7012a796fd83744bcfb4951d01a95d3bab63f9a7ed185ad035c4665989066a3",
+    "counts_equal": true,
+    "derivation": "The candidate reran the complete native corpus. Both decompressed input and output bytes match the retained actual Rust comparison; the original Rust process and source identity remain historical, and no new Rust compilation or execution is claimed.",
+    "full_domain": {
+      "cases": 3125,
+      "native_output_bytes": 139202296,
+      "native_output_sha256": "3d432e0350eb351df875bcc8fa7d195fbefe2e64460a117a6e3c92c601417c17",
+      "oracle_sha256": "36efacf6a1d418c10251afed788f52b20127c62fa39a3f2534882461cce8d585",
+      "requests_bytes": 237318931,
+      "requests_sha256": "25ee9795db24913b4d2bb717711f613242b51b629203a1588e79bc7dba71a8db"
+    },
+    "new_rust_execution": false,
+    "proof_path": "native/view_original_rust_comparison.json",
+    "retained_rust_comparison_sha256": "50bdc58be10868b31db6493fd9e0370b9ba854dde91e8d60842b50f36661b746",
+    "retained_rust_job": "1a1da2f383e-392-1554"
+  },
+  "schema": "hepta.runtime.view-render-native-proof.v1",
+  "transport": {
+    "builder_sha256": "70943c536904ff0ffd57e0b6871edfaed1b9d8631ef1480d9de049cd652a3772",
+    "counts": {
+      "exact_profile_template_and_image_binding": 1,
+      "loader_frame_refusal": 1,
+      "native_vm_original_reference": 6,
+      "profile_admission_refusal": 11,
+      "standalone_output_io_error": 1,
+      "standalone_refusal": 3,
+      "unsupported_transport_before_build": 2
+    },
+    "elf_sha256": "c1135143fe2141b1ef6d20e773217761277fa6b48f74b74fed3d0503157a9f8d",
+    "image_sha256": "a1e5bc7cf485dd0d91521a3018c6e67e8fda5c85fcdbe1dfbb27fa37dca6e9c6",
+    "loader_sha256": "d5d41f225f759d7ef9f82821b267708752d9755e9471302906806420efc3c669",
+    "manifest_sha256": "357356bf90e8a90dc025a8ee815e5d990e08e066a0e81dba9f14cd8f78f71144",
+    "packer_sha256": "fc0911e275e5af7751b73be89c10a60df5ed4d6b7b2826b5e2f84d27bdc1ba52",
+    "source_sha256": "d7012a796fd83744bcfb4951d01a95d3bab63f9a7ed185ad035c4665989066a3",
+    "status": "PASS",
+    "test_sha256": "0a3ac78fa7b19750d1c7df8ffb6f0157a9c3d8e6232dfbb6a7ac54c40e2a58bd"
+  },
+  "whole_view_migrated": false
+}

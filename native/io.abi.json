@@ -1,0 +1,225 @@
+{
+  "authority": {
+    "hardlinks": "Ordinary read targets may have multiple links, matching the retained read helper. This is not a filesystem sandbox against external writers or privileged namespace changes.",
+    "not_implemented": [
+      "host/config loading and authorization",
+      "remote SSH/SFTP",
+      "arbitrary non-UTF8 Unix filenames",
+      "write operations",
+      "MCP schemas and responses",
+      "base64 and SHA256 output fields",
+      "file_info outside the explicit native-local Linux composition; view behavior"
+    ],
+    "original_behavior_distinction": "The retained binary_file.py helper reopens parent directories from / for each request. This primitive intentionally pins startup root custody. Its root-replacement behavior is explicitly tested and must be reconciled by the eventual caller authorization owner before tool replacement.",
+    "path_profile": "Valid UTF-8 absolute paths of at most 4096 bytes, without NUL or any .. component. Op1 normalizes dot and redundant slash components like PurePosixPath, including its exactly-two-leading-slash anchor. Op2 requires non-aliased paths: no empty, dot or dot-dot component. Startup root argv remains limited to 4095 bytes. The root itself and final names beginning .hepta- are refused. Op3 uses the op1 normalization and allows ordinary hardlinks and special permission bits; see file_info_io_abi.md.",
+    "root_custody": "The startup directory is opened component by component with O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC and retained as an opaque descriptor capability until EOF. Requests use that same inode even if its old pathname is renamed or replaced.",
+    "root_source": "Only startup argv from the administrator; no request field can change the root",
+    "symlinks": "O_NOFOLLOW on every opened path component, including the final file"
+  },
+  "continuation": {
+    "actions": {
+      "1": "open / once for startup at sequence 1",
+      "10": "start fixed inspection guard before target effects, op3 composition only",
+      "11": "duplicate the configured root handle for retained-parent custody",
+      "12": "finish guard after typed response serialization, op3 composition only",
+      "2": "open one directory component",
+      "3": "open one regular-file candidate component",
+      "4": "fstat",
+      "5": "pread64",
+      "6": "close",
+      "7": "descriptor read for op3; at most 1 MiB",
+      "8": "Linux flistxattr for op3",
+      "9": "Linux fgetxattr for op3"
+    },
+    "buffer_admission": {
+      "close": "All buffer/argument fields zero",
+      "component": "Only workspace offset 12288, extent 2..4096 including terminal NUL; no earlier NUL, slash, . or .. component",
+      "file_info": "The combined composition requires an 8 MiB IO workspace. Action 7 is offset 16384, size 1..1048576, argument 0. Action 8 is offset 2125824, size 65536, argument 0. Action 9 writes offset 16384, size 65536 from a 1..255-byte NUL-terminated name at 2191360. Action 11 accepts only the held root handle with all other fields zero.",
+      "file_info_guard": "Action 10 has all handle/span/argument fields zero. Action 12 has only size nonzero: the prepared current output extent, 128..75776. See file_info_io_abi.md for state 55/56, root custody and matching effect/module sequences.",
+      "pread": "Nonempty extent at most 4096 wholly inside workspace[16384,81921); signed nonnegative file offset. The final byte is only the bounded full-read overflow sentinel.",
+      "stat": "Offset 512 or 656, exactly 144 bytes; the op3 composition additionally admits offset 800."
+    },
+    "cleanup": "HIA closes request file/intermediate directory handles before any response and closes its root on EOF. The adapter also closes every still-tracked handle on fatal exits. The kernel releases remaining descriptors on process teardown. Handles remain private to one process.",
+    "file_info_guard_syscalls": [
+      "fork",
+      "getpid",
+      "getppid",
+      "prctl(PR_SET_PDEATHSIG)",
+      "pipe2",
+      "clock_gettime(CLOCK_MONOTONIC)",
+      "ppoll",
+      "kill(owned worker, SIGKILL)",
+      "wait4(owned worker, WNOHANG)",
+      "munmap"
+    ],
+    "file_info_syscalls": [
+      "read",
+      "flistxattr",
+      "fgetxattr",
+      "fcntl(F_DUPFD_CLOEXEC)"
+    ],
+    "handles": "Eight private adapter slots carry fd plus 56-bit generation. HIA receives generation<<8 | (slot+1), never a raw fd. Unknown, released or mismatched-generation handles are rejected.",
+    "interrupts": "openat/fstat/pread/read/write retry EINTR. close is issued once and its handle is retired before the syscall. SIGPIPE is ignored so output failure becomes exit 74.",
+    "magic": "HIAFX001",
+    "offset": 256,
+    "sequence": "Strictly increases across startup and all requests; independently checked by the adapter. Standalone IO allows at most 16384 effects per frame. The multi-image bridge permits 262144 native entry/effect resumptions per root frame, enough for 16 bounded full files with two component walks each.",
+    "syscalls": [
+      "openat",
+      "fstat",
+      "pread64",
+      "close"
+    ],
+    "transport_syscalls": [
+      "read",
+      "write",
+      "mmap",
+      "rt_sigaction",
+      "exit"
+    ],
+    "u64_fields": [
+      "magic",
+      "sequence",
+      "action",
+      "opaque_handle",
+      "buffer_offset",
+      "buffer_length",
+      "argument",
+      "reserved_zero",
+      "result_bits",
+      "positive_errno",
+      "result_handle",
+      "completed_sequence",
+      "completed_flag"
+    ]
+  },
+  "executable": {
+    "arguments": [
+      "native-read.elf",
+      "administrator-supplied absolute root"
+    ],
+    "exit_status": {
+      "0": "clean EOF",
+      "2": "invalid framing or native contract",
+      "3": "capacity refusal",
+      "64": "invalid startup root or failed root admission",
+      "74": "transport or shutdown IO failure"
+    },
+    "input_transport": "Repeated u64 little-endian byte length followed by 112..4208 request bytes",
+    "output_transport": "Repeated u64 little-endian byte length followed by a complete response; 128..65664 bytes per response",
+    "runtime_dependencies": [
+      "Linux kernel"
+    ],
+    "shutdown": "EOF at a frame boundary asks HIA to close the root handle; truncated frames fail. No response is published before file identity and close checks finish."
+  },
+  "policy_entry": {
+    "file_info_composition": {
+      "call_mask": 4,
+      "codec_module_id": 2,
+      "description": "Operation 3 requires the closed composition and its qualified native deadline guard. The standalone 86016-byte operation 1/2 transport refuses its capacity. See file_info_io_abi.md for streaming, metadata, response, ordering and qualification requirements.",
+      "flags": 3,
+      "minimum_output_bytes": 75776,
+      "module_id": 3,
+      "workspace_bytes": 8388608
+    },
+    "file_info_guard": {
+      "finish_state": 56,
+      "maximum_pending_workers": 1,
+      "phase_offset": 2192,
+      "prepared_result_length_offset": 2200,
+      "production_timeout_seconds": 30,
+      "qualification": "Synthetic HIA transition tests, actual empty-pipe kernel blocking/cancellation, and actual seven-image fixed-30-second syscall-hold/root-recovery tests are separate evidence. See file_info_deadline_abi.md and file_info_deadline_observation.json.",
+      "setup_failure_status": 19,
+      "start_state": 55,
+      "timeout_errno": 110,
+      "timeout_status": 15
+    },
+    "minimum_workspace": "Op1 checks 81920 minimum; op2 requires at least 81921 to read the one-byte overflow sentinel. Emitted adapters allocate 86016 bytes.",
+    "output_bytes": 65664,
+    "requests": "The adapter reenters with the same unchanged request until a complete response is returned. A zero-length input at an idle initialized state denotes transport-owned shutdown.",
+    "returns": {
+      "0": "startup/shutdown complete",
+      "0xffffffe0": "one pinned codec-module call pending, op3 composition only",
+      "0xfffffff0": "one effect request pending",
+      "0xfffffffb": "shutdown close failed",
+      "0xfffffffc": "startup root admission failed",
+      "0xfffffffe": "insufficient workspace/output capacity",
+      "0xffffffff": "contract refused",
+      "128..65664": "complete request response extent",
+      "256..75776": "complete successful file-info response extent, op3 composition only"
+    },
+    "signature": "f0(readbuf input, mutbuf output, mutbuf workspace)->u32",
+    "startup": "A fresh zeroed workspace receives the administrator root UTF-8 bytes. The adapter reenters with unchanged input until HIA returns zero.",
+    "workspace_bytes": 86016
+  },
+  "request": {
+    "absent_version": "All seven version words must be zero when has_expected_version is 0 or 2",
+    "fields_after_magic": [
+      "request_id:u64",
+      "operation:u64=1|2|3",
+      "offset:u64",
+      "limit:u64=1..65536 for op1/2; zero for op3",
+      "has_expected_version:u64=0|1|2",
+      "expected_version:7*u64",
+      "path_length:u64"
+    ],
+    "file_info_operation": "Op3 requires offset, limit, expected-version flag and tuple all zero. It hashes a held regular descriptor until EOF independently of initial size, checks the fingerprint interval, closes and reopens from the retained parent, checks reopened version, then captures Linux xattrs/ACL in a separate before/after interval. Hardlinks and07777 mode bits are permitted. Sorted scalar-name/digest records and separate initial/capture modes are specified in file_info_io_abi.md.",
+    "full_file_operation": "Op2 requires offset 0, limit 1..65536, expected-version flag 0 and all-zero tuple. Initial nlink must equal 1 and size<=limit. The owner reads up to limit+1, verifies version/nlink/count, validates strict UTF-8, repeats the descriptor-relative walk, confirms version/nlink again, and closes both file descriptors before any response. Success has offset 0, next_offset=data_length=before.size, eof 1. Client request IDs are arbitrary u64 echoed unchanged; the private effect sequence is independent.",
+    "guaranteed_mismatch": "Flag 2 represents a caller-proven noncanonical expected-version string. It returns status 6 after successful regular-file fstat admission, before cursor checks or file reads. Path/open/type errors still take precedence. Flags 0 and 1 are unchanged.",
+    "header_bytes": 112,
+    "magic": "HIARD001",
+    "payload": "Exact path UTF-8 bytes"
+  },
+  "response": {
+    "fields_after_magic": [
+      "request_id:u64",
+      "status:u64",
+      "errno:u64",
+      "data_length:u64",
+      "offset:u64",
+      "next_offset:u64",
+      "eof:u64=0|1",
+      "version:7*u64",
+      "mode:u64"
+    ],
+    "file_info_payload": "HIAINF01 typed metadata followed by sorted length/name/raw-digest records; see file_info_io_abi.md. Error responses remain exactly128 bytes with zero payload and metadata.",
+    "header_bytes": 128,
+    "magic": "HIARR001",
+    "mode": "st_mode & 07777",
+    "payload": "Successful read bytes only; every failed response has empty data and zero file metadata",
+    "status": {
+      "0": "success",
+      "1": "invalid path or reserved target",
+      "10": "malformed request",
+      "11": "initial hardlink count differs from 1",
+      "12": "full-file byte ceiling exceeded",
+      "13": "op2 confirmation identity/link change, or op3 reopened version mismatch",
+      "14": "invalid strict UTF-8 file data(op2) or nonscalar xattr name(op3)",
+      "15": "file-info deadline expired",
+      "16": "file-info xattr syscall/name-list error",
+      "17": "file-info metadata budget exceeded",
+      "18": "file-info capture version changed",
+      "19": "file-info deadline setup failed",
+      "2": "outside configured root",
+      "3": "open failed",
+      "4": "not a regular nonnegative-size file",
+      "5": "cursor beyond file size",
+      "6": "expected version differs",
+      "7": "file changed while reading",
+      "8": "stat/read failed",
+      "9": "close failed"
+    },
+    "version": [
+      "st_dev",
+      "st_ino",
+      "st_size",
+      "mtime_seconds_bits",
+      "mtime_nanoseconds",
+      "ctime_seconds_bits",
+      "ctime_nanoseconds"
+    ],
+    "version_semantics": "The before/after descriptor version preserves the retained dev/inode/size/mtime_ns/ctime_ns identity without narrowing seconds*1e9. Seconds retain signed two-complement bits. atime is intentionally excluded."
+  },
+  "schema": "hepta.runtime.native-io-abi.v1",
+  "scope": "Read-only OS dependency primitive. No MCP tool registration, complete binary_read/view replacement, configured host authorization or whole-runtime closure is claimed.",
+  "target": "linux-x86_64-lp64"
+}
