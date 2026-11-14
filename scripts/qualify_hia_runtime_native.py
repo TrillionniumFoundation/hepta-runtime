@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import gzip
 import hashlib
 import json
 import os
@@ -42,6 +43,8 @@ MODULES = (
      "standalone": "filter", "manifest_env": "HIA_CODEC_MANIFEST", "test": "test_binary_codec.py"},
     {"key": "policy", "name": "policy", "source": "native/policy.hepta",
      "standalone": "filter", "manifest_env": "HIA_POLICY_MANIFEST", "test": "test_policy.py"},
+    {"key": "stat_version", "name": "stat-version", "source": "native/stat_version.hepta",
+     "standalone": "filter", "manifest_env": "HIA_STAT_VERSION_MANIFEST", "test": "test_stat_version.py"},
     {"key": "native_io", "name": "native-io", "source": "native/io_policy.hepta",
      "companion_sources": ("native/io_packer.hepta",), "builder": "io",
      "manifest_env": "HIA_IO_MANIFEST", "test": "test_native_io.py"},
@@ -53,6 +56,16 @@ RUST_CORPUS_FILES = ("native-corpus.json", "input.bin.gz", "native-output.bin.gz
 
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def qualification_env(inherited: dict | None = None) -> dict:
+    """Keep ordinary host settings, then admit only qualifier-owned HIA inputs.
+
+    Standalone suites intentionally support development overrides. The closed
+    qualification must not inherit an external loader, source or probe path.
+    """
+    parent = os.environ if inherited is None else inherited
+    return {key: value for key, value in parent.items() if not key.startswith("HIA_")}
 
 
 def sources() -> dict:
@@ -162,6 +175,84 @@ def io_reference_evidence(output: Path, report: dict) -> dict:
             "complete_original_tool_parity": False}
 
 
+def stat_version_reference_evidence(output: Path, report: dict) -> dict:
+    """Bind direct original-Python execution and its separately named inverse."""
+    checks = [row for row in report["checks"] if row["name"] == "test_stat_version.py"]
+    if len(checks) != 1:
+        raise ValueError("stat-version reference requires exactly one completed native suite")
+    check = checks[0]
+    stdout = (output / "test_stat_version.py.stdout").read_bytes()
+    stderr = (output / "test_stat_version.py.stderr").read_bytes()
+    summary = json.loads(stdout)
+    if (check["exit_code"] != 0 or check["timed_out"] is not False or check.get("start_error")
+            or hashlib.sha256(stdout).hexdigest() != check["stdout_sha256"]
+            or hashlib.sha256(stderr).hexdigest() != check["stderr_sha256"]
+            or summary != check.get("summary") or summary.get("status") != "PASS"):
+        raise ValueError("stat-version test execution evidence differs")
+    counts = {"native_calls": 10624, "original_version_calls": 5236, "canonical_inverse_cases": 5236,
+              "domain_rejections": 66, "frame_rejections": 78, "capacity_controls": 5,
+              "elf_cases": 3, "vm_cases": 8}
+    folder = output / "stat-version-python-reference"
+    metadata = json.loads((folder / "native-corpus.json").read_bytes())
+    if (metadata.get("schema") != "hepta.runtime.stat-version-corpus.v1"
+            or metadata.get("counts") != counts or summary.get("counts") != counts):
+        raise ValueError("stat-version original/inverse coverage differs")
+    packed = (folder / "stat-version-cases.jsonl.gz").read_bytes()
+    wire = gzip.decompress(packed)
+    if (hashlib.sha256(packed).hexdigest() != metadata["corpus_sha256"]
+            or hashlib.sha256(wire).hexdigest() != metadata["raw_sha256"]):
+        raise ValueError("stat-version captured corpus identity differs")
+    rows = wire.splitlines()
+    if not wire.endswith(b"\n") or len(rows) != metadata["cases"] or len(rows) != 10620:
+        raise ValueError("stat-version captured call accounting differs")
+    observed = {"format": 0, "inverse": 0, 0xFFFFFFFF: 0, 0xFFFFFFFE: 0, 0xFFFFFFFD: 0}
+    for encoded in rows:
+        row = json.loads(encoded)
+        request, returned = bytes.fromhex(row["request"]), bytes.fromhex(row["output"])
+        status = row["status"]
+        if type(status) is not int or not 0 <= status <= 0xFFFFFFFF:
+            raise ValueError("invalid stat-version captured status")
+        if status in (0xFFFFFFFF, 0xFFFFFFFE, 0xFFFFFFFD):
+            if returned:
+                raise ValueError("stat-version refusal corpus contains a result")
+            observed[status] += 1
+        else:
+            if len(returned) != status or len(request) < 16 or request[:8] != b"HSTVER01":
+                raise ValueError("invalid stat-version captured success")
+            operation = int.from_bytes(request[8:16], "little")
+            if operation not in (1, 2):
+                raise ValueError("unknown stat-version successful operation")
+            observed["format" if operation == 1 else "inverse"] += 1
+    if observed != {"format": 5236, "inverse": 5236, 0xFFFFFFFF: 78, 0xFFFFFFFE: 4, 0xFFFFFFFD: 66}:
+        raise ValueError("stat-version captured original/inverse/refusal domains differ")
+    module = json.loads((output / report["modules"]["stat_version"]["manifest"]).read_bytes())
+    original = report["inventory"]["original_sources"]["src/mcp/runtime/binary_file.py"]
+    if (metadata["source_sha256"] != module["source_sha256"]
+            or metadata["image_sha256"] != module["image_sha256"]
+            or summary["source_sha256"] != module["source_sha256"]
+            or metadata["original_source_sha256"] != original["sha256"]
+            or summary["original_source_sha256"] != original["sha256"]):
+        raise ValueError("stat-version original/native source identity differs")
+    return {"status": "PASS", "reference_kind": "unchanged original Python version function",
+            "original_version_calls": 5236, "canonical_inverse_cases": 5236,
+            "inverse_reference": "new inverse validated by arbitrary-precision arithmetic and original-formatter roundtrip",
+            "native_calls": 10624, "captured_native_cases": 10620,
+            "separate_native_calls": "one exact-capacity success and three ELF comparison inputs",
+            "native_cases_added_by_replay": 0, "counts": counts,
+            "original_source": original, "source_sha256": module["source_sha256"],
+            "image_sha256": module["image_sha256"],
+            "module_manifest_sha256": report["modules"]["stat_version"]["sha256"],
+            "corpus_metadata_sha256": sha(folder / "native-corpus.json"),
+            "corpus_sha256": metadata["corpus_sha256"], "raw_sha256": metadata["raw_sha256"],
+            "test_stdout_sha256": check["stdout_sha256"], "test_stderr_sha256": check["stderr_sha256"],
+            "scope": "pure stat version codec; no filesystem or complete tool replacement"}
+
+
+def python_reference_evidence(output: Path, report: dict) -> dict:
+    return {"native_io": io_reference_evidence(output, report),
+            "stat_version": stat_version_reference_evidence(output, report)}
+
+
 def run(output: Path, hepta: Path) -> dict:
     output.mkdir(parents=True, mode=0o700, exist_ok=False)
     report_path = output / "result.json"
@@ -206,7 +297,7 @@ def run(output: Path, hepta: Path) -> dict:
         report["compiler_cold_status"] = "PASS"
         report["phase"] = "native_components"
         report["modules"] = {}
-        env = dict(os.environ)
+        env = qualification_env()
         env.update({
             "HIA_HEPTA_DIR": str(hepta), "HIA_BUILD_ROOT": str(output / "build"),
             "HIA_BYTES_CORPUS_DIR": str(output / "rust-oracle"), "PYTHONDONTWRITEBYTECODE": "1",
@@ -215,6 +306,7 @@ def run(output: Path, hepta: Path) -> dict:
             "HIA_DELTA_CORPUS_DIR": str(output / "delta-rust-oracle"),
             "HIA_CODEC_CORPUS_DIR": str(output / "codec-rust-oracle"),
             "HIA_POLICY_CORPUS_DIR": str(output / "policy-rust-oracle"),
+            "HIA_STAT_VERSION_CORPUS_DIR": str(output / "stat-version-python-reference"),
             "HIA_REFERENCE_RUNTIME": str(ROOT),
         })
         for item in MODULES:
@@ -232,8 +324,11 @@ def run(output: Path, hepta: Path) -> dict:
             record_check(output, report, name=name,
                          command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)],
                          env=env, timeout=180)
-        report["original_python_comparisons"] = {"native_io": io_reference_evidence(output, report)}
+        report["original_python_comparisons"] = python_reference_evidence(output, report)
         report["retained_python_comparison_status"] = "PASS"
+        report["python_reference_inputs"] = {
+            "stat-version-python-reference/" + name: sha(output / "stat-version-python-reference" / name)
+            for name in ("native-corpus.json", "stat-version-cases.jsonl.gz")}
         report["rust_oracle_inputs"] = {
             "rust-oracle/" + name: sha(output / "rust-oracle" / name) for name in RUST_CORPUS_FILES}
         report["rust_oracle_inputs"].update({

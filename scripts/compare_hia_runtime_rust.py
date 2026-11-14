@@ -20,7 +20,7 @@ import traceback
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from qualify_hia_runtime_native import MODULES, io_reference_evidence, record_check, save_report, sha, sources
+from qualify_hia_runtime_native import MODULES, python_reference_evidence, record_check, save_report, sha, sources
 from check_hia_native_inventory import RUNTIME_BASE_COMMIT, check_original_sources
 from hia_native_build import HEPTA_COMMIT
 from hia_native_cold import validate_cold_evidence
@@ -73,12 +73,13 @@ def check_input_pins(output: Path, report: dict) -> None:
             or report.get("compiler_cold_evidence") != cold):
         raise ValueError("required matching-source full cold evidence differs")
     if (report.get("retained_python_comparison_status") != "PASS"
-            or report.get("original_python_comparisons") != {"native_io": io_reference_evidence(output, report)}):
-        raise ValueError("required retained-Python IO evidence differs")
-    for relative, expected in report["rust_oracle_inputs"].items():
-        path = Path(relative)
-        if path.is_absolute() or ".." in path.parts or sha(output / path) != expected:
-            raise ValueError("retained native oracle corpus changed: " + relative)
+            or report.get("original_python_comparisons") != python_reference_evidence(output, report)):
+        raise ValueError("required retained-Python IO/stat-version evidence differs")
+    for collection in ("rust_oracle_inputs", "python_reference_inputs"):
+        for relative, expected in report[collection].items():
+            path = Path(relative)
+            if path.is_absolute() or ".." in path.parts or sha(output / path) != expected:
+                raise ValueError("retained native reference corpus changed: " + relative)
     for item in report["modules"].values():
         manifest = output / item["manifest"]
         if sha(manifest) != item["sha256"]:
@@ -385,7 +386,7 @@ RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
 NEW_COMPONENTS = {"runtime_protocol"}
 # These are checked in check_input_pins against the native process evidence and
 # original Python source identities. They are not counted as Rust comparisons.
-PYTHON_REFERENCE_COMPONENTS = {"native_io"}
+PYTHON_REFERENCE_COMPONENTS = {"native_io", "stat_version"}
 
 
 def run(output: Path, rustc_name: str) -> dict:

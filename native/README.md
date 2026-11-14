@@ -38,6 +38,7 @@ continue to identify the language and are not filename extensions.
 | [delta.hepta](delta.hepta) | Original bounded Myers line diff, exact hunk rendering and deletion markers, CRLF normalization and Rust line splitting |
 | [binary_codec.hepta](binary_codec.hepta) | SHA256 raw/hex and resumable state; canonical Base64 encoding and explicit legacy, strict-padding and canonical decoding |
 | [policy.hepta](policy.hepta) | Original deterministic permission/protection order, executable/environment policy, remote lexical paths and local path operations |
+| [stat_version.hepta](stat_version.hepta) | Exact original five-field stat version text and canonical inverse over full integer/timestamp domains |
 | [io_policy.hepta](io_policy.hepta) | Read-only descriptor custody, bounded read continuations, file versions and error/cleanup decisions |
 | [io_packer.hepta](io_packer.hepta) | Static ELF construction with checked syscall records, opaque handles and persistent binary I/O framing |
 | [stdio_packer.hepta](stdio_packer.hepta) | ELF construction and persistent newline-delimited input/output transport |
@@ -50,6 +51,7 @@ The byte ABI and all eight operations are specified in
 and capacity rules are specified in [delta_abi.md](delta_abi.md). Hash/state layouts,
 binary bounds and Base64 policies are specified in [binary_codec_abi.md](binary_codec_abi.md).
 Policy operations and their caller boundaries are in [policy_abi.md](policy_abi.md).
+The exact file-version boundary is specified in [stat_version_abi.md](stat_version_abi.md).
 The read-only OS dependency, startup-root custody and exact wire records are
 specified in [io.abi.json](io.abi.json).
 No native component falls back to
@@ -67,6 +69,10 @@ network, SSH, database or process-management standard library.
 Use an ordinary checkout of the exact Hepta commit shown above. The builder
 checks both the commit/tree and the actual tracked source bytes; changing the
 dependency checkout, a source file, or a cached compiler image is rejected.
+Qualification clears inherited `HIA_*` development overrides before admitting
+its own manifest, source, compiler and corpus inputs. Standalone suites retain
+their explicit development overrides; these cannot silently substitute an
+external loader or fault probe in the closed qualification.
 Python 3.11+ and a C toolchain are build/test dependencies for the initial seed.
 Independent comparison also requires Rust 1.95.0 and Cargo; endpoint and codec
 reference dependencies are pinned in their Cargo.lock files.
@@ -126,6 +132,8 @@ delta-rust-oracle/native-corpus.json
 codec-rust-oracle/native-corpus.json
 codec-rust-oracle/codec_cases.jsonl.gz
 policy-rust-oracle/native-corpus.json
+stat-version-python-reference/native-corpus.json
+stat-version-python-reference/stat-version-cases.jsonl.gz
 ```
 
 The test driver runs actual native images and the standalone ELF. It retains
@@ -134,7 +142,7 @@ corpora. The CI workflow compiles original Rust function bodies and independent
 locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
-native tests and retained-Python I/O comparisons. It becomes `PASS` only
+native tests and retained-Python I/O/file-version comparisons. It becomes `PASS` only
 after all six independent Rust comparisons succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
@@ -226,6 +234,20 @@ output bytes**. Its 188 malformed controls, buffer-capacity checks, independent
 VM cases and actual static ELF calls are separate. See
 [policy_original_rust_comparison.json](policy_original_rust_comparison.json).
 This component does not load host configuration or resolve filesystem paths.
+
+The file-version component has passed **10,624 native calls**. It directly
+compares **5,236 formatting results** with the unchanged original Python
+`binary_file.py:version` function, extracted from its pinned source through the
+Python AST. Its new inverse has **5,236 canonical roundtrip cases**, with a
+separate arbitrary-precision reference and exact reformatting through the
+original function. Negative timestamps and signed-seconds extrema preserve
+the original mathematical nanosecond value without fixed-width multiplication
+overflow. The suite also checks 66 noncanonical inputs, 78 malformed frames,
+five capacity controls, eight HIA VM cases and three static ELF executions.
+The live Python-reference corpus captures 10,620 calls; one exact-capacity
+success and three native comparison inputs for the ELF checks are separately
+asserted. See [stat_version_original_python_comparison.json](stat_version_original_python_comparison.json).
+This is a representation boundary; it does not open files or replace a tool.
 
 The read-only I/O dependency has passed **13 test groups and 113 actual ELF
 requests**, including **8 direct comparisons** with the retained Python

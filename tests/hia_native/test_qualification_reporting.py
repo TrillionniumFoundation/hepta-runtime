@@ -7,7 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from qualify_hia_runtime_native import MODULES, io_reference_evidence, record_check, sources
+from qualify_hia_runtime_native import MODULES, io_reference_evidence, qualification_env, record_check, sources
 from compare_hia_runtime_rust import run as compare_rust
 from check_hia_native_inventory import ORIGINAL_RUNTIME_BLOBS, check_original_sources
 from hia_native_build import HEPTA_COMMIT, HEPTA_TREE
@@ -117,6 +117,25 @@ class QualificationReportingTests(unittest.TestCase):
                               "print('{\"native_io\": {\"elf_requests\": 113, \"original_read_comparisons\": 0}}')"])
         with self.assertRaisesRegex(ValueError, "retained-reference coverage differs"):
             io_reference_evidence(self.output, self.report)
+
+    def test_qualification_child_cannot_inherit_external_loader_source_or_probe(self):
+        external = {"HIA_NATIVE_LOADER": "/external/loader.py",
+                    "HIA_PROTOCOL_SOURCE": "/external/protocol.hepta",
+                    "HIA_IO_PROBE_MANIFEST": "/external/probe/manifest.json",
+                    "HIA_FUTURE_DEVELOPMENT_OVERRIDE": "/external/future",
+                    "QUALIFICATION_HOST_MARKER": "preserved"}
+        child = qualification_env(external)
+        child["HIA_HEPTA_DIR"] = "/qualifier-owned/compiler"
+        program = "import json,os; print(json.dumps(dict(os.environ),sort_keys=True))"
+        row = record_check(self.output, self.report, name="closed-input-environment", timeout=5,
+                           command=[sys.executable, "-I", "-c", program], env=child)
+        actual = json.loads(row.stdout)
+        for key in external:
+            if key.startswith("HIA_"):
+                with self.subTest(override=key):
+                    self.assertNotIn(key, actual)
+        self.assertEqual(actual["HIA_HEPTA_DIR"], "/qualifier-owned/compiler")
+        self.assertEqual(actual["QUALIFICATION_HOST_MARKER"], "preserved")
 
 
 if __name__ == "__main__":
