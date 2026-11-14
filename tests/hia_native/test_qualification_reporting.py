@@ -120,6 +120,142 @@ class QualificationReportingTests(unittest.TestCase):
         self.assertEqual(json.loads((self.output / "timeout.py.stdout").read_bytes()), {"entered": True})
         self.assertEqual(json.loads((self.output / "timeout.py.execution.json").read_bytes())["checks"], [check])
 
+    def test_ordered_independent_group_overlaps_and_preserves_internal_order(self):
+        import qualify_hia_runtime_native as q
+        root = self.wait_fixture({
+            "first.py": "(root/'ready').write_text('ready')\n"
+                        "deadline=time.monotonic()+3\nwhile not (root/'release').exists():\n"
+                        " assert time.monotonic()<deadline\n time.sleep(.005)\n"
+                        "(root/'first-done').write_text('done')\nprint(json.dumps({'first':True}))\n",
+            "second.py": "assert (root/'first-done').read_text()=='done'\n"
+                         "assert sys.argv[1:]==['--owned-output','two words']\nprint(json.dumps({'second':True}))\n",
+            "main.py": "deadline=time.monotonic()+3\nwhile not (root/'ready').exists():\n"
+                       " assert time.monotonic()<deadline\n time.sleep(.005)\n"
+                       "(root/'release').write_text('release')\nprint(json.dumps({'main':True}))\n"})
+        commands = {"second.py": [sys.executable, "-I", "-B", str(root / "tests/hia_native/second.py"),
+                                   "--owned-output", "two words"]}
+        with patch.object(q, "ROOT", root):
+            q.run_native_checks(self.output, self.report, ("main.py", "first.py", "second.py"), {},
+                parallel_tests=(), ordered_groups=(("first.py", "second.py"),), commands=commands, timeout=5)
+        self.assertEqual([r["name"] for r in self.report["checks"]], ["main.py", "first.py", "second.py"])
+        self.assertEqual(len(self.report["native_parallel_receipts"]), 2)
+        self.assertTrue(all(r["exit_code"] == 0 and not r["timed_out"] for r in self.report["checks"]))
+
+    def test_ordered_group_retains_failure_and_runs_its_submitted_successor(self):
+        import qualify_hia_runtime_native as q
+        root = self.wait_fixture({"main.py": "print('{}')\n", "first.py": "print('{}')\nsys.exit(17)\n",
+                                  "second.py": "print(json.dumps({'successor_ran':True}))\n"})
+        with patch.object(q, "ROOT", root), self.assertRaisesRegex(RuntimeError, "first.py failed"):
+            q.run_native_checks(self.output, self.report, ("main.py", "first.py", "second.py"), {},
+                parallel_tests=(), ordered_groups=(("first.py", "second.py"),), timeout=5)
+        self.assertEqual([r["exit_code"] for r in self.report["checks"]], [0, 17, 0])
+        self.assertEqual(len(self.report["native_parallel_receipts"]), 2)
+        self.assertEqual(json.loads((self.output / "second.py.stdout").read_bytes()), {"successor_ran": True})
+
+    def test_scheduler_refuses_partial_groups_and_foreign_commands_before_launch(self):
+        import qualify_hia_runtime_native as q
+        for settings in ({"ordered_groups": (("one.py", "missing.py"),)},
+                         {"commands": {"one.py": ["/foreign/program"]}},
+                         {"commands": {"missing.py": [sys.executable]}},
+                         {"parallel_tests": ("one.py",), "ordered_groups": (("one.py",),)}):
+            with self.subTest(settings=settings), self.assertRaises(ValueError):
+                q.run_native_checks(self.output, self.report, ("one.py",), {}, **settings)
+        self.assertEqual(self.report["checks"], [])
+
+    def original_worker_fixture(self, *, serial_code=0, worker_code=0, blocked=False):
+        import compare_hia_runtime_rust as comparison
+        root = self.wait_fixture({
+            "wait.py": "(root/'ready').write_text('ready')\n"
+                       "deadline=time.monotonic()+3\nwhile not (root/'release').exists():\n"
+                       " assert time.monotonic()<deadline\n time.sleep(.005)\n"
+                       + ("time.sleep(60)\n" if blocked else "") +
+                       "print(json.dumps({'worker_complete':True}))\nsys.exit(" + str(worker_code) + ")\n",
+            "serial.py": "deadline=time.monotonic()+3\nwhile not (root/'ready').exists():\n"
+                         " assert time.monotonic()<deadline\n time.sleep(.005)\n"
+                         "(root/'release').write_text('release')\nprint(json.dumps({'serial_complete':True}))\n"
+                         "sys.exit(" + str(serial_code) + ")\n"})
+        def worker(output, report, rustc, *, report_path):
+            record_check(output, report, name="operation-scope-os-rust-compile",
+                command=[sys.executable, "-I", "-c", "print('{}')"], timeout=5, report_path=report_path)
+            record_check(output, report, name="operation-scope-os-rust-compare",
+                command=[sys.executable, "-I", str(root / "tests/hia_native/wait.py")],
+                timeout=.4 if blocked else 5, report_path=report_path)
+            return {"worker_complete": True}
+        def serial(output, report, rustc):
+            record_check(output, report, name="serial-reference",
+                command=[sys.executable, "-I", str(root / "tests/hia_native/serial.py")], timeout=5)
+            return {"serial_complete": True}
+        self.report.update(modules={"serial": {}, "operation_scope_os": {}}, original_rust_comparisons={})
+        with patch.object(comparison, "RECIPES", {"serial": serial, "operation_scope_os": worker}):
+            comparison.run_rust_recipes(self.output, self.report, Path(sys.executable))
+
+    def test_original_os_worker_overlaps_main_and_retains_private_records(self):
+        self.original_worker_fixture()
+        self.assertEqual([r["name"] for r in self.report["checks"]],
+            ["serial-reference", "operation-scope-os-rust-compile", "operation-scope-os-rust-compare"])
+        self.assertEqual(set(self.report["original_rust_comparisons"]), {"serial", "operation_scope_os"})
+        path = self.output / "operation-scope-os-rust.execution.json"
+        private = json.loads(path.read_bytes())
+        self.assertEqual(private["checks"], self.report["checks"][1:])
+        self.assertEqual(len(self.report["rust_parallel_receipts"]), 1)
+        self.assertEqual(json.loads((self.output / "result.json").read_bytes()), self.report)
+
+    def test_main_original_failure_drains_submitted_os_worker(self):
+        with self.assertRaisesRegex(RuntimeError, "serial-reference failed"):
+            self.original_worker_fixture(serial_code=19)
+        self.assertEqual([r["exit_code"] for r in self.report["checks"]], [19, 0, 0])
+        self.assertEqual(set(self.report["original_rust_comparisons"]), {"operation_scope_os"})
+        self.assertNotIn("rust_parallel_drain_errors", self.report)
+
+    def test_original_os_worker_failure_cannot_become_pass(self):
+        with self.assertRaisesRegex(RuntimeError, "operation-scope-os-rust-compare failed"):
+            self.original_worker_fixture(worker_code=21)
+        self.assertEqual([r["exit_code"] for r in self.report["checks"]], [0, 0, 21])
+        self.assertNotIn("operation_scope_os", self.report["original_rust_comparisons"])
+        self.assertEqual(len(self.report["rust_parallel_receipts"]), 1)
+
+    def test_original_os_worker_timeout_is_killed_and_retained(self):
+        with self.assertRaisesRegex(RuntimeError, "operation-scope-os-rust-compare timed out"):
+            self.original_worker_fixture(blocked=True)
+        row = self.report["checks"][-1]
+        self.assertTrue(row["timed_out"])
+        self.assertEqual(row["exit_code"], -9)
+        self.assertEqual(row["timeout_seconds"], .4)
+        self.assertNotIn("operation_scope_os", self.report["original_rust_comparisons"])
+
+    def test_batch_original_stderr_requires_actual_bytes_and_typed_summary(self):
+        import hashlib
+        from hia_native_batch_apply_qualification import check_original_runtime_summary
+        path = self.output / "original.stderr"
+        expected = {"status": "PASS", "rust_oracle_cases": 14412, "output_bytes": 301354944}
+        raw = json.dumps(expected).encode() + b"\n"
+        record = {"original_stderr_sha256": hashlib.sha256(raw).hexdigest(), "original_stderr_bytes": len(raw)}
+        path.write_bytes(raw)
+        check_original_runtime_summary(path, record, expected)
+        for changed in (raw + b"\n", raw.replace(b"14412", b"14413"), b"{}"):
+            path.write_bytes(changed)
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                check_original_runtime_summary(path, record, expected)
+        for changed in (b'{"status":"PASS","rust_oracle_cases":true,"output_bytes":301354944}',
+                        b'{"status":"FAIL","status":"PASS","rust_oracle_cases":14412,"output_bytes":301354944}'):
+            path.write_bytes(changed)
+            rehashed = {"original_stderr_sha256": hashlib.sha256(changed).hexdigest(), "original_stderr_bytes": len(changed)}
+            with self.subTest(rehashed=changed), self.assertRaises(ValueError):
+                check_original_runtime_summary(path, rehashed, expected)
+
+    def test_batch_apply_registry_keeps_all_processes_and_original_editable_recipe(self):
+        import qualify_hia_runtime_native as q
+        entry = {row["key"]: row for row in MODULES}["batch_apply"]
+        self.assertEqual(entry["builder"], "batch_apply")
+        self.assertEqual((entry["test"], *entry["additional_tests"]),
+                         tuple(q.batch_apply_test_commands(self.output, self.output / "bundle.json")))
+        self.assertIn("batch_apply", RECIPES)
+        self.assertIn("editable_content", RECIPES)
+        pinned = sources()
+        for name in ("scripts/hia_native_batch_apply_build.py", "scripts/hia_native_batch_apply_qualification.py",
+                     "native/batch_apply.hepta", "native/editable_bulk_composition.json"):
+            self.assertIn(name, pinned)
+
     def test_editable_defaults_follow_an_arbitrarily_named_checkout(self):
         import shutil
         import subprocess

@@ -44,6 +44,7 @@ the production source inventory.
 | [text_budget.hepta](text_budget.hepta) | Original byte-based token estimate, binary64 boundary behavior, MiB formatting, line ranges and head/tail truncation |
 | [line_endpoint.hepta](line_endpoint.hepta) | Original typed line-endpoint parsing, Unicode trim, integer boundaries, hash normalization and exact diagnostics |
 | [batch_plan.hepta](batch_plan.hepta) | Original typed batch admission, operation parsing and endpoint planning, complete ordered diagnostics and full 50-operation / 5 MiB file domains |
+| [batch_apply.hepta](batch_apply.hepta) | Original ordered batch conflicts, duplicate/noise diagnostics, full application through EditableContent, Rust Debug escaping and fixed plan-to-apply composition |
 | [line_verify.hepta](line_verify.hepta) | Original stale line-ID verification, exact fresh context and nearest-three relocation hints, plus complete strict/clamped index results |
 | [delta.hepta](delta.hepta) | Original bounded Myers line diff, exact hunk rendering and deletion markers, CRLF normalization and Rust line splitting |
 | [editable_content.hepta](editable_content.hepta) | Original ordered text state, per-line endings, insertion, normalized-byte replacement and trailing-newline preservation |
@@ -206,14 +207,19 @@ python3 -m venv /absolute/path/to/hia-reference-environment
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 54 native suite processes, the fresh compiler cold process,
-23 required original Rust recipes and one Rust-version process: 103 recorded
+The declared run has 58 native suite processes, the fresh compiler cold process,
+24 required original Rust recipes and one Rust-version process: 108 recorded
 checks in a complete successful aggregate. The two JSON recipes share one locked
 Cargo build and each perform a complete independent replay. A component's retained historical
 comparison is not a fresh aggregate invocation.
 The OS-scope, authority-transport and file-info-guard suites run through two
-independent worker slots while the other native suites retain their declared
-order. Each suite keeps its original 180-second process limit and private
+independent worker slots. The JSON Value and JSON transport suites execute in
+order through one additional worker, using their separate output directories;
+the compiler cold gate finishes before these workers start. Large batch, view
+and history suites remain sequential on the caller. The original OS-scope and authority Rust
+recipes use two independent workers, while the two JSON references retain their
+shared-build order. No suite or recipe is omitted, and all process results are
+collected in declaration order. Each suite keeps its original 180-second process limit and private
 execution receipt. The aggregate records every completed process, drains jobs
 already launched when another suite fails, and checks the receipt hashes again
 before accepting any original Rust replay. The file-info cancellation fixtures
@@ -318,7 +324,7 @@ locked Rust reference crates, then compares their results with the retained
 native corpus. The aggregate
 result is `NATIVE_COMPONENTS_PASS` after the fresh full compiler cold gate,
 native tests and retained-Python chunk/full-file, file-version and MCP comparisons. It becomes `PASS` only
-after all nineteen independent Rust comparisons succeed. The Python reference domain
+after all 24 required original Rust recipes succeed. The Python reference domain
 is accounted separately and is never represented by a dummy Rust recipe. Timeouts retain partial
 stdout/stderr and the failing check; they cannot be recorded as a pass.
 
@@ -689,6 +695,21 @@ build and replay each keep the 180-second budget. The
 describe the internal boundary. Public JSON/MCP admission, path authorization,
 conflict checks, edit application, history/cache effects and production routing
 remain separate owners.
+
+The [batch application owner](batch_apply_abi.md) covers 14,412 complete original
+requests plus 140 invalid frames and six capacity refusals. The maximum case
+retains all fifty five-MiB contents and its complete 267,387,010-byte result.
+Its 102 contract faults and exact-capacity success verify child calls, private
+state cleanup and publication atomicity. A fixed six-image ELF serves eight
+requests, including eight complete native plan-to-apply joins. Unicode Debug
+formatting is checked against the complete Rust scalar domain. The mandatory
+original recipe freshly compiles and executes both the unchanged original
+batch owner and the Debug probe, preserving complete output bytes and actual
+stderr. Seventeen evidence-corruption controls do not add semantic calls.
+The EditableContent LF scan and bulk operations have changed f3/f5/f8; all other
+twenty functions retain their exact source and the complete original Editable
+recipe remains mandatory. Canonical locks, file writes, history/cache updates,
+configuration, authorization and production routing remain separate owners.
 
 The editable-content component compares **8,749 complete ordered responses**
 with the unchanged original `EditableContent` methods. This includes mixed

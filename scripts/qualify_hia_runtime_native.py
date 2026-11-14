@@ -51,6 +51,7 @@ from hia_native_authority_qualification import (FOLDER as AUTHORITY_FOLDER, SUIT
 from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 batch_plan_evidence as checked_batch_plan_evidence)
 
+import hia_native_batch_apply_qualification as batch_apply_qualification
 from hia_native_history_qualification import (FOLDER as HISTORY_FOLDER,
                                               qualification_evidence as checked_history_evidence)
 
@@ -73,6 +74,10 @@ MODULES = (
     {"key": "batch_plan", "name": "batch-plan", "source": "native/batch_plan.hepta",
      "builder": "batch_plan", "manifest_env": "HIA_BATCH_PLAN_BUNDLE", "test": "test_batch_plan.py",
      "additional_tests": ("test_batch_plan_evidence.py",)},
+    {"key": "batch_apply", "name": "batch-apply", "source": "native/batch_apply.hepta",
+     "builder": "batch_apply", "manifest_env": "HIA_APPLY_BUNDLE", "test": "test_batch_apply.py",
+     "additional_tests": ("test_batch_apply_contract.py", "test_batch_apply_artifacts.py",
+                          "test_batch_apply_evidence.py")},
     {"key": "delta", "name": "delta", "source": "native/delta.hepta",
      "standalone": "filter", "manifest_env": "HIA_DELTA_MANIFEST", "test": "test_delta.py"},
     {"key": "editable_content", "name": "editable-content", "source": "native/editable_content.hepta",
@@ -193,6 +198,7 @@ def sources() -> dict:
         "hia_native_history_build.py", "hia_native_history_qualification.py", "hia_native_json_qualification.py",
         "hia_native_line_verify_qualification.py",
         "hia_native_batch_plan_build.py", "hia_native_batch_plan_qualification.py",
+        "hia_native_batch_apply_build.py", "hia_native_batch_apply_qualification.py",
         "hia_native_scope_os_build.py", "hia_native_scope_os_qualification.py",
         "hia_native_authority_build.py", "hia_native_authority_layout.py",
         "hia_native_authority_probe_build.py", "hia_native_authority_qualification.py",
@@ -293,38 +299,70 @@ INDEPENDENT_WAIT_SUITES = (
 )
 
 
+ORDERED_INDEPENDENT_SUITES = (("test_serde_json.py", "test_serde_json_transport.py"),)
+PARALLEL_NATIVE_SUITES = INDEPENDENT_WAIT_SUITES + tuple(
+    name for group in ORDERED_INDEPENDENT_SUITES for name in group)
+
+
 def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: dict,
                       *, parallel_tests: tuple[str, ...] = INDEPENDENT_WAIT_SUITES,
+                      ordered_groups: tuple[tuple[str, ...], ...] = ORDERED_INDEPENDENT_SUITES,
+                      commands: dict[str, list[str]] | None = None,
                       timeout: float = 180) -> None:
-    """Overlap independent OS waits; retain every process at its declared position.
+    """Overlap two OS waits and one ordered JSON worker with the main suite.
 
-    Wide allocation/byte-domain suites stay on the sequential caller. The three
-    explicit suites use separate temporary directories and corpus destinations.
-    Their workers publish separate receipts and never mutate the aggregate.
-    Already submitted processes finish within their original per-process limits
-    even when the sequential caller fails; all their original bytes are retained.
+    The compiler cold gate has already completed. Large application/history/view
+    suites stay on the main thread; JSON owns separate artifacts and one worker.
+    Workers retain private execution receipts. Only the caller updates the full
+    report, in declaration order, and every submitted process is drained even
+    when another check fails. Each process keeps its original deadline.
     """
     if len(set(tests)) != len(tests) or any(Path(name).name != name for name in tests):
         raise ValueError("native executable suite names must be unique basenames")
+    commands = commands or {}
+    if set(commands) - set(tests):
+        raise ValueError("native command override names an undeclared suite")
+    def command(name):
+        prefix = [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)]
+        argv = commands.get(name, prefix)
+        if (type(argv) is not list or any(type(value) is not str for value in argv)
+                or argv[:len(prefix)] != prefix):
+            raise ValueError("native command differs from its source-owned suite: " + name)
+        return argv
+    invocation = {name: command(name) for name in tests}
     selected = tuple(name for name in tests if name in parallel_tests)
+    groups = tuple(group for group in ordered_groups if set(group) & set(tests))
+    flattened = tuple(name for group in groups for name in group)
+    if (any(not group or set(group) - set(tests) for group in groups)
+            or len(set(flattened)) != len(flattened) or set(flattened) & set(selected)):
+        raise ValueError("ordered independent suite group is partial or duplicated")
     receipts, futures, collected = {}, {}, set()
     report["native_parallel_receipts"] = {}
-    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="hia-native-waits") as pool:
+    for name in (*selected, *flattened):
+        receipts[name] = ({"phase": report.get("phase"), "checks": []},
+                          output / (name + ".execution.json"))
+    def execute(group):
+        failures = {}
+        for name in group:
+            private, path = receipts[name]
+            try:
+                record_check(output, private, name=name, command=invocation[name],
+                             timeout=timeout, env=env, report_path=path)
+                failures[name] = None
+            except Exception as error:
+                failures[name] = error
+        return failures
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="hia-native-waits") as waits, \
+            ThreadPoolExecutor(max_workers=1, thread_name_prefix="hia-native-json") as ordered:
         try:
             for name in selected:
-                private = {"phase": report.get("phase"), "checks": []}
-                path = output / (name + ".execution.json")
-                receipts[name] = (private, path)
-                futures[name] = pool.submit(record_check, output, private, name=name,
-                    command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)],
-                    timeout=timeout, env=env, report_path=path)
-
+                futures[name] = waits.submit(execute, (name,))
+            for group in groups:
+                future = ordered.submit(execute, group)
+                for name in group:
+                    futures[name] = future
             def collect(name):
-                failure = None
-                try:
-                    futures[name].result()
-                except Exception as error:
-                    failure = error
+                failure = futures[name].result()[name]
                 private, path = receipts[name]
                 if (len(private["checks"]) != 1 or private["checks"][0]["name"] != name
                         or json.loads(path.read_bytes()) != private):
@@ -336,19 +374,14 @@ def run_native_checks(output: Path, report: dict, tests: tuple[str, ...], env: d
                 collected.add(name)
                 save_report(output / "result.json", report)
                 return failure
-
             for name in tests:
                 if name in futures:
                     failure = collect(name)
                     if failure is not None:
                         raise failure
                 else:
-                    record_check(output, report, name=name,
-                        command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)],
-                        timeout=timeout, env=env)
+                    record_check(output, report, name=name, command=invocation[name], timeout=timeout, env=env)
         finally:
-            # Do not abandon owned background process groups or discard their
-            # failure/timeout receipts when an earlier sequential suite fails.
             for name in futures:
                 if name not in collected:
                     try:
@@ -524,6 +557,86 @@ def batch_plan_evidence(output: Path, report: dict) -> dict:
               for name in ("native-corpus.json", "requests.bin.gz", "native-output.bin.gz",
                            "history.jsonl.gz", "elf-observation.json")}
     return {**evidence, "artifact_sha256": artifacts, "corpus_sha256": corpus}
+
+
+def batch_apply_test_commands(output: Path, bundle: Path) -> dict[str, list[str]]:
+    folder = output / "batch-apply"
+    prefix = lambda name: [sys.executable, "-I", "-B", str(ROOT / "tests/hia_native" / name)]
+    return {
+        "test_batch_apply.py": prefix("test_batch_apply.py") + ["--bundle", str(bundle),
+            "--corpus", str(folder / "corpus")],
+        "test_batch_apply_contract.py": prefix("test_batch_apply_contract.py") + ["--bundle", str(bundle),
+            "--result", str(folder / "contract.json")],
+        "test_batch_apply_artifacts.py": prefix("test_batch_apply_artifacts.py") + ["--bundle", str(bundle),
+            "--output", str(folder / "artifacts")],
+        "test_batch_apply_evidence.py": prefix("test_batch_apply_evidence.py") + ["--bundle", str(bundle),
+            "--corpus", str(folder / "corpus"), "--contract", str(folder / "contract.json"),
+            "--artifacts", str(folder / "artifacts"), "--result", str(folder / "evidence-controls.json")],
+    }
+
+
+def batch_apply_evidence(output: Path, report: dict) -> dict:
+    q = batch_apply_qualification
+    hepta = Path(report["compiler_checkout"]).resolve(strict=True)
+    bootstrap = json.loads((output / "build/bootstrap/bootstrap.json").read_bytes())
+    if check_dependency(hepta) != bootstrap.get("dependency"):
+        raise ValueError("batch application source parser differs from the pinned compiler checkout")
+    bundle = output / report["modules"]["batch_apply"]["manifest"]
+    folder = output / "batch-apply"
+    raw = q.evidence(folder / "corpus", folder / "contract.json", folder / "artifacts", bundle,
+                     source_root=ROOT, hepta=hepta)
+    receipts = (
+        ("test_batch_apply.py", folder / "corpus/native-corpus.json", {"rows", "controls"}),
+        ("test_batch_apply_contract.py", folder / "contract.json", {"rows", "wire_hex", "success_hex"}),
+        ("test_batch_apply_artifacts.py", folder / "artifacts/result.json",
+            {"joined_cases", "source_contract", "joined_loaded_artifacts"}),
+        ("test_batch_apply_evidence.py", folder / "evidence-controls.json", {"execution_source_pins"}),
+    )
+    commands = batch_apply_test_commands(output, bundle)
+    completed = {}
+    for name, path, omitted in receipts:
+        check, summary = completed_test_summary(output, report, name)
+        retained = q.json_file(path)
+        if (q.canonical(summary) != q.canonical({k: v for k, v in retained.items() if k not in omitted})
+                or check.get("command") != commands[name] or check.get("timeout_seconds") != 180
+                or type(check.get("elapsed_seconds")) not in (int, float)
+                or not 0 < check["elapsed_seconds"] < 180
+                or check.get("stdout_bytes") != (output / (name + ".stdout")).stat().st_size
+                or check.get("stderr_bytes") != (output / (name + ".stderr")).stat().st_size):
+            raise ValueError("batch application retained report differs from actual completed process: " + name)
+        completed[name] = {k: check[k] for k in ("command", "exit_code", "timed_out", "timeout_seconds",
+            "stdout_bytes", "stderr_bytes", "stdout_sha256", "stderr_sha256")}
+    controls = q.json_file(folder / "evidence-controls.json")
+    expected = {"schema": "hepta.runtime.batch-apply-evidence-controls.v1", "status": "PASS",
+        "accepted_complete_receipts": 1, "rejected_corruptions": 17,
+        "native_calls_added": 0, "rust_calls_added": 0, "execution_source_pins": raw["source_pins"],
+        "native_evidence_sha256": q.sha(q.canonical(raw))}
+    if any(q.canonical(controls.get(k)) != q.canonical(v) for k, v in expected.items()):
+        raise ValueError("batch application corruption controls are incomplete or changed")
+    manifest = q.json_file(bundle)
+    build = output / "build"
+    composition = build / manifest["composition"]["manifest"]
+    packed = q.json_file(composition)
+    directories = {bundle.parent, composition.parent, (build / manifest["debug_probe"]["manifest"]).parent}
+    directories.update((build / row["manifest"]).parent for row in manifest["wide_modules"])
+    directories.update(build / "modules" / ("composition-" + row["source_sha256"][:24])
+                       for row in (packed["packer"], *packed["members"]))
+    artifacts = {}
+    for directory in sorted(directories):
+        for path in sorted(directory.iterdir()):
+            q.require(path.is_file() and not path.is_symlink() and path.resolve() == path,
+                      "batch application artifact is not a regular owned file")
+            artifacts[path.relative_to(output).as_posix()] = sha(path)
+    corpus = {}
+    for path in sorted(folder.rglob("*")):
+        if path.is_file():
+            q.require(not path.is_symlink() and path.resolve() == path, "batch application corpus path differs")
+            corpus[path.relative_to(output).as_posix()] = sha(path)
+    return {"schema": "hepta.runtime.batch-apply-completed-evidence.v1", "status": "PASS",
+            "native_evidence": raw, "completed_processes": completed,
+            "artifact_sha256": artifacts, "corpus_sha256": corpus,
+            "complete_original_tool_parity": False, "production_activated": False,
+            "whole_runtime_replaced": False}
 
 
 def view_render_evidence(output: Path, report: dict) -> dict:
@@ -1702,6 +1815,9 @@ def run(output: Path, hepta: Path) -> dict:
             elif item.get("builder") == "history":
                 from hia_native_history_build import build_history
                 built = build_history(hepta, output / "build", source_root=ROOT)
+            elif item.get("builder") == "batch_apply":
+                from hia_native_batch_apply_build import build_batch_apply
+                built = build_batch_apply(hepta, output / "build", source_root=ROOT)
             elif item.get("builder") == "batch_plan":
                 from hia_native_batch_plan_build import build_batch_plan
                 built = build_batch_plan(hepta, output / "build", source_root=ROOT)
@@ -1732,7 +1848,9 @@ def run(output: Path, hepta: Path) -> dict:
         env["HIA_CACHE_ELF_MANIFEST"] = str(cache_fixture)
         tests = tuple(dict.fromkeys(name for item in MODULES
                                     for name in (item["test"], *item.get("additional_tests", ())))) + EXTRA_TESTS
-        run_native_checks(output, report, tests, env, timeout=180)
+        (output / "batch-apply").mkdir()
+        run_native_checks(output, report, tests, env, timeout=180,
+            commands=batch_apply_test_commands(output, output / report["modules"]["batch_apply"]["manifest"]))
         report["original_python_comparisons"] = python_reference_evidence(output, report)
         report["native_composition_evidence"] = native_composition_evidence(output, report)
         report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
@@ -1747,6 +1865,7 @@ def run(output: Path, hepta: Path) -> dict:
         report["editable_content_evidence"] = editable_content_evidence(output, report)
         report["line_verify_evidence"] = line_verify_evidence(output, report)
         report["batch_plan_evidence"] = batch_plan_evidence(output, report)
+        report["batch_apply_evidence"] = batch_apply_evidence(output, report)
         report["view_render_evidence"] = view_render_evidence(output, report)
         report["view_cache_evidence"] = view_cache_evidence(output, report)
         report["history_evidence"] = history_evidence(output, report)
@@ -1787,6 +1906,8 @@ def run(output: Path, hepta: Path) -> dict:
         report["rust_oracle_inputs"].update(report["json_evidence"]["corpus_sha256"])
         report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["artifact_sha256"])
         report["rust_oracle_inputs"].update(report["batch_plan_evidence"]["corpus_sha256"])
+        report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["artifact_sha256"])
+        report["rust_oracle_inputs"].update(report["batch_apply_evidence"]["corpus_sha256"])
         authority = report["caller_authority_evidence"]
         for label in ("artifact", "probe"):
             report["rust_oracle_inputs"].update({"build/" + name: expected

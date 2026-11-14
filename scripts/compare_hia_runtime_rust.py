@@ -6,6 +6,8 @@ retained native corpus. Replaying a corpus does not add new native test cases.
 from __future__ import annotations
 
 import argparse
+import copy
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import gzip
 import hashlib
@@ -21,9 +23,9 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy_evidence,
-                                       INDEPENDENT_WAIT_SUITES,
+                                       PARALLEL_NATIVE_SUITES,
                                        editable_content_evidence, view_render_evidence, view_cache_evidence,
-                                       line_verify_evidence, batch_plan_evidence, caller_authority_evidence,
+                                       line_verify_evidence, batch_plan_evidence, batch_apply_evidence, caller_authority_evidence,
                                        history_evidence, json_evidence,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
@@ -126,6 +128,8 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required line-ID verification/diagnostic/index evidence differs")
     if report.get("batch_plan_evidence") != batch_plan_evidence(output, report):
         raise ValueError("required complete batch input/endpoint/large-result evidence differs")
+    if report.get("batch_apply_evidence") != batch_apply_evidence(output, report):
+        raise ValueError("required batch application complete native execution evidence differs")
     if report.get("view_render_evidence") != view_render_evidence(output, report):
         raise ValueError("required complete view byte-domain/cache-plan/transport evidence differs")
     if report.get("json_evidence") != json_evidence(output, report):
@@ -145,7 +149,7 @@ def check_input_pins(output: Path, report: dict) -> None:
             if path.is_absolute() or ".." in path.parts or sha(output / path) != expected:
                 raise ValueError("retained native reference corpus changed: " + relative)
     if set(report.get("native_parallel_receipts", {})) != {
-            name + ".execution.json" for name in INDEPENDENT_WAIT_SUITES}:
+            name + ".execution.json" for name in PARALLEL_NATIVE_SUITES}:
         raise ValueError("independent native process receipt inventory differs")
     for relative, expected in report["native_parallel_receipts"].items():
         if Path(relative).name != relative or sha(output / relative) != expected:
@@ -155,6 +159,21 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (len(rows) != 1 or rows[0] not in report["checks"] or rows[0].get("exit_code") != 0
                 or rows[0].get("timed_out") is not False or rows[0].get("start_error")):
             raise ValueError("independent native process did not finish successfully")
+    if report.get("original_rust_comparisons"):
+        receipts = report.get("rust_parallel_receipts", {})
+        expected_receipts = {value[0] for value in PARALLEL_RUST_RECIPES.values()}
+        if set(receipts) != expected_receipts:
+            raise ValueError("independent original reference receipt inventory differs")
+        for key, (name, expected) in PARALLEL_RUST_RECIPES.items():
+            path = output / name
+            if sha(path) != receipts[name]:
+                raise ValueError("independent original reference receipt changed")
+            private = json.loads(path.read_bytes())
+            rows = [row for row in private.get("checks", []) if row["name"] in expected]
+            if ([row["name"] for row in rows] != list(expected)
+                    or any(row not in report["checks"] or row["exit_code"] != 0
+                           or row["timed_out"] is not False for row in rows)):
+                raise ValueError("independent original reference completion differs: " + key)
     declared = {item["key"]: item for item in MODULES}
     for key, item in report["modules"].items():
         expected = declared[key]
@@ -170,7 +189,7 @@ def check_input_pins(output: Path, report: dict) -> None:
         if (module.get("compiler_commit") != HEPTA_COMMIT
                 or module.get("compiler_sha256") != report["compiler_image_sha256"]):
             raise ValueError("compiled module compiler identity changed")
-        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "history"}:
+        if item.get("builder") in {"composition", "record_composition", "scope_composition", "scope_os_composition", "entropy", "authority_composition", "batch_plan", "batch_apply", "history"}:
             # The appropriate fixed table, all child source/image pairs,
             # packer and executable were revalidated above, including its suite.
             continue
@@ -805,7 +824,7 @@ def compare_operation_scope(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
-def compare_operation_scope_os(output: Path, report: dict, rustc: Path) -> dict:
+def compare_operation_scope_os(output: Path, report: dict, rustc: Path, *, report_path: Path | None = None) -> dict:
     evidence = operation_scope_os_evidence(output, report)
     if evidence != report.get("operation_scope_os_evidence"):
         raise ValueError("OS scope native source or complete traces changed before original Rust comparison")
@@ -821,7 +840,7 @@ def compare_operation_scope_os(output: Path, report: dict, rustc: Path) -> dict:
     env.update({"HIA_REFERENCE_RUNTIME": str(ROOT), "RUSTC": str(rustc)})
     record_check(output, report, name="operation-scope-os-rust-compile",
                  command=[str(executable("cargo")), "build", "--locked", "--release",
-                          "--manifest-path", str(manifest), "--target-dir", str(target)], env=env, timeout=180)
+                          "--manifest-path", str(manifest), "--target-dir", str(target)], env=env, timeout=180, report_path=report_path)
     generated = list((target / "release/build").glob("hia-operation-scope-os-reference-*/out/original_operation_reference.rs"))
     expected_source = (b"#[allow(dead_code)]\nmod original {\n"
                        + (ROOT / "src/mcp/runtime/operation_crypto.rs").read_bytes() + b"\n"
@@ -843,7 +862,7 @@ def compare_operation_scope_os(output: Path, report: dict, rustc: Path) -> dict:
                 "HIA_SCOPE_OS_RESULT": str(folder / SCOPE_OS_PAIRED_RECEIPT)})
     record_check(output, report, name="operation-scope-os-rust-compare",
                  command=[sys.executable, "-I", "-B", str(ROOT / "tests/hia_native/test_scope_os.py")],
-                 env=env, timeout=180)
+                 env=env, timeout=180, report_path=report_path)
     check, summary = completed_test_summary(output, report, "operation-scope-os-rust-compare")
     retained = json.loads((folder / SCOPE_OS_PAIRED_RECEIPT).read_bytes())
     if {key: value for key, value in retained.items() if key != "cases"} != summary:
@@ -974,6 +993,31 @@ def compare_batch_plan(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
+def compare_batch_apply(output: Path, report: dict, rustc: Path) -> dict:
+    import hia_native_batch_apply_qualification as q
+    evidence = batch_apply_evidence(output, report)
+    if evidence != report.get("batch_apply_evidence"):
+        raise ValueError("batch application native evidence changed before original replay")
+    project = output / "batch-apply-rust-reference"
+    folder = output / "batch-apply"
+    q.prepare_original_reference(project, evidence["native_evidence"], folder / "corpus", folder / "artifacts",
+                                 source_root=ROOT)
+    command = [sys.executable, "-I", "-B", str(project / "driver.py"), "--manifest", str(project / "input.json"),
+               "--rustc", str(rustc), "--output", str(project / "replay")]
+    record_check(output, report, name="batch-apply-rust-compare", command=command, timeout=180,
+                 env=qualification_env())
+    check, summary = completed_test_summary(output, report, "batch-apply-rust-compare")
+    if (q.canonical(summary) != q.canonical(q.json_file(project / "replay/result.json"))
+            or (output / "batch-apply-rust-compare.stderr").read_bytes() != b""
+            or check["command"] != command or check["timeout_seconds"] != 180):
+        raise ValueError("batch application original driver differs from its actual process")
+    result = q.original_comparison_evidence(project, source_root=ROOT)
+    if batch_apply_evidence(output, report) != evidence:
+        raise ValueError("batch application native evidence changed during original replay")
+    return {**result, "original_stdout_sha256": check["stdout_sha256"],
+            "original_stderr_sha256": check["stderr_sha256"]}
+
+
 def compare_line_verify(output: Path, report: dict, rustc: Path) -> dict:
     evidence = line_verify_evidence(output, report)
     if evidence != report.get("line_verify_evidence"):
@@ -1089,7 +1133,7 @@ def compare_view_render(output: Path, report: dict, rustc: Path) -> dict:
     return result
 
 
-def compare_caller_authority(output: Path, report: dict, rustc: Path) -> dict:
+def compare_caller_authority(output: Path, report: dict, rustc: Path, *, report_path: Path | None = None) -> dict:
     cargo = executable(str(rustc.with_name("cargo")))
     executable(str(rustc.with_name("cargo-fmt")))
     rustfmt = executable(str(rustc.with_name("rustfmt")))
@@ -1102,7 +1146,10 @@ def compare_caller_authority(output: Path, report: dict, rustc: Path) -> dict:
         env["RUSTFMT"] = str(rustfmt)
         return env
 
-    return compare_authority_original(ROOT, output, report, rustc, record_check=record_check,
+    def capture(*args, **kwargs):
+        return record_check(*args, **kwargs, report_path=report_path)
+
+    return compare_authority_original(ROOT, output, report, rustc, record_check=capture,
         completed_test_summary=completed_test_summary, qualification_env=environment, cargo=cargo)
 
 
@@ -1117,7 +1164,7 @@ def compare_serde_json(output: Path, report: dict, rustc: Path) -> dict:
 
 
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
-           "line_verify": compare_line_verify, "batch_plan": compare_batch_plan,
+           "line_verify": compare_line_verify, "batch_plan": compare_batch_plan, "batch_apply": compare_batch_apply,
            "editable_content": compare_editable_content, "view_render": compare_view_render,
            "view_cache": compare_view_cache, "history": compare_history,
            "fence_json": compare_fence_json, "serde_json": compare_serde_json,
@@ -1134,6 +1181,84 @@ NEW_COMPONENTS = {"runtime_protocol"}
 # These are checked in check_input_pins against the native process evidence and
 # original Python source identities. They are not counted as Rust comparisons.
 PYTHON_REFERENCE_COMPONENTS = {"native_io", "stat_version", "local_service", "file_info_service"}
+
+
+PARALLEL_RUST_RECIPES = {
+    "operation_scope_os": ("operation-scope-os-rust.execution.json",
+        ("operation-scope-os-rust-compile", "operation-scope-os-rust-compare")),
+    "caller_authority": ("caller-authority-rust.execution.json",
+        ("caller-authority-rust-format", "caller-authority-rust-compile",
+         "caller-authority-rust-compare", "caller-authority-rust-kernel")),
+}
+
+
+def run_rust_recipes(output: Path, report: dict, rustc: Path) -> None:
+    """Overlap the two independent OS references with private report writers.
+
+    Their Cargo targets, native corpus and raw process files are distinct. JSON
+    stays in the main ordered stream and shares its one fresh build. Workers
+    receive immutable native evidence snapshots. The caller collects every
+    completed check in declaration order, including failures during draining.
+    """
+    selected = {key: value for key, value in PARALLEL_RUST_RECIPES.items()
+                if key in report["modules"] and key in RECIPES}
+    if not selected:
+        raise ValueError("independent OS reference recipes are missing")
+    receipts, futures, collected = {}, {}, set()
+    report["rust_parallel_receipts"] = {}
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="hia-original-os") as pool:
+        for key, (name, expected) in selected.items():
+            private = copy.deepcopy(report)
+            original_checks = copy.deepcopy(private["checks"])
+            path = output / name
+            receipts[key] = (private, original_checks, path, expected)
+            futures[key] = pool.submit(RECIPES[key], output, private, rustc, report_path=path)
+        def collect(key):
+            private, original_checks, path, expected = receipts[key]
+            result, failure = None, None
+            try:
+                result = futures[key].result()
+            except Exception as error:
+                failure = error
+            if private["checks"][:len(original_checks)] != original_checks:
+                raise ValueError("independent original reference modified native process evidence")
+            checks = private["checks"][len(original_checks):]
+            names = [row["name"] for row in checks]
+            if (not checks or names != list(expected[:len(checks)]) or len(checks) > len(expected)
+                    or any(name in {row["name"] for row in report["checks"]} for name in names)
+                    or json.loads(path.read_bytes()) != private):
+                raise ValueError("independent original reference process receipts differ: " + key)
+            report["checks"].extend(checks)
+            if failure is None:
+                if (len(checks) != len(expected)
+                        or any(row["exit_code"] != 0 or row["timed_out"] is not False for row in checks)):
+                    raise ValueError("independent original reference did not complete: " + key)
+                report["original_rust_comparisons"][key] = result
+            report["rust_parallel_receipts"][path.name] = sha(path)
+            collected.add(key)
+            save_report(output / "result.json", report)
+            return failure
+        try:
+            for key in report["modules"]:
+                if key in futures:
+                    failure = collect(key)
+                    if failure is not None:
+                        raise failure
+                elif key in RECIPES:
+                    report["original_rust_comparisons"][key] = RECIPES[key](output, report, rustc)
+                    save_report(output / "result.json", report)
+        finally:
+            for key in futures:
+                if key not in collected:
+                    try:
+                        failure = collect(key)
+                        if failure is not None:
+                            report.setdefault("rust_parallel_drain_errors", []).append(
+                                {"name": key, "type": type(failure).__name__, "message": str(failure)})
+                    except Exception as error:
+                        report.setdefault("rust_parallel_drain_errors", []).append(
+                            {"name": key, "type": type(error).__name__, "message": str(error)})
+            save_report(output / "result.json", report)
 
 
 def run(output: Path, rustc_name: str) -> dict:
@@ -1162,10 +1287,7 @@ def run(output: Path, rustc_name: str) -> dict:
         report["rust_compiler"] = {"invocation_path": str(rustc), "resolved_path": str(rustc.resolve()),
                                    "invocation_executable_sha256": compiler_sha,
                                    "version": version.stdout.decode("utf-8")}
-        for key in report["modules"]:
-            if key in RECIPES:
-                report["original_rust_comparisons"][key] = RECIPES[key](output, report, rustc)
-                save_report(report_path, report)
+        run_rust_recipes(output, report, rustc)
         if set(report["original_rust_comparisons"]) != RECIPES.keys():
             raise ValueError("not all required Rust reference recipes completed")
         check_input_pins(output, report)
