@@ -32,8 +32,8 @@ continue to identify the language and are not filename extensions.
 
 ## Native components
 
-Qualification covers 32 production HIA sources through 25 executable components
-and seven HIA packers; the two scope profiles share their HIA scope owner.
+Qualification covers 39 production HIA sources through 31 executable components
+and eight HIA packers; the two scope profiles share their HIA scope owner.
 Test-only HIA fixtures are recorded separately from
 the production source inventory.
 
@@ -42,6 +42,8 @@ the production source inventory.
 | [runtime_bytes.hepta](runtime_bytes.hepta) | Existing line hash/ID, strict and clamped line indices, log cursor/page arithmetic, name/digest/text predicates |
 | [runtime_protocol.hepta](runtime_protocol.hepta) | Strict JSON, JSON-RPC IDs/errors, protocol negotiation, initialization lifecycle, native tool responses and line hashing |
 | [text_budget.hepta](text_budget.hepta) | Original byte-based token estimate, binary64 boundary behavior, MiB formatting, line ranges and head/tail truncation |
+| [request_context.hepta](request_context.hepta) | Private nested hint queues, insertion-order deduplication, drain/exit/destruction and a dispatcher-owned view-cache association |
+| [response_hints.hepta](response_hints.hepta) | Exact original response text composition from a complete drained hint list, including empty hints and every valid Unicode scalar |
 | [line_endpoint.hepta](line_endpoint.hepta) | Original typed line-endpoint parsing, Unicode trim, integer boundaries, hash normalization and exact diagnostics |
 | [batch_plan.hepta](batch_plan.hepta) | Original typed batch admission, operation parsing and endpoint planning, complete ordered diagnostics and full 50-operation / 5 MiB file domains |
 | [batch_apply.hepta](batch_apply.hepta) | Original ordered batch conflicts, duplicate/noise diagnostics, full application through EditableContent, Rust Debug escaping and fixed plan-to-apply composition |
@@ -215,7 +217,7 @@ limit; every native process retains 180 seconds and the cold/owner limits below
 are unchanged. Missing, duplicated, failed or altered partitions cannot qualify.
 The collector verifies every actual command, raw stdout/stderr, retained corpus,
 private process receipt and immutable build byte before running the existing
-native evidence checks and all 24 original Rust recipes. Artifact transport can
+native evidence checks and all 26 original Rust recipes. Artifact transport can
 strip executable permissions; only byte-verified owned regular files have their
 recorded ordinary permissions restored. The aggregate retains the original
 partition reports and rechecks them before and after the original comparisons.
@@ -223,10 +225,12 @@ The standalone commands above still execute the complete gate sequentially.
 
 The output directory must be new. Earlier reports are not overwritten. The
 builder executes B0 → B1 → B2 → B3 and requires byte-identical B1, B2 and B3.
-The declared run has 59 native suite processes, the fresh compiler cold process,
-24 required original Rust recipes and one Rust-version process: 109 recorded
+The declared run has 63 native suite processes, the fresh compiler cold process,
+26 required original Rust recipes and one Rust-version process: 116 recorded
 checks in a complete successful aggregate. The two JSON recipes share one locked
-Cargo build and each perform a complete independent replay. A component's retained historical
+Cargo build and each perform a complete independent replay. The two request-context
+recipes share another fresh locked Cargo build and two original execution processes.
+A component's retained historical
 comparison is not a fresh aggregate invocation.
 The OS-scope, authority-transport and file-info-guard suites run through two
 independent worker slots. The JSON Value and JSON transport suites execute in
@@ -906,6 +910,67 @@ See [fence_json_abi.md](fence_json_abi.md),
 [serde_json_composition.json](serde_json_composition.json), and the retained
 [native](serde_json_native_proof.json) and
 [original Rust](serde_json_original_rust_comparison.json) observations.
+
+## Request context and response hints
+
+The [request context owner](request_context_abi.md) replaces the pure state
+operations behind the original scoped hint queue. It keeps private queues for
+nested scopes, restores the enclosing cache association on exit, removes
+duplicates in first-insertion order, and clears retired state. The separate
+[response composer](response_hints_abi.md) appends the original warning prefix
+and line endings to complete result bytes. Neither owner changes text, normalizes
+Unicode or imposes an additional per-hint quota inside its explicit arena.
+
+The direct context suite executes **6,653 native calls**: 6,595 successful state
+events, 23 frame refusals, 11 capacity refusals and 24 private-state refusals,
+across 22 workspaces. The complete input and output bytes of every successful
+event are retained for original-Rust replay. Scope nesting, interleaved private
+workspaces, 4,097 unique hints, all valid Unicode scalars, exact output capacity
+and the maximum single-hint arena capacity are included. These finite cases do
+not qualify the cost of every possible many-small-hint state or an unbounded
+allocator-backed domain.
+
+The response suite executes **1,161 native calls** and retains **553 complete
+successful cases** for the original `append_hints` function. Malformed framing,
+invalid UTF-8 and capacity refusals are counted separately. Nine actual static
+ELF executions include complete-input and error-boundary controls. The
+persistent context fixture runs another six native processes with **61
+requests**, then sends an actual drained list into the actual native response
+ELF. Its fixed two-image table reuses the existing generic hexadecimal test
+transport and introduces no public context-selection API.
+
+The evidence suite checks the original process invocations and all retained
+source, image, corpus and raw stream bytes. Its **55 refusal controls in eight
+groups** cover altered commands, deadlines, exit codes, byte lengths, source and
+image substitutions, incomplete or duplicated records, missing processes and
+unqualified production claims. Re-reading these captures adds no native cases.
+
+The two required original-Rust recipes compile the unchanged request-context
+module, the exact `append_hints` body and the original `ViewCache` methods in a
+fresh isolated crate. Its 14 registry dependencies match the original lock by
+version and checksum. Complete original sources are extracted from the current
+frozen runtime at execution time; duplicate old source trees and a second full
+runtime lock are not committed. Each aggregate records the actual compile,
+Tokio/reference process and response-composer process separately.
+
+All 6,595 captured successes are compared byte for byte across their 18 semantic
+sessions: **5,701 original accessor operations**, **272 private PEEK observations**
+and **622 lifecycle adapter operations**. The 58 native boundary refusals have
+no corresponding original Rust API input and remain separate. The reference
+also exercises **13 actual Tokio scenarios**, including same-task interleaving,
+and replays all 553 response cases over **33,998,849 framed bytes**. A separate
+direction drives the actual HIA image with **68 original-generated traces and
+7,489 calls**; those extra calls are not added to the captured native suite's
+counts. The final gate rechecks every retained original response, process
+receipt, source input and compiled binary.
+
+The original Tokio context belongs to the currently polled scoped future. Two
+independent scopes interleaved by `join` or `select` in the same task need separate
+private workspaces and trusted scheduler save/restore. The HIA state owner does
+not implement that scheduler, retain an original `Arc` object, or authenticate a
+cache association. The bounded image, its test transport and a successful Rust
+comparison therefore do not qualify production task-local routing or removal
+of the original request dispatcher.
 
 ## Remaining migration work and cleanup
 

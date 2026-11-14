@@ -26,7 +26,7 @@ from qualify_hia_runtime_native import (MODULES, completed_test_summary, entropy
                                        PARALLEL_NATIVE_SUITES,
                                        editable_content_evidence, view_render_evidence, view_cache_evidence,
                                        line_verify_evidence, batch_plan_evidence, batch_apply_evidence, caller_authority_evidence,
-                                       history_evidence, json_evidence,
+                                       history_evidence, json_evidence, request_context_evidence,
                                        file_info_evidence, multi_read_controller_evidence, native_composition_evidence,
                                        operation_aead_evidence, operation_kdf_evidence, operation_nonce_evidence,
                                        operation_record_evidence, operation_scope_evidence,
@@ -48,6 +48,8 @@ from hia_native_authority_qualification import compare_original as compare_autho
 from hia_native_history_qualification import compare_original as compare_history_original
 from hia_native_json_qualification import (compare_original as compare_json_original,
                                            check_original_receipts as check_json_original_receipts)
+from hia_native_request_context_reference import (compare_original as compare_request_original,
+                                                  check_original_receipts as check_request_original_receipts)
 from hia_native_batch_plan_qualification import (FOLDER as BATCH_PLAN_FOLDER,
                                                 ORIGINALS as BATCH_PLAN_ORIGINALS,
                                                 REFERENCE_ROWS as BATCH_PLAN_ROWS)
@@ -137,6 +139,9 @@ def check_input_pins(output: Path, report: dict) -> None:
         raise ValueError("required complete view byte-domain/cache-plan/transport evidence differs")
     if report.get("json_evidence") != json_evidence(output, report):
         raise ValueError("required JSON actual native/ELF/corpus evidence differs")
+    if report.get("request_context_evidence") != request_context_evidence(output, report):
+        raise ValueError("required request context state/response/transport evidence differs")
+    check_request_original_receipts(ROOT, output, report, completed_test_summary)
     check_json_original_receipts(ROOT, output, report, completed_test_summary)
     if report.get("history_evidence") != history_evidence(output, report):
         raise ValueError("required history state/original-domain/static-image evidence differs")
@@ -1166,7 +1171,18 @@ def compare_serde_json(output: Path, report: dict, rustc: Path) -> dict:
         "serde_json", completed=completed_test_summary, record_check=record_check, environment=qualification_env)
 
 
+def compare_request_context(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_request_original(ROOT, output, report, rustc, executable(str(rustc.with_name("cargo"))),
+        "request_context", completed=completed_test_summary, record_check=record_check, environment=qualification_env)
+
+
+def compare_response_hints(output: Path, report: dict, rustc: Path) -> dict:
+    return compare_request_original(ROOT, output, report, rustc, executable(str(rustc.with_name("cargo"))),
+        "response_hints", completed=completed_test_summary, record_check=record_check, environment=qualification_env)
+
+
 RECIPES = {"runtime_bytes": compare_bytes, "text_budget": compare_text,
+           "request_context": compare_request_context, "response_hints": compare_response_hints,
            "line_verify": compare_line_verify, "batch_plan": compare_batch_plan, "batch_apply": compare_batch_apply,
            "editable_content": compare_editable_content, "view_render": compare_view_render,
            "view_cache": compare_view_cache, "history": compare_history,

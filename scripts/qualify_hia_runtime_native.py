@@ -57,6 +57,7 @@ from hia_native_history_qualification import (FOLDER as HISTORY_FOLDER,
 
 from hia_native_json_qualification import (COMPONENTS as JSON_COMPONENTS, TRANSPORT_REPORT as JSON_TRANSPORT_REPORT,
                                            qualification_evidence as checked_json_evidence)
+from hia_native_request_context_qualification import qualification_evidence as checked_request_context_evidence
 
 # Every native owner needs an executable qualification entry. Transport tests
 # cover the two packers that NativeBuild compiles internally.
@@ -67,6 +68,11 @@ MODULES = (
      "standalone": "stdio", "manifest_env": "HIA_PROTOCOL_MANIFEST", "test": "test_runtime_protocol.py"},
     {"key": "text_budget", "name": "text-budget", "source": "native/text_budget.hepta",
      "standalone": "filter", "manifest_env": "HIA_TEXT_MANIFEST", "test": "test_text_budget.py"},
+    {"key": "request_context", "name": "request-context", "source": "native/request_context.hepta",
+     "standalone": None, "manifest_env": "HIA_REQUEST_CONTEXT_MANIFEST", "test": "test_request_context.py"},
+    {"key": "response_hints", "name": "response-hints", "source": "native/response_hints.hepta",
+     "standalone": "filter", "manifest_env": "HIA_RESPONSE_HINTS_MANIFEST", "test": "test_response_hints.py",
+     "additional_tests": ("test_request_context_transport.py", "test_request_context_evidence.py")},
     {"key": "line_endpoint", "name": "line-endpoint", "source": "native/line_endpoint.hepta",
      "standalone": None, "manifest_env": "HIA_ENDPOINT_MANIFEST", "test": "test_line_endpoint.py"},
     {"key": "line_verify", "name": "line-verify", "source": "native/line_verify.hepta",
@@ -197,6 +203,7 @@ def sources() -> dict:
         "hia_native_editable_qualification.py", "hia_native_view_qualification.py",
         "hia_native_view_cache_build.py", "hia_native_view_cache_qualification.py",
         "hia_native_history_build.py", "hia_native_history_qualification.py", "hia_native_json_qualification.py",
+        "hia_native_request_context_build.py", "hia_native_request_context_qualification.py", "hia_native_request_context_reference.py",
         "hia_native_line_verify_qualification.py",
         "hia_native_batch_plan_build.py", "hia_native_batch_plan_qualification.py",
         "hia_native_batch_apply_build.py", "hia_native_batch_apply_qualification.py",
@@ -512,6 +519,10 @@ def completed_test_summary(output: Path, report: dict, name: str) -> tuple[dict,
             or summary != check.get("summary")):
         raise ValueError(name + " test execution evidence differs")
     return check, summary
+
+
+def request_context_evidence(output: Path, report: dict) -> dict:
+    return checked_request_context_evidence(ROOT, output, report, completed_test_summary)
 
 
 def entropy_evidence(output: Path, report: dict) -> dict:
@@ -1708,6 +1719,10 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
         "HIA_HEPTA_DIR": str(hepta), "HIA_BUILD_ROOT": str(output / "build"),
         "HIA_BYTES_CORPUS_DIR": str(output / "rust-oracle"), "PYTHONDONTWRITEBYTECODE": "1",
         "HIA_TEXT_CORPUS_DIR": str(output / "text-rust-oracle"),
+        "HIA_REQUEST_CONTEXT_CORPUS_DIR": str(output / "request-context-rust-oracle"),
+        "HIA_RESPONSE_HINTS_CORPUS_DIR": str(output / "response-hints-rust-oracle"),
+        "HIA_REQUEST_CONTEXT_TRANSPORT_DIR": str(output / "request-context-transport"),
+        "HIA_REQUEST_CONTEXT_QUALIFICATION_OUTPUT": str(output),
         "HIA_ENDPOINT_CORPUS_DIR": str(output / "endpoint-rust-oracle"),
         "HIA_DELTA_CORPUS_DIR": str(output / "delta-rust-oracle"),
         "HIA_EDITABLE_CORPUS_DIR": str(output / EDITABLE_FOLDER),
@@ -1766,6 +1781,7 @@ def native_environment(output: Path, hepta: Path, report: dict) -> dict:
             env["HIA_AUTHORITY_PROBE_MANIFEST"] = str(output / report["modules"][item["key"]]["probe_manifest"])
     env["HIA_NONCE_COMPOSITION_MANIFEST"] = str(output / report["nonce_composition"]["manifest"])
     env["HIA_CACHE_ELF_MANIFEST"] = str(output / report["cache_composition"]["manifest"])
+    env["HIA_REQUEST_CONTEXT_ELF_MANIFEST"] = str(output / report["request_context_composition"]["manifest"])
     return env
 
 
@@ -1853,6 +1869,10 @@ def prepare_native(output: Path, hepta: Path, report: dict) -> NativeBuild:
     cache_fixture = build_cache(hepta, output / "build")
     report["cache_composition"] = {"manifest": str(cache_fixture.relative_to(output)),
                                    "sha256": sha(cache_fixture), "builder": "composition_fixture"}
+    from hia_native_request_context_build import build_request_context
+    context_fixture = build_request_context(hepta, output / "build", source_root=ROOT)
+    report["request_context_composition"] = {"manifest": str(context_fixture.relative_to(output)),
+                                            "sha256": sha(context_fixture), "builder": "composition_fixture"}
     (output / "batch-apply").mkdir()
     return builder
 
@@ -1870,6 +1890,7 @@ def native_commands(output: Path, report: dict, tests: tuple[str, ...]) -> dict[
 
 
 def collect_native_evidence(output: Path, report: dict) -> None:
+    report["request_context_evidence"] = request_context_evidence(output, report)
     report["original_python_comparisons"] = python_reference_evidence(output, report)
     report["native_composition_evidence"] = native_composition_evidence(output, report)
     report["multi_read_controller_evidence"] = multi_read_controller_evidence(output, report)
@@ -1906,6 +1927,7 @@ def collect_native_evidence(output: Path, report: dict) -> None:
     report["python_reference_inputs"]["file-info-blocking-probe.elf"] = sha(output / "file-info-blocking-probe.elf")
     report["rust_oracle_inputs"] = {
         "rust-oracle/" + name: sha(output / "rust-oracle" / name) for name in RUST_CORPUS_FILES}
+    report["rust_oracle_inputs"].update(report["request_context_evidence"]["artifact_sha256"])
     report["rust_oracle_inputs"].update({
         ENTROPY_FOLDER + "/" + name: sha(output / ENTROPY_FOLDER / name) for name in ENTROPY_CORPUS_FILES})
     report["rust_oracle_inputs"].update(report["system_entropy_evidence"]["artifacts"]["artifact_sha256"])

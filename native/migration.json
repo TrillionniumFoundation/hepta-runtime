@@ -194,6 +194,16 @@
       "source": "native/serde_filter_packer.hepta",
       "scope": "Source-owned syscall-only static filter transport for the serde-json.v1 16/64/256 MiB profile; exact embedded image and transport template are qualified. No added OS authority or interpreter at runtime.",
       "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/request_context.hepta",
+      "scope": "Private scoped-future request context state with nested scopes, complete duplicate-preserving hint queues, ordered deduplicating peek/drain, cache aliases and explicit destruction. Fixed-workspace capacity refusals preserve state. Actual async scheduler ownership, Arc cache capability lifetime, unbounded allocation and production caller replacement remain separate owners.",
+      "legacy_call_sites_replaced": false
+    },
+    {
+      "source": "native/response_hints.hepta",
+      "scope": "Exact original append_hints UTF-8 response bytes after a validated native drain result, including unchanged empty-hint results and original warning/newline formatting. Real native executable join is qualified separately; production MCP response delivery remains a caller owner.",
+      "legacy_call_sites_replaced": false
     }
   ],
   "legacy_tool_handlers": [
